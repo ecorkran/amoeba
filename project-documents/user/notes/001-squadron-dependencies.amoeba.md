@@ -123,5 +123,6 @@ None of these block Amoeba from starting initiative 100 (Substrate) or 120 (Runn
 
 ## Notes
 
+- **Context Forge initiative 240 (Review-Aware Workflow Gating)** is the upstream home for the deterministic, AI-free review gate Amoeba's Runner (init 120) would otherwise have to own: `cf next` itself becomes review-aware (config-driven `workflow.review_required` / `workflow.review_threshold`, reading the Squadron slice-300 verdict/score frontmatter contract). Amoeba **consumes** this gate rather than reimplementing it — one less thing the routing engine builds. Tracked in CF, not as a Squadron dependency, since it's CF-side logic; recorded here only so the Runner's architecture knows the gate exists and reads its result. (CF input doc: `context-forge/project-documents/user/notes/001-review-gating-architecture-input.context-forge.md`.)
 - This register is a living document. As Amoeba's initiatives reach architecture (P2) and induce real failures (P6), new Squadron asks may appear — they get appended here with the same priority/blocking/gates treatment.
 - Correction logged: the concept and initiative plan assume tier can be *inferred* in v1; source shows `category` is free-form, so v1 inference relies on `severity`+heuristics and is lossier than implied. S1 is the clean fix. (Concept finding C should be read with this caveat.)
