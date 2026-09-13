@@ -8,7 +8,7 @@ audience: [human, ai]
 description: Concept for Amoeba — an orchestration runner with deterministic control flow and bounded nondeterminism that drives Context Forge and Squadron through a project's full lifecycle, escalating to a human (or first to an ephemeral Judge) only where judgment is the actual work.
 dependsOn: [000-pre-concept.amoeba.md]
 dateCreated: 20260618
-dateUpdated: 20260618
+dateUpdated: 20260913
 status: in_progress
 ---
 
@@ -150,6 +150,20 @@ Squadron has **no built-in N-run / N-model agreement scoring.** It has `fan_out`
 **E. The Squadron daemon is safe to relocate — pipeline runs don't depend on it.**
 The Squadron daemon manages **agent lifecycle only** (`sq spawn/list/task/message/history/shutdown`). **Pipeline and review runs (`sq run`, `sq review`) do not depend on the daemon**, and no Langfuse coupling to the daemon was found. **Conclusion:** the pre-concept's required confirmation — "nothing in Squadron's pipeline/Langfuse/session paths depends on the daemon being resident" — **holds.** The daemon can be reused as the base for Amoeba's resident substrate (item 7) and relocated out of Squadron's request-shaped identity without breaking pipeline execution. *(Resolves OQ6.)*
 
+#### Grounding update — 2026-09-13
+
+Re-grounded against Squadron, Context Forge, and ai-project-guide HEAD after three months of upstream change (SQ +773 commits, CF +361, guide 0.15.6 → 0.17.4). Full detail with file:line citations in `notes/002-upstream-delta.amoeba.md`. Status of each finding:
+
+- **A holds.** CF still persists workflow pointers only; review/gate state is recomputed from disk on every call. Boundary added: Squadron now persists per-pipeline `RunState` with resumable run IDs, so Amoeba's store is the *project-lifecycle* layer that references SQ run IDs, not a second per-run store. **PM decision 2026-09-13:** Squadron's unstarted initiative 280 (Shared Agent Artifact Store) is Amoeba's scope, folded into initiative 100.
+- **B partially superseded.** Squadron now has a multi-step loop (`judge-cycle.yaml`: `until: review.pass`, `on_exhaust: checkpoint`), but the checkpoint exits when non-interactive and saves state for `sq run --resume`. v1 routing stays continue / Judge / escalate; "SQ run exited at checkpoint" is a blocked-state the Runner must model and resume by run ID. Auto-fix is still SQ-side and undelivered (S4).
+- **C holds.** No tier field; `category` still free-form. v1 inference stands.
+- **D narrows the Judge.** Squadron initiatives 300/320 (intrinsic LLM judging & scoring, judge calibration) are complete: judge templates emit `score` + `criteria`, and a findings-addressed judge exists. Amoeba does **not** build a scorer; initiative 140 becomes *judge invocation + consensus*. Consensus is still Amoeba's — Squadron has `fan_out` but no agreement reducer.
+- **E holds.** Daemon unchanged (agent lifecycle only). **PM decision 2026-09-13:** CF initiative 220 (Event-Driven Pipeline — persistent MCP daemon, server-initiated notifications), unstarted in CF, is most likely Amoeba's: it is the push-based substrate seam that replaces polling `cf next`. Confirm with the CF team.
+- **New F — CF review gating landed (CF initiative 240).** Config key is `workflow.review_enabled` (not `review_required`); review type is position-derived. The Runner consumes the gate via `workflow_status.activeSlice.status ∈ {pending-review, review-failed}` + `gateInfo`, never via `workflow_next`'s prose `recommendation`. Gating is verdict-only (`score` unenforced). Two silent-ungate hatches must be detected: `review: none` on a slice design (PM-only) and `dateCreated` before `review_gate_effective_date`.
+- **New G — derived verdicts.** Squadron's JSON exposes `fallback_used` (verdict derived after a summary-parse failure); `verdict == PASS && fallback_used` is the Runner's false-negative predicate. It is absent from frontmatter, so a derived PASS clears CF's gate. The Runner gates on SQ JSON, not on CF's gate alone. A failure artifact (`verdict: UNKNOWN` + provider-failure body) now occupies the live slot on provider failure — artifact presence ≠ review happened.
+- **First proof replaced.** Kalshi ingestion (trading-data initiative 260) shipped manually and is in production. Candidate substitutes: trading-data 189, 918, 906 — PM decision pending. OQ7 (Kalshi discovery) no longer applies.
+- **Process.** Planning branches removed (guide 0.17.x; planning commits directly to the integration target); review gates are hard stops ("stop and report to the PM, or run the review"); `review: none` is PM-only and must never be written by automation.
+
 #### Decisions locked at concept
 
 * **Checkpoint = persisted blocked-state, not a blocking call.** Unchanged and central. Enables async-by-construction, free restart-survival, and a quantity-not-rewrite path to multi-project mode.
@@ -187,5 +201,5 @@ Directional, not committal (detailed stack decisions belong in Phase 2):
 * **DFS through the lifecycle tree**, easiest slice category first, to validate Runner + routing table + Judge on low-risk work before hard slices.
 * **Build by inducing failure** — point the Runner at real work, and treat every wrong escalation as the next deterministic gate / routing rule, every missed escalation as a severity/calibration correction, and every confident-but-wrong Judge resolution as threshold-calibration data.
 * **Front-load judgment** at the concept and borderline-P1 checkpoints to manufacture downstream checkability (for deterministic gates) and judgeability (for the Judge).
-* **First proof:** drive `trading-data` to add Kalshi as a data source, near-autonomously, with one front-loaded human checkpoint at concept and a single Kalshi-API research step.
+* **First proof:** drive one `trading-data` slice near-autonomously, with one front-loaded human checkpoint. *(Updated 2026-09-13: the original target — add Kalshi as a data source — shipped manually as trading-data initiative 260. Substitute candidates 189 / 918 / 906; PM decision pending. See `notes/002-upstream-delta.amoeba.md` §7.)*
 * **Favor simplicity**; avoid premature optimization and avoid adopting an autonomous-agent framework as plumbing.

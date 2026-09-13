@@ -6,7 +6,7 @@ source: user/project-guides/000-concept.amoeba.md
 audience: [human, ai]
 description: Cross-repo dependencies Amoeba places on Squadron, with priority, blocking-status, and the Amoeba initiative each gates. Hand-off doc for the Squadron team to start work in parallel.
 dateCreated: 20260620
-dateUpdated: 20260620
+dateUpdated: 20260913
 status: not_started
 ---
 
@@ -123,6 +123,12 @@ None of these block Amoeba from starting initiative 100 (Substrate) or 120 (Runn
 
 ## Notes
 
-- **Context Forge initiative 240 (Review-Aware Workflow Gating)** is the upstream home for the deterministic, AI-free review gate Amoeba's Runner (init 120) would otherwise have to own: `cf next` itself becomes review-aware (config-driven `workflow.review_required` / `workflow.review_threshold`, reading the Squadron slice-300 verdict/score frontmatter contract). Amoeba **consumes** this gate rather than reimplementing it — one less thing the routing engine builds. Tracked in CF, not as a Squadron dependency, since it's CF-side logic; recorded here only so the Runner's architecture knows the gate exists and reads its result. (CF input doc: `context-forge/project-documents/user/notes/001-review-gating-architecture-input.context-forge.md`.)
+- **Context Forge initiative 240 (Review-Aware Workflow Gating) — landed** (CF 0.9.0/0.10.0). The shipped config keys are `workflow.review_enabled` / `review_threshold` / `review_unknown_as` / `review_gates.{arch,slice,tasks,code}.threshold` / `review_gate_effective_date` — **not** `workflow.review_required` as originally recorded here. `score` is parsed but not enforced. The Runner reads the gate via `workflow_status.activeSlice.status` + `gateInfo`, not `workflow_next`'s prose. Amoeba **consumes** this gate rather than reimplementing it. (Canonical: `context-forge/docs/REVIEW-GATING.md`; boundary rationale: `context-forge/project-documents/user/notes/001-review-gating-architecture-input.context-forge.md`.)
+- **Status as of 2026-09-13:** none of S1–S5 delivered as filed (S4 partial — loop exists, exhaust path exits non-interactively). Ground truth with citations in `002-upstream-delta.amoeba.md` §4. Squadron slice 189 (`merge_findings` reducer) is the SQ-side home for S5 if ever wanted.
+- **New asks appended 2026-09-13:**
+  - **S6 — derived-verdict flag in frontmatter** (SQ #97). `fallback_used` reaches `--output json` but not `_review_frontmatter_lines`; CF's gate reads frontmatter, so a derived PASS auto-clears it. One-line builder change; **PM decision** because it alters a contract CF consumes. Priority High, non-blocking for Amoeba (we gate on JSON).
+  - **S7 — expose `location_verified` and `finding_scan` in `to_dict()`.** Computed today, deliberately withheld from every machine-readable surface. Tier-1 signals (hallucinated citation, parser mangling). Priority Medium, non-blocking.
+  - **S8 — a run-level or review-completed event.** The events system has exactly `commit` and `post-action`; an orchestrator needs "review persisted" to subscribe to rather than poll. Priority Medium, non-blocking; relevant to the CF 220 seam Amoeba now owns.
+  - Agreed with slice 918 (in flight): `stop_reason`, `reasoning_chars`, `failed_tool_calls` added to `to_dict()` as optional keys — retry-vs-escalate predicates.
 - This register is a living document. As Amoeba's initiatives reach architecture (P2) and induce real failures (P6), new Squadron asks may appear — they get appended here with the same priority/blocking/gates treatment.
 - Correction logged: the concept and initiative plan assume tier can be *inferred* in v1; source shows `category` is free-form, so v1 inference relies on `severity`+heuristics and is lossier than implied. S1 is the clean fix. (Concept finding C should be read with this caveat.)
