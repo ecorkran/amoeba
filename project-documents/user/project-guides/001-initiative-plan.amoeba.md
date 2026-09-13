@@ -43,7 +43,7 @@ The concept's Solution Approach named **7 components** (Runner, Run-state store,
 
 ## Sequencing
 
-DFS, not BFS. The intended build order is **100 → 120 → (140 ‖ 160)**: stand up the foundation, build the deterministic spine, then attach the two judgment/edge layers. The first vertical proof (drive one `trading-data` slice — the original Kalshi target shipped manually as trading-data initiative 260; substitute candidates 189 / 918 / 906 await a PM decision, see `notes/002-upstream-delta.amoeba.md` §7) cuts across all four but is led by 120's loop; per "build by inducing failure," where the first proof stops that it shouldn't have is what tells us whether any of these four needs to split further. The Kalshi-API discovery step (OQ7) no longer applies.
+DFS, not BFS. The intended build order is **100 → 120 → (140 ‖ 160)**: stand up the foundation, build the deterministic spine, then attach the two judgment/edge layers. The first vertical proof (drive one unstarted `trading-data` unit of work — the original Kalshi target shipped manually; the concrete unit is chosen by the PM from what is unstarted when Amoeba is ready, not anchored now, since sibling projects keep moving) cuts across all four but is led by 120's loop; per "build by inducing failure," where the first proof stops that it shouldn't have is what tells us whether any of these four needs to split further. The Kalshi-API discovery step (OQ7) no longer applies.
 
 ## Notes
 

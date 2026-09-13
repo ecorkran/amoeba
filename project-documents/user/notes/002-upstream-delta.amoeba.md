@@ -78,15 +78,18 @@ Nothing below invalidates the three-part architecture (Runner / Translator / Jud
 - Legacy code-review guide cluster deleted in 0.17.1 (`guide.ai-project.090-code-review.md`, `prompt.code-review-crawler.md`, `agents/code-review-agent.md`, `skills/review.md`). Structured review is Squadron's.
 - No orchestrator role or non-interactive operation is defined in the guide. Phase approval delegation unchanged: P0–P2 human PM; P3–P5 AI Architect under established patterns; P6 self-validate via tests/CI; P7 PM.
 
-## 7. First proof is gone — substitute needed (PM decision)
+## 7. First proof is gone — pick later, not now (PM decision 2026-09-13)
 
-trading-data initiative 260 (Kalshi, 7 slices: 261–265, 267, 266 retired) is complete and in production (~345M trades, ~240M candles); slice 188 (Kalshi over HTTP) is Phase 6 complete on `188-slice.api-surface-coverage-kalshi`, awaiting code review, unmerged.
+trading-data initiative 260 (Kalshi, 7 slices) is complete and in production. The concept's first-proof target therefore no longer exists.
 
-Candidates:
-- **189 — API surface coverage: operations and freshness** (`180-slices.data-serving-api.md` entry 9; deps `[188]`, Risk Low, Effort 2/5). Unstarted at plan-entry level, so a runner drives P3→P6 end to end. One genuine design decision (extend `/api/v1/status` vs sibling `/api/v1/overview`) — tests whether the runner surfaces a decision rather than picking silently. Fresh worked precedent in 188. Unblocked when 188 merges. (td-api-kalshi's pick.)
-- **918 — fixture teardown / drop-database race** (`slices/918-slice.fixture-teardown-drop-database-race.md`, `not_started`, no deps). Design already complete with a 3-experiment measurement table and a preserved failed-fix patch. Starts mid-pipeline (tasks → code → review). Needs a test DB cluster.
-- **906 — `mt data` CLI module decomposition** (`not_started`, deps `[905]`). Mechanical behavior-preserving split; the `[905]` dependency (1,730 lint violations) may be a real blocker.
-- Avoid 907 (would build the CI gate the runner relies on), 910/911 (production blast radius), 200/220/240 (need architecture written; 220 needs a purchase decision).
+**Decision: do not anchor the proof to a specific sibling-project slice.** All sibling projects are moving; whatever looks unstarted today will likely be done by hand before Amoeba can run a proof. When Amoeba reaches proof stage, the PM picks from what is unstarted then.
+
+Selection criteria recorded from the 2026-09-13 survey (the reusable part):
+- Genuinely unstarted at the plan-entry level, so the runner drives P3→P6 end to end rather than entering mid-pipeline.
+- Bounded scope with a fresh in-tree worked precedent of the same shape.
+- Contains at least one genuine design decision — tests whether the runner *surfaces* a decision rather than silently picking.
+- No production host / cutover step, no purchase decision, no repo-infrastructure change the runner itself would depend on (e.g. introducing CI).
+- Low blast radius; no paper dependency on a large unstarted grind.
 
 ## 8. Field-observed failure shapes the Runner must model
 
@@ -139,5 +142,5 @@ Verified by sq-base against branch `918-slice.review-grounding`, pkg 0.12.2.
 
 1. `cf guides update` to 0.17.4 and refresh CLAUDE.md branch rules (PM).
 2. Apply the corrections above to the concept, initiative plan, and dependency register.
-3. PM decisions: first proof (189 / 918 / 906); whether to ask Squadron for the #97 frontmatter flag; confirm CF 220 ownership with the CF team.
+3. PM decisions still open: whether to ask Squadron for the #97 frontmatter flag (S6); confirm CF 220 ownership with the CF team. (First proof: deferred by decision — pick when ready, §7.)
 4. Phase 2 architecture for initiative 100, committed directly on `main` per 0.17.x branch rules.
