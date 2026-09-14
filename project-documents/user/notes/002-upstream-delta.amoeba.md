@@ -18,7 +18,7 @@ Nothing below invalidates the three-part architecture (Runner / Translator / Jud
 ## Ownership decisions (PM, 2026-09-13)
 
 - **SQ initiative 280 "Shared Agent Artifact Store"** (SQLite, typed `review_findings` / `checkpoint` / `task_progress` / `devlog` artifacts, `sq artifacts list`) — unstarted in Squadron; **Amoeba owns this scope now.** It merges into initiative 100 (Substrate & Run-State Store). Squadron's per-pipeline `RunState` stays Squadron's; Amoeba's store is the project-lifecycle layer that references SQ run IDs.
-- **CF initiative 220 "Event-Driven Pipeline"** (persistent MCP daemon, `cf server start/stop/status`, port 3100, server-initiated notifications for multi-client coordination) — active in CF's plan but slice 221 unstarted, `packages/server` does not exist; **Amoeba most likely owns this now.** It is the push-based substrate seam that replaces polling `cf next`. Confirm with CF team before CF starts 221.
+- **CF initiative 220 "Event-Driven Pipeline"** (persistent MCP daemon, `cf server start/stop/status`, port 3100, server-initiated notifications for multi-client coordination) — active in CF's plan but slice 221 unstarted, `packages/server` does not exist; **Amoeba owns this** (confirmed by PM 2026-09-13). It is the push-based substrate seam that replaces polling `cf next`. CF's plan should mark 220 as delegated so slice 221 is not started on the CF side.
 
 ## 1. Squadron has a Judge — re-scope initiative 140
 
@@ -142,5 +142,5 @@ Verified by sq-base against branch `918-slice.review-grounding`, pkg 0.12.2.
 
 1. `cf guides update` to 0.17.4 and refresh CLAUDE.md branch rules (PM).
 2. Apply the corrections above to the concept, initiative plan, and dependency register.
-3. PM decisions still open: whether to ask Squadron for the #97 frontmatter flag (S6); confirm CF 220 ownership with the CF team. (First proof: deferred by decision — pick when ready, §7.)
+3. PM decisions still open: whether to ask Squadron for the #97 frontmatter flag (S6). CF 220 ownership: **confirmed by PM 2026-09-13** (Amoeba owns it). (First proof: deferred by decision — pick when ready, §7.)
 4. Phase 2 architecture for initiative 100, committed directly on `main` per 0.17.x branch rules.
