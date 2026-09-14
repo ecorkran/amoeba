@@ -82,7 +82,7 @@ The Runner (120) runs inside the resident process and only ever reads and writes
 
 ## Technical Considerations
 
-- **OQ6 boundary — Amoeba-internal component, exposed by contract.** The concept deferred whether the substrate is Amoeba-internal or a peer primitive that SQ, Amoeba, and Cowork sit on. Recommendation: build it *inside* Amoeba, behind a documented read/write contract, and treat extraction into a peer package as a later packaging decision. The PM already assigned SQ 280 and CF 220 scope here, which makes Amoeba the de facto shared layer; making it a separate primitive up front adds a repo and a versioning contract before a single consumer exists. **For PM ratification at review.**
+- **OQ6 boundary — Amoeba-internal component, exposed by contract (ratified by PM 2026-09-13).** The concept deferred whether the substrate is Amoeba-internal or a peer primitive that SQ, Amoeba, and Cowork sit on. Decision: build it *inside* Amoeba, behind a documented read/write contract, and treat extraction into a peer package as a later packaging decision. The PM assigned SQ 280 and CF 220 scope here, which makes Amoeba the de facto shared layer; making it a separate primitive up front adds a repo and a versioning contract before a single consumer exists.
 
 - **CF 220 ownership — confirmed (PM, 2026-09-13).** Amoeba owns the event-driven-daemon scope CF planned as initiative 220. CF will not start slice 221; this component builds the CF-side half of the event seam. CF's plan should be updated to mark 220 as delegated to Amoeba so the two projects do not both build it.
 
