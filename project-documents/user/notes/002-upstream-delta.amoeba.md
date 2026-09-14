@@ -134,7 +134,7 @@ Verified by sq-base against branch `918-slice.review-grounding`, pkg 0.12.2.
 ## Corrections to earlier Amoeba documents
 
 - `000-concept.amoeba.md` finding C: still true (category free-form). Finding E: still true (daemon unchanged). Findings A/B/D: true, but B must add that SQ now has an unattended loop that exits at checkpoint non-interactively, and D must add that SQ has a scorer (§1).
-- `001-initiative-plan.amoeba.md`: initiative 140 re-scoped (§1); initiative 100 absorbs SQ 280 scope and likely CF 220 (Ownership decisions) and no longer reuses the Squadron daemon (§9); initiative 120 invokes Squadron's shipped loops and owns only the lifecycle-level loop (§9); first proof replaced (§7).
+- `001-initiative-plan.amoeba.md`: initiative 140 re-scoped (§1); initiative 100 absorbs SQ 280 scope and CF 220 (Ownership decisions; CF 220 confirmed by PM 2026-09-13) and no longer reuses the Squadron daemon (§9); initiative 120 invokes Squadron's shipped loops and owns only the lifecycle-level loop (§9); first proof replaced (§7).
 - `000-concept.amoeba.md` "Decisions locked at concept": the *always-escalate until trust is earned* threshold decision must be reworded — Amoeba reports calibration evidence and recommends; the PM changes thresholds (§9 constraints).
 - `001-squadron-dependencies.amoeba.md`: Notes section names `workflow.review_required` — the shipped key is `workflow.review_enabled`. S1–S5 status as of 2026-09-13 in §4. New asks to append: `fallback_used` (or a derived flag) in frontmatter (#97); `location_verified` + `finding_scan` in `to_dict()`; a run-level / review-completed event.
 
