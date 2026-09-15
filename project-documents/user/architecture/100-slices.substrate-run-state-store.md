@@ -8,7 +8,7 @@ component: substrate-run-state-store
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 100 — decomposes the substrate and run-state store into foundation, feature, and integration slices that each leave the system in a working state.
 dateCreated: 20260913
-dateUpdated: 20260913
+dateUpdated: 20260915
 status: not_started
 ---
 
@@ -102,7 +102,7 @@ Two consequences shape the decomposition:
 
 ## Integration Work
 
-6. [ ] **(106) Contract Proof and Hardening** — Prove the contract from the outside before initiative 120 commits to it. An end-to-end exercise driving a realistic lifecycle sequence through the substrate — nodes created, a Squadron run journaled and its verdict ingested, a blocked-state written and resolved through the inbox, a restart mid-sequence, subscribers observing the whole thing — using only the documented API, no internal access. Closes out store-locality behavior (per-project versus per-supervisor), the pruning policy for paused Squadron runs that SQ never prunes, and documentation for downstream initiative authors.
+6. [ ] **(106) Contract Proof and Hardening** — Prove the contract from the outside before initiative 120 commits to it. An end-to-end exercise driving a realistic lifecycle sequence through the substrate — nodes created, a Squadron run journaled and its verdict ingested, a blocked-state written and resolved through the inbox, a restart mid-sequence, subscribers observing the whole thing — using only the documented API, no internal access. Verifies store-locality behavior end to end against the model settled in slice 101 (per-supervisor, central, project-keyed) — the locality *decision* is closed there, and what remains here is proving path resolution and project-keying hold under a realistic sequence. Also closes out the pruning policy for paused Squadron runs that SQ never prunes, and documentation for downstream initiative authors.
    **Value:** Developer value — the contract is demonstrated to work for its actual consumer rather than assumed to. This is the point at which initiative 120 can safely begin.
    **Success Criteria:**
    - A full lifecycle sequence runs through the public API with no internal access.

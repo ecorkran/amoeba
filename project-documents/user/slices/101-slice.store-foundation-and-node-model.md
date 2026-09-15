@@ -6,7 +6,7 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: []
 interfaces: [102, 103, 104, 105, 106]
 dateCreated: 20260914
-dateUpdated: 20260914
+dateUpdated: 20260915
 status: not_started
 ---
 
@@ -131,6 +131,8 @@ This follows the architecture's "resident process per supervisor (not per projec
 
 No per-project override is built. Adding one would put two locality paths in the foundation slice before any consumer needs either, which the architecture warns against directly.
 
+The slice plan originally assigned this decision to slice 106. The PM decision above closes it here instead, and 106's entry in `100-slices.substrate-run-state-store.md` has been narrowed to match: 106 verifies locality behavior end to end rather than deciding it.
+
 ### Node identity and tree shape
 
 Nodes form a tree by parent reference, scoped by project. Every node carries `project_id` from the first row written, per the architecture's "project is a first-class key from day one" principle — which explicitly does *not* mean building multi-project supervision now.
@@ -148,6 +150,20 @@ This is the vocabulary fixed by the architecture and the slice plan. `StrEnum` i
 The same treatment applies to any other value this slice routes on. Free-form upstream strings (Squadron's `category`, CF's prose `recommendation`) are not stored here at all — they belong to slice 104 — and when they arrive they are stored as data, never used as logical structure.
 
 A status value read from the database that is not in the enum is an error, not a default. This is the "unknown is a value, not a default" principle at the storage boundary.
+
+### Failure modes on the store I/O path
+
+This slice introduces the repository's first I/O path, so the local-I/O equivalents of hang/timeout/disconnect are enumerated here rather than discovered in slice 102. Each is an explicit, typed failure: none degrades to a silent default, and none is swallowed.
+
+**Lock contention (`SQLITE_BUSY`).** WAL permits concurrent readers with one writer, and this slice does *not* enforce single-writer — that is slice 102's job — so contention is reachable from a caller-side race, including within this slice's own tests. A busy timeout is set at open, and its value is a named configuration constant, not an inline literal at the `connect` call. Exhausting it raises a typed store exception naming the contended operation; it never retries indefinitely and never returns an empty result as though the read succeeded.
+
+**Corrupt or unreadable database file on open.** A file that exists but is not a valid SQLite database, or whose `schema_meta` cannot be read, raises at open. It is never re-created, truncated, or treated as a fresh store — silently replacing a corrupt store would destroy lifecycle history, which is precisely the state this component exists to protect. This is the same posture as the existing rule that a store newer than the code is an error rather than a silent downgrade.
+
+**Permission error on the store path.** An unreadable or unwritable store path — or a parent directory that cannot be created — raises at open with the resolved path in the message. The store does not fall back to a temporary location or an in-memory database; a caller silently operating against a throwaway store it did not ask for is the worst available outcome.
+
+**Disk-full during a commit.** A failed commit propagates. Writes are already transactional, so the database is left consistent by SQLite's own guarantees; the store's obligation is to surface the failure rather than report success. No write method returns a status code that a caller can ignore — failures raise.
+
+Handling conforms to the project's exception rule: these are specific, typed exceptions raised at the boundary, not bare `except` blocks, and any intermediate catch re-raises after `logger.exception`.
 
 ### Patterns and conventions
 
@@ -236,6 +252,7 @@ Nothing. This is the bottom of the stack.
 - The status vocabulary is defined exactly once as an enumeration and referenced everywhere; a value outside it raises rather than defaulting.
 - The schema carries a version stamp, and a migration from version N to N+1 runs and is covered by a test.
 - Every node is scoped to a project, and queries for one project never return another project's nodes.
+- Each enumerated store-I/O failure mode raises a typed exception rather than degrading silently: opening a corrupt database file, opening a path the process cannot read or write, and exhausting the busy timeout under contention are each covered by a test. The busy timeout is a named configuration constant, asserted as such rather than matched as a literal.
 
 ### Technical Requirements
 
