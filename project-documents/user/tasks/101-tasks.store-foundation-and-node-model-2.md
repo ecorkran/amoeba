@@ -57,11 +57,16 @@ status: not_started
 - [ ] Test busy-timeout exhaustion under contention raises the typed error
 - [ ] Assert the busy timeout **as a named constant**, not by matching a literal value — a test that hardcodes the number defeats the purpose
 - [ ] Ensure every test operates only on paths the fixture created
+- [ ] For the permission test, restrict a parent directory rather than the file, and skip when the process runs as root — `chmod`-based restriction is a no-op for root, which is common in containerized CI. A test that silently passes because it could not restrict anything is worse than no test
 
 **Success Criteria**:
 - [ ] `uv run pytest -v` passes with all three failure-mode tests green
 - [ ] The busy-timeout test references the named constant
+- [ ] The permission test either genuinely exercises the failure or skips with a stated reason — it never passes vacuously
 - [ ] No test touches the central per-supervisor store path
+
+**Files to Create**:
+- `tests/test_failure_modes.py`
 
 ---
 
@@ -115,11 +120,16 @@ status: not_started
 - [ ] Export the store class, the dataclasses, the vocabularies, and the exception types from `src/amoeba/store/__init__.py`
 - [ ] Do not export `sql.py` internals or migration machinery
 - [ ] Confirm every exported callable carries a docstring sufficient for a downstream author
+- [ ] Add an import-surface regression test in `tests/test_public_api.py`: import every exported name from `amoeba.store` and assert the exported set matches an explicit expected list, so a typo'd, dropped, or accidentally-added export fails `pytest` rather than waiting for someone to re-run the manual walkthrough
 
 **Success Criteria**:
 - [ ] The names in the LLD's verification walkthrough import successfully from `amoeba.store`
 - [ ] Internal modules are not re-exported
+- [ ] `uv run pytest tests/test_public_api.py -v` passes and would fail on a changed export surface
 - [ ] `uv run pyright` strict passes
+
+**Files to Create**:
+- `tests/test_public_api.py`
 
 ---
 
@@ -130,7 +140,9 @@ status: not_started
 **Objective**: Document the store contract well enough that initiative 120's slice design can proceed **without reading the implementation**. Per the LLD this is the criterion that actually gates downstream work.
 
 **Steps**:
+- [ ] Write the document at `docs/store-contract.md` — a standalone file, not a module docstring, since the audience is a downstream slice author who will not open the package
 - [ ] Document the public API: lifecycle, node writes, node reads, blocked-state writes, and the two Runner queries
+- [ ] Document the CF and SQ reference fields on nodes, stating explicitly that the store holds them as **opaque, unparsed values** — slice 104 correlates provenance against them and the Runner, not the store, parses CF/SQ output
 - [ ] Document the status vocabulary and the other closed vocabularies, with each value's meaning
 - [ ] Document the writer model explicitly: this library **does not** enforce single-writer, and slice 102 is what adds it — stated so 102 knows what it is adding rather than discovering an assumption
 - [ ] Document the enumerated failure modes and which exception each raises
