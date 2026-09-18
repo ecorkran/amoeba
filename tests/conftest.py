@@ -1,0 +1,28 @@
+"""Shared test fixtures.
+
+Every fixture here creates its own throwaway store under pytest's ``tmp_path``
+and destroys only what it created. No test touches the central per-supervisor
+store path — that property is checked mechanically by the guard test in
+``test_store_safety.py`` rather than assumed.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture
+def store_file(tmp_path: Path) -> Path:
+    """Path to a throwaway store file that does not yet exist.
+
+    Scope: function. Each test gets its own path under its own ``tmp_path``, so
+    tests never share a store and never observe each other's writes.
+
+    Safety: the path lies inside pytest's temporary directory, which pytest
+    created and pytest removes. This fixture creates nothing and therefore
+    destroys nothing — the file, if any, is created by the store under test,
+    which is the only thing torn down with it.
+    """
+    return tmp_path / "throwaway.sqlite3"
