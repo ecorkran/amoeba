@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 MIGRATIONS_PACKAGE: Final = "amoeba.store.schema"
 
 #: The schema version this code expects. Bumped with each migration added.
-EXPECTED_SCHEMA_VERSION: Final = 1
+EXPECTED_SCHEMA_VERSION: Final = 2
 
 #: Version stamped on a store whose ``schema_meta`` table does not exist yet.
 UNINITIALIZED_SCHEMA_VERSION: Final = 0

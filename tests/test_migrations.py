@@ -141,6 +141,59 @@ def test_missing_migration_raises_rather_than_skipping(store_file: Path) -> None
         assert read_schema_version(connection) == EXPECTED_SCHEMA_VERSION
 
 
+def test_migration_advances_the_stamp_and_data_survives(store_file: Path) -> None:
+    """The N to N+1 proof: open at version 1, migrate, keep the data.
+
+    This is the mechanism slices 102-106 add their real migrations onto, so it
+    is proven here before anything depends on it.
+    """
+    with _connect(store_file) as connection:
+        migrate(connection, expected_version=1)
+        assert read_schema_version(connection) == 1
+
+        connection.execute(
+            sql.INSERT_NODE,
+            (
+                "n1",
+                "demo",
+                None,
+                "slice",
+                "runnable",
+                "survivor",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "2026-09-17T00:00:00+00:00",
+                "2026-09-17T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+
+        assert migrate(connection, expected_version=2) == 2
+        assert read_schema_version(connection) == 2
+
+        row = connection.execute(sql.SELECT_NODE_BY_ID, ("n1",)).fetchone()
+        assert row is not None
+        assert row[5] == "survivor"
+
+
+def test_fresh_store_arrives_at_the_latest_version(store_file: Path) -> None:
+    """A store created from scratch runs every migration, not only the first."""
+    with _connect(store_file) as connection:
+        assert migrate(connection) == EXPECTED_SCHEMA_VERSION
+        assert EXPECTED_SCHEMA_VERSION >= 2
+
+        columns = {
+            str(row[1])
+            for row in connection.execute(f"PRAGMA table_info({sql.TABLE_NODES})")
+        }
+        assert "note" in columns
+
+
 def test_failed_migration_leaves_the_stamp_unadvanced(
     store_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

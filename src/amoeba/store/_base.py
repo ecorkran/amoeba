@@ -21,6 +21,12 @@ from amoeba.store.models import Node, NodeNotFoundError, StoreBusyError
 
 logger = logging.getLogger(__name__)
 
+#: SQLite result codes meaning "the lock could not be acquired in time".
+#: Matched on the error *code*, never on the message text: a message-substring
+#: check misclassifies unrelated errors, since "blocked_states" contains
+#: "locked".
+BUSY_ERROR_CODES = frozenset({sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED})
+
 
 def now() -> datetime:
     """The current instant, in UTC."""
@@ -44,20 +50,26 @@ def new_id() -> str:
 class StoreBase:
     """Connection state and the helpers every operation mixin builds on."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        busy_timeout_seconds: float = sql.BUSY_TIMEOUT_SECONDS,
+    ) -> None:
         self._connection = connection
+        self._busy_timeout_seconds = busy_timeout_seconds
 
     def _execute(self, statement: str, parameters: Sequence[object]) -> sqlite3.Cursor:
         """Execute one statement, translating lock contention to a typed error."""
         try:
             return self._connection.execute(statement, tuple(parameters))
         except sqlite3.OperationalError as error:
-            if "locked" in str(error) or "busy" in str(error):
+            if error.sqlite_errorcode in BUSY_ERROR_CODES:
                 # Specific: the busy timeout was exhausted. Never retried
                 # indefinitely and never reported as an empty result.
                 logger.exception("busy timeout exhausted")
                 raise StoreBusyError(
-                    f"busy timeout of {sql.BUSY_TIMEOUT_SECONDS}s exhausted: {error}"
+                    f"busy timeout of {self._busy_timeout_seconds}s exhausted "
+                    f"on {statement.strip().split(maxsplit=1)[0]}: {error}"
                 ) from error
             raise
 

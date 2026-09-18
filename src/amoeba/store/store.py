@@ -46,12 +46,17 @@ class Store(NodeOperations, BlockingOperations):
     ignore.
     """
 
-    def __init__(self, connection: sqlite3.Connection, path: Path) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        path: Path,
+        busy_timeout_seconds: float = sql.BUSY_TIMEOUT_SECONDS,
+    ) -> None:
         """Wrap an already-open, already-migrated connection.
 
         Callers use :meth:`open` or :meth:`open_temporary` instead.
         """
-        super().__init__(connection)
+        super().__init__(connection, busy_timeout_seconds)
         self._path = path
 
     @property
@@ -60,7 +65,13 @@ class Store(NodeOperations, BlockingOperations):
         return self._path
 
     @classmethod
-    def open(cls, path: Path | None = None, *, project_id: str | None = None) -> Self:
+    def open(
+        cls,
+        path: Path | None = None,
+        *,
+        project_id: str | None = None,
+        busy_timeout_seconds: float = sql.BUSY_TIMEOUT_SECONDS,
+    ) -> Self:
         """Open a store, creating and migrating it as needed.
 
         Args:
@@ -68,6 +79,10 @@ class Store(NodeOperations, BlockingOperations):
                 for ``project_id`` is resolved from ``paths``.
             project_id: Used to resolve the central path when ``path`` is
                 omitted. Ignored when ``path`` is given.
+            busy_timeout_seconds: How long to wait for a contended lock before
+                raising. Defaults to the named configuration constant;
+                parameterized so a contention test need not wait the full
+                production timeout.
 
         Returns:
             An open store.
@@ -95,7 +110,7 @@ class Store(NodeOperations, BlockingOperations):
                 f"cannot create store directory {path.parent}: {error}"
             ) from error
 
-        connection = cls._connect(path)
+        connection = cls._connect(path, busy_timeout_seconds)
 
         try:
             migrate(connection)
@@ -103,7 +118,7 @@ class Store(NodeOperations, BlockingOperations):
             connection.close()
             raise
 
-        return cls(connection, path)
+        return cls(connection, path, busy_timeout_seconds)
 
     @classmethod
     def open_temporary(cls) -> Self:
@@ -117,11 +132,13 @@ class Store(NodeOperations, BlockingOperations):
         return cls(connection, IN_MEMORY_PATH)
 
     @staticmethod
-    def _connect(path: Path) -> sqlite3.Connection:
+    def _connect(
+        path: Path, busy_timeout_seconds: float = sql.BUSY_TIMEOUT_SECONDS
+    ) -> sqlite3.Connection:
         """Connect, set WAL and the busy timeout, and verify readability."""
         try:
             connection = sqlite3.connect(
-                path, timeout=sql.BUSY_TIMEOUT_SECONDS, isolation_level="DEFERRED"
+                path, timeout=busy_timeout_seconds, isolation_level="DEFERRED"
             )
         except sqlite3.OperationalError as error:
             # Specific: sqlite3 reports an unopenable path this way. Typed so
