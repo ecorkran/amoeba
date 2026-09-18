@@ -1,0 +1,41 @@
+[project]
+name = "amoeba"
+version = "0.1.0"
+description = "Orchestration runner with deterministic control flow and bounded nondeterminism."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/amoeba"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pyright>=1.1.390",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+line-length = 88
+# Planning artifacts and the ai-project-guide submodule are documentation, not
+# source. The submodule in particular must never be modified by this project.
+extend-exclude = ["project-documents"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
