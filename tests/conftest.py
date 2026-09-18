@@ -8,9 +8,12 @@ store path — that property is checked mechanically by the guard test in
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+from amoeba.store import Store
 
 
 @pytest.fixture
@@ -26,3 +29,19 @@ def store_file(tmp_path: Path) -> Path:
     which is the only thing torn down with it.
     """
     return tmp_path / "throwaway.sqlite3"
+
+
+@pytest.fixture
+def store(store_file: Path) -> Iterator[Store]:
+    """An open store backed by a throwaway file, closed when the test ends.
+
+    Scope: function. The store is opened at :func:`store_file`, so it lives
+    entirely inside pytest's temporary directory and no two tests share one.
+
+    Safety: destroys only what it created. The fixture opens — and thereby
+    creates — exactly one store file under ``tmp_path`` and closes it on
+    teardown; removing the directory is pytest's own doing. It never resolves
+    or opens the central per-supervisor store.
+    """
+    with Store.open(store_file) as opened:
+        yield opened
