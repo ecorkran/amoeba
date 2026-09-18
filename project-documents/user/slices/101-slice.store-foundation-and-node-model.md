@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: []
 interfaces: [102, 103, 104, 105, 106]
 dateCreated: 20260914
-dateUpdated: 20260915
-status: not_started
+dateUpdated: 20260917
+status: complete
 ---
 
 # Slice Design: Store Foundation and Node Model
@@ -68,24 +68,43 @@ Two *upstream* shapes are referenced but not parsed here, recorded so the schema
 
 ### Component Structure
 
+As implemented (2026-09-17):
+
 ```
 src/amoeba/store/
   __init__.py        Public API surface — the contract
   models.py          Node, BlockedState, Resolution dataclasses; StrEnum vocabularies
+  paths.py           Central store path resolution (pure; no I/O)
   sql.py             Every SQL statement; column names as module constants
-  store.py           Store class: open/close, transactions, CRUD, the two queries
+  mapping.py         The single row-to-dataclass mapping layer
+  _base.py           Connection plumbing shared by the operation mixins
+  store.py           Store class: open/close, context manager, assembly
+  nodes.py           Node writes and reads
+  blocking.py        block/resolve and the two Runner queries
   migrations.py      Version detection and the migration runner
-  migrations/
+  schema/
     001_initial.sql
+    002_node_note.sql
 tests/
+  conftest.py            Throwaway-store fixture
   test_models.py
+  test_paths.py
   test_store.py
   test_migrations.py
   test_queries.py
-  conftest.py        Throwaway-store fixture
+  test_failure_modes.py
+  test_public_api.py
+  test_store_safety.py   Guard: no test reaches the central store
+docs/
+  store-contract.md  The contract documentation
 ```
 
 The module split follows the project's ~300-line file guideline and keeps one concern per file. `sql.py` exists as its own module for a specific reason given under Technical Decisions.
+
+Two deviations from the original sketch, both forced during implementation:
+
+- **The SQL files live in `schema/`, not `migrations/`.** A `migrations.py` module and a `migrations/` package directory cannot coexist: the module shadows the directory and `importlib.resources` resolves to the wrong place, making the `.sql` files unreachable. The runner keeps the name `migrations.py`.
+- **`store.py` split into `store.py` + `nodes.py` + `blocking.py` + `mapping.py` + `_base.py`.** Held as one file it reached 520 lines, well past the ~300-line guideline. Split by concern rather than padded; the public surface is unchanged, since `Store` composes the operation mixins.
 
 **Interaction:** `store.py` is the only module callers touch. It composes statements from `sql.py`, maps rows to the dataclasses in `models.py`, and delegates schema setup to `migrations.py` at open time. Nothing in `models.py` knows SQL exists; nothing in `sql.py` knows the dataclasses exist. The mapping between them lives in one place, in `store.py`.
 
@@ -270,7 +289,7 @@ Nothing. This is the bottom of the stack.
 
 ### Verification Walkthrough
 
-None of these commands exist yet; this slice creates them. After implementation:
+**Verified 2026-09-17 against commit on branch `101-slice.store-foundation-and-node-model`.** Every command below was executed as written and produced the output shown. No deviations were found.
 
 **1. The scaffold is real.**
 
@@ -281,15 +300,23 @@ uv run ruff check . && uv run ruff format --check .
 uv run pyright
 ```
 
-Expect clean output from all three. `pyright` reporting zero errors across `src` and `tests` is the gate, not a TODO.
+Actual output:
+
+```
+All checks passed!
+36 files already formatted
+0 errors, 0 warnings, 0 informations
+```
+
+`pyright` reporting zero errors across `src` and `tests` is the gate, not a TODO.
 
 **2. The suite passes.**
 
 ```bash
-uv run pytest -v
+uv run pytest -q
 ```
 
-Expect the model, store, migration, and query tests green.
+Actual output: `119 passed`. The model, path, store, migration, query, failure-mode, public-API, and test-safety suites are all green.
 
 **3. Drive the contract by hand.** This is the demo that matters — it is the slice's claim, executed:
 
@@ -298,32 +325,72 @@ uv run python
 ```
 
 ```python
-from amoeba.store import Store, NodeStatus
+from amoeba.store import Store, NodeKind, BlockedKind
 
 with Store.open_temporary() as store:          # throwaway store, not the real one
-    initiative = store.create_node(project_id="demo", kind="initiative", ...)
-    slice_node = store.create_node(project_id="demo", parent_id=initiative.id, ...)
+    initiative = store.create_node(
+        project_id="demo", kind=NodeKind.INITIATIVE, title="substrate"
+    )
+    slice_node = store.create_node(
+        project_id="demo", parent_id=initiative.id, kind=NodeKind.SLICE, title="101"
+    )
 
-    print(store.runnable(project_id="demo"))   # -> the nodes awaiting work
+    print("runnable:", [n.title for n in store.runnable(project_id="demo")])
 
-    store.block(slice_node.id, kind=NodeStatus.BLOCKED_ON_HUMAN, context=...)
-    print(store.blocked(project_id="demo"))    # -> node + who it is blocked on
+    store.block(slice_node.id, kind=BlockedKind.HUMAN, context="awaiting PM ruling")
+    blocked = store.blocked(project_id="demo")
+    print("blocked:", [(b.node.title, b.blocked_state.kind.value) for b in blocked])
+    print("runnable while blocked:", [n.title for n in store.runnable(project_id="demo")])
 
-    store.resolve(slice_node.id, resolution=...)
-    print(store.runnable(project_id="demo"))   # -> slice_node is back
+    store.resolve(slice_node.id, resolved_by="pm", detail="ruled: proceed")
+    print("runnable after resolve:", [n.title for n in store.runnable(project_id="demo")])
+    print("blocked after resolve:", store.blocked(project_id="demo"))
+```
+
+Actual output:
+
+```
+runnable: ['substrate', '101']
+blocked: [('101', 'human')]
+runnable while blocked: ['substrate']
+runnable after resolve: ['substrate', '101']
+blocked after resolve: []
 ```
 
 The observable claim: a blocked node disappears from the runnable set, appears in the blocked set with its blocker identified, and returns to runnable when — and only when — its resolution slot is filled. That is checkpoint-as-persisted-blocked-state, demonstrated.
 
+**Caveats discovered during implementation:**
+
+- `block()` takes a `BlockedKind`, not a `NodeStatus`. The design sketch above originally passed `NodeStatus.BLOCKED_ON_HUMAN`; the implemented signature takes the blocker vocabulary and derives the status itself via `BLOCKED_KIND_TO_STATUS`, which is what makes it impossible for status and blocked-state to disagree.
+- `resolve()` takes `resolved_by=` and `detail=` rather than a single `resolution=` object, so the slot's provenance is required rather than optional.
+- `create_node()` requires `kind=` and `title=`; `parent_id=` is optional.
+
 **4. Migrations actually migrate.**
 
 ```bash
-uv run pytest tests/test_migrations.py -v
+uv run pytest tests/test_migrations.py -q
 ```
 
-The test opens a store at version N, applies the migration, and asserts the stamp advanced and the data survived. A store stamped newer than the code raises rather than silently proceeding.
+Actual output: `11 passed`. The suite opens a store at version 1, applies the `002` migration, and asserts the stamp advanced **and** the pre-existing row survived. A store stamped newer than the code raises `StoreSchemaError` rather than silently proceeding, and a failed migration leaves the stamp unadvanced.
 
-**5. Inspect the file.** The store is a real SQLite database; `sqlite3 <path> .schema` shows the tables, and status values are readable strings because the vocabulary is a `StrEnum`. Slice 102's inspection surface builds on this.
+**5. Inspect the file.** The store is a real SQLite database:
+
+```bash
+sqlite3 <path> .schema
+sqlite3 <path> "SELECT status, kind, title FROM nodes;"
+sqlite3 <path> "SELECT version FROM schema_meta;"
+```
+
+Actual output (a store with one node blocked on a judge):
+
+```
+blocked_on_judge|slice|101
+2
+```
+
+`.schema` shows `schema_meta`, `nodes`, `blocked_states`, the `idx_nodes_project_status` index, and the `note` column added by migration `002`. Status values are readable strings because the vocabulary is a `StrEnum`. Slice 102's inspection surface builds on this.
+
+**Implementation note on file layout:** the migration `.sql` files live in `src/amoeba/store/schema/`, not `src/amoeba/store/migrations/` as the Component Structure sketch shows. A `migrations.py` module and a `migrations/` package directory cannot coexist — the module shadows the directory and `importlib.resources` cannot reach the `.sql` files. The runner remains `migrations.py`.
 
 ## Risk Assessment
 
