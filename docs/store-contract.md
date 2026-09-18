@@ -146,8 +146,8 @@ constant and exists so contention tests need not wait the production timeout.
 
 | Method | Effect |
 | --- | --- |
-| `create_node(*, project_id, kind, title, parent_id=None, status=RUNNABLE, cf=None, sq=None)` | Creates a node and returns it, with its generated `id`. Raises `NodeNotFoundError` if `parent_id` names no node. |
-| `update_node_status(node_id, status)` | Sets status, validated against the vocabulary. Returns the updated node. |
+| `create_node(*, project_id, kind, title, parent_id=None, status=RUNNABLE, cf=None, sq=None)` | Creates a node and returns it, with its generated `id`. Raises `NodeNotFoundError` if `parent_id` names no node, and `InvalidTransitionError` if `status` is a blocked status. |
+| `update_node_status(node_id, status)` | Sets status, validated against the vocabulary. Returns the updated node. Raises `InvalidTransitionError` if the node is blocked or `status` is a blocked status. |
 | `update_cf_reference(node_id, cf)` | Replaces all CF fields. The node's `id` is unchanged. |
 | `update_sq_reference(node_id, sq)` | Replaces all SQ fields. The node's `id` is unchanged. |
 
@@ -157,8 +157,10 @@ multi-project supervision exists yet.
 
 **No write returns a status code you can ignore.** Failures raise.
 
-Do not call `update_node_status` to block or unblock a node — use `block()` and
-`resolve()`, which keep status and blocked-state consistent.
+`update_node_status` cannot block or unblock a node, and `create_node` cannot
+create one already blocked: both raise `InvalidTransitionError` for any blocked
+status. Use `block()` and `resolve()`, which keep status and blocked-state
+consistent.
 
 ## Node reads
 
@@ -183,7 +185,8 @@ slot *and* flips the node back to `runnable` together.
 
 There is deliberately **no public path that writes one half**. Node status and
 blocked state cannot disagree, because the caller is never able to make them
-disagree. Do not try to compose the two-step version yourself.
+disagree: `create_node` and `update_node_status` refuse every blocked status, so
+`block()` and `resolve()` are the only writers of either half.
 
 Invalid transitions raise `InvalidTransitionError` rather than silently
 overwriting:
@@ -244,8 +247,8 @@ against a throwaway store it did not ask for is the worst available outcome.
 | Store is stamped at a schema version newer than the code | `StoreSchemaError` |
 | Stored value outside a closed vocabulary, read back | `UnknownVocabularyValueError` |
 | Node id does not exist | `NodeNotFoundError` |
-| Block or resolve against a node in the wrong state | `InvalidTransitionError` |
-| Store invariant violated by a write | `StoreIntegrityError` |
+| Block or resolve against a node in the wrong state, or a blocked status written through `create_node` / `update_node_status` | `InvalidTransitionError` |
+| Schema-level invariant (foreign key, one open blocked state per node) violated by a write | `StoreIntegrityError` |
 
 All inherit from `StoreError`, so `except StoreError` catches the family.
 

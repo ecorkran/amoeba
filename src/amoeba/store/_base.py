@@ -17,7 +17,12 @@ from datetime import UTC, datetime
 
 from amoeba.store import sql
 from amoeba.store.mapping import map_node
-from amoeba.store.models import Node, NodeNotFoundError, StoreBusyError
+from amoeba.store.models import (
+    Node,
+    NodeNotFoundError,
+    StoreBusyError,
+    StoreIntegrityError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +64,17 @@ class StoreBase:
         self._busy_timeout_seconds = busy_timeout_seconds
 
     def _execute(self, statement: str, parameters: Sequence[object]) -> sqlite3.Cursor:
-        """Execute one statement, translating lock contention to a typed error."""
+        """Execute one statement, translating sqlite3 failures to typed errors."""
+        operation = statement.strip().split(maxsplit=1)[0]
         try:
             return self._connection.execute(statement, tuple(parameters))
+        except sqlite3.IntegrityError as error:
+            # Specific: a schema-level invariant (foreign key, or the one-open-
+            # blocked-state-per-node index) refused the write.
+            logger.exception("store invariant violated on %s", operation)
+            raise StoreIntegrityError(
+                f"store invariant violated on {operation}: {error}"
+            ) from error
         except sqlite3.OperationalError as error:
             if error.sqlite_errorcode in BUSY_ERROR_CODES:
                 # Specific: the busy timeout was exhausted. Never retried
@@ -69,7 +82,7 @@ class StoreBase:
                 logger.exception("busy timeout exhausted")
                 raise StoreBusyError(
                     f"busy timeout of {self._busy_timeout_seconds}s exhausted "
-                    f"on {statement.strip().split(maxsplit=1)[0]}: {error}"
+                    f"on {operation}: {error}"
                 ) from error
             raise
 

@@ -5,6 +5,10 @@ against :data:`EXPECTED_SCHEMA_VERSION`. Missing or lower means the numbered
 ``.sql`` files above it are applied in order inside a transaction. Higher means
 the store was written by newer code, which raises rather than silently
 downgrading — the store holds lifecycle history that cannot be reconstructed.
+
+The ``.sql`` files deliberately omit ``IF NOT EXISTS``. The version gate is the
+protection against re-application; idempotent DDL would mask a genuine
+double-apply bug instead of failing on it.
 """
 
 from __future__ import annotations

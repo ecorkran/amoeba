@@ -111,13 +111,7 @@ class Store(NodeOperations, BlockingOperations):
             ) from error
 
         connection = cls._connect(path, busy_timeout_seconds)
-
-        try:
-            migrate(connection)
-        except Exception:
-            connection.close()
-            raise
-
+        cls._migrate_or_close(connection)
         return cls(connection, path, busy_timeout_seconds)
 
     @classmethod
@@ -128,8 +122,22 @@ class Store(NodeOperations, BlockingOperations):
         written to the central per-supervisor path.
         """
         connection = cls._connect(IN_MEMORY_PATH)
-        migrate(connection)
+        cls._migrate_or_close(connection)
         return cls(connection, IN_MEMORY_PATH)
+
+    @staticmethod
+    def _migrate_or_close(connection: sqlite3.Connection) -> None:
+        """Migrate a fresh connection, closing it if migration fails.
+
+        Shared by both constructors so they give the same failure guarantee:
+        a failed open never leaks a connection.
+        """
+        try:
+            migrate(connection)
+        except Exception:
+            logger.exception("migration failed; closing the connection")
+            connection.close()
+            raise
 
     @staticmethod
     def _connect(

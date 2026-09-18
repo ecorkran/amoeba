@@ -10,7 +10,29 @@ from __future__ import annotations
 from amoeba.store import sql
 from amoeba.store._base import StoreBase, isoformat, new_id, now
 from amoeba.store.mapping import map_node
-from amoeba.store.models import CFReference, Node, NodeKind, NodeStatus, SQReference
+from amoeba.store.models import (
+    BLOCKED_STATUSES,
+    CFReference,
+    InvalidTransitionError,
+    Node,
+    NodeKind,
+    NodeStatus,
+    SQReference,
+)
+
+
+def _refuse_blocked_status(status: NodeStatus, action: str) -> None:
+    """Reject a node write that would touch the blocked half on its own.
+
+    Blocked statuses are owned by ``block()`` and ``resolve()``, which write
+    status and blocked state in one transaction. Refusing them here is what
+    makes "no public path writes one half" structural rather than advisory.
+    """
+    if status in BLOCKED_STATUSES:
+        raise InvalidTransitionError(
+            f"cannot {action} {status.value!r} directly: "
+            "use block() and resolve() so status and blocked state agree"
+        )
 
 
 class NodeOperations(StoreBase):
@@ -43,7 +65,10 @@ class NodeOperations(StoreBase):
 
         Raises:
             NodeNotFoundError: If ``parent_id`` names no node.
+            InvalidTransitionError: If ``status`` is a blocked status. A node
+                is created unblocked and then blocked with ``block()``.
         """
+        _refuse_blocked_status(status, "create a node as")
         if parent_id is not None:
             self._require_node(parent_id)
 
@@ -92,9 +117,14 @@ class NodeOperations(StoreBase):
         Raises:
             NodeNotFoundError: If the node does not exist.
             ValueError: If ``status`` is outside the vocabulary.
+            InvalidTransitionError: If the node is blocked, or ``status`` is a
+                blocked status. Those transitions belong to ``block()`` and
+                ``resolve()``.
         """
-        self._require_node(node_id)
+        current = self._require_node(node_id)
         validated = NodeStatus(status)
+        _refuse_blocked_status(current.status, "move a node out of")
+        _refuse_blocked_status(validated, "move a node into")
 
         with self._connection:
             self._execute(

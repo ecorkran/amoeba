@@ -9,7 +9,10 @@ import pytest
 
 from amoeba.store import sql
 from amoeba.store.models import (
+    BLOCKED_STATUSES,
+    BlockedKind,
     CFReference,
+    InvalidTransitionError,
     NodeKind,
     NodeNotFoundError,
     NodeStatus,
@@ -149,6 +152,49 @@ def test_update_status_round_trips(store_file: Path) -> None:
         fetched = store.get_node(node_id)
         assert fetched is not None
         assert fetched.status is NodeStatus.IN_PROGRESS
+
+
+@pytest.mark.parametrize("blocked_status", sorted(BLOCKED_STATUSES))
+def test_update_status_refuses_to_block_a_node(
+    store_file: Path, blocked_status: NodeStatus
+) -> None:
+    """A blocked status written alone would leave no blocked-state record."""
+    with Store.open(store_file) as store:
+        node_id = _make_node(store)
+
+        with pytest.raises(InvalidTransitionError):
+            store.update_node_status(node_id, blocked_status)
+
+        assert store.blocked("demo") == []
+
+
+def test_update_status_refuses_to_unblock_a_node(store_file: Path) -> None:
+    """Unblocking through a status write would orphan the open blocked state."""
+    with Store.open(store_file) as store:
+        node_id = _make_node(store)
+        store.block(node_id, kind=BlockedKind.HUMAN, context="needs a decision")
+
+        with pytest.raises(InvalidTransitionError):
+            store.update_node_status(node_id, NodeStatus.RUNNABLE)
+
+        assert [blocked.node.id for blocked in store.blocked("demo")] == [node_id]
+
+
+@pytest.mark.parametrize("blocked_status", sorted(BLOCKED_STATUSES))
+def test_create_node_refuses_a_blocked_status(
+    store_file: Path, blocked_status: NodeStatus
+) -> None:
+    """A node is created unblocked; only block() may write a blocked status."""
+    with Store.open(store_file) as store:
+        with pytest.raises(InvalidTransitionError):
+            store.create_node(
+                project_id="demo",
+                kind=NodeKind.SLICE,
+                title="born blocked",
+                status=blocked_status,
+            )
+
+        assert store.nodes_for_project("demo") == []
 
 
 def test_update_status_of_unknown_node_raises(store_file: Path) -> None:

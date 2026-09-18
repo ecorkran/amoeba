@@ -2,7 +2,7 @@
 
 This module fixes the vocabulary every other module in the package references.
 It knows nothing about SQL or ``sqlite3``: the mapping between these types and
-database rows lives in one place, in ``store.py``.
+database rows lives in one place, in ``mapping.py``.
 
 A value read back that is not in one of these vocabularies is an error, not a
 default — "unknown is a value, not a default" at the storage boundary.

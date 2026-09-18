@@ -20,9 +20,12 @@ from amoeba.store import sql
 from amoeba.store.models import (
     BlockedKind,
     NodeKind,
+    NodeStatus,
     StoreBusyError,
     StoreCorruptError,
+    StoreIntegrityError,
     StorePermissionError,
+    StoreSchemaError,
 )
 from amoeba.store.store import Store
 
@@ -238,3 +241,55 @@ def test_concurrent_readers_are_allowed_under_wal(store_file: Path) -> None:
         thread.join(timeout=10)
 
         assert results == [1]
+
+
+def test_schema_invariant_violation_raises_typed_error(store_file: Path) -> None:
+    """A write the schema refuses surfaces typed, not as a raw sqlite3 error.
+
+    The node's status is reset behind the store's back, so ``block()`` passes
+    its own check and the one-open-blocked-state-per-node index refuses the
+    second record.
+    """
+    with Store.open(store_file) as store:
+        node_id = store.create_node(
+            project_id="demo", kind=NodeKind.SLICE, title="a slice"
+        ).id
+        store.block(node_id, kind=BlockedKind.HUMAN, context="first block")
+
+        tamper = sqlite3.connect(store_file)
+        try:
+            with tamper:
+                tamper.execute(
+                    sql.UPDATE_NODE_STATUS,
+                    (NodeStatus.RUNNABLE.value, "2026-01-01T00:00:00+00:00", node_id),
+                )
+        finally:
+            tamper.close()
+
+        with pytest.raises(StoreIntegrityError):
+            store.block(node_id, kind=BlockedKind.HUMAN, context="second block")
+
+
+def test_open_temporary_closes_the_connection_when_migration_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both constructors give the same guarantee: a failed open leaks nothing."""
+    opened: list[sqlite3.Connection] = []
+
+    def _tracking_connect(path: Path) -> sqlite3.Connection:
+        connection = sqlite3.connect(path)
+        opened.append(connection)
+        return connection
+
+    def _failing_migrate(connection: sqlite3.Connection) -> None:
+        raise StoreSchemaError("provoked migration failure")
+
+    monkeypatch.setattr(Store, "_connect", staticmethod(_tracking_connect))
+    monkeypatch.setattr("amoeba.store.store.migrate", _failing_migrate)
+
+    with pytest.raises(StoreSchemaError):
+        Store.open_temporary()
+
+    (connection,) = opened
+    with pytest.raises(sqlite3.ProgrammingError):
+        connection.execute("SELECT 1")

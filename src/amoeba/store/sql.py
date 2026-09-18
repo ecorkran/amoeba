@@ -4,7 +4,7 @@ This module is the structural mitigation for choosing raw ``sqlite3`` over an
 ORM. ``sqlite3`` returns untyped rows, so a column-name typo in a rarely
 exercised query would otherwise be a runtime failure rather than a check-time
 one. Centralizing the names here means a typo is a single-definition concern:
-the statements and the row-mapping code in ``store.py`` reference the same
+the statements and the row-mapping code in ``mapping.py`` reference the same
 constants.
 
 It holds statements and names only. It imports neither ``sqlite3`` nor the
