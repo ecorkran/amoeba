@@ -64,10 +64,10 @@ This is the highest-risk slice in initiative 100 and is sequenced second so that
 
 - **Slice 101 (complete, merged at `eb310f0`)** — `Store`, the migration mechanism (`EXPECTED_SCHEMA_VERSION = 2`), typed failure modes, central path resolution, `block()`.
 - **`pydantic`** — first runtime dependency (see D3). Used only at the Squadron run-file and `cf get --json` parsing boundaries.
-- **Squadron run-state files** as an observed external format. Verified against Squadron `0.12.5` (`src/squadron/pipeline/state.py`), schema version 4.
-- **`cf` CLI** on `PATH` for read-back. Verified present at `0.15.0`.
+- **Squadron run-state files** as an observed external format (`src/squadron/pipeline/state.py`).
+- **`cf` CLI** on `PATH` for read-back.
 
-Both upstream versions have moved since the architecture document was written (it records SQ 0.12.2 and CF 0.14.x). The shapes this slice reads are re-verified below; the recorded versions in `002-upstream-delta.amoeba.md` are stale and should be refreshed separately.
+**Upstream versions are not pinned.** Squadron and Context Forge are both under active development and will keep moving while this slice is built; both had already moved past the versions the architecture document records by the time this design was written (observed 20260919: SQ 0.12.5, CF 0.15.0 — a dated observation, not a requirement). This slice depends on *shapes*, not versions: the handful of fields listed below. The observers tolerate unknown fields, treat a missing required field as `Unknown`, and record the run file's own `schema_version` in the journal result as provenance. No code compares against an upstream version number, and a version bump alone is never a reason to revisit this design — a change to one of the listed facts is.
 
 ### Interfaces Required
 
@@ -285,7 +285,8 @@ Slice 101 only, through its public contract. `StoreError` subclasses raised duri
 
 - [ ] All vocabularies are `StrEnum`s defined once; no exit-code integers or outcome strings at call sites.
 - [ ] Every tunable (idle interval, shutdown grace, stop timeout, clock tolerance, `cf` timeout, runs directory) lives in `ProcessSettings`.
-- [ ] Squadron matcher fixtures are **real** run files copied from `~/.config/squadron/runs/` (schema version 4), including at least one `paused` and one `failed`. The CF fixture is captured from real `cf get --json` output.
+- [ ] Squadron matcher fixtures are **real** run files copied from `~/.config/squadron/runs/` at implementation time, including at least one `paused` and one `failed`. The CF fixture is captured from real `cf get --json` output. Each fixture notes the date it was captured; none is tied to an upstream version.
+- [ ] A run file or `cf` output missing a field the observer requires yields `Unknown`, not an exception and not a match — so upstream drift degrades to a human escalation.
 - [ ] The guard test fails when a read-write `Store.open` call is added outside `process/host.py`.
 - [ ] Process-level tests drive the real CLI as a subprocess against a `tmp_path` supervisor directory via `AMOEBA_STORE_DIR`; none touches `~/.config/amoeba` or the real Squadron runs directory.
 - [ ] `tests/load/` contains a crash-loop test and a recovery-scale test (see Implementation Notes) with asserted bounds.
