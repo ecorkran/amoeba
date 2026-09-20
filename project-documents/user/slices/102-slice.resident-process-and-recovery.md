@@ -4,7 +4,7 @@ slice: resident-process-and-recovery
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101]
-interfaces: [103, 105, 106, 107]
+interfaces: [103, 104, 105, 106, 107]
 dateCreated: 20260919
 dateUpdated: 20260919
 status: not_started
@@ -407,12 +407,12 @@ Suggested order — each step leaves the suite green:
 
 ### Special Considerations
 
-**Decisions awaiting Project Manager ratification.** The design is complete under these recommendations; each is reversible at design time and expensive later.
+**Project Manager decisions.** D4 is ratified and applied (see below). D1, D2, D3, and D5 remain recommendations awaiting ratification; the design is complete under them, and each is reversible at design time and expensive later.
 
 - **D1** — foreground-only `start`, no self-daemonizing.
 - **D2** — synchronous host loop with a `Tenant.tick` seam, rather than asyncio.
 - **D3** — `argparse`, plus `pydantic` as the project's first runtime dependency.
-- **D4 — the slice plan's inspection criterion cannot be met in sequence.** The plan says the inspection surface "lists nodes, findings, verdicts, and journal entries", but findings and verdicts do not exist until slice 104, which follows this one. This design ships nodes, blocked states, and journal entries, plus a listing registry so 104 adds its own. The slice plan entry has not been edited; if the PM agrees, the criterion should be split between 102 and 104 there.
+- **D4 — the slice plan's inspection criterion. RATIFIED 20260919 and applied.** The plan formerly said the inspection surface "lists nodes, findings, verdicts, and journal entries", which this slice could not meet because findings and verdicts do not exist until slice 104. The PM ratified the split: slice 102's criterion now covers nodes, blocked states, and journal entries plus the listing registry, and slice 104's criterion covers findings and verdicts registered into that registry. Slice 104's dependencies moved to `[101, 102]` and this design's `interfaces` now includes 104. Execution order is unchanged.
 - **D5** — subset matching on Squadron `params`.
 
 **Journaled-but-never-issued is indistinguishable from issued-and-pruned** for `sq_run`. Both present as zero matches and both escalate. That is correct under "unknown is a value", but it means a crash in the narrow window between `journal_issue` and process launch costs a human interruption. Accepted; S9 removes it.

@@ -54,7 +54,7 @@ Two consequences shape the decomposition:
    - A command journaled and then interrupted before resolution is reconciled on restart, not re-issued.
    - The zero-match and multiple-match reconciliation cases both produce a blocked node rather than a guess.
    - Killing the process mid-operation and restarting loses no committed state.
-   - Inspection surface lists nodes, findings, verdicts, and journal entries.
+   - Inspection surface lists nodes, blocked states, and journal entries, through a listing registry that later slices extend rather than edit.
    **Dependencies:** [101]
    **Interfaces:** Hosts the Runner (initiative 120); provides process lifecycle commands; consumes 101's store API.
    **Risk Level:** High — crash recovery is the hardest correctness problem in this component and the arch doc flags it as rewrite-expensive if wrong. Sequenced early so its problems surface before later slices depend on it.
@@ -82,8 +82,9 @@ Two consequences shape the decomposition:
    - Judge invocation samples (model, run id, score, verdict) are recorded individually, not collapsed.
    - Calibration evidence is queryable and reportable; nothing writes back into Squadron's metrology store.
    - Every ingested record stores the upstream version it was parsed from.
-   **Dependencies:** [101]
-   **Interfaces:** Provides finding/verdict/judge-sample records to initiatives 120 (routing) and 140 (consensus); consumes the store API from 101.
+   - The inspection surface lists findings and verdicts in addition to the nodes, blocked states, and journal entries slice 102 established — registered into 102's listing registry, not by editing the CLI.
+   **Dependencies:** [101, 102]
+   **Interfaces:** Provides finding/verdict/judge-sample records to initiatives 120 (routing) and 140 (consensus); consumes the store API from 101 and the inspection listing registry from 102.
    **Risk Level:** Medium — normalization correctness is the crux, and getting it wrong is silent.
    **Relative Effort:** 4
 

@@ -445,8 +445,13 @@ status: not_started
 
 ---
 
-## Open Item for the Project Manager
+## Resolved: D4 — the inspection criterion (review finding F001)
 
-**D4 — the slice plan's inspection criterion (review finding F001).** The slice plan's slice-102 success criterion reads "Inspection surface lists nodes, findings, verdicts, and journal entries" (`100-slices.substrate-run-state-store.md:57`). Findings and verdicts do not exist until slice 104, which depends only on [101] and follows this slice, so **this slice cannot satisfy that criterion as written**. Task 7.4 ships nodes, blocked states, and journal entries plus the listing registry that 104 extends.
+**Ratified by the Project Manager on 20260919 and applied to the slice plan.** The slice-102 criterion previously read "Inspection surface lists nodes, findings, verdicts, and journal entries", which this slice could not satisfy because findings and verdicts do not exist until slice 104. The criterion is now split:
 
-This is left unresolved deliberately: editing the slice plan changes an acceptance contract and reassigns scope between slices, which is the Project Manager's call, not the executing developer's. **The plan entry has not been edited.** Once ratified, the criterion should be split between 102 and 104 in the slice plan before Phase 6 completes — otherwise slice 102 closes against a criterion it is known not to meet.
+- **102** — "Inspection surface lists nodes, blocked states, and journal entries, through a listing registry that later slices extend rather than edit." This is what Task 7.4 delivers.
+- **104** — lists findings and verdicts *in addition to* the above, registered into this slice's registry rather than by editing the CLI.
+
+Slice 104's declared dependencies moved from `[101]` to `[101, 102]` to match, and this slice's `interfaces` frontmatter now includes 104. Execution order is unchanged (`101 → 102 → 103 → 104`), so no resequencing follows.
+
+**No open items remain for this slice.** Task 7.4 registers no findings or verdicts listing; slice 104 owns those.
