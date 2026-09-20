@@ -181,7 +181,7 @@ Five of these are choices a reasonable Project Manager could make differently. T
 - `CommandKind`: `cf_write`, `sq_run`.
 - `JournalOutcome`: `completed`, `failed` (both written by the issuer), `adopted`, `not_applied`, `unknown` (written only by recovery).
 - `JournalResolver`: `issuer`, `recovery`.
-- `ExitCode`: one enumeration for every CLI exit status; no bare integers at call sites.
+- `ExitCode`: one enumeration for every CLI exit status; no bare integers at call sites. Includes `ALREADY_RUNNING`, `NOT_RUNNING`, `STOP_TIMEOUT`, `NO_STOP_TARGET`, and `GRACE_EXPIRED`.
 
 **Parameters are validated at issue time, not at recovery time.** Each `CommandKind` declares the parameter keys recovery needs. `journal_issue` raises if they are missing — discovering at 3 a.m., after a crash, that an entry cannot be reconciled because a field was never written is the failure this prevents.
 
@@ -190,6 +190,11 @@ Five of these are choices a reasonable Project Manager could make differently. T
 
 Additional keys are stored and ignored.
 
+**Provenance on both ingested shapes.** The architecture requires that every ingested record store the upstream it was parsed from, because neither upstream moves by semver. The two observers satisfy this differently, because the two upstreams expose different things:
+
+- **Squadron** — the run file carries its own `schema_version`; the adopted result records it.
+- **Context Forge** — `cf get --json` exposes **no version field** (verified 20260919: its keys are project metadata only). The observer therefore records two things in the adopted result: the project record's own `updatedAt` timestamp, which is what actually dates the observed values, and the string from a single `cf --version` invocation per recovery pass, captured as an opaque label. Neither is ever compared, parsed for ordering, or branched on — recording provenance is not the same as depending on a version, and the rule that no code compares upstream version numbers stands. If `cf --version` fails or is unavailable, the observer records it as unavailable and continues; provenance capture never turns an otherwise-clean adoption into an escalation.
+
 **D5 — Squadron matching is subset-on-params. (PM)** A run file is a candidate when all of: `pipeline` equals the journaled pipeline (compared lower-cased, because Squadron lower-cases it); every journaled `params` key is present in the run's `params` with an equal value; `started_at` is no earlier than the entry's `issued_at` less a named clock tolerance; and its `run_id` is not already recorded in another journal entry's result. Exact equality on `params` would never match, because Squadron persists definition defaults merged with overrides. Subset matching is looser, and the looseness is safe: a wider net can only turn a would-be single match into several, and several is escalated, never guessed.
 
 **Unknown is a value.** Every one of these yields `Unknown` and therefore a `blocked_on_human` node: no observer registered for the kind; zero candidates; two or more candidates; runs directory missing or unreadable; `cf` missing, timing out, exiting non-zero, or emitting unparseable output. A run file that fails to parse is logged at WARNING, counted, and named in the `Unknown` reason if the entry ends up unmatched — it is never silently skipped into a confident answer.
@@ -197,6 +202,12 @@ Additional keys are stored and ignored.
 **Already-blocked node.** `block()` refuses a node that is already blocked, and the unique partial index forbids a second open blocked state. If an unresolved entry's node is already blocked, `journal_escalate` marks the entry `unknown` and does not write a second block; the node is already stopped, and the entry is visible through `amoeba inspect journal`. This is handled as an explicit branch, not by catching `InvalidTransitionError`.
 
 **Error handling.** Observers raise nothing for expected external failure — those are `Unknown`. Unexpected exceptions are logged with `logger.exception` and re-raised; a recovery that cannot complete aborts startup rather than letting tenants run against unreconciled state. `cli/main.py` is the one documented process-boundary handler that maps `StoreError` and lifecycle errors to `ExitCode` values.
+
+**Lifecycle failure modes are enumerated, not implicit.** The observer ladder above covers the external boundaries; these three cover the process's own lifetime, where it must decide rather than converge.
+
+- **Lock held, PID file absent or unreadable.** The start sequence acquires the lock before writing the PID file, so a live process can legitimately hold the lock with no PID file yet; a truncated or non-JSON PID file presents identically. `stop` does not guess a signal target: it reports `ExitCode.NO_STOP_TARGET` naming the lock path, and says the process is running but not addressable. `status` reports `running (pid unknown)` — distinct from `stopped (stale pid file)`, which is the inverse case (PID file present, lock free). The remedy is the operator's, and it is safe because the lock, not the PID file, is the truth about liveness.
+- **Grace period expires.** The loop stops ticking new work as soon as the stop event is set; the grace period bounds only the *current* tick. On expiry the process logs at ERROR, naming the tenant that did not return, and exits with `ExitCode.GRACE_EXPIRED` without waiting further — stores are closed, but a tenant mid-tick is abandoned in place rather than interrupted. This is safe precisely because of crash-only: an abandoned tick is indistinguishable from `kill -9` and is reconciled on the next start by the same recovery path. The process never escalates to killing its own thread.
+- **A tenant hangs.** **By decision, there is no per-tick timeout** — no watchdog, no tick budget in `ProcessSettings`. A synchronous loop (D2) cannot interrupt a tenant that does not return without threads or signals whose failure modes are worse than the one they fix, and crash-only already makes an external `kill -9` a correct and recoverable remedy. The obligation therefore sits on the tenant: `tick()` must return promptly and poll `stop_requested` inside long operations, which `docs/process-contract.md` states as a requirement rather than a suggestion for slices 103 and 120. The observable consequence is bounded and named: the grace period expires, `stop` returns `STOP_TIMEOUT`, and the operator kills the process. Revisit if a real tenant cannot honor the contract.
 
 ## Implementation Details
 
@@ -231,7 +242,7 @@ Observation = Adopt | NotApplied | Unknown   # frozen dataclasses
 | Command | Behavior |
 | --- | --- |
 | `amoeba start` | Foreground. Refuses with `ExitCode.ALREADY_RUNNING` if the lock is held. Logs a recovery summary per project before entering the loop. |
-| `amoeba stop` | Confirms the lock is held, sends `SIGTERM` to the recorded PID, waits for the lock to release. `ExitCode.NOT_RUNNING` if nothing holds it; `ExitCode.STOP_TIMEOUT` if the wait expires. Never escalates to `SIGKILL` on its own. |
+| `amoeba stop` | Confirms the lock is held, sends `SIGTERM` to the recorded PID, waits for the lock to release. `ExitCode.NOT_RUNNING` if nothing holds it; `ExitCode.STOP_TIMEOUT` if the wait expires; `ExitCode.NO_STOP_TARGET` if the lock is held but the PID file is absent or unreadable (see below). Never escalates to `SIGKILL` on its own. |
 | `amoeba status` | `running` (with pid and start time), `stopped`, or `stopped (stale pid file)`. Exit status distinguishes running from not. |
 | `amoeba inspect projects` | Project ids that have a store in the supervisor directory. |
 | `amoeba inspect nodes\|blocked\|journal --project ID` | Read-only listings. `journal` accepts `--unresolved`. All accept `--json`. |
@@ -270,6 +281,9 @@ Slice 101 only, through its public contract. `StoreError` subclasses raised duri
 - [ ] `amoeba start` runs, `amoeba status` reports it running with its pid, `amoeba stop` ends it within the grace period, and `status` then reports stopped.
 - [ ] A second `amoeba start` exits with `ExitCode.ALREADY_RUNNING` and does not disturb the first.
 - [ ] After `kill -9`, `amoeba start` succeeds immediately with no manual cleanup, and `status` in between reports a stale pid file rather than running.
+- [ ] With the lock held and the PID file removed or corrupted, `stop` exits `NO_STOP_TARGET` without signalling anything, and `status` reports `running (pid unknown)`.
+- [ ] A tenant that does not return within the grace period causes exit with `GRACE_EXPIRED` and an ERROR log naming the tenant; the next start recovers normally.
+- [ ] An adopted `cf_write` result carries the project record's `updatedAt` and a captured `cf --version` label; with `cf --version` unavailable the adoption still succeeds and records it as unavailable.
 - [ ] A `cf_write` entry left unresolved is resolved `adopted` when CF holds the expected values and `not_applied` when it does not. Neither re-issues anything.
 - [ ] An `sq_run` entry left unresolved with exactly one matching run file is resolved `adopted` with that `run_id`.
 - [ ] An `sq_run` entry with zero matching run files, and one with two, each become outcome `unknown` with the node `blocked_on_human` and the blocked-state context naming the journal entry.
@@ -368,7 +382,7 @@ uv run ruff check . && uv run pyright
 ### Mitigation Strategies
 
 - The matcher is biased entirely toward escalation: every ambiguity, parse failure, and unreadable directory is `Unknown`. The only path to `adopted` is exactly one candidate passing all four conditions. Fixtures are real files, and the two-match and zero-match cases are first-class success criteria. S9 (caller-supplied run id) stays in Future Work as the real fix.
-- The first task of the inspection work is a test that opens a store read-only with no writer alive, on the project's actual Python/SQLite. If it fails, the fallback is a read-write handle that the inspection code never writes through, with the guard test extended to cover `cli/inspect.py` — decided on that evidence, not in advance.
+- The first task of the inspection work is a test that opens a store read-only with no writer alive, on the project's actual Python/SQLite. If it fails, the fallback is a read-write handle that the inspection code never writes through, with the guard test extended to cover `cli/inspect.py` — decided on that evidence, not in advance. **If the fallback is taken, it softens the sole-writer invariant and both contract documents must say so**: `docs/process-contract.md` and the writer-model section of `docs/store-contract.md` state that inspection holds a read-write handle it never writes through, rather than leaving "only the resident process opens a store read-write" standing as an unqualified claim. A weaker invariant documented honestly is acceptable; a stale contract is not.
 - Lifecycle tests run the real CLI as a subprocess and send real signals. Nothing about locking or signal handling is mocked.
 
 ## Implementation Notes
@@ -387,6 +401,8 @@ Suggested order — each step leaves the suite green:
 8. **CLI** — lifecycle commands, then `inspect` and its registry.
 9. **Guard test** for read-write opens.
 10. **Load tier.** *Crash loop:* repeatedly start the process with a test tenant that issues journal entries, `SIGKILL` at a random point, restart; assert after every cycle that no committed node or entry is missing, no entry is reconciled twice, and start-to-ready stays under a stated bound. *Recovery scale:* several hundred unresolved entries against a runs directory of a thousand files; assert a bound on total recovery time and that the directory is scanned once per recovery, not once per entry.
+
+    **Candidate bounds, to be confirmed against first measurement:** start-to-ready with an empty journal under 2 s; recovery of 500 unresolved `sq_run` entries against 1000 run files under 30 s; exactly one runs-directory scan per recovery pass regardless of entry count. The first two are starting targets, not derived requirements — the architecture states no NFR for this path. Measure first, then set each assertion at roughly twice the observed value so the test catches a regression in kind (a per-entry directory scan, an accidental O(n²) match) rather than normal machine variance. If a measurement lands wildly off a candidate, record the real number and say why; do not tune the bound silently to whatever passes. The scan-count assertion is exact and is the one that actually guards the algorithm.
 11. **Docs** — `process-contract.md`, `store-contract.md`, `CHANGELOG.md`, and the refined walkthrough.
 
 ### Special Considerations
