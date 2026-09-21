@@ -60,7 +60,7 @@ Two consequences shape the decomposition:
    **Risk Level:** High — crash recovery is the hardest correctness problem in this component and the arch doc flags it as rewrite-expensive if wrong. Sequenced early so its problems surface before later slices depend on it.
    **Relative Effort:** 4
 
-3. [ ] **(103) Durable Inbox and Message Queue** — The one surface parts outside the resident process may write to, and the channels between them. Durable append from outside the process (including while the process is down, with submissions applied on restart), plus the point-to-point channels: intent (Translator → Runner), escalation (Runner → Translator and notification bridge), and inbound human reply (bridge → a blocked node's resolution slot). Defines delivery and replay semantics and the apply loop by which the resident process consumes the inbox and commits the resulting writes. Completing this slice closes the first vertical path through the substrate: an outside writer submits, the process applies, state persists, a restart preserves it.
+3. [ ] **(103) Durable Inbox and Message Queue** — The one surface parts outside the resident process may write to, and the channels between them. Durable append from outside the process (including while the process is down, with submissions applied on restart), plus the point-to-point channels: intent (Translator → Runner), escalation (Runner → Translator and notification bridge), and inbound human reply (bridge → a blocked node's resolution slot). Defines delivery and replay semantics and the apply loop by which the resident process consumes the inbox and commits the resulting writes. Also lands runtime project creation (a `create_project` submission makes the running process create and open a new store), folded in by PM decision 20260921 because nothing in 101–102 could bring a project into existence inside the process. Completing this slice closes the first vertical path through the substrate: an outside writer submits, the process applies, state persists, a restart preserves it.
    **Value:** Architectural enablement — without it the sole-writer model has no way for the Judge, Translator, or notification bridge to contribute state, which blocks initiatives 140 and 160.
    **Success Criteria:**
    - An out-of-process writer can append to the inbox while the resident process is stopped; the submission is applied when it starts.
@@ -68,10 +68,11 @@ Two consequences shape the decomposition:
    - A human reply landing in the inbox fills a blocked node's resolution slot and flips it runnable.
    - Delivery and replay semantics are documented (what is guaranteed, what is not).
    - No path exists for an external writer to mutate the store except through the inbox.
+   - A project can be created through the inbox while the process is running, and submitted to without a restart.
    **Dependencies:** [101, 102]
    **Interfaces:** Provides the inbox API consumed by initiatives 140 and 160 and by the notification bridge; consumes 101 and 102.
    **Risk Level:** Medium
-   **Relative Effort:** 3
+   **Relative Effort:** 4
 
 4. [ ] **(104) Findings, Verdicts, and Provenance** — The evidence layer. Content-based finding identity with a defined normalization rule (Squadron's finding ids are positional and not stable across runs, so identity cannot key on them), per-iteration finding status, and verdict records carrying full provenance: source (stdout JSON vs artifact frontmatter), `fallback_used` derivation flag, failure-artifact status, judge score and criteria, SQ run id, reviewed SHA, and the upstream version the record was parsed from. Includes the SQ 280 typed-artifact scope (`review_findings`, `checkpoint`, `task_progress`, `devlog`) as record types in the store. Records what a mechanical check examined alongside its result, so a check that ran against nothing is distinguishable from one that passed.
    **Value:** Developer value — the Runner can ask "is this the same finding as last round?" and "is this PASS trustworthy?", neither of which CF's gate nor SQ's output can answer alone. Unblocks initiative 140's consensus work.
