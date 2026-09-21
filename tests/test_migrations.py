@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.store import sql
+from amoeba.store import sql, sql_journal
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     UNINITIALIZED_SCHEMA_VERSION,
@@ -20,7 +20,12 @@ EXPECTED_TABLES = {
     sql.TABLE_SCHEMA_META,
     sql.TABLE_NODES,
     sql.TABLE_BLOCKED_STATES,
+    sql_journal.TABLE_COMMAND_JOURNAL,
 }
+
+#: The version that introduced the command journal, and the one before it.
+JOURNAL_SCHEMA_VERSION = 3
+PRE_JOURNAL_SCHEMA_VERSION = 2
 
 
 def _connect(path: Path) -> sqlite3.Connection:
@@ -192,6 +197,172 @@ def test_fresh_store_arrives_at_the_latest_version(store_file: Path) -> None:
             for row in connection.execute(f"PRAGMA table_info({sql.TABLE_NODES})")
         }
         assert "note" in columns
+
+
+def _insert_node(connection: sqlite3.Connection, node_id: str, title: str) -> None:
+    """Insert a node directly, for staging a store at an older version."""
+    connection.execute(
+        sql.INSERT_NODE,
+        (
+            node_id,
+            "demo",
+            None,
+            "slice",
+            "blocked_on_human",
+            title,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            "2026-09-17T00:00:00+00:00",
+            "2026-09-17T00:00:00+00:00",
+        ),
+    )
+
+
+def _index_names(connection: sqlite3.Connection, table: str) -> set[str]:
+    rows = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?",
+        (table,),
+    ).fetchall()
+    return {str(row[0]) for row in rows}
+
+
+def test_version_two_store_with_data_upgrades_to_three(store_file: Path) -> None:
+    """Migration 003 is the first real schema change: existing data survives it.
+
+    Stages a store exactly as slice 101 code would have left it — at version 2,
+    carrying nodes and an open blocked state — then migrates and asserts every
+    prior row is still there.
+    """
+    with _connect(store_file) as connection:
+        migrate(connection, expected_version=PRE_JOURNAL_SCHEMA_VERSION)
+        _insert_node(connection, "n1", "survivor")
+        connection.execute(
+            sql.INSERT_BLOCKED_STATE,
+            (
+                "b1",
+                "n1",
+                "human",
+                "waiting on the PM",
+                "2026-09-17T00:00:00+00:00",
+                "2026-09-17T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+
+        assert migrate(connection) == JOURNAL_SCHEMA_VERSION
+        assert read_schema_version(connection) == JOURNAL_SCHEMA_VERSION
+
+        node_row = connection.execute(sql.SELECT_NODE_BY_ID, ("n1",)).fetchone()
+        assert node_row is not None
+        assert node_row[5] == "survivor"
+
+        blocked_rows = connection.execute(
+            sql.SELECT_BLOCKED_STATES_FOR_NODE, ("n1",)
+        ).fetchall()
+        assert len(blocked_rows) == 1
+        assert blocked_rows[0][3] == "waiting on the PM"
+
+
+def test_journal_table_and_partial_index_exist_after_migration(
+    store_file: Path,
+) -> None:
+    """The table recovery queries, and the partial index that serves it."""
+    with _connect(store_file) as connection:
+        migrate(connection)
+
+        assert sql_journal.TABLE_COMMAND_JOURNAL in _table_names(connection)
+
+        indexes = _index_names(connection, sql_journal.TABLE_COMMAND_JOURNAL)
+        assert sql_journal.INDEX_JOURNAL_UNRESOLVED in indexes
+        assert sql_journal.INDEX_JOURNAL_PROJECT in indexes
+
+
+def test_unresolved_index_is_partial_on_the_recovery_predicate(
+    store_file: Path,
+) -> None:
+    """The partial index matches the recovery query's shape.
+
+    Asserted against the stored DDL rather than by trusting the filename: an
+    index over the same columns without the ``WHERE outcome IS NULL`` clause
+    would satisfy a name check while serving the recovery query worse.
+    """
+    with _connect(store_file) as connection:
+        migrate(connection)
+
+        ddl = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+            (sql_journal.INDEX_JOURNAL_UNRESOLVED,),
+        ).fetchone()
+
+        assert ddl is not None
+        statement = str(ddl[0]).lower()
+        assert f"{sql_journal.COL_JOURNAL_OUTCOME} is null" in statement
+
+
+def test_fresh_store_reaches_version_three_directly(store_file: Path) -> None:
+    """The fresh path and the upgrade path land on identical schema."""
+    upgraded = store_file.parent / "upgraded.sqlite3"
+
+    with _connect(store_file) as fresh:
+        migrate(fresh)
+        fresh_tables = _table_names(fresh)
+        fresh_journal_columns = {
+            str(row[1])
+            for row in fresh.execute(
+                f"PRAGMA table_info({sql_journal.TABLE_COMMAND_JOURNAL})"
+            )
+        }
+
+    with _connect(upgraded) as stepwise:
+        migrate(stepwise, expected_version=PRE_JOURNAL_SCHEMA_VERSION)
+        migrate(stepwise)
+
+        assert read_schema_version(stepwise) == JOURNAL_SCHEMA_VERSION
+        assert _table_names(stepwise) == fresh_tables
+        assert {
+            str(row[1])
+            for row in stepwise.execute(
+                f"PRAGMA table_info({sql_journal.TABLE_COMMAND_JOURNAL})"
+            )
+        } == fresh_journal_columns
+
+
+def test_journal_columns_match_the_single_definition_site(store_file: Path) -> None:
+    """The table's columns are exactly the names declared in ``sql_journal``."""
+    with _connect(store_file) as connection:
+        migrate(connection)
+
+        columns = {
+            str(row[1])
+            for row in connection.execute(
+                f"PRAGMA table_info({sql_journal.TABLE_COMMAND_JOURNAL})"
+            )
+        }
+
+        assert columns == set(sql_journal.JOURNAL_COLUMNS)
+
+
+def test_store_stamped_above_three_still_refuses_to_downgrade(
+    store_file: Path,
+) -> None:
+    """The newer-than-code rule holds at the new expected version too."""
+    with _connect(store_file) as connection:
+        migrate(connection)
+        connection.execute(
+            sql.UPSERT_SCHEMA_VERSION,
+            (sql.SCHEMA_META_ROW_ID, JOURNAL_SCHEMA_VERSION + 1),
+        )
+        connection.commit()
+
+        with pytest.raises(StoreSchemaError, match="newer"):
+            migrate(connection)
+
+        assert read_schema_version(connection) == JOURNAL_SCHEMA_VERSION + 1
 
 
 def test_failed_migration_leaves_the_stamp_unadvanced(

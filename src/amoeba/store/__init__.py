@@ -16,6 +16,13 @@ and deliberately not re-exported.
 
 from __future__ import annotations
 
+from amoeba.store.journal_models import (
+    REQUIRED_PARAMETER_KEYS,
+    CommandKind,
+    JournalEntry,
+    JournalOutcome,
+    JournalResolver,
+)
 from amoeba.store.models import (
     BLOCKED_KIND_TO_STATUS,
     BLOCKED_STATUSES,
@@ -44,13 +51,18 @@ __all__ = [
     # Vocabularies
     "BLOCKED_KIND_TO_STATUS",
     "BLOCKED_STATUSES",
+    "REQUIRED_PARAMETER_KEYS",
     "BlockedKind",
+    "CommandKind",
+    "JournalOutcome",
+    "JournalResolver",
     "NodeKind",
     "NodeStatus",
     # Transfer objects
     "BlockedNode",
     "BlockedState",
     "CFReference",
+    "JournalEntry",
     "Node",
     "Resolution",
     "SQReference",
