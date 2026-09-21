@@ -7,85 +7,85 @@ project: amoeba
 verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md
-aiModel: z-ai/glm-5.3
+aiModel: z-ai/glm-5.2
 status: complete
-dateCreated: 20260920
-dateUpdated: 20260920
-reviewedSha: bf6d292620c8b67e1230c3a1cb88484b336d498c
+dateCreated: 20260921
+dateUpdated: 20260921
+reviewedSha: 20b3d70883b787b2950c3f41940d797c68ce8c8d
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 8
+toolCallsMade: 2
 findings:
   - id: F001
-    severity: pass
+    severity: note
     category: uncategorized
-    summary: "All slice success criteria trace to tasks"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
+    summary: "ProcessSettings module (settings.py) not explicitly listed as a file to create"
+    location: "unverified"
   - id: F002
-    severity: pass
+    severity: note
     category: uncategorized
-    summary: "Sequencing and test-with pattern are correct"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
+    summary: "Host-loop implementation tasks (6.1–6.3) defer their test to 6.4"
+    location: "unverified"
   - id: F003
-    severity: pass
+    severity: note
     category: uncategorized
-    summary: "Task sizes are appropriately scoped"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
+    summary: "CLI skeleton and lifecycle tasks (7.1–7.2) defer their test to 7.3"
+    location: "unverified"
   - id: F004
     severity: pass
     category: uncategorized
-    summary: "NFR/load-test coverage matches the slice design"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
+    summary: "All success criteria from the slice design trace to tasks"
+    location: "unverified"
   - id: F005
-    severity: concern
+    severity: pass
     category: uncategorized
-    summary: "No CI wiring task gates the load tier"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
+    summary: "Load-test tier and CI wiring are both present and correctly sequenced"
+    location: "unverified"
   - id: F006
-    severity: note
+    severity: pass
     category: uncategorized
-    summary: "Tasks 9.3 and 9.5 have no explicit commit step"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
+    summary: "Commit checkpoints distributed throughout, not batched at end"
+    location: "unverified"
 ---
 
 # Review: tasks — slice 102
 
 **Verdict:** PASS
-**Model:** z-ai/glm-5.3
+**Model:** z-ai/glm-5.2
 
 ## Findings
 
-### [PASS] All slice success criteria trace to tasks
+### [NOTE] ProcessSettings module (settings.py) not explicitly listed as a file to create
 
-Every success criterion in the slice design is covered either here or in Part 1. Functional criteria 1–5 (lifecycle, ALREADY_RUNNING, kill -9 recovery, NO_STOP_TARGET, GRACE_EXPIRED) map to Tasks 5.2, 6.4, and 7.3; criteria 6–12 (journal/recovery outcomes, subset matching, escalation idempotence) are Part 1's Sections 1–4, confirmed by the frontmatter entry state; criteria 13–16 map to Tasks 7.4/7.5. Technical requirements (real fixtures — Part 1 Task 4.1; guard test — Task 8.1; load tier — Tasks 9.1/9.2; docs — Tasks 9.3/9.4) and Integration Requirements (throwaway tenant — Task 6.4; v2→v3 migration on start — Task 7.3) are all present. The walkthrough is Task 9.5. No untraceable scope creep found.
+The LLD's component structure shows `src/amoeba/process/settings.py` as a distinct module (`ProcessSettings — every tunable, defined once`), and the Technical Requirements state "Every tunable (idle interval, shutdown grace, stop timeout, clock tolerance, cf timeout, runs directory) lives in ProcessSettings." Task 6.1 references `idle_interval_seconds` (implying the settings exist), and Task 7.1 says "Expose ProcessSettings tunables as CLI flags," but neither task lists `settings.py` in its "Files to Create." A junior AI would likely create it as part of 6.1 or 7.1, but the task that owns its creation is ambiguous. Adding it to Task 6.1's file list (first use) or Task 7.1's would remove the ambiguity.
 
-### [PASS] Sequencing and test-with pattern are correct
+### [NOTE] Host-loop implementation tasks (6.1–6.3) defer their test to 6.4
 
-Dependencies form a clean linear chain (5.1 → 5.2 → 6.1 → 6.2 → 6.3 → 6.4 → 7.1 → 7.2 → 7.3 → 7.4 → 7.5 → 8.1 → 9.1 → 9.2 → 9.3 → 9.4 → 9.5 → 9.6) matching the LLD's Implementation Notes order. No circular dependencies. Every implementation task is immediately followed by its test task (5.1→5.2, 6.1–6.3→6.4, 7.1–7.2→7.3, 7.4→7.5), with correct reference to Task 2.1's read-only fallback contingency in 8.1. Commit checkpoints are distributed (after 5.2, 6.4, 7.3, 7.5, 8.1, 9.2, 9.4, and 9.6 with merge), not batched at the end.
+Three sequential tasks modify `host.py` before the first test (Task 6.4) runs. This deviates from a strict test-immediately-follows-implementation pattern, but it is justified: the loop, recovery gating, and signal handling are interdependent and none is independently testable without the others. The LLD's own Implementation Notes prescribe exactly this order (step 7: host loop, signals, Tenant, then the throwaway-tenant integration test). No action needed — noted for completeness.
 
-### [PASS] Task sizes are appropriately scoped
+### [NOTE] CLI skeleton and lifecycle tasks (7.1–7.2) defer their test to 7.3
 
-Each task has a clear objective, concrete steps, and checkable success criteria a junior AI can execute. Task 6.1 (ResidentProcess + Tenant protocol) is the largest, but it has explicit line-budget guidance and its lifetime steps come directly from the LLD's Component Structure, so splitting it would fragment a single coherent module. Tasks 9.1/9.2 are correctly split (crash loop vs. recovery scale are distinct concerns). No task is so granular it should be merged.
+Task 7.1 creates the CLI skeleton and ExitCode enum; Task 7.2 implements start/stop/status; Task 7.3 tests the lifecycle. Two implementation tasks precede the test. This is the same justified pattern as the host loop — the skeleton is not independently testable without the commands. The LLD's Implementation Notes confirm this ordering (step 8: CLI — lifecycle commands, then inspect). No action needed.
 
-### [PASS] NFR/load-test coverage matches the slice design
+### [PASS] All success criteria from the slice design trace to tasks
 
-The slice design does not restate a hard NFR (it explicitly says "the architecture states no NFR for this path"), yet Tasks 9.1 and 9.2 still create the `tests/load/` tier the design's Technical Requirements and Implementation Notes demand, including the measure-first-then-bound methodology and the exact one-scan-per-recovery assertion. This satisfies the load-tier criterion fully.
+Every Functional Requirement (16), Technical Requirement (11), and Integration Requirement (2) in the LLD maps to at least one task in either this file (part 2, Sections 5–9) or the referenced part 1 (Sections 1–4). No criterion is unaddressed. The D4 resolution (findings/verdicts deferred to slice 104) is correctly reflected in Task 7.4, which registers only `projects`, `nodes`, `blocked`, and `journal`.
 
-### [CONCERN] No CI wiring task gates the load tier
+### [PASS] Load-test tier and CI wiring are both present and correctly sequenced
 
-Tasks 9.1/9.2 create `tests/load/` explicitly excluded from the default pytest run ("`uv run pytest` (default) does not run this tier"), but no task wires the tier into any automated gate. I searched the repo and found no CI configuration (no `.github/workflows`, no CI task in Part 1). Task 9.6 runs the tier once manually, but nothing ensures it runs again — a regression in recovery performance or the double-reconciliation property would be invisible until the next manual invocation. Either a CI wiring task should exist (running at least the load tier on merge), or the task file should explicitly state why the tier is manual-only, so the gap is a decision rather than an omission.
+Task 9.1 creates the `tests/load/` tier with its harness; Tasks 9.2–9.3 implement the crash-loop and recovery-scale tests with measured bounds; Task 9.7 wires CI (`.github/workflows/ci.yml`) to gate both the default suite and the load tier as separate steps. The LLD's Technical Requirement for `tests/load/` and the project rules' requirement for CI gating on concurrency-touching slices are both satisfied. The `--ignore=tests/load` + explicit-path collection mechanism is correctly described.
 
-### [NOTE] Tasks 9.3 and 9.5 have no explicit commit step
+### [PASS] Commit checkpoints distributed throughout, not batched at end
 
-CLAUDE.md requires a commit at least once per task, but Tasks 9.3 (process-contract.md) and 9.5 (demo script + walkthrough refinement) list no commit step, unlike their neighbors 9.2 and 9.4. Minor, since 9.4's and 9.6's commits will capture the work, but adding the commit steps would keep the per-task rule explicit for the executing agent.
+Commits are specified at Tasks 5.2, 6.4, 7.3, 7.5, 8.1, 9.3, 9.4, 9.5, 9.6, 9.7, and 9.8 — distributed across the entire breakdown rather than accumulated at the end. Intermediate implementation tasks (5.1, 6.1–6.3, 7.1–7.2, 7.4, 9.1–9.2) lack explicit commit instructions, but each is followed by a test task that carries the commit, and CLAUDE.md's "at least once per task" rule covers the general case. This is the correct green-suite commit pattern.
 
 ### Run Digest
 
-- Response length: 4009 chars
+- Response length: 4034 chars
 - Response is newline-free: no
-- Tool calls made: 8
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: stop
-- Reasoning characters: 2097
+- Reasoning characters: 17059
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 6

@@ -4,118 +4,117 @@ layer: project
 reviewType: tasks
 slice: resident-process-and-recovery
 project: amoeba
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md
-aiModel: z-ai/glm-5.3
+aiModel: z-ai/glm-5.2
 status: complete
-dateCreated: 20260920
-dateUpdated: 20260920
-reviewedSha: bf6d292620c8b67e1230c3a1cb88484b336d498c
+dateCreated: 20260921
+dateUpdated: 20260921
+reviewedSha: 20b3d70883b787b2950c3f41940d797c68ce8c8d
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 24
+toolCallsMade: 4
 findings:
   - id: F001
-    severity: concern
-    category: task-sequencing
-    summary: "ExitCode vocabulary is consumed in Section 6 before Task 7.1 defines it"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md:119-163"
+    severity: pass
+    category: uncategorized
+    summary: "All success criteria cross-referenced and covered"
+    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md"
   - id: F002
-    severity: concern
-    category: ci-gating
-    summary: "No CI wiring task gates the load tier"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md:313-357"
+    severity: pass
+    category: uncategorized
+    summary: "Sequencing is correct with no circular dependencies"
+    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
   - id: F003
-    severity: concern
-    category: success-criteria
-    summary: "Task 2.2/2.3 success criteria are unsatisfiable under the documented fallback branch"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md:231-272"
+    severity: pass
+    category: uncategorized
+    summary: "Test-with pattern followed; commit checkpoints distributed"
+    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md"
   - id: F004
-    severity: concern
-    category: cross-reference
-    summary: "Task 2.1's fallback note cross-references the wrong task"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md:220"
+    severity: pass
+    category: uncategorized
+    summary: "Load test tier and CI gating are explicit, not implicit"
+    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
   - id: F005
-    severity: note
-    category: test-infrastructure
-    summary: "Default-run exclusion mechanism for `tests/load/` is unspecified and likely needs an unlisted pyproject change"
-    location: "pyproject.toml:42-43"
+    severity: pass
+    category: uncategorized
+    summary: "Task sizes are appropriate; no task is too large or too granular"
+    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md"
   - id: F006
     severity: note
-    category: scope-definition
-    summary: "The load-test tenant has no specified entry path into the process"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md:315-334"
+    category: uncategorized
+    summary: "GRACE_EXPIRED → next-start recovery not tested as a distinct scenario"
+    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
   - id: F007
     severity: pass
-    category: coverage
-    summary: "Every success criterion in the slice design traces to at least one task"
+    category: uncategorized
+    summary: "D4 resolution is correctly applied and documented"
     location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md"
-  - id: F008
-    severity: pass
-    category: task-sequencing
-    summary: "Sequencing follows the LLD's development approach, with the risk-first ordering intact"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md:210"
-  - id: F009
-    severity: pass
-    category: test-organization
-    summary: "Test-with pattern and commit checkpoints are correctly distributed"
-    location: "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md"
 ---
 
 # Review: tasks — slice 102
 
-**Verdict:** CONCERNS
-**Model:** z-ai/glm-5.3
+**Verdict:** PASS
+**Model:** z-ai/glm-5.2
 
 ## Findings
 
-### [CONCERN] ExitCode vocabulary is consumed in Section 6 before Task 7.1 defines it
+### [PASS] All success criteria cross-referenced and covered
 
-Tasks 6.2 (line 108: "aborts the start with a specific exit code"), 6.3 (line 128: "exit `GRACE_EXPIRED`"), and 6.4 (line 152: "triggers grace expiry with `GRACE_EXPIRED`") all require the `ExitCode` vocabulary, but that enum is first created in Task 7.1 (line 177), which depends on Task 6.4. The declared dependency chain is 6.2 → 6.3 → 6.4 → 7.1, so a junior AI implementing 6.3 hits an undefined symbol and cannot satisfy the "no bare integers at call sites" rule without either creating the enum early (duplicating 7.1's work and placing it outside its LLD-assigned home in `cli/main.py`) or improvising. The LLD's own error-handling section supplies the correct split — "`cli/main.py` is the one documented process-boundary handler that maps `StoreError` and lifecycle errors to `ExitCode` values" — meaning the host should raise a typed lifecycle error and the CLI should map it. Tasks 6.2/6.3/6.4 should be reworded to that split (host raises, 7.2 maps), or the enum should be defined in an earlier task. Note also that Task 7.1 names only the five failure codes while `status` must "distinguish running from not" (7.2) and the StoreError abort (6.2) needs its own member — the enum needs more members than the task lists, which a junior AI will only discover mid-flight.
+Every Functional, Technical, and Integration Requirement from the slice design maps to specific tasks across both files:
 
-### [CONCERN] No CI wiring task gates the load tier
+- **FR1–FR5** (lifecycle, single-instance, crash recovery, NO_STOP_TARGET, GRACE_EXPIRED): Tasks 5.1–5.2, 6.1–6.4, 7.1–7.3.
+- **FR6–FR11** (CF and Squadron observer matching, subset params, run-id dedup): Tasks 4.1–4.6 with real fixtures and exhaustive escalation paths.
+- **FR12–FR14** (already-blocked escalate, interrupted recovery idempotence, missing-param raise): Tasks 1.5, 1.7, 3.3, 3.4.
+- **FR15–FR16** (inspect listings, never-migrates): Tasks 7.4, 7.5, 8.1.
+- **TR1–TR9** (StrEnums, ProcessSettings, real fixtures, Unknown-on-missing-field, guard test, subprocess tests, load tier, quality gates, docs): Tasks 1.1, 3.2, 4.1, 4.2, 8.1, 7.3, 9.1–9.3, 9.4–9.5.
+- **IR1–IR2** (throwaway Tenant integration, v2→v3 migration on start): Tasks 6.4, 1.4, 7.3.
 
-Tasks 9.1 and 9.2 create `tests/load/` (crash loop and recovery scale), and Task 9.1 deliberately excludes the tier from the default pytest run — yet no task wires CI to execute it. The Python rules are explicit (`.claude/rules/python.md:64`): "CI must gate load tests for slices touching these paths," and this slice is squarely on the concurrency/process boundary. The repo currently has no CI at all (no `.github/` directory or CI configuration exists at the root), and Task 9.6's gates are run by hand (`uv run pytest tests/load` locally), so nothing anywhere executes the load tier automatically — gating is left entirely implicit. Either add a CI wiring task (a minimal workflow running the default suite plus `pytest tests/load`) or record an explicit PM decision to defer CI; as written, the breakdown satisfies the letter of "load tests exist" while violating the rule that makes them meaningful.
+No success criterion lacks a corresponding task; no task is untraceable to a criterion.
 
-### [CONCERN] Task 2.2/2.3 success criteria are unsatisfiable under the documented fallback branch
+### [PASS] Sequencing is correct with no circular dependencies
 
-Task 2.2's steps correctly acknowledge the contingency ("or the Task 2.1 fallback, if that was the evidence"), but its success criterion "A write attempted through the handle fails rather than succeeding silently" — and Task 2.3's "Test that every write operation attempted through a read-only handle raises" — cannot pass if the fallback (a read-write handle the inspection code never writes through) is taken. The LLD treats this fallback as a live possibility (it is the slice's second named technical risk, with a full mitigation paragraph). In that branch a junior AI is left with a checklist item that is impossible to check. The criteria should be conditional, mirroring how Tasks 8.1 and 9.4 correctly handle the same branch.
+The dependency chain is strictly linear across both files: Section 1 (journal models → SQL → mixin → tests → commit) → Section 2 (read-only open) → Section 3 (recovery protocol) → Section 4 (observers) → Section 5 (lock) → Section 6 (host loop) → Section 7 (CLI) → Section 8 (guard) → Section 9 (load, docs, CI). Each task's `Dependencies` field references only its immediate predecessor or the prior section's completion. No task depends on something later in the sequence. The cross-file handoff (part 1 → part 2) is clean: part 2's entry state is explicitly declared and its first dependency is "Section 4 complete."
 
-### [CONCERN] Task 2.1's fallback note cross-references the wrong task
+### [PASS] Test-with pattern followed; commit checkpoints distributed
 
-Task 2.1's fallback instruction says to "note it for Task 5.x (the guard test must then also cover `cli/inspect.py`)". The guard test is Task 8.1, not anything in Section 5 (Instance Lock and PID File). The reference is stale — likely a leftover section number from before the breakdown was split into two files. Impact is low because Task 8.1 independently self-references the Task 2.1 fallback ("unless Task 2.1's evidence forced the fallback, in which case extend the guard..."), but the note as written misdirects the reader to the instance-lock section, and the "Section 9" half of the same sentence is only correct by coincidence of the split. Should read "Task 8.1."
+Tests immediately follow their implementation tasks in every section:
+- 1.1→1.2, 1.3→1.4, 1.5+1.6→1.7 (journal)
+- 2.1+2.2→2.3 (read-only open)
+- 3.1+3.2+3.3→3.4 (recovery)
+- 4.1+4.2+4.3→4.4, 4.5→4.6 (observers)
+- 5.1→5.2, 6.1+6.2+6.3→6.4, 7.1+7.2→7.3, 7.4→7.5 (process and CLI)
+- 9.1→9.2→9.3 (load tier)
 
-### [NOTE] Default-run exclusion mechanism for `tests/load/` is unspecified and likely needs an unlisted pyproject change
+Commits appear at Tasks 1.8, 2.3, 3.4, 4.4, 4.6, 5.2, 6.4, 7.3, 7.5, 8.1, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8 — 16 checkpoints across both files, not batched at the end.
 
-`testpaths = ["tests"]` (pyproject.toml:43) collects `tests/load/` by default, so Task 9.1's criterion "`uv run pytest` (default) does not run this tier" requires a configuration change the task does not spell out. A registered marker plus `addopts = -m "not load"` needs a `pyproject.toml` edit that is absent from Task 9.1's Files to Modify — and would also deselect the tier under the task's own stated invocation `uv run pytest tests/load` unless overridden. An env-gated skip in `tests/load/conftest.py` works without a pyproject change but then depends on CI setting that variable, which compounds the CI-gating concern above. The task should name the mechanism.
+### [PASS] Load test tier and CI gating are explicit, not implicit
 
-### [NOTE] The load-test tenant has no specified entry path into the process
+The LLD's Technical Requirement TR7 (`tests/load/` with crash-loop and recovery-scale tests) is covered by Tasks 9.2 and 9.3, each with measurement-first bound-setting and exact scan-count assertions. Task 9.7 explicitly creates `.github/workflows/ci.yml` running both the default suite and `uv run pytest tests/load` as separate CI steps that can each fail the run independently. CI gating is not left implicit.
 
-Task 9.1 requires "repeatedly start the process with a test tenant that issues journal entries," and Task 6.4 similarly needs a throwaway tenant ticked by the real host — but the CLI ships zero tenants and has no registration mechanism, and no task creates the harness (a small script that constructs `ResidentProcess` with the tenant in a subprocess) that these tests require. `Files to Create` for 9.1 lists only `__init__.py`, `conftest.py`, and `test_crash_loop.py`. A junior AI must invent the harness, and the obvious wrong turn — adding a `--tenant` flag to the CLI — would be scope creep beyond the LLD's "ships no tenants." Task 9.1 also bundles tier scaffolding, the harness, and the crash-loop test; it is the strongest candidate in the breakdown for a split.
+### [PASS] Task sizes are appropriate; no task is too large or too granular
 
-### [PASS] Every success criterion in the slice design traces to at least one task
+Effort ratings range from 1–3. The largest tasks (1.5, 3.3, 4.3, 4.5 at effort 3) each implement one cohesive unit with clear success criteria and bounded file scope. No task requires splitting, and no pair of tasks is so granular it should be merged. The 300-line and 50-line budgets are repeatedly referenced in success criteria, keeping scope bounded.
 
-I walked all 16 Functional, 9 Technical, and 2 Integration requirements in the LLD against both task files and found no gaps and no scope creep. Representative mappings: the four lifecycle failure modes (ALREADY_RUNNING / kill-9 / NO_STOP_TARGET / GRACE_EXPIRED) → Tasks 7.2–7.3 and 5.2; subset matching, clock tolerance, and run-id dedup → Tasks 4.3–4.4; already-blocked escalation → Tasks 1.5, 1.7, 3.4; interrupted-recovery idempotence → Task 3.4 and 9.1; never-migrate/never-create inspection → Tasks 2.2–2.3 and 7.4–7.5; the version-2-to-3 upgrade by `amoeba start` → Tasks 1.4 and 7.3; the throwaway-tenant seam → Task 6.4; real fixtures with paused/failed runs and capture dates → Task 4.1; the AST guard → Task 8.1; docs and changelog → Tasks 9.3–9.4. Even the items that could have been dropped — `scripts/demo_journal.py` and the walkthrough refinement (Task 9.5) — trace to explicit LLD statements ("to be written in this slice"; "Draft; to be refined with real output"). File 1 covers Sections 1–4 of the LLD's component structure completely; file 2 covers the rest, including the D4-mandated absence of findings/verdicts listings.
+### [NOTE] GRACE_EXPIRED → next-start recovery not tested as a distinct scenario
 
-### [PASS] Sequencing follows the LLD's development approach, with the risk-first ordering intact
+FR5 states "the next start recovers normally" after a GRACE_EXPIRED exit. Task 6.4 tests grace expiry and the ERROR log, and Task 7.3 tests the CLI surfacing of GRACE_EXPIRED, but neither explicitly asserts that a subsequent `amoeba start` recovers cleanly after a grace-expiry exit. The crash-only design principle makes this equivalent to the `kill -9` recovery path that Task 7.3 and the crash-loop test (9.2) cover, so the gap is covered by design rather than by a direct test. This is informational only — the existing tests provide sufficient confidence given the crash-only convergence guarantee.
 
-The section order (journal → read-only open → recovery protocol → observers → lock → host → CLI → guard → load → docs) is exactly the LLD's eleven-step Development Approach. Task 2.1 (line 210) is correctly an evidence-gathering *test* placed before any implementation depends on the answer, matching the LLD's mitigation ("The first task of the inspection work is a test that opens a store read-only with no writer alive... decided on that evidence, not in advance"). Declared dependencies are linear with no cycles; the only dependency defect found is the ExitCode content inversion flagged above. Task 5.2's forward references ("the state Task 6.4 and Task 7.2 must handle") are correct, unlike the Task 5.x one in file 1.
+### [PASS] D4 resolution is correctly applied and documented
 
-### [PASS] Test-with pattern and commit checkpoints are correctly distributed
-
-Every implementation task is immediately followed by its test task: 1.1/1.2, 1.3/1.4, 1.5+1.6/1.7, 2.2/2.3, 3.3/3.4, 4.2+4.3/4.4, 4.5/4.6, 5.1/5.2, 6.1–6.3/6.4, 7.2/7.3, 7.4/7.5, with 8.1–9.2 being tests themselves. Commits are spread across the work (1.8; then within 2.3, 3.4, 4.4, 4.6, 5.2, 6.4, 7.3, 7.5, 8.1, 9.2, 9.4; final merge in 9.6), matching the slice-101 precedent of commit-after-green-group rather than batching at the end. The tests also inherit slice 101's mechanical safety net: the existing `tests/test_store_safety.py` scans `TESTS_DIR.rglob("*.py")`, which will cover the new `tests/load/` and CLI test files against central-path resolution for free.
+The D4 resolution (inspection criterion split between slice 102 and 104) is reflected in Task 7.4, which registers only `projects`, `nodes`, `blocked`, and `journal` — explicitly excluding findings and verdicts (slice 104's scope). The closing section of part 2 documents the ratification and confirms no open items remain.
 
 ### Run Digest
 
-- Response length: 9364 chars
+- Response length: 5158 chars
 - Response is newline-free: no
-- Tool calls made: 24
+- Tool calls made: 4
 - Tool calls failed: 0
 - Stop reason: stop
-- Reasoning characters: 81434
+- Reasoning characters: 21174
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7

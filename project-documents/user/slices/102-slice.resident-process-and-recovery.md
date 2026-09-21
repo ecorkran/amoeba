@@ -278,39 +278,39 @@ Slice 101 only, through its public contract. `StoreError` subclasses raised duri
 
 ### Functional Requirements
 
-- [ ] `amoeba start` runs, `amoeba status` reports it running with its pid, `amoeba stop` ends it within the grace period, and `status` then reports stopped.
-- [ ] A second `amoeba start` exits with `ExitCode.ALREADY_RUNNING` and does not disturb the first.
-- [ ] After `kill -9`, `amoeba start` succeeds immediately with no manual cleanup, and `status` in between reports a stale pid file rather than running.
-- [ ] With the lock held and the PID file removed or corrupted, `stop` exits `NO_STOP_TARGET` without signalling anything, and `status` reports `running (pid unknown)`.
-- [ ] A tenant that does not return within the grace period causes exit with `GRACE_EXPIRED` and an ERROR log naming the tenant; the next start recovers normally.
-- [ ] An adopted `cf_write` result carries the project record's `updatedAt` and a captured `cf --version` label; with `cf --version` unavailable the adoption still succeeds and records it as unavailable.
-- [ ] A `cf_write` entry left unresolved is resolved `adopted` when CF holds the expected values and `not_applied` when it does not. Neither re-issues anything.
-- [ ] An `sq_run` entry left unresolved with exactly one matching run file is resolved `adopted` with that `run_id`.
-- [ ] An `sq_run` entry with zero matching run files, and one with two, each become outcome `unknown` with the node `blocked_on_human` and the blocked-state context naming the journal entry.
-- [ ] The Squadron matcher matches when the journaled `params` are a strict subset of the persisted ones, and rejects a run started before the entry was issued.
-- [ ] A run id already recorded in another journal entry is not a candidate.
-- [ ] `journal_escalate` against an already-blocked node marks the entry `unknown` and writes no second blocked state.
-- [ ] Recovery interrupted partway and re-run reconciles each entry exactly once.
-- [ ] `journal_issue` with a missing required parameter raises and writes nothing.
-- [ ] `amoeba inspect` lists projects, nodes, blocked states, and journal entries, human-readable and as `--json`, while the process is running and while it is stopped.
-- [ ] Inspection never migrates, creates, or writes a store.
+- [x] `amoeba start` runs, `amoeba status` reports it running with its pid, `amoeba stop` ends it within the grace period, and `status` then reports stopped.
+- [x] A second `amoeba start` exits with `ExitCode.ALREADY_RUNNING` and does not disturb the first.
+- [x] After `kill -9`, `amoeba start` succeeds immediately with no manual cleanup, and `status` in between reports a stale pid file rather than running.
+- [x] With the lock held and the PID file removed or corrupted, `stop` exits `NO_STOP_TARGET` without signalling anything, and `status` reports `running (pid unknown)`.
+- [x] A tenant that does not return within the grace period causes exit with `GRACE_EXPIRED` and an ERROR log naming the tenant; the next start recovers normally.
+- [x] An adopted `cf_write` result carries the project record's `updatedAt` and a captured `cf --version` label; with `cf --version` unavailable the adoption still succeeds and records it as unavailable.
+- [x] A `cf_write` entry left unresolved is resolved `adopted` when CF holds the expected values and `not_applied` when it does not. Neither re-issues anything.
+- [x] An `sq_run` entry left unresolved with exactly one matching run file is resolved `adopted` with that `run_id`.
+- [x] An `sq_run` entry with zero matching run files, and one with two, each become outcome `unknown` with the node `blocked_on_human` and the blocked-state context naming the journal entry.
+- [x] The Squadron matcher matches when the journaled `params` are a strict subset of the persisted ones, and rejects a run started before the entry was issued.
+- [x] A run id already recorded in another journal entry is not a candidate.
+- [x] `journal_escalate` against an already-blocked node marks the entry `unknown` and writes no second blocked state.
+- [x] Recovery interrupted partway and re-run reconciles each entry exactly once.
+- [x] `journal_issue` with a missing required parameter raises and writes nothing.
+- [x] `amoeba inspect` lists projects, nodes, blocked states, and journal entries, human-readable and as `--json`, while the process is running and while it is stopped.
+- [x] Inspection never migrates, creates, or writes a store.
 
 ### Technical Requirements
 
-- [ ] All vocabularies are `StrEnum`s defined once; no exit-code integers or outcome strings at call sites.
-- [ ] Every tunable (idle interval, shutdown grace, stop timeout, clock tolerance, `cf` timeout, runs directory) lives in `ProcessSettings`.
-- [ ] Squadron matcher fixtures are **real** run files copied from `~/.config/squadron/runs/` at implementation time, including at least one `paused` and one `failed`. The CF fixture is captured from real `cf get --json` output. Each fixture notes the date it was captured; none is tied to an upstream version.
-- [ ] A run file or `cf` output missing a field the observer requires yields `Unknown`, not an exception and not a match — so upstream drift degrades to a human escalation.
-- [ ] The guard test fails when a read-write `Store.open` call is added outside `process/host.py`.
-- [ ] Process-level tests drive the real CLI as a subprocess against a `tmp_path` supervisor directory via `AMOEBA_STORE_DIR`; none touches `~/.config/amoeba` or the real Squadron runs directory.
-- [ ] `tests/load/` contains a crash-loop test and a recovery-scale test (see Implementation Notes) with asserted bounds.
-- [ ] `ruff`, `pyright` strict, and the full test suite are clean. Source files stay near 300 lines.
-- [ ] `docs/process-contract.md` exists; `docs/store-contract.md` is updated; `CHANGELOG.md` has entries.
+- [x] All vocabularies are `StrEnum`s defined once; no exit-code integers or outcome strings at call sites.
+- [x] Every tunable (idle interval, shutdown grace, stop timeout, clock tolerance, `cf` timeout, runs directory) lives in `ProcessSettings`.
+- [x] Squadron matcher fixtures are **real** run files copied from `~/.config/squadron/runs/` at implementation time, including at least one `paused` and one `failed`. The CF fixture is captured from real `cf get --json` output. Each fixture notes the date it was captured; none is tied to an upstream version.
+- [x] A run file or `cf` output missing a field the observer requires yields `Unknown`, not an exception and not a match — so upstream drift degrades to a human escalation.
+- [x] The guard test fails when a read-write `Store.open` call is added outside `process/host.py`.
+- [x] Process-level tests drive the real CLI as a subprocess against a `tmp_path` supervisor directory via `AMOEBA_STORE_DIR`; none touches `~/.config/amoeba` or the real Squadron runs directory.
+- [x] `tests/load/` contains a crash-loop test and a recovery-scale test (see Implementation Notes) with asserted bounds.
+- [x] `ruff`, `pyright` strict, and the full test suite are clean. Source files stay near 300 lines.
+- [x] `docs/process-contract.md` exists; `docs/store-contract.md` is updated; `CHANGELOG.md` has entries.
 
 ### Integration Requirements
 
-- [ ] A throwaway `Tenant` defined in a test is ticked by the real host, writes through `store_for()`, observes `stop_requested`, and the process exits cleanly — proving the seam 103 and 120 will use.
-- [ ] A store created by slice 101 code at schema version 2 is upgraded to 3 by `amoeba start` with its nodes and blocked states intact.
+- [x] A throwaway `Tenant` defined in a test is ticked by the real host, writes through `store_for()`, observes `stop_requested`, and the process exits cleanly — proving the seam 103 and 120 will use.
+- [x] A store created by slice 101 code at schema version 2 is upgraded to 3 by `amoeba start` with its nodes and blocked states intact.
 
 ### Verification Walkthrough
 
