@@ -166,7 +166,7 @@ A `resolution` targets a **blocked-state id, not a node id**. A node can be bloc
 
 ## Technical Decisions
 
-D1–D4 are choices a reasonable Project Manager could make differently. **D1, D2, D4, and the project-creation scope were ratified by the PM on 20260921**; D3 is a recommendation.
+D1–D4 are choices a reasonable Project Manager could make differently. **All four, and the project-creation scope, were ratified by the PM on 20260921.**
 
 ### Technology Choices
 
@@ -183,7 +183,7 @@ What it gives up: a transactional global sequence at submit time (answered by D4
 
 **D2 — Exactly-once effect from a submitter-generated id. (PM — ratified 20260921)** Delivery of a file to the apply loop is at-least-once; the effect is exactly-once because the submission id is unique in `inbox_submissions` and the record commits with the effect. The submitter generates the id (a default is generated if none is passed), which makes `submit()` safely retryable: a bridge unsure whether its call succeeded resubmits with the same id. A second submission reusing an id with *different* content is a no-op — first one wins — logged at WARNING. It is not an error, because the second file may legitimately be a retry whose timestamp differs.
 
-**D3 — Escalation messages are written by the store's one block writer, not by callers. (PM)** Whenever a node is blocked on `BlockedKind.HUMAN`, the store writes one row on the `escalation` channel in the same transaction, carrying `node_id`, `blocked_state_id`, and an optional opaque `payload` (a new keyword-only argument to `block()`, default `None`, stored as NULL). A human-blocked node without an escalation cannot exist, and no caller has to remember a second call. This is deterministic plumbing, not a decision — the substrate does not choose *whether* to escalate; it records that a human block happened on the channel defined for exactly that. `blocked_on_judge` and `blocked_on_sq_checkpoint` write no message; no channel is defined for them and the Runner observes both directly.
+**D3 — Escalation messages are written by the store's one block writer, not by callers. (PM — ratified 20260921)** Whenever a node is blocked on `BlockedKind.HUMAN`, the store writes one row on the `escalation` channel in the same transaction, carrying `node_id`, `blocked_state_id`, and an optional opaque `payload` (a new keyword-only argument to `block()`, default `None`, stored as NULL). A human-blocked node without an escalation cannot exist, and no caller has to remember a second call. This is deterministic plumbing, not a decision — the substrate does not choose *whether* to escalate; it records that a human block happened on the channel defined for exactly that. `blocked_on_judge` and `blocked_on_sq_checkpoint` write no message; no channel is defined for them and the Runner observes both directly.
 
 Two consequences for slice 102's recovery, both intended:
 
@@ -477,7 +477,7 @@ Suggested order — each step leaves the suite green:
 
 ### Special Considerations
 
-**Project Manager decisions.** Ratified 20260921: D1 (file-drop hand-off, SQLite for everything durable), D2 (submitter-generated id, first-wins on reuse), D4 (receiver-assigned order), and folding runtime project creation into this slice. Awaiting ratification: D3 (escalation written by the block writer, including both recovery consequences). The design is complete under it; it is cheap to reverse now and expensive after initiative 160 codes against it.
+**Project Manager decisions.** Ratified 20260921: D1 (file-drop hand-off, SQLite for everything durable), D2 (submitter-generated id, first-wins on reuse), D3 (escalation written by the block writer, including both recovery consequences), D4 (receiver-assigned order), and folding runtime project creation into this slice. Nothing awaits ratification.
 
 **A submission that races ahead of its project's creation is quarantined, not held.** Holding would mean an unbounded set of files the loop re-examines every tick waiting for a project that may never come. Submitters that create a project wait for `submission(id)` to report `applied` before submitting into it; the contract says so.
 
