@@ -283,9 +283,9 @@ provenance and never parsed, ordered, or branched on.
 | `amoeba inspect projects` | Project ids with a store in the supervisor directory. |
 | `amoeba inspect nodes\|blocked\|journal --project ID` | Read-only listings. `journal` accepts `--unresolved`. All accept `--json`. |
 
-`start` exposes every `ProcessSettings` tunable as a flag: `--idle-interval`,
-`--shutdown-grace`, `--stop-timeout`, `--clock-tolerance`, `--cf-timeout`,
-`--sq-runs-dir`.
+`start` exposes every loop-governing `ProcessSettings` tunable as a flag:
+`--idle-interval`, `--shutdown-grace`, `--clock-tolerance`, `--cf-timeout`,
+`--sq-runs-dir`. `stop` exposes the one tunable it consumes: `--stop-timeout`.
 
 ### Exit codes
 

@@ -108,6 +108,28 @@ def test_stop_with_nothing_running(supervisor_dir: Path) -> None:
     assert "not running" in result.stderr
 
 
+def test_stop_accepts_stop_timeout(supervisor_dir: Path) -> None:
+    """``--stop-timeout`` is reachable on ``stop`` (review finding F001).
+
+    Previously the flag was registered only on ``start``, so argparse rejected
+    it here as an unrecognized argument. Asserting on ``NOT_RUNNING`` rather
+    than ``FAILURE`` proves the flag itself parsed correctly and reached
+    dispatch, not merely that *some* exit code came back.
+    """
+    result = run_cli(["stop", "--stop-timeout", "5"], supervisor_dir)
+
+    assert result.returncode == ExitCode.NOT_RUNNING
+    assert "unrecognized arguments" not in result.stderr
+
+
+def test_start_no_longer_exposes_stop_timeout(supervisor_dir: Path) -> None:
+    """``--stop-timeout`` moved off ``start``: it never used the value."""
+    result = run_cli(["start", "--stop-timeout", "5"], supervisor_dir)
+
+    assert result.returncode != ExitCode.OK
+    assert "unrecognized arguments" in result.stderr
+
+
 def test_status_with_nothing_ever_started(supervisor_dir: Path) -> None:
     """A supervisor directory that has never run reports stopped."""
     result = run_cli(["status"], supervisor_dir)

@@ -2,9 +2,18 @@
 
 The sole-writer model is enforced in two parts. The instance lock guarantees at
 most one resident process per supervisor directory; this test guarantees that
-*within Amoeba* nothing but ``process/host.py`` reaches for the read-write
-``Store.open``. Together they make the model structural rather than a sentence
-in a contract document.
+*within Amoeba* nothing but ``process/host.py`` (and the one exempted operator
+script below) reaches for the read-write ``Store.open``. Together they make
+the model structural rather than a sentence in a contract document.
+
+**Scanned roots**: ``src/amoeba/`` and ``scripts/``. The latter was added
+after a review found ``scripts/demo_journal.py`` doing a real read-write open
+outside the scanned tree — an intentional operator-facing demo, but invisible
+to this guard by construction. Rather than widen ``src/amoeba/`` itself (which
+would misrepresent where the exemption actually lives), ``scripts/`` is
+scanned as its own root and the demo script is named explicitly in
+:data:`PERMITTED_SCRIPTS`, so the exemption is visible here rather than
+silently unenforced.
 
 **What this guard does not cover**, stated plainly rather than implied away:
 
@@ -15,7 +24,7 @@ in a contract document.
 - ``Store.open_temporary``, which creates an in-memory database that no other
   process can see, so it cannot violate single-writer.
 - Tests, which legitimately open stores read-write to stage fixtures. The scan
-  covers ``src/amoeba/`` only.
+  covers ``src/amoeba/`` and ``scripts/`` only.
 - Raw ``sqlite3.connect`` calls that bypass ``Store`` entirely. The store
   package itself is where those live, by construction.
 
@@ -30,19 +39,27 @@ from pathlib import Path
 
 import pytest
 
-SOURCE_DIR = Path(__file__).parent.parent / "src" / "amoeba"
+REPO_ROOT = Path(__file__).parent.parent
+SOURCE_DIR = REPO_ROOT / "src" / "amoeba"
+SCRIPTS_DIR = REPO_ROOT / "scripts"
 
-#: The read-write constructor. Calling it anywhere but the permitted module is
+#: The read-write constructor. Calling it anywhere but a permitted module is
 #: what this guard fails on.
 READ_WRITE_OPEN = "open"
 
 #: The class the call must be made on for it to count.
 STORE_CLASS = "Store"
 
-#: The **only** module permitted to open a store read-write. Not a list that
-#: grows casually: adding to it widens the sole-writer invariant, and the
-#: contract documents would have to say so.
+#: The **only** module under ``src/amoeba/`` permitted to open a store
+#: read-write. Not a list that grows casually: adding to it widens the
+#: sole-writer invariant, and the contract documents would have to say so.
 PERMITTED_MODULES = frozenset({"process/host.py"})
+
+#: The **only** module under ``scripts/`` permitted to open a store
+#: read-write. ``demo_journal.py`` is an operator-run demo, not part of the
+#: resident process, and requires ``AMOEBA_STORE_DIR`` pointed at a scratch
+#: directory before it can do anything — see its own module docstring.
+PERMITTED_SCRIPTS = frozenset({"demo_journal.py"})
 
 #: Constructors that are not the read-write open and are therefore ignored.
 #: ``open_read_only`` is the whole point of the exercise; ``open_temporary``
@@ -55,9 +72,19 @@ def _source_modules() -> list[Path]:
     return sorted(SOURCE_DIR.rglob("*.py"))
 
 
+def _script_modules() -> list[Path]:
+    """Every Python module under ``scripts/``."""
+    return sorted(SCRIPTS_DIR.rglob("*.py"))
+
+
 def _relative(path: Path) -> str:
     """A module's path relative to the package root, for readable failures."""
     return path.relative_to(SOURCE_DIR).as_posix()
+
+
+def _relative_to_scripts(path: Path) -> str:
+    """A script's path relative to ``scripts/``, for readable failures."""
+    return path.relative_to(SCRIPTS_DIR).as_posix()
 
 
 def _read_write_open_calls(source: str) -> list[int]:
@@ -195,3 +222,43 @@ def test_the_inspection_cli_is_covered_by_the_scan() -> None:
 def test_the_permitted_set_is_exactly_the_host() -> None:
     """Widening the sole-writer invariant is a deliberate, visible change."""
     assert PERMITTED_MODULES == frozenset({"process/host.py"})
+
+
+# --------------------------------------------------------------------------
+# ``scripts/`` — added after a review found it outside the scanned set
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "script_path", _script_modules(), ids=lambda path: _relative_to_scripts(path)
+)
+def test_only_permitted_scripts_open_a_store_read_write(script_path: Path) -> None:
+    """No script but the ones named in ``PERMITTED_SCRIPTS`` may write."""
+    relative = _relative_to_scripts(script_path)
+    calls = _read_write_open_calls(script_path.read_text(encoding="utf-8"))
+
+    if relative in PERMITTED_SCRIPTS:
+        return
+
+    assert not calls, (
+        f"scripts/{relative} calls the read-write Store.open at line(s) "
+        f"{calls}. Only {sorted(PERMITTED_SCRIPTS)} are permitted to: add it "
+        "to PERMITTED_SCRIPTS if this is a deliberate new operator tool, or "
+        "use Store.open_read_only otherwise."
+    )
+
+
+def test_the_permitted_scripts_exist_and_actually_open_a_store() -> None:
+    """Same drift check as the host module, for the scripts allowlist."""
+    for permitted in PERMITTED_SCRIPTS:
+        path = SCRIPTS_DIR / permitted
+        assert path.exists(), f"{permitted} is permitted but does not exist"
+        assert _read_write_open_calls(path.read_text(encoding="utf-8")), (
+            f"{permitted} is permitted to open a store read-write but does "
+            "not; either the allowlist or the script has drifted"
+        )
+
+
+def test_the_permitted_scripts_set_is_exactly_the_demo() -> None:
+    """Widening this exemption is a deliberate, visible change too."""
+    assert PERMITTED_SCRIPTS == frozenset({"demo_journal.py"})

@@ -111,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_settings_flags(start)
 
-    subparsers.add_parser(
+    stop = subparsers.add_parser(
         "stop",
         help="Ask a running resident process to stop.",
         description=(
@@ -120,6 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
             "SIGKILL."
         ),
     )
+    _add_stop_timeout_flag(stop)
 
     subparsers.add_parser(
         "status", help="Report whether a resident process is running."
@@ -153,13 +154,6 @@ def _add_settings_flags(parser: argparse.ArgumentParser) -> None:
         help="How long shutdown waits for the current tick to return.",
     )
     parser.add_argument(
-        "--stop-timeout",
-        type=float,
-        default=defaults.stop_timeout_seconds,
-        metavar="SECONDS",
-        help="How long 'stop' waits for the lock to be released.",
-    )
-    parser.add_argument(
         "--clock-tolerance",
         type=float,
         default=defaults.clock_tolerance_seconds,
@@ -179,6 +173,26 @@ def _add_settings_flags(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_SQ_RUNS_DIR,
         metavar="PATH",
         help="The Squadron runs directory the observer scans.",
+    )
+
+
+def _add_stop_timeout_flag(parser: argparse.ArgumentParser) -> None:
+    """Expose the one :class:`ProcessSettings` tunable ``stop`` consumes.
+
+    ``stop`` uses only ``stop_timeout_seconds``; the rest of
+    :class:`ProcessSettings` governs the running loop and has no meaning to a
+    command that just signals a PID and waits. Registering the flag here
+    rather than in :func:`_add_settings_flags` keeps ``amoeba stop --help``
+    honest about what it can actually change.
+    """
+    defaults = ProcessSettings()
+
+    parser.add_argument(
+        "--stop-timeout",
+        type=float,
+        default=defaults.stop_timeout_seconds,
+        metavar="SECONDS",
+        help="How long to wait for the lock to be released after signalling.",
     )
 
 
@@ -217,15 +231,25 @@ def _add_inspect_parser(subparsers: Any) -> None:
 
 
 def settings_from_args(args: argparse.Namespace) -> ProcessSettings:
-    """Build settings from parsed flags. Defaults live in ``ProcessSettings``."""
+    """Build ``start`` settings from parsed flags. Defaults live in
+    ``ProcessSettings``."""
     return ProcessSettings(
         idle_interval_seconds=args.idle_interval,
         shutdown_grace_seconds=args.shutdown_grace,
-        stop_timeout_seconds=args.stop_timeout,
         clock_tolerance_seconds=args.clock_tolerance,
         cf_timeout_seconds=args.cf_timeout,
         sq_runs_dir=args.sq_runs_dir,
     )
+
+
+def stop_settings_from_args(args: argparse.Namespace) -> ProcessSettings:
+    """Build ``stop`` settings from parsed flags.
+
+    Only ``stop_timeout_seconds`` is ``stop``-reachable; every other field
+    keeps :class:`ProcessSettings`'s default, since ``stop`` never runs the
+    loop those defaults govern.
+    """
+    return ProcessSettings(stop_timeout_seconds=args.stop_timeout)
 
 
 def _dispatch(args: argparse.Namespace) -> ExitCode:
@@ -237,7 +261,7 @@ def _dispatch(args: argparse.Namespace) -> ExitCode:
         case "start":
             return lifecycle.start(settings_from_args(args))
         case "stop":
-            return lifecycle.stop(ProcessSettings())
+            return lifecycle.stop(stop_settings_from_args(args))
         case "status":
             return lifecycle.status()
         case "inspect":
