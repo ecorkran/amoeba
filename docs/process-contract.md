@@ -231,7 +231,8 @@ A per-project summary is logged before the loop is entered, including
 class Observer(Protocol):
     def observe(self, entry: JournalEntry) -> Observation: ...
 
-Observation = Adopt | NotApplied | Unknown   # frozen dataclasses
+
+Observation = Adopt | NotApplied | Unknown  # frozen dataclasses
 ```
 
 An observer **never** issues, retries, or repairs anything. Expected external
