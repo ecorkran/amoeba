@@ -1,0 +1,91 @@
+{
+  "schema_version": 4,
+  "run_id": "run-20260505-review-a697ad3d",
+  "pipeline": "review",
+  "params": {
+    "model": "deepseek4",
+    "slice": "245"
+  },
+  "execution_mode": "sdk",
+  "started_at": "2026-05-05T04:00:43.345342Z",
+  "updated_at": "2026-05-05T04:02:20.503534Z",
+  "status": "paused",
+  "current_step": "review-0",
+  "completed_steps": [
+    {
+      "step_name": "review-0",
+      "step_type": "review",
+      "status": "paused",
+      "verdict": "FAIL",
+      "outputs": {
+        "checkpoint": "paused",
+        "reason": "Review verdict: FAIL",
+        "trigger": "on-concerns",
+        "human_options": [
+          "approve",
+          "revise",
+          "skip",
+          "abort"
+        ]
+      },
+      "action_results": [
+        {
+          "success": true,
+          "action_type": "review",
+          "outputs": {
+            "response": "I need to see the changed files and their content to perform the review.  \nPlease provide the output of `git diff 2d57aa4^..1bf4095` (or the list of changed files and their full content) so I can proceed.\n\n## Summary\nFAIL\n\n## Findings\n\n### [FAIL] Insufficient information to proceed with review\ncategory: process\nlocation: unverified\nThe review requires the diff of `2d57aa4^..1bf4095` and the content of all changed files. As an AI, I cannot execute shell commands on your file system to retrieve this data. Without the diff output and file contents, a substantive review of quality and correctness is impossible. Please supply the necessary information.",
+            "review_file": "project-documents/user/reviews/245-review.code.pool-resolution-classification-policy-and-mid-run-session-construction.md"
+          },
+          "error": null,
+          "metadata": {
+            "model": "deepseek/deepseek-v4-pro",
+            "profile": "openrouter",
+            "template": "code"
+          },
+          "verdict": "FAIL",
+          "findings": [
+            {
+              "id": "F001",
+              "severity": "fail",
+              "category": "process",
+              "summary": "Insufficient information to proceed with review",
+              "location": "unverified"
+            }
+          ]
+        },
+        {
+          "success": true,
+          "action_type": "checkpoint",
+          "outputs": {
+            "checkpoint": "paused",
+            "reason": "Review verdict: FAIL",
+            "trigger": "on-concerns",
+            "human_options": [
+              "approve",
+              "revise",
+              "skip",
+              "abort"
+            ]
+          },
+          "error": null,
+          "metadata": {
+            "step": "review-0",
+            "pipeline": "review"
+          },
+          "verdict": "FAIL",
+          "findings": []
+        }
+      ],
+      "iteration": 0,
+      "completed_at": "2026-05-05T04:02:20.500651Z"
+    }
+  ],
+  "checkpoint": {
+    "reason": "checkpoint",
+    "step": "review-0",
+    "verdict": "FAIL",
+    "paused_at": "2026-05-05T04:02:20.500651Z"
+  },
+  "compact_summaries": {},
+  "pool_selections": []
+}

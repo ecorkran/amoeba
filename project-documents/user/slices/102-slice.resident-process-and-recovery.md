@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101]
 interfaces: [103, 104, 105, 106, 107]
 dateCreated: 20260919
-dateUpdated: 20260919
-status: not_started
+dateUpdated: 20260921
+status: complete
 ---
 
 # Slice Design: resident-process-and-recovery
@@ -278,43 +278,51 @@ Slice 101 only, through its public contract. `StoreError` subclasses raised duri
 
 ### Functional Requirements
 
-- [ ] `amoeba start` runs, `amoeba status` reports it running with its pid, `amoeba stop` ends it within the grace period, and `status` then reports stopped.
-- [ ] A second `amoeba start` exits with `ExitCode.ALREADY_RUNNING` and does not disturb the first.
-- [ ] After `kill -9`, `amoeba start` succeeds immediately with no manual cleanup, and `status` in between reports a stale pid file rather than running.
-- [ ] With the lock held and the PID file removed or corrupted, `stop` exits `NO_STOP_TARGET` without signalling anything, and `status` reports `running (pid unknown)`.
-- [ ] A tenant that does not return within the grace period causes exit with `GRACE_EXPIRED` and an ERROR log naming the tenant; the next start recovers normally.
-- [ ] An adopted `cf_write` result carries the project record's `updatedAt` and a captured `cf --version` label; with `cf --version` unavailable the adoption still succeeds and records it as unavailable.
-- [ ] A `cf_write` entry left unresolved is resolved `adopted` when CF holds the expected values and `not_applied` when it does not. Neither re-issues anything.
-- [ ] An `sq_run` entry left unresolved with exactly one matching run file is resolved `adopted` with that `run_id`.
-- [ ] An `sq_run` entry with zero matching run files, and one with two, each become outcome `unknown` with the node `blocked_on_human` and the blocked-state context naming the journal entry.
-- [ ] The Squadron matcher matches when the journaled `params` are a strict subset of the persisted ones, and rejects a run started before the entry was issued.
-- [ ] A run id already recorded in another journal entry is not a candidate.
-- [ ] `journal_escalate` against an already-blocked node marks the entry `unknown` and writes no second blocked state.
-- [ ] Recovery interrupted partway and re-run reconciles each entry exactly once.
-- [ ] `journal_issue` with a missing required parameter raises and writes nothing.
-- [ ] `amoeba inspect` lists projects, nodes, blocked states, and journal entries, human-readable and as `--json`, while the process is running and while it is stopped.
-- [ ] Inspection never migrates, creates, or writes a store.
+- [x] `amoeba start` runs, `amoeba status` reports it running with its pid, `amoeba stop` ends it within the grace period, and `status` then reports stopped.
+- [x] A second `amoeba start` exits with `ExitCode.ALREADY_RUNNING` and does not disturb the first.
+- [x] After `kill -9`, `amoeba start` succeeds immediately with no manual cleanup, and `status` in between reports a stale pid file rather than running.
+- [x] With the lock held and the PID file removed or corrupted, `stop` exits `NO_STOP_TARGET` without signalling anything, and `status` reports `running (pid unknown)`.
+- [x] A tenant that does not return within the grace period causes exit with `GRACE_EXPIRED` and an ERROR log naming the tenant; the next start recovers normally.
+- [x] An adopted `cf_write` result carries the project record's `updatedAt` and a captured `cf --version` label; with `cf --version` unavailable the adoption still succeeds and records it as unavailable.
+- [x] A `cf_write` entry left unresolved is resolved `adopted` when CF holds the expected values and `not_applied` when it does not. Neither re-issues anything.
+- [x] An `sq_run` entry left unresolved with exactly one matching run file is resolved `adopted` with that `run_id`.
+- [x] An `sq_run` entry with zero matching run files, and one with two, each become outcome `unknown` with the node `blocked_on_human` and the blocked-state context naming the journal entry.
+- [x] The Squadron matcher matches when the journaled `params` are a strict subset of the persisted ones, and rejects a run started before the entry was issued.
+- [x] A run id already recorded in another journal entry is not a candidate.
+- [x] `journal_escalate` against an already-blocked node marks the entry `unknown` and writes no second blocked state.
+- [x] Recovery interrupted partway and re-run reconciles each entry exactly once.
+- [x] `journal_issue` with a missing required parameter raises and writes nothing.
+- [x] `amoeba inspect` lists projects, nodes, blocked states, and journal entries, human-readable and as `--json`, while the process is running and while it is stopped.
+- [x] Inspection never migrates, creates, or writes a store.
 
 ### Technical Requirements
 
-- [ ] All vocabularies are `StrEnum`s defined once; no exit-code integers or outcome strings at call sites.
-- [ ] Every tunable (idle interval, shutdown grace, stop timeout, clock tolerance, `cf` timeout, runs directory) lives in `ProcessSettings`.
-- [ ] Squadron matcher fixtures are **real** run files copied from `~/.config/squadron/runs/` at implementation time, including at least one `paused` and one `failed`. The CF fixture is captured from real `cf get --json` output. Each fixture notes the date it was captured; none is tied to an upstream version.
-- [ ] A run file or `cf` output missing a field the observer requires yields `Unknown`, not an exception and not a match — so upstream drift degrades to a human escalation.
-- [ ] The guard test fails when a read-write `Store.open` call is added outside `process/host.py`.
-- [ ] Process-level tests drive the real CLI as a subprocess against a `tmp_path` supervisor directory via `AMOEBA_STORE_DIR`; none touches `~/.config/amoeba` or the real Squadron runs directory.
-- [ ] `tests/load/` contains a crash-loop test and a recovery-scale test (see Implementation Notes) with asserted bounds.
-- [ ] `ruff`, `pyright` strict, and the full test suite are clean. Source files stay near 300 lines.
-- [ ] `docs/process-contract.md` exists; `docs/store-contract.md` is updated; `CHANGELOG.md` has entries.
+- [x] All vocabularies are `StrEnum`s defined once; no exit-code integers or outcome strings at call sites.
+- [x] Every tunable (idle interval, shutdown grace, stop timeout, clock tolerance, `cf` timeout, runs directory) lives in `ProcessSettings`.
+- [x] Squadron matcher fixtures are **real** run files copied from `~/.config/squadron/runs/` at implementation time, including at least one `paused` and one `failed`. The CF fixture is captured from real `cf get --json` output. Each fixture notes the date it was captured; none is tied to an upstream version.
+- [x] A run file or `cf` output missing a field the observer requires yields `Unknown`, not an exception and not a match — so upstream drift degrades to a human escalation.
+- [x] The guard test fails when a read-write `Store.open` call is added outside `process/host.py`.
+- [x] Process-level tests drive the real CLI as a subprocess against a `tmp_path` supervisor directory via `AMOEBA_STORE_DIR`; none touches `~/.config/amoeba` or the real Squadron runs directory.
+- [x] `tests/load/` contains a crash-loop test and a recovery-scale test (see Implementation Notes) with asserted bounds.
+- [x] `ruff`, `pyright` strict, and the full test suite are clean. Source files stay near 300 lines.
+- [x] `docs/process-contract.md` exists; `docs/store-contract.md` is updated; `CHANGELOG.md` has entries.
 
 ### Integration Requirements
 
-- [ ] A throwaway `Tenant` defined in a test is ticked by the real host, writes through `store_for()`, observes `stop_requested`, and the process exits cleanly — proving the seam 103 and 120 will use.
-- [ ] A store created by slice 101 code at schema version 2 is upgraded to 3 by `amoeba start` with its nodes and blocked states intact.
+- [x] A throwaway `Tenant` defined in a test is ticked by the real host, writes through `store_for()`, observes `stop_requested`, and the process exits cleanly — proving the seam 103 and 120 will use.
+- [x] A store created by slice 101 code at schema version 2 is upgraded to 3 by `amoeba start` with its nodes and blocked states intact.
 
 ### Verification Walkthrough
 
-Draft; to be refined with real output at the end of Phase 6. None of these commands exists yet. Everything runs against a scratch supervisor directory so the real one is never touched.
+**Verified end to end on 20260921** against a scratch supervisor directory
+(Darwin 25.5.0, Python 3.13.7, SQLite 3.50.4). The output below is **captured
+from a real run**, not drafted. Every step ran as written; the one correction
+made during verification is noted at step 3.
+
+Everything runs against a scratch directory, so the real supervisor directory
+and the real Squadron runs directory are never touched. Both were checked
+afterward: `~/.config/amoeba` did not exist, and `~/.config/squadron/runs/`
+still held its original 131 files with none of the demo's run ids among them.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
@@ -324,52 +332,136 @@ export AMOEBA_STORE_DIR="$(mktemp -d)"
 
 ```bash
 uv run amoeba start &          # foreground process, backgrounded by the shell
-uv run amoeba status           # → running  pid=<n>  since=<timestamp>
-uv run amoeba start            # → refuses; echo $? shows the ALREADY_RUNNING code
-uv run amoeba stop             # → stopped
-uv run amoeba status           # → stopped
+uv run amoeba status
+#   running  pid=23968  since=2026-09-21T13:36:29.626426+00:00  version=0.1.0
+#   echo $? → 0
+
+uv run amoeba start            # refuses; the running process is untouched
+#   amoeba: another amoeba process holds $AMOEBA_STORE_DIR/amoeba.lock
+#   echo $? → 2   (ExitCode.ALREADY_RUNNING)
+
+uv run amoeba stop
+#   amoeba: stopped (pid 23968)
+#   echo $? → 0
+
+uv run amoeba status
+#   stopped
+#   echo $? → 8   (ExitCode.NOT_RUNNING_STATUS)
 ```
 
 **2. Crash leaves nothing to clean up**
 
 ```bash
 uv run amoeba start &
-kill -9 %1
-uv run amoeba status           # → stopped (stale pid file)
-uv run amoeba start &          # → starts; no manual lock or pid removal
+kill -9 "$(python3 -c "import json;print(json.load(open('$AMOEBA_STORE_DIR/amoeba.pid'))['pid'])")"
+
+uv run amoeba status
+#   stopped (stale pid file)
+#   echo $? → 8
+
+uv run amoeba start &          # starts; no manual lock or pid removal
+uv run amoeba status
+#   running  pid=24875  since=2026-09-21T13:36:47.675734+00:00  version=0.1.0
 uv run amoeba stop
+#   amoeba: stopped (pid 24875)
 ```
 
-**3. Recovery — the three Squadron outcomes.** A helper script, `scripts/demo_journal.py` (to be written in this slice, a few lines over the public store API), creates a project `demo` with three nodes and issues one unresolved `sq_run` entry per node against a scratch runs directory seeded with copies of real run files: one entry with exactly one matching file, one with none, one with two.
+**3. Recovery — the three Squadron outcomes.** `scripts/demo_journal.py` creates
+a project `demo` with three nodes and issues one unresolved `sq_run` entry per
+node, against a scratch runs directory seeded with copies of **real** run files:
+one entry with exactly one matching file, one with none, one with two.
+
+> **Correction made during verification.** The first run of the demo script
+> produced `0 adopted, 0 not_applied, 3 unknown`. The cause was in the script,
+> not the matcher: it journaled `params={"demo": case}` while the copied run
+> files carried the fixture's own params, so the subset condition — every
+> journaled key present in the run with an equal value — could never hold. The
+> script now journals a strict subset of the run's real params, which is also
+> what a real caller does, since Squadron persists definition defaults merged
+> with the caller's overrides. This is exactly the failure D5's subset rule
+> exists to describe, and it is recorded here rather than quietly fixed.
 
 ```bash
 uv run python scripts/demo_journal.py --runs-dir "$AMOEBA_STORE_DIR/runs"
-uv run amoeba inspect journal --project demo --unresolved    # → three entries
+#   store dir:  /var/folders/.../tmp.ntE7mnPNv1
+#   runs dir:   /var/folders/.../tmp.ntE7mnPNv1/runs
+#   seeding three unresolved sq_run entries:
+#     one    node=ff3ab7fbdaf648fa9ec7cdef276e32d0  entry=bc2b566c26b54df5a8c555f4b30745eb
+#     none   node=12a142ecce774428bed801107eb58ce4  entry=fbc23da41ca7477a97b465b5743d4a76
+#     two    node=8008fa94306f4e888173044f47ea5992  entry=2b2826d10fe944dc94df3230188f450b
+
+uv run amoeba inspect journal --project demo --unresolved
+#   id                                node_id                           kind    outcome  resolved_by  issued_at
+#   --------------------------------  --------------------------------  ------  -------  -----------  --------------------------------
+#   bc2b566c26b54df5a8c555f4b30745eb  ff3ab7fbdaf648fa9ec7cdef276e32d0  sq_run                         2026-09-21T13:37:47.775117+00:00
+#   fbc23da41ca7477a97b465b5743d4a76  12a142ecce774428bed801107eb58ce4  sq_run                         2026-09-21T13:37:47.775389+00:00
+#   2b2826d10fe944dc94df3230188f450b  8008fa94306f4e888173044f47ea5992  sq_run                         2026-09-21T13:37:47.775626+00:00
+
 uv run amoeba start --sq-runs-dir "$AMOEBA_STORE_DIR/runs" &
-#   log: recovery demo: 1 adopted, 0 not_applied, 2 unknown
-uv run amoeba inspect journal --project demo --unresolved    # → none
+#   log: amoeba.process.host: recovery demo: 1 adopted, 0 not_applied, 2 unknown
+
+uv run amoeba inspect journal --project demo --unresolved
+#   (none)
+
 uv run amoeba inspect journal --project demo
-#   → one 'adopted' carrying a run_id; two 'unknown'
+#   id                                node_id                           kind    outcome  resolved_by  issued_at
+#   --------------------------------  --------------------------------  ------  -------  -----------  --------------------------------
+#   bc2b566c26b54df5a8c555f4b30745eb  ff3ab7fbdaf648fa9ec7cdef276e32d0  sq_run  adopted  recovery     2026-09-21T13:37:47.775117+00:00
+#   fbc23da41ca7477a97b465b5743d4a76  12a142ecce774428bed801107eb58ce4  sq_run  unknown  recovery     2026-09-21T13:37:47.775389+00:00
+#   2b2826d10fe944dc94df3230188f450b  8008fa94306f4e888173044f47ea5992  sq_run  unknown  recovery     2026-09-21T13:37:47.775626+00:00
+
 uv run amoeba inspect blocked --project demo
-#   → two nodes blocked_on_human; each context names its journal entry
+#   node_id                           title                 blocked_on  context
+#   --------------------------------  --------------------  ----------  --------------------------------------------------------------
+#   12a142ecce774428bed801107eb58ce4  none-match demo node  human       journal entry fbc23da41ca7477a97b465b5743d4a76 (sq_run): no squadron run matches this entry
+#   8008fa94306f4e888173044f47ea5992  two-match demo node   human       journal entry 2b2826d10fe944dc94df3230188f450b (sq_run): 2 squadron runs match this entry (candidates: run-demo-two-00000001, run-demo-two-00000002)
+```
+
+The adopted entry's result carries the run id and the run file's own
+`schema_version` as provenance — never a comparison, only a record:
+
+```bash
+uv run amoeba inspect journal --project demo --json   # the adopted entry's result
+#   { "run_id": "run-demo-one-00000001", "schema_version": 4, "status": "paused" }
 ```
 
 **4. Nothing is re-issued or double-handled**
 
 ```bash
 uv run amoeba stop && uv run amoeba start --sq-runs-dir "$AMOEBA_STORE_DIR/runs" &
-#   log: recovery demo: nothing to reconcile
-uv run amoeba inspect blocked --project demo                 # → still exactly two
+#   log: amoeba.process.host: recovery demo: nothing to reconcile
+
+uv run amoeba inspect blocked --project demo --json    # → still exactly 2
 ```
 
-**5. Committed state survives a kill.** `kill -9` the process, then `amoeba inspect nodes --project demo --json` and compare with the listing taken before the kill: identical.
+**5. Committed state survives a kill**
+
+```bash
+uv run amoeba inspect nodes --project demo --json > before.json
+kill -9 "$(python3 -c "import json;print(json.load(open('$AMOEBA_STORE_DIR/amoeba.pid'))['pid'])")"
+uv run amoeba inspect nodes --project demo --json > after.json
+diff before.json after.json    # → no differences; listings identical
+```
 
 **6. Quality gates**
 
 ```bash
-uv run pytest && uv run pytest tests/load
-uv run ruff check . && uv run pyright
+uv run pytest                 # → 396 passed
+uv run pytest tests/load      # → 8 passed
+uv run ruff check . && uv run ruff format --check . && uv run pyright
+#   All checks passed! / 74 files already formatted / 0 errors
 ```
+
+**Caveats discovered during implementation**
+
+- `amoeba status` exits **8**, not 0, when the supervisor is stopped. That is
+  deliberate — it lets a script distinguish running from stopped by exit status
+  alone — but it means `set -e` scripts must not call it unguarded.
+- `amoeba start` is foreground (D1). Every step above backgrounds it with the
+  shell's `&`; there is no `--daemon` flag and none is planned.
+- The demo script refuses to overwrite an existing `demo` store. Pass `--reset`
+  to replace one, which is also how to re-run the walkthrough in a directory
+  that has already been used.
 
 ## Risk Assessment
 

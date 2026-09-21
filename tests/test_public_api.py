@@ -18,13 +18,18 @@ EXPECTED_EXPORTS = {
     # Vocabularies
     "BLOCKED_KIND_TO_STATUS",
     "BLOCKED_STATUSES",
+    "REQUIRED_PARAMETER_KEYS",
     "BlockedKind",
+    "CommandKind",
+    "JournalOutcome",
+    "JournalResolver",
     "NodeKind",
     "NodeStatus",
     # Transfer objects
     "BlockedNode",
     "BlockedState",
     "CFReference",
+    "JournalEntry",
     "Node",
     "Resolution",
     "SQReference",
@@ -43,11 +48,20 @@ EXPECTED_EXPORTS = {
 }
 
 #: Internal modules that must not become part of the contract.
-INTERNAL_MODULES = {"sql", "mapping", "migrations", "paths", "_base"}
+INTERNAL_MODULES = {
+    "sql",
+    "sql_journal",
+    "mapping",
+    "mapping_journal",
+    "migrations",
+    "paths",
+    "_base",
+}
 
 #: Store methods a downstream author codes against, per the API contract.
 CONTRACT_METHODS = {
     "open",
+    "open_read_only",
     "open_temporary",
     "close",
     "create_node",
@@ -63,6 +77,13 @@ CONTRACT_METHODS = {
     "all_blocked_states",
     "runnable",
     "blocked",
+    # The command journal, added by slice 102.
+    "journal_issue",
+    "journal_resolve",
+    "journal_escalate",
+    "journal_entry",
+    "journal_entries",
+    "unresolved_journal_entries",
 }
 
 

@@ -22,8 +22,17 @@ from typing import Self
 
 from amoeba.store import paths, sql
 from amoeba.store.blocking import BlockingOperations
-from amoeba.store.migrations import migrate
-from amoeba.store.models import StoreCorruptError, StorePermissionError
+from amoeba.store.journal import JournalOperations
+from amoeba.store.migrations import (
+    EXPECTED_SCHEMA_VERSION,
+    migrate,
+    read_schema_version,
+)
+from amoeba.store.models import (
+    StoreCorruptError,
+    StorePermissionError,
+    StoreSchemaError,
+)
 from amoeba.store.nodes import NodeOperations
 
 logger = logging.getLogger(__name__)
@@ -33,7 +42,7 @@ logger = logging.getLogger(__name__)
 IN_MEMORY_PATH = Path(":memory:")
 
 
-class Store(NodeOperations, BlockingOperations):
+class Store(NodeOperations, BlockingOperations, JournalOperations):
     """A project-keyed lifecycle node store backed by one SQLite file.
 
     Open a store with :meth:`open` or :meth:`open_temporary`, both of which
@@ -113,6 +122,106 @@ class Store(NodeOperations, BlockingOperations):
         connection = cls._connect(path, busy_timeout_seconds)
         cls._migrate_or_close(connection)
         return cls(connection, path, busy_timeout_seconds)
+
+    @classmethod
+    def open_read_only(
+        cls,
+        path: Path | None = None,
+        *,
+        project_id: str | None = None,
+        busy_timeout_seconds: float = sql.BUSY_TIMEOUT_SECONDS,
+    ) -> Self:
+        """Open a store read-only, for every out-of-process consumer.
+
+        This is what inspection uses. The handle is genuinely read-only —
+        SQLite ``mode=ro``, verified against this project's Python and SQLite
+        build in ``tests/test_read_only_open.py`` — so a write attempted
+        through it raises rather than succeeding silently.
+
+        It **never migrates**. A store at any version other than the one this
+        code expects raises :class:`StoreSchemaError`, in both directions:
+        migrating would be a write, and reading a newer store risks
+        misinterpreting columns this code does not know about.
+
+        Args:
+            path: The store file. When omitted, the central per-supervisor path
+                for ``project_id`` is resolved from ``paths``.
+            project_id: Used to resolve the central path when ``path`` is
+                omitted. Ignored when ``path`` is given.
+            busy_timeout_seconds: How long to wait for a contended lock before
+                raising.
+
+        Returns:
+            An open read-only store.
+
+        Raises:
+            ValueError: If neither ``path`` nor ``project_id`` is given.
+            StorePermissionError: If no store exists at the path, or it cannot
+                be read. A missing store is never created.
+            StoreCorruptError: If the file is not a readable SQLite database.
+            StoreSchemaError: If the store's schema version is not the expected
+                one. The file is left exactly as it was found.
+        """
+        if path is None:
+            if project_id is None:
+                raise ValueError(
+                    "open_read_only() requires either a path or a project_id"
+                )
+            path = paths.store_path(project_id)
+
+        # Checked before connecting: sqlite3 in mode=ro reports a missing file
+        # as an unhelpful "unable to open database file", and the caller needs
+        # to know the store does not exist rather than that it is unreadable.
+        if not path.exists():
+            raise StorePermissionError(f"no store exists at {path}")
+
+        connection = cls._connect_read_only(path, busy_timeout_seconds)
+        try:
+            version = read_schema_version(connection)
+            if version != EXPECTED_SCHEMA_VERSION:
+                raise StoreSchemaError(
+                    f"store at {path} is at schema version {version}, but this "
+                    f"code expects {EXPECTED_SCHEMA_VERSION}; a read-only open "
+                    "never migrates"
+                )
+        except Exception:
+            logger.exception("read-only open failed; closing the connection")
+            connection.close()
+            raise
+
+        return cls(connection, path, busy_timeout_seconds)
+
+    @staticmethod
+    def _connect_read_only(
+        path: Path, busy_timeout_seconds: float
+    ) -> sqlite3.Connection:
+        """Connect via ``mode=ro`` and verify the file is readable.
+
+        WAL journal mode is deliberately not set here: that is a write, and a
+        WAL store is already readable through a read-only handle — the property
+        measured in ``tests/test_read_only_open.py``.
+        """
+        uri = f"file:{path}?mode=ro"
+        try:
+            connection = sqlite3.connect(
+                uri, uri=True, timeout=busy_timeout_seconds, isolation_level="DEFERRED"
+            )
+        except sqlite3.OperationalError as error:
+            # Specific: sqlite3 reports an unopenable path this way.
+            logger.exception("cannot open store read-only at %s", path)
+            raise StorePermissionError(
+                f"cannot open store read-only at {path}: {error}"
+            ) from error
+
+        try:
+            connection.execute(sql.PRAGMA_FOREIGN_KEYS_ON)
+        except sqlite3.DatabaseError as error:
+            connection.close()
+            # Specific: a non-SQLite or malformed file fails on first real use.
+            logger.exception("cannot read store at %s", path)
+            raise StoreCorruptError(f"cannot read store at {path}: {error}") from error
+
+        return connection
 
     @classmethod
     def open_temporary(cls) -> Self:

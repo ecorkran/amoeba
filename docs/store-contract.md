@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20260917
+dateUpdated: 20260921
 status: complete
 ---
 
@@ -27,13 +27,17 @@ is a row. Everything that makes Amoeba async by construction follows from this.
 ## What the store is not
 
 - **Not a process.** This is a synchronous, in-process library. The resident
-  process that hosts it is slice 102.
-- **Not a single-writer enforcer.** See [Writer model](#writer-model) — this
-  matters and is easy to assume wrongly.
+  process that hosts it is `amoeba.process` — see
+  [`process-contract.md`](process-contract.md).
+- **Not a single-writer enforcer on its own.** See
+  [Writer model](#writer-model): slice 102 added the enforcement around it, and
+  the distinction is easy to assume wrongly.
 - **Not a parser.** CF and SQ values are stored opaquely. See
   [Reference fields](#reference-fields).
-- **Not a journal.** Issued commands, findings, verdicts, the inbox, and the
-  change feed belong to slices 102–105. Nothing about them is modeled here.
+- **Not a findings store.** Findings, verdicts, the inbox, and the change feed
+  belong to slices 103–105. Nothing about them is modeled here. *(Slice 102
+  added the command journal, which this document now covers — see
+  [The command journal](#the-command-journal).)*
 
 ## Importing
 
@@ -41,16 +45,18 @@ Everything below is exported from `amoeba.store` directly:
 
 ```python
 from amoeba.store import Store, Node, NodeKind, NodeStatus, BlockedKind
+from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
 ```
 
-`sql`, `mapping`, `migrations`, `paths`, and `_base` are internal. They are not
+`sql`, `sql_journal`, `mapping`, `migrations`, `paths`, and `_base` are
+internal. They are not
 re-exported and are not contract. A test (`tests/test_public_api.py`) pins the
 export set, so this list cannot drift silently.
 
 ## Vocabularies
 
 All vocabularies are `StrEnum`, so the values stored in the database file are
-readable strings — slice 102's inspection surface reads them directly.
+readable strings — `amoeba inspect` reads them directly.
 
 **A value outside a vocabulary is an error, not a default.** Reading a row whose
 status is not in `NodeStatus` raises `UnknownVocabularyValueError` rather than
@@ -221,17 +227,145 @@ Both queries:
 - use the `(project_id, status)` index
 - return an **empty list** when there is nothing, which is not an error
 
+## The command journal
+
+*Added by slice 102. Schema version 3.*
+
+A record of every side-effecting command, written **before** the command is
+issued and closed when its result arrives. Its whole purpose is one ordering
+guarantee:
+
+> `journal_issue` **commits before it returns.** A crash in the window between
+> that commit and the side effect therefore leaves a durable unresolved entry.
+
+That entry is what lets the resident process, on its next start, ask the
+external system what actually happened — rather than guessing, or re-issuing a
+command that may already have run. The reconcile protocol itself is
+[`process-contract.md`](process-contract.md)'s subject; this section covers only
+what the store offers.
+
+### Vocabularies
+
+All `StrEnum`, all defined once, exported from `amoeba.store`.
+
+| Vocabulary | Members |
+| --- | --- |
+| `CommandKind` | `cf_write`, `sq_run` |
+| `JournalOutcome` | `completed`, `failed` (written by the issuer); `adopted`, `not_applied`, `unknown` (written only by recovery) |
+| `JournalResolver` | `issuer`, `recovery` |
+
+`unknown` is a *recorded outcome* — recovery could not determine what happened —
+and is distinct from an unmappable stored string, which raises
+`UnknownVocabularyValueError` like any other vocabulary violation.
+
+### Required parameter keys
+
+`REQUIRED_PARAMETER_KEYS` maps each `CommandKind` to the keys recovery needs.
+`journal_issue` validates them **before writing anything**:
+
+| Kind | Required keys |
+| --- | --- |
+| `sq_run` | `pipeline`, `params` |
+| `cf_write` | `project`, `expected` (a mapping of CF field name to the value the write should leave behind) |
+
+Additional keys are stored and returned unchanged.
+
+Validating at issue time rather than at recovery time is deliberate: discovering
+at 3 a.m., after a crash, that an entry cannot be reconciled because a matching
+field was never recorded is the failure this prevents.
+
+### Methods
+
+| Method | Effect |
+| --- | --- |
+| `journal_issue(node_id, *, kind, parameters)` | Validates the parameters for the kind, writes an unresolved entry, **commits**, returns it. Call before the side effect. Raises `NodeNotFoundError` for an unknown node and `ValueError` for a missing required key — in both cases writing nothing. |
+| `journal_resolve(entry_id, *, outcome, result=None, resolved_by=ISSUER)` | Closes the entry. Raises `InvalidTransitionError` if it does not exist or is already resolved; a first outcome is never silently overwritten. |
+| `journal_escalate(entry_id, *, reason)` | **One transaction:** sets outcome `unknown` and blocks the node on `HUMAN` with a context naming the entry. If the node is already blocked, marks the entry and writes no second blocked state. |
+| `journal_entry(entry_id)` | One entry, or `None`. |
+| `unresolved_journal_entries(project_id)` | Entries still in flight, oldest first. What recovery consumes. |
+| `journal_entries(project_id, *, node_id=None, include_resolved=True)` | What inspection consumes. |
+| `recorded_result_run_ids(project_id)` | Run ids already recorded in some entry's result, mapped to that entry's id. The Squadron matcher's fourth candidate condition reads this. |
+
+### `JournalEntry`
+
+A frozen dataclass: `id`, `project_id`, `node_id`, `kind`, `parameters`,
+`issued_at`, `outcome`, `result`, `resolved_at`, `resolved_by`, plus an
+`is_resolved` property derived from `outcome` — not a separate stored flag, so
+the two cannot disagree.
+
+### The already-blocked branch
+
+`block()` refuses a node that is already blocked, and a unique partial index
+forbids a second open blocked state. When an unresolved entry's node is already
+blocked, `journal_escalate` marks the entry `unknown` and does **not** write a
+second block: the node is already stopped, and the entry stays visible through
+`amoeba inspect journal`.
+
+This is an explicit branch in the implementation, not a caught
+`InvalidTransitionError` — catching would also swallow a genuine transition bug.
+
+### Security
+
+> **`parameters` and `result` are stored verbatim and are shown by
+> `amoeba inspect`, including in `--json` output. Callers must not place secrets
+> in them.**
+
+Store a reference — a path, an id, a key name — not the secret itself.
+
+### Retention
+
+Entries are never deleted in this slice. Retention is Future Work.
+
 ## Writer model
 
-**This library does not enforce single-writer.** It is stated here explicitly so
-slice 102 knows what it is *adding* rather than discovering an assumption.
+**This library does not enforce single-writer on its own.** WAL journal mode is
+set at open, which permits concurrent readers alongside one writer. Two
+processes that both open a store read-write will contend, and contention
+surfaces as `StoreBusyError` once the busy timeout is exhausted — the library
+does not prevent it.
 
-WAL journal mode is set at open, which permits concurrent readers alongside one
-writer. Within this slice the caller owns writer discipline. Two processes
-writing the same store will contend, and contention surfaces as
-`StoreBusyError` once the busy timeout is exhausted — it is not prevented.
+**Slice 102 added the enforcement, and it is now mechanical rather than
+conventional:**
 
-Slice 102's resident process is what makes the store single-writer in practice.
+1. **An advisory instance lock** (`amoeba.lock` in the supervisor directory)
+   guarantees at most one resident process per supervisor. The kernel releases
+   it when the holder dies by any means, so a stale lock cannot exist.
+2. **A guard test** (`tests/test_writer_guard.py`) walks the AST of every module
+   under `src/amoeba/` and fails if any module other than `process/host.py`
+   calls the read-write `Store.open`.
+
+Every out-of-process consumer uses [`Store.open_read_only`](#read-only-access)
+instead, which is a genuine SQLite `mode=ro` handle: a write attempted through
+it raises. That was **measured** on this project's Python and SQLite build
+rather than assumed — see `tests/test_read_only_open.py`, which records the
+measurement and its date.
+
+Stated honestly: this does not stop a third party importing `amoeba.store` and
+writing. Nothing in a library can. It makes the mistake impossible to make *by
+accident inside Amoeba*, which is the realistic failure.
+
+The full process-side contract is in
+[`process-contract.md`](process-contract.md).
+
+## Read-only access
+
+```python
+Store.open_read_only(path=None, *, project_id=None)
+```
+
+A read-only handle for every out-of-process consumer — `amoeba inspect` uses it
+for all of its listings.
+
+- **It never migrates.** A store at any version other than the one this code
+  expects raises `StoreSchemaError` and the file is left exactly as it was
+  found. Migrating would be a write.
+- **It never creates.** Opening a path with no store raises
+  `StorePermissionError` rather than creating an empty database.
+- **It cannot write.** The handle is SQLite `mode=ro`; every write method raises
+  through it.
+
+Reads through it return the same values a read-write open does, whether or not
+a writer is currently alive.
 
 ## Failure modes
 

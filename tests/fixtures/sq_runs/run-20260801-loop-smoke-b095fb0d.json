@@ -1,0 +1,52 @@
+{
+  "schema_version": 4,
+  "run_id": "run-20260801-loop-smoke-b095fb0d",
+  "pipeline": "loop-smoke",
+  "params": {},
+  "execution_mode": "sdk",
+  "started_at": "2026-08-01T16:16:07.124013Z",
+  "updated_at": "2026-08-01T16:16:07.233304Z",
+  "status": "completed",
+  "current_step": null,
+  "completed_steps": [
+    {
+      "step_name": "loop-0",
+      "step_type": "loop",
+      "status": "skipped",
+      "verdict": null,
+      "score": null,
+      "outputs": {},
+      "action_results": [
+        {
+          "success": false,
+          "action_type": "dispatch",
+          "outputs": {},
+          "error": "No API key found. Set OPENROUTER_API_KEY environment variable.",
+          "metadata": {},
+          "verdict": null,
+          "findings": [],
+          "score": null,
+          "criteria": null,
+          "provenance": null
+        },
+        {
+          "success": false,
+          "action_type": "review",
+          "outputs": {},
+          "error": "No API key found. Set OPENROUTER_API_KEY environment variable.",
+          "metadata": {},
+          "verdict": null,
+          "findings": [],
+          "score": null,
+          "criteria": null,
+          "provenance": null
+        }
+      ],
+      "iteration": 2,
+      "completed_at": "2026-08-01T16:16:07.232678Z"
+    }
+  ],
+  "checkpoint": null,
+  "compact_summaries": {},
+  "pool_selections": []
+}

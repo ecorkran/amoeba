@@ -1,0 +1,16 @@
+{
+  "name": "amoeba",
+  "id": "project_1781844717321_1gukaohbc",
+  "projectPath": "/Users/manta/source/repos/manta/amoeba",
+  "template": "default",
+  "fileArch": "100-arch.substrate-run-state-store",
+  "fileSlicePlan": "100-slices.substrate-run-state-store",
+  "fileSlice": "102-slice.resident-process-and-recovery",
+  "fileTasks": "102-tasks.resident-process-and-recovery",
+  "developmentPhase": "Phase 6: Implementation",
+  "instruction": "Phase 6: Implementation",
+  "dateProject": "20260919",
+  "createdAt": "2026-06-19T04:51:57.320Z",
+  "updatedAt": "2026-09-21T11:43:12.219Z",
+  "customData": {}
+}

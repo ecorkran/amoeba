@@ -1,0 +1,47 @@
+{
+  "schema_version": 3,
+  "run_id": "run-20260411-p5-93bf1c90",
+  "pipeline": "p5",
+  "params": {
+    "model": "sonnet",
+    "review-model": "minimax",
+    "slice": "210"
+  },
+  "execution_mode": "prompt-only",
+  "started_at": "2026-04-11T15:11:18.751261Z",
+  "updated_at": "2026-04-11T15:15:08.668543Z",
+  "status": "completed",
+  "current_step": null,
+  "completed_steps": [
+    {
+      "step_name": "tasks-0",
+      "step_type": "tasks",
+      "status": "completed",
+      "verdict": "PASS",
+      "outputs": {},
+      "action_results": [
+        {
+          "success": true,
+          "action_type": "prompt-only-feedback",
+          "outputs": {},
+          "error": null,
+          "metadata": {},
+          "verdict": "PASS",
+          "findings": []
+        }
+      ],
+      "completed_at": "2026-04-11T15:14:33.705885Z"
+    },
+    {
+      "step_name": "summary-1",
+      "step_type": "summary",
+      "status": "completed",
+      "verdict": null,
+      "outputs": {},
+      "action_results": [],
+      "completed_at": "2026-04-11T15:15:08.064035Z"
+    }
+  ],
+  "checkpoint": null,
+  "compact_summaries": {}
+}
