@@ -166,7 +166,7 @@ A `resolution` targets a **blocked-state id, not a node id**. A node can be bloc
 
 ## Technical Decisions
 
-D1–D4 are choices a reasonable Project Manager could make differently. **D1, D2, and the project-creation scope were ratified by the PM on 20260921**; D3 and D4 are recommendations.
+D1–D4 are choices a reasonable Project Manager could make differently. **D1, D2, D4, and the project-creation scope were ratified by the PM on 20260921**; D3 is a recommendation.
 
 ### Technology Choices
 
@@ -192,7 +192,7 @@ Two consequences for slice 102's recovery, both intended:
 
 *Alternative:* a public `post_message()` the Runner calls after `block()`. Rejected because it reintroduces a two-call window and a way to forget.
 
-**D4 — Authoritative order is assigned by the receiver at apply. (PM)** Every submitter writes to a local directory, so all filename timestamps come from the same system clock as the resident process; there is no cross-machine skew. But the process may be down when a file lands, so it cannot stamp arrival, and a submitter takes its timestamp slightly before its rename completes. Filename order is therefore a drain order that is right except for submissions racing within that window or across a wall-clock step. The order that anything may *rely* on is assigned by the receiver: `inbox_submissions.applied_seq` and `messages.seq` are autoincrement integers written inside the apply transaction. "Which came first" is answered from those, never from `submitted_at`, which is kept as data.
+**D4 — Authoritative order is assigned by the receiver at apply. (PM — ratified 20260921)** Every submitter writes to a local directory, so all filename timestamps come from the same system clock as the resident process; there is no cross-machine skew. But the process may be down when a file lands, so it cannot stamp arrival, and a submitter takes its timestamp slightly before its rename completes. Filename order is therefore a drain order that is right except for submissions racing within that window or across a wall-clock step. The order that anything may *rely* on is assigned by the receiver: `inbox_submissions.applied_seq` and `messages.seq` are autoincrement integers written inside the apply transaction. "Which came first" is answered from those, never from `submitted_at`, which is kept as data.
 
 **The inbound-reply channel has no message table.** A reply terminates in a resolution slot. Its durable record is the `inbox_submissions` row; materializing it again as a message would duplicate the fact.
 
@@ -477,7 +477,7 @@ Suggested order — each step leaves the suite green:
 
 ### Special Considerations
 
-**Project Manager decisions.** Ratified 20260921: D1 (file-drop hand-off, SQLite for everything durable), D2 (submitter-generated id, first-wins on reuse), and folding runtime project creation into this slice. Awaiting ratification: D3 (escalation written by the block writer, including both recovery consequences) and D4 (receiver-assigned order). The design is complete under them; each is cheap to reverse now and expensive after initiative 160 codes against it.
+**Project Manager decisions.** Ratified 20260921: D1 (file-drop hand-off, SQLite for everything durable), D2 (submitter-generated id, first-wins on reuse), D4 (receiver-assigned order), and folding runtime project creation into this slice. Awaiting ratification: D3 (escalation written by the block writer, including both recovery consequences). The design is complete under it; it is cheap to reverse now and expensive after initiative 160 codes against it.
 
 **A submission that races ahead of its project's creation is quarantined, not held.** Holding would mean an unbounded set of files the loop re-examines every tick waiting for a project that may never come. Submitters that create a project wait for `submission(id)` to report `applied` before submitting into it; the contract says so.
 
