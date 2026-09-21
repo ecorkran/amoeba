@@ -53,6 +53,7 @@ INTERNAL_MODULES = {"sql", "sql_journal", "mapping", "migrations", "paths", "_ba
 #: Store methods a downstream author codes against, per the API contract.
 CONTRACT_METHODS = {
     "open",
+    "open_read_only",
     "open_temporary",
     "close",
     "create_node",
