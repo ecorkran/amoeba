@@ -1,0 +1,54 @@
+# Gates every push and pull request.
+#
+# The default suite and the load tier are **separate steps** so either can fail
+# the run on its own: the Python rules require CI to gate load tests for slices
+# touching concurrency and process boundaries, and a load failure that merely
+# tinted a combined result would not be that gate.
+#
+# One job, one Python version — what the project targets today. A matrix would
+# be speculative; nothing in this project requires one yet.
+#
+# Load-test failures are deliberately NOT suppressed with continue-on-error. A
+# flaky load test is a signal to fix the test or its bound, not to hide it.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run pyright
+
+      - name: Tests
+        run: uv run pytest
+
+      # A separate step, and separately able to fail the run. The tier is
+      # excluded from the default suite by --ignore, so naming the path is what
+      # collects it.
+      - name: Load tests
+        run: uv run pytest tests/load
