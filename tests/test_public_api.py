@@ -48,7 +48,15 @@ EXPECTED_EXPORTS = {
 }
 
 #: Internal modules that must not become part of the contract.
-INTERNAL_MODULES = {"sql", "sql_journal", "mapping", "migrations", "paths", "_base"}
+INTERNAL_MODULES = {
+    "sql",
+    "sql_journal",
+    "mapping",
+    "mapping_journal",
+    "migrations",
+    "paths",
+    "_base",
+}
 
 #: Store methods a downstream author codes against, per the API contract.
 CONTRACT_METHODS = {
