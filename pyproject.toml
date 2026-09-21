@@ -46,3 +46,8 @@ reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The load tier is never collected by a bare `uv run pytest`: it drives real
+# processes through crash loops and takes far longer than the default suite.
+# An explicit `uv run pytest tests/load` still collects it, because a path
+# named on the command line is collected regardless of --ignore.
+addopts = ["--ignore=tests/load"]
