@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 102: command journal in the store (migration `003`) — an entry is committed *before* its side effect is issued, so a crash leaves a durable record of what may have been in flight.
+- Slice 102: `journal_issue` / `journal_resolve` / `journal_escalate`, with parameters validated at issue time so an entry can always be reconciled later.
+- Slice 102: `Store.open_read_only` — a genuine SQLite `mode=ro` handle that never migrates and never creates, measured against this project's Python and SQLite build.
+- Slice 102: the resident process — `amoeba start` / `stop` / `status`, single-instance enforcement via an advisory `flock`, and signal-driven graceful shutdown with a bounded grace period.
+- Slice 102: reconcile-by-observation recovery — every journaled-but-unresolved command is reconciled by *observing* the external system, never by re-issuing; every ambiguity becomes a `blocked_on_human` node.
+- Slice 102: two observers — Squadron runs-directory matching (subset-on-params, four candidate conditions) and Context Forge read-back — both tested against real captured upstream output.
+- Slice 102: the `Tenant` protocol and host loop that slices 103 and 120 plug into. This slice ships **no tenants**: the process starts, recovers, idles, and stops.
+- Slice 102: `amoeba inspect` — read-only listings for projects, nodes, blocked states, and journal entries, human-readable and `--json`, declared in one registry that slice 104 extends by registering.
+- Slice 102: `pydantic` as the project's first runtime dependency, used only at the two external parsing boundaries.
+- Slice 102: a `tests/load/` tier with crash-loop and recovery-scale tests, excluded from the default suite and gated separately in CI.
+- Slice 102: an AST guard test failing if any module other than `process/host.py` opens a store read-write.
+- Slice 102: contract documentation at `docs/process-contract.md`, and a Journal section plus corrected writer-model section in `docs/store-contract.md`.
 - Slice 101: Python project scaffold — `pyproject.toml` with the mandated ruff, pyright strict, pytest, and uv configuration.
 - Slice 101: SQLite-backed lifecycle node store — project-keyed node tree, closed `StrEnum` vocabularies, and blocked states with an explicit resolution slot.
 - Slice 101: `block()` and `resolve()` as single store operations, so node status and blocked-state can never disagree.
