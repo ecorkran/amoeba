@@ -6,7 +6,7 @@ lld: user/slices/102-slice.resident-process-and-recovery.md
 dependencies: [101]
 projectState: Continuation of 102-tasks.resident-process-and-recovery-1.md. Sections 1-4 (journal, read-only open, recovery protocol, both observers) are complete when this file begins.
 dateCreated: 20260919
-dateUpdated: 20260919
+dateUpdated: 20260921
 status: not_started
 ---
 
@@ -105,11 +105,11 @@ status: not_started
 - [ ] Run recovery for **every** project store before the first tick, with the observer registry assembled from both observers
 - [ ] Log a per-project recovery summary line before entering the loop
 - [ ] An unexpected recovery failure **aborts startup**; the process does not enter the loop against unreconciled state
-- [ ] A `StoreError` from any project aborts the start with a specific exit code and the store's own message — the process never skips a project or falls back to another store, per the LLD's Consumes from Other Slices
+- [ ] A `StoreError` from any project aborts the start by propagating (or re-raising as a typed lifecycle error carrying the store's own message) — the process never skips a project or falls back to another store, per the LLD's Consumes from Other Slices. This module does **not** define or import `ExitCode`; mapping the failure to an exit code is Task 7.1/7.2's job at the process boundary
 
 **Success Criteria**:
 - [ ] No tenant ticks before all projects are reconciled
-- [ ] A corrupt store for one project stops the whole supervisor, deliberately
+- [ ] A corrupt store for one project stops the whole supervisor, deliberately, by raising out of `host.py`
 - [ ] The summary line appears for each project, including "nothing to reconcile"
 
 **Files to Modify**: `src/amoeba/process/host.py`
@@ -125,13 +125,13 @@ status: not_started
 **Steps**:
 - [ ] Set the stop `threading.Event` from the signal handler — the single piece of state published across an execution boundary
 - [ ] Stop ticking new work as soon as the event is set; the grace period bounds only the **current** tick
-- [ ] On grace expiry: log at ERROR **naming the tenant that did not return**, close stores, and exit `GRACE_EXPIRED` without waiting further — abandoning a mid-tick tenant in place rather than interrupting it
+- [ ] On grace expiry: log at ERROR **naming the tenant that did not return**, close stores, and raise a typed `GraceExpiredError` (or return a distinct lifecycle result the CLI maps to `ExitCode.GRACE_EXPIRED` in Task 7.2) without waiting further — abandoning a mid-tick tenant in place rather than interrupting it. This module does **not** define or import `ExitCode`
 - [ ] Implement **no** per-tick timeout and no watchdog — that is a decision in the LLD, not an omission
 - [ ] Ensure stores close, the PID file is removed, and the lock releases on the normal path
 
 **Success Criteria**:
 - [ ] `SIGTERM` during idle exits promptly and cleanly
-- [ ] Grace expiry exits with the right code and an ERROR log naming the tenant
+- [ ] Grace expiry signals the lifecycle-error condition the CLI maps to `ExitCode.GRACE_EXPIRED`, with an ERROR log naming the tenant
 - [ ] No timeout, watchdog, or thread-kill mechanism is introduced
 - [ ] The abandoned-tick path leaves state recoverable by the next start
 
@@ -149,7 +149,7 @@ status: not_started
 - [ ] Define a throwaway `Tenant` in the test that is ticked by the real host, writes through `store_for()`, and observes `stop_requested` — the LLD's Integration Requirement
 - [ ] Assert the process exits cleanly afterward and its writes are durable
 - [ ] Test `SIGTERM` during an idle wait stops promptly
-- [ ] Test a tenant that **ignores** `stop_requested` triggers grace expiry with `GRACE_EXPIRED` and the ERROR log naming it
+- [ ] Test a tenant that **ignores** `stop_requested` triggers grace expiry — asserted here as the host's own signal (raised error or lifecycle result, not an `ExitCode`) — and the ERROR log naming it; Task 7.3 separately proves this surfaces as `ExitCode.GRACE_EXPIRED` through the CLI
 - [ ] Test zero tenants: start, recover, idle, stop
 - [ ] Test recovery gating — a tenant that records its first tick time never ticks before recovery completes
 - [ ] Send real signals to real subprocesses; mock nothing
@@ -174,15 +174,18 @@ status: not_started
 
 **Steps**:
 - [ ] Create `src/amoeba/cli/` with `__init__.py` and `main.py` using `argparse` (D3 — no CLI dependency)
-- [ ] Define the `ExitCode` enum with every status the LLD names — `ALREADY_RUNNING`, `NOT_RUNNING`, `STOP_TIMEOUT`, `NO_STOP_TARGET`, `GRACE_EXPIRED` — and use **no bare integers** at call sites
+- [ ] Define the `ExitCode` enum with every status the LLD names plus the two the host layer's typed errors require: `ALREADY_RUNNING`, `NOT_RUNNING`, `STOP_TIMEOUT`, `NO_STOP_TARGET`, `GRACE_EXPIRED`, and a `STARTUP_FAILED` (or equivalent) member for the `StoreError`-during-recovery abort Task 6.2 raises — and use **no bare integers** at call sites
 - [ ] Register the `amoeba` console script in `pyproject.toml`
-- [ ] Implement the **one** process-boundary handler mapping `StoreError` and lifecycle errors to exit codes, documented as such per the project exception rule
+- [ ] Implement the **one** process-boundary handler mapping `StoreError` and the host layer's typed lifecycle errors (from Tasks 6.2/6.3 — `host.py` itself never imports or references `ExitCode`) to exit codes, documented as such per the project exception rule
+
+**Note:** `ExitCode` is defined here, in Section 7, which starts after Section 6 (the host loop) completes. Sections 6's tasks raise typed errors or return lifecycle results; they do not reference `ExitCode` members directly — only this task's boundary handler and Task 7.2 do.
 - [ ] Expose `ProcessSettings` tunables as CLI flags (including `--sq-runs-dir`), adding no environment variables
 
 **Success Criteria**:
 - [ ] `uv run amoeba --help` works after `uv sync`
 - [ ] No exit-code integer literal outside the enum
 - [ ] The boundary handler is the only broad exception handler in the package and is commented as the process boundary
+- [ ] `grep` for `ExitCode` under `src/amoeba/process/` finds nothing — only `cli/` references it
 
 **Files to Create**: `src/amoeba/cli/__init__.py`, `src/amoeba/cli/main.py`
 **Files to Modify**: `pyproject.toml`
@@ -312,15 +315,35 @@ status: not_started
 
 ## Section 9: Load Tier, Documentation, and Walkthrough
 
-### Task 9.1: Create the load-test tier and the crash-loop test
+### Task 9.1: Create the load-test tier and its process harness
 **Owner**: Junior AI
 **Dependencies**: Task 8.1
-**Effort**: 3
-**Objective**: Create `tests/load/`, required by the Python rules now that concurrency and process boundaries enter the codebase, and prove crash-only holds under repetition.
+**Effort**: 2
+**Objective**: Create `tests/load/`, required by the Python rules now that concurrency and process boundaries enter the codebase, and build the shared harness both load tests drive a real resident process through.
 
 **Steps**:
-- [ ] Create `tests/load/` with its own configuration so it is **excluded from the default run** and invoked as `uv run pytest tests/load`
-- [ ] Implement the crash loop per the LLD: repeatedly start the process with a test tenant that issues journal entries, `SIGKILL` at a **random** point, restart
+- [ ] Add `addopts = ["--ignore=tests/load"]` to `pyproject.toml`'s `[tool.pytest.ini_options]`, alongside the existing `testpaths = ["tests"]`, so a bare `uv run pytest` never collects the directory. An explicit `uv run pytest tests/load` still works because a path named directly on the command line is collected regardless of `--ignore` (pytest collects explicitly named paths first; `--ignore` only prunes implicit `testpaths` discovery)
+- [ ] Create `tests/load/__init__.py` and `tests/load/conftest.py` for the tier's own fixtures (no marker mechanism needed — `--ignore` handles exclusion directly)
+- [ ] Add a small in-process **test-only harness** in `conftest.py` (not a CLI flag — the CLI ships no tenant registration, per the LLD's "ships no tenants") that constructs a `ResidentProcess` directly with one throwaway `Tenant` registered, launches it in a subprocess via a tiny bootstrap script the fixture writes to `tmp_path`, and exposes helpers to signal and wait on it. This is the same shape of harness Task 6.4 already builds for its own throwaway-tenant test; factor the common piece so it is written once and both `test_host.py` and this tier can use it, per the project's DRY rule
+
+**Success Criteria**:
+- [ ] `uv run pytest` (default, no args) does not collect anything under `tests/load/`; `uv run pytest tests/load` does collect (even though nothing is in it yet but `__init__.py`/`conftest.py`)
+- [ ] The harness starts a real subprocess running `ResidentProcess` with one throwaway tenant and can signal and wait on it — proven by a minimal smoke use in this task, not deferred to 9.2
+- [ ] `uv run pyright` clean
+
+**Files to Create**: `tests/load/__init__.py`, `tests/load/conftest.py`
+**Files to Modify**: `pyproject.toml`
+
+---
+
+### Task 9.2: Implement the crash-loop test
+**Owner**: Junior AI
+**Dependencies**: Task 9.1
+**Effort**: 3
+**Objective**: Prove crash-only holds under repetition, using the harness Task 9.1 built.
+
+**Steps**:
+- [ ] Implement the crash loop per the LLD: repeatedly start the process (via the Task 9.1 harness) with a test tenant that issues journal entries, `SIGKILL` at a **random** point, restart
 - [ ] After every cycle assert: no committed node or entry is missing, **no entry is reconciled twice**, and start-to-ready stays under the asserted bound
 - [ ] Set the bound by **measuring first**, then asserting at roughly twice the observed value, per the LLD's candidate bounds (start-to-ready under 2 s is a starting target, not a requirement)
 - [ ] Record the real measured numbers in the test as a comment; if a measurement lands far from the candidate, record it and say why rather than tuning the bound silently to whatever passes
@@ -329,15 +352,14 @@ status: not_started
 - [ ] The loop runs many cycles with `SIGKILL` at varying points and no state loss
 - [ ] Double-reconciliation would fail the test
 - [ ] Measured values recorded; bounds justified rather than reverse-engineered
-- [ ] `uv run pytest` (default) does not run this tier
 
-**Files to Create**: `tests/load/__init__.py`, `tests/load/conftest.py`, `tests/load/test_crash_loop.py`
+**Files to Create**: `tests/load/test_crash_loop.py`
 
 ---
 
-### Task 9.2: Implement the recovery-scale test
+### Task 9.3: Implement the recovery-scale test
 **Owner**: Junior AI
-**Dependencies**: Task 9.1
+**Dependencies**: Task 9.2
 **Effort**: 3
 **Objective**: Prove recovery scales and, more importantly, that the runs directory is scanned once per recovery rather than once per entry.
 
@@ -356,9 +378,9 @@ status: not_started
 
 ---
 
-### Task 9.3: Write docs/process-contract.md
+### Task 9.4: Write docs/process-contract.md
 **Owner**: Junior AI
-**Dependencies**: Task 9.2
+**Dependencies**: Task 9.3
 **Effort**: 3
 **Objective**: Write the downstream contract for lifecycle, tenants, and recovery, held to slice 101's bar — a downstream design proceeds without reading the implementation.
 
@@ -374,14 +396,15 @@ status: not_started
 - [ ] Every exit code documented with its trigger
 - [ ] The tenant obligation is stated as binding, with its consequence
 - [ ] A slice 103 designer could build the apply loop from this document alone
+- [ ] Commit after this task, e.g. `docs: add process contract`
 
 **Files to Create**: `docs/process-contract.md`
 
 ---
 
-### Task 9.4: Update docs/store-contract.md and the changelog
+### Task 9.5: Update docs/store-contract.md and the changelog
 **Owner**: Junior AI
-**Dependencies**: Task 9.3
+**Dependencies**: Task 9.4
 **Effort**: 2
 **Objective**: Fold the journal into the existing store contract and correct the sections slice 101 wrote that this slice changes.
 
@@ -395,15 +418,15 @@ status: not_started
 **Success Criteria**:
 - [ ] No sentence in the contract contradicts what this slice shipped
 - [ ] The writer-model section matches the enforcement actually implemented
-- [ ] Commit after this task, e.g. `docs: add process contract and update store contract`
+- [ ] Commit after this task, e.g. `docs: update store contract for the command journal`
 
 **Files to Modify**: `docs/store-contract.md`, `CHANGELOG.md`
 
 ---
 
-### Task 9.5: Write the demo helper and refine the verification walkthrough
+### Task 9.6: Write the demo helper and refine the verification walkthrough
 **Owner**: Junior AI
-**Dependencies**: Task 9.4
+**Dependencies**: Task 9.5
 **Effort**: 2
 **Objective**: Make the LLD's walkthrough real, replacing its drafted output with captured output.
 
@@ -417,15 +440,36 @@ status: not_started
 - [ ] All six walkthrough steps run as written; any step that does not is fixed in the code or corrected in the document
 - [ ] The walkthrough in the LLD shows real output, not drafted output
 - [ ] The helper uses only the public store API
+- [ ] Commit after this task, e.g. `docs: capture real walkthrough output and add demo script`
 
 **Files to Create**: `scripts/demo_journal.py`
 **Files to Modify**: `project-documents/user/slices/102-slice.resident-process-and-recovery.md`
 
 ---
 
-### Task 9.6: Final verification and slice completion
+### Task 9.7: Wire CI to gate the default suite and the load tier
 **Owner**: Junior AI
-**Dependencies**: Task 9.5
+**Dependencies**: Task 9.6
+**Effort**: 2
+**Objective**: The repo has no CI at all yet, and the Python rules require CI to gate load tests for slices touching concurrency/process boundaries (`.claude/rules/python.md`). This slice is the first to need it — add the minimal workflow rather than leaving the gate implicit.
+
+**Steps**:
+- [ ] Create `.github/workflows/ci.yml` running on push and pull_request: `uv sync`, then `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`, `uv run pytest` (default suite), and `uv run pytest tests/load`
+- [ ] Keep the workflow to one job and one Python version — matching what the project currently targets, not a matrix, since nothing in this slice requires one
+- [ ] Do not gate the crash-loop test's non-determinism by suppressing failures — a flaky load test is a signal to fix the test or the bound, not to skip it in CI
+
+**Success Criteria**:
+- [ ] The workflow runs the default suite and the load tier as separate steps, both able to fail the run independently
+- [ ] A deliberately broken test (verify once locally with `act` or by inspection, not required to run in a real GitHub Actions run before commit) would fail the workflow
+- [ ] Commit after this task, e.g. `chore: add CI workflow gating tests and the load tier`
+
+**Files to Create**: `.github/workflows/ci.yml`
+
+---
+
+### Task 9.8: Final verification and slice completion
+**Owner**: Junior AI
+**Dependencies**: Task 9.7
 **Effort**: 2
 **Objective**: Verify every success criterion in the LLD, then close the slice.
 

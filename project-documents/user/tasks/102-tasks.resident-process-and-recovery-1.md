@@ -6,7 +6,7 @@ lld: user/slices/102-slice.resident-process-and-recovery.md
 dependencies: [101]
 projectState: Slice 101 shipped and merged — the store package exists at schema version 2 with nodes, blocked states, migrations, and docs/store-contract.md. There is no process, no CLI, no journal, and no runtime dependency. This slice lands all four.
 dateCreated: 20260919
-dateUpdated: 20260919
+dateUpdated: 20260921
 status: not_started
 ---
 
@@ -217,7 +217,7 @@ status: not_started
 - [ ] Write a test that creates a store, writes nodes, closes it so no writer is alive, then opens the file with SQLite `mode=ro` and reads those nodes — on the project's actual Python and SQLite build
 - [ ] Repeat with the writer still alive in a separate process, which is the real inspection case
 - [ ] Record the observed SQLite version and the result in the test as a comment
-- [ ] **If it fails:** take the LLD's named fallback — a read-write handle the inspection code never writes through — and note it for Task 5.x (the guard test must then also cover `cli/inspect.py`) and Section 9 (both contract documents must state the softened invariant, per the LLD's mitigation)
+- [ ] **If it fails:** take the LLD's named fallback — a read-write handle the inspection code never writes through — and note it for Task 8.1 (the guard test must then also cover `cli/inspect.py`) and Section 9 (both contract documents must state the softened invariant, per the LLD's mitigation)
 
 **Success Criteria**:
 - [ ] The test runs and its outcome is recorded, whichever way it goes
@@ -241,9 +241,9 @@ status: not_started
 - [ ] Export from `amoeba.store` and add to the public-API pin
 
 **Success Criteria**:
-- [ ] A write attempted through the handle fails rather than succeeding silently
-- [ ] Opening a store at version 2 with code expecting 3 raises `StoreSchemaError` and does not migrate — assert the file's schema version is unchanged afterward
-- [ ] Opening a non-existent store raises rather than creating one
+- [ ] **If Task 2.1's evidence supported true `mode=ro`:** a write attempted through the handle fails rather than succeeding silently. **If Task 2.1 forced the fallback:** this criterion does not apply to `Store.open_read_only` itself — mutation safety instead rests entirely on the guard test (Task 8.1) restricting who calls it — and the task's completion note must say which branch was taken
+- [ ] Opening a store at version 2 with code expecting 3 raises `StoreSchemaError` and does not migrate — assert the file's schema version is unchanged afterward (holds under either branch)
+- [ ] Opening a non-existent store raises rather than creating one (holds under either branch)
 - [ ] `uv run pyright` clean
 
 **Files to Modify**: `src/amoeba/store/store.py`, `src/amoeba/store/__init__.py`, `tests/test_public_api.py`
@@ -257,13 +257,13 @@ status: not_started
 **Objective**: Prove inspection can never mutate a store.
 
 **Steps**:
-- [ ] Test that every write operation attempted through a read-only handle raises
+- [ ] **If Task 2.1's evidence supported true `mode=ro`:** test that every write operation attempted through a read-only handle raises. **If the fallback was taken:** skip this assertion here — enforcement is the guard test's job — and mark the skip with a comment pointing at Task 8.1 rather than deleting the intent silently
 - [ ] Test that `open_read_only` against a store needing migration raises and leaves the file's schema version untouched
 - [ ] Test that `open_read_only` does not create a database file when none exists
 - [ ] Test reading nodes, blocked states, and journal entries through the handle returns the same values as a read-write open
 
 **Success Criteria**:
-- [ ] All four behaviors asserted; the no-create test checks the filesystem directly
+- [ ] Under true `mode=ro`: all four behaviors asserted; the no-create test checks the filesystem directly. Under the fallback: the same three non-mutation-enforcement behaviors asserted, plus a comment recording that write-rejection is covered by Task 8.1 instead
 - [ ] `uv run pytest` passes
 - [ ] Commit after this task, e.g. `feat(store): add read-only store open`
 
