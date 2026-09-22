@@ -63,7 +63,8 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 
 **Steps**:
 - [ ] Change `PERMITTED_MODULES` in `tests/test_writer_guard.py` from `process/host.py` to `process/project_stores.py`
-- [ ] Update the **four** other places in that file that name `process/host.py` literally, all of which fail or go stale if only the constant changes: the `frozenset({"process/host.py"})` assertion in `test_the_permitted_set_is_exactly_the_host`, that test's own name, the failure message in `_assert_no_read_write_open` ("Only process/host.py may do that…"), and the module docstring
+- [ ] Update the **five** other places in that file that name `process/host.py` literally, all of which fail or go stale if only the constant changes: the module docstring, the docstring of `test_only_the_host_opens_a_store_read_write`, that test's failure message ("Only process/host.py may do that…"), the `frozenset({"process/host.py"})` assertion in `test_the_permitted_set_is_exactly_the_host`, and the docstring around it. Rename both test functions too — their names say `host`
+- [ ] Finish by grepping the file for `host` and confirming nothing stale remains; the count above is a guide, the grep is the check
 - [ ] Confirm the deliberate-widening test still pins a set of **size one** — the guard must not be loosened to allow both modules
 - [ ] Run slice 102's full suite and the load tier; both must pass with no test modified other than the writer guard's host-naming above
 - [ ] Investigate any **other** failure as a defect in the extraction, not as a test needing an update

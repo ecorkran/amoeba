@@ -106,7 +106,7 @@ status: not_started
 - [ ] Delete any `.attempts.json` counter along with the file on success
 - [ ] Return whether any file was handled
 - [ ] Log a WARNING when a submission id is reused with different content — first wins, and it is not an error (D2)
-- [ ] Add a smoke test covering this task's two claims before moving on — one `intent` submission applies and its file is deleted; a tick with more files than `inbox_batch_size` handles exactly that many; a tick with `stop_requested` set stops early. The full branch coverage stays in Task 6.8, but these are this task's own success criteria and should not go four tasks unverified
+- [ ] Add a smoke test covering **all three** of this task's claims before moving on: one `intent` submission applies and its file is deleted; a tick with more files than `inbox_batch_size` handles exactly that many; a tick with `stop_requested` set stops early. The full branch coverage stays in Task 6.8, but these are this task's own success criteria and should not go four tasks unverified
 
 **Success Criteria**:
 - [ ] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set, **proven by the smoke test**
@@ -191,18 +191,22 @@ status: not_started
 ### Task 6.8: Test the tenant against the real host
 **Owner**: Junior AI
 **Dependencies**: Task 6.7
-**Effort**: 3
+**Effort**: 4
 **Objective**: Cover the apply loop, the crash table, the quarantine ladder, and the attempt counter through `tests/host_harness.py`.
 
 **Steps**:
 - [ ] Assert a submission made while the process is **stopped** is applied on start and its file is gone
 - [ ] Assert a `create_project` applied by a **running** process creates the store, and a later submission for that project applies **without a restart** — in the same tick and in a later one
+- [ ] Assert the crash-table row that no other step reaches: a process killed **between store creation and the record commit**. Create the store via `open_project`, close without applying, leave the submission file in `new/`, restart, and assert the store is discovered and opened, the record is written, and the effect happens exactly once. Task 9.1's randomized kills only hit this window by chance, and Task 10.3's `kill -9` lands after the submission has already applied
 - [ ] Assert replay: a file restored to `new/` after apply changes nothing and leaves exactly one record
 - [ ] Assert D2's different-content case explicitly: a second submission reusing an existing id with **different** content is a no-op that leaves the first record intact and logs a WARNING — not an error, since the second file may be a legitimate retry with a differing timestamp
 - [ ] Assert each quarantine reason lands in `quarantine/` with its sidecar and that later valid submissions in the same tick still apply
 - [ ] Assert the batch-size limit and early stop on `stop_requested`
-- [ ] Assert the F001 path: a submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts with the counter incrementing on disk, then lands in `failed/` with the last error recorded, and the tick that parks it goes on to apply the next file
+- [ ] Assert the pre-park half of the F001 path: a submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts, with the counter incrementing on disk across those starts
+- [ ] Assert the **park transition itself** as its own step — this is the rung that separates this design from a plain crash-stop, so do not fold it into the step above. On the `inbox_max_attempts`-th failure: the file **and** its counter move to `inbox/failed/`, the sidecar carries `{attempts, last_error, last_failed_at}` with the real exception text, an ERROR is logged, the tick **continues to the next file** rather than re-raising, and the process stays up
 - [ ] Assert a file moved from `failed/` back to `new/` resumes at its recorded count and is deleted with its counter once it applies
+- [ ] Assert Task 6.5's negative criterion, which nothing else tests: construct a **sick store** and confirm the submission takes the attempt-counter path and is **never** quarantined. The LLD treats the `StoreError`-versus-quarantine line as the only thing allowed to stop the queue, so a silent regression here is invisible without this test
+- [ ] Assert the tenant actually ticks inside a **running `amoeba start`**, not only through the harness — a submission dropped into `new/` while the real process runs is applied without further intervention
 
 **Success Criteria**:
 - [ ] Every functional criterion in the LLD touching the tenant has a test here
@@ -210,7 +214,7 @@ status: not_started
 - [ ] `uv run pytest` passes
 - [ ] Commit after this task, e.g. `feat(process): add InboxTenant apply loop`
 
-**Files to Create**: `tests/process/test_inbox_tenant.py`
+**Files to Modify**: `tests/process/test_inbox_tenant.py` — created by Task 6.4 for its smoke test; this task extends it
 
 ---
 
@@ -317,7 +321,7 @@ status: not_started
 **Steps**:
 - [ ] Create `scripts/demo_inbox.py` seeding one node blocked on a human in the `demo` project and printing the node id and blocked-state id
 - [ ] Have it perform a read-write `Store.open` and run **only while the process is stopped**, like `demo_journal.py`
-- [ ] Add it to `PERMITTED_SCRIPTS` in `tests/test_writer_guard.py`
+- [ ] Add it to `PERMITTED_SCRIPTS` in `tests/test_writer_guard.py` — **and** update the pin assertion `PERMITTED_SCRIPTS == frozenset({"demo_journal.py"})` in the same file, which fails if only the constant changes. Same trap as Task 1.2's permitted-module rename
 - [ ] Note in the script why it exists: nothing outside the process can create nodes until initiative 120
 
 **Success Criteria**:
@@ -427,7 +431,7 @@ status: not_started
 
 ### Task 10.3: Run the integration walkthrough and capture real output
 **Owner**: Junior AI
-**Dependencies**: Task 10.2
+**Dependencies**: Task 10.2 — the contracts and changelog are in place before output is captured, so the walkthrough runs against the documented behavior rather than ahead of it
 **Effort**: 2
 **Objective**: Execute the LLD's Verification Walkthrough end to end and replace its draft output with captured output.
 
@@ -440,7 +444,7 @@ status: not_started
 **Success Criteria**:
 - [ ] The walkthrough in the LLD shows real captured output
 - [ ] The end-to-end test passes, including the `kill -9` step
-- [ ] Commit after this task, e.g. `docs: add inbox contract and capture walkthrough output`
+- [ ] Commit after this task, e.g. `docs: capture slice 103 walkthrough output`
 
 **Files to Modify**: `user/slices/103-slice.durable-inbox-and-message-queue.md`
 **Files to Create**: the end-to-end integration test module

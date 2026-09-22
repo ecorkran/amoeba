@@ -9,160 +9,95 @@ project: amoeba
 verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-1.md
-aiModel: qwen/qwen3.8-2.4t-a95b
+aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260922
 dateUpdated: 20260922
-reviewedSha: 66c59fa6a8c22011217a7bcad40c03a064f65765
+reviewedSha: ea9e3e22620271d9a4887a68763abddd81cfcb05
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 36
+toolCallsMade: 27
 findings:
   - id: F001
-    severity: pass
-    category: task-coverage
-    summary: "All slice success criteria trace to tasks"
-    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-2.md"
+    severity: concern
+    category: task-structure
+    summary: "Three consecutive implementation tasks in Section 6 ship unverified behavior; test-with pattern broken"
+    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-2.md:93-218"
+    resolution: accepted
+    resolvedBy: "task 6.8 gains explicit steps for the deferred 6.5/6.6 behavior"
   - id: F002
-    severity: pass
-    category: load-testing
-    summary: "Load-test NFR is covered and explicitly CI-gated"
-    location: ".github/workflows/ci.yml"
+    severity: concern
+    category: coverage-gap
+    summary: "Crash-table row \"killed between store creation and the record commit\" has no covering task step"
+    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-2.md:191-218"
+    resolution: accepted
+    resolvedBy: "task 6.8 gains the open_project-to-commit crash step"
   - id: F003
-    severity: concern
-    category: test-maintenance
-    summary: "Task 1.2's \"constant-only\" claim ignores a hardcoded guard assertion"
-    location: "tests/test_writer_guard.py:222-224"
+    severity: note
+    category: accuracy
+    summary: "Task 1.2 miscounts and misnames the writer-guard edit sites"
+    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-1.md:56-82"
     resolution: accepted
-    resolvedBy: "task 1.2 now changes all four host.py literals in the guard"
+    resolvedBy: "task 1.2 corrected to five sites; invented symbol removed"
   - id: F004
-    severity: concern
-    category: sequencing
-    summary: "Task 3.2 requires a payload round-trip test before any payload can be persisted"
-    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-1.md:201"
-    resolution: accepted
-    resolvedBy: "payload round-trip assertion moved from task 3.2 to 3.4"
+    severity: pass
+    category: test-coverage
+    summary: "Load-tier NFR is covered and CI gating is structural, not implicit"
+    location: ".github/workflows/ci.yml:52-54"
   - id: F005
-    severity: concern
-    category: task-scope
-    summary: "Project-id validation is embedded in store_path(), not independently reusable"
-    location: "src/amoeba/store/paths.py:63-89"
-    resolution: accepted
-    resolvedBy: "task 5.1 extracts validate_project_id from store_path"
-  - id: F006
-    severity: concern
-    category: test-infrastructure
-    summary: "New test packages risk pytest collection collisions and cross-directory fixture reuse"
-    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-2.md:272"
-    resolution: accepted
-    resolvedBy: "__init__.py required; fixtures to root conftest; file renamed"
-  - id: F007
-    severity: concern
-    category: process-conformance
-    summary: "Commits are batched across tasks despite the project's one-commit-per-task rule"
-    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-2.md"
-    resolution: accepted
-    resolvedBy: "per-task commits added to all 24 tasks that lacked one"
-  - id: F008
-    severity: note
-    category: test-gap
-    summary: "D2's different-content WARNING has no explicit test step"
-    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-2.md:188"
-    resolution: accepted
-    resolvedBy: "task 6.8 gains an explicit different-content WARNING step"
-  - id: F009
-    severity: note
-    category: sequencing
-    summary: "Test-with pattern is batched at section granularity in a few places"
-    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-2.md:93"
-    resolution: accepted
-    resolvedBy: "task 6.4 gains a smoke test for its own criteria"
-  - id: F010
-    severity: note
-    category: naming
-    summary: "LLD \"Mixin\" naming diverges from the existing *Operations composition style"
-    location: "src/amoeba/store/store.py:45"
-    resolution: accepted
-    resolvedBy: "tasks specify MessageOperations and InboxOperations"
+    severity: pass
+    category: task-structure
+    summary: "Sequencing, commit cadence, scope discipline, and factual premises all check out"
+    location: "project-documents/user/tasks/103-tasks.durable-inbox-and-message-queue-1.md"
 ---
 
 # Review: tasks — slice 0
 
 **Verdict:** CONCERNS
-**Model:** qwen/qwen3.8-2.4t-a95b
+**Model:** z-ai/glm-5.3-flash
 
 ## Findings
 
-### [PASS] All slice success criteria trace to tasks
+### [CONCERN] Three consecutive implementation tasks in Section 6 ship unverified behavior; test-with pattern broken
 
-Every success criterion in the slice design maps to at least one task. Functional: submit-while-stopped/replay (6.8), `create_project` running + restart race (6.8, 10.3), invalid project id (5.3, 6.5, 6.8), resolution preconditions and stale targets (4.2, 4.3), intent/acknowledge (3.3, 3.4, 4.2), D3 escalation rows (3.3–3.5), D4 ordering (4.3), quarantine ladder (6.5, 6.8), bounded attempts/`failed/` park and requeue (6.6, 6.8), `submit()` failure cleanliness (5.2, 5.3), batch size/stop (6.4, 6.8), CLI and listings running/stopped (7.1–7.3). Technical: vocabularies/SQL/layout centralization (2.1, 2.3, 5.1), one block writer (3.1), writer guard (1.2, 8.1), unchanged 102 suite (1.2), real-`submit()` fixtures (5.5), migration test (2.4), load test (9.1–9.2), quality gates and 300-line budget (10.4), docs (10.1–10.2). Integration: end-to-end walkthrough with `kill -9` (10.3) and the 160-sufficient contract doc (10.1). No scope creep detected; every task traces to a design requirement.
+Tasks 6.4 (apply loop), 6.5 (quarantine ladder), 6.6 (attempt counter and `failed/` park), and 6.7 (tenant registration) are implemented, committed, and built upon before any test task runs; the only coverage in between is Task 6.4's own smoke test, which covers batch size and `stop_requested` but none of the quarantine ladder or F001 behavior. The dedicated test task, 6.8, arrives three implementation tasks later (effort 9 cumulative). This violates the project guide's test-with rule ("tests gate forward progress ... before subsequent implementation tasks begin") — the same rule the breakdown itself follows diligently everywhere else (2.1→2.2, 2.3→2.4, 3.1→3.2, 3.3→3.4, 5.2→5.3). Task 6.5 and 6.6 are exactly the kind of behavior that needs immediate pinning: six distinct quarantine branches and a multi-start crash/park/requeue state machine whose success criteria ("the counter survives the crash that wrote it", "a requeued file resumes at its old count") cannot be verified inside those tasks at all. Task 6.8 also lists `tests/process/test_inbox_tenant.py` under "Files to Create" although Task 6.4 already creates it — a symptom of the deferred-testing split. Suggested fix: split 6.8, or add inline verification steps to 6.5 and 6.6 the way Task 3.5 does (implement-and-test in one task). Milder instances of the same pattern, not blocking: Section 4 (4.1→4.2→4.3) and Section 7 (7.1→7.2→7.3), and Task 5.1's envelope parse behavior (extra fields ignored, unknown version rejected) is not directly tested until 5.5.
 
-### [PASS] Load-test NFR is covered and explicitly CI-gated
+### [CONCERN] Crash-table row "killed between store creation and the record commit" has no covering task step
 
-The slice's Technical Requirement "`tests/load/` gains a concurrent-submitter test with asserted exactly-once" is covered by Task 9.1 (`tests/load/test_inbox_concurrent.py`, kill-looped process, same-id resubmissions, exactly-once assertions) plus Task 9.2's measure-first drain-time bound per slice 102's rule. No new CI wiring task is needed because `ci.yml` already runs `uv run pytest tests/load` as a separate, non-suppressed step that can fail the run independently — gating is explicit, not implicit.
+The slice design's functional requirement — "a process killed between store creation and the record commit writes the record on restart" — is a distinct crash point (the LLD's crash table row: new empty store, file in `new/`, no record → store discovered at start, `open_project` finds it open, record written). Task 6.8's enumerated steps cover the other crash rows: "applied on start" for a pre-commit crash and "file restored to `new/` after apply" for the post-commit case, but the open_project/commit window is absent. Task 10.3's end-to-end `kill -9` also does not reach it — the walkthrough kills the process after the intent submission has already applied. Task 9.1's randomized kills only cover this window probabilistically, and a failure there would be hard to attribute. The success criterion "Every functional criterion in the LLD touching the tenant has a test here" in Task 6.8 presumably intends to catch this, but a junior AI executes the step list, not the inference. The scenario is concretely testable via `tests/host_harness.py` (create the store via `open_project`, close without applying, place the submission file in `new/`, restart, assert the record is written and applied once). Add an explicit step to Task 6.8.
 
-### [CONCERN] Task 1.2's "constant-only" claim ignores a hardcoded guard assertion
+### [NOTE] Task 1.2 miscounts and misnames the writer-guard edit sites
 
-Task 1.2 says to change `PERMITTED_MODULES` (tests/test_writer_guard.py:56) to `process/project_stores.py` and requires the suite to pass "with no changes to any slice 102 test beyond the constant." But `test_the_permitted_set_is_exactly_the_host` at line 222–224 asserts the literal `PERMITTED_MODULES == frozenset({"process/host.py"})` — changing only the constant leaves this test failing, and the task tells the junior to treat failures as extraction defects. The assertion message at line 186 and the module docstring also hardcode `process/host.py`. Task 1.2 should list that literal (and the strings) as part of its change set; otherwise the junior either violates the stated constraint or chases a phantom regression.
+Task 1.2 says there are "the **four** other places" naming `process/host.py` literally and attributes the failure message to a helper named `_assert_no_read_write_open` — no such symbol exists in `tests/test_writer_guard.py`; the message lives in the parametrized `test_only_the_host_opens_a_store_read_write` (line 186). The actual literal occurrences beyond the constant at line 56 are five: the module docstring (line 5), the parametrized test's own docstring (line 177, not listed in the task), the failure message (line 186), the frozenset assertion (line 224), and the two test function names (lines 176, 223). The task's success criterion ("no `process/host.py` literal remains") is grep-verified and will catch everything regardless, so this wastes a little executor time rather than risking a wrong result — but the count and the symbol name should be corrected so the junior AI doesn't stop at four edits.
 
-### [CONCERN] Task 3.2 requires a payload round-trip test before any payload can be persisted
+### [PASS] Load-tier NFR is covered and CI gating is structural, not implicit
 
-Task 3.1 adds keyword-only `payload=None` to `block()` but explicitly defers writing escalation rows to Task 3.3, and the LLD's migration 004 adds no `payload` column to `blocked_states` (payload rides on the `messages` escalation row). So at Task 3.2 there is nowhere the payload is stored, making its step "assert `block(payload=…)` round-trips the payload and omitting it stores NULL" impossible to implement as written. Move that assertion into Task 3.4 (`tests/store/test_messages.py`), where the escalation row exists to read back.
+The slice's Technical Requirement ("`tests/load/` gains a concurrent-submitter test with asserted exactly-once") is carried by Task 9.1 (`tests/load/test_inbox_concurrent.py`, explicitly placed in the existing tier) and Task 9.2 (measure-first drain bound, per the LLD's Implementation Notes). No new CI wiring task exists, and none is needed: the workflow created in slice 102 already runs `uv run pytest tests/load` as its own step that can fail the run independently, and the CI's default suite excludes the tier via `--ignore`, so the new test is gated the moment it lands in `tests/load/`. The gating is mechanical, not implicit. Task 10.4's final gate re-runs both tiers.
 
-### [CONCERN] Project-id validation is embedded in store_path(), not independently reusable
+### [PASS] Sequencing, commit cadence, scope discipline, and factual premises all check out
 
-Task 5.1 says "reuse the project-id validation rule already in `amoeba.store.paths`; do not re-implement it," and Task 6.1 requires an invalid id to be refused "before any path is computed." In the actual code, the validation (non-empty, no separator, not `.`/`..`) lives inline inside `store_path()` — i.e., inside the path computation itself — and there is no standalone `validate_project_id()` function. No task scopes extracting one, and `paths.py` appears in no task's Files-to-Modify list. Add that small extraction (naturally to Task 5.1 or 6.1) so both `submit()` and `open_project` can reuse it without calling the path builder.
-
-### [CONCERN] New test packages risk pytest collection collisions and cross-directory fixture reuse
-
-The tasks create new directories `tests/store/`, `tests/inbox/`, `tests/process/`, `tests/cli/`, but never mention `__init__.py` files. Two concrete hazards: (1) Task 8.1 creates `tests/inbox/test_public_api.py` while `tests/test_public_api.py` already exists — under pytest's rootdir import mode, duplicate basenames in directories without `__init__.py` fail collection with an import-file mismatch; (2) Task 5.5 (file 1, line 454) says to place fixtures "where Section 6's tenant tests can reuse them," but fixtures in `tests/inbox/conftest.py` are invisible to `tests/process/` tests — conftest fixtures only apply downward. The only precedent, `tests/load/`, ships an `__init__.py`. Tasks 5.5 and 8.1 should require `__init__.py` in each new test package and put shared fixtures in the root `tests/conftest.py` (or import them explicitly).
-
-### [CONCERN] Commits are batched across tasks despite the project's one-commit-per-task rule
-
-CLAUDE.md requires "Git add and commit from project root at least once per task." The task files place commit checkpoints only at selected tasks, so whole runs go uncommitted: Tasks 6.3–6.7 (settings, apply loop, quarantine, attempt counter, registration) all land in the single commit at 6.8, Task 8.2's demo script and guard changes are not committed until 9.2, and Tasks 10.1–10.2 not until 10.3. This concentrates risk (a failed 6.8 test run loses attribution across five tasks' work). Add per-task commits or explicitly mark the checkpoint batching as a deliberate deviation.
-
-### [NOTE] D2's different-content WARNING has no explicit test step
-
-The functional requirement "Resubmitting an existing id with different content is a no-op and logs a WARNING" is implemented by Task 6.4 (line 104), but Task 6.8's assertions cover replay (file restored) without explicitly asserting the WARNING or the different-content variant. It is only implicitly caught by Task 6.8's catch-all success criterion "Every functional criterion in the LLD touching the tenant has a test here." Add an explicit step.
-
-### [NOTE] Test-with pattern is batched at section granularity in a few places
-
-Most of the plan pairs implementation with an immediately following test task (1.1→1.2, 2.1→2.2, 2.3→2.4, 3.1→3.2, 3.3→3.4, 5.2→5.3, 5.4→5.5, 6.1→6.2), but four implementation tasks (6.4–6.7) run before any test at 6.8, and 4.1–4.2 / 7.1–7.2 also defer testing one step. Acceptable since the test tasks enumerate every branch, but Task 6.4's own success criteria (batch size, stop_requested early-stop) are unverifiable until 6.8; a smoke test at 6.4 would reduce the blast radius.
-
-### [NOTE] LLD "Mixin" naming diverges from the existing *Operations composition style
-
-The assembled class is `Store(NodeOperations, BlockingOperations, JournalOperations)`, but the tasks (faithful to the LLD) speak of `MessagesMixin` and `InboxMixin` wired "alongside the existing mixins." A junior AI will follow the LLD names fine, but the naming inconsistency is worth a one-line note in Task 3.3/4.1 so the new components match the house convention (or deliberately depart from it).
+Verified against the slice design and the codebase: the dependency chain 1.1→1.2→…→10.4 is acyclic and matches the LLD's Development Approach order (extraction first as a pure refactor with the writer-guard move before `open_project`; consolidation before D3 behavior; models before migration; `apply_submission` before the package); every one of the 33 tasks has a commit checkpoint distributed throughout rather than batched; every task traces to a slice-design requirement (the `ProjectStores` extraction, migration 004 with backfill, D3 and both recovery consequences, D4 ordering, all three kinds and their rejection branches, the quarantine ladder, F001's bounded attempts, the CLI, the guard/public-API tests, the demo script from the walkthrough, the load tier, and all three documentation targets), with no scope creep found — Task 5.1's `validate_project_id` extraction and Task 9.2's measurement step are both explicitly grounded in the LLD's "Project ids become filenames" and "measure first" rules, and I confirmed their premises in `src/amoeba/store/paths.py` and slice 102's load-tier precedent. Task sizing is appropriate (effort 1–3, no task needs splitting; the effort-1 tasks are coherent units, not fragments).
 
 ## Response
 
-All five concerns and all three notes accepted and resolved on 20260922. Every code-level claim was verified against the source before changing anything; all four that could be checked were accurate.
+All three findings accepted and resolved on 20260922. Each code-level claim was verified against source first; all held.
 
-**F003 — accepted.** Confirmed at `tests/test_writer_guard.py`: `test_the_permitted_set_is_exactly_the_host` asserts the literal `frozenset({"process/host.py"})`, and the failure message in `_assert_no_read_write_open` plus the module docstring name it too. Task 1.2 now lists all four literals — including the test's own name — as part of its change set, and its "no other test modified" constraint is scoped to the writer guard so the junior does not chase a phantom regression.
+**F001 — accepted.** Correct that Tasks 6.5 and 6.6 stated success criteria no one could check inside those tasks — "the counter survives the crash that wrote it", "a requeued file resumes at its old count" are runtime behavioral claims, and the junior would have been ticking boxes it had no way to verify. Rather than splitting 6.8, its step list now carries explicit assertions for each deferred behavior, including the park transition and the `StoreError` boundary (see the part-2 review's F001 and F003, which found the same stretch from the other side). The duplicate `tests/process/test_inbox_tenant.py` under Files to Create is also fixed.
 
-**F004 — accepted.** Correct that the assertion was impossible as written: migration 004 adds no payload column to `blocked_states`, and the payload only becomes readable on the escalation row in Task 3.3. Task 3.2 now asserts only that `block(payload=…)` *accepts* the argument; the round-trip assertion moved to Task 3.4 with a note saying where it came from.
+**F002 — accepted, and the best finding across both reviews.** The LLD's crash table has a distinct row — killed between store creation and the record commit — that is also a functional success criterion, and none of Task 6.8's eight steps reached it. The reasoning for why the catch-all criterion did not save it is exactly right: a junior AI executes the step list, not the inference. Task 6.8 gains a concrete step using the harness — create via `open_project`, close without applying, leave the file in `new/`, restart, assert the record is written and the effect happens once — with a note that Task 9.1's randomized kills hit this window only by chance and Task 10.3's `kill -9` lands after the submission has already applied.
 
-**F005 — accepted, and the most useful finding here.** Confirmed the three checks live inline inside `store_path()`, so there was no way to validate an id without computing a path — which both `submit()` and `open_project` need. Task 5.1 now scopes extracting `validate_project_id()` with `store_path()` calling it, keeping one definition, and `paths.py` is in its Files to Modify.
-
-**F006 — accepted, both hazards.** `tests/test_public_api.py` does exist and `tests/load/` is the only package with an `__init__.py`. Task 8.1's new file is renamed `test_inbox_public_api.py`, and Task 5.5 now requires `__init__.py` in each new test package and puts the shared envelope fixtures in the root `tests/conftest.py` so `tests/process/` can reach them.
-
-**F007 — accepted (PM decision).** The PM chose per-task commits over documented checkpoint batching. Twenty-four tasks gained an explicit commit step; all 38 tasks across both files now have one.
-
-**F008 — accepted.** Task 6.8 gains an explicit step asserting the different-content case: a no-op that leaves the first record intact and logs a WARNING rather than erroring.
-
-**F009 — accepted.** Task 6.4 gains a smoke test for its own two claims (batch size, early stop on `stop_requested`), so they are not unverified four tasks deep. Full branch coverage stays in 6.8.
-
-**F010 — accepted.** Confirmed `Store(NodeOperations, BlockingOperations, JournalOperations)`. The tasks now specify `MessageOperations` and `InboxOperations`, with a note that this deliberately departs from the LLD's "Mixin" wording in favor of the house convention.
+**F003 — accepted, and it caught a defect introduced while fixing the previous review.** Confirmed: `_assert_no_read_write_open` does not exist in `tests/test_writer_guard.py`; the failure message lives in the parametrized `test_only_the_host_opens_a_store_read_write`. That symbol name was invented rather than checked. The literal occurrences beyond the constant are five, not four — the docstring at line 177 was missed — plus both test function names. Task 1.2 now lists all five, says to rename both tests, and ends with a grep so the count is a guide rather than the check.
 
 ### Run Digest
 
-- Response length: 8674 chars
+- Response length: 7385 chars
 - Response is newline-free: no
-- Tool calls made: 36
+- Tool calls made: 27
 - Tool calls failed: 0
 - Stop reason: stop
-- Reasoning characters: 42752
+- Reasoning characters: 75228
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 5
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 5
+- Finding-shaped matches — surviving validation: 5
