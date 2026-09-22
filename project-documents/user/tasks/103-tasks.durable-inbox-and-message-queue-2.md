@@ -42,6 +42,8 @@ status: not_started
 - [ ] An invalid project id is refused before any path is computed and no store file is created anywhere
 - [ ] The writer guard's permitted set is still exactly `{process/project_stores.py}`
 
+- [ ] Commit after this task, e.g. `feat(process): add open_project for runtime creation`
+
 **Files to Modify**: `src/amoeba/process/project_stores.py`, `src/amoeba/process/host.py`
 
 ---
@@ -84,6 +86,8 @@ status: not_started
 - [ ] `grep` finds neither default value anywhere outside the settings module
 - [ ] `uv run pyright` clean
 
+- [ ] Commit after this task, e.g. `feat(process): add inbox batch size and max attempts settings`
+
 **Files to Modify**: the `ProcessSettings` module, `src/amoeba/cli/lifecycle.py`
 
 ---
@@ -102,14 +106,16 @@ status: not_started
 - [ ] Delete any `.attempts.json` counter along with the file on success
 - [ ] Return whether any file was handled
 - [ ] Log a WARNING when a submission id is reused with different content — first wins, and it is not an error (D2)
+- [ ] Add a smoke test covering this task's two claims before moving on — one `intent` submission applies and its file is deleted; a tick with more files than `inbox_batch_size` handles exactly that many; a tick with `stop_requested` set stops early. The full branch coverage stays in Task 6.8, but these are this task's own success criteria and should not go four tasks unverified
 
 **Success Criteria**:
-- [ ] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set
+- [ ] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set, **proven by the smoke test**
 - [ ] The file delete follows the commit, so a crash between them leaves a recorded submission and a file that is a no-op on restart
 - [ ] The tenant is the only module importing both `amoeba.inbox` and `amoeba.store` write paths
 - [ ] `uv run pyright` clean
+- [ ] Commit after this task, e.g. `feat(process): add inbox apply loop`
 
-**Files to Create**: `src/amoeba/process/inbox_tenant.py`
+**Files to Create**: `src/amoeba/process/inbox_tenant.py`, `tests/process/test_inbox_tenant.py`
 
 ---
 
@@ -130,6 +136,8 @@ status: not_started
 - [ ] Each of the six quarantine reasons is reachable and produces its sidecar
 - [ ] Later valid submissions in the same tick still apply after a quarantine
 - [ ] No `StoreError` path leads to quarantine
+
+- [ ] Commit after this task, e.g. `feat(process): add the quarantine ladder`
 
 **Files to Modify**: `src/amoeba/process/inbox_tenant.py`
 
@@ -154,6 +162,8 @@ status: not_started
 - [ ] After parking, the tick continues and the process stays up
 - [ ] A requeued file resumes at its old count rather than buying a fresh set of attempts
 
+- [ ] Commit after this task, e.g. `feat(process): bound apply failures and park in failed`
+
 **Files to Modify**: `src/amoeba/process/inbox_tenant.py`, `src/amoeba/inbox/layout.py`
 
 ---
@@ -172,6 +182,8 @@ status: not_started
 - [ ] `amoeba start` registers `InboxTenant` first
 - [ ] Slice 102's lifecycle tests pass, updated only where they asserted zero tenants
 
+- [ ] Commit after this task, e.g. `feat(cli): register InboxTenant first at start`
+
 **Files to Modify**: `src/amoeba/cli/lifecycle.py`
 
 ---
@@ -186,6 +198,7 @@ status: not_started
 - [ ] Assert a submission made while the process is **stopped** is applied on start and its file is gone
 - [ ] Assert a `create_project` applied by a **running** process creates the store, and a later submission for that project applies **without a restart** — in the same tick and in a later one
 - [ ] Assert replay: a file restored to `new/` after apply changes nothing and leaves exactly one record
+- [ ] Assert D2's different-content case explicitly: a second submission reusing an existing id with **different** content is a no-op that leaves the first record intact and logs a WARNING — not an error, since the second file may be a legitimate retry with a differing timestamp
 - [ ] Assert each quarantine reason lands in `quarantine/` with its sidecar and that later valid submissions in the same tick still apply
 - [ ] Assert the batch-size limit and early stop on `stop_requested`
 - [ ] Assert the F001 path: a submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts with the counter incrementing on disk, then lands in `failed/` with the last error recorded, and the tick that parks it goes on to apply the next file
@@ -220,6 +233,8 @@ status: not_started
 - [ ] `cli/submit.py` opens no store read-write, confirmed by the writer guard
 - [ ] All three subcommands work with the process running and stopped
 
+- [ ] Commit after this task, e.g. `feat(cli): add amoeba submit`
+
 **Files to Create**: `src/amoeba/cli/submit.py`
 
 ---
@@ -241,6 +256,8 @@ status: not_started
 - [ ] All three listings work with the process running and stopped
 - [ ] `submissions` lists in `applied_seq` order
 - [ ] Listing names derive from the registry, not from hand-maintained strings
+
+- [ ] Commit after this task, e.g. `feat(cli): add inbox, submissions, and messages listings`
 
 **Files to Modify**: the inspection CLI module
 
@@ -287,7 +304,7 @@ status: not_started
 - [ ] Commit after this task, e.g. `test: pin inbox public api and writer boundary`
 
 **Files to Modify**: `tests/test_writer_guard.py`
-**Files to Create**: `tests/inbox/test_public_api.py`
+**Files to Create**: `tests/inbox/test_inbox_public_api.py` — **not** `test_public_api.py`, which already exists at `tests/test_public_api.py`; duplicate basenames break pytest collection
 
 ---
 
@@ -306,6 +323,8 @@ status: not_started
 **Success Criteria**:
 - [ ] The script prints both ids and the writer guard passes with it allow-listed
 - [ ] The guard's script allow-list grows by exactly one entry
+
+- [ ] Commit after this task, e.g. `test: add demo_inbox script and allow-list it`
 
 **Files to Create**: `scripts/demo_inbox.py`
 **Files to Modify**: `tests/test_writer_guard.py`
@@ -331,6 +350,8 @@ status: not_started
 - [ ] The test kills and restarts the process mid-run and still asserts exactly-once per id
 - [ ] Projects are created through the inbox during the run, exercising runtime creation under load
 - [ ] `uv run pytest tests/load` passes
+
+- [ ] Commit after this task, e.g. `test: add concurrent submitter load test`
 
 **Files to Create**: `tests/load/test_inbox_concurrent.py`
 
@@ -376,6 +397,8 @@ status: not_started
 - [ ] The document is sufficient for an initiative 160 slice design without reading the implementation
 - [ ] Durability is stated as "fsync-durable on a POSIX filesystem" rather than overclaimed
 
+- [ ] Commit after this task, e.g. `docs: add inbox contract`
+
 **Files to Create**: `docs/inbox-contract.md`
 
 ---
@@ -395,6 +418,8 @@ status: not_started
 **Success Criteria**:
 - [ ] All three documents reflect the shipped behavior
 - [ ] Both recorded consequences of D3 appear in the store contract
+
+- [ ] Commit after this task, e.g. `docs: update store and process contracts for slice 103`
 
 **Files to Modify**: `docs/store-contract.md`, `docs/process-contract.md`, `CHANGELOG.md`
 

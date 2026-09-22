@@ -48,6 +48,8 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 - [ ] No public behavior change: no signature visible to `ResidentProcess` callers is altered
 - [ ] `uv run pyright` clean in strict mode
 
+- [ ] Commit after this task, e.g. `refactor(process): add ProjectStores and delegate from host`
+
 **Files to Create**: `src/amoeba/process/project_stores.py`
 **Files to Modify**: `src/amoeba/process/host.py`
 
@@ -61,13 +63,14 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 
 **Steps**:
 - [ ] Change `PERMITTED_MODULES` in `tests/test_writer_guard.py` from `process/host.py` to `process/project_stores.py`
-- [ ] Confirm the guard's deliberate-widening test still pins a set of **size one** — the guard must not be loosened to allow both modules
-- [ ] Run slice 102's full suite and the load tier; both must pass with no test modified other than the permitted-module constant
-- [ ] Investigate any failure as a defect in the extraction, not as a test needing an update
+- [ ] Update the **four** other places in that file that name `process/host.py` literally, all of which fail or go stale if only the constant changes: the `frozenset({"process/host.py"})` assertion in `test_the_permitted_set_is_exactly_the_host`, that test's own name, the failure message in `_assert_no_read_write_open` ("Only process/host.py may do that…"), and the module docstring
+- [ ] Confirm the deliberate-widening test still pins a set of **size one** — the guard must not be loosened to allow both modules
+- [ ] Run slice 102's full suite and the load tier; both must pass with no test modified other than the writer guard's host-naming above
+- [ ] Investigate any **other** failure as a defect in the extraction, not as a test needing an update
 
 **Success Criteria**:
-- [ ] The writer guard's permitted set is exactly `{process/project_stores.py}`
-- [ ] `uv run pytest` and `uv run pytest tests/load` pass with no changes to any slice 102 test beyond the constant
+- [ ] The writer guard's permitted set is exactly `{process/project_stores.py}` and no `process/host.py` literal remains in `tests/test_writer_guard.py`
+- [ ] `uv run pytest` and `uv run pytest tests/load` pass with no slice 102 test modified outside the writer guard
 - [ ] `uv run ruff check .` and `uv run pyright` clean
 - [ ] Commit after this task, e.g. `refactor(process): extract ProjectStores from host`
 
@@ -95,6 +98,8 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 - [ ] `uv run pyright` clean in strict mode
 - [ ] No import of `sqlite3` and no SQL in this module
 
+- [ ] Commit after this task, e.g. `feat(store): add inbox and message vocabularies`
+
 **Files to Create**: `src/amoeba/store/inbox_models.py`
 
 ---
@@ -113,6 +118,8 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Success Criteria**:
 - [ ] Adding a `SubmissionKind` member without its payload model fails this suite
 - [ ] `uv run pytest` passes
+
+- [ ] Commit after this task, e.g. `test: pin inbox vocabularies and kind mapping`
 
 **Files to Create**: `tests/store/test_inbox_models.py`
 
@@ -136,6 +143,8 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 - [ ] `EXPECTED_SCHEMA_VERSION` is 4 and the migration runner picks up `004` without modification
 - [ ] Both autoincrement keys are declared `INTEGER PRIMARY KEY AUTOINCREMENT` so values are never reassigned after a delete
 - [ ] `uv run pyright` clean
+
+- [ ] Commit after this task, e.g. `feat(store): add migration 004 for inbox and messages`
 
 **Files to Create**: `src/amoeba/store/schema/004_inbox_and_messages.sql`, `src/amoeba/store/sql_inbox.py`
 **Files to Modify**: the module declaring `EXPECTED_SCHEMA_VERSION`
@@ -186,6 +195,8 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 - [ ] All slice 101 and 102 block, resolve, and recovery tests pass unchanged
 - [ ] `uv run pyright` clean
 
+- [ ] Commit after this task, e.g. `refactor(store): route block writing through one writer`
+
 **Files to Modify**: the store modules holding `block()` and `journal_escalate`
 
 ---
@@ -198,7 +209,7 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 
 **Steps**:
 - [ ] Run the full slice 101 and 102 suites plus the load tier; all must pass with no test modified
-- [ ] Add a test asserting `block(payload=…)` round-trips the payload and that omitting it stores NULL
+- [ ] Assert `block(payload=…)` **accepts** the argument without error; do not assert it round-trips — migration 004 adds no payload column to `blocked_states`, and the payload only becomes readable on the escalation row in Task 3.3. The round-trip assertion lives in Task 3.4
 
 **Success Criteria**:
 - [ ] `uv run pytest` and `uv run pytest tests/load` pass with no slice 101/102 test modified
@@ -208,24 +219,27 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 
 ---
 
-### Task 3.3: Implement MessagesMixin and the automatic escalation row
+### Task 3.3: Implement MessageOperations and the automatic escalation row
 **Owner**: Junior AI
 **Dependencies**: Task 3.2
 **Effort**: 3
 **Objective**: Create `store/messages.py` with the message read and acknowledge methods, and make the block writer emit one escalation row for every `HUMAN` block in the same transaction.
 
 **Steps**:
-- [ ] Create `MessagesMixin` in `src/amoeba/store/messages.py` with `messages`, `pending_intents`, and `acknowledge_message` per the LLD's API Contracts table, using only `sql_inbox.py` statements
+- [ ] Create the message operations class in `src/amoeba/store/messages.py` with `messages`, `pending_intents`, and `acknowledge_message` per the LLD's API Contracts table, using only `sql_inbox.py` statements
+- [ ] **Name it `MessageOperations`, not `MessagesMixin`.** The LLD says "mixin", but the assembled class is `Store(NodeOperations, BlockingOperations, JournalOperations)` — follow the house convention. The same applies to `InboxOperations` in Task 4.1
 - [ ] Have `acknowledge_message` raise `InvalidTransitionError` when the row is already acknowledged or is not an intent
 - [ ] In the internal block writer, write exactly one `escalation` row **in the same transaction** whenever the kind is `HUMAN`, carrying `node_id`, `blocked_state_id`, and the optional opaque payload
 - [ ] Write **no** message for `JUDGE` or `SQ_CHECKPOINT` blocks — no channel is defined for them
-- [ ] Wire `MessagesMixin` into the `Store` class alongside the existing mixins
+- [ ] Wire `MessageOperations` into the `Store` class alongside the existing operations classes
 
 **Success Criteria**:
 - [ ] A human-blocked node without an escalation row cannot exist — the row commits with the block or neither does
 - [ ] `messages(after_seq=n)` returns only rows with `seq > n`, ascending, and is stable across repeated calls
 - [ ] `acknowledge_message` raises on a second acknowledge and on a non-intent row
 - [ ] `uv run pyright` clean
+
+- [ ] Commit after this task, e.g. `feat(store): add message operations and escalation on human block`
 
 **Files to Create**: `src/amoeba/store/messages.py`
 **Files to Modify**: the store class assembly, the internal block writer
@@ -241,6 +255,7 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 **Steps**:
 - [ ] Assert `block(kind=HUMAN)` writes exactly one escalation row in the same transaction, and that `JUDGE` and `SQ_CHECKPOINT` blocks write none
 - [ ] Assert the escalation row carries the correct `node_id` and `blocked_state_id`
+- [ ] Assert `block(payload=…)` round-trips the payload onto the escalation row, and that omitting it stores NULL — this is the first point where the payload is readable (moved here from Task 3.2)
 - [ ] Assert `messages(channel=ESCALATION, after_seq=n)` returns only later rows in `seq` order, identically on repeated calls, **through a read-only handle**
 - [ ] Assert `pending_intents` excludes acknowledged rows and that a second `acknowledge_message` raises
 
@@ -248,6 +263,8 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 - [ ] All four assertions above pass
 - [ ] A read-only handle can read messages, confirming outside consumers need no write access
 - [ ] `uv run pytest` passes
+
+- [ ] Commit after this task, e.g. `test: cover escalation rows and the message read api`
 
 **Files to Create**: `tests/store/test_messages.py`
 
@@ -278,24 +295,26 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 
 Pure library work — no files and no tenant yet, per the LLD's Development Approach.
 
-### Task 4.1: Implement InboxMixin.apply_submission with the replay check
+### Task 4.1: Implement InboxOperations.apply_submission with the replay check
 **Owner**: Junior AI
 **Dependencies**: Task 3.5
 **Effort**: 3
 **Objective**: Create `store/inbox.py` with the single-transaction apply, starting with idempotency.
 
 **Steps**:
-- [ ] Create `InboxMixin` in `src/amoeba/store/inbox.py` with `apply_submission`, `submission`, and `submissions` per the LLD's API Contracts table
+- [ ] Create `InboxOperations` in `src/amoeba/store/inbox.py` with `apply_submission`, `submission`, and `submissions` per the LLD's API Contracts table (house naming, per Task 3.3 — the LLD calls it `InboxMixin`)
 - [ ] Structure `apply_submission` as **one transaction**: replay check by submission id, then precondition, then effect, then record
 - [ ] On replay, return the existing record unchanged and perform no effect
 - [ ] Define the kind-to-effect mapping as a single table, per the LLD's "Adding a submission kind" rule
-- [ ] Wire `InboxMixin` into the `Store` class
+- [ ] Wire `InboxOperations` into the `Store` class
 
 **Success Criteria**:
 - [ ] Applying the same submission id twice leaves exactly one record and performs the effect once
 - [ ] The effect and the record commit together — no state exists where one is present without the other
 - [ ] Every `SubmissionKind` member has an entry in the kind-to-effect mapping, enforced by a test
 - [ ] `uv run pyright` clean
+
+- [ ] Commit after this task, e.g. `feat(store): add apply_submission with replay check`
 
 **Files to Create**: `src/amoeba/store/inbox.py`
 **Files to Modify**: the store class assembly
@@ -321,6 +340,8 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 - [ ] A node re-blocked since the original block is **not** resolved by a stale reply
 - [ ] An `intent` produces one unacknowledged message carrying the submission id
 - [ ] `InvalidTransitionError` is nowhere caught to implement a rejection
+
+- [ ] Commit after this task, e.g. `feat(store): add the three submission kind effects`
 
 **Files to Modify**: `src/amoeba/store/inbox.py`
 
@@ -362,15 +383,20 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 - [ ] Create `src/amoeba/inbox/envelope.py` with the pydantic envelope carrying `envelope_version`, `id`, `project_id`, `kind`, `submitted_by`, `submitted_at`, `payload`, plus the per-kind payload models
 - [ ] Configure the envelope to **ignore unknown extra fields** and to reject an unknown `envelope_version` rather than best-effort parsing it
 - [ ] Import vocabularies from `amoeba.store` (models only); do **not** import `Store` — the dependency direction in the LLD's Component Structure is one-way
-- [ ] Reuse the project-id validation rule already in `amoeba.store.paths`; do not re-implement it
+- [ ] **Extract** the project-id rule in `amoeba.store.paths` into a standalone `validate_project_id(project_id)`: today the three checks (non-empty, no path separator, not `.` or `..`) are inline inside `store_path()`, so there is no way to validate an id *without* computing a path — which `submit()` and `open_project` both need. Have `store_path()` call the extracted function so the rule still has exactly one definition
+- [ ] Reuse that function from the envelope; do not re-implement the rule
 
 **Success Criteria**:
 - [ ] Directory names and the filename scheme appear only in `layout.py`
 - [ ] `amoeba.inbox` imports no write path from `amoeba.store`
-- [ ] Project-id validation has exactly one definition in the codebase
+- [ ] Project-id validation has exactly one definition, callable without computing a path
+- [ ] `store_path()` behavior is unchanged — slice 101's path tests pass untouched
 - [ ] `uv run pyright` clean
 
+- [ ] Commit after this task, e.g. `feat(inbox): add layout, envelope, and project id validation`
+
 **Files to Create**: `src/amoeba/inbox/layout.py`, `src/amoeba/inbox/envelope.py`, `src/amoeba/inbox/__init__.py`
+**Files to Modify**: `src/amoeba/store/paths.py`
 
 ---
 
@@ -394,6 +420,8 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 - [ ] `submit()` works whether or not the resident process is running
 - [ ] `submit()` opens no store, read-write or otherwise
 
+- [ ] Commit after this task, e.g. `feat(inbox): add submit with fsync-ordered durability`
+
 **Files to Create**: `src/amoeba/inbox/submit.py`
 
 ---
@@ -414,6 +442,8 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 - [ ] The fsync order assertion fails if either call is removed or reordered
 - [ ] No test asserts durability beyond "fsync-durable on a POSIX filesystem" — the contract does not overclaim
 - [ ] `uv run pytest` passes
+
+- [ ] Commit after this task, e.g. `test: cover submit durability and validation failures`
 
 **Files to Create**: `tests/inbox/test_submit.py`
 
@@ -437,6 +467,8 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 - [ ] A stray `tmp/` file appears in no listing
 - [ ] A sidecar-less file in `quarantine/` or `failed/` is reported rather than crashing the listing
 
+- [ ] Commit after this task, e.g. `feat(inbox): add pending, quarantined, and failed listings`
+
 **Files to Create**: `src/amoeba/inbox/pending.py`
 
 ---
@@ -451,14 +483,18 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 - [ ] Create fixtures that include **a file produced by the real `submit()`** and hand-damaged variants of it: truncated, wrong `envelope_version`, and extra unknown fields
 - [ ] Assert the extra-fields variant parses (unknown fields ignored) while the truncated and wrong-version variants do not
 - [ ] Assert `pending()` returns files in drain order and that `quarantined()` and `failed()` surface their sidecar contents
-- [ ] Place fixtures where Section 6's tenant tests can reuse them
+- [ ] Put the shared envelope fixtures in the **root `tests/conftest.py`**, not in `tests/inbox/conftest.py` — Section 6's tenant tests live in `tests/process/` and conftest fixtures only apply downward, so a sibling directory cannot see them
+- [ ] Add `__init__.py` to every new test package created in this slice (`tests/store/`, `tests/inbox/`, `tests/process/`, `tests/cli/`), matching the one precedent in `tests/load/`. Without it, pytest's import mode fails collection on duplicate test-file basenames
 
 **Success Criteria**:
 - [ ] Fixtures derive from real `submit()` output, not hand-written approximations of it
+- [ ] Tenant tests in `tests/process/` can use the envelope fixtures
+- [ ] Every new test directory has an `__init__.py`
 - [ ] `uv run pytest` passes
 - [ ] Commit after this task, e.g. `feat(inbox): add submit, listings, and envelope models`
 
-**Files to Create**: `tests/inbox/test_listings.py`, `tests/inbox/conftest.py`
+**Files to Create**: `tests/inbox/test_listings.py`, `__init__.py` in each new test package
+**Files to Modify**: `tests/conftest.py`
 
 ---
 
