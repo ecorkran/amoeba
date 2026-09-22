@@ -82,7 +82,7 @@ src/amoeba/
     envelope.py        Submission envelope + per-kind payload models (pydantic)
     layout.py          directory names and the filename scheme, defined once
     submit.py          submit() — the only write path open to outside parts
-    pending.py         read-only listing of pending and quarantined files
+    pending.py         read-only listing of pending, quarantined, and failed files
   process/
     inbox_tenant.py    InboxTenant — the apply loop
     project_stores.py  ProjectStores — open all, open one at runtime, close all
@@ -107,6 +107,7 @@ src/amoeba/
 | `inbox/tmp/` | Files being written. Never read by the apply loop. |
 | `inbox/new/` | Complete submissions awaiting apply. |
 | `inbox/quarantine/` | Submissions that could not be attributed to an open project store, each with a `.reason.json` sidecar. |
+| `inbox/failed/` | Submissions that were attributed and valid but whose apply failed `inbox_max_attempts` times, each with its `.attempts.json` sidecar. |
 
 ### Data Flow
 
@@ -135,8 +136,15 @@ for file in sorted(inbox/new/)[: settings.inbox_batch_size]:
         id already recorded?  → no-op (replay)
         kind's precondition holds? → effect + record(outcome=applied)
         otherwise                  → record(outcome=rejected, reason)
-    delete file
+    delete file and its counter, if any
 return whether any file was handled
+
+# on an unexpected exception from open_project or apply_submission:
+#   attempts = read(<file>.attempts.json).attempts + 1
+#   if attempts >= settings.inbox_max_attempts:
+#       move file + counter → failed/;  log ERROR;  continue to next file
+#   else:
+#       write <file>.attempts.json;  log exception;  re-raise (process stops)
 ```
 
 Crash analysis — the file delete is deliberately *after* the commit:
@@ -160,7 +168,7 @@ A `resolution` targets a **blocked-state id, not a node id**. A node can be bloc
 
 ### State Management
 
-- **Durable, supervisor directory:** the inbox files. A file in `new/` is a submission not yet known to be applied — nothing more. Its lifetime is from `submit()` to apply.
+- **Durable, supervisor directory:** the inbox files. A file in `new/` is a submission not yet known to be applied — nothing more. Its lifetime is from `submit()` to apply. Its `.attempts.json` counter, if one exists, is durable for the same reason the file is: both must outlive the crash that wrote them.
 - **Durable, each project store:** `inbox_submissions` (the idempotency and audit record) and `messages`. SQLite remains the home of everything durable and queryable.
 - **In memory:** the open-store map, which now grows at runtime. Nothing authoritative: it is rebuilt from the directory at every start. The tenant holds no cursor; the directory listing is the queue.
 
@@ -214,6 +222,12 @@ Two consequences for slice 102's recovery, both intended:
 
 **Error handling.** `submit()` raises typed errors (`InboxSubmitError` family) on validation or I/O failure and leaves nothing in `new/`. In the tenant, an unexpected exception from `apply_submission` or `open_project` is logged with `logger.exception` and re-raised — the file stays in `new/`, and the process stops rather than skipping a submission and applying later ones out of order. A `StoreError` is not converted to quarantine: quarantine means "this submission is bad", never "the store is unwell".
 
+**A failing apply stops the process, but not forever.** Stopping is right the first time — the store is unwell and the operator should know. Repeating it without bound is not: a validated submission whose apply fails deterministically (a corrupt or future-schema store file for its project, a permission problem on the store path) would otherwise stop the process on every start, with the same file first in line each time, and no way out but a hand edit. So the tenant counts attempts. Before re-raising, it writes `<file>.attempts.json` beside the file in `new/` — `{attempts, last_error, last_failed_at}`, written with the same tmp-and-rename used by `submit()`. The count lives on disk rather than in the store because the store is the thing that may be broken, and in memory it would reset on every crash.
+
+On the `inbox_max_attempts`-th consecutive failure the tenant moves the file and its counter to `inbox/failed/`, logs at ERROR, and continues to the next file instead of re-raising. `failed/` is its own directory, not `quarantine/`, and the distinction is the same one drawn above: a quarantined file is a bad submission, a failed one is a good submission the store could not apply. Its sidecar records the last exception, so what stopped the process is inspectable after the process is running again. Nothing is deleted; an operator who has fixed the store requeues by moving the file back to `new/`, and the counter goes with it — a requeued file that fails again resumes at its old count rather than buying another full set of attempts. A successful apply deletes the counter with the file.
+
+`inbox_max_attempts` lives in `ProcessSettings` with a `start` flag, like `inbox_batch_size`. The default is small; the point is to bound the loop, not to retry a corrupt store into working.
+
 ## Implementation Details
 
 ### API Contracts
@@ -225,6 +239,7 @@ Two consequences for slice 102's recovery, both intended:
 | `submit(*, project_id, kind, payload, submitted_by, submission_id=None, store_dir=None) -> str` | Validates, writes durably, returns the submission id. Works whether or not the process is running. |
 | `pending(store_dir=None) -> list[PendingSubmission]` | Files in `new/`, in drain order. |
 | `quarantined(store_dir=None) -> list[QuarantinedSubmission]` | Quarantined files with their recorded reason. |
+| `failed(store_dir=None) -> list[FailedSubmission]` | Parked files with their attempt count and last error. |
 
 Envelope fields: `envelope_version`, `id`, `project_id`, `kind`, `submitted_by`, `submitted_at`, `payload`.
 
@@ -234,7 +249,7 @@ A submitter learns its outcome by reading, not by reply: `Store.open_read_only(p
 
 | Member | Meaning |
 | --- | --- |
-| `open_project(project_id) -> Store` | Create-or-open the project's store read-write and add it to the open set. Idempotent. A new store is migrated to the current schema by `Store.open` as usual; its journal is empty, so there is nothing to recover. `project_ids` reflects it immediately. A failure raises and stops the process, consistent with "never run blind to a project". |
+| `open_project(project_id) -> Store` | Create-or-open the project's store read-write and add it to the open set. Idempotent. A new store is migrated to the current schema by `Store.open` as usual; its journal is empty, so there is nothing to recover. `project_ids` reflects it immediately. A failure raises; the tenant stops the process, consistent with "never run blind to a project", until the submission's attempt count is spent and it is parked in `failed/`. |
 
 **Store additions (exported from `amoeba.store`):**
 
@@ -258,7 +273,7 @@ A submitter learns its outcome by reading, not by reply: `Store.open_read_only(p
 | `amoeba submit create-project --project ID --by NAME [--id ID]` | Calls `submit()`; prints the submission id. |
 | `amoeba submit resolution --project ID --blocked-state ID --by NAME --detail TEXT [--id ID]` | Same. |
 | `amoeba submit intent --project ID --payload-json JSON [--node ID] --by NAME [--id ID]` | Same. |
-| `amoeba inspect inbox` | Supervisor-level (like `projects`): pending and quarantined files. |
+| `amoeba inspect inbox` | Supervisor-level (like `projects`): pending, quarantined, and failed files. |
 | `amoeba inspect submissions\|messages --project ID` | Registered into 102's listing registry. `messages` accepts `--channel`. All accept `--json`. |
 
 `submit` subcommand names derive from `SubmissionKind`, as `inspect` names derive from the listing registry — never the reverse.
@@ -282,7 +297,7 @@ This is the content `docs/inbox-contract.md` must state.
 - **Durability on return.** When `submit()` returns, the submission is fsync-durable on a POSIX filesystem — process up or down.
 - **Exactly-once effect per submission id.** Redelivery, restart, and submitter retry with the same id cannot double-apply.
 - **Atomic effect and record.** No state exists in which a slot is filled but the submission is unrecorded, or the reverse.
-- **Every submission reaches a terminal, inspectable state:** `applied`, `rejected` (with reason), or quarantined (with reason). None is dropped silently.
+- **Every submission reaches a terminal, inspectable state:** `applied`, `rejected` (with reason), quarantined (with reason), or failed (with attempt count and last error). None is dropped silently.
 - **One authoritative order, assigned by the receiver.** `applied_seq` and `messages.seq` are total, gap-tolerant, and never reassigned.
 - **Messages are replayable.** `messages(after_seq=0)` returns a channel's full history in a stable order, any number of times. Escalation consumers hold their own cursor and are delivered every row once by advancing it.
 - **Every human block has an escalation row committed with it**, and every journal entry recovery escalates has one — whether it created the block or landed on an existing one.
@@ -335,6 +350,8 @@ This is the content `docs/inbox-contract.md` must state.
 - [ ] `applied_seq` and `seq` increase in apply order regardless of the `submitted_at` values in the envelopes.
 - [ ] `messages(channel=ESCALATION, after_seq=n)` returns only later rows, in `seq` order, identically on repeated calls, through a read-only handle.
 - [ ] Unparseable JSON, an unknown envelope version, an unknown kind, an invalid payload, and an unknown project each end in `quarantine/` with the matching `QuarantineReason`; later valid submissions in the same tick still apply.
+- [ ] A valid submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts, its counter incrementing on disk each time, then lands in `failed/` with the last error recorded; the tick that parks it goes on to apply the next file, and the process stays up.
+- [ ] A file moved back from `failed/` to `new/` resumes at its recorded attempt count rather than at zero, and is deleted with its counter once it applies.
 - [ ] `submit()` with an invalid payload raises and leaves nothing in `new/` or `tmp/`.
 - [ ] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set.
 - [ ] `amoeba submit` and the three inspection listings work with the process running and stopped.
@@ -455,7 +472,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright
 ### Mitigation Strategies
 
 - `submit()` fsyncs the file and then the directory, and a test asserts both calls occur in order (the one place a call-order assertion is the honest test). The contract states the guarantee as "fsync-durable on a POSIX filesystem" rather than overclaiming.
-- The quarantine ladder is enumerated as a closed vocabulary and each member has a success criterion, including "later valid submissions in the same tick still apply". The only thing allowed to stop the queue is a `StoreError` or an unexpected exception — a sick store, where stopping is correct.
+- The quarantine ladder is enumerated as a closed vocabulary and each member has a success criterion, including "later valid submissions in the same tick still apply". The only thing allowed to stop the queue is a `StoreError` or an unexpected exception — a sick store, where stopping is correct — and even that is bounded: after `inbox_max_attempts` the submission is parked in `failed/` and the queue moves on, so a store that cannot be fixed by restarting cannot hold the process down forever.
 - The extraction is its own step, done first and as a pure refactor: no behavior change, slice 102's suite and load tier passing unchanged, committed separately before `open_project` is added on top.
 
 ## Implementation Notes
