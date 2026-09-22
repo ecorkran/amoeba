@@ -2,9 +2,9 @@
 
 The sole-writer model is enforced in two parts. The instance lock guarantees at
 most one resident process per supervisor directory; this test guarantees that
-*within Amoeba* nothing but ``process/host.py`` (and the one exempted operator
-script below) reaches for the read-write ``Store.open``. Together they make
-the model structural rather than a sentence in a contract document.
+*within Amoeba* nothing but ``process/project_stores.py`` (and the one exempted
+operator script below) reaches for the read-write ``Store.open``. Together they
+make the model structural rather than a sentence in a contract document.
 
 **Scanned roots**: ``src/amoeba/`` and ``scripts/``. The latter was added
 after a review found ``scripts/demo_journal.py`` doing a real read-write open
@@ -53,7 +53,7 @@ STORE_CLASS = "Store"
 #: The **only** module under ``src/amoeba/`` permitted to open a store
 #: read-write. Not a list that grows casually: adding to it widens the
 #: sole-writer invariant, and the contract documents would have to say so.
-PERMITTED_MODULES = frozenset({"process/host.py"})
+PERMITTED_MODULES = frozenset({"process/project_stores.py"})
 
 #: The **only** module under ``scripts/`` permitted to open a store
 #: read-write. ``demo_journal.py`` is an operator-run demo, not part of the
@@ -173,8 +173,8 @@ def test_the_scan_ignores_unrelated_open_calls() -> None:
 @pytest.mark.parametrize(
     "module_path", _source_modules(), ids=lambda path: _relative(path)
 )
-def test_only_the_host_opens_a_store_read_write(module_path: Path) -> None:
-    """No module but ``process/host.py`` calls the read-write ``Store.open``."""
+def test_only_project_stores_opens_a_store_read_write(module_path: Path) -> None:
+    """Only ``process/project_stores.py`` calls the read-write ``Store.open``."""
     relative = _relative(module_path)
     calls = _read_write_open_calls(module_path.read_text(encoding="utf-8"))
 
@@ -183,8 +183,8 @@ def test_only_the_host_opens_a_store_read_write(module_path: Path) -> None:
 
     assert not calls, (
         f"{relative} calls the read-write Store.open at line(s) {calls}. "
-        "Only process/host.py may do that: it is the sole writer, guaranteed "
-        "by the instance lock. Every other module must use "
+        "Only process/project_stores.py may do that: it is the sole writer, "
+        "guaranteed by the instance lock. Every other module must use "
         "Store.open_read_only."
     )
 
@@ -219,9 +219,14 @@ def test_the_inspection_cli_is_covered_by_the_scan() -> None:
     assert _read_write_open_calls(inspect_module.read_text(encoding="utf-8")) == []
 
 
-def test_the_permitted_set_is_exactly_the_host() -> None:
-    """Widening the sole-writer invariant is a deliberate, visible change."""
-    assert PERMITTED_MODULES == frozenset({"process/host.py"})
+def test_the_permitted_set_is_exactly_project_stores() -> None:
+    """Widening the sole-writer invariant is a deliberate, visible change.
+
+    Still a set of **size one** after the extraction: the permission moved
+    from ``process/host.py`` to ``process/project_stores.py``, it was not
+    loosened to allow both.
+    """
+    assert PERMITTED_MODULES == frozenset({"process/project_stores.py"})
 
 
 # --------------------------------------------------------------------------
@@ -249,7 +254,7 @@ def test_only_permitted_scripts_open_a_store_read_write(script_path: Path) -> No
 
 
 def test_the_permitted_scripts_exist_and_actually_open_a_store() -> None:
-    """Same drift check as the host module, for the scripts allowlist."""
+    """Same drift check as the permitted module, for the scripts allowlist."""
     for permitted in PERMITTED_SCRIPTS:
         path = SCRIPTS_DIR / permitted
         assert path.exists(), f"{permitted} is permitted but does not exist"

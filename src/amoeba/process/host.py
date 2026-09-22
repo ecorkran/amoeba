@@ -1,10 +1,11 @@
 """The resident process: lifetime, the tenant seam, and graceful shutdown.
 
 One long-lived process per supervisor. It acquires the instance lock, writes
-the PID file, opens every project store **read-write** — this module is the
-only one permitted to do so, which ``tests/test_writer_guard.py`` enforces
-mechanically — reconciles every journaled-but-unresolved command, then ticks
-its tenants until stop is requested.
+the PID file, opens every project store **read-write** through
+``ProjectStores`` — the only module permitted to do so, which
+``tests/test_writer_guard.py`` enforces mechanically — reconciles every
+journaled-but-unresolved command, then ticks its tenants until stop is
+requested.
 
 **Recovery gates the loop.** No tenant ticks until every project has been
 reconciled, so the Runner can never act on a node whose in-flight command has
@@ -47,13 +48,10 @@ from amoeba.process.instance_lock import (
     pid_file_path,
     write_pid_file,
 )
+from amoeba.process.project_stores import ProjectStores
 from amoeba.process.recovery import RecoverySummary, reconcile
 from amoeba.process.settings import ProcessSettings
-from amoeba.process.supervisor import (
-    build_observer_registry,
-    discover_project_ids,
-    store_path_for,
-)
+from amoeba.process.supervisor import build_observer_registry
 from amoeba.store import Store
 
 logger = logging.getLogger(__name__)
@@ -128,7 +126,7 @@ class ResidentProcess:
         self._grace_expired_exit_status = grace_expired_exit_status
         self._exit_on_grace_expiry = exit_on_grace_expiry
         self._stop_event = threading.Event()
-        self._stores: dict[str, Store] = {}
+        self._stores = ProjectStores(store_dir)
         self._current_tenant_name = _NO_TENANT
         self._lock = InstanceLock(lock_path({"AMOEBA_STORE_DIR": str(store_dir)}))
 
@@ -154,12 +152,12 @@ class ResidentProcess:
             KeyError: If the project has no store open, which means it did not
                 exist in the supervisor directory when the process started.
         """
-        return self._stores[project_id]
+        return self._stores.store_for(project_id)
 
     @property
     def project_ids(self) -> tuple[str, ...]:
         """The projects this process has open."""
-        return tuple(self._stores)
+        return self._stores.project_ids
 
     def request_stop(self) -> None:
         """Ask the loop to stop. Safe to call from a signal handler."""
@@ -184,11 +182,11 @@ class ResidentProcess:
             # The lock is acquired before the PID file is written, so a live
             # process can legitimately hold the lock with no PID file yet.
             write_pid_file(pid_path, version=self._version)
-            self._open_stores()
+            self._stores.open_all()
             self._recover_every_project()
             self._run_loop_with_grace()
         finally:
-            self._close_stores()
+            self._stores.close_all()
             pid_path.unlink(missing_ok=True)
             self._lock.release()
 
@@ -286,25 +284,6 @@ class ResidentProcess:
         signal.signal(signal.SIGTERM, _handle)
         signal.signal(signal.SIGINT, _handle)
 
-    def _open_stores(self) -> None:
-        """Open every project's store read-write.
-
-        This is the **only** read-write ``Store.open`` call in the package.
-
-        Raises:
-            StartupFailedError: If any store cannot be opened. A corrupt store
-                for one project stops the whole supervisor, deliberately.
-        """
-        for project_id in discover_project_ids(self._store_dir):
-            path = store_path_for(self._store_dir, project_id)
-            try:
-                self._stores[project_id] = Store.open(path)
-            except Exception as error:
-                logger.exception("cannot open the store for project %s", project_id)
-                raise StartupFailedError(
-                    f"cannot open the store for project {project_id!r}: {error}"
-                ) from error
-
     def _recover_every_project(self) -> None:
         """Reconcile every project before any tenant ticks.
 
@@ -363,16 +342,3 @@ class ResidentProcess:
             self._current_tenant_name = tenant.name
             worked = tenant.tick(self) or worked
         return worked
-
-    def _close_stores(self) -> None:
-        """Close every open store. Runs on every exit path."""
-        for project_id, store in self._stores.items():
-            try:
-                store.close()
-            except Exception:
-                # Logged and swallowed deliberately: this runs in the teardown
-                # path, and a failure to close one store must not prevent
-                # closing the rest or releasing the lock. Crash-only makes an
-                # unclosed store recoverable anyway.
-                logger.exception("error closing the store for project %s", project_id)
-        self._stores.clear()
