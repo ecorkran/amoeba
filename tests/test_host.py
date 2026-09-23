@@ -616,3 +616,79 @@ def test_committed_writes_survive_a_sigkill(
 
     assert "seeded" in titles
     assert any(title.startswith("tick-") for title in titles)
+
+
+# --------------------------------------------------------------------------
+# Runtime project creation (slice 103)
+# --------------------------------------------------------------------------
+
+RUNTIME_PROJECT = "made-at-runtime"
+
+#: On its first tick: create a project twice, write to it, try an unsafe id,
+#: and report what it saw on stdout for the test to read.
+RUNTIME_CREATING_TENANT = TenantSpec(
+    body=textwrap.dedent(
+        f"""
+        if self.ticks == 0:
+            first = host.open_project({RUNTIME_PROJECT!r})
+            again = host.open_project({RUNTIME_PROJECT!r})
+            first.create_node(
+                project_id={RUNTIME_PROJECT!r}, kind=NodeKind.SLICE, title="runtime"
+            )
+            print("OPENED", ",".join(sorted(host.project_ids)), first is again,
+                  flush=True)
+            try:
+                host.open_project("unsafe/id")
+            except ValueError:
+                print("REFUSED", flush=True)
+        self.ticks += 1
+        return False
+        """
+    ).strip(),
+    name="creator",
+)
+
+
+def test_open_project_creates_a_store_at_runtime(
+    tmp_path: Path, supervisor_dir: Path, runs_dir: Path
+) -> None:
+    """Immediately in project_ids, idempotent, usable, and at schema 4."""
+    _seed_project(supervisor_dir)
+    host = _running_host(
+        tmp_path, supervisor_dir, runs_dir=runs_dir, tenant=RUNTIME_CREATING_TENANT
+    )
+
+    try:
+        opened = host.await_line("OPENED")
+        host.await_line("REFUSED")
+        assert host.terminate_and_wait() == 0
+    finally:
+        host.cleanup()
+
+    assert opened.split() == ["OPENED", f"{PROJECT},{RUNTIME_PROJECT}", "True"]
+
+    # A read-only open refuses any version but the expected one, so opening
+    # at all proves the runtime store was migrated to the current schema.
+    runtime_file = supervisor_dir / f"{RUNTIME_PROJECT}.sqlite3"
+    with Store.open_read_only(runtime_file) as store:
+        titles = [node.title for node in store.nodes_for_project(RUNTIME_PROJECT)]
+    assert titles == ["runtime"]
+
+
+def test_open_project_refuses_an_unsafe_id_and_creates_nothing(
+    tmp_path: Path, supervisor_dir: Path, runs_dir: Path
+) -> None:
+    host = _running_host(
+        tmp_path, supervisor_dir, runs_dir=runs_dir, tenant=RUNTIME_CREATING_TENANT
+    )
+
+    try:
+        host.await_line("REFUSED")
+        assert host.terminate_and_wait() == 0
+    finally:
+        host.cleanup()
+
+    assert not (supervisor_dir / "unsafe").exists()
+    assert sorted(path.name for path in supervisor_dir.glob("*.sqlite3")) == [
+        f"{RUNTIME_PROJECT}.sqlite3"
+    ]
