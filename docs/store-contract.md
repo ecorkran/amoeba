@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20260921
+dateUpdated: 20260923
 status: complete
 ---
 
@@ -34,10 +34,11 @@ is a row. Everything that makes Amoeba async by construction follows from this.
   the distinction is easy to assume wrongly.
 - **Not a parser.** CF and SQ values are stored opaquely. See
   [Reference fields](#reference-fields).
-- **Not a findings store.** Findings, verdicts, the inbox, and the change feed
-  belong to slices 103–105. Nothing about them is modeled here. *(Slice 102
-  added the command journal, which this document now covers — see
-  [The command journal](#the-command-journal).)*
+- **Not a findings store.** Findings, verdicts, and the change feed belong to
+  slices 104–105. Nothing about them is modeled here. *(Slice 102 added the
+  command journal and slice 103 the inbox record and message channels, which
+  this document now covers — see [The command journal](#the-command-journal)
+  and [The inbox record and messages](#the-inbox-record-and-messages).)*
 
 ## Importing
 
@@ -46,12 +47,14 @@ Everything below is exported from `amoeba.store` directly:
 ```python
 from amoeba.store import Store, Node, NodeKind, NodeStatus, BlockedKind
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
+from amoeba.store import Channel, Message, SubmissionKind, SubmissionRecord
 ```
 
-`sql`, `sql_journal`, `mapping`, `migrations`, `paths`, and `_base` are
-internal. They are not
-re-exported and are not contract. A test (`tests/test_public_api.py`) pins the
-export set, so this list cannot drift silently.
+`sql`, `sql_journal`, `sql_inbox`, `mapping`, `mapping_journal`,
+`mapping_inbox`, `migrations`, `paths`, `_base`, and `_block_writer` are
+internal. They are not re-exported and are not contract. A test
+(`tests/test_public_api.py`) pins the export set, so this list cannot drift
+silently.
 
 ## Vocabularies
 
@@ -182,12 +185,22 @@ These are the load-bearing operations of the slice.
 
 ```python
 state = store.block(node_id, kind=BlockedKind.HUMAN, context="awaiting PM ruling")
+state = store.block(node_id, kind=BlockedKind.HUMAN, context="…", payload={"options": […]})
 state = store.resolve(node_id, resolved_by="pm", detail="add the task to 101")
 ```
 
 **Each is one call and one transaction.** `block()` writes the blocked-state
 record *and* sets the node's status together; `resolve()` fills the resolution
 slot *and* flips the node back to `runnable` together.
+
+**A `HUMAN` block also writes its escalation (slice 103, D3).** In the same
+transaction, `block(kind=HUMAN)` writes one row on the `escalation` message
+channel carrying the node id, the blocked-state id, and the optional opaque
+`payload` — whatever the eventual resolver needs to decide. A human-blocked node
+without its escalation row cannot exist. `JUDGE` and `SQ_CHECKPOINT` blocks
+write no message. Every block, whoever asks for it, goes through one internal
+writer, so there is no path that blocks without escalating. The `payload` is
+stored only on the escalation row; `BlockedState` does not carry it.
 
 There is deliberately **no public path that writes one half**. Node status and
 blocked state cannot disagree, because the caller is never able to make them
@@ -280,7 +293,7 @@ field was never recorded is the failure this prevents.
 | --- | --- |
 | `journal_issue(node_id, *, kind, parameters)` | Validates the parameters for the kind, writes an unresolved entry, **commits**, returns it. Call before the side effect. Raises `NodeNotFoundError` for an unknown node and `ValueError` for a missing required key — in both cases writing nothing. |
 | `journal_resolve(entry_id, *, outcome, result=None, resolved_by=ISSUER)` | Closes the entry. Raises `InvalidTransitionError` if it does not exist or is already resolved; a first outcome is never silently overwritten. |
-| `journal_escalate(entry_id, *, reason)` | **One transaction:** sets outcome `unknown` and blocks the node on `HUMAN` with a context naming the entry. If the node is already blocked, marks the entry and writes no second blocked state. |
+| `journal_escalate(entry_id, *, reason)` | **One transaction:** sets outcome `unknown`, blocks the node on `HUMAN` with a context naming the entry, and writes an escalation row carrying the entry id. If the node is already blocked, marks the entry, writes no second blocked state, and writes one escalation row pointing at the existing open block. |
 | `journal_entry(entry_id)` | One entry, or `None`. |
 | `unresolved_journal_entries(project_id)` | Entries still in flight, oldest first. What recovery consumes. |
 | `journal_entries(project_id, *, node_id=None, include_resolved=True)` | What inspection consumes. |
@@ -301,6 +314,13 @@ blocked, `journal_escalate` marks the entry `unknown` and does **not** write a
 second block: the node is already stopped, and the entry stays visible through
 `amoeba inspect journal`.
 
+It **does** write one escalation row (slice 103, D3), pointing at the node's
+existing open blocked state with the entry id set — whatever kind that block
+is. A human must hear that a command's outcome is unknown even when the node
+was already waiting on a Judge. For such a row, "the blocked state is still
+open" does not mean "no human has seen it": that block's own owner can resolve
+it. Deliver escalations by `seq` cursor, not by open-ness.
+
 This is an explicit branch in the implementation, not a caught
 `InvalidTransitionError` — catching would also swallow a genuine transition bug.
 
@@ -315,6 +335,59 @@ Store a reference — a path, an id, a key name — not the secret itself.
 ### Retention
 
 Entries are never deleted in this slice. Retention is Future Work.
+
+## The inbox record and messages
+
+*Added by slice 103. Schema version 4.*
+
+The store's half of the inbox. How a submission gets here, what each kind
+means, and what is and is not guaranteed are
+[`inbox-contract.md`](inbox-contract.md)'s subject; this section covers only
+what the store offers.
+
+### Vocabularies
+
+| Vocabulary | Members |
+| --- | --- |
+| `SubmissionKind` | `create_project`, `resolution`, `intent` |
+| `SubmissionOutcome` | `applied`, `rejected` |
+| `Channel` | `intent`, `escalation` |
+| `QuarantineReason` | `unparseable_envelope`, `unknown_envelope_version`, `unknown_kind`, `invalid_project_id`, `invalid_payload`, `no_store_for_project` (recorded beside a quarantined file, never in the store) |
+
+### Types
+
+- **`SubmissionRecord`** — `applied_seq`, `id`, `project_id`, `kind`,
+  `submitted_by`, `submitted_at`, `payload`, `outcome`, `reason` (set when
+  rejected), `applied_at`.
+- **`Message`** — `seq`, `id`, `project_id`, `channel`, `node_id`,
+  `blocked_state_id`, `journal_entry_id`, `submission_id`, `payload`,
+  `created_at`, `acknowledged_at`, `acknowledged_by`, plus an `is_acknowledged`
+  property.
+
+`applied_seq` and `seq` are assigned by the store at write time — the
+authoritative order (D4). They are never reassigned, even after a delete.
+`submitted_at` is the submitter's clock and orders nothing.
+
+### Methods
+
+| Method | Effect |
+| --- | --- |
+| `apply_submission(*, submission_id, project_id, kind, submitted_by, submitted_at, payload)` | **One transaction:** replay check, precondition, effect, record. On replay returns the existing record unchanged and does nothing else. A failed precondition is recorded `rejected` with a reason, never raised. Raises `ValueError` for a payload malformed for its kind, writing nothing. Called by the resident process; outside parts use `amoeba.inbox.submit`. |
+| `submission(submission_id)` | One record, or `None` until applied. |
+| `submissions(project_id, *, outcome=None)` | Records in `applied_seq` order. |
+| `messages(project_id, *, channel, after_seq=0)` | Rows with `seq > after_seq`, ascending. The replay primitive; stable across calls. |
+| `pending_intents(project_id)` | Unacknowledged `intent` rows, ascending. What the Runner consumes. |
+| `acknowledge_message(message_id, *, acknowledged_by)` | Marks an `intent` consumed. Raises `InvalidTransitionError` if it does not exist, is not an intent, or is already acknowledged. |
+
+All reads work through a **read-only** handle, so a consumer following a channel
+needs no write access. `apply_submission` takes plain, already-validated values:
+`amoeba.store` never imports `amoeba.inbox`.
+
+### Security and retention
+
+Submission payloads and message payloads are stored verbatim and shown by
+`amoeba inspect`. **Callers must not place secrets in them.** Records and
+messages are never deleted in this slice.
 
 ## Writer model
 

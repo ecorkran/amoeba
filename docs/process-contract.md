@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: resident-process-and-recovery
 dateCreated: 20260921
-dateUpdated: 20260921
+dateUpdated: 20260923
 status: complete
 ---
 
@@ -64,6 +64,7 @@ The directory holds:
 | `<project>.sqlite3` | One store per project. |
 | `amoeba.lock` | The instance lock. **The truth about liveness.** |
 | `amoeba.pid` | JSON: pid, started-at, version. **Informational only.** |
+| `inbox/` | Submissions from outside the process: `tmp/`, `new/`, `quarantine/`, `failed/`. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
 
 **The lock is the truth; the PID file is a convenience.** The kernel releases an
 advisory `flock` when its holder dies by any means, so a stale lock cannot
@@ -97,6 +98,11 @@ A failure in step 3 or 4 for **any** project aborts the start. The process never
 skips a project and never falls back to another store: running while blind to
 one project is worse than not running.
 
+**Projects can also be opened at runtime** (slice 103): an applied
+`create_project` submission creates the project's store while the process runs,
+through `host.open_project`. A new store's journal is empty, so there is nothing
+to recover, and the gate above is not reopened.
+
 ## The Tenant protocol
 
 Exactly two members:
@@ -115,18 +121,26 @@ Tenants are ticked in registration order. When no tenant reports work, the loop
 waits on the stop event for `idle_interval_seconds` — it does not busy-loop, and
 the wait ends the moment stop is requested.
 
-**Slice 102 ships no tenants.** With zero registered, the process is a correct,
-idle, recoverable host. That is the intended end state of this slice.
+**`amoeba start` registers one tenant, `InboxTenant`, first** (slice 103). It
+drains the inbox — see [`inbox-contract.md`](inbox-contract.md) — at most
+`inbox_batch_size` files per tick, checking `stop_requested` between files.
+Registered first so a backlog that accumulated while the process was down
+drains ahead of any later tenant's work.
 
 What a tenant may use on `host`:
 
 | Member | Meaning |
 | --- | --- |
 | `store_for(project_id)` | The open read-write store for a project. |
-| `project_ids` | Every project this process has open. |
+| `project_ids` | Every project this process has open. **Grows at runtime** — see below. |
+| `open_project(project_id)` | Create-or-open a project's store read-write and add it to the open set. Idempotent. `project_ids` reflects it at once. Raises on an unsafe project id (before any path is computed) or a store that cannot be opened. *(Slice 103.)* |
 | `stop_requested` | Whether shutdown has been requested. **Poll this.** |
 | `request_stop()` | Ask the loop to stop. |
 | `settings` | The `ProcessSettings` this process was built with. |
+
+> **Do not cache `project_ids`.** It is no longer fixed at startup: a project
+> created through the inbox joins it mid-run. Read it each time you need it.
+> The Runner in initiative 120 depends on this.
 
 ### The tenant obligation
 
@@ -280,12 +294,14 @@ provenance and never parsed, ordered, or branched on.
 | `amoeba start` | Foreground. Refuses if the lock is held. Logs a recovery summary per project before entering the loop. |
 | `amoeba stop` | Confirms the lock is held, sends `SIGTERM` to the recorded pid, waits for release. **Never escalates to `SIGKILL`.** |
 | `amoeba status` | `running` (pid, start time, version), `running (pid unknown)`, `stopped (stale pid file)`, or `stopped`. |
-| `amoeba inspect projects` | Project ids with a store in the supervisor directory. |
-| `amoeba inspect nodes\|blocked\|journal --project ID` | Read-only listings. `journal` accepts `--unresolved`. All accept `--json`. |
+| `amoeba inspect projects\|inbox` | Supervisor-level: project ids with a store; inbox files pending, quarantined, or failed. Open no store. |
+| `amoeba inspect nodes\|blocked\|journal\|submissions\|messages --project ID` | Read-only listings. `journal` accepts `--unresolved`; `messages` accepts `--channel`. All accept `--json`. |
+| `amoeba submit create-project\|resolution\|intent ...` | Write one submission to the inbox and print its id. Opens no store; works whether or not the process runs. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
 
 `start` exposes every loop-governing `ProcessSettings` tunable as a flag:
 `--idle-interval`, `--shutdown-grace`, `--clock-tolerance`, `--cf-timeout`,
-`--sq-runs-dir`. `stop` exposes the one tunable it consumes: `--stop-timeout`.
+`--sq-runs-dir`, `--inbox-batch-size`, `--inbox-max-attempts`. `stop` exposes the
+one tunable it consumes: `--stop-timeout`.
 
 ### Exit codes
 
@@ -301,8 +317,9 @@ Every status, and the condition that produces it. Defined once in
 | 4 | `STOP_TIMEOUT` | `stop`: the process did not release the lock before `--stop-timeout`. No `SIGKILL` follows. |
 | 5 | `NO_STOP_TARGET` | `stop`: the lock is held but the PID file is absent or unreadable. **Nothing was signalled.** |
 | 6 | `GRACE_EXPIRED` | `start`: a tenant did not return within `--shutdown-grace`. |
-| 7 | `STARTUP_FAILED` | `start`: a store could not be opened, or recovery could not complete, for any project. |
+| 7 | `STARTUP_FAILED` | `start`: a store could not be opened, or recovery could not complete, for any project. **Also** any store error that stops a running process — including an inbox apply that fails below its attempt limit — since the boundary maps every `StoreError` here. |
 | 8 | `NOT_RUNNING_STATUS` | `status`: the supervisor is not running. Not a failure — it distinguishes running from stopped by exit status alone. |
+| 9 | `SUBMISSION_REFUSED` | `submit`: the submission was invalid or could not be written. Nothing was left in the inbox. *(Slice 103.)* |
 
 ## Inspection
 
@@ -325,8 +342,13 @@ Two parts, both mechanical:
 1. **The instance lock** guarantees at most one resident process per supervisor
    directory.
 2. **A guard test** (`tests/test_writer_guard.py`) walks the AST of every module
-   under `src/amoeba/` and fails if any module other than `process/host.py`
-   calls the read-write `Store.open`.
+   under `src/amoeba/` and fails if any module other than
+   `process/project_stores.py` calls the read-write `Store.open`. *(Slice 103
+   moved read-write opening there from `process/host.py`, which now delegates;
+   the permitted set is still exactly one module.)*
+
+Parts outside the process never write a store: they submit to the inbox, and
+the process applies what they submit. `amoeba.inbox` never imports `Store`.
 
 Stated honestly: this does not stop a third party importing `amoeba.store` and
 writing. Nothing in a library can. It makes the mistake impossible to make *by
@@ -338,7 +360,9 @@ Journal `parameters` and `result` are stored verbatim and are **shown by
 `amoeba inspect`**, including in `--json` output that may be piped into logs or
 tickets.
 
-> **Callers must not place secrets in journal parameters or results.**
+> **Callers must not place secrets in journal parameters or results.** The same
+> holds for inbox submission payloads and message payloads (slice 103), which
+> are stored and shown the same way.
 
 This applies to every caller that issues a journaled command, including the
 Runner in initiative 120. Store a reference — a path, an id, a key name — not

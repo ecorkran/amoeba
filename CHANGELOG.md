@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 103: the durable inbox — `amoeba.inbox.submit()` writes one fsync-durable file whether or not the process runs; the only way a part outside the process contributes state.
+- Slice 103: `InboxTenant`, the first real tenant — applies each submission exactly once per id, quarantines what cannot be attributed, and bounds a failing apply with an on-disk attempt counter that parks the file in `inbox/failed/`.
+- Slice 103: schema version 4 (migration `004`) — `inbox_submissions` and `messages`, with receiver-assigned `applied_seq` / `seq` as the authoritative order, and a backfill of escalations for open human blocks.
+- Slice 103: three submission kinds — `create_project`, `resolution` (targets a blocked state, never redirected to a newer block), and `intent`.
+- Slice 103: the `intent` and `escalation` message channels, with `messages(after_seq=…)` as a replay primitive readable through a read-only handle, plus `pending_intents` / `acknowledge_message` for the Runner.
+- Slice 103: runtime project creation via `host.open_project` — a project created through the inbox is usable at once, without a restart.
+- Slice 103: `amoeba submit create-project|resolution|intent`, with flags derived from each kind's payload model, and exit code `SUBMISSION_REFUSED` (9).
+- Slice 103: `amoeba inspect inbox|submissions|messages`, and `--inbox-batch-size` / `--inbox-max-attempts` on `amoeba start`.
+- Slice 103: `docs/inbox-contract.md`, and a concurrent-submitter load test proving exactly-once across repeated `SIGKILL`s.
 - Slice 102: command journal in the store (migration `003`) — an entry is committed *before* its side effect is issued, so a crash leaves a durable record of what may have been in flight.
 - Slice 102: `journal_issue` / `journal_resolve` / `journal_escalate`, with parameters validated at issue time so an entry can always be reconciled later.
 - Slice 102: `Store.open_read_only` — a genuine SQLite `mode=ro` handle that never migrates and never creates, measured against this project's Python and SQLite build.
@@ -36,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Slice 101: typed failure modes for lock contention, corrupt files, permission errors, and failed commits — none degrading to a default or fallback store.
 - Slice 101: central per-supervisor store path resolution (`AMOEBA_STORE_DIR` → XDG → `~/.config/amoeba`), project-keyed and pure.
 - Slice 101: contract documentation at `docs/store-contract.md`, sufficient to design a consumer without reading the implementation.
+
+### Changed
+
+- Slice 103: a `HUMAN` block now writes an escalation message in the same transaction; `block()` gains an optional `payload`. Every block goes through one internal writer.
+- Slice 103: `journal_escalate` now writes an escalation carrying the journal entry id, including on its already-blocked branch, where it points at the existing open block.
+- Slice 103: `amoeba start` registers `InboxTenant` first, where slice 102 registered no tenants.
+- Slice 103: `host.project_ids` grows at runtime and must not be cached.
+- Slice 103: read-write store opening moved from `process/host.py` to `process/project_stores.py`; the writer guard's one permitted module moved with it.
 
 ### Fixed
 
