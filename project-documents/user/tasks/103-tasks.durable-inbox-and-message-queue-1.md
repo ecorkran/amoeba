@@ -492,12 +492,12 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 - [x] Assert the extra-fields variant parses (unknown fields ignored) while the truncated and wrong-version variants do not
 - [x] Assert `pending()` returns files in drain order and that `quarantined()` and `failed()` surface their sidecar contents
 - [x] Put the shared envelope fixtures in the **root `tests/conftest.py`**, not in `tests/inbox/conftest.py` — Section 6's tenant tests live in `tests/process/` and conftest fixtures only apply downward, so a sibling directory cannot see them
-- [x] Add `__init__.py` to every new test package created in this slice (`tests/store/`, `tests/inbox/`, `tests/process/`, `tests/cli/`) — partial: store/ and inbox/ done; process/ and cli/ get theirs when created in Sections 6–7, matching the one precedent in `tests/load/`. Without it, pytest's import mode fails collection on duplicate test-file basenames
+- [x] Add `__init__.py` to every new test package created in this slice (`tests/store/`, `tests/inbox/`, `tests/process/`, `tests/cli/`) — partial: store/, inbox/, and process/ done; cli/ gets its own in Section 7, matching the one precedent in `tests/load/`. Without it, pytest's import mode fails collection on duplicate test-file basenames
 
 **Success Criteria**:
 - [x] Fixtures derive from real `submit()` output, not hand-written approximations of it
 - [x] Tenant tests in `tests/process/` can use the envelope fixtures
-- [x] Every new test directory has an `__init__.py` — partial: store/ and inbox/ done; process/ and cli/ get theirs when created in Sections 6–7
+- [x] Every new test directory has an `__init__.py` — partial: store/, inbox/, and process/ done; cli/ gets its own in Section 7
 - [x] `uv run pytest` passes
 - [x] Commit after this task, e.g. `feat(inbox): add submit, listings, and envelope models`
 

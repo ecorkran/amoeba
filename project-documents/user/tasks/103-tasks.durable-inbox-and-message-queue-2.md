@@ -6,8 +6,8 @@ lld: user/slices/103-slice.durable-inbox-and-message-queue.md
 dependencies: [101, 102]
 projectState: Continuation of 103-tasks.durable-inbox-and-message-queue-1.md. Sections 1-5 have landed ProjectStores, migration 004, the one block writer with D3 escalations, apply_submission, and the amoeba.inbox package.
 dateCreated: 20260922
-dateUpdated: 20260922
-status: not_started
+dateUpdated: 20260923
+status: in_progress
 ---
 
 ## Context Summary
@@ -29,20 +29,20 @@ status: not_started
 **Objective**: Add idempotent create-or-open to `ProjectStores` and expose it on the host, per the LLD's Host addition table.
 
 **Steps**:
-- [ ] Add `open_project(project_id) -> Store` to `ProjectStores`: create-or-open the project's store read-write and add it to the open set; **idempotent**, so calling it for an already-open project returns the open handle
-- [ ] Let `Store.open` migrate a new store to the current schema as usual; a new store's journal is empty, so there is nothing to recover
-- [ ] Ensure `project_ids` reflects a newly opened project **immediately**
-- [ ] Expose `open_project` on the host, delegating to `ProjectStores`
-- [ ] Validate the project id with the one rule in `amoeba.store.paths` **before** it reaches any filesystem path computation
-- [ ] Let failures raise — the tenant, not this method, decides what a failure means
+- [x] Add `open_project(project_id) -> Store` to `ProjectStores`: create-or-open the project's store read-write and add it to the open set; **idempotent**, so calling it for an already-open project returns the open handle
+- [x] Let `Store.open` migrate a new store to the current schema as usual; a new store's journal is empty, so there is nothing to recover
+- [x] Ensure `project_ids` reflects a newly opened project **immediately**
+- [x] Expose `open_project` on the host, delegating to `ProjectStores`
+- [x] Validate the project id with the one rule in `amoeba.store.paths` **before** it reaches any filesystem path computation
+- [x] Let failures raise — the tenant, not this method, decides what a failure means
 
 **Success Criteria**:
-- [ ] `open_project` on an existing project is a no-op returning the open handle
-- [ ] `host.project_ids` grows at runtime and includes a project created after startup
-- [ ] An invalid project id is refused before any path is computed and no store file is created anywhere
-- [ ] The writer guard's permitted set is still exactly `{process/project_stores.py}`
+- [x] `open_project` on an existing project is a no-op returning the open handle
+- [x] `host.project_ids` grows at runtime and includes a project created after startup
+- [x] An invalid project id is refused before any path is computed and no store file is created anywhere
+- [x] The writer guard's permitted set is still exactly `{process/project_stores.py}`
 
-- [ ] Commit after this task, e.g. `feat(process): add open_project for runtime creation`
+- [x] Commit after this task, e.g. `feat(process): add open_project for runtime creation`
 
 **Files to Modify**: `src/amoeba/process/project_stores.py`, `src/amoeba/process/host.py`
 
@@ -55,15 +55,15 @@ status: not_started
 **Objective**: Cover runtime creation through `tests/host_harness.py`, the harness slice 102 established.
 
 **Steps**:
-- [ ] Assert a project created at runtime is immediately in `project_ids` and has a usable store
-- [ ] Assert `open_project` is idempotent across repeated calls
-- [ ] Assert a store created at runtime is at schema version 4
-- [ ] Assert an invalid project id raises and creates nothing on disk
+- [x] Assert a project created at runtime is immediately in `project_ids` and has a usable store
+- [x] Assert `open_project` is idempotent across repeated calls
+- [x] Assert a store created at runtime is at schema version 4
+- [x] Assert an invalid project id raises and creates nothing on disk
 
 **Success Criteria**:
-- [ ] All four assertions pass against the real host, not a mock
-- [ ] `uv run pytest` passes
-- [ ] Commit after this task, e.g. `feat(process): add runtime project creation`
+- [x] All four assertions pass against the real host, not a mock
+- [x] `uv run pytest` passes
+- [x] Commit after this task, e.g. `feat(process): add runtime project creation`
 
 **Files to Modify**: the host test module
 
@@ -76,17 +76,19 @@ status: not_started
 **Objective**: Add `inbox_batch_size` and `inbox_max_attempts` to `ProcessSettings`, each with a `start` flag like every other tunable.
 
 **Steps**:
-- [ ] Add both settings to `ProcessSettings` following the existing convention
-- [ ] Add the corresponding `amoeba start` flags
-- [ ] Choose a **small** default for `inbox_max_attempts` — per the LLD the point is to bound the loop, not to retry a corrupt store into working
-- [ ] Centralize both defaults in the settings definition; do not hard-code either value at a call site
+- [x] Add both settings to `ProcessSettings` following the existing convention
+- [x] Add the corresponding `amoeba start` flags
+- [x] Choose a **small** default for `inbox_max_attempts` — per the LLD the point is to bound the loop, not to retry a corrupt store into working
+- [x] Centralize both defaults in the settings definition; do not hard-code either value at a call site
+
+> Implementation note (20260923): defaults are inbox_batch_size=100 and inbox_max_attempts=3 (the LLD specifies only "small" for the latter). Both --inbox-batch-size and --inbox-max-attempts refuse values below 1.
 
 **Success Criteria**:
-- [ ] Both settings are settable by flag and have centralized defaults
-- [ ] `grep` finds neither default value anywhere outside the settings module
-- [ ] `uv run pyright` clean
+- [x] Both settings are settable by flag and have centralized defaults
+- [x] `grep` finds neither default value anywhere outside the settings module
+- [x] `uv run pyright` clean
 
-- [ ] Commit after this task, e.g. `feat(process): add inbox batch size and max attempts settings`
+- [x] Commit after this task, e.g. `feat(process): add inbox batch size and max attempts settings`
 
 **Files to Modify**: the `ProcessSettings` module, `src/amoeba/cli/lifecycle.py`
 
@@ -99,21 +101,23 @@ status: not_started
 **Objective**: Implement the first real `Tenant`, per the LLD's Data Flow "Apply" block.
 
 **Steps**:
-- [ ] Create `src/amoeba/process/inbox_tenant.py` implementing the `Tenant` protocol (`name`, `tick(host) -> bool`)
-- [ ] Handle at most `inbox_batch_size` files per tick, in filename (drain) order, checking `stop_requested` **between files**
-- [ ] For a `create_project` envelope, call `host.open_project` before resolving the store
-- [ ] Delete the file **after** the transaction commits — never before; the crash table in the LLD depends on this order
-- [ ] Delete any `.attempts.json` counter along with the file on success
-- [ ] Return whether any file was handled
-- [ ] Log a WARNING when a submission id is reused with different content — first wins, and it is not an error (D2)
-- [ ] Add a smoke test covering **all three** of this task's claims before moving on: one `intent` submission applies and its file is deleted; a tick with more files than `inbox_batch_size` handles exactly that many; a tick with `stop_requested` set stops early. The full branch coverage stays in Task 6.8, but these are this task's own success criteria and should not go four tasks unverified
+- [x] Create `src/amoeba/process/inbox_tenant.py` implementing the `Tenant` protocol (`name`, `tick(host) -> bool`)
+- [x] Handle at most `inbox_batch_size` files per tick, in filename (drain) order, checking `stop_requested` **between files**
+- [x] For a `create_project` envelope, call `host.open_project` before resolving the store
+- [x] Delete the file **after** the transaction commits — never before; the crash table in the LLD depends on this order
+- [x] Delete any `.attempts.json` counter along with the file on success
+- [x] Return whether any file was handled
+- [x] Log a WARNING when a submission id is reused with different content — first wins, and it is not an error (D2)
+- [x] Add a smoke test covering **all three** of this task's claims before moving on: one `intent` submission applies and its file is deleted; a tick with more files than `inbox_batch_size` handles exactly that many; a tick with `stop_requested` set stops early. The full branch coverage stays in Task 6.8, but these are this task's own success criteria and should not go four tasks unverified
+
+> Implementation note (20260923): Tasks 6.4–6.6 landed as one commit (fcb0813) — split, the 6.4 version would have had to crash on a bad file. The tenant types its host as a small InboxHost protocol that ResidentProcess satisfies; in-process tests drive it through tests/local_host_harness.py (real ProjectStores, no process).
 
 **Success Criteria**:
-- [ ] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set, **proven by the smoke test**
-- [ ] The file delete follows the commit, so a crash between them leaves a recorded submission and a file that is a no-op on restart
-- [ ] The tenant is the only module importing both `amoeba.inbox` and `amoeba.store` write paths
-- [ ] `uv run pyright` clean
-- [ ] Commit after this task, e.g. `feat(process): add inbox apply loop`
+- [x] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set, **proven by the smoke test**
+- [x] The file delete follows the commit, so a crash between them leaves a recorded submission and a file that is a no-op on restart
+- [x] The tenant is the only module importing both `amoeba.inbox` and `amoeba.store` write paths
+- [x] `uv run pyright` clean
+- [x] Commit after this task, e.g. `feat(process): add inbox apply loop`
 
 **Files to Create**: `src/amoeba/process/inbox_tenant.py`, `tests/process/test_inbox_tenant.py`
 
@@ -126,18 +130,18 @@ status: not_started
 **Objective**: Route every submission that cannot be attributed to an open store into `quarantine/` with its reason, never raising.
 
 **Steps**:
-- [ ] Quarantine with the matching `QuarantineReason` for each member of the closed vocabulary: unparseable envelope, unknown envelope version, unknown kind, invalid project id, invalid payload, and no store for the project
-- [ ] Move the file and write a `.reason.json` sidecar; **never delete content**
-- [ ] Continue to the next file after quarantining — a bad submission must not block later valid ones in the same tick
-- [ ] Do **not** convert a `StoreError` into a quarantine: quarantine means "this submission is bad", never "the store is unwell"
-- [ ] Quarantine a submission that races ahead of its project's creation rather than holding it, per the LLD's Special Considerations
+- [x] Quarantine with the matching `QuarantineReason` for each member of the closed vocabulary: unparseable envelope, unknown envelope version, unknown kind, invalid project id, invalid payload, and no store for the project
+- [x] Move the file and write a `.reason.json` sidecar; **never delete content**
+- [x] Continue to the next file after quarantining — a bad submission must not block later valid ones in the same tick
+- [x] Do **not** convert a `StoreError` into a quarantine: quarantine means "this submission is bad", never "the store is unwell"
+- [x] Quarantine a submission that races ahead of its project's creation rather than holding it, per the LLD's Special Considerations
 
 **Success Criteria**:
-- [ ] Each of the six quarantine reasons is reachable and produces its sidecar
-- [ ] Later valid submissions in the same tick still apply after a quarantine
-- [ ] No `StoreError` path leads to quarantine
+- [x] Each of the six quarantine reasons is reachable and produces its sidecar
+- [x] Later valid submissions in the same tick still apply after a quarantine
+- [x] No `StoreError` path leads to quarantine
 
-- [ ] Commit after this task, e.g. `feat(process): add the quarantine ladder`
+- [x] Commit after this task, e.g. `feat(process): add the quarantine ladder`
 
 **Files to Modify**: `src/amoeba/process/inbox_tenant.py`
 
@@ -150,19 +154,19 @@ status: not_started
 **Objective**: Implement the design review's F001 resolution, per the LLD's "A failing apply stops the process, but not forever."
 
 **Steps**:
-- [ ] On an unexpected exception from `open_project` or `apply_submission`, read the file's `.attempts.json` (absent means zero) and increment
-- [ ] Below `inbox_max_attempts`: write the counter beside the file in `new/` using the **same tmp-and-rename** `submit()` uses, log with `logger.exception`, and **re-raise** so the process stops — the file stays in `new/`
-- [ ] At `inbox_max_attempts`: move the file **and its counter** to `inbox/failed/`, log at ERROR, and **continue to the next file** instead of re-raising
-- [ ] Record `{attempts, last_error, last_failed_at}` in the counter so the failure is inspectable once the process is running again
-- [ ] Ensure a file moved back from `failed/` to `new/` **resumes at its recorded count** rather than starting over
+- [x] On an unexpected exception from `open_project` or `apply_submission`, read the file's `.attempts.json` (absent means zero) and increment
+- [x] Below `inbox_max_attempts`: write the counter beside the file in `new/` using the **same tmp-and-rename** `submit()` uses, log with `logger.exception`, and **re-raise** so the process stops — the file stays in `new/`
+- [x] At `inbox_max_attempts`: move the file **and its counter** to `inbox/failed/`, log at ERROR, and **continue to the next file** instead of re-raising
+- [x] Record `{attempts, last_error, last_failed_at}` in the counter so the failure is inspectable once the process is running again
+- [x] Ensure a file moved back from `failed/` to `new/` **resumes at its recorded count** rather than starting over
 
 **Success Criteria**:
-- [ ] The counter survives the crash that wrote it, because it is on disk rather than in memory or in the store
-- [ ] The first `inbox_max_attempts - 1` failures still stop the process, so an unwell store stays loud
-- [ ] After parking, the tick continues and the process stays up
-- [ ] A requeued file resumes at its old count rather than buying a fresh set of attempts
+- [x] The counter survives the crash that wrote it, because it is on disk rather than in memory or in the store
+- [x] The first `inbox_max_attempts - 1` failures still stop the process, so an unwell store stays loud
+- [x] After parking, the tick continues and the process stays up
+- [x] A requeued file resumes at its old count rather than buying a fresh set of attempts
 
-- [ ] Commit after this task, e.g. `feat(process): bound apply failures and park in failed`
+- [x] Commit after this task, e.g. `feat(process): bound apply failures and park in failed`
 
 **Files to Modify**: `src/amoeba/process/inbox_tenant.py`, `src/amoeba/inbox/layout.py`
 
@@ -175,14 +179,14 @@ status: not_started
 **Objective**: Wire the tenant into the lifecycle so a backlog drains ahead of any later tenant's work.
 
 **Steps**:
-- [ ] Register `InboxTenant` in `cli/lifecycle.py` as the **first** tenant — tenants tick in registration order, and the LLD requires the inbox to drain first
-- [ ] Confirm `amoeba start` changes from zero tenants to exactly one
+- [x] Register `InboxTenant` in `cli/lifecycle.py` as the **first** tenant — tenants tick in registration order, and the LLD requires the inbox to drain first
+- [x] Confirm `amoeba start` changes from zero tenants to exactly one
 
 **Success Criteria**:
-- [ ] `amoeba start` registers `InboxTenant` first
-- [ ] Slice 102's lifecycle tests pass, updated only where they asserted zero tenants
+- [x] `amoeba start` registers `InboxTenant` first
+- [x] Slice 102's lifecycle tests pass, updated only where they asserted zero tenants
 
-- [ ] Commit after this task, e.g. `feat(cli): register InboxTenant first at start`
+- [x] Commit after this task, e.g. `feat(cli): register InboxTenant first at start`
 
 **Files to Modify**: `src/amoeba/cli/lifecycle.py`
 
@@ -195,24 +199,26 @@ status: not_started
 **Objective**: Cover the apply loop, the crash table, the quarantine ladder, and the attempt counter through `tests/host_harness.py`.
 
 **Steps**:
-- [ ] Assert a submission made while the process is **stopped** is applied on start and its file is gone
-- [ ] Assert a `create_project` applied by a **running** process creates the store, and a later submission for that project applies **without a restart** — in the same tick and in a later one
-- [ ] Assert the crash-table row that no other step reaches: a process killed **between store creation and the record commit**. Create the store via `open_project`, close without applying, leave the submission file in `new/`, restart, and assert the store is discovered and opened, the record is written, and the effect happens exactly once. Task 9.1's randomized kills only hit this window by chance, and Task 10.3's `kill -9` lands after the submission has already applied
-- [ ] Assert replay: a file restored to `new/` after apply changes nothing and leaves exactly one record
-- [ ] Assert D2's different-content case explicitly: a second submission reusing an existing id with **different** content is a no-op that leaves the first record intact and logs a WARNING — not an error, since the second file may be a legitimate retry with a differing timestamp
-- [ ] Assert each quarantine reason lands in `quarantine/` with its sidecar and that later valid submissions in the same tick still apply
-- [ ] Assert the batch-size limit and early stop on `stop_requested`
-- [ ] Assert the pre-park half of the F001 path: a submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts, with the counter incrementing on disk across those starts
-- [ ] Assert the **park transition itself** as its own step — this is the rung that separates this design from a plain crash-stop, so do not fold it into the step above. On the `inbox_max_attempts`-th failure: the file **and** its counter move to `inbox/failed/`, the sidecar carries `{attempts, last_error, last_failed_at}` with the real exception text, an ERROR is logged, the tick **continues to the next file** rather than re-raising, and the process stays up
-- [ ] Assert a file moved from `failed/` back to `new/` resumes at its recorded count and is deleted with its counter once it applies
-- [ ] Assert Task 6.5's negative criterion, which nothing else tests: construct a **sick store** and confirm the submission takes the attempt-counter path and is **never** quarantined. The LLD treats the `StoreError`-versus-quarantine line as the only thing allowed to stop the queue, so a silent regression here is invisible without this test
-- [ ] Assert the tenant actually ticks inside a **running `amoeba start`**, not only through the harness — a submission dropped into `new/` while the real process runs is applied without further intervention
+- [x] Assert a submission made while the process is **stopped** is applied on start and its file is gone
+- [x] Assert a `create_project` applied by a **running** process creates the store, and a later submission for that project applies **without a restart** — in the same tick and in a later one
+- [x] Assert the crash-table row that no other step reaches: a process killed **between store creation and the record commit**. Create the store via `open_project`, close without applying, leave the submission file in `new/`, restart, and assert the store is discovered and opened, the record is written, and the effect happens exactly once. Task 9.1's randomized kills only hit this window by chance, and Task 10.3's `kill -9` lands after the submission has already applied
+- [x] Assert replay: a file restored to `new/` after apply changes nothing and leaves exactly one record
+- [x] Assert D2's different-content case explicitly: a second submission reusing an existing id with **different** content is a no-op that leaves the first record intact and logs a WARNING — not an error, since the second file may be a legitimate retry with a differing timestamp
+- [x] Assert each quarantine reason lands in `quarantine/` with its sidecar and that later valid submissions in the same tick still apply
+- [x] Assert the batch-size limit and early stop on `stop_requested`
+- [x] Assert the pre-park half of the F001 path: a submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts, with the counter incrementing on disk across those starts
+- [x] Assert the **park transition itself** as its own step — this is the rung that separates this design from a plain crash-stop, so do not fold it into the step above. On the `inbox_max_attempts`-th failure: the file **and** its counter move to `inbox/failed/`, the sidecar carries `{attempts, last_error, last_failed_at}` with the real exception text, an ERROR is logged, the tick **continues to the next file** rather than re-raising, and the process stays up
+- [x] Assert a file moved from `failed/` back to `new/` resumes at its recorded count and is deleted with its counter once it applies
+- [x] Assert Task 6.5's negative criterion, which nothing else tests: construct a **sick store** and confirm the submission takes the attempt-counter path and is **never** quarantined. The LLD treats the `StoreError`-versus-quarantine line as the only thing allowed to stop the queue, so a silent regression here is invisible without this test
+- [x] Assert the tenant actually ticks inside a **running `amoeba start`**, not only through the harness — a submission dropped into `new/` while the real process runs is applied without further intervention
+
+> Implementation note (20260923): real-process tests live in tests/process/test_inbox_process.py. The sick store is a directory where its .sqlite3 file belongs. Open item for the PM: the CLI boundary maps any StoreError to ExitCode.STARTUP_FAILED (7), so a tenant's mid-run store failure exits as "startup failed"; the test asserts only a non-zero exit.
 
 **Success Criteria**:
-- [ ] Every functional criterion in the LLD touching the tenant has a test here
-- [ ] The F001 park is proven to keep the process up
-- [ ] `uv run pytest` passes
-- [ ] Commit after this task, e.g. `feat(process): add InboxTenant apply loop`
+- [x] Every functional criterion in the LLD touching the tenant has a test here
+- [x] The F001 park is proven to keep the process up
+- [x] `uv run pytest` passes
+- [x] Commit after this task, e.g. `feat(process): add InboxTenant apply loop`
 
 **Files to Modify**: `tests/process/test_inbox_tenant.py` — created by Task 6.4 for its smoke test; this task extends it
 
