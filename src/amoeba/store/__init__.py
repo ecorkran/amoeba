@@ -16,6 +16,14 @@ and deliberately not re-exported.
 
 from __future__ import annotations
 
+from amoeba.store.inbox_models import (
+    Channel,
+    Message,
+    QuarantineReason,
+    SubmissionKind,
+    SubmissionOutcome,
+    SubmissionRecord,
+)
 from amoeba.store.journal_models import (
     REQUIRED_PARAMETER_KEYS,
     CommandKind,
@@ -53,19 +61,25 @@ __all__ = [
     "BLOCKED_STATUSES",
     "REQUIRED_PARAMETER_KEYS",
     "BlockedKind",
+    "Channel",
     "CommandKind",
     "JournalOutcome",
     "JournalResolver",
     "NodeKind",
     "NodeStatus",
+    "QuarantineReason",
+    "SubmissionKind",
+    "SubmissionOutcome",
     # Transfer objects
     "BlockedNode",
     "BlockedState",
     "CFReference",
     "JournalEntry",
+    "Message",
     "Node",
     "Resolution",
     "SQReference",
+    "SubmissionRecord",
     # The store
     "Store",
     # Exceptions

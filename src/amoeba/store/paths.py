@@ -60,6 +60,41 @@ def store_dir(env: dict[str, str] | None = None) -> Path:
     return DEFAULT_STORE_DIR
 
 
+def validate_path_component(value: str, *, name: str) -> None:
+    """Check that a value is safe to become part of a filename.
+
+    The one definition of the rule, for every identifier that ends up in a
+    path: project ids, which name store files, and submission ids, which name
+    inbox files.
+
+    Args:
+        value: The identifier to check.
+        name: What it is, for the error message.
+
+    Raises:
+        ValueError: If ``value`` is empty, contains a path separator, or is
+            ``.`` or ``..`` — any of which would let it escape its directory.
+    """
+    if not value:
+        raise ValueError(f"{name} must be non-empty")
+    if os.sep in value or (os.altsep is not None and os.altsep in value):
+        raise ValueError(f"{name} must not contain a path separator: {value!r}")
+    if value in {os.curdir, os.pardir}:
+        raise ValueError(f"{name} must not be a path component: {value!r}")
+
+
+def validate_project_id(project_id: str) -> None:
+    """Check that a project id is safe to become a store filename.
+
+    ``store_path`` applies it, and so do ``amoeba.inbox.submit`` and runtime
+    project creation — both of which validate an id without computing a path.
+
+    Raises:
+        ValueError: If ``project_id`` fails :func:`validate_path_component`.
+    """
+    validate_path_component(project_id, name="project_id")
+
+
 def store_path(project_id: str, env: dict[str, str] | None = None) -> Path:
     """Resolve the store file path for a project.
 
@@ -67,23 +102,14 @@ def store_path(project_id: str, env: dict[str, str] | None = None) -> Path:
     file named for that project under the resolved store directory.
 
     Args:
-        project_id: The project scope key. Must be non-empty.
+        project_id: The project scope key. Must pass :func:`validate_project_id`.
         env: Environment mapping to read. Defaults to ``os.environ``.
 
     Returns:
         The resolved file path. It is not created and may not exist.
 
     Raises:
-        ValueError: If ``project_id`` is empty or contains a path separator,
-            which would let a project id escape the store directory.
+        ValueError: If ``project_id`` fails :func:`validate_project_id`.
     """
-    if not project_id:
-        raise ValueError("project_id must be non-empty")
-    if os.sep in project_id or (os.altsep is not None and os.altsep in project_id):
-        raise ValueError(
-            f"project_id must not contain a path separator: {project_id!r}"
-        )
-    if project_id in {os.curdir, os.pardir}:
-        raise ValueError(f"project_id must not be a path component: {project_id!r}")
-
+    validate_project_id(project_id)
     return store_dir(env) / f"{project_id}{STORE_FILE_SUFFIX}"

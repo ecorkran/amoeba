@@ -20,19 +20,25 @@ EXPECTED_EXPORTS = {
     "BLOCKED_STATUSES",
     "REQUIRED_PARAMETER_KEYS",
     "BlockedKind",
+    "Channel",
     "CommandKind",
     "JournalOutcome",
     "JournalResolver",
     "NodeKind",
     "NodeStatus",
+    "QuarantineReason",
+    "SubmissionKind",
+    "SubmissionOutcome",
     # Transfer objects
     "BlockedNode",
     "BlockedState",
     "CFReference",
     "JournalEntry",
+    "Message",
     "Node",
     "Resolution",
     "SQReference",
+    "SubmissionRecord",
     # The store
     "Store",
     # Exceptions
@@ -51,11 +57,14 @@ EXPECTED_EXPORTS = {
 INTERNAL_MODULES = {
     "sql",
     "sql_journal",
+    "sql_inbox",
     "mapping",
     "mapping_journal",
+    "mapping_inbox",
     "migrations",
     "paths",
     "_base",
+    "_block_writer",
 }
 
 #: Store methods a downstream author codes against, per the API contract.
@@ -84,6 +93,13 @@ CONTRACT_METHODS = {
     "journal_entry",
     "journal_entries",
     "unresolved_journal_entries",
+    # The inbox record and the message queue, added by slice 103.
+    "apply_submission",
+    "submission",
+    "submissions",
+    "messages",
+    "pending_intents",
+    "acknowledge_message",
 }
 
 
