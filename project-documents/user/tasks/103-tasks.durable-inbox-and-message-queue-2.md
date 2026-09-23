@@ -356,18 +356,20 @@ status: in_progress
 **Objective**: Prove exactly-once under concurrency and repeated kills, per the LLD's Implementation Notes item 9.
 
 **Steps**:
-- [ ] Run several submitter **processes**, each submitting a few hundred `intent` submissions to projects created **through the inbox during the run**
-- [ ] Deliberately resubmit a fraction under the **same id** to exercise D2
-- [ ] `SIGKILL` and restart the resident process at random points throughout
-- [ ] Assert: every distinct id has exactly one record **and** exactly one message; `applied_seq` has no duplicates; `inbox/new/` drains to empty; no `tmp/` file is ever applied
-- [ ] Place the test in the existing `tests/load/` tier
+- [x] Run several submitter **processes**, each submitting a few hundred `intent` submissions to projects created **through the inbox during the run**
+- [x] Deliberately resubmit a fraction under the **same id** to exercise D2
+- [x] `SIGKILL` and restart the resident process at random points throughout
+- [x] Assert: every distinct id has exactly one record **and** exactly one message; `applied_seq` has no duplicates; `inbox/new/` drains to empty; no `tmp/` file is ever applied
+- [x] Place the test in the existing `tests/load/` tier
+
+> Implementation note (20260923): 4 submitters x 2000 intents; kills continue through the drain until 10 have landed. Submitter output goes to files — undrained pipes deadlocked earlier drafts — and the kill window's floor (0.15 s) sits above measured startup (~0.09 s) so restarts do not starve. The "resident runs as real amoeba start" choice means the tenant is exercised exactly as shipped.
 
 **Success Criteria**:
-- [ ] The test kills and restarts the process mid-run and still asserts exactly-once per id
-- [ ] Projects are created through the inbox during the run, exercising runtime creation under load
-- [ ] `uv run pytest tests/load` passes
+- [x] The test kills and restarts the process mid-run and still asserts exactly-once per id
+- [x] Projects are created through the inbox during the run, exercising runtime creation under load
+- [x] `uv run pytest tests/load` passes
 
-- [ ] Commit after this task, e.g. `test: add concurrent submitter load test`
+- [x] Commit after this task, e.g. `test: add concurrent submitter load test`
 
 **Files to Create**: `tests/load/test_inbox_concurrent.py`
 
@@ -380,14 +382,16 @@ status: in_progress
 **Objective**: Follow slice 102's measure-first rule rather than guessing a threshold.
 
 **Steps**:
-- [ ] Measure the observed drain time first
-- [ ] Assert at roughly **twice** the observation
-- [ ] Record the measured number in the test as a comment, per slice 102's precedent
+- [x] Measure the observed drain time first
+- [x] Assert at roughly **twice** the observation
+- [x] Record the measured number in the test as a comment, per slice 102's precedent
+
+> Implementation note (20260923): measured final drain 2.945–3.196 s for ~6,100–6,330 files over 10 runs (~2,000 files/s); bound asserted at 6.5 s; recorded in the test's module docstring.
 
 **Success Criteria**:
-- [ ] The threshold is derived from a recorded measurement, not chosen arbitrarily
-- [ ] The recorded number is present in the test
-- [ ] Commit after this task, e.g. `test: add concurrent submitter load test`
+- [x] The threshold is derived from a recorded measurement, not chosen arbitrarily
+- [x] The recorded number is present in the test
+- [x] Commit after this task, e.g. `test: add concurrent submitter load test`
 
 **Files to Modify**: `tests/load/test_inbox_concurrent.py`
 
