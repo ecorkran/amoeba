@@ -158,10 +158,10 @@ class JournalOperations(BlockWriter):
         does. This is what recovery calls when it cannot determine whether a
         command reached the external system.
 
-        A node that is *already* blocked is handled as an explicit branch — the
-        entry is marked and no second blocked state is written. The node is
-        already stopped, and the entry remains visible through
-        ``amoeba inspect journal``.
+        Both branches write exactly one ``escalation`` message carrying the
+        entry id (D3). A node that is *already* blocked is handled as an
+        explicit branch: no second blocked state is written, and the message
+        points at the node's existing open blocked state, whatever its kind.
 
         Args:
             entry_id: The entry to escalate.
@@ -205,15 +205,23 @@ class JournalOperations(BlockWriter):
                     f"journal entry {entry_id!r} does not exist or is already resolved"
                 )
 
-            if not already_blocked:
-                # Through the one block writer, inside this transaction, so the
-                # block and the outcome cannot land separately.
+            # Through the one block writer, inside this transaction, so the
+            # outcome, any block, and the escalation cannot land separately.
+            if already_blocked:
+                self._escalate_existing_block(
+                    entry.node_id,
+                    project_id=entry.project_id,
+                    journal_entry_id=entry.id,
+                    timestamp=timestamp,
+                )
+            else:
                 self._write_block(
                     entry.node_id,
                     project_id=entry.project_id,
                     kind=BlockedKind.HUMAN,
                     context=f"journal entry {entry.id} ({entry.kind.value}): {reason}",
                     timestamp=timestamp,
+                    journal_entry_id=entry.id,
                 )
 
         return self._require_entry(entry_id)

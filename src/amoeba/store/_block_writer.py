@@ -18,7 +18,11 @@ from collections.abc import Mapping
 from amoeba.store import sql, sql_inbox
 from amoeba.store._base import StoreBase, new_id
 from amoeba.store.inbox_models import Channel
-from amoeba.store.models import BLOCKED_KIND_TO_STATUS, BlockedKind
+from amoeba.store.models import (
+    BLOCKED_KIND_TO_STATUS,
+    BlockedKind,
+    StoreIntegrityError,
+)
 
 #: The blocker kinds that raise an escalation message. Only a human has a
 #: channel; a judge or a Squadron checkpoint is resolved by the machinery that
@@ -38,6 +42,7 @@ class BlockWriter(StoreBase):
         context: str,
         timestamp: str,
         payload: Mapping[str, object] | None = None,
+        journal_entry_id: str | None = None,
     ) -> str:
         """Write one blocked state, set the node's status, and escalate.
 
@@ -53,6 +58,7 @@ class BlockWriter(StoreBase):
             timestamp: The instant, already rendered for storage.
             payload: Opaque data for whoever resolves the block. Stored on the
                 escalation row; ignored for kinds that do not escalate.
+            journal_entry_id: Set when recovery raised the block.
 
         Returns:
             The new blocked state's id.
@@ -73,7 +79,45 @@ class BlockWriter(StoreBase):
                 blocked_state_id=blocked_state_id,
                 timestamp=timestamp,
                 payload=payload,
+                journal_entry_id=journal_entry_id,
             )
+        return blocked_state_id
+
+    def _escalate_existing_block(
+        self,
+        node_id: str,
+        *,
+        project_id: str,
+        journal_entry_id: str,
+        timestamp: str,
+    ) -> str:
+        """Escalate against a node's **existing** open block, writing no block.
+
+        Recovery's already-blocked branch: the node is stopped already, so no
+        second block is written, but whatever it is blocked on — human or not —
+        a human must now also hear that a command's outcome is unknown.
+
+        Returns:
+            The existing open blocked state's id, which the row points at.
+
+        Raises:
+            StoreIntegrityError: If the node has no open blocked state, which
+                its blocked status says it must. Raised inside the caller's
+                transaction, so nothing lands.
+        """
+        row = self._execute(sql.SELECT_OPEN_BLOCKED_STATE, (node_id,)).fetchone()
+        if row is None:
+            raise StoreIntegrityError(
+                f"node {node_id!r} is blocked but has no open blocked state"
+            )
+        blocked_state_id = str(row[0])
+        self._write_escalation(
+            node_id,
+            project_id=project_id,
+            blocked_state_id=blocked_state_id,
+            timestamp=timestamp,
+            journal_entry_id=journal_entry_id,
+        )
         return blocked_state_id
 
     def _write_escalation(
@@ -84,6 +128,7 @@ class BlockWriter(StoreBase):
         blocked_state_id: str,
         timestamp: str,
         payload: Mapping[str, object] | None = None,
+        journal_entry_id: str | None = None,
     ) -> None:
         """Write one ``escalation`` row. Inside the caller's transaction."""
         self._execute(
@@ -94,7 +139,7 @@ class BlockWriter(StoreBase):
                 Channel.ESCALATION.value,
                 node_id,
                 blocked_state_id,
-                None,
+                journal_entry_id,
                 None,
                 None if payload is None else json.dumps(dict(payload)),
                 timestamp,

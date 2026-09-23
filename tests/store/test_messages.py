@@ -15,6 +15,7 @@ import pytest
 
 from amoeba.store import sql_inbox
 from amoeba.store.inbox_models import Channel
+from amoeba.store.journal_models import CommandKind
 from amoeba.store.models import BlockedKind, InvalidTransitionError, NodeKind
 from amoeba.store.store import Store
 
@@ -205,3 +206,58 @@ def test_acknowledging_an_unknown_message_raises(store_file: Path) -> None:
     with Store.open(store_file) as store:
         with pytest.raises(InvalidTransitionError):
             store.acknowledge_message("no-such-message", acknowledged_by="runner")
+
+
+# --------------------------------------------------------------------------
+# D3 on recovery's path: journal_escalate
+# --------------------------------------------------------------------------
+
+
+def _issue(store: Store, node_id: str) -> str:
+    return store.journal_issue(
+        node_id,
+        kind=CommandKind.SQ_RUN,
+        parameters={"pipeline": "review", "params": {}},
+    ).id
+
+
+def test_escalating_an_unblocked_node_escalates_with_the_entry(
+    store_file: Path,
+) -> None:
+    with Store.open(store_file) as store:
+        node_id = _make_node(store)
+        entry_id = _issue(store, node_id)
+
+        store.journal_escalate(entry_id, reason="lost track")
+
+        block = store.blocked_state_for(node_id)
+        [escalation] = store.messages(PROJECT, channel=Channel.ESCALATION)
+
+    assert block is not None
+    assert block.kind is BlockedKind.HUMAN
+    assert escalation.blocked_state_id == block.id
+    assert escalation.journal_entry_id == entry_id
+
+
+@pytest.mark.parametrize("existing_kind", [BlockedKind.HUMAN, BlockedKind.JUDGE])
+def test_escalating_an_already_blocked_node_points_at_the_existing_block(
+    store_file: Path, existing_kind: BlockedKind
+) -> None:
+    """No second block; one new escalation, against the block already there."""
+    with Store.open(store_file) as store:
+        node_id = _make_node(store)
+        entry_id = _issue(store, node_id)
+        existing = store.block(node_id, kind=existing_kind, context="already")
+        before = store.messages(PROJECT, channel=Channel.ESCALATION)
+
+        store.journal_escalate(entry_id, reason="lost track")
+
+        after = store.messages(PROJECT, channel=Channel.ESCALATION)
+        blocks = list(store.all_blocked_states(node_id))
+
+    assert [block.id for block in blocks] == [existing.id]
+
+    [raised] = after[len(before) :]
+    assert raised.blocked_state_id == existing.id
+    assert raised.journal_entry_id == entry_id
+    assert raised.node_id == node_id
