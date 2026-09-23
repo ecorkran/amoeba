@@ -233,17 +233,19 @@ status: in_progress
 **Objective**: Add the operator- and bridge-usable writer, per the LLD's CLI table.
 
 **Steps**:
-- [ ] Create `src/amoeba/cli/submit.py` with `create-project`, `resolution`, and `intent` subcommands taking the flags the LLD's CLI table names, each printing the submission id
-- [ ] Derive subcommand names **from `SubmissionKind`** — never the reverse, and never a hand-maintained second list
-- [ ] Call `amoeba.inbox.submit()`; open no store
-- [ ] Follow slice 102's CLI process-boundary and `ExitCode` conventions
+- [x] Create `src/amoeba/cli/submit.py` with `create-project`, `resolution`, and `intent` subcommands taking the flags the LLD's CLI table names, each printing the submission id
+- [x] Derive subcommand names **from `SubmissionKind`** — never the reverse, and never a hand-maintained second list
+- [x] Call `amoeba.inbox.submit()`; open no store
+- [x] Follow slice 102's CLI process-boundary and `ExitCode` conventions
+
+> Implementation note (20260923): flags derive from each kind's payload-model fields, so a new kind needs no second list — which makes them --blocked-state-id, --node-id, and --body (JSON object) rather than the LLD draft's --blocked-state, --node, and --payload-json. Refusals exit with the new ExitCode.SUBMISSION_REFUSED (9). Tasks 7.1 and 7.2 share one commit (d204f7e) because both edit main.py; main.py's flag mapping moved to cli/settings_flags.py (367 -> 251 lines).
 
 **Success Criteria**:
-- [ ] Adding a `SubmissionKind` member surfaces a subcommand without editing a second list
-- [ ] `cli/submit.py` opens no store read-write, confirmed by the writer guard
-- [ ] All three subcommands work with the process running and stopped
+- [x] Adding a `SubmissionKind` member surfaces a subcommand without editing a second list
+- [x] `cli/submit.py` opens no store read-write, confirmed by the writer guard
+- [x] All three subcommands work with the process running and stopped
 
-- [ ] Commit after this task, e.g. `feat(cli): add amoeba submit`
+- [x] Commit after this task, e.g. `feat(cli): add amoeba submit`
 
 **Files to Create**: `src/amoeba/cli/submit.py`
 
@@ -256,18 +258,20 @@ status: in_progress
 **Objective**: Add `inspect inbox`, `inspect submissions`, and `inspect messages`.
 
 **Steps**:
-- [ ] Add `inspect inbox` as a **supervisor-level** listing (like `projects`), showing pending, quarantined, and failed files
-- [ ] Register `submissions` and `messages` into slice 102's listing registry as project-scoped listings taking `--project`
-- [ ] Give `messages` a `--channel` option
-- [ ] Support `--json` on all three, per the existing convention
-- [ ] Read through `Store.open_read_only` — these listings must work while the process is running
+- [x] Add `inspect inbox` as a **supervisor-level** listing (like `projects`), showing pending, quarantined, and failed files
+- [x] Register `submissions` and `messages` into slice 102's listing registry as project-scoped listings taking `--project`
+- [x] Give `messages` a `--channel` option
+- [x] Support `--json` on all three, per the existing convention
+- [x] Read through `Store.open_read_only` — these listings must work while the process is running
+
+> Implementation note (20260923): supervisor-level listings are now marked by a supervisor_rows callable on the registry entry rather than dispatch comparing the listing's name; --channel is a ChoiceOption. The new row builders live in cli/inspect_inbox.py to keep inspect.py near budget.
 
 **Success Criteria**:
-- [ ] All three listings work with the process running and stopped
-- [ ] `submissions` lists in `applied_seq` order
-- [ ] Listing names derive from the registry, not from hand-maintained strings
+- [x] All three listings work with the process running and stopped
+- [x] `submissions` lists in `applied_seq` order
+- [x] Listing names derive from the registry, not from hand-maintained strings
 
-- [ ] Commit after this task, e.g. `feat(cli): add inbox, submissions, and messages listings`
+- [x] Commit after this task, e.g. `feat(cli): add inbox, submissions, and messages listings`
 
 **Files to Modify**: the inspection CLI module
 
@@ -280,15 +284,15 @@ status: in_progress
 **Objective**: Cover `submit` and the listings the way slice 102 tests its CLI.
 
 **Steps**:
-- [ ] Test each `submit` subcommand as a subprocess, asserting the printed id matches the file written in `new/`
-- [ ] Test all three listings with the process both running and stopped
-- [ ] Test `--json` output shape for each listing
-- [ ] Test that an invalid project id or payload exits non-zero and writes nothing
+- [x] Test each `submit` subcommand as a subprocess, asserting the printed id matches the file written in `new/`
+- [x] Test all three listings with the process both running and stopped
+- [x] Test `--json` output shape for each listing
+- [x] Test that an invalid project id or payload exits non-zero and writes nothing
 
 **Success Criteria**:
-- [ ] Tests exercise the real CLI as subprocesses, not by calling internal functions
-- [ ] `uv run pytest` passes
-- [ ] Commit after this task, e.g. `feat(cli): add submit command and inbox listings`
+- [x] Tests exercise the real CLI as subprocesses, not by calling internal functions
+- [x] `uv run pytest` passes
+- [x] Commit after this task, e.g. `feat(cli): add submit command and inbox listings`
 
 **Files to Create**: `tests/cli/test_submit.py`, plus additions to the inspection CLI test module
 
@@ -303,15 +307,15 @@ status: in_progress
 **Objective**: Make the architectural boundary mechanical rather than asserted, per the LLD's Technical Requirements.
 
 **Steps**:
-- [ ] Assert the writer guard's permitted set is exactly `{process/project_stores.py}` and that the deliberate-widening test still pins a set of size one
-- [ ] Assert `amoeba.inbox` and `cli/submit.py` open no store read-write
-- [ ] Add a test asserting **`amoeba.inbox`'s public exports contain no write path other than `submit`**
-- [ ] Assert `amoeba.store` does not import `amoeba.inbox`, pinning the one-way dependency direction in the LLD's Component Structure
+- [x] Assert the writer guard's permitted set is exactly `{process/project_stores.py}` and that the deliberate-widening test still pins a set of size one
+- [x] Assert `amoeba.inbox` and `cli/submit.py` open no store read-write
+- [x] Add a test asserting **`amoeba.inbox`'s public exports contain no write path other than `submit`**
+- [x] Assert `amoeba.store` does not import `amoeba.inbox`, pinning the one-way dependency direction in the LLD's Component Structure
 
 **Success Criteria**:
-- [ ] All four assertions pass, and each fails if the boundary it guards is violated
-- [ ] `uv run pytest` passes
-- [ ] Commit after this task, e.g. `test: pin inbox public api and writer boundary`
+- [x] All four assertions pass, and each fails if the boundary it guards is violated
+- [x] `uv run pytest` passes
+- [x] Commit after this task, e.g. `test: pin inbox public api and writer boundary`
 
 **Files to Modify**: `tests/test_writer_guard.py`
 **Files to Create**: `tests/inbox/test_inbox_public_api.py` — **not** `test_public_api.py`, which already exists at `tests/test_public_api.py`; duplicate basenames break pytest collection
@@ -325,16 +329,18 @@ status: in_progress
 **Objective**: Provide the seeding helper the verification walkthrough needs.
 
 **Steps**:
-- [ ] Create `scripts/demo_inbox.py` seeding one node blocked on a human in the `demo` project and printing the node id and blocked-state id
-- [ ] Have it perform a read-write `Store.open` and run **only while the process is stopped**, like `demo_journal.py`
-- [ ] Add it to `PERMITTED_SCRIPTS` in `tests/test_writer_guard.py` — **and** update the pin assertion `PERMITTED_SCRIPTS == frozenset({"demo_journal.py"})` in the same file, which fails if only the constant changes. Same trap as Task 1.2's permitted-module rename
-- [ ] Note in the script why it exists: nothing outside the process can create nodes until initiative 120
+- [x] Create `scripts/demo_inbox.py` seeding one node blocked on a human in the `demo` project and printing the node id and blocked-state id
+- [x] Have it perform a read-write `Store.open` and run **only while the process is stopped**, like `demo_journal.py`
+- [x] Add it to `PERMITTED_SCRIPTS` in `tests/test_writer_guard.py` — **and** update the pin assertion `PERMITTED_SCRIPTS == frozenset({"demo_journal.py"})` in the same file, which fails if only the constant changes. Same trap as Task 1.2's permitted-module rename
+- [x] Note in the script why it exists: nothing outside the process can create nodes until initiative 120
+
+> Implementation note (20260923): demo_inbox.py takes the instance lock while it writes and refuses if the resident process holds it.
 
 **Success Criteria**:
-- [ ] The script prints both ids and the writer guard passes with it allow-listed
-- [ ] The guard's script allow-list grows by exactly one entry
+- [x] The script prints both ids and the writer guard passes with it allow-listed
+- [x] The guard's script allow-list grows by exactly one entry
 
-- [ ] Commit after this task, e.g. `test: add demo_inbox script and allow-list it`
+- [x] Commit after this task, e.g. `test: add demo_inbox script and allow-list it`
 
 **Files to Create**: `scripts/demo_inbox.py`
 **Files to Modify**: `tests/test_writer_guard.py`
