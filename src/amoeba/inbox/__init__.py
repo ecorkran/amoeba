@@ -10,7 +10,17 @@ Exported here is the out-of-process API. ``submit`` is its only write path.
 from __future__ import annotations
 
 from amoeba.inbox.envelope import EnvelopeError
+from amoeba.inbox.submit import (
+    InboxSubmitError,
+    InvalidSubmissionError,
+    SubmissionWriteError,
+    submit,
+)
 
 __all__ = [
     "EnvelopeError",
+    "InboxSubmitError",
+    "InvalidSubmissionError",
+    "SubmissionWriteError",
+    "submit",
 ]
