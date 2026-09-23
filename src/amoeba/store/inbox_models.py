@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Final
 
 
 class SubmissionKind(StrEnum):
@@ -27,6 +28,15 @@ class SubmissionKind(StrEnum):
     CREATE_PROJECT = "create_project"
     RESOLUTION = "resolution"
     INTENT = "intent"
+
+
+#: Payload keys each kind's effect reads, defined once. The envelope's payload
+#: models in ``amoeba.inbox`` use these as their field names; a test there pins
+#: the two together, so neither side can rename a key alone.
+RESOLUTION_BLOCKED_STATE_ID: Final = "blocked_state_id"
+RESOLUTION_DETAIL: Final = "detail"
+INTENT_NODE_ID: Final = "node_id"
+INTENT_BODY: Final = "body"
 
 
 class SubmissionOutcome(StrEnum):

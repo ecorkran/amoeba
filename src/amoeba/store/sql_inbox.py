@@ -97,6 +97,11 @@ _MESSAGE_SELECT_LIST: Final = ", ".join(MESSAGE_COLUMNS)
 # inbox_submissions statements
 # --------------------------------------------------------------------------
 
+#: Opens the apply transaction and takes the write lock **before** the replay
+#: check. The connection's DEFERRED mode would otherwise begin only at the
+#: first write, leaving the replay check and the precondition reads outside it.
+BEGIN_IMMEDIATE: Final = "BEGIN IMMEDIATE"
+
 #: ``applied_seq`` is omitted so SQLite assigns it — the receiver's order.
 INSERT_SUBMISSION: Final = f"""
 INSERT INTO {TABLE_INBOX_SUBMISSIONS} (

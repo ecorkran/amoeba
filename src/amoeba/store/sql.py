@@ -291,6 +291,14 @@ WHERE {COL_BLOCKED_NODE_ID} = ?
   AND {COL_BLOCKED_RESOLVED_AT} IS NULL
 """
 
+#: A resolution submission targets a blocked state by id, never by node, so a
+#: stale reply cannot land on a newer block.
+SELECT_BLOCKED_STATE_BY_ID: Final = f"""
+SELECT {_BLOCKED_SELECT_LIST}
+FROM {TABLE_BLOCKED_STATES}
+WHERE {TABLE_BLOCKED_STATES}.{COL_BLOCKED_ID} = ?
+"""
+
 SELECT_OPEN_BLOCKED_STATE: Final = f"""
 SELECT {_BLOCKED_SELECT_LIST}
 FROM {TABLE_BLOCKED_STATES}

@@ -112,17 +112,13 @@ class BlockingOperations(BlockWriter):
         timestamp = isoformat(now())
 
         with self._connection:
-            cursor = self._execute(
-                sql.FILL_RESOLUTION_SLOT,
-                (resolved_by, detail, timestamp, timestamp, node_id),
+            filled = self._write_resolution(
+                node_id, resolved_by=resolved_by, detail=detail, timestamp=timestamp
             )
-            if cursor.rowcount != 1:
+            if not filled:
                 raise InvalidTransitionError(
                     f"node {node_id!r} has no open blocked state to resolve"
                 )
-            self._execute(
-                sql.UPDATE_NODE_STATUS, (NodeStatus.RUNNABLE.value, timestamp, node_id)
-            )
 
         state = self.blocked_state_for(node_id, include_resolved=True)
         if state is None:

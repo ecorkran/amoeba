@@ -21,6 +21,7 @@ from amoeba.store.inbox_models import Channel
 from amoeba.store.models import (
     BLOCKED_KIND_TO_STATUS,
     BlockedKind,
+    NodeStatus,
     StoreIntegrityError,
 )
 
@@ -82,6 +83,30 @@ class BlockWriter(StoreBase):
                 journal_entry_id=journal_entry_id,
             )
         return blocked_state_id
+
+    def _write_resolution(
+        self, node_id: str, *, resolved_by: str, detail: str, timestamp: str
+    ) -> bool:
+        """Fill a node's open resolution slot and flip it back to runnable.
+
+        Inside the caller's transaction, like :meth:`_write_block`, so that
+        ``resolve()`` and ``apply_submission`` both write a resolution through
+        one place without opening a second transaction.
+
+        Returns:
+            Whether an open slot was filled. ``False`` means the node had no
+            open blocked state, and nothing was written.
+        """
+        cursor = self._execute(
+            sql.FILL_RESOLUTION_SLOT,
+            (resolved_by, detail, timestamp, timestamp, node_id),
+        )
+        if cursor.rowcount != 1:
+            return False
+        self._execute(
+            sql.UPDATE_NODE_STATUS, (NodeStatus.RUNNABLE.value, timestamp, node_id)
+        )
+        return True
 
     def _escalate_existing_block(
         self,
