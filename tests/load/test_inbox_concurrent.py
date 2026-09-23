@@ -11,6 +11,23 @@ Afterwards: every id a submitter was told succeeded has exactly one record and
 exactly one intent message, no ``applied_seq`` repeats, the record set equals
 the reported set exactly (so nothing unreported — a stray ``tmp/`` file — was
 ever applied), and ``new/``, ``quarantine/``, and ``failed/`` are all empty.
+
+**The drain bound was measured first, then set at roughly twice the slowest
+observation**, per slice 102's rule, so a failure means a regression in kind —
+a per-file store reopen, a rescan of ``new/`` per file — not machine variance.
+
+Measured 20260923 on the development machine (Darwin 25.5.0, Python 3.13.7,
+SQLite 3.50.4), 10 runs, final drain after the tenth kill:
+
+    backlog at drain start    6,092 – 6,334 files
+    final drain, min          2.945 s
+    final drain, median       ~3.08 s
+    final drain, max          3.196 s   (~2,000 files/s)
+    bound asserted            6.5   s
+
+The bound is on the drain of a backlog whose size depends on how far the
+submitters outran the killed process; both are printed on every run, so a
+bound that stops matching reality is visible rather than quietly tuned.
 """
 
 from __future__ import annotations
@@ -23,6 +40,7 @@ import time
 from pathlib import Path
 
 from cli_harness import await_running, cli_environment, run_cli, start_background
+from load_harness import measured
 
 from amoeba.cli.main import ExitCode
 from amoeba.inbox import failed, pending, quarantined
@@ -48,6 +66,10 @@ TARGET_KILLS = 10
 #: a machine fast enough to outrun the kills fails loudly instead of passing
 #: vacuously.
 MINIMUM_KILLS = 3
+
+#: Asserted bound on the final drain. See the module docstring for the
+#: measurement it is based on.
+DRAIN_BOUND_SECONDS = 6.5
 
 #: How long a submitter may wait for its project's creation to apply.
 CREATE_TIMEOUT_SECONDS = 60.0
@@ -208,6 +230,9 @@ def test_concurrent_submitters_across_kills_apply_exactly_once(
     assert kills >= MINIMUM_KILLS, (
         f"only {kills} kills landed while submitters ran; raise "
         "INTENTS_PER_SUBMITTER rather than shortening the kill window"
+    )
+    assert drain_seconds < DRAIN_BOUND_SECONDS, measured(
+        f"final drain of {backlog} files", drain_seconds, DRAIN_BOUND_SECONDS
     )
     assert quarantined(supervisor_dir) == []
     assert failed(supervisor_dir) == []
