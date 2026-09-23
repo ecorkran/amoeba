@@ -7,7 +7,7 @@ dependencies: [101, 102]
 projectState: Slices 101 and 102 are merged. The store is at schema version 3 with nodes, blocked states, the command journal, and recovery. The resident process starts, recovers, idles, and stops — with zero tenants registered and no way for anything outside the process to contribute state. This slice adds the inbox, the first real tenant, the messages table, and runtime project creation.
 dateCreated: 20260922
 dateUpdated: 20260922
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -37,18 +37,18 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Objective**: Move `_open_stores`, `store_for`, `project_ids`, and `_close_stores` out of `process/host.py` into a new `process/project_stores.py`, with `host.py` delegating. Behavior must not change.
 
 **Steps**:
-- [ ] Create `src/amoeba/process/project_stores.py` holding a `ProjectStores` class with the four members named above, moved verbatim in behavior
-- [ ] Change `host.py` to construct a `ProjectStores` and delegate `store_for` and `project_ids` to it; do not leave a second copy of the opening logic behind
-- [ ] Do **not** add `open_project` in this task — it belongs to Section 6, after this refactor is verified and committed
-- [ ] Keep both files within the ~300-line guideline; confirm `host.py` is materially smaller than its starting 378 lines
+- [x] Create `src/amoeba/process/project_stores.py` holding a `ProjectStores` class with the four members named above, moved verbatim in behavior
+- [x] Change `host.py` to construct a `ProjectStores` and delegate `store_for` and `project_ids` to it; do not leave a second copy of the opening logic behind
+- [x] Do **not** add `open_project` in this task — it belongs to Section 6, after this refactor is verified and committed
+- [x] Keep both files within the ~300-line guideline; confirm `host.py` is materially smaller than its starting 378 lines
 
 **Success Criteria**:
-- [ ] `process/project_stores.py` is the only module that opens a store read-write; `grep` for the read-write open in `host.py` finds nothing
-- [ ] `host.py` line count is reduced and both files are near or under 300 lines
-- [ ] No public behavior change: no signature visible to `ResidentProcess` callers is altered
-- [ ] `uv run pyright` clean in strict mode
+- [x] `process/project_stores.py` is the only module that opens a store read-write; `grep` for the read-write open in `host.py` finds nothing
+- [x] `host.py` line count is reduced and both files are near or under 300 lines
+- [x] No public behavior change: no signature visible to `ResidentProcess` callers is altered
+- [x] `uv run pyright` clean in strict mode
 
-- [ ] Commit after this task, e.g. `refactor(process): add ProjectStores and delegate from host`
+- [x] Commit after this task, e.g. `refactor(process): add ProjectStores and delegate from host`
 
 **Files to Create**: `src/amoeba/process/project_stores.py`
 **Files to Modify**: `src/amoeba/process/host.py`
@@ -62,18 +62,18 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Objective**: Point the sole-writer guard at the new module and prove the extraction changed nothing.
 
 **Steps**:
-- [ ] Change `PERMITTED_MODULES` in `tests/test_writer_guard.py` from `process/host.py` to `process/project_stores.py`
-- [ ] Update the **five** other places in that file that name `process/host.py` literally, all of which fail or go stale if only the constant changes: the module docstring, the docstring of `test_only_the_host_opens_a_store_read_write`, that test's failure message ("Only process/host.py may do that…"), the `frozenset({"process/host.py"})` assertion in `test_the_permitted_set_is_exactly_the_host`, and the docstring around it. Rename both test functions too — their names say `host`
-- [ ] Finish by grepping the file for `host` and confirming nothing stale remains; the count above is a guide, the grep is the check
-- [ ] Confirm the deliberate-widening test still pins a set of **size one** — the guard must not be loosened to allow both modules
-- [ ] Run slice 102's full suite and the load tier; both must pass with no test modified other than the writer guard's host-naming above
-- [ ] Investigate any **other** failure as a defect in the extraction, not as a test needing an update
+- [x] Change `PERMITTED_MODULES` in `tests/test_writer_guard.py` from `process/host.py` to `process/project_stores.py`
+- [x] Update the **five** other places in that file that name `process/host.py` literally, all of which fail or go stale if only the constant changes: the module docstring, the docstring of `test_only_the_host_opens_a_store_read_write`, that test's failure message ("Only process/host.py may do that…"), the `frozenset({"process/host.py"})` assertion in `test_the_permitted_set_is_exactly_the_host`, and the docstring around it. Rename both test functions too — their names say `host`
+- [x] Finish by grepping the file for `host` and confirming nothing stale remains; the count above is a guide, the grep is the check
+- [x] Confirm the deliberate-widening test still pins a set of **size one** — the guard must not be loosened to allow both modules
+- [x] Run slice 102's full suite and the load tier; both must pass with no test modified other than the writer guard's host-naming above
+- [x] Investigate any **other** failure as a defect in the extraction, not as a test needing an update
 
 **Success Criteria**:
-- [ ] The writer guard's permitted set is exactly `{process/project_stores.py}` and no `process/host.py` literal remains in `tests/test_writer_guard.py`
-- [ ] `uv run pytest` and `uv run pytest tests/load` pass with no slice 102 test modified outside the writer guard
-- [ ] `uv run ruff check .` and `uv run pyright` clean
-- [ ] Commit after this task, e.g. `refactor(process): extract ProjectStores from host`
+- [x] The writer guard's permitted set is exactly `{process/project_stores.py}` and no `process/host.py` literal remains in `tests/test_writer_guard.py`
+- [x] `uv run pytest` and `uv run pytest tests/load` pass with no slice 102 test modified outside the writer guard
+- [x] `uv run ruff check .` and `uv run pyright` clean
+- [x] Commit after this task, e.g. `refactor(process): extract ProjectStores from host`
 
 **Files to Modify**: `tests/test_writer_guard.py`
 
@@ -90,7 +90,7 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Steps**:
 - [ ] Define `SubmissionKind`, `SubmissionOutcome`, `Channel`, and `QuarantineReason` as `StrEnum`s with exactly the members the LLD's "Closed vocabularies" section lists
 - [ ] Define the frozen `SubmissionRecord` and `Message` dataclasses with the fields the LLD's API Contracts and schema sections name, following the slice 101 convention in `models.py`
-- [ ] Define the kind-to-payload-model mapping as a single module-level constant, per the LLD's "Adding a submission kind" rule
+- [ ] ~~Define the kind-to-payload-model mapping here~~ — **moved to Task 5.1** (PM decision 20260923). The payload models are pydantic and live in `amoeba.inbox.envelope`; defining the mapping in the store would make `amoeba.store` import `amoeba.inbox`, reversing the LLD's dependency direction
 - [ ] Treat `submitted_by` and `resolved_by` as free-form data — no enum, and nothing branches on them
 
 **Success Criteria**:
@@ -114,10 +114,10 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Steps**:
 - [ ] Assert each enum's exact member set — a test that fails if a member is added or renamed without deliberate intent
 - [ ] Assert both record dataclasses are frozen
-- [ ] Assert every `SubmissionKind` member has an entry in the kind-to-payload-model mapping, so a kind missing from it fails a test rather than a user
+- [ ] ~~Assert every `SubmissionKind` member has a payload model~~ — **moved to Task 5.1** with the mapping it covers
 
 **Success Criteria**:
-- [ ] Adding a `SubmissionKind` member without its payload model fails this suite
+- [ ] Adding or renaming a vocabulary member fails this suite
 - [ ] `uv run pytest` passes
 
 - [ ] Commit after this task, e.g. `test: pin inbox vocabularies and kind mapping`
@@ -382,6 +382,7 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Steps**:
 - [ ] Create `src/amoeba/inbox/layout.py` defining the four directory names (`tmp`, `new`, `quarantine`, `failed`), the sidecar suffixes, and the filename scheme `{submitted_at_ns:020d}-{submission_id}.json` — each in exactly one place
 - [ ] Create `src/amoeba/inbox/envelope.py` with the pydantic envelope carrying `envelope_version`, `id`, `project_id`, `kind`, `submitted_by`, `submitted_at`, `payload`, plus the per-kind payload models
+- [ ] Define the kind-to-payload-model mapping here as a single module-level constant (moved from Task 2.1), and add a test in `tests/inbox/` asserting every `SubmissionKind` member has an entry — adding a kind without its payload model must fail that test
 - [ ] Configure the envelope to **ignore unknown extra fields** and to reject an unknown `envelope_version` rather than best-effort parsing it
 - [ ] Import vocabularies from `amoeba.store` (models only); do **not** import `Store` — the dependency direction in the LLD's Component Structure is one-way
 - [ ] **Extract** the project-id rule in `amoeba.store.paths` into a standalone `validate_project_id(project_id)`: today the three checks (non-empty, no path separator, not `.` or `..`) are inline inside `store_path()`, so there is no way to validate an id *without* computing a path — which `submit()` and `open_project` both need. Have `store_path()` call the extracted function so the rule still has exactly one definition
