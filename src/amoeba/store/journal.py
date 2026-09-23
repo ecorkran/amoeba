@@ -210,6 +210,7 @@ class JournalOperations(BlockWriter):
                 # block and the outcome cannot land separately.
                 self._write_block(
                     entry.node_id,
+                    project_id=entry.project_id,
                     kind=BlockedKind.HUMAN,
                     context=f"journal entry {entry.id} ({entry.kind.value}): {reason}",
                     timestamp=timestamp,

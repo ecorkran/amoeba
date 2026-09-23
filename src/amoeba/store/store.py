@@ -23,6 +23,7 @@ from typing import Self
 from amoeba.store import paths, sql
 from amoeba.store.blocking import BlockingOperations
 from amoeba.store.journal import JournalOperations
+from amoeba.store.messages import MessageOperations
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 IN_MEMORY_PATH = Path(":memory:")
 
 
-class Store(NodeOperations, BlockingOperations, JournalOperations):
+class Store(NodeOperations, BlockingOperations, JournalOperations, MessageOperations):
     """A project-keyed lifecycle node store backed by one SQLite file.
 
     Open a store with :meth:`open` or :meth:`open_temporary`, both of which

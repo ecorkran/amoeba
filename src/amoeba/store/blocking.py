@@ -69,6 +69,7 @@ class BlockingOperations(BlockWriter):
         with self._connection:
             blocked_state_id = self._write_block(
                 node_id,
+                project_id=node.project_id,
                 kind=kind,
                 context=context,
                 timestamp=isoformat(created),

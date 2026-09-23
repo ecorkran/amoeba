@@ -75,7 +75,7 @@ def _vocabulary[VocabularyT: (CommandKind, JournalOutcome, JournalResolver)](
         ) from error
 
 
-def _timestamp(value: object, column: str) -> datetime | None:
+def decode_timestamp(value: object, column: str) -> datetime | None:
     if value is None:
         return None
     if not isinstance(value, str):
@@ -114,7 +114,7 @@ def map_journal_entry(row: Sequence[object]) -> JournalEntry:
         node_id=str(row[2]),
         kind=_vocabulary(row[3], CommandKind, sql_journal.COL_JOURNAL_KIND),
         parameters=decode_mapping(row[4], sql_journal.COL_JOURNAL_PARAMETERS),
-        issued_at=_timestamp(row[5], sql_journal.COL_JOURNAL_ISSUED_AT),
+        issued_at=decode_timestamp(row[5], sql_journal.COL_JOURNAL_ISSUED_AT),
         outcome=(
             None
             if outcome_value is None
@@ -127,7 +127,7 @@ def map_journal_entry(row: Sequence[object]) -> JournalEntry:
             if row[7] is None
             else decode_mapping(row[7], sql_journal.COL_JOURNAL_RESULT)
         ),
-        resolved_at=_timestamp(row[8], sql_journal.COL_JOURNAL_RESOLVED_AT),
+        resolved_at=decode_timestamp(row[8], sql_journal.COL_JOURNAL_RESOLVED_AT),
         resolved_by=(
             None
             if resolver_value is None
