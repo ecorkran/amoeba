@@ -303,19 +303,21 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Create `store/inbox.py` with the single-transaction apply, starting with idempotency.
 
 **Steps**:
-- [ ] Create `InboxOperations` in `src/amoeba/store/inbox.py` with `apply_submission`, `submission`, and `submissions` per the LLD's API Contracts table (house naming, per Task 3.3 — the LLD calls it `InboxMixin`)
-- [ ] Structure `apply_submission` as **one transaction**: replay check by submission id, then precondition, then effect, then record
-- [ ] On replay, return the existing record unchanged and perform no effect
-- [ ] Define the kind-to-effect mapping as a single table, per the LLD's "Adding a submission kind" rule
-- [ ] Wire `InboxOperations` into the `Store` class
+- [x] Create `InboxOperations` in `src/amoeba/store/inbox.py` with `apply_submission`, `submission`, and `submissions` per the LLD's API Contracts table (house naming, per Task 3.3 — the LLD calls it `InboxMixin`)
+- [x] Structure `apply_submission` as **one transaction**: replay check by submission id, then precondition, then effect, then record
+- [x] On replay, return the existing record unchanged and perform no effect
+- [x] Define the kind-to-effect mapping as a single table, per the LLD's "Adding a submission kind" rule
+- [x] Wire `InboxOperations` into the `Store` class
+
+> Implementation note (20260923): `apply_submission` also takes `project_id`. The LLD signature omits it, but the record's `project_id` column and every "in this project" precondition require it, and a `Store` does not know its own project. Tasks 4.1 and 4.2 were committed together (8e3b3c3) because 4.1's "every kind has an effect" criterion cannot hold before 4.2's effects exist.
 
 **Success Criteria**:
-- [ ] Applying the same submission id twice leaves exactly one record and performs the effect once
-- [ ] The effect and the record commit together — no state exists where one is present without the other
-- [ ] Every `SubmissionKind` member has an entry in the kind-to-effect mapping, enforced by a test
-- [ ] `uv run pyright` clean
+- [x] Applying the same submission id twice leaves exactly one record and performs the effect once
+- [x] The effect and the record commit together — no state exists where one is present without the other
+- [x] Every `SubmissionKind` member has an entry in the kind-to-effect mapping, enforced by a test
+- [x] `uv run pyright` clean
 
-- [ ] Commit after this task, e.g. `feat(store): add apply_submission with replay check`
+- [x] Commit after this task, e.g. `feat(store): add apply_submission with replay check`
 
 **Files to Create**: `src/amoeba/store/inbox.py`
 **Files to Modify**: the store class assembly
@@ -329,20 +331,20 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Implement `create_project`, `resolution`, and `intent` effects with preconditions checked as explicit branches.
 
 **Steps**:
-- [ ] `create_project`: no precondition; naming a project that already exists records `applied`, not rejected — the requested state holds
-- [ ] `resolution`: precondition is that the targeted **blocked state** exists in this project and is the node's **open** one; effect is `resolve()`
-- [ ] `intent`: precondition is that `node_id`, if given, exists in this project; effect is one row on the `intent` channel carrying the submission id as provenance
-- [ ] Record `rejected` with a reason on every failed precondition — never raise to signal rejection, and never catch `InvalidTransitionError` to implement it
-- [ ] Target a blocked-state id, **never** a node id, and never redirect a stale target to a newer block
+- [x] `create_project`: no precondition; naming a project that already exists records `applied`, not rejected — the requested state holds
+- [x] `resolution`: precondition is that the targeted **blocked state** exists in this project and is the node's **open** one; effect is `resolve()`
+- [x] `intent`: precondition is that `node_id`, if given, exists in this project; effect is one row on the `intent` channel carrying the submission id as provenance
+- [x] Record `rejected` with a reason on every failed precondition — never raise to signal rejection, and never catch `InvalidTransitionError` to implement it
+- [x] Target a blocked-state id, **never** a node id, and never redirect a stale target to a newer block
 
 **Success Criteria**:
-- [ ] A `resolution` fills the targeted slot and flips the node `runnable`, in one transaction
-- [ ] A `resolution` naming an already-resolved blocked state, a blocked state of another project, or a nonexistent one is recorded `rejected` with a reason
-- [ ] A node re-blocked since the original block is **not** resolved by a stale reply
-- [ ] An `intent` produces one unacknowledged message carrying the submission id
-- [ ] `InvalidTransitionError` is nowhere caught to implement a rejection
+- [x] A `resolution` fills the targeted slot and flips the node `runnable`, in one transaction
+- [x] A `resolution` naming an already-resolved blocked state, a blocked state of another project, or a nonexistent one is recorded `rejected` with a reason
+- [x] A node re-blocked since the original block is **not** resolved by a stale reply
+- [x] An `intent` produces one unacknowledged message carrying the submission id
+- [x] `InvalidTransitionError` is nowhere caught to implement a rejection
 
-- [ ] Commit after this task, e.g. `feat(store): add the three submission kind effects`
+- [x] Commit after this task, e.g. `feat(store): add the three submission kind effects`
 
 **Files to Modify**: `src/amoeba/store/inbox.py`
 
@@ -355,17 +357,17 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Cover replay, all three kinds, every rejection branch, and D4's ordering.
 
 **Steps**:
-- [ ] Test replay: the same id applied twice changes nothing and leaves one record
-- [ ] Test each kind's applied path and each rejection branch named in Task 4.2
-- [ ] Test that `applied_seq` and `messages.seq` increase in **apply order regardless of the `submitted_at` values** in the envelopes — construct envelopes with out-of-order timestamps
-- [ ] Test `submissions(outcome=…)` filtering and `applied_seq` ordering
-- [ ] Test that a `create_project` for an existing project is `applied` and changes nothing
+- [x] Test replay: the same id applied twice changes nothing and leaves one record
+- [x] Test each kind's applied path and each rejection branch named in Task 4.2
+- [x] Test that `applied_seq` and `messages.seq` increase in **apply order regardless of the `submitted_at` values** in the envelopes — construct envelopes with out-of-order timestamps
+- [x] Test `submissions(outcome=…)` filtering and `applied_seq` ordering
+- [x] Test that a `create_project` for an existing project is `applied` and changes nothing
 
 **Success Criteria**:
-- [ ] Every branch in Task 4.2's table has a test
-- [ ] Ordering is proven independent of `submitted_at`, pinning D4
-- [ ] `uv run pytest` passes
-- [ ] Commit after this task, e.g. `feat(store): add apply_submission with three submission kinds`
+- [x] Every branch in Task 4.2's table has a test
+- [x] Ordering is proven independent of `submitted_at`, pinning D4
+- [x] `uv run pytest` passes
+- [x] Commit after this task, e.g. `feat(store): add apply_submission with three submission kinds`
 
 **Files to Create**: `tests/store/test_inbox_apply.py`
 
