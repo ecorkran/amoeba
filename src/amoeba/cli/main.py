@@ -174,6 +174,32 @@ def _add_settings_flags(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         help="The Squadron runs directory the observer scans.",
     )
+    parser.add_argument(
+        "--inbox-batch-size",
+        type=_positive_int,
+        default=defaults.inbox_batch_size,
+        metavar="COUNT",
+        help="The most inbox files one tick handles.",
+    )
+    parser.add_argument(
+        "--inbox-max-attempts",
+        type=_positive_int,
+        default=defaults.inbox_max_attempts,
+        metavar="COUNT",
+        help="Failed applies of one file before it is parked in inbox/failed/.",
+    )
+
+
+def _positive_int(text: str) -> int:
+    """An argparse type for a count that must be at least 1.
+
+    Zero would be accepted by ``int`` and silently stop the queue (a batch of
+    none) or park every file on its first failure — so it is refused here.
+    """
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
+    return value
 
 
 def _add_stop_timeout_flag(parser: argparse.ArgumentParser) -> None:
@@ -239,6 +265,8 @@ def settings_from_args(args: argparse.Namespace) -> ProcessSettings:
         clock_tolerance_seconds=args.clock_tolerance,
         cf_timeout_seconds=args.cf_timeout,
         sq_runs_dir=args.sq_runs_dir,
+        inbox_batch_size=args.inbox_batch_size,
+        inbox_max_attempts=args.inbox_max_attempts,
     )
 
 

@@ -41,6 +41,13 @@ class ProcessSettings:
         cf_timeout_seconds: How long to wait for a ``cf`` invocation before
             treating it as unobservable.
         sq_runs_dir: The Squadron runs directory the observer scans.
+        inbox_batch_size: The most inbox files one ``InboxTenant`` tick
+            handles. Each is one short transaction and ``stop_requested`` is
+            checked between them, so this bounds a tick, not shutdown latency.
+        inbox_max_attempts: How many consecutive failed applies of one file
+            before it is parked in ``inbox/failed/``. Small on purpose: the
+            first failures stop the process so a sick store stays loud; this
+            bounds that loop rather than retrying a corrupt store into working.
     """
 
     idle_interval_seconds: float = 1.0
@@ -49,3 +56,5 @@ class ProcessSettings:
     clock_tolerance_seconds: float = 5.0
     cf_timeout_seconds: float = 10.0
     sq_runs_dir: Path = DEFAULT_SQ_RUNS_DIR
+    inbox_batch_size: int = 100
+    inbox_max_attempts: int = 3
