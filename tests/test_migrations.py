@@ -254,7 +254,10 @@ def test_version_two_store_with_data_upgrades_to_three(store_file: Path) -> None
         )
         connection.commit()
 
-        assert migrate(connection) == JOURNAL_SCHEMA_VERSION
+        assert (
+            migrate(connection, expected_version=JOURNAL_SCHEMA_VERSION)
+            == JOURNAL_SCHEMA_VERSION
+        )
         assert read_schema_version(connection) == JOURNAL_SCHEMA_VERSION
 
         node_row = connection.execute(sql.SELECT_NODE_BY_ID, ("n1",)).fetchone()
@@ -309,7 +312,7 @@ def test_fresh_store_reaches_version_three_directly(store_file: Path) -> None:
     upgraded = store_file.parent / "upgraded.sqlite3"
 
     with _connect(store_file) as fresh:
-        migrate(fresh)
+        migrate(fresh, expected_version=JOURNAL_SCHEMA_VERSION)
         fresh_tables = _table_names(fresh)
         fresh_journal_columns = {
             str(row[1])
@@ -320,7 +323,7 @@ def test_fresh_store_reaches_version_three_directly(store_file: Path) -> None:
 
     with _connect(upgraded) as stepwise:
         migrate(stepwise, expected_version=PRE_JOURNAL_SCHEMA_VERSION)
-        migrate(stepwise)
+        migrate(stepwise, expected_version=JOURNAL_SCHEMA_VERSION)
 
         assert read_schema_version(stepwise) == JOURNAL_SCHEMA_VERSION
         assert _table_names(stepwise) == fresh_tables
@@ -352,7 +355,7 @@ def test_store_stamped_above_three_still_refuses_to_downgrade(
 ) -> None:
     """The newer-than-code rule holds at the new expected version too."""
     with _connect(store_file) as connection:
-        migrate(connection)
+        migrate(connection, expected_version=JOURNAL_SCHEMA_VERSION)
         connection.execute(
             sql.UPSERT_SCHEMA_VERSION,
             (sql.SCHEMA_META_ROW_ID, JOURNAL_SCHEMA_VERSION + 1),
@@ -360,7 +363,7 @@ def test_store_stamped_above_three_still_refuses_to_downgrade(
         connection.commit()
 
         with pytest.raises(StoreSchemaError, match="newer"):
-            migrate(connection)
+            migrate(connection, expected_version=JOURNAL_SCHEMA_VERSION)
 
         assert read_schema_version(connection) == JOURNAL_SCHEMA_VERSION + 1
 
