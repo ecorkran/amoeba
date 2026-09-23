@@ -6,7 +6,7 @@ lld: user/slices/103-slice.durable-inbox-and-message-queue.md
 dependencies: [101, 102]
 projectState: Slices 101 and 102 are merged. The store is at schema version 3 with nodes, blocked states, the command journal, and recovery. The resident process starts, recovers, idles, and stops — with zero tenants registered and no way for anything outside the process to contribute state. This slice adds the inbox, the first real tenant, the messages table, and runtime project creation.
 dateCreated: 20260922
-dateUpdated: 20260922
+dateUpdated: 20260923
 status: in_progress
 ---
 
@@ -382,22 +382,24 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Create the directory/filename scheme and the pydantic envelope, each defined exactly once.
 
 **Steps**:
-- [ ] Create `src/amoeba/inbox/layout.py` defining the four directory names (`tmp`, `new`, `quarantine`, `failed`), the sidecar suffixes, and the filename scheme `{submitted_at_ns:020d}-{submission_id}.json` — each in exactly one place
-- [ ] Create `src/amoeba/inbox/envelope.py` with the pydantic envelope carrying `envelope_version`, `id`, `project_id`, `kind`, `submitted_by`, `submitted_at`, `payload`, plus the per-kind payload models
-- [ ] Define the kind-to-payload-model mapping here as a single module-level constant (moved from Task 2.1), and add a test in `tests/inbox/` asserting every `SubmissionKind` member has an entry — adding a kind without its payload model must fail that test
-- [ ] Configure the envelope to **ignore unknown extra fields** and to reject an unknown `envelope_version` rather than best-effort parsing it
-- [ ] Import vocabularies from `amoeba.store` (models only); do **not** import `Store` — the dependency direction in the LLD's Component Structure is one-way
-- [ ] **Extract** the project-id rule in `amoeba.store.paths` into a standalone `validate_project_id(project_id)`: today the three checks (non-empty, no path separator, not `.` or `..`) are inline inside `store_path()`, so there is no way to validate an id *without* computing a path — which `submit()` and `open_project` both need. Have `store_path()` call the extracted function so the rule still has exactly one definition
-- [ ] Reuse that function from the envelope; do not re-implement the rule
+- [x] Create `src/amoeba/inbox/layout.py` defining the four directory names (`tmp`, `new`, `quarantine`, `failed`), the sidecar suffixes, and the filename scheme `{submitted_at_ns:020d}-{submission_id}.json` — each in exactly one place
+- [x] Create `src/amoeba/inbox/envelope.py` with the pydantic envelope carrying `envelope_version`, `id`, `project_id`, `kind`, `submitted_by`, `submitted_at`, `payload`, plus the per-kind payload models
+- [x] Define the kind-to-payload-model mapping here as a single module-level constant (moved from Task 2.1), and add a test in `tests/inbox/` asserting every `SubmissionKind` member has an entry — adding a kind without its payload model must fail that test
+- [x] Configure the envelope to **ignore unknown extra fields** and to reject an unknown `envelope_version` rather than best-effort parsing it
+- [x] Import vocabularies from `amoeba.store` (models only); do **not** import `Store` — the dependency direction in the LLD's Component Structure is one-way
+- [x] **Extract** the project-id rule in `amoeba.store.paths` into a standalone `validate_project_id(project_id)`: today the three checks (non-empty, no path separator, not `.` or `..`) are inline inside `store_path()`, so there is no way to validate an id *without* computing a path — which `submit()` and `open_project` both need. Have `store_path()` call the extracted function so the rule still has exactly one definition
+- [x] Reuse that function from the envelope; do not re-implement the rule
+
+> Implementation note (20260923): the path rule is `validate_path_component(value, *, name)` in `amoeba.store.paths`, with `validate_project_id` as its project-id form. Submission ids use the same rule because they become inbox filenames. `amoeba.store` also now exports `Channel`, `QuarantineReason`, `SubmissionKind`, `SubmissionOutcome`, `Message`, and `SubmissionRecord` (the LLD says these are exported; no task covered it), with `tests/test_public_api.py` updated.
 
 **Success Criteria**:
-- [ ] Directory names and the filename scheme appear only in `layout.py`
-- [ ] `amoeba.inbox` imports no write path from `amoeba.store`
-- [ ] Project-id validation has exactly one definition, callable without computing a path
-- [ ] `store_path()` behavior is unchanged — slice 101's path tests pass untouched
-- [ ] `uv run pyright` clean
+- [x] Directory names and the filename scheme appear only in `layout.py`
+- [x] `amoeba.inbox` imports no write path from `amoeba.store`
+- [x] Project-id validation has exactly one definition, callable without computing a path
+- [x] `store_path()` behavior is unchanged — slice 101's path tests pass untouched
+- [x] `uv run pyright` clean
 
-- [ ] Commit after this task, e.g. `feat(inbox): add layout, envelope, and project id validation`
+- [x] Commit after this task, e.g. `feat(inbox): add layout, envelope, and project id validation`
 
 **Files to Create**: `src/amoeba/inbox/layout.py`, `src/amoeba/inbox/envelope.py`, `src/amoeba/inbox/__init__.py`
 **Files to Modify**: `src/amoeba/store/paths.py`
@@ -411,20 +413,20 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Implement the only write path open to outside parts, per the LLD's Data Flow "Submit" block.
 
 **Steps**:
-- [ ] Implement `submit(*, project_id, kind, payload, submitted_by, submission_id=None, store_dir=None) -> str` in `src/amoeba/inbox/submit.py`
-- [ ] Validate the project id, envelope, and payload for the kind **before writing anything**
-- [ ] Write to `inbox/tmp/`, **fsync the file**, rename into `inbox/new/`, then **fsync the directory** — in that order
-- [ ] Generate a submission id when none is passed, so a retrying submitter can pass the same one back (D2)
-- [ ] Raise typed `InboxSubmitError`-family errors on validation or I/O failure, leaving nothing in `new/`
-- [ ] Create the inbox directories on demand with the user's default permissions, per the LLD's Security note
+- [x] Implement `submit(*, project_id, kind, payload, submitted_by, submission_id=None, store_dir=None) -> str` in `src/amoeba/inbox/submit.py`
+- [x] Validate the project id, envelope, and payload for the kind **before writing anything**
+- [x] Write to `inbox/tmp/`, **fsync the file**, rename into `inbox/new/`, then **fsync the directory** — in that order
+- [x] Generate a submission id when none is passed, so a retrying submitter can pass the same one back (D2)
+- [x] Raise typed `InboxSubmitError`-family errors on validation or I/O failure, leaving nothing in `new/`
+- [x] Create the inbox directories on demand with the user's default permissions, per the LLD's Security note
 
 **Success Criteria**:
-- [ ] `submit()` returns only after the file is fsync-durable in `new/`
-- [ ] An invalid payload or project id raises and leaves nothing in `new/` **or** `tmp/`
-- [ ] `submit()` works whether or not the resident process is running
-- [ ] `submit()` opens no store, read-write or otherwise
+- [x] `submit()` returns only after the file is fsync-durable in `new/`
+- [x] An invalid payload or project id raises and leaves nothing in `new/` **or** `tmp/`
+- [x] `submit()` works whether or not the resident process is running
+- [x] `submit()` opens no store, read-write or otherwise
 
-- [ ] Commit after this task, e.g. `feat(inbox): add submit with fsync-ordered durability`
+- [x] Commit after this task, e.g. `feat(inbox): add submit with fsync-ordered durability`
 
 **Files to Create**: `src/amoeba/inbox/submit.py`
 
@@ -437,17 +439,17 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Cover durability mechanics and validation failure, per the LLD's Mitigation Strategies.
 
 **Steps**:
-- [ ] Assert both fsync calls occur **in order** (file, then directory) — the LLD names this the one place a call-order assertion is the honest test, because unit tests cannot simulate power loss
-- [ ] Assert an invalid payload, an invalid project id, and a project id containing a path separator or equal to `.` or `..` each raise and leave `new/` and `tmp/` empty
-- [ ] Assert the returned id is the one passed when `submission_id` is supplied, and is generated otherwise
-- [ ] Assert the filename matches the scheme in `layout.py`
+- [x] Assert both fsync calls occur **in order** (file, then directory) — the LLD names this the one place a call-order assertion is the honest test, because unit tests cannot simulate power loss
+- [x] Assert an invalid payload, an invalid project id, and a project id containing a path separator or equal to `.` or `..` each raise and leave `new/` and `tmp/` empty
+- [x] Assert the returned id is the one passed when `submission_id` is supplied, and is generated otherwise
+- [x] Assert the filename matches the scheme in `layout.py`
 
 **Success Criteria**:
-- [ ] The fsync order assertion fails if either call is removed or reordered
-- [ ] No test asserts durability beyond "fsync-durable on a POSIX filesystem" — the contract does not overclaim
-- [ ] `uv run pytest` passes
+- [x] The fsync order assertion fails if either call is removed or reordered
+- [x] No test asserts durability beyond "fsync-durable on a POSIX filesystem" — the contract does not overclaim
+- [x] `uv run pytest` passes
 
-- [ ] Commit after this task, e.g. `test: cover submit durability and validation failures`
+- [x] Commit after this task, e.g. `test: cover submit durability and validation failures`
 
 **Files to Create**: `tests/inbox/test_submit.py`
 
@@ -460,18 +462,20 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Implement `pending()`, `quarantined()`, and `failed()` in `src/amoeba/inbox/pending.py`.
 
 **Steps**:
-- [ ] `pending(store_dir=None)` lists files in `new/` in drain order (filename order — which the LLD is explicit is *not* authoritative order)
-- [ ] `quarantined(store_dir=None)` lists quarantined files with the reason from each `.reason.json` sidecar
-- [ ] `failed(store_dir=None)` lists parked files with the attempt count and last error from each `.attempts.json` sidecar
-- [ ] Do **not** list stray `tmp/` files — per the LLD they are harmless and out of scope for this slice
-- [ ] Return the frozen transfer types the LLD's API Contracts table names
+- [x] `pending(store_dir=None)` lists files in `new/` in drain order (filename order — which the LLD is explicit is *not* authoritative order)
+- [x] `quarantined(store_dir=None)` lists quarantined files with the reason from each `.reason.json` sidecar
+- [x] `failed(store_dir=None)` lists parked files with the attempt count and last error from each `.attempts.json` sidecar
+- [x] Do **not** list stray `tmp/` files — per the LLD they are harmless and out of scope for this slice
+- [x] Return the frozen transfer types the LLD's API Contracts table names
+
+> Implementation note (20260923): both sidecar formats (`ReasonSidecar`, `AttemptsSidecar`) live in `src/amoeba/inbox/sidecars.py` so the tenant (Section 6) writes exactly what the listings read. The tmp-and-rename write lives in `src/amoeba/inbox/durable.py`, shared by `submit()` and the tenant's attempt counter.
 
 **Success Criteria**:
-- [ ] All three listings work with the process running and stopped, and open no store
-- [ ] A stray `tmp/` file appears in no listing
-- [ ] A sidecar-less file in `quarantine/` or `failed/` is reported rather than crashing the listing
+- [x] All three listings work with the process running and stopped, and open no store
+- [x] A stray `tmp/` file appears in no listing
+- [x] A sidecar-less file in `quarantine/` or `failed/` is reported rather than crashing the listing
 
-- [ ] Commit after this task, e.g. `feat(inbox): add pending, quarantined, and failed listings`
+- [x] Commit after this task, e.g. `feat(inbox): add pending, quarantined, and failed listings`
 
 **Files to Create**: `src/amoeba/inbox/pending.py`
 
@@ -484,18 +488,18 @@ Pure library work — no files and no tenant yet, per the LLD's Development Appr
 **Objective**: Build the envelope fixtures the LLD's Technical Requirements demand and cover the listings.
 
 **Steps**:
-- [ ] Create fixtures that include **a file produced by the real `submit()`** and hand-damaged variants of it: truncated, wrong `envelope_version`, and extra unknown fields
-- [ ] Assert the extra-fields variant parses (unknown fields ignored) while the truncated and wrong-version variants do not
-- [ ] Assert `pending()` returns files in drain order and that `quarantined()` and `failed()` surface their sidecar contents
-- [ ] Put the shared envelope fixtures in the **root `tests/conftest.py`**, not in `tests/inbox/conftest.py` — Section 6's tenant tests live in `tests/process/` and conftest fixtures only apply downward, so a sibling directory cannot see them
-- [ ] Add `__init__.py` to every new test package created in this slice (`tests/store/`, `tests/inbox/`, `tests/process/`, `tests/cli/`), matching the one precedent in `tests/load/`. Without it, pytest's import mode fails collection on duplicate test-file basenames
+- [x] Create fixtures that include **a file produced by the real `submit()`** and hand-damaged variants of it: truncated, wrong `envelope_version`, and extra unknown fields
+- [x] Assert the extra-fields variant parses (unknown fields ignored) while the truncated and wrong-version variants do not
+- [x] Assert `pending()` returns files in drain order and that `quarantined()` and `failed()` surface their sidecar contents
+- [x] Put the shared envelope fixtures in the **root `tests/conftest.py`**, not in `tests/inbox/conftest.py` — Section 6's tenant tests live in `tests/process/` and conftest fixtures only apply downward, so a sibling directory cannot see them
+- [x] Add `__init__.py` to every new test package created in this slice (`tests/store/`, `tests/inbox/`, `tests/process/`, `tests/cli/`) — partial: store/ and inbox/ done; process/ and cli/ get theirs when created in Sections 6–7, matching the one precedent in `tests/load/`. Without it, pytest's import mode fails collection on duplicate test-file basenames
 
 **Success Criteria**:
-- [ ] Fixtures derive from real `submit()` output, not hand-written approximations of it
-- [ ] Tenant tests in `tests/process/` can use the envelope fixtures
-- [ ] Every new test directory has an `__init__.py`
-- [ ] `uv run pytest` passes
-- [ ] Commit after this task, e.g. `feat(inbox): add submit, listings, and envelope models`
+- [x] Fixtures derive from real `submit()` output, not hand-written approximations of it
+- [x] Tenant tests in `tests/process/` can use the envelope fixtures
+- [x] Every new test directory has an `__init__.py` — partial: store/ and inbox/ done; process/ and cli/ get theirs when created in Sections 6–7
+- [x] `uv run pytest` passes
+- [x] Commit after this task, e.g. `feat(inbox): add submit, listings, and envelope models`
 
 **Files to Create**: `tests/inbox/test_listings.py`, `__init__.py` in each new test package
 **Files to Modify**: `tests/conftest.py`
