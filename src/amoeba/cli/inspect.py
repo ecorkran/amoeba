@@ -17,10 +17,12 @@ import argparse
 import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from amoeba.cli import inspect_inbox
 from amoeba.process.supervisor import discover_project_ids, store_path_for
-from amoeba.store import Store, paths
+from amoeba.store import Channel, Store, paths
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from amoeba.cli.main import ExitCode
@@ -31,25 +33,52 @@ type Row = dict[str, object]
 
 
 @dataclass(frozen=True)
+class ChoiceOption:
+    """An optional flag taking one value from a closed set, e.g. ``--channel``."""
+
+    flag: str
+    help_text: str
+    choices: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Listing:
     """One inspection listing: its name, its query, and its columns.
+
+    Exactly one of ``rows`` and ``supervisor_rows`` is set. Which one is what
+    makes a listing project-scoped or supervisor-level — never its name.
 
     Attributes:
         name: The subcommand name. Derived *from* this registry entry.
         help_text: One line, shown by ``--help``.
         columns: Column order for the table form.
-        rows: Produces the rows. Receives an open **read-only** store and the
-            parsed arguments.
-        requires_project: Whether ``--project`` is required.
+        rows: For a project-scoped listing: receives an open **read-only**
+            store and the parsed arguments.
+        supervisor_rows: For a supervisor-level listing: receives the
+            supervisor directory, and opens no store.
         flags: Extra boolean flags, as ``(flag, help)`` pairs.
+        choice_options: Extra optional flags taking one value from a set.
     """
 
     name: str
     help_text: str
     columns: tuple[str, ...]
-    rows: Callable[[Store, argparse.Namespace], list[Row]]
-    requires_project: bool = True
+    rows: Callable[[Store, argparse.Namespace], list[Row]] | None = None
+    supervisor_rows: Callable[[Path], list[Row]] | None = None
     flags: tuple[tuple[str, str], ...] = field(default_factory=tuple)
+    choice_options: tuple[ChoiceOption, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        if (self.rows is None) == (self.supervisor_rows is None):
+            raise ValueError(
+                f"listing {self.name!r} must set exactly one of rows and "
+                "supervisor_rows"
+            )
+
+    @property
+    def requires_project(self) -> bool:
+        """Whether ``--project`` is required: every project-scoped listing."""
+        return self.supervisor_rows is None
 
 
 def _node_rows(store: Store, args: argparse.Namespace) -> list[Row]:
@@ -97,19 +126,38 @@ def _journal_rows(store: Store, args: argparse.Namespace) -> list[Row]:
     ]
 
 
+def _project_rows(supervisor_dir: Path) -> list[Row]:
+    """Project ids with a store in the supervisor directory.
+
+    An empty supervisor directory yields an empty list rather than failing: a
+    supervisor that has never run is a valid state.
+    """
+    return [
+        {
+            "project_id": project_id,
+            "store": str(store_path_for(supervisor_dir, project_id)),
+        }
+        for project_id in discover_project_ids(supervisor_dir)
+    ]
+
+
+#: The name of the ``projects`` listing, which tests refer to.
+PROJECTS_LISTING = "projects"
+
 #: The listing registry — the single structural definition of what ``inspect``
 #: can show. Adding a listing is appending here; nothing else changes.
-#:
-#: ``projects`` is handled separately in :func:`run_listing` because it reads
-#: the supervisor directory rather than one store, so it has no ``--project``
-#: and opens nothing.
 LISTINGS: tuple[Listing, ...] = (
     Listing(
-        name="projects",
+        name=PROJECTS_LISTING,
         help_text="Project ids that have a store in the supervisor directory.",
         columns=("project_id", "store"),
-        rows=lambda store, args: [],
-        requires_project=False,
+        supervisor_rows=_project_rows,
+    ),
+    Listing(
+        name="inbox",
+        help_text="Inbox files that are pending, quarantined, or failed.",
+        columns=("state", "file", "attempts", "reason", "problem"),
+        supervisor_rows=inspect_inbox.inbox_rows,
     ),
     Listing(
         name="nodes",
@@ -137,29 +185,45 @@ LISTINGS: tuple[Listing, ...] = (
         rows=_journal_rows,
         flags=(("--unresolved", "Only entries still in flight."),),
     ),
+    Listing(
+        name="submissions",
+        help_text="Applied and rejected inbox submissions for a project.",
+        columns=(
+            "applied_seq",
+            "id",
+            "kind",
+            "outcome",
+            "reason",
+            "submitted_by",
+            "submitted_at",
+        ),
+        rows=inspect_inbox.submission_rows,
+    ),
+    Listing(
+        name="messages",
+        help_text="Intent and escalation messages for a project, in seq order.",
+        columns=(
+            "seq",
+            "id",
+            "channel",
+            "node_id",
+            "blocked_state_id",
+            "submission_id",
+            "acknowledged_at",
+        ),
+        rows=inspect_inbox.message_rows,
+        choice_options=(
+            ChoiceOption(
+                flag="--channel",
+                help_text="Only this channel. Every channel when omitted.",
+                choices=tuple(channel.value for channel in Channel),
+            ),
+        ),
+    ),
 )
 
 #: By name, so dispatch is a lookup rather than a chain of comparisons.
 LISTINGS_BY_NAME: dict[str, Listing] = {listing.name: listing for listing in LISTINGS}
-
-#: The listing that reads the supervisor directory rather than a single store.
-PROJECTS_LISTING = "projects"
-
-
-def _project_rows() -> list[Row]:
-    """Project ids with a store in the supervisor directory.
-
-    An empty supervisor directory yields an empty list rather than failing: a
-    supervisor that has never run is a valid state.
-    """
-    store_dir = paths.store_dir()
-    return [
-        {
-            "project_id": project_id,
-            "store": str(store_path_for(store_dir, project_id)),
-        }
-        for project_id in discover_project_ids(store_dir)
-    ]
 
 
 def run_listing(name: str, args: argparse.Namespace, *, use_json: bool) -> ExitCode:
@@ -173,13 +237,16 @@ def run_listing(name: str, args: argparse.Namespace, *, use_json: bool) -> ExitC
     from amoeba.cli.main import ExitCode
 
     listing = LISTINGS_BY_NAME[name]
+    supervisor_dir = paths.store_dir()
 
-    if name == PROJECTS_LISTING:
-        rows = _project_rows()
-    else:
-        store_path = store_path_for(paths.store_dir(), args.project)
-        with Store.open_read_only(store_path) as store:
+    if listing.supervisor_rows is not None:
+        rows = listing.supervisor_rows(supervisor_dir)
+    elif listing.rows is not None:
+        project_store_file = store_path_for(supervisor_dir, args.project)
+        with Store.open_read_only(project_store_file) as store:
             rows = listing.rows(store, args)
+    else:
+        raise ValueError(f"listing {name!r} declares no rows")
 
     if use_json:
         print(json.dumps(rows, indent=2, default=str))

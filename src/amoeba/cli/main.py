@@ -19,16 +19,16 @@ import sys
 from collections.abc import Sequence
 from enum import IntEnum
 from importlib import metadata
-from pathlib import Path
 from typing import Any, Final
 
+from amoeba.cli import settings_flags
+from amoeba.inbox import InboxSubmitError
 from amoeba.process.errors import (
     AlreadyRunningError,
     GraceExpiredError,
     ProcessError,
     StartupFailedError,
 )
-from amoeba.process.settings import DEFAULT_SQ_RUNS_DIR, ProcessSettings
 from amoeba.store.models import StoreError
 
 logger = logging.getLogger(__name__)
@@ -90,6 +90,10 @@ class ExitCode(IntEnum):
     #: distinguishable from running by exit status alone.
     NOT_RUNNING_STATUS = 8
 
+    #: ``submit``: the submission was invalid or could not be written durably.
+    #: Nothing was left in the inbox.
+    SUBMISSION_REFUSED = 9
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every subcommand."""
@@ -109,7 +113,7 @@ def build_parser() -> argparse.ArgumentParser:
             "of whatever launched it (launchd, tmux, a shell &)."
         ),
     )
-    _add_settings_flags(start)
+    settings_flags.add_start_flags(start)
 
     stop = subparsers.add_parser(
         "stop",
@@ -120,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
             "SIGKILL."
         ),
     )
-    _add_stop_timeout_flag(stop)
+    settings_flags.add_stop_flags(stop)
 
     subparsers.add_parser(
         "status", help="Report whether a resident process is running."
@@ -128,98 +132,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_inspect_parser(subparsers)
 
+    from amoeba.cli.submit import add_submit_parser
+
+    add_submit_parser(subparsers)
+
     return parser
-
-
-def _add_settings_flags(parser: argparse.ArgumentParser) -> None:
-    """Expose every :class:`ProcessSettings` tunable as a flag.
-
-    Flags, not environment variables: ``AMOEBA_STORE_DIR`` stays the project's
-    only environment read (D3), so there is no second source of truth.
-    """
-    defaults = ProcessSettings()
-
-    parser.add_argument(
-        "--idle-interval",
-        type=float,
-        default=defaults.idle_interval_seconds,
-        metavar="SECONDS",
-        help="How long the loop waits when no tenant reported work.",
-    )
-    parser.add_argument(
-        "--shutdown-grace",
-        type=float,
-        default=defaults.shutdown_grace_seconds,
-        metavar="SECONDS",
-        help="How long shutdown waits for the current tick to return.",
-    )
-    parser.add_argument(
-        "--clock-tolerance",
-        type=float,
-        default=defaults.clock_tolerance_seconds,
-        metavar="SECONDS",
-        help="Clock skew allowed when matching a Squadron run's start time.",
-    )
-    parser.add_argument(
-        "--cf-timeout",
-        type=float,
-        default=defaults.cf_timeout_seconds,
-        metavar="SECONDS",
-        help="How long to wait for a 'cf' invocation.",
-    )
-    parser.add_argument(
-        "--sq-runs-dir",
-        type=Path,
-        default=DEFAULT_SQ_RUNS_DIR,
-        metavar="PATH",
-        help="The Squadron runs directory the observer scans.",
-    )
-    parser.add_argument(
-        "--inbox-batch-size",
-        type=_positive_int,
-        default=defaults.inbox_batch_size,
-        metavar="COUNT",
-        help="The most inbox files one tick handles.",
-    )
-    parser.add_argument(
-        "--inbox-max-attempts",
-        type=_positive_int,
-        default=defaults.inbox_max_attempts,
-        metavar="COUNT",
-        help="Failed applies of one file before it is parked in inbox/failed/.",
-    )
-
-
-def _positive_int(text: str) -> int:
-    """An argparse type for a count that must be at least 1.
-
-    Zero would be accepted by ``int`` and silently stop the queue (a batch of
-    none) or park every file on its first failure — so it is refused here.
-    """
-    value = int(text)
-    if value < 1:
-        raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
-    return value
-
-
-def _add_stop_timeout_flag(parser: argparse.ArgumentParser) -> None:
-    """Expose the one :class:`ProcessSettings` tunable ``stop`` consumes.
-
-    ``stop`` uses only ``stop_timeout_seconds``; the rest of
-    :class:`ProcessSettings` governs the running loop and has no meaning to a
-    command that just signals a PID and waits. Registering the flag here
-    rather than in :func:`_add_settings_flags` keeps ``amoeba stop --help``
-    honest about what it can actually change.
-    """
-    defaults = ProcessSettings()
-
-    parser.add_argument(
-        "--stop-timeout",
-        type=float,
-        default=defaults.stop_timeout_seconds,
-        metavar="SECONDS",
-        help="How long to wait for the lock to be released after signalling.",
-    )
 
 
 def _add_inspect_parser(subparsers: Any) -> None:
@@ -251,49 +168,32 @@ def _add_inspect_parser(subparsers: Any) -> None:
             )
         for flag, flag_help in listing.flags:
             listing_parser.add_argument(flag, action="store_true", help=flag_help)
+        for option in listing.choice_options:
+            listing_parser.add_argument(
+                option.flag, choices=option.choices, help=option.help_text
+            )
         listing_parser.add_argument(
             "--json", action="store_true", help="Emit JSON instead of a table."
         )
-
-
-def settings_from_args(args: argparse.Namespace) -> ProcessSettings:
-    """Build ``start`` settings from parsed flags. Defaults live in
-    ``ProcessSettings``."""
-    return ProcessSettings(
-        idle_interval_seconds=args.idle_interval,
-        shutdown_grace_seconds=args.shutdown_grace,
-        clock_tolerance_seconds=args.clock_tolerance,
-        cf_timeout_seconds=args.cf_timeout,
-        sq_runs_dir=args.sq_runs_dir,
-        inbox_batch_size=args.inbox_batch_size,
-        inbox_max_attempts=args.inbox_max_attempts,
-    )
-
-
-def stop_settings_from_args(args: argparse.Namespace) -> ProcessSettings:
-    """Build ``stop`` settings from parsed flags.
-
-    Only ``stop_timeout_seconds`` is ``stop``-reachable; every other field
-    keeps :class:`ProcessSettings`'s default, since ``stop`` never runs the
-    loop those defaults govern.
-    """
-    return ProcessSettings(stop_timeout_seconds=args.stop_timeout)
 
 
 def _dispatch(args: argparse.Namespace) -> ExitCode:
     """Route a parsed command to its implementation."""
     from amoeba.cli import inspect as inspect_module
     from amoeba.cli import lifecycle
+    from amoeba.cli import submit as submit_module
 
     match args.command:
         case "start":
-            return lifecycle.start(settings_from_args(args))
+            return lifecycle.start(settings_flags.start_settings(args))
         case "stop":
-            return lifecycle.stop(stop_settings_from_args(args))
+            return lifecycle.stop(settings_flags.stop_settings(args))
         case "status":
             return lifecycle.status()
         case "inspect":
             return inspect_module.run_listing(args.listing, args, use_json=args.json)
+        case "submit":
+            return submit_module.run_submit(args)
         case _:
             raise ValueError(f"unhandled command {args.command!r}")
 
@@ -333,6 +233,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ProcessError as error:
         print(f"amoeba: {error}", file=sys.stderr)
         return int(ExitCode.FAILURE)
+    except InboxSubmitError as error:
+        print(f"amoeba: {error}", file=sys.stderr)
+        return int(ExitCode.SUBMISSION_REFUSED)
     except KeyboardInterrupt:
         # Ctrl-C outside the running loop; a clean stop, not a crash.
         return int(ExitCode.OK)

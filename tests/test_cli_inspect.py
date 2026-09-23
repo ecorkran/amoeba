@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,16 @@ from cli_harness import await_running, run_cli, start_background
 
 from amoeba.cli.inspect import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.cli.main import ExitCode
-from amoeba.store import BlockedKind, CommandKind, JournalOutcome, NodeKind, Store
+from amoeba.inbox import submit
+from amoeba.store import (
+    BlockedKind,
+    CommandKind,
+    JournalOutcome,
+    NodeKind,
+    Store,
+    SubmissionKind,
+)
+from amoeba.store.inbox_models import INTENT_BODY, INTENT_NODE_ID
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
@@ -78,6 +88,23 @@ def populated(supervisor_dir: Path) -> Path:
             kind=CommandKind.CF_WRITE,
             parameters={"project": "amoeba", "expected": {"phase": "6"}},
         )
+        # Slice 103: a submission record and the intent message it produced.
+        store.apply_submission(
+            submission_id="fixture-intent",
+            project_id=PROJECT,
+            kind=SubmissionKind.INTENT,
+            submitted_by="fixture",
+            submitted_at=datetime(2026, 9, 23, tzinfo=UTC),
+            payload={INTENT_NODE_ID: runnable.id, INTENT_BODY: {"want": "a run"}},
+        )
+    # And one file still waiting in the inbox, written by the real submit().
+    submit(
+        project_id=PROJECT,
+        kind=SubmissionKind.INTENT,
+        payload={INTENT_BODY: {"want": "later"}},
+        submitted_by="fixture",
+        store_dir=supervisor_dir,
+    )
     return project_store_file
 
 
@@ -354,14 +381,29 @@ def test_slice_104_listings_are_not_registered_here() -> None:
     """Findings and verdicts belong to slice 104, per the ratified D4 split."""
     registered = {listing.name for listing in LISTINGS}
 
-    assert registered == {PROJECTS_LISTING, "nodes", "blocked", "journal"}
+    assert registered == {
+        PROJECTS_LISTING,
+        "nodes",
+        "blocked",
+        "journal",
+        # Slice 103.
+        "inbox",
+        "submissions",
+        "messages",
+    }
     assert "findings" not in registered
     assert "verdicts" not in registered
 
 
 def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
     """``projects`` takes no ``--project``; the rest require one."""
-    assert set(PROJECT_LISTINGS) == {"nodes", "blocked", "journal"}
+    assert set(PROJECT_LISTINGS) == {
+        "nodes",
+        "blocked",
+        "journal",
+        "submissions",
+        "messages",
+    }
 
     missing_project = run_cli(["inspect", "nodes"], supervisor_dir)
     assert missing_project.returncode != ExitCode.OK
