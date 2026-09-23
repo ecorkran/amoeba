@@ -88,18 +88,18 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Objective**: Create `src/amoeba/store/inbox_models.py` holding every inbox and message vocabulary and both record dataclasses, so no related string literal appears anywhere else.
 
 **Steps**:
-- [ ] Define `SubmissionKind`, `SubmissionOutcome`, `Channel`, and `QuarantineReason` as `StrEnum`s with exactly the members the LLD's "Closed vocabularies" section lists
-- [ ] Define the frozen `SubmissionRecord` and `Message` dataclasses with the fields the LLD's API Contracts and schema sections name, following the slice 101 convention in `models.py`
-- [ ] ~~Define the kind-to-payload-model mapping here~~ — **moved to Task 5.1** (PM decision 20260923). The payload models are pydantic and live in `amoeba.inbox.envelope`; defining the mapping in the store would make `amoeba.store` import `amoeba.inbox`, reversing the LLD's dependency direction
-- [ ] Treat `submitted_by` and `resolved_by` as free-form data — no enum, and nothing branches on them
+- [x] Define `SubmissionKind`, `SubmissionOutcome`, `Channel`, and `QuarantineReason` as `StrEnum`s with exactly the members the LLD's "Closed vocabularies" section lists
+- [x] Define the frozen `SubmissionRecord` and `Message` dataclasses with the fields the LLD's API Contracts and schema sections name, following the slice 101 convention in `models.py`
+- [x] ~~Define the kind-to-payload-model mapping here~~ — **moved to Task 5.1** (PM decision 20260923). The payload models are pydantic and live in `amoeba.inbox.envelope`; defining the mapping in the store would make `amoeba.store` import `amoeba.inbox`, reversing the LLD's dependency direction
+- [x] Treat `submitted_by` and `resolved_by` as free-form data — no enum, and nothing branches on them
 
 **Success Criteria**:
-- [ ] Every inbox and message vocabulary value is defined exactly once; `grep` for any kind, outcome, channel, or quarantine-reason literal finds it only in this module
-- [ ] Both records are frozen dataclasses consistent with the existing transfer types
-- [ ] `uv run pyright` clean in strict mode
-- [ ] No import of `sqlite3` and no SQL in this module
+- [x] Every inbox and message vocabulary value is defined exactly once; `grep` for any kind, outcome, channel, or quarantine-reason literal finds it only in this module
+- [x] Both records are frozen dataclasses consistent with the existing transfer types
+- [x] `uv run pyright` clean in strict mode
+- [x] No import of `sqlite3` and no SQL in this module
 
-- [ ] Commit after this task, e.g. `feat(store): add inbox and message vocabularies`
+- [x] Commit after this task, e.g. `feat(store): add inbox and message vocabularies`
 
 **Files to Create**: `src/amoeba/store/inbox_models.py`
 
@@ -112,15 +112,15 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Objective**: Pin the vocabularies before any SQL or parsing depends on them.
 
 **Steps**:
-- [ ] Assert each enum's exact member set — a test that fails if a member is added or renamed without deliberate intent
-- [ ] Assert both record dataclasses are frozen
-- [ ] ~~Assert every `SubmissionKind` member has a payload model~~ — **moved to Task 5.1** with the mapping it covers
+- [x] Assert each enum's exact member set — a test that fails if a member is added or renamed without deliberate intent
+- [x] Assert both record dataclasses are frozen
+- [x] ~~Assert every `SubmissionKind` member has a payload model~~ — **moved to Task 5.1** with the mapping it covers
 
 **Success Criteria**:
-- [ ] Adding or renaming a vocabulary member fails this suite
-- [ ] `uv run pytest` passes
+- [x] Adding or renaming a vocabulary member fails this suite
+- [x] `uv run pytest` passes
 
-- [ ] Commit after this task, e.g. `test: pin inbox vocabularies and kind mapping`
+- [x] Commit after this task, e.g. `test: pin inbox vocabularies and kind mapping`
 
 **Files to Create**: `tests/store/test_inbox_models.py`
 
