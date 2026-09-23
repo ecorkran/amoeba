@@ -255,3 +255,25 @@ def test_non_runnable_statuses_are_absent_from_runnable(store_file: Path) -> Non
         store.update_node_status(done, NodeStatus.DONE)
 
         assert [node.id for node in store.runnable("demo")] == [runnable_id]
+
+
+def test_block_accepts_an_optional_payload(store_file: Path) -> None:
+    """``payload`` is accepted without changing what ``block()`` does.
+
+    Acceptance only: ``blocked_states`` has no payload column, and the payload
+    becomes readable on the escalation row, where its round trip is tested.
+    """
+    with Store.open(store_file) as store:
+        node_id = _make_node(store)
+
+        blocked = store.block(
+            node_id,
+            kind=BlockedKind.HUMAN,
+            context="needs a decision",
+            payload={"options": ["a", "b"]},
+        )
+
+        node = store.get_node(node_id)
+        assert blocked.node_id == node_id
+        assert node is not None
+        assert node.status is NodeStatus.BLOCKED_ON_HUMAN
