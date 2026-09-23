@@ -20,6 +20,7 @@ import time
 
 from amoeba.cli.main import VERSION, ExitCode
 from amoeba.process.host import ResidentProcess
+from amoeba.process.inbox_tenant import InboxTenant
 from amoeba.process.instance_lock import (
     InstanceLock,
     PidFileContents,
@@ -47,13 +48,14 @@ def start(settings: ProcessSettings) -> ExitCode:
         StartupFailedError: Mapped to ``ExitCode.STARTUP_FAILED``.
         GraceExpiredError: Mapped to ``ExitCode.GRACE_EXPIRED``.
     """
+    supervisor_dir = paths.store_dir()
     process = ResidentProcess(
         settings,
-        store_dir=paths.store_dir(),
+        store_dir=supervisor_dir,
         version=VERSION,
-        # No tenants: this slice ships none. The process starts, recovers,
-        # idles, and stops.
-        tenants=(),
+        # Tenants tick in registration order. The inbox is first, so a backlog
+        # of submissions drains ahead of any later tenant's work.
+        tenants=(InboxTenant(supervisor_dir),),
         grace_expired_exit_status=int(ExitCode.GRACE_EXPIRED),
         # A tenant that never returns must not hold the process forever; the
         # operator's remedy would otherwise be an external kill.
