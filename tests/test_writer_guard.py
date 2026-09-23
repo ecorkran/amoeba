@@ -219,6 +219,24 @@ def test_the_inspection_cli_is_covered_by_the_scan() -> None:
     assert _read_write_open_calls(inspect_module.read_text(encoding="utf-8")) == []
 
 
+def test_the_inbox_and_submit_cli_are_covered_by_the_scan() -> None:
+    """``amoeba.inbox`` and ``cli/submit.py`` are scanned, and exempt from nothing.
+
+    Both are how a part *outside* the process contributes state, so neither
+    may hold a read-write store: ``submit`` writes a file, and the process
+    applies it through the one permitted module.
+    """
+    scanned = set(_source_modules())
+    inbox_modules = sorted((SOURCE_DIR / "inbox").glob("*.py"))
+    submit_cli = SOURCE_DIR / "cli" / "submit.py"
+
+    assert inbox_modules, "the inbox package must exist to be scanned"
+    for module in [*inbox_modules, submit_cli]:
+        assert module in scanned
+        assert _relative(module) not in PERMITTED_MODULES
+        assert _read_write_open_calls(module.read_text(encoding="utf-8")) == []
+
+
 def test_the_permitted_set_is_exactly_project_stores() -> None:
     """Widening the sole-writer invariant is a deliberate, visible change.
 
