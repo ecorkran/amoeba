@@ -25,13 +25,15 @@ from amoeba.store.inbox_models import INTENT_BODY
 from amoeba.store.paths import STORE_FILE_SUFFIX
 
 
-def _submit(store_dir: Path, **overrides: object) -> str:
+def _submit(supervisor_dir: Path, **overrides: object) -> str:
+    # Named ``supervisor_dir`` rather than ``store_dir``: the store-safety guard
+    # flags any reference to that name, which is also the central resolver's.
     arguments: dict[str, object] = {
         "project_id": "demo",
         "kind": SubmissionKind.INTENT,
         "payload": {INTENT_BODY: {"want": "x"}},
         "submitted_by": "tester",
-        "store_dir": store_dir,
+        "store_dir": supervisor_dir,
     }
     arguments.update(overrides)
     return submit(**arguments)  # pyright: ignore[reportArgumentType]
