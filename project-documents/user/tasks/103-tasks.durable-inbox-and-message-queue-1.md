@@ -133,19 +133,19 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Objective**: Add the `inbox_submissions` and `messages` tables at schema version 4, with every statement and column name living in one module.
 
 **Steps**:
-- [ ] Write `src/amoeba/store/schema/004_inbox_and_messages.sql` creating both tables exactly as the LLD's "Database / Storage Schema" section specifies, including the autoincrement primary keys that carry D4's receiver-assigned order
-- [ ] Add the index on `(project_id, channel, seq)` and the partial index on unacknowledged intents
-- [ ] Add the backfill: one escalation row per **open** `HUMAN` blocked state, so D3's invariant holds from version 4 onward; do **not** backfill resolved historical blocks
-- [ ] Create `src/amoeba/store/sql_inbox.py` holding every statement and column name for both tables, following the slice 101/102 convention
-- [ ] Raise `EXPECTED_SCHEMA_VERSION` from 3 to 4
+- [x] Write `src/amoeba/store/schema/004_inbox_and_messages.sql` creating both tables exactly as the LLD's "Database / Storage Schema" section specifies, including the autoincrement primary keys that carry D4's receiver-assigned order
+- [x] Add the index on `(project_id, channel, seq)` and the partial index on unacknowledged intents
+- [x] Add the backfill: one escalation row per **open** `HUMAN` blocked state, so D3's invariant holds from version 4 onward; do **not** backfill resolved historical blocks
+- [x] Create `src/amoeba/store/sql_inbox.py` holding every statement and column name for both tables, following the slice 101/102 convention
+- [x] Raise `EXPECTED_SCHEMA_VERSION` from 3 to 4
 
 **Success Criteria**:
-- [ ] No SQL string and no column name for either table appears outside `sql_inbox.py` and the migration file
-- [ ] `EXPECTED_SCHEMA_VERSION` is 4 and the migration runner picks up `004` without modification
-- [ ] Both autoincrement keys are declared `INTEGER PRIMARY KEY AUTOINCREMENT` so values are never reassigned after a delete
-- [ ] `uv run pyright` clean
+- [x] No SQL string and no column name for either table appears outside `sql_inbox.py` and the migration file
+- [x] `EXPECTED_SCHEMA_VERSION` is 4 and the migration runner picks up `004` without modification
+- [x] Both autoincrement keys are declared `INTEGER PRIMARY KEY AUTOINCREMENT` so values are never reassigned after a delete
+- [x] `uv run pyright` clean
 
-- [ ] Commit after this task, e.g. `feat(store): add migration 004 for inbox and messages`
+- [x] Commit after this task, e.g. `feat(store): add migration 004 for inbox and messages`
 
 **Files to Create**: `src/amoeba/store/schema/004_inbox_and_messages.sql`, `src/amoeba/store/sql_inbox.py`
 **Files to Modify**: the module declaring `EXPECTED_SCHEMA_VERSION`
@@ -159,15 +159,15 @@ Per the LLD's Development Approach, this section is **first and is a pure refact
 **Objective**: Prove the upgrade preserves existing data and performs the escalation backfill.
 
 **Steps**:
-- [ ] Build a fixture store at schema version 3 containing nodes, an **open** `HUMAN` blocked state, a resolved `HUMAN` blocked state, and journal entries
-- [ ] Assert the upgrade to 4 leaves nodes, blocked states, and journal rows intact
-- [ ] Assert exactly one backfilled escalation row exists for the open human block and **none** for the resolved one
-- [ ] Assert a store created fresh at version 4 has both tables and both indexes
+- [x] Build a fixture store at schema version 3 containing nodes, an **open** `HUMAN` blocked state, a resolved `HUMAN` blocked state, and journal entries
+- [x] Assert the upgrade to 4 leaves nodes, blocked states, and journal rows intact
+- [x] Assert exactly one backfilled escalation row exists for the open human block and **none** for the resolved one
+- [x] Assert a store created fresh at version 4 has both tables and both indexes
 
 **Success Criteria**:
-- [ ] A version-3 store with an open human block upgrades to 4 with all prior data intact and gains exactly one backfilled row
-- [ ] `uv run pytest` passes
-- [ ] Commit after this task, e.g. `feat(store): add inbox and messages schema at version 4`
+- [x] A version-3 store with an open human block upgrades to 4 with all prior data intact and gains exactly one backfilled row
+- [x] `uv run pytest` passes
+- [x] Commit after this task, e.g. `feat(store): add inbox and messages schema at version 4`
 
 **Files to Create**: `tests/store/test_migration_004.py`
 
