@@ -11,13 +11,13 @@ schema-level expression of checkpoint-as-persisted-blocked-state.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 from amoeba.store import sql
-from amoeba.store._base import StoreBase, isoformat, new_id, now
+from amoeba.store._base import isoformat, now
+from amoeba.store._block_writer import BlockWriter
 from amoeba.store.mapping import map_blocked_state, map_node
 from amoeba.store.models import (
-    BLOCKED_KIND_TO_STATUS,
     BLOCKED_STATUSES,
     BlockedKind,
     BlockedNode,
@@ -28,10 +28,17 @@ from amoeba.store.models import (
 )
 
 
-class BlockingOperations(StoreBase):
+class BlockingOperations(BlockWriter):
     """Blocking, resolution, and the queries the Runner's loop consumes."""
 
-    def block(self, node_id: str, *, kind: BlockedKind, context: str) -> BlockedState:
+    def block(
+        self,
+        node_id: str,
+        *,
+        kind: BlockedKind,
+        context: str,
+        payload: Mapping[str, object] | None = None,
+    ) -> BlockedState:
         """Block a node: write the blocked state and set the node's status.
 
         One call, one transaction.
@@ -40,6 +47,7 @@ class BlockingOperations(StoreBase):
             node_id: The node to block.
             kind: What it is blocked on.
             context: Description of the block.
+            payload: Opaque data for whoever resolves the block. Optional.
 
         Returns:
             The blocked state, with an unfilled resolution slot — that unfilled
@@ -57,34 +65,24 @@ class BlockingOperations(StoreBase):
             )
 
         created = now()
-        blocked = BlockedState(
-            id=new_id(),
+
+        with self._connection:
+            blocked_state_id = self._write_block(
+                node_id,
+                kind=kind,
+                context=context,
+                timestamp=isoformat(created),
+                payload=payload,
+            )
+
+        return BlockedState(
+            id=blocked_state_id,
             node_id=node_id,
             kind=kind,
             context=context,
             created_at=created,
             updated_at=created,
         )
-        timestamp = isoformat(created)
-
-        with self._connection:
-            self._execute(
-                sql.INSERT_BLOCKED_STATE,
-                (
-                    blocked.id,
-                    blocked.node_id,
-                    blocked.kind.value,
-                    blocked.context,
-                    timestamp,
-                    timestamp,
-                ),
-            )
-            self._execute(
-                sql.UPDATE_NODE_STATUS,
-                (BLOCKED_KIND_TO_STATUS[kind].value, timestamp, node_id),
-            )
-
-        return blocked
 
     def resolve(self, node_id: str, *, resolved_by: str, detail: str) -> BlockedState:
         """Fill a node's resolution slot and flip it back to runnable.

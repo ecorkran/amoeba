@@ -18,8 +18,9 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 
-from amoeba.store import sql, sql_journal
-from amoeba.store._base import StoreBase, isoformat, new_id, now
+from amoeba.store import sql_journal
+from amoeba.store._base import isoformat, new_id, now
+from amoeba.store._block_writer import BlockWriter
 from amoeba.store.journal_models import (
     REQUIRED_PARAMETER_KEYS,
     CommandKind,
@@ -29,7 +30,6 @@ from amoeba.store.journal_models import (
 )
 from amoeba.store.mapping_journal import decode_mapping, map_journal_entry
 from amoeba.store.models import (
-    BLOCKED_KIND_TO_STATUS,
     BLOCKED_STATUSES,
     BlockedKind,
     InvalidTransitionError,
@@ -41,7 +41,7 @@ from amoeba.store.models import (
 RESULT_KEY_RUN_ID = "run_id"
 
 
-class JournalOperations(StoreBase):
+class JournalOperations(BlockWriter):
     """The command journal: issue before the side effect, resolve after it."""
 
     def journal_issue(
@@ -206,39 +206,16 @@ class JournalOperations(StoreBase):
                 )
 
             if not already_blocked:
-                self._block_for_entry(entry, reason, timestamp)
+                # Through the one block writer, inside this transaction, so the
+                # block and the outcome cannot land separately.
+                self._write_block(
+                    entry.node_id,
+                    kind=BlockedKind.HUMAN,
+                    context=f"journal entry {entry.id} ({entry.kind.value}): {reason}",
+                    timestamp=timestamp,
+                )
 
         return self._require_entry(entry_id)
-
-    def _block_for_entry(
-        self, entry: JournalEntry, reason: str, timestamp: str
-    ) -> None:
-        """Write the blocked state and status for an escalated entry.
-
-        Called inside :meth:`journal_escalate`'s transaction, so the block and
-        the outcome cannot land separately. Uses the same statements
-        ``block()`` does rather than calling it, because calling it would open a
-        second transaction and split the two writes.
-        """
-        self._execute(
-            sql.INSERT_BLOCKED_STATE,
-            (
-                new_id(),
-                entry.node_id,
-                BlockedKind.HUMAN.value,
-                f"journal entry {entry.id} ({entry.kind.value}): {reason}",
-                timestamp,
-                timestamp,
-            ),
-        )
-        self._execute(
-            sql.UPDATE_NODE_STATUS,
-            (
-                BLOCKED_KIND_TO_STATUS[BlockedKind.HUMAN].value,
-                timestamp,
-                entry.node_id,
-            ),
-        )
 
     def _require_entry(self, entry_id: str) -> JournalEntry:
         """Return an entry, raising when it does not exist."""
