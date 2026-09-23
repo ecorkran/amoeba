@@ -154,9 +154,21 @@ class ResidentProcess:
         """
         return self._stores.store_for(project_id)
 
+    def open_project(self, project_id: str) -> Store:
+        """Create-or-open a project's store at runtime. Idempotent.
+
+        :attr:`project_ids` reflects it immediately, so a consumer must not
+        cache that list.
+
+        Raises:
+            ValueError: If ``project_id`` is not a safe filename.
+            StoreError: If the store cannot be created or opened.
+        """
+        return self._stores.open_project(project_id)
+
     @property
     def project_ids(self) -> tuple[str, ...]:
-        """The projects this process has open."""
+        """The projects this process has open. Grows at runtime."""
         return self._stores.project_ids
 
     def request_stop(self) -> None:

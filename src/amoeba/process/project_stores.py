@@ -19,6 +19,7 @@ from pathlib import Path
 from amoeba.process.errors import StartupFailedError
 from amoeba.process.supervisor import discover_project_ids, store_path_for
 from amoeba.store import Store
+from amoeba.store.paths import validate_project_id
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +53,34 @@ class ProjectStores:
                     f"cannot open the store for project {project_id!r}: {error}"
                 ) from error
 
+    def open_project(self, project_id: str) -> Store:
+        """Create-or-open a project's store read-write and add it to the set.
+
+        Idempotent: an already-open project returns its open handle. A new
+        store is migrated by ``Store.open`` as usual; its journal is empty, so
+        there is nothing to recover. :attr:`project_ids` includes it at once.
+
+        Raises:
+            ValueError: If ``project_id`` is not a safe filename. Checked
+                before any path is computed, so nothing is created.
+            StoreError: If the store cannot be created or opened. Not caught
+                here — the caller decides what a failure means.
+        """
+        if (open_store := self._stores.get(project_id)) is not None:
+            return open_store
+
+        validate_project_id(project_id)
+        store = Store.open(store_path_for(self._store_dir, project_id))
+        self._stores[project_id] = store
+        logger.info("opened project %s at runtime", project_id)
+        return store
+
     def store_for(self, project_id: str) -> Store:
         """The open read-write store for a project.
 
         Raises:
-            KeyError: If the project has no store open, which means it did not
-                exist in the supervisor directory when the process started.
+            KeyError: If the project has no store open: it existed neither at
+                start nor was opened since through :meth:`open_project`.
         """
         return self._stores[project_id]
 
