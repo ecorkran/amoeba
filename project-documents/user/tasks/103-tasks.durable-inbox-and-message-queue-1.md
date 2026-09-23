@@ -184,19 +184,19 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 **Objective**: Make `block()` and `journal_escalate` write their blocks through a single internal writer, removing `_block_for_entry` as a separate write path.
 
 **Steps**:
-- [ ] Identify the two current paths: the public `block()` and `journal_escalate`'s private `_block_for_entry`
-- [ ] Introduce one internal block writer both call, preserving each caller's existing public signature and behavior
-- [ ] Delete `_block_for_entry` as a separate write path — it must not survive as a second way to write a block
-- [ ] Add the keyword-only `payload=None` argument to `block()`, stored as NULL when absent
-- [ ] Do **not** write escalation rows yet — that is Task 3.3, so this task stays a behavior-preserving consolidation
+- [x] Identify the two current paths: the public `block()` and `journal_escalate`'s private `_block_for_entry`
+- [x] Introduce one internal block writer both call, preserving each caller's existing public signature and behavior
+- [x] Delete `_block_for_entry` as a separate write path — it must not survive as a second way to write a block
+- [x] Add the keyword-only `payload=None` argument to `block()`, stored as NULL when absent
+- [x] Do **not** write escalation rows yet — that is Task 3.3, so this task stays a behavior-preserving consolidation
 
 **Success Criteria**:
-- [ ] Exactly one internal function writes a blocked state; `grep` confirms no second write path
-- [ ] `_block_for_entry` no longer exists
-- [ ] All slice 101 and 102 block, resolve, and recovery tests pass unchanged
-- [ ] `uv run pyright` clean
+- [x] Exactly one internal function writes a blocked state; `grep` confirms no second write path
+- [x] `_block_for_entry` no longer exists
+- [x] All slice 101 and 102 block, resolve, and recovery tests pass unchanged
+- [x] `uv run pyright` clean
 
-- [ ] Commit after this task, e.g. `refactor(store): route block writing through one writer`
+- [x] Commit after this task, e.g. `refactor(store): route block writing through one writer`
 
 **Files to Modify**: the store modules holding `block()` and `journal_escalate`
 
@@ -209,12 +209,12 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 **Objective**: Confirm the consolidation changed nothing, so any later failure is attributable to D3 rather than to the refactor.
 
 **Steps**:
-- [ ] Run the full slice 101 and 102 suites plus the load tier; all must pass with no test modified
-- [ ] Assert `block(payload=…)` **accepts** the argument without error; do not assert it round-trips — migration 004 adds no payload column to `blocked_states`, and the payload only becomes readable on the escalation row in Task 3.3. The round-trip assertion lives in Task 3.4
+- [x] Run the full slice 101 and 102 suites plus the load tier; all must pass with no test modified
+- [x] Assert `block(payload=…)` **accepts** the argument without error; do not assert it round-trips — migration 004 adds no payload column to `blocked_states`, and the payload only becomes readable on the escalation row in Task 3.3. The round-trip assertion lives in Task 3.4
 
 **Success Criteria**:
-- [ ] `uv run pytest` and `uv run pytest tests/load` pass with no slice 101/102 test modified
-- [ ] Commit after this task, e.g. `refactor(store): consolidate block writing into one writer`
+- [x] `uv run pytest` and `uv run pytest tests/load` pass with no slice 101/102 test modified
+- [x] Commit after this task, e.g. `refactor(store): consolidate block writing into one writer`
 
 **Files to Modify**: the store block/resolve test module
 
@@ -227,20 +227,20 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 **Objective**: Create `store/messages.py` with the message read and acknowledge methods, and make the block writer emit one escalation row for every `HUMAN` block in the same transaction.
 
 **Steps**:
-- [ ] Create the message operations class in `src/amoeba/store/messages.py` with `messages`, `pending_intents`, and `acknowledge_message` per the LLD's API Contracts table, using only `sql_inbox.py` statements
-- [ ] **Name it `MessageOperations`, not `MessagesMixin`.** The LLD says "mixin", but the assembled class is `Store(NodeOperations, BlockingOperations, JournalOperations)` — follow the house convention. The same applies to `InboxOperations` in Task 4.1
-- [ ] Have `acknowledge_message` raise `InvalidTransitionError` when the row is already acknowledged or is not an intent
-- [ ] In the internal block writer, write exactly one `escalation` row **in the same transaction** whenever the kind is `HUMAN`, carrying `node_id`, `blocked_state_id`, and the optional opaque payload
-- [ ] Write **no** message for `JUDGE` or `SQ_CHECKPOINT` blocks — no channel is defined for them
-- [ ] Wire `MessageOperations` into the `Store` class alongside the existing operations classes
+- [x] Create the message operations class in `src/amoeba/store/messages.py` with `messages`, `pending_intents`, and `acknowledge_message` per the LLD's API Contracts table, using only `sql_inbox.py` statements
+- [x] **Name it `MessageOperations`, not `MessagesMixin`.** The LLD says "mixin", but the assembled class is `Store(NodeOperations, BlockingOperations, JournalOperations)` — follow the house convention. The same applies to `InboxOperations` in Task 4.1
+- [x] Have `acknowledge_message` raise `InvalidTransitionError` when the row is already acknowledged or is not an intent
+- [x] In the internal block writer, write exactly one `escalation` row **in the same transaction** whenever the kind is `HUMAN`, carrying `node_id`, `blocked_state_id`, and the optional opaque payload
+- [x] Write **no** message for `JUDGE` or `SQ_CHECKPOINT` blocks — no channel is defined for them
+- [x] Wire `MessageOperations` into the `Store` class alongside the existing operations classes
 
 **Success Criteria**:
-- [ ] A human-blocked node without an escalation row cannot exist — the row commits with the block or neither does
-- [ ] `messages(after_seq=n)` returns only rows with `seq > n`, ascending, and is stable across repeated calls
-- [ ] `acknowledge_message` raises on a second acknowledge and on a non-intent row
-- [ ] `uv run pyright` clean
+- [x] A human-blocked node without an escalation row cannot exist — the row commits with the block or neither does
+- [x] `messages(after_seq=n)` returns only rows with `seq > n`, ascending, and is stable across repeated calls
+- [x] `acknowledge_message` raises on a second acknowledge and on a non-intent row
+- [x] `uv run pyright` clean
 
-- [ ] Commit after this task, e.g. `feat(store): add message operations and escalation on human block`
+- [x] Commit after this task, e.g. `feat(store): add message operations and escalation on human block`
 
 **Files to Create**: `src/amoeba/store/messages.py`
 **Files to Modify**: the store class assembly, the internal block writer
@@ -254,18 +254,18 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 **Objective**: Cover the D3 invariant and the replay primitive.
 
 **Steps**:
-- [ ] Assert `block(kind=HUMAN)` writes exactly one escalation row in the same transaction, and that `JUDGE` and `SQ_CHECKPOINT` blocks write none
-- [ ] Assert the escalation row carries the correct `node_id` and `blocked_state_id`
-- [ ] Assert `block(payload=…)` round-trips the payload onto the escalation row, and that omitting it stores NULL — this is the first point where the payload is readable (moved here from Task 3.2)
-- [ ] Assert `messages(channel=ESCALATION, after_seq=n)` returns only later rows in `seq` order, identically on repeated calls, **through a read-only handle**
-- [ ] Assert `pending_intents` excludes acknowledged rows and that a second `acknowledge_message` raises
+- [x] Assert `block(kind=HUMAN)` writes exactly one escalation row in the same transaction, and that `JUDGE` and `SQ_CHECKPOINT` blocks write none
+- [x] Assert the escalation row carries the correct `node_id` and `blocked_state_id`
+- [x] Assert `block(payload=…)` round-trips the payload onto the escalation row, and that omitting it stores NULL — this is the first point where the payload is readable (moved here from Task 3.2)
+- [x] Assert `messages(channel=ESCALATION, after_seq=n)` returns only later rows in `seq` order, identically on repeated calls, **through a read-only handle**
+- [x] Assert `pending_intents` excludes acknowledged rows and that a second `acknowledge_message` raises
 
 **Success Criteria**:
-- [ ] All four assertions above pass
-- [ ] A read-only handle can read messages, confirming outside consumers need no write access
-- [ ] `uv run pytest` passes
+- [x] All four assertions above pass
+- [x] A read-only handle can read messages, confirming outside consumers need no write access
+- [x] `uv run pytest` passes
 
-- [ ] Commit after this task, e.g. `test: cover escalation rows and the message read api`
+- [x] Commit after this task, e.g. `test: cover escalation rows and the message read api`
 
 **Files to Create**: `tests/store/test_messages.py`
 
@@ -278,15 +278,15 @@ This section implements D3. Per the LLD, the consolidation is required for corre
 **Objective**: Make `journal_escalate` escalate on its already-blocked branch, where today it writes nothing.
 
 **Steps**:
-- [ ] On the branch where the entry's node is **already blocked**, write an escalation row pointing at the node's **existing open blocked state**, with `journal_entry_id` set — whatever kind that existing block is
-- [ ] Keep `journal_escalate`'s signature unchanged; it must still write no second block on this branch
-- [ ] Ensure the unblocked path also carries `journal_entry_id` on its escalation row
+- [x] On the branch where the entry's node is **already blocked**, write an escalation row pointing at the node's **existing open blocked state**, with `journal_entry_id` set — whatever kind that existing block is
+- [x] Keep `journal_escalate`'s signature unchanged; it must still write no second block on this branch
+- [x] Ensure the unblocked path also carries `journal_entry_id` on its escalation row
 
 **Success Criteria**:
-- [ ] `journal_escalate` on an unblocked node writes the block and one escalation row carrying `journal_entry_id`
-- [ ] On an already-blocked node — tested with **both** a `HUMAN` and a `JUDGE` existing block — it writes no second block and exactly one escalation row pointing at the existing open blocked state
-- [ ] Slice 102's recovery tests pass, updated only where they asserted that nothing else happened on escalation
-- [ ] Commit after this task, e.g. `feat(store): write escalation messages from the block writer`
+- [x] `journal_escalate` on an unblocked node writes the block and one escalation row carrying `journal_entry_id`
+- [x] On an already-blocked node — tested with **both** a `HUMAN` and a `JUDGE` existing block — it writes no second block and exactly one escalation row pointing at the existing open blocked state
+- [x] Slice 102's recovery tests pass, updated only where they asserted that nothing else happened on escalation
+- [x] Commit after this task, e.g. `feat(store): write escalation messages from the block writer`
 
 **Files to Modify**: the journal/recovery store module, `tests/store/test_messages.py` or the recovery test module
 
