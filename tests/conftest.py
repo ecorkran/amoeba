@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from inbox_harness import RealSubmission, damaged_variants, write_real_submission
 
 from amoeba.store import Store
 
@@ -45,3 +46,29 @@ def store(store_file: Path) -> Iterator[Store]:
     """
     with Store.open(store_file) as opened:
         yield opened
+
+
+@pytest.fixture
+def supervisor_dir(tmp_path: Path) -> Path:
+    """A throwaway supervisor directory: inbox, stores, lock, and PID file.
+
+    Scope: function. Safety: it lies inside pytest's ``tmp_path``, is never the
+    central directory, and this fixture creates nothing in it.
+    """
+    return tmp_path / "supervisor"
+
+
+@pytest.fixture
+def real_submission(supervisor_dir: Path) -> RealSubmission:
+    """One file written by the real ``submit()`` into ``supervisor_dir``.
+
+    Here, not in ``tests/inbox/conftest.py``: the tenant tests in
+    ``tests/process/`` need it too, and conftest fixtures only apply downward.
+    """
+    return write_real_submission(supervisor_dir)
+
+
+@pytest.fixture
+def damaged_envelopes(real_submission: RealSubmission) -> dict[str, bytes]:
+    """Truncated, wrong-version, and extra-fields copies of the real file."""
+    return damaged_variants(real_submission)

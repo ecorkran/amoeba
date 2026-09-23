@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -27,12 +27,6 @@ from amoeba.store.store import Store
 PROJECT = "demo"
 OTHER_PROJECT = "other"
 SUBMITTED_AT = datetime(2026, 9, 23, 12, 0, tzinfo=UTC)
-
-
-@pytest.fixture
-def store(store_file: Path) -> Iterator[Store]:
-    with Store.open(store_file) as opened:
-        yield opened
 
 
 def _node(store: Store, project_id: str = PROJECT) -> str:
