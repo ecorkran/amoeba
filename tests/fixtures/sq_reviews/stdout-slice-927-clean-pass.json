@@ -1,0 +1,28 @@
+{
+  "verdict": "PASS",
+  "findings": [],
+  "structured_findings": [],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron"
+  },
+  "timestamp": "2026-09-26T14:30:24.250263",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "stop_reason": "stop",
+  "reasoning_chars": 19192,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "fallback_used": false,
+  "verdictSource": "stated"
+}

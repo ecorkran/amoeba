@@ -52,3 +52,12 @@ Captured **20260921** from `cf get --json` run against this repository.
 Note what this fixture does **not** contain: any version field. That absence is
 why the CF observer captures an opaque `cf --version` label separately, once per
 recovery pass, rather than reading a version out of this output.
+
+## `sq_reviews/` — Squadron review output
+
+Captured **20260926** for slice 104's review parser. More files (review artifacts, a pipeline-run judge artifact, and an artifact/stdout pair of one review) are added when slice 104 is implemented.
+
+| File | Command | Why it is here |
+| --- | --- | --- |
+| `stdout-slice-927-clean-pass.json` | `sq review slice 927 --output json --no-save` in the Squadron repo (captured by the Squadron session, squadron c88e2587, minimax-m3) | A clean PASS: `verdictSource: stated`, zero findings, `fallback_used: false`. Must parse as findings parsed, not as a parse failure. |
+| `stdout-slice-104-concerns-glmflash.json` | `sq review slice <104 design path> --against <100-arch path> --model glmflash --output json` against a throwaway copy of this repo (squadron 0.14.0, z-ai/glm-5.3-flash) | A CONCERNS with ten findings, mixed PASS/CONCERN/NOTE severities, and 48 tool calls. The review was not saved (a path input carries no slice number), so stdout holds no trailing `Saved review to` line. |

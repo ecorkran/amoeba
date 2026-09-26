@@ -1,0 +1,195 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Dependency direction, seam usage, and writer model verified against merged code",
+      "description": "The claimed consumption points all exist in the merged 101\u2013103 implementation: `KIND_PAYLOAD_MODELS` and `validate_envelope` (`src/amoeba/inbox/envelope.py:88,165`), `_Application` and the single-transaction `apply_submission` with explicit-branch rejection (`src/amoeba/store/inbox.py:49,127-166`), `KIND_EFFECTS` as the kind-to-effect table (`src/amoeba/store/inbox.py:266`), `_takes_object` raising at parser build (`src/amoeba/cli/submit.py:62-76`), `LISTINGS`/`run_listing` (`src/amoeba/cli/inspect.py:149,230`), `journal_entry` (`src/amoeba/store/journal.py:238`), `open_read_only` (`src/amoeba/store/store.py:135`), and `PERMITTED_SCRIPTS` with the `demo_inbox.py` precedent (`tests/test_writer_guard.py:63`). The dependency direction matches 103's rule (inbox converts pydantic payloads into plain store values; the store imports neither pydantic nor the adapter; `finding_identity.py` imports nothing from the store). The `verdict` kind follows 103's documented three-part seam and its \"rejection is a recorded outcome\" convention, and the demo script follows the `PERMITTED_SCRIPTS` precedent rather than weakening the writer guard.",
+      "file_ref": null,
+      "category": "alignment",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:138"
+    },
+    {
+      "severity": "PASS",
+      "title": "Metrology constraints and NFR posture are consistent with the architecture",
+      "description": "The architecture states no quantitative NFRs for these paths (a grep over the arch doc for latency/throughput/budget terms returns nothing; slice 102's doc likewise records \"the architecture states no NFR for this path\"), so nothing needed restating with targets. The slice's only performance claim \u2014 that `finding_changes` is \"bounded by one node's verdicts for one template, which is small\" (line 205) \u2014 is informal but violates no stated target. The metrology constraint is honored end to end: calibration is read-only and descriptive, never recommends thresholds, never writes outside the project store, a test asserts no module references Squadron's metrology directory/config, and escalated-gate admissibility is explicitly assigned to 140 rather than decided here.",
+      "file_ref": null,
+      "category": "nfr",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:574"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D2's identity rule contradicts the architecture's stated principle, and the architecture was not amended",
+      "description": "The architecture's principle reads \"Findings are keyed on normalized content (severity, location, summary)\" (arch doc line 47). D2 excludes severity and category and is PM-ratified, with a well-argued rationale (the regrade case; category is free-form). But the slice doc's own handling of D1 shows the expected mechanism: when a decision changed the architecture, \"`100-arch` is amended to match\" \u2014 and the arch doc indeed carries the D1 amendment (line 27). No such amendment was made for D2, so the architecture and the ratified slice design now state different identity principles. Since 105, 120, and 140 all consume `finding_identity` and 140's Tier-2 work builds on this boundary, the parent document should be updated (or the deviation recorded in it) the same way D1 was, so the two documents do not disagree on the store's central rule.",
+      "file_ref": null,
+      "category": "alignment",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:194"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parser mapping table omits `reviewed_sha`, `tool_calls_made`, `score`, and `criteria`",
+      "description": "The \"Mapping rules\" table is presented as the parser's spec but covers only 10 of `VerdictInput`'s parsed fields. Missing, each with an upstream-specific key name the table should pin (the upstream-delta note confirms frontmatter carries conditional `reviewedSha`, `toolCallsMade`, and judge `score` + `criteria`): `reviewed_sha` \u2014 which the architecture explicitly requires (\"which SQ run and reviewed SHA produced it\", arch line 49); `tool_calls_made`; and `score`/`criteria`, which are load-bearing for two stated deliverables \u2014 judge samples ingested from artifacts (squadron#140 makes stdout JSON `UNKNOWN`, so artifacts are the only source until it is fixed) and the `calibration` report's score min/mean/max. `ParsedReview` \"carries the `VerdictInput` review fields\", so the fields presumably parse, but the key names and the JSON-vs-artifact sources for exactly these fields are unspecified, and none of the success criteria tests `reviewed_sha` at all.",
+      "file_ref": null,
+      "category": "under-specification",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:332-343"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Record-id and idempotency contract across the inbox path is self-contradictory",
+      "description": "Three statements cannot all hold as written. (a) Line 157 and line 357 say that through the inbox \"the record id is the submission id,\" and D7 says \"A verdict arriving through the inbox uses its submission id.\" (b) `to_verdict_input` defaults `record_id` to a digest of the input text \"so re-ingesting the same bytes is a no-op (D7)\" (line 326). (c) Walkthrough step 7 (line 525) re-ingests the same artifact \"without `--id`, so the digest id repeats\" and expects one verdict record. Since `amoeba ingest review` submits through the inbox where submission ids are independently generated, (a) would give two different record ids for the same bytes \u2014 breaking (c) and D7's cited rationale \u2014 unless ingest passes the digest id *as the submission id*, which the doc never states. Relatedly, \"the payload is `VerdictInput`'s fields flattened\" implies the payload carries `id`, but a payload field named `id` would generate a `--id` flag colliding with the existing `--id` submission flag in 103's parser, and the effect would then ignore it. The design needs one explicit sentence: whether `VerdictPayload` omits `id`, and that `amoeba ingest review` sets `submission_id` to the digest id (with `--id` overriding it). This matters because idempotency on this path is D7's whole point (crash-retry safety for 105's re-detection).",
+      "file_ref": null,
+      "category": "consistency",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:326-364"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fixture source artifacts referenced by exact filename do not exist in the repository",
+      "description": "The technical requirement asserts \"Real artifacts from `project-documents/user/reviews/` (including `archive/`) are copied unmodified into `tests/fixtures/sq_reviews/`\", and the walkthrough ingests specific files (`102-review.tasks.resident-process-and-recovery.part-1\u2026`, the `103-review.tasks\u2026` provider failure). I verified that `project-documents/user/` contains no `reviews/` directory and a repo-wide search for the referenced filenames returns matches only inside this slice document \u2014 the source artifacts are absent from this checkout. The design's crux tests (consecutive rounds share no identity; the normalization case table \"only as honest as their input\") all depend on these files. Fixture capture is listed as development step 1, but the requirement as written presumes existing content. Make capture an explicit stated prerequisite, and re-verify the step-1 expectation while doing so: the captures are dated 20260921, before `verdictSource` was observed in frontmatter (20260926), so per D5's own `unattested` row their standing would likely be `unattested`, not the \"all `stated`\" the walkthrough currently expects \u2014 an expectation that cannot be checked against files that are not present.",
+      "file_ref": null,
+      "category": "test-evidence",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:443"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale cross-reference to the slice plan's dependency list",
+      "description": "The text says \"The slice plan lists only [101, 102]. 103 is added here\u2026\" \u2014 but the slice plan has already been updated to `**Dependencies:** [101, 102, 103] \u2014 103 added at slice design`. The frontmatter (`dependencies: [101, 102, 103]`) is correct; the explanatory sentence is stale.",
+      "file_ref": null,
+      "category": "documentation",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:73"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 4 omits required flags and one expected standing conflicts with D5's table order",
+      "description": "The \"Unknown is a value\" rule requires `fallback_used` and `findings_parsed` explicitly in the payload, yet r3 omits `--findings-parsed` and r5 omits `--fallback-used`, `--findings-parsed`, and the base provenance flags. For r3 this is load-bearing: a derived PASS with `findings_parsed` false would classify `findings_unparsed` (checked before `derived` in the top-down table), not the expected `derived`. For r5 (`CONCERNS`/`imposed` with no findings submitted) D5's second disjunct \u2014 \"`verdict` \u2208 {CONCERNS, FAIL} with zero findings recorded\" \u2014 fires before `imposed`, yielding `findings_unparsed`, not the expected `imposed`. The bullets are evidently shorthand, but r3/r5 need at least one finding and the explicit unknown-form flags for the expected standings to follow from D5 as written. The walkthrough is marked draft, so this is a correction, not a blocker.",
+      "file_ref": null,
+      "category": "consistency",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:508-514"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Standing rule encodes Squadron parse semantics as a universal rule",
+      "description": "The `findings_unparsed` row treats \"verdict \u2208 {CONCERNS, FAIL} with zero findings recorded\" as unparsed even when `findings_parsed` is explicitly true. That mirrors Squadron's semantics (where a zero-finding CONCERNS/FAIL always implies a parse failure) but misclassifies a non-Squadron submitter \u2014 e.g., a Judge sample via the inbox with a genuinely zero-finding CONCERNS \u2014 as `findings_unparsed`, which is non-comparable and excluded from baseline selection. Impact is low (judge templates rarely serve as baselines for review series), but the store is generic and the contract doc should state that this disjunct encodes a Squadron-specific invariant.",
+      "file_ref": null,
+      "category": "under-specification",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:223"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`value_options` is an edit to 102's CLI plumbing beyond pure registration",
+      "description": "The slice plan says slice 104 registers listings \"into 102's listing registry, not by editing the CLI.\" This slice edits the registry's data structure (`Listing` gains `value_options`) and `_add_inspect_parser`. The change is additive, generically useful, disclosed (\"the one edit to 102's CLI plumbing\"), and recorded under Consumes-from \u2014 consistent with 103's precedent of documenting recorded changes to consumed contracts \u2014 so this is a note on plan wording, not a violation. The `LISTINGS` concatenation in `inspect_evidence.py` follows the `inspect_inbox.py` precedent exactly.",
+      "file_ref": null,
+      "category": "scope",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:371"
+    },
+    {
+      "severity": "NOTE",
+      "title": "File-I/O failure modes for the new ingest path are not enumerated",
+      "description": "Parse failure modes are enumerated well (missing `verdict`, non-mapping frontmatter, no JSON object \u2192 `SquadronParseError`; unknown enums quarantined, never coerced; required unknown-forms explicit). Not covered for the `amoeba ingest review` path (line 364): a missing or unreadable file (an I/O error, not a parse failure \u2014 \"a parse failure exits non-zero and submits nothing\" does not clearly cover it, and an unhandled traceback is the implicit behavior today), and malformed YAML raising from `yaml.safe_load` (the parser contract lists three `SquadronParseError` triggers; a `YAMLError` propagating uncaught is a fourth path left implicit). These are local file reads \u2014 no hang/timeout/peer-disconnect class \u2014 but the design's own standard (\"Nothing is defaulted\", explicit failure everywhere) suggests naming both explicitly.",
+      "file_ref": null,
+      "category": "error-handling",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:345"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "summary": "Dependency direction, seam usage, and writer model verified against merged code",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:138"
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "nfr",
+      "summary": "Metrology constraints and NFR posture are consistent with the architecture",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:574"
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "alignment",
+      "summary": "D2's identity rule contradicts the architecture's stated principle, and the architecture was not amended",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:194"
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "summary": "Parser mapping table omits `reviewed_sha`, `tool_calls_made`, `score`, and `criteria`",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:332-343"
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "summary": "Record-id and idempotency contract across the inbox path is self-contradictory",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:326-364"
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-evidence",
+      "summary": "Fixture source artifacts referenced by exact filename do not exist in the repository",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:443"
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation",
+      "summary": "Stale cross-reference to the slice plan's dependency list",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:73"
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "summary": "Walkthrough step 4 omits required flags and one expected standing conflicts with D5's table order",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:508-514"
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "under-specification",
+      "summary": "Standing rule encodes Squadron parse semantics as a universal rule",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:223"
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "scope",
+      "summary": "`value_options` is an edit to 102's CLI plumbing beyond pure registration",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:371"
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "error-handling",
+      "summary": "File-I/O failure modes for the new ingest path are not enumerated",
+      "location": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md:345"
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md",
+    "against": "project-documents/user/architecture/100-arch.substrate-run-state-store.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-amoeba/b680a346-c29f-47db-b964-68554a723cc3/scratchpad/capture/amoeba"
+  },
+  "timestamp": "2026-09-26T15:12:48.350496",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 48,
+  "stop_reason": "stop",
+  "reasoning_chars": 87470,
+  "failed_tool_calls": 4,
+  "recovery_turn_used": false,
+  "fallback_used": false,
+  "verdictSource": "stated"
+}
