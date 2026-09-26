@@ -44,7 +44,7 @@ Amoeba's three parts — Runner, Translator, Judge — never call each other. Th
 
 - **Reference, don't duplicate.** CF workflow pointers and SQ run IDs are referenced by key, never copied as authoritative. Amoeba's store is the lifecycle layer *above* both; when a fact is CF's or SQ's, the store holds a pointer and a snapshot-with-provenance, not a competing truth.
 
-- **Identity is content-based.** Findings are keyed on normalized content (severity, location, summary), never on Squadron's positional `id`. Cross-run questions ("is this the same finding as last round?") must be answerable from the store alone.
+- **Identity is content-based.** Findings are keyed on normalized content — location without line references, and summary — never on Squadron's positional `id`. Severity is excluded: it is the reviewer's grade of an issue, and it changes between rounds for the same issue (slice 104, D2, PM-ratified 20260926). Cross-run questions ("is this the same finding as last round?") must be answerable from the store alone.
 
 - **Provenance on every ingested fact.** A verdict record says where it came from (stdout JSON vs. artifact frontmatter), whether it was derived (`fallback_used`), whether the artifact was a provider-failure placeholder, and which SQ run and reviewed SHA produced it. Presence of an artifact is never treated as evidence that a review happened.
 

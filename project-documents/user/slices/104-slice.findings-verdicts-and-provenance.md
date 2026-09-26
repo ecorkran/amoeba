@@ -70,7 +70,7 @@ Developer value, and the unblocker for initiative 140. After this slice:
 
 - **Slice 101:** `Store`, node records, the migration mechanism (`EXPECTED_SCHEMA_VERSION` goes from 4 to 5), and the typed failure modes.
 - **Slice 102:** the inspection listing registry (`cli/inspect.py`, `Listing`), `Store.open_read_only`, the command journal (a verdict may reference the `SQ_RUN` entry that produced it), and the writer guard.
-- **Slice 103:** the submission-kind seam (a `SubmissionKind` member, a `KIND_PAYLOAD_MODELS` entry, and a `KIND_EFFECTS` entry), `amoeba submit`, and the D2 idempotency pattern this slice reuses for record ids. The slice plan lists only [101, 102]. 103 is added here because the Judge's write path is 103's inbox.
+- **Slice 103:** the submission-kind seam (a `SubmissionKind` member, a `KIND_PAYLOAD_MODELS` entry, and a `KIND_EFFECTS` entry), `amoeba submit`, and the D2 idempotency pattern this slice reuses for record ids. 103 was added to the slice plan's dependencies at design time, because the Judge's write path is 103's inbox.
 - **PyYAML, as a new runtime dependency** (plus `types-PyYAML` in dev). Artifact frontmatter is YAML, including nested `findings:` lists and quoted strings, so the parser uses a real YAML reader rather than a hand-rolled one. It reads with `safe_load` only.
 
 ### Interfaces Required
@@ -220,7 +220,7 @@ Samples of one invocation are recorded individually, never collapsed, and never 
 | --- | --- |
 | `provider_failure` | `provider_failure` is true |
 | `unparsed` | `verdict` is `UNKNOWN` |
-| `findings_unparsed` | `findings_parsed` is false, or `verdict` ∈ {CONCERNS, FAIL} with zero findings recorded |
+| `findings_unparsed` | `findings_parsed` is false |
 | `imposed` | `derivation` is `imposed`: Squadron capped the verdict itself (SQ 927) |
 | `derived` | `derivation` is `derived` |
 | `unattested` | `derivation` is `not_reported`, for example frontmatter written before `verdictSource` existed |
@@ -248,7 +248,7 @@ The slice plan's false-negative predicate (`verdict == PASS && fallback_used`) b
 
 ### Patterns and Conventions
 
-**D7 — Caller-supplied record ids make every record idempotent. (PM — pending)** This is 103's D2 applied to direct calls. Each input carries an `id`. Recording an id that already exists returns the existing record unchanged, and differing content is logged at WARNING (first wins). The Runner can generate the id when it journals the command, so re-ingesting after a crash between "run finished" and "verdict recorded" writes nothing twice. A verdict arriving through the inbox uses its submission id, so there is one id per fact. Slice 105 can derive a deterministic id from an artifact's bytes to make re-detection a no-op.
+**D7 — Caller-supplied record ids make every record idempotent. (PM — pending)** This is 103's D2 applied to direct calls. Each input carries an `id`. Recording an id that already exists returns the existing record unchanged, and differing content is logged at WARNING (first wins). The Runner can generate the id when it journals the command, so re-ingesting after a crash between "run finished" and "verdict recorded" writes nothing twice. A verdict arriving through the inbox uses its submission id, so there is one id per fact. `amoeba ingest review` makes the digest id its submission id. Slice 105 can derive a deterministic id from an artifact's bytes to make re-detection a no-op.
 
 **D8 — Upstream version is a required opaque label, never compared. (PM — pending)** Every record carries `Provenance(upstream, upstream_version, source, source_path)`. `upstream_version` must be non-empty. The caller supplies whatever the upstream reports. For Squadron that is the `squadronVersion` stamp once squadron#139 lands, and until then an explicit label (for example, from `sq --version`). No code branches on the label or compares it. This matches the existing observers' treatment of `cf --version` and the standing rule that upstream versions are moving targets. `upstream` is free data (`squadron`, `context-forge`), never logic. `source` is closed: `stdout_json`, `artifact_frontmatter`, `command_output`, `document`.
 
@@ -338,10 +338,15 @@ Mapping rules:
 | `template` | `template_name` | `reviewType` |
 | `model` / `requested_model` | `model` / `requested_model` | `aiModel` / `requestedModel` |
 | `diff_truncated` | `diff_truncated` | `diffTruncated` |
+| `reviewed_sha` | not in JSON: `null` | `reviewedSha` |
+| `tool_calls_made` | `tool_calls_made` | `toolCallsMade` |
+| `score` / `criteria` | `score` / `criteria` | `score` / `criteria` (judges only) |
 | findings | `structured_findings[]` | `findings:` |
 | `sq_run_id`, `upstream_version` | `run_id`, `squadron_version` | `runId`, `squadronVersion` |
 
-Keys added by squadron#139 and SQ 927 are read when present and are `null` when absent, so the parser works before and after those land. Headings are matched leniently: any level, any case, surrounding whitespace ignored. Squadron key names and literals live once in `review_fields.py`. Unknown keys are ignored, including the `resolution` and `resolvedBy` keys this repository has added by hand. A missing `verdict`, a non-mapping frontmatter, or no JSON object raises `SquadronParseError`. Nothing is defaulted.
+Keys added by squadron#139 and SQ 927 are read when present and are `null` when absent, so the parser works before and after those land. Headings are matched leniently: any level, any case, surrounding whitespace ignored. Squadron key names and literals live once in `review_fields.py`. Unknown keys are ignored, including the `resolution` and `resolvedBy` keys this repository has added by hand. A missing `verdict`, non-mapping frontmatter, malformed YAML (the `YAMLError` is wrapped), malformed JSON, or no JSON object raises `SquadronParseError`. Nothing is defaulted.
+
+*The zero-findings rule is Squadron's, so it lives in the parser.* In Squadron, a CONCERNS or FAIL with zero findings always means the findings failed to parse. The parser encodes that as `findings_parsed: false`. The standing table reads only `findings_parsed`, so a different submitter (for example, a Judge sample with a real zero-finding CONCERNS) is not misclassified.
 
 *Judge templates:* stdout JSON reports `verdict: UNKNOWN` for every judge template (squadron#140), because the score-derived verdict is applied only when the review runs inside a pipeline. The parser records what it is given, so such a record's standing is `unparsed`. Until #140 is fixed, judge samples are ingested from the artifact. The contract doc says so.
 
@@ -353,14 +358,14 @@ Keys added by squadron#139 and SQ 927 are read when present and are `null` when 
 
 A captured JSON/artifact pair still checks this in tests.
 
-**Inbox, the `verdict` kind:** the payload is `VerdictInput`'s fields flattened. `provenance` becomes `upstream`, `upstream_version`, `source`, and `source_path`, and the record id is the submission id. The effect checks the preconditions listed under Data Flow.
+**Inbox, the `verdict` kind:** the payload is `VerdictInput`'s fields except `id`, flattened. `provenance` becomes `upstream`, `upstream_version`, `source`, and `source_path`. The payload carries no id: the record id is always the submission id. The effect checks the preconditions listed under Data Flow.
 
 **CLI:**
 
 | Command | Behavior |
 | --- | --- |
 | `amoeba submit verdict --project ID --by NAME --node-id ID --verdict V --derivation D --fallback-used JSON --provider-failure JSON --template T --model M --findings JSON --upstream U --upstream-version V --source S [optional fields…] [--id ID]` | Flags derived from `VerdictPayload` under D9. |
-| `amoeba ingest review --project ID --node ID --by NAME (--artifact PATH \| --stdout-json PATH) [--upstream-version V] [--judge-invocation ID] [--id ID]` | Parses the file with the adapter, then calls `submit()` with a `verdict` payload. It prints the submission id. Works whether the process is running or stopped, like `submit`. A parse failure exits non-zero and submits nothing. |
+| `amoeba ingest review --project ID --node ID --by NAME (--artifact PATH \| --stdout-json PATH) [--upstream-version V] [--judge-invocation ID] [--id ID]` | Parses the file with the adapter, then calls `submit()` with a `verdict` payload. The **submission id** is `--id` if given; otherwise it is the digest id from `to_verdict_input`. Ingesting the same bytes twice therefore reuses one submission id, and 103's D2 makes the second a no-op. It prints the submission id. Works whether the process is running or stopped, like `submit`. A missing or unreadable file, or a parse failure, exits non-zero with the error and submits nothing. |
 | `amoeba inspect verdicts --project ID [--node ID]` | `recorded_seq, id, node_id, template, model, verdict, standing, score, judge_invocation_id, upstream_version` |
 | `amoeba inspect findings --project ID [--node ID]` | Identities (`findings()`). With `--verdict ID`: that verdict's observations tagged `new`/`recurring`, then `absent` identities, with the baseline id in a header line. |
 | `amoeba inspect checks --project ID [--node ID]` | `recorded_seq, id, node_id, name, outcome, examined_count, standing, baseline_ref` |
@@ -421,7 +426,7 @@ These consume 101–103 through their documented contracts. Recorded changes to 
 - Location line-reference changes (`:119-163` → `:218-240`, `#L12` → none) and summary formatting changes (whitespace, backticks, case, trailing period) do not change identity. A changed file path or changed summary words do.
 - Using the captured 102 task-review series from `tests/fixtures/sq_reviews/`, consecutive rounds share **no** identity. The test asserts this and names it as the documented rewording boundary.
 - `finding_changes` on a round-2 verdict returns the round-1 verdict as baseline and tags `new`, `recurring`, and `absent` correctly. On a provider-failure verdict it returns `comparable=False`. A provider-failure verdict recorded between two real rounds is skipped as a baseline.
-- Each `VerdictStanding` row in D5 is produced by a record built for it. In particular, a PASS with `derivation=derived` is `derived`, a CONCERNS with `derivation=stated` and zero findings is `findings_unparsed`, `derivation=imposed` is `imposed`, and a provider failure is `provider_failure`.
+- Each `VerdictStanding` row in D5 is produced by a record built for it. In particular, a PASS with `derivation=derived` is `derived`, a record with `findings_parsed=false` is `findings_unparsed`, a CONCERNS with zero findings and `findings_parsed=true` is `stated`, `derivation=imposed` is `imposed`, and a provider failure is `provider_failure`.
 - Recording a provider-failure verdict with findings, or with a verdict other than UNKNOWN, raises directly and is `rejected` through the inbox.
 - Three judge samples sharing a `judge_invocation_id` are three verdict records with their own model, run id, score, and verdict. `calibration` reports them per `(template, model)` and counts the invocation in `split_invocations` when their verdicts differ.
 - Recording a verdict, check, or artifact with an existing id returns the existing record, writes nothing, and logs a WARNING if the content differs.
@@ -442,7 +447,7 @@ These consume 101–103 through their documented contracts. Recorded changes to 
 - Real artifacts from `project-documents/user/reviews/` (including `archive/`) are copied unmodified into `tests/fixtures/sq_reviews/`, with a README recording the capture date and why each is there. Hand-written or hand-edited reviews (for example `103-review.code…`, which carries `resolution:` keys Squadron never writes) are excluded or marked as such. The fixtures also include:
   - a fresh pipeline-run judge artifact, which the PM launches with the JSON capture. Squadron's `302-review.judge.slice-vs-arch…` is not used: it dates from July and lacks `verdictSource`, the tool telemetry, and the Run Digest;
   - a clean PASS with zero findings, which has no `findings:` key and must parse as `findings_parsed: true`;
-  - at least one real `sq review … --output json` stdout capture, with its trailing line intact. This needs a live paid provider run, which the PM launches.
+  - real `sq review … --output json` stdout captures. Two were captured 20260926 and are already in `tests/fixtures/sq_reviews/`: a clean PASS and a ten-finding CONCERNS. Still needed is one review saved **with** a slice number, which gives an artifact/stdout pair with the trailing `Saved review to` line intact. It is captured at implementation time with `--model glmflash`, in a throwaway copy of the repo so nothing lands in the real reviews directory.
   - a real degraded *Findings Not Parsed* artifact, if one can be found. If none can, the README records it as missing, and that parser branch is tested on a real artifact with the heading added, which the README also labels.
 - A store at schema version 4 with nodes, journal entries, submissions, and messages upgrades to 5 with all of them intact.
 - The writer guard is unchanged: no new module opens a store read-write.
@@ -506,9 +511,11 @@ Expected: `inspect findings --verdict r2` prints `baseline: r1`, one `recurring`
 
 **4. The PASS cases that are not a PASS.** Submit three verdicts:
 
-- `r3`: `--verdict PASS --derivation derived --fallback-used true`
+Each also passes the base flags from step 3, and `r3` and `r5` pass one finding.
+
+- `r3`: `--verdict PASS --derivation derived --fallback-used true --findings-parsed true`
 - `r4`: `--verdict CONCERNS --derivation stated --fallback-used true --findings-parsed false --findings '[]'`
-- `r5`: `--verdict CONCERNS --derivation imposed`
+- `r5`: `--verdict CONCERNS --derivation imposed --fallback-used true --findings-parsed true`
 
 Expected: standings `derived`, `findings_unparsed`, and `imposed`.
 
