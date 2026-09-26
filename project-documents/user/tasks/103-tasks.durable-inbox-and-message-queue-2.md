@@ -484,6 +484,5 @@ status: complete
 - [x] All quality gates clean
 - [x] Every LLD success criterion is verified, not assumed
 - [x] `host.py` is within the line guideline, closing the item slice 102 left open
-- [ ] Commit, then merge the slice branch into the integration target — **re-read `cf config get git.integration_branch` first** rather than inferring the target from the current branch or from memory (merge step deferred to main agent) **(merge deferred: PM requires code review before merge)**
 
 **Files to Modify**: both task files, `user/slices/103-slice.durable-inbox-and-message-queue.md`
