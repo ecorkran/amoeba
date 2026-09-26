@@ -334,7 +334,7 @@ Mapping rules:
 | `verdict` | `verdict` | `verdict` |
 | `derivation` | `verdictSource`; `not_reported` if absent | same |
 | `fallback_used` | `fallback_used` | `null`: not in frontmatter |
-| `findings_parsed` | false when `fallback_used` is true and `verdictSource` is `stated`; otherwise true | false when the body has a *Findings Not Parsed* heading or the frontmatter has no `findings:` key; otherwise true |
+| `findings_parsed` | false when `fallback_used` is true and `verdictSource` is `stated`; otherwise true | false when the body has a *Findings Not Parsed* heading; otherwise true. The absence of a `findings:` key means nothing here, because Squadron omits the key for every empty list, including a clean PASS. |
 | `provider_failure` | false: a provider failure produces no JSON | true when the frontmatter says `providerFailure: true` (squadron#139), or the body has a *Provider Failure* heading |
 | `template` | `template_name` | `reviewType` |
 | `model` / `requested_model` | `model` / `requested_model` | `aiModel` / `requestedModel` |
@@ -346,7 +346,13 @@ Keys added by squadron#139 and SQ 927 are read when present and are `null` when 
 
 *Judge templates:* stdout JSON reports `verdict: UNKNOWN` for every judge template (squadron#140), because the score-derived verdict is applied only when the review runs inside a pipeline. The parser records what it is given, so such a record's standing is `unparsed`. Until #140 is fixed, judge samples are ingested from the artifact. The contract doc says so.
 
-*One assumption to check against fixtures:* that `template_name` in JSON and `reviewType` in frontmatter carry the same string for the same review. Baseline selection groups by `template`, so a mismatch would split one series in two. If a captured pair disagrees, the mapping gains a normalization step before this slice closes.
+*`template_name` and `reviewType` carry the same string for the same review* (sq-orch, confirmed against squadron c88e2587):
+
+- The code, slice, tasks, and arch reviews use their literal names, from both the CLI and pipelines.
+- Judges write the template name verbatim (`judge-slice-vs-arch`).
+- `sq review pr` saves `reviewType: code`. PR code reviews therefore share the `code` series of whatever node they are attached to. Separating them would mean grouping on the frontmatter's `targetKind` as well. That is not needed while PR reviews attach to their own nodes.
+
+A captured JSON/artifact pair still checks this in tests.
 
 **Inbox, the `verdict` kind:** the payload is `VerdictInput`'s fields flattened. `provenance` becomes `upstream`, `upstream_version`, `source`, and `source_path`, and the record id is the submission id. The effect checks the preconditions listed under Data Flow.
 
@@ -435,7 +441,8 @@ These consume 101–103 through their documented contracts. Recorded changes to 
 - Vocabularies are `StrEnum`s defined once. All SQL and column names live in `sql_evidence.py`. The identity rule has one definition and a version constant. The standing rules each have one function.
 - `finding_identity.py` has no store imports and is covered by a table of normalization cases.
 - Real artifacts from `project-documents/user/reviews/` (including `archive/`) are copied unmodified into `tests/fixtures/sq_reviews/`, with a README recording the capture date and why each is there. Hand-written or hand-edited reviews (for example `103-review.code…`, which carries `resolution:` keys Squadron never writes) are excluded or marked as such. The fixtures also include:
-  - a pipeline-run judge artifact, for example Squadron's own `302-review.judge.slice-vs-arch…`;
+  - a fresh pipeline-run judge artifact, which the PM launches with the JSON capture. Squadron's `302-review.judge.slice-vs-arch…` must **not** be used: it predates the settled judge save path, writes `reviewType: judge.slice-vs-arch` (current output writes `judge-slice-vs-arch`), and lacks `verdictSource`;
+  - a clean PASS with zero findings, which has no `findings:` key and must parse as `findings_parsed: true`;
   - at least one real `sq review … --output json` stdout capture, with its trailing line intact. This needs a live paid provider run, which the PM launches.
   - a real degraded *Findings Not Parsed* artifact, if one can be found. If none can, the README records it as missing, and that parser branch is tested on a real artifact with the heading added, which the README also labels.
 - A store at schema version 4 with nodes, journal entries, submissions, and messages upgrades to 5 with all of them intact.
@@ -555,7 +562,7 @@ Expected: every fixture parses to its stated fields, the normalization case tabl
 4. `finding_changes` with baseline selection, including the failure-skip and judge-sample cases.
 5. `record_check`, `record_artifact`, and their reads. Then `calibration`.
 6. The `verdict` submission kind, the D9 flag-typing change, and tests extending 103's completeness tests.
-7. `amoeba.upstream.squadron` against every fixture, then `amoeba ingest review`. Check the `template_name`/`reviewType` assumption as soon as a JSON capture exists.
+7. `amoeba.upstream.squadron` against every fixture, then `amoeba ingest review`. Pin the `template_name`/`reviewType` equality in a test as soon as a JSON capture exists.
 8. The listing registry's `value_options` and the five listings. Update the pinned-registry tests.
 9. `scripts/demo_evidence.py` and the round payloads, the end-to-end CLI test, the docs, and the CHANGELOG.
 
