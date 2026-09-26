@@ -3,21 +3,26 @@
 Separate from ``host.py`` so the loop module stays near its line budget, and so
 the CLI's inspection path can discover projects without importing the host.
 
-Neither function opens a store read-write; ``host.py`` remains the only module
-permitted to do that.
+Nothing here opens a store read-write; ``project_stores.py`` remains the only
+module permitted to do that. Recovery receives stores already open.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import logging
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
+from amoeba.process.errors import StartupFailedError
 from amoeba.process.observers.cf_readback import CFReadbackObserver
 from amoeba.process.observers.sq_runs import SquadronRunsObserver, scan_runs_directory
-from amoeba.process.recovery import ObserverRegistry
+from amoeba.process.recovery import ObserverRegistry, reconcile
 from amoeba.process.settings import ProcessSettings
+from amoeba.store import Store
 from amoeba.store.journal_models import CommandKind
 from amoeba.store.paths import STORE_FILE_SUFFIX
+
+logger = logging.getLogger(__name__)
 
 
 def discover_project_ids(store_dir: Path) -> list[str]:
@@ -67,3 +72,29 @@ def build_observer_registry(
             timeout_seconds=settings.cf_timeout_seconds
         ),
     }
+
+
+def recover_every_project(
+    projects: Iterable[tuple[str, Store]], settings: ProcessSettings
+) -> None:
+    """Reconcile every project, each against a freshly assembled registry.
+
+    The host calls this before any tenant ticks: recovery gates the loop.
+
+    Raises:
+        StartupFailedError: If recovery fails for any project. The process
+            does not enter the loop against unreconciled state.
+    """
+    for project_id, store in projects:
+        try:
+            registry = build_observer_registry(
+                settings, store.recorded_result_run_ids(project_id)
+            )
+            summary = reconcile(store, project_id, registry)
+        except Exception as error:
+            logger.exception("recovery failed for project %s", project_id)
+            raise StartupFailedError(
+                f"recovery failed for project {project_id!r}: {error}"
+            ) from error
+
+        logger.info("recovery %s: %s", project_id, summary.describe())

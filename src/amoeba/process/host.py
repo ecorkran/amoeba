@@ -28,20 +28,16 @@ boundary.
 from __future__ import annotations
 
 import logging
-import os
 import signal
-import sys
 import threading
 from collections.abc import Sequence
+from functools import partial
 from pathlib import Path
 from types import FrameType
 from typing import Protocol
 
-from amoeba.process.errors import (
-    AlreadyRunningError,
-    GraceExpiredError,
-    StartupFailedError,
-)
+from amoeba.process.errors import AlreadyRunningError, GraceExpiredError
+from amoeba.process.grace import abandon_process, run_with_grace
 from amoeba.process.instance_lock import (
     InstanceLock,
     lock_path,
@@ -49,9 +45,8 @@ from amoeba.process.instance_lock import (
     write_pid_file,
 )
 from amoeba.process.project_stores import ProjectStores
-from amoeba.process.recovery import RecoverySummary, reconcile
 from amoeba.process.settings import ProcessSettings
-from amoeba.process.supervisor import build_observer_registry
+from amoeba.process.supervisor import recover_every_project
 from amoeba.store import Store
 
 logger = logging.getLogger(__name__)
@@ -195,7 +190,7 @@ class ResidentProcess:
             # process can legitimately hold the lock with no PID file yet.
             write_pid_file(pid_path, version=self._version)
             self._stores.open_all()
-            self._recover_every_project()
+            recover_every_project(self._stores.items(), self._settings)
             self._run_loop_with_grace()
         finally:
             self._stores.close_all()
@@ -203,81 +198,31 @@ class ResidentProcess:
             self._lock.release()
 
     def _run_loop_with_grace(self) -> None:
-        """Run the loop on **this** thread, with a watchdog bounding shutdown.
+        """Run the loop on this thread, bounded during shutdown by the grace
+        watchdog in ``grace.py``.
 
-        The loop stays on the calling thread because the stores live there:
-        ``sqlite3`` connections may only be used by the thread that created
-        them, so moving the loop off this thread would move every tenant write
-        off it too.
-
-        The grace period is instead enforced by a watchdog thread that owns no
-        store and only observes. It starts when stop is requested and, if the
-        loop has not returned by the time the grace period expires, logs at
-        ERROR naming the tenant. A tenant mid-tick is **abandoned in place**,
-        never interrupted — safe precisely because of crash-only: an abandoned
-        tick is indistinguishable from ``kill -9`` and is reconciled by the
-        same recovery path on the next start.
-
-        What happens next depends on ``exit_on_grace_expiry``. The CLI sets it,
-        because a tenant that never returns would otherwise hold the process
-        forever and the operator's only remedy would be an external kill. A
-        caller that drives the host in-process leaves it unset and gets the
-        typed error once the tenant finally does return.
+        With ``exit_on_grace_expiry`` (the CLI) an abandoned tenant exits the
+        process; otherwise the caller gets the typed error once the tenant
+        finally returns.
 
         Raises:
             GraceExpiredError: If the grace period expired before the loop
                 returned.
         """
-        expired = threading.Event()
-        finished = threading.Event()
-
-        def _watch() -> None:
-            # Wait for shutdown to begin; nothing is bounded before that,
-            # because there is no per-tick timeout by decision.
-            while not self._stop_event.wait(timeout=0.05):
-                if finished.is_set():
-                    return
-
-            if finished.wait(timeout=self._settings.shutdown_grace_seconds):
-                return
-
-            expired.set()
-            logger.error(
-                "tenant %r did not return within the %ss grace period; abandoning it",
-                self._current_tenant_name,
-                self._settings.shutdown_grace_seconds,
-            )
-            if self._exit_on_grace_expiry:
-                self._abandon()
-
-        watchdog = threading.Thread(target=_watch, name="amoeba-grace", daemon=True)
-        watchdog.start()
-        try:
-            self._loop()
-        finally:
-            finished.set()
-
-        if expired.is_set():
+        on_expiry = (
+            partial(abandon_process, self._grace_expired_exit_status)
+            if self._exit_on_grace_expiry
+            else None
+        )
+        expired = run_with_grace(
+            self._loop,
+            stop_event=self._stop_event,
+            grace_seconds=self._settings.shutdown_grace_seconds,
+            current_tenant=lambda: self._current_tenant_name,
+            on_expiry=on_expiry,
+        )
+        if expired:
             raise GraceExpiredError(self._current_tenant_name)
-
-    def _abandon(self) -> None:
-        """Exit the process immediately, abandoning a tenant that will not return.
-
-        Called only from the watchdog, only after the grace period expired.
-        ``os._exit`` is deliberate: the loop thread is stuck inside a tenant,
-        so no orderly unwinding is possible from here, and any ``atexit`` or
-        buffered-output handling would run against a thread that is not coming
-        back. The lock is released by the kernel, and the PID file left behind
-        is harmless because nothing trusts it — which is exactly the state a
-        ``kill -9`` leaves, and the one the next start recovers from.
-
-        The status is supplied by the caller through
-        :attr:`grace_expired_exit_status`, so this module names no exit code of
-        its own — mapping a lifecycle failure to a status is the CLI's job.
-        """
-        sys.stderr.flush()
-        sys.stdout.flush()
-        os._exit(self._grace_expired_exit_status)
 
     def install_signal_handlers(self) -> None:
         """Route SIGTERM and SIGINT to the stop event.
@@ -295,31 +240,6 @@ class ResidentProcess:
 
         signal.signal(signal.SIGTERM, _handle)
         signal.signal(signal.SIGINT, _handle)
-
-    def _recover_every_project(self) -> None:
-        """Reconcile every project before any tenant ticks.
-
-        Raises:
-            StartupFailedError: If recovery fails for any project. The process
-                does not enter the loop against unreconciled state.
-        """
-        for project_id, store in self._stores.items():
-            try:
-                summary = self._recover_project(project_id, store)
-            except Exception as error:
-                logger.exception("recovery failed for project %s", project_id)
-                raise StartupFailedError(
-                    f"recovery failed for project {project_id!r}: {error}"
-                ) from error
-
-            logger.info("recovery %s: %s", project_id, summary.describe())
-
-    def _recover_project(self, project_id: str, store: Store) -> RecoverySummary:
-        """Reconcile one project against a freshly assembled registry."""
-        registry = build_observer_registry(
-            self._settings, store.recorded_result_run_ids(project_id)
-        )
-        return reconcile(store, project_id, registry)
 
     def _loop(self) -> None:
         """Tick tenants until stop is requested.
