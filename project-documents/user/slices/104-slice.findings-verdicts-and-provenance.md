@@ -226,17 +226,16 @@ Samples of one invocation are recorded individually, never collapsed, and never 
 | `unattested` | `derivation` is `not_reported`, for example frontmatter written before `verdictSource` existed |
 | `stated` | everything else |
 
-The table works on `derivation` and `findings_parsed`, not on `fallback_used` directly. Squadron sets `fallback_used` in three cases (sq-orch confirmed, 20260926):
+The table works on `derivation` and `findings_parsed`, not on `fallback_used` directly. Squadron sets `fallback_used` in exactly two cases (sq-orch, verified against squadron c88e2587 on 20260926):
 
-- a derived verdict;
-- a CONCERNS or FAIL with zero parsed findings;
-- a PASS whose verdict parsed but whose findings did not.
+- a derived verdict (`verdictSource: derived`), whose findings did parse;
+- a CONCERNS or FAIL with zero parsed findings (`verdictSource: stated`).
 
-The parser maps each case onto those two fields, so frontmatter (which lacks `fallback_used`) and JSON land in the same place. The raw `fallback_used` is still stored as provenance.
+A stated PASS with no findings is a clean review, not a parse failure. The parser maps both cases onto `derivation` and `findings_parsed`, so frontmatter (which lacks `fallback_used`) and JSON land in the same place. The raw `fallback_used` is still stored as provenance.
 
-The slice plan's false-negative predicate (`verdict == PASS && fallback_used`) becomes `verdict == PASS and standing in {derived, findings_unparsed}`.
+The slice plan's false-negative predicate (`verdict == PASS && fallback_used`) becomes `verdict == PASS and standing == derived`.
 
-*Amended 20260926, after ratification, on upstream evidence:* `findings_missing` became `findings_unparsed` to cover the PASS case, and `imposed` was added ahead of SQ 927, whose design is committed.
+*Amended 20260926, after ratification, on upstream evidence:* `findings_missing` became `findings_unparsed`, which also covers the *Findings Not Parsed* artifact body. `imposed` was added ahead of SQ 927, whose design is committed.
 
 | `CheckStanding` | Rule, evaluated top-down |
 | --- | --- |
@@ -349,7 +348,7 @@ Keys added by squadron#139 and SQ 927 are read when present and are `null` when 
 *`template_name` and `reviewType` carry the same string for the same review* (sq-orch, confirmed against squadron c88e2587):
 
 - The code, slice, tasks, and arch reviews use their literal names, from both the CLI and pipelines.
-- Judges write the template name verbatim (`judge-slice-vs-arch`).
+- Judges write the template's declared `name:` verbatim, which is dotted (`judge.slice-vs-arch`). Only the YAML filenames use hyphens.
 - `sq review pr` saves `reviewType: code`. PR code reviews therefore share the `code` series of whatever node they are attached to. Separating them would mean grouping on the frontmatter's `targetKind` as well. That is not needed while PR reviews attach to their own nodes.
 
 A captured JSON/artifact pair still checks this in tests.
@@ -430,7 +429,7 @@ These consume 101–103 through their documented contracts. Recorded changes to 
 - A check with `examined_count=0` and outcome `passed` has standing `vacuous`, not `passed`.
 - Every artifact in `tests/fixtures/sq_reviews/` parses to the verdict, derivation, and findings its frontmatter states. The captured provider-failure artifact parses to standing `provider_failure`. A judge artifact yields its `score` and `criteria`.
 - A captured stdout JSON followed by Squadron's `Saved review to …` line parses. The same review's artifact and stdout JSON produce the same identities.
-- `fallback_used: true` with `verdictSource: stated` in JSON, and a *Findings Not Parsed* body in an artifact, each give standing `findings_unparsed`, including on a PASS.
+- `fallback_used: true` with `verdictSource: stated` in JSON, and a *Findings Not Parsed* body in an artifact, each give standing `findings_unparsed`. A stated PASS with zero findings (the captured clean-PASS JSON) gives `stated`.
 - A missing `verdict`, non-mapping frontmatter, or text with no JSON object raises `SquadronParseError`. `to_verdict_input` with no upstream version in the input and none passed raises.
 - `amoeba ingest review` on the same file twice produces one verdict record. On an unparseable file it exits non-zero and leaves nothing in `inbox/new/`.
 - Every verdict, check, and artifact record carries a non-empty `upstream_version`. Recording one without it fails.
@@ -441,7 +440,7 @@ These consume 101–103 through their documented contracts. Recorded changes to 
 - Vocabularies are `StrEnum`s defined once. All SQL and column names live in `sql_evidence.py`. The identity rule has one definition and a version constant. The standing rules each have one function.
 - `finding_identity.py` has no store imports and is covered by a table of normalization cases.
 - Real artifacts from `project-documents/user/reviews/` (including `archive/`) are copied unmodified into `tests/fixtures/sq_reviews/`, with a README recording the capture date and why each is there. Hand-written or hand-edited reviews (for example `103-review.code…`, which carries `resolution:` keys Squadron never writes) are excluded or marked as such. The fixtures also include:
-  - a fresh pipeline-run judge artifact, which the PM launches with the JSON capture. Squadron's `302-review.judge.slice-vs-arch…` must **not** be used: it predates the settled judge save path, writes `reviewType: judge.slice-vs-arch` (current output writes `judge-slice-vs-arch`), and lacks `verdictSource`;
+  - a fresh pipeline-run judge artifact, which the PM launches with the JSON capture. Squadron's `302-review.judge.slice-vs-arch…` is not used: it dates from July and lacks `verdictSource`, the tool telemetry, and the Run Digest;
   - a clean PASS with zero findings, which has no `findings:` key and must parse as `findings_parsed: true`;
   - at least one real `sq review … --output json` stdout capture, with its trailing line intact. This needs a live paid provider run, which the PM launches.
   - a real degraded *Findings Not Parsed* artifact, if one can be found. If none can, the README records it as missing, and that parser branch is tested on a real artifact with the heading added, which the README also labels.
@@ -508,7 +507,7 @@ Expected: `inspect findings --verdict r2` prints `baseline: r1`, one `recurring`
 **4. The PASS cases that are not a PASS.** Submit three verdicts:
 
 - `r3`: `--verdict PASS --derivation derived --fallback-used true`
-- `r4`: `--verdict PASS --derivation stated --fallback-used true --findings-parsed false`
+- `r4`: `--verdict CONCERNS --derivation stated --fallback-used true --findings-parsed false --findings '[]'`
 - `r5`: `--verdict CONCERNS --derivation imposed`
 
 Expected: standings `derived`, `findings_unparsed`, and `imposed`.
