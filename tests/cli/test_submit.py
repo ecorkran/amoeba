@@ -16,7 +16,10 @@ import pytest
 from cli_harness import await_running, run_cli, start_background
 
 from amoeba.cli.main import ExitCode
-from amoeba.cli.submit import subcommand_name
+from amoeba.cli.submit import (
+    _takes_object,  # pyright: ignore[reportPrivateUsage]
+    subcommand_name,
+)
 from amoeba.inbox import layout
 from amoeba.store import BlockedKind, NodeKind, Store, SubmissionKind
 
@@ -241,3 +244,19 @@ def test_the_inbox_listing_shows_each_state(supervisor_dir: Path) -> None:
     )
     # Sidecar-less files are reported, not crashed on.
     assert all(row["problem"] for row in rows if row["state"] != layout.NEW_DIR_NAME)
+
+
+@pytest.mark.parametrize(
+    ("annotation", "takes_object"),
+    [(dict[str, object], True), (str, False), (str | None, False)],
+)
+def test_supported_payload_field_types_map_to_flags(
+    annotation: object, takes_object: bool
+) -> None:
+    assert _takes_object(SubmissionKind.INTENT, "field", annotation) is takes_object
+
+
+@pytest.mark.parametrize("annotation", [int, bool, list[str]])
+def test_an_unsupported_payload_field_type_fails_fast(annotation: object) -> None:
+    with pytest.raises(TypeError, match="only maps dict and str"):
+        _takes_object(SubmissionKind.INTENT, "field", annotation)

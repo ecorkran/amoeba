@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from amoeba.inbox.durable import fsync_directory
 from amoeba.process.errors import StartupFailedError
 from amoeba.process.supervisor import discover_project_ids, store_path_for
 from amoeba.store import Store, StoreError
@@ -47,6 +48,8 @@ def _create_atomically(path: Path) -> None:
     if any(sidecar.exists() for sidecar in _sidecars(building)):
         raise StoreError(f"SQLite left its write-ahead log behind for {building}")
     building.replace(path)
+    # SQLite fsynced the file; this makes the rename itself survive a crash.
+    fsync_directory(path.parent)
 
 
 def _sidecars(path: Path) -> tuple[Path, ...]:

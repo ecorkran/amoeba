@@ -59,6 +59,23 @@ def _json_object(text: str) -> dict[str, object]:
     return narrowed
 
 
+def _takes_object(kind: SubmissionKind, name: str, annotation: object) -> bool:
+    """Whether a payload field takes a JSON object (else a plain string).
+
+    Raises:
+        TypeError: For any other field type, at parser build time, so a new
+            payload field shape fails fast instead of arriving as a string.
+    """
+    if get_origin(annotation) is dict:
+        return True
+    if annotation in (str, str | None):
+        return False
+    raise TypeError(
+        f"{kind.value} payload field {name!r} has type {annotation!r}; "
+        "amoeba submit only maps dict and str fields to flags"
+    )
+
+
 def add_submit_parser(subparsers: Any) -> None:
     """Add ``submit`` and one subcommand per submission kind.
 
@@ -89,7 +106,7 @@ def add_submit_parser(subparsers: Any) -> None:
             help="Reuse an id to retry safely. Generated when omitted.",
         )
         for name, field in KIND_PAYLOAD_MODELS[kind].model_fields.items():
-            takes_object = get_origin(field.annotation) is dict
+            takes_object = _takes_object(kind, name, field.annotation)
             kind_parser.add_argument(
                 _flag(name),
                 dest=_PAYLOAD_DEST_PREFIX + name,
