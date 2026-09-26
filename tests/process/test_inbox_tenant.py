@@ -142,7 +142,11 @@ def test_a_reused_id_with_different_content_keeps_the_first_and_warns(
 
     [record] = store.submissions(PROJECT)
     assert record.kind is SubmissionKind.INTENT
-    assert "reused with different content" in caplog.text
+    assert [
+        record.levelno
+        for record in caplog.records
+        if "reused with different content" in record.getMessage()
+    ] == [logging.WARNING]
     assert pending(supervisor_dir) == []
 
 
@@ -195,6 +199,30 @@ def test_every_quarantine_reason_lands_and_later_files_still_apply(
     assert pending(supervisor_dir) == []
     record = store.submission(FIXTURE_SUBMISSION_ID)
     assert record is not None and record.outcome is SubmissionOutcome.APPLIED
+
+
+@pytest.mark.parametrize("unsafe_id", ["a/b", ".", ".."])
+def test_a_hand_written_create_project_with_an_unsafe_id_creates_no_store(
+    tmp_path: Path,
+    supervisor_dir: Path,
+    local_host: LocalHost,
+    real_submission: RealSubmission,
+    unsafe_id: str,
+) -> None:
+    """``submit()`` refuses these ids, so the file is written by hand."""
+    envelope = json.loads(real_submission.content) | {
+        "project_id": unsafe_id,
+        "kind": SubmissionKind.CREATE_PROJECT,
+        "payload": {},
+    }
+    name = layout.submission_filename(0, "unsafe")
+    (layout.new_dir(supervisor_dir) / name).write_text(json.dumps(envelope))
+
+    InboxTenant(supervisor_dir).tick(local_host)
+
+    [entry] = [e for e in quarantined(supervisor_dir) if e.path.name == name]
+    assert entry.reason is QuarantineReason.INVALID_PROJECT_ID
+    assert list(tmp_path.rglob(f"*{STORE_FILE_SUFFIX}*")) == []
 
 
 # --------------------------------------------------------------------------

@@ -129,6 +129,8 @@ def test_the_slice_end_to_end_through_the_real_cli(
         ),
         "project creation",
     )
+    listing = run_cli(["inspect", "projects", "--json"], supervisor_dir)
+    assert [row["project_id"] for row in json.loads(listing.stdout)] == [PROJECT]
     _stop(supervisor_dir, process)
 
     # Seed a human-blocked node while stopped; its escalation is readable at once.
@@ -178,3 +180,5 @@ def test_the_slice_end_to_end_through_the_real_cli(
             created,
             resolution,
         ]
+        node = store.get_node(node_id)
+    assert node is not None and node.status is NodeStatus.RUNNABLE
