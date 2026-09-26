@@ -30,6 +30,11 @@ DEFAULT_STORE_DIR = Path.home() / ".config" / STORE_DIR_NAME
 #: Filename suffix for a project's store file.
 STORE_FILE_SUFFIX = ".sqlite3"
 
+#: Suffix appended to a store's filename while it is built and migrated, before
+#: it is renamed into place. It must not end in ``STORE_FILE_SUFFIX``, so a
+#: half-built store is never discovered as a project.
+STORE_CREATING_SUFFIX = ".creating"
+
 
 def store_dir(env: dict[str, str] | None = None) -> Path:
     """Resolve the directory holding this supervisor's stores.

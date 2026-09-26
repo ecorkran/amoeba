@@ -18,10 +18,41 @@ from pathlib import Path
 
 from amoeba.process.errors import StartupFailedError
 from amoeba.process.supervisor import discover_project_ids, store_path_for
-from amoeba.store import Store
-from amoeba.store.paths import validate_project_id
+from amoeba.store import Store, StoreError
+from amoeba.store.paths import STORE_CREATING_SUFFIX, validate_project_id
 
 logger = logging.getLogger(__name__)
+
+#: The files SQLite keeps beside a WAL-mode database while it is open.
+_SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm")
+
+
+def _create_atomically(path: Path) -> None:
+    """Build and migrate a new store beside ``path``, then rename it into place.
+
+    A reader polling for the store — the documented way a submitter learns its
+    project exists — then finds it either absent or complete, never at an
+    earlier schema version mid-migration. A crash part-way leaves only the
+    temporary file, which discovery ignores and the next attempt replaces.
+
+    Raises:
+        StoreError: If the store cannot be built, or SQLite left its write-ahead
+            log behind on close (renaming would strand committed pages in it).
+    """
+    building = path.with_name(path.name + STORE_CREATING_SUFFIX)
+    for leftover in (building, *_sidecars(building)):
+        leftover.unlink(missing_ok=True)
+
+    Store.open(building).close()
+    if any(sidecar.exists() for sidecar in _sidecars(building)):
+        raise StoreError(f"SQLite left its write-ahead log behind for {building}")
+    building.replace(path)
+
+
+def _sidecars(path: Path) -> tuple[Path, ...]:
+    return tuple(
+        path.with_name(path.name + suffix) for suffix in _SQLITE_SIDECAR_SUFFIXES
+    )
 
 
 class ProjectStores:
@@ -57,8 +88,10 @@ class ProjectStores:
         """Create-or-open a project's store read-write and add it to the set.
 
         Idempotent: an already-open project returns its open handle. A new
-        store is migrated by ``Store.open`` as usual; its journal is empty, so
-        there is nothing to recover. :attr:`project_ids` includes it at once.
+        store is built under a temporary name and renamed into place only once
+        fully migrated, so an outside reader never sees it half-built. Its
+        journal is empty, so there is nothing to recover. :attr:`project_ids`
+        includes it at once.
 
         Raises:
             ValueError: If ``project_id`` is not a safe filename. Checked
@@ -70,7 +103,10 @@ class ProjectStores:
             return open_store
 
         validate_project_id(project_id)
-        store = Store.open(store_path_for(self._store_dir, project_id))
+        path = store_path_for(self._store_dir, project_id)
+        if not path.exists():
+            _create_atomically(path)
+        store = Store.open(path)
         self._stores[project_id] = store
         logger.info("opened project %s at runtime", project_id)
         return store

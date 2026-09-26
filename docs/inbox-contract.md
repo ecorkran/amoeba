@@ -46,8 +46,8 @@ submission_id = submit(
     kind=SubmissionKind.RESOLUTION,
     payload={"blocked_state_id": "…", "detail": "approved"},
     submitted_by="notification-bridge",
-    submission_id=None,   # pass your own to retry safely; generated when None
-    store_dir=None,       # the supervisor directory; resolved like the store's
+    submission_id=None,  # pass your own to retry safely; generated when None
+    store_dir=None,  # the supervisor directory; resolved like the store's
 )
 ```
 
@@ -112,12 +112,14 @@ usage error instead.
 from amoeba.store import Store
 
 with Store.open_read_only(project_id="demo") as store:
-    record = store.submission(submission_id)   # None until applied
+    record = store.submission(submission_id)  # None until applied
 ```
 
 `None` means "not applied yet". Once applied, the record's `outcome` is
 `applied` or `rejected`, with a `reason` when rejected. For `create_project`,
-the store file not existing yet is the same answer as `None`.
+the store file not existing yet is the same answer as `None`. The process
+builds a new store under a temporary name and renames it into place once
+migrated, so a store that exists is always complete.
 
 **Rule for a submitter that creates a project:** wait until
 `submission(create_id)` reports `applied` before submitting into that project.
