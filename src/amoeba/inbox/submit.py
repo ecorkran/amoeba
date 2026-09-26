@@ -40,6 +40,7 @@ class InvalidSubmissionError(InboxSubmitError):
     def __init__(self, reason: QuarantineReason, detail: str) -> None:
         super().__init__(f"{reason.value}: {detail}")
         self.reason = reason
+        self.detail = detail
 
 
 class SubmissionWriteError(InboxSubmitError):

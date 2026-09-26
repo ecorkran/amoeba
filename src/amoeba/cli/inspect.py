@@ -209,6 +209,7 @@ LISTINGS: tuple[Listing, ...] = (
             "node_id",
             "blocked_state_id",
             "submission_id",
+            "journal_entry_id",
             "acknowledged_at",
         ),
         rows=inspect_inbox.message_rows,
