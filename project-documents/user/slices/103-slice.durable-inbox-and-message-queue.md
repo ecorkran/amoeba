@@ -375,7 +375,9 @@ This is the content `docs/inbox-contract.md` must state.
 
 ### Verification Walkthrough
 
-**Draft — to be replaced with captured output when Phase 6 completes.** `amoeba submit`, the `inbox` / `submissions` / `messages` listings, and `scripts/demo_inbox.py` do not exist yet; this slice creates them. Nothing outside the process can create nodes until initiative 120, so the demo script seeds one node blocked on a human in the `demo` project and prints the blocked-state id. It performs a read-write `Store.open`, runs only while the process is stopped, and is added to `PERMITTED_SCRIPTS` in the writer guard, like `demo_journal.py`.
+Captured 20260925 from an empty supervisor directory through the real CLI. Step 1 comes from one run and steps 2–8 from a second, so the `create_project` id differs between them; wide columns (`submitted_at`, the store path) are trimmed. Nothing outside the process can create nodes until initiative 120, so `scripts/demo_inbox.py` seeds one node blocked on a human in the `demo` project. It opens the store read-write, takes the instance lock while it writes, and is in `PERMITTED_SCRIPTS` in the writer guard, like `demo_journal.py`.
+
+The process applies the inbox once per idle interval (1 second by default), so after a `submit` to a running process, allow about a second before inspecting.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
@@ -383,75 +385,123 @@ export AMOEBA_STORE_DIR="$(mktemp -d)"
 
 **1. Create a project in a running process**
 
-```bash
-uv run amoeba start &
-uv run amoeba inspect projects              # (none)
-uv run amoeba submit create-project --project demo --by pm
-uv run amoeba inspect projects              # demo
-uv run amoeba inspect submissions --project demo   # applied_seq=1  create_project  applied
-uv run amoeba stop
+```text
+$ amoeba start &
+$ amoeba inspect projects
+(none)
+$ amoeba submit create-project --project demo --by pm
+e5d047889e2b4589a0af7fe82fb29793
+$ amoeba inspect projects
+project_id  store
+----------  ------------------------------
+demo        $AMOEBA_STORE_DIR/demo.sqlite3
+$ amoeba inspect submissions --project demo
+applied_seq  id                                kind            outcome  reason  submitted_by
+-----------  --------------------------------  --------------  -------  ------  ------------
+1            e5d047889e2b4589a0af7fe82fb29793  create_project  applied          pm
+$ amoeba stop
+amoeba: stopped (pid 67962)
 ```
 
 **2. Seed a blocked node; the escalation is already there for an outside reader**
 
-```bash
-uv run python scripts/demo_inbox.py        # prints: node=<NODE>  blocked_state=<BS>
-uv run amoeba inspect messages --project demo --channel escalation
-#   one row: node_id=<NODE>, blocked_state_id=<BS>
+```text
+$ uv run python scripts/demo_inbox.py
+store dir:         $AMOEBA_STORE_DIR
+node id:           d875e5c2e1c24f4ba607e40e6b87b16e
+blocked state id:  1007fde3e0194c14b46eb642d081bd6d
+$ amoeba inspect messages --project demo --channel escalation
+seq  id                                channel     node_id                           blocked_state_id                  submission_id  acknowledged_at
+---  --------------------------------  ----------  --------------------------------  --------------------------------  -------------  ---------------
+1    91e90e48bb2b47e6b621ef8d5d1199b0  escalation  d875e5c2e1c24f4ba607e40e6b87b16e  1007fde3e0194c14b46eb642d081bd6d
 ```
 
 **3. Submit while the process is down**
 
-```bash
-uv run amoeba status                        # stopped
-uv run amoeba submit resolution --project demo --blocked-state <BS> \
+```text
+$ amoeba status
+stopped
+$ amoeba submit resolution --project demo --blocked-state-id 1007fde3e0194c14b46eb642d081bd6d \
     --by pm --detail "proceed with option B"
-#   prints the submission id <SUB>
-uv run amoeba inspect inbox                 # one pending file, id <SUB>
-uv run amoeba inspect blocked --project demo   # still blocked: nothing applied it
+1b2ad5dd9e50470e991ca70fa10a63c3
+$ amoeba inspect inbox
+state  file                                                        attempts  reason  problem
+-----  ----------------------------------------------------------  --------  ------  -------
+new    01790384231750861000-1b2ad5dd9e50470e991ca70fa10a63c3.json  0
+$ amoeba inspect blocked --project demo
+node_id                           title             blocked_on  context
+--------------------------------  ----------------  ----------  -------------------------------------------
+d875e5c2e1c24f4ba607e40e6b87b16e  awaiting a human  human       Approve the plan before the slice proceeds.
 ```
 
 **4. Start applies it**
 
-```bash
-uv run amoeba start &
-uv run amoeba inspect inbox                 # (none)
-uv run amoeba inspect submissions --project demo   # <SUB>  resolution  applied
-uv run amoeba inspect blocked --project demo       # (none)
-uv run amoeba inspect nodes --project demo         # <NODE> is runnable
+```text
+$ amoeba start &
+$ amoeba inspect inbox
+(none)
+$ amoeba inspect submissions --project demo
+applied_seq  id                                kind            outcome  reason  submitted_by
+-----------  --------------------------------  --------------  -------  ------  ------------
+1            de3a2a78f8634024843f45690ea6d895  create_project  applied          pm
+2            1b2ad5dd9e50470e991ca70fa10a63c3  resolution      applied          pm
+$ amoeba inspect blocked --project demo
+(none)
+$ amoeba inspect nodes --project demo
+id                                kind   status    title             parent_id
+--------------------------------  -----  --------  ----------------  ---------
+d875e5c2e1c24f4ba607e40e6b87b16e  slice  runnable  awaiting a human
 ```
 
 **5. Replay and stale replies do not double-write**
 
-```bash
-uv run amoeba submit resolution --project demo --blocked-state <BS> \
-    --by pm --detail "proceed with option B" --id <SUB>      # same id: retry
-uv run amoeba submit resolution --project demo --blocked-state <BS> \
-    --by someone-else --detail "late reply"                  # new id, stale target
-uv run amoeba inspect submissions --project demo
-#   <SUB>   applied            (exactly one row for <SUB>)
-#   <SUB2>  rejected  reason: blocked state already resolved
+```text
+$ amoeba submit resolution --project demo --blocked-state-id 1007fde3e0194c14b46eb642d081bd6d \
+    --by pm --detail "proceed with option B" --id 1b2ad5dd9e50470e991ca70fa10a63c3   # same id: retry
+1b2ad5dd9e50470e991ca70fa10a63c3
+$ amoeba submit resolution --project demo --blocked-state-id 1007fde3e0194c14b46eb642d081bd6d \
+    --by someone-else --detail "late reply"                                          # new id, stale target
+64fe983f6cb64d0ba5cb342c943d4577
+$ amoeba inspect submissions --project demo
+applied_seq  id                                kind            outcome   reason                                                                submitted_by
+-----------  --------------------------------  --------------  --------  --------------------------------------------------------------------  ------------
+1            de3a2a78f8634024843f45690ea6d895  create_project  applied                                                                         pm
+2            1b2ad5dd9e50470e991ca70fa10a63c3  resolution      applied                                                                         pm
+3            64fe983f6cb64d0ba5cb342c943d4577  resolution      rejected  blocked state '1007fde3e0194c14b46eb642d081bd6d' is already resolved  someone-else
 ```
 
 **6. Intent, and survival of a kill**
 
-```bash
-uv run amoeba submit intent --project demo --by translator \
-    --payload-json '{"request": "pause after slice 104"}'
-uv run amoeba inspect messages --project demo --channel intent   # one unacknowledged row
-kill -9 "$(python3 -c "import json;print(json.load(open('$AMOEBA_STORE_DIR/amoeba.pid'))['pid'])")"
-uv run amoeba start &
-uv run amoeba inspect submissions --project demo --json   # identical to before the kill
+```text
+$ amoeba submit intent --project demo --by translator --body '{"request": "pause after slice 104"}'
+f7b9cb868b8844d9925cfcd03a4a35b2
+$ amoeba inspect messages --project demo --channel intent
+seq  id                                channel  node_id  blocked_state_id  submission_id                     acknowledged_at
+---  --------------------------------  -------  -------  ----------------  --------------------------------  ---------------
+2    45a5b4667e914688a60b0b8a5d66c60c  intent                              f7b9cb868b8844d9925cfcd03a4a35b2
+$ kill -9 "$(python3 -c "import json;print(json.load(open('$AMOEBA_STORE_DIR/amoeba.pid'))['pid'])")"
+$ amoeba start &
+$ amoeba inspect submissions --project demo --json   # byte-identical to the output before the kill
 ```
 
 **7. Bad submissions are quarantined, not lost and not blocking**
 
-```bash
-echo 'not json' > "$AMOEBA_STORE_DIR/inbox/new/00000000000000000000-bad.json"
-uv run amoeba submit intent --project nosuch --by pm --payload-json '{}'
-uv run amoeba inspect inbox
-#   quarantined: …-bad.json   unparseable_envelope
-#   quarantined: …            no_store_for_project
+```text
+$ echo 'not json' > "$AMOEBA_STORE_DIR/inbox/new/00000000000000000000-bad.json"
+$ amoeba submit intent --project nosuch --by pm --body '{}'
+1e35c1395daf4c6ab51eef1b5615e63c
+$ amoeba inspect inbox
+state       file                                                        attempts  reason                problem
+----------  ----------------------------------------------------------  --------  --------------------  ---------------------------------------------------
+quarantine  00000000000000000000-bad.json                                         unparseable_envelope  not JSON: Expecting value: line 1 column 1 (char 0)
+quarantine  01790384240313119000-1e35c1395daf4c6ab51eef1b5615e63c.json            no_store_for_project  no open store for project 'nosuch'
+```
+
+The process log records both at WARNING and keeps running:
+
+```text
+WARNING amoeba.process.inbox_tenant: quarantined 00000000000000000000-bad.json: unparseable_envelope (not JSON: Expecting value: line 1 column 1 (char 0))
+WARNING amoeba.process.inbox_tenant: quarantined 01790384240313119000-1e35c1395daf4c6ab51eef1b5615e63c.json: no_store_for_project (no open store for project 'nosuch')
 ```
 
 **8. Quality gates**
