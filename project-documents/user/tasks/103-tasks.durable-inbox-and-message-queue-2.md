@@ -6,8 +6,8 @@ lld: user/slices/103-slice.durable-inbox-and-message-queue.md
 dependencies: [101, 102]
 projectState: Continuation of 103-tasks.durable-inbox-and-message-queue-1.md. Sections 1-5 have landed ProjectStores, migration 004, the one block writer with D3 escalations, apply_submission, and the amoeba.inbox package.
 dateCreated: 20260922
-dateUpdated: 20260923
-status: in_progress
+dateUpdated: 20260925
+status: complete
 ---
 
 ## Context Summary
@@ -406,18 +406,18 @@ status: in_progress
 **Objective**: State the delivery and replay semantics, per the LLD's "Delivery and Replay Semantics" section — which is the content this document must carry.
 
 **Steps**:
-- [ ] State every **Guaranteed** item the LLD lists: durability on return, exactly-once effect per id, atomic effect and record, every submission reaching a terminal inspectable state, one receiver-assigned authoritative order, replayable messages, and an escalation row with every human block
-- [ ] State every **Not guaranteed** item: apply order versus submit order, latency, outcome notification, that a valid submission is applied, what an open blocked state means for a recovery-attached escalation, and retention
-- [ ] State the rule that a submitter creating a project waits for `submission(id)` to report `applied` before submitting into it
-- [ ] Repeat slice 102's rule that callers must not place secrets in payloads
-- [ ] Write for a reader who has not read the implementation — an initiative 160 slice design must be able to proceed from this document alone
+- [x] State every **Guaranteed** item the LLD lists: durability on return, exactly-once effect per id, atomic effect and record, every submission reaching a terminal inspectable state, one receiver-assigned authoritative order, replayable messages, and an escalation row with every human block
+- [x] State every **Not guaranteed** item: apply order versus submit order, latency, outcome notification, that a valid submission is applied, what an open blocked state means for a recovery-attached escalation, and retention
+- [x] State the rule that a submitter creating a project waits for `submission(id)` to report `applied` before submitting into it
+- [x] Repeat slice 102's rule that callers must not place secrets in payloads
+- [x] Write for a reader who has not read the implementation — an initiative 160 slice design must be able to proceed from this document alone
 
 **Success Criteria**:
-- [ ] Every guaranteed and not-guaranteed item in the LLD appears
-- [ ] The document is sufficient for an initiative 160 slice design without reading the implementation
-- [ ] Durability is stated as "fsync-durable on a POSIX filesystem" rather than overclaimed
+- [x] Every guaranteed and not-guaranteed item in the LLD appears
+- [x] The document is sufficient for an initiative 160 slice design without reading the implementation
+- [x] Durability is stated as "fsync-durable on a POSIX filesystem" rather than overclaimed
 
-- [ ] Commit after this task, e.g. `docs: add inbox contract`
+- [x] Commit after this task, e.g. `docs: add inbox contract`
 
 **Files to Create**: `docs/inbox-contract.md`
 
@@ -430,16 +430,16 @@ status: in_progress
 **Objective**: Record this slice's changes to slices 101 and 102, per the LLD's "Consumes from Other Slices."
 
 **Steps**:
-- [ ] `docs/store-contract.md`: `block()` gains `payload=None` and a `HUMAN` block writes an escalation row; `journal_escalate` shares the block writer and escalates on its already-blocked branch; the new inbox and message methods
-- [ ] `docs/process-contract.md`: `open_project`; `project_ids` is no longer fixed at startup; read-write opening moved to `process/project_stores.py`; `amoeba start` now registers `InboxTenant` first
-- [ ] `CHANGELOG.md`: schema version 4 and the slice's user-visible additions
-- [ ] Note in the process contract that consumers **must not cache `project_ids`**, which initiative 120 depends on
+- [x] `docs/store-contract.md`: `block()` gains `payload=None` and a `HUMAN` block writes an escalation row; `journal_escalate` shares the block writer and escalates on its already-blocked branch; the new inbox and message methods
+- [x] `docs/process-contract.md`: `open_project`; `project_ids` is no longer fixed at startup; read-write opening moved to `process/project_stores.py`; `amoeba start` now registers `InboxTenant` first
+- [x] `CHANGELOG.md`: schema version 4 and the slice's user-visible additions
+- [x] Note in the process contract that consumers **must not cache `project_ids`**, which initiative 120 depends on
 
 **Success Criteria**:
-- [ ] All three documents reflect the shipped behavior
-- [ ] Both recorded consequences of D3 appear in the store contract
+- [x] All three documents reflect the shipped behavior
+- [x] Both recorded consequences of D3 appear in the store contract
 
-- [ ] Commit after this task, e.g. `docs: update store and process contracts for slice 103`
+- [x] Commit after this task, e.g. `docs: update store and process contracts for slice 103`
 
 **Files to Modify**: `docs/store-contract.md`, `docs/process-contract.md`, `CHANGELOG.md`
 
@@ -452,15 +452,15 @@ status: in_progress
 **Objective**: Execute the LLD's Verification Walkthrough end to end and replace its draft output with captured output.
 
 **Steps**:
-- [ ] Run all eight steps from an **empty** supervisor directory through the real CLI as subprocesses
-- [ ] Replace the LLD's draft walkthrough output with the captured output, removing the "Draft" note
-- [ ] Add the end-to-end integration test the LLD's Integration Requirements names: `start` → `submit create-project` → seed a human-blocked node → read its escalation row read-only → `stop` → `submit resolution` → `start` → node is `runnable` → `kill -9` → `start` → state unchanged and no second apply
-- [ ] Investigate any divergence between the draft and reality as a defect or a design correction, not as a transcript to edit
+- [x] Run all eight steps from an **empty** supervisor directory through the real CLI as subprocesses
+- [x] Replace the LLD's draft walkthrough output with the captured output, removing the "Draft" note
+- [x] Add the end-to-end integration test the LLD's Integration Requirements names: `start` → `submit create-project` → seed a human-blocked node → read its escalation row read-only → `stop` → `submit resolution` → `start` → node is `runnable` → `kill -9` → `start` → state unchanged and no second apply
+- [x] Investigate any divergence between the draft and reality as a defect or a design correction, not as a transcript to edit
 
 **Success Criteria**:
-- [ ] The walkthrough in the LLD shows real captured output
-- [ ] The end-to-end test passes, including the `kill -9` step
-- [ ] Commit after this task, e.g. `docs: capture slice 103 walkthrough output`
+- [x] The walkthrough in the LLD shows real captured output
+- [x] The end-to-end test passes, including the `kill -9` step
+- [x] Commit after this task, e.g. `docs: capture slice 103 walkthrough output`
 
 **Files to Modify**: `user/slices/103-slice.durable-inbox-and-message-queue.md`
 **Files to Create**: the end-to-end integration test module
@@ -474,16 +474,16 @@ status: in_progress
 **Objective**: Confirm every success criterion in the LLD and close the slice.
 
 **Steps**:
-- [ ] Run `uv run pytest && uv run pytest tests/load`
-- [ ] Run `uv run ruff check . && uv run ruff format --check . && uv run pyright`
-- [ ] Walk the LLD's Functional, Technical, and Integration Requirements checklists and confirm each item
-- [ ] Confirm source files stay near 300 lines, **`host.py` included**
-- [ ] Set `status: complete` in both task files and in the slice design
+- [x] Run `uv run pytest && uv run pytest tests/load`
+- [x] Run `uv run ruff check . && uv run ruff format --check . && uv run pyright`
+- [x] Walk the LLD's Functional, Technical, and Integration Requirements checklists and confirm each item
+- [x] Confirm source files stay near 300 lines, **`host.py` included**
+- [x] Set `status: complete` in both task files and in the slice design
 
 **Success Criteria**:
-- [ ] All quality gates clean
-- [ ] Every LLD success criterion is verified, not assumed
-- [ ] `host.py` is within the line guideline, closing the item slice 102 left open
-- [ ] Commit, then merge the slice branch into the integration target — **re-read `cf config get git.integration_branch` first** rather than inferring the target from the current branch or from memory (merge step deferred to main agent)
+- [x] All quality gates clean
+- [x] Every LLD success criterion is verified, not assumed
+- [x] `host.py` is within the line guideline, closing the item slice 102 left open
+- [ ] Commit, then merge the slice branch into the integration target — **re-read `cf config get git.integration_branch` first** rather than inferring the target from the current branch or from memory (merge step deferred to main agent) **(merge deferred: PM requires code review before merge)**
 
 **Files to Modify**: both task files, `user/slices/103-slice.durable-inbox-and-message-queue.md`

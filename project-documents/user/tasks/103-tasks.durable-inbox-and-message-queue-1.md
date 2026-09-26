@@ -6,8 +6,8 @@ lld: user/slices/103-slice.durable-inbox-and-message-queue.md
 dependencies: [101, 102]
 projectState: Slices 101 and 102 are merged. The store is at schema version 3 with nodes, blocked states, the command journal, and recovery. The resident process starts, recovers, idles, and stops — with zero tenants registered and no way for anything outside the process to contribute state. This slice adds the inbox, the first real tenant, the messages table, and runtime project creation.
 dateCreated: 20260922
-dateUpdated: 20260923
-status: in_progress
+dateUpdated: 20260925
+status: complete
 ---
 
 ## Context Summary

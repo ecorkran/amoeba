@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102]
 interfaces: [104, 105, 106]
 dateCreated: 20260921
-dateUpdated: 20260921
-status: not_started
+dateUpdated: 20260925
+status: complete
 ---
 
 # Slice Design: durable-inbox-and-message-queue
@@ -335,43 +335,43 @@ This is the content `docs/inbox-contract.md` must state.
 
 ### Functional Requirements
 
-- [ ] With the process stopped, `submit()` succeeds and the file is in `inbox/new/`; after `amoeba start` the submission is `applied` and the file is gone.
-- [ ] A `create_project` submission applied by a **running** process creates the store, and the next submission for that project — in the same tick or a later one — applies without a restart. `amoeba inspect projects` lists it.
-- [ ] A `create_project` for an existing project is `applied` and changes nothing; a process killed between store creation and the record commit writes the record on restart.
-- [ ] A project id containing a path separator, or equal to `.` or `..`, is refused by `submit()` and, if hand-written into `new/`, quarantined as `invalid_project_id` with no store file created anywhere.
-- [ ] A `resolution` submission fills the targeted blocked state's slot and flips the node `runnable`, in one transaction.
-- [ ] Applying the same submission twice (file restored to `new/` after apply) changes nothing and leaves exactly one record.
-- [ ] A process killed between the apply commit and the file delete applies nothing twice on restart and removes the file.
-- [ ] Resubmitting an existing id with different content is a no-op and logs a WARNING.
-- [ ] A `resolution` naming an already-resolved blocked state, a blocked state of another project, or a nonexistent one is recorded `rejected` with a reason; a node re-blocked since is **not** resolved by the stale reply.
-- [ ] An `intent` submission produces one unacknowledged `intent` message carrying the submission id; `acknowledge_message` removes it from `pending_intents`; a second acknowledge raises.
-- [ ] `block(kind=HUMAN)` writes exactly one escalation row in the same transaction; `JUDGE` and `SQ_CHECKPOINT` blocks write none.
-- [ ] `journal_escalate` on an unblocked node writes the block and one escalation row carrying `journal_entry_id`; on an already-blocked node — tested with a `HUMAN` and a `JUDGE` block — it writes no second block and one escalation row pointing at the existing open blocked state.
-- [ ] `applied_seq` and `seq` increase in apply order regardless of the `submitted_at` values in the envelopes.
-- [ ] `messages(channel=ESCALATION, after_seq=n)` returns only later rows, in `seq` order, identically on repeated calls, through a read-only handle.
-- [ ] Unparseable JSON, an unknown envelope version, an unknown kind, an invalid payload, and an unknown project each end in `quarantine/` with the matching `QuarantineReason`; later valid submissions in the same tick still apply.
-- [ ] A valid submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts, its counter incrementing on disk each time, then lands in `failed/` with the last error recorded; the tick that parks it goes on to apply the next file, and the process stays up.
-- [ ] A file moved back from `failed/` to `new/` resumes at its recorded attempt count rather than at zero, and is deleted with its counter once it applies.
-- [ ] `submit()` with an invalid payload raises and leaves nothing in `new/` or `tmp/`.
-- [ ] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set.
-- [ ] `amoeba submit` and the three inspection listings work with the process running and stopped.
+- [x] With the process stopped, `submit()` succeeds and the file is in `inbox/new/`; after `amoeba start` the submission is `applied` and the file is gone.
+- [x] A `create_project` submission applied by a **running** process creates the store, and the next submission for that project — in the same tick or a later one — applies without a restart. `amoeba inspect projects` lists it.
+- [x] A `create_project` for an existing project is `applied` and changes nothing; a process killed between store creation and the record commit writes the record on restart.
+- [x] A project id containing a path separator, or equal to `.` or `..`, is refused by `submit()` and, if hand-written into `new/`, quarantined as `invalid_project_id` with no store file created anywhere.
+- [x] A `resolution` submission fills the targeted blocked state's slot and flips the node `runnable`, in one transaction.
+- [x] Applying the same submission twice (file restored to `new/` after apply) changes nothing and leaves exactly one record.
+- [x] A process killed between the apply commit and the file delete applies nothing twice on restart and removes the file.
+- [x] Resubmitting an existing id with different content is a no-op and logs a WARNING.
+- [x] A `resolution` naming an already-resolved blocked state, a blocked state of another project, or a nonexistent one is recorded `rejected` with a reason; a node re-blocked since is **not** resolved by the stale reply.
+- [x] An `intent` submission produces one unacknowledged `intent` message carrying the submission id; `acknowledge_message` removes it from `pending_intents`; a second acknowledge raises.
+- [x] `block(kind=HUMAN)` writes exactly one escalation row in the same transaction; `JUDGE` and `SQ_CHECKPOINT` blocks write none.
+- [x] `journal_escalate` on an unblocked node writes the block and one escalation row carrying `journal_entry_id`; on an already-blocked node — tested with a `HUMAN` and a `JUDGE` block — it writes no second block and one escalation row pointing at the existing open blocked state.
+- [x] `applied_seq` and `seq` increase in apply order regardless of the `submitted_at` values in the envelopes.
+- [x] `messages(channel=ESCALATION, after_seq=n)` returns only later rows, in `seq` order, identically on repeated calls, through a read-only handle.
+- [x] Unparseable JSON, an unknown envelope version, an unknown kind, an invalid payload, and an unknown project each end in `quarantine/` with the matching `QuarantineReason`; later valid submissions in the same tick still apply.
+- [x] A valid submission whose apply raises every time stops the process for `inbox_max_attempts - 1` starts, its counter incrementing on disk each time, then lands in `failed/` with the last error recorded; the tick that parks it goes on to apply the next file, and the process stays up.
+- [x] A file moved back from `failed/` to `new/` resumes at its recorded attempt count rather than at zero, and is deleted with its counter once it applies.
+- [x] `submit()` with an invalid payload raises and leaves nothing in `new/` or `tmp/`.
+- [x] A tick handles at most `inbox_batch_size` files and stops early when `stop_requested` is set.
+- [x] `amoeba submit` and the three inspection listings work with the process running and stopped.
 
 ### Technical Requirements
 
-- [ ] Vocabularies are `StrEnum`s defined once; directory names and the filename scheme are defined once in `layout.py`; all SQL and column names live in `sql_inbox.py`; project-id validation has one definition.
-- [ ] There is one internal block writer; `block()` and `journal_escalate` both use it, and `_block_for_entry` no longer exists as a separate write path.
-- [ ] The writer guard's permitted set is exactly `{process/project_stores.py}`. `amoeba.inbox` and `cli/submit.py` open no store read-write. A new test asserts `amoeba.inbox`'s public exports contain no write path other than `submit`.
-- [ ] All slice 102 host, lifecycle, recovery, and load tests pass unchanged after the `ProjectStores` extraction.
-- [ ] Envelope fixtures include a file produced by the real `submit()` and hand-damaged variants of it (truncated, wrong version, extra fields).
-- [ ] A store at schema version 3 with an open human block upgrades to 4 with nodes, blocked states, and journal intact, and gains the backfilled escalation row.
-- [ ] `tests/load/` gains a concurrent-submitter test (see Implementation Notes) with asserted exactly-once.
-- [ ] `ruff`, `pyright` strict, and the full suite are clean; source files stay near 300 lines, `host.py` included.
-- [ ] `docs/inbox-contract.md` exists; `store-contract.md`, `process-contract.md`, and `CHANGELOG.md` are updated.
+- [x] Vocabularies are `StrEnum`s defined once; directory names and the filename scheme are defined once in `layout.py`; all SQL and column names live in `sql_inbox.py`; project-id validation has one definition.
+- [x] There is one internal block writer; `block()` and `journal_escalate` both use it, and `_block_for_entry` no longer exists as a separate write path.
+- [x] The writer guard's permitted set is exactly `{process/project_stores.py}`. `amoeba.inbox` and `cli/submit.py` open no store read-write. A new test asserts `amoeba.inbox`'s public exports contain no write path other than `submit`.
+- [x] All slice 102 host, lifecycle, recovery, and load tests pass unchanged after the `ProjectStores` extraction.
+- [x] Envelope fixtures include a file produced by the real `submit()` and hand-damaged variants of it (truncated, wrong version, extra fields).
+- [x] A store at schema version 3 with an open human block upgrades to 4 with nodes, blocked states, and journal intact, and gains the backfilled escalation row.
+- [x] `tests/load/` gains a concurrent-submitter test (see Implementation Notes) with asserted exactly-once.
+- [x] `ruff`, `pyright` strict, and the full suite are clean; source files stay near 300 lines, `host.py` included.
+- [x] `docs/inbox-contract.md` exists; `store-contract.md`, `process-contract.md`, and `CHANGELOG.md` are updated.
 
 ### Integration Requirements
 
-- [ ] End to end through the real CLI as subprocesses, starting from an **empty** supervisor directory: `start` → `submit create-project` → seed a human-blocked node → read its escalation row read-only → `stop` → `submit resolution` → `start` → node is `runnable` → `kill -9` → `start` → state unchanged and no second apply.
-- [ ] `docs/inbox-contract.md` is sufficient for an initiative 160 slice design to proceed without reading the implementation.
+- [x] End to end through the real CLI as subprocesses, starting from an **empty** supervisor directory: `start` → `submit create-project` → seed a human-blocked node → read its escalation row read-only → `stop` → `submit resolution` → `start` → node is `runnable` → `kill -9` → `start` → state unchanged and no second apply.
+- [x] `docs/inbox-contract.md` is sufficient for an initiative 160 slice design to proceed without reading the implementation.
 
 ### Verification Walkthrough
 
