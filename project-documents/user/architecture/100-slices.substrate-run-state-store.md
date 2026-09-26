@@ -84,7 +84,7 @@ Two consequences shape the decomposition:
    - Calibration evidence is queryable and reportable; nothing writes back into Squadron's metrology store.
    - Every ingested record stores the upstream version it was parsed from.
    - The inspection surface lists findings and verdicts in addition to the nodes, blocked states, and journal entries slice 102 established — registered into 102's listing registry, not by editing the CLI.
-   **Dependencies:** [101, 102]
+   **Dependencies:** [101, 102, 103] — 103 added at slice design: the Judge's write path is 103's inbox.
    **Interfaces:** Provides finding/verdict/judge-sample records to initiatives 120 (routing) and 140 (consensus); consumes the store API from 101 and the inspection listing registry from 102.
    **Risk Level:** Medium — normalization correctness is the crux, and getting it wrong is silent.
    **Relative Effort:** 4
