@@ -13,7 +13,7 @@ from pathlib import Path
 
 from amoeba.store import sql, sql_inbox, sql_journal
 from amoeba.store.inbox_models import Channel
-from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, migrate
+from amoeba.store.migrations import migrate
 from amoeba.store.models import BlockedKind, NodeStatus
 
 #: The last version before the inbox tables existed.
@@ -106,15 +106,12 @@ def _schema_objects(connection: sqlite3.Connection, kind: str) -> set[str]:
     return {str(row[0]) for row in rows}
 
 
-def test_version_four_is_the_expected_version() -> None:
-    assert EXPECTED_SCHEMA_VERSION == INBOX_SCHEMA_VERSION
-
-
 def test_upgrade_keeps_every_prior_row(store_file: Path) -> None:
     _stage_version_three_store(store_file)
 
     with sqlite3.connect(store_file) as connection:
-        assert migrate(connection) == INBOX_SCHEMA_VERSION
+        upgraded = migrate(connection, expected_version=INBOX_SCHEMA_VERSION)
+        assert upgraded == INBOX_SCHEMA_VERSION
 
         assert _count(connection, sql.TABLE_NODES) == 3
         assert _count(connection, sql.TABLE_BLOCKED_STATES) == 3
