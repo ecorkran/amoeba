@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amoeba.cli import inspect_inbox
+from amoeba.cli import inspect_evidence, inspect_inbox
 from amoeba.process.supervisor import discover_project_ids, store_path_for
 from amoeba.store import Channel, Store, paths
 
@@ -155,6 +155,8 @@ def _project_rows(supervisor_dir: Path) -> list[Row]:
 #: The name of the ``projects`` listing, which tests refer to.
 PROJECTS_LISTING = "projects"
 
+_NODE_OPTION = ValueOption(flag="--node", help_text="Only this node.", metavar="ID")
+
 #: The listing registry — the single structural definition of what ``inspect``
 #: can show. Adding a listing is appending here; nothing else changes.
 LISTINGS: tuple[Listing, ...] = (
@@ -229,6 +231,27 @@ LISTINGS: tuple[Listing, ...] = (
                 flag="--channel",
                 help_text="Only this channel. Every channel when omitted.",
                 choices=tuple(channel.value for channel in Channel),
+            ),
+        ),
+    ),
+    Listing(
+        name="verdicts",
+        help_text="Recorded review verdicts for a project, in arrival order.",
+        columns=inspect_evidence.VERDICT_COLUMNS,
+        rows=inspect_evidence.verdict_rows,
+        value_options=(_NODE_OPTION,),
+    ),
+    Listing(
+        name="findings",
+        help_text="Findings by content key, or one review's changes (--verdict).",
+        columns=inspect_evidence.FINDING_COLUMNS,
+        rows=inspect_evidence.finding_rows,
+        value_options=(
+            _NODE_OPTION,
+            ValueOption(
+                flag="--verdict",
+                help_text="Show this review's findings as new, recurring, gone.",
+                metavar="ID",
             ),
         ),
     ),
