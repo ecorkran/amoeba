@@ -125,6 +125,10 @@ CONTRACT_METHODS = {
     "acknowledge_message",
     # Verdicts and findings, added by slice 104.
     "record_verdict",
+    "verdict",
+    "verdicts",
+    "observations",
+    "findings",
 }
 
 

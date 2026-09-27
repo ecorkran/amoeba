@@ -12,6 +12,8 @@ not import a sibling operation class (the pattern ``BlockWriter`` set).
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from amoeba.store import sql_evidence, sql_journal
@@ -91,12 +93,15 @@ class VerdictWriter(StoreBase):
         rows = self._execute(sql_evidence.SELECT_OBSERVATIONS, (verdict_id,))
         return [map_observation(row) for row in rows.fetchall()]
 
-    def _load_verdict(self, verdict_id: str) -> VerdictRecord | None:
-        row = self._execute(sql_evidence.SELECT_VERDICT_BY_ID, (verdict_id,)).fetchone()
-        if row is None:
-            return None
+    def _record_from_row(self, row: Sequence[object]) -> VerdictRecord:
+        """Map a verdict row and attach its findings, as the reviewer gave them."""
+        record = map_verdict(row, ())
         findings = tuple(
             observation_as_finding(observation)
-            for observation in self._observation_rows(verdict_id)
+            for observation in self._observation_rows(record.id)
         )
-        return map_verdict(row, findings)
+        return dataclasses.replace(record, findings=findings)
+
+    def _load_verdict(self, verdict_id: str) -> VerdictRecord | None:
+        row = self._execute(sql_evidence.SELECT_VERDICT_BY_ID, (verdict_id,)).fetchone()
+        return None if row is None else self._record_from_row(row)

@@ -13,11 +13,21 @@ from __future__ import annotations
 import dataclasses
 import logging
 
-from amoeba.store import sql_inbox
+from amoeba.store import sql_evidence, sql_inbox
 from amoeba.store._base import isoformat, now
 from amoeba.store._verdict_writer import VerdictWriter
-from amoeba.store.evidence_models import VerdictInput, VerdictRecord
-from amoeba.store.models import NodeNotFoundError, StoreIntegrityError
+from amoeba.store.evidence_models import (
+    FindingObservation,
+    FindingSummary,
+    VerdictInput,
+    VerdictRecord,
+)
+from amoeba.store.mapping_evidence import map_observation
+from amoeba.store.models import (
+    NodeNotFoundError,
+    StoreIntegrityError,
+    VerdictNotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,3 +85,83 @@ class VerdictOperations(VerdictWriter):
         if recorded is None:
             raise StoreIntegrityError(f"verdict {verdict.id!r} vanished after insert")
         return recorded
+
+    def verdict(self, verdict_id: str) -> VerdictRecord | None:
+        """Return the verdict with this id, or ``None`` if there is none."""
+        return self._load_verdict(verdict_id)
+
+    def verdicts(
+        self, project_id: str, *, node_id: str | None = None
+    ) -> list[VerdictRecord]:
+        """A project's verdicts, optionally for one node, in arrival order."""
+        statement, parameters = (
+            (sql_evidence.SELECT_VERDICTS, (project_id,))
+            if node_id is None
+            else (sql_evidence.SELECT_VERDICTS_FOR_NODE, (project_id, node_id))
+        )
+        rows = self._execute(statement, parameters).fetchall()
+        return [self._record_from_row(row) for row in rows]
+
+    def observations(self, verdict_id: str) -> list[FindingObservation]:
+        """One review's findings as stored, in the order the reviewer gave them.
+
+        Raises:
+            VerdictNotFoundError: If no verdict has this id. An empty list would
+                look like a real review with no findings.
+        """
+        self._require_verdict(verdict_id)
+        return self._observation_rows(verdict_id)
+
+    def findings(
+        self, project_id: str, *, node_id: str | None = None
+    ) -> list[FindingSummary]:
+        """One row per content key per node, in order of first appearance.
+
+        Each row carries the latest severity, summary, and location, the first
+        and last reviews that reported the key, and how many reviews did.
+        """
+        statement, parameters = (
+            (sql_evidence.SELECT_PROJECT_OBSERVATIONS, (project_id,))
+            if node_id is None
+            else (sql_evidence.SELECT_NODE_OBSERVATIONS, (project_id, node_id))
+        )
+        folded: dict[tuple[str, int, str], _KeyHistory] = {}
+        for row in self._execute(statement, parameters).fetchall():
+            node, observation = str(row[0]), map_observation(row[1:])
+            key = (node, observation.identity_version, observation.identity)
+            folded.setdefault(key, _KeyHistory(node, observation)).see(observation)
+        return [history.summary() for history in folded.values()]
+
+    def _require_verdict(self, verdict_id: str) -> VerdictRecord:
+        record = self._load_verdict(verdict_id)
+        if record is None:
+            raise VerdictNotFoundError(f"no verdict with id {verdict_id!r}")
+        return record
+
+
+class _KeyHistory:
+    """Folds one key's observations, in arrival order, into a summary row."""
+
+    def __init__(self, node_id: str, first: FindingObservation) -> None:
+        self._node_id = node_id
+        self._first = first
+        self._latest = first
+        self._verdict_ids: list[str] = []
+
+    def see(self, observation: FindingObservation) -> None:
+        self._latest = observation
+        if observation.verdict_id not in self._verdict_ids:
+            self._verdict_ids.append(observation.verdict_id)
+
+    def summary(self) -> FindingSummary:
+        return FindingSummary(
+            node_id=self._node_id,
+            identity=self._first.identity,
+            identity_version=self._first.identity_version,
+            latest_severity=self._latest.severity,
+            latest_summary=self._latest.summary,
+            latest_location=self._latest.location,
+            first_verdict_id=self._first.verdict_id,
+            last_verdict_id=self._latest.verdict_id,
+            times_seen=len(self._verdict_ids),
+        )
