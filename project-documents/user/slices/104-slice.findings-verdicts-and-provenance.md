@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102, 103]
 interfaces: [105, 106, 108, 109]
 dateCreated: 20260926
-dateUpdated: 20260926
-status: not_started
+dateUpdated: 20260927
+status: complete
 ---
 
 # Slice Design: findings-verdicts-and-provenance
@@ -363,15 +363,24 @@ These consume 101–103 through their documented contracts. The changes are reco
 
 ### Verification Walkthrough
 
-Draft; filled in with real output when implementation is done. Nothing outside the process can create nodes until initiative 120. So `scripts/demo_evidence.py` seeds one node in the `demo` project and prints its id. It runs with the process stopped, and it is added to the writer guard's allowed scripts, like `demo_inbox.py`. The review payloads sit beside it as JSON files. They use real finding text from the captured 102 rounds, reordered for the recurrence case.
+Run by hand on 20260927 against the implementation; output below is real, trimmed. Nothing outside the process can create nodes until initiative 120, so `scripts/demo_evidence.py` seeds one node in the `demo` project and prints only its id. It takes the instance lock and refuses while the process runs, and it is in the writer guard's permitted scripts, like `demo_inbox.py`. The payloads in `scripts/demo_evidence/` use real finding text from the captured 102 rounds (`README.md` there, and `tests/test_demo_evidence_payloads.py` checks it).
+
+**Caveats found while running it:**
+
+- Run it in **bash**. `$BASE` relies on word splitting; zsh does not split an unquoted variable, so every flag arrives as one argument and `submit` reports them all missing. In zsh use `${=BASE}`.
+- Run from the repository root with `uv run` (or an activated venv).
+- `amoeba start &` needs a moment before the first `submit` is applied; wait until `amoeba status` prints `running`. A submission made while the process is stopped is applied at the next start.
+- `amoeba start` with no `--sq-runs-dir` reads (never writes) the real `~/.config/squadron/runs` during recovery. Pass `--sq-runs-dir "$(mktemp -d)"` to keep the run fully isolated.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
-amoeba start &
-amoeba submit create-project --project demo --by pm
-amoeba stop
+uv run amoeba start &
+until uv run amoeba status | grep -q '^running'; do sleep 0.2; done
+uv run amoeba submit create-project --project demo --by pm
+uv run amoeba stop
 NODE=$(uv run python scripts/demo_evidence.py)
-amoeba start &
+uv run amoeba start &
+until uv run amoeba status | grep -q '^running'; do sleep 0.2; done
 BASE="--project demo --by pm --node-id $NODE --review-type tasks --model demo-model \
   --upstream squadron --upstream-version 0.14.0 --source artifact_frontmatter \
   --provider-failure false --fallback-used null"
@@ -380,35 +389,61 @@ BASE="--project demo --by pm --node-id $NODE --review-type tasks --model demo-mo
 **1. Round 1.**
 
 ```bash
-amoeba submit verdict $BASE --id r1 --verdict CONCERNS --derivation stated \
+uv run amoeba submit verdict $BASE --id r1 --verdict CONCERNS --derivation stated \
   --findings-parsed true --findings "$(cat scripts/demo_evidence/round1.json)"
+uv run amoeba inspect verdicts --project demo
 ```
 
-`amoeba inspect verdicts --project demo` shows `r1` labelled `stated`.
+```
+recorded_seq  id  node_id                           review_type  model       verdict   standing  upstream_version
+1             r1  9b43e65603924f208766bc824e3bb69e  tasks        demo-model  CONCERNS  stated    0.14.0
+```
 
-**2. Round 2.** One finding comes back at a new position with a moved line range, one is dropped, and one is new. Submit `round2.json` as `r2`, the same way.
+**2. Round 2.** The ExitCode finding comes back at position 2 with its range moved (`:119-163` → `:141-185`), the CI-wiring finding is dropped, and a GRACE_EXPIRED finding is new. Submit `round2.json` as `r2` the same way.
 
-`amoeba inspect findings --project demo --verdict r2` shows the previous review `r1`, one `recurring`, one `new`, and one `gone`.
+```bash
+uv run amoeba inspect findings --project demo --verdict r2
+```
 
-**3. A provider failure between rounds is skipped.** Submit `r3` with `--verdict UNKNOWN --derivation not_reported --provider-failure true --findings-parsed null --findings '[]'`. Then submit round 2's payload again, as `r4`.
+```
+verdict r2: previous review r1
+change     severity  summary                                                                    location                       key
+new        concern   The GRACE_EXPIRED exit criterion has no CLI-level test despite Task 6.4…  …-2.md:218-240                 10e56e2644c2
+recurring  concern   ExitCode vocabulary is consumed in Section 6 before Task 7.1 defines it    …-2.md:141-185                 3cf31e254868
+gone       concern   No CI wiring task gates the load tier                                      …-2.md:313-357                 60e071743b78
+```
+
+(The table also has the per-key columns `node_id`, `times_seen`, `first_verdict_id`, `last_verdict_id`, which are empty in `--verdict` mode; trimmed here.)
+
+**3. A provider failure between rounds is skipped.**
+
+```bash
+uv run amoeba submit verdict $BASE --id r3 --verdict UNKNOWN --derivation not_reported \
+  --provider-failure true --findings-parsed null --findings '[]'
+uv run amoeba submit verdict $BASE --id r4 --verdict CONCERNS --derivation stated \
+  --findings-parsed true --findings "$(cat scripts/demo_evidence/round2.json)"
+```
+
+(`--provider-failure true` after `$BASE`'s `false`: argparse keeps the last one.)
 
 - `inspect verdicts` labels `r3` `provider_failure`.
-- `inspect findings --verdict r3` says it is not comparable.
-- `inspect findings --verdict r4` shows previous review `r2` and every finding `recurring`. `r3` was skipped.
+- `inspect findings --verdict r3` prints `verdict r3: not comparable`, then `(none)`.
+- `inspect findings --verdict r4` prints `verdict r4: previous review r2`, and both findings `recurring`. `r3` was skipped.
 
-**4. Verdicts that aren't what they look like.** Each submission carries one finding.
+**4. Verdicts that aren't what they look like.** Each carries `--findings "$(cat scripts/demo_evidence/one_finding.json)"`.
 
-| Submission | Flags | Label |
+| Submission | Flags | Label shown |
 | --- | --- | --- |
 | `r5` | `--verdict PASS --derivation derived --findings-parsed true` | `derived` |
 | `r6` | `--verdict CONCERNS --derivation stated --findings-parsed false` | `findings_unparsed` |
 | `r7` | `--verdict CONCERNS --derivation imposed --findings-parsed true` | `imposed` |
 
-**5. Retry and restart.** Resubmit round 1 with `--id r1`. Then `kill -9` the process and `amoeba start`.
+**5. Retry and restart.** Resubmit round 1 with `--id r1`, wait a tick, then `kill -9` the process (`amoeba status` prints its pid; afterwards it prints `stopped (stale pid file)`) and start it again.
 
-`inspect verdicts` lists the same rows as before, and `inspect submissions --project demo` shows nothing applied twice.
+- `inspect verdicts --json` is byte-identical before and after.
+- `inspect submissions --project demo` lists `create_project` then `r1` … `r7`, each `applied` once. The retry of `r1` added no row.
 
-**6. Provenance.** `amoeba inspect verdicts --project demo --json` shows `upstream`, `upstream_version`, `source`, and `recorded_at` on every record.
+**6. Provenance.** `uv run amoeba inspect verdicts --project demo --json`: all 7 rows carry `upstream: squadron`, `upstream_version: 0.14.0`, `source: artifact_frontmatter`, `source_path` (`""` when not given), and `recorded_at`.
 
 **7. The matching rule against real Squadron text.**
 
@@ -416,7 +451,7 @@ amoeba submit verdict $BASE --id r1 --verdict CONCERNS --derivation stated \
 uv run pytest tests/store/test_finding_identity.py -v
 ```
 
-The normalization cases pass. The captured-rounds test confirms that no key is shared across the reworded 102 rounds.
+46 passed, including `test_captured_fixture_matches_the_lld_table` for all four captured files and `test_captured_rounds_share_no_keys`. The same flow runs automatically in `tests/cli/test_evidence_end_to_end.py`.
 
 ## Risk Assessment
 
