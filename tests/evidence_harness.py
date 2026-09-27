@@ -5,7 +5,12 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-from review_fixtures import CapturedFinding, read_frontmatter, review_findings
+from review_fixtures import (
+    CapturedFinding,
+    has_provider_failure_heading,
+    read_frontmatter,
+    review_findings,
+)
 
 from amoeba.store import (
     FindingInput,
@@ -91,19 +96,30 @@ def _as_input(captured: CapturedFinding) -> FindingInput:
 
 
 def captured_verdict(verdict_id: str, node_id: str, path: Path) -> VerdictInput:
-    """A ``VerdictInput`` built from a captured review file's frontmatter.
+    """A ``VerdictInput`` built from a captured review file.
 
-    ``derivation`` is read from the file's ``verdictSource`` (pinned ``stated``
-    on both part-1 files by the fixture guard test), never assumed.
+    ``derivation`` is the file's ``verdictSource`` (pinned ``stated`` on both
+    part-1 files by the fixture guard test), or ``not_reported`` when the file
+    has none. A *Provider Failure* heading marks a provider failure, whose
+    findings were never parsed. Nothing is assumed beyond that.
     """
     frontmatter = read_frontmatter(path)
+    source = frontmatter.get("verdictSource")
+    failed = has_provider_failure_heading(path)
     return verdict_input(
         verdict_id,
         node_id,
         *(_as_input(captured) for captured in review_findings(path)),
         verdict=parse_verdict(str(frontmatter["verdict"])),
-        derivation=VerdictDerivation(str(frontmatter["verdictSource"])),
+        derivation=(
+            VerdictDerivation.NOT_REPORTED
+            if source is None
+            else VerdictDerivation(str(source))
+        ),
+        provider_failure=failed,
+        findings_parsed=None if failed else True,
         model=str(frontmatter["aiModel"]),
         reviewed_sha=str(frontmatter["reviewedSha"]),
+        tool_calls_made=frontmatter.get("toolCallsMade"),
         provenance=dataclasses.replace(PROVENANCE, source_path=path.name),
     )

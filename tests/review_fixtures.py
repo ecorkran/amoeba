@@ -25,6 +25,17 @@ ROUND_2_PART_2 = SQ_REVIEWS / f"{_REVIEW_STEM}.part-2.md"
 # Frontmatter is the block between the first two lines consisting of `---`.
 _FRONTMATTER_FENCE = re.compile(r"^---[ \t]*$", re.MULTILINE)
 
+# Squadron writes a failed provider call as a normal review slot with this heading.
+_PROVIDER_FAILURE_HEADING = re.compile(
+    r"^#{1,6}\s*provider failure\s*$", re.MULTILINE | re.IGNORECASE
+)
+
+
+def has_provider_failure_heading(path: Path) -> bool:
+    return (
+        _PROVIDER_FAILURE_HEADING.search(path.read_text(encoding="utf-8")) is not None
+    )
+
 
 @dataclass(frozen=True)
 class CapturedFinding:
