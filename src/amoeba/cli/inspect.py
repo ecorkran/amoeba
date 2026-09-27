@@ -42,6 +42,15 @@ class ChoiceOption:
 
 
 @dataclass(frozen=True)
+class ValueOption:
+    """An optional flag taking one free value, e.g. ``--node ID``."""
+
+    flag: str
+    help_text: str
+    metavar: str
+
+
+@dataclass(frozen=True)
 class Listing:
     """One inspection listing: its name, its query, and its columns.
 
@@ -58,6 +67,7 @@ class Listing:
             supervisor directory, and opens no store.
         flags: Extra boolean flags, as ``(flag, help)`` pairs.
         choice_options: Extra optional flags taking one value from a set.
+        value_options: Extra optional flags taking one free value.
     """
 
     name: str
@@ -67,6 +77,7 @@ class Listing:
     supervisor_rows: Callable[[Path], list[Row]] | None = None
     flags: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     choice_options: tuple[ChoiceOption, ...] = field(default_factory=tuple)
+    value_options: tuple[ValueOption, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if (self.rows is None) == (self.supervisor_rows is None):

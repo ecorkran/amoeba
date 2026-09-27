@@ -172,6 +172,10 @@ def _add_inspect_parser(subparsers: Any) -> None:
             listing_parser.add_argument(
                 option.flag, choices=option.choices, help=option.help_text
             )
+        for value in listing.value_options:
+            listing_parser.add_argument(
+                value.flag, metavar=value.metavar, help=value.help_text
+            )
         listing_parser.add_argument(
             "--json", action="store_true", help="Emit JSON instead of a table."
         )
