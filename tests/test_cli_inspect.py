@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from cli_harness import await_running, run_cli, start_background
+from evidence_harness import finding, verdict_input
 
 from amoeba.cli.inspect import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.cli.main import ExitCode
@@ -96,6 +97,11 @@ def populated(supervisor_dir: Path) -> Path:
             submitted_by="fixture",
             submitted_at=datetime(2026, 9, 23, tzinfo=UTC),
             payload={INTENT_NODE_ID: runnable.id, INTENT_BODY: {"want": "a run"}},
+        )
+        # Slice 104: one review verdict with one finding.
+        store.record_verdict(
+            verdict_input("fixture-review", runnable.id, finding("x", "a.py:1")),
+            project_id=PROJECT,
         )
     # And one file still waiting in the inbox, written by the real submit().
     submit(
@@ -372,13 +378,13 @@ def test_subcommand_names_derive_from_the_registry(supervisor_dir: Path) -> None
 
 def test_an_unregistered_listing_is_rejected(supervisor_dir: Path) -> None:
     """A subcommand that is not in the registry does not exist."""
-    result = run_cli(["inspect", "findings", "--project", PROJECT], supervisor_dir)
+    result = run_cli(["inspect", "not-a-listing", "--project", PROJECT], supervisor_dir)
 
     assert result.returncode != ExitCode.OK
+    assert "invalid choice" in result.stderr
 
 
-def test_slice_104_listings_are_not_registered_here() -> None:
-    """Findings and verdicts belong to slice 104, per the ratified D4 split."""
+def test_the_registered_listings_are_pinned() -> None:
     registered = {listing.name for listing in LISTINGS}
 
     assert registered == {
@@ -390,9 +396,10 @@ def test_slice_104_listings_are_not_registered_here() -> None:
         "inbox",
         "submissions",
         "messages",
+        # Slice 104.
+        "verdicts",
+        "findings",
     }
-    assert "findings" not in registered
-    assert "verdicts" not in registered
 
 
 def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
@@ -403,6 +410,8 @@ def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
         "journal",
         "submissions",
         "messages",
+        "verdicts",
+        "findings",
     }
 
     missing_project = run_cli(["inspect", "nodes"], supervisor_dir)
