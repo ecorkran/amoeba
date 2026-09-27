@@ -18,11 +18,55 @@ status: not_started
 
 ---
 
-## Section 6: The verdict Inbox Kind and the Submit Flag Rule
+## Section 6: The Submit Flag Rule and the verdict Inbox Kind
 
-### Task 6.1: Add the verdict submission kind
+The flag rule comes first. Registering `VerdictPayload` makes `amoeba submit` build a `verdict` subcommand, and today's `_takes_object` raises `TypeError` at parser build on its bool and list fields, which would break every CLI test until the rule changed.
+
+### Task 6.1: Replace the submit flag rule
 **Owner**: Junior AI
 **Dependencies**: Task 5.2
+**Effort**: 2
+**Objective**: Make `amoeba submit` build flags for every payload field type, per the LLD's "`amoeba submit` reads flags by one rule".
+
+**Steps**:
+- [ ] Replace `_takes_object` in `src/amoeba/cli/submit.py` with a rule: a text field, an enum field, or the optional form of either takes the flag as typed; every other field takes JSON (`--score 82.5`, `--fallback-used null`, `--findings '[…]'`)
+- [ ] A value that is not valid JSON fails with an argparse error naming the flag
+- [ ] Pydantic validates the built payload either way; the CLI does no type checking of its own
+- [ ] Existing `create-project`, `resolution`, and `intent` flags behave exactly as before (a dict field was already JSON; text fields stay as typed)
+- [ ] No per-kind branch: flags keep coming from each kind's payload model
+
+**Success Criteria**:
+- [ ] No per-kind branch in `cli/submit.py`
+- [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(cli): read submit flags by field type`
+
+**Files to Modify**: `src/amoeba/cli/submit.py`
+
+---
+
+### Task 6.2: Test the flag rule
+**Owner**: Junior AI
+**Dependencies**: Task 6.1
+**Effort**: 2
+**Objective**: Replace `_takes_object`'s tests with ones for the new rule, before any real payload depends on it.
+
+**Steps**:
+- [ ] Replace the `_takes_object` tests in `tests/cli/test_submit.py` with a table over annotations: `str`, `str | None`, a `StrEnum`, its optional form → as typed; `bool | None`, `float | None`, `int | None`, `list[…]`, `dict[…]` → JSON
+- [ ] Using a small pydantic model defined in the test, `null` builds `None`, `false` builds `False`, and `'[…]'` builds a list
+- [ ] Bad JSON on a JSON flag fails with an error naming the flag
+- [ ] 103's other submit CLI tests pass unchanged
+
+**Success Criteria**:
+- [ ] `uv run pytest tests/cli` passes
+- [ ] Commit, e.g. `test: cover the submit flag rule`
+
+**Files to Modify**: `tests/cli/test_submit.py`
+
+---
+
+### Task 6.3: Add the verdict submission kind
+**Owner**: Junior AI
+**Dependencies**: Task 6.2
 **Effort**: 3
 **Objective**: Add all three parts of 103's seam for `verdict`, reusing Section 4's checks and insert.
 
@@ -35,23 +79,26 @@ status: not_started
 - [ ] A replayed submission id is already a no-op through `apply_submission`'s replay check; do not add a second one
 
 **Success Criteria**:
-- [ ] Payload key names appear once in `src/amoeba/store/` and match `VerdictPayload`'s field names (pinned by a test in Task 6.2)
+- [ ] Payload key names appear once in `src/amoeba/store/` and match `VerdictPayload`'s field names (pinned by a test in Task 6.4)
 - [ ] `amoeba.store` imports neither pydantic nor `amoeba.inbox`
+- [ ] `amoeba submit verdict --help` lists every `VerdictPayload` field, with no change to `cli/submit.py`
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(inbox): add verdict submission kind`
 
 **Files to Create**: `src/amoeba/inbox/evidence_payloads.py`
 **Files to Modify**: `src/amoeba/store/inbox_models.py`, `src/amoeba/store/evidence_models.py`, `src/amoeba/store/verdicts.py`, `src/amoeba/store/inbox.py` (one `KIND_EFFECTS` entry), `src/amoeba/inbox/envelope.py` (one `KIND_PAYLOAD_MODELS` entry)
 
 ---
 
-### Task 6.2: Test the verdict kind through apply_submission and the envelope
+### Task 6.4: Test the verdict kind through apply_submission, the envelope, and the CLI
 **Owner**: Junior AI
-**Dependencies**: Task 6.1
+**Dependencies**: Task 6.3
 **Effort**: 2
-**Objective**: Cover applied, rejected, replayed, and quarantined paths, and extend 103's completeness tests.
+**Objective**: Cover applied, rejected, replayed, and quarantined paths, and extend 103's completeness pins.
 
 **Steps**:
 - [ ] Extend 103's completeness tests so every `SubmissionKind` has a payload model and an effect, `VERDICT` included
+- [ ] Add a `VERDICT` entry to `KIND_FLAGS` in `tests/cli/test_submit.py` with a full valid flag set (every required field: node id, verdict, derivation, fallback-used, findings-parsed, provider-failure, review type, model, findings, upstream, upstream version, source). `test_every_kind_has_a_subcommand` and the parametrized write test then cover `verdict`
 - [ ] `VerdictPayload`'s field names equal the store's payload key set, so the two cannot drift
 - [ ] A valid verdict submission is `applied`, and the record id equals the submission id
 - [ ] Applying the same submission again changes nothing
@@ -61,52 +108,10 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `uv run pytest` passes
-- [ ] Commit, e.g. `feat(inbox): add verdict submission kind`
+- [ ] Commit, e.g. `test: cover the verdict submission kind`
 
 **Files to Create**: `tests/store/test_verdict_submission.py`
-**Files to Modify**: 103's completeness tests (`tests/inbox/test_envelope.py`, `tests/store/test_inbox_apply.py`)
-
----
-
-### Task 6.3: Replace the submit flag rule
-**Owner**: Junior AI
-**Dependencies**: Task 6.2
-**Effort**: 2
-**Objective**: Make `amoeba submit` build flags for every payload field type, per the LLD's "`amoeba submit` reads flags by one rule".
-
-**Steps**:
-- [ ] Replace `_takes_object` in `src/amoeba/cli/submit.py` with a rule: a text field, an enum field, or the optional form of either takes the flag as typed; every other field takes JSON (`--score 82.5`, `--fallback-used null`, `--findings '[…]'`)
-- [ ] A value that is not valid JSON fails with an argparse error naming the flag
-- [ ] Pydantic validates the built payload either way; the CLI does no type checking of its own
-- [ ] Existing `create-project`, `resolution`, and `intent` flags behave exactly as before (a dict field was already JSON; text fields stay as typed)
-- [ ] The `verdict` subcommand appears with no per-kind code: its flags come from `VerdictPayload`
-
-**Success Criteria**:
-- [ ] `amoeba submit verdict --help` lists every `VerdictPayload` field
-- [ ] No per-kind branch in `cli/submit.py`
-- [ ] `uv run pyright` clean
-
-**Files to Modify**: `src/amoeba/cli/submit.py`
-
----
-
-### Task 6.4: Test the flag rule
-**Owner**: Junior AI
-**Dependencies**: Task 6.3
-**Effort**: 2
-**Objective**: Replace `_takes_object`'s tests with ones for the new rule.
-
-**Steps**:
-- [ ] Replace the `_takes_object` tests in `tests/cli/test_submit.py` with a table: `str`, `str | None`, a `StrEnum`, its optional form → as typed; `bool | None`, `float | None`, `int | None`, `list[…]`, `dict[…]` → JSON
-- [ ] `--fallback-used null` builds `None`; `--provider-failure false` builds `False`; `--findings '[…]'` builds a list
-- [ ] Bad JSON on a JSON flag fails with an error naming the flag
-- [ ] 103's existing submit CLI tests pass unchanged apart from the replaced helper tests
-
-**Success Criteria**:
-- [ ] `uv run pytest tests/cli` passes
-- [ ] Commit, e.g. `feat(cli): read submit flags by field type`
-
-**Files to Modify**: `tests/cli/test_submit.py`
+**Files to Modify**: 103's completeness tests (`tests/inbox/test_envelope.py`, `tests/store/test_inbox_apply.py`), `tests/cli/test_submit.py` (`KIND_FLAGS`)
 
 ---
 
@@ -120,14 +125,16 @@ status: not_started
 
 **Steps**:
 - [ ] Add `value_options` to `Listing` in `src/amoeba/cli/inspect.py`, defaulting to empty, alongside the existing `choice_options`
-- [ ] `_add_inspect_parser` adds them; the row function receives their values
+- [ ] `_add_inspect_parser` in `src/amoeba/cli/main.py` adds them, in the same loop that adds `choice_options` today; the row function receives their values
 - [ ] Existing listings are unchanged
 
 **Success Criteria**:
 - [ ] Every existing `tests/test_cli_inspect.py` test passes unchanged
+- [ ] `cli/main.py` grows by only the few lines of the new option loop
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(cli): add value options to the listing registry`
 
-**Files to Modify**: `src/amoeba/cli/inspect.py`
+**Files to Modify**: `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`
 
 ---
 
@@ -146,6 +153,7 @@ status: not_started
 **Success Criteria**:
 - [ ] `cli/inspect.py` and `cli/main.py` grow by no more than the registry append and imports
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(cli): add verdicts and findings listing rows`
 
 **Files to Create**: `src/amoeba/cli/inspect_evidence.py`
 **Files to Modify**: `src/amoeba/cli/inspect.py` (append to `LISTINGS`)

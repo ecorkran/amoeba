@@ -74,6 +74,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 - [ ] `grep -n "import" src/amoeba/store/finding_identity.py` shows only standard-library imports
 - [ ] The string `unverified` appears in `src/` only in this module
 - [ ] `uv run pyright` and `uv run ruff check .` clean
+- [ ] Commit, e.g. `feat(store): add finding identity normalizers`
 
 **Files to Create**: `src/amoeba/store/finding_identity.py`
 
@@ -90,7 +91,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 - [ ] Key tests from the LLD's Functional Requirements: a changed line reference (`:119-163` → `:218-240`, `#L12` → none) or a formatting-only summary change keeps the key; a different path or different words change it
 - [ ] A small test helper reads a review file's YAML frontmatter with PyYAML and returns its `findings` list. It lives under `tests/` (it is **not** the slice 108 parser)
 - [ ] Captured-rounds test: compute keys for every finding in round 1 part 1 and round 2 part 1; assert the two sets share **no** keys. The docstring names this as the rewording limit and cites one real pair (the `GRACE_EXPIRED` example in the LLD)
-- [ ] Fixture guard test: each of the four captured files exists and its frontmatter verdict and reviewed commit match the LLD table; a mismatch fails with a message naming the file
+- [ ] Fixture guard test: each of the four captured files exists and its frontmatter verdict and reviewed commit match the LLD table; a mismatch fails with a message naming the file. Also pin `verdictSource: stated` on both part-1 files (checked 20260926), so Task 5.2 builds their `VerdictInput`s with `derivation=stated` from the file, not a guess
 
 **Success Criteria**:
 - [ ] Round 1 part 1 yields 9 findings, round 2 part 1 yields 7, and zero keys are shared (the counts measured during design review; if they differ, stop and ask the PM rather than adjusting the assertion)
@@ -122,6 +123,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Success Criteria**:
 - [ ] Each word-list value is defined once; `grep` for any member literal in `src/` finds only this module (the migration's CHECK constraints, if any, excepted)
 - [ ] `uv run pyright` clean in strict mode
+- [ ] Commit, e.g. `feat(store): add evidence vocabularies and records`
 
 **Files to Create**: `src/amoeba/store/evidence_models.py`
 **Files to Modify**: `src/amoeba/store/models.py`
@@ -168,6 +170,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 - [ ] No SQL or column name for either table outside `sql_evidence.py` and the migration file
 - [ ] The migration runner picks up `005` without modification
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(store): add migration 005 and evidence sql`
 
 **Files to Create**: `src/amoeba/store/schema/005_verdicts_and_findings.sql`, `src/amoeba/store/sql_evidence.py`
 **Files to Modify**: the module declaring `EXPECTED_SCHEMA_VERSION`
@@ -187,6 +190,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Success Criteria**:
 - [ ] Column names come only from `sql_evidence.py`
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(store): add evidence row mapping`
 
 **Files to Create**: `src/amoeba/store/mapping_evidence.py`
 
@@ -230,6 +234,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Success Criteria**:
 - [ ] One transaction: a failed check or a failing finding insert leaves no verdict row
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(store): add VerdictOperations.record_verdict`
 
 **Files to Create**: `src/amoeba/store/verdicts.py`
 **Files to Modify**: `src/amoeba/store/store.py`, `src/amoeba/store/__init__.py`, `tests/test_public_api.py`
@@ -247,9 +252,11 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 - [ ] Each failing check raises and writes nothing: unknown node, node in another project, journal entry on another node, provider failure with findings, provider failure with a verdict other than `UNKNOWN`, empty `upstream_version`
 - [ ] Retry: same id and same content returns the existing record with no WARNING; same id and different content returns the **first** record, writes nothing, and logs a WARNING (`caplog`)
 - [ ] `recorded_seq` follows arrival order
+- [ ] Round trip: a `VerdictInput` with every optional field set (`score`, `criteria`, `tool_calls_made`, `sq_run_id`, `journal_entry_id`, `requested_model`, `reviewed_sha`, `diff_truncated`, `fallback_used`, `source_path`) reads back through `verdict()` equal to what was recorded; a second one with each of those set to `None` reads back `None`, never a default
 
 **Success Criteria**:
 - [ ] Every check in Task 4.1 has a test
+- [ ] Every `VerdictInput` field survives the round trip, set and null
 - [ ] `uv run pytest` passes
 - [ ] Commit, e.g. `feat(store): add record_verdict with retry rule`
 
@@ -272,6 +279,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 
 **Success Criteria**:
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(store): add verdict read methods`
 
 **Files to Modify**: `src/amoeba/store/verdicts.py` (or its read-side sibling)
 
@@ -317,6 +325,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Success Criteria**:
 - [ ] The comparable set comes only from `COMPARABLE_STANDINGS`; the trust label only from `verdict_standing`
 - [ ] `uv run pyright` clean
+- [ ] Commit, e.g. `feat(store): compute finding changes between rounds`
 
 **Files to Modify**: `src/amoeba/store/verdicts.py` (or its read-side sibling)
 

@@ -352,7 +352,7 @@ These consume 101–103 through their documented contracts. The changes are reco
 
   The rewording test compares part 1, round 1 against round 2. Round 2's part 2 is a real provider failure (a *Provider Failure* heading, no findings), so the `provider_failure` label and the "not comparable" case each get one real input. If any of these files is missing or its frontmatter differs from the table, the fixture copy step stops with an error. It never substitutes a hand-built round.
 - A store at version 4 with nodes, journal entries, submissions, and messages upgrades to 5 with all of them intact.
-- The writer guard is unchanged.
+- The writer guard is not weakened. Its only change is adding `scripts/demo_evidence.py` to the permitted scripts, as 103 added `demo_inbox.py`.
 - `ruff`, `pyright` strict, and the full suite are clean. Source files stay near 300 lines.
 - `docs/evidence-contract.md` covers the matching rule and what it does not match, the trust labels, how the previous round is chosen, and the provenance fields.
 
