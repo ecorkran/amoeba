@@ -228,16 +228,16 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Create `VerdictOperations` in `src/amoeba/store/verdicts.py` with `record_verdict`, per the LLD's "Recording a review" flow.
 
 **Steps**:
-- [ ] One transaction, in the LLD's order: id already recorded → return the existing record and write nothing (log a WARNING if the content differs; first wins); node exists in this project; journal entry, if given, is on the same node; provider failure ⇒ verdict `UNKNOWN` and no findings; `upstream_version` is non-empty; insert the verdict row; insert one observation row per finding, in order, with raw text, normalized text, key, and `RULE_VERSION`
-- [ ] Split the checks into a helper that **returns a reason string or `None`**, so Section 6's inbox effect reuses the same checks as plain branches. `record_verdict` raises on a reason (`NodeNotFoundError` for a missing node, `ValueError` or an existing `StoreError` subclass otherwise — match how `block()` raises)
-- [ ] Split the insert into a helper that runs inside a caller's transaction, so Section 6 can call it from `apply_submission`
-- [ ] Add `VerdictOperations` to the `Store` bases and export the new public names from `amoeba.store`; update `tests/test_public_api.py`
-- [ ] Keep `verdicts.py` near 300 lines. If the read methods in Task 4.3 push it over, put them in a second module
+- [x] One transaction, in the LLD's order: id already recorded → return the existing record and write nothing (log a WARNING if the content differs; first wins); node exists in this project; journal entry, if given, is on the same node; provider failure ⇒ verdict `UNKNOWN` and no findings; `upstream_version` is non-empty; insert the verdict row; insert one observation row per finding, in order, with raw text, normalized text, key, and `RULE_VERSION`
+- [x] Split the checks into a helper that **returns a reason string or `None`**, so Section 6's inbox effect reuses the same checks as plain branches. `record_verdict` raises on a reason (`NodeNotFoundError` for a missing node, `ValueError` or an existing `StoreError` subclass otherwise — match how `block()` raises)
+- [x] Split the insert into a helper that runs inside a caller's transaction, so Section 6 can call it from `apply_submission`
+- [x] Add `VerdictOperations` to the `Store` bases and export the new public names from `amoeba.store`; update `tests/test_public_api.py`
+- [x] Keep `verdicts.py` near 300 lines. If the read methods in Task 4.3 push it over, put them in a second module
 
 **Success Criteria**:
-- [ ] One transaction: a failed check or a failing finding insert leaves no verdict row
-- [ ] `uv run pyright` clean
-- [ ] Commit, e.g. `feat(store): add VerdictOperations.record_verdict`
+- [x] One transaction: a failed check or a failing finding insert leaves no verdict row
+- [x] `uv run pyright` clean
+- [x] Commit, e.g. `feat(store): add VerdictOperations.record_verdict`
 
 **Files to Create**: `src/amoeba/store/verdicts.py`
 **Files to Modify**: `src/amoeba/store/store.py`, `src/amoeba/store/__init__.py`, `tests/test_public_api.py`
@@ -251,17 +251,17 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Cover every check and the retry rule.
 
 **Steps**:
-- [ ] Records a verdict with findings; observations carry the order given, raw and normalized text, key, and rule version
-- [ ] Each failing check raises and writes nothing: unknown node, node in another project, journal entry on another node, provider failure with findings, provider failure with a verdict other than `UNKNOWN`, empty `upstream_version`
-- [ ] Retry: same id and same content returns the existing record with no WARNING; same id and different content returns the **first** record, writes nothing, and logs a WARNING (`caplog`)
-- [ ] `recorded_seq` follows arrival order
-- [ ] Round trip: a `VerdictInput` with every optional field set (`score`, `criteria`, `tool_calls_made`, `sq_run_id`, `journal_entry_id`, `requested_model`, `reviewed_sha`, `diff_truncated`, `fallback_used`, `source_path`) reads back through `verdict()` equal to what was recorded; a second one with each of those set to `None` reads back `None`, never a default
+- [x] Records a verdict with findings; observations carry the order given, raw and normalized text, key, and rule version
+- [x] Each failing check raises and writes nothing: unknown node, node in another project, journal entry on another node, provider failure with findings, provider failure with a verdict other than `UNKNOWN`, empty `upstream_version`
+- [x] Retry: same id and same content returns the existing record with no WARNING; same id and different content returns the **first** record, writes nothing, and logs a WARNING (`caplog`)
+- [x] `recorded_seq` follows arrival order
+- [x] Round trip: a `VerdictInput` with every optional field set (`score`, `criteria`, `tool_calls_made`, `sq_run_id`, `journal_entry_id`, `requested_model`, `reviewed_sha`, `diff_truncated`, `fallback_used`, `source_path`) reads back through `verdict()` equal to what was recorded; a second one with each of those set to `None` reads back `None`, never a default
 
 **Success Criteria**:
-- [ ] Every check in Task 4.1 has a test
-- [ ] Every `VerdictInput` field survives the round trip, set and null
-- [ ] `uv run pytest` passes
-- [ ] Commit, e.g. `feat(store): add record_verdict with retry rule`
+- [x] Every check in Task 4.1 has a test
+- [x] Every `VerdictInput` field survives the round trip, set and null
+- [x] `uv run pytest` passes
+- [x] Commit, e.g. `feat(store): add record_verdict with retry rule`
 
 **Files to Create**: `tests/store/test_verdicts.py`
 
@@ -274,15 +274,15 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Add `verdict`, `verdicts`, `observations`, and `findings` per the LLD's API Contracts.
 
 **Steps**:
-- [ ] `verdict(verdict_id)` returns `None` for an unknown id
-- [ ] `verdicts(project_id, *, node_id=None)` in `recorded_seq` order
-- [ ] `observations(verdict_id)` in ordinal order; raises `VerdictNotFoundError` for an unknown id
-- [ ] `findings(project_id, *, node_id=None)`: one row per key, with node, latest severity and summary, first and last verdict ids, times seen
-- [ ] All four work through `Store.open_read_only`
+- [x] `verdict(verdict_id)` returns `None` for an unknown id
+- [x] `verdicts(project_id, *, node_id=None)` in `recorded_seq` order
+- [x] `observations(verdict_id)` in ordinal order; raises `VerdictNotFoundError` for an unknown id
+- [x] `findings(project_id, *, node_id=None)`: one row per key, with node, latest severity and summary, first and last verdict ids, times seen
+- [x] All four work through `Store.open_read_only`
 
 **Success Criteria**:
-- [ ] `uv run pyright` clean
-- [ ] Commit, e.g. `feat(store): add verdict read methods`
+- [x] `uv run pyright` clean
+- [x] Commit, e.g. `feat(store): add verdict read methods`
 
 **Files to Modify**: `src/amoeba/store/verdicts.py` (or its read-side sibling)
 
@@ -295,15 +295,15 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Cover ordering, filtering, the per-key summary, and unknown ids.
 
 **Steps**:
-- [ ] `verdict` returns `None`, and `observations` raises `VerdictNotFoundError`, on an unknown id
-- [ ] `verdicts` orders by arrival and filters by node
-- [ ] `findings` merges the same key across two verdicts (times seen 2, latest severity from the later one) and keeps keys on different nodes apart
-- [ ] A repeated key within one review is stored twice in `observations` and shows as one `findings` row
-- [ ] Every read works through a read-only handle
+- [x] `verdict` returns `None`, and `observations` raises `VerdictNotFoundError`, on an unknown id
+- [x] `verdicts` orders by arrival and filters by node
+- [x] `findings` merges the same key across two verdicts (times seen 2, latest severity from the later one) and keeps keys on different nodes apart
+- [x] A repeated key within one review is stored twice in `observations` and shows as one `findings` row
+- [x] Every read works through a read-only handle
 
 **Success Criteria**:
-- [ ] `uv run pytest` passes
-- [ ] Commit, e.g. `feat(store): add verdict and finding read methods`
+- [x] `uv run pytest` passes
+- [x] Commit, e.g. `feat(store): add verdict and finding read methods`
 
 **Files to Modify**: `tests/store/test_verdicts.py`
 
@@ -318,17 +318,17 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Work out new/recurring/gone at call time, per the LLD's "What changed since the last round" flow.
 
 **Steps**:
-- [ ] Unknown verdict id raises `VerdictNotFoundError`
-- [ ] A target whose standing is not in `COMPARABLE_STANDINGS` returns "not comparable" with empty lists
-- [ ] Previous round: the latest earlier verdict (by `recorded_seq`) on the same node and `review_type` whose standing is comparable. Standing is computed with `verdict_standing`, not stored
-- [ ] Compare keys only within the same `identity_version`
-- [ ] Tag each target finding `recurring` or `new`; `gone` is the previous keys not in the target. No previous round means every finding is `new`
-- [ ] Store nothing
+- [x] Unknown verdict id raises `VerdictNotFoundError`
+- [x] A target whose standing is not in `COMPARABLE_STANDINGS` returns "not comparable" with empty lists
+- [x] Previous round: the latest earlier verdict (by `recorded_seq`) on the same node and `review_type` whose standing is comparable. Standing is computed with `verdict_standing`, not stored
+- [x] Compare keys only within the same `identity_version`
+- [x] Tag each target finding `recurring` or `new`; `gone` is the previous keys not in the target. No previous round means every finding is `new`
+- [x] Store nothing
 
 **Success Criteria**:
-- [ ] The comparable set comes only from `COMPARABLE_STANDINGS`; the trust label only from `verdict_standing`
-- [ ] `uv run pyright` clean
-- [ ] Commit, e.g. `feat(store): compute finding changes between rounds`
+- [x] The comparable set comes only from `COMPARABLE_STANDINGS`; the trust label only from `verdict_standing`
+- [x] `uv run pyright` clean
+- [x] Commit, e.g. `feat(store): compute finding changes between rounds`
 
 **Files to Modify**: `src/amoeba/store/verdicts.py` (or its read-side sibling)
 
@@ -341,17 +341,17 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Cover each branch, and run the real 102 rounds through the store.
 
 **Steps**:
-- [ ] The same finding text at a different list position, with a moved line range, is `recurring`
-- [ ] Round 2 names round 1 as previous and tags new, recurring, and gone correctly (hand-built `FindingInput`s)
-- [ ] A provider failure is "not comparable"; one recorded between two real rounds is skipped when choosing the previous round
-- [ ] A `findings_unparsed` verdict is never chosen as previous, and a different `review_type` on the same node is never chosen
-- [ ] Captured rounds through the store: build `VerdictInput`s from round 1 part 1 and round 2 part 1 via the Task 1.3 frontmatter helper; record both; `finding_changes` on round 2 names round 1, tags every finding `new`, and lists every round 1 key as `gone`
-- [ ] Record round 2 part 2 (the real provider failure) as a provider failure; it is labelled `provider_failure` and is "not comparable"
+- [x] The same finding text at a different list position, with a moved line range, is `recurring`
+- [x] Round 2 names round 1 as previous and tags new, recurring, and gone correctly (hand-built `FindingInput`s)
+- [x] A provider failure is "not comparable"; one recorded between two real rounds is skipped when choosing the previous round
+- [x] A `findings_unparsed` verdict is never chosen as previous, and a different `review_type` on the same node is never chosen
+- [x] Captured rounds through the store: build `VerdictInput`s from round 1 part 1 and round 2 part 1 via the Task 1.3 frontmatter helper; record both; `finding_changes` on round 2 names round 1, tags every finding `new`, and lists every round 1 key as `gone`
+- [x] Record round 2 part 2 (the real provider failure) as a provider failure; it is labelled `provider_failure` and is "not comparable"
 
 **Success Criteria**:
-- [ ] Every branch in Task 5.1 has a test, and the real provider failure is one of the inputs
-- [ ] `uv run pytest` passes
-- [ ] Commit, e.g. `feat(store): add finding_changes across review rounds`
+- [x] Every branch in Task 5.1 has a test, and the real provider failure is one of the inputs
+- [x] `uv run pytest` passes
+- [x] Commit, e.g. `feat(store): add finding_changes across review rounds`
 
 **Files to Create**: `tests/store/test_finding_changes.py`
 
