@@ -13,7 +13,7 @@ not import a sibling operation class (the pattern ``BlockWriter`` set).
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from amoeba.store import sql_evidence, sql_journal
@@ -32,6 +32,7 @@ from amoeba.store.mapping_evidence import (
     verdict_parameters,
 )
 from amoeba.store.mapping_journal import map_journal_entry
+from amoeba.store.verdict_payload import verdict_from_payload
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,25 @@ class VerdictWriter(StoreBase):
                 sql_evidence.INSERT_OBSERVATION,
                 observation_parameters(verdict.id, ordinal, finding),
             )
+
+    def _apply_verdict_submission(
+        self,
+        project_id: str,
+        submission_id: str,
+        payload: Mapping[str, object],
+        recorded_at: str,
+    ) -> str | None:
+        """The inbox ``verdict`` effect, inside ``apply_submission``'s transaction.
+
+        Runs the same checks as ``record_verdict``, but returns the reason as a
+        rejection instead of raising. The submission id becomes the record id.
+        """
+        verdict = verdict_from_payload(submission_id, payload)
+        rejection = self._verdict_rejection(project_id, verdict)
+        if rejection is not None:
+            return rejection.reason
+        self._insert_verdict(project_id, verdict, recorded_at)
+        return None
 
     def _observation_rows(self, verdict_id: str) -> list[FindingObservation]:
         rows = self._execute(sql_evidence.SELECT_OBSERVATIONS, (verdict_id,))

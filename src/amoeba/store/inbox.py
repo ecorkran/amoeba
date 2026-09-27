@@ -30,6 +30,7 @@ from typing import ClassVar
 from amoeba.store import sql, sql_inbox
 from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter
+from amoeba.store._verdict_writer import VerdictWriter
 from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
@@ -87,7 +88,7 @@ def _payload_mapping(payload: Mapping[str, object], key: str) -> dict[str, objec
     return narrowed
 
 
-class InboxOperations(BlockWriter):
+class InboxOperations(BlockWriter, VerdictWriter):
     """Apply a submission exactly once, and read back what was applied."""
 
     def apply_submission(
@@ -261,10 +262,20 @@ class InboxOperations(BlockWriter):
         )
         return None
 
+    def _apply_verdict(self: InboxOperations, application: _Application) -> str | None:
+        """Record a review; the checks and insert live beside ``record_verdict``."""
+        return self._apply_verdict_submission(
+            application.project_id,
+            application.submission_id,
+            application.payload,
+            application.timestamp,
+        )
+
     #: The kind-to-effect table, defined once. A kind missing here fails a
     #: test, not a user.
     KIND_EFFECTS: ClassVar[Mapping[SubmissionKind, Effect]] = {
         SubmissionKind.CREATE_PROJECT: _apply_create_project,
         SubmissionKind.RESOLUTION: _apply_resolution,
         SubmissionKind.INTENT: _apply_intent,
+        SubmissionKind.VERDICT: _apply_verdict,
     }

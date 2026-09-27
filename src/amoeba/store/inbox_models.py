@@ -28,6 +28,7 @@ class SubmissionKind(StrEnum):
     CREATE_PROJECT = "create_project"
     RESOLUTION = "resolution"
     INTENT = "intent"
+    VERDICT = "verdict"
 
 
 #: Payload keys each kind's effect reads, defined once. The envelope's payload

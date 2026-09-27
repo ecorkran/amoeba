@@ -24,11 +24,12 @@ from typing import Final
 from pydantic import (
     AwareDatetime,
     BaseModel,
-    ConfigDict,
     ValidationError,
     field_validator,
 )
 
+from amoeba.inbox.evidence_payloads import VerdictPayload
+from amoeba.inbox.payload_config import MODEL_CONFIG
 from amoeba.store.inbox_models import QuarantineReason, SubmissionKind
 from amoeba.store.paths import validate_path_component, validate_project_id
 
@@ -40,8 +41,6 @@ ENVELOPE_VERSION_FIELD: Final = "envelope_version"
 #: The envelope field holding the kind, checked before full validation so an
 #: unknown kind is named as such rather than as an unparseable envelope.
 ENVELOPE_KIND_FIELD: Final = "kind"
-
-_MODEL_CONFIG: Final = ConfigDict(extra="ignore", frozen=True)
 
 
 class EnvelopeError(ValueError):
@@ -62,13 +61,13 @@ class EnvelopeError(ValueError):
 class CreateProjectPayload(BaseModel):
     """``create_project`` carries nothing: the envelope's project id is it."""
 
-    model_config = _MODEL_CONFIG
+    model_config = MODEL_CONFIG
 
 
 class ResolutionPayload(BaseModel):
     """Fills one blocked state's slot. Targets the blocked state, not a node."""
 
-    model_config = _MODEL_CONFIG
+    model_config = MODEL_CONFIG
 
     blocked_state_id: str
     detail: str
@@ -77,7 +76,7 @@ class ResolutionPayload(BaseModel):
 class IntentPayload(BaseModel):
     """Something the Runner should act on, optionally about one node."""
 
-    model_config = _MODEL_CONFIG
+    model_config = MODEL_CONFIG
 
     node_id: str | None = None
     body: dict[str, object]
@@ -89,6 +88,7 @@ KIND_PAYLOAD_MODELS: Final[Mapping[SubmissionKind, type[BaseModel]]] = {
     SubmissionKind.CREATE_PROJECT: CreateProjectPayload,
     SubmissionKind.RESOLUTION: ResolutionPayload,
     SubmissionKind.INTENT: IntentPayload,
+    SubmissionKind.VERDICT: VerdictPayload,
 }
 
 #: The kind values, as plain strings, for checking a raw decoded field.
@@ -98,7 +98,7 @@ _KIND_VALUES: Final = frozenset(kind.value for kind in SubmissionKind)
 class SubmissionEnvelope(BaseModel):
     """One submission as written to disk."""
 
-    model_config = _MODEL_CONFIG
+    model_config = MODEL_CONFIG
 
     envelope_version: int
     id: str
