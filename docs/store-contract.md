@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20260923
+dateUpdated: 20260927
 status: complete
 ---
 
@@ -34,11 +34,6 @@ is a row. Everything that makes Amoeba async by construction follows from this.
   the distinction is easy to assume wrongly.
 - **Not a parser.** CF and SQ values are stored opaquely. See
   [Reference fields](#reference-fields).
-- **Not a findings store.** Findings, verdicts, and the change feed belong to
-  slices 104–105. Nothing about them is modeled here. *(Slice 102 added the
-  command journal and slice 103 the inbox record and message channels, which
-  this document now covers — see [The command journal](#the-command-journal)
-  and [The inbox record and messages](#the-inbox-record-and-messages).)*
 
 ## Importing
 
@@ -389,6 +384,54 @@ Submission payloads and message payloads are stored verbatim and shown by
 `amoeba inspect`. **Callers must not place secrets in them.** Records and
 messages are never deleted in this slice.
 
+## Verdicts and findings
+
+*Added by slice 104. Schema version 5.*
+
+The store records what each review said: one verdict per review and one
+observation per finding, each keyed by content so rounds can be compared. The
+matching rule, the trust label, how the previous round is chosen, and the
+`verdict` inbox kind are [`evidence-contract.md`](evidence-contract.md)'s
+subject; this section lists only what the store offers.
+
+### Vocabularies
+
+| Vocabulary | Members |
+| --- | --- |
+| `ReviewVerdict` | `PASS`, `CONCERNS`, `FAIL`, `UNKNOWN` |
+| `FindingSeverity` | `pass`, `note`, `concern`, `fail` |
+| `VerdictDerivation` | `stated`, `derived`, `imposed`, `not_reported` |
+| `RecordSource` | `stdout_json`, `artifact_frontmatter` |
+| `FindingChange` | `new`, `recurring`, `gone` |
+| `VerdictStanding` | `provider_failure`, `unparsed`, `findings_unparsed`, `imposed`, `derived`, `unattested`, `stated` |
+
+`SubmissionKind` gains `verdict`.
+
+### Types
+
+`VerdictInput`, `FindingInput`, `Provenance`, `VerdictRecord`,
+`FindingObservation`, `FindingSummary`, `TaggedFinding`, and `FindingChanges`,
+all frozen. Fields are listed in the evidence contract.
+
+### Methods
+
+| Method | Effect |
+| --- | --- |
+| `record_verdict(verdict, *, project_id)` | **One transaction:** retry check, checks, the verdict row, one row per finding. An id already recorded returns the existing record, with a WARNING if the content differs. |
+| `verdict(verdict_id)` | One record, or `None`. |
+| `verdicts(project_id, *, node_id=None)` | Records in arrival (`recorded_seq`) order. |
+| `observations(verdict_id)` | One review's findings in the reviewer's order. Raises `VerdictNotFoundError`. |
+| `findings(project_id, *, node_id=None)` | One summary per content key per node. |
+| `finding_changes(verdict_id)` | New, recurring, and gone against the previous comparable round. Raises `VerdictNotFoundError`. |
+
+All reads work through a read-only handle. `verdict_standing`, `parse_verdict`,
+`parse_severity`, and `COMPARABLE_STANDINGS` are exported beside them. The
+matching rule is `amoeba.store.finding_identity`, importable without a store.
+
+### Retention
+
+Verdicts and observations are never deleted in this slice.
+
 ## Writer model
 
 **This library does not enforce single-writer on its own.** WAL journal mode is
@@ -454,6 +497,7 @@ against a throwaway store it did not ask for is the worst available outcome.
 | Store is stamped at a schema version newer than the code | `StoreSchemaError` |
 | Stored value outside a closed vocabulary, read back | `UnknownVocabularyValueError` |
 | Node id does not exist | `NodeNotFoundError` |
+| Verdict id does not exist, for `observations` or `finding_changes` | `VerdictNotFoundError` |
 | Block or resolve against a node in the wrong state, or a blocked status written through `create_node` / `update_node_status` | `InvalidTransitionError` |
 | Schema-level invariant (foreign key, one open blocked state per node) violated by a write | `StoreIntegrityError` |
 

@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: durable-inbox-and-message-queue
 dateCreated: 20260923
-dateUpdated: 20260923
+dateUpdated: 20260927
 status: complete
 ---
 
@@ -31,9 +31,9 @@ the store's single-writer model intact while many parts contribute to it.
   directory, on the same machine.
 - **Not a reply channel.** A submitter learns the outcome by reading, not by
   being told. Push is slice 105.
-- **Not a way to create nodes.** The three kinds create projects, resolve
-  blocks, and record intents. Node creation from outside the process arrives
-  with initiative 120.
+- **Not a way to create nodes.** The kinds create projects, resolve blocks,
+  record intents, and record reviews of existing nodes. Node creation from
+  outside the process arrives with initiative 120.
 
 ## Submitting
 
@@ -68,13 +68,22 @@ amoeba submit intent --project demo --by operator \
 
 Each prints the submission id. `--id` reuses an id.
 
-### The three kinds
+**The flag rule** (slice 104). One flag per payload field. A text or enum
+field, or the optional form of either, takes its flag as typed. Every other
+field takes JSON: `--score 82.5`, `--fallback-used null`,
+`--findings '[...]'`, `--body '{"want": "a review"}'`. A value that is not
+valid JSON is a usage error naming the flag. The CLI does no type checking of
+its own: the kind's payload model validates the result either way, and an
+invalid payload is refused before anything is written.
+
+### The kinds
 
 | Kind | Payload | Effect | Rejected when |
 | --- | --- | --- | --- |
 | `create_project` | none | The project's store exists. The process creates it at once and it is usable immediately. | Never: a project that already exists is `applied` — the requested state holds. |
 | `resolution` | `blocked_state_id`, `detail` | Fills that blocked state's resolution slot and returns its node to `runnable`. `resolved_by` is `submitted_by`. | The blocked state does not exist, belongs to another project, or is already resolved. |
 | `intent` | `body` (a JSON object), optional `node_id` | One unacknowledged row on the `intent` channel, carrying the submission id. | `node_id` is given and is not a node of this project. |
+| `verdict` | A review result: `VerdictInput`'s fields except `id`, with provenance flattened — see [`evidence-contract.md`](evidence-contract.md#through-the-inbox) | One verdict record, whose id is the submission id, and one observation per finding. | The node is not in this project; a provider failure carries findings or a verdict other than `UNKNOWN`; `upstream_version` is empty. An unknown word in an enum field, or an omitted `derivation`, `fallback_used`, or `findings_parsed`, fails validation and is quarantined instead. |
 
 **A resolution targets a blocked state, never a node.** If a node was resolved
 and blocked again since your reply was written, your reply names the old,

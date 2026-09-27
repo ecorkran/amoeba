@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 104: verdict records and findings in the store — schema version 5 (migration `005`: `verdicts`, `finding_observations`), `record_verdict` (one transaction, caller-supplied id, first record wins), and `verdict` / `verdicts` / `observations` / `findings` reads.
+- Slice 104: `amoeba.store.finding_identity`, a versioned content key per finding that survives formatting and moved line numbers but deliberately not rewording; pinned against the captured slice-102 review rounds.
+- Slice 104: `finding_changes` — new, recurring, and gone against the previous comparable round, never stored; provider failures and unparsed reviews are never a baseline.
+- Slice 104: a trust label (`VerdictStanding`) on every verdict, and required provenance (`upstream_version` is a label, never compared).
+- Slice 104: the `verdict` submission kind and `amoeba submit verdict`; `amoeba submit` now reads flags by one rule (text and enum fields as typed, everything else as JSON).
+- Slice 104: `amoeba inspect verdicts` and `amoeba inspect findings [--verdict ID]`; the listing registry gains `value_options`.
+- Slice 104: `docs/evidence-contract.md`; PyYAML as a dev-only dependency for reading captured review files in tests.
 - Slice 103: the durable inbox — `amoeba.inbox.submit()` writes one fsync-durable file whether or not the process runs; the only way a part outside the process contributes state.
 - Slice 103: `InboxTenant`, the first real tenant — applies each submission exactly once per id, quarantines what cannot be attributed, and bounds a failing apply with an on-disk attempt counter that parks the file in `inbox/failed/`.
 - Slice 103: schema version 4 (migration `004`) — `inbox_submissions` and `messages`, with receiver-assigned `applied_seq` / `seq` as the authoritative order, and a backfill of escalations for open human blocks.
