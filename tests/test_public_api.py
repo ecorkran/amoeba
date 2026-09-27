@@ -129,6 +129,7 @@ CONTRACT_METHODS = {
     "verdicts",
     "observations",
     "findings",
+    "finding_changes",
 }
 
 

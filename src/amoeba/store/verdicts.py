@@ -17,12 +17,16 @@ from amoeba.store import sql_evidence, sql_inbox
 from amoeba.store._base import isoformat, now
 from amoeba.store._verdict_writer import VerdictWriter
 from amoeba.store.evidence_models import (
+    COMPARABLE_STANDINGS,
+    FindingChange,
+    FindingChanges,
     FindingObservation,
     FindingSummary,
+    TaggedFinding,
     VerdictInput,
     VerdictRecord,
 )
-from amoeba.store.mapping_evidence import map_observation
+from amoeba.store.mapping_evidence import map_observation, map_verdict
 from amoeba.store.models import (
     NodeNotFoundError,
     StoreIntegrityError,
@@ -132,11 +136,78 @@ class VerdictOperations(VerdictWriter):
             folded.setdefault(key, _KeyHistory(node, observation)).see(observation)
         return [history.summary() for history in folded.values()]
 
+    def finding_changes(self, verdict_id: str) -> FindingChanges:
+        """What changed in this review since the previous comparable round.
+
+        Worked out now, never stored. The previous round is the latest earlier
+        verdict on the same node and review type whose standing is comparable;
+        failed rounds are skipped, so they never report open findings as gone.
+
+        Raises:
+            VerdictNotFoundError: If no verdict has this id.
+        """
+        target = self._require_verdict(verdict_id)
+        if target.standing not in COMPARABLE_STANDINGS:
+            return FindingChanges(
+                verdict_id=verdict_id,
+                comparable=False,
+                previous_verdict_id=None,
+                findings=(),
+                gone=(),
+            )
+        current = self._observation_rows(verdict_id)
+        previous = self._previous_round(target)
+        earlier = [] if previous is None else self._observation_rows(previous.id)
+        earlier_keys = {_key(o) for o in earlier}
+        current_keys = {_key(o) for o in current}
+        gone: dict[tuple[int, str], FindingObservation] = {}
+        for observation in earlier:
+            if _key(observation) not in current_keys:
+                gone.setdefault(_key(observation), observation)
+        return FindingChanges(
+            verdict_id=verdict_id,
+            comparable=True,
+            previous_verdict_id=None if previous is None else previous.id,
+            findings=tuple(
+                TaggedFinding(
+                    observation=o,
+                    change=(
+                        FindingChange.RECURRING
+                        if _key(o) in earlier_keys
+                        else FindingChange.NEW
+                    ),
+                )
+                for o in current
+            ),
+            gone=tuple(gone.values()),
+        )
+
+    def _previous_round(self, target: VerdictRecord) -> VerdictRecord | None:
+        rows = self._execute(
+            sql_evidence.SELECT_EARLIER_ROUNDS,
+            (
+                target.project_id,
+                target.node_id,
+                target.review_type,
+                target.recorded_seq,
+            ),
+        ).fetchall()
+        for row in rows:
+            candidate = map_verdict(row, ())
+            if candidate.standing in COMPARABLE_STANDINGS:
+                return candidate
+        return None
+
     def _require_verdict(self, verdict_id: str) -> VerdictRecord:
         record = self._load_verdict(verdict_id)
         if record is None:
             raise VerdictNotFoundError(f"no verdict with id {verdict_id!r}")
         return record
+
+
+def _key(observation: FindingObservation) -> tuple[int, str]:
+    """Keys compare only within one rule version."""
+    return (observation.identity_version, observation.identity)
 
 
 class _KeyHistory:
