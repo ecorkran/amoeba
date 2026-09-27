@@ -9,107 +9,94 @@ project: amoeba
 verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md
-aiModel: z-ai/glm-5.3-flash
+aiModel: claude-sonnet-5
 status: complete
-dateCreated: 20260926
-dateUpdated: 20260926
-reviewedSha: e406ad9cc0489c1e3177ba9353eec79894a6dac1
+dateCreated: 20260927
+dateUpdated: 20260927
+reviewedSha: e55015bfc81092cb5a22a53333655a5f87e3036d
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 35
+toolCallsMade: 6
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Complete coverage of the slice design's Sections 6–8 success criteria"
+    summary: "Every Section 6–8 success criterion traces to a task"
     location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md"
   - id: F002
     severity: pass
     category: sequencing
-    summary: "Sequencing, dependencies, and test-with pattern verified against the real code"
-    location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md"
+    summary: "Sequencing is a clean, acyclic chain with correct cross-file linkage"
+    location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md:27"
   - id: F003
-    severity: concern
-    category: sequencing
-    summary: "Adding VERDICT breaks two pinned submit tests that no task is scheduled to fix until 6.4 — and 6.4 claims they pass unchanged"
-    location: "tests/cli/test_submit.py:76-91"
+    severity: pass
+    category: process
+    summary: "Commit checkpoints are per-task, not batched at the end"
+    location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md"
   - id: F004
     severity: concern
-    category: process
-    summary: "Tasks 6.1, 6.3, and 7.1 have no commit checkpoint"
-    location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md"
+    category: test-coverage
+    summary: "No explicit test for rejecting a verdict submission with a missing/empty `upstream_version`"
+    location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md:105"
   - id: F005
     severity: note
-    category: nfr
-    summary: "No new load test, and none is required — CI gating already exists"
-    location: ".github/workflows/ci.yml:54"
+    category: sequencing
+    summary: "Task 7.1 has no dedicated test task immediately after it"
+    location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md:120-137"
   - id: F006
     severity: note
-    category: environment
-    summary: "The captured review files named in the slice design are not present in this checkout"
-    location: "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md"
-  - id: F007
-    severity: note
-    category: docs
-    summary: "LLD-internal tension: \"the writer guard is unchanged\" vs. the walkthrough's deliberate widening"
-    location: "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md"
+    category: nfr
+    summary: "No new load-test/CI-gating task, correctly so"
+    location: "project-documents/user/tasks/104-tasks.findings-verdicts-and-provenance-2.md:258"
 ---
 
 # Review: tasks — slice 104
 
 **Verdict:** CONCERNS
-**Model:** z-ai/glm-5.3-flash
+**Model:** claude-sonnet-5
 
 ## Findings
 
-### [PASS] Complete coverage of the slice design's Sections 6–8 success criteria
+### [PASS] Every Section 6–8 success criterion traces to a task
 
-Every requirement in scope for this file maps to a task: inbox rejection of a provider failure with findings or a non-`UNKNOWN` verdict (Task 6.2, complementing Task 4.2's direct-call coverage in part 1); submission-id record id, replay no-op, and `INVALID_PAYLOAD` quarantine (Task 6.2); the one-rule submit flag builder (6.3/6.4); `value_options` and both listings with running/stopped behavior (7.1–7.3); the demo script with real fixture text and writer-guard widening (8.1); the end-to-end CLI requirement (8.2, modeled on the existing `tests/cli/test_inbox_end_to_end.py`); the contract docs and `CHANGELOG` (8.3); and all four tooling checks plus the walkthrough fill-in (8.4). Nothing in the slice's Included scope is missing, and no task lacks a traceable LLD anchor — the FindingPayload model Task 6.1 creates is the LLD's own component for typing the nested findings list, not scope creep. Task sizing (effort 1–3) is appropriate; no task needs splitting or merging.
+The slice's Development Approach steps 5–7 map 1:1 onto Sections 6, 7, and 8. The `verdict` inbox kind, the new `amoeba submit` flag rule, `value_options`, the two listings, the demo script, the end-to-end CLI test, and the doc updates (`evidence-contract.md`, `store-contract.md`, `inbox-contract.md`, `CHANGELOG.md`) each have a dedicated task, and each task's steps quote the LLD's exact language (e.g. Task 6.3's payload-flattening rule matches "The inbox `verdict` type" in the slice design almost verbatim). No task in this file is untraceable to a line item in the slice's Included scope or Success Criteria.
 
-### [PASS] Sequencing, dependencies, and test-with pattern verified against the real code
+### [PASS] Sequencing is a clean, acyclic chain with correct cross-file linkage
 
-Dependencies form a clean linear chain (6.1 → 6.2 → 6.3 → 6.4 → 7.1 → 7.2 → 7.3 → 8.1 → 8.2 → 8.3 → 8.4) with no cycles, and the cross-file dependency on part-1's Task 5.2 is declared. Test tasks immediately follow their implementations. All anchors the tasks plan to replace or extend exist exactly as described: `test_slice_104_listings_are_not_registered_here` (`tests/test_cli_inspect.py:380`), the unregistered-findings test (`tests/test_cli_inspect.py:373`), the completeness tests (`tests/inbox/test_envelope.py:55`, `tests/store/test_inbox_apply.py:69`), the `demo_inbox.py` precedent (`scripts/demo_inbox.py`, `PERMITTED_SCRIPTS` at `tests/test_writer_guard.py:63`), and the registry append point (`src/amoeba/cli/inspect.py:149`; `cli/main.py` already iterates `LISTINGS` at `src/amoeba/cli/main.py:161`, so Task 7.2's "no more than the registry append and imports" claim is accurate).
+Task 6.1 depends on Task 5.2 from part 1 (correctly referenced across files), and every subsequent task depends only on its immediate predecessor (6.1→6.2→6.3→6.4→7.1→7.2→7.3→8.1→8.2→8.3→8.4). No forward references, no cycles. Task 6.3's reuse of "Task 4.1's check helper" and "Task 4.1's insert helper" is consistent with part 1's Task 4.1, which explicitly split those helpers out for this purpose (104-tasks...-1.md:229-230).
 
-### [CONCERN] Adding VERDICT breaks two pinned submit tests that no task is scheduled to fix until 6.4 — and 6.4 claims they pass unchanged
+### [PASS] Commit checkpoints are per-task, not batched at the end
 
-Task 6.1 adds `VERDICT` to `SubmissionKind`. That immediately falsifies two tests the task plan never touches: `test_every_kind_has_a_subcommand` asserts `set(KIND_FLAGS) == set(SubmissionKind)` (`tests/cli/test_submit.py:84`), and the parametrized write test at `tests/cli/test_submit.py:87-91` will invoke `submit verdict` with the (empty) `KIND_FLAGS` entry and fail payload validation. Task 6.2's success criterion "`uv run pytest` passes" is therefore unachievable as written — its Files-to-Modify list covers only the envelope and apply completeness tests, not `tests/cli/test_submit.py`. Task 6.4 does modify that file but only replaces `_takes_object` tests; its step "103's existing submit CLI tests pass unchanged apart from the replaced helper tests" is contradicted by the `KIND_FLAGS` completeness pin, which requires a new `VERDICT` entry with a full valid flag set (derivation, fallback-used, findings-parsed, provider-failure, findings, and provenance are all required by Task 6.1's payload). Either Task 6.2 or Task 6.4 should explicitly add the `KIND_FLAGS` entry and drop the "pass unchanged" wording; otherwise a junior following the checklist hits a red suite with no instruction on the fix.
+Every one of the 11 tasks (6.1 through 8.4) ends with an explicit commit step and example message. Task 8.4 is the only end-of-slice task, and it's legitimately terminal (final validation + walkthrough write-up), not a dumping ground for deferred commits.
 
-### [CONCERN] Tasks 6.1, 6.3, and 7.1 have no commit checkpoint
+### [CONCERN] No explicit test for rejecting a verdict submission with a missing/empty `upstream_version`
 
-Project rules require "Git add and commit from project root at least once per task." Commits appear only in the paired test tasks (6.2, 6.4, 7.3) — their messages are feature messages (`feat(inbox): add verdict submission kind`), showing the intended convention is commit-per-implementation+test-pair — but Tasks 6.1, 6.3, and 7.1 list no commit in their success criteria. A junior executing these checklists literally will leave completed implementation work uncommitted across a task boundary; a session interruption loses it. Add a commit checkpoint to each, or state the pair-commit convention explicitly in the Context Summary so the omission is clearly deliberate.
+The slice's functional requirement "A verdict without `upstream_version` cannot be recorded" is tested for the direct-call path in part 1 (Task 4.2: "empty `upstream_version`" is one of the failing-check tests). Task 6.4's rejected-path bullet only lists "a provider failure with findings, and one with a non-`UNKNOWN` verdict... an unknown node" — it never calls out an empty/missing `upstream_version` case through the inbox. The effect is built by reusing Task 4.1's check helper (per Task 6.3), so this will very likely pass once implemented, but the task list doesn't require a test asserting it, so a regression here (e.g. if the reused-helper wiring is done incorrectly) wouldn't be caught by any task in this breakdown. Add one bullet to Task 6.4 covering this case explicitly.
 
-### [NOTE] No new load test, and none is required — CI gating already exists
+### [NOTE] Task 7.1 has no dedicated test task immediately after it
 
-The slice design restates no load/performance NFR; the new verdict effect runs inside 103's existing single-transaction `apply_submission` drain, which the existing tier (`tests/load/test_inbox_concurrent.py`, `test_crash_loop.py`) already exercises generically. CI already gates `uv run pytest tests/load` (`.github/workflows/ci.yml:54`), and Task 8.4 runs the tier clean. The tier-requirement rule is satisfied without a new load test; no action needed.
+Unlike the 6.1→6.2 and 6.3→6.4 pairs, Task 7.1 (add `value_options` to the registry) is followed by more implementation (Task 7.2) before any test task (7.3) verifies it. This is defensible — `value_options` has no observable behavior until a listing consumes it — but it's a deviation from the test-immediately-follows-implementation pattern used elsewhere in this file, worth noting rather than blocking.
 
-### [NOTE] The captured review files named in the slice design are not present in this checkout
+### [NOTE] No new load-test/CI-gating task, correctly so
 
-The Technical Requirements table lists the four captured 102 task-review files under `project-documents/user/reviews/` (including `archive/`), and states they are "all tracked in git" — but that directory does not exist in this working tree (`project-documents/user/` contains only architecture, notes, project-guides, slices, and tasks), and `tests/fixtures/sq_reviews/` currently holds only the two JSON captures. Both part-1 Task 1.1 (which guards with "stop and ask the PM") and part-2 Task 8.1 (whose payload text must trace to fixture files Task 1.1 creates) have correct stop-guards for this, so the breakdown handles the situation — but the PM should confirm the files' location or commit them before Section 1 is scheduled, since Task 8.1's chain depends on them.
-
-### [NOTE] LLD-internal tension: "the writer guard is unchanged" vs. the walkthrough's deliberate widening
-
-The Technical Requirements say "The writer guard is unchanged," while the Verification Walkthrough and Task 8.1 add `demo_evidence.py` to `PERMITTED_SCRIPTS` (as 103 did for `demo_inbox.py`, `tests/test_writer_guard.py:63`). Task 8.1 resolves this precisely — widen by exactly one script, update the pinned-set assertion at `tests/test_writer_guard.py:288` and its comment — so no task change is needed, but the LLD's requirement bullet should be read as "no weakening," which the doc could state to avoid a reviewer flagging the widening as a violation.
-
-### Run Digest
-
-- Response length: 7956 chars
-- Response is newline-free: no
-- Tool calls made: 35
-- Tool calls failed: 2
-- Stop reason: stop
-- Reasoning characters: 43510
-- `## Summary` located: yes
-- `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
-- Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+The slice design has no NFR or performance section, and `tests/load/` already exists from prior slices (101–103). Task 8.4's `uv run pytest tests/load` is a regression check, not a new load test for this slice's functionality, so the "load test → CI wiring" requirement doesn't apply here. No gap.
 
 ## Response
 
-Resolved 20260926 against `e406ad9`.
+- **F004 (CONCERN, accepted):** Task 6.4's rejected-path bullet didn't cover empty/missing `upstream_version`, even though the check is proven at the direct-call layer (part 1, Task 4.2). Added "An empty `upstream_version` is `rejected` with a reason" to Task 6.4's steps.
+- F001, F002, F003 (PASS): no action needed.
+- F005, F006 (NOTE): no action needed, reasoning in the finding stands.
 
-- **F003 (concern): accepted, and worse than stated.** Registering `VerdictPayload` makes `amoeba submit` build a `verdict` subcommand, and today's `_takes_object` raises `TypeError` at parser build on its bool and list fields. Every CLI test, not just the two `KIND_FLAGS` pins, would fail from the old 6.1 until the old 6.3. Section 6 is reordered: 6.1/6.2 replace and test the flag rule first (using a test-local pydantic model), then 6.3/6.4 add and test the verdict kind. Task 6.4 now adds the `VERDICT` entry to `KIND_FLAGS` with a full valid flag set, and the "pass unchanged" wording was removed from the task that changes that file.
-- **F004 (concern): accepted, more widely.** Tasks 7.1 and 7.2 lacked a commit step, and so did seven implementation tasks in part 1 (1.2, 2.1, 3.1, 3.2, 4.1, 4.3, 5.1). Every task in both files now ends with a commit, per the project rule of at least one commit per task.
-- **F006 (note): premise wrong, no change.** The four captured files are tracked in git under `project-documents/user/reviews/archive/`. See part 1's F001 response: the reviewer's tools cannot see `project-documents/user/reviews/`.
-- **F007 (note): accepted.** The slice design's Technical Requirements bullet now reads "the writer guard is not weakened", naming the one permitted-script addition.
-- **F005 (note):** no action.
+### Run Digest
+
+- Response length: 4188 chars
+- Response is newline-free: no
+- Tool calls made: 6
+- Tool calls failed: 0
+- Stop reason: end_turn
+- Reasoning characters: 0
+- `## Summary` located: yes
+- `## Findings` located: yes
+- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — inside fences: 0
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6

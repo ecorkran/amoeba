@@ -103,6 +103,7 @@ The flag rule comes first. Registering `VerdictPayload` makes `amoeba submit` bu
 - [ ] A valid verdict submission is `applied`, and the record id equals the submission id
 - [ ] Applying the same submission again changes nothing
 - [ ] A provider failure with findings, and one with a non-`UNKNOWN` verdict, are `rejected` with a reason; an unknown node is `rejected`
+- [ ] An empty `upstream_version` is `rejected` with a reason
 - [ ] An unrecognized `derivation` fails envelope validation with `INVALID_PAYLOAD` (the file would be quarantined); an omitted `findings_parsed` fails too
 - [ ] Lowercase `concerns` and uppercase `CONCERN` severity are accepted
 
