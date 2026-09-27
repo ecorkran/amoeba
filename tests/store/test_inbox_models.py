@@ -27,7 +27,7 @@ from amoeba.store.inbox_models import (
 @pytest.mark.parametrize(
     ("vocabulary", "expected"),
     [
-        (SubmissionKind, {"create_project", "resolution", "intent"}),
+        (SubmissionKind, {"create_project", "resolution", "intent", "verdict"}),
         (SubmissionOutcome, {"applied", "rejected"}),
         (Channel, {"intent", "escalation"}),
         (

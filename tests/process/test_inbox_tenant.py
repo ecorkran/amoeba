@@ -164,7 +164,7 @@ def _bad_files(
         QuarantineReason.UNPARSEABLE_ENVELOPE: damaged[TRUNCATED],
         QuarantineReason.UNKNOWN_ENVELOPE_VERSION: damaged[WRONG_VERSION],
         QuarantineReason.UNKNOWN_KIND: json.dumps(
-            decoded | {"kind": "verdict"}
+            decoded | {"kind": "not_a_kind"}
         ).encode(),
         QuarantineReason.INVALID_PROJECT_ID: json.dumps(
             decoded | {"project_id": ".."}

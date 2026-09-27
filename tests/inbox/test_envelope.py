@@ -14,6 +14,7 @@ from amoeba.inbox.envelope import (
     parse_envelope,
     validate_envelope,
 )
+from amoeba.inbox.evidence_payloads import FindingPayload
 from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
@@ -22,6 +23,7 @@ from amoeba.store.inbox_models import (
     QuarantineReason,
     SubmissionKind,
 )
+from amoeba.store.verdict_payload import FINDING_PAYLOAD_KEYS, VERDICT_PAYLOAD_KEYS
 
 #: The keys each kind's store effect reads, from their single definition. The
 #: payload models' field names must equal these exactly.
@@ -29,7 +31,12 @@ EFFECT_KEYS = {
     SubmissionKind.CREATE_PROJECT: set[str](),
     SubmissionKind.RESOLUTION: {RESOLUTION_BLOCKED_STATE_ID, RESOLUTION_DETAIL},
     SubmissionKind.INTENT: {INTENT_NODE_ID, INTENT_BODY},
+    SubmissionKind.VERDICT: set(VERDICT_PAYLOAD_KEYS),
 }
+
+
+def test_finding_payload_fields_are_the_keys_the_store_reads() -> None:
+    assert set(FindingPayload.model_fields) == FINDING_PAYLOAD_KEYS
 
 
 def _valid() -> dict[str, object]:
@@ -84,7 +91,7 @@ def test_anything_but_version_one_is_an_unknown_version(version: object) -> None
     )
 
 
-@pytest.mark.parametrize("kind", ["verdict", None, {}, ["intent"]])
+@pytest.mark.parametrize("kind", ["not_a_kind", None, {}, ["intent"]])
 def test_an_unknown_or_unhashable_kind_is_named(kind: object) -> None:
     assert _reason(_valid() | {"kind": kind}) is QuarantineReason.UNKNOWN_KIND
 

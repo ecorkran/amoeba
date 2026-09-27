@@ -6,9 +6,11 @@ import ast
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
+import amoeba.store._verdict_writer as verdict_writer_module
 import amoeba.store.inbox as inbox_module
 from amoeba.store.inbox import InboxOperations
 from amoeba.store.inbox_models import (
@@ -69,9 +71,13 @@ def test_every_kind_has_an_effect() -> None:
     assert set(InboxOperations.KIND_EFFECTS) == set(SubmissionKind)
 
 
-def test_no_exception_is_caught_to_implement_a_rejection() -> None:
-    """Rejection is an explicit branch. The module has no ``except`` at all."""
-    source = Path(inbox_module.__file__).read_text(encoding="utf-8")
+@pytest.mark.parametrize(
+    "module", [inbox_module, verdict_writer_module], ids=lambda m: m.__name__
+)
+def test_no_exception_is_caught_to_implement_a_rejection(module: ModuleType) -> None:
+    """Rejection is an explicit branch. No effect module has an ``except``."""
+    assert module.__file__ is not None
+    source = Path(module.__file__).read_text(encoding="utf-8")
     handlers = [
         node
         for node in ast.walk(ast.parse(source))
