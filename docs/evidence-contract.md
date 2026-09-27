@@ -42,13 +42,19 @@ designed **without reading the implementation**. If you have to open
 
 ```python
 from amoeba.store import (
-    FindingInput, FindingSeverity, Provenance, RecordSource,
-    ReviewVerdict, Store, VerdictDerivation, VerdictInput,
+    FindingInput,
+    FindingSeverity,
+    Provenance,
+    RecordSource,
+    ReviewVerdict,
+    Store,
+    VerdictDerivation,
+    VerdictInput,
 )
 
 record = store.record_verdict(
     VerdictInput(
-        id="…",                        # the caller's id; the retry key
+        id="…",  # the caller's id; the retry key
         node_id=node.id,
         verdict=ReviewVerdict.CONCERNS,
         derivation=VerdictDerivation.STATED,
@@ -57,10 +63,16 @@ record = store.record_verdict(
         provider_failure=False,
         review_type="tasks",
         model="z-ai/glm-5.3",
-        findings=(FindingInput(severity=FindingSeverity.CONCERN,
-                               summary="…", location="path.md:12-30"),),
-        provenance=Provenance(upstream="squadron", upstream_version="0.14.0",
-                              source=RecordSource.ARTIFACT_FRONTMATTER),
+        findings=(
+            FindingInput(
+                severity=FindingSeverity.CONCERN, summary="…", location="path.md:12-30"
+            ),
+        ),
+        provenance=Provenance(
+            upstream="squadron",
+            upstream_version="0.14.0",
+            source=RecordSource.ARTIFACT_FRONTMATTER,
+        ),
     ),
     project_id="demo",
 )
