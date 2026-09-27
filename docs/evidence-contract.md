@@ -205,7 +205,9 @@ Heading anchors such as `slice.md#data-flow` are not line references and are
 kept.
 
 `finding_identity(location, summary)` is the hex SHA-256 of `"v1"`, the
-normalized location, and the normalized summary, joined by `\x1f`. Severity and
+normalized location, and the normalized summary, each written as
+`{length}:{text}` and concatenated, so no character in a field can move text
+across the field boundary. Severity and
 category are **not** part of the key: severity is the reviewer's grade of an
 issue, not the issue (one captured finding went from `concern` to `note`
 between rounds), and category is free text picked fresh each run.

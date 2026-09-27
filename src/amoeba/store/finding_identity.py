@@ -21,10 +21,6 @@ RULE_VERSION: Final = 1
 # Squadron writes this literal when a finding has no location.
 UNVERIFIED_LOCATION: Final = "unverified"
 
-# Cannot survive normalization inside either field (whitespace runs collapse,
-# and \x1f is not whitespace NFKC would produce), so the join is unambiguous.
-_KEY_SEPARATOR: Final = "\x1f"
-
 _TRAILING_SUMMARY_PUNCTUATION: Final = ".;:"
 
 _WHITESPACE_RUN = re.compile(r"\s+")
@@ -69,7 +65,11 @@ def normalize_location(location: str | None) -> str:
 
 def finding_identity(location: str | None, summary: str) -> str:
     """Return the hex SHA-256 content key for one finding under this rule version."""
-    material = _KEY_SEPARATOR.join(
-        (f"v{RULE_VERSION}", normalize_location(location), normalize_summary(summary))
+    fields = (
+        f"v{RULE_VERSION}",
+        normalize_location(location),
+        normalize_summary(summary),
     )
+    # Length-prefixed so no character inside a field can shift text between fields.
+    material = "".join(f"{len(field)}:{field}" for field in fields)
     return hashlib.sha256(material.encode("utf-8")).hexdigest()

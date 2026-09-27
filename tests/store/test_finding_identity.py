@@ -114,8 +114,10 @@ def test_different_path_or_words_change_the_key(
     assert finding_identity(*before) != finding_identity(*after)
 
 
-def test_location_and_summary_cannot_be_shifted_between_fields() -> None:
-    assert finding_identity("a b", "c") != finding_identity("a", "b c")
+@pytest.mark.parametrize("separator", [" ", "\x1f", "\x00", ":"])
+def test_location_and_summary_cannot_be_shifted_between_fields(separator: str) -> None:
+    shifted_left = finding_identity(f"a{separator}b", "c")
+    assert shifted_left != finding_identity("a", f"b{separator}c")
 
 
 # Frontmatter checked 20260926 against the LLD's Technical Requirements table.
