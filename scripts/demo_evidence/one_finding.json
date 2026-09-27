@@ -1,0 +1,9 @@
+[
+  {
+    "position_id": "F001",
+    "severity": "concern",
+    "category": "cross-reference",
+    "summary": "Task 2.1's fallback note cross-references the wrong task",
+    "location": "project-documents/user/tasks/102-tasks.resident-process-and-recovery-1.md:220"
+  }
+]

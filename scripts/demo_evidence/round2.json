@@ -1,0 +1,16 @@
+[
+  {
+    "position_id": "F001",
+    "severity": "concern",
+    "category": "test-coverage",
+    "summary": "The GRACE_EXPIRED exit criterion has no CLI-level test despite Task 6.4 deferring one to Task 7.3",
+    "location": "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md:218-240"
+  },
+  {
+    "position_id": "F002",
+    "severity": "concern",
+    "category": "task-sequencing",
+    "summary": "ExitCode vocabulary is consumed in Section 6 before Task 7.1 defines it",
+    "location": "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md:141-185"
+  }
+]

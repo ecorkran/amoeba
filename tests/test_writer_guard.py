@@ -56,11 +56,12 @@ STORE_CLASS = "Store"
 PERMITTED_MODULES = frozenset({"process/project_stores.py"})
 
 #: The **only** scripts under ``scripts/`` permitted to open a store
-#: read-write. Both are operator-run demos, not part of the resident process:
+#: read-write. All are operator-run demos, not part of the resident process:
 #: ``demo_journal.py`` requires ``AMOEBA_STORE_DIR`` pointed at a scratch
-#: directory, and ``demo_inbox.py`` (slice 103) takes the instance lock and
-#: refuses while the process runs — see each one's module docstring.
-PERMITTED_SCRIPTS = frozenset({"demo_journal.py", "demo_inbox.py"})
+#: directory, and ``demo_inbox.py`` (slice 103) and ``demo_evidence.py``
+#: (slice 104) take the instance lock and refuse while the process runs — see
+#: each one's module docstring.
+PERMITTED_SCRIPTS = frozenset({"demo_journal.py", "demo_inbox.py", "demo_evidence.py"})
 
 #: Constructors that are not the read-write open and are therefore ignored.
 #: ``open_read_only`` is the whole point of the exercise; ``open_temporary``
@@ -285,4 +286,6 @@ def test_the_permitted_scripts_exist_and_actually_open_a_store() -> None:
 
 def test_the_permitted_scripts_set_is_exactly_the_demos() -> None:
     """Widening this exemption is a deliberate, visible change too."""
-    assert PERMITTED_SCRIPTS == frozenset({"demo_journal.py", "demo_inbox.py"})
+    assert PERMITTED_SCRIPTS == frozenset(
+        {"demo_journal.py", "demo_inbox.py", "demo_evidence.py"}
+    )

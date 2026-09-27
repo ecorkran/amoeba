@@ -1,0 +1,16 @@
+[
+  {
+    "position_id": "F001",
+    "severity": "concern",
+    "category": "task-sequencing",
+    "summary": "ExitCode vocabulary is consumed in Section 6 before Task 7.1 defines it",
+    "location": "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md:119-163"
+  },
+  {
+    "position_id": "F002",
+    "severity": "concern",
+    "category": "ci-gating",
+    "summary": "No CI wiring task gates the load tier",
+    "location": "project-documents/user/tasks/102-tasks.resident-process-and-recovery-2.md:313-357"
+  }
+]
