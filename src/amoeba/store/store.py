@@ -36,6 +36,7 @@ from amoeba.store.models import (
     StoreSchemaError,
 )
 from amoeba.store.nodes import NodeOperations
+from amoeba.store.verdicts import VerdictOperations
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class Store(
     JournalOperations,
     MessageOperations,
     InboxOperations,
+    VerdictOperations,
 ):
     """A project-keyed lifecycle node store backed by one SQLite file.
 

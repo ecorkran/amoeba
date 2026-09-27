@@ -16,6 +16,26 @@ and deliberately not re-exported.
 
 from __future__ import annotations
 
+from amoeba.store.evidence_models import (
+    COMPARABLE_STANDINGS,
+    FindingChange,
+    FindingChanges,
+    FindingInput,
+    FindingObservation,
+    FindingSeverity,
+    FindingSummary,
+    Provenance,
+    RecordSource,
+    ReviewVerdict,
+    TaggedFinding,
+    VerdictDerivation,
+    VerdictInput,
+    VerdictRecord,
+    VerdictStanding,
+    parse_severity,
+    parse_verdict,
+    verdict_standing,
+)
 from amoeba.store.inbox_models import (
     Channel,
     Message,
@@ -52,6 +72,7 @@ from amoeba.store.models import (
     StorePermissionError,
     StoreSchemaError,
     UnknownVocabularyValueError,
+    VerdictNotFoundError,
 )
 from amoeba.store.store import Store
 
@@ -70,6 +91,17 @@ __all__ = [
     "QuarantineReason",
     "SubmissionKind",
     "SubmissionOutcome",
+    "COMPARABLE_STANDINGS",
+    "FindingChange",
+    "FindingSeverity",
+    "RecordSource",
+    "ReviewVerdict",
+    "VerdictDerivation",
+    "VerdictStanding",
+    # Evidence rules
+    "parse_severity",
+    "parse_verdict",
+    "verdict_standing",
     # Transfer objects
     "BlockedNode",
     "BlockedState",
@@ -80,6 +112,14 @@ __all__ = [
     "Resolution",
     "SQReference",
     "SubmissionRecord",
+    "FindingChanges",
+    "FindingInput",
+    "FindingObservation",
+    "FindingSummary",
+    "Provenance",
+    "TaggedFinding",
+    "VerdictInput",
+    "VerdictRecord",
     # The store
     "Store",
     # Exceptions
@@ -92,4 +132,5 @@ __all__ = [
     "StorePermissionError",
     "StoreSchemaError",
     "UnknownVocabularyValueError",
+    "VerdictNotFoundError",
 ]

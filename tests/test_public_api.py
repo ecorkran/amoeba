@@ -29,6 +29,17 @@ EXPECTED_EXPORTS = {
     "QuarantineReason",
     "SubmissionKind",
     "SubmissionOutcome",
+    "COMPARABLE_STANDINGS",
+    "FindingChange",
+    "FindingSeverity",
+    "RecordSource",
+    "ReviewVerdict",
+    "VerdictDerivation",
+    "VerdictStanding",
+    # Evidence rules, added by slice 104
+    "parse_severity",
+    "parse_verdict",
+    "verdict_standing",
     # Transfer objects
     "BlockedNode",
     "BlockedState",
@@ -39,6 +50,14 @@ EXPECTED_EXPORTS = {
     "Resolution",
     "SQReference",
     "SubmissionRecord",
+    "FindingChanges",
+    "FindingInput",
+    "FindingObservation",
+    "FindingSummary",
+    "Provenance",
+    "TaggedFinding",
+    "VerdictInput",
+    "VerdictRecord",
     # The store
     "Store",
     # Exceptions
@@ -51,6 +70,7 @@ EXPECTED_EXPORTS = {
     "StorePermissionError",
     "StoreSchemaError",
     "UnknownVocabularyValueError",
+    "VerdictNotFoundError",
 }
 
 #: Internal modules that must not become part of the contract.
@@ -65,6 +85,9 @@ INTERNAL_MODULES = {
     "paths",
     "_base",
     "_block_writer",
+    "sql_evidence",
+    "mapping_evidence",
+    "_verdict_writer",
 }
 
 #: Store methods a downstream author codes against, per the API contract.
@@ -100,6 +123,8 @@ CONTRACT_METHODS = {
     "messages",
     "pending_intents",
     "acknowledge_message",
+    # Verdicts and findings, added by slice 104.
+    "record_verdict",
 }
 
 
