@@ -6,8 +6,9 @@ Both levels derive from the inbox's own definitions, never the reverse:
 - one flag per field of that kind's payload model, named from the field.
 
 So adding a kind — a member, a payload model, an effect — surfaces its
-subcommand and its flags here with no second list to keep in step. A field
-typed as an object takes a JSON object.
+subcommand and its flags here with no second list to keep in step. A text or
+enum field takes its flag as typed; every other field takes JSON. Pydantic
+validates the result either way.
 
 It calls :func:`amoeba.inbox.submit` and opens no store. It works whether or
 not the resident process is running, and prints the submission id.
@@ -17,7 +18,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import TYPE_CHECKING, Any, get_origin
+from types import UnionType
+from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
 from amoeba.inbox import submit
 from amoeba.inbox.envelope import KIND_PAYLOAD_MODELS
@@ -41,38 +43,32 @@ def _flag(field_name: str) -> str:
     return "--" + field_name.replace("_", "-")
 
 
-def _json_object(text: str) -> dict[str, object]:
-    """An argparse type for a field that holds a JSON object."""
+def _json_value(text: str) -> object:
+    """An argparse type for a field that takes JSON. Pydantic checks the shape."""
     try:
-        value: object = json.loads(text)
+        return json.loads(text)
     except json.JSONDecodeError as error:
         # Specific: reported by argparse as a usage error, naming the flag.
         raise argparse.ArgumentTypeError(f"not valid JSON: {error}") from error
-    if not isinstance(value, dict):
-        raise argparse.ArgumentTypeError("must be a JSON object")
-    # Narrowed key by key: the isinstance check above cannot type the contents.
-    narrowed: dict[str, object] = {}
-    for key, item in value.items():  # pyright: ignore[reportUnknownVariableType]
-        if not isinstance(key, str):
-            raise argparse.ArgumentTypeError(f"non-string key {key!r}")
-        narrowed[key] = item
-    return narrowed
 
 
-def _takes_object(kind: SubmissionKind, name: str, annotation: object) -> bool:
-    """Whether a payload field takes a JSON object (else a plain string).
+def _takes_text(annotation: object) -> bool:
+    """Whether a payload field takes its flag as typed (else as JSON).
 
-    Raises:
-        TypeError: For any other field type, at parser build time, so a new
-            payload field shape fails fast instead of arriving as a string.
+    Text and enum fields, and the optional form of either, take the flag as
+    typed. Every other field takes JSON: ``--score 82.5``,
+    ``--fallback-used null``, ``--findings '[...]'``.
     """
-    if get_origin(annotation) is dict:
-        return True
-    if annotation in (str, str | None):
-        return False
-    raise TypeError(
-        f"{kind.value} payload field {name!r} has type {annotation!r}; "
-        "amoeba submit only maps dict and str fields to flags"
+    members = (
+        get_args(annotation)
+        if get_origin(annotation) in (Union, UnionType)
+        else (annotation,)
+    )
+    concrete = [member for member in members if member is not type(None)]
+    return (
+        len(concrete) == 1
+        and isinstance(concrete[0], type)
+        and issubclass(concrete[0], str)
     )
 
 
@@ -106,13 +102,13 @@ def add_submit_parser(subparsers: Any) -> None:
             help="Reuse an id to retry safely. Generated when omitted.",
         )
         for name, field in KIND_PAYLOAD_MODELS[kind].model_fields.items():
-            takes_object = _takes_object(kind, name, field.annotation)
+            takes_text = _takes_text(field.annotation)
             kind_parser.add_argument(
                 _flag(name),
                 dest=_PAYLOAD_DEST_PREFIX + name,
                 required=field.is_required(),
-                type=_json_object if takes_object else str,
-                metavar="JSON" if takes_object else "VALUE",
+                type=str if takes_text else _json_value,
+                metavar="VALUE" if takes_text else "JSON",
             )
 
 
