@@ -111,19 +111,19 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Create `src/amoeba/store/evidence_models.py` holding every word list, input/record dataclass, and the trust-label function.
 
 **Steps**:
-- [ ] `StrEnum`s with exactly the members in the LLD's "Word lists": `ReviewVerdict`, `FindingSeverity`, `VerdictDerivation`, `RecordSource`, `FindingChange`, `VerdictStanding` (members: the seven labels in the trust-label table)
-- [ ] One parse function each for verdict and severity that accepts any letter case and raises `ValueError` on an unknown word. Never map to a near match
-- [ ] Frozen dataclasses: `Provenance` (`upstream`, `upstream_version`, `source`, `source_path`), `FindingInput`, `VerdictInput` (fields per the LLD's API Contracts), and `VerdictRecord` (the input's fields plus `project_id`, `recorded_seq`, `recorded_at`, and a `standing` property)
-- [ ] Frozen read types for `observations`, `findings`, and `finding_changes` results: an observation row (raw and normalized text, key, rule version, ordinal), a per-key finding summary (node, latest severity and summary, first/last verdict ids, times seen), and `FindingChanges` (comparable flag, previous verdict id or `None`, target findings each tagged `new`/`recurring`, and the `gone` keys)
-- [ ] `verdict_standing(...) -> VerdictStanding`: the one trust-label function, reading `provider_failure`, `verdict`, `findings_parsed`, and `derivation` top to bottom per the table. It never reads `fallback_used`. `unattested` is `derivation == not_reported`
-- [ ] A `COMPARABLE_STANDINGS` constant (`stated`, `derived`, `imposed`, `unattested`), defined once, for Section 5
-- [ ] Add `VerdictNotFoundError(StoreError)` to `src/amoeba/store/models.py`, next to `NodeNotFoundError`
-- [ ] No `sqlite3` import and no SQL here
+- [x] `StrEnum`s with exactly the members in the LLD's "Word lists": `ReviewVerdict`, `FindingSeverity`, `VerdictDerivation`, `RecordSource`, `FindingChange`, `VerdictStanding` (members: the seven labels in the trust-label table)
+- [x] One parse function each for verdict and severity that accepts any letter case and raises `ValueError` on an unknown word. Never map to a near match
+- [x] Frozen dataclasses: `Provenance` (`upstream`, `upstream_version`, `source`, `source_path`), `FindingInput`, `VerdictInput` (fields per the LLD's API Contracts), and `VerdictRecord` (the input's fields plus `project_id`, `recorded_seq`, `recorded_at`, and a `standing` property)
+- [x] Frozen read types for `observations`, `findings`, and `finding_changes` results: an observation row (raw and normalized text, key, rule version, ordinal), a per-key finding summary (node, latest severity and summary, first/last verdict ids, times seen), and `FindingChanges` (comparable flag, previous verdict id or `None`, target findings each tagged `new`/`recurring`, and the `gone` keys)
+- [x] `verdict_standing(...) -> VerdictStanding`: the one trust-label function, reading `provider_failure`, `verdict`, `findings_parsed`, and `derivation` top to bottom per the table. It never reads `fallback_used`. `unattested` is `derivation == not_reported`
+- [x] A `COMPARABLE_STANDINGS` constant (`stated`, `derived`, `imposed`, `unattested`), defined once, for Section 5
+- [x] Add `VerdictNotFoundError(StoreError)` to `src/amoeba/store/models.py`, next to `NodeNotFoundError`
+- [x] No `sqlite3` import and no SQL here
 
 **Success Criteria**:
-- [ ] Each word-list value is defined once; `grep` for any member literal in `src/` finds only this module (the migration's CHECK constraints, if any, excepted)
-- [ ] `uv run pyright` clean in strict mode
-- [ ] Commit, e.g. `feat(store): add evidence vocabularies and records`
+- [x] Each word-list value is defined once; `grep` for any member literal in `src/` finds only this module (the migration's CHECK constraints, if any, excepted)
+- [x] `uv run pyright` clean in strict mode
+- [x] Commit, e.g. `feat(store): add evidence vocabularies and records`
 
 **Files to Create**: `src/amoeba/store/evidence_models.py`
 **Files to Modify**: `src/amoeba/store/models.py`
@@ -137,16 +137,16 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Pin the word lists and cover every trust-label row before anything stores them.
 
 **Steps**:
-- [ ] Assert each enum's exact member set
-- [ ] Assert verdict and severity parse in any case (`pass`, `PASS`, `Pass`) and that an unknown word raises
-- [ ] Table-driven test of `verdict_standing` with one row per label, including each case in the LLD's Success Criteria: `derived`, `findings_unparsed`, `imposed`, CONCERNS with zero findings and `findings_parsed=true` → `stated` (comment: table coverage only; Squadron cannot produce it), `provider_failure`, `unparsed`, `unattested`
-- [ ] Assert precedence: a provider failure whose other fields also match a later row still gives `provider_failure`
-- [ ] Assert every dataclass is frozen
+- [x] Assert each enum's exact member set
+- [x] Assert verdict and severity parse in any case (`pass`, `PASS`, `Pass`) and that an unknown word raises
+- [x] Table-driven test of `verdict_standing` with one row per label, including each case in the LLD's Success Criteria: `derived`, `findings_unparsed`, `imposed`, CONCERNS with zero findings and `findings_parsed=true` → `stated` (comment: table coverage only; Squadron cannot produce it), `provider_failure`, `unparsed`, `unattested`
+- [x] Assert precedence: a provider failure whose other fields also match a later row still gives `provider_failure`
+- [x] Assert every dataclass is frozen
 
 **Success Criteria**:
-- [ ] Every `VerdictStanding` member is produced by at least one row
-- [ ] `uv run pytest` passes
-- [ ] Commit, e.g. `feat(store): add verdict vocabularies and trust label`
+- [x] Every `VerdictStanding` member is produced by at least one row
+- [x] `uv run pytest` passes
+- [x] Commit, e.g. `feat(store): add verdict vocabularies and trust label`
 
 **Files to Create**: `tests/store/test_evidence_models.py`
 
@@ -161,16 +161,16 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Add `verdicts` and `finding_observations` at schema version 5, with every statement and column name in one module.
 
 **Steps**:
-- [ ] Write `src/amoeba/store/schema/005_verdicts_and_findings.sql` with both tables exactly per the LLD's "Database / Storage Schema", including `recorded_seq INTEGER PRIMARY KEY AUTOINCREMENT`, `id UNIQUE`, the node and journal-entry foreign keys, the `(project_id, node_id, review_type, recorded_seq)` index, the `(verdict_id, ordinal)` primary key, and the `identity` index
-- [ ] Nothing to backfill
-- [ ] Create `src/amoeba/store/sql_evidence.py` with every statement and column name for both tables, following `sql_inbox.py`
-- [ ] Raise `EXPECTED_SCHEMA_VERSION` from 4 to 5
+- [x] Write `src/amoeba/store/schema/005_verdicts_and_findings.sql` with both tables exactly per the LLD's "Database / Storage Schema", including `recorded_seq INTEGER PRIMARY KEY AUTOINCREMENT`, `id UNIQUE`, the node and journal-entry foreign keys, the `(project_id, node_id, review_type, recorded_seq)` index, the `(verdict_id, ordinal)` primary key, and the `identity` index
+- [x] Nothing to backfill
+- [x] Create `src/amoeba/store/sql_evidence.py` with every statement and column name for both tables, following `sql_inbox.py`
+- [x] Raise `EXPECTED_SCHEMA_VERSION` from 4 to 5
 
 **Success Criteria**:
-- [ ] No SQL or column name for either table outside `sql_evidence.py` and the migration file
-- [ ] The migration runner picks up `005` without modification
-- [ ] `uv run pyright` clean
-- [ ] Commit, e.g. `feat(store): add migration 005 and evidence sql`
+- [x] No SQL or column name for either table outside `sql_evidence.py` and the migration file
+- [x] The migration runner picks up `005` without modification
+- [x] `uv run pyright` clean
+- [x] Commit, e.g. `feat(store): add migration 005 and evidence sql`
 
 **Files to Create**: `src/amoeba/store/schema/005_verdicts_and_findings.sql`, `src/amoeba/store/sql_evidence.py`
 **Files to Modify**: the module declaring `EXPECTED_SCHEMA_VERSION`
@@ -184,13 +184,13 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Create `src/amoeba/store/mapping_evidence.py`, following `mapping_inbox.py`.
 
 **Steps**:
-- [ ] Row → `VerdictRecord` and row → observation record. Integer booleans map back to `bool | None`; `criteria` JSON text maps back to a mapping or `None`
-- [ ] An unknown enum value in a row **raises**. It is never defaulted or skipped
+- [x] Row → `VerdictRecord` and row → observation record. Integer booleans map back to `bool | None`; `criteria` JSON text maps back to a mapping or `None`
+- [x] An unknown enum value in a row **raises**. It is never defaulted or skipped
 
 **Success Criteria**:
-- [ ] Column names come only from `sql_evidence.py`
-- [ ] `uv run pyright` clean
-- [ ] Commit, e.g. `feat(store): add evidence row mapping`
+- [x] Column names come only from `sql_evidence.py`
+- [x] `uv run pyright` clean
+- [x] Commit, e.g. `feat(store): add evidence row mapping`
 
 **Files to Create**: `src/amoeba/store/mapping_evidence.py`
 
@@ -203,17 +203,17 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Prove the upgrade keeps existing data and the mapping refuses bad rows.
 
 **Steps**:
-- [ ] Following `tests/store/test_migration_004.py`, build a version-4 store with nodes, journal entries, inbox submissions, and messages; upgrade to 5; assert every row is intact
-- [ ] Assert a fresh version-5 store has both tables and all three indexes
-- [ ] Assert a row with an unknown `derivation` (written with raw SQL in the test) makes the mapping raise
-- [ ] Assert a row with an unknown `verdict` (written with raw SQL in the test) makes the mapping raise
-- [ ] Assert a finding row with an unknown `severity` (written with raw SQL in the test) makes the mapping raise
+- [x] Following `tests/store/test_migration_004.py`, build a version-4 store with nodes, journal entries, inbox submissions, and messages; upgrade to 5; assert every row is intact
+- [x] Assert a fresh version-5 store has both tables and all three indexes
+- [x] Assert a row with an unknown `derivation` (written with raw SQL in the test) makes the mapping raise
+- [x] Assert a row with an unknown `verdict` (written with raw SQL in the test) makes the mapping raise
+- [x] Assert a finding row with an unknown `severity` (written with raw SQL in the test) makes the mapping raise
 
 **Success Criteria**:
-- [ ] A populated version-4 store upgrades to 5 with all prior data intact
-- [ ] Bad `derivation`, bad `verdict`, and bad `severity` each independently raise
-- [ ] `uv run pytest` passes
-- [ ] Commit, e.g. `feat(store): add verdicts and findings schema at version 5`
+- [x] A populated version-4 store upgrades to 5 with all prior data intact
+- [x] Bad `derivation`, bad `verdict`, and bad `severity` each independently raise
+- [x] `uv run pytest` passes
+- [x] Commit, e.g. `feat(store): add verdicts and findings schema at version 5`
 
 **Files to Create**: `tests/store/test_migration_005.py`
 
