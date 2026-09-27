@@ -7,7 +7,7 @@ dependencies: [101, 102, 103]
 projectState: Continuation of 104-tasks.findings-verdicts-and-provenance-1.md. After Sections 1–5 the store is at schema version 5 with record_verdict, the read methods, finding_changes, and the trust label. Nothing outside the process can record a verdict yet, and nothing displays one.
 dateCreated: 20260926
 dateUpdated: 20260927
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -192,15 +192,15 @@ The flag rule comes first. Registering `VerdictPayload` makes `amoeba submit` bu
 **Objective**: Build what the LLD's Verification Walkthrough needs, following `scripts/demo_inbox.py`.
 
 **Steps**:
-- [ ] `scripts/demo_evidence.py` seeds one node in the `demo` project and prints only its id. It runs with the process stopped and takes the instance lock, like `demo_inbox.py`
-- [ ] Add `demo_evidence.py` to `PERMITTED_SCRIPTS` in `tests/test_writer_guard.py`, and update the pinned-set assertion and its comment. The guard is otherwise unchanged
-- [ ] `scripts/demo_evidence/round1.json` and `round2.json`: findings arrays using **real finding text from the captured 102 rounds**, arranged so round 2 has one finding back at a new position with a moved line range, one dropped, and one new
-- [ ] Add a one-finding payload for walkthrough step 4
+- [x] `scripts/demo_evidence.py` seeds one node in the `demo` project and prints only its id. It runs with the process stopped and takes the instance lock, like `demo_inbox.py`
+- [x] Add `demo_evidence.py` to `PERMITTED_SCRIPTS` in `tests/test_writer_guard.py`, and update the pinned-set assertion and its comment. The guard is otherwise unchanged
+- [x] `scripts/demo_evidence/round1.json` and `round2.json`: findings arrays using **real finding text from the captured 102 rounds**, arranged so round 2 has one finding back at a new position with a moved line range, one dropped, and one new
+- [x] Add a one-finding payload for walkthrough step 4
 
 **Success Criteria**:
-- [ ] `uv run pytest tests/test_writer_guard.py` passes with the permitted set widened by exactly this script
-- [ ] Every finding summary in the payload files can be traced to a fixture in `tests/fixtures/sq_reviews/`
-- [ ] Commit, e.g. `feat: add evidence demo script and payloads`
+- [x] `uv run pytest tests/test_writer_guard.py` passes with the permitted set widened by exactly this script
+- [x] Every finding summary in the payload files can be traced to a fixture in `tests/fixtures/sq_reviews/`
+- [x] Commit, e.g. `feat: add evidence demo script and payloads`
 
 **Files to Create**: `scripts/demo_evidence.py`, `scripts/demo_evidence/*.json`
 **Files to Modify**: `tests/test_writer_guard.py`
@@ -214,15 +214,15 @@ The flag rule comes first. Registering `VerdictPayload` makes `amoeba submit` bu
 **Objective**: Prove the LLD's Integration Requirement, following `tests/cli/test_inbox_end_to_end.py`.
 
 **Steps**:
-- [ ] Create a project, seed a node with the demo script, start the process
-- [ ] Submit round 1, round 2, and a provider failure with `amoeba submit verdict`
-- [ ] Resubmit round 1 with the same `--id`, `kill -9` the process, `amoeba start`
-- [ ] Read-only inspection shows three verdicts, the right tags on round 2, "not comparable" on the failure, and no submission applied twice
+- [x] Create a project, seed a node with the demo script, start the process
+- [x] Submit round 1, round 2, and a provider failure with `amoeba submit verdict`
+- [x] Resubmit round 1 with the same `--id`, `kill -9` the process, `amoeba start`
+- [x] Read-only inspection shows three verdicts, the right tags on round 2, "not comparable" on the failure, and no submission applied twice
 
 **Success Criteria**:
-- [ ] The test passes repeatedly (run it 5 times); if it flakes, get the failure output before changing anything
-- [ ] `uv run pytest` passes
-- [ ] Commit, e.g. `test: add evidence end-to-end cli test`
+- [x] The test passes repeatedly (run it 5 times); if it flakes, get the failure output before changing anything
+- [x] `uv run pytest` passes
+- [x] Commit, e.g. `test: add evidence end-to-end cli test`
 
 **Files to Create**: `tests/cli/test_evidence_end_to_end.py`
 
@@ -235,14 +235,14 @@ The flag rule comes first. Registering `VerdictPayload` makes `amoeba submit` bu
 **Objective**: Make `docs/evidence-contract.md` enough for slice 108's and initiative 140's designs without reading the code.
 
 **Steps**:
-- [ ] `docs/evidence-contract.md`: the matching rule (version 1, each step), what it does **not** match (rewording, citing the captured rounds), the trust labels and their order, the "CONCERNS, zero findings, parsed" note from the LLD, how the previous round is chosen and why failures are never a baseline, the provenance fields and that versions are never compared, the retry rule, and `VerdictInput`'s fields including the null-until-SQ-927 `diff_truncated` and `requested_model`
-- [ ] `docs/store-contract.md`: drop the "not a findings store" line; add the new operations and `VerdictNotFoundError`
-- [ ] `docs/inbox-contract.md`: the `verdict` kind and the new submit flag rule
-- [ ] `CHANGELOG.md`: one entry for the slice, including `value_options` and schema version 5
+- [x] `docs/evidence-contract.md`: the matching rule (version 1, each step), what it does **not** match (rewording, citing the captured rounds), the trust labels and their order, the "CONCERNS, zero findings, parsed" note from the LLD, how the previous round is chosen and why failures are never a baseline, the provenance fields and that versions are never compared, the retry rule, and `VerdictInput`'s fields including the null-until-SQ-927 `diff_truncated` and `requested_model`
+- [x] `docs/store-contract.md`: drop the "not a findings store" line; add the new operations and `VerdictNotFoundError`
+- [x] `docs/inbox-contract.md`: the `verdict` kind and the new submit flag rule
+- [x] `CHANGELOG.md`: one entry for the slice, including `value_options` and schema version 5
 
 **Success Criteria**:
-- [ ] Every item in the LLD's Technical Requirements docs bullet is covered
-- [ ] Commit, e.g. `docs: add evidence contract and update store and inbox contracts`
+- [x] Every item in the LLD's Technical Requirements docs bullet is covered
+- [x] Commit, e.g. `docs: add evidence contract and update store and inbox contracts`
 
 **Files to Create**: `docs/evidence-contract.md`
 **Files to Modify**: `docs/store-contract.md`, `docs/inbox-contract.md`, `CHANGELOG.md`
@@ -256,14 +256,14 @@ The flag rule comes first. Registering `VerdictPayload` makes `amoeba submit` bu
 **Objective**: Run everything, and fill in the LLD's Verification Walkthrough with real output.
 
 **Steps**:
-- [ ] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean
-- [ ] Check new source files are near 300 lines (`wc -l`); split any that are well over
-- [ ] Run the LLD's Verification Walkthrough steps 1–7 by hand and replace its draft note with the real commands and trimmed output
-- [ ] If any walkthrough step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match
+- [x] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean
+- [x] Check new source files are near 300 lines (`wc -l`); split any that are well over
+- [x] Run the LLD's Verification Walkthrough steps 1–7 by hand and replace its draft note with the real commands and trimmed output
+- [x] If any walkthrough step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match
 
 **Success Criteria**:
-- [ ] All four checks clean
-- [ ] The walkthrough in the LLD shows real output
-- [ ] Commit on the slice branch, e.g. `docs: record slice 104 verification walkthrough`
+- [x] All four checks clean
+- [x] The walkthrough in the LLD shows real output
+- [x] Commit on the slice branch, e.g. `docs: record slice 104 verification walkthrough`
 
 **Files to Modify**: `project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md`

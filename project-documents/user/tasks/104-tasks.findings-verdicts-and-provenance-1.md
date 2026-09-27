@@ -7,7 +7,7 @@ dependencies: [101, 102, 103]
 projectState: Slices 101–103 are merged. The store is at schema version 4 with nodes, blocked states, the command journal, the inbox, and messages. The resident process runs InboxTenant, which applies create_project, resolution, and intent submissions. The store has no record of what a review said. This slice adds verdict records, content-keyed findings, "what changed since last round", and a trust label.
 dateCreated: 20260926
 dateUpdated: 20260927
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
