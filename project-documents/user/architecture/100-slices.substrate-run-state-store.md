@@ -74,7 +74,7 @@ Two consequences shape the decomposition:
    **Risk Level:** Medium
    **Relative Effort:** 4
 
-4. [ ] **(104) Findings, Verdicts, and Provenance** — Review records and finding matching. Each review result is stored with where it came from: verdict, how Squadron reached it, whether it was a provider failure, model, reviewed commit, SQ run id, and the upstream version label. Each finding is stored under a content key built by a documented matching rule, never under Squadron's position numbers. The store answers "what changed since the last round?" and puts a trust label on every verdict. The Judge submits reviews through a new inbox type. *Split 20260926:* parsing moved to 108; judge samples, calibration, check results, and the remaining typed records moved to 109.
+4. [x] **(104) Findings, Verdicts, and Provenance** — Review records and finding matching. Each review result is stored with where it came from: verdict, how Squadron reached it, whether it was a provider failure, model, reviewed commit, SQ run id, and the upstream version label. Each finding is stored under a content key built by a documented matching rule, never under Squadron's position numbers. The store answers "what changed since the last round?" and puts a trust label on every verdict. The Judge submits reviews through a new inbox type. *Split 20260926:* parsing moved to 108; judge samples, calibration, check results, and the remaining typed records moved to 109.
    **Value:** Developer value — the Runner can ask "is this the same finding as last round?" and "is this PASS trustworthy?", neither of which CF's gate nor SQ's output can answer alone.
    **Success Criteria:**
    - The same finding emitted across two runs with different positional ids resolves to one identity.
