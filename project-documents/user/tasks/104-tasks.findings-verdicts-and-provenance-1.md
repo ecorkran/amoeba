@@ -6,8 +6,8 @@ lld: user/slices/104-slice.findings-verdicts-and-provenance.md
 dependencies: [101, 102, 103]
 projectState: Slices 101–103 are merged. The store is at schema version 4 with nodes, blocked states, the command journal, the inbox, and messages. The resident process runs InboxTenant, which applies create_project, resolution, and intent submissions. The store has no record of what a review said. This slice adds verdict records, content-keyed findings, "what changed since last round", and a trust label.
 dateCreated: 20260926
-dateUpdated: 20260926
-status: not_started
+dateUpdated: 20260927
+status: in_progress
 ---
 
 ## Context Summary
@@ -40,17 +40,17 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Put the test inputs in place before any code that is tested against them.
 
 **Steps**:
-- [ ] Add `pyyaml` and `types-PyYAML` to the `dev` dependency group in `pyproject.toml` (`uv add --dev`). Not a runtime dependency — slice 108 promotes it
-- [ ] Copy the four captured 102 task-review files named in the LLD's Technical Requirements table from `project-documents/user/reviews/archive/` into `tests/fixtures/sq_reviews/`, **byte for byte** (`cp`, never retyped)
-- [ ] Before copying, check each source file's frontmatter against the table (verdict and reviewed commit: round 1 part 1 CONCERNS `bf6d292`, part 2 PASS; round 2 part 1 CONCERNS `20b3d70`, part 2 `UNKNOWN`). If any file is missing or differs, **stop and ask the PM**. Never substitute a hand-built round
-- [ ] Survey the other files in `project-documents/user/reviews/` (including `archive/`). Copy only ones that are pure Squadron output and serve a named purpose here. Leave out hand-edited files (any with `resolution:` or `resolvedBy:` keys, e.g. `103-review.code…`) and the one written by hand after a tooling gap
-- [ ] Add an `sq_reviews/` section to `tests/fixtures/README.md` in the existing table style: file, verdict, reviewed commit, capture date, why it is here, and a line naming the hand-edited files deliberately left out. Include the two JSON captures already in that directory
+- [x] Add `pyyaml` and `types-PyYAML` to the `dev` dependency group in `pyproject.toml` (`uv add --dev`). Not a runtime dependency — slice 108 promotes it
+- [x] Copy the four captured 102 task-review files named in the LLD's Technical Requirements table from `project-documents/user/reviews/archive/` into `tests/fixtures/sq_reviews/`, **byte for byte** (`cp`, never retyped)
+- [x] Before copying, check each source file's frontmatter against the table (verdict and reviewed commit: round 1 part 1 CONCERNS `bf6d292`, part 2 PASS; round 2 part 1 CONCERNS `20b3d70`, part 2 `UNKNOWN`). If any file is missing or differs, **stop and ask the PM**. Never substitute a hand-built round
+- [x] Survey the other files in `project-documents/user/reviews/` (including `archive/`). Copy only ones that are pure Squadron output and serve a named purpose here. Leave out hand-edited files (any with `resolution:` or `resolvedBy:` keys, e.g. `103-review.code…`) and the one written by hand after a tooling gap
+- [x] Add an `sq_reviews/` section to `tests/fixtures/README.md` in the existing table style: file, verdict, reviewed commit, capture date, why it is here, and a line naming the hand-edited files deliberately left out. Include the two JSON captures already in that directory
 
 **Success Criteria**:
-- [ ] `diff` between each copied file and its source is empty
-- [ ] The README says why each `sq_reviews/` file is present and which review files were excluded as hand-edited
-- [ ] `uv run python -c "import yaml"` works in the dev environment; `pyproject.toml` runtime dependencies are unchanged
-- [ ] Commit, e.g. `test: add captured squadron review fixtures for slice 104`
+- [x] `diff` between each copied file and its source is empty
+- [x] The README says why each `sq_reviews/` file is present and which review files were excluded as hand-edited
+- [x] `uv run python -c "import yaml"` works in the dev environment; `pyproject.toml` runtime dependencies are unchanged
+- [x] Commit, e.g. `test: add captured squadron review fixtures for slice 104`
 
 **Files to Create**: `tests/fixtures/sq_reviews/*.md`
 **Files to Modify**: `pyproject.toml`, `uv.lock`, `tests/fixtures/README.md`
@@ -64,17 +64,17 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Create `src/amoeba/store/finding_identity.py` with `normalize_summary`, `normalize_location`, `finding_identity`, and `RULE_VERSION`, exactly per the LLD's "The matching rule" table.
 
 **Steps**:
-- [ ] Define `RULE_VERSION = 1` and Squadron's `unverified` location text as module constants — each defined once, here
-- [ ] `normalize_summary`: the five summary steps in the table, in order
-- [ ] `normalize_location`: the four location steps in the table, in order. Line-reference removal covers every listed form (`:12`, `:12-30`, `:12:4`, `#L12`, `#L12-L30`, `, line 12`) **anywhere** in the string. Keep case
-- [ ] `finding_identity(location, summary) -> str`: hex SHA-256 of `"v1"`, the normalized location, and the normalized summary, joined by one separator character that cannot appear in normalized text (e.g. `\x1f`); build the `"v1"` prefix from `RULE_VERSION`
-- [ ] Import nothing from `amoeba.store` (standard library only)
+- [x] Define `RULE_VERSION = 1` and Squadron's `unverified` location text as module constants — each defined once, here
+- [x] `normalize_summary`: the five summary steps in the table, in order
+- [x] `normalize_location`: the four location steps in the table, in order. Line-reference removal covers every listed form (`:12`, `:12-30`, `:12:4`, `#L12`, `#L12-L30`, `, line 12`) **anywhere** in the string. Keep case
+- [x] `finding_identity(location, summary) -> str`: hex SHA-256 of `"v1"`, the normalized location, and the normalized summary, joined by one separator character that cannot appear in normalized text (e.g. `\x1f`); build the `"v1"` prefix from `RULE_VERSION`
+- [x] Import nothing from `amoeba.store` (standard library only)
 
 **Success Criteria**:
-- [ ] `grep -n "import" src/amoeba/store/finding_identity.py` shows only standard-library imports
-- [ ] The string `unverified` appears in `src/` only in this module
-- [ ] `uv run pyright` and `uv run ruff check .` clean
-- [ ] Commit, e.g. `feat(store): add finding identity normalizers`
+- [x] `grep -n "import" src/amoeba/store/finding_identity.py` shows only standard-library imports
+- [x] The string `unverified` appears in `src/` only in this module
+- [x] `uv run pyright` and `uv run ruff check .` clean
+- [x] Commit, e.g. `feat(store): add finding identity normalizers`
 
 **Files to Create**: `src/amoeba/store/finding_identity.py`
 
@@ -87,16 +87,16 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Pin what the rule catches and, on real data, what it does not.
 
 **Steps**:
-- [ ] Parametrized case table for each normalizer: whitespace runs, backticks, casefold, trailing `.`/`;`/`:`, NFKC, every line-reference form, `\` → `/`, leading `./`, `unverified` in any case, missing and empty location, and that location **case is kept**
-- [ ] Key tests from the LLD's Functional Requirements: a changed line reference (`:119-163` → `:218-240`, `#L12` → none) or a formatting-only summary change keeps the key; a different path or different words change it
-- [ ] A small test helper reads a review file's YAML frontmatter with PyYAML and returns its `findings` list. It lives under `tests/` (it is **not** the slice 108 parser)
-- [ ] Captured-rounds test: compute keys for every finding in round 1 part 1 and round 2 part 1; assert the two sets share **no** keys. The docstring names this as the rewording limit and cites one real pair (the `GRACE_EXPIRED` example in the LLD)
-- [ ] Fixture guard test: each of the four captured files exists and its frontmatter verdict and reviewed commit match the LLD table; a mismatch fails with a message naming the file. Also pin `verdictSource: stated` on both part-1 files (checked 20260926), so Task 5.2 builds their `VerdictInput`s with `derivation=stated` from the file, not a guess
+- [x] Parametrized case table for each normalizer: whitespace runs, backticks, casefold, trailing `.`/`;`/`:`, NFKC, every line-reference form, `\` → `/`, leading `./`, `unverified` in any case, missing and empty location, and that location **case is kept**
+- [x] Key tests from the LLD's Functional Requirements: a changed line reference (`:119-163` → `:218-240`, `#L12` → none) or a formatting-only summary change keeps the key; a different path or different words change it
+- [x] A small test helper reads a review file's YAML frontmatter with PyYAML and returns its `findings` list. It lives under `tests/` (it is **not** the slice 108 parser)
+- [x] Captured-rounds test: compute keys for every finding in round 1 part 1 and round 2 part 1; assert the two sets share **no** keys. The docstring names this as the rewording limit and cites one real pair (the `GRACE_EXPIRED` example in the LLD)
+- [x] Fixture guard test: each of the four captured files exists and its frontmatter verdict and reviewed commit match the LLD table; a mismatch fails with a message naming the file. Also pin `verdictSource: stated` on both part-1 files (checked 20260926), so Task 5.2 builds their `VerdictInput`s with `derivation=stated` from the file, not a guess
 
 **Success Criteria**:
-- [ ] Round 1 part 1 yields 9 findings, round 2 part 1 yields 7, and zero keys are shared (the counts measured during design review; if they differ, stop and ask the PM rather than adjusting the assertion)
-- [ ] `uv run pytest tests/store/test_finding_identity.py` passes
-- [ ] Commit, e.g. `feat(store): add versioned finding identity rule`
+- [x] Round 1 part 1 yields 9 findings, round 2 part 1 yields 7, and zero keys are shared (the counts measured during design review; if they differ, stop and ask the PM rather than adjusting the assertion)
+- [x] `uv run pytest tests/store/test_finding_identity.py` passes
+- [x] Commit, e.g. `feat(store): add versioned finding identity rule`
 
 **Files to Create**: `tests/store/test_finding_identity.py`, a frontmatter helper under `tests/` (e.g. `tests/review_fixtures.py`)
 
