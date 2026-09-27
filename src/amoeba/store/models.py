@@ -187,6 +187,10 @@ class NodeNotFoundError(StoreError):
     """No node exists with the given id."""
 
 
+class VerdictNotFoundError(StoreError):
+    """No verdict exists with the given id."""
+
+
 class InvalidTransitionError(StoreError):
     """A block or resolve was attempted against a node in the wrong state."""
 
