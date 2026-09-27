@@ -84,6 +84,7 @@ From the store: `get_node`, `journal_entry`, error translation in `_execute`, an
   - a CONCERNS or FAIL whose findings did not parse.
 - A provider failure writes `verdict: UNKNOWN` into the normal review slot.
 - No Squadron output carries the run id or the Squadron version yet. Squadron has an issue open to add both.
+- The same committed, unbuilt Squadron design (SQ 927) that adds `imposed` also adds `diffTruncated` and `requestedModel` to review frontmatter (`diff_truncated`, `requested_model` in JSON). Neither appears in 0.14.0 output. Their columns hold null until Squadron ships them, and slice 108 maps them when it does.
 
 ## Architecture
 
@@ -174,6 +175,8 @@ What the rule does catch: whitespace, backticks, letter case, trailing punctuati
 
 The rule reads `derivation` and `findings_parsed`, never `fallback_used` directly. The caller maps Squadron's flags onto those two fields: `fallback_used` with `stated` means the findings did not parse. The raw `fallback_used` is kept as provenance. "A PASS the reviewer didn't really give" is `verdict == PASS` and label `derived`.
 
+A real Squadron CONCERNS or FAIL with zero parsed findings always sets `fallback_used`, so it lands as `findings_unparsed` and is never a comparison baseline. The "CONCERNS, zero findings, `findings_parsed=true`" → `stated` case in the success criteria is table coverage of the label function only; Squadron cannot produce it today. `evidence-contract.md` states both.
+
 ### Patterns and Conventions
 
 **Every record carries its own id, so a retry never writes twice.** *(PM pending.)* This is 103's inbox rule applied to direct calls. The caller supplies the id. Recording an id that already exists returns the existing record and changes nothing, with a WARNING if the content differs; the first one wins. The Runner can create the id when it journals the Squadron command, so recording again after a crash is harmless. Through the inbox, the record id is the submission id.
@@ -201,6 +204,8 @@ Verdict and severity are accepted in any letter case, because Squadron writes se
 **"Not reported" must be said explicitly.** `derivation`, `fallback_used`, and `findings_parsed` are required in the payload. A submitter passes `not_reported` or `null` rather than leaving them out.
 
 **Errors.** Direct store calls raise on a failed check, as `block()` does. The inbox apply function returns a rejection reason for the same checks, tested as plain branches, never by catching the exception.
+
+**An unknown verdict id.** `verdict(verdict_id)` returns `None`, as `get_node` and `journal_entry` do. `observations` and `finding_changes` raise `VerdictNotFoundError` (a `StoreError`, next to `NodeNotFoundError`), because an empty result from either would look like a real review with no findings. `amoeba inspect findings --verdict ID` reports an unknown id as an error, not an empty listing.
 
 ## Implementation Details
 
@@ -317,7 +322,7 @@ These consume 101–103 through their documented contracts. The changes are reco
 
 - The same finding text in two reviews, at different list positions, gets one key, and `finding_changes` reports it `recurring`.
 - A changed line reference (`:119-163` → `:218-240`, `#L12` → none) or a formatting-only summary change (whitespace, backticks, case, trailing period) keeps the key. A different file path or different words change it.
-- On the captured 102 task-review rounds in `tests/fixtures/sq_reviews/`, consecutive rounds share **no** keys. The test says so and names this as the rewording limit.
+- On the captured 102 task-review rounds (part 1, rounds 1 and 2, listed under Technical Requirements), the two rounds share **no** keys. The test says so and names this as the rewording limit.
 - `finding_changes` on round 2 names round 1 as the previous review and tags new, recurring, and gone correctly.
   - On a provider-failure review, it says "not comparable".
   - A provider failure recorded between two real rounds is skipped when finding the previous round.
@@ -338,6 +343,14 @@ These consume 101–103 through their documented contracts. The changes are reco
 - Each word list is a `StrEnum` defined once. All SQL and column names live in `sql_evidence.py`. The matching rule has one definition and a version constant. The trust label has one function.
 - `finding_identity.py` imports nothing from the store, and is covered by a table of normalization cases.
 - Real Squadron review files from `project-documents/user/reviews/` (including `archive/`) are copied into `tests/fixtures/sq_reviews/` unchanged. The README records why each file is there. Hand-written or hand-edited reviews (for example `103-review.code…`, which has `resolution:` keys Squadron never writes) are left out, or marked as such.
+- The captured 102 task-review rounds are these files, all tracked in git (paths under `project-documents/user/reviews/`):
+
+  | Round | Part 1 | Part 2 | Reviewed commit |
+  | --- | --- | --- | --- |
+  | 1 | `archive/102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md` (CONCERNS) | `archive/…part-2.20260921T112635.md` (PASS) | `bf6d292` |
+  | 2 | `archive/102-review.tasks.resident-process-and-recovery.part-1.md` (CONCERNS) | `archive/…part-2.md` (`UNKNOWN`, provider failure) | `20b3d70` |
+
+  The rewording test compares part 1, round 1 against round 2. Round 2's part 2 is a real provider failure (a *Provider Failure* heading, no findings), so the `provider_failure` label and the "not comparable" case each get one real input. If any of these files is missing or its frontmatter differs from the table, the fixture copy step stops with an error. It never substitutes a hand-built round.
 - A store at version 4 with nodes, journal entries, submissions, and messages upgrades to 5 with all of them intact.
 - The writer guard is unchanged.
 - `ruff`, `pyright` strict, and the full suite are clean. Source files stay near 300 lines.
