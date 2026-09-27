@@ -115,13 +115,13 @@ A frozen, keyword-only dataclass.
 | `model` | `str` | The model that answered. |
 | `findings` | `tuple[FindingInput, ...]` | In the reviewer's order. |
 | `provenance` | `Provenance` | See [Provenance](#provenance). |
-| `diff_truncated` | `bool \| None` | Null until Squadron ships SQ 927's `diffTruncated`. |
-| `requested_model` | `str \| None` | Null until Squadron ships SQ 927's `requestedModel`. |
+| `diff_truncated` | `bool \| None` | Squadron's `diffTruncated` (SQ 927); null when absent. |
+| `requested_model` | `str \| None` | Squadron's `requestedModel` (SQ 927); set only on a substitution. |
 | `reviewed_sha` | `str \| None` | The commit reviewed. |
 | `score` | `float \| None` | Stored now; slice 109 uses it. |
 | `criteria` | `Mapping \| None` | Stored as JSON; slice 109 uses it. |
 | `tool_calls_made` | `int \| None` | |
-| `sq_run_id` | `str \| None` | No Squadron output carries it yet. |
+| `sq_run_id` | `str \| None` | Squadron's `runId` (#139), pipeline runs only. |
 | `journal_entry_id` | `str \| None` | The journaled Squadron run command, if any. |
 
 "Not reported" is said explicitly: `derivation`, `fallback_used`, and
@@ -162,6 +162,30 @@ Checked 20260926 against squadron 0.14.0.
   findings.
 - A missing location is Squadron's literal `unverified`; pass it as is. The
   matching rule treats it as empty.
+
+**Observed 20260927 on squadron `main`, after SQ 927 and #139 merged.** Not in
+a PyPI release yet (the latest is 0.14.0). This is a dated observation, not a
+version pin:
+
+- `verdictSource: imposed` appears when Squadron caps a PASS to CONCERNS: the
+  diff was truncated and the model made no successful tool calls. The capped
+  review carries a synthetic finding with category `review-coverage` and no
+  location.
+- `diffTruncated` (JSON `diff_truncated`) is written only on reviews that had
+  a diff. Absent means `diff_truncated=None`.
+- `requestedModel` (JSON `requested_model`) appears only on a substitution;
+  `aiModel` is then the model that actually answered, possibly a dated
+  snapshot id. Map `aiModel` to `model` and `requestedModel` to
+  `requested_model`.
+- `squadronVersion` (JSON `squadron_version`) can supply `upstream_version`,
+  and `runId` (JSON `run_id`, pipeline runs only) can supply `sq_run_id`.
+- `providerFailure: true` marks a provider failure in frontmatter, alongside
+  the *Provider Failure* heading.
+- JSON also adds `diff_chars`, `diff_chars_injected`, `answering_models`,
+  `model_substituted`, `finding_scan`, and `location_verified` per finding.
+  The store has no field for them; slice 108 decides whether any is needed.
+- Severity values and the `unverified` literal are unchanged. Under
+  `--output json`, the "Saved review to" line now goes to stderr.
 
 ## The matching rule
 
