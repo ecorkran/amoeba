@@ -33,17 +33,18 @@ bound that stops matching reality is visible rather than quietly tuned.
 from __future__ import annotations
 
 import random
-import subprocess
-import sys
 import textwrap
 import time
 from pathlib import Path
 
-from cli_harness import await_running, cli_environment, run_cli, start_background
-from load_harness import measured
+from load_harness import (
+    launch_submitters,
+    measured,
+    run_with_kills,
+    submitter_output,
+)
 
-from amoeba.cli.main import ExitCode
-from amoeba.inbox import failed, pending, quarantined
+from amoeba.inbox import failed, quarantined
 from amoeba.store import Channel, Store, SubmissionOutcome
 
 SUBMITTERS = 4
@@ -125,44 +126,18 @@ SUBMITTER_SOURCE = textwrap.dedent(
 ).strip()
 
 
-def _output_files(tmp_path: Path, number: int) -> tuple[Path, Path]:
-    return tmp_path / f"submitter-{number}.out", tmp_path / f"submitter-{number}.err"
-
-
-def _launch_submitters(
-    tmp_path: Path, supervisor_dir: Path
-) -> list[subprocess.Popen[bytes]]:
-    """Start every submitter, each writing its output to files.
-
-    Files, not pipes: nothing reads a submitter's output until it has exited,
-    and a pipe nobody drains blocks its writer once the buffer fills — which
-    on macOS can be small — hanging the run.
-    """
-    script = tmp_path / "submitter.py"
-    script.write_text(SUBMITTER_SOURCE, encoding="utf-8")
-    submitters: list[subprocess.Popen[bytes]] = []
-    for number in range(SUBMITTERS):
-        stdout_file, stderr_file = _output_files(tmp_path, number)
-        with stdout_file.open("wb") as stdout, stderr_file.open("wb") as stderr:
-            submitters.append(
-                subprocess.Popen(
-                    [
-                        sys.executable,
-                        str(script),
-                        str(supervisor_dir),
-                        f"project-{number}",
-                        str(INTENTS_PER_SUBMITTER),
-                        str(number),
-                        str(RESUBMIT_FRACTION),
-                        str(CREATE_TIMEOUT_SECONDS),
-                    ],
-                    stdin=subprocess.DEVNULL,
-                    stdout=stdout,
-                    stderr=stderr,
-                    env=cli_environment(supervisor_dir),
-                )
-            )
-    return submitters
+def _submitter_arguments(supervisor_dir: Path) -> list[list[str]]:
+    return [
+        [
+            str(supervisor_dir),
+            f"project-{number}",
+            str(INTENTS_PER_SUBMITTER),
+            str(number),
+            str(RESUBMIT_FRACTION),
+            str(CREATE_TIMEOUT_SECONDS),
+        ]
+        for number in range(SUBMITTERS)
+    ]
 
 
 def _assert_exactly_once(
@@ -187,56 +162,41 @@ def _assert_exactly_once(
 def test_concurrent_submitters_across_kills_apply_exactly_once(
     tmp_path: Path, supervisor_dir: Path, runs_dir: Path
 ) -> None:
-    rng = random.Random(20260923)
-    start_arguments = ["--sq-runs-dir", str(runs_dir), "--idle-interval", "0.02"]
-    deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
-
-    submitters = _launch_submitters(tmp_path, supervisor_dir)
-    process = start_background(supervisor_dir, start_arguments)
-    kills = 0
-    try:
-        while any(submitter.poll() is None for submitter in submitters) or (
-            kills < TARGET_KILLS and pending(supervisor_dir)
-        ):
-            assert time.monotonic() < deadline, "the run never finished"
-            time.sleep(rng.uniform(*KILL_WINDOW_SECONDS))
-            process.kill_and_wait()
-            process.cleanup()
-            kills += 1
-            process = start_background(supervisor_dir, start_arguments)
-
-        drain_started = time.monotonic()
-        backlog = len(pending(supervisor_dir))
-        await_running(supervisor_dir)
-        while pending(supervisor_dir):
-            assert time.monotonic() < deadline, "the inbox never drained"
-            time.sleep(0.02)
-        drain_seconds = time.monotonic() - drain_started
-        assert run_cli(["stop"], supervisor_dir).returncode == ExitCode.OK
-    finally:
-        process.cleanup()
-        for submitter in submitters:
-            if submitter.poll() is None:
-                submitter.kill()
+    submitters = launch_submitters(
+        tmp_path,
+        supervisor_dir,
+        SUBMITTER_SOURCE,
+        _submitter_arguments(supervisor_dir),
+    )
+    run = run_with_kills(
+        supervisor_dir,
+        ["--sq-runs-dir", str(runs_dir), "--idle-interval", "0.02"],
+        submitters,
+        rng=random.Random(20260923),
+        kill_window=KILL_WINDOW_SECONDS,
+        target_kills=TARGET_KILLS,
+        deadline=time.monotonic() + RUN_TIMEOUT_SECONDS,
+    )
 
     for number, submitter in enumerate(submitters):
         submitter.wait()
-        stdout_file, stderr_file = _output_files(tmp_path, number)
+        stdout_file, stderr_file = submitter_output(tmp_path, number)
         assert submitter.returncode == 0, stderr_file.read_text()
         _assert_exactly_once(
             supervisor_dir, f"project-{number}", set(stdout_file.read_text().split())
         )
 
-    assert kills >= MINIMUM_KILLS, (
-        f"only {kills} kills landed while submitters ran; raise "
+    assert run.kills >= MINIMUM_KILLS, (
+        f"only {run.kills} kills landed while submitters ran; raise "
         "INTENTS_PER_SUBMITTER rather than shortening the kill window"
     )
-    assert drain_seconds < DRAIN_BOUND_SECONDS, measured(
-        f"final drain of {backlog} files", drain_seconds, DRAIN_BOUND_SECONDS
+    assert run.drain_seconds < DRAIN_BOUND_SECONDS, measured(
+        f"final drain of {run.backlog} files", run.drain_seconds, DRAIN_BOUND_SECONDS
     )
     assert quarantined(supervisor_dir) == []
     assert failed(supervisor_dir) == []
     print(
         f"\n{SUBMITTERS} submitters x {INTENTS_PER_SUBMITTER} intents, "
-        f"{kills} kills, final drain of {backlog} files in {drain_seconds:.3f}s"
+        f"{run.kills} kills, final drain of {run.backlog} files "
+        f"in {run.drain_seconds:.3f}s"
     )

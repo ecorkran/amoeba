@@ -3,7 +3,8 @@
 The process harness itself is **not** redefined here: it lives in
 ``tests/host_harness.py`` and is shared with ``tests/test_host.py``, per the
 project's DRY rule. This module adds only what the load tier needs on top of
-it — a journal-issuing tenant and helpers for synthesizing run files at scale.
+it — a journal-issuing tenant, helpers for synthesizing run files at scale,
+and the submitter-plus-SIGKILL loop the concurrent inbox tests share.
 
 The tier's fixtures live in ``conftest.py``, which is also what puts
 ``tests/`` on ``sys.path`` so ``host_harness`` imports here.
@@ -12,12 +13,20 @@ The tier's fixtures live in ``conftest.py``, which is also what puts
 from __future__ import annotations
 
 import json
+import random
+import subprocess
+import sys
 import textwrap
+import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from cli_harness import await_running, cli_environment, run_cli, start_background
 from host_harness import TenantSpec
+
+from amoeba.inbox import pending
 
 PROJECT = "demo"
 
@@ -123,6 +132,95 @@ def seed_project(supervisor_dir: Path, project_id: str = PROJECT) -> Path:
     with Store.open(path) as store:
         store.create_node(project_id=project_id, kind=NodeKind.SLICE, title="root")
     return path
+
+
+def submitter_output(tmp_path: Path, number: int) -> tuple[Path, Path]:
+    """Where submitter ``number`` writes its stdout and stderr."""
+    return tmp_path / f"submitter-{number}.out", tmp_path / f"submitter-{number}.err"
+
+
+def launch_submitters(
+    tmp_path: Path,
+    supervisor_dir: Path,
+    source: str,
+    arguments: Sequence[Sequence[str]],
+) -> list[subprocess.Popen[bytes]]:
+    """Start one ``source`` process per argument list, each writing to files.
+
+    Files, not pipes: nothing reads a submitter's output until it has exited,
+    and a pipe nobody drains blocks its writer once the buffer fills — which
+    on macOS can be small — hanging the run.
+    """
+    script = tmp_path / "submitter.py"
+    script.write_text(source, encoding="utf-8")
+    submitters: list[subprocess.Popen[bytes]] = []
+    for number, argv in enumerate(arguments):
+        stdout_file, stderr_file = submitter_output(tmp_path, number)
+        with stdout_file.open("wb") as stdout, stderr_file.open("wb") as stderr:
+            submitters.append(
+                subprocess.Popen(
+                    [sys.executable, str(script), *argv],
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout,
+                    stderr=stderr,
+                    env=cli_environment(supervisor_dir),
+                )
+            )
+    return submitters
+
+
+@dataclass(frozen=True)
+class KillRun:
+    """What a kill loop measured: kills landed, and the final drain."""
+
+    kills: int
+    backlog: int
+    drain_seconds: float
+
+
+def run_with_kills(
+    supervisor_dir: Path,
+    start_arguments: Sequence[str],
+    submitters: Sequence[subprocess.Popen[bytes]],
+    *,
+    rng: random.Random,
+    kill_window: tuple[float, float],
+    target_kills: int,
+    deadline: float,
+) -> KillRun:
+    """SIGKILL and restart ``amoeba start`` at random points, then drain.
+
+    Kills continue while any submitter runs, and after that while the inbox
+    still holds files, until ``target_kills`` have landed. The process is then
+    left to drain the rest, which is what ``drain_seconds`` times.
+    """
+    process = start_background(supervisor_dir, list(start_arguments))
+    kills = 0
+    try:
+        while any(submitter.poll() is None for submitter in submitters) or (
+            kills < target_kills and pending(supervisor_dir)
+        ):
+            assert time.monotonic() < deadline, "the run never finished"
+            time.sleep(rng.uniform(*kill_window))
+            process.kill_and_wait()
+            process.cleanup()
+            kills += 1
+            process = start_background(supervisor_dir, list(start_arguments))
+
+        drain_started = time.monotonic()
+        backlog = len(pending(supervisor_dir))
+        await_running(supervisor_dir)
+        while pending(supervisor_dir):
+            assert time.monotonic() < deadline, "the inbox never drained"
+            time.sleep(0.02)
+        drain_seconds = time.monotonic() - drain_started
+        assert run_cli(["stop"], supervisor_dir).returncode == 0
+    finally:
+        process.cleanup()
+        for submitter in submitters:
+            if submitter.poll() is None:
+                submitter.kill()
+    return KillRun(kills=kills, backlog=backlog, drain_seconds=drain_seconds)
 
 
 def measured(label: str, seconds: float, bound: float) -> str:
