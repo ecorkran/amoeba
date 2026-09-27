@@ -47,7 +47,7 @@ Developer value.
 - Store operations: `record_verdict`, `verdict`, `verdicts`, `observations`, `findings`, `finding_changes`.
 - The trust label on verdict records.
 - A `verdict` inbox submission type, and a change to how `amoeba submit` reads flags, so number, true/false, and list fields work.
-- `amoeba inspect verdicts` and `amoeba inspect findings`, registered in 102's listing registry. The registry gains options that take a value (`--node ID`).
+- `amoeba inspect verdicts`, `amoeba inspect findings`, and `amoeba inspect changes`, registered in 102's listing registry. The registry gains options that take a value (`--node ID`).
 - `docs/evidence-contract.md`, and updates to `store-contract.md`, `inbox-contract.md`, and `CHANGELOG.md`.
 
 **Excluded**
@@ -205,7 +205,7 @@ Verdict and severity are accepted in any letter case, because Squadron writes se
 
 **Errors.** Direct store calls raise on a failed check, as `block()` does. The inbox apply function returns a rejection reason for the same checks, tested as plain branches, never by catching the exception.
 
-**An unknown verdict id.** `verdict(verdict_id)` returns `None`, as `get_node` and `journal_entry` do. `observations` and `finding_changes` raise `VerdictNotFoundError` (a `StoreError`, next to `NodeNotFoundError`), because an empty result from either would look like a real review with no findings. `amoeba inspect findings --verdict ID` reports an unknown id as an error, not an empty listing.
+**An unknown verdict id.** `verdict(verdict_id)` returns `None`, as `get_node` and `journal_entry` do. `observations` and `finding_changes` raise `VerdictNotFoundError` (a `StoreError`, next to `NodeNotFoundError`), because an empty result from either would look like a real review with no findings. `amoeba inspect changes --verdict ID` reports an unknown id as an error (`NOT_FOUND`), not an empty listing.
 
 ## Implementation Details
 
@@ -262,7 +262,8 @@ Verdict and severity are accepted in any letter case, because Squadron writes se
 | --- | --- |
 | `amoeba submit verdict --project ID --by NAME --node-id ID --verdict V --derivation D --fallback-used JSON --findings-parsed JSON --provider-failure JSON --review-type T --model M --findings JSON --upstream U --upstream-version V --source S [optional fields] [--id ID]` | Flags come from the payload model, under the new flag rule. |
 | `amoeba inspect verdicts --project ID [--node ID]` | Columns: `recorded_seq, id, node_id, review_type, model, verdict, standing, upstream_version` |
-| `amoeba inspect findings --project ID [--node ID] [--verdict ID]` | One row per key. With `--verdict`, that review's findings tagged new/recurring, then the gone ones, with the previous review's id in a header line. |
+| `amoeba inspect findings --project ID [--node ID]` | One row per key. |
+| `amoeba inspect changes --project ID --verdict ID` | That review's findings tagged new/recurring, then the gone ones, each row naming the previous review. A review that is not comparable exits `NOT_COMPARABLE` (11); an unknown id exits `NOT_FOUND` (10). |
 
 Both listings accept `--json`. The registry today only has on/off flags and fixed choices, so `Listing` gains `value_options`, and `_add_inspect_parser` adds them. That is the one change to 102's CLI plumbing. It is additive.
 
@@ -402,18 +403,17 @@ recorded_seq  id  node_id                           review_type  model       ver
 **2. Round 2.** The ExitCode finding comes back at position 2 with its range moved (`:119-163` → `:141-185`), the CI-wiring finding is dropped, and a GRACE_EXPIRED finding is new. Submit `round2.json` as `r2` the same way.
 
 ```bash
-uv run amoeba inspect findings --project demo --verdict r2
+uv run amoeba inspect changes --project demo --verdict r2
 ```
 
 ```
-verdict r2: previous review r1
-change     severity  summary                                                                    location                       key
-new        concern   The GRACE_EXPIRED exit criterion has no CLI-level test despite Task 6.4…  …-2.md:218-240                 10e56e2644c2
-recurring  concern   ExitCode vocabulary is consumed in Section 6 before Task 7.1 defines it    …-2.md:141-185                 3cf31e254868
-gone       concern   No CI wiring task gates the load tier                                      …-2.md:313-357                 60e071743b78
+change     severity  summary                                                                    location        key           previous_verdict_id
+new        concern   The GRACE_EXPIRED exit criterion has no CLI-level test despite Task 6.4…  …-2.md:218-240  3c8b8952363b  r1
+recurring  concern   ExitCode vocabulary is consumed in Section 6 before Task 7.1 defines it    …-2.md:141-185  b8a8d9a481a6  r1
+gone       concern   No CI wiring task gates the load tier                                      …-2.md:313-357  a635c50747f5  r1
 ```
 
-(The table also has the per-key columns `node_id`, `times_seen`, `first_verdict_id`, `last_verdict_id`, which are empty in `--verdict` mode; trimmed here.)
+(Re-run 20260927 after code review moved `--verdict` from `findings` into its own `changes` listing; summaries and locations trimmed here.)
 
 **3. A provider failure between rounds is skipped.**
 
@@ -427,8 +427,9 @@ uv run amoeba submit verdict $BASE --id r4 --verdict CONCERNS --derivation state
 (`--provider-failure true` after `$BASE`'s `false`: argparse keeps the last one.)
 
 - `inspect verdicts` labels `r3` `provider_failure`.
-- `inspect findings --verdict r3` prints `verdict r3: not comparable`, then `(none)`.
-- `inspect findings --verdict r4` prints `verdict r4: previous review r2`, and both findings `recurring`. `r3` was skipped.
+- `inspect changes --verdict r3` prints `amoeba: verdict 'r3' is not comparable (failed or unparsed review)` on stderr, nothing on stdout, and exits 11 (`NOT_COMPARABLE`).
+- `inspect changes --verdict r4` shows both findings `recurring` with `previous_verdict_id` `r2`. `r3` was skipped.
+- `inspect changes --verdict nope` prints `amoeba: no verdict with id 'nope'` and exits 10 (`NOT_FOUND`).
 
 **4. Verdicts that aren't what they look like.** Each carries `--findings "$(cat scripts/demo_evidence/one_finding.json)"`.
 

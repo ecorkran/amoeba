@@ -43,11 +43,12 @@ class ChoiceOption:
 
 @dataclass(frozen=True)
 class ValueOption:
-    """An optional flag taking one free value, e.g. ``--node ID``."""
+    """A flag taking one free value, e.g. ``--node ID``."""
 
     flag: str
     help_text: str
     metavar: str
+    required: bool = False
 
 
 @dataclass(frozen=True)
@@ -243,15 +244,22 @@ LISTINGS: tuple[Listing, ...] = (
     ),
     Listing(
         name="findings",
-        help_text="Findings by content key, or one review's changes (--verdict).",
+        help_text="Findings by content key, with how often each was seen.",
         columns=inspect_evidence.FINDING_COLUMNS,
         rows=inspect_evidence.finding_rows,
+        value_options=(_NODE_OPTION,),
+    ),
+    Listing(
+        name="changes",
+        help_text="One review's findings as new, recurring, or gone.",
+        columns=inspect_evidence.CHANGE_COLUMNS,
+        rows=inspect_evidence.change_rows,
         value_options=(
-            _NODE_OPTION,
             ValueOption(
                 flag="--verdict",
-                help_text="Show this review's findings as new, recurring, gone.",
+                help_text="The review to compare with its previous round.",
                 metavar="ID",
+                required=True,
             ),
         ),
     ),

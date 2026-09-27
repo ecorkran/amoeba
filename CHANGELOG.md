@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Slice 104: `finding_changes` — new, recurring, and gone against the previous comparable round, never stored; provider failures and unparsed reviews are never a baseline.
 - Slice 104: a trust label (`VerdictStanding`) on every verdict, and required provenance (`upstream_version` is a label, never compared).
 - Slice 104: the `verdict` submission kind and `amoeba submit verdict`; `amoeba submit` now reads flags by one rule (text and enum fields as typed, everything else as JSON).
-- Slice 104: `amoeba inspect verdicts` and `amoeba inspect findings [--verdict ID]`; the listing registry gains `value_options`.
+- Slice 104: `amoeba inspect verdicts`, `amoeba inspect findings`, and `amoeba inspect changes --verdict ID`; the listing registry gains `value_options`; exit codes `NOT_FOUND` (10) and `NOT_COMPARABLE` (11).
 - Slice 104: `docs/evidence-contract.md`; PyYAML as a dev-only dependency for reading captured review files in tests.
 - Slice 103: the durable inbox — `amoeba.inbox.submit()` writes one fsync-durable file whether or not the process runs; the only way a part outside the process contributes state.
 - Slice 103: `InboxTenant`, the first real tenant — applies each submission exactly once per id, quarantines what cannot be attributed, and bounds a failing apply with an on-disk attempt counter that parks the file in `inbox/failed/`.

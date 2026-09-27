@@ -325,12 +325,14 @@ See [`inbox-contract.md`](inbox-contract.md) for the flag rule.
   id, node_id, review_type, model, verdict, standing, upstream_version`. With
   `--json`, rows also carry `upstream`, `source`, `source_path`, `recorded_at`.
 - `amoeba inspect findings --project ID [--node ID]` — one row per key.
-- `amoeba inspect findings --project ID --verdict ID` — a header line naming
-  the previous review (or saying `not comparable`), then that review's findings
-  tagged `new`/`recurring`, then the `gone` ones. With `--json` there is no
-  header; each row carries `previous_verdict_id`. An unknown id is an error.
+- `amoeba inspect changes --project ID --verdict ID` — that review's findings
+  tagged `new`/`recurring`, then the `gone` ones. Columns `change, severity,
+  summary, location, key, previous_verdict_id` (`None` for a first round);
+  `--json` rows also carry `verdict_id`. An unknown id exits `NOT_FOUND` (10).
+  A review that is not comparable exits `NOT_COMPARABLE` (11) with nothing on
+  stdout, so neither form can read a failed round as one with no changes.
 
-Both read through a read-only handle, whether the process is running or not.
+All three read through a read-only handle, whether the process is running or not.
 
 ## Storage
 

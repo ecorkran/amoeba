@@ -1,13 +1,12 @@
-"""Rows for the evidence listings: ``verdicts`` and ``findings``.
+"""Rows for the evidence listings: ``verdicts``, ``findings``, and ``changes``.
 
 A sibling of ``inspect.py``, which registers these in its one ``LISTINGS``
-registry. Both receive a **read-only** store, so they work whether or not the
+registry. All receive a **read-only** store, so they work whether or not the
 resident process is running.
 
-``findings --verdict ID`` is the one listing with a header: in table form it
-prints a line naming the previous round (or saying the review is not
-comparable) before the rows. In JSON form every row carries
-``previous_verdict_id`` instead, so the output stays one JSON array.
+``changes --verdict ID`` refuses a review that is not comparable rather than
+printing no rows, so neither output form can pass a failed round off as a
+round with nothing in it.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING, Final
 
-from amoeba.store import FindingChange, FindingChanges, FindingObservation, Store
+from amoeba.store import FindingChange, FindingObservation, Store
 
 if TYPE_CHECKING:  # pragma: no cover - typing only; inspect.py imports this
     from amoeba.cli.inspect import Row
@@ -32,7 +31,6 @@ VERDICT_COLUMNS: Final = (
 )
 
 FINDING_COLUMNS: Final = (
-    "change",
     "node_id",
     "severity",
     "summary",
@@ -43,8 +41,26 @@ FINDING_COLUMNS: Final = (
     "key",
 )
 
+CHANGE_COLUMNS: Final = (
+    "change",
+    "severity",
+    "summary",
+    "location",
+    "key",
+    "previous_verdict_id",
+)
+
 #: Enough of the hex key to tell keys apart by eye; JSON carries the full key.
 _SHORT_KEY_LENGTH: Final = 12
+
+
+class VerdictNotComparableError(Exception):
+    """The review's standing means its findings cannot be compared to another's."""
+
+    def __init__(self, verdict_id: str) -> None:
+        super().__init__(
+            f"verdict {verdict_id!r} is not comparable (failed or unparsed review)"
+        )
 
 
 def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
@@ -69,17 +85,9 @@ def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
 
 
 def finding_rows(store: Store, args: argparse.Namespace) -> list[Row]:
-    """One row per key, or with ``--verdict``, that review's changes.
-
-    Raises:
-        VerdictNotFoundError: For an unknown ``--verdict`` id, which the CLI
-            boundary reports as an error, never as an empty listing.
-    """
-    if args.verdict is not None:
-        return _change_rows(store.finding_changes(args.verdict), use_json=args.json)
+    """One row per content key, optionally for one node."""
     return [
         {
-            "change": "",
             "node_id": summary.node_id,
             "severity": summary.latest_severity.value,
             "summary": summary.latest_summary,
@@ -93,42 +101,39 @@ def finding_rows(store: Store, args: argparse.Namespace) -> list[Row]:
     ]
 
 
-def _change_rows(changes: FindingChanges, *, use_json: bool) -> list[Row]:
-    if not use_json:
-        print(_header(changes))
+def change_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+    """One review's findings tagged new or recurring, plus the ones now gone.
+
+    Raises:
+        VerdictNotFoundError: For an unknown ``--verdict`` id.
+        VerdictNotComparableError: When the review is not comparable.
+    """
+    changes = store.finding_changes(args.verdict)
+    if not changes.comparable:
+        raise VerdictNotComparableError(changes.verdict_id)
     tagged = [(t.change, t.observation) for t in changes.findings]
     tagged += [(FindingChange.GONE, observation) for observation in changes.gone]
     return [
-        _change_row(change, observation, changes, use_json=use_json)
+        _change_row(change, observation, changes.previous_verdict_id, args.json)
         for change, observation in tagged
     ]
-
-
-def _header(changes: FindingChanges) -> str:
-    if not changes.comparable:
-        return f"verdict {changes.verdict_id}: not comparable"
-    previous = changes.previous_verdict_id or "none"
-    return f"verdict {changes.verdict_id}: previous review {previous}"
 
 
 def _change_row(
     change: FindingChange,
     observation: FindingObservation,
-    changes: FindingChanges,
-    *,
+    previous_verdict_id: str | None,
     use_json: bool,
 ) -> Row:
-    row: Row = {
+    return {
         "change": change.value,
         "severity": observation.severity.value,
         "summary": observation.summary,
         "location": observation.location or "",
         "key": _key(observation.identity, use_json=use_json),
+        "previous_verdict_id": previous_verdict_id,
         "verdict_id": observation.verdict_id,
     }
-    if use_json:
-        row["previous_verdict_id"] = changes.previous_verdict_id
-    return row
 
 
 def _key(identity: str, *, use_json: bool) -> str:

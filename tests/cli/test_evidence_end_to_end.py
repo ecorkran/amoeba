@@ -3,7 +3,7 @@
 From an **empty** supervisor directory: start → create the project → stop →
 seed a node → start → submit two review rounds and a provider failure →
 resubmit round 1 under the same id → kill -9 → start. Read-only inspection
-then shows three verdicts, round 2's changes, the failure as not comparable,
+then shows three verdicts, round 2's changes, the failure refused as not comparable,
 and nothing applied twice.
 """
 
@@ -192,15 +192,15 @@ def test_the_slice_end_to_end_through_the_real_cli(
         ("r2", "stated"),
         ("r3", "provider_failure"),
     ]
-    changes = _inspect(supervisor_dir, "findings", "--verdict", "r2")
+    changes = _inspect(supervisor_dir, "changes", "--verdict", "r2")
     assert [row["change"] for row in changes] == ["new", "recurring", "gone"]
     assert {row["previous_verdict_id"] for row in changes} == {"r1"}
 
     failure = run_cli(
-        ["inspect", "findings", "--project", PROJECT, "--verdict", "r3"],
+        ["inspect", "changes", "--project", PROJECT, "--verdict", "r3"],
         supervisor_dir,
     )
-    assert failure.stdout.splitlines()[0] == "verdict r3: not comparable"
+    assert failure.returncode == ExitCode.NOT_COMPARABLE, failure.stderr
 
     submissions = _inspect(supervisor_dir, "submissions")
     assert [row["id"] for row in submissions] == [created, "r1", "r2", "r3"]

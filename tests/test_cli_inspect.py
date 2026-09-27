@@ -40,6 +40,8 @@ from amoeba.store.migrations import (
 PROJECT = "demo"
 
 #: Listings that take ``--project``; ``projects`` reads the directory instead.
+_FIXTURE_VERDICT = "fixture-review"
+
 PROJECT_LISTINGS = tuple(
     listing.name for listing in LISTINGS if listing.requires_project
 )
@@ -100,7 +102,7 @@ def populated(supervisor_dir: Path) -> Path:
         )
         # Slice 104: one review verdict with one finding.
         store.record_verdict(
-            verdict_input("fixture-review", runnable.id, finding("x", "a.py:1")),
+            verdict_input(_FIXTURE_VERDICT, runnable.id, finding("x", "a.py:1")),
             project_id=PROJECT,
         )
     # And one file still waiting in the inbox, written by the real submit().
@@ -131,11 +133,19 @@ def running_supervisor(
         process.cleanup()
 
 
+#: A value in the ``populated`` store for every required flag a listing takes.
+_REQUIRED_VALUES: dict[str, str] = {"--verdict": _FIXTURE_VERDICT}
+
+
 def _listing_arguments(name: str, extra: list[str] | None = None) -> list[str]:
     """Build the argument vector for one listing."""
+    listing = LISTINGS_BY_NAME[name]
     arguments = ["inspect", name]
-    if LISTINGS_BY_NAME[name].requires_project:
+    if listing.requires_project:
         arguments += ["--project", PROJECT]
+    for option in listing.value_options:
+        if option.required:
+            arguments += [option.flag, _REQUIRED_VALUES[option.flag]]
     return arguments + (extra or [])
 
 
@@ -399,6 +409,7 @@ def test_the_registered_listings_are_pinned() -> None:
         # Slice 104.
         "verdicts",
         "findings",
+        "changes",
     }
 
 
@@ -412,6 +423,7 @@ def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
         "messages",
         "verdicts",
         "findings",
+        "changes",
     }
 
     missing_project = run_cli(["inspect", "nodes"], supervisor_dir)

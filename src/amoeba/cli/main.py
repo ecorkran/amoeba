@@ -22,6 +22,7 @@ from importlib import metadata
 from typing import Any, Final
 
 from amoeba.cli import settings_flags
+from amoeba.cli.inspect_evidence import VerdictNotComparableError
 from amoeba.inbox import InboxSubmitError
 from amoeba.process.errors import (
     AlreadyRunningError,
@@ -29,7 +30,7 @@ from amoeba.process.errors import (
     ProcessError,
     StartupFailedError,
 )
-from amoeba.store.models import StoreError
+from amoeba.store.models import StoreError, VerdictNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,13 @@ class ExitCode(IntEnum):
     #: ``submit``: the submission was invalid or could not be written durably.
     #: Nothing was left in the inbox.
     SUBMISSION_REFUSED = 9
+
+    #: ``inspect``: a record named on the command line does not exist.
+    NOT_FOUND = 10
+
+    #: ``inspect changes``: the review failed or was unparsed, so it has no
+    #: changes to compare.
+    NOT_COMPARABLE = 11
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,7 +182,10 @@ def _add_inspect_parser(subparsers: Any) -> None:
             )
         for value in listing.value_options:
             listing_parser.add_argument(
-                value.flag, metavar=value.metavar, help=value.help_text
+                value.flag,
+                metavar=value.metavar,
+                help=value.help_text,
+                required=value.required,
             )
         listing_parser.add_argument(
             "--json", action="store_true", help="Emit JSON instead of a table."
@@ -229,6 +240,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except StartupFailedError as error:
         print(f"amoeba: {error}", file=sys.stderr)
         return int(ExitCode.STARTUP_FAILED)
+    except VerdictNotFoundError as error:
+        print(f"amoeba: {error}", file=sys.stderr)
+        return int(ExitCode.NOT_FOUND)
+    except VerdictNotComparableError as error:
+        print(f"amoeba: {error}", file=sys.stderr)
+        return int(ExitCode.NOT_COMPARABLE)
     except StoreError as error:
         # The store's own message reaches the operator; the process never
         # falls back to a different store or starts with a project skipped.

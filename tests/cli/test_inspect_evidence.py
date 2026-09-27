@@ -1,9 +1,9 @@
-"""``amoeba inspect verdicts`` and ``amoeba inspect findings``, as real subprocesses.
+"""``amoeba inspect`` ``verdicts``, ``findings``, and ``changes``, as subprocesses.
 
 The generic listing tests in ``test_cli_inspect.py`` already run every listing
 in both forms, stopped and running. This module covers what is specific to
-these two: the pinned columns, ``--node``, provenance in JSON, and the
-``--verdict`` header, tags, and errors.
+these three: the pinned columns, ``--node``, provenance in JSON, and the
+``changes`` tags and refusals.
 """
 
 from __future__ import annotations
@@ -115,14 +115,25 @@ def test_findings_without_verdict_is_one_row_per_key(
     assert (kept["times_seen"], kept["first_verdict_id"]) == (2, "r1")
 
 
-def test_findings_for_a_verdict_names_the_previous_review_and_tags(
+def test_changes_table_has_the_pinned_columns(
     supervisor_dir: Path, nodes: tuple[str, str]
 ) -> None:
-    code, stdout, stderr = _inspect(supervisor_dir, "findings", "--verdict", "r3")
+    code, stdout, stderr = _inspect(supervisor_dir, "changes", "--verdict", "r3")
     assert code == ExitCode.OK, stderr
-    assert stdout.splitlines()[0] == "verdict r3: previous review r1"
+    assert stdout.splitlines()[0].split() == [
+        "change",
+        "severity",
+        "summary",
+        "location",
+        "key",
+        "previous_verdict_id",
+    ]
 
-    rows = _json(supervisor_dir, "findings", "--verdict", "r3")
+
+def test_changes_tag_each_finding_against_the_previous_review(
+    supervisor_dir: Path, nodes: tuple[str, str]
+) -> None:
+    rows = _json(supervisor_dir, "changes", "--verdict", "r3")
     assert [(r["change"], r["summary"]) for r in rows] == [
         ("new", _ADDED.summary),
         ("recurring", _KEPT_MOVED.summary),
@@ -131,21 +142,39 @@ def test_findings_for_a_verdict_names_the_previous_review_and_tags(
     assert {r["previous_verdict_id"] for r in rows} == {"r1"}
 
 
-def test_findings_for_a_provider_failure_is_not_comparable(
+def test_a_first_round_has_no_previous_review(
     supervisor_dir: Path, nodes: tuple[str, str]
 ) -> None:
-    code, stdout, _ = _inspect(supervisor_dir, "findings", "--verdict", "r2")
-    assert code == ExitCode.OK
-    assert stdout.splitlines()[0] == "verdict r2: not comparable"
+    rows = _json(supervisor_dir, "changes", "--verdict", "r1")
+    assert {r["change"] for r in rows} == {"new"}
+    assert {r["previous_verdict_id"] for r in rows} == {None}
 
 
-def test_an_unknown_verdict_is_an_error(
+@pytest.mark.parametrize("json_flag", [(), ("--json",)])
+def test_changes_for_a_provider_failure_is_refused(
+    supervisor_dir: Path, nodes: tuple[str, str], json_flag: tuple[str, ...]
+) -> None:
+    code, stdout, stderr = _inspect(
+        supervisor_dir, "changes", "--verdict", "r2", *json_flag
+    )
+    assert code == ExitCode.NOT_COMPARABLE
+    assert "r2" in stderr
+    assert stdout == ""
+
+
+def test_an_unknown_verdict_is_not_found(
     supervisor_dir: Path, nodes: tuple[str, str]
 ) -> None:
-    code, stdout, stderr = _inspect(supervisor_dir, "findings", "--verdict", "nope")
-    assert code != ExitCode.OK
+    code, stdout, stderr = _inspect(supervisor_dir, "changes", "--verdict", "nope")
+    assert code == ExitCode.NOT_FOUND
     assert "nope" in stderr
     assert stdout == ""
+
+
+def test_changes_requires_a_verdict(supervisor_dir: Path) -> None:
+    code, _, stderr = _inspect(supervisor_dir, "changes")
+    assert code != ExitCode.OK
+    assert "--verdict" in stderr
 
 
 @pytest.fixture
@@ -169,4 +198,4 @@ def test_both_listings_work_while_the_process_runs(
     supervisor_dir: Path, running: None
 ) -> None:
     assert len(_json(supervisor_dir, "verdicts")) == 4
-    assert len(_json(supervisor_dir, "findings", "--verdict", "r3")) == 3
+    assert len(_json(supervisor_dir, "changes", "--verdict", "r3")) == 3

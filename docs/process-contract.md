@@ -317,9 +317,11 @@ Every status, and the condition that produces it. Defined once in
 | 4 | `STOP_TIMEOUT` | `stop`: the process did not release the lock before `--stop-timeout`. No `SIGKILL` follows. |
 | 5 | `NO_STOP_TARGET` | `stop`: the lock is held but the PID file is absent or unreadable. **Nothing was signalled.** |
 | 6 | `GRACE_EXPIRED` | `start`: a tenant did not return within `--shutdown-grace`. |
-| 7 | `STARTUP_FAILED` | `start`: a store could not be opened, or recovery could not complete, for any project. **Also** any store error that stops a running process — including an inbox apply that fails below its attempt limit — since the boundary maps every `StoreError` here. |
+| 7 | `STARTUP_FAILED` | `start`: a store could not be opened, or recovery could not complete, for any project. **Also** any store error that stops a running process — including an inbox apply that fails below its attempt limit — since the boundary maps every `StoreError` here, except `VerdictNotFoundError` (`NOT_FOUND`). |
 | 8 | `NOT_RUNNING_STATUS` | `status`: the supervisor is not running. Not a failure — it distinguishes running from stopped by exit status alone. |
 | 9 | `SUBMISSION_REFUSED` | `submit`: the submission was invalid or could not be written. Nothing was left in the inbox. *(Slice 103.)* |
+| 10 | `NOT_FOUND` | `inspect`: a record named on the command line (e.g. `changes --verdict ID`) does not exist. *(Slice 104.)* |
+| 11 | `NOT_COMPARABLE` | `inspect changes`: the review failed or was unparsed, so it has no changes to report. *(Slice 104.)* |
 
 ## Inspection
 
