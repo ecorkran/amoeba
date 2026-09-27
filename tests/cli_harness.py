@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -130,13 +131,55 @@ def start_background(
 def await_running(supervisor_dir: Path, timeout: float = START_TIMEOUT_SECONDS) -> None:
     """Wait until ``status`` reports the supervisor running."""
     deadline = time.monotonic() + timeout
+    last: CommandResult | None = None
     while time.monotonic() < deadline:
         if (supervisor_dir / "amoeba.pid").exists():
-            result = run_cli(["status"], supervisor_dir)
-            if result.stdout.startswith("running"):
+            last = run_cli(["status"], supervisor_dir)
+            if last.stdout.startswith("running"):
                 return
         time.sleep(0.05)
-    raise AssertionError(f"the supervisor never reported running within {timeout}s")
+    raise AssertionError(
+        f"the supervisor never reported running within {timeout}s; "
+        f"last status: {last!r}"
+    )
+
+
+#: A running process applies a submission on its next tick; generous for a
+#: loaded machine.
+APPLY_TIMEOUT_SECONDS = 20.0
+
+
+def start_running(supervisor_dir: Path, runs_dir: Path) -> BackgroundCli:
+    """``amoeba start`` with a fast tick, returned once it reports running."""
+    process = start_background(
+        supervisor_dir, ["--sq-runs-dir", str(runs_dir), "--idle-interval", "0.05"]
+    )
+    await_running(supervisor_dir)
+    return process
+
+
+def stop_running(supervisor_dir: Path, process: BackgroundCli) -> None:
+    """``amoeba stop``, asserting a clean exit."""
+    assert run_cli(["stop"], supervisor_dir).returncode == 0
+    assert process.wait() == 0
+    process.cleanup()
+
+
+def await_condition(
+    condition: Callable[[], bool], what: str, timeout: float = APPLY_TIMEOUT_SECONDS
+) -> None:
+    """Poll until ``condition`` holds, failing with ``what`` on timeout."""
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline, f"{what} did not happen"
+        time.sleep(0.05)
+
+
+def submit_cli(supervisor_dir: Path, project_id: str, *arguments: str) -> str:
+    """``amoeba submit …`` for a project; returns the printed submission id."""
+    result = run_cli(["submit", *arguments, "--project", project_id], supervisor_dir)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
 
 
 def await_stopped(supervisor_dir: Path, timeout: float = START_TIMEOUT_SECONDS) -> None:

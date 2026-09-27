@@ -15,29 +15,24 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-import time
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from cli_harness import (
-    BackgroundCli,
-    await_running,
+    await_condition,
     await_stopped,
     cli_environment,
     run_cli,
-    start_background,
+    start_running,
+    stop_running,
+    submit_cli,
 )
 
-from amoeba.cli.main import ExitCode
 from amoeba.inbox import pending
 from amoeba.store import Channel, NodeStatus, Store, SubmissionOutcome
 
 PROJECT = "demo"
 DEMO_SCRIPT = Path(__file__).parent.parent.parent / "scripts" / "demo_inbox.py"
-
-#: A running process applies on its next tick; generous for a loaded machine.
-APPLY_TIMEOUT_SECONDS = 20.0
 
 
 @pytest.fixture
@@ -56,31 +51,8 @@ def runs_dir(tmp_path: Path) -> Path:
     return directory
 
 
-def _start(supervisor_dir: Path, runs_dir: Path) -> BackgroundCli:
-    process = start_background(
-        supervisor_dir, ["--sq-runs-dir", str(runs_dir), "--idle-interval", "0.05"]
-    )
-    await_running(supervisor_dir)
-    return process
-
-
-def _stop(supervisor_dir: Path, process: BackgroundCli) -> None:
-    assert run_cli(["stop"], supervisor_dir).returncode == ExitCode.OK
-    assert process.wait() == ExitCode.OK
-    process.cleanup()
-
-
-def _await(condition: Callable[[], bool], what: str) -> None:
-    deadline = time.monotonic() + APPLY_TIMEOUT_SECONDS
-    while not condition():
-        assert time.monotonic() < deadline, f"{what} did not happen"
-        time.sleep(0.05)
-
-
 def _submit(supervisor_dir: Path, *arguments: str) -> str:
-    result = run_cli(["submit", *arguments, "--project", PROJECT], supervisor_dir)
-    assert result.returncode == ExitCode.OK, result.stderr
-    return result.stdout.strip()
+    return submit_cli(supervisor_dir, PROJECT, *arguments)
 
 
 def _outcome(supervisor_dir: Path, submission_id: str) -> SubmissionOutcome | None:
@@ -120,9 +92,9 @@ def test_the_slice_end_to_end_through_the_real_cli(
     supervisor_dir: Path, runs_dir: Path
 ) -> None:
     # A running process creates the project.
-    process = _start(supervisor_dir, runs_dir)
+    process = start_running(supervisor_dir, runs_dir)
     created = _submit(supervisor_dir, "create-project", "--by", "pm")
-    _await(
+    await_condition(
         lambda: (
             (supervisor_dir / f"{PROJECT}.sqlite3").is_file()
             and _outcome(supervisor_dir, created) is SubmissionOutcome.APPLIED
@@ -131,7 +103,7 @@ def test_the_slice_end_to_end_through_the_real_cli(
     )
     listing = run_cli(["inspect", "projects", "--json"], supervisor_dir)
     assert [row["project_id"] for row in json.loads(listing.stdout)] == [PROJECT]
-    _stop(supervisor_dir, process)
+    stop_running(supervisor_dir, process)
 
     # Seed a human-blocked node while stopped; its escalation is readable at once.
     node_id, blocked_state_id = _seed_blocked_node(supervisor_dir)
@@ -154,8 +126,8 @@ def test_the_slice_end_to_end_through_the_real_cli(
         "proceed",
     )
     assert _outcome(supervisor_dir, resolution) is None
-    process = _start(supervisor_dir, runs_dir)
-    _await(
+    process = start_running(supervisor_dir, runs_dir)
+    await_condition(
         lambda: _outcome(supervisor_dir, resolution) is SubmissionOutcome.APPLIED,
         "the resolution",
     )
@@ -168,12 +140,12 @@ def test_the_slice_end_to_end_through_the_real_cli(
     process.kill_and_wait()
     process.cleanup()
     await_stopped(supervisor_dir)
-    process = _start(supervisor_dir, runs_dir)
+    process = start_running(supervisor_dir, runs_dir)
     try:
         assert _snapshot(supervisor_dir) == before
         assert pending(supervisor_dir) == []
     finally:
-        _stop(supervisor_dir, process)
+        stop_running(supervisor_dir, process)
 
     with Store.open_read_only(supervisor_dir / f"{PROJECT}.sqlite3") as store:
         assert [record.id for record in store.submissions(PROJECT)] == [
