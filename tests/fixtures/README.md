@@ -2,7 +2,7 @@
 docType: reference
 purpose: Provenance of the real upstream fixtures the observers are tested against
 dateCreated: 20260921
-dateUpdated: 20260921
+dateUpdated: 20260927
 ---
 
 # Upstream fixtures
@@ -55,7 +55,30 @@ recovery pass, rather than reading a version out of this output.
 
 ## `sq_reviews/` — Squadron review output
 
-Captured **20260926** for slice 104's review parser. More files (review artifacts, a pipeline-run judge artifact, and an artifact/stdout pair of one review) are added when slice 104 is implemented.
+### Review files
+
+Copied **20260927** from `project-documents/user/reviews/archive/` with `cp`, byte for byte. They were written by Squadron on **20260921** during slice 102's two task-review rounds. Slice 104's matching-rule and `finding_changes` tests read them.
+
+| File | `verdict` | `reviewedSha` | Why it is here |
+| --- | --- | --- | --- |
+| `102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md` | CONCERNS | `bf6d292` | Round 1, part 1: nine findings. The baseline for the rewording test. |
+| `102-review.tasks.resident-process-and-recovery.part-2.20260921T112635.md` | PASS | `bf6d292` | Round 1, part 2: a real PASS that carries findings. |
+| `102-review.tasks.resident-process-and-recovery.part-1.md` | CONCERNS | `20b3d70` | Round 2, part 1: seven findings, every carried-over one reworded. It shares no key with round 1, which pins the rewording limit. |
+| `102-review.tasks.resident-process-and-recovery.part-2.md` | `UNKNOWN` | `20b3d70` | Round 2, part 2: a real provider failure (a *Provider Failure* heading, no findings, no `verdictSource`). |
+
+Both part-1 files say `verdictSource: stated`.
+
+**Left out on purpose.** The matching tests are only as honest as their input, so no hand-edited review is copied here:
+
+- Files carrying `resolution:` or `resolvedBy:` keys, which Squadron never writes: every `103-review.*` file, including the archived task review.
+- `103-review.code.durable-inbox-and-message-queue.md`, which was also written by hand from terminal output after Squadron did not save the run.
+- Any review with a `## Response` section appended after the run (the 103 and 104 reviews).
+
+The other Squadron review files in `project-documents/user/reviews/` are unedited but have no test that needs them, so they are not copied.
+
+### Stdout captures
+
+Captured **20260926**.
 
 | File | Command | Why it is here |
 | --- | --- | --- |
