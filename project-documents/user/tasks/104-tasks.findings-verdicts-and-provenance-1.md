@@ -206,9 +206,12 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 - [ ] Following `tests/store/test_migration_004.py`, build a version-4 store with nodes, journal entries, inbox submissions, and messages; upgrade to 5; assert every row is intact
 - [ ] Assert a fresh version-5 store has both tables and all three indexes
 - [ ] Assert a row with an unknown `derivation` (written with raw SQL in the test) makes the mapping raise
+- [ ] Assert a row with an unknown `verdict` (written with raw SQL in the test) makes the mapping raise
+- [ ] Assert a finding row with an unknown `severity` (written with raw SQL in the test) makes the mapping raise
 
 **Success Criteria**:
 - [ ] A populated version-4 store upgrades to 5 with all prior data intact
+- [ ] Bad `derivation`, bad `verdict`, and bad `severity` each independently raise
 - [ ] `uv run pytest` passes
 - [ ] Commit, e.g. `feat(store): add verdicts and findings schema at version 5`
 
