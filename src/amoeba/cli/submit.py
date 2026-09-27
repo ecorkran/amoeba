@@ -21,6 +21,8 @@ import json
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
+from pydantic import BaseModel
+
 from amoeba.inbox import submit
 from amoeba.inbox.envelope import KIND_PAYLOAD_MODELS
 from amoeba.store import SubmissionKind
@@ -101,15 +103,27 @@ def add_submit_parser(subparsers: Any) -> None:
             default=None,
             help="Reuse an id to retry safely. Generated when omitted.",
         )
-        for name, field in KIND_PAYLOAD_MODELS[kind].model_fields.items():
-            takes_text = _takes_text(field.annotation)
-            kind_parser.add_argument(
-                _flag(name),
-                dest=_PAYLOAD_DEST_PREFIX + name,
-                required=field.is_required(),
-                type=str if takes_text else _json_value,
-                metavar="VALUE" if takes_text else "JSON",
-            )
+        add_payload_flags(kind_parser, KIND_PAYLOAD_MODELS[kind])
+
+
+def add_payload_flags(parser: argparse.ArgumentParser, model: type[BaseModel]) -> None:
+    """One flag per field of ``model``, typed by the flag rule."""
+    for name, field in model.model_fields.items():
+        takes_text = _takes_text(field.annotation)
+        parser.add_argument(
+            _flag(name),
+            dest=_PAYLOAD_DEST_PREFIX + name,
+            required=field.is_required(),
+            type=str if takes_text else _json_value,
+            metavar="VALUE" if takes_text else "JSON",
+        )
+
+
+def payload_from(args: argparse.Namespace, model: type[BaseModel]) -> dict[str, object]:
+    """The parsed payload flags of ``model``, keyed by field name."""
+    return {
+        name: getattr(args, _PAYLOAD_DEST_PREFIX + name) for name in model.model_fields
+    }
 
 
 def run_submit(args: argparse.Namespace) -> ExitCode:
@@ -122,10 +136,7 @@ def run_submit(args: argparse.Namespace) -> ExitCode:
     from amoeba.cli.main import ExitCode
 
     kind: SubmissionKind = args.submission_kind
-    payload = {
-        name: getattr(args, _PAYLOAD_DEST_PREFIX + name)
-        for name in KIND_PAYLOAD_MODELS[kind].model_fields
-    }
+    payload = payload_from(args, KIND_PAYLOAD_MODELS[kind])
     print(
         submit(
             project_id=args.project,

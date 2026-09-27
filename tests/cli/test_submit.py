@@ -8,16 +8,21 @@ the behavior of the three new listings.
 
 from __future__ import annotations
 
+import argparse
 import json
 import time
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
 from cli_harness import await_running, run_cli, start_background
+from pydantic import BaseModel
 
 from amoeba.cli.main import ExitCode
 from amoeba.cli.submit import (
-    _takes_object,  # pyright: ignore[reportPrivateUsage]
+    _takes_text,  # pyright: ignore[reportPrivateUsage]
+    add_payload_flags,
+    payload_from,
     subcommand_name,
 )
 from amoeba.inbox import layout
@@ -246,17 +251,71 @@ def test_the_inbox_listing_shows_each_state(supervisor_dir: Path) -> None:
     assert all(row["problem"] for row in rows if row["state"] != layout.NEW_DIR_NAME)
 
 
+# --------------------------------------------------------------------------
+# the flag rule
+# --------------------------------------------------------------------------
+
+
+class _Color(StrEnum):
+    RED = "red"
+
+
 @pytest.mark.parametrize(
-    ("annotation", "takes_object"),
-    [(dict[str, object], True), (str, False), (str | None, False)],
+    ("annotation", "takes_text"),
+    [
+        (str, True),
+        (str | None, True),
+        (_Color, True),
+        (_Color | None, True),
+        (bool | None, False),
+        (bool, False),
+        (float | None, False),
+        (int | None, False),
+        (list[str], False),
+        (dict[str, object], False),
+    ],
 )
-def test_supported_payload_field_types_map_to_flags(
-    annotation: object, takes_object: bool
-) -> None:
-    assert _takes_object(SubmissionKind.INTENT, "field", annotation) is takes_object
+def test_the_flag_rule_by_annotation(annotation: object, takes_text: bool) -> None:
+    assert _takes_text(annotation) is takes_text
 
 
-@pytest.mark.parametrize("annotation", [int, bool, list[str]])
-def test_an_unsupported_payload_field_type_fails_fast(annotation: object) -> None:
-    with pytest.raises(TypeError, match="only maps dict and str"):
-        _takes_object(SubmissionKind.INTENT, "field", annotation)
+class _RulePayload(BaseModel):
+    name: str
+    color: _Color
+    flag: bool | None
+    score: float | None = None
+    items: list[str] = []
+
+
+def _parse(*flags: str) -> dict[str, object]:
+    parser = argparse.ArgumentParser(exit_on_error=False)
+    add_payload_flags(parser, _RulePayload)
+    return payload_from(parser.parse_args(list(flags)), _RulePayload)
+
+
+def test_json_flags_build_null_false_and_lists() -> None:
+    payload = _parse(
+        "--name", "n", "--color", "red", "--flag", "null", "--items", '["a", "b"]'
+    )
+    assert payload == {
+        "name": "n",
+        "color": "red",
+        "flag": None,
+        "score": None,
+        "items": ["a", "b"],
+    }
+    assert _RulePayload.model_validate(payload).flag is None
+
+    typed = _parse("--name", "n", "--color", "red", "--flag", "false", "--score", "8.5")
+    assert (typed["flag"], typed["score"]) == (False, 8.5)
+
+
+def test_text_flags_are_taken_as_typed() -> None:
+    assert _parse("--name", "null", "--color", "red", "--flag", "true")["name"] == (
+        "null"
+    )
+
+
+def test_bad_json_on_a_json_flag_names_the_flag() -> None:
+    with pytest.raises(argparse.ArgumentError, match="--flag"):
+        _parse("--name", "n", "--color", "red", "--flag", "nope")
