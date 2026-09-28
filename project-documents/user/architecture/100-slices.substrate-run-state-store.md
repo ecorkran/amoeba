@@ -119,8 +119,8 @@ Two consequences shape the decomposition:
    - Calibration evidence is queryable and reportable; nothing writes back into Squadron's metrology store.
    - A check that examined nothing is distinguishable from one that passed.
    - Every recorded item stores the upstream version label it came from.
-   **Dependencies:** [104]
-   **Interfaces:** Provides judge-sample, calibration, and check records to initiatives 120 and 140.
+   **Dependencies:** [104, 105, 108] — 108 added at slice design: judge samples are ingested through its parser and `amoeba ingest review`. 105 added at slice design: it takes the preceding migration and this slice extends its previous-round query.
+   **Interfaces:** Provides judge-sample, calibration, and check records to 106 and initiatives 120 and 140.
    **Risk Level:** Low
    **Relative Effort:** 3
 
