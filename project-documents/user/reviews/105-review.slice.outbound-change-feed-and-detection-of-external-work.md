@@ -11,52 +11,58 @@ aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
 dateUpdated: 20260928
-reviewedSha: c4c6d2c9dc1f4c1683ceab8cdf90e1685f134b19
+reviewedSha: a15951619db092c0a14fbb8906bc47d31423489d
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 7
+toolCallsMade: 22
 runId: run-20260928-slices-plan-a04bdb07
 squadronVersion: 0.15.0
 findings:
   - id: F001
-    severity: pass
-    category: alignment
-    summary: "Dependency set and integration points match the slice plan and prior slices"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#dependencies"
+    severity: concern
+    category: specification
+    summary: "Delivery-guarantee sentence inverts the at-least-once condition"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:296"
   - id: F002
-    severity: pass
-    category: coverage
-    summary: "All five plan-level success criteria for 105 are covered by functional requirements"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#success-criteria"
+    severity: concern
+    category: error-handling
+    summary: "Failure modes for first-activation baseline are not enumerated"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:300"
   - id: F003
     severity: concern
-    category: architecture-alignment
-    summary: "D2's transport is polling, against the architecture's \"Push, not poll\" goal, and awaits PM ratification"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d2--subscribers-follow-the-log-themselves-the-process-runs-no-server"
+    category: documentation
+    summary: "Settings count inconsistent: \"two fields\" vs. three listed for ProcessSettings"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:331"
   - id: F004
-    severity: concern
-    category: error-handling
-    summary: "Detection's error handling claims to follow InboxTenant but drops 103's bounded-failure mechanism"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#errors"
+    severity: pass
+    category: architecture-alignment
+    summary: "Ownership and defer/skip rule matches the architecture's detection-ownership principle"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:198-214"
   - id: F005
-    severity: note
-    category: scope
-    summary: "D7 modifies completed slice 104's contract"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d7--a-review-series-is-node-review-type-and-reviewed-document"
-  - id: F006
-    severity: note
+    severity: pass
     category: error-handling
-    summary: "File vanishing between listing and read is not enumerated"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d6--one-interface-for-where-reviews-come-from"
+    summary: "New I/O path failure modes carry explicit handling strategies"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:216-221"
+  - id: F006
+    severity: pass
+    category: nfr
+    summary: "NFR treatment: targets stated where the parent sets none"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:265-272"
   - id: F007
-    severity: note
-    category: under-specification
-    summary: "Runner/detection ordering in D5 rests on an unstated sequencing assumption"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d5--the-runner-owns-the-reviews-it-launches-detection-defers-then-skips"
+    severity: pass
+    category: architecture-alignment
+    summary: "D7's additive change to completed slice 104's contract is owned and safe"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:223-229"
   - id: F008
     severity: note
-    category: nfr
-    summary: "Parent architecture states no numeric NFRs; slice sets its own bounds"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#settings"
+    category: architecture-alignment
+    summary: "\"Push, not poll\" deviation for the outbound surface is documented but unratified"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:182"
+  - id: F009
+    severity: note
+    category: under-specification
+    summary: "Unattributed reviews are terminal in detection; the recovery path is only implied"
+    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:191-196"
 ---
 
 # Review: slice — slice 105
@@ -66,50 +72,54 @@ findings:
 
 ## Findings
 
-### [PASS] Dependency set and integration points match the slice plan and prior slices
+### [CONCERN] Delivery-guarantee sentence inverts the at-least-once condition
 
-The declared dependencies `[101, 102, 103, 104, 108]` match the slice plan's entry for 105 (including both "added at slice design" additions, 103 and 108, each with a stated reason). Consumption claims check out against the consumed designs: the `Tenant` seam and listing registry from 102, the submission-kind seam (enum member + payload model + effect) from 103, `record_verdict` with its retry/idempotency rule from 104, and `EXPECTED_SCHEMA_VERSION` 5 → 6 continuing 101's migration mechanism. The changes to consumed slices are additive and each has a named contract doc and CHANGELOG entry.
+The line reads: "Delivery to a subscriber is therefore at-least-once only if the subscriber saves its cursor before acting; the contract says to save after." This is backwards and self-contradictory: saving the cursor *before* acting gives at-most-once (a crash between save and act loses the change); saving *after* acting gives at-least-once (a crash after acting but before saving redelivers). The trailing clause states the actual recommendation, so intent is recoverable, but this bullet sits in `docs/feed-contract.md`'s source material, and the slice's own Integration Requirements demand that document be sufficient "for initiative 160's slice design to consume the feed without reading the code." The slice plan's success criterion "Subscribers that disconnect and reconnect do not corrupt feed state" depends on this paragraph being unambiguous. Rewrite to state both outcomes explicitly: save-after yields at-least-once with possible duplicate effects; save-before yields at-most-once with possible loss.
 
-### [PASS] All five plan-level success criteria for 105 are covered by functional requirements
+### [CONCERN] Failure modes for first-activation baseline are not enumerated
 
-Plan criteria — subscriber notified on status change; external review ingested with correct provenance; provider-failure artifact detected as a failure; detection replaceable by an upstream event without changing the subscriber contract (D6's `ReviewSource`); disconnect/reconnect not corrupting feed state (cursor resume, killed-follower test) — each maps to an explicit functional or integration requirement, including the replay-invariant test that catches a write path missing its emission.
+The D6 table (lines 216–221) thoroughly covers scan-time races, and line 252 covers an *established* watch becoming missing/unreadable (`unreachable`, process keeps running). Unspecified is the case where the directory is missing, unreadable, or not a directory at the moment `watch_reviews` is *first applied*: "First activation baselines existing files inside the same transaction" (line 300; data flow at lines 133–139). Because the watch upsert and baseline share one transaction, a listing failure rolls back the registration too — so does a nonexistent directory (a) quarantine as invalid payload (only "relative path" is named invalid), (b) fail the apply and ride 103's attempts ladder until parked — leaving the watch permanently unregistered and requiring sidecar surgery to retry, or (c) register a watch that immediately reports `unreachable`? Each has a different operator-recovery story, and only (c) matches the lenient behavior the scan path already chose. Enumerate these cases the way D6 does.
 
-### [CONCERN] D2's transport is polling, against the architecture's "Push, not poll" goal, and awaits PM ratification
+### [CONCERN] Settings count inconsistent: "two fields" vs. three listed for ProcessSettings
 
-The architecture's Design Goals state "Push, not poll — the resident process learns … by subscription," and the event seam is described as "publish/subscribe … state-change notifications to subscribers." D2 implements the outbound half as a subscriber-side blocking iterator that wakes on `PRAGMA data_version` checked every 0.25 s — a poll behind a push-shaped API. The design honestly self-flags this ("PM pending — this is the architecture's 'push, not poll' goal, met from the subscriber's side"), states the latency bound in the contract, and shows the socket alternative was considered and rejected for sound reasons (synchronous loop, 102 D2). The rejection reasoning is strong, but the deviation from a stated architectural goal is a PM decision that must actually be made, not left implicit — the same is true of D1, D4, D5, and D7, all marked "(PM pending)". Ratify or reject D2 (and the others) before implementation begins.
+The Consumes section says "`ProcessSettings` gains two fields," but the Settings section (line 263) adds three to `ProcessSettings` with CLI flags: `review_scan_interval_seconds`, `sq_timeout_seconds`, and `detection_max_attempts` (only `follow_interval_seconds` and `feed_batch_size` live in `FeedSettings`). This line is what 102's owners read when updating their contract; correct it to three.
 
-### [CONCERN] Detection's error handling claims to follow InboxTenant but drops 103's bounded-failure mechanism
+### [PASS] Ownership and defer/skip rule matches the architecture's detection-ownership principle
 
-"An exception from the store during detection is re-raised, as `InboxTenant` does." Slice 103's final design does not simply re-raise: a validated submission whose apply fails deterministically re-raises for `inbox_max_attempts - 1` starts (with an on-disk attempt counter) and is then parked in `inbox/failed/`, precisely so "a store that cannot be fixed by restarting cannot hold the process down forever." Under 102's semantics, re-raising from a tenant tick stops the process; a deterministic store failure inside `ReviewDetectionTenant.tick` (e.g. a corrupt or future-schema project store) would therefore crash-loop the process on every start with no bound and no park, the exact failure 103 engineered away. Either justify why the detection path cannot hit a deterministic store failure (and say why the 103 mechanism doesn't apply), or adopt the same attempt-counter/park treatment for the detection tenant.
+D5 implements the architecture's rule — "the Runner owns the control surface... the seam owns detection only of things nobody in Amoeba issued" — via defer (open review-producing journal entry → skip the project) then skip (`runner_issued` ledger mark). The five stated preconditions check out against 102's actual design: synchronous host loop (102:169), journal-before-issue, and recovery running before any tenant ticks (102:514). The residual hole (recovery resolves an entry by observation without the Runner's mark) is acknowledged and made benign by the parsed-content digest, which turns the overlap into a `record_verdict` retry — consistent with the architecture's "Unknown is a value" and command-before-result principles.
 
-### [NOTE] D7 modifies completed slice 104's contract
+### [PASS] New I/O path failure modes carry explicit handling strategies
 
-D7 adds `source_document` to `VerdictInput` and the `verdicts` table, regroups `finding_changes` by it, changes the previous-round index, and extends the `verdict` inbox payload — changes to slice 104, which is complete. The change is additive, null-safe for all pre-existing verdicts, justified by the real captured multi-part series, included in migration 006, and routed through `evidence-contract.md` updates. Acceptable, but it is cross-slice scope inside 105 and shares D7's pending-PM status; it should be ratified as one decision.
+The D6 table gives each scan-time race a named outcome (file gone before read → dropped, no ledger row; changed between settle and read → digest of bytes actually read; `PermissionError` → WARNING and skip; non-regular/non-md → ignored). Store-recording failures reuse 103's bounded-failure machinery — attempts sidecar written before the transaction, re-raise below the limit, park and continue at the limit, sidecar delete on success, including the crash-between-commit-and-delete window (lines 252–262). The `sq --version` subprocess has a timeout and an explicit unavailable marker, verified against 102's `cf --version` pattern (102:196). A parse failure is an outcome, not an exception. The only gap is the registration-time case above.
 
-### [NOTE] File vanishing between listing and read is not enumerated
+### [PASS] NFR treatment: targets stated where the parent sets none
 
-`DirectoryReviewSource.poll()` returns `DetectedFile(path, bytes, observed_at)`. The design covers half-written files (settle rule), missing/unreadable directories (`unreachable`), and parse failures (`unparseable`), but not the TOCTOU case where a file is deleted or renamed (e.g. PM archiving a round) between the directory listing and the read. One sentence on whether that yields a skipped file, an outcome, or a retry next tick would close the enumeration.
+The architecture document states no numeric targets, and the slice says so explicitly rather than inventing inherited ones. It then sets specific targets with reasoning (scan 2 s → detection within ~5 s; follow 0.25 s; `sq --version` timeout 10 s matching `cf_timeout_seconds`; attempts 3 matching `inbox_max_attempts`) and marks exactly which one is contractual ("within `follow_interval_seconds` of the commit, plus the time to read the new rows") — the right shape when the parent sets no NFR.
 
-### [NOTE] Runner/detection ordering in D5 rests on an unstated sequencing assumption
+### [PASS] D7's additive change to completed slice 104's contract is owned and safe
 
-D5's defer rule holds while a review-producing journal entry is unresolved, and the skip rule relies on the Runner writing `record_detection(outcome=runner_issued)` for the file. The argument that the Runner's verdict recording "always finishes before detection looks again" assumes the Runner records the verdict (and the ledger row) before resolving the journal entry. That ordering is 120's obligation and is not stated as a requirement anywhere in this doc; it should be named in `evidence-contract.md` alongside the attribution rule, or the window acknowledged.
+Changing `finding_changes`' grouping on a shipped slice is scope this slice must justify, and it does: 104's design document stays untouched as the historical record; migration 006 adds a nullable column; `IS` comparison means two nulls match, so every pre-105 verdict keeps 104's behavior and 104's suite passes unchanged; the rebuilt previous-round index `(project_id, node_id, review_type, source_document, recorded_seq)` matches 104's actual index (104:288) plus one column; and a `CHANGELOG` entry names the contract change. The motivating multi-part case is drawn from the captured 102 fixtures, not hypothetical.
 
-### [NOTE] Parent architecture states no numeric NFRs; slice sets its own bounds
+### [NOTE] "Push, not poll" deviation for the outbound surface is documented but unratified
 
-The architecture document states no latency/throughput targets for the seam, so there is nothing to restate. The slice usefully introduces its own — `follow_interval_seconds = 0.25`, `review_scan_interval_seconds = 2.0`, "detection latency is about two scan intervals," "within a second" for a resolution-driven status change — and commits the follower bound to the contract. Good practice; keep the walkthrough's "within about 5 seconds" consistent with the stated two-interval bound when refining in Phase 6.
+The design's reading — the goal governs *inbound* signals the resident process learns, all three of which this slice or its predecessors cover — is defensible, and the interval wake on `PRAGMA data_version` is labeled polling rather than dressed up as push, with a costed push sketch (datagram sockets) that fits behind `follow()` and 102's D2 reversal note. Keep in mind that five decisions sit at "(PM pending)" (D1, D2, D4, D5, D7) with no consolidated ratification list, unlike 103's "Project Manager decisions" summary; record the outcomes there so the pending set is auditable.
+
+### [NOTE] Unattributed reviews are terminal in detection; the recovery path is only implied
+
+Because the ledger skips any known `(project, path, digest)` (line 151), a review detected before its slice node exists is recorded `unattributed` and never re-examined even after the node appears — correct under "never guessed," and visible on the feed and in `inspect detections`. Recovery exists (a hand edit produces a new digest, per walkthrough step 8, or `amoeba ingest review`), but the doc states the retry rule only for the `unparseable` outcome (line 335). One sentence making the unattributed recovery path explicit would close the asymmetry.
 
 ### Run Digest
 
-- Response length: 7983 chars
+- Response length: 9383 chars
 - Response is newline-free: no
-- Tool calls made: 7
+- Tool calls made: 22
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 128000 tokens
-- Reasoning characters: 17469
+- Reasoning characters: 66090
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9
