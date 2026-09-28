@@ -352,7 +352,7 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 ### Provides to Other Slices
 
 - **106:** the feed, so the end-to-end proof can assert that subscribers saw the whole sequence, including across a restart.
-- **107:** the change log as the place CF-sourced changes land; a CF event that updates a node fires the same triggers.
+- **107:** the change log and trigger convention. 107 adds a `cf_snapshots` table with its own trigger and a `cf_project_changed` kind, and extends the invariant test.
 - **Initiative 120:** `attribute_review`, `record_detection(outcome=runner_issued)`, and the review-producing kinds set. The Runner may also follow the feed instead of re-querying. 120 takes on the requirements in D5, points 3 and 5: mark the ledger in the same transaction that resolves the journal entry, and record its reviews from the artifact through 108's parser.
 - **Initiative 160:** `follow()` and `amoeba feed` for the Translator surface and the notification bridge.
 

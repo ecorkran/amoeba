@@ -20,14 +20,14 @@ status: not_started
 
 ## Planning Context
 
-Architecture-level. Greenfield — Amoeba has no code, so there are no migration or refactoring slices. The parent architecture document has already settled the decisions that would otherwise fan out across slice design: the substrate is Amoeba-internal behind a documented contract (OQ6, ratified), the resident process is the **sole writer** with a durable inbox as the only externally-writable surface, and Amoeba owns the event-seam half of CF initiative 220 (CF slices 221, 224, 225, 226; CF keeps 222, 223, 227, 228).
+Architecture-level. Greenfield — Amoeba has no code, so there are no migration or refactoring slices. The parent architecture document has already settled the decisions that would otherwise fan out across slice design: the substrate is Amoeba-internal behind a documented contract (OQ6, ratified), the resident process is the **sole writer** with a durable inbox as the only externally-writable surface, and Amoeba owns the scope of CF initiative 220, which it meets entirely on its own side by watching CF's `projects.json` (revised 20260928; see slice 107).
 
 Two consequences shape the decomposition:
 
 - **The contract is the deliverable, not the engine.** Initiatives 120, 140, and 160 all code against this component's read/write interface. Slice 101 exists to make that interface real and stable as early as possible, because every downstream initiative is blocked on it.
 - **Sole-writer collapses what would otherwise be concurrency slices.** Because only the resident process mutates the store, there is no distributed-write slice, no lock-arbitration slice, and no conflict-resolution slice. The inbox (slice 103) is where that decision is paid for, and it is deliberately adjacent to the resident process (slice 102).
 
-**Slices were numbered in execution order until 104 was split on 20260926;** the split-off slices 108 and 109 took the next free numbers rather than renumbering slices already referenced by finished designs, reviews, and docs. See Implementation Order. Slice 107 is last because it spans two repositories and Amoeba does not need it to be useful; see its entry.
+**Slices were numbered in execution order until 104 was split on 20260926;** the split-off slices 108 and 109 took the next free numbers rather than renumbering slices already referenced by finished designs, reviews, and docs. See Implementation Order. Slice 107 was deferred until 20260928, when it was rescoped to need no Context Forge change and scheduled after 109; see its entry.
 
 ## Foundation Work
 
@@ -124,9 +124,22 @@ Two consequences shape the decomposition:
    **Risk Level:** Low
    **Relative Effort:** 3
 
+8. [ ] **(107) Context Forge Event Seam** — CF state changes made by any client (CLI, MCP, another agent) become records and feed entries in Amoeba, without polling `cf next` and without any change to Context Forge. CF keeps all project state in one `projects.json`, replaced atomically on every write; a tenant in the resident process watches that file, and when it changes, diffs each linked CF project against its last stored snapshot and records a new snapshot plus a change on 105's feed. A PM links an Amoeba project to a CF project by CF's project id through an inbox submission. This is the whole of the scope Amoeba took from CF initiative 220: the long-running process is 102's, notifications and subscriptions are 105's feed, and watching the file replaces CF-side event emission. *Rescoped 20260928:* previously deferred as a two-repository slice needing a CF daemon and an agreed wire contract; neither is needed.
+   **Value:** Developer value — the Runner and subscribers learn that a phase, slice, or task pointer moved the moment any client moves it, and missed changes are impossible because the stored snapshot is the baseline every check compares against.
+   **Success Criteria:**
+   - A change to a linked CF project made by any CF client produces a stored snapshot and one feed change naming the fields that changed.
+   - Changes made while the resident process is down are recorded on the first check after it starts.
+   - Only linked projects are recorded; changes to other CF projects produce nothing.
+   - An unreadable or unrecognized `projects.json`, or a linked project missing from it, is recorded as exactly that, never guessed around.
+   - The `projects.json` fields Amoeba reads are documented as an observed shape.
+   **Dependencies:** [101, 102, 103, 105]
+   **Interfaces:** Consumes CF's `projects.json`; provides CF snapshots and `cf_project_changed` feed entries to 106 and initiative 120.
+   **Risk Level:** Low
+   **Relative Effort:** 2
+
 ## Integration Work
 
-8. [ ] **(106) Contract Proof and Hardening** — Prove the contract from the outside before initiative 120 commits to it. An end-to-end exercise driving a realistic lifecycle sequence through the substrate — nodes created, a Squadron run journaled and its verdict ingested, a blocked-state written and resolved through the inbox, a restart mid-sequence, subscribers observing the whole thing — using only the documented API, no internal access. Verifies store-locality behavior end to end against the model settled in slice 101 (per-supervisor, central, project-keyed) — the locality *decision* is closed there, and what remains here is proving path resolution and project-keying hold under a realistic sequence. Also closes out the pruning policy for paused Squadron runs that SQ never prunes, and documentation for downstream initiative authors.
+9. [ ] **(106) Contract Proof and Hardening** — Prove the contract from the outside before initiative 120 commits to it. An end-to-end exercise driving a realistic lifecycle sequence through the substrate — nodes created, a Squadron run journaled and its verdict ingested, a blocked-state written and resolved through the inbox, a restart mid-sequence, subscribers observing the whole thing — using only the documented API, no internal access. Verifies store-locality behavior end to end against the model settled in slice 101 (per-supervisor, central, project-keyed) — the locality *decision* is closed there, and what remains here is proving path resolution and project-keying hold under a realistic sequence. Also closes out the pruning policy for paused Squadron runs that SQ never prunes, and documentation for downstream initiative authors.
    **Value:** Developer value — the contract is demonstrated to work for its actual consumer rather than assumed to. This is the point at which initiative 120 can safely begin.
    **Success Criteria:**
    - A full lifecycle sequence runs through the public API with no internal access.
@@ -134,30 +147,14 @@ Two consequences shape the decomposition:
    - Store locality behaves correctly for the chosen model and is documented.
    - Pruning policy for paused SQ runs is implemented and documented.
    - Contract documentation is sufficient for initiative 120's slice design to proceed against it.
-   **Dependencies:** [101, 102, 103, 104, 105, 108, 109]
+   **Dependencies:** [101, 102, 103, 104, 105, 107, 108, 109] — 107 added 20260928 when it was scheduled before this slice.
    **Interfaces:** Consumes the full public contract; produces the documentation initiatives 120/140/160 design against.
    **Risk Level:** Low
    **Relative Effort:** 3
 
-## Deferred
-
-9. [ ] **(107) Context Forge Event Seam** — The CF-side half of the seam, and the scope absorbed from CF initiative 220 (CF slices 221 daemon lifecycle, 224 storage event emission, 225 server-initiated notifications, 226 client subscription model). Replaces polling `cf next` with push: CF state changes made by any client become events Amoeba's seam receives and applies to the node tree.
-   **Why it is last and unscheduled:** Amoeba does not need it. Without this slice the Runner polls CF, which is exactly today's behavior — so slices 101–106 deliver a complete, working substrate on their own. CF's initiative 220 is not in active development and is not a CF priority, and the leftover question on CF's side (its retained slices 222 and 227 were written to depend on CF's 221, which Amoeba now owns) is CF's to resolve on its own schedule. Build this when push actually earns its cost, and settle the CF-side ownership boundary with the CF team at that time rather than now.
-   **Value:** Developer value — removes the last polling loop and enables multi-client CF coordination.
-   **Success Criteria:**
-   - A CF project mutation made by another client produces an event Amoeba receives.
-   - Received events update the node tree without a full re-read of `projects.json`.
-   - The subscription model filters by project.
-   - Missing an event (process down, subscriber disconnected) degrades to a reconciling re-read rather than silent drift.
-   - The CF-side ownership boundary and wire contract are documented and agreed with the CF team.
-   **Dependencies:** [101, 102, 105]
-   **Interfaces:** Consumes CF's storage events; provides CF-sourced state changes to the node tree and the change feed.
-   **Risk Level:** High — spans two repositories.
-   **Relative Effort:** 4
-
 ## Implementation Order
 
-`101 → 102 → 103 → 104 → 108 → 105 → 109 → 106`. 108 and 109 were split from 104 on 20260926 and numbered after the existing slices; 108 precedes 105 because 105 ingests through its parser. Slice 107 is deferred and unscheduled; it can be built at any point after 105 without disturbing the sequence.
+`101 → 102 → 103 → 104 → 108 → 105 → 109 → 107 → 106`. 108 and 109 were split from 104 on 20260926 and numbered after the existing slices; 108 precedes 105 because 105 ingests through its parser. 107 was scheduled on 20260928 after its rescope; it follows 109 rather than directly after 105 so that 109's already-designed migration number (007) stands, and it precedes 106 so the contract proof covers it.
 
 Rationale, in the guide's order of precedence:
 
