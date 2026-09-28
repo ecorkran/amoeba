@@ -134,16 +134,29 @@ The subscriber owns the cursor. The store keeps no record of subscribers.
 
 ```
 amoeba submit watch-reviews --project P --by pm --reviews-dir /abs/path --active true
-  inbox apply: upsert review_watches(project, dir, active, registered_at)
-  on first activation: every file already in dir → detected_reviews row, outcome = baseline
+  inbox apply: upsert review_watches(project, dir, active, registered_at); baselined_at stays null
+next detection tick, for a watch with baselined_at null:
+  list and read every top-level *.md; any failure → no rows written, retry next scan (table below)
+  one transaction: a detected_reviews row per file (outcome = baseline), set baselined_at
+a watch is scanned for new reviews only once baselined_at is set
 ```
+
+The baseline is taken by the tenant, not by the inbox apply, so the store does no filesystem reads. It is all or nothing: a partial baseline would let a file it missed be ingested later as a new review, out of order.
+
+| Baseline failure | What happens |
+| --- | --- |
+| Directory missing or unreadable when registered | The watch is recorded and shown `unreachable`. Baselining happens on the first scan that can list it. Nothing is ingested before then. |
+| One file unreadable (`PermissionError`) | The whole baseline waits and retries each scan, with one WARNING naming the file. The watch shows `baseline_pending`. A file that cannot be read cannot be digested, and skipping it would ingest it later as new. |
+| A file deleted between listing and read | Dropped from this baseline, as in D6. If it comes back later, it is detected as new. Accepted: a review deleted and restored during registration is rare, and ingesting it is the visible outcome, not a lost one. |
+| Store failure writing the baseline | The bounded-failure rule under Errors, with the sidecar keyed by the watch (`baseline-{sha256 of the dir}`) instead of a file digest. At the limit the watch shows `failed` and is not scanned until the sidecar is removed. |
+| Registered while the process is stopped | The submission is applied at the next start, and the baseline is taken on the first tick after. Files that arrived in between count as existing, so they are baselined. |
 
 Baselining at registration keeps old rounds out. Ingesting them in directory order would give them `recorded_seq` values in the wrong order, and 104's "previous round" lookup reads `recorded_seq`.
 
 **Detecting a review** (one `ReviewDetectionTenant.tick`, at most once per `review_scan_interval_seconds`):
 
 ```
-for each active watch in each open project:
+for each active, baselined watch in each open project:
   if the project has an open journal entry of a review-producing kind → skip this project this tick
   for each DetectedFile from DirectoryReviewSource (top-level *.md, settled):
     digest = sha256(bytes)
@@ -194,6 +207,7 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 - It is defined once in `amoeba.store.attribution` and exported. **Initiative 120 must attach the reviews it launches with the same rule**, or the Runner's rounds and detected rounds split across two nodes and "what changed since last round" breaks. This is recorded in `evidence-contract.md`.
 - Rejected: attaching to gate nodes. Nothing on a node says which review type a gate is for, and adding it is 120's node-model decision, not 105's.
 - An unattributed review does not create a blocked node. There is no node to block, and creating one would invent tree structure. It is on the feed and in `inspect detections`.
+- *Unattributed is terminal for detection, and recovery is by hand.* Detection never retries it: the file's `(path, digest)` is in the ledger, and retrying later would record old rounds after newer ones. Once the right slice node exists, the PM runs `amoeba inspect detections --outcome unattributed`, then `amoeba ingest review --node ID` (108) on each file, oldest round first. The ledger row keeps the parsed-content id (`record_id`), which is the id `ingest` uses, so the listing shows the row as `recorded_since` once that is done, and ingesting it twice is a no-op. The ledger row itself is not rewritten; it stays the record of what detection saw. An automatic sweep when a matching slice node appears is 120's to add if it wants one.
 
 **D5 — The Runner owns the reviews it launches; detection defers, then skips.** *(PM pending.)*
 
@@ -293,11 +307,11 @@ None of these is a promise in a contract except the follower's, which `feed-cont
 **Delivery guarantees** (`docs/feed-contract.md`):
 
 - Every committed change appears exactly once in the log, in commit order, with no gaps in `seq`.
-- A follower that resumes with its last seen `seq` gets every later change once. Delivery to a subscriber is therefore at-least-once only if the subscriber saves its cursor before acting; the contract says to save after.
+- A follower that resumes with its last seen `seq` gets every later change once. Whether a subscriber *acts* on each change once depends on when it saves its cursor. Saving **after** acting gives at-least-once: a crash between acting and saving replays that change. Saving **before** acting gives at-most-once: a crash between saving and acting loses it. The contract tells subscribers to save after acting and to make their handling safe to repeat.
 - The feed says a change happened. It is not the source of truth for current state; the store is.
 - Nothing is ever deleted from `changes` in this slice.
 
-**Inbox, the `watch_reviews` kind:** payload `reviews_dir: str` (absolute, validated by pydantic), `active: bool`. The effect upserts the watch. First activation baselines existing files inside the same transaction. Reactivating a directory does not re-baseline: files that arrived while inactive are detected. A relative path is quarantined as invalid.
+**Inbox, the `watch_reviews` kind:** payload `reviews_dir: str` (absolute, validated by pydantic), `active: bool`. The effect upserts the watch. The effect leaves `baselined_at` null on first activation; the tenant takes the baseline (see Data Flow). Reactivating a directory does not re-baseline: files that arrived while inactive are detected. A relative path is quarantined as invalid.
 
 **CLI:**
 
@@ -305,17 +319,17 @@ None of these is a promise in a contract except the follower's, which `feed-cont
 | --- | --- |
 | `amoeba feed --project ID [--after N] [--follow]` | Prints changes as JSON lines, one object per change, keys as in `Change`. Without `--follow`, prints what exists and exits 0. With it, runs until interrupted. Works with the process running or stopped. |
 | `amoeba submit watch-reviews --project ID --by NAME --reviews-dir PATH --active true\|false` | From the payload model, under 104's flag rule. |
-| `amoeba inspect watches --project ID` | `reviews_dir, active, registered_at, state` (`ok` / `unreachable`). |
-| `amoeba inspect detections --project ID [--outcome O]` | `detected_at, outcome, path, node_id, verdict_id, detail`. |
+| `amoeba inspect watches --project ID` | `reviews_dir, active, registered_at, baselined_at, state` (`ok` / `unreachable` / `baseline_pending` / `failed`). |
+| `amoeba inspect detections --project ID [--outcome O]` | `detected_at, outcome, path, node_id, verdict_id, record_id, recorded_since, detail`. `recorded_since` is true when a verdict with that `record_id` now exists, however it got there. |
 
 ### Database / Storage Schema
 
 Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Nothing to backfill: the feed of an upgraded store starts empty, and `change_head` is 0.
 
 - **`changes`:** `seq` (INTEGER PRIMARY KEY AUTOINCREMENT), `project_id`, `kind`, `node_id` (nullable, no FK so a feed row never blocks a future node deletion), `subject_id`, `payload` (JSON text), `recorded_at`. Index on `(project_id, seq)`.
-- **`review_watches`:** `project_id`, `reviews_dir`, `active` (INTEGER), `registered_at`, `updated_at`. Primary key `(project_id, reviews_dir)`.
+- **`review_watches`:** `project_id`, `reviews_dir`, `active` (INTEGER), `registered_at`, `baselined_at` (nullable), `updated_at`. Primary key `(project_id, reviews_dir)`.
 - **`verdicts`:** gains `source_document` (TEXT, nullable). The previous-round index becomes `(project_id, node_id, review_type, source_document, recorded_seq)`.
-- **`detected_reviews`:** `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `project_id`, `path`, `digest`, `outcome`, `node_id` (nullable FK), `verdict_id` (nullable FK), `detail`, `detected_at`. UNIQUE `(project_id, path, digest)`.
+- **`detected_reviews`:** `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `project_id`, `path`, `digest`, `outcome`, `node_id` (nullable FK), `verdict_id` (nullable FK), `record_id` (nullable: the parsed-content id from 108, set for every file that parsed), `detail`, `detected_at`. UNIQUE `(project_id, path, digest)`.
 
 ## Integration Points
 
@@ -328,7 +342,7 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 
 ### Consumes from Other Slices
 
-- **101–104** through their documented contracts. The changes are additive: each private writer gains one emission call, verdicts gain `source_document` and `finding_changes` groups by it, `SubmissionKind` gains `watch_reviews`, `ProcessSettings` gains two fields, `amoeba start` registers a second tenant, and `LISTINGS` gains two entries. The test that pins the listing set is updated to the new set.
+- **101–104** through their documented contracts. The changes are additive: each private writer gains one emission call, verdicts gain `source_document` and `finding_changes` groups by it, `SubmissionKind` gains `watch_reviews`, `ProcessSettings` gains three fields, `amoeba start` registers a second tenant, and `LISTINGS` gains two entries. The test that pins the listing set is updated to the new set.
 - **108:** the parser. If a file fails to parse because Squadron's shape moved, the outcome is `unparseable` with the parser's error, visible in `inspect detections`, and the file is retried only if its bytes change. A parser fix is followed by re-ingesting those files with `amoeba ingest review`.
 
 ## Success Criteria
@@ -346,6 +360,9 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 - A file with no matching slice node is `unattributed` with its candidate ids; with two matching nodes, both are listed. Nothing is written to a node.
 - A non-review markdown file is `unparseable` and is not retried until its bytes change.
 - Files present at registration are `baseline` and never ingested.
+- A directory registered before it exists shows `unreachable`, then is baselined on the first scan that can list it; nothing is ingested before that.
+- With one unreadable file present at registration, no baseline rows are written and the watch shows `baseline_pending` until the file is readable; then the whole directory is baselined at once.
+- An `unattributed` file ingested by hand with `amoeba ingest review` after its slice node exists shows `recorded_since` true in `inspect detections`, and a second ingest records nothing.
 - While the project has an open `SQ_RUN` journal entry, a new file is not processed; after the entry resolves, it is.
 - A file already marked `runner_issued` is never ingested.
 - Restarting the process re-ingests nothing.
@@ -406,10 +423,12 @@ The follower prints `node_status_changed` from `blocked_on_human` to `runnable` 
 ```bash
 cp "$F/$P.part-2.20260921T112635.md" "$REVIEWS/"
 uv run amoeba submit watch-reviews --project demo --by pm --reviews-dir "$REVIEWS" --active true
+sleep 3   # the baseline is taken on the next detection scan
+uv run amoeba inspect watches --project demo
 uv run amoeba inspect detections --project demo
 ```
 
-One row, `baseline`. No verdict, no feed line.
+`inspect watches` shows the directory `ok` with `baselined_at` set. `inspect detections` shows one row, `baseline`. No verdict, no feed line.
 
 **4. A PM-launched review is detected.** Copy round 1 of part 1 in, as `sq review` would write it, then round 2 of part 1 a few seconds later:
 
