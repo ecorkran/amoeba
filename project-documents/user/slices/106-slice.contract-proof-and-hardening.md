@@ -20,7 +20,7 @@ Four deliverables:
 
 1. **The contract proof.** A scripted lifecycle sequence driven by a stand-in Runner tenant plus real CLI subprocesses, with `kill -9` injected at named points. The final state must come out right every time. A guard test makes "only the documented contract" a mechanical check.
 2. **Hardening found by the proof.** Reading the contracts for this design already turned up five gaps (see [Contract gaps found at design](#contract-gaps-found-at-design)). Each is fixed here or assigned to the slice that owns it.
-3. **Pruning of paused Squadron runs.** Squadron never prunes a paused run. Amoeba decides which of *its own* paused runs are dead, and an operator command removes them.
+3. **A pruning policy for paused Squadron runs.** Squadron never prunes a paused run. Amoeba decides which of *its own* paused runs are dead and reports them. It deletes nothing: Squadron's files stay Squadron's (D7).
 4. **A contract index for initiative authors.** One entry document that tells a 120, 140, or 160 designer which contract answers which question, and lists every obligation the substrate puts on them in one place.
 
 ## Value
@@ -30,7 +30,7 @@ Developer value. After this slice, initiative 120 designs against a contract tha
 - The Runner has a documented, exported way to be hosted in the resident process. Today there is none: `amoeba.process` exports nothing and `amoeba start` hard-codes its tenants.
 - "Any part can restart and rebuild its view from the store" is shown, not claimed: the stand-in Runner keeps no progress in memory and finishes the sequence after every kill.
 - Obligations scattered across five contract documents (journal before launch, non-TTY stdin for `sq`, the attribution rule, the one-transaction report-back, "don't cache `project_ids`", "save the cursor after acting") are listed once, with links.
-- Paused Squadron runs Amoeba abandoned stop piling up in `~/.config/squadron/runs/`.
+- The paused Squadron runs Amoeba abandoned are named, with their paths and the reason each is dead, so they can be removed with confidence instead of guessed at.
 
 ## Technical Scope
 
@@ -42,7 +42,7 @@ Developer value. After this slice, initiative 120 designs against a contract tha
 - The public hosting seam in `amoeba.process` (D3).
 - Store-locality hardening: relative directory variables refused, project ids restricted to a portable form (D5).
 - `done` enforced as terminal, as the store contract already says it is (D6).
-- `amoeba prune sq-runs` (D7).
+- `amoeba prune sq-runs`, a read-only report (D7).
 - The restart matrix in the load tier: a kill at every step boundary.
 - `docs/README.md` (the contract index); updates to `store-contract.md`, `process-contract.md`, and `CHANGELOG.md`; a new Squadron dependency entry in `user/notes/001-squadron-dependencies.amoeba.md`.
 
@@ -52,7 +52,7 @@ Developer value. After this slice, initiative 120 designs against a contract tha
 - `cf_write` in the sequence. Reconciling it needs a live `cf`, and 102 already covers its observer against captured output. The sequence uses `sq_run` only.
 - Real Squadron model calls. The fake Squadron writes files shaped from captured fixtures; spending tokens would make the proof slow, costly, and non-deterministic.
 - Journal, message, and feed retention. Still slice-plan future work.
-- Automatic pruning. See D7.
+- Removing Squadron's run files. Amoeba never deletes them itself; removal waits for a Squadron command (D7).
 - Performance targets. The load tier from 102–104 already measures throughput; this slice measures correctness.
 
 ## Dependencies
@@ -153,12 +153,11 @@ The final state after each is compared to the clean run's, with the expected dif
 **Pruning (D7).**
 
 ```
-amoeba prune sq-runs [--apply] [--sq-runs-dir PATH]
+amoeba prune sq-runs [--sq-runs-dir PATH] [--json]
   owned := every run id in any project's journal results or node sq.run_id   (read-only stores)
-  for each run file in the runs directory:
+  for each run file in the runs directory (read, never written):
     classify → prunable | not_owned | not_paused | owner_not_done | unreadable
-  print one row per run file
-  with --apply: for each prunable, re-read its status; still paused → unlink
+  print one row per run file, with its path
 ```
 
 ### State Management
@@ -184,7 +183,7 @@ The slice adds no tables and no migration. `done` becomes terminal in the store'
 
 Each package's `__all__` is pinned by a test written out by hand, as `tests/test_public_api.py` already does for `amoeba.store`, so adding a name to the contract is a deliberate edit in two places. CLI actors run as subprocesses and are unaffected by the guard.
 
-**D3 — `amoeba.process` exports a hosting seam.** *(PM pending.)* Today the package's `__init__` exports nothing, the `Tenant` protocol lives in `host.py`, and `amoeba start` builds its tenant tuple inline. The Runner has no documented way in.
+**D3 — `amoeba.process` exports a hosting seam.** Additive: nothing existing changes, as when 103 and 104 added exports to `amoeba.store`. Today the package's `__init__` exports nothing, the `Tenant` protocol lives in `host.py`, and `amoeba start` builds its tenant tuple inline. The Runner has no documented way in.
 
 - Export `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Adopt`, `NotApplied`, `Unknown`, and a new `standard_tenants(supervisor_dir, settings) -> tuple[Tenant, ...]`.
 - `standard_tenants` returns the inbox tenant first and the detection tenant second, the order both slices depend on. `amoeba start` calls it; so does `proof_host.py`, followed by `ProofRunner`. There is one list of standard tenants.
@@ -199,13 +198,13 @@ Each package's `__all__` is pinned by a test written out by hand, as `tests/test
 - The subscriber's transcript, across every kill, must equal `amoeba feed --project proof` read from 0 at the end: no gap, no repeat. Replaying it rebuilds each node's final status.
 - **Default suite:** the clean run and the three kill runs. **Load tier:** a kill at every step boundary 1–11, each followed by restart, completion, and the same comparison.
 
-**D5 — Locality: no relative directories, and project ids that cannot collide on disk.** *(PM pending.)*
+**D5 — Locality: no relative directories, and project ids that cannot collide on disk.** *(PM ratification required: both halves narrow 101's published contract. See [PM ratification](#pm-ratification).)*
 
 - **Relative directory variables are refused.** `paths.store_dir` uses `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME` verbatim, so a relative value resolves against each process's working directory. A process started in one directory and a submitter in another then use two different supervisors, and the submitter's files are never applied. `store_dir` raises `ValueError` naming the variable when either is relative. The XDG specification says to ignore a relative `XDG_CONFIG_HOME`; ignoring it would fall back to the default without saying so, which this project does not do.
 - **Project ids are ASCII slugs:** `[a-z0-9][a-z0-9._-]*`. macOS filesystems are case-insensitive by default, so `Demo` and `demo` are one store file today while being two projects to every query. Unicode ids have the same problem through normalization. `validate_project_id` is the one definition and every caller already goes through it. Mapping a Context Forge project name to an Amoeba project id is 120's job; the contract states the rule it must satisfy.
 - Nothing is on disk yet that could break: Amoeba has no users outside this repository's tests.
 
-**D6 — `done` is terminal, and the store enforces it.** *(PM pending; aligns code with the documented 101 contract.)* `store-contract.md` already calls `done` terminal, but no write refuses to leave it. Pruning (D7) is only safe if a `done` node can never resume its run. Four refusals, all `InvalidTransitionError`, are one rule, "nothing happens on a finished node":
+**D6 — `done` is terminal, and the store enforces it.** Not a contract change: `store-contract.md` already publishes `done` as terminal, and no write refuses to leave it. This is a defect against the published contract, fixed like any other. It matters here because D7's report calls a run dead when its nodes are `done`; that is only true if `done` is final. Four refusals, all `InvalidTransitionError`, are one rule, "nothing happens on a finished node":
 
 - `update_node_status` refuses any change away from `done`;
 - `block()` refuses a `done` node;
@@ -214,17 +213,18 @@ Each package's `__all__` is pinned by a test written out by hand, as `tests/test
 
 The last one means recovery can never meet an unresolved entry on a `done` node, so `journal_escalate` needs no new branch. Existing tests that move a node out of `done`, if any, are fixed, not the rule.
 
-**D7 — Pruning is an operator command over Amoeba's own dead paused runs.** *(PM pending.)* The architecture makes pruning Amoeba's policy. It also says no part edits Squadron's run files directly. This decision is the one sanctioned exception, kept as narrow as it can be:
+**D7 — The pruning policy is Amoeba's; removal stays Squadron's.** The architecture gives Amoeba the pruning *policy* ("paused runs are never pruned on SQ's side; pruning policy is Amoeba's") and forbids any part editing Squadron's run files ("State is the interface"). Both hold if Amoeba decides and reports, and never deletes.
 
 - **Prunable** means all of: the run id is **owned** (recorded in some journal entry's result, or in some node's `sq.run_id`, in any project of this supervisor); the file's `status` is `paused` (Squadron prunes completed and failed runs itself); and every node that references the run is `done` (D6 makes that final).
-- Everything else is kept and listed with why: `not_owned` (the PM's own runs are never touched), `not_paused`, `owner_not_done`, `unreadable`.
-- **Dry run by default.** `--apply` deletes. Just before deleting, the file's status is read again; if it is no longer `paused`, it is kept. A file already gone is skipped (`FileNotFoundError`, handled with a comment: someone else pruned it).
-- **Not automatic.** Deleting another tool's files is an action an operator should see. A tenant that did it quietly would be the first thing in Amoeba to destroy data it did not create.
-- **Nothing is written to the store.** The command opens every store read-only and deletes files. Running it twice is harmless.
+- Everything else is listed with why: `not_owned` (the PM's own runs), `not_paused`, `owner_not_done`, `unreadable`.
+- **Read-only on both sides.** The command opens every store read-only and reads run files; it writes nothing anywhere. Each row carries the file's path, so the operator can remove a run by hand. That is a person acting on their own files, outside Amoeba's writer model.
+- **Removal arrives through Squadron.** A new entry in `001-squadron-dependencies.amoeba.md` asks for a command that discards one paused run by id, dated, not tied to a version. When it lands, a later slice adds `--apply` that calls it for each `prunable` row. Nothing in Amoeba ever unlinks a Squadron file.
 - **Settles on `--sq-runs-dir`,** defaulting to the same `DEFAULT_SQ_RUNS_DIR` constant `ProcessSettings` uses. Tests always pass a throwaway directory, as 102 requires.
-- **Squadron dependency.** A new register entry asks Squadron for a command that discards one paused run by id. If it lands, `--apply` calls it instead of unlinking, and the exception above goes away. Recorded as a dated request, not a version dependency.
 
-Rejected: an age threshold ("paused for more than N days"). It is a number with no evidence behind it, and it would delete runs a live node still owns.
+Rejected:
+
+- *Amoeba unlinking the file itself, behind `--apply`.* It would be the first place Amoeba destroys data it did not create, and a standing exception to "State is the interface". Reporting delivers the policy without either.
+- *An age threshold* ("paused for more than N days"). A number with no evidence behind it, and it would name runs a live node still owns.
 
 **D8 — The contract index is a map plus an obligations list.** `docs/README.md` holds:
 
@@ -240,8 +240,8 @@ A test checks every relative link and anchor in `docs/*.md` resolves, so the ind
 
 - `RunDisposition` is a `StrEnum` defined once: `prunable`, `not_owned`, `not_paused`, `owner_not_done`, `unreadable`. Squadron's `paused` status string is one named constant in `run_pruning.py`, beside the observer's existing reading of the same field.
 - Kill-point names are one `StrEnum` in `proof_runner.py`; the harness and the tests reference it.
-- `amoeba prune sq-runs` exits `OK` for a dry run and for a completed `--apply`, and `FAILURE` only for an unexpected error at the boundary. No new exit code.
-- Errors follow the project's rule: the prune command logs and re-raises anything it did not expect; the one swallowed exception is `FileNotFoundError` at unlink, with its comment.
+- `amoeba prune sq-runs` exits `OK` when it prints its report, and `FAILURE` only for an unexpected error at the boundary. No new exit code.
+- Errors follow the project's rule: the prune command logs and re-raises anything it did not expect. The one swallowed exception is `FileNotFoundError` for a run file that disappears between listing and reading, with a comment: Squadron pruned it in between, so there is nothing to report.
 
 ### Contract gaps found at design
 
@@ -252,10 +252,21 @@ Found by reading the contracts and the code they describe while writing this des
 | `amoeba.process` exports nothing; `start` hard-codes tenants | 120 has no documented way to host the Runner | D3 |
 | Relative `AMOEBA_STORE_DIR` / `XDG_CONFIG_HOME` used as given | Process and submitter in different directories use different supervisors | D5 |
 | Project ids differing only in case accepted | Two projects share one store file on macOS | D5 |
-| `done` documented terminal, not enforced | A finished node can be reopened; pruning would be unsafe | D6 |
+| `done` documented terminal, not enforced | A finished node can be reopened; the pruning report could call a live run dead | D6 |
 | No public way to make 105's report-back one transaction | 120 cannot meet 105's D5 point 3 | Required from 105 (see Interfaces Required) |
 
 Gaps the proof finds during implementation are added to this table with their disposition, and the contract index links to it.
+
+### PM ratification
+
+Two changes narrow what 101's published store contract accepts. Nothing else in this slice changes a published contract: D3 only adds exports, D6 enforces what the contract already says, and D7 writes nothing outside Amoeba. Neither item departs from an architectural principle.
+
+| Change | Published today | After | If not ratified |
+| --- | --- | --- | --- |
+| Refuse a relative `AMOEBA_STORE_DIR` or `XDG_CONFIG_HOME` | "used verbatim" | `ValueError` naming the variable | The contract documents that both must be absolute, and the locality proof runs with absolute values only. The split-supervisor failure stays possible. |
+| Project ids are ASCII slugs, `[a-z0-9][a-z0-9._-]*` | Any non-empty id with no path separator, not `.` or `..` | `ValueError` / `SUBMISSION_REFUSED` | The contract documents the case-insensitive filesystem collision as a known limit and tells 120 to lowercase ids itself. |
+
+**Gate:** Phase 5 does not break these two into tasks until the PM rules. Everything else in the slice, including the rest of D5's locality proof, can proceed without them.
 
 ## Implementation Details
 
@@ -276,7 +287,7 @@ The ownership map is built by the CLI from each project's read-only store: `reco
 
 | Command | Output |
 | --- | --- |
-| `amoeba prune sq-runs [--sq-runs-dir PATH] [--apply] [--json]` | One row per run file: `run_id, status, disposition, owner_node_ids`, then with `--apply` a `deleted N` line. |
+| `amoeba prune sq-runs [--sq-runs-dir PATH] [--json]` | One row per run file: `run_id, path, status, disposition, owner_node_ids`. Writes nothing. |
 
 **Store behavior changes (D5, D6):** `validate_project_id` narrows to ASCII slugs; `store_dir` refuses relative values; the four `done` refusals. All raise existing exception types. Each is documented in `store-contract.md` and named in `CHANGELOG.md` as a change to 101's contract.
 
@@ -309,7 +320,7 @@ If a dependency's contract turns out not to support a step as its document says,
 - All three directory resolutions put every file under the expected supervisor directory; a relative `AMOEBA_STORE_DIR` or `XDG_CONFIG_HOME` is refused with an error naming the variable.
 - A project id with an uppercase letter, a space, or a non-ASCII character is refused by `submit`, `open_project`, and `Store.open`.
 - Leaving `done`, blocking a `done` node, journaling on a `done` node, and marking done a node with an unresolved entry each raise `InvalidTransitionError`.
-- After the clean sequence, `amoeba prune sq-runs` lists the step-6 paused run as `prunable`, the captured paused fixture copied into the same directory as `not_owned`, and a paused run owned by a still-`runnable` node as `owner_not_done`. `--apply` deletes only the first; a second `--apply` deletes nothing.
+- After the clean sequence, `amoeba prune sq-runs` lists the step-6 paused run as `prunable`, the captured paused fixture copied into the same directory as `not_owned`, and a paused run owned by a still-`runnable` node as `owner_not_done`. Every file in the runs directory is byte-identical before and after the command.
 
 ### Technical Requirements
 
@@ -365,12 +376,12 @@ uv run pytest tests/contract/test_lifecycle_proof.py -k clean --basetemp=/tmp/am
 export AMOEBA_STORE_DIR=/tmp/amoeba-proof/<test dir>/supervisor
 RUNS=/tmp/amoeba-proof/<test dir>/sq-runs
 cp tests/fixtures/sq_runs/run-20260505-review-a697ad3d.json "$RUNS/"
+ls -l "$RUNS" > /tmp/before
 uv run amoeba prune sq-runs --sq-runs-dir "$RUNS"
-uv run amoeba prune sq-runs --sq-runs-dir "$RUNS" --apply
-uv run amoeba prune sq-runs --sq-runs-dir "$RUNS" --apply
+ls -l "$RUNS" | diff /tmp/before -
 ```
 
-The dry run lists the step-6 run `prunable`, the copied fixture `not_owned`, and the step-3 run `not_paused`. The first `--apply` prints `deleted 1`; the second prints `deleted 0`. The fixture is still in `$RUNS`.
+The report lists the step-6 run `prunable` with its path, the copied fixture `not_owned`, and the step-3 run `not_paused`. The `diff` prints nothing: no file was touched.
 
 **6. The index.** Open `docs/README.md` and follow "Hosting a Runner" and each obligation link; every one lands on the section that states it. `uv run pytest tests/test_docs_links.py` checks the same mechanically.
 
@@ -394,4 +405,4 @@ Steps 1, 2, 5, and 6 need only 101–104 and can start before 105, 108, and 109 
 
 - **The proof must not grow into a Runner.** `ProofRunner` follows a fixed table and makes exactly one decision (re-issue after an `unknown` entry whose block was resolved), because the `after-issue` window cannot complete without it. Anything more belongs to 120.
 - **Timing.** Every wait in the harness is "until a condition holds, with a timeout", reading public state, never a fixed sleep. Detection's settle rule and the follower's interval make fixed sleeps flaky.
-- **Deleting Squadron's files** is limited to D7's rule, runs only on `--apply`, and never touches a run Amoeba did not record.
+- **Squadron's files are never written or deleted** by anything in this slice. The pruning report reads them; a test asserts the runs directory is unchanged after it runs.
