@@ -35,7 +35,7 @@ Developer value.
 **Included**
 
 - Migration `006` with three tables: `changes`, `review_watches`, `detected_reviews`.
-- Change emission inside every existing write path: node creation, node status change (including block and resolve), verdict recorded, message posted, and detection outcomes.
+- Change emission by SQLite triggers on the tracked tables: node creation, node status change (including block and resolve), verdict recorded, message posted (intents and recovery's escalations), and detection outcomes (D8).
 - `amoeba.store` read API for the feed: `changes(project_id, *, after, limit)` and `change_head(project_id)`.
 - `amoeba.feed`: a subscriber-side follower that yields changes after a cursor and waits for more. `amoeba feed --project ID [--after N] [--follow]` prints them as JSON lines.
 - A `watch_reviews` inbox submission kind that registers or deactivates a review directory for a project.
@@ -72,7 +72,7 @@ Developer value.
 - `ParsedReview` exposes the frontmatter's `slice` as a field; attribution needs it. `to_verdict_input` carries `sourceDocument` into `VerdictInput.source_document` (D7).
 - The default record id is a digest of the **parsed** review, not of the raw bytes. This repository edits review files by hand after Squadron writes them (`resolution:` and `resolvedBy:` keys, which the parser ignores). A raw-bytes digest would turn each such edit into a second verdict for one review. A parsed-content digest makes the edit a no-op, and makes `amoeba ingest review` and detection agree on the id for the same review.
 
-**From the store:** the private writer methods (`_verdict_writer`, `_block_writer`, node writes in `nodes.py`, `_apply_intent`), each of which gains one emission call; `journal_entries` filtered to unresolved.
+**From the store:** the `nodes`, `verdicts`, and `messages` tables and their timestamp columns, which the triggers read (no writer method changes); `journal_entries` filtered to unresolved.
 
 **What Squadron writes today** (from the files in `project-documents/user/reviews/`): one file per review at the top of the reviews directory, named `{index}-review.{reviewType}.{slice}[.part-N].md`. A new round overwrites the same name; the PM moves older rounds into `archive/` with a timestamp suffix by hand. No file carries the Squadron version or run id yet (squadron#139).
 
@@ -85,11 +85,10 @@ src/amoeba/store/
   feed_models.py        ChangeKind, Change, DetectionOutcome, ReviewWatch, DetectedReview
   sql_feed.py           every statement and column name for the three tables
   mapping_feed.py       row → record mapping
-  _change_writer.py     ChangeWriter mixin: _emit_change(...), used by every writer
   feed.py               FeedOperations mixin: changes, change_head, watches, detections,
                         record_detection
   attribution.py        attribute_review(nodes, slice_name) -> Attribution
-  schema/006_change_feed_and_detection.sql
+  schema/006_change_feed_and_detection.sql   tables and the emission triggers
 src/amoeba/feed/
   follower.py           follow(store_dir, project_id, after) -> Iterator[Change]
 src/amoeba/process/
@@ -110,11 +109,11 @@ Same pattern as 101–104: models, SQL, mapping, operations mixin. The store doe
 **Emitting a change:**
 
 ```
-any writer (create_node, update_node_status, block, resolve, record_verdict, intent, detection)
-  inside its existing transaction:
-    write its own rows
-    _emit_change(kind, node_id, subject_id, payload)   # INSERT INTO changes; seq assigned here
-  commit                                               # both land, or neither
+any write to nodes, verdicts, messages, or detected_reviews, by any code path
+  AFTER INSERT / AFTER UPDATE OF status trigger fires inside the same transaction
+    INSERT INTO changes (kind, node_id, subject_id, payload via json_object,
+                         recorded_at = the row's own timestamp)
+  commit                                   # the row and its change land together, or neither
 ```
 
 **Following the feed:**
@@ -172,7 +171,7 @@ for each active, baselined watch in each open project:
 
 **Settled** means the file's `(size, mtime_ns)` is unchanged since the previous scan. It stops a half-written file from being parsed. Detection latency is about two scan intervals.
 
-**Version label:** the frontmatter's stamp when Squadron starts writing one; until then, the output of one `sq --version` per scan that found new files; if that fails, the explicit unavailable marker 102 uses for `cf --version`. `evidence-contract.md` says this label is what the detector observed, not necessarily what wrote the file.
+**Version label:** the frontmatter's stamp when Squadron starts writing one; until then, the `sq --version` label captured **once at process start-up**, before the loop, next to recovery (which already runs `cf --version` there); if that fails, the explicit unavailable marker 102 uses for `cf --version`. No tick ever starts a subprocess, so the tenant keeps 102's "return promptly" contract: the worst case for a hanging `sq --version` is `sq_timeout_seconds` added to start-up, where nothing is waiting on a tick. The cost: a Squadron upgrade while the process runs is not reflected in the label until the next restart. `evidence-contract.md` says this label is what the process observed at start-up, not necessarily what wrote the file.
 
 ### State Management
 
@@ -242,6 +241,13 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 - *How a finished slice's contract is changed.* 104 is complete, and its design document is not edited: it stays the record of what 104 shipped. The change is made and owned here. Migration 006 adds the column. 105's tasks change `VerdictInput`, the payload, and the previous-round query. 105 updates `evidence-contract.md` (the series definition) and adds a `CHANGELOG` entry naming it a change to 104's contract. 104's tests run unchanged and must pass, since every one of them records verdicts without a `source_document`. One new test covers the part-1 and part-2 case.
 - Rejected: attaching each review to the node whose `cf.artifact_path` equals `sourceDocument`. It avoids the column, but depends on 120 creating a node per task file with a path spelled exactly as Squadron spells it. The slice name is the stable key; the document is only a series separator.
 
+**D8 — Changes are emitted by SQLite triggers, not by writer code.** A trigger on each tracked table (`nodes` insert and status update, `verdicts` insert, `messages` insert, `detected_reviews` insert) writes the `changes` row in the same transaction as the write that fired it. No writer method changes.
+
+- *Why:* emission in writer code is only as complete as the list of writers, and a test can only check the writers it knows to call. That list is already longer than it looks: recovery (102) writes escalation messages outside the inbox. A trigger fires for every write to its table, whoever makes it, including paths that do not exist yet.
+- *Payloads* are built with `json_object` from the row. `recorded_at` is copied from the row's own timestamp column (`updated_at`, `recorded_at`, `created_at`, `detected_at`), so the feed and the store never disagree on when something happened. The node-status trigger fires only `WHEN old.status IS NOT new.status`. The detection trigger fires only `WHEN new.outcome NOT IN ('baseline', 'runner_issued')`.
+- *The cost:* `ChangeKind` and `DetectionOutcome` values appear as literals in the migration's SQL as well as in the enums. SQL cannot import a Python enum, and a shipped migration is frozen. The invariant test ties them together: a drifted literal fails its "every kind appears" check.
+- *Rejected:* an `_emit_change` call in each writer method. Its only guard would be a test that exercises the writers it knows about, which cannot catch a write path it does not call.
+
 ### Patterns and Conventions
 
 **Word lists** (`StrEnum`, defined once in `feed_models.py`):
@@ -253,15 +259,25 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 
 | Kind | `node_id` | `subject_id` | payload |
 | --- | --- | --- | --- |
-| `node_created` | the node | the node | `kind`, `parent_id` |
+| `node_created` | the node | the node | `kind`, `parent_id`, `status` |
 | `node_status_changed` | the node | the node | `from`, `to` |
-| `verdict_recorded` | the node | verdict id | `verdict`, `standing`, `review_type` |
+| `verdict_recorded` | the node | verdict id | `verdict`, `review_type`, `provider_failure` |
 | `message_posted` | the node, or null | message id | `channel` |
 | `review_detected` | the node, or null | ledger id | `outcome`, `path` |
 
-A change is emitted only when the writer actually inserts or updates. A retried `record_verdict` that returns the existing record emits nothing. `baseline` and `runner_issued` detections emit no change: nothing happened that a subscriber should act on.
+`node_created` carries the initial status, so replaying the feed from seq 0 rebuilds each node's status without reading the store. `verdict_recorded` carries no trust label: the label is computed from stored fields on read (104) and a trigger cannot call that function, so a subscriber that wants it reads `verdict(id)`.
 
-**Emission is one call per writer, and a test proves none is missed.** The invariant test: run a scripted sequence through every write path (create, block, resolve, status updates, verdicts, intents), then replay the feed from seq 0 and rebuild each node's status from `node_created` and `node_status_changed`. It must equal the store's current node statuses. A new write path that forgets to emit fails this test.
+A change is emitted only when a row is actually inserted, or a status actually changes. A retried `record_verdict` that returns the existing record inserts nothing, so it emits nothing. `baseline` and `runner_issued` detections emit no change: nothing happened that a subscriber should act on.
+
+**The invariant test checks every tracked table, not just node status.** Triggers make a missed emission impossible for any write to a tracked table; the test proves the triggers are right. It runs a scripted sequence through every write path that exists (create, block, resolve, status updates, verdicts, intents, a recovery escalation, detections of every outcome), then replays the feed from seq 0 and reconciles it against the store, table by table:
+
+- node ids from `node_created` equal the `nodes` table, and each node's status rebuilt from `node_created.status` plus `node_status_changed` equals its stored status;
+- verdict ids from `verdict_recorded` equal the `verdicts` table;
+- message ids from `message_posted` equal the `messages` table;
+- ledger ids from `review_detected` equal the `detected_reviews` rows whose outcome is not `baseline` or `runner_issued`;
+- every `ChangeKind` member appears at least once, so a kind whose trigger was never written, or whose literal in the trigger SQL drifted from the enum, fails.
+
+A write path added later that the script does not exercise is still covered, because its rows fire the same triggers. What the test cannot see is a new **table** that should be on the feed; putting one on the feed means a new `ChangeKind` member, which fails the last check until a trigger and a script step are added.
 
 **Errors.** A watched directory that is missing or unreadable logs one ERROR when it goes bad and one INFO when it recovers, and is shown in `inspect watches` as `unreachable`. It does not stop the process: a PM deleting a checkout is not a sick store. A parse failure is an outcome, not an exception.
 
@@ -280,7 +296,7 @@ The parent architecture sets no numeric targets, so these are this slice's choic
 
 - **Scan interval, 2 s, so detection within about 5 s.** A review takes minutes to run and a person reads the result; seconds of delay are invisible. Shorter only costs more `stat` calls.
 - **Follow interval, 0.25 s.** A status view should feel live; one pragma read four times a second is nothing.
-- **`sq --version` timeout, 10 s.** The same as the existing `cf_timeout_seconds`.
+- **`sq --version` timeout, 10 s.** The same as the existing `cf_timeout_seconds`. It bounds start-up only; no tick runs it.
 - **Attempts, 3.** The same reasoning as `inbox_max_attempts`: loud first, bounded after.
 
 None of these is a promise in a contract except the follower's, which `feed-contract.md` states as "within `follow_interval_seconds` of the commit, plus the time to read the new rows." Each is one field, changed in one place.
@@ -336,20 +352,21 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 ### Provides to Other Slices
 
 - **106:** the feed, so the end-to-end proof can assert that subscribers saw the whole sequence, including across a restart.
-- **107:** the change log as the place CF-sourced changes land; a CF event that updates a node emits through the same writers.
+- **107:** the change log as the place CF-sourced changes land; a CF event that updates a node fires the same triggers.
 - **Initiative 120:** `attribute_review`, `record_detection(outcome=runner_issued)`, and the review-producing kinds set. The Runner may also follow the feed instead of re-querying. 120 takes on the requirements in D5, points 3 and 5: mark the ledger in the same transaction that resolves the journal entry, and record its reviews from the artifact through 108's parser.
 - **Initiative 160:** `follow()` and `amoeba feed` for the Translator surface and the notification bridge.
 
 ### Consumes from Other Slices
 
-- **101–104** through their documented contracts. The changes are additive: each private writer gains one emission call, verdicts gain `source_document` and `finding_changes` groups by it, `SubmissionKind` gains `watch_reviews`, `ProcessSettings` gains three fields, `amoeba start` registers a second tenant, and `LISTINGS` gains two entries. The test that pins the listing set is updated to the new set.
+- **101–104** through their documented contracts. The changes are additive: triggers on `nodes`, `verdicts`, and `messages` (no writer code changes), verdicts gain `source_document` and `finding_changes` groups by it, `SubmissionKind` gains `watch_reviews`, `ProcessSettings` gains three fields, `amoeba start` registers a second tenant, and `LISTINGS` gains two entries. The test that pins the listing set is updated to the new set.
 - **108:** the parser. If a file fails to parse because Squadron's shape moved, the outcome is `unparseable` with the parser's error, visible in `inspect detections`, and the file is retried only if its bytes change. A parser fix is followed by re-ingesting those files with `amoeba ingest review`.
 
 ## Success Criteria
 
 ### Functional Requirements
 
-- Each write path emits its change in the same transaction. Feed replay from seq 0 rebuilds every node's current status (the invariant test).
+- Every write to a tracked table emits its change in the same transaction. Feed replay from seq 0 reconciles with every tracked table and rebuilds every node's current status (the invariant test).
+- No tick starts a subprocess; `sq --version` runs once, before the loop.
 - A `resolution` submission applied by the process produces a `node_status_changed` change from the blocked status to `runnable`.
 - A follower started with `--after N` prints exactly the changes after N. Killed mid-stream and restarted with its last printed seq, it prints the rest with no gap and no repeat, and the `changes` table is unchanged by either.
 - `amoeba feed --follow` started while the process is stopped prints new changes once the process starts and applies submissions.
@@ -438,7 +455,7 @@ sleep 6
 cp "$F/$P.part-1.md" "$REVIEWS/"
 ```
 
-For each, within about 5 seconds, the follower prints `verdict_recorded` (`CONCERNS`, `stated`, `tasks`) and `review_detected` (`ingested`). `uv run amoeba inspect verdicts --project demo` shows both on `$SLICE_NODE`, and `--json` shows `source: artifact_frontmatter` and `source_path` pointing into `$REVIEWS`.
+For each, within about 5 seconds, the follower prints `verdict_recorded` (`CONCERNS`, `tasks`, `provider_failure: false`) and `review_detected` (`ingested`). `uv run amoeba inspect verdicts --project demo` shows both on `$SLICE_NODE`, and `--json` shows `source: artifact_frontmatter` and `source_path` pointing into `$REVIEWS`.
 
 **5. Parts stay separate series.** `uv run amoeba inspect changes --project demo --verdict <round 2 id>` names round 1 of part 1 as the previous round. The two rounds share no keys, which is 104's rewording limit, so every round-2 finding is `new` and every round-1 finding is `gone`.
 
@@ -470,14 +487,14 @@ uv run pytest tests/store/test_feed_invariant.py tests/cli/test_detection_end_to
 
 ### Mitigation Strategies
 
-- The replay invariant test covers every write path and fails on a missed emission. Emission sits in the private writers, not in public methods, so an inbox apply and a direct call share it.
+- Emission is by trigger (D8), so no write path, present or future, can skip it. The invariant test reconciles the feed with every tracked table and requires every `ChangeKind`.
 - The attribution rule is exported and named in `evidence-contract.md` as the rule 120 uses. 120's slice design lists it as a prerequisite.
 
 ## Implementation Notes
 
 ### Development Approach
 
-1. Migration 006, `feed_models.py`, `sql_feed.py`, mapping, `_emit_change`, and emission in every existing writer. The replay invariant test and the 5 → 6 upgrade test. Riskiest piece; depends only on 101–104.
+1. Migration 006 with its triggers, `feed_models.py`, `sql_feed.py`, and mapping. The invariant test and the 5 → 6 upgrade test. Riskiest piece; depends only on 101–104.
 2. `changes` and `change_head`; `amoeba.feed.follow` and `amoeba feed`. Follower tests: resume, process stopped, killed follower.
 3. `watch_reviews` kind with baselining; `watches` and `detections` read methods; `record_detection`.
 4. `attribute_review` with its table of cases (zero, one, several, wrong kind).
