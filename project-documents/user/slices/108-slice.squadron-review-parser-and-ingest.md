@@ -143,6 +143,7 @@ parse_review_artifact(text)                parse_review_json(text)
 
 ```
 amoeba ingest review --project P --node N --by B (--artifact F | --stdout-json F)
+  store file for P exists?    → no: exit SUBMISSION_REFUSED (D6; opens no store)
   read F as UTF-8             → OSError / UnicodeDecodeError: exit REVIEW_UNREADABLE
   parse                       → SquadronParseError: exit REVIEW_UNREADABLE
   to_verdict_input(source_path = F resolved to an absolute path)
@@ -258,7 +259,26 @@ The digest covers every `ParsedReview` field, including `source`, `slice`, and `
 
 *Rejected:* a digest of the raw bytes, which was the first draft's choice. Every hand edit would then become a second verdict for the same review (105's review of this point).
 
-**D6 — `ingest` submits and does not wait.** Ingest reports the submission id, not the outcome. It works like `submit` and the rest of 103's contract: the process may be stopped, and the outcome is read afterwards with `inspect submissions` or `inspect verdicts`. Waiting for the process to apply the submission would tie a file-parsing command to the process being up.
+**D6 — `ingest` submits and does not wait, and refuses a project that has no store.** Ingest reports the submission id, not the outcome. It works like `submit` and the rest of 103's contract: the process may be stopped, and the outcome is read afterwards. Waiting for the process to apply the submission would tie a file-parsing command to the process being up.
+
+A submission ends in one of four places (103). The PM finds each one here:
+
+| Outcome | Cause, for an ingest | Where to look |
+| --- | --- | --- |
+| `applied` | The verdict was recorded, or a replay was a no-op. | `inspect submissions --project P`, `inspect verdicts --project P` |
+| `rejected` | The node is not in the project. | `inspect submissions --project P` (with the reason) |
+| quarantined | `no_store_for_project`: the project did not exist when the process drained the file. `invalid_payload` is not reachable from ingest, because `submit()` validates the payload before writing. | `inspect inbox` (with the reason) |
+| failed | The store could not apply it after repeated attempts. | `inspect inbox` |
+
+A quarantined submission never reaches the project, so `inspect submissions` and `inspect verdicts` cannot show it. The one quarantine ingest can realistically hit, a project that does not exist, is refused up front instead:
+
+- Before reading the file, ingest checks that `paths.store_path(project)` exists. If it does not, ingest exits `SUBMISSION_REFUSED` with `no store for project 'P'` and writes nothing.
+- This opens no store. 103 guarantees that a store file which exists is complete, because the process renames it into place only after migrating it.
+- A project whose `create-project` is still pending is refused too. That matches 103's rule for submitters: wait until the project is applied before submitting into it.
+
+The check narrows the race; it does not close it. A project deleted between the check and the drain would still quarantine the file. Projects are never deleted today, so that case is theoretical, and `inspect inbox` covers it. The fix is to requeue the file per 103.
+
+`amoeba submit` does not get the same check. It is 103's generic path and accepts `create-project`, whose project by definition does not exist yet.
 
 **D7 — `--node` is the PM's explicit attribution and is not checked against the review's `slice`.** Ingest attaches the review to whatever node `--node` names. It does not compare the node's `cf.slice_name` with `ParsedReview.slice`. Three reasons:
 
@@ -349,6 +369,7 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 - `amoeba ingest review` on a real file, with the process running, produces one verdict whose id is the digest id, with `source_path` set to the file's absolute path. Ingesting it a second time produces no second record.
 - Ingesting a file that is unparseable, missing, or has no version label exits `REVIEW_UNREADABLE` and leaves `inbox/new/` empty.
 - Ingest works with the process stopped. The submission is applied at the next start.
+- Ingest into a project with no store file exits `SUBMISSION_REFUSED`, names the project, and leaves `inbox/new/` empty. This is covered for the process both running and stopped.
 - Ingest prints the node id, the parsed `slice` (`-` when there is none), and the review type on stderr. A review whose `slice` differs from the node's slice name is still submitted (D7).
 - `provider_failure_problem` is the only definition of the provider-failure rule. `_verdict_writer.py` and the parser both call it, and 104's rejection tests pass unchanged.
 
@@ -375,15 +396,23 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 
 ### Verification Walkthrough
 
-Draft; refined with captured output when Phase 6 completes. It reuses 104's `scripts/demo_evidence.py` to seed a node, because nothing outside the process can create one until 120.
+Draft; refined with captured output when Phase 6 completes. It reuses 104's `scripts/demo_evidence.py` to seed a node, because nothing outside the process can create one until 120. The setup follows 104's walkthrough, which was run by hand against the implementation. 104 found these caveats while running it, and they apply here too:
+
+- Run from the repository root with `uv run`. The commands below are written for bash. Every expansion is quoted, so zsh works as well.
+- `amoeba start &` needs a moment before it applies anything. Wait until `amoeba status` prints `running`, including after the restart in step 8.
+- Without `--sq-runs-dir`, `amoeba start` reads (never writes) the real `~/.config/squadron/runs` during recovery. Passing an empty temporary directory keeps the run fully isolated.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
-uv run amoeba start &
+SQ_RUNS="$(mktemp -d)"
+wait_running() { until uv run amoeba status | grep -q '^running'; do sleep 0.2; done; }
+uv run amoeba start --sq-runs-dir "$SQ_RUNS" &
+wait_running
 uv run amoeba submit create-project --project demo --by pm
 uv run amoeba stop
 NODE=$(uv run python scripts/demo_evidence.py)
-uv run amoeba start &
+uv run amoeba start --sq-runs-dir "$SQ_RUNS" &
+wait_running
 F=tests/fixtures/sq_reviews
 ```
 
@@ -422,15 +451,22 @@ Expected:
 - `inspect verdicts` still shows one row for that review, with step 1's `source_path`, not `/tmp/r1.md`.
 - `inspect submissions` shows one submission under that id.
 
-**6. Unparseable input submits nothing.**
+**6. Bad input and an unknown project submit nothing.**
 
 ```bash
 echo '# not a review' > /tmp/bad.md
 uv run amoeba ingest review --project demo --node "$NODE" --by pm --artifact /tmp/bad.md --upstream-version x; echo "exit $?"
+uv run amoeba ingest review --project nosuch --node "$NODE" --by pm \
+  --artifact "$F/102-review.tasks.resident-process-and-recovery.part-1.md" --upstream-version 0.14.0; echo "exit $?"
 ls "$AMOEBA_STORE_DIR/inbox/new"
+uv run amoeba inspect inbox
 ```
 
-Expected: `SquadronParseError: … no frontmatter`, `exit 12`, and an empty `new/`.
+Expected:
+
+- The first command prints `SquadronParseError: … no frontmatter` and `exit 12`.
+- The second prints `no store for project 'nosuch'` and `exit 9` (`SUBMISSION_REFUSED`).
+- `new/` is empty, and `inspect inbox` lists nothing quarantined.
 
 **7. Stdout JSON.** The pair's filenames are fixed at capture time; `$PAIR_JSON` and `$PAIR_MD` stand for them here.
 
@@ -445,7 +481,7 @@ Expected:
 - The JSON row shows `source: stdout_json` and `reviewed_sha` null.
 - `uv run amoeba inspect findings --project demo --node "$NODE"` shows each of the pair's finding keys seen twice.
 
-**8. Survives a crash.** `kill -9` the process, then run `uv run amoeba start &`. Expected: `inspect verdicts` lists the same rows, and nothing is applied twice.
+**8. Survives a crash.** `kill -9` the process, then run `uv run amoeba start --sq-runs-dir "$SQ_RUNS" &` and `wait_running`. Expected: `inspect verdicts` lists the same rows, and nothing is applied twice.
 
 **9. The parser against every fixture.**
 
