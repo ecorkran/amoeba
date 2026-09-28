@@ -8,7 +8,7 @@ component: substrate-run-state-store
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 100 — decomposes the substrate and run-state store into foundation, feature, and integration slices that each leave the system in a working state.
 dateCreated: 20260913
-dateUpdated: 20260926
+dateUpdated: 20260928
 status: not_started
 ---
 
@@ -107,8 +107,8 @@ Two consequences shape the decomposition:
    - A provider-failure artifact is detected as a failure, not as a review that happened.
    - Detection is replaceable by an upstream event without changing the subscriber contract.
    - Subscribers that disconnect and reconnect do not corrupt feed state.
-   **Dependencies:** [101, 102, 104, 108] — 108 added at the 104 split: detected reviews are ingested through its parser.
-   **Interfaces:** Provides the change feed consumed by initiative 160 and by status views; consumes 101, 102, 104.
+   **Dependencies:** [101, 102, 103, 104, 108] — 108 added at the 104 split: detected reviews are ingested through its parser. 103 added at slice design: directory registration and human replies both arrive through its inbox.
+   **Interfaces:** Provides the change feed consumed by initiative 160 and by status views; consumes 101, 102, 103, 104, 108.
    **Risk Level:** Medium
    **Relative Effort:** 3
 
