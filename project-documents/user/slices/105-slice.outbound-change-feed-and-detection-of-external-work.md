@@ -177,7 +177,9 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 
 **D1 — The feed is a change log in the store, written in the mutation's transaction.** *(PM pending.)* A change and its feed row commit together or not at all, so the feed can never show a change the store does not have, or miss one it does. Order is `seq`, per project, and it matches commit order because the resident process is the sole writer. Rejected: an in-memory event bus in the process. It loses events on crash and gives a subscriber that was down no way to catch up.
 
-**D2 — Subscribers follow the log themselves; the process runs no server.** *(PM pending — this is the architecture's "push, not poll" goal, met from the subscriber's side.)* `follow()` is a blocking iterator. It wakes on SQLite's `PRAGMA data_version`, which changes only when another connection commits, so an idle check costs one pragma read. The subscriber sees a stream; the waiting lives in one function.
+**D2 — Subscribers follow the log themselves; the process runs no server.** *(PM pending.)* `follow()` is a blocking iterator. It wakes on SQLite's `PRAGMA data_version`, which changes only when another connection commits, so an idle check costs one pragma read. The subscriber sees a stream; the waiting lives in one function.
+
+*How this sits against "Push, not poll."* That design goal is about **inbound** signals: the resident process should learn that CF changed, a Squadron run finished, or a human replied without polling `cf next`, which recomputes gate state from disk on every call. This slice meets it for the two inbound signals it owns: human replies arrive through the inbox, and PM-launched reviews are detected by the tenant, not by the Runner calling anything. The outbound feed is a different surface. Inside the implementation, `follow()` does check a counter on an interval, and the design says so plainly rather than calling it push. What the goal rules out, a subscriber re-reading or recomputing state to find out whether anything changed, does not happen: an idle check reads one integer, and a busy one reads only the new rows. The PM decision is whether that is acceptable for the outbound surface or whether a real wake-up signal is wanted now. If it is, the smallest version fits behind `follow()` with no subscriber change: each follower binds a datagram socket in `{store_dir}/feed/`, and after any commit that emitted changes the process sends one empty datagram to each socket there, never blocking and unlinking any socket that refuses. The follower still reads the rows from the log. This design does not build it.
 
 - *Why not a Unix socket served by a tenant:* the loop is synchronous (102, D2). Serving sockets from it means non-blocking accept and send, per-connection buffers, and a slow-subscriber policy, all inside the process that owns crash recovery. The log would still be needed for catch-up, so the socket would only add latency savings.
 - *What it costs:* a change reaches a follower within `follow_interval_seconds` (default 0.25), not instantly. The contract states the bound.
@@ -195,17 +197,35 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 
 **D5 — The Runner owns the reviews it launches; detection defers, then skips.** *(PM pending.)*
 
-- *Defer:* while a project has an unresolved journal entry of a review-producing command kind, the tenant does not scan that project. The set of review-producing kinds is defined once in `journal_models.py` (today `{SQ_RUN}`; 120 adds its review command kind to it). Both tenants tick in the same synchronous loop, so the Runner's "run exited, record the verdict" always finishes before detection looks again. Recovery reconciles every open entry before any tenant ticks, so a crash cannot leave a project deferred forever.
+- *Defer:* while a project has an unresolved journal entry of a review-producing command kind, the tenant does not scan that project. The set of review-producing kinds is defined once in `journal_models.py` (today `{SQ_RUN}`; 120 adds its review command kind to it).
 - *Skip:* when the Runner records a review from a file, it calls `record_detection(outcome=runner_issued, verdict_id)` for that `(path, digest)`. Detection skips anything already in the ledger.
 - A PM review that finishes while the Runner has one in flight is detected a few seconds late. Accepted.
 
+*What the ordering rests on.* The rule is only correct if all of these hold. Tenant registration order does **not** matter.
+
+1. **No two tenants run at once.** The loop is synchronous (102, D2), so detection never observes the Runner halfway through a tick. This is 102's standing design; if it ever changes, this rule must be revisited.
+2. **The Runner journals before it launches.** 102's command-before-result rule. So any file a Runner-launched review writes appears while its entry is open, and detection is deferred for that project.
+3. **The Runner marks the ledger no later than it resolves the entry, in one transaction:** record the verdict, `record_detection(runner_issued)`, resolve the journal entry. If the resolve committed first and the Runner's tick ended before the mark, the next detection tick would take the file as external. This is a requirement on 120, stated in `evidence-contract.md`.
+4. **Recovery runs before any tenant ticks** (102). A crash cannot leave a project deferred forever. It can, however, resolve an entry by observation without the Runner having marked the file. That file is then detected as external. It still lands once, because of 5.
+5. **The Runner records its reviews from the artifact through 108's parser**, so its record id and detection's are the same parsed-content digest. Any overlap after a crash is then a `record_verdict` retry, a no-op. Also a requirement on 120.
+
 **D6 — One interface for where reviews come from.** `ReviewSource.poll() -> Sequence[DetectedFile]`, where `DetectedFile` is `(path, bytes, observed_at)`. `DirectoryReviewSource` is the only implementation. An S8 event source implements the same method from Squadron's event; the tenant, ledger, attribution, and feed do not change. The ledger key stays `(path, digest)`, since S8 would still name a file.
+
+`DirectoryReviewSource` handles the file-level races itself, so the tenant only ever sees whole files it could read:
+
+| Case | What happens |
+| --- | --- |
+| Listed, then gone before `stat` or read (`FileNotFoundError`) | Dropped from this scan and its remembered size and timestamp forgotten. No ledger row: a file that is gone is not a review. If it comes back, it settles again from scratch. |
+| Changed between the settle check and the read | The digest is taken from the bytes actually read, and the ledger key is that digest, so what is recorded always matches what was parsed. If the file keeps changing, the next scan sees a new size or timestamp and waits for it to settle again. |
+| One file unreadable (`PermissionError`) | One WARNING per file until it becomes readable, then skipped. Not a ledger row, because nothing was examined. |
+| Not a regular file (directory, socket), or not `*.md` | Ignored. |
 
 **D7 — A review series is node, review type, and reviewed document.** *(PM pending; changes 104's contract, additively.)* Task reviews come in parts. The captured 102 series has `part-1` and `part-2` reviews, both `reviewType: tasks`, both for the same slice, reviewing different task files. Attached to one slice node under 104's rule, part 2's round would become part 1's "previous round", and `finding_changes` would report every part-1 finding as new and every part-2 finding as gone.
 
 - `VerdictInput` and the `verdicts` table gain `source_document: str | None`, filled by 108's parser from the frontmatter's `sourceDocument`.
 - `finding_changes` picks the previous round on the same node, same `review_type`, and same `source_document`, compared with `IS` so two nulls match. Every verdict recorded before this slice has a null `source_document`, so their series are unchanged.
 - The `verdict` inbox payload gains the optional field.
+- *How a finished slice's contract is changed.* 104 is complete, and its design document is not edited: it stays the record of what 104 shipped. The change is made and owned here. Migration 006 adds the column. 105's tasks change `VerdictInput`, the payload, and the previous-round query. 105 updates `evidence-contract.md` (the series definition) and adds a `CHANGELOG` entry naming it a change to 104's contract. 104's tests run unchanged and must pass, since every one of them records verdicts without a `source_document`. One new test covers the part-1 and part-2 case.
 - Rejected: attaching each review to the node whose `cf.artifact_path` equals `sourceDocument`. It avoids the column, but depends on 120 creating a node per task file with a path spelled exactly as Squadron spells it. The slice name is the stable key; the document is only a series separator.
 
 ### Patterns and Conventions
@@ -229,9 +249,27 @@ A change is emitted only when the writer actually inserts or updates. A retried 
 
 **Emission is one call per writer, and a test proves none is missed.** The invariant test: run a scripted sequence through every write path (create, block, resolve, status updates, verdicts, intents), then replay the feed from seq 0 and rebuild each node's status from `node_created` and `node_status_changed`. It must equal the store's current node statuses. A new write path that forgets to emit fails this test.
 
-**Errors.** A watched directory that is missing or unreadable logs one ERROR when it goes bad and one INFO when it recovers, and is shown in `inspect watches` as `unreachable`. It does not stop the process: a PM deleting a checkout is not a sick store. An exception from the store during detection is re-raised, as `InboxTenant` does. A parse failure is an outcome, not an exception.
+**Errors.** A watched directory that is missing or unreadable logs one ERROR when it goes bad and one INFO when it recovers, and is shown in `inspect watches` as `unreachable`. It does not stop the process: a PM deleting a checkout is not a sick store. A parse failure is an outcome, not an exception.
 
-**Settings** (added to `ProcessSettings`, with CLI flags): `review_scan_interval_seconds = 2.0`, `sq_timeout_seconds = 10.0`. The follower's `follow_interval_seconds = 0.25` and `feed_batch_size = 500` live in a `FeedSettings` dataclass in `amoeba.feed`, since followers run outside the process.
+An exception from the store while recording a detected file follows 103's bounded-failure rule, not just its re-raise. Re-raising alone would put the process in a crash loop: restart, see the same file, fail again.
+
+- **Counter first.** Before the recording transaction, the tenant durably writes an attempts sidecar for that file: `{store_dir}/detection/attempts/{project_id}/{digest}.attempts.json`, the same `AttemptsSidecar` model and `write_durably` path `InboxTenant` uses. It lives under the supervisor directory, because the watched directory belongs to the PM and detection never writes into it.
+- **Below the limit:** log at ERROR and re-raise, so the process stops and the operator hears about it.
+- **At the limit** (`detection_max_attempts`): log at ERROR, leave the sidecar as the record that the file is parked, and move on. Detection skips any `(project, digest)` with a parked sidecar. `amoeba inspect detections` lists parked files alongside ledger rows, as `failed`, read from the sidecars, the way `inspect inbox` reads `failed/`. Removing the sidecar by hand retries the file.
+- **On success:** the sidecar is deleted after the transaction commits. A crash in between leaves a recorded file and a leftover counter, and the next scan finds the file already in the ledger and deletes the counter.
+
+`failed` is a listing state, not a `DetectionOutcome`: the store could not record the file, so the store has no row for it.
+
+**Settings** (added to `ProcessSettings`, with CLI flags): `review_scan_interval_seconds = 2.0`, `sq_timeout_seconds = 10.0`, `detection_max_attempts = 3`. The follower's `follow_interval_seconds = 0.25` and `feed_batch_size = 500` live in a `FeedSettings` dataclass in `amoeba.feed`, since followers run outside the process.
+
+The parent architecture sets no numeric targets, so these are this slice's choices, sized to the work:
+
+- **Scan interval, 2 s, so detection within about 5 s.** A review takes minutes to run and a person reads the result; seconds of delay are invisible. Shorter only costs more `stat` calls.
+- **Follow interval, 0.25 s.** A status view should feel live; one pragma read four times a second is nothing.
+- **`sq --version` timeout, 10 s.** The same as the existing `cf_timeout_seconds`.
+- **Attempts, 3.** The same reasoning as `inbox_max_attempts`: loud first, bounded after.
+
+None of these is a promise in a contract except the follower's, which `feed-contract.md` states as "within `follow_interval_seconds` of the commit, plus the time to read the new rows." Each is one field, changed in one place.
 
 ## Implementation Details
 
@@ -285,7 +323,7 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 
 - **106:** the feed, so the end-to-end proof can assert that subscribers saw the whole sequence, including across a restart.
 - **107:** the change log as the place CF-sourced changes land; a CF event that updates a node emits through the same writers.
-- **Initiative 120:** `attribute_review`, `record_detection(outcome=runner_issued)`, and the review-producing kinds set. The Runner may also follow the feed instead of re-querying.
+- **Initiative 120:** `attribute_review`, `record_detection(outcome=runner_issued)`, and the review-producing kinds set. The Runner may also follow the feed instead of re-querying. 120 takes on the requirements in D5, points 3 and 5: mark the ledger in the same transaction that resolves the journal entry, and record its reviews from the artifact through 108's parser.
 - **Initiative 160:** `follow()` and `amoeba feed` for the Translator surface and the notification bridge.
 
 ### Consumes from Other Slices
@@ -312,6 +350,8 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 - A file already marked `runner_issued` is never ingested.
 - Restarting the process re-ingests nothing.
 - A watched directory that is removed shows `unreachable`; the process keeps running and resumes when it returns.
+- A file deleted between listing and read produces no ledger row and no error; restored, it is detected normally.
+- A store failure while recording one file stops the process below `detection_max_attempts`. At the limit the file is listed `failed` in `inspect detections`, later files are still detected, and the process keeps running. Deleting the sidecar retries it.
 
 ### Technical Requirements
 
