@@ -94,7 +94,7 @@ Two consequences shape the decomposition:
    - The same review's file and stdout produce the same finding keys.
    - Unparseable input fails with a typed error and submits nothing; nothing is defaulted.
    - Ingesting the same file twice produces one record.
-   **Dependencies:** [104]
+   **Dependencies:** [101, 103, 104] — 103 added at slice design: `amoeba ingest review` writes through its inbox.
    **Interfaces:** Provides the parser to 105 and initiative 120, and `amoeba ingest review` to the PM.
    **Risk Level:** Medium — Squadron's output shape moves without semver.
    **Relative Effort:** 3
