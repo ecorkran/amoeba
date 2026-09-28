@@ -38,6 +38,7 @@ Developer value:
 - The `amoeba.upstream` package, with `amoeba.upstream.squadron` inside it, exporting `parse_review_json`, `parse_review_artifact`, `ParsedReview`, `to_verdict_input`, `review_record_id`, and the errors `SquadronReviewError`, `SquadronParseError`, and `UpstreamVersionError`.
 - `amoeba.upstream.squadron.review_fields`, which defines every Squadron key name and literal the parser reads, each exactly once.
 - `verdict_to_payload(VerdictInput)` in `amoeba.store.verdict_payload`. It is the inverse of 104's `verdict_from_payload` and uses the same key constants.
+- `provider_failure_problem` in `amoeba.store.evidence_models`: 104's provider-failure rule, moved out of `_verdict_writer.py` so the parser can share it (D3). This is a refactor with no behavior change.
 - The `amoeba ingest review` command in a new `cli/ingest.py`, registered in `cli/main.py`, with one new `ExitCode` member.
 - PyYAML moves from dev to runtime dependencies. `types-pyyaml` stays in dev.
 - New real fixtures in `tests/fixtures/sq_reviews/`, recorded in the README (see Technical Requirements).
@@ -53,6 +54,7 @@ Developer value:
 - **Parsing other Squadron output.** Run files stay in `process/observers/sq_runs.py`, and pipeline state and checkpoint prompts belong to 120. Parsing CF MCP results is also 120's.
 - **Storing Squadron's newer diagnostics.** The parser reads these keys and drops them: `location_verified`, `finding_scan`, `diff_chars`, `diff_chars_injected`, `answering_models`, `stop_reason`, and `tools_given`. Nothing consumes them yet. Adding one later means adding a `VerdictInput` field.
 - **Checking that the node exists before submitting.** `submit()` is fire-and-forget by design (103). An unknown node shows up as a `rejected` submission, which the PM sees in `inspect submissions`.
+- **Checking `--node` against the review's `slice`.** Ingest attaches the review to the node the PM names, as is (D7). Matching a review's slice to a node is 105's `attribute_review`.
 
 ## Dependencies
 
@@ -104,6 +106,7 @@ src/amoeba/
       review_fields.py     Squadron key names, literals, and the two body headings
   store/
     verdict_payload.py     + verdict_to_payload (inverse of verdict_from_payload)
+    evidence_models.py     + provider_failure_problem (moved from _verdict_writer.py)
   cli/
     ingest.py              add_ingest_parser, run_ingest
     main.py                registers ingest; ExitCode.REVIEW_UNREADABLE
@@ -144,6 +147,7 @@ amoeba ingest review --project P --node N --by B (--artifact F | --stdout-json F
   parse                       → SquadronParseError: exit REVIEW_UNREADABLE
   to_verdict_input(source_path = F resolved to an absolute path)
                               → UpstreamVersionError: exit REVIEW_UNREADABLE
+  print node, parsed slice, and review type on stderr (D7; informational only)
   submit(kind=verdict, payload=verdict_to_payload(input), submission_id=input.id)
                               → InboxSubmitError: exit SUBMISSION_REFUSED
   print the submission id; exit OK
@@ -159,7 +163,7 @@ This slice adds no state of its own. The parser holds none, and ingest writes on
 
 ## Technical Decisions
 
-D1 was set by PM direction at the 104 split. D2 through D6 are pending PM ratification.
+D1 was set by PM direction at the 104 split. D2 through D7 are pending PM ratification.
 
 ### Technology Choices
 
@@ -207,7 +211,10 @@ Each finding maps as follows:
 
 Five rules apply on top of the table:
 
-- **A provider failure is checked at parse time.** 104's store rejects a provider failure whose verdict is not `UNKNOWN` or that carries findings. The parser raises `SquadronParseError` for either case, so a contradictory file fails at the command line with the file named, not later as a `rejected` submission.
+- **A provider failure is checked at parse time, by the store's own rule.** 104's store rejects a provider failure whose verdict is not `UNKNOWN` or that carries findings. Today that rule is two inline branches in `_verdict_writer.py`. This slice moves it into one pure function in `evidence_models.py`: `provider_failure_problem(*, provider_failure, verdict, findings) -> str | None`. It returns the rejection reason, or `None`.
+  - The store's writer calls it and returns its reason as the `VerdictRejection`. Behavior is unchanged: 104's rejection tests pass as they are.
+  - The parser calls it and raises `SquadronParseError` with the same reason. A contradictory file therefore fails at the command line with the file named, not later as a `rejected` submission.
+  - One definition means the two layers cannot drift apart.
 
 - **`requested_model` follows the contract, not the raw key.** 104's contract says the field is set only on a substitution, which is also Squadron's own rule for writing the key to a file. Copying JSON's `requested_model` whenever it is present would make stdout and file disagree about the same review.
 - **The zero-findings rule belongs to Squadron, so it lives here.** A CONCERNS or FAIL with `fallback_used` and a stated verdict means the findings failed to parse. The standing function reads only `findings_parsed`, so other submitters are not caught by Squadron's rule.
@@ -238,6 +245,13 @@ The digest covers every `ParsedReview` field, including `source`, `slice`, and `
 
 - A hand edit that adds `resolution:` or `resolvedBy:` does not change the id. The same file ingested by the PM, found by 105, or recorded by 120 from the file gets the same id.
 - A file and a stdout capture of the same review get **different** ids, because they carry different fields (for example, `reviewed_sha` exists only in the file). That is accepted: 105's D5 has the Runner record its reviews from the file, so every path to a stored review goes through the file.
+
+  If both halves of one review are ingested anyway (the PM ingests a stdout capture by hand, then 105 detects the file), the review is stored twice. That has visible effects:
+  - `inspect verdicts` shows two rows.
+  - Each finding key shows `times_seen` two higher, not one.
+  - The later of the two becomes the other's previous round, so `finding_changes` reports every finding as `recurring` against itself.
+
+  Nothing is lost or wrong, but the counts overstate. Merging the two would mean a cross-source identity for a review, and Squadron provides no such key: stdout JSON has no `reviewedSha`, and `run_id` is null on the CLI. The rule for callers is to ingest a review's file, not its stdout, whenever the file exists. Stdout is for reviews run with `--no-save`.
 - Changing which fields the digest covers changes every id, so any such change is a contract change. It requires a new format tag and a `CHANGELOG` entry. Adding a new field to `ParsedReview` counts, so D3's "drop diagnostics" rule also keeps ids stable.
 
 `to_verdict_input(record_id=…)` and `amoeba ingest review --id` override the default. The Runner, for example, can use an id it created when it journaled the command.
@@ -245,6 +259,14 @@ The digest covers every `ParsedReview` field, including `source`, `slice`, and `
 *Rejected:* a digest of the raw bytes, which was the first draft's choice. Every hand edit would then become a second verdict for the same review (105's review of this point).
 
 **D6 — `ingest` submits and does not wait.** Ingest reports the submission id, not the outcome. It works like `submit` and the rest of 103's contract: the process may be stopped, and the outcome is read afterwards with `inspect submissions` or `inspect verdicts`. Waiting for the process to apply the submission would tie a file-parsing command to the process being up.
+
+**D7 — `--node` is the PM's explicit attribution and is not checked against the review's `slice`.** Ingest attaches the review to whatever node `--node` names. It does not compare the node's `cf.slice_name` with `ParsedReview.slice`. Three reasons:
+
+- **It is the override path.** 105 sends a file here precisely when automatic attribution failed: `unattributed`, recovered by hand with `ingest review --node`. A check that repeated 105's slice matching would refuse the files that most need a human decision.
+- **Some reviews have no slice to compare.** PR reviews carry no `slice`, and a node may have no `cf.slice_name` (104's demo node, or any node 120 creates for a non-slice gate). A check would need exceptions for both.
+- **It would need a store read.** Ingest opens no store today. Adding a read-only open only to second-guess an explicit argument is not worth it.
+
+The cost is that a wrong `--node` records the review on the wrong node, and nothing flags it. To make that visible, ingest prints the parsed `slice` (or `-` when there is none) and the review type on stderr, next to the node id, before it submits. It does not act on them. Recovery is the same as for any wrong record: there is no delete, and the PM ingests again onto the right node with a new `--id`. A new id is needed because the digest id is already taken, and the first record wins. Slice-to-node matching stays in one place, 105's `attribute_review`.
 
 **Error handling.**
 
@@ -305,7 +327,7 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 
 ### Consumes from Other Slices
 
-- **104:** unchanged. It gains one additive function, `verdict_to_payload`. `evidence-contract.md`'s Squadron-mapping notes move into the new parsing section.
+- **104:** its behavior is unchanged. It gains `verdict_to_payload`, and its provider-failure rule moves into `provider_failure_problem` without changing what it accepts or rejects. `evidence-contract.md`'s Squadron-mapping notes move into the new parsing section.
 - **103:** `submit()`, unchanged.
 - **The `cli/main.py` boundary handler:** unchanged apart from the new exit code and the registered subcommand. `process-contract.md` lists both.
 
@@ -327,6 +349,8 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 - `amoeba ingest review` on a real file, with the process running, produces one verdict whose id is the digest id, with `source_path` set to the file's absolute path. Ingesting it a second time produces no second record.
 - Ingesting a file that is unparseable, missing, or has no version label exits `REVIEW_UNREADABLE` and leaves `inbox/new/` empty.
 - Ingest works with the process stopped. The submission is applied at the next start.
+- Ingest prints the node id, the parsed `slice` (`-` when there is none), and the review type on stderr. A review whose `slice` differs from the node's slice name is still submitted (D7).
+- `provider_failure_problem` is the only definition of the provider-failure rule. `_verdict_writer.py` and the parser both call it, and 104's rejection tests pass unchanged.
 
 ### Technical Requirements
 
@@ -342,7 +366,7 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
   - **A new 0.15.0 file/stdout pair** from one `sq review … --output json` saved **with** a slice number, with stdout and stderr captured to separate files. It is captured at implementation time with `--model glmflash` in a throwaway copy of this repository, so nothing lands in the real reviews directory. It pins that stdout is pure JSON, that `template_name` equals `reviewType`, and that the finding keys match.
 - **A known gap.** No real file with a *Findings Not Parsed* heading **and** a CONCERNS or FAIL verdict has been found. The README records it as missing. That parser branch is tested on a copy of a real file with the heading added, and the README labels the copy as edited.
 - `ruff`, `pyright` strict, and the full suite are clean. Source files stay near 300 lines.
-- `docs/evidence-contract.md` gains a "Parsing Squadron output" section: the D3 table, D4, D5 (with what changes an id), what is dropped, and the dated observation. `process-contract.md` documents `ingest review` and exit code 12. `CHANGELOG.md` is updated.
+- `docs/evidence-contract.md` gains a "Parsing Squadron output" section: the D3 table, D4, D5 (with what changes an id, and the stated consequence of ingesting both a file and its stdout: two records and doubled counts, plus the "prefer the file" rule), D7, what is dropped, and the dated observation. `process-contract.md` documents `ingest review` and exit code 12. `CHANGELOG.md` is updated.
 
 ### Integration Requirements
 
