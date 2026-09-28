@@ -4,7 +4,7 @@ slice: squadron-review-parser-and-ingest
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 103, 104]
-interfaces: [105, 106]
+interfaces: [105, 106, 109]
 dateCreated: 20260928
 dateUpdated: 20260928
 status: not_started
@@ -35,13 +35,13 @@ Developer value:
 
 **Included**
 
-- The `amoeba.upstream` package, with `amoeba.upstream.squadron` inside it, exporting `parse_review_json`, `parse_review_artifact`, `ParsedReview`, `to_verdict_input`, `review_record_id`, and `SquadronParseError`.
+- The `amoeba.upstream` package, with `amoeba.upstream.squadron` inside it, exporting `parse_review_json`, `parse_review_artifact`, `ParsedReview`, `to_verdict_input`, `review_record_id`, and the errors `SquadronReviewError`, `SquadronParseError`, and `UpstreamVersionError`.
 - `amoeba.upstream.squadron.review_fields`, which defines every Squadron key name and literal the parser reads, each exactly once.
 - `verdict_to_payload(VerdictInput)` in `amoeba.store.verdict_payload`. It is the inverse of 104's `verdict_from_payload` and uses the same key constants.
 - The `amoeba ingest review` command in a new `cli/ingest.py`, registered in `cli/main.py`, with one new `ExitCode` member.
 - PyYAML moves from dev to runtime dependencies. `types-pyyaml` stays in dev.
 - New real fixtures in `tests/fixtures/sq_reviews/`, recorded in the README (see Technical Requirements).
-- 104's fixture reader (`tests/review_fixtures.py`) is replaced by the parser, so 104's matching tests run through production code.
+- 104's fixture reader (`tests/review_fixtures.py`) is replaced by the parser, so 104's matching tests run through production code. Its four users switch over: `tests/store/test_finding_identity.py`, `tests/store/test_finding_changes.py`, `tests/evidence_harness.py`, and `tests/test_demo_evidence_payloads.py`.
 - Documentation: a new "Parsing Squadron output" section in `docs/evidence-contract.md` replaces 104's "Mapping Squadron's flags (for slice 108)" notes. `amoeba ingest review` and its exit code are added to `process-contract.md`. `CHANGELOG.md` gets an entry.
 
 **Excluded**
@@ -100,7 +100,7 @@ src/amoeba/
     squadron/
       __init__.py          re-exports the public names below
       review.py            parse_review_json, parse_review_artifact, ParsedReview,
-                           to_verdict_input, review_record_id, SquadronParseError
+                           to_verdict_input, review_record_id, and the three errors
       review_fields.py     Squadron key names, literals, and the two body headings
   store/
     verdict_payload.py     + verdict_to_payload (inverse of verdict_from_payload)
@@ -143,7 +143,7 @@ amoeba ingest review --project P --node N --by B (--artifact F | --stdout-json F
   read F as UTF-8             → OSError / UnicodeDecodeError: exit REVIEW_UNREADABLE
   parse                       → SquadronParseError: exit REVIEW_UNREADABLE
   to_verdict_input(source_path = F resolved to an absolute path)
-                              → a missing version label: exit REVIEW_UNREADABLE
+                              → UpstreamVersionError: exit REVIEW_UNREADABLE
   submit(kind=verdict, payload=verdict_to_payload(input), submission_id=input.id)
                               → InboxSubmitError: exit SUBMISSION_REFUSED
   print the submission id; exit OK
@@ -151,7 +151,7 @@ amoeba ingest review --project P --node N --by B (--artifact F | --stdout-json F
 
 At every failing step, nothing reaches `inbox/new/`. When the resident process applies the submission, it records the verdict with the submission id as the record id (104).
 
-**Duplicates.** Ingesting the same review a second time reuses the same submission id, and 103's D2 makes that submission a no-op. If 105's detection already recorded the review directly under the same id, the submission applies, and `record_verdict` returns the existing record (first wins, with a WARNING if the content differs).
+**Duplicates.** Ingesting the same review a second time reuses the same submission id, and 103's D2 makes that submission a no-op. The replay check compares ids only, so a second ingest from a different path, or of a hand-edited copy, is also a no-op: the first ingest's `source_path` stays on the record. If 105's detection already recorded the review directly under the same id, the submission applies, and `record_verdict` returns the existing record (first wins, with a WARNING if the content differs).
 
 ### State Management
 
@@ -205,7 +205,9 @@ Each finding maps as follows:
 - `severity` → `parse_severity`
 - `category`, `summary`, `location` pass through as written, including Squadron's `unverified` literal, which 104's matching rule already treats as empty
 
-Four rules apply on top of the table:
+Five rules apply on top of the table:
+
+- **A provider failure is checked at parse time.** 104's store rejects a provider failure whose verdict is not `UNKNOWN` or that carries findings. The parser raises `SquadronParseError` for either case, so a contradictory file fails at the command line with the file named, not later as a `rejected` submission.
 
 - **`requested_model` follows the contract, not the raw key.** 104's contract says the field is set only on a substitution, which is also Squadron's own rule for writing the key to a file. Copying JSON's `requested_model` whenever it is present would make stdout and file disagree about the same review.
 - **The zero-findings rule belongs to Squadron, so it lives here.** A CONCERNS or FAIL with `fallback_used` and a stated verdict means the findings failed to parse. The standing function reads only `findings_parsed`, so other submitters are not caught by Squadron's rule.
@@ -225,8 +227,8 @@ Four rules apply on top of the table:
 
 - The stamp is used when present.
 - The argument is used when there is no stamp. That covers files written before #139.
-- With neither, it raises `ValueError`.
-- With both, and different, it raises `ValueError`. A silent choice between two labels would hide a mistake.
+- With neither, it raises `UpstreamVersionError`.
+- With both, and different, it raises `UpstreamVersionError`, naming both labels. A silent choice between two labels would hide a mistake.
 
 As in 104, the label is never compared or branched on beyond that equality check.
 
@@ -246,8 +248,10 @@ The digest covers every `ParsedReview` field, including `source`, `slice`, and `
 
 **Error handling.**
 
-- `SquadronParseError(ValueError)` carries a `source` (`stdout_json` or `artifact_frontmatter`) and a message naming the key.
-- `cli/ingest.py` catches `OSError`, `UnicodeDecodeError`, `SquadronParseError`, and the version-label `ValueError` in explicit branches, prints the error to stderr, and returns `ExitCode.REVIEW_UNREADABLE`.
+- `SquadronReviewError(ValueError)` is the base class for the two errors below:
+  - `SquadronParseError` carries a `source` (`stdout_json` or `artifact_frontmatter`) and a message naming the key.
+  - `UpstreamVersionError` is raised by `to_verdict_input` under D4.
+- `cli/ingest.py` catches `OSError`, `UnicodeDecodeError`, and `SquadronReviewError` in explicit branches, prints the error to stderr, and returns `ExitCode.REVIEW_UNREADABLE`. It does not catch plain `ValueError`, so a bug elsewhere still reaches the boundary handler as a `FAILURE`.
 - `InboxSubmitError` is already mapped to `SUBMISSION_REFUSED` by the boundary handler.
 - No broad `except` is added.
 
@@ -319,7 +323,7 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 - JSON `requested_model` is kept only when `model_substituted` is true.
 - In the captured 0.15.0 file/stdout pair, both sources produce the same verdict, review type, model, and **finding keys** (`finding_identity` over each finding) in the same order.
 - `review_record_id` is unchanged by adding `resolution:` and `resolvedBy:` keys, or a `## Response` section, to a fixture's text. It changes when a finding's summary changes.
-- Each of these raises `SquadronParseError`, and a test covers each: a missing `verdict`, an unknown severity, frontmatter that is not a mapping, malformed YAML, text with no JSON object, and a JSON object with no `verdict`. `to_verdict_input` raises when there is no version label at all, and when the stamp and the argument disagree.
+- Each of these raises `SquadronParseError`, and a test covers each: a missing `verdict`, an unknown severity, frontmatter that is not a mapping, malformed YAML, text with no JSON object, a JSON object with no `verdict`, and a provider failure with a verdict other than `UNKNOWN` or with findings. `to_verdict_input` raises `UpstreamVersionError` when there is no version label at all, and when the stamp and the argument disagree.
 - `amoeba ingest review` on a real file, with the process running, produces one verdict whose id is the digest id, with `source_path` set to the file's absolute path. Ingesting it a second time produces no second record.
 - Ingesting a file that is unparseable, missing, or has no version label exits `REVIEW_UNREADABLE` and leaves `inbox/new/` empty.
 - Ingest works with the process stopped. The submission is applied at the next start.
@@ -375,7 +379,7 @@ Expected:
 
 **2. The stamp supplies the version.** Ingest the 0.15.0 fixture (`105-review.slice…20260928T175751.md`) without `--upstream-version`. Expected: its row shows `upstream_version: 0.15.0`, and `--json` shows `sq_run_id: run-20260928-slices-plan-a04bdb07`. Running it again with `--upstream-version 0.14.0` exits `12`, with a message naming both labels.
 
-**3. Provider failures and degraded reviews.** Ingest the two provider-failure fixtures (the 102 part-2 round-2 file and the 928 file) and the 925 *Findings Not Parsed* file. Expected standings: `provider_failure`, `provider_failure`, `unparsed`.
+**3. Provider failures and degraded reviews.** Ingest the two provider-failure fixtures (the 102 part-2 round-2 file and the 928 file) and the 925 *Findings Not Parsed* file. The 928 file carries its own stamp. The other two predate it and need `--upstream-version 0.14.0`. Expected standings: `provider_failure`, `provider_failure`, `unparsed`. The 925 file's standing is `unparsed` rather than `findings_unparsed` because its verdict is `UNKNOWN`, which the trust label checks first.
 
 **4. Round 2 compares against round 1.** Ingest `102-review…part-1.md` (round 2). Then run `uv run amoeba inspect changes --project demo --verdict <round-2 id>`. Expected: round 1 is named as the previous round, no finding is `recurring`, and every round-1 finding is `gone`. This is 104's rewording limit, now shown through the parser.
 
@@ -388,7 +392,11 @@ perl -pi -e 's/^(verdictSource: stated)$/$1\nresolution: addressed/' /tmp/r1.md
 uv run amoeba ingest review --project demo --node "$NODE" --by pm --artifact /tmp/r1.md --upstream-version 0.14.0
 ```
 
-Expected: the same id as step 1 again. `inspect verdicts` still shows one row for that review, and `inspect submissions` shows the repeats as no-ops.
+Expected:
+
+- The command prints the same id as step 1 again.
+- `inspect verdicts` still shows one row for that review, with step 1's `source_path`, not `/tmp/r1.md`.
+- `inspect submissions` shows one submission under that id.
 
 **6. Unparseable input submits nothing.**
 
@@ -400,7 +408,18 @@ ls "$AMOEBA_STORE_DIR/inbox/new"
 
 Expected: `SquadronParseError: … no frontmatter`, `exit 12`, and an empty `new/`.
 
-**7. Stdout JSON.** Ingest the new 0.15.0 stdout capture with `--stdout-json`. Expected: `source: stdout_json`, `reviewed_sha` null, and a different id from its paired file (D5). `uv run amoeba inspect findings --project demo --node "$NODE"` shows its finding keys shared with the paired file, each seen twice.
+**7. Stdout JSON.** The pair's filenames are fixed at capture time; `$PAIR_JSON` and `$PAIR_MD` stand for them here.
+
+```bash
+uv run amoeba ingest review --project demo --node "$NODE" --by pm --stdout-json "$F/$PAIR_JSON"
+uv run amoeba ingest review --project demo --node "$NODE" --by pm --artifact "$F/$PAIR_MD"
+```
+
+Expected:
+
+- Two different ids (D5).
+- The JSON row shows `source: stdout_json` and `reviewed_sha` null.
+- `uv run amoeba inspect findings --project demo --node "$NODE"` shows each of the pair's finding keys seen twice.
 
 **8. Survives a crash.** `kill -9` the process, then run `uv run amoeba start &`. Expected: `inspect verdicts` lists the same rows, and nothing is applied twice.
 
