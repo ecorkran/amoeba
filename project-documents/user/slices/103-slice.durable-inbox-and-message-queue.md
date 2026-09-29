@@ -316,7 +316,7 @@ This is the content `docs/inbox-contract.md` must state.
 ### Provides to Other Slices
 
 - **104:** the submission-kind seam (enum member + payload model + effect) for verdict and judge-sample submissions from the out-of-process Judge; two more listings already in the registry as precedent.
-- **105:** `messages.seq` and `inbox_submissions.applied_seq` as change sources for the feed; the change feed replaces consumer polling without changing `messages()`.
+- **105:** `messages.seq` as a change source for the feed. *(Corrected 20260928 by 105's design, D8a: `applied_seq` is not itself a change source — a submission's effects, not the submission row, are what land on the feed. A rejected submission carries no effect and is still read via `submission(id)`, per line 309 above.)* The change feed replaces consumer polling for effects without changing `messages()`.
 - **106:** project creation, the blocked-state-resolved-through-the-inbox step of the end-to-end proof, and `submit` + `kill -9` + `start` as its restart injection — all through public surfaces, with no script opening a store read-write.
 - **Initiative 120:** `pending_intents` / `acknowledge_message`; escalation delivery as a side effect of `block(kind=HUMAN)`; `host.open_project` and a `project_ids` that grows at runtime, which the Runner must not cache.
 - **Initiatives 140, 160, and the notification bridge:** `amoeba.inbox.submit`, `Store.open_read_only(...).messages(...)`, and `submission(id)`.

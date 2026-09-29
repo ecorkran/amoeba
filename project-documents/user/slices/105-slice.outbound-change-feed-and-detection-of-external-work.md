@@ -59,7 +59,7 @@ Developer value.
 
 ### Prerequisites
 
-- **101:** `Store`, nodes and their `cf.slice_name` reference, the migration mechanism (`EXPECTED_SCHEMA_VERSION` 5 → 6).
+- **101:** `Store`, nodes and their `cf.slice_name` reference, the migration mechanism (`EXPECTED_SCHEMA_VERSION` 5 → 6). *Added at slice design:* the read-only handle gains `read_transaction()` (D1a), a contract addition 105 needs and 101 owns.
 - **102:** the tenant seam, `ProcessSettings`, the command journal (the ownership rule reads open entries), the listing registry, the writer guard, and the `cf --version` "label or explicit unavailable marker" pattern this slice reuses for `sq --version`.
 - **103:** the inbox, its kind seam (member, payload model, effect), `amoeba submit`, and `resolution`, which is how human replies arrive. *Added at slice design:* the plan listed 101, 102, 104, 108, but registration and reply delivery both go through 103.
 - **104:** `record_verdict`, its retry rule, the trust label, and `VerdictInput`.
@@ -142,6 +142,8 @@ a watch is scanned for new reviews only once baselined_at is set
 
 The baseline is taken by the tenant, not by the inbox apply, so the store does no filesystem reads. It is all or nothing: a partial baseline would let a file it missed be ingested later as a new review, out of order.
 
+**Latency posture for the new filesystem I/O.** 102's standing rule is "no per-tick timeout; the tenant must return promptly," and 102 itself bounds its one subprocess call with `cf_timeout_seconds`. This slice adds directory listing, `stat`, and full-file reads inside the same synchronous loop with no analogous bound, and paths are used as given with no symlink resolution (Special Considerations). A watched directory that is, or contains a symlink into, a stalled network mount hangs the tick — and with it the whole synchronous loop, including stop handling — with `kill -9` as the only remedy. This is the accepted posture, not an oversight: watched directories are expected to be local, matching 102's own standing remedy for a hanging tenant. It is not solved by adding a timeout around filesystem calls, since a timed-out `stat` on a hung mount does not free the thread that issued it; a real bound would need the scan to run off the synchronous loop entirely, which is bigger than this slice and not built here.
+
 | Baseline failure | What happens |
 | --- | --- |
 | Directory missing or unreadable when registered | The watch is recorded and shown `unreachable`. Baselining happens on the first scan that can list it. Nothing is ingested before then. |
@@ -188,6 +190,17 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 ### Technology Choices
 
 **D1 — The feed is a change log in the store, written in the mutation's transaction.** *(PM pending.)* A change and its feed row commit together or not at all, so the feed can never show a change the store does not have, or miss one it does. Order is `seq`, per project, and it matches commit order because the resident process is the sole writer. Rejected: an in-memory event bus in the process. It loses events on crash and gives a subscriber that was down no way to catch up.
+
+**D1a — Reading a state snapshot and `change_head` together needs an explicit read transaction, which the read-only handle now exposes.** Two sequential calls on a read-only connection are not atomic against each other: Python's `sqlite3` only opens an implicit transaction around statements it recognizes as mutating, so two plain `SELECT`s issued back to back can straddle a commit from the writer, landing the snapshot and the head on either side of the same change. `change_head`'s stated purpose — "read it in the same read transaction as a state snapshot, then follow from it" — is unachievable without a primitive that groups reads into one transaction, and no such primitive exists in 101–104's contracts.
+
+- **Fix:** the read-only handle (101's `open_read_only`) gains `read_transaction() -> AbstractContextManager[None]`, wrapping `BEGIN` / `COMMIT` (a plain read never needs `ROLLBACK`; if a read raises inside the block, the transaction is rolled back to release the read lock, then the exception propagates). Any two or more read calls made inside the block see one consistent snapshot. `change_head` gains no new behavior; callers wanting the snapshot-then-head pattern write:
+  ```python
+  with handle.read_transaction():
+      state = handle.some_state_read(...)
+      head = handle.change_head(project_id)
+  ```
+- This is a contract addition to 101, not to 105: it lives on the read-only handle 101 already defines, and every future slice needing multi-read consistency uses the same method. `store-contract.md` gains this method under 101's section, credited to 105 where the gap was found.
+- **Tested** by a new case in the follower test suite: seed some state, open `read_transaction()`, read state and `change_head()`, commit a change from a second connection between the two reads, and assert the transaction's `change_head()` did not observe it (the write is visible only after the transaction closes and a fresh read begins).
 
 **D2 — Subscribers follow the log themselves; the process runs no server.** *(PM pending.)* `follow()` is a blocking iterator. It wakes on SQLite's `PRAGMA data_version`, which changes only when another connection commits, so an idle check costs one pragma read. The subscriber sees a stream; the waiting lives in one function.
 
@@ -240,6 +253,12 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 - The `verdict` inbox payload gains the optional field.
 - *How a finished slice's contract is changed.* 104 is complete, and its design document is not edited: it stays the record of what 104 shipped. The change is made and owned here. Migration 006 adds the column. 105's tasks change `VerdictInput`, the payload, and the previous-round query. 105 updates `evidence-contract.md` (the series definition) and adds a `CHANGELOG` entry naming it a change to 104's contract. 104's tests run unchanged and must pass, since every one of them records verdicts without a `source_document`. One new test covers the part-1 and part-2 case.
 - Rejected: attaching each review to the node whose `cf.artifact_path` equals `sourceDocument`. It avoids the column, but depends on 120 creating a node per task file with a path spelled exactly as Squadron spells it. The slice name is the stable key; the document is only a series separator.
+
+**D8a — Submission outcomes are not their own `ChangeKind`; their effects are.** 103 named `inbox_submissions.applied_seq` as a feed change source (103-slice.durable-inbox-and-message-queue.md:319) and left "push" of submission outcomes to this slice (103-slice.durable-inbox-and-message-queue.md:309). This slice does not add a trigger on `inbox_submissions`, and there is no `submission_applied` (or similarly named) `ChangeKind`.
+
+- *Why:* a submission's outcome is never actionable on its own. Every kind of submission this slice or its prerequisites define resolves into a row on a tracked table — a node is created, a status changes, a verdict is recorded, a message is posted — and each of those already fires its own trigger with its own `ChangeKind`. A subscriber that wants "did submission X take effect" reads `submission(id)` once (103), or watches for the specific change it implies; nothing is lost by not adding a second, redundant announcement for the same commit.
+- *A rejected submission is different: nothing lands on a tracked table*, so no trigger fires and no effect-change exists to substitute. A subscriber has no way to learn a submission was rejected except by polling `submission(id)`, which is 103's answer and stays true. This is accepted as a gap in the *push* story for rejections specifically, not for successful submissions.
+- This corrects 103's forward reference: `applied_seq` is not itself a change source, and no trigger reads `inbox_submissions`. 103-slice.durable-inbox-and-message-queue.md line 319 is updated to point at the effects instead.
 
 **D8 — Changes are emitted by SQLite triggers, not by writer code.** A trigger on each tracked table (`nodes` insert and status update, `verdicts` insert, `messages` insert, `detected_reviews` insert) writes the `changes` row in the same transaction as the write that fired it. No writer method changes.
 
@@ -310,7 +329,7 @@ None of these is a promise in a contract except the follower's, which `feed-cont
 | Method | Effect |
 | --- | --- |
 | `changes(project_id, *, after: int = 0, limit: int) -> list[Change]` | Changes with `seq > after`, in order. |
-| `change_head(project_id) -> int` | The last `seq`, or 0. Read it in the same read transaction as a state snapshot, then follow from it, to get "current state, then everything after". |
+| `change_head(project_id) -> int` | The last `seq`, or 0. Read it inside `read_transaction()` (D1a, added to 101's read-only handle) alongside a state snapshot, then follow from it, to get "current state, then everything after". |
 | `watches(project_id) -> list[ReviewWatch]` | Registered directories. |
 | `detections(project_id, *, outcome=None) -> list[DetectedReview]` | The ledger, in detection order. |
 | `record_detection(DetectionInput) -> DetectedReview` | In-process only. Idempotent on `(project_id, path, digest)`. |
@@ -368,6 +387,7 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 - Every write to a tracked table emits its change in the same transaction. Feed replay from seq 0 reconciles with every tracked table and rebuilds every node's current status (the invariant test).
 - No tick starts a subprocess; `sq --version` runs once, before the loop.
 - A `resolution` submission applied by the process produces a `node_status_changed` change from the blocked status to `runnable`.
+- `read_transaction()` makes a snapshot read and `change_head()` atomic against a concurrent commit: a write committed between the two calls inside the block is observed by neither (D1a).
 - A follower started with `--after N` prints exactly the changes after N. Killed mid-stream and restarted with its last printed seq, it prints the rest with no gap and no repeat, and the `changes` table is unchanged by either.
 - `amoeba feed --follow` started while the process is stopped prints new changes once the process starts and applies submissions.
 - A real Squadron review file copied into a registered directory is recorded as a verdict on the matching slice node, with `source: artifact_frontmatter`, the file's path as `source_path`, and a ledger row `ingested`. A `verdict_recorded` and a `review_detected` change follow.
