@@ -57,7 +57,7 @@ Developer value.
 ### Prerequisites
 
 - **101:** `Store`, the migration mechanism (`EXPECTED_SCHEMA_VERSION` 7 → 8, after 109's 007).
-- **102:** the tenant seam, `ProcessSettings` and its flag wiring, the listing registry, the writer guard, and the `cf --version` label that start-up already captures (with its `unavailable` marker).
+- **102:** the tenant seam, `ProcessSettings` and its flag wiring, the listing registry, the writer guard, and the `cf --version` subprocess call and its `unavailable` marker convention (102 calls it once at start-up; this tenant calls it again on each detected file change).
 - **103:** the inbox kind seam (member, payload model, effect) and `amoeba submit`.
 - **105:** the `changes` table, the trigger emission pattern (105 D8), the feed invariant test, and the bounded-failure attempts sidecar used by detection.
 
@@ -69,7 +69,8 @@ Not needed: 104, 108, 109. 109 is ahead in the order only because it already hol
 
 - **Location.** `CONTEXT_FORGE_DATA_DIR` if set. Otherwise `~/.config/context-forge` on macOS; on other platforms `$XDG_CONFIG_HOME/context-forge`, falling back to `~/.config/context-forge`. The file is `projects.json` in that directory.
 - **Write.** `FileStorageService` copies the current file to `projects.json.backup`, writes `projects.json.tmp`, validates it as JSON, and renames it over `projects.json`. Readers never see a partial file written by CF.
-- **Shape.** A JSON array of project objects (`ProjectData`). Each has a string `id` (`project_{ms}_{random}`), `name`, `createdAt`, `updatedAt`, and optional pointer fields: `developmentPhase`, `instruction`, `workType`, `fileSlice`, `fileTasks`, `fileArch`, `fileSlicePlan`, `fileHLD`, `fileSpec`, `fileConcept`, `projectPath`, `dateProject`, `template`, `worktrees` (array of per-worktree overlays carrying their own `developmentPhase`, `activeSlice`, `activeTaskFile`, and so on), and `customData`. Older records carry retired keys (`slice`).
+- **Shape.** A JSON array of project objects (`ProjectData`). Each has a string `id` (`project_{ms}_{random}`), `name`, `createdAt`, `updatedAt`, and optional pointer fields: `developmentPhase`, `instruction`, `workType`, `fileSlice`, `fileTasks`, `fileArch`, `fileSlicePlan`, `fileHLD`, `fileSpec`, `fileConcept`, `projectPath`, `dateProject`, `template`, `worktrees` (array of per-worktree overlays), and `customData`. Older records carry retired keys (`slice`).
+- **`worktrees` overlay shape, observed 20260928 on CF 0.18.0.** Each overlay is an object keyed by worktree path, carrying `developmentPhase`, `activeSlice`, `activeTaskFile`, `updatedAt`. No overlay observed carries its own `customData`; if CF ever adds one, it is caught by the recursive ignore rule below rather than assumed absent.
 
 Amoeba depends on exactly two things in that shape: the file is a JSON array of objects, and each object has a string `id`. Every other key is carried as opaque data and compared by value, never interpreted. So a key CF adds, renames, or retires shows up as a changed field, not as a parse failure.
 
@@ -114,18 +115,19 @@ next tick: the linked project has no snapshot yet → it is recorded (below), wi
 **One `CFWatchTenant.tick`** (at most once per `cf_scan_interval_seconds`):
 
 ```
-if no active watch in any open project → return
-sig = stat(projects.json) → (st_ino, st_size, st_mtime_ns)
-if sig == last_sig and no watch is new since the last tick → return     # the common case: one stat
+if no active watch in any open project (checked against an in-memory cache, not a fresh query) → return
+sig = stat(projects.json)  # missing file: sig = None, handled by the branch below
+if sig == last_sig and the cache has no watch added since the last tick → return     # the common case: one stat, no query
+last_sig = sig             # set before dispatch: an unrecognized or missing file is still not re-read until sig changes
+if sig is None:
+  every active watch: state unreachable (on transition only); return
 read_projects_file(path)
-  ProjectsFileMissing      → every active watch: state unreachable (on transition only); return
   ProjectsFileUnrecognized → every active watch: state unrecognized, detail = error; return
-last_sig = sig
 for each active watch (project P, cf id C):
   current  = tracked_fields(records[C])  or  absent
   previous = latest snapshot for (P, C)  or  none
   if absent and previous is none or previous.present is false → state missing; continue
-  changed = changed_keys(previous, current)     # every key when previous is none; ["present"] when C vanished
+  changed = changed_keys(previous, current)     # every key when previous is none; ["$present"] when C vanished
   if changed is empty → state ok; continue       # e.g. only updatedAt or customData moved
   one transaction:
     record_cf_snapshot(P, C, present, fields = current, changed, cf_updated_at, version_label)
@@ -135,7 +137,7 @@ for each active watch (project P, cf id C):
 
 `last_sig` lives only in memory. After a restart it is unset, so the first tick reads the file and diffs every watch against its stored snapshot: that is the whole catch-up mechanism, and it is the same code path as a normal change.
 
-The version label is the `cf --version` label 102 already captures once at start-up, before the loop. No tick starts a subprocess.
+The version label is re-captured whenever the file signature changes (one `cf --version` subprocess per detected change, not per tick), so a snapshot's label reflects the CF binary that was live when the snapshot was taken. If the subprocess fails, the label is stored as `unavailable`, the same marker 102 uses at start-up.
 
 ### State Management
 
@@ -164,11 +166,11 @@ In memory: the file signature from the last successful read. Losing it costs one
 
 **D3 — Link by CF project id.** A watch names CF's `id`, never its `name`. Names are user-editable (`cf set name`), and a label is not a key. The id is carried as an opaque string; its format is not parsed.
 
-**D4 — The diff is top-level keys, compared by value, minus two ignored keys.** `IGNORED_KEYS = {"updatedAt", "customData"}`, defined once in `diff.py`.
+**D4 — The diff is top-level keys, compared by value, minus two ignored keys, applied recursively into `worktrees` overlays.** `IGNORED_KEYS = {"updatedAt", "customData"}`, defined once in `diff.py`, and applied both to the record itself and to each entry of `worktrees` before comparison and before storage.
 
-- `updatedAt` changes on every write, so it would make every write a change. It is kept on the snapshot as provenance (`cf_updated_at`), not compared.
-- `customData` is free text (`recentEvents` runs to kilobytes of pasted summaries). It is not workflow state, and the architecture forbids routing on free-form strings. It is not stored.
-- Every other key is compared by value (deep JSON equality), including keys Amoeba has never seen. `changed_keys(None, x)` is every key in `x`. A record that disappears yields `["present"]`.
+- `updatedAt` changes on every write, so it would make every write a change. It is kept on the snapshot as provenance (`cf_updated_at`), not compared. An overlay's own `updatedAt` is stripped the same way, for the same reason.
+- `customData` is free text (`recentEvents` runs to kilobytes of pasted summaries). It is not workflow state, and the architecture forbids routing on free-form strings. It is not stored, whether it appears on the record or inside a `worktrees` overlay.
+- Every other key is compared by value (deep JSON equality), including keys Amoeba has never seen. `changed_keys(None, x)` is every key in `x`. A record that disappears yields the reserved marker `["$present"]`, prefixed with `$` because no CF key is observed to start with it, so it cannot collide with a real CF field. `worktrees` itself is still reported as one changed key when any overlay's remaining fields differ; it is not diffed per sub-field, only cleaned of ignored keys before the whole-value comparison.
 
 **D5 — The Runner's own CF writes are reported too.** Unlike review detection (105 D5), this tenant does not defer to open `cf_write` journal entries. A CF change the Runner made is still a CF change, and a subscriber should see it. The Runner tells its own writes apart by its journal. Deferring would add a rule with nothing to protect: there is no double-record risk, because a snapshot is recorded only when the fields differ from the last one.
 
@@ -192,10 +194,10 @@ The payload says which keys moved, not their values; a subscriber that wants the
 **Errors.**
 
 - *File missing or unreadable:* every active watch goes `unreachable`, with one ERROR on the transition and one INFO on recovery. The process keeps running: CF not being installed on a machine is not a sick store.
-- *File present but not an array of objects with string `id`s, or not JSON:* `unrecognized`, with the error as `detail`, one ERROR on the transition. Retried only when the signature changes. This is also what a hand edit caught mid-save looks like; the next save fixes it.
+- *File present but not an array of objects with string `id`s, or not JSON:* `unrecognized`, with the error as `detail`, one ERROR on the transition. Retried only when the signature changes. This is also what a hand edit caught mid-save looks like; the next save fixes it. One malformed or duplicate-id entry anywhere in the file, including in a project no watch links, blinds every watch — this is a deliberate trade-off, not an oversight: `read_projects_file` parses the whole file as one unit because there is no partial-validity notion in the observed shape, and refusing to guess which of two same-id records is correct is safer than silently picking one. The blast radius is visible immediately through `inspect cf-watches`, and self-heals on CF's next write.
 - *Linked id never present:* `missing`, no snapshot. A typo in the id sits visibly in `inspect cf-watches`.
 - *Linked id present before, now gone:* a snapshot with `present = false` and a feed entry. That is a real CF fact (`cf project rm`), not an error. If it returns, the next snapshot has every key changed.
-- *Store failure while recording a snapshot:* 105's bounded-failure rule, reusing its `AttemptsSidecar` and `write_durably`, with the sidecar at `{store_dir}/cf/attempts/{project_id}/{cf_project_id}.attempts.json`. Below `cf_max_attempts`: ERROR and re-raise. At the limit: ERROR, the watch goes `failed`, and it is skipped until the sidecar is removed. On success the sidecar is deleted.
+- *Store failure while recording a snapshot:* 105's bounded-failure rule, reusing its `AttemptsSidecar` and `write_durably`. D3 keeps `cf_project_id` opaque and unparsed, so it is never used as a path component: the sidecar is keyed on a hex digest of the id, at `{store_dir}/cf/attempts/{project_id}/{sha256(cf_project_id).hexdigest()}.attempts.json`. Below `cf_max_attempts`: ERROR and re-raise. At the limit: ERROR, the watch goes `failed`, and it is skipped until the sidecar is removed. On success the sidecar is deleted.
 
 **Settings** (added to `ProcessSettings`, with CLI flags):
 
@@ -235,11 +237,11 @@ The payload says which keys moved, not their values; a subscriber that wants the
 
 ### Database / Storage Schema
 
-Migration `008_cf_watches_and_snapshots.sql`, `EXPECTED_SCHEMA_VERSION` 8. Nothing to backfill.
+Migration `008_cf_watches_and_snapshots.sql`, `EXPECTED_SCHEMA_VERSION` 8. Nothing to backfill. This number assumes 109's `007` lands first (Prerequisites); if implementation order changes and 107 ships before 109, this migration is renumbered `007` and 109's becomes `008` — keep this visible in the slice plan rather than fixing a number here that the plan might not honor.
 
 - **`cf_watches`:** `project_id`, `cf_project_id`, `active` (INTEGER), `state`, `detail` (nullable), `registered_at`, `updated_at`. Primary key `(project_id, cf_project_id)`.
 - **`cf_snapshots`:** `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `project_id`, `cf_project_id`, `present` (INTEGER), `fields` (JSON text, the record minus `IGNORED_KEYS`; `{}` when absent), `changed` (JSON array text), `cf_updated_at` (nullable), `version_label`, `observed_at`. Index on `(project_id, cf_project_id, id)`.
-- **Trigger** `AFTER INSERT ON cf_snapshots`: inserts a `changes` row, kind `'cf_project_changed'`, `node_id` null, `subject_id` the snapshot id, payload `json_object('cf_project_id', …, 'present', …, 'changed', json(new.changed))`, `recorded_at = new.observed_at`.
+- **Trigger** `AFTER INSERT ON cf_snapshots`: inserts a `changes` row, kind `'cf_project_changed'`, `node_id` null, `subject_id` the snapshot id, payload `json_object('cf_project_id', …, 'present', json(iif(new.present, 'true', 'false')), 'changed', json(new.changed))`, `recorded_at = new.observed_at`. `present` is cast to a JSON boolean literal, matching 105's boolean convention, rather than SQLite's native `1`/`0`.
 
 ## Integration Points
 
@@ -270,7 +272,7 @@ Migration `008_cf_watches_and_snapshots.sql`, `EXPECTED_SCHEMA_VERSION` 8. Nothi
 - A `projects.json` that is not JSON, not an array, has an entry without a string `id`, or has a duplicate `id`, shows `unrecognized` with the reason, records nothing, and is re-read only after the file changes.
 - A deactivated watch records nothing; reactivated, it records one snapshot covering everything that changed while inactive.
 - A store failure while recording stops the process below `cf_max_attempts`; at the limit the watch is `failed`, other watches continue, and deleting the sidecar retries.
-- An idle tick performs one `stat` and no read.
+- An idle tick performs one `stat`, no file read, and no new-watch detection beyond an in-memory cache of known watch ids (populated on tenant start and updated when `watch_cf` submissions are applied).
 
 ### Technical Requirements
 
