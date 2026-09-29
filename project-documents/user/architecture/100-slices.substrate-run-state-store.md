@@ -27,7 +27,7 @@ Two consequences shape the decomposition:
 - **The contract is the deliverable, not the engine.** Initiatives 120, 140, and 160 all code against this component's read/write interface. Slice 101 exists to make that interface real and stable as early as possible, because every downstream initiative is blocked on it.
 - **Sole-writer collapses what would otherwise be concurrency slices.** Because only the resident process mutates the store, there is no distributed-write slice, no lock-arbitration slice, and no conflict-resolution slice. The inbox (slice 103) is where that decision is paid for, and it is deliberately adjacent to the resident process (slice 102).
 
-**Slices were numbered in execution order until 104 was split on 20260926;** the split-off slices 108 and 109 took the next free numbers rather than renumbering slices already referenced by finished designs, reviews, and docs. See Implementation Order. Slice 107 was deferred until 20260928, when it was rescoped to need no Context Forge change and scheduled after 109; see its entry.
+**Slices were numbered in execution order until 104 was split on 20260926;** the split-off slices 108 and 109 took the next free numbers rather than renumbering slices already referenced by finished designs, reviews, and docs. See Implementation Order. Slice 107 was deferred until 20260928, when it was rescoped to need no Context Forge change and scheduled after 109; see its entry. Slice 110 (Network API) was added on 20260928 by PM direction and takes the next free number.
 
 ## Foundation Work
 
@@ -108,7 +108,7 @@ Two consequences shape the decomposition:
    - Detection is replaceable by an upstream event without changing the subscriber contract.
    - Subscribers that disconnect and reconnect do not corrupt feed state.
    **Dependencies:** [101, 102, 103, 104, 108] — 108 added at the 104 split: detected reviews are ingested through its parser. 103 added at slice design: directory registration and human replies both arrive through its inbox.
-   **Interfaces:** Provides the change feed consumed by initiative 160 and by status views; consumes 101, 102, 103, 104, 108.
+   **Interfaces:** Provides the change feed consumed by 110, initiative 160, and status views; consumes 101, 102, 103, 104, 108.
    **Risk Level:** Medium
    **Relative Effort:** 3
 
@@ -137,9 +137,23 @@ Two consequences shape the decomposition:
    **Risk Level:** Low
    **Relative Effort:** 2
 
+9. [ ] **(110) Network API** — Added 20260928 by PM direction: Amoeba is not useful beyond one machine without a network surface. `amoeba serve` is its own process, separate from the resident process, exposing three things over the network: read-only store queries (the same reads `amoeba inspect` makes), submission to the inbox (the only write, so the sole-writer model is unchanged), and the change feed as a live stream that a client resumes from its last `seq`. This is where push reaches remote subscribers; local followers keep 105's polling. Binds to localhost by default; any other bind requires authentication. Protocol, authentication scheme, and endpoint shape are decided at slice design.
+   **Value:** Architectural enablement — the notification bridge, Cowork, a status UI, and remote agents can use Amoeba without filesystem access to the supervisor's machine, which initiative 160 needs.
+   **Success Criteria:**
+   - A remote client can read nodes, blocked states, verdicts, and findings, and gets the same answers as `amoeba inspect`.
+   - A remote client can submit to the inbox, and the submission is applied exactly as a local one is, including while the resident process is stopped.
+   - A remote client following the feed receives each change once, in order, and resumes after a disconnect from its last `seq` with no gap and no repeat.
+   - No endpoint mutates the store except by submitting to the inbox.
+   - The server refuses to bind off localhost without authentication configured, and unauthenticated requests to a non-local bind are rejected.
+   - Killing the server leaves the resident process and the store unaffected; killing the resident process leaves the server serving reads and accepting submissions.
+   **Dependencies:** [101, 102, 103, 104, 105]
+   **Interfaces:** Provides the network surface consumed by initiative 160, the notification bridge, and Cowork; consumes the read contract (101–104), the inbox (103), and the feed (105).
+   **Risk Level:** Medium — first network exposure; authentication and the stream's resume semantics are the parts to get right.
+   **Relative Effort:** 3
+
 ## Integration Work
 
-9. [ ] **(106) Contract Proof and Hardening** — Prove the contract from the outside before initiative 120 commits to it. An end-to-end exercise driving a realistic lifecycle sequence through the substrate — nodes created, a Squadron run journaled and its verdict ingested, a blocked-state written and resolved through the inbox, a restart mid-sequence, subscribers observing the whole thing — using only the documented API, no internal access. Verifies store-locality behavior end to end against the model settled in slice 101 (per-supervisor, central, project-keyed) — the locality *decision* is closed there, and what remains here is proving path resolution and project-keying hold under a realistic sequence. Also closes out the pruning policy for paused Squadron runs that SQ never prunes, and documentation for downstream initiative authors.
+10. [ ] **(106) Contract Proof and Hardening** — Prove the contract from the outside before initiative 120 commits to it. An end-to-end exercise driving a realistic lifecycle sequence through the substrate — nodes created, a Squadron run journaled and its verdict ingested, a blocked-state written and resolved through the inbox, a restart mid-sequence, subscribers observing the whole thing — using only the documented API, no internal access. Verifies store-locality behavior end to end against the model settled in slice 101 (per-supervisor, central, project-keyed) — the locality *decision* is closed there, and what remains here is proving path resolution and project-keying hold under a realistic sequence. Also closes out the pruning policy for paused Squadron runs that SQ never prunes, and documentation for downstream initiative authors.
    **Value:** Developer value — the contract is demonstrated to work for its actual consumer rather than assumed to. This is the point at which initiative 120 can safely begin.
    **Success Criteria:**
    - A full lifecycle sequence runs through the public API with no internal access.
@@ -147,14 +161,14 @@ Two consequences shape the decomposition:
    - Store locality behaves correctly for the chosen model and is documented.
    - Pruning policy for paused SQ runs is implemented and documented.
    - Contract documentation is sufficient for initiative 120's slice design to proceed against it.
-   **Dependencies:** [101, 102, 103, 104, 105, 107, 108, 109] — 107 added 20260928 when it was scheduled before this slice.
+   **Dependencies:** [101, 102, 103, 104, 105, 107, 108, 109, 110] — 107 added 20260928 when it was scheduled before this slice. 110 added 20260928 so the contract is proven through the network surface as well as locally.
    **Interfaces:** Consumes the full public contract; produces the documentation initiatives 120/140/160 design against.
    **Risk Level:** Low
    **Relative Effort:** 3
 
 ## Implementation Order
 
-`101 → 102 → 103 → 104 → 108 → 105 → 109 → 107 → 106`. 108 and 109 were split from 104 on 20260926 and numbered after the existing slices; 108 precedes 105 because 105 ingests through its parser. 107 was scheduled on 20260928 after its rescope; it follows 109 rather than directly after 105 so that 109's already-designed migration number (007) stands, and it precedes 106 so the contract proof covers it.
+`101 → 102 → 103 → 104 → 108 → 105 → 109 → 107 → 110 → 106`. 108 and 109 were split from 104 on 20260926 and numbered after the existing slices; 108 precedes 105 because 105 ingests through its parser. 107 was scheduled on 20260928 after its rescope; it follows 109 rather than directly after 105 so that 109's already-designed migration number (007) stands, and it precedes 106 so the contract proof covers it. 110 was added on 20260928; it needs 105's feed, adds no migration, and precedes 106 so the proof runs through the network surface too.
 
 Rationale, in the guide's order of precedence:
 
