@@ -50,7 +50,7 @@ Developer value.
 - Context Forge events: slice 107.
 - Review completion for commands the Runner issued. The Runner observes those at process exit (120). This slice only defers to it; see the ownership rule under Technical Decisions.
 - Backfilling reviews that existed before a directory was registered. Use `amoeba ingest review` (108), oldest first.
-- A server-side push transport (socket, HTTP). See D2.
+- A network transport for the feed (HTTP, WebSocket, SSE). Slice 110; see D2.
 - A cross-project feed. Each project has its own feed and cursor.
 - Feed retention and compaction. Already in the slice plan's future work.
 - Parsing anything other than Squadron review files.
@@ -189,7 +189,7 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 
 ### Technology Choices
 
-**D1 — The feed is a change log in the store, written in the mutation's transaction.** *(PM pending.)* A change and its feed row commit together or not at all, so the feed can never show a change the store does not have, or miss one it does. Order is `seq`, per project, and it matches commit order because the resident process is the sole writer. Rejected: an in-memory event bus in the process. It loses events on crash and gives a subscriber that was down no way to catch up.
+**D1 — The feed is a change log in the store, written in the mutation's transaction.** *(PM — ratified 20260928.)* A change and its feed row commit together or not at all, so the feed can never show a change the store does not have, or miss one it does. Order is `seq`, per project, and it matches commit order because the resident process is the sole writer. Rejected: an in-memory event bus in the process. It loses events on crash and gives a subscriber that was down no way to catch up.
 
 **D1a — Reading a state snapshot and `change_head` together needs an explicit read transaction, which the read-only handle now exposes.** Two sequential calls on a read-only connection are not atomic against each other: Python's `sqlite3` only opens an implicit transaction around statements it recognizes as mutating, so two plain `SELECT`s issued back to back can straddle a commit from the writer, landing the snapshot and the head on either side of the same change. `change_head`'s stated purpose — "read it in the same read transaction as a state snapshot, then follow from it" — is unachievable without a primitive that groups reads into one transaction, and no such primitive exists in 101–104's contracts.
 
@@ -202,9 +202,9 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 - This is a contract addition to 101, not to 105: it lives on the read-only handle 101 already defines, and every future slice needing multi-read consistency uses the same method. `store-contract.md` gains this method under 101's section, credited to 105 where the gap was found.
 - **Tested** by a new case in the follower test suite: seed some state, open `read_transaction()`, read state and `change_head()`, commit a change from a second connection between the two reads, and assert the transaction's `change_head()` did not observe it (the write is visible only after the transaction closes and a fresh read begins).
 
-**D2 — Subscribers follow the log themselves; the process runs no server.** *(PM pending.)* `follow()` is a blocking iterator. It wakes on SQLite's `PRAGMA data_version`, which changes only when another connection commits, so an idle check costs one pragma read. The subscriber sees a stream; the waiting lives in one function.
+**D2 — Subscribers follow the log themselves; the process runs no server.** *(PM — ratified 20260928.)* `follow()` is a blocking iterator. It wakes on SQLite's `PRAGMA data_version`, which changes only when another connection commits, so an idle check costs one pragma read. The subscriber sees a stream; the waiting lives in one function.
 
-*How this sits against "Push, not poll."* That design goal is about **inbound** signals: the resident process should learn that CF changed, a Squadron run finished, or a human replied without polling `cf next`, which recomputes gate state from disk on every call. This slice meets it for the two inbound signals it owns: human replies arrive through the inbox, and PM-launched reviews are detected by the tenant, not by the Runner calling anything. The outbound feed is a different surface. Inside the implementation, `follow()` does check a counter on an interval, and the design says so plainly rather than calling it push. What the goal rules out, a subscriber re-reading or recomputing state to find out whether anything changed, does not happen: an idle check reads one integer, and a busy one reads only the new rows. The PM decision is whether that is acceptable for the outbound surface or whether a real wake-up signal is wanted now. If it is, the smallest version fits behind `follow()` with no subscriber change: each follower binds a datagram socket in `{store_dir}/feed/`, and after any commit that emitted changes the process sends one empty datagram to each socket there, never blocking and unlinking any socket that refuses. The follower still reads the rows from the log. This design does not build it.
+*How this sits against "Push, not poll."* That design goal is about **inbound** signals: the resident process should learn that CF changed, a Squadron run finished, or a human replied without polling `cf next`, which recomputes gate state from disk on every call. This slice meets it for the two inbound signals it owns: human replies arrive through the inbox, and PM-launched reviews are detected by the tenant, not by the Runner calling anything. The outbound feed is a different surface. Inside the implementation, `follow()` does check a counter on an interval, and the design says so plainly rather than calling it push. What the goal rules out, a subscriber re-reading or recomputing state to find out whether anything changed, does not happen: an idle check reads one integer, and a busy one reads only the new rows. *Resolved 20260928:* polling is accepted for followers on the same machine as the store; a fraction of a second on a local file makes no practical difference. Real push belongs at the network edge, where it matters: slice 110 (Network API) serves the feed as a live stream to remote subscribers by tailing this same log through `follow()`. The feed log stays the one source; 110 is a transport over it, and nothing in this slice changes for it.
 
 - *Why not a Unix socket served by a tenant:* the loop is synchronous (102, D2). Serving sockets from it means non-blocking accept and send, per-connection buffers, and a slow-subscriber policy, all inside the process that owns crash recovery. The log would still be needed for catch-up, so the socket would only add latency savings.
 - *What it costs:* a change reaches a follower within `follow_interval_seconds` (default 0.25), not instantly. The contract states the bound.
@@ -213,7 +213,7 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 
 **D3 — Detection scans directories on an interval, in a tenant.** No file-watching library. FSEvents and inotify deliver events on a thread, and the tenant would still have to reconcile them against a scan after any restart. A top-level listing of one reviews directory every 2 seconds is a few dozen `stat` calls. Non-recursive: Squadron writes to the top level, and `archive/` holds rounds already seen.
 
-**D4 — A review attaches to its slice node.** *(PM pending.)* The attribution rule: the one node in the project with `kind == slice` and `cf.slice_name` equal to the frontmatter's `slice`. Zero or several matches is `unattributed`, recorded with the candidate ids, and nothing is written to any node.
+**D4 — A review attaches to its slice node.** *(PM — ratified 20260928.)* The attribution rule: the one node in the project with `kind == slice` and `cf.slice_name` equal to the frontmatter's `slice`. Zero or several matches is `unattributed`, recorded with the candidate ids, and nothing is written to any node.
 
 - It needs nothing new on the node. Slice, tasks, and code reviews on one slice node stay separate series because 104's `finding_changes` groups by `review_type`, and multi-part task reviews stay separate by D7.
 - It is defined once in `amoeba.store.attribution` and exported. **Initiative 120 must attach the reviews it launches with the same rule**, or the Runner's rounds and detected rounds split across two nodes and "what changed since last round" breaks. This is recorded in `evidence-contract.md`.
@@ -221,7 +221,7 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 - An unattributed review does not create a blocked node. There is no node to block, and creating one would invent tree structure. It is on the feed and in `inspect detections`.
 - *Unattributed is terminal for detection, and recovery is by hand.* Detection never retries it: the file's `(path, digest)` is in the ledger, and retrying later would record old rounds after newer ones. Once the right slice node exists, the PM runs `amoeba inspect detections --outcome unattributed`, then `amoeba ingest review --node ID` (108) on each file, oldest round first. The ledger row keeps the parsed-content id (`record_id`), which is the id `ingest` uses, so the listing shows the row as `recorded_since` once that is done, and ingesting it twice is a no-op. The ledger row itself is not rewritten; it stays the record of what detection saw. An automatic sweep when a matching slice node appears is 120's to add if it wants one.
 
-**D5 — The Runner owns the reviews it launches; detection defers, then skips.** *(PM pending.)*
+**D5 — The Runner owns the reviews it launches; detection defers, then skips.** *(PM — ratified 20260928.)*
 
 - *Defer:* while a project has an unresolved journal entry of a review-producing command kind, the tenant does not scan that project. The set of review-producing kinds is defined once in `journal_models.py` (today `{SQ_RUN}`; 120 adds its review command kind to it).
 - *Skip:* when the Runner records a review from a file, it calls `record_detection(outcome=runner_issued, verdict_id)` for that `(path, digest)`. Detection skips anything already in the ledger.
@@ -246,7 +246,7 @@ The only in-memory state is the tenant's last-scan signatures and scan time. Los
 | One file unreadable (`PermissionError`) | One WARNING per file until it becomes readable, then skipped. Not a ledger row, because nothing was examined. |
 | Not a regular file (directory, socket), or not `*.md` | Ignored. |
 
-**D7 — A review series is node, review type, and reviewed document.** *(PM pending; changes 104's contract, additively.)* Task reviews come in parts. The captured 102 series has `part-1` and `part-2` reviews, both `reviewType: tasks`, both for the same slice, reviewing different task files. Attached to one slice node under 104's rule, part 2's round would become part 1's "previous round", and `finding_changes` would report every part-1 finding as new and every part-2 finding as gone.
+**D7 — A review series is node, review type, and reviewed document.** *(PM — ratified 20260928; changes 104's contract, additively.)* Task reviews come in parts. The captured 102 series has `part-1` and `part-2` reviews, both `reviewType: tasks`, both for the same slice, reviewing different task files. Attached to one slice node under 104's rule, part 2's round would become part 1's "previous round", and `finding_changes` would report every part-1 finding as new and every part-2 finding as gone.
 
 - `VerdictInput` and the `verdicts` table gain `source_document: str | None`, filled by 108's parser from the frontmatter's `sourceDocument`.
 - `finding_changes` picks the previous round on the same node, same `review_type`, and same `source_document`, compared with `IS` so two nulls match. Every verdict recorded before this slice has a null `source_document`, so their series are unchanged.
@@ -373,7 +373,8 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 - **106:** the feed, so the end-to-end proof can assert that subscribers saw the whole sequence, including across a restart.
 - **107:** the change log and trigger convention. 107 adds a `cf_snapshots` table with its own trigger and a `cf_project_changed` kind, and extends the invariant test.
 - **Initiative 120:** `attribute_review`, `record_detection(outcome=runner_issued)`, and the review-producing kinds set. The Runner may also follow the feed instead of re-querying. 120 takes on the requirements in D5, points 3 and 5: mark the ledger in the same transaction that resolves the journal entry, and record its reviews from the artifact through 108's parser.
-- **Initiative 160:** `follow()` and `amoeba feed` for the Translator surface and the notification bridge.
+- **110:** `follow()` and `change_head` / `read_transaction()`, which the network API streams to remote subscribers.
+- **Initiative 160:** `follow()` and `amoeba feed` for the Translator surface and the notification bridge, locally or through 110.
 
 ### Consumes from Other Slices
 
