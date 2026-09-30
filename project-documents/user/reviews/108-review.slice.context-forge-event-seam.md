@@ -8,7 +8,7 @@ rulesSource: project
 project: amoeba
 verdict: CONCERNS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/107-slice.context-forge-event-seam.md
+sourceDocument: project-documents/user/slices/108-slice.context-forge-event-seam.md
 aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20260928
@@ -22,55 +22,55 @@ findings:
     severity: pass
     category: architecture-alignment
     summary: "Writer model, layering, and CF 220 ownership match the architecture"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md#Architecture"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Architecture"
   - id: F002
     severity: pass
     category: error-handling
     summary: "Failure modes are enumerated with explicit handling"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:192-198"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:192-198"
   - id: F003
     severity: concern
     category: error-handling
     summary: "Pseudocode contradicts the \"re-read only when the signature changes\" rule"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:114-134"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:114-134"
   - id: F004
     severity: concern
     category: provenance
     summary: "Version label is captured at start-up, so snapshot provenance can go stale"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:138"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:138"
   - id: F005
     severity: concern
     category: error-handling
     summary: "Opaque CF id is used as a filesystem path component"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:198"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:198"
   - id: F006
     severity: concern
     category: scope
     summary: "Ignored keys are top-level only, but `worktrees` overlays may carry free text or churn"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:51,72,167-171"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:51,72,167-171"
   - id: F007
     severity: note
     category: nfr
     summary: "Idle-tick claim (\"one stat and no read\") ignores the per-tick store query"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:116-119,275"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:116-119,275"
   - id: F008
     severity: note
     category: error-handling
     summary: "Whole-file rejection on a duplicate or malformed id has a wide blast radius"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:223,270"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:223,270"
   - id: F009
     severity: note
     category: contract
     summary: "Feed payload details to pin down"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:186,242,312"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:186,242,312"
   - id: F010
     severity: note
     category: dependencies
-    summary: "Migration ordering couples 107 to 109"
-    location: "project-documents/user/slices/107-slice.context-forge-event-seam.md:59,64"
+    summary: "Migration ordering couples 108 to 107"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:59,64"
 ---
 
-# Review: slice — slice 107
+# Review: slice — slice 108
 
 **Verdict:** CONCERNS
 **Model:** claude-sonnet-5-5
@@ -83,7 +83,7 @@ The tenant lives in the resident process, and the only external write is the `wa
 
 ### [PASS] Failure modes are enumerated with explicit handling
 
-The design covers a missing file, an unrecognized file, a linked id that was never present, an id that vanished, and a store failure. Each has a named state, a log level, a recovery trigger, and a bounded-failure path reusing 105's sidecar. Nothing is left as TBD. The arch states no numeric NFR for this path. The slice restates the 2s scan interval and the idle-tick cost as its own targets.
+The design covers a missing file, an unrecognized file, a linked id that was never present, an id that vanished, and a store failure. Each has a named state, a log level, a recovery trigger, and a bounded-failure path reusing 106's sidecar. Nothing is left as TBD. The arch states no numeric NFR for this path. The slice restates the 2s scan interval and the idle-tick cost as its own targets.
 
 ### [CONCERN] Pseudocode contradicts the "re-read only when the signature changes" rule
 
@@ -111,12 +111,12 @@ One entry without a string `id`, or one duplicate `id`, in an unlinked project b
 
 ### [NOTE] Feed payload details to pin down
 
-- The trigger's `json_object('present', new.present)` yields `1`/`0`, but the walkthrough and payload table show `true`/`false`. Confirm 105's convention for booleans.
+- The trigger's `json_object('present', new.present)` yields `1`/`0`, but the walkthrough and payload table show `true`/`false`. Confirm 106's convention for booleans.
 - The synthetic `"present"` entry in `changed` shares a namespace with CF's own keys. If CF ever adds a `present` field, the two are indistinguishable. A reserved marker would avoid this.
 
-### [NOTE] Migration ordering couples 107 to 109
+### [NOTE] Migration ordering couples 108 to 107
 
-The slice takes migration 008 on the assumption that 109's 007 lands first, yet it lists 109 as "not needed". The ordering is stated openly and is fine. If the slice order changes, the migration numbers will need renumbering, so keep that visible in the slice plan.
+The slice takes migration 008 on the assumption that 107's 007 lands first, yet it lists 107 as "not needed". The ordering is stated openly and is fine. If the slice order changes, the migration numbers will need renumbering, so keep that visible in the slice plan.
 
 ### Run Digest
 

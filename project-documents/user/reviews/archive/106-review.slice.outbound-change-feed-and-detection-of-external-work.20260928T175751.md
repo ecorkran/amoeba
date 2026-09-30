@@ -6,7 +6,7 @@ slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
 verdict: CONCERNS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md
+sourceDocument: project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -21,45 +21,45 @@ findings:
     severity: pass
     category: alignment
     summary: "Dependency set and integration points match the slice plan and prior slices"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#dependencies"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#dependencies"
   - id: F002
     severity: pass
     category: coverage
-    summary: "All five plan-level success criteria for 105 are covered by functional requirements"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#success-criteria"
+    summary: "All five plan-level success criteria for 106 are covered by functional requirements"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#success-criteria"
   - id: F003
     severity: concern
     category: architecture-alignment
     summary: "D2's transport is polling, against the architecture's \"Push, not poll\" goal, and awaits PM ratification"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d2--subscribers-follow-the-log-themselves-the-process-runs-no-server"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#d2--subscribers-follow-the-log-themselves-the-process-runs-no-server"
   - id: F004
     severity: concern
     category: error-handling
     summary: "Detection's error handling claims to follow InboxTenant but drops 103's bounded-failure mechanism"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#errors"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#errors"
   - id: F005
     severity: note
     category: scope
     summary: "D7 modifies completed slice 104's contract"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d7--a-review-series-is-node-review-type-and-reviewed-document"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#d7--a-review-series-is-node-review-type-and-reviewed-document"
   - id: F006
     severity: note
     category: error-handling
     summary: "File vanishing between listing and read is not enumerated"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d6--one-interface-for-where-reviews-come-from"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#d6--one-interface-for-where-reviews-come-from"
   - id: F007
     severity: note
     category: under-specification
     summary: "Runner/detection ordering in D5 rests on an unstated sequencing assumption"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#d5--the-runner-owns-the-reviews-it-launches-detection-defers-then-skips"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#d5--the-runner-owns-the-reviews-it-launches-detection-defers-then-skips"
   - id: F008
     severity: note
     category: nfr
     summary: "Parent architecture states no numeric NFRs; slice sets its own bounds"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#settings"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#settings"
 ---
 
-# Review: slice — slice 105
+# Review: slice — slice 106
 
 **Verdict:** CONCERNS
 **Model:** z-ai/glm-5.3-flash
@@ -68,9 +68,9 @@ findings:
 
 ### [PASS] Dependency set and integration points match the slice plan and prior slices
 
-The declared dependencies `[101, 102, 103, 104, 108]` match the slice plan's entry for 105 (including both "added at slice design" additions, 103 and 108, each with a stated reason). Consumption claims check out against the consumed designs: the `Tenant` seam and listing registry from 102, the submission-kind seam (enum member + payload model + effect) from 103, `record_verdict` with its retry/idempotency rule from 104, and `EXPECTED_SCHEMA_VERSION` 5 → 6 continuing 101's migration mechanism. The changes to consumed slices are additive and each has a named contract doc and CHANGELOG entry.
+The declared dependencies `[101, 102, 103, 104, 105]` match the slice plan's entry for 106 (including both "added at slice design" additions, 103 and 105, each with a stated reason). Consumption claims check out against the consumed designs: the `Tenant` seam and listing registry from 102, the submission-kind seam (enum member + payload model + effect) from 103, `record_verdict` with its retry/idempotency rule from 104, and `EXPECTED_SCHEMA_VERSION` 5 → 6 continuing 101's migration mechanism. The changes to consumed slices are additive and each has a named contract doc and CHANGELOG entry.
 
-### [PASS] All five plan-level success criteria for 105 are covered by functional requirements
+### [PASS] All five plan-level success criteria for 106 are covered by functional requirements
 
 Plan criteria — subscriber notified on status change; external review ingested with correct provenance; provider-failure artifact detected as a failure; detection replaceable by an upstream event without changing the subscriber contract (D6's `ReviewSource`); disconnect/reconnect not corrupting feed state (cursor resume, killed-follower test) — each maps to an explicit functional or integration requirement, including the replay-invariant test that catches a write path missing its emission.
 
@@ -84,7 +84,7 @@ The architecture's Design Goals state "Push, not poll — the resident process l
 
 ### [NOTE] D7 modifies completed slice 104's contract
 
-D7 adds `source_document` to `VerdictInput` and the `verdicts` table, regroups `finding_changes` by it, changes the previous-round index, and extends the `verdict` inbox payload — changes to slice 104, which is complete. The change is additive, null-safe for all pre-existing verdicts, justified by the real captured multi-part series, included in migration 006, and routed through `evidence-contract.md` updates. Acceptable, but it is cross-slice scope inside 105 and shares D7's pending-PM status; it should be ratified as one decision.
+D7 adds `source_document` to `VerdictInput` and the `verdicts` table, regroups `finding_changes` by it, changes the previous-round index, and extends the `verdict` inbox payload — changes to slice 104, which is complete. The change is additive, null-safe for all pre-existing verdicts, justified by the real captured multi-part series, included in migration 006, and routed through `evidence-contract.md` updates. Acceptable, but it is cross-slice scope inside 106 and shares D7's pending-PM status; it should be ratified as one decision.
 
 ### [NOTE] File vanishing between listing and read is not enumerated
 

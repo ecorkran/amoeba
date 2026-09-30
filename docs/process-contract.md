@@ -10,7 +10,7 @@ status: complete
 # The Amoeba Process Contract
 
 This document is the contract for `amoeba.process` and the `amoeba` CLI. It is
-written so that a slice design in 103, 104, 105, 106, 107, or initiative 120 can
+written so that a slice design in 103, 104, 106, 110, 108, or initiative 120 can
 proceed **without reading the process implementation**. If you find yourself
 opening `host.py` to answer a design question, that is a gap in this document —
 say so.
@@ -395,6 +395,6 @@ Named here so a downstream design knows what is *not* coming for free:
   journaled-but-never-issued ambiguity entirely. Until then, that narrow crash
   window costs a human interruption.
 - **Journal retention.** Entries are never deleted in this slice.
-- **Pruning Squadron's paused runs** — slice 106.
+- **Pruning Squadron's paused runs** — slice 110.
 - **A per-tick budget**, should a real tenant prove unable to honor the tenant
   obligation. Revisit then, not speculatively.

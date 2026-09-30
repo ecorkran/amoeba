@@ -4,7 +4,7 @@ slice: durable-inbox-and-message-queue
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102]
-interfaces: [104, 105, 106]
+interfaces: [104, 106, 110]
 dateCreated: 20260921
 dateUpdated: 20260925
 status: complete
@@ -53,7 +53,7 @@ Architectural enablement. Without this slice, initiatives 140 and 160 cannot exi
 - The Runner's consumption of intent and any routing — initiative 120.
 - Populating a new project's node tree. `create_project` yields an empty store; building the tree from CF is the Runner's job (120).
 - Verdict, finding, and judge-sample submission kinds — slice 104 adds them through the seam this slice defines.
-- Push notification that a message or state change exists — slice 105's change feed. Until then consumers poll the read API.
+- Push notification that a message or state change exists — slice 106's change feed. Until then consumers poll the read API.
 - Removing or archiving a project.
 - Retention of applied submission records and messages — already Future Work in the slice plan.
 - Authentication of submitters. The inbox is protected by filesystem permissions on the supervisor directory, as the stores already are.
@@ -306,7 +306,7 @@ This is the content `docs/inbox-contract.md` must state.
 
 - **That apply order equals submit order.** It does except for submissions racing within one submitter's timestamp-to-rename window, or across a wall-clock step. Anything that needs order reads `applied_seq` / `seq`.
 - **Latency.** Apply happens on the next tick; bounded below by `idle_interval_seconds` when idle, unbounded while the process is down.
-- **Notification of outcome.** Submitters poll `submission(id)`. Push is slice 105.
+- **Notification of outcome.** Submitters poll `submission(id)`. Push is slice 106.
 - **That a valid submission is applied.** A `resolution` whose blocked state was resolved by someone else first is `rejected` as stale. First writer wins; the loser is told why.
 - **That "blocked state still open" means "a human has not yet seen it"** for an escalation that recovery attached to a Judge or checkpoint block: that block can be resolved by its own owner. Delivery by cursor is the guarantee; open-ness is a convenience query.
 - **Retention limits.** Records and messages are never deleted in this slice.
@@ -316,8 +316,8 @@ This is the content `docs/inbox-contract.md` must state.
 ### Provides to Other Slices
 
 - **104:** the submission-kind seam (enum member + payload model + effect) for verdict and judge-sample submissions from the out-of-process Judge; two more listings already in the registry as precedent.
-- **105:** `messages.seq` as a change source for the feed. *(Corrected 20260928 by 105's design, D8a: `applied_seq` is not itself a change source — a submission's effects, not the submission row, are what land on the feed. A rejected submission carries no effect and is still read via `submission(id)`, per line 309 above.)* The change feed replaces consumer polling for effects without changing `messages()`.
-- **106:** project creation, the blocked-state-resolved-through-the-inbox step of the end-to-end proof, and `submit` + `kill -9` + `start` as its restart injection — all through public surfaces, with no script opening a store read-write.
+- **106:** `messages.seq` as a change source for the feed. *(Corrected 20260928 by 106's design, D8a: `applied_seq` is not itself a change source — a submission's effects, not the submission row, are what land on the feed. A rejected submission carries no effect and is still read via `submission(id)`, per line 309 above.)* The change feed replaces consumer polling for effects without changing `messages()`.
+- **110:** project creation, the blocked-state-resolved-through-the-inbox step of the end-to-end proof, and `submit` + `kill -9` + `start` as its restart injection — all through public surfaces, with no script opening a store read-write.
 - **Initiative 120:** `pending_intents` / `acknowledge_message`; escalation delivery as a side effect of `block(kind=HUMAN)`; `host.open_project` and a `project_ids` that grows at runtime, which the Runner must not cache.
 - **Initiatives 140, 160, and the notification bridge:** `amoeba.inbox.submit`, `Store.open_read_only(...).messages(...)`, and `submission(id)`.
 

@@ -6,7 +6,7 @@ slice: judge-samples-checks-and-calibration
 project: amoeba
 verdict: PASS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/109-slice.judge-samples-checks-and-calibration.md
+sourceDocument: project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -21,27 +21,27 @@ findings:
     severity: pass
     category: alignment
     summary: "Strong alignment with the architecture's stated scope and principles"
-    location: "project-documents/user/slices/109-slice.judge-samples-checks-and-calibration.md#Overview"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Overview"
   - id: F002
     severity: pass
     category: alignment
     summary: "Provenance and vocabulary principles upheld"
-    location: "project-documents/user/slices/109-slice.judge-samples-checks-and-calibration.md#D5"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#D5"
   - id: F003
     severity: pass
     category: error-handling
     summary: "Failure modes on new write paths are enumerated, not TBD"
-    location: "project-documents/user/slices/109-slice.judge-samples-checks-and-calibration.md#Error handling"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Error handling"
   - id: F004
     severity: pass
     category: dependencies
     summary: "Dependency directions and integration points are consistent"
-    location: "project-documents/user/slices/109-slice.judge-samples-checks-and-calibration.md#Dependencies"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Dependencies"
   - id: F005
     severity: note
     category: scope
-    summary: "106's wording says \"the inbox kind for judge samples\"; 109 reuses the `verdict` kind"
-    location: "project-documents/user/slices/109-slice.judge-samples-checks-and-calibration.md#Inbox"
+    summary: "110's wording says \"the inbox kind for judge samples\"; 107 reuses the `verdict` kind"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Inbox"
   - id: F006
     severity: note
     category: alignment
@@ -51,10 +51,10 @@ findings:
     severity: note
     category: under-specification
     summary: "Calibration report's known overcount is documented rather than hidden"
-    location: "project-documents/user/slices/109-slice.judge-samples-checks-and-calibration.md#D4"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#D4"
 ---
 
-# Review: slice — slice 109
+# Review: slice — slice 107
 
 **Verdict:** PASS
 **Model:** z-ai/glm-5.3-flash
@@ -75,11 +75,11 @@ The D2 cross-node precondition is handled explicitly on both paths (`ValueError`
 
 ### [PASS] Dependency directions and integration points are consistent
 
-Consumes from 104/105/108 as designed; the migration-006 coupling with 105 is explicitly acknowledged with a fallback (this slice takes 006 if 105 slips, and 105 rebases). Provides to 106 match 106's stated expectation (`106-slice.contract-proof-and-hardening.md:70` — judge samples submitted by the out-of-process Judge actor; line 110/124). Writer model is respected: samples arrive via the inbox for the out-of-process Judge; checks/work records are in-process writes by the resident-process Runner, consistent with the parent's writer model. The 105 change-feed extension is deferred, not added speculatively.
+Consumes from 104/106/105 as designed; the migration-006 coupling with 106 is explicitly acknowledged with a fallback (this slice takes 006 if 106 slips, and 106 rebases). Provides to 110 match 110's stated expectation (`110-slice.contract-proof-and-hardening.md:70` — judge samples submitted by the out-of-process Judge actor; line 110/124). Writer model is respected: samples arrive via the inbox for the out-of-process Judge; checks/work records are in-process writes by the resident-process Runner, consistent with the parent's writer model. The 106 change-feed extension is deferred, not added speculatively.
 
-### [NOTE] 106's wording says "the inbox kind for judge samples"; 109 reuses the `verdict` kind
+### [NOTE] 110's wording says "the inbox kind for judge samples"; 107 reuses the `verdict` kind
 
-106 (line 70) phrases its dependency as "the inbox kind for judge samples and its read method", while 109 deliberately extends the existing `verdict` kind with an optional key rather than adding a kind. Functionally equivalent — 106's actor calls `amoeba submit verdict` (its line 110) — but the two documents use slightly different terminology for the same seam. Cosmetic; no action needed unless doc reconciliation matters.
+110 (line 70) phrases its dependency as "the inbox kind for judge samples and its read method", while 107 deliberately extends the existing `verdict` kind with an optional key rather than adding a kind. Functionally equivalent — 110's actor calls `amoeba submit verdict` (its line 110) — but the two documents use slightly different terminology for the same seam. Cosmetic; no action needed unless doc reconciliation matters.
 
 ### [NOTE] NFR restatement not applicable — no performance targets in the parent
 

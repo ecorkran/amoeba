@@ -77,7 +77,7 @@ The architecture's writer model ("the resident process is the sole writer; the i
 
 ### [PASS] Scope matches the slice plan, including the PM-ratified additions
 
-All included items map to slice plan 103's success criteria (durable append while down, idempotent apply loop, human reply fills a resolution slot, documented semantics, runtime project creation). Exclusions correctly defer message content (160), Runner consumption (120), verdict kinds (104), and push notification (105), each with the consuming slice named. The effort change from 3 to 4 is flagged against the slice plan entry.
+All included items map to slice plan 103's success criteria (durable append while down, idempotent apply loop, human reply fills a resolution slot, documented semantics, runtime project creation). Exclusions correctly defer message content (160), Runner consumption (120), verdict kinds (104), and push notification (106), each with the consuming slice named. The effort change from 3 to 4 is flagged against the slice plan entry.
 
 ### [PASS] Delivery, replay, and crash semantics are enumerated rather than implicit
 

@@ -3,8 +3,8 @@ docType: slice-design
 slice: context-forge-event-seam
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
-dependencies: [101, 102, 103, 105]
-interfaces: [106]
+dependencies: [101, 102, 103, 106]
+interfaces: [110]
 dateCreated: 20260928
 dateUpdated: 20260928
 status: not_started
@@ -16,9 +16,9 @@ status: not_started
 
 Context Forge state changes all the time, from the CLI, from MCP tools, from agents, and Amoeba only finds out by asking. This slice makes Amoeba notice on its own, without any change to Context Forge.
 
-CF keeps every project's state in one file, `projects.json` in its data directory, and replaces that file atomically (write a temp file, rename over) on every write, whichever client made it. So the file is already the event source. A new tenant in the resident process watches it. When it changes, the tenant diffs each linked CF project against the last snapshot stored for it, and if anything moved, records a new snapshot. A trigger puts a `cf_project_changed` entry on 105's change feed in the same transaction.
+CF keeps every project's state in one file, `projects.json` in its data directory, and replaces that file atomically (write a temp file, rename over) on every write, whichever client made it. So the file is already the event source. A new tenant in the resident process watches it. When it changes, the tenant diffs each linked CF project against the last snapshot stored for it, and if anything moved, records a new snapshot. A trigger puts a `cf_project_changed` entry on 106's change feed in the same transaction.
 
-This is all of the scope Amoeba took from CF initiative 220. 220's long-running process is 102's resident process; its notifications and subscription model are 105's feed; its storage-event emission is replaced by watching the file. The slice was deferred as a two-repository project needing a CF daemon and an agreed wire contract. It needs neither (rescoped 20260928).
+This is all of the scope Amoeba took from CF initiative 220. 220's long-running process is 102's resident process; its notifications and subscription model are 106's feed; its storage-event emission is replaced by watching the file. The slice was deferred as a two-repository project needing a CF daemon and an agreed wire contract. It needs neither (rescoped 20260928).
 
 ## Value
 
@@ -56,12 +56,12 @@ Developer value.
 
 ### Prerequisites
 
-- **101:** `Store`, the migration mechanism (`EXPECTED_SCHEMA_VERSION` 7 → 8, after 109's 007).
+- **101:** `Store`, the migration mechanism (`EXPECTED_SCHEMA_VERSION` 7 → 8, after 107's 007).
 - **102:** the tenant seam, `ProcessSettings` and its flag wiring, the listing registry, the writer guard, and the `cf --version` subprocess call and its `unavailable` marker convention (102 calls it once at start-up; this tenant calls it again on each detected file change).
 - **103:** the inbox kind seam (member, payload model, effect) and `amoeba submit`.
-- **105:** the `changes` table, the trigger emission pattern (105 D8), the feed invariant test, and the bounded-failure attempts sidecar used by detection.
+- **106:** the `changes` table, the trigger emission pattern (106 D8), the feed invariant test, and the bounded-failure attempts sidecar used by detection.
 
-Not needed: 104, 108, 109. 109 is ahead in the order only because it already holds migration 007.
+Not needed: 104, 105, 107. 107 is ahead in the order only because it already holds migration 007.
 
 ### Interfaces Required
 
@@ -74,7 +74,7 @@ Not needed: 104, 108, 109. 109 is ahead in the order only because it already hol
 
 Amoeba depends on exactly two things in that shape: the file is a JSON array of objects, and each object has a string `id`. Every other key is carried as opaque data and compared by value, never interpreted. So a key CF adds, renames, or retires shows up as a changed field, not as a parse failure.
 
-**From the store:** 105's `changes` table and its trigger convention.
+**From the store:** 106's `changes` table and its trigger convention.
 
 ## Architecture
 
@@ -100,7 +100,7 @@ src/amoeba/cli/
 docs/cf-contract.md
 ```
 
-Same pattern as 101–105: models, SQL, mapping, operations mixin. The store does not import `amoeba.upstream`; it stores CF fields as an opaque JSON object and a list of changed key names, both computed by the tenant. The tenant is the only module that knows both the file reader and the store's write path, as `ReviewDetectionTenant` is for reviews.
+Same pattern as 101–107: models, SQL, mapping, operations mixin. The store does not import `amoeba.upstream`; it stores CF fields as an opaque JSON object and a list of changed key names, both computed by the tenant. The tenant is the only module that knows both the file reader and the store's write path, as `ReviewDetectionTenant` is for reviews.
 
 ### Data Flow
 
@@ -154,13 +154,13 @@ In memory: the file signature from the last successful read. Losing it costs one
 
 **D1 — Watch CF's file; do not ask CF to emit events.** The file is replaced atomically by every CF client, so a change to the file is a change to CF state, and a complete read is always possible. Asking CF to emit events would need a CF-side change, a transport, and a delivery guarantee, and would still need a reconciling read after downtime. The reconciling read alone does the whole job.
 
-- *Checked by `stat`, not by a file-watch library*, for the reason 105 D3 gives: FSEvents and inotify arrive on a thread, and a scan is still needed after restart. One `stat` per tick is nothing.
+- *Checked by `stat`, not by a file-watch library*, for the reason 106 D3 gives: FSEvents and inotify arrive on a thread, and a scan is still needed after restart. One `stat` per tick is nothing.
 - *The signature includes the inode* because CF replaces the file by rename. Two writes within one mtime tick with equal sizes still produce different inodes.
 - *Read the file directly, not through `cf get --json`.* One read covers every linked project, needs no subprocess in a tick, and sees the base record and all worktree overlays together (`cf get` resolves one overlay depending on where it runs). The price is depending on a file CF does not call a contract. That dependency is two facts (an array of objects with string `id`s), both documented in `cf-contract.md`, and a violation is recorded as `unrecognized`, never guessed around.
 
 **D2 — Record snapshots; do not write nodes.** A CF change is recorded as a snapshot row and a feed entry. The tenant never creates, updates, or blocks a node.
 
-- *Why:* turning "`fileSlice` moved to 108" into node changes needs a node for that slice, a rule for which node holds `cf.phase`, and a policy for what a pointer moving backwards means. That is the Runner's node model (120), the same line 105 D4 drew for gate nodes. The substrate stays deterministic plumbing: it records what CF said, with provenance, and says that it changed.
+- *Why:* turning "`fileSlice` moved to 105" into node changes needs a node for that slice, a rule for which node holds `cf.phase`, and a policy for what a pointer moving backwards means. That is the Runner's node model (120), the same line 105 D4 drew for gate nodes. The substrate stays deterministic plumbing: it records what CF said, with provenance, and says that it changed.
 - *Reference, don't duplicate:* a snapshot is CF's state as observed at a time, with CF's own `updatedAt`, never a competing truth. The Runner reads it or CF, not a copy it mutates.
 - This replaces the old plan criterion "received events update the node tree."
 
@@ -172,14 +172,14 @@ In memory: the file signature from the last successful read. Losing it costs one
 - `customData` is free text (`recentEvents` runs to kilobytes of pasted summaries). It is not workflow state, and the architecture forbids routing on free-form strings. It is not stored, whether it appears on the record or inside a `worktrees` overlay.
 - Every other key is compared by value (deep JSON equality), including keys Amoeba has never seen. `changed_keys(None, x)` is every key in `x`. A record that disappears yields the reserved marker `["$present"]`, prefixed with `$` because no CF key is observed to start with it, so it cannot collide with a real CF field. `worktrees` itself is still reported as one changed key when any overlay's remaining fields differ; it is not diffed per sub-field, only cleaned of ignored keys before the whole-value comparison.
 
-**D5 — The Runner's own CF writes are reported too.** Unlike review detection (105 D5), this tenant does not defer to open `cf_write` journal entries. A CF change the Runner made is still a CF change, and a subscriber should see it. The Runner tells its own writes apart by its journal. Deferring would add a rule with nothing to protect: there is no double-record risk, because a snapshot is recorded only when the fields differ from the last one.
+**D5 — The Runner's own CF writes are reported too.** Unlike review detection (106 D5), this tenant does not defer to open `cf_write` journal entries. A CF change the Runner made is still a CF change, and a subscriber should see it. The Runner tells its own writes apart by its journal. Deferring would add a rule with nothing to protect: there is no double-record risk, because a snapshot is recorded only when the fields differ from the last one.
 
 ### Patterns and Conventions
 
 **Word lists** (`StrEnum`, defined once in `cf_models.py`):
 
 - `CFWatchState`: `pending`, `ok`, `missing`, `unreachable`, `unrecognized`, `failed`
-- `ChangeKind` (105) gains `cf_project_changed`.
+- `ChangeKind` (106) gains `cf_project_changed`.
 
 **The feed entry:**
 
@@ -189,7 +189,7 @@ In memory: the file signature from the last successful read. Losing it costs one
 
 The payload says which keys moved, not their values; a subscriber that wants them reads `cf_snapshot(id)`. The trigger copies `changed` from the row's stored JSON column, so the feed and the store cannot disagree.
 
-**Feed invariant (105).** The scripted sequence gains a linked CF project: a first snapshot, a change, a disappearance. The reconciliation gains one rule: snapshot ids from `cf_project_changed` equal the `cf_snapshots` table. The "every `ChangeKind` appears" check then covers the new member.
+**Feed invariant (106).** The scripted sequence gains a linked CF project: a first snapshot, a change, a disappearance. The reconciliation gains one rule: snapshot ids from `cf_project_changed` equal the `cf_snapshots` table. The "every `ChangeKind` appears" check then covers the new member.
 
 **Errors.**
 
@@ -197,12 +197,12 @@ The payload says which keys moved, not their values; a subscriber that wants the
 - *File present but not an array of objects with string `id`s, or not JSON:* `unrecognized`, with the error as `detail`, one ERROR on the transition. Retried only when the signature changes. This is also what a hand edit caught mid-save looks like; the next save fixes it. One malformed or duplicate-id entry anywhere in the file, including in a project no watch links, blinds every watch — this is a deliberate trade-off, not an oversight: `read_projects_file` parses the whole file as one unit because there is no partial-validity notion in the observed shape, and refusing to guess which of two same-id records is correct is safer than silently picking one. The blast radius is visible immediately through `inspect cf-watches`, and self-heals on CF's next write.
 - *Linked id never present:* `missing`, no snapshot. A typo in the id sits visibly in `inspect cf-watches`.
 - *Linked id present before, now gone:* a snapshot with `present = false` and a feed entry. That is a real CF fact (`cf project rm`), not an error. If it returns, the next snapshot has every key changed.
-- *Store failure while recording a snapshot:* 105's bounded-failure rule, reusing its `AttemptsSidecar` and `write_durably`. D3 keeps `cf_project_id` opaque and unparsed, so it is never used as a path component: the sidecar is keyed on a hex digest of the id, at `{store_dir}/cf/attempts/{project_id}/{sha256(cf_project_id).hexdigest()}.attempts.json`. Below `cf_max_attempts`: ERROR and re-raise. At the limit: ERROR, the watch goes `failed`, and it is skipped until the sidecar is removed. On success the sidecar is deleted.
+- *Store failure while recording a snapshot:* 106's bounded-failure rule, reusing its `AttemptsSidecar` and `write_durably`. D3 keeps `cf_project_id` opaque and unparsed, so it is never used as a path component: the sidecar is keyed on a hex digest of the id, at `{store_dir}/cf/attempts/{project_id}/{sha256(cf_project_id).hexdigest()}.attempts.json`. Below `cf_max_attempts`: ERROR and re-raise. At the limit: ERROR, the watch goes `failed`, and it is skipped until the sidecar is removed. On success the sidecar is deleted.
 
 **Settings** (added to `ProcessSettings`, with CLI flags):
 
 - `cf_data_dir: Path`, from `resolve_cf_data_dir()`, the one place CF's location rule is mirrored. `--cf-data-dir` overrides it. The rule is CF's, copied (Interfaces Required); `cf-contract.md` names it as copied.
-- `cf_scan_interval_seconds = 2.0`: same reasoning as 105's review scan. A pointer moves when a person or agent finishes a step; a few seconds' delay is invisible, and an idle tick is one `stat`.
+- `cf_scan_interval_seconds = 2.0`: same reasoning as 106's review scan. A pointer moves when a person or agent finishes a step; a few seconds' delay is invisible, and an idle tick is one `stat`.
 - `cf_max_attempts = 3`: same as `inbox_max_attempts` and `detection_max_attempts`.
 
 ## Implementation Details
@@ -237,24 +237,24 @@ The payload says which keys moved, not their values; a subscriber that wants the
 
 ### Database / Storage Schema
 
-Migration `008_cf_watches_and_snapshots.sql`, `EXPECTED_SCHEMA_VERSION` 8. Nothing to backfill. This number assumes 109's `007` lands first (Prerequisites); if implementation order changes and 107 ships before 109, this migration is renumbered `007` and 109's becomes `008` — keep this visible in the slice plan rather than fixing a number here that the plan might not honor.
+Migration `008_cf_watches_and_snapshots.sql`, `EXPECTED_SCHEMA_VERSION` 8. Nothing to backfill. This number assumes 107's `007` lands first (Prerequisites); if implementation order changes and 108 ships before 107, this migration is renumbered `007` and 107's becomes `008` — keep this visible in the slice plan rather than fixing a number here that the plan might not honor.
 
 - **`cf_watches`:** `project_id`, `cf_project_id`, `active` (INTEGER), `state`, `detail` (nullable), `registered_at`, `updated_at`. Primary key `(project_id, cf_project_id)`.
 - **`cf_snapshots`:** `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `project_id`, `cf_project_id`, `present` (INTEGER), `fields` (JSON text, the record minus `IGNORED_KEYS`; `{}` when absent), `changed` (JSON array text), `cf_updated_at` (nullable), `version_label`, `observed_at`. Index on `(project_id, cf_project_id, id)`.
-- **Trigger** `AFTER INSERT ON cf_snapshots`: inserts a `changes` row, kind `'cf_project_changed'`, `node_id` null, `subject_id` the snapshot id, payload `json_object('cf_project_id', …, 'present', json(iif(new.present, 'true', 'false')), 'changed', json(new.changed))`, `recorded_at = new.observed_at`. `present` is cast to a JSON boolean literal, matching 105's boolean convention, rather than SQLite's native `1`/`0`.
+- **Trigger** `AFTER INSERT ON cf_snapshots`: inserts a `changes` row, kind `'cf_project_changed'`, `node_id` null, `subject_id` the snapshot id, payload `json_object('cf_project_id', …, 'present', json(iif(new.present, 'true', 'false')), 'changed', json(new.changed))`, `recorded_at = new.observed_at`. `present` is cast to a JSON boolean literal, matching 106's boolean convention, rather than SQLite's native `1`/`0`.
 
 ## Integration Points
 
 ### Provides to Other Slices
 
-- **106:** CF snapshots and `cf_project_changed` entries in the end-to-end sequence. 106's feed check reconciles by table, so it covers them with its sequence extended by one link and one `cf set`.
+- **110:** CF snapshots and `cf_project_changed` entries in the end-to-end sequence. 110's feed check reconciles by table, so it covers them with its sequence extended by one link and one `cf set`.
 - **Initiative 120:** the feed entry as its signal that CF moved, and `latest_cf_snapshot` as a read of CF state with provenance. 120 decides what a change means for nodes (D2) and reads gate state through CF itself.
 - **Initiative 160:** the entries on the feed, like any other kind.
 
 ### Consumes from Other Slices
 
 - **101–103** through their documented contracts. Additive: `SubmissionKind` gains `watch_cf`, `ProcessSettings` gains three fields, `amoeba start` registers a third tenant, `LISTINGS` gains two entries (the listing-set test is updated).
-- **105:** `ChangeKind` gains a member and 105's invariant test gains a step and a rule. The detection tenant and its sidecar helper are reused, not changed.
+- **106:** `ChangeKind` gains a member and 106's invariant test gains a step and a rule. The detection tenant and its sidecar helper are reused, not changed.
 - **Context Forge:** if CF moves its storage out of `projects.json`, or changes the file into something other than an array of objects with `id`, every watch goes `unreachable` or `unrecognized`, visibly, and nothing is recorded. The fix is a new reader in `amoeba.upstream.context_forge`; the store, tenant, and feed are unaffected.
 
 ## Success Criteria
@@ -280,7 +280,7 @@ Migration `008_cf_watches_and_snapshots.sql`, `EXPECTED_SCHEMA_VERSION` 8. Nothi
 - The store imports nothing from `amoeba.upstream` or `amoeba.process`. No tick starts a subprocess.
 - Reader tests run against a copy of a real `projects.json` from CF 0.18.0, trimmed of `customData`, stored in `tests/fixtures/cf/`, plus files written by the real `cf` CLI into a temporary `CONTEXT_FORGE_DATA_DIR`. No hand-built file stands in for the real shape in the success-path tests.
 - A version-7 store upgrades to 8 intact.
-- 105's feed invariant test passes with the new step and rule.
+- 106's feed invariant test passes with the new step and rule.
 - `ruff`, `pyright` strict, and the full suite are clean. Files stay near 300 lines.
 
 ### Integration Requirements
@@ -326,7 +326,7 @@ The follower prints `cf_project_changed` with `changed: ["developmentPhase"]`. `
 **5. Nothing is missed while the process is down.** `kill -9` the process (pid from `amoeba status`), then:
 
 ```bash
-cf set slice user/slices/107-slice.context-forge-event-seam.md -p demo-cf
+cf set slice user/slices/108-slice.context-forge-event-seam.md -p demo-cf
 cf set phase "Phase 5: Task Breakdown" -p demo-cf
 uv run amoeba start --sq-runs-dir "$(mktemp -d)" &
 ```
@@ -349,8 +349,8 @@ uv run pytest tests/store/test_feed_invariant.py tests/cli/test_cf_watch_end_to_
 
 ### Development Approach
 
-1. `amoeba.upstream.context_forge`: `resolve_cf_data_dir`, `read_projects_file`, `changed_keys`, against the real-file fixture and files written by the real `cf` CLI. No store involvement; can start before 105 lands.
-2. Migration 008, `cf_models.py`, `sql_cf.py`, mapping, the operations mixin, the trigger. 7 → 8 upgrade test; extend 105's invariant test.
+1. `amoeba.upstream.context_forge`: `resolve_cf_data_dir`, `read_projects_file`, `changed_keys`, against the real-file fixture and files written by the real `cf` CLI. No store involvement; can start before 106 lands.
+2. Migration 008, `cf_models.py`, `sql_cf.py`, mapping, the operations mixin, the trigger. 7 → 8 upgrade test; extend 106's invariant test.
 3. The `watch_cf` kind and its effect.
 4. `CFWatchTenant`: the signature check, the per-watch diff, the state transitions, the bounded-failure path.
 5. Settings and flags, `start` wiring, the two listings, the end-to-end CLI test, `docs/cf-contract.md`, the other doc updates, and `CHANGELOG`.

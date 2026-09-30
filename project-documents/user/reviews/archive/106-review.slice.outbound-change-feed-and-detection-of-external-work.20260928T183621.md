@@ -6,7 +6,7 @@ slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
 verdict: CONCERNS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md
+sourceDocument: project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -22,50 +22,50 @@ findings:
     severity: concern
     category: specification
     summary: "Delivery-guarantee sentence inverts the at-least-once condition"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:296"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:296"
   - id: F002
     severity: concern
     category: error-handling
     summary: "Failure modes for first-activation baseline are not enumerated"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:300"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:300"
   - id: F003
     severity: concern
     category: documentation
     summary: "Settings count inconsistent: \"two fields\" vs. three listed for ProcessSettings"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:331"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:331"
   - id: F004
     severity: pass
     category: architecture-alignment
     summary: "Ownership and defer/skip rule matches the architecture's detection-ownership principle"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:198-214"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:198-214"
   - id: F005
     severity: pass
     category: error-handling
     summary: "New I/O path failure modes carry explicit handling strategies"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:216-221"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:216-221"
   - id: F006
     severity: pass
     category: nfr
     summary: "NFR treatment: targets stated where the parent sets none"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:265-272"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:265-272"
   - id: F007
     severity: pass
     category: architecture-alignment
     summary: "D7's additive change to completed slice 104's contract is owned and safe"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:223-229"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:223-229"
   - id: F008
     severity: note
     category: architecture-alignment
     summary: "\"Push, not poll\" deviation for the outbound surface is documented but unratified"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:182"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:182"
   - id: F009
     severity: note
     category: under-specification
     summary: "Unattributed reviews are terminal in detection; the recovery path is only implied"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:191-196"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:191-196"
 ---
 
-# Review: slice — slice 105
+# Review: slice — slice 106
 
 **Verdict:** CONCERNS
 **Model:** z-ai/glm-5.3-flash
@@ -98,7 +98,7 @@ The architecture document states no numeric targets, and the slice says so expli
 
 ### [PASS] D7's additive change to completed slice 104's contract is owned and safe
 
-Changing `finding_changes`' grouping on a shipped slice is scope this slice must justify, and it does: 104's design document stays untouched as the historical record; migration 006 adds a nullable column; `IS` comparison means two nulls match, so every pre-105 verdict keeps 104's behavior and 104's suite passes unchanged; the rebuilt previous-round index `(project_id, node_id, review_type, source_document, recorded_seq)` matches 104's actual index (104:288) plus one column; and a `CHANGELOG` entry names the contract change. The motivating multi-part case is drawn from the captured 102 fixtures, not hypothetical.
+Changing `finding_changes`' grouping on a shipped slice is scope this slice must justify, and it does: 104's design document stays untouched as the historical record; migration 006 adds a nullable column; `IS` comparison means two nulls match, so every pre-106 verdict keeps 104's behavior and 104's suite passes unchanged; the rebuilt previous-round index `(project_id, node_id, review_type, source_document, recorded_seq)` matches 104's actual index (104:288) plus one column; and a `CHANGELOG` entry names the contract change. The motivating multi-part case is drawn from the captured 102 fixtures, not hypothetical.
 
 ### [NOTE] "Push, not poll" deviation for the outbound surface is documented but unratified
 

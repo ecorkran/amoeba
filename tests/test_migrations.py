@@ -149,7 +149,7 @@ def test_missing_migration_raises_rather_than_skipping(store_file: Path) -> None
 def test_migration_advances_the_stamp_and_data_survives(store_file: Path) -> None:
     """The N to N+1 proof: open at version 1, migrate, keep the data.
 
-    This is the mechanism slices 102-106 add their real migrations onto, so it
+    This is the mechanism slices 102-110 add their real migrations onto, so it
     is proven here before anything depends on it.
     """
     with _connect(store_file) as connection:

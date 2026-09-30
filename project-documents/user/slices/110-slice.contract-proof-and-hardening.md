@@ -3,7 +3,7 @@ docType: slice-design
 slice: contract-proof-and-hardening
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
-dependencies: [101, 102, 103, 104, 105, 108, 109]
+dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
 interfaces: []
 dateCreated: 20260928
 dateUpdated: 20260928
@@ -59,15 +59,15 @@ Developer value. After this slice, initiative 120 designs against a contract tha
 
 ### Prerequisites
 
-All of 101, 102, 103, 104, 105, 108, and 109 implemented. At the time of writing, 101–104 are complete, 105 is designed, and 108 and 109 have no design yet. The proof binds to whatever their contracts publish; names below are from their slice-plan entries and 105's design.
+All of 101 through 109 implemented. At the time of writing, 101–104 are complete, 105 through 108 are designed, and 109 has no design yet. The proof binds to whatever their contracts publish; names below are from their slice-plan entries and the designs that exist.
 
 ### Interfaces Required
 
 - **101–104:** the contracts in `docs/store-contract.md`, `docs/process-contract.md`, `docs/inbox-contract.md`, and `docs/evidence-contract.md`, used as written.
-- **105:** `follow()`, `amoeba feed`, the `watch_reviews` kind, `record_detection`, `attribute_review`, and `inspect detections`.
-- **105, new requirement:** a public store method that does the Runner's report-back **in one transaction**: record the verdict, mark the file `runner_issued`, and resolve the journal entry. 105's D5 point 3 requires one transaction, but every public `Store` method is its own transaction and there is no public way to group them. Without this method 120 cannot meet 105's own requirement. This goes into 105's task breakdown; if 105 ships without it, this slice adds it.
-- **108:** `parse_review_artifact`, `to_verdict_input`, the parsed-content record id, and `amoeba ingest review`, exported from `amoeba.upstream.squadron`.
-- **109:** the inbox kind for judge samples and its read method, so the out-of-process Judge in the sequence records samples the way 140 will.
+- **106:** `follow()`, `amoeba feed`, the `watch_reviews` kind, `record_detection`, `attribute_review`, and `inspect detections`.
+- **106, new requirement:** a public store method that does the Runner's report-back **in one transaction**: record the verdict, mark the file `runner_issued`, and resolve the journal entry. 106's D5 point 3 requires one transaction, but every public `Store` method is its own transaction and there is no public way to group them. Without this method 120 cannot meet 106's own requirement. This goes into 106's task breakdown; if 106 ships without it, this slice adds it.
+- **105:** `parse_review_artifact`, `to_verdict_input`, the parsed-content record id, and `amoeba ingest review`, exported from `amoeba.upstream.squadron`.
+- **107:** the inbox kind for judge samples and its read method, so the out-of-process Judge in the sequence records samples the way 140 will.
 - **Test fixtures:** `tests/fixtures/sq_reviews/` (the captured 102 task-review series, including the provider failure) and `tests/fixtures/sq_runs/` (including the captured paused run `run-20260505-review-a697ad3d.json`).
 
 ## Architecture
@@ -96,7 +96,7 @@ tests/load/
 docs/README.md               the contract index
 ```
 
-`run_pruning.py` sits in `amoeba.upstream.squadron`, next to 108's parser, because it reads Squadron's run files. The store stays free of any Squadron knowledge.
+`run_pruning.py` sits in `amoeba.upstream.squadron`, next to 105's parser, because it reads Squadron's run files. The store stays free of any Squadron knowledge.
 
 ### Data Flow
 
@@ -105,9 +105,9 @@ docs/README.md               the contract index
 | Actor | Runs | Surface |
 | --- | --- | --- |
 | Operator | CLI subprocess | `amoeba submit create-project`, `watch-reviews`; `amoeba status`, `stop`; `kill -9` |
-| `ProofRunner` (stands in for 120) | Tenant inside the resident process | `host.store_for`, `host.project_ids`, the `Store` read/write API, the journal, 108's parser, 105's report-back method |
+| `ProofRunner` (stands in for 120) | Tenant inside the resident process | `host.store_for`, `host.project_ids`, the `Store` read/write API, the journal, 105's parser, 106's report-back method |
 | Fake Squadron | Called by `ProofRunner` | Writes run JSON into the throwaway `--sq-runs-dir` and review files into a throwaway reviews directory |
-| Judge (stands in for 140) | CLI subprocess | `amoeba submit verdict`, 109's judge-sample kind, `amoeba submit resolution` |
+| Judge (stands in for 140) | CLI subprocess | `amoeba submit verdict`, 107's judge-sample kind, `amoeba submit resolution` |
 | Human | CLI subprocess | `amoeba submit resolution` |
 | PM | Shell | Copies a review file into the registered reviews directory |
 | Subscriber (stands in for 160) | `amoeba feed --follow` subprocess, running for the whole sequence | Its stdout transcript |
@@ -231,7 +231,7 @@ Rejected:
 - **Which document answers what:** one row per contract document, with the questions it answers.
 - **The public packages** and their export sets, linking to the pinned tests.
 - **Hosting a Runner:** a link to D3's section in `process-contract.md`, and `ProofRunner`'s "work out the step from the store" pattern.
-- **Obligations on consumers,** every "must" the contracts put on 120, 140, and 160, each linking to its source: journal before side effect; issue `sq` with non-TTY stdin and resume only by explicit id; attach reviews by `attribute_review`; report back in one transaction and from the artifact through 108's parser; poll `stop_requested` and return promptly; never cache `project_ids`; save a feed cursor after acting and make handling repeatable; resolutions target a blocked state, not a node; wait for `create_project` to apply before submitting into it; no secrets in any payload; project ids are slugs; `done` is final.
+- **Obligations on consumers,** every "must" the contracts put on 120, 140, and 160, each linking to its source: journal before side effect; issue `sq` with non-TTY stdin and resume only by explicit id; attach reviews by `attribute_review`; report back in one transaction and from the artifact through 105's parser; poll `stop_requested` and return promptly; never cache `project_ids`; save a feed cursor after acting and make handling repeatable; resolutions target a blocked state, not a node; wait for `create_project` to apply before submitting into it; no secrets in any payload; project ids are slugs; `done` is final.
 - **Known limits,** linking to each contract's future-work section.
 
 A test checks every relative link and anchor in `docs/*.md` resolves, so the index cannot rot silently.
@@ -253,7 +253,7 @@ Found by reading the contracts and the code they describe while writing this des
 | Relative `AMOEBA_STORE_DIR` / `XDG_CONFIG_HOME` used as given | Process and submitter in different directories use different supervisors | D5 |
 | Project ids differing only in case accepted | Two projects share one store file on macOS | D5 |
 | `done` documented terminal, not enforced | A finished node can be reopened; the pruning report could call a live run dead | D6 |
-| No public way to make 105's report-back one transaction | 120 cannot meet 105's D5 point 3 | Required from 105 (see Interfaces Required) |
+| No public way to make 106's report-back one transaction | 120 cannot meet 106's D5 point 3 | Required from 106 (see Interfaces Required) |
 
 Gaps the proof finds during implementation are added to this table with their disposition, and the contract index links to it.
 
@@ -297,14 +297,14 @@ The ownership map is built by the CLI from each project's read-only store: `reco
 
 - **Initiative 120:** the hosting seam; the demonstrated sequence as a worked example of a Runner tick; the contract index; the obligations list; `done` as a guaranteed final state it can rely on.
 - **Initiatives 140 and 160:** the same index, with the Judge and subscriber roles in the proof as worked examples of their surfaces.
-- **Slice 107:** nothing new; the proof's feed check covers any change 107 later lands on the feed, since it reconciles by table.
+- **Slice 108:** nothing new; the proof's feed check covers any change 108 later lands on the feed, since it reconciles by table.
 
 ### Consumes from Other Slices
 
 - **101–104** through their contracts. The behavior changes in D5 and D6 are this slice's, recorded as changes to 101's contract; 101's design document is not edited.
-- **105:** the feed, detection, attribution, and the report-back method named in Interfaces Required.
-- **108:** the parser, used by `ProofRunner` for its own reviews and, through detection, for the PM's.
-- **109:** judge samples, submitted by the Judge actor.
+- **106:** the feed, detection, attribution, and the report-back method named in Interfaces Required.
+- **105:** the parser, used by `ProofRunner` for its own reviews and, through detection, for the PM's.
+- **107:** judge samples, submitted by the Judge actor.
 
 If a dependency's contract turns out not to support a step as its document says, that is a gap: it goes in the table, and the fix lands in this slice unless the owning slice is still open.
 
@@ -399,7 +399,7 @@ Relative effort 4 (the slice plan estimated 3, before the gaps above were found)
 6. **Pruning:** `run_pruning.py` against fixtures, then the CLI, then the proof's pruning assertions.
 7. **Docs:** `docs/README.md`, contract updates, the Squadron dependency entry, `CHANGELOG`, and the link test.
 
-Steps 1, 2, 5, and 6 need only 101–104 and can start before 105, 108, and 109 land. Steps 3 and 4 need all of them.
+Steps 1, 2, 5, and 6 need only 101–104 and can start before 105 through 109 land. Steps 3 and 4 need all of them.
 
 ### Special Considerations
 

@@ -74,7 +74,7 @@ status: complete
 **Owner**: Junior AI
 **Dependencies**: Task 4.2
 **Effort**: 2
-**Objective**: Land a deliberately trivial second migration purely to prove the runner works end to end, so slices 102–106 add tables onto a proven mechanism.
+**Objective**: Land a deliberately trivial second migration purely to prove the runner works end to end, so slices 102–110 add tables onto a proven mechanism.
 
 **Steps**:
 - [x] Write `migrations/002_*.sql` with a trivial, clearly-labeled schema change
@@ -210,7 +210,7 @@ Named here because each is a plausible scope-creep target. All belong to later s
 - [x] Single-writer enforcement — **slice 102**
 - [x] The durable inbox and message channels — **slice 103**
 - [x] Finding identity, normalization, and verdict provenance — **slice 104**
-- [x] Change feed, subscriptions, filesystem detection — **slice 105**
-- [x] Pruning and retention policy — **slice 106**
+- [x] Change feed, subscriptions, filesystem detection — **slice 106**
+- [x] Pruning and retention policy — **slice 110**
 - [x] Any parsing of CF or SQ output — the store accepts values; the Runner parses them
 - [x] A per-project store override — the LLD declines this deliberately

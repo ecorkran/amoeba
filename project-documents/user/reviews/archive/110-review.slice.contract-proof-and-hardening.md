@@ -6,7 +6,7 @@ slice: contract-proof-and-hardening
 project: amoeba
 verdict: CONCERNS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/106-slice.contract-proof-and-hardening.md
+sourceDocument: project-documents/user/slices/110-slice.contract-proof-and-hardening.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -21,25 +21,25 @@ findings:
     severity: concern
     category: governance
     summary: "Four technical decisions are marked \"PM pending\", including one that deliberately violates a stated architectural principle"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Technical Decisions"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Technical Decisions"
   - id: F002
     severity: note
     category: scope
     summary: "Architecture assigns pruning policy to Amoeba; D7 implements it with correct scoping"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#D7 — Pruning is an operator command over Amoeba's own dead paused runs"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D7 — Pruning is an operator command over Amoeba's own dead paused runs"
   - id: F003
     severity: note
     category: error-handling
     summary: "Failure modes are enumerated with explicit handling, and dependency directions are respected"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Restart injection (D4)"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Restart injection (D4)"
   - id: F004
     severity: note
     category: nfr
     summary: "NFR coverage"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Excluded"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Excluded"
 ---
 
-# Review: slice — slice 106
+# Review: slice — slice 110
 
 **Verdict:** CONCERNS
 **Model:** z-ai/glm-5.3-flash

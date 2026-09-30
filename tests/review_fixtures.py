@@ -1,6 +1,6 @@
 """Read captured Squadron review files for tests.
 
-A test helper, not the slice 108 parser: it reads the YAML frontmatter of the
+A test helper, not the slice 105 parser: it reads the YAML frontmatter of the
 byte-real review files in ``tests/fixtures/sq_reviews/`` and hands back the
 fields tests need. A malformed file fails loudly with its name.
 """

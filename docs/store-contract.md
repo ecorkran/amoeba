@@ -562,7 +562,7 @@ multiline-aware.
 **Storage engine reversal trigger (PM).** The decision to use raw stdlib
 `sqlite3` rather than SQLAlchemy Core + Alembic should be revisited if *either*:
 
-- schema churn across slices 102–106 makes hand-written migrations painful, or
+- schema churn across slices 102–110 makes hand-written migrations painful, or
 - the hand-rolled layer becomes recurring maintenance — repeated tweaks and bug
   fixes in the store plumbing itself.
 

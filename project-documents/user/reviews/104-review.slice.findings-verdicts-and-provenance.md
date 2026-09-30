@@ -74,7 +74,7 @@ The Data Flow enumerates the "not comparable" case and the baseline-skip rules, 
 
 ### [NOTE] `diff_truncated` is in the schema and `VerdictInput` but absent from the design's own "What Squadron emits today" list
 
-Every other provenance field traces to the dated emitted-shapes list (lines 75–85) or to the upstream-delta note; `diff_truncated` appears in neither. If it is a real Squadron field (stdout JSON or frontmatter), add it to that list with its location so slice 108's parser design does not have to guess; if it is not, it is a nullable column that will only ever store null.
+Every other provenance field traces to the dated emitted-shapes list (lines 75–85) or to the upstream-delta note; `diff_truncated` appears in neither. If it is a real Squadron field (stdout JSON or frontmatter), add it to that list with its location so slice 105's parser design does not have to guess; if it is not, it is a nullable column that will only ever store null.
 
 ### [NOTE] The "CONCERNS with zero findings, findings_parsed=true" label criterion exercises a state real Squadron output cannot produce
 

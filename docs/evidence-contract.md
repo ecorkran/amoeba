@@ -11,7 +11,7 @@ status: complete
 
 This document is the contract for review evidence in the store: verdict
 records, the findings each review reported, how findings are matched across
-rounds, and the trust label on every verdict. It is written so that slice 108
+rounds, and the trust label on every verdict. It is written so that slice 105
 (the Squadron-output parser) and initiative 140 (judgment over findings) can be
 designed **without reading the implementation**. If you have to open
 `verdicts.py` to answer a design question, that is a gap here — say so.
@@ -29,14 +29,14 @@ designed **without reading the implementation**. If you have to open
 ## What it is not
 
 - **Not a parser.** The store never reads Squadron's JSON or review files.
-  Callers pass already-parsed values (`VerdictInput`). Parsing is slice 108.
+  Callers pass already-parsed values (`VerdictInput`). Parsing is slice 105.
 - **Not a judge of sameness.** The matching rule removes formatting only. It
   does not decide that a reworded finding is the same issue; that is judgment,
   and belongs to initiative 140. See [What the rule does not match](#what-the-rule-does-not-match).
 - **Not a tracker of finding state.** Nothing marks a finding addressed,
   disputed, accepted, or rejected. That is initiatives 120 and 140.
 - **Not a discoverer.** Noticing reviews on disk that someone else launched is
-  slice 105.
+  slice 106.
 
 ## Recording a review
 
@@ -118,8 +118,8 @@ A frozen, keyword-only dataclass.
 | `diff_truncated` | `bool \| None` | Squadron's `diffTruncated` (SQ 927); null when absent. |
 | `requested_model` | `str \| None` | Squadron's `requestedModel` (SQ 927); set only on a substitution. |
 | `reviewed_sha` | `str \| None` | The commit reviewed. |
-| `score` | `float \| None` | Stored now; slice 109 uses it. |
-| `criteria` | `Mapping \| None` | Stored as JSON; slice 109 uses it. |
+| `score` | `float \| None` | Stored now; slice 107 uses it. |
+| `criteria` | `Mapping \| None` | Stored as JSON; slice 107 uses it. |
 | `tool_calls_made` | `int \| None` | |
 | `sq_run_id` | `str \| None` | Squadron's `runId` (#139), pipeline runs only. |
 | `journal_entry_id` | `str \| None` | The journaled Squadron run command, if any. |
@@ -147,7 +147,7 @@ caller supplies it, for example from `sq --version`. **No code compares versions
 or branches on them.** When Squadron changes its output, the version finds the
 affected records; it never changes how they are read.
 
-### Mapping Squadron's flags (for slice 108)
+### Mapping Squadron's flags (for slice 105)
 
 Checked 20260926 against squadron 0.14.0.
 
@@ -183,7 +183,7 @@ version pin:
   the *Provider Failure* heading.
 - JSON also adds `diff_chars`, `diff_chars_injected`, `answering_models`,
   `model_substituted`, `finding_scan`, and `location_verified` per finding.
-  The store has no field for them; slice 108 decides whether any is needed.
+  The store has no field for them; slice 105 decides whether any is needed.
 - Severity values and the `unverified` literal are unchanged. Under
   `--output json`, the "Saved review to" line now goes to stderr.
 
@@ -343,11 +343,11 @@ it is never defaulted.
 
 ## Future work
 
-- Slice 108 parses Squadron's JSON and review files into `VerdictInput`, and
+- Slice 105 parses Squadron's JSON and review files into `VerdictInput`, and
   re-runs this rule's captured-round tests through the parser.
-- Slice 109 adds judge samples, calibration over `score` and `criteria`, and
+- Slice 107 adds judge samples, calibration over `score` and `criteria`, and
   check records.
-- Slice 105 records reviews it finds on disk through `record_verdict`; the
+- Slice 106 records reviews it finds on disk through `record_verdict`; the
   retry rule makes finding the same file twice harmless.
 - Initiative 140 owns deciding that two differently worded findings are the
   same issue.

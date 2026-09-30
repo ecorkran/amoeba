@@ -4,7 +4,7 @@ slice: squadron-review-parser-and-ingest
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 103, 104]
-interfaces: [105, 106, 109]
+interfaces: [106, 107, 110]
 dateCreated: 20260928
 dateUpdated: 20260928
 status: not_started
@@ -18,7 +18,7 @@ Slice 104 built the store for review results, but it reads nothing from Squadron
 
 1. **A Squadron review parser.** `amoeba.upstream.squadron` turns the stdout of `sq review … --output json`, or a saved review file, into a `ParsedReview`, and composes a `VerdictInput` from it. It is pure: text in, typed value out. It opens no store and reads no files.
 2. **`amoeba ingest review`.** The command reads a file, parses it, and submits the result through 103's inbox as a `verdict`. It works with the process running or stopped. Ingesting the same review twice records it once.
-3. **A record id taken from the parsed review.** The id is a digest of what the parser read, not of the file's bytes. Slice 105's detection, `amoeba ingest review`, and the Runner (120) therefore all arrive at the same id for the same review. Adding a `resolution:` key to a file by hand leaves its id unchanged.
+3. **A record id taken from the parsed review.** The id is a digest of what the parser read, not of the file's bytes. Slice 106's detection, `amoeba ingest review`, and the Runner (120) therefore all arrive at the same id for the same review. Adding a `resolution:` key to a file by hand leaves its id unchanged.
 
 The first draft of this design sits inside slice 104's draft at commit `c525a63`. This document starts from that draft and brings it up to date against Squadron as it is today.
 
@@ -27,8 +27,8 @@ The first draft of this design sits inside slice 104's draft at commit `c525a63`
 Developer value:
 
 - A real review becomes a stored record with one command.
-- Slice 105 can ingest reviews it finds on disk before initiative 120 exists, which the sequencing requires.
-- 105, 120, and the PM share one parser. Every caller maps a given Squadron review the same way.
+- Slice 106 can ingest reviews it finds on disk before initiative 120 exists, which the sequencing requires.
+- 106, 120, and the PM share one parser. Every caller maps a given Squadron review the same way.
 - 104 tested its matching rule on finding text taken straight from the fixtures, so its tests never exercised the real input path. This slice re-runs those tests through the parser, so they now read what production reads.
 
 ## Technical Scope
@@ -43,18 +43,18 @@ Developer value:
 - PyYAML moves from dev to runtime dependencies. `types-pyyaml` stays in dev.
 - New real fixtures in `tests/fixtures/sq_reviews/`, recorded in the README (see Technical Requirements).
 - 104's fixture reader (`tests/review_fixtures.py`) is replaced by the parser, so 104's matching tests run through production code. Its four users switch over: `tests/store/test_finding_identity.py`, `tests/store/test_finding_changes.py`, `tests/evidence_harness.py`, and `tests/test_demo_evidence_payloads.py`.
-- Documentation: a new "Parsing Squadron output" section in `docs/evidence-contract.md` replaces 104's "Mapping Squadron's flags (for slice 108)" notes. `amoeba ingest review` and its exit code are added to `process-contract.md`. `CHANGELOG.md` gets an entry.
+- Documentation: a new "Parsing Squadron output" section in `docs/evidence-contract.md` replaces 104's "Mapping Squadron's flags (for slice 105)" notes. `amoeba ingest review` and its exit code are added to `process-contract.md`. `CHANGELOG.md` gets an entry.
 
 **Excluded**
 
 - **Store schema changes.** There is no migration and no new column or table. The parser fills only the fields `VerdictInput` already has.
-- **`source_document`.** The parser exposes `sourceDocument` on `ParsedReview` and includes it in the record id, but it does not pass the value to `VerdictInput`. Slice 105 adds that field (its D7) and the one-line pass-through in `to_verdict_input`.
-- **Judge samples** (`judge_invocation_id`), calibration, and check results. These belong to slice 109.
-- **Detecting review files on disk.** That is slice 105.
+- **`source_document`.** The parser exposes `sourceDocument` on `ParsedReview` and includes it in the record id, but it does not pass the value to `VerdictInput`. Slice 106 adds that field (its D7) and the one-line pass-through in `to_verdict_input`.
+- **Judge samples** (`judge_invocation_id`), calibration, and check results. These belong to slice 107.
+- **Detecting review files on disk.** That is slice 106.
 - **Parsing other Squadron output.** Run files stay in `process/observers/sq_runs.py`, and pipeline state and checkpoint prompts belong to 120. Parsing CF MCP results is also 120's.
 - **Storing Squadron's newer diagnostics.** The parser reads these keys and drops them: `location_verified`, `finding_scan`, `diff_chars`, `diff_chars_injected`, `answering_models`, `stop_reason`, and `tools_given`. Nothing consumes them yet. Adding one later means adding a `VerdictInput` field.
 - **Checking that the node exists before submitting.** `submit()` is fire-and-forget by design (103). An unknown node shows up as a `rejected` submission, which the PM sees in `inspect submissions`.
-- **Checking `--node` against the review's `slice`.** Ingest attaches the review to the node the PM names, as is (D7). Matching a review's slice to a node is 105's `attribute_review`.
+- **Checking `--node` against the review's `slice`.** Ingest attaches the review to the node the PM names, as is (D7). Matching a review's slice to a node is 106's `attribute_review`.
 
 ## Dependencies
 
@@ -120,8 +120,8 @@ If `review.py` grows past about 300 lines, the two readers split into `review_js
 
 - `amoeba.upstream.squadron` imports only store vocabularies and dataclasses (`evidence_models`). It never imports `Store`, `amoeba.inbox`, or `amoeba.process`.
 - The store never imports `amoeba.upstream`.
-- `cli/ingest.py` is the only module that knows both the parser and the inbox. For 105, the equivalent is its detection tenant, which knows both the parser and the store.
-- Slice 106 plans a `run_pruning.py` in the same package, as a sibling module. Nothing here depends on it.
+- `cli/ingest.py` is the only module that knows both the parser and the inbox. For 106, the equivalent is its detection tenant, which knows both the parser and the store.
+- Slice 110 plans a `run_pruning.py` in the same package, as a sibling module. Nothing here depends on it.
 
 ### Data Flow
 
@@ -156,7 +156,7 @@ amoeba ingest review --project P --node N --by B (--artifact F | --stdout-json F
 
 At every failing step, nothing reaches `inbox/new/`. When the resident process applies the submission, it records the verdict with the submission id as the record id (104).
 
-**Duplicates.** Ingesting the same review a second time reuses the same submission id, and 103's D2 makes that submission a no-op. The replay check compares ids only, so a second ingest from a different path, or of a hand-edited copy, is also a no-op: the first ingest's `source_path` stays on the record. If 105's detection already recorded the review directly under the same id, the submission applies, and `record_verdict` returns the existing record (first wins, with a WARNING if the content differs).
+**Duplicates.** Ingesting the same review a second time reuses the same submission id, and 103's D2 makes that submission a no-op. The replay check compares ids only, so a second ingest from a different path, or of a hand-edited copy, is also a no-op: the first ingest's `source_path` stays on the record. If 106's detection already recorded the review directly under the same id, the submission applies, and `record_verdict` returns the existing record (first wins, with a WARNING if the content differs).
 
 ### State Management
 
@@ -168,7 +168,7 @@ D1 was set by PM direction at the 104 split. D2 through D7 are pending PM ratifi
 
 ### Technology Choices
 
-**D1 — The parser is an adapter package outside the store. (PM directed 20260926, carried from 104's D1.)** It lives in `amoeba.upstream.squadron`, not in the Runner (120), because 105 runs before 120 exists. It is pure, so 105's tenant and 120's Runner call it in-process, and `amoeba ingest` calls it from the command line. It parses Squadron's **review output only**.
+**D1 — The parser is an adapter package outside the store. (PM directed 20260926, carried from 104's D1.)** It lives in `amoeba.upstream.squadron`, not in the Runner (120), because 106 runs before 120 exists. It is pure, so 106's tenant and 120's Runner call it in-process, and `amoeba ingest` calls it from the command line. It parses Squadron's **review output only**.
 
 **D2 — Frontmatter is read with a real YAML parser.** Review frontmatter contains nested lists (`findings:`), nested mappings (`pr:`), and quoted strings containing colons and backticks. A hand-written reader would be a parser that fails on valid input without saying so. The parser calls `yaml.safe_load`, and nothing else. PyYAML becomes a runtime dependency. It is already locked for 104's tests.
 
@@ -219,7 +219,7 @@ Five rules apply on top of the table:
 
 - **`requested_model` follows the contract, not the raw key.** 104's contract says the field is set only on a substitution, which is also Squadron's own rule for writing the key to a file. Copying JSON's `requested_model` whenever it is present would make stdout and file disagree about the same review.
 - **The zero-findings rule belongs to Squadron, so it lives here.** A CONCERNS or FAIL with `fallback_used` and a stated verdict means the findings failed to parse. The standing function reads only `findings_parsed`, so other submitters are not caught by Squadron's rule.
-- **`source_document` is taken from files only.** JSON's `input_files.input` is whatever path the caller typed, which can differ in spelling from the `sourceDocument` a file carries. Using it would split one review series into two once 105 separates series by document.
+- **`source_document` is taken from files only.** JSON's `input_files.input` is whatever path the caller typed, which can differ in spelling from the `sourceDocument` a file carries. Using it would split one review series into two once 106 separates series by document.
 - **Nothing is defaulted.** Any of the following raises `SquadronParseError`, naming the key and the source:
   - a missing `verdict`, review type, or model
   - an unknown verdict or severity word
@@ -240,14 +240,14 @@ Five rules apply on top of the table:
 
 As in 104, the label is never compared or branched on beyond that equality check.
 
-**D5 — The record id is a digest of the parsed review. (Required by 105.)** `review_record_id(parsed)` returns `sq-review-` followed by the first 32 hex characters of the SHA-256 of a canonical JSON encoding of the `ParsedReview`. The encoding uses sorted keys and compact separators, puts findings in order, and starts with a digest-format tag, `parsed-review-v1`. The id changes only when the review's parsed content changes.
+**D5 — The record id is a digest of the parsed review. (Required by 106.)** `review_record_id(parsed)` returns `sq-review-` followed by the first 32 hex characters of the SHA-256 of a canonical JSON encoding of the `ParsedReview`. The encoding uses sorted keys and compact separators, puts findings in order, and starts with a digest-format tag, `parsed-review-v1`. The id changes only when the review's parsed content changes.
 
 The digest covers every `ParsedReview` field, including `source`, `slice`, and `source_document`. It excludes everything the caller supplies: node, path, the caller's version label, and journal entry. Consequences:
 
-- A hand edit that adds `resolution:` or `resolvedBy:` does not change the id. The same file ingested by the PM, found by 105, or recorded by 120 from the file gets the same id.
-- A file and a stdout capture of the same review get **different** ids, because they carry different fields (for example, `reviewed_sha` exists only in the file). That is accepted: 105's D5 has the Runner record its reviews from the file, so every path to a stored review goes through the file.
+- A hand edit that adds `resolution:` or `resolvedBy:` does not change the id. The same file ingested by the PM, found by 106, or recorded by 120 from the file gets the same id.
+- A file and a stdout capture of the same review get **different** ids, because they carry different fields (for example, `reviewed_sha` exists only in the file). That is accepted: 106's D5 has the Runner record its reviews from the file, so every path to a stored review goes through the file.
 
-  If both halves of one review are ingested anyway (the PM ingests a stdout capture by hand, then 105 detects the file), the review is stored twice. That has visible effects:
+  If both halves of one review are ingested anyway (the PM ingests a stdout capture by hand, then 106 detects the file), the review is stored twice. That has visible effects:
   - `inspect verdicts` shows two rows.
   - Each finding key shows `times_seen` two higher, not one.
   - The later of the two becomes the other's previous round, so `finding_changes` reports every finding as `recurring` against itself.
@@ -257,7 +257,7 @@ The digest covers every `ParsedReview` field, including `source`, `slice`, and `
 
 `to_verdict_input(record_id=…)` and `amoeba ingest review --id` override the default. The Runner, for example, can use an id it created when it journaled the command.
 
-*Rejected:* a digest of the raw bytes, which was the first draft's choice. Every hand edit would then become a second verdict for the same review (105's review of this point).
+*Rejected:* a digest of the raw bytes, which was the first draft's choice. Every hand edit would then become a second verdict for the same review (106's review of this point).
 
 **D6 — `ingest` submits and does not wait, and refuses a project that has no store.** Ingest reports the submission id, not the outcome. It works like `submit` and the rest of 103's contract: the process may be stopped, and the outcome is read afterwards. Waiting for the process to apply the submission would tie a file-parsing command to the process being up.
 
@@ -282,11 +282,11 @@ The check narrows the race; it does not close it. A project deleted between the 
 
 **D7 — `--node` is the PM's explicit attribution and is not checked against the review's `slice`.** Ingest attaches the review to whatever node `--node` names. It does not compare the node's `cf.slice_name` with `ParsedReview.slice`. Three reasons:
 
-- **It is the override path.** 105 sends a file here precisely when automatic attribution failed: `unattributed`, recovered by hand with `ingest review --node`. A check that repeated 105's slice matching would refuse the files that most need a human decision.
+- **It is the override path.** 106 sends a file here precisely when automatic attribution failed: `unattributed`, recovered by hand with `ingest review --node`. A check that repeated 106's slice matching would refuse the files that most need a human decision.
 - **Some reviews have no slice to compare.** PR reviews carry no `slice`, and a node may have no `cf.slice_name` (104's demo node, or any node 120 creates for a non-slice gate). A check would need exceptions for both.
 - **It would need a store read.** Ingest opens no store today. Adding a read-only open only to second-guess an explicit argument is not worth it.
 
-The cost is that a wrong `--node` records the review on the wrong node, and nothing flags it. To make that visible, ingest prints the parsed `slice` (or `-` when there is none) and the review type on stderr, next to the node id, before it submits. It does not act on them. Recovery is the same as for any wrong record: there is no delete, and the PM ingests again onto the right node with a new `--id`. A new id is needed because the digest id is already taken, and the first record wins. Slice-to-node matching stays in one place, 105's `attribute_review`.
+The cost is that a wrong `--node` records the review on the wrong node, and nothing flags it. To make that visible, ingest prints the parsed `slice` (or `-` when there is none) and the review type on stderr, next to the node id, before it submits. It does not act on them. Recovery is the same as for any wrong record: there is no delete, and the PM ingests again onto the right node with a new `--id`. A new id is needed because the digest id is already taken, and the first record wins. Slice-to-node matching stays in one place, 106's `attribute_review`.
 
 **Error handling.**
 
@@ -334,16 +334,16 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 
 ### Provides to Other Slices
 
-- **105:**
+- **106:**
   - `parse_review_artifact`, `to_verdict_input`, and `review_record_id`, called in-process by the detection tenant.
   - `ParsedReview.slice`, for attribution.
-  - `ParsedReview.source_document`, which 105 passes on to its new `VerdictInput.source_document` field.
+  - `ParsedReview.source_document`, which 106 passes on to its new `VerdictInput.source_document` field.
   - The parsed-content id, stored as the ledger's `record_id`.
   - `amoeba ingest review --node`, used to recover unattributed files and to backfill.
   - `SquadronParseError` messages, used as the `unparseable` detail.
-- **106:** the parser, used by `ProofRunner` for its own reviews, and `amoeba ingest review`.
-- **Initiative 120:** the parser for the reviews the Runner launches, read from the file per 105's D5, with `record_id` and `journal_entry_id` supplied by the Runner.
-- **109:** the judge fields (`score`, `criteria`) are already parsed. 109 adds `judge_invocation_id` to `to_verdict_input` and to `ingest`.
+- **110:** the parser, used by `ProofRunner` for its own reviews, and `amoeba ingest review`.
+- **Initiative 120:** the parser for the reviews the Runner launches, read from the file per 106's D5, with `record_id` and `journal_entry_id` supplied by the Runner.
+- **107:** the judge fields (`score`, `criteria`) are already parsed. 107 adds `judge_invocation_id` to `to_verdict_input` and to `ingest`.
 
 ### Consumes from Other Slices
 
@@ -383,7 +383,7 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
   - `928-review.slice.codex-parity-for-skill-packs-and-provider-access.20260927T212759.md`, from Squadron's `reviews/archive/`: a provider failure with `providerFailure: true` and `runId`.
   - `925-review.code.command-install-target-parity-codex-via-the-agents-skill-layout.20260922T145229.md`, from Squadron's `reviews/archive/`: *Findings Not Parsed*, verdict `UNKNOWN`.
   - `github.com-ecorkran-squadron-116-review.code.md`, from Squadron's `reviews/`: a PR review with a nested `pr:` mapping and no `slice`.
-  - `105-review.slice.outbound-change-feed-and-detection-of-external-work.20260928T175751.md`, from this repository's `reviews/archive/`: 0.15.0, with `runId` and `squadronVersion`.
+  - `106-review.slice.outbound-change-feed-and-detection-of-external-work.20260928T175751.md`, from this repository's `reviews/archive/`: 0.15.0, with `runId` and `squadronVersion`.
   - **A new 0.15.0 file/stdout pair** from one `sq review … --output json` saved **with** a slice number, with stdout and stderr captured to separate files. It is captured at implementation time with `--model glmflash` in a throwaway copy of this repository, so nothing lands in the real reviews directory. It pins that stdout is pure JSON, that `template_name` equals `reviewType`, and that the finding keys match.
 - **A known gap.** No real file with a *Findings Not Parsed* heading **and** a CONCERNS or FAIL verdict has been found. The README records it as missing. That parser branch is tested on a copy of a real file with the heading added, and the README labels the copy as edited.
 - `ruff`, `pyright` strict, and the full suite are clean. Source files stay near 300 lines.
@@ -392,7 +392,7 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 ### Integration Requirements
 
 - An end-to-end test drives the real CLI as subprocesses: create a project, seed a node, ingest two rounds and a provider failure, ingest round 1 again, then `kill -9` and `start`. Read-only inspection must then show exactly three verdicts with the expected standings, and round 2's changes against round 1.
-- Slice 105's design needs no names beyond those listed under Provides to Other Slices.
+- Slice 106's design needs no names beyond those listed under Provides to Other Slices.
 
 ### Verification Walkthrough
 
@@ -430,7 +430,7 @@ Expected:
 - `uv run amoeba inspect verdicts --project demo` shows one `tasks` verdict, `CONCERNS`, standing `stated`.
 - `inspect verdicts --json` shows `source: artifact_frontmatter`, `source_path` as the absolute fixture path, and `upstream_version: 0.14.0`.
 
-**2. The stamp supplies the version.** Ingest the 0.15.0 fixture (`105-review.slice…20260928T175751.md`) without `--upstream-version`. Expected: its row shows `upstream_version: 0.15.0`, and `--json` shows `sq_run_id: run-20260928-slices-plan-a04bdb07`. Running it again with `--upstream-version 0.14.0` exits `12`, with a message naming both labels.
+**2. The stamp supplies the version.** Ingest the 0.15.0 fixture (`106-review.slice…20260928T175751.md`) without `--upstream-version`. Expected: its row shows `upstream_version: 0.15.0`, and `--json` shows `sq_run_id: run-20260928-slices-plan-a04bdb07`. Running it again with `--upstream-version 0.14.0` exits `12`, with a message naming both labels.
 
 **3. Provider failures and degraded reviews.** Ingest the two provider-failure fixtures (the 102 part-2 round-2 file and the 928 file) and the 925 *Findings Not Parsed* file. The 928 file carries its own stamp. The other two predate it and need `--upstream-version 0.14.0`. Expected standings: `provider_failure`, `provider_failure`, `unparsed`. The 925 file's standing is `unparsed` rather than `findings_unparsed` because its verdict is `UNKNOWN`, which the trust label checks first.
 
@@ -499,7 +499,7 @@ Expected: every fixture parses to its stated fields, and 104's matching tests pa
 
 ### Mitigation Strategies
 
-- Required keys raise; they are never defaulted. Optional keys map to null when absent. Unknown keys are ignored. So Squadron adding a key breaks nothing, and Squadron removing or renaming a required key fails loudly: 105 lists the file as `unparseable`, and ingest exits 12.
+- Required keys raise; they are never defaulted. Optional keys map to null when absent. Unknown keys are ignored. So Squadron adding a key breaks nothing, and Squadron removing or renaming a required key fails loudly: 106 lists the file as `unparseable`, and ingest exits 12.
 - Every record carries Squadron's version label, so the records a shape change touched can be found.
 - Every fixture has a capture date, and a real 0.15.0 pair is captured at implementation. A stale fixture shows up as a reason to recapture.
 

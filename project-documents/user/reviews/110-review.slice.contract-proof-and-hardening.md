@@ -6,7 +6,7 @@ slice: contract-proof-and-hardening
 project: amoeba
 verdict: PASS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/106-slice.contract-proof-and-hardening.md
+sourceDocument: project-documents/user/slices/110-slice.contract-proof-and-hardening.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -22,40 +22,40 @@ findings:
     severity: pass
     category: architecture-alignment
     summary: "Architecture principles are demonstrated, not just claimed"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Technical Decisions"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Technical Decisions"
   - id: F002
     severity: pass
     category: architecture-alignment
     summary: "Contract-narrowing changes are gated, not smuggled"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#PM ratification"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#PM ratification"
   - id: F003
     severity: pass
     category: error-handling
     summary: "Failure modes enumerated per kill point with explicit recovery"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Restart injection (D4)"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Restart injection (D4)"
   - id: F004
     severity: pass
     category: dependency-direction
     summary: "Dependency directions correct"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Component Structure"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Component Structure"
   - id: F005
     severity: note
     category: integration-points
-    summary: "Cross-slice dependency on 105's transactional report-back is open-ended"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Interfaces Required"
+    summary: "Cross-slice dependency on 106's transactional report-back is open-ended"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Interfaces Required"
   - id: F006
     severity: note
     category: under-specification
     summary: "Slug pattern permits trailing dots"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#D5"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D5"
   - id: F007
     severity: note
     category: error-handling
     summary: "Read-only store concurrency during prune not discussed"
-    location: "project-documents/user/slices/106-slice.contract-proof-and-hardening.md#Pruning (D7)"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Pruning (D7)"
 ---
 
-# Review: slice — slice 106
+# Review: slice — slice 110
 
 **Verdict:** PASS
 **Model:** z-ai/glm-5.3-flash
@@ -78,9 +78,9 @@ Each kill window (`after-issue`, `after-launch`, `inbox-while-down`, `mid-follow
 
 `run_pruning.py` sits in `amoeba.upstream.squadron` (adapter layer) reading Squadron files, with the store explicitly kept free of Squadron knowledge; the store imports nothing from `amoeba.upstream`/`amoeba.process`/`amoeba.feed`; the writer guard is unchanged. The AST-based `test_public_only.py` guard plus hand-pinned `__all__` sets make the boundary mechanical.
 
-### [NOTE] Cross-slice dependency on 105's transactional report-back is open-ended
+### [NOTE] Cross-slice dependency on 106's transactional report-back is open-ended
 
-The design requires a new public one-transaction report-back method from 105 and provides a fallback ("if 105 ships without it, this slice adds it"). This is workable but means the slice may grow a store method beyond its stated hardening scope; if the fallback fires, the gap table should record it as a 105 contract gap assigned here, not silently absorbed.
+The design requires a new public one-transaction report-back method from 106 and provides a fallback ("if 106 ships without it, this slice adds it"). This is workable but means the slice may grow a store method beyond its stated hardening scope; if the fallback fires, the gap table should record it as a 106 contract gap assigned here, not silently absorbed.
 
 ### [NOTE] Slug pattern permits trailing dots
 

@@ -6,7 +6,7 @@ slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
 verdict: CONCERNS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md
+sourceDocument: project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -22,45 +22,45 @@ findings:
     severity: pass
     category: alignment
     summary: "Architecture alignment and dependency direction"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#Component-Structure"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#Component-Structure"
   - id: F002
     severity: pass
     category: error-handling
     summary: "Failure modes enumerated for every new I/O path"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#Patterns-and-Conventions"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#Patterns-and-Conventions"
   - id: F003
     severity: concern
     category: under-specification
     summary: "The replay invariant test cannot catch missed emissions it claims to"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:264"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:264"
   - id: F004
     severity: concern
     category: error-handling
     summary: "`sq --version` subprocess can block the synchronous host loop, violating 102's tenant contract"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:175"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:175"
   - id: F005
     severity: note
     category: under-specification
     summary: "`node_created` payload lacks the initial status needed for replay"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:256"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:256"
   - id: F006
     severity: note
     category: alignment
     summary: "\"Push, not poll\" tension is surfaced honestly, not hidden"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:195"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:195"
   - id: F007
     severity: note
     category: alignment
     summary: "D7's additive change to 104's completed contract is handled correctly"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md#D7"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md#D7"
   - id: F008
     severity: note
     category: alignment
     summary: "Dependency list correction at design time is documented, not silent"
-    location: "project-documents/user/slices/105-slice.outbound-change-feed-and-detection-of-external-work.md:64"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:64"
 ---
 
-# Review: slice — slice 105
+# Review: slice — slice 106
 
 **Verdict:** CONCERNS
 **Model:** z-ai/glm-5.3-flash
@@ -97,7 +97,7 @@ Extending `finding_changes` to group by `source_document` matches 104's verified
 
 ### [NOTE] Dependency list correction at design time is documented, not silent
 
-Adding 103 to the prerequisite list ("*Added at slice design:*") with the reason — registration and reply delivery both go through the inbox — is correct and verified against the slice plan's dependency list (arch slices doc: 105 consumes "101, 102, 103, 104, 108"). The human-reply path correctly needs no watcher: applying a `resolution` flips status, which emits `node_status_changed` (line 353).
+Adding 103 to the prerequisite list ("*Added at slice design:*") with the reason — registration and reply delivery both go through the inbox — is correct and verified against the slice plan's dependency list (arch slices doc: 106 consumes "101, 102, 103, 104, 105"). The human-reply path correctly needs no watcher: applying a `resolution` flips status, which emits `node_status_changed` (line 353).
 
 ### Run Digest
 

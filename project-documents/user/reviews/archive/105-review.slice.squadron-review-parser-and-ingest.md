@@ -6,7 +6,7 @@ slice: squadron-review-parser-and-ingest
 project: amoeba
 verdict: CONCERNS
 verdictSource: stated
-sourceDocument: project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md
+sourceDocument: project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -22,50 +22,50 @@ findings:
     severity: pass
     category: scope
     summary: "Scope and exclusions match the architecture's assigned boundaries exactly"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:15-57"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:15-57"
   - id: F002
     severity: pass
     category: dependency-direction
     summary: "Dependency direction and writer model conform to the sole-writer architecture"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:119-124"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:119-124"
   - id: F003
     severity: pass
     category: architectural-principles
     summary: "Provenance and \"unknown is a value\" principles are carried through, not just cited"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:223-240"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:223-240"
   - id: F004
     severity: pass
     category: error-handling
     summary: "Failure modes on the new I/O paths are enumerated with explicit exits; no TBDs"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:271-278"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:271-278"
   - id: F005
     severity: pass
     category: integration-points
     summary: "Consumed and provided interfaces match the sibling slices as written"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:59-92"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:59-92"
   - id: F006
     severity: concern
     category: error-handling
     summary: "A verdict submission naming a nonexistent project ends in quarantine — a terminal state D6's read-back surfaces never show"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:261"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:261"
   - id: F007
     severity: note
     category: data-quality
     summary: "The D5 cross-source double-record consequence is accepted with adequate containment"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:242-259"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:242-259"
   - id: F008
     severity: note
     category: robustness
     summary: "Walkthrough setup drops 104's documented startup-wait and isolation caveats"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:376-387"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:376-387"
   - id: F009
     severity: note
     category: nfr
     summary: "No parent NFR required restatement; the one applicable property is carried through"
-    location: "project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md:371-374"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:371-374"
 ---
 
-# Review: slice — slice 108
+# Review: slice — slice 105
 
 **Verdict:** CONCERNS
 **Model:** z-ai/glm-5.3-flash
@@ -74,7 +74,7 @@ findings:
 
 ### [PASS] Scope and exclusions match the architecture's assigned boundaries exactly
 
-The architecture reserves to this component only "parsing of Squadron **review output** … as an adapter outside the store" and explicitly excludes "parsing of other SQ output or of CF MCP results (the Runner's control surface, initiative 120)." The slice's D1 states the same placement and the same "review output only" limit, and its Excluded list maps every adjacent concern to its owner: run files stay in `process/observers/sq_runs.py`, CF MCP parsing is 120's, detection is 105's, judge samples are 109's. Nothing reaches beyond the assigned scope; the additions it does make (`verdict_to_payload`, `provider_failure_problem`) are justified by the one integration point it owns (submit requires a payload dict) and are gated on 104's behavior-preservation tests.
+The architecture reserves to this component only "parsing of Squadron **review output** … as an adapter outside the store" and explicitly excludes "parsing of other SQ output or of CF MCP results (the Runner's control surface, initiative 120)." The slice's D1 states the same placement and the same "review output only" limit, and its Excluded list maps every adjacent concern to its owner: run files stay in `process/observers/sq_runs.py`, CF MCP parsing is 120's, detection is 106's, judge samples are 107's. Nothing reaches beyond the assigned scope; the additions it does make (`verdict_to_payload`, `provider_failure_problem`) are justified by the one integration point it owns (submit requires a payload dict) and are gated on 104's behavior-preservation tests.
 
 ### [PASS] Dependency direction and writer model conform to the sole-writer architecture
 
@@ -90,15 +90,15 @@ The new I/O is local file read plus one inbox submission — no network, so hang
 
 ### [PASS] Consumed and provided interfaces match the sibling slices as written
 
-Verified against the referenced documents and the repository: 104's design confirms the PyYAML dev→runtime hand-off verbatim, that callers pass parsed values and the record id is the submission id, and the shipped store package really contains the `verdict_from_payload`/payload-key surface the inverse function targets; the four named `review_fixtures.py` users are exactly the four modules importing it; 105's design asks for precisely `ParsedReview.slice`, `source_document`, the parsed-content digest id, `SquadronParseError` details, and `ingest review --node` recovery — all provided; 106's required imports (:69) match the Provides list name for name. The `dependencies: [101, 103, 104]` correction of the plan's dependency list is flagged honestly in the Prerequisites section.
+Verified against the referenced documents and the repository: 104's design confirms the PyYAML dev→runtime hand-off verbatim, that callers pass parsed values and the record id is the submission id, and the shipped store package really contains the `verdict_from_payload`/payload-key surface the inverse function targets; the four named `review_fixtures.py` users are exactly the four modules importing it; 106's design asks for precisely `ParsedReview.slice`, `source_document`, the parsed-content digest id, `SquadronParseError` details, and `ingest review --node` recovery — all provided; 110's required imports (:69) match the Provides list name for name. The `dependencies: [101, 103, 104]` correction of the plan's dependency list is flagged honestly in the Prerequisites section.
 
 ### [CONCERN] A verdict submission naming a nonexistent project ends in quarantine — a terminal state D6's read-back surfaces never show
 
-The slice enumerates the wrong-node case (Excluded: "An unknown node shows up as a `rejected` submission, which the PM sees in `inspect submissions`") — correct, since 104's writer checks node existence inside the apply transaction. But it never enumerates the wrong-**project** case, and it terminates differently: per 103, a submission that cannot be attributed to an open project store is *quarantined* as `no_store_for_project` because "there is no store row to write" — it never becomes a submission record. `submit()` cannot catch it (only id *format* is validated at submit time; existence is apply-time), so the run exits `OK` and prints an id, and D6's stated outcome surfaces — `inspect submissions` and `inspect verdicts` — both show nothing. Only `inspect inbox` (quarantined listing) reveals what happened, and the slice's "A failing run prints the error on stderr" claim doesn't hold here because this isn't a failing run. This is precisely the kind of per-message-type failure mode the design should name. D6's submit-and-don't-wait stance is right, so the fix is documentation and test coverage, not a read-back: state in D6/Excluded that a nonexistent `--project` quarantines silently, name `inspect inbox` as the surface, and add a success-criteria case for it. Note the adjacent risk is real for a PM tool: `ingest review` is documented as the backfill path for pre-registration reviews (105), i.e., often run against directories/projects in flux.
+The slice enumerates the wrong-node case (Excluded: "An unknown node shows up as a `rejected` submission, which the PM sees in `inspect submissions`") — correct, since 104's writer checks node existence inside the apply transaction. But it never enumerates the wrong-**project** case, and it terminates differently: per 103, a submission that cannot be attributed to an open project store is *quarantined* as `no_store_for_project` because "there is no store row to write" — it never becomes a submission record. `submit()` cannot catch it (only id *format* is validated at submit time; existence is apply-time), so the run exits `OK` and prints an id, and D6's stated outcome surfaces — `inspect submissions` and `inspect verdicts` — both show nothing. Only `inspect inbox` (quarantined listing) reveals what happened, and the slice's "A failing run prints the error on stderr" claim doesn't hold here because this isn't a failing run. This is precisely the kind of per-message-type failure mode the design should name. D6's submit-and-don't-wait stance is right, so the fix is documentation and test coverage, not a read-back: state in D6/Excluded that a nonexistent `--project` quarantines silently, name `inspect inbox` as the surface, and add a success-criteria case for it. Note the adjacent risk is real for a PM tool: `ingest review` is documented as the backfill path for pre-registration reviews (106), i.e., often run against directories/projects in flux.
 
 ### [NOTE] The D5 cross-source double-record consequence is accepted with adequate containment
 
-File-vs-stdout captures of one review get different ids and, if both are ingested, produce doubled `times_seen` and spurious "recurring against itself" rows. The design documents the mechanism, the visible effects, the reason no cross-source key exists in Squadron, and a concrete caller rule ("ingest a review's file, not its stdout"), and 105's D5 independently forces the Runner and detection onto the file path. Accepted-and-documented is the right call at this layer; the residue is a counting artifact in a debugging store, not a correctness problem.
+File-vs-stdout captures of one review get different ids and, if both are ingested, produce doubled `times_seen` and spurious "recurring against itself" rows. The design documents the mechanism, the visible effects, the reason no cross-source key exists in Squadron, and a concrete caller rule ("ingest a review's file, not its stdout"), and 106's D5 independently forces the Runner and detection onto the file path. Accepted-and-documented is the right call at this layer; the residue is a counting artifact in a debugging store, not a correctness problem.
 
 ### [NOTE] Walkthrough setup drops 104's documented startup-wait and isolation caveats
 

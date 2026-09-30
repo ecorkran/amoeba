@@ -3,8 +3,8 @@ docType: slice-design
 slice: judge-samples-checks-and-calibration
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
-dependencies: [104, 105, 108]
-interfaces: [106]
+dependencies: [104, 105, 106]
+interfaces: [110]
 dateCreated: 20260928
 dateUpdated: 20260928
 status: not_started
@@ -21,7 +21,7 @@ Slice 104 stores review verdicts and their findings. It stores `score` and `crit
 3. **Check results.** A mechanical check (a validator, a test run, `cf check`) is recorded with what it examined. A check that examined nothing has standing `vacuous`, never `passed`.
 4. **Work records.** SQ 280's `task_progress` and `devlog` types land in one small table with opaque JSON content, until a consumer defines their fields. SQ 280's other two types already have homes: `review_findings` is 104's verdict and its findings, and `checkpoint` is 101's blocked state.
 
-The first draft of this design is inside slice 104's draft at commit `c525a63` (its D4, D5, and D6). This document starts from it and brings it up to date against 104 and 108 as designed and built.
+The first draft of this design is inside slice 104's draft at commit `c525a63` (its D4, D5, and D6). This document starts from it and brings it up to date against 104 and 105 as designed and built.
 
 ## Value
 
@@ -35,7 +35,7 @@ Developer value:
 
 **Included**
 
-- `judge_invocation_id` on `VerdictInput`, `VerdictRecord`, the `verdicts` table, the `verdict` payload (optional key), `verdict_to_payload`, 108's `to_verdict_input`, and `amoeba ingest review --judge-invocation-id`.
+- `judge_invocation_id` on `VerdictInput`, `VerdictRecord`, the `verdicts` table, the `verdict` payload (optional key), `verdict_to_payload`, 105's `to_verdict_input`, and `amoeba ingest review --judge-invocation-id`.
 - One precondition on judge samples: every sample of an invocation is on the same node (D2).
 - 104's previous-round rule gains one exclusion: a judge sample never takes a sample of its own invocation as its previous round (D3).
 - A `judge_invocation_id` filter on `verdicts(...)`, and on `amoeba inspect verdicts`.
@@ -43,7 +43,7 @@ Developer value:
 - `record_check`, `check`, `checks`, the `CheckOutcome` and `CheckStanding` vocabularies, `check_standing`, and `amoeba inspect checks` (D5).
 - `record_work`, `work_records`, the `WorkRecordKind` vocabulary, and `amoeba inspect work-records` (D6).
 - `RecordSource` gains `command_output` and `document`.
-- The next store migration (`007` if 105 lands first, as planned) and `EXPECTED_SCHEMA_VERSION` + 1.
+- The next store migration (`007` if 106 lands first, as planned) and `EXPECTED_SCHEMA_VERSION` + 1.
 - `scripts/demo_checks.py`, which seeds checks and work records for the walkthrough.
 - New judge review fixtures in `tests/fixtures/sq_reviews/`, recorded in the README.
 - Documentation: `docs/evidence-contract.md` gains judge-sample, calibration, check, and work-record sections. `docs/inbox-contract.md`'s stale line "Slice 104 adds verdict and judge-sample kinds" is corrected. `docs/store-contract.md` and `CHANGELOG.md` are updated.
@@ -54,8 +54,8 @@ Developer value:
 - **Recommendations and thresholds.** The report counts and summarizes. Recommending a threshold is 140's work, reported to the PM. Nothing here mutates a threshold or writes outside the project store (the architecture's metrology constraint).
 - **Excluding escalated-gate samples from agreement data.** The store does not know which gates were escalated. 140 applies that filter when it computes agreement.
 - **Calibration across projects.** Each project has its own store file, so the report is per project. Combining projects is a later report's job.
-- **Inbox kinds for checks and work records.** Their producers (the Runner, 105's tenant) run in-process. A kind can be added later through 103's three-part seam.
-- **Checks and work records on 105's change feed.** Putting a table on the feed means a new `ChangeKind` and a trigger (105's D8). Nothing subscribes to these yet. Judge samples are verdicts, so they already emit `verdict_recorded`.
+- **Inbox kinds for checks and work records.** Their producers (the Runner, 106's tenant) run in-process. A kind can be added later through 103's three-part seam.
+- **Checks and work records on 106's change feed.** Putting a table on the feed means a new `ChangeKind` and a trigger (106's D8). Nothing subscribes to these yet. Judge samples are verdicts, so they already emit `verdict_recorded`.
 - **Fields for `task_progress` and `devlog`.** Content stays an opaque JSON object until a consumer designs it.
 
 ## Dependencies
@@ -63,8 +63,8 @@ Developer value:
 ### Prerequisites
 
 - **Slice 104:** `VerdictInput`, `VerdictRecord`, the `verdicts` table, the `verdict` inbox kind and its payload keys, the first-wins retry rule, `finding_changes` and its previous-round rule, the `Listing` registry with `value_options`, and `docs/evidence-contract.md`.
-- **Slice 108:** `to_verdict_input`, `verdict_to_payload`, and `amoeba ingest review`, which this slice extends with the invocation id. It also parses `score` and `criteria` from judge files. *Added at slice design:* the slice plan lists only 104.
-- **Slice 105:** it takes migration 006, and it changes the previous-round query to group by `source_document`. This slice edits the same query, so it builds on 105's version. *Added at slice design.* If 105 slips, this slice takes 006 and 105 rebases onto it; nothing else changes.
+- **Slice 105:** `to_verdict_input`, `verdict_to_payload`, and `amoeba ingest review`, which this slice extends with the invocation id. It also parses `score` and `criteria` from judge files. *Added at slice design:* the slice plan lists only 104.
+- **Slice 106:** it takes migration 006, and it changes the previous-round query to group by `source_document`. This slice edits the same query, so it builds on 106's version. *Added at slice design.* If 106 slips, this slice takes 006 and 106 rebases onto it; nothing else changes.
 - **Slices 101 and 103**, through 104: the migration mechanism, `Store`, `submit()`, and the writer guard.
 
 ### Interfaces Required
@@ -73,8 +73,8 @@ Developer value:
 
 - Judge templates are named with a dot (`judge.slice-vs-arch`, `judge.tasks-vs-slice`, `judge.findings-addressed`). The review file's `reviewType` carries that name.
 - A judge file carries `score` (0–100) and a `criteria` mapping of criterion name to 0–100. It also carries findings in the usual shape.
-- A judge file's verdict comes from the score by threshold, computed by Squadron's `enforce_judge`. Squadron writes **no** `verdictSource` for it, on purpose. 108's parser maps the absence to `not_reported`, so a judge sample read from a file has standing `unattested`. That is the honest label: Squadron did not say how the verdict was reached. The report shows it; nothing here reinterprets it.
-- Stdout JSON reports `verdict: UNKNOWN` for judge templates (squadron#140, still open). A sample read from stdout therefore has standing `unparsed`. Judge samples are ingested from the file, which 108 already recommends for every review.
+- A judge file's verdict comes from the score by threshold, computed by Squadron's `enforce_judge`. Squadron writes **no** `verdictSource` for it, on purpose. 105's parser maps the absence to `not_reported`, so a judge sample read from a file has standing `unattested`. That is the honest label: Squadron did not say how the verdict was reached. The report shows it; nothing here reinterprets it.
+- Stdout JSON reports `verdict: UNKNOWN` for judge templates (squadron#140, still open). A sample read from stdout therefore has standing `unparsed`. Judge samples are ingested from the file, which 105 already recommends for every review.
 
 From Amoeba: 104's `_verdict_writer.py` and `verdicts.py`, `sql_evidence.py`, `mapping_evidence.py`, `verdict_payload.py`, `inbox/evidence_payloads.py`, and `cli/inspect.py`'s `LISTINGS`.
 
@@ -97,7 +97,7 @@ src/amoeba/store/
   verdict_payload.py    + VERDICT_JUDGE_INVOCATION_ID
   schema/007_judge_samples_checks_and_work.sql
 src/amoeba/inbox/evidence_payloads.py   + judge_invocation_id: str | None = None
-src/amoeba/upstream/squadron/review.py  + judge_invocation_id argument (108's module)
+src/amoeba/upstream/squadron/review.py  + judge_invocation_id argument (105's module)
 src/amoeba/cli/
   ingest.py             + --judge-invocation-id
   inspect_evidence.py   + calibration rows; verdict rows gain judge_invocation_id
@@ -121,7 +121,7 @@ Judge (140) picks invocation id J, runs N judge reviews
     record_verdict                       one transaction, as in 104
       replay check (first wins)
       node exists; journal entry on the same node         (104)
-      provider-failure rule                                (104/108)
+      provider-failure rule                                (104/105)
       J already has samples on another node? → rejected    (D2)
       INSERT verdict row with judge_invocation_id = J; findings as in 104
 ```
@@ -135,7 +135,7 @@ calibration(project_id)
   → CalibrationRow per group, sorted by review_type, model
 ```
 
-**A check, in-process** (the Runner, later 105's tenant):
+**A check, in-process** (the Runner, later 106's tenant):
 
 ```
 record_check(CheckInput)                  one transaction
@@ -165,13 +165,13 @@ Names, used the same way in code, docs, and CLI:
 - A **judge sample** is a verdict record whose `judge_invocation_id` is set.
 - A verdict record without one is a **review verdict**.
 
-The id is caller-supplied data and is not part of 108's digest record id. So one review file is one sample: ingesting the same file into a second invocation is a no-op that keeps the first. A caller that really wants the same file in two invocations passes `--id`.
+The id is caller-supplied data and is not part of 105's digest record id. So one review file is one sample: ingesting the same file into a second invocation is a no-op that keeps the first. A caller that really wants the same file in two invocations passes `--id`.
 
 **D2 — Every sample of one invocation is on the same node.** An invocation judges one gate. `record_verdict` rejects a sample whose invocation already has a sample on a different node (direct call: `ValueError`; inbox: `rejected` with the reason). The check is one indexed lookup. Without it, a typo in `--node` would silently split an invocation across gates, and 140's consensus would read half of it. Nothing else about an invocation is constrained: samples may differ in model, review type, and verdict. If 140 finds a real need for one invocation spanning nodes, it drops this rule.
 
 ### Patterns and Conventions
 
-**D3 — A judge sample never compares against its own invocation.** 104's `finding_changes` picks the previous round as the latest comparable verdict on the same node and review type (105 adds `source_document`). For a judge sample, that would be the previous sample of the same invocation: sample 3 would report sample 2's findings as `recurring`, which is two models agreeing, not an issue carried across rounds. So when the target is a judge sample, the previous-round query also excludes samples with the same `judge_invocation_id`. Its previous round is then the latest sample of an earlier invocation. Review verdicts are unaffected, and judge review types never match ordinary ones, so the two never mix.
+**D3 — A judge sample never compares against its own invocation.** 104's `finding_changes` picks the previous round as the latest comparable verdict on the same node and review type (106 adds `source_document`). For a judge sample, that would be the previous sample of the same invocation: sample 3 would report sample 2's findings as `recurring`, which is two models agreeing, not an issue carried across rounds. So when the target is a judge sample, the previous-round query also excludes samples with the same `judge_invocation_id`. Its previous round is then the latest sample of an earlier invocation. Review verdicts are unaffected, and judge review types never match ordinary ones, so the two never mix.
 
 **D4 — The calibration report is descriptive, per `(review_type, model)`, over judge samples only.** `CalibrationRow` holds:
 
@@ -215,7 +215,7 @@ An invocation that spans three models counts in each of the three rows, so `spli
 - `checkpoint` is a `blocked_on_sq_checkpoint` node carrying the SQ run id (101).
 - `task_progress` and `devlog` have no home and no designed consumer. They share one `work_records` table with a closed `WorkRecordKind`, an opaque JSON-object `content`, and the standard provenance, like 103's message payloads.
 
-The table is named `work_records`, not "artifacts", because "review artifact" already means a Squadron review file throughout 104, 105, and 108. Fields are designed when a consumer needs them; until then the store checks only that `content` is a JSON object.
+The table is named `work_records`, not "artifacts", because "review artifact" already means a Squadron review file throughout 104, 106, and 105. Fields are designed when a consumer needs them; until then the store checks only that `content` is a JSON object.
 
 **Vocabulary and provenance.** `RecordSource` gains `command_output` (checks) and `document` (work records read from a file). It stays one vocabulary, describing what the caller read the record from. It is not restricted per record type. Checks and work records carry the same `Provenance` as verdicts, so every recorded item has a non-empty `upstream_version` (the slice plan's criterion). For a check, `upstream` names the tool (`context-forge`, `pytest`) and the version is whatever that tool reports.
 
@@ -242,7 +242,7 @@ The table is named `work_records`, not "artifacts", because "review artifact" al
 
 **Inbox.** The `verdict` payload gains `judge_invocation_id: str | None = None`. Because 103's `amoeba submit` builds flags from the payload model, `amoeba submit verdict --judge-invocation-id J` exists with no CLI code. An empty string is refused by payload validation.
 
-**108's parser.** `to_verdict_input(..., judge_invocation_id=None)` passes the id through. It stays out of `review_record_id` (D1).
+**105's parser.** `to_verdict_input(..., judge_invocation_id=None)` passes the id through. It stays out of `review_record_id` (D1).
 
 **CLI:**
 
@@ -275,16 +275,16 @@ As in 104, no `CHECK` constraints on vocabulary columns; the mapping raises on a
 
 ### Provides to Other Slices
 
-- **106:** judge samples through `amoeba submit verdict --judge-invocation-id`, read back through `verdicts(..., judge_invocation_id=J)`, for its Judge actor (step 5 of its sequence).
+- **110:** judge samples through `amoeba submit verdict --judge-invocation-id`, read back through `verdicts(..., judge_invocation_id=J)`, for its Judge actor (step 5 of its sequence).
 - **Initiative 140:** the judge-sample write path, the per-invocation read, and `calibration` as its evidence source. The kind seam remains for consensus records when 140 designs them.
 - **Initiative 120:** `record_check`, `check_standing`, and `record_work` in-process; checks' `vacuous` standing for gating.
-- **105 (later):** checks and work records can join the change feed by adding a `ChangeKind` and a trigger.
+- **106 (later):** checks and work records can join the change feed by adding a `ChangeKind` and a trigger.
 
 ### Consumes from Other Slices
 
 - **104:** unchanged in behavior for review verdicts. It gains a column, a filter, one rejection rule that applies only to judge samples, and D3's exclusion, which applies only to judge samples.
-- **105:** its migration and its previous-round query, extended here. Its `verdict_recorded` trigger fires for judge samples unchanged; the trigger's payload does not carry `judge_invocation_id`, so a subscriber reads `verdict(id)`, as it already does for the standing.
-- **108:** `to_verdict_input`, `verdict_to_payload`, and `ingest review`, each extended by one argument or key. 108's round-trip test covers the new key.
+- **106:** its migration and its previous-round query, extended here. Its `verdict_recorded` trigger fires for judge samples unchanged; the trigger's payload does not carry `judge_invocation_id`, so a subscriber reads `verdict(id)`, as it already does for the standing.
+- **105:** `to_verdict_input`, `verdict_to_payload`, and `ingest review`, each extended by one argument or key. 105's round-trip test covers the new key.
 
 ## Success Criteria
 
@@ -292,7 +292,7 @@ As in 104, no `CHECK` constraints on vocabulary columns; the mapping raises on a
 
 - Three samples sharing one `judge_invocation_id`, with different models, scores, and verdicts, are three verdict records, each with its own model, run id, score, criteria, and verdict. `verdicts(project, judge_invocation_id=J)` returns exactly those three in arrival order.
 - A sample whose invocation already has a sample on another node raises directly and is `rejected` through the inbox, with the reason. A review verdict is never affected by D2.
-- `finding_changes` on the second sample of an invocation does not use the first sample as its previous round. With an earlier invocation present, it uses that invocation's latest comparable sample. Review verdicts' previous rounds are unchanged (104's and 105's tests pass as they are).
+- `finding_changes` on the second sample of an invocation does not use the first sample as its previous round. With an earlier invocation present, it uses that invocation's latest comparable sample. Review verdicts' previous rounds are unchanged (104's and 106's tests pass as they are).
 - `calibration` over a built set gives the D4 fields exactly, including: an invocation split across two models counts in both rows; a provider-failure sample does not make an invocation split; `score_*` are `None` when nothing is scored. `summarize_judge_samples` is tested on built records with no store.
 - A check with `examined_count=0` and outcome `passed` has standing `vacuous`; the same with outcome `failed` is `vacuous`; `examined_count=None` is `unattested`; `errored` wins over everything. Each `CheckStanding` row is produced by a record built for it.
 - `record_check` rejects a negative count, a count that disagrees with `examined`, an empty name, an unknown node, and an empty `upstream_version`.
@@ -320,7 +320,7 @@ As in 104, no `CHECK` constraints on vocabulary columns; the mapping raises on a
 
 ### Verification Walkthrough
 
-Draft; refined with captured output when Phase 6 completes. The setup is 108's: `uv run` from the repository root, wait for `running` after each start, and an empty `--sq-runs-dir`.
+Draft; refined with captured output when Phase 6 completes. The setup is 105's: `uv run` from the repository root, wait for `running` after each start, and an empty `--sq-runs-dir`.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
@@ -400,7 +400,7 @@ uv run pytest tests/store/test_calibration.py tests/store/test_checks.py tests/s
 2. **Migration.** The migration, `sql_checks.py`, and the upgrade test.
 3. **Judge samples.** `judge_invocation_id` through `VerdictInput`, mapping, payload keys, `VerdictPayload`, and `verdict_to_payload`; the D2 precondition on both paths; the `verdicts` filter; D3 in the previous-round query. Then `calibration()`.
 4. **Checks and work records.** `CheckOperations`, its mapping, and tests.
-5. **Parser and ingest.** 108's `to_verdict_input` argument and `--judge-invocation-id`; capture the fresh judge fixture and add both judge fixtures.
+5. **Parser and ingest.** 105's `to_verdict_input` argument and `--judge-invocation-id`; capture the fresh judge fixture and add both judge fixtures.
 6. **Listings.** The three new listings and the verdict column and filter; update the pinned registry test.
 7. **Proof and docs.** `scripts/demo_checks.py`, the end-to-end CLI test, the docs, and the `CHANGELOG`.
 

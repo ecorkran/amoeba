@@ -232,7 +232,7 @@ The flag rule comes first. Registering `VerdictPayload` makes `amoeba submit` bu
 **Owner**: Junior AI
 **Dependencies**: Task 8.2
 **Effort**: 2
-**Objective**: Make `docs/evidence-contract.md` enough for slice 108's and initiative 140's designs without reading the code.
+**Objective**: Make `docs/evidence-contract.md` enough for slice 105's and initiative 140's designs without reading the code.
 
 **Steps**:
 - [x] `docs/evidence-contract.md`: the matching rule (version 1, each step), what it does **not** match (rewording, citing the captured rounds), the trust labels and their order, the "CONCERNS, zero findings, parsed" note from the LLD, how the previous round is chosen and why failures are never a baseline, the provenance fields and that versions are never compared, the retry rule, and `VerdictInput`'s fields including the null-until-SQ-927 `diff_truncated` and `requested_model`

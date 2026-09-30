@@ -4,7 +4,7 @@ slice: findings-verdicts-and-provenance
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102, 103]
-interfaces: [105, 106, 108, 109]
+interfaces: [105, 106, 107, 110]
 dateCreated: 20260926
 dateUpdated: 20260927
 status: complete
@@ -25,10 +25,10 @@ The out-of-process Judge gets a way to submit reviews through the inbox. Two new
 
 **Split out on 20260926** (the first version of this design covered all of it):
 
-- **Slice 108:** parsing Squadron's review output, and an `amoeba ingest review` command.
-- **Slice 109:** judge samples and the calibration report, mechanical check results, and task-progress and dev-log records.
+- **Slice 105:** parsing Squadron's review output, and an `amoeba ingest review` command.
+- **Slice 107:** judge samples and the calibration report, mechanical check results, and task-progress and dev-log records.
 
-The full first draft, including the parser mapping and the judge and check designs, is in git history at commit `c525a63`. Slices 108 and 109 start from it.
+The full first draft, including the parser mapping and the judge and check designs, is in git history at commit `c525a63`. Slices 105 and 107 start from it.
 
 ## Value
 
@@ -52,9 +52,9 @@ Developer value.
 
 **Excluded**
 
-- Reading Squadron's JSON or review files: slice 108. Here, callers pass values that are already parsed.
-- Judge samples, calibration, check results, task progress, and dev-log records: slice 109.
-- Noticing reviews that someone else launched: slice 105.
+- Reading Squadron's JSON or review files: slice 105. Here, callers pass values that are already parsed.
+- Judge samples, calibration, check results, task progress, and dev-log records: slice 107.
+- Noticing reviews that someone else launched: slice 106.
 - Deciding whether a reworded finding is "the same issue": initiative 140. The matching rule only handles formatting differences.
 - Marking findings addressed, disputed, accepted, or rejected: 120 and 140.
 - Tagging findings by how checkable they are: 120.
@@ -66,7 +66,7 @@ Developer value.
 - **Slice 101:** `Store`, nodes, the migration mechanism (`EXPECTED_SCHEMA_VERSION` goes from 4 to 5).
 - **Slice 102:** the inspection listing registry, `Store.open_read_only`, the command journal (a verdict may point at the Squadron run command that produced it), and the writer guard.
 - **Slice 103:** the inbox submission types and `amoeba submit`, and its retry rule: resubmitting the same id is a no-op.
-- **PyYAML, dev-only** (with `types-PyYAML`). Tests read the real review files' frontmatter with it. Slice 108 makes it a runtime dependency.
+- **PyYAML, dev-only** (with `types-PyYAML`). Tests read the real review files' frontmatter with it. Slice 105 makes it a runtime dependency.
 
 ### Interfaces Required
 
@@ -84,7 +84,7 @@ From the store: `get_node`, `journal_entry`, error translation in `_execute`, an
   - a CONCERNS or FAIL whose findings did not parse.
 - A provider failure writes `verdict: UNKNOWN` into the normal review slot.
 - No Squadron output carries the run id or the Squadron version yet. Squadron has an issue open to add both.
-- The same committed, unbuilt Squadron design (SQ 927) that adds `imposed` also adds `diffTruncated` and `requestedModel` to review frontmatter (`diff_truncated`, `requested_model` in JSON). Neither appears in 0.14.0 output. Their columns hold null until Squadron ships them, and slice 108 maps them when it does.
+- The same committed, unbuilt Squadron design (SQ 927) that adds `imposed` also adds `diffTruncated` and `requestedModel` to review frontmatter (`diff_truncated`, `requested_model` in JSON). Neither appears in 0.14.0 output. Their columns hold null until Squadron ships them, and slice 105 maps them when it does.
 
 ## Architecture
 
@@ -147,7 +147,7 @@ All durable state lives in the project store, in the two new tables. The trust l
 
 ### Technology Choices
 
-**Callers pass parsed values; the store reads nothing from Squadron.** *(PM directed 20260926.)* The store's input is `VerdictInput`. Squadron's JSON and review files are read by an adapter package in slice 108, which slice 105 and the Runner also use. Keeping it out of this slice keeps the slice small. The cost is that this slice tests the matching rule by feeding it real finding text straight from the fixtures, not through the production parser. Slice 108 then re-runs those tests through the parser.
+**Callers pass parsed values; the store reads nothing from Squadron.** *(PM directed 20260926.)* The store's input is `VerdictInput`. Squadron's JSON and review files are read by an adapter package in slice 105, which slice 106 and the Runner also use. Keeping it out of this slice keeps the slice small. The cost is that this slice tests the matching rule by feeding it real finding text straight from the fixtures, not through the production parser. Slice 105 then re-runs those tests through the parser.
 
 **How findings are matched.** *(PM ratified 20260926.)* The key is the location with line numbers removed, plus the summary, both normalized. Severity and category are left out.
 
@@ -230,7 +230,7 @@ Verdict and severity are accepted in any letter case, because Squadron writes se
 - `sq_run_id | None`, `journal_entry_id | None`
 - `findings: Sequence[FindingInput]`, `provenance: Provenance`
 
-`score` and `criteria` are stored now because review files carry them. Slice 109 adds what uses them.
+`score` and `criteria` are stored now because review files carry them. Slice 107 adds what uses them.
 
 **`FindingInput`** has these fields:
 
@@ -300,10 +300,10 @@ Primary key on `(verdict_id, ordinal)`. Index on `identity`.
 
 ### Provides to Other Slices
 
-- **108:** `VerdictInput` as the parser's output, and the matching rule's tests, which 108 re-runs through the parser.
-- **109:** the `verdicts` table and its `score` and `criteria` columns. 109 adds a judge-invocation column, the calibration report, and check records.
-- **105:** `record_verdict` as the target for reviews it finds on disk. The retry rule makes finding the same file twice harmless. The trust label says "a failure file is a failure, not a review".
-- **106:** recording a review for a journaled Squadron run, as part of the end-to-end proof.
+- **105:** `VerdictInput` as the parser's output, and the matching rule's tests, which 105 re-runs through the parser.
+- **107:** the `verdicts` table and its `score` and `criteria` columns. 107 adds a judge-invocation column, the calibration report, and check records.
+- **106:** `record_verdict` as the target for reviews it finds on disk. The retry rule makes finding the same file twice harmless. The trust label says "a failure file is a failure, not a review".
+- **110:** recording a review for a journaled Squadron run, as part of the end-to-end proof.
 - **Initiative 120:** `record_verdict`, `finding_changes`, the trust label, and `finding_identity`.
 - **Initiative 140:** the `verdict` inbox type.
 
@@ -360,7 +360,7 @@ These consume 101–103 through their documented contracts. The changes are reco
 ### Integration Requirements
 
 - End to end through the real CLI: create a project, seed a node, submit two review rounds and a provider failure with `amoeba submit verdict`, `kill -9`, and `start`. Read-only inspection then shows three verdicts, the right changes on round 2, and nothing applied twice.
-- `docs/evidence-contract.md` is enough for slice 108's design and initiative 140's design to proceed without reading the code.
+- `docs/evidence-contract.md` is enough for slice 105's design and initiative 140's design to proceed without reading the code.
 
 ### Verification Walkthrough
 

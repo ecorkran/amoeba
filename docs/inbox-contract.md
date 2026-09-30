@@ -30,7 +30,7 @@ the store's single-writer model intact while many parts contribute to it.
 - **Not a network service.** Submission is a file write into the supervisor
   directory, on the same machine.
 - **Not a reply channel.** A submitter learns the outcome by reading, not by
-  being told. Push is slice 105.
+  being told. Push is slice 106.
 - **Not a way to create nodes.** The kinds create projects, resolve blocks,
   record intents, and record reviews of existing nodes. Node creation from
   outside the process arrives with initiative 120.
@@ -191,7 +191,7 @@ inbox is ever deleted except a file that has been recorded.
 - **Latency.** A file is applied on the next tick — bounded below by
   `idle_interval_seconds` when the process is idle, unbounded while it is down.
 - **Notification of the outcome.** Submitters poll `submission(id)`. Push is
-  slice 105.
+  slice 106.
 - **That a valid submission is applied.** A `resolution` whose blocked state
   someone else resolved first is `rejected` as stale. First writer wins; the
   loser is told why.
@@ -257,7 +257,7 @@ Both are `ProcessSettings` fields with an `amoeba start` flag:
 
 ## Future work
 
-- **Push notification of outcomes and new messages** — slice 105's change feed.
+- **Push notification of outcomes and new messages** — slice 106's change feed.
 - **Retention** of records, messages, and quarantined or failed files.
 - **More kinds.** Adding one is three things: a `SubmissionKind` member, a
   payload model, and an effect. Slice 104 adds verdict and judge-sample kinds.

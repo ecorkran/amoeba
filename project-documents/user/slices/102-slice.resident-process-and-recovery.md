@@ -4,7 +4,7 @@ slice: resident-process-and-recovery
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101]
-interfaces: [103, 104, 105, 106, 107]
+interfaces: [103, 104, 106, 108, 110]
 dateCreated: 20260919
 dateUpdated: 20260921
 status: complete
@@ -52,11 +52,11 @@ This is the highest-risk slice in initiative 100 and is sequenced second so that
 - The Runner, routing, and any decision about *what* to do after recovery — initiative 120. Recovery records outcomes; it does not act on them.
 - The inbox, channels, and apply loop — slice 103.
 - Findings and verdict tables, and therefore their inspection listings — slice 104 (see Decisions, D4).
-- Change feed and filesystem detection — slice 105.
+- Change feed and filesystem detection — slice 106.
 - Self-daemonizing, launchd/systemd units, log rotation (see D1).
 - Any network listener. Stop and status need no IPC beyond a signal and two files.
 - Windows. `fcntl` and POSIX signals are assumed; an unsupported platform fails at import with an explicit error, not a degraded mode.
-- Pruning of Squadron's paused runs — slice 106.
+- Pruning of Squadron's paused runs — slice 110.
 
 ## Dependencies
 
@@ -166,7 +166,7 @@ Five of these are choices a reasonable Project Manager could make differently. T
 
 **D1 — Foreground process; no self-daemonizing. (PM)** `amoeba start` runs in the foreground and logs to stderr. Detaching is the job of whatever launched it (`launchd`, `tmux`, a shell `&`). Double-fork daemonization, log files, and rotation are a well-known source of subtle bugs and buy nothing the supervisor does not already provide. `stop` and `status` work identically either way because they key on the lock, not on a parent relationship.
 
-**D2 — Synchronous host loop. (PM)** The store is synchronous `sqlite3`, the process is the sole writer, and the Runner is specified as a deterministic state machine. A plain loop with a stop event has no event-loop-starvation failure mode and no shared mutable state between coroutines to audit. A tenant that launches a long subprocess polls it and checks `stop_requested`; it does not block the loop invisibly. *Reversal note:* if slice 105's subscriber transport needs a listening socket, it runs in its own thread with a queue into the loop — the loop itself stays synchronous. If that proves awkward, this is the decision to revisit, and it is cheaper to revisit at 105 than to adopt asyncio speculatively now.
+**D2 — Synchronous host loop. (PM)** The store is synchronous `sqlite3`, the process is the sole writer, and the Runner is specified as a deterministic state machine. A plain loop with a stop event has no event-loop-starvation failure mode and no shared mutable state between coroutines to audit. A tenant that launches a long subprocess polls it and checks `stop_requested`; it does not block the loop invisibly. *Reversal note:* if slice 106's subscriber transport needs a listening socket, it runs in its own thread with a queue into the loop — the loop itself stays synchronous. If that proves awkward, this is the decision to revisit, and it is cheaper to revisit at 106 than to adopt asyncio speculatively now.
 
 **D3 — `argparse` for the CLI; `pydantic` at parsing boundaries only. (PM)** The project has zero runtime dependencies today. `argparse` keeps the CLI dependency-free. `pydantic` is added because the Python rules require it wherever external data is parsed, and this slice parses two external formats. It is used with unknown fields ignored, so an upstream that adds fields does not break recovery. Tunables are a frozen `ProcessSettings` dataclass overridable by CLI flag; no new environment variables and no `.env`, so `AMOEBA_STORE_DIR` in `paths.py` remains the project's only environment read and there is no second source of truth.
 
@@ -263,9 +263,9 @@ Migration `003` is the first real use of the mechanism slice 101 proved with its
 
 - **103:** the `Tenant` protocol for its apply loop; `ResidentProcess.store_for()`; the guarantee that the apply loop is the only writer; `open_read_only` for out-of-process readers; the supervisor directory as the home for the inbox's durable files.
 - **104:** the inspection listing registry.
-- **105:** the host to run detection inside, and D2's reversal note about a subscriber thread.
-- **106:** `start`/`stop`/`kill -9`/`start` as the restart-injection mechanism for the end-to-end proof.
-- **107:** a resident process for CF events to arrive at.
+- **106:** the host to run detection inside, and D2's reversal note about a subscriber thread.
+- **110:** `start`/`stop`/`kill -9`/`start` as the restart-injection mechanism for the end-to-end proof.
+- **108:** a resident process for CF events to arrive at.
 - **Initiative 120:** `journal_issue` / `journal_resolve`, the `Observer` registry, journal outcomes as the facts the Runner routes on after a restart, and `stop_requested`.
 
 `docs/store-contract.md` gains a Journal section and its "Not a journal" and "Writer model" sections are updated; a new `docs/process-contract.md` covers lifecycle, tenants, and recovery semantics. Both hold to slice 101's bar: a downstream design proceeds without reading the implementation.

@@ -16,8 +16,8 @@ status: complete
 - **Current state:** slice 103 is merged. `EXPECTED_SCHEMA_VERSION = 4`. `Store` is assembled from `NodeOperations`, `BlockingOperations`, `JournalOperations`, `MessageOperations`, and `InboxOperations` (`src/amoeba/store/store.py`, 301 lines). The inbox seam is three parts: a `SubmissionKind` member, a payload model in `KIND_PAYLOAD_MODELS` (`inbox/envelope.py`), and an effect in `KIND_EFFECTS` (`store/inbox.py`, 270 lines). The tenant passes the effect the **validated payload as a plain dict** (`payload.model_dump()`), never a pydantic object.
 - **Dependencies:** slices 101–103 through their documented contracts. **PyYAML and `types-PyYAML` become dev-only dependencies** (tests read real review-file frontmatter). No new runtime dependency.
 - **What this slice delivers:** migration `005` (`verdicts`, `finding_observations`), the `finding_identity` matching rule, `VerdictOperations` (`record_verdict`, `verdict`, `verdicts`, `observations`, `findings`, `finding_changes`), the trust label, the `verdict` inbox kind, the new `amoeba submit` flag rule, `amoeba inspect verdicts` / `findings`, `docs/evidence-contract.md`, and contract/CHANGELOG updates.
-- **Not in this slice:** parsing Squadron output (108), judge samples, calibration, checks, task progress, dev log (109), discovering reviews on disk (105).
-- **Next planned slices:** 108 (Squadron-output parser) and 109 (judge and checks), both built on this slice's `VerdictInput` and `evidence-contract.md`.
+- **Not in this slice:** parsing Squadron output (105), judge samples, calibration, checks, task progress, dev log (107), discovering reviews on disk (106).
+- **Next planned slices:** 105 (Squadron-output parser) and 107 (judge and checks), both built on this slice's `VerdictInput` and `evidence-contract.md`.
 
 **Branch:** all implementation happens on `104-slice.findings-verdicts-and-provenance`, forked from the target (`cf config get git.integration_branch`; empty means `main`). No task here merges. Merging comes after the code review (Phase 7).
 
@@ -40,7 +40,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Objective**: Put the test inputs in place before any code that is tested against them.
 
 **Steps**:
-- [x] Add `pyyaml` and `types-PyYAML` to the `dev` dependency group in `pyproject.toml` (`uv add --dev`). Not a runtime dependency — slice 108 promotes it
+- [x] Add `pyyaml` and `types-PyYAML` to the `dev` dependency group in `pyproject.toml` (`uv add --dev`). Not a runtime dependency — slice 105 promotes it
 - [x] Copy the four captured 102 task-review files named in the LLD's Technical Requirements table from `project-documents/user/reviews/archive/` into `tests/fixtures/sq_reviews/`, **byte for byte** (`cp`, never retyped)
 - [x] Before copying, check each source file's frontmatter against the table (verdict and reviewed commit: round 1 part 1 CONCERNS `bf6d292`, part 2 PASS; round 2 part 1 CONCERNS `20b3d70`, part 2 `UNKNOWN`). If any file is missing or differs, **stop and ask the PM**. Never substitute a hand-built round
 - [x] Survey the other files in `project-documents/user/reviews/` (including `archive/`). Copy only ones that are pure Squadron output and serve a named purpose here. Leave out hand-edited files (any with `resolution:` or `resolvedBy:` keys, e.g. `103-review.code…`) and the one written by hand after a tooling gap
@@ -89,7 +89,7 @@ Per the LLD's Development Approach, this is first: it is the riskiest piece and 
 **Steps**:
 - [x] Parametrized case table for each normalizer: whitespace runs, backticks, casefold, trailing `.`/`;`/`:`, NFKC, every line-reference form, `\` → `/`, leading `./`, `unverified` in any case, missing and empty location, and that location **case is kept**
 - [x] Key tests from the LLD's Functional Requirements: a changed line reference (`:119-163` → `:218-240`, `#L12` → none) or a formatting-only summary change keeps the key; a different path or different words change it
-- [x] A small test helper reads a review file's YAML frontmatter with PyYAML and returns its `findings` list. It lives under `tests/` (it is **not** the slice 108 parser)
+- [x] A small test helper reads a review file's YAML frontmatter with PyYAML and returns its `findings` list. It lives under `tests/` (it is **not** the slice 105 parser)
 - [x] Captured-rounds test: compute keys for every finding in round 1 part 1 and round 2 part 1; assert the two sets share **no** keys. The docstring names this as the rewording limit and cites one real pair (the `GRACE_EXPIRED` example in the LLD)
 - [x] Fixture guard test: each of the four captured files exists and its frontmatter verdict and reviewed commit match the LLD table; a mismatch fails with a message naming the file. Also pin `verdictSource: stated` on both part-1 files (checked 20260926), so Task 5.2 builds their `VerdictInput`s with `derivation=stated` from the file, not a guess
 

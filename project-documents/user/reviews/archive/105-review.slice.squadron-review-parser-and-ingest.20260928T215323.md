@@ -6,7 +6,7 @@ slice: squadron-review-parser-and-ingest
 project: amoeba
 verdict: UNKNOWN
 recoveryTurn: true
-sourceDocument: project-documents/user/slices/108-slice.squadron-review-parser-and-ingest.md
+sourceDocument: project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md
 aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260928
@@ -18,7 +18,7 @@ runId: run-20260928-slices-plan-a04bdb07
 squadronVersion: 0.15.0
 ---
 
-# Review: slice — slice 108
+# Review: slice — slice 105
 
 **Verdict:** UNKNOWN
 **Model:** z-ai/glm-5.3-flash
@@ -53,13 +53,13 @@ The verification documents confirm enough context. Let me now write the review.
 
 ---
 
-# Review of "Orchestration Review — Slice 106 Update"
+# Review of "Orchestration Review — Slice 110 Update"
 
 *(Following the numbered format.)*
 
 ## 1. Summary
 
-*(Numbered format.)* The document proposes updating slice 106's orchestration review. The proposal covers four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
+*(Numbered format.)* The document proposes updating slice 110's orchestration review. The proposal covers four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
 
 ## 2. Strengths
 
@@ -100,11 +100,11 @@ The proposal names terms — entry criteria, escalation, read-back — but the t
 
 ---
 
-# Review: "Orchestration Review — Slice 106 Update" (Reviewer 3, Numbered)
+# Review: "Orchestration Review — Slice 110 Update" (Reviewer 3, Numbered)
 
 ## 1. Summary (Numbered)
 
-*(Numbered format.)* The document proposes updating slice 106's orchestration review across four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
+*(Numbered format.)* The document proposes updating slice 110's orchestration review across four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
 
 ## 2. Strengths (Numbered)
 
@@ -141,11 +141,11 @@ The proposal assigns reviewers, but the assignment itself is unverified. The esc
 
 ---
 
-# Review of "Orchestration Review — Slice 106 Update" (Numbered, Reviewer 2)
+# Review of "Orchestration Review — Slice 110 Update" (Numbered, Reviewer 2)
 
 ## 1. Summary (Numbered)
 
-*(Numbered format.)* The document proposes updating slice 106's orchestration review in four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
+*(Numbered format.)* The document proposes updating slice 110's orchestration review in four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
 
 ## 2. Strengths (Numbered)
 
@@ -161,11 +161,11 @@ The proposal assigns reviewers, but the assignment itself is unverified. The esc
 
 ---
 
-# Review: "Orchestration Review — Slice 106 Update" (Numbered, Reviewer 2)
+# Review: "Orchestration Review — Slice 110 Update" (Numbered, Reviewer 2)
 
 ## 1. Summary (Numbered)
 
-*(Numbered format.)* The document proposes updating slice 106's orchestration review across four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
+*(Numbered format.)* The document proposes updating slice 110's orchestration review across four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
 
 ## 2. Strengths (Numbered)
 
@@ -187,11 +187,11 @@ The proposal assigns reviewers, but the assignment itself is unverified. The esc
 
 ---
 
-# Review of "Orchestration Review — Slice 106 Update" (Numbered, Reviewer 2)
+# Review of "Orchestration Review — Slice 110 Update" (Numbered, Reviewer 2)
 
 ## 1. Summary (Numbered)
 
-*(Numbered format.)* The document proposes updating slice 106's orchestration review in four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
+*(Numbered format.)* The document proposes updating slice 110's orchestration review in four areas: orchestration entry criteria, reviewer assignment, escalation, and read-back format.
 
 ## 2. Strengths (Numbered)
 

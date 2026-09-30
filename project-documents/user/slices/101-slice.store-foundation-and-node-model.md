@@ -4,7 +4,7 @@ slice: store-foundation-and-node-model
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: []
-interfaces: [102, 103, 104, 105, 106]
+interfaces: [102, 103, 104, 106, 110]
 dateCreated: 20260914
 dateUpdated: 20260917
 status: complete
@@ -43,8 +43,8 @@ The concept's single load-bearing decision — *a checkpoint is a persisted bloc
 - The command journal and reconcile-by-observation recovery — slice 102. This slice stores nothing about issued commands.
 - The durable inbox and message channels — slice 103. This slice has no concept of an external writer; the library caller is the writer.
 - Finding identity, normalization, and verdict provenance — slice 104. Nodes carry *reference fields* pointing at SQ artifacts and runs, but findings and verdicts are not modeled here.
-- Change feed, subscriptions, filesystem detection — slice 105.
-- Pruning and retention policy — slice 106.
+- Change feed, subscriptions, filesystem detection — slice 106.
+- Pruning and retention policy — slice 110.
 - Any parsing of CF or SQ output. The store accepts values; the Runner (initiative 120) parses them.
 
 ## Dependencies
@@ -140,7 +140,7 @@ The remaining question was whether to go through SQLAlchemy Core. Raw was chosen
 
 The real cost of raw is typing. `sqlite3` returns `Any` rows, and under `pyright` strict a column-name typo in a rarely-exercised query is a runtime failure rather than a check-time one. The mitigation is structural rather than aspirational: **every SQL statement lives in `sql.py`, and every column name is a module-level constant referenced by both the statements and the row-mapping code.** This satisfies the project rule against scattering comparison values and recovers most of the typo-safety SQLAlchemy would have bought. The typed row-mapping layer is written either way, since the contract exposes dataclasses and not tuples.
 
-**Reversal trigger (PM):** switch to SQLAlchemy Core + Alembic if *either* schema churn across slices 102–106 makes hand-written migrations painful, *or* the hand-rolled layer turns into recurring maintenance — repeated tweaks and bug fixes in the store plumbing itself. Recorded as Future Work so the trigger is a decision someone makes on evidence, not a drift.
+**Reversal trigger (PM):** switch to SQLAlchemy Core + Alembic if *either* schema churn across slices 102–110 makes hand-written migrations painful, *or* the hand-rolled layer turns into recurring maintenance — repeated tweaks and bug fixes in the store plumbing itself. Recorded as Future Work so the trigger is a decision someone makes on evidence, not a drift.
 
 ### Store locality: per-supervisor, central
 
@@ -150,7 +150,7 @@ This follows the architecture's "resident process per supervisor (not per projec
 
 No per-project override is built. Adding one would put two locality paths in the foundation slice before any consumer needs either, which the architecture warns against directly.
 
-The slice plan originally assigned this decision to slice 106. The PM decision above closes it here instead, and 106's entry in `100-slices.substrate-run-state-store.md` has been narrowed to match: 106 verifies locality behavior end to end rather than deciding it.
+The slice plan originally assigned this decision to slice 110. The PM decision above closes it here instead, and 110's entry in `100-slices.substrate-run-state-store.md` has been narrowed to match: 110 verifies locality behavior end to end rather than deciding it.
 
 ### Node identity and tree shape
 
@@ -253,8 +253,8 @@ Everything is synchronous. Nothing blocks on anything external; there is nothing
 - **102 (Resident Process):** the store API it hosts and becomes sole writer of, plus the schema its inspection surface reads.
 - **103 (Durable Inbox):** the write API the apply loop commits through, and the resolution-slot operation an inbound human reply lands in.
 - **104 (Findings & Verdicts):** the migration mechanism it adds tables through, the node ids its records attach to, and the reference fields its provenance correlates against.
-- **105 (Change Feed):** the status transitions it emits notifications about.
-- **106 (Contract Proof):** the public API it exercises end to end with no internal access.
+- **106 (Change Feed):** the status transitions it emits notifications about.
+- **110 (Contract Proof):** the public API it exercises end to end with no internal access.
 - **Initiatives 120 / 140 / 160:** the documented contract they design against.
 
 ### Consumes from Other Slices
@@ -285,7 +285,7 @@ Nothing. This is the bottom of the stack.
 ### Integration Requirements
 
 - Contract documentation is complete enough that initiative 120's slice design can proceed against it without reading the store implementation. This is the criterion that actually gates downstream work, and it is checked by a person reading the document, not by a test.
-- The migration mechanism is proven, so slices 102–106 can add tables without redesigning it.
+- The migration mechanism is proven, so slices 102–110 can add tables without redesigning it.
 
 ### Verification Walkthrough
 
@@ -401,8 +401,8 @@ blocked_on_judge|slice|101
 ### Mitigation Strategies
 
 - **The migration mechanism ships in this slice, not later.** Schema change is expected and made routine from the first commit rather than treated as an exception.
-- **The contract is narrow on purpose.** Findings, verdicts, journals, inbox, and feed are all excluded. The smaller the surface committed to now, the less there is to get wrong — and slices 102–106 each extend it with a concrete consumer in hand rather than a guess.
-- **Slice 106 exists precisely to falsify the contract** from the outside before initiative 120 commits to it, and slice 102 — the highest-risk slice in the sequence — was deliberately placed immediately after this one so its pressure lands early.
+- **The contract is narrow on purpose.** Findings, verdicts, journals, inbox, and feed are all excluded. The smaller the surface committed to now, the less there is to get wrong — and slices 102–110 each extend it with a concrete consumer in hand rather than a guess.
+- **Slice 110 exists precisely to falsify the contract** from the outside before initiative 120 commits to it, and slice 102 — the highest-risk slice in the sequence — was deliberately placed immediately after this one so its pressure lands early.
 
 ## Implementation Notes
 
