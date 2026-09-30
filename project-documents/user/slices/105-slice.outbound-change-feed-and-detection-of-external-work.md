@@ -63,11 +63,11 @@ Developer value.
 - **102:** the tenant seam, `ProcessSettings`, the command journal (the ownership rule reads open entries), the listing registry, the writer guard, and the `cf --version` "label or explicit unavailable marker" pattern this slice reuses for `sq --version`.
 - **103:** the inbox, its kind seam (member, payload model, effect), `amoeba submit`, and `resolution`, which is how human replies arrive. *Added at slice design:* the plan listed 101, 102, 104, 108, but registration and reply delivery both go through 103.
 - **104:** `record_verdict`, its retry rule, the trust label, and `VerdictInput`.
-- **108:** `parse_review_artifact` and `to_verdict_input`. 108 has no design yet; the two requirements below go into it.
+- **108:** `parse_review_artifact`, `to_verdict_input`, and `review_record_id`. 108's design meets both requirements below (its D5 and `ParsedReview.slice`).
 
 ### Interfaces Required
 
-**From slice 108** (to be written into 108's design):
+**From slice 108** (met by 108's design):
 
 - `ParsedReview` exposes the frontmatter's `slice` as a field; attribution needs it. `to_verdict_input` carries `sourceDocument` into `VerdictInput.source_document` (D7).
 - The default record id is a digest of the **parsed** review, not of the raw bytes. This repository edits review files by hand after Squadron writes them (`resolution:` and `resolvedBy:` keys, which the parser ignores). A raw-bytes digest would turn each such edit into a second verdict for one review. A parsed-content digest makes the edit a no-op, and makes `amoeba ingest review` and detection agree on the id for the same review.
