@@ -14,13 +14,15 @@ status: not_started
 
 Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Context Summary, branch, reading note, and section map first. This file covers **Sections 6–9** (payload inverse, test migration, the command, docs and final validation).
 
+**Commit cadence and fixture paths:** as in file 1. An implementation task that says "committed with Task N.M" is committed together with its test task. Fixture path constants already exist in `tests/review_fixtures.py` (added by Tasks 1.1–1.3); tasks here add none.
+
 ---
 
 ## Section 6: The Payload Inverse
 
 ### Task 6.1: Implement `verdict_to_payload`
 **Owner**: Junior AI
-**Dependencies**: Task 5.3
+**Dependencies**: Task 5.5
 **Effort**: 2
 **Objective**: The inverse of `verdict_from_payload`, so ingest can submit a `VerdictInput` through the inbox.
 
@@ -58,35 +60,91 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ## Section 7: Migrate 104's Fixture Tests onto the Parser
 
-### Task 7.1: Switch the four users to `parse_review_artifact`
+### Task 7.1: Switch `tests/store/test_finding_identity.py` to the parser
 **Owner**: Junior AI
-**Dependencies**: Task 6.2
-**Effort**: 3
-**Objective**: 104's matching tests read what production reads (LLD Value and Technical Requirements).
+**Dependencies**: Task 5.4 (needs `parse_review_artifact`; independent of Section 6)
+**Effort**: 2
+**Objective**: 104's matching-rule tests read what production reads (LLD Value and Technical Requirements).
 
 **Steps**:
-- [ ] Read each of the four users before editing: `tests/store/test_finding_identity.py`, `tests/store/test_finding_changes.py`, `tests/evidence_harness.py`, `tests/test_demo_evidence_payloads.py`. Edit one file at a time and run its tests after each
-- [ ] Replace `review_findings` / `read_frontmatter` / `has_provider_failure_heading` calls with `parse_review_artifact` on the file text and use `ParsedReview.findings` and fields
-- [ ] Where a test builds a `VerdictInput` from a fixture, use `to_verdict_input` with an explicit `upstream_version` for pre-stamp files
-- [ ] Keep every assertion's expected values unchanged. If one fails, report the difference to the PM rather than changing the expected value
+- [ ] Read the file fully, then replace its `review_findings` / `read_frontmatter` / `has_provider_failure_heading` uses with `parse_review_artifact` on the fixture text and `ParsedReview` fields
+- [ ] Where it builds a `VerdictInput` from a fixture, use `to_verdict_input` with an explicit `upstream_version` for pre-stamp files
+- [ ] Keep every expected value unchanged. If an assertion fails, report the difference to the PM rather than changing it
 
 **Success Criteria**:
-- [ ] All four files pass with no expected-value changes
-- [ ] No test imports `read_frontmatter`, `review_findings`, `CapturedFinding`, or `has_provider_failure_heading`
-- [ ] Commit, e.g. `test: read review fixtures through the production parser`
+- [ ] `uv run pytest tests/store/test_finding_identity.py` passes with no expected-value changes
+- [ ] The file no longer imports `read_frontmatter`, `review_findings`, `CapturedFinding`, or `has_provider_failure_heading`
+- [ ] Commit, e.g. `test: read finding-identity fixtures through the parser`
 
-**Files to Modify**: the four files above
+**Files to Modify**: `tests/store/test_finding_identity.py`
 
 ---
 
-### Task 7.2: Delete the old fixture reader
+### Task 7.2: Switch `tests/store/test_finding_changes.py` to the parser
 **Owner**: Junior AI
-**Dependencies**: Task 7.1
+**Dependencies**: Task 5.4
+**Effort**: 2
+**Objective**: Same migration for the `finding_changes` tests.
+
+**Steps**:
+- [ ] Apply the same replacement and rules as Task 7.1 to this file; it imports `ROUND_1_PART_1`, `ROUND_2_PART_1`, `ROUND_2_PART_2`
+
+**Success Criteria**:
+- [ ] `uv run pytest tests/store/test_finding_changes.py` passes with no expected-value changes
+- [ ] No import of the four removed helpers
+- [ ] Commit, e.g. `test: read finding-changes fixtures through the parser`
+
+**Files to Modify**: `tests/store/test_finding_changes.py`
+
+---
+
+### Task 7.3: Switch `tests/evidence_harness.py` to the parser
+**Owner**: Junior AI
+**Dependencies**: Task 5.4
+**Effort**: 2
+**Objective**: Same migration for the shared evidence harness, which other tests import.
+
+**Steps**:
+- [ ] Apply the same replacement and rules as Task 7.1 to this file
+- [ ] Run every test module that imports it (`grep -rn evidence_harness tests`), not just one
+
+**Success Criteria**:
+- [ ] All tests importing the harness pass with no expected-value changes
+- [ ] No import of the four removed helpers
+- [ ] Commit, e.g. `test: build evidence harness verdicts through the parser`
+
+**Files to Modify**: `tests/evidence_harness.py`
+
+---
+
+### Task 7.4: Switch `tests/test_demo_evidence_payloads.py` to the parser
+**Owner**: Junior AI
+**Dependencies**: Task 6.2 (this test compares payloads, so it may use `verdict_to_payload`), Task 5.4
+**Effort**: 2
+**Objective**: Same migration for the demo payload test.
+
+**Steps**:
+- [ ] Apply the same replacement and rules as Task 7.1 to this file. It imports `SQ_REVIEWS` and `review_findings`
+- [ ] Do not change `scripts/demo_evidence.py` or the payload files in `scripts/demo_evidence/`
+
+**Success Criteria**:
+- [ ] `uv run pytest tests/test_demo_evidence_payloads.py` passes with no expected-value changes
+- [ ] No import of the four removed helpers
+- [ ] Commit, e.g. `test: check demo payloads through the parser`
+
+**Files to Modify**: `tests/test_demo_evidence_payloads.py`
+
+---
+
+### Task 7.5: Delete the old fixture reader
+**Owner**: Junior AI
+**Dependencies**: Task 7.4
 **Effort**: 1
 **Objective**: Remove the test-only parser; `tests/review_fixtures.py` keeps only fixture paths.
 
 **Steps**:
-- [ ] Delete the YAML reader, frontmatter regex, heading regex, `CapturedFinding`, and the `yaml` and `re` imports from `tests/review_fixtures.py`. Keep `SQ_REVIEWS` and the four `ROUND_*` paths, and add path constants for the new fixtures that later tests need
+- [ ] Confirm the four migration tasks above are committed, so nothing still imports the helpers (`grep -rn "review_findings\|read_frontmatter" tests`)
+- [ ] Delete the YAML reader, frontmatter regex, heading regex, `CapturedFinding`, and the `yaml` and `re` imports from `tests/review_fixtures.py`. Keep `SQ_REVIEWS` and the four `ROUND_*` paths
 - [ ] Update the module docstring to say it holds paths only
 - [ ] Run the full suite once
 
@@ -103,7 +161,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 8.1: Add `ExitCode.REVIEW_UNREADABLE`
 **Owner**: Junior AI
-**Dependencies**: Task 7.2
+**Dependencies**: Task 7.5
 **Effort**: 1
 **Objective**: A distinct exit status (`12`) for unreadable reviews.
 
@@ -150,8 +208,8 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 **Steps**:
 - [ ] Read `tests/cli/test_submit.py` and `tests/cli_harness.py` and reuse their helpers; use a throwaway supervisor directory, never the real one
-- [ ] Create `tests/cli/test_ingest.py`
-- [ ] Failure paths, each asserting the exit code and an empty `inbox/new/`: missing file, non-UTF-8 file, `# not a review` text (message mentions no frontmatter), a pre-stamp file with no `--upstream-version`, stamp/argument disagreement, project with no store file (`SUBMISSION_REFUSED`, message names the project)
+- [ ] Create `tests/cli/test_ingest.py` with a fixture that makes the "store exists" precondition the way 104's end-to-end test does: in a `tmp_path` supervisor directory, `start_running`, `submit_cli` a `create-project` for project `demo`, `await_condition` until `paths.store_path("demo", env)` exists (use `cli_environment` for `env`), then `stop_running`. The project then has a real store file and the process is stopped. The "no project" case never creates one
+- [ ] Failure paths (all with the fixture above, process stopped), each asserting the exit code and an empty `inbox/new/`: missing file, non-UTF-8 file, `# not a review` text (message mentions no frontmatter), a pre-stamp file with no `--upstream-version`, stamp/argument disagreement, project with no store file (`SUBMISSION_REFUSED`, message names the project)
 - [ ] Success path, process stopped: a real fixture with `--upstream-version` writes exactly one file to `inbox/new/`; stdout is the digest id; stderr names the node, slice, and review type; `--stdout-json` works on a capture; both flags together or neither is an argument error
 - [ ] D7: a review whose `slice` differs from any node's slice name is still submitted
 - [ ] `--id` overrides the digest id
@@ -164,25 +222,59 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ---
 
-### Task 8.4: Test end to end through the real CLI
+### Task 8.4: End to end, running process, two rounds and a provider failure
 **Owner**: Junior AI
 **Dependencies**: Task 8.3
-**Effort**: 4
-**Objective**: Prove the LLD's Integration Requirement with real subprocesses.
+**Effort**: 3
+**Objective**: Prove the LLD's main Integration Requirement with real subprocesses.
 
 **Steps**:
-- [ ] Model it on `tests/cli/test_evidence_end_to_end.py`: from an empty supervisor directory, start, create the project, stop, seed a node with `scripts/demo_evidence.py`, start
-- [ ] Ingest round 1 part 1, round 2 part 1, and a provider-failure file (each with `--upstream-version` where it has no stamp); ingest round 1 again from a different path with a `resolution:` key added; `kill -9` the process; start again
-- [ ] Read-only inspection then shows exactly three verdicts with the expected standings, the first ingest's `source_path` (absolute) on round 1, `source: artifact_frontmatter`, and round 2's `inspect changes` naming round 1 as previous with every round-1 finding `gone`
-- [ ] A second test: ingest with the process **stopped**; the submission is applied at the next start
-- [ ] A third test: ingest into a nonexistent project, with the process running and again stopped, exits `SUBMISSION_REFUSED`, leaves `inbox/new/` empty, and `inspect inbox` shows nothing quarantined
-- [ ] A fourth: `--stdout-json` and `--artifact` of the new 0.15.0 pair store two records with different ids (D5)
+- [ ] Create `tests/cli/test_ingest_end_to_end.py`, modelled on `tests/cli/test_evidence_end_to_end.py`: from an empty supervisor directory, start, create the project, stop, seed a node with `scripts/demo_evidence.py`, start
+- [ ] Ingest round 1 part 1, round 2 part 1 (`102-…part-1.md`), and the round 2 part 2 provider-failure file, each with `--upstream-version` (all three predate the stamp). Ingest round 1 again from a different path, a copy with a `resolution:` key added
+- [ ] `kill -9` the process; start again
+- [ ] Read-only inspection shows exactly three verdicts with the expected standings (`stated`, `stated`, `provider_failure`), round 1's `source_path` is the first ingest's absolute path, `source` is `artifact_frontmatter`, and `inspect changes` on round 2 names round 1 as previous with every round-1 finding `gone`
 
 **Success Criteria**:
-- [ ] All pass and leave no stray processes or files outside `tmp_path`; `ruff` and `pyright` clean
-- [ ] Commit, e.g. `test: end-to-end review ingest through the real CLI`
+- [ ] The test passes and leaves no stray processes or files outside `tmp_path`; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: end-to-end review ingest with a running process`
 
 **Files to Create**: `tests/cli/test_ingest_end_to_end.py`
+
+---
+
+### Task 8.5: End to end, stopped process and unknown project
+**Owner**: Junior AI
+**Dependencies**: Task 8.4
+**Effort**: 2
+**Objective**: Cover D6 with the process both stopped and running.
+
+**Steps**:
+- [ ] In the same test module, with the same setup as Task 8.4: ingest with the process **stopped**, then start it; the verdict is applied and appears in `inspect verdicts`
+- [ ] Ingest into the nonexistent project `nosuch`, once with the process running and once stopped: exit `SUBMISSION_REFUSED`, stderr names the project, `inbox/new/` stays empty, and `inspect inbox` shows nothing quarantined
+
+**Success Criteria**:
+- [ ] Both tests pass; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: ingest with a stopped process and an unknown project`
+
+**Files to Modify**: `tests/cli/test_ingest_end_to_end.py`
+
+---
+
+### Task 8.6: End to end, stdout JSON against the saved file
+**Owner**: Junior AI
+**Dependencies**: Task 8.5
+**Effort**: 2
+**Objective**: Pin D5's accepted consequence on the real 0.15.0 pair.
+
+**Steps**:
+- [ ] With a running process and a seeded node, ingest the pair's stdout file with `--stdout-json` and its saved `.md` with `--artifact` (no `--upstream-version`; both carry a stamp)
+- [ ] Assert two different ids; the JSON row has `source: stdout_json` and `reviewed_sha` null; `inspect findings` for the node shows each of the pair's finding keys seen twice
+
+**Success Criteria**:
+- [ ] The test passes; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: ingest a stdout capture and its saved file`
+
+**Files to Modify**: `tests/cli/test_ingest_end_to_end.py`
 
 ---
 
@@ -190,7 +282,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 9.1: Write the "Parsing Squadron output" section
 **Owner**: Junior AI
-**Dependencies**: Task 8.4
+**Dependencies**: Task 8.6
 **Effort**: 3
 **Objective**: Replace 104's "Mapping Squadron's flags (for slice 105)" notes with the parser's contract.
 
@@ -233,14 +325,13 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Objective**: Run everything and replace the LLD's draft walkthrough note with real output.
 
 **Steps**:
-- [ ] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean
+- [ ] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean (the slice has no performance requirement and adds no load test; this run only checks for regressions)
 - [ ] `wc -l` the new source files; split any well over ~300 lines
-- [ ] Confirm the import rules by grep: no `amoeba.inbox`, `amoeba.process`, or `Store` import under `src/amoeba/upstream`; no `amoeba.upstream` import under `src/amoeba/store`
 - [ ] Run the LLD's Verification Walkthrough steps 1–9 by hand (with the real filenames for the captured pair) and replace its draft note with the real commands and trimmed output
 - [ ] If any step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match
 
 **Success Criteria**:
-- [ ] All four checks clean; import rules hold
+- [ ] All four checks clean (the import rules are enforced by Task 5.5's test)
 - [ ] The walkthrough in the LLD shows real output
 - [ ] Commit on the slice branch, e.g. `docs: record slice 105 verification walkthrough`
 
