@@ -11,58 +11,54 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: 84d710f653b37956a71877572e68d3073ad5e4c8
+reviewedSha: 83153c08b9faacf705a3f27a258826318111750f
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 7
-durationSeconds: 50.8
+toolCallsMade: 9
+durationSeconds: 55.4
 runId: run-20261007-tasks-plan-25f0a00a
 squadronVersion: 0.21.1
 findings:
   - id: F001
+    severity: concern
+    category: scope
+    summary: "Task 7.2 targets a file that does not import the four helpers"
+    location: "tests/store/test_finding_changes.py:6-14"
+  - id: F002
+    severity: concern
+    category: sequencing
+    summary: "Task 7.5 does not depend on Tasks 7.1–7.3"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:139-143"
+  - id: F003
+    severity: concern
+    category: commit-cadence
+    summary: "Task 8.1 has no commit checkpoint and no test"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:162-175"
+  - id: F004
+    severity: concern
+    category: task-sizing
+    summary: "Tasks 8.2 and 8.3 are large for one junior AI task"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:179-221"
+  - id: F005
+    severity: concern
+    category: test-coverage
+    summary: "\"No `Store` import in `ingest.py`\" is checked by hand, not enforced"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:193-196"
+  - id: F006
+    severity: note
+    category: verification
+    summary: "Task 9.3 runs `tests/load`, which exists"
+    location: "tests/load"
+  - id: F007
     severity: pass
     category: coverage
     summary: "Success-criteria coverage for Sections 6–9"
     location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:354-392"
-  - id: F002
-    severity: concern
-    category: completeness
-    summary: "Task 8.3 does not say how to create the \"store exists\" precondition"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:145-163"
-  - id: F003
-    severity: concern
-    category: task-sizing
-    summary: "Task 8.4 is too large for one task"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:167-185"
-  - id: F004
-    severity: concern
-    category: sequencing
-    summary: "Fixture path constants have no clear owner before Task 7.2"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:89"
-  - id: F005
-    severity: note
-    category: sequencing
-    summary: "Task 7.1 and later dependency chains are more serial than necessary"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:62"
-  - id: F006
-    severity: note
-    category: process
-    summary: "Commit cadence relies on test tasks to commit implementation tasks"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:32-36"
-  - id: F007
-    severity: note
-    category: task-sizing
-    summary: "Task 7.1 touches four files under one commit"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:62-78"
   - id: F008
-    severity: note
-    category: nfr
-    summary: "No NFR load-test requirement applies"
-    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:354-392"
-  - id: F009
-    severity: note
-    category: scope
-    summary: "Task 9.3 repeats the import-direction check from Task 5.3"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:238"
+    severity: pass
+    category: commit-cadence
+    summary: "Commit distribution and test-with pattern"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md"
 ---
 
 # Review: tasks — slice 105
@@ -72,63 +68,56 @@ findings:
 
 ## Findings
 
+### [CONCERN] Task 7.2 targets a file that does not import the four helpers
+
+Task 7.2 says to "apply the same replacement" as Task 7.1. It also requires "No import of the four removed helpers". But `test_finding_changes.py` imports only `ROUND_*` paths from `review_fixtures` and builds verdicts through `captured_verdict` from `evidence_harness` (lines 153–175). A grep of `tests/` for `review_findings`, `read_frontmatter`, `CapturedFinding` and `has_provider_failure_heading` finds `review_fixtures.py`, `test_demo_evidence_payloads.py`, `test_finding_identity.py` and `evidence_harness.py`. It does not find `test_finding_changes.py`.
+
+So the success criterion is already true, and the task has nothing to change. The real migration for this file happens in Task 7.3. A junior AI could invent edits to satisfy the task. Fold 7.2 into 7.3. Alternatively, reframe it as "run `test_finding_changes.py` after 7.3 and confirm it passes unchanged". Note that the slice design lists this file as a direct user of the old reader, which appears to be inaccurate.
+
+### [CONCERN] Task 7.5 does not depend on Tasks 7.1–7.3
+
+Task 7.5 deletes the old reader from `tests/review_fixtures.py`. It lists only Task 7.4 as a dependency. Tasks 7.1–7.3 are independent of 7.4, so the declared graph lets 7.5 run before the other three users are migrated. Step 1 of the task does check this with a grep, which is a mitigation. The dependency list should still read 7.1, 7.2, 7.3 and 7.4.
+
+### [CONCERN] Task 8.1 has no commit checkpoint and no test
+
+The file's Context Summary says every task not marked "committed with Task N.M" commits on its own. Task 8.1 has no commit criterion and no "committed with 8.3" note. Task 8.2 follows that "committed with" convention. Add a commit line, or state that 8.1 is committed with 8.2 and 8.3. The new member is only exercised by Task 8.3's tests, so the second option fits the test-with pattern better.
+
+### [CONCERN] Tasks 8.2 and 8.3 are large for one junior AI task
+
+Task 8.2 (effort 4) holds a seven-step ordered pipeline, a mutually exclusive argument group, explicit exception branches, and registration. Task 8.3 (effort 3) packs about a dozen scenarios into one module. These include a multi-process fixture (`start_running`, `submit_cli`, `await_condition`, `stop_running`), six failure paths, the success path, D7 and `--id`.
+
+Consider splitting 8.2 into the argument parser and registration, then the `run_ingest` pipeline. Consider splitting 8.3 into a failure-path module and a success-path module. Keep each implementation committed with its tests.
+
+### [CONCERN] "No `Store` import in `ingest.py`" is checked by hand, not enforced
+
+The slice design says ingest opens no store (D6). Task 8.2 states this only as a success-criterion line, and Task 5.5's import-direction test covers `upstream` and `store` only. A later change could add a `Store` import with no test failing. Extend Task 5.5, or add an assertion in Task 8.3, that `cli/ingest.py` does not import `Store`.
+
+### [NOTE] Task 9.3 runs `tests/load`, which exists
+
+`uv run pytest tests/load` is valid because the directory exists. The slice has no NFR, so no new load test and no CI-wiring task is needed. Task 9.3 states this.
+
 ### [PASS] Success-criteria coverage for Sections 6–9
 
-Each criterion in the slice design that falls to this file has a task:
-- Payload round trip and key sets: 6.1 and 6.2.
-- Migrating 104's four fixture users and deleting the old reader: 7.1 and 7.2.
-- `REVIEW_UNREADABLE = 12`: 8.1.
-- Ingest data flow and D6/D7: 8.2 and 8.3.
-- Read-failure paths, each leaving `inbox/new/` empty: 8.3.
-- Stderr node, slice and type line, and the D7 non-check: 8.3.
-- Integration requirement (three verdicts, `kill -9`, round 2 against round 1, stopped process, nonexistent project, D5 two-id pair): 8.4.
-- Docs, CHANGELOG, and the walkthrough: 9.1 to 9.3.
+Each criterion maps to a task:
+- **Payload inverse:** the `verdict_to_payload` round trip is in 6.1 and 6.2.
+- **Test migration:** the migration of 104's tests and the deletion of the old reader are in 7.1–7.5.
+- **Exit code:** `ExitCode.REVIEW_UNREADABLE = 12` is in 8.1, and 11 is currently the last member.
+- **Ingest command:** the command is in 8.2. 8.3 covers the failure paths, the unknown-project refusal, the stamp/argument disagreement, D7 and `--id`.
+- **End to end:** running process, double ingest, `kill -9` and standings are in 8.4. The stopped process and unknown project, in both states, are in 8.5. The stdout/file pair and the doubled counts are in 8.6.
+- **Docs:** the evidence-contract section, the process-contract entry and the CHANGELOG are in 9.1 and 9.2.
+- **Walkthrough:** the walkthrough refresh is in 9.3.
 
-No task falls outside the slice's scope. The error handling in 8.2 matches the design: explicit branches only, with `InboxSubmitError` left to the boundary handler. Exit code 12 is free; `src/amoeba/cli/main.py` currently ends at `NOT_COMPARABLE = 11`.
+I found no scope creep in Sections 6–9. Dependencies are acyclic.
 
-### [CONCERN] Task 8.3 does not say how to create the "store exists" precondition
+### [PASS] Commit distribution and test-with pattern
 
-Task 8.3 runs ingest with no process, and its success path and `--id` case need a project whose store file exists at `paths.store_path(project)`. Nothing says how the test gets one. Options include creating a real store through the harness, or touching an empty file, which is only valid if ingest checks existence and nothing else. A junior will have to guess, and a fake empty file could contradict D6's "a store file that exists is complete" rationale. Name the helper in `tests/cli_harness.py` or `tests/cli/test_submit.py` to reuse, or state the fixture approach explicitly. The "project with no store file" case in the same task is fine.
-
-### [CONCERN] Task 8.4 is too large for one task
-
-Task 8.4 is rated Effort 4 but holds four separate subprocess scenarios:
-- the full main flow, with a repeated ingest and a `kill -9`
-- ingest with the process stopped
-- a nonexistent project, with the process both running and stopped
-- the 0.15.0 pair D5 test
-
-Each needs its own supervisor lifecycle. Split it into two tasks, 8.4 (main flow plus crash) and 8.5 (stopped, refused, and D5 pair), with a commit after each. The main flow also needs a step to wait until the process has applied the three submissions before `kill -9`. Without it, the "exactly three verdicts" assertion is racy. Poll `inspect submissions` for this.
-
-### [CONCERN] Fixture path constants have no clear owner before Task 7.2
-
-Task 7.2 says to "add path constants for the new fixtures that later tests need". The tests in Tasks 3.3, 4.2 and 5.3 (in the part-1 file) already read those fixtures. If they take paths from `tests/review_fixtures.py`, the constants should be added in Task 1.1/1.2, and 7.2's wording is misleading. If they hardcode paths, Section 7 leaves duplicated path definitions. Decide which, and say so in Tasks 1.1/1.2 or 3.3 and in 7.2. Task 7.2 should also check that no `tests/upstream` module depends on the deleted reader.
-
-### [NOTE] Task 7.1 and later dependency chains are more serial than necessary
-
-Task 7.1 depends on 6.2, but it really needs only Section 5 (`parse_review_artifact` and `to_verdict_input`). Task 8.1 depends on 7.2 for no technical reason, and the same is true of 9.1's dependence on 8.4. The ordering is safe and has no cycles. The chain still blocks parallel work, and a failure in the Section 6 payload work would hold up the test migration. Consider recording the real dependencies.
-
-### [NOTE] Commit cadence relies on test tasks to commit implementation tasks
-
-Tasks 6.1, 8.1 and 8.2 have no commit of their own. 6.1 is committed with 6.2, and 8.2 explicitly with 8.3, which fits the test-with pattern. 8.1 never says where it is committed; add "committed with Task 8.3" to its criteria. Strictly, the project rule is "commit at least once per task". Commits are otherwise spread through the whole file and not batched at the end.
-
-### [NOTE] Task 7.1 touches four files under one commit
-
-Task 7.1 edits four files, one at a time with a test run after each, and makes a single commit. That is acceptable at Effort 3. Per-file commits would give clearer rollback points if an expected value diverges and the junior has to stop and report to the PM.
-
-### [NOTE] No NFR load-test requirement applies
-
-The slice design restates no NFR, so no `tests/load/` task or CI-gating task is required. Task 9.3 runs the existing `tests/load` suite as a regression check, and that directory exists. Neither CI gating nor a new load test is missing.
-
-### [NOTE] Task 9.3 repeats the import-direction check from Task 5.3
-
-Task 5.3 already adds a test for the import rules, and Task 9.3 re-checks them by grep. The repeat is cheap and acts as a final guard, so keep it. A one-line cross-reference to the 5.3 test would show it is intentional.
+Commits fall after 6.2, each of 7.1–7.5, 8.3, 8.4, 8.5, 8.6, 9.1, 9.2 and 9.3, so they are spread through the work and not batched at the end. Each implementation task (6.1, 8.2) is immediately followed by its test task and committed with it.
 
 ### Run Digest
 
-- Response length: 6081 chars
+- Response length: 5664 chars
 - Response is newline-free: no
-- Tool calls made: 7
+- Tool calls made: 9
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -138,10 +127,10 @@ Task 5.3 already adds a test for the import rules, and Task 9.3 re-checks them b
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 50.8 s
+- Duration: 55.4 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8

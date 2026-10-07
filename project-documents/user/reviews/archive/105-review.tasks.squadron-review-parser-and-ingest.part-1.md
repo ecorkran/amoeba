@@ -11,63 +11,54 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: 84d710f653b37956a71877572e68d3073ad5e4c8
+reviewedSha: 83153c08b9faacf705a3f27a258826318111750f
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 4
-durationSeconds: 35.7
+durationSeconds: 51.0
 runId: run-20261007-tasks-plan-25f0a00a
 squadronVersion: 0.21.1
 findings:
   - id: F001
     severity: concern
-    category: coverage-gap
-    summary: "README \"known gap\" entry is not assigned to any task"
-    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:388"
+    category: correctness
+    summary: "Task 3.5 expects `sq_run_id` from the new 0.15.0 file, which the CLI capture will not have"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:297"
   - id: F002
     severity: concern
-    category: coverage-gap
-    summary: "The edited-copy fixture is never created by a task"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:227"
+    category: test-coverage
+    summary: "Task 4.2 does not cover every branch of the `findings_parsed` rule"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:344"
   - id: F003
     severity: concern
-    category: task-sizing
-    summary: "Task 3.2 is too large for one junior task"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:191-213"
+    category: clarity
+    summary: "Task 1.2 does not say which review to run or what the command is"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:76"
   - id: F004
-    severity: concern
-    category: test-coverage
-    summary: "Missing negative tests for a finding without `severity` or `summary`"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:228"
+    severity: note
+    category: test-design
+    summary: "Task 3.3's \"defined once\" grep test is fragile and is deferred"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:256"
   - id: F005
-    severity: concern
-    category: sequencing
-    summary: "Two implementation tasks run back to back before their tests"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:287-325"
+    severity: note
+    category: scoping
+    summary: "Task 3.2's file-split wording is ambiguous"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:233"
   - id: F006
-    severity: concern
-    category: specification-clarity
-    summary: "Vague or conditional constants in Task 2.4"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:154-158"
+    severity: note
+    category: redundancy
+    summary: "Task 4.2 lists the trailing-line check twice"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:343-345"
   - id: F007
-    severity: note
-    category: specification-clarity
-    summary: "Some fixture references are under-specified"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:271"
-  - id: F008
-    severity: note
-    category: sequencing
-    summary: "Task 2.1's dependency on Task 1.2 is artificial"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:94"
-  - id: F009
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage for Sections 1–5"
-    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:354-390"
-  - id: F010
+    summary: "Success criteria for Sections 1–5 trace to tasks, with no scope creep"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md"
+  - id: F008
     severity: pass
-    category: robustness
-    summary: "Safeguards against hallucinated inputs"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:76"
+    category: sequencing
+    summary: "Sequencing and commit cadence are sound"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:26-30"
 ---
 
 # Review: tasks — slice 105
@@ -77,64 +68,46 @@ findings:
 
 ## Findings
 
-### [CONCERN] README "known gap" entry is not assigned to any task
+### [CONCERN] Task 3.5 expects `sq_run_id` from the new 0.15.0 file, which the CLI capture will not have
 
-The LLD says the README records that no real *Findings Not Parsed* + CONCERNS/FAIL file exists, and labels the edited copy as edited. Task 1.1 adds README entries only for the four copied files. Task 3.3 says "add the label to the README if Task 1.1 did not", and a conditional step like that is easy to skip. Nothing records the "missing" note at all. Add an explicit README step, in Task 1.1 or 3.3, for the known-gap note and the edited-copy label.
+Task 3.5 says "the 106 file and the new 0.15.0 file give `sq_run_id` and `upstream_version`". The slice design says `run_id` is null on the CLI, and `runId` appears in frontmatter "only on pipeline runs" (design lines 72 and 81). The new pair from Task 1.2 comes from a plain `sq review` CLI run, so it will most likely have no `runId`. The design's criterion ("The 0.15.0 file yields `sq_run_id` and `upstream_version`") fits the 106 fixture, which has `runId`. Task 1.1 also checks that the 106 fixture has `runId`. The test as written will fail on a correct parser, or push the implementer to doctor the fixture. Fix: expect `sq_run_id` from the 106 file only. For the new file, expect `upstream_version` (`squadronVersion`) and assert `sq_run_id` matches whatever its frontmatter actually has (likely `None`).
 
-### [CONCERN] The edited-copy fixture is never created by a task
+### [CONCERN] Task 4.2 does not cover every branch of the `findings_parsed` rule
 
-Task 3.3 describes "a copy of a real CONCERNS file with the *Findings Not Parsed* heading added". The README is meant to label it as edited, which implies a committed fixture. It is unclear whether the copy is a file in `tests/fixtures/sq_reviews/` or is built in the test at runtime. Neither Section 1 nor Task 3.3 lists it under Files to Create. Also, a hand-edited file inside a directory the other tasks treat as byte-for-byte real input blurs that boundary. Decide where it lives (a test-built copy is simplest) and state it.
+The design's D3 rule for stdout has three outcomes: false, `None` when `fallback_used` is absent, and otherwise true. The synthetic variants in 4.2 cover only `fallback_used: true` with `stated`, and `true` with `derived`. Missing cases:
+- `fallback_used` absent gives `findings_parsed=None`.
+- `fallback_used: true` with `verdictSource` null gives `False` (`not_reported`).
+- `fallback_used: false` gives `True`.
 
-### [CONCERN] Task 3.2 is too large for one junior task
+The `None` branch is the easiest to get wrong silently. Add these as explicit rows.
 
-Task 3.2 bundles five jobs:
-- frontmatter splitting
-- safe YAML loading
-- body heading scan
-- the full D3 field mapping, with optional/required rules
-- finding mapping and the `provider_failure_problem` call
+### [CONCERN] Task 1.2 does not say which review to run or what the command is
 
-Its effort is 4, and it has no intermediate checkpoint or commit. Task 4.1 needs the finding mapper from it as a shared helper. Consider splitting it into "frontmatter and headings extraction" and "field and finding mapping", with the finding mapper as its own function from the start. That would also avoid the refactor Task 4.1 anticipates.
+"Run `sq review` for a slice, with a slice number" names no slice, template or arguments. A junior can't tell which slice document to review, or whether the throwaway copy contains it. Later tasks (3.5, 4.2, 5.2) rely on this pair, so the exact command matters. The task has a good stop-and-ask rule for a missing `sq` or key. Add the same for an ambiguous command. Better, give the slice and template to use, or tell the junior to ask the PM before running. The README entry for the pair should also repeat the secrets and hand-edit scan from Task 1.1, since the pair is new model output.
 
-### [CONCERN] Missing negative tests for a finding without `severity` or `summary`
+### [NOTE] Task 3.3's "defined once" grep test is fragile and is deferred
 
-Task 3.2 and D3 require a finding to have `severity` and `summary`. The LLD's "Nothing is defaulted" list names "lacks `severity` or `summary`". Task 3.3's error cases test only "finding that is not a mapping" and "unknown severity". Add one case each for a missing `severity` and a missing `summary`. The same applies to Task 4.2 for stdout findings.
+Common keys such as `"verdict"`, `"score"`, `"model"`, `"id"` and `"slice"` can legitimately appear as quoted strings in error messages or docstrings. Because the test is written in 3.3, before any mapping code exists, it passes trivially at that point and only bites once 3.4 and 4.1 land. Consider making it AST-based (string constants used as dict keys or `.get` arguments) and say explicitly that it must stay green through 3.4, 4.1 and 5.3.
 
-### [CONCERN] Two implementation tasks run back to back before their tests
+### [NOTE] Task 3.2's file-split wording is ambiguous
 
-Tasks 5.1 and 5.2 both land before Task 5.3, which tests both. The same happens in Tasks 3.1 and 3.2 before Task 3.3, and Tasks 4.1 and 4.2 are correctly paired. Task 5.1 (`review_record_id`) is pure and could be tested immediately: stability, enum-by-value, and hand-edit invariance. Consider moving those tests into 5.1 and keeping D4 and the import rules in 5.3. This is a mild departure from the test-with pattern, not a defect. Commits do land at 1.1, 1.2, 2.1, 2.2, 2.3, 2.4, 3.3, 4.2 and 5.3, which is acceptably distributed.
+Task 3.2 says helpers go in `review.py` "(or `review_artifact.py` if already split)". Nothing splits the file before Task 4.1, and 4.1 makes the split conditional on line count. Make the split rule a single decision point. For example, 4.1 performs it, and the helpers are moved in that step with the existing tests as the safety net.
 
-### [CONCERN] Vague or conditional constants in Task 2.4
+### [NOTE] Task 4.2 lists the trailing-line check twice
 
-Task 2.4 says to define the `stated` / `derived` literals "if the parser compares them". D3's `findings_parsed` rule compares against `stated` and `not_reported`, so the parser does compare, and `not_reported` is also the default. The condition should be removed and the literals named: `stated`, `not_reported`, and any others. Otherwise a junior may skip them and inline the strings in Task 4.1, which breaks the single-definition rule. The `unverified` literal is passed through, so no constant is needed there.
+The "trailing-line tolerance" bullet and the later "appended text after the object" bullet test the same thing. Merge them. The task also notes that no existing capture carries a trailing line, which differs from the design's success-criterion wording about 0.14.0 captures. That's fine, since the synthetic append covers it. Mention the discrepancy in the README or the test docstring so a reader isn't confused.
 
-### [NOTE] Some fixture references are under-specified
+### [PASS] Success criteria for Sections 1–5 trace to tasks, with no scope creep
 
-Task 4.2 refers to "the clean PASS", "the CONCERNS capture", and "the 0.14.0 captures" without naming files. These are existing fixtures from 104, and the junior must infer which file is which. Naming them (they are in `tests/review_fixtures.py` or `tests/fixtures/sq_reviews/`) would remove the guesswork. Task 3.3 has the same issue with "a real CONCERNS file".
+The design's fixture list maps to Tasks 1.1–1.3, including the known-gap edited copy. PyYAML maps to 2.1, the shared provider-failure rule to 2.2–2.3, and `review_fields` to 2.4. The file reader maps to 3.1–3.5, the stdout reader to 4.1–4.2, the record id to 5.1–5.2, and `to_verdict_input` with the D4 cases to 5.3–5.4. The import-direction test (5.5) matches a stated technical requirement. The parser error cases the design requires each have a test, and the provider-failure contradiction cases are in 3.5. Task 3.4 and Task 5.3 both honour the exclusion of `source_document` and `slice` from `VerdictInput`.
 
-### [NOTE] Task 2.1's dependency on Task 1.2 is artificial
+### [PASS] Sequencing and commit cadence are sound
 
-PyYAML's move has no technical dependency on the fixture capture. The ordering is harmless, and it keeps the capture, which may block on the PM, out of the later critical path. It is only worth noting.
-
-### [PASS] Success-criteria coverage for Sections 1–5
-
-Each of these maps to a task with no scope creep:
-- Fixtures: 1.1 and 1.2.
-- `provider_failure_problem` as the single definition of the rule: 2.2 and 2.3.
-- `review_fields.py`: 2.4.
-- Reader behavior, including both provider-failure files, *Findings Not Parsed*, the PR review, the 0.15.0 stamp, and the error list: 3.3.
-- `fallback_used` rules, `requested_model` handling, trailing stdout text, and the file/stdout key equality on the new pair: 4.1 and 4.2.
-- Digest-id invariance, D4 and the import-direction test: 5.1 to 5.3.
-
-The remaining criteria (round trip, test migration, ingest, end-to-end, docs) are covered in part 2.
-
-### [PASS] Safeguards against hallucinated inputs
-
-Task 1.2 stops and asks the PM rather than hand-building a pair if `sq` or a provider key is unavailable. Task 1.1 checks each fixture for hand edits and verifies the expected frontmatter before copying. Task 3.1 stops rather than adding `RecordSource` strings. This is consistent with the project rule against fabricated values.
+There are no circular dependencies. The PyYAML move is placed before the parser, with a note explaining why it departs from the design's step 8. Implementation tasks are paired with an immediately following test task and share a commit (3.2/3.3, 3.4/3.5, 5.1/5.2, 5.3/5.4). The commit cadence statement matches this. Commits are spread across all five sections rather than batched at the end. Task sizes (effort 1–3) are reasonable, and none needs splitting or merging.
 
 ### Run Digest
 
-- Response length: 6756 chars
+- Response length: 6196 chars
 - Response is newline-free: no
 - Tool calls made: 4
 - Tool calls failed: 0
@@ -146,10 +119,10 @@ Task 1.2 stops and asks the PM rather than hand-building a pair if `sq` or a pro
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 35.7 s
+- Duration: 51.0 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
