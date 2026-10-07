@@ -8,6 +8,7 @@ projectState: Slices 101–104 are merged. The store holds verdicts and content-
 dateCreated: 20261007
 dateUpdated: 20261007
 status: not_started
+---
 
 ## Context Summary
 
