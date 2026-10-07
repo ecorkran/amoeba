@@ -65,7 +65,7 @@ status: not_started
 
 ---
 
-### Task 1.2: Capture the 0.15.0 file and stdout pair
+### Task 1.2: Capture a current Squadron file and stdout pair
 **Owner**: Junior AI
 **Dependencies**: Task 1.1
 **Effort**: 3
@@ -73,9 +73,10 @@ status: not_started
 
 **Steps**:
 - [ ] Make a throwaway copy of this repo outside the working tree (`mktemp -d`). Never run the review in the real repo, so nothing lands in the real `reviews/` directory
-- [ ] In the copy, run `sq review` for a slice, **with a slice number** (so Squadron saves a file), `--model glmflash --output json`, redirecting stdout and stderr to separate files. Run `sq --version` and record it
+- [ ] In the copy, `cd` into it and run `sq review slice 105 --model glmflash --output json > <stdout file> 2> <stderr file>` (the slice **number** form is what makes Squadron save a review file; a path would not). Slice 105's design is the input. If `sq` cannot resolve the number, stop and ask the PM rather than substituting another command
+- [ ] Run `sq --version` and record the actual value. It may be newer than 0.15.0 (the LLD's observation date version); use the file names, README text, and test names below with the version you actually got. If the output has keys the LLD's D3 table does not list, note them in the README; the parser ignores unknown keys
 - [ ] Confirm the stdout file is one JSON object (parses with `python -m json.tool`) and the `Saved review to` line is in the stderr file, not stdout
-- [ ] Confirm the saved review file has no hand edits and that `template_name` in the JSON equals `reviewType` in the frontmatter
+- [ ] Confirm the saved review file has no hand edits, note whether it has a `runId` (a CLI run normally does not, and its JSON `run_id` is null), and that `template_name` in the JSON equals `reviewType` in the frontmatter
 - [ ] Copy the saved file and the stdout file into `tests/fixtures/sq_reviews/` with `cp`. Name them so the pair is obvious (e.g. same stem; stdout ends `.stdout.json`)
 - [ ] Add a README entry: command, Squadron version, model, capture date, why (pins pure-JSON stdout, `template_name == reviewType`, matching finding keys)
 - [ ] Add path constants for both files to `tests/review_fixtures.py`
@@ -85,7 +86,7 @@ status: not_started
 - [ ] Both files exist, are unmodified Squadron output, and are listed in the README with the exact command
 - [ ] The stdout file parses as a single JSON object
 - [ ] The real `project-documents/user/reviews/` directory gained no files (`git status`)
-- [ ] Commit, e.g. `test: capture squadron 0.15.0 review file and stdout pair`
+- [ ] Commit, e.g. `test: capture squadron review file and stdout pair`
 
 **Files to Create**: two files in `tests/fixtures/sq_reviews/`
 **Files to Modify**: `tests/fixtures/README.md`, `tests/review_fixtures.py`
@@ -195,7 +196,7 @@ status: not_started
 **Success Criteria**:
 - [ ] Every value listed above has exactly one constant
 - [ ] `ruff` and `pyright` clean
-- [ ] Commit, e.g. `feat(upstream): add squadron review field names`. (Tests for "defined once" come in Task 3.3.)
+- [ ] Commit, e.g. `feat(upstream): add squadron review field names`. (The "defined once" test is Task 5.5, after every reader exists.)
 
 **Files to Create**: `src/amoeba/upstream/__init__.py`, `src/amoeba/upstream/squadron/__init__.py`, `src/amoeba/upstream/squadron/review_fields.py`
 
@@ -229,7 +230,7 @@ status: not_started
 **Objective**: The first half of `parse_review_artifact`: raw frontmatter mapping plus the two heading flags.
 
 **Steps**:
-- [ ] Add private helpers in `review.py` (or `review_artifact.py` if already split): split frontmatter, load it, detect headings
+- [ ] Add three private helpers in `review.py`: split frontmatter, load it, detect headings. If Task 4.1 later splits the file, they move into `review_artifact.py` with the artifact reader
 - [ ] Fence: a line of `---` plus optional trailing whitespace; leading blank lines allowed; no frontmatter raises `SquadronParseError` containing "no frontmatter"
 - [ ] Load with `yaml.safe_load` only; chain the YAML error; a non-mapping result raises
 - [ ] Headings: *Provider Failure* and *Findings Not Parsed* at any level `#`–`######`, any case, surrounding whitespace ignored, using the constants from `review_fields.py`
@@ -253,7 +254,6 @@ status: not_started
 - [ ] Heading flags: the 928 file and `102-…part-2.md` (round 2) have *Provider Failure*; the 925 file and the edited-copy fixture have *Findings Not Parsed*; the round 1 part 1 file has neither
 - [ ] Leniency: leading blank lines before the fence; trailing spaces on a fence; heading at another level and in another case
 - [ ] Errors, each a `SquadronParseError` naming the problem: no frontmatter (text `# not a review`), malformed YAML (cause is chained), frontmatter that is not a mapping
-- [ ] "Defined once" check: a test greps `src/amoeba/upstream/squadron/` and fails if any Squadron key string from Task 2.4 appears as a quoted literal outside `review_fields.py`
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/upstream` passes; `ruff` and `pyright` clean
@@ -294,7 +294,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/upstream/test_review_artifact.py`
 - [ ] Table-driven test over every `.md` fixture: expected verdict, derivation, `findings_parsed`, `provider_failure`, review type, finding count, and for each finding its order, severity, summary, location, and positional id. Write the expected values by reading each file, not by printing the parser's output. Each row also asserts `findings` or another field is non-default where the file has data (catches silent empty results)
-- [ ] Named cases: both provider-failure files (the 0.14.0 `102-…part-2.md` heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file and the new 0.15.0 file give `sq_run_id` and `upstream_version`
+- [ ] Named cases: both provider-failure files (the 0.14.0 `102-…part-2.md` heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file gives `sq_run_id` (`run-20260928-slices-plan-a04bdb07`) and its `upstream_version` stamp; the new captured file gives its stamp, and `sq_run_id` equal to its `runId` if it has one and `None` if it does not
 - [ ] Missing-key errors, each its own test: no `verdict`, no `reviewType`, no `aiModel`; each message names the key
 - [ ] Finding errors, each its own test (mutate a copy of a real file's text): a finding that is not a mapping; a finding without `severity`; a finding without `summary`; an unknown severity word; an unknown verdict word
 - [ ] Provider-failure errors: a failure with a verdict other than `UNKNOWN`; a failure with findings
@@ -341,10 +341,15 @@ status: not_started
 - [ ] Create `tests/upstream/test_review_json.py`
 - [ ] Real captures: `stdout-slice-927-clean-pass.json` gives `findings_parsed=True` and standing `stated`; `stdout-slice-104-concerns-glmflash.json` gives ten findings in order (check the count and order against the file)
 - [ ] Trailing-line tolerance: append a `Saved review to <path>` line to the text of a real capture (none of the existing captures carries one); the result equals the pure-JSON parse
-- [ ] Synthetic variants built by editing a real capture's dict: `fallback_used: true` + `verdictSource: stated` → `findings_parsed=False`; same with `derived` → `True` and standing `derived`; `requested_model` kept only when `model_substituted` is true; `verdictSource` null → `not_reported`
-- [ ] Appended text after the object (a `Saved review to …` line) is ignored
+- [ ] `findings_parsed` rule, one test per branch, built by editing a real capture's dict:
+  - `fallback_used: true` with `verdictSource: stated` → `False`
+  - `fallback_used: true` with `verdictSource` null → `False` (derivation `not_reported`)
+  - `fallback_used: true` with `verdictSource: derived` → `True`, standing `derived`
+  - `fallback_used: false` → `True`
+  - `fallback_used` key absent → `None`
+- [ ] `requested_model` is kept only when `model_substituted` is true; `verdictSource` null → derivation `not_reported`
 - [ ] Errors: text with no JSON object; a JSON object with no `verdict`; malformed JSON; unknown severity; a finding without `severity`; a finding without `summary`
-- [ ] On the new 0.15.0 pair (stdout file and saved `.md` from Task 1.2): file and stdout agree on verdict, review type, model, and **finding keys** (`finding_identity` over each finding) in the same order; `template_name` equals `reviewType`
+- [ ] On the new captured pair (stdout file and saved `.md` from Task 1.2): file and stdout agree on verdict, review type, model, and **finding keys** (`finding_identity` over each finding) in the same order; `template_name` equals `reviewType`
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/upstream` passes; `ruff` and `pyright` clean
@@ -386,7 +391,7 @@ status: not_started
 - [ ] The id matches `sq-review-` + 32 hex characters
 - [ ] Unchanged after adding `resolution:` and `resolvedBy:` keys and a `## Response` section to a fixture's text
 - [ ] Changes when one finding's summary changes, and when the verdict changes
-- [ ] The file parse and the stdout parse of the new 0.15.0 pair get different ids
+- [ ] The file parse and the stdout parse of the newly captured pair get different ids
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/upstream` passes; `ruff` and `pyright` clean
@@ -437,17 +442,18 @@ status: not_started
 
 ---
 
-### Task 5.5: Test the dependency direction
+### Task 5.5: Test the dependency direction and single definition of Squadron keys
 **Owner**: Junior AI
 **Dependencies**: Task 5.4
 **Effort**: 1
-**Objective**: Enforce the LLD's import rules with a test, so Task 9.3 does not need to repeat them by hand.
+**Objective**: Enforce the LLD's import rules and its "each key defined once" rule with tests, so Task 9.3 does not need to repeat them by hand.
 
 **Steps**:
 - [ ] Create `tests/upstream/test_import_direction.py`. Scan the source files (use `ast`; follow any existing import-rule test style in `tests/`): nothing under `src/amoeba/upstream` imports `amoeba.inbox`, `amoeba.process`, or `Store`; nothing under `src/amoeba/store` imports `amoeba.upstream`
+- [ ] Create `tests/upstream/test_field_names_defined_once.py`. Using `ast`, collect every string constant in `src/amoeba/upstream/squadron/` modules other than `review_fields.py`, excluding docstrings; fail if any equals a Squadron key, heading, or tag value from `review_fields.py`. Import the values from `review_fields`; do not retype them. If it flags a hit, fix the source to use the constant; do not loosen the test
 
 **Success Criteria**:
-- [ ] The test passes; `ruff` and `pyright` clean
-- [ ] Commit, e.g. `test: enforce upstream import direction`
+- [ ] Both tests pass; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: enforce upstream import direction and single key definitions`
 
-**Files to Create**: `tests/upstream/test_import_direction.py`
+**Files to Create**: `tests/upstream/test_import_direction.py`, `tests/upstream/test_field_names_defined_once.py`

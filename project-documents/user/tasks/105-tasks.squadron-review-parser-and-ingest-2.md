@@ -80,25 +80,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ---
 
-### Task 7.2: Switch `tests/store/test_finding_changes.py` to the parser
-**Owner**: Junior AI
-**Dependencies**: Task 5.4
-**Effort**: 2
-**Objective**: Same migration for the `finding_changes` tests.
-
-**Steps**:
-- [ ] Apply the same replacement and rules as Task 7.1 to this file; it imports `ROUND_1_PART_1`, `ROUND_2_PART_1`, `ROUND_2_PART_2`
-
-**Success Criteria**:
-- [ ] `uv run pytest tests/store/test_finding_changes.py` passes with no expected-value changes
-- [ ] No import of the four removed helpers
-- [ ] Commit, e.g. `test: read finding-changes fixtures through the parser`
-
-**Files to Modify**: `tests/store/test_finding_changes.py`
-
----
-
-### Task 7.3: Switch `tests/evidence_harness.py` to the parser
+### Task 7.2: Switch `tests/evidence_harness.py` to the parser
 **Owner**: Junior AI
 **Dependencies**: Task 5.4
 **Effort**: 2
@@ -106,18 +88,18 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 **Steps**:
 - [ ] Apply the same replacement and rules as Task 7.1 to this file
-- [ ] Run every test module that imports it (`grep -rn evidence_harness tests`), not just one
+- [ ] Run every test module that imports it (`grep -rn evidence_harness tests`), not just one. `tests/store/test_finding_changes.py` imports no review helper itself (only `ROUND_*` paths and the harness), so it needs no edit; this run covers it
 
 **Success Criteria**:
 - [ ] All tests importing the harness pass with no expected-value changes
-- [ ] No import of the four removed helpers
+- [ ] No import of the removed helpers
 - [ ] Commit, e.g. `test: build evidence harness verdicts through the parser`
 
 **Files to Modify**: `tests/evidence_harness.py`
 
 ---
 
-### Task 7.4: Switch `tests/test_demo_evidence_payloads.py` to the parser
+### Task 7.3: Switch `tests/test_demo_evidence_payloads.py` to the parser
 **Owner**: Junior AI
 **Dependencies**: Task 6.2 (this test compares payloads, so it may use `verdict_to_payload`), Task 5.4
 **Effort**: 2
@@ -129,21 +111,21 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/test_demo_evidence_payloads.py` passes with no expected-value changes
-- [ ] No import of the four removed helpers
+- [ ] No import of the removed helpers
 - [ ] Commit, e.g. `test: check demo payloads through the parser`
 
 **Files to Modify**: `tests/test_demo_evidence_payloads.py`
 
 ---
 
-### Task 7.5: Delete the old fixture reader
+### Task 7.4: Delete the old fixture reader
 **Owner**: Junior AI
-**Dependencies**: Task 7.4
+**Dependencies**: Tasks 7.1, 7.2, 7.3
 **Effort**: 1
 **Objective**: Remove the test-only parser; `tests/review_fixtures.py` keeps only fixture paths.
 
 **Steps**:
-- [ ] Confirm the four migration tasks above are committed, so nothing still imports the helpers (`grep -rn "review_findings\|read_frontmatter" tests`)
+- [ ] Confirm Tasks 7.1–7.3 above are committed, so nothing still imports the helpers (`grep -rn "review_findings\|read_frontmatter" tests`)
 - [ ] Delete the YAML reader, frontmatter regex, heading regex, `CapturedFinding`, and the `yaml` and `re` imports from `tests/review_fixtures.py`. Keep `SQ_REVIEWS` and the four `ROUND_*` paths
 - [ ] Update the module docstring to say it holds paths only
 - [ ] Run the full suite once
@@ -161,38 +143,39 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 8.1: Add `ExitCode.REVIEW_UNREADABLE`
 **Owner**: Junior AI
-**Dependencies**: Task 7.5
+**Dependencies**: Task 7.4
 **Effort**: 1
 **Objective**: A distinct exit status (`12`) for unreadable reviews.
 
 **Steps**:
 - [ ] Read the end of `ExitCode` in `cli/main.py` and add `REVIEW_UNREADABLE = 12` with a doc comment in the existing style: file unreadable, unparseable, or no version label
-- [ ] Update any test that pins the full exit-code set (search `tests/` for `ExitCode`)
+- [ ] Update any test that pins the full exit-code set (search `tests/` for `ExitCode`). If none exists, add a small test asserting `ExitCode.REVIEW_UNREADABLE == 12` and that all `ExitCode` values are unique, in the CLI test module closest in subject
 
 **Success Criteria**:
-- [ ] No bare `12` appears in `src/`; the enum test (if any) passes; `ruff` and `pyright` clean
+- [ ] No bare `12` appears in `src/`; the exit-code test passes; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `feat(cli): add REVIEW_UNREADABLE exit code`
 
-**Files to Modify**: `src/amoeba/cli/main.py`, the exit-code test if one exists
+**Files to Modify**: `src/amoeba/cli/main.py`, the exit-code test (or a new small test)
 
 ---
 
-### Task 8.2: Implement `cli/ingest.py` and register it
+### Task 8.2: Implement ingest's argument parsing and read/parse/compose steps
 **Owner**: Junior AI
 **Dependencies**: Task 8.1
-**Effort**: 4
-**Objective**: Parse a file and submit it through the inbox, per the LLD Data Flow and D6/D7.
+**Effort**: 3
+**Objective**: Everything in ingest that happens before submitting (LLD Data Flow, D6, D7). Task 8.4 adds the submit.
 
 **Steps**:
-- [ ] Read `cli/submit.py` first and follow its parser and boundary conventions, including how it resolves the supervisor directory and reports the submission id
-- [ ] Add `add_ingest_parser` and `run_ingest` for `amoeba ingest review --project ID --node NODE_ID --by NAME (--artifact PATH | --stdout-json PATH) [--upstream-version LABEL] [--id ID]`. `--artifact` and `--stdout-json` are mutually exclusive and one is required
-- [ ] Order of steps, each failure leaving `inbox/new/` empty: (1) the project's store file (`paths.store_path(project)`) must exist, else print `no store for project '<P>'` and return `SUBMISSION_REFUSED` without opening a store; (2) read the file as UTF-8, `OSError` / `UnicodeDecodeError` → `REVIEW_UNREADABLE`; (3) parse by the chosen flag, `SquadronReviewError` → `REVIEW_UNREADABLE`; (4) `to_verdict_input` with the absolute resolved path as `source_path`, `--id` as `record_id`, `--upstream-version` as the label; `UpstreamVersionError` → `REVIEW_UNREADABLE`; (5) print node, parsed `slice` (`-` if none), and review type on stderr; (6) `submit` with kind `verdict`, `verdict_to_payload(...)`, and `submission_id` = the input's id; (7) print the submission id on stdout, return `OK`
-- [ ] Catch `OSError`, `UnicodeDecodeError`, and `SquadronReviewError` in explicit branches only; print the error on stderr. Never catch plain `ValueError` or add a broad `except`. `InboxSubmitError` is left to the boundary handler
+- [ ] Read `cli/submit.py` first and follow its parser and boundary conventions, including how it resolves the supervisor directory
+- [ ] Add `add_ingest_parser` and `run_ingest` in `cli/ingest.py` for `amoeba ingest review --project ID --node NODE_ID --by NAME (--artifact PATH | --stdout-json PATH) [--upstream-version LABEL] [--id ID]`. `--artifact` and `--stdout-json` are mutually exclusive and one is required
+- [ ] Steps in order, each failing before anything is written: (1) the project's store file (`paths.store_path(project)`) must exist, else print `no store for project '<P>'` and return `SUBMISSION_REFUSED` without opening a store; (2) read the file as UTF-8, `OSError` / `UnicodeDecodeError` → `REVIEW_UNREADABLE`; (3) parse by the chosen flag, `SquadronReviewError` → `REVIEW_UNREADABLE`; (4) `to_verdict_input` with the absolute resolved path as `source_path`, `--id` as `record_id`, `--upstream-version` as the label; `UpstreamVersionError` → `REVIEW_UNREADABLE`; (5) print node, parsed `slice` (`-` if none), and review type on stderr
+- [ ] Catch `OSError`, `UnicodeDecodeError`, and `SquadronReviewError` in explicit branches only; print the error on stderr. Never catch plain `ValueError` or add a broad `except`
 - [ ] Do not compare `--node` with the review's `slice` (D7)
 - [ ] Register in `cli/main.py` next to `add_submit_parser`
+- [ ] Until Task 8.4, after step 5 return `OK` without submitting, with a `TODO(8.4)` comment on that line
 
 **Success Criteria**:
 - [ ] `amoeba ingest review --help` lists every flag
-- [ ] No store is opened by the command (no `Store` import in `ingest.py`)
 - [ ] `ruff` and `pyright` clean (committed with Task 8.3)
 
 **Files to Create**: `src/amoeba/cli/ingest.py`
@@ -200,31 +183,67 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ---
 
-### Task 8.3: Test the command with no process running
+### Task 8.3: Test ingest's failure paths and the no-Store rule
 **Owner**: Junior AI
 **Dependencies**: Task 8.2
 **Effort**: 3
-**Objective**: Pin ingest's argument handling and failure paths.
+**Objective**: Pin every failure exit and prove nothing is written.
 
 **Steps**:
 - [ ] Read `tests/cli/test_submit.py` and `tests/cli_harness.py` and reuse their helpers; use a throwaway supervisor directory, never the real one
 - [ ] Create `tests/cli/test_ingest.py` with a fixture that makes the "store exists" precondition the way 104's end-to-end test does: in a `tmp_path` supervisor directory, `start_running`, `submit_cli` a `create-project` for project `demo`, `await_condition` until `paths.store_path("demo", env)` exists (use `cli_environment` for `env`), then `stop_running`. The project then has a real store file and the process is stopped. The "no project" case never creates one
-- [ ] Failure paths (all with the fixture above, process stopped), each asserting the exit code and an empty `inbox/new/`: missing file, non-UTF-8 file, `# not a review` text (message mentions no frontmatter), a pre-stamp file with no `--upstream-version`, stamp/argument disagreement, project with no store file (`SUBMISSION_REFUSED`, message names the project)
-- [ ] Success path, process stopped: a real fixture with `--upstream-version` writes exactly one file to `inbox/new/`; stdout is the digest id; stderr names the node, slice, and review type; `--stdout-json` works on a capture; both flags together or neither is an argument error
-- [ ] D7: a review whose `slice` differs from any node's slice name is still submitted
-- [ ] `--id` overrides the digest id
+- [ ] Failure paths (all with that fixture), each asserting the exit code, a stderr message naming the problem, and an empty `inbox/new/`: missing file, non-UTF-8 file, `# not a review` text (message mentions no frontmatter), a pre-stamp file with no `--upstream-version`, stamp/argument disagreement, project with no store file (`SUBMISSION_REFUSED`, message names the project)
+- [ ] Argument errors: both flags together, neither flag
+- [ ] Enforced rule: a test parses `src/amoeba/cli/ingest.py` with `ast` and fails if it imports or references `Store` (D6: ingest opens no store)
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/cli/test_ingest.py` passes; `ruff` and `pyright` clean
-- [ ] Commit, e.g. `feat(cli): add amoeba ingest review`
+- [ ] Commit (covers Tasks 8.2 and 8.3), e.g. `feat(cli): read and parse reviews in amoeba ingest review`
 
 **Files to Create**: `tests/cli/test_ingest.py`
 
 ---
 
-### Task 8.4: End to end, running process, two rounds and a provider failure
+### Task 8.4: Add the submit step to ingest
 **Owner**: Junior AI
 **Dependencies**: Task 8.3
+**Effort**: 2
+**Objective**: Complete the command: submit through the inbox and report the id (LLD Data Flow, last two steps).
+
+**Steps**:
+- [ ] Replace the Task 8.2 `TODO(8.4)` stub: call `submit` with kind `verdict`, `verdict_to_payload(input)`, and `submission_id` = the input's id; print the submission id on stdout; return `OK`
+- [ ] Leave `InboxSubmitError` to the boundary handler (it maps to `SUBMISSION_REFUSED`)
+
+**Success Criteria**:
+- [ ] No `TODO(8.4)` remains; `ruff` and `pyright` clean (committed with Task 8.5)
+
+**Files to Modify**: `src/amoeba/cli/ingest.py`
+
+---
+
+### Task 8.5: Test ingest's success path
+**Owner**: Junior AI
+**Dependencies**: Task 8.4
+**Effort**: 2
+**Objective**: Pin what a successful ingest writes, with the process stopped.
+
+**Steps**:
+- [ ] In `tests/cli/test_ingest.py`, reusing the Task 8.3 fixture: a real fixture with `--upstream-version` writes exactly one file to `inbox/new/`; stdout is the digest id; stderr names the node, slice, and review type
+- [ ] `--stdout-json` works on a capture
+- [ ] D7: a review whose `slice` differs from any node's slice name is still submitted
+- [ ] `--id` overrides the digest id, and the submission id equals it
+
+**Success Criteria**:
+- [ ] `uv run pytest tests/cli/test_ingest.py` passes; `ruff` and `pyright` clean
+- [ ] Commit (covers Tasks 8.4 and 8.5), e.g. `feat(cli): submit reviews from amoeba ingest review`
+
+**Files to Modify**: `tests/cli/test_ingest.py`
+
+---
+
+### Task 8.6: End to end, running process, two rounds and a provider failure
+**Owner**: Junior AI
+**Dependencies**: Task 8.5
 **Effort**: 3
 **Objective**: Prove the LLD's main Integration Requirement with real subprocesses.
 
@@ -242,14 +261,14 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ---
 
-### Task 8.5: End to end, stopped process and unknown project
+### Task 8.7: End to end, stopped process and unknown project
 **Owner**: Junior AI
-**Dependencies**: Task 8.4
+**Dependencies**: Task 8.6
 **Effort**: 2
 **Objective**: Cover D6 with the process both stopped and running.
 
 **Steps**:
-- [ ] In the same test module, with the same setup as Task 8.4: ingest with the process **stopped**, then start it; the verdict is applied and appears in `inspect verdicts`
+- [ ] In the same test module, with the same setup as Task 8.6: ingest with the process **stopped**, then start it; the verdict is applied and appears in `inspect verdicts`
 - [ ] Ingest into the nonexistent project `nosuch`, once with the process running and once stopped: exit `SUBMISSION_REFUSED`, stderr names the project, `inbox/new/` stays empty, and `inspect inbox` shows nothing quarantined
 
 **Success Criteria**:
@@ -260,11 +279,11 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ---
 
-### Task 8.6: End to end, stdout JSON against the saved file
+### Task 8.8: End to end, stdout JSON against the saved file
 **Owner**: Junior AI
-**Dependencies**: Task 8.5
+**Dependencies**: Task 8.7
 **Effort**: 2
-**Objective**: Pin D5's accepted consequence on the real 0.15.0 pair.
+**Objective**: Pin D5's accepted consequence on the newly captured pair.
 
 **Steps**:
 - [ ] With a running process and a seeded node, ingest the pair's stdout file with `--stdout-json` and its saved `.md` with `--artifact` (no `--upstream-version`; both carry a stamp)
@@ -282,7 +301,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 9.1: Write the "Parsing Squadron output" section
 **Owner**: Junior AI
-**Dependencies**: Task 8.6
+**Dependencies**: Task 8.8
 **Effort**: 3
 **Objective**: Replace 104's "Mapping Squadron's flags (for slice 105)" notes with the parser's contract.
 
