@@ -64,7 +64,7 @@ status: not_started
 - [ ] Read 106's LLD API Contracts row for `record_runner_report`: `record_runner_report(project_id, *, verdict: VerdictInput, path, digest, journal_entry_id, ...)`. The remaining parameters are those `journal_resolve` and `record_detection` need that are not already listed; take them from those two methods' real signatures and do not add any other parameter
 - [ ] Read how `record_verdict`, `record_detection`, and `journal_resolve` each open their own transaction. Implement the new method with one `with self._connection:` block that performs all three writes. Reuse each method's body by extracting its non-transactional part into a private helper that both the existing method and the new one call; do not copy their SQL
 - [ ] Idempotent on `(project_id, path, digest)`: a retry returns the existing verdict and writes nothing. A journal entry that is unknown or already resolved raises before any write
-- [ ] Export it through the existing `Store` surface (it is a method; no new package export). Add it to `store-contract.md` when Task 10.2 runs
+- [ ] Export it through the existing `Store` surface (it is a method; no new package export). Task 10.2 documents it in `store-contract.md` (when this task fires)
 
 **Success Criteria**:
 - [ ] Method exists with the signature fixed above; existing tests still pass
@@ -147,8 +147,8 @@ Each fix is a narrowing or enforcement in the store; each is tested at once. `st
 
 **Steps**:
 - [ ] `tests/test_paths.py`: parametrized accept list and refuse list (include `Demo`, `de mo`, `démo`, `demo.`, `.demo`, `-demo`, `` empty, `a/b`, `..`)
-- [ ] `tests/store/`: `Store.open` refuses `Demo` and creates no file in the store directory
-- [ ] `tests/process/test_project_stores.py`: `open_project("Demo")` raises and creates nothing
+- [ ] `tests/store/`: `Store.open` refuses each of `Demo`, `de mo`, `démo` (parametrized) and creates no file in the store directory
+- [ ] `tests/process/test_project_stores.py`: `open_project` refuses the same three ids (parametrized), raises, and creates nothing
 - [ ] `tests/cli/test_submit.py`: `amoeba submit create-project --project Demo --by pm` exits 9, prints the rule, and the supervisor directory is empty afterward
 - [ ] Fix existing tests or fixtures that use uppercase or odd ids (change the test data, not the rule)
 

@@ -33,7 +33,7 @@ status: not_started
 
 **Steps**:
 - [ ] Create `tests/contract/proof_runner.py`. Define `KillPoint` as one `StrEnum`: `after-issue`, `after-launch`, `inbox-while-down`, plus one boundary member per step 1–11 for the load-tier matrix (name them `after-step-1` … `after-step-11`; the harness and tests reference only the enum). `ProofRunner` reads the kill point from one environment variable whose name is a module constant
-- [ ] Define the step table as data: each row is a name, the "state that must hold afterwards" (a predicate over a store-reading view), and an action. Rows for runner-owned steps are 2, 3, 4, 6, 7, 11. Steps 1, 5, 8, 9, 10 are actors' (Task 5.5) and the runner only checks they have happened before continuing; its predicates for them read the store, never actor-side flags
+- [ ] Define the step table as data: each row is a name, the "state that must hold afterwards" (a predicate over a store-reading view), and an action. Rows for runner-owned steps are 2, 3, 4, 6, 7, 11. Steps 1, 5, 8, 9, 10 are actors' (Tasks 5.8 and 5.8b) and the runner only checks they have happened before continuing; its predicates for them read the store, never actor-side flags
 - [ ] `tick(host)` implements the `Tenant` protocol: for each project it is assigned (`proof`, and `proof-b` for steps 1–3), find the first row whose predicate is false and either do its action or return, if it waits on an actor. Return the tenant's "did work" boolean as the protocol requires (read `Tenant.tick` in `process/host.py`)
 - [ ] Define once, beside the enum, which side performs each kill (`KILL_OWNER`): the runner kills itself at `after-issue`, `after-launch`, and `after-step-N` for runner-owned steps 2, 3, 4, 6, 7, 11; the **harness** kills the host (`kill_host`) for `inbox-while-down` and for `after-step-N` of actor-owned steps 1, 5, 8, 9, 10, because the runner cannot observe those moments. `mid-follow` is deliberately not a kill point (see Task 6.1)
 - [ ] Kill points apply to project `proof` only. `proof-b` runs steps 1–3 through the same table but its rows never call `kill_here`, and the driver's harness-side kills key on `proof`'s state, so an `after-step-N` kill is never attributed to the wrong project
@@ -346,7 +346,7 @@ status: not_started
 **Objective**: Eleven cases, one per step, each followed by restart, completion, and the same comparison.
 
 **Steps**:
-- [ ] Create `tests/load/test_restart_matrix.py` parametrized over the eleven `after-step-N` members of `KillPoint`. Reuse `run_sequence` from `tests/contract/test_lifecycle_proof.py` through `sys.path` as `tests/load/conftest.py` does for shared harnesses; do not copy it
+- [ ] Create `tests/load/test_restart_matrix.py` parametrized over the eleven `after-step-N` members of `KillPoint`. Reuse `run_sequence` from `tests/contract/test_lifecycle_proof.py` through `sys.path` as `tests/load/conftest.py` does for shared harnesses; do not copy it. The `tests/contract` modules import each other by flat name (`proof_runner`, `snapshot`, `proof_harness`), so first add `tests/contract` to the directories `tests/load/conftest.py` inserts on `sys.path`; otherwise the import of `run_sequence` fails on its siblings
 - [ ] Each case asserts the same things as Section 6: completion, snapshot equal to the clean run's (no allowed differences, except where a boundary coincides with a named point whose table row applies), transcripts equal
 - [ ] The driver already handles both owners (Task 5.9): runner-owned boundaries are killed by `ProofRunner` itself, actor-owned boundaries (1, 5, 8, 9, 10) by the harness once the step's state-afterwards holds. Assert in the test, from `KILL_OWNER`, that both kinds appear among the eleven cases
 
@@ -382,11 +382,24 @@ status: not_started
 **Steps**:
 - [ ] Parametrize the clean run over the three environments. The harness must pass the environment explicitly to the host and every actor (copy `os.environ`, remove the other variables, set `HOME` for the third). `DEFAULT_STORE_DIR` is computed at import from `Path.home()`; each subprocess gets its own `HOME`, so this works across processes. Do not monkeypatch in-process
 - [ ] Assert each run's store, lock, inbox, and sidecar files land under the expected directory (`$AMOEBA_STORE_DIR`; `$XDG_CONFIG_HOME/amoeba`; `$HOME/.config/amoeba`) and nowhere else under `tmp_path`. For the third, the Squadron runs directory is still passed explicitly, never the default
-- [ ] Assert a relative `AMOEBA_STORE_DIR` and a relative `XDG_CONFIG_HOME` are each refused by `status`, `start`, `submit`, `inspect`, and `feed` (exit nonzero, message names the variable). A project id with an uppercase letter, a space, or a non-ASCII character is refused by `submit` (exit 9, nothing written); `open_project` and `Store.open` refusals are already covered by Task 2.4: reference them rather than repeating
 
 **Success Criteria**:
 - [ ] Tests pass; the three-resolution runs add no more than their own clean-run time each (report the figure)
 - [ ] Commit `test: prove store locality under the lifecycle sequence`
+
+### Task 8.3: Refusals at every command
+**Owner**: Junior AI
+**Dependencies**: 8.1
+**Effort**: 2
+**Objective**: The D5 refusals hold at every command, not only in the library. A gap found here (for example in `feed` or `serve` wiring) is fixed at its cause and recorded in the gap table (Task 10.5).
+
+**Steps**:
+- [ ] Assert a relative `AMOEBA_STORE_DIR` and a relative `XDG_CONFIG_HOME` are each refused by `status`, `start`, `submit`, `inspect`, and `feed` (exit nonzero, message names the variable)
+- [ ] A project id with an uppercase letter, a space, or a non-ASCII character is refused by `submit` (exit 9, nothing written). The `open_project` and `Store.open` refusals for the same three shapes are Task 2.4's; reference them rather than repeating
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit `test: prove D5 refusals at every command`
 
 ---
 
@@ -400,7 +413,7 @@ status: not_started
 
 **Steps**:
 - [ ] First check whether 105 already exposes a run-file reader in `amoeba.upstream.squadron`. If it does, point the observer at it and skip the move
-- [ ] Otherwise create `src/amoeba/upstream/squadron/run_files.py` holding `SquadronRun`, `parse_run_file`, and the one named constant for Squadron's `paused` status string. Move them unchanged (same fields, same logging, same `None`-on-failure behavior). `process/observers/sq_runs.py` imports them from the new module. Process may depend on upstream; the reverse is never allowed
+- [ ] Otherwise create `src/amoeba/upstream/squadron/run_files.py` holding `SquadronRun` and `parse_run_file`. Move those two unchanged (same fields, same logging, same `None`-on-failure behavior). Also add the one named constant for Squadron's `paused` status string; it does not exist today (the observer stores the status verbatim), so it is new, not part of the move. `process/observers/sq_runs.py` imports them from the new module. Process may depend on upstream; the reverse is never allowed
 - [ ] Export `SquadronRun` and `parse_run_file` from the package `__init__` and add them to the squadron pin test from Task 3.3
 
 **Success Criteria**:
@@ -524,6 +537,7 @@ All markdown carries YAML front matter per `file-naming-conventions.md` where th
 
 **Steps**:
 - [ ] Locate the paragraphs on directory resolution ("used verbatim"), project ids, and `done`. Rewrite: both directory variables must be absolute and a relative value raises `ValueError` naming the variable; project ids are ASCII slugs with the pattern (copy it from the constant), with the reasons; `done` is final with the four refusals listed. Remove any "known limit" line about case-insensitive collisions
+- [ ] If Task 1.2 added the one-transaction report-back method, document it here under its confirmed name (Task 1.1): the three things it does in one transaction, and that the Runner calls it instead of the separate methods. Task 10.4's obligations row links to this section
 - [ ] Put the mapping rule where 120 will find it: "mapping a Context Forge project name to an Amoeba project id is the Runner's job; it must produce a slug"
 
 **Success Criteria**:
@@ -594,7 +608,7 @@ All markdown carries YAML front matter per `file-naming-conventions.md` where th
 
 ### Task 11.1: Full validation and walkthrough
 **Owner**: Junior AI
-**Dependencies**: 10.6
+**Dependencies**: 10.6, 7.1, 8.3, 9.5
 **Effort**: 2
 **Objective**: Everything green; the LLD walkthrough run once with real output.
 
