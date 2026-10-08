@@ -18,7 +18,7 @@ status: not_started
 - **What this slice delivers:** Group A, a no-behavior-change refactor (registry → `amoeba.inspection`, `ListingQuery`, `abbreviated_columns`, `change_as_json` → `amoeba.feed`), proven by byte comparison. Group B, the network surface: read endpoints, submission and status endpoints, the SSE feed and `feed/page`, bearer-token auth with scopes, `amoeba token`, `amoeba serve` with TLS and bounds, `docs/network-contract.md`, contract updates, `CHANGELOG.md`.
 - **Not in this slice:** any other write endpoint, resident-process status (D7), browser support (CORS, cookies, token in query string), WebSocket, a client library, a cross-project stream, rate limiting, metrics, token expiry, mutual TLS, OpenAPI, per-kind or per-project authorization, paging of listings (LLD "Excluded").
 - **Next planned slice:** 110 (contract proof), which runs `amoeba serve` as one more subprocess.
-- **No load or benchmark task:** the LLD sets one latency bound and no throughput target. The latency bound is a timing test in the default suite (Task 5.10), so it runs wherever the suite runs; no separate load test or CI gate is added.
+- **Load tier:** this slice adds concurrency and process boundaries (many streams, a stalled-client bound, a latency bound), so the Python rules require a load tier. `tests/load/` already exists, is excluded from the default suite by `--ignore`, and `ci.yml` already runs `uv run pytest tests/load` as its own gating step. Task 8.1c adds the serve load tests there; no workflow change is needed. No benchmark or throughput target is added (the LLD sets none).
 
 **Branch:** all implementation happens on `109-slice.network-api`, forked from the target (`cf config get git.integration_branch`; empty means `main`). No task here merges. Merging comes after the code review (Phase 7).
 
@@ -85,24 +85,25 @@ status: not_started
 
 Order inside Group A, per the LLD: first relocate modules unchanged; then change the row signature one module at a time, running the byte comparison after each. No re-export shims: update every importer in the same commit.
 
-### Task 2.1: Create `amoeba.inspection` and move the registry types and core rows
+### Task 2.1: Create `amoeba.inspection`; move the listing types and core rows
 **Owner**: Junior AI
 **Dependencies**: Task 1.2
 **Effort**: 3
-**Objective**: `Row`, `ChoiceOption`, `ValueOption`, `Listing`, and the four core row functions live in `amoeba.inspection`, unchanged. The `LISTINGS` tuple stays in `cli/inspect.py` until Task 2.5d, so imports only ever point from `cli` to `inspection`, never back (no cycle).
+**Objective**: `Row`, `ChoiceOption`, `ValueOption`, `Listing`, and the four core row functions live in `amoeba.inspection`, unchanged. The `LISTINGS` tuple stays in `cli/inspect.py` until Task 2.5d, so imports only ever point from `cli` to `inspection`.
 
 **Steps**:
-- [ ] Create `src/amoeba/inspection/__init__.py`, `registry.py`, and `rows_core.py` per the LLD Component Structure. Move code verbatim (git move semantics, no rewrites). The types go to `registry.py`; the core row functions (nodes, blocked, journal, projects) go to `rows_core.py`
+- [ ] Create `src/amoeba/inspection/__init__.py`, `types.py`, and `rows_core.py`. `types.py` holds `Row`, `ChoiceOption`, `ValueOption`, and `Listing`. **They do not go in `registry.py`:** `registry.py` will import every row module to build `LISTINGS`, and the row modules import these types, so defining the types in `registry.py` would be an import cycle. `registry.py` is created in Task 2.5d. This differs from the LLD's Component Structure (which lists the types under `registry.py`); report it to the PM in Task 8.5
+- [ ] Move code verbatim (git move semantics, no rewrites). Core row functions (nodes, blocked, journal, projects) go to `rows_core.py`
 - [ ] Leave `LISTINGS`, `LISTINGS_BY_NAME`, `PROJECTS_LISTING`, and `run_listing` in `cli/inspect.py` for now; they import from `amoeba.inspection`. No module in `amoeba.inspection` may import `amoeba.cli`
 - [ ] Row functions keep their `argparse.Namespace` parameter for now (changed in Tasks 2.8–2.9). `inspection` may import `argparse` until Task 2.10
-- [ ] Update every importer in the same commit (`cli/inspect.py`, `cli/inspect_inbox.py`, `cli/inspect_evidence.py`, other `cli/inspect_*.py`, `cli/main.py`, and tests that import the moved names). Do not move `run_listing`'s `json.dumps` yet (Task 2.10)
+- [ ] Update every importer in the same commit (`cli/inspect*.py`, `cli/main.py`, and tests that import the moved names). Do not move `run_listing`'s `json.dumps` yet (Task 2.10)
 
 **Success Criteria**:
 - [ ] Full suite and the byte-comparison test pass; `ruff` and `pyright` clean
 - [ ] `grep -rn "amoeba.cli" src/amoeba/inspection` finds nothing
-- [ ] Commit, e.g. `refactor: move listing registry types to amoeba.inspection`
+- [ ] Commit, e.g. `refactor: move listing types to amoeba.inspection`
 
-**Files to Create**: `src/amoeba/inspection/__init__.py`, `registry.py`, `rows_core.py`
+**Files to Create**: `src/amoeba/inspection/__init__.py`, `types.py`, `rows_core.py`
 **Files to Modify**: `src/amoeba/cli/inspect.py`, other `cli/inspect_*.py`, `src/amoeba/cli/main.py`, affected tests
 
 ---
@@ -156,14 +157,14 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 **Owner**: Junior AI
 **Dependencies**: Task 2.4
 **Effort**: 1
-**Objective**: Each 105 `cli/inspect_*.py` module (names from Task 1.1) → `inspection/rows_<topic>.py`, one task-step per module, unchanged.
+**Objective**: Each 105 `cli/inspect_*.py` module (names from Task 1.1) → `inspection/rows_<topic>.py`, unchanged.
 
 **Steps**:
-- [ ] Move each module, update importers and the CLI tests that slice added; run the suite after each module
+- [ ] For each 105 module, as its own sub-step (2.5a-1, 2.5a-2, …): move it, update importers and the CLI tests that slice added, run the suite and the byte comparison, commit
 
 **Success Criteria**:
-- [ ] Suite and byte comparison pass; no old-module reference remains
-- [ ] Commit per module, e.g. `refactor: move parser listings to amoeba.inspection`
+- [ ] No old-module reference remains; suite and byte comparison pass after each sub-step
+- [ ] One commit per module, e.g. `refactor: move parser listings to amoeba.inspection`
 
 ---
 
@@ -171,23 +172,29 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 **Owner**: Junior AI
 **Dependencies**: Task 2.5a
 **Effort**: 1
-**Objective**: As 2.5a, for the 107 modules (calibration, checks, work records, as named in Task 1.1).
+**Objective**: As Task 2.5a, for the 107 modules named in Task 1.1.
+
+**Steps**:
+- [ ] For each 107 module, as its own sub-step: move it, update importers and tests, run the suite and the byte comparison, commit
 
 **Success Criteria**:
-- [ ] Suite and byte comparison pass; no old-module reference remains
-- [ ] Commit per module
+- [ ] No old-module reference remains; suite and byte comparison pass after each sub-step
+- [ ] One commit per module
 
 ---
 
-### Task 2.5c: Move the 108 listing module
+### Task 2.5c: Move the 108 listing module(s)
 **Owner**: Junior AI
 **Dependencies**: Task 2.5b
 **Effort**: 1
-**Objective**: As 2.5a, for the 108 module(s) (CF watch listings, as named in Task 1.1).
+**Objective**: As Task 2.5a, for the 108 modules named in Task 1.1.
+
+**Steps**:
+- [ ] For each 108 module, as its own sub-step: move it, update importers and tests, run the suite and the byte comparison, commit
 
 **Success Criteria**:
-- [ ] Suite and byte comparison pass; `ls src/amoeba/cli/inspect_*.py` shows only `inspect.py`
-- [ ] Commit per module
+- [ ] `ls src/amoeba/cli/inspect_*.py` shows only `inspect.py`; suite and byte comparison pass
+- [ ] One commit per module
 
 ---
 
@@ -195,10 +202,10 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 **Owner**: Junior AI
 **Dependencies**: Task 2.5c
 **Effort**: 2
-**Objective**: Now that every row module is in `amoeba.inspection`, `LISTINGS`, `LISTINGS_BY_NAME`, and `PROJECTS_LISTING` move to `inspection/registry.py` with no import cycle.
+**Objective**: Now that every row module is in `amoeba.inspection`, `LISTINGS`, `LISTINGS_BY_NAME`, and `PROJECTS_LISTING` move to a new `inspection/registry.py`.
 
 **Steps**:
-- [ ] Move the three names verbatim. `registry.py` imports the `rows_*` modules to build the tuple; those modules import only the types from `registry.py`. If that creates a cycle, put the types in `inspection/types.py` and re-point the row modules to it in the same commit (the types are still defined once)
+- [ ] Move the three names verbatim into `registry.py`, which imports the `rows_*` modules and `types.py`. Row modules import only `types.py` (Task 2.1), so there is no cycle. Nothing under `inspection` may import `registry.py` except `query.py` consumers and the CLI/server
 - [ ] `cli/inspect.py` imports `LISTINGS` and `LISTINGS_BY_NAME` from `amoeba.inspection`; update all importers, including the test that pins the listing set
 
 **Success Criteria**:
@@ -208,21 +215,22 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 
 ---
 
-### Task 2.6: Implement `ListingQuery` and `ListingQueryError`
+### Task 2.6: Implement `ListingQuery`, `ListingQueryError`, and `build_query`
 **Owner**: Junior AI
 **Dependencies**: Task 2.5d
 **Effort**: 3
-**Objective**: The typed, frozen query record that replaces `argparse.Namespace` in row functions (LLD D3).
+**Objective**: The typed, frozen query record that replaces `argparse.Namespace` in row functions (LLD D3), with one public validating builder.
 
 **Steps**:
 - [ ] Create `inspection/query.py`. `ListingQuery` is a frozen record: `project: str | None` plus option values keyed by option name. It carries its listing's declared options so accessors can check them
 - [ ] Add accessors `value(name) -> str | None`, `choice(name) -> str | None`, `flag(name) -> bool`. Each raises `ListingQueryError` when `name` is not an option the listing declares **with that type** (flags/choice_options/value_options on `Listing` remain the only declaration)
-- [ ] Add `query_from_namespace(listing, namespace)` (used by `cli/inspect.py`) that walks the listing's declared options and builds the query. Choice values are validated against `choices`; required value options must be present. Put `query_from_params` in the same module in Task 3.5, not now
-- [ ] Share the validation between both builders in one private helper so Task 3.5 reuses it
+- [ ] Add the public `build_query(listing, project, raw: Mapping[str, str | bool | None]) -> ListingQuery`. It walks the listing's declared options, checks choice values against `choices`, requires required value options, and parses flags. It is the one validation both entry points call; it imports no `argparse`
+- [ ] Add `query_from_namespace(listing, namespace)` in **`cli/inspect.py`** (it is the only place that may see a `Namespace`): it extracts each declared option's value from the namespace and calls `build_query`. `query_from_params` is added to `inspection/query.py` in Task 3.5 and calls `build_query` too
+- [ ] **Intermediate state of `run_listing`:** add a temporary boolean field `uses_query` to `Listing`, default `False`. `run_listing` passes a `ListingQuery` (via `query_from_namespace`) to a listing whose `uses_query` is true and the raw `Namespace` to the rest. Tasks 2.8 and 2.9 set it to true as each module converts; Task 2.10 deletes the field once every listing is converted
 
 **Success Criteria**:
-- [ ] `ListingQuery` is immutable; `ListingQueryError` is defined once
-- [ ] No module in `amoeba.inspection` has gained an `argparse` import (the builders take a plain mapping internally; `query_from_namespace` lives in `cli/inspect.py` and calls the shared helper)
+- [ ] `ListingQuery` is immutable; `ListingQueryError` and `build_query` are defined once; no `argparse` import under `amoeba.inspection`
+- [ ] Suite and byte comparison still pass with every listing at `uses_query = False`
 - [ ] Commit with Task 2.7
 
 **Files to Create**: `src/amoeba/inspection/query.py`
@@ -233,12 +241,12 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 **Owner**: Junior AI
 **Dependencies**: Task 2.6
 **Effort**: 2
-**Objective**: Pin the accessor and validation rules.
+**Objective**: Pin the accessor and `build_query` validation rules.
 
 **Steps**:
 - [ ] Create `tests/inspection/__init__.py` and `tests/inspection/test_query.py`
 - [ ] Cover: each accessor returns the supplied value; an accessor for an undeclared name raises `ListingQueryError`; an accessor used with the wrong type (e.g. `flag` on a value option) raises; a choice outside `choices` is rejected; a missing required value option is rejected; the record is frozen
-- [ ] Iterate `LISTINGS` once: build a query with no options for every listing and assert no listing's declared options make the builder fail
+- [ ] Iterate `LISTINGS` once: call `build_query` with no options for every listing and assert none fails unless it declares a required option
 
 **Success Criteria**:
 - [ ] New tests pass; suite, `ruff`, `pyright` clean
@@ -254,7 +262,7 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 
 **Steps**:
 - [ ] Add `abbreviated_columns: tuple[str, ...]` to `Listing` (default empty). Only the CLI table printer shortens these columns
-- [ ] Convert `rows_core.py` row functions from `args: argparse.Namespace` to `query: ListingQuery`, reading options only through the accessors. Update their `Listing` entries
+- [ ] Convert `rows_core.py` row functions from `args: argparse.Namespace` to `query: ListingQuery`, reading options only through the accessors. Update their `Listing` entries and set `uses_query = True` on them
 - [ ] In `cli/inspect.py`, build the query with `query_from_namespace` and pass it. Rows always carry full values
 - [ ] Update direct tests of these row functions to pass a `ListingQuery`; limit test edits to that
 
@@ -277,10 +285,11 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 - [ ] 2.9d the 105 module(s), one commit each
 - [ ] 2.9e the 107 module(s), one commit each
 - [ ] 2.9f the 108 module(s), one commit each
+- [ ] For each module, set `uses_query = True` on its listings in the same commit
 - [ ] For each, update direct row-function tests to pass a `ListingQuery`, and nothing else in the tests
 
 **Success Criteria**:
-- [ ] `grep -rn "args\.\|Namespace" src/amoeba/inspection` finds no use
+- [ ] `grep -rn "args\.\|Namespace" src/amoeba/inspection` finds no use; every `Listing` has `uses_query = True`
 - [ ] Byte comparison passes after every sub-step; suite clean
 - [ ] One commit per module, e.g. `refactor: pass ListingQuery to inbox row functions`
 
@@ -293,6 +302,7 @@ Order inside Group A, per the LLD: first relocate modules unchanged; then change
 **Objective**: One JSON encoding of rows; `amoeba.inspection` is argparse-free and covered by the writer guard.
 
 **Steps**:
+- [ ] Delete the temporary `uses_query` field and make `run_listing` always build a `ListingQuery`; `grep -rn uses_query src tests` finds nothing
 - [ ] Add `encode_rows(rows)` to `inspection/registry.py`, returning exactly what `json.dumps(rows, default=str)` produced in `run_listing`; make `run_listing` call it
 - [ ] The LLD lists `read_listing()` beside `encode_rows()` in `registry.py`. Add it only as an extraction of the step `run_listing` already performs (call the listing's row function with a store and a `ListingQuery`, return the rows) so the CLI and Task 3.8 share it. If `run_listing` has no such separable step, do not invent one: tell the PM the LLD name has no counterpart and leave it out
 - [ ] Add a test that no module under `src/amoeba/inspection` imports `argparse` or `amoeba.cli` (AST scan, in the style of `test_writer_guard.py`)
@@ -432,7 +442,7 @@ Requires the D2 ruling from Task 1.1. If D2 was not ratified, stop here and tell
 **Objective**: Server-side query building from URL parameters (LLD D3).
 
 **Steps**:
-- [ ] Add `query_from_params(listing, project, params)` to `inspection/query.py`, reusing the Task 2.6 helper. Flags parse `true`/`false` (case-insensitive); anything else is a `ListingQueryError`. An **unknown parameter** raises `ListingQueryError` naming it (the server returns `400 invalid_query`)
+- [ ] Add `query_from_params(listing, project, params)` to `inspection/query.py`. It first rejects any **unknown parameter** with a `ListingQueryError` naming it (the server returns `400 invalid_query`), then calls the public `build_query` from Task 2.6. Flags accept `true`/`false` (case-insensitive); anything else is a `ListingQueryError`
 - [ ] Tests in `tests/inspection/test_query_params.py`: `nod=x` is rejected naming `nod`; a bad choice value and a bad flag value are rejected; a valid value, choice, and flag each build the expected query; iterate `LISTINGS` and build a no-parameter query for each
 
 **Success Criteria**:
@@ -441,19 +451,22 @@ Requires the D2 ruling from Task 1.1. If D2 was not ratified, stop here and tell
 
 ---
 
-### Task 3.5a: App factory and `NoAuth` placeholder
+### Task 3.5a: App factory, authenticator seam, and route wiring
 **Owner**: Junior AI
 **Dependencies**: Task 3.5
-**Effort**: 2
-**Objective**: `build_app` exists and the authenticator seam is defined once, before any endpoint needs it.
+**Effort**: 3
+**Objective**: `build_app` exists, the authenticator seam can express a per-endpoint scope, and every endpoint is registered through one helper that enforces it, before any endpoint is written.
 
 **Steps**:
-- [ ] In `serve/auth.py`, define the `Authenticator` protocol and `NoAuth` now. The protocol is exactly two methods: `authenticate(headers) -> Principal | None` and `authorize(principal) -> ApiErrorCode | None` (returns the denial code or `None`). `Principal` here is a frozen record of name and scope; Task 6.3 adds `TokenAuth`, the scope table, and the scope-aware use of `authorize` without changing these signatures. `NoAuth.authenticate` returns `None` and `NoAuth.authorize` returns `None` (everything open)
-- [ ] Create `serve/app.py` with `build_app(supervisor_dir, settings, authenticator)` returning a Starlette app with the Task 3.4 handler installed and `/v1` routes mounted as later tasks add them. Tests use `NoAuth` until Task 6.5
+- [ ] Create `serve/tokens.py` containing only `TokenScope` (`StrEnum`: `read`, `submit`) for now; Task 6.1 adds the file format to the same module
+- [ ] In `serve/auth.py` define `Principal` (frozen: name, scope); the `Authenticator` protocol with `authenticate(headers) -> Principal | None` and `authorize(principal, required_scope: TokenScope) -> ApiErrorCode | None` (returns the denial code, or `None` when allowed); `NoAuth` (`authenticate` returns `None`, `authorize` always returns `None`); and the `ENDPOINT_SCOPES` table (route name → `TokenScope`), empty for now. Task 6.3 adds `TokenAuth` without changing these signatures
+- [ ] In `serve/app.py` add `build_app(supervisor_dir, settings, authenticator)` and one registration helper `add_route(app, name, path, methods, endpoint)`. The helper looks up the route's scope in `ENDPOINT_SCOPES[name]` (a missing entry raises at startup), and wraps the endpoint so it runs `authenticate`, then `authorize(principal, scope)`, and raises `ApiError` with the returned code before the handler runs. **Every endpoint task from 3.6 on registers through `add_route` and adds its row to `ENDPOINT_SCOPES`**
+- [ ] Add `amoeba/serve` to `tests/test_writer_guard.py`'s scanned set now (no module permitted a read-write open), so every later `serve` module is covered from its first commit
 - [ ] Add an AST test: `amoeba.serve` imports nothing from `amoeba.process` or `amoeba.cli`
+- [ ] Tests (`tests/serve/test_app.py`): an unknown path returns the structured `404` body; registering a route with no `ENDPOINT_SCOPES` row fails at startup; a stub authenticator that denies produces its code's status before the handler runs, and one that allows runs the handler; `NoAuth` allows everything
 
 **Success Criteria**:
-- [ ] The app builds and answers an unknown path with the structured `404` body; layering test passes; suite clean
+- [ ] Tests pass; layering and writer-guard tests pass; suite clean
 - [ ] Commit, e.g. `feat: add serve app factory and authenticator seam`
 
 ---
@@ -465,7 +478,7 @@ Requires the D2 ruling from Task 1.1. If D2 was not ratified, stop here and tell
 **Objective**: `GET /v1/listings` and `GET /v1/listings/{name}` (LLD API Contracts).
 
 **Steps**:
-- [ ] Create `serve/reads.py`. Discovery returns each listing's `name`, `scope` (`project` or `supervisor`), `columns`, and `options` (from the registry's own metadata: option names without `--`, type, choices). Build routes and responses from `LISTINGS`, never from a hand-kept list
+- [ ] Register through `add_route` (Task 3.5a) with a `ENDPOINT_SCOPES` row of `read`. Create `serve/reads.py`. Discovery returns each listing's `name`, `scope` (`project` or `supervisor`), `columns`, and `options` (from the registry's own metadata: option names without `--`, type, choices). Build routes and responses from `LISTINGS`, never from a hand-kept list
 - [ ] Supervisor listings (`projects`, `inbox`, and any other supervisor-scoped listing the registry declares) return `{"listing", "columns", "rows"}` using `encode_rows`; no `change_head`. Asking for a project-scoped name here, or an unknown name, is `unknown_listing`
 - [ ] Row functions are sync; define endpoints as sync functions so Starlette runs them in its thread pool
 

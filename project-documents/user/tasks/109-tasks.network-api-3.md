@@ -18,9 +18,9 @@ status: not_started
 
 | Ruling is "no" | Fallback (LLD PM-ratification table) | Tasks to change |
 | --- | --- | --- |
-| D6 scopes | Every valid token can submit; no scope column; limit documented | 6.1, 6.3, 6.5 (drop the scope-denial tests), 6.6 (no `--scope`), 6.8, 8.2, 8.5 |
-| D6 principal binding | `submitted_by` taken from the body; principal only logged | 6.7 (and its tests), 8.2 |
-| D6 TLS off-loopback | Plain HTTP allowed off-loopback; contract warns tokens can be replayed | 6.9 (no TLS refusal row), 7.1, 7.4 (no TLS-refusal assertions), 8.2 |
+| D6 scopes | Every valid token can submit; no scope column; limit documented | 3.5a (`required_scope` argument and `ENDPOINT_SCOPES`), 5.5 (heartbeat call), 6.1, 6.2 (fixture lines), 6.3, 6.5 (drop scope-denial tests), 6.6 (no `--scope`; CLI tests), 6.7 (the `read`-token case), 6.8, 7.3a (scope cases), 8.1b (`submit`-token variant), 8.2, 8.5 |
+| D6 principal binding | `submitted_by` taken from the body; principal only logged | 6.7 (and its tests), 7.3a (mismatch case), 8.1b, 8.2 |
+| D6 TLS off-loopback | Plain HTTP allowed off-loopback; contract warns tokens can be replayed | 6.9 (no TLS refusal row), 7.1, 7.3 (no TLS-refusal case), 7.4 (no TLS-refusal assertions), 8.2 |
 | `SERVE_REFUSED` (12) | Refusals exit `FAILURE` (1), told apart by stderr | 6.9, 7.2, 7.3 (assert exit 1), 8.2 |
 
 - **Not in this slice:** see file 1. Final merge happens in Phase 7, not here.
@@ -72,12 +72,12 @@ status: not_started
 **Objective**: One place that decides who a request is (LLD D6).
 
 **Steps**:
-- [ ] In `serve/auth.py` (protocol, `Principal`, and `NoAuth` already exist from Task 3.5a; keep their signatures): add `TokenAuth`, which reads the token file on **every** call and looks up the bearer token by hash. `authenticate` returns the `Principal` or `None`; `authorize(principal)` returns a denial code (`unauthenticated`, `auth_unavailable`) or `None`, re-reading the file, and is the single check used both per request and at stream heartbeats
+- [ ] In `serve/auth.py` (protocol, `Principal`, and `NoAuth` already exist from Task 3.5a; keep their signatures): add `TokenAuth`, which reads the token file on **every** call and looks up the bearer token by hash. `authenticate` returns the `Principal` or `None`; `authorize(principal, required_scope)` returns a denial code (`unauthenticated` when there is no principal, `auth_unavailable` when the file is bad, `insufficient_scope` when the scope is too low) or `None`, re-reading the file, and is the single check used per request (through `add_route`, Task 3.5a) and at stream heartbeats (with `TokenScope.read`)
 - [ ] The `Authorization: Bearer <token>` header is the only accepted form. Tokens in a query string are never read
 - [ ] **Never trust the peer address.** No rule anywhere skips auth for loopback requests; the only inputs are the header and the token file
-- [ ] One table `ENDPOINT_SCOPES` maps each route to its required scope (`read` for listings, discovery, status, feed, page; `submit` for `POST /submissions`; `submit` includes `read`). The required scope is checked at request time against this table; `403 insufficient_scope` is produced only there. Routes are checked against the table in a test so a new route without an entry fails
-- [ ] Wire the app to call the authenticator before every handler (middleware or one dependency), and map outcomes through the error table: no/wrong/revoked token → `401 unauthenticated` with `WWW-Authenticate: Bearer`; insufficient scope → `403 insufficient_scope`
-- [ ] Fallback if scopes were not ratified: every valid token passes; omit the scope column and `ENDPOINT_SCOPES`
+- [ ] `ENDPOINT_SCOPES` and the `add_route` wrapper already exist (Task 3.5a) and every endpoint is registered through it. Verify the table's rows: `read` for listings, discovery, status, feed, page; `submit` for `POST /submissions`; `submit` includes `read`. A test lists every registered route and checks it has a row
+- [ ] Outcomes map through the error table: no/wrong/revoked token → `401 unauthenticated` with `WWW-Authenticate: Bearer`; insufficient scope → `403 insufficient_scope`
+- [ ] Fallback if scopes were not ratified: every valid token passes; omit the scope column and ignore `required_scope`
 
 **Success Criteria**:
 - [ ] Commit with Task 6.4
@@ -94,7 +94,6 @@ status: not_started
 - [ ] A missing, unreadable, or malformed file at request time → `503 auth_unavailable` for every request, including ones whose token was valid before. No fallback to a last good copy or a skipped line
 - [ ] A valid file with no matching token, including a valid empty file after every token is revoked → `401 unauthenticated` (a deliberate revocation, not a fault)
 - [ ] Logging: ERROR once when the file goes bad, naming the cause and the line number if malformed; INFO once when it is valid again. Track the last-known state in the authenticator so it does not log per request. This state is a log-dedup flag only and is never used to authorize
-- [ ] **Access log mechanism:** add one ASGI middleware in `serve/app.py` that logs method, path (no query string), status, and principal name at INFO on logger `amoeba.serve.access`, and never headers. Task 7.1 turns off uvicorn's own access log (which would be a second, unmanaged format), so this middleware is the only access log. It runs inside `TestClient`, so the tests below can observe it
 
 **Success Criteria**:
 - [ ] Commit with Task 6.5
@@ -110,12 +109,28 @@ status: not_started
 **Steps**:
 - [ ] `tests/serve/test_auth.py`, `TestClient` with `TokenAuth`: no token, wrong token, and a revoked token are `401` including requests presented as coming from `127.0.0.1`; a valid `read` token reads but a `submit`-requiring route is `403 insufficient_scope`; a `submit` token reads and submits. Iterate every route in the app against `ENDPOINT_SCOPES`
 - [ ] File failures, table-driven: delete the file, `chmod 000`, add a malformed line → every request `503 auth_unavailable` with exactly one ERROR logged (capture with `caplog`); restore → service resumes with exactly one INFO. Revoke the last token → `401`, no ERROR
-- [ ] Tokens never appear in logs: with `caplog` capturing `amoeba.serve.access` and the root logger during an authenticated request, assert one access record exists with method, path, status, and principal, and the token string appears in no record. Add the same assertion for a request that fails with `401`
 - [ ] `NoAuth`: all endpoints open
 
 **Success Criteria**:
 - [ ] Tests pass; suite clean
+- [ ] These are logic-level tests with `TestClient`. The subprocess auth-refusal tests the Technical Requirements call for are Task 7.3a
 - [ ] Commit, e.g. `feat: add token authentication with scopes` (includes Tasks 6.3–6.4)
+
+---
+
+### Task 6.5a: Access-log middleware
+**Owner**: Junior AI
+**Dependencies**: Task 6.5
+**Effort**: 2
+**Objective**: One access log that records who did what and never a credential (LLD D6 "Secrets stay out of logs").
+
+**Steps**:
+- [ ] Add one ASGI middleware in `serve/app.py` that logs method, path (no query string), status, and principal name at INFO on logger `amoeba.serve.access`, and never headers. Task 7.1 turns off uvicorn's own access log (a second, unmanaged format), so this is the only access log
+- [ ] Tests in `tests/serve/test_access_log.py` with `caplog` capturing `amoeba.serve.access` and the root logger: one access record exists with method, path, status, and principal for an authenticated request; the token string appears in no record; the same for a request that fails with `401` and one that fails with `503 auth_unavailable`
+
+**Success Criteria**:
+- [ ] Tests pass; suite clean
+- [ ] Commit, e.g. `feat: add serve access log`
 
 ---
 
@@ -162,7 +177,7 @@ status: not_started
 **Objective**: Revocation takes effect on open streams within `heartbeat_seconds` (LLD D6).
 
 **Steps**:
-- [ ] Make the Task 5.5 heartbeat hook call the real authenticator: re-read the token file and re-check presence and scope sufficiency (`read`). On failure send one terminal event, `event: closed` with `data: {"code": …}` where the code is the `ApiErrorCode` member `authorize` returned (`unauthenticated` or `auth_unavailable`; never retyped strings). With only the scopes `read` and `submit`, and `submit` including `read`, no valid token can fall below `read`, so `insufficient_scope` cannot occur on an open stream; the LLD's "scope lowered to below `read`" has no producing case. Report this LLD inconsistency to the PM in Task 8.5. After the terminal event, close the stream through `StreamWorker.close()`
+- [ ] Make the Task 5.5 heartbeat hook call the real authenticator (`authorize(principal, TokenScope.read)`): re-read the token file and re-check presence and scope sufficiency (`read`). On failure send one terminal event, `event: closed` with `data: {"code": …}` where the code is the `ApiErrorCode` member `authorize` returned (`unauthenticated` or `auth_unavailable`; never retyped strings). With only the scopes `read` and `submit`, and `submit` including `read`, no valid token can fall below `read`, so `insufficient_scope` cannot occur on an open stream; the LLD's "scope lowered to below `read`" has no producing case. Report this LLD inconsistency to the PM in Task 8.5. After the terminal event, close the stream through `StreamWorker.close()`
 - [ ] The check runs at every heartbeat tick whether or not events are flowing
 - [ ] Tests in `tests/serve/test_stream_auth.py` (real server, `http.client`, small `heartbeat_seconds`): revoke the token → `closed` with `unauthenticated` within the bound; lower the principal from `submit` to `read` (rewrite the file) → the stream stays open; break the file → every open stream gets `auth_unavailable`; thread count returns to zero after each; with `NoAuth` nothing is re-checked
 
@@ -180,7 +195,8 @@ status: not_started
 
 **Steps**:
 - [ ] Add `SERVE_REFUSED = 12` to the `ExitCode` enum (definition in the 102 location found by `grep -n "class ExitCode"`). Fallback if not ratified: use `FAILURE` and skip the enum change
-- [ ] Create `serve/startup.py` with one function `check_startup(settings, supervisor_dir)` that raises a `ServeRefusedError` naming the missing piece. Rules: non-loopback host with `auth=none` refused; non-loopback without `tls_cert`/`tls_key` refused (both required together; one without the other is refused for any host); `auth=tokens` with the token file missing, unreadable, malformed, or empty refused
+- [ ] Create `serve/startup.py` with one function `check_startup(settings, supervisor_dir)` that raises a `ServeRefusedError` naming the missing piece. Rules, exactly the LLD's: non-loopback host with `auth=none` refused; non-loopback without TLS refused, where TLS counts as configured only when both `tls_cert` and `tls_key` are set; `auth=tokens` with the token file missing, unreadable, malformed, or empty refused
+- [ ] The LLD is silent on a lone `--tls-cert` or `--tls-key` on a loopback bind. Add no rule for it: pass the settings to uvicorn unchanged and let its own error surface. Report this gap to the PM in Task 8.5
 - [ ] Tests (`tests/serve/test_startup.py`), table-driven over host × auth × TLS × token-file state: every refusal names its reason; loopback + `none` starts; loopback + `tokens` + valid file starts; `0.0.0.0` and `::` count as non-loopback
 
 **Success Criteria**:
@@ -230,12 +246,29 @@ status: not_started
 
 **Steps**:
 - [ ] `tests/serve/test_serve_cli.py` (subprocess, `http.client`, ephemeral port): `amoeba serve` serves `/v1/listings` on `127.0.0.1`; `--host 0.0.0.0` without `--auth tokens` exits `12` with the reason on stderr; with tokens and no token file exits `12`; with tokens but no TLS exits `12` (expected codes follow the rulings: `1` under the `SERVE_REFUSED` fallback; no TLS refusal under the TLS fallback)
-- [ ] Settings flags change behavior (e.g. a small `--max-feed-streams` produces `503 too_many_streams` at the cap)
+- [ ] Settings flags change behavior: a small `--max-feed-streams` produces `503 too_many_streams` at the cap, **and a listing read still succeeds while the cap is full**
 - [ ] No uvicorn access-log lines appear on stderr; the middleware's access lines do, and none contains a token
 
 **Success Criteria**:
 - [ ] Tests pass; suite, `ruff`, `pyright` clean
 - [ ] Commit, e.g. `feat: add amoeba serve command` (includes Tasks 7.1–7.2)
+
+---
+
+### Task 7.3a: Subprocess auth-refusal tests
+**Owner**: Junior AI
+**Dependencies**: Task 7.3
+**Effort**: 3
+**Objective**: The auth rules hold in the real process, as the Technical Requirements require (subprocess, stdlib `http.client`).
+
+**Steps**:
+- [ ] `tests/serve/test_serve_auth_process.py`: start `amoeba serve --auth tokens` with tokens made by `amoeba token add`. No token, wrong token, and a revoked token (revoked with `amoeba token revoke` while the server runs) are `401`, from a client connecting to `127.0.0.1`. A `read` token posting a submission is `403 insufficient_scope`; a `submit` token with a different `submitted_by` is `403 principal_mismatch`
+- [ ] Token-file failure: `chmod 000` the file → every request `503 auth_unavailable`, and the server's stderr holds exactly one ERROR line; restore it → service resumes with exactly one INFO line; no stderr line contains a token. Revoking the last token → `401`
+- [ ] An open stream whose token is revoked receives `event: closed` with `unauthenticated` within `heartbeat_seconds` (small value) plus a margin
+
+**Success Criteria**:
+- [ ] Tests pass; suite clean
+- [ ] Commit, e.g. `test: pin auth behavior in the serve process`
 
 ---
 
@@ -265,7 +298,7 @@ status: not_started
 **Steps**:
 - [ ] `tests/serve/test_serve_bounds.py`: `SIGTERM` with an open stream ends the stream and the process within `shutdown_grace_seconds` plus a margin; stream thread count reaches zero (observed through the clean exit and the closed stream)
 - [ ] `max_connections`: past the limit uvicorn answers `503`, and the server keeps serving afterward
-- [ ] Re-run the Task 5.8 stall scenario against `amoeba serve` (same assertions)
+- [ ] Re-run the Task 5.9 stall scenario (never-reading socket closed within the bound, memory flat, `Last-Event-ID` resume) and the cap-with-listing-read case against `amoeba serve` instead of `server_main.py`
 
 **Success Criteria**:
 - [ ] Tests pass without flakiness on three consecutive runs; suite clean
@@ -292,32 +325,81 @@ status: not_started
 
 ## Section 8: End-to-End, Docs, and Final Validation
 
-### Task 8.1: End-to-end and independence tests
+### Task 8.1: End-to-end flow test
 **Owner**: Junior AI
 **Dependencies**: Task 7.6
-**Effort**: 5
-**Objective**: The LLD Integration Requirements as subprocesses.
+**Effort**: 4
+**Objective**: The LLD Integration Requirements flow, as subprocesses.
 
 **Steps**:
-- [ ] `tests/serve/test_network_end_to_end.py`: start the resident process and `amoeba serve` as subprocesses on a temp supervisor dir; create a project and seed a blocked node (reuse 106's `scripts/demo_detection.py` or its harness); follow the feed over SSE; read the `escalation` message to find the `blocked_state_id`; resolve the block with `POST /submissions` (a `resolution`); see the `node_status_changed` event; `kill -9` the resident process; submit again (status `pending`); restart it; see the event and `applied`, with the SSE stream never dropped
-- [ ] Independence: `kill -9` the server → the resident process still runs (`amoeba status`), the store is unchanged, and `inspect` works; restart the server, `kill -9` the resident process → reads, the stream, and submissions keep working
-- [ ] The transcript of the SSE stream equals `amoeba feed --project P` read from 0
-- [ ] Authenticated variant: repeat the submit step with a `submit` token and `--auth tokens`
+- [ ] `tests/serve/test_network_end_to_end.py`: start the resident process and `amoeba serve` on a temp supervisor dir; create a project and seed a blocked node (reuse 106's detection demo script or harness); follow the feed over SSE; read the `escalation` message to find the `blocked_state_id`; resolve the block with `POST /submissions` (a `resolution`); see the `node_status_changed` event
+- [ ] `kill -9` the resident process; submit again (status `pending`); restart it; see the event and `applied`, with the SSE stream never dropped
+- [ ] The SSE transcript equals `amoeba feed --project P` read from 0
 
 **Success Criteria**:
 - [ ] Tests pass on three consecutive runs; suite clean
-- [ ] Commit, e.g. `test: add network end-to-end and independence tests`
+- [ ] Commit, e.g. `test: add network end-to-end flow test`
+
+---
+
+### Task 8.1a: Independence tests
+**Owner**: Junior AI
+**Dependencies**: Task 8.1
+**Effort**: 3
+**Objective**: Killing either process leaves the other working (LLD Success Criteria).
+
+**Steps**:
+- [ ] `tests/serve/test_serve_independence.py`: `kill -9` the server → the resident process still runs (`amoeba status`), the store is unchanged, and `inspect` works
+- [ ] Restart the server, `kill -9` the resident process → reads, the stream, and submissions keep working; the submissions apply when the process is started again
+
+**Success Criteria**:
+- [ ] Tests pass on three consecutive runs; suite clean
+- [ ] Commit, e.g. `test: pin serve and resident process independence`
+
+---
+
+### Task 8.1b: Authenticated end-to-end variant
+**Owner**: Junior AI
+**Dependencies**: Task 8.1a
+**Effort**: 2
+**Objective**: The submit path works end to end under `--auth tokens`.
+
+**Steps**:
+- [ ] Repeat the resolve step of Task 8.1 with `--auth tokens`: a `submit` token whose principal equals `submitted_by` resolves the block; the event appears on a stream opened with a `read` token
+
+**Success Criteria**:
+- [ ] Test passes; suite clean
+- [ ] Commit, e.g. `test: add authenticated network end-to-end variant`
+
+---
+
+### Task 8.1c: Serve load tests
+**Owner**: Junior AI
+**Dependencies**: Task 8.1b
+**Effort**: 4
+**Objective**: Concurrency and process-boundary behavior at scale, in the existing load tier that CI already runs as a separate, gating step.
+
+**Steps**:
+- [ ] Read `tests/load/__init__.py`, `conftest.py`, and `load_harness.py` first and reuse the shared process harness (`tests/host_harness.py`); do not copy it
+- [ ] `tests/load/test_serve_streams.py` with a real resident process and a real `amoeba serve`: `max_feed_streams` concurrent SSE clients while a submitter posts and the resident process commits hundreds of changes; every client's transcript equals `amoeba feed` from 0 (no gap, no repeat); no stream thread outlives its client afterward
+- [ ] Stalled clients at the cap: fill every slot with never-reading sockets; slots free within the stall bound plus a margin, resident memory stays flat, and listing reads succeed throughout
+- [ ] Latency under load: with the streams above open, a change committed after a quiet period reaches a follower within the LLD bound (`follow_interval_seconds` plus delivery, with a generous margin)
+- [ ] Confirm `uv run pytest tests/load` collects the new file and that `.github/workflows/ci.yml` needs no change. These tests must not be marked skip or xfail
+
+**Success Criteria**:
+- [ ] `uv run pytest tests/load` passes on three consecutive runs; the default suite does not collect these tests
+- [ ] Commit, e.g. `test: add serve load tests`
 
 ---
 
 ### Task 8.2: `docs/network-contract.md`
 **Owner**: Junior AI
-**Dependencies**: Task 8.1
+**Dependencies**: Task 8.1c
 **Effort**: 3
 **Objective**: Enough for initiative 160 to build the bridge's client without reading code.
 
 **Steps**:
-- [ ] Create `docs/network-contract.md` (with the YAML frontmatter the docs convention requires): endpoint table with scopes, success and error statuses and codes (taken from the error table, not retyped by hand where a generator is practical); auth modes, token file format, scopes, principal binding; SSE event format, resume rules, heartbeat, terminal `closed` event; the `feed/page` vs `changes` listing distinction; retry guidance (always send your own `submission_id`); `ServeSettings` bounds; same-host statement (`amoeba serve` runs on the supervisor's machine; remote parts reach it over the network, not by mounting its directory); proxies (run `--auth tokens`; never trust source address); revocation latency (`heartbeat_seconds` for open streams); no secrets in payloads; the slow-header finding from Task 7.6; the Task 5.8 result; the fallback applied for any ruling that was "no" (per the matrix in the Context Summary); the same-machine trust note for `--auth none`
+- [ ] Create `docs/network-contract.md` (with the YAML frontmatter the docs convention requires): endpoint table with scopes, success and error statuses and codes (taken from the error table, not retyped by hand where a generator is practical); auth modes, token file format, scopes, principal binding; SSE event format, resume rules, heartbeat, terminal `closed` event; the `feed/page` vs `changes` listing distinction; retry guidance (always send your own `submission_id`); `ServeSettings` bounds; same-host statement (`amoeba serve` runs on the supervisor's machine; remote parts reach it over the network, not by mounting its directory); proxies (run `--auth tokens`; never trust source address); revocation latency (`heartbeat_seconds` for open streams); no secrets in payloads; the slow-header finding from Task 7.6; the Task 5.7 result; the fallback applied for any ruling that was "no" (per the matrix in the Context Summary); the same-machine trust note for `--auth none`
 - [ ] Mark the doc as written from the final code, not the design; fix any mismatch with the LLD in the doc and note it for Task 8.4
 
 **Success Criteria**:
@@ -371,7 +453,7 @@ status: not_started
 - [ ] Re-run the byte-comparison test: `amoeba inspect` output is unchanged from the Task 1.2 baseline
 - [ ] Check Technical Requirements by test or grep: no re-export shims; no `argparse` in `amoeba.inspection`; `amoeba.serve` imports nothing from `amoeba.process` or `amoeba.cli`; the store imports nothing from `amoeba.serve`, `amoeba.inspection`, or `amoeba.feed`; every word list is defined once; the writer guard covers `amoeba.serve` and `amoeba.inspection`; files near 300 lines (list any larger)
 - [ ] Walk the LLD Success Criteria list and name the test covering each; list any criterion without one and add the test
-- [ ] Report to the PM: the five rulings and where any fallback was applied; the uvicorn `send` and slow-header findings; the `openssl` CLI dependency of the TLS test; and each departure from the LLD: `FeedSettings` held in `app.state` with no feed flags (file 2), `cli/token.py` importing `serve.tokens` (Task 6.6), and the open-stream `insufficient_scope` case that cannot occur (Task 6.8); plus any file over 300 lines
+- [ ] Report to the PM: the five rulings and where any fallback was applied; the uvicorn `send` and slow-header findings; the `openssl` CLI dependency of the TLS test; and each departure from the LLD: the listing types in `inspection/types.py` instead of `registry.py` (file 1, Task 2.1); the lone-TLS-flag gap (Task 6.9); `FeedSettings` held in `app.state` with no feed flags (file 2), `cli/token.py` importing `serve.tokens` (Task 6.6), and the open-stream `insufficient_scope` case that cannot occur (Task 6.8); plus any file over 300 lines
 
 **Success Criteria**:
 - [ ] All checks clean; every Success Criterion maps to a passing test

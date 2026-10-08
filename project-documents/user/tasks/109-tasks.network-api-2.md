@@ -13,10 +13,11 @@ status: not_started
 ## Context Summary
 
 - Continuation file for the **network-api** slice (109). See `109-tasks.network-api-1.md` for the full context summary, branch rule, reading note, PM-ratification note, and commit cadence; they apply here unchanged.
-- **This file:** Section 3 continued (project-scoped listing endpoints), Section 4 (`inbox.locate` and submissions), Section 5 (the feed: `feed/page`, the stream worker, SSE, bounds, and the stall verification).
+- **This file:** Section 3 continued (project-scoped listing endpoints), Section 4 (`inbox.locate` and submissions), Section 5 (the feed: `feed/page`, the stream worker, SSE, the uvicorn backpressure check, and the cap and stall bounds).
 - **Authentication placeholder:** until Section 6, `build_app` takes `NoAuth` (defined in Task 3.5a). Streams call the authenticator's `authorize()` at every heartbeat tick; Task 6.8 supplies the real check and its tests. Do not add token logic in this file.
 - **Feed settings:** the LLD's `ServeSettings` has no feed fields. `build_app` stores a default-constructed `FeedSettings` (106; read how 106 constructs it) at `app.state.feed_settings`; every feed endpoint reads it there, and tests replace it before serving (for small intervals). No new flags are added for it. Task 8.5 reports this to the PM.
-- **Server harness:** streaming tests need a real server. Task 5.5 adds `tests/serve/server_harness.py`, which runs `uvicorn.Server` for a built app in a thread on an ephemeral port; Task 7.1's `server.run` reuses the same uvicorn settings but not the harness.
+- **Server harness:** streaming tests need a real server. Task 5.5 adds `tests/serve/server_harness.py` (uvicorn in a thread, ephemeral port) and `tests/serve/server_main.py` (the same in its own process, for tests that need a pid). Task 7.1's `server.run` is separate; Task 7.5 repeats the process-level cases against the real command.
+- **Endpoint wiring:** every endpoint here registers through `add_route` (Task 3.5a) and adds its row to `ENDPOINT_SCOPES`.
 - **Next file:** `109-tasks.network-api-3.md` (Sections 6–8).
 
 ---
@@ -30,7 +31,7 @@ status: not_started
 **Objective**: `GET /v1/projects/{project}/listings/{name}?…` with rows and `change_head` from one snapshot (LLD Data Flow "A read", D3, D3a, D5a).
 
 **Steps**:
-- [ ] In `serve/reads.py`, add the endpoint: `validate_project_id` (→ `invalid_project_id`), listing exists and is project-scoped (else `unknown_listing`), `query_from_params`, store path via `store_path_for(supervisor_dir, project)`; a project with no store file is `unknown_project`
+- [ ] In `serve/reads.py`, add the endpoint, registered through `add_route` with `ENDPOINT_SCOPES` row `read` (Task 3.5a): `validate_project_id` (→ `invalid_project_id`), listing exists and is project-scoped (else `unknown_listing`), `query_from_params`, store path via `store_path_for(supervisor_dir, project)`; a project with no store file is `unknown_project`
 - [ ] Open with `Store.open_read_only(path, busy_timeout_seconds=settings.store_busy_timeout_seconds)`. Inside `store.read_transaction()` call the listing's rows (through `read_listing` if Task 2.10 added it, else `listing.rows(store, query)`) and `store.change_head(project)`; close the store in a `finally`/context manager
 - [ ] If `len(rows) > settings.max_listing_rows`, raise `listing_too_large` (413) with the row count in the message and a hint to narrow (`node=`, `unresolved=true`, `channel=`). Never truncate
 - [ ] Respond `200 {"listing", "columns", "rows": encode_rows(rows), "change_head": head}`
@@ -54,7 +55,7 @@ status: not_started
 - [ ] `max_listing_rows`: build the app with a tiny limit; a listing over it → `413 listing_too_large` with the count in the body and no `rows` key
 - [ ] `StoreBusyError` (patch the open to raise it) → `503 store_busy` with `Retry-After`. A store at an unexpected schema version → `503 store_unavailable` while another project still serves
 - [ ] Unknown project → `404 unknown_project`; bad project id → `400 invalid_project_id`; unknown listing → `404 unknown_listing`; `changes` listing with an unknown verdict → `404 not_found`; not comparable → `409 not_comparable`
-- [ ] Add `amoeba/serve` to `test_writer_guard.py`'s scanned set (no module permitted a read-write open) and assert endpoints leave the store file bytes and `PRAGMA data_version` unchanged after a read
+- [ ] Assert endpoints leave the store file bytes and `PRAGMA data_version` unchanged after a read
 
 **Success Criteria**:
 - [ ] Tests pass; suite, `ruff`, `pyright` clean
@@ -120,7 +121,7 @@ status: not_started
 **Objective**: Inbox submission over HTTP through `amoeba.inbox.submit()` and nothing else (LLD D4).
 
 **Steps**:
-- [ ] Create `serve/writes.py`. Read the body incrementally within `settings.request_body_timeout_seconds` and cap at `settings.max_request_bytes` **while reading**, before parsing: over size → `413 request_too_large`; not complete in time → `408 request_timeout`. The body must be a JSON object, else `422 invalid_submission` with a reason (bad JSON and wrong types are client errors, not 500s)
+- [ ] Create `serve/writes.py`, registered through `add_route` with `ENDPOINT_SCOPES` row `submit`. Read the body incrementally within `settings.request_body_timeout_seconds` and cap at `settings.max_request_bytes` **while reading**, before parsing: over size → `413 request_too_large`; not complete in time → `408 request_timeout`. The body must be a JSON object, else `422 invalid_submission` with a reason (bad JSON and wrong types are client errors, not 500s)
 - [ ] Fields: `kind`, `payload` (omitted means `{}`), `submitted_by`, optional `submission_id`. Call `amoeba.inbox.submit(project_id, kind, payload, submitted_by, submission_id, store_dir)` and nothing else; no per-kind code, no kind list. `validate_project_id` first
 - [ ] `InvalidSubmissionError` → `422 invalid_submission` carrying its quarantine `reason`; `SubmissionWriteError` → `503 submission_write_failed` (both via the error table; message states nothing was written)
 - [ ] Success: `202 {"submission_id"}`. Do not pre-check that the project has a store (a client that just submitted `create_project` is correct)
@@ -160,7 +161,7 @@ status: not_started
 **Objective**: `GET /v1/projects/{project}/submissions/{id}` reports `applied`, `rejected`, `pending`, `quarantined`, or `failed` (LLD Data Flow "Submission status").
 
 **Steps**:
-- [ ] Add `SubmissionState` (`StrEnum`) to `serve/` (once): `applied`/`rejected` reuse the store's outcome enum values by reference, not retyped
+- [ ] Register through `add_route` with `ENDPOINT_SCOPES` row `read`. Add `SubmissionState` (`StrEnum`) to `serve/` (once): `applied`/`rejected` reuse the store's outcome enum values by reference, not retyped
 - [ ] Up to two passes of: `store.submission(id)` if the store exists (read-only open, as in Task 3.8) → `applied | rejected` (include `applied_seq` when applied and `reason` when rejected); then `inbox.locate(id)` → `pending | quarantined | failed` with `reason`; then `store.submission(id)` again. Nothing found in either pass → `404 unknown_submission`
 - [ ] Tests (`tests/serve/test_submission_status.py`): `pending` after submit; `applied` after the apply helper; `rejected` for a rejected record; `quarantined` with reason `no_store_for_project` for an `intent` into a project with no store; `failed` for a parked file; unknown id → `404`; bad project id → `400`
 
@@ -195,7 +196,7 @@ status: not_started
 **Objective**: `GET /v1/projects/{project}/feed/page?after=N[&limit=M]`, the non-streaming form (LLD D5).
 
 **Steps**:
-- [ ] Set `app.state.feed_settings` in `build_app` as described in the Context Summary. Create `serve/stream.py` (page endpoint first). `after` is required: missing or non-integer → `400 invalid_query` naming `after`. `limit` defaults to `FeedSettings.feed_batch_size` and may not exceed it (over → `400 invalid_query`)
+- [ ] Set `app.state.feed_settings` in `build_app` as described in the Context Summary. Create `serve/stream.py` (page endpoint first), registered through `add_route` with `ENDPOINT_SCOPES` row `read`. `after` is required: missing or non-integer → `400 invalid_query` naming `after`. `limit` defaults to `FeedSettings.feed_batch_size` and may not exceed it (over → `400 invalid_query`)
 - [ ] Open the store read-only (errors before any body, as in Task 3.8), read one page with 106's changes reader, return `{"changes": [change_as_json(c)…], "next_after"}`. `next_after` is the last `seq`, or `after` when empty
 - [ ] Do not reuse the `changes` listing; the two names are unrelated (LLD D5)
 
@@ -258,12 +259,14 @@ status: not_started
 **Objective**: `GET /v1/projects/{project}/feed` as `text/event-stream` (LLD D5, API Contracts), without the cap and stall bounds (Task 5.7).
 
 **Steps**:
+- [ ] Register through `add_route` with `ENDPOINT_SCOPES` row `read`
 - [ ] Cursor: `Last-Event-ID` if present, else `?after=N`; neither → `400 invalid_query` naming both forms. Never default to 0 or to the head
 - [ ] Before sending headers: authenticate, validate the project, open the store read-only to prove it opens (so `404`/`503` are real status codes). Headers include `Cache-Control: no-store`. Event format: `id: {seq}\nevent: change\ndata: {change_as_json}\n\n`
-- [ ] Nothing to send for `settings.heartbeat_seconds` → send `: keepalive\n\n`. At each heartbeat tick call `authenticator.authorize(principal)`; if it returns a denial code, send one terminal `event: closed` with `data: {"code": …}` and end the stream (a no-op for `NoAuth`; Task 6.8 tests it)
+- [ ] Nothing to send for `settings.heartbeat_seconds` → send `: keepalive\n\n`. At each heartbeat tick call `authenticator.authorize(principal, TokenScope.read)` with the principal captured when the stream opened; if it returns a denial code, send one terminal `event: closed` with `data: {"code": …}` and end the stream (a no-op for `NoAuth`; Task 6.8 tests it)
 - [ ] Client disconnect ends the stream through `StreamWorker.close()`
 - [ ] **Shutdown lives in the app, not in the launcher:** register a Starlette lifespan shutdown handler in `build_app` that sets the stop event of every open stream. Keep a registry of open workers on `app.state` for this
-- [ ] Create `tests/serve/server_harness.py`: a context manager that runs `uvicorn.Server` for a given app in a thread on an ephemeral port and stops it by setting `should_exit`, so the lifespan shutdown handler runs. It is the only server launcher the Section 5 tests use
+- [ ] Create `tests/serve/server_harness.py`: a context manager that runs `uvicorn.Server` for a given app in a thread on an ephemeral port and stops it by setting `should_exit`, so the lifespan shutdown handler runs. It is the launcher the Section 5 tests use, except the subprocess cases below
+- [ ] Create `tests/serve/server_main.py`, a test-only entry point (`python tests/serve/server_main.py <supervisor_dir> <port> [settings as JSON]`) that builds the app with `NoAuth` and runs uvicorn in its own process. Tests that need the server's own pid (memory readings, `kill`) launch it with `subprocess`. It exists because `amoeba serve` does not yet exist; Task 7.5 repeats those cases against the real command
 
 **Success Criteria**:
 - [ ] Commit with Task 5.6
@@ -289,54 +292,55 @@ status: not_started
 
 ---
 
-### Task 5.7: Stream cap and stall bound
+### Task 5.7: Verify uvicorn's `send` waits for a non-reading client (D5 stop-and-ask check)
 **Owner**: Junior AI
 **Dependencies**: Task 5.6
+**Effort**: 3
+**Objective**: Establish, before any stall bound is built on it, that uvicorn's `send` waits when a peer stops reading (LLD D5 and D5a). This test uses no Amoeba code, so it cannot be confused by our own bound.
+
+**Steps**:
+- [ ] Create `tests/serve/probe_app.py`, a tiny ASGI app that streams fixed-size chunks forever and increments a counter file each time `await send(...)` returns. Launch it in a subprocess with `sys.executable -m uvicorn --app-dir <tests/serve> probe_app:app` on an ephemeral port
+- [ ] `tests/serve/test_uvicorn_send_waits.py`: open a raw socket with a small `SO_RCVBUF`, send the GET, and never read. Poll the counter and the server's resident memory (`ps -o rss= -p <pid>`). Assert (a) the counter stops increasing within a short time (sends are waiting, not returning), and (b) resident memory stays flat while the counter is stalled
+- [ ] **If (a) or (b) fails, STOP.** It means `send` returns while uvicorn buffers in memory, and no application-level timeout can detect a stalled stream. Do not hand-roll a transport workaround. Tell the PM; the candidate remedy is Hypercorn under the same Starlette app (LLD D5). Record the outcome (pass or fail, uvicorn version) in the task notes for Task 8.2
+
+**Success Criteria**:
+- [ ] The test passes, or work has stopped with the PM informed
+- [ ] Commit, e.g. `test: verify uvicorn send backpressure`
+
+---
+
+### Task 5.8: Stream cap and stall bound
+**Owner**: Junior AI
+**Dependencies**: Task 5.7
 **Effort**: 3
 **Objective**: Bound the two ways a remote client can hold a stream slot (LLD D5, D5a).
 
 **Steps**:
 - [ ] A limiter of `settings.max_feed_streams` slots, separate from Starlette's thread pool (reads and submissions must still work at the cap). Past the cap: `503 too_many_streams` with `Retry-After`. Acquire after the pre-stream checks; release in a `finally` on every exit path
 - [ ] Every send (events and keepalives) must complete within `settings.stream_stall_seconds`, else log at INFO with the principal and last `seq` sent, close the stream through `StreamWorker.close()`, and free the slot
-- [ ] Do not wrap the stall bound in any transport workaround; Task 5.8 verifies that it is able to fire
+- [ ] The bound is a plain timeout around `send`; no transport workaround (Task 5.7 showed it can fire)
 
 **Success Criteria**:
-- [ ] Commit with Task 5.8
+- [ ] Commit with Task 5.9
 
 ---
 
-### Task 5.8: Verify uvicorn's `send` drains (D5 stop-and-ask check)
-**Owner**: Junior AI
-**Dependencies**: Task 5.7
-**Effort**: 3
-**Objective**: Establish, not assume, that a never-reading client makes uvicorn's `send` wait (LLD D5 and D5a).
-
-**Steps**:
-- [ ] `tests/serve/test_stream_stall.py` using the server harness with a small `stream_stall_seconds`. Open a raw socket with a small `SO_RCVBUF`, send the GET, read nothing. Produce enough changes to fill the socket buffers. Assert (a) the server closes the stream within `stream_stall_seconds` plus a margin, (b) the server's resident memory (read with `ps -o rss= -p <pid>`; run the server as a subprocess for this test so the pid is its own) stays flat while waiting, (c) the slot is freed
-- [ ] Then reconnect with `Last-Event-ID` set to the last id received before the stall and assert the stream resumes with no gap and no repeat
-- [ ] **If (a) or (b) fails, STOP.** It means `send` returns while uvicorn buffers in memory and no application-level timeout can detect the stall. Do not hand-roll a transport workaround. Tell the PM; the candidate remedy is Hypercorn under the same Starlette app (LLD D5). Record the outcome (pass or fail, uvicorn version) in the task notes for Task 8.2
-
-**Success Criteria**:
-- [ ] The test passes, or work has stopped with the PM informed
-- [ ] Commit with Task 5.9 only if it passes
-
----
-
-### Task 5.9: Cap, cleanup, and backpressure tests
+### Task 5.9: Cap, stall, cleanup, and backpressure tests
 **Owner**: Junior AI
 **Dependencies**: Task 5.8
-**Effort**: 3
-**Objective**: The remaining stream Success Criteria.
+**Effort**: 4
+**Objective**: The stream Success Criteria for caps, stalls, and cleanup.
 
 **Steps**:
-- [ ] `tests/serve/test_stream_limits.py`: fill `max_feed_streams` (small) with open streams → the next is `503 too_many_streams` with `Retry-After`, and a listing read still succeeds
-- [ ] Fill every slot with non-reading clients; assert the slots free within the stall bound and a new stream is then accepted
+- [ ] `tests/serve/test_stream_limits.py` (server launched with `server_main.py` where a pid is needed, else the harness): fill `max_feed_streams` (small) with open streams → the next is `503 too_many_streams` with `Retry-After`, **and a listing read still succeeds at the cap**
+- [ ] Stall: a raw socket with a small receive buffer that never reads is closed within `stream_stall_seconds` plus a margin, the server's resident memory stays flat meanwhile, and the slot is freed. Then reconnect with `Last-Event-ID` set to the last id received before the stall: the stream resumes with no gap and no repeat
+- [ ] Fill every slot with non-reading clients; the slots free within the stall bound and a new stream is then accepted
 - [ ] Thread count: after client disconnect, after stall timeout, and after server shutdown, the live stream-thread count is zero
 - [ ] Backpressure: a slow but reading client never hits the stall bound; a non-reading client does not grow server memory and the worker stops reading the store
 
 **Success Criteria**:
 - [ ] Tests pass; suite clean
-- [ ] Commit, e.g. `feat: bound stream slots and stalled sends` (includes Tasks 5.7–5.8)
+- [ ] Commit, e.g. `feat: bound stream slots and stalled sends` (includes Task 5.8)
 
 ---
 
@@ -344,7 +348,7 @@ status: not_started
 **Owner**: Junior AI
 **Dependencies**: Task 5.9
 **Effort**: 3
-**Objective**: A blocked stream pins no snapshot; the latency bound holds (LLD D5, Success Criteria). These run in the default suite; the LLD sets no throughput target, so no separate load test or CI gate exists.
+**Objective**: A blocked stream pins no snapshot; the latency bound holds (LLD D5, Success Criteria). These are fast, single-client checks in the default suite; the same bound under concurrent load is checked in the load tier (Task 8.1c).
 
 **Steps**:
 - [ ] Checkpoint test (`tests/serve/test_stream_checkpoint.py`): fill a stream's buffer with a non-reading client, commit from a writer, run `PRAGMA wal_checkpoint(TRUNCATE)` from the writer connection, and assert `busy = 0`. If it fails, `follow()` is holding a read transaction across a `yield`; stop and tell the PM (106 interface). Do not work around it in the server
