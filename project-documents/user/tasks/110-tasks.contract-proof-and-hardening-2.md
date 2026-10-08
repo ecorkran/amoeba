@@ -15,7 +15,7 @@ status: not_started
 - Continuation of the **contract-proof-and-hardening** slice (110). Read File 1's Context Summary and reading note first; they apply here unchanged.
 - **Task numbers with letters (5.8a, 5.8b, 5.8c) are real tasks inserted to keep each commit tested; do them in order, as listed.**
 - **This file:** 5 `ProofRunner` and the clean run; 6 kill points and both subscribers; 7 restart matrix in the load tier; 8 locality under the sequence; 9 pruning; 10 docs and the contract index; 11 final validation.
-- **Hard gate:** Sections 5, 6, 7 and 8, Task 9.5, and Tasks 10.1 and 10.4–10.6 need 105–109 merged (Task 1.1's presence table), because they run or describe the clean sequence. Tasks 9.1–9.4 (pruning classifier and command) and 10.2–10.3 (store-contract update, Squadron entry) need only 101–104 and depend only on Sections 2–3, so they may be done out of numeric order while the gate is closed. If any of 105–109 is absent: do those tasks, then stop and tell the PM which slices block the rest. Do not stub a missing slice's API.
+- **Hard gate:** Sections 5, 6, 7 and 8, Task 9.5, and Tasks 10.1 and 10.4–10.6 need 105–109 merged (Task 1.1's presence table), because they run or describe the clean sequence. Tasks 9.0–9.4 (the pruning classifier and command) need 105 only, because they live in `amoeba.upstream.squadron`, the package 105 creates; they do not need 106–109. Tasks 10.2 and 10.3 need only 101–104 (and Task 1.2's method if it was added). If a needed slice is absent: do the tasks that do not need it, then stop and tell the PM which slices block the rest. Do not stub a missing slice's API.
 - **`ProofRunner` rule (LLD "Special Considerations"):** it follows a fixed table and keeps **no progress in memory**. Each tick it reads the store (`nodes_for_project`, `runnable`, `blocked`, `journal_entries`, `verdicts`), finds the first step whose "state afterwards" does not hold, and does that step. It makes exactly one decision: re-issue after an `unknown` entry whose block was resolved. Add nothing else.
 - **Waits:** every wait is "until a public-state condition holds, with a timeout" (Task 4.6's `wait_until`). No fixed sleeps.
 
@@ -36,12 +36,13 @@ status: not_started
 - [ ] Define the step table as data: each row is a name, the "state that must hold afterwards" (a predicate over a store-reading view), and an action. Rows for runner-owned steps are 2, 3, 4, 6, 7, 11. Steps 1, 5, 8, 9, 10 are actors' (Task 5.5) and the runner only checks they have happened before continuing; its predicates for them read the store, never actor-side flags
 - [ ] `tick(host)` implements the `Tenant` protocol: for each project it is assigned (`proof`, and `proof-b` for steps 1–3), find the first row whose predicate is false and either do its action or return, if it waits on an actor. Return the tenant's "did work" boolean as the protocol requires (read `Tenant.tick` in `process/host.py`)
 - [ ] Define once, beside the enum, which side performs each kill (`KILL_OWNER`): the runner kills itself at `after-issue`, `after-launch`, and `after-step-N` for runner-owned steps 2, 3, 4, 6, 7, 11; the **harness** kills the host (`kill_host`) for `inbox-while-down` and for `after-step-N` of actor-owned steps 1, 5, 8, 9, 10, because the runner cannot observe those moments. `mid-follow` is deliberately not a kill point (see Task 6.1)
+- [ ] Kill points apply to project `proof` only. `proof-b` runs steps 1–3 through the same table but its rows never call `kill_here`, and the driver's harness-side kills key on `proof`'s state, so an `after-step-N` kill is never attributed to the wrong project
 - [ ] `kill_here(point)`: if the configured kill point equals `point`, `os.kill(os.getpid(), signal.SIGKILL)`. No mocks
 - [ ] Nothing in memory between ticks except the configuration. A second `ProofRunner` constructed fresh must continue from the store
 
 **Success Criteria**:
 - [ ] Module has the enum, the table type, `tick`, and `kill_here`; passes the public-only guard
-- [ ] Committed with Task 5.2
+- [ ] Committed with Task 5.3
 
 ### Task 5.2: Steps 2 and 4 — nodes, then block on judge
 **Owner**: Junior AI
@@ -81,7 +82,7 @@ status: not_started
 - [ ] Row 3 uses `journal_issue(sq_run)` on the slice node; calls `kill_here(after-issue)`; calls `fake_squadron.write_completed_run` and `write_review_round(1)` into the throwaway directories; calls `kill_here(after-launch)`; parses the artifact with 105's `parse_review_artifact`, converts with `to_verdict_input`, and calls 106's one-transaction report-back method (name from Task 1.1), passing the entry id, path, and digest. Use 106's `attribute_review` to confirm the slice node is the target. No other write
 - [ ] Predicate: the slice node has a verdict from this artifact, a `runner_issued` detection for that `(path, digest)`, and a `completed` or `adopted` journal entry. A tick that finds an `adopted` entry with no verdict skips the issue and launch and goes to the report-back (the `after-launch` recovery); a tick that finds the verdict recorded by detection first records nothing new (the report-back is a retry)
 - [ ] The one decision: an `unknown` entry whose human block is resolved leads to a fresh `journal_issue`. Everything else about `unknown` is left to the human actor
-- [ ] The same row runs for `proof-b` (steps 1–3 only), with its own slice node
+- [ ] The same row runs for `proof-b` (steps 1–3 only), with its own slice node, and with no kill calls (see Task 5.1)
 
 **Success Criteria**:
 - [ ] Row exists; no `Store` write other than `journal_issue`, node reads, and the report-back method appears in the file (grep)
@@ -170,6 +171,7 @@ status: not_started
 **Steps**:
 - [ ] Add `start_server()` to the harness: `amoeba token add --principal judge --scope submit` and `--principal subscriber --scope read` (the token is printed once; capture it from stdout), then start `amoeba serve --auth tokens` on a free loopback port bound to the throwaway supervisor directory. The server is never a kill target; the harness stops it only at the end
 - [ ] Create `tests/contract/judge_actor.py`. The Judge POSTs to `/v1/projects/proof/submissions` with `Authorization: Bearer` using the HTTP client recorded in Task 1.1: one `verdict` for the gate, two judge samples (same `judge_invocation_id`, each submitted separately, using 107's key), then a `resolution` for the judge block. Wait for each submission's state through `GET …/submissions/{id}` before the next
+- [ ] Every Judge submission sets `submitted_by` to the token's principal (`judge`). 109 refuses a body whose `submitted_by` differs from the principal (`403 principal_mismatch`); the resolution's `resolved_by` is therefore `judge`
 - [ ] Tokens never appear in logs or assertion messages
 
 **Success Criteria**:
@@ -183,26 +185,39 @@ status: not_started
 **Objective**: Scopes and the judge writes work as the sequence needs.
 
 **Steps**:
-- [ ] In `test_actors.py` add: a `read` token's POST is refused (`403`); a `submit` token's POST is accepted and applied (`wait_until` the submission state is applied); after the Judge runs against a gate that is `blocked_on_judge` (build it by running steps 2–4 through the host), the gate is `runnable` and two judge samples exist as separate records (read through `inspect verdicts --json`)
+- [ ] In `test_actors.py` add: a `read` token's POST is refused (`403`); a `submit` token's POST is accepted and applied (`wait_until` the submission state is applied); a `submit` token whose body `submitted_by` is not `judge` gets `403 principal_mismatch` and nothing is applied; after the Judge runs against a gate that is `blocked_on_judge` (build it by running steps 2–4 through the host), the gate is `runnable` and exactly two judge samples exist as separate records, read with `amoeba inspect verdicts --project proof --judge-invocation-id <J> --json` (107 adds that filter), with two distinct record ids
 
 **Success Criteria**:
 - [ ] Tests pass
 - [ ] Commit `test: add serve harness and Judge actor`
 
-### Task 5.9: The clean run
+### Task 5.9: The sequence driver and the clean run
 **Owner**: Junior AI
 **Dependencies**: 5.8c
-**Effort**: 4
-**Objective**: Drive steps 1–11 end to end with no kill, with `proof-b` interleaved.
+**Effort**: 3
+**Objective**: Drive steps 1–11 end to end with no kill.
 
 **Steps**:
-- [ ] Register `ProofRunner` in `proof_host.py` (Task 4.7 left it out). Create `test_lifecycle_proof.py` with a driver function `run_sequence(kill_point=None)` returning the final snapshot; the clean test calls it with `None`. The driver waits on each step's "state afterwards" with `wait_until`, then triggers the next actor. It accepts any `KillPoint`: for a point whose `KILL_OWNER` is the runner, it passes the point to the host environment; for a harness-owned point, it calls `kill_host` as soon as the named step's state-afterwards holds. In both cases it then restarts the host with no kill point and carries on. Section 7 reuses this driver unchanged
-- [ ] Assert the LLD functional criteria for the clean run: every node `done`; three verdicts (two review rounds and the Judge's); two judge samples recorded separately; one detection `ingested` (round 2), one `runner_issued` (round 1); nothing runnable or blocked; `finding_changes` on the round-2 verdict names round 1 as the previous round though one was recorded by the Runner and the other detected
-- [ ] Run `proof-b` through steps 1–3 interleaved (its create-project submitted between step 1 and step 2 of `proof`); assert neither project's `runnable`, `blocked`, `verdicts`, or feed ever shows the other's rows and that `inspect projects` lists both
-- [ ] Return the snapshot for later comparison; also return the paths of the runs directory and supervisor directory for Section 9
+- [ ] Register `ProofRunner` in `proof_host.py` (Task 4.7 left it out). Create `test_lifecycle_proof.py` with a driver function `run_sequence(kill_point=None)` returning the final snapshot and the runs and supervisor directory paths; the clean test calls it with `None`. The driver waits on each step's "state afterwards" with `wait_until`, then triggers the next actor
+- [ ] The driver accepts any `KillPoint`: for a point whose `KILL_OWNER` is the runner, it passes the point to the host environment; for a harness-owned point, it calls `kill_host` as soon as the named step's state-afterwards holds. In both cases it then restarts the host with no kill point and carries on. Section 7 reuses this driver unchanged
+- [ ] Clean test asserts the sequence reaches step 11: every node of `proof` is `done` and nothing is runnable or blocked
 
 **Success Criteria**:
 - [ ] The clean test passes three times in a row without flakes
+- [ ] Committed with Task 5.9a
+
+### Task 5.9a: Clean-run assertions and `proof-b` isolation
+**Owner**: Junior AI
+**Dependencies**: 5.9
+**Effort**: 3
+**Objective**: The LLD functional criteria for the clean run, and project keying.
+
+**Steps**:
+- [ ] Assert: three verdicts (two review rounds and the Judge's); two judge samples recorded separately; one detection `ingested` (round 2), one `runner_issued` (round 1); `finding_changes` on the round-2 verdict names round 1 as the previous round though one was recorded by the Runner and the other detected
+- [ ] Add `proof-b` to the driver: steps 1–3, with its create-project submitted between steps 1 and 2 of `proof`. Assert neither project's `runnable`, `blocked`, `verdicts`, or feed ever shows the other's rows and that `inspect projects` lists both. Put these assertions in a shared helper that Task 8.1 calls
+
+**Success Criteria**:
+- [ ] Tests pass three times in a row
 - [ ] Commit `test: add ProofRunner, actors, and the clean lifecycle run`
 
 ---
@@ -211,7 +226,7 @@ status: not_started
 
 ### Task 6.1: Expected-difference table
 **Owner**: Junior AI
-**Dependencies**: 5.9
+**Dependencies**: 5.9a
 **Effort**: 2
 **Objective**: Write down, once, how each kill point may differ from the clean snapshot.
 
@@ -234,7 +249,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Test passes three times in a row
-- [ ] Committed with Task 6.3
+- [ ] Commit `test: add after-issue kill run`
 
 ### Task 6.3: `after-launch` run
 **Owner**: Junior AI
@@ -247,7 +262,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Test passes three times in a row
-- [ ] Committed with Task 6.4
+- [ ] Commit `test: add after-launch kill run`
 
 ### Task 6.4: `inbox-while-down` run
 **Owner**: Junior AI
@@ -260,33 +275,60 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Test passes three times in a row
-- [ ] Commit `test: add after-issue, after-launch, inbox-while-down kill runs`
+- [ ] Commit `test: add inbox-while-down kill run`
 
-### Task 6.5: Subscribers — local feed and remote SSE
+### Task 6.4a: Deferred export pins
 **Owner**: Junior AI
 **Dependencies**: 6.4, 3.3
-**Effort**: 4
-**Objective**: Both subscribers stay up through every kill and their transcripts are checked (`mid-follow`).
+**Effort**: 1
+**Objective**: Finish any pin test Task 3.3 had to skip.
 
 **Steps**:
-- [ ] If the feed or squadron modules of Task 3.3 were skipped for a missing slice, write those pin tests now
-- [ ] Local subscriber: start `amoeba feed --project proof --follow` as a subprocess at the beginning of `run_sequence`, capturing stdout lines. Never restarted by the kill points
-- [ ] Remote subscriber: an SSE client against `amoeba serve` with a `read` token, reading `/v1/projects/proof/feed?after=0`; on disconnect or error it reconnects with `Last-Event-ID` set to the last `id:` it received. It runs in a thread of the test process using the stdlib or the HTTP client 109's tests use; keep the reconnect logic in one function. The server is never killed, so disconnects happen only if the server closes a stream; add one deliberate disconnect (the client closes its own connection once, mid-sequence) so resume is exercised
-- [ ] At the end of every run (clean and each kill run) assert: the local transcript equals `amoeba feed --project proof --after 0` printed at the end (no gap, no repeat, compare the `seq` lists and the full lines); replaying the transcript rebuilds each node's final status (apply `node_status_changed`-style changes by title; use the change vocabulary 106's contract lists); the remote transcript equals the local one (same `seq` list and same payloads)
-- [ ] Add `proof-b`'s rows to a separate check: nothing in `proof`'s transcripts carries `proof-b`
+- [ ] If the feed or squadron modules of Task 3.3 were skipped for a missing slice, write those pin tests now from the merged `__all__`. If none were skipped, do nothing
 
 **Success Criteria**:
-- [ ] The transcript checks run in the clean run and all three kill runs and pass
-- [ ] Commit `test: check feed and SSE transcripts across kills`
+- [ ] Pin tests pass; no skips remain
+- [ ] Commit `test: pin remaining public export sets` (or no commit if nothing was skipped)
+
+### Task 6.5: Local feed subscriber and transcript check
+**Owner**: Junior AI
+**Dependencies**: 6.4a
+**Effort**: 3
+**Objective**: The `amoeba feed --follow` subscriber stays up through every kill and its transcript is checked (`mid-follow`).
+
+**Steps**:
+- [ ] Start `amoeba feed --project proof --follow` as a subprocess at the beginning of `run_sequence`, capturing stdout lines. The kill points never restart it
+- [ ] At the end of every run (clean and each kill run) assert the transcript equals `amoeba feed --project proof --after 0` printed at the end: same `seq` list (no gap, no repeat) and the same lines
+- [ ] Replay the transcript: apply each change by node title using the change vocabulary 106's contract lists, and assert the rebuilt status of every node equals its final status
+- [ ] Assert nothing in the transcript carries `proof-b`
+
+**Success Criteria**:
+- [ ] The checks run in the clean run and all three kill runs, and pass
+- [ ] Commit `test: check local feed transcript across kills`
+
+### Task 6.5a: Remote SSE subscriber
+**Owner**: Junior AI
+**Dependencies**: 6.5
+**Effort**: 3
+**Objective**: The same contract proven through the network surface (109).
+
+**Steps**:
+- [ ] Add an SSE client against the `amoeba serve` from Task 5.8b with the `subscriber` (`read`) token, reading `/v1/projects/proof/feed?after=0`. It runs in a thread of the test process using the HTTP client recorded in Task 1.1. On disconnect or error it reconnects with `Last-Event-ID` set to the last `id:` it received. Keep the reconnect logic in one function
+- [ ] The server is never killed, so add one deliberate disconnect (the client closes its own connection once, mid-sequence) to exercise resume
+- [ ] At the end of every run assert the remote transcript equals the local one from Task 6.5: same `seq` list and same payloads
+
+**Success Criteria**:
+- [ ] The comparison passes in the clean run and all three kill runs
+- [ ] Commit `test: check SSE transcript across kills and reconnect`
 
 ### Task 6.6: Whole `tests/contract` pass
 **Owner**: Junior AI
-**Dependencies**: 6.5
+**Dependencies**: 6.5a
 **Effort**: 1
 **Objective**: Verify the group before the load tier.
 
 **Steps**:
-- [ ] Run `uv run pytest tests/contract -v` once. Expected: `test_lifecycle_proof.py` four cases (`clean`, `after-issue`, `after-launch`, `inbox-while-down`), `test_public_only.py`, snapshot, steps, and smoke tests pass. Run `ruff` and `pyright` once
+- [ ] Run `uv run pytest tests/contract -v` once. Expected: `test_lifecycle_proof.py` four cases (`clean`, `after-issue`, `after-launch`, `inbox-while-down`), `test_public_only.py`, snapshot, steps, and smoke tests pass. Run `ruff check`, `ruff format --check`, and `pyright` once
 - [ ] Record the run time. If the directory takes more than the default suite can reasonably carry (say so to the PM rather than deciding), report it; do not move tests silently
 
 **Success Criteria**:
@@ -325,7 +367,7 @@ status: not_started
 
 **Steps**:
 - [ ] `tests/contract/test_locality.py`: confirm the harness starts the host with `cwd` set to one directory and runs actors with `cwd=work_dir` (Task 4.6); assert after a clean run that all stores, the lock, the inbox directories, and the detection sidecars are under the supervisor directory and that `work_dir` and the host's working directory contain no `amoeba` files
-- [ ] `proof` and `proof-b` in one supervisor directory (from the clean run): each project's `runnable`, `blocked`, `verdicts`, and feed never show the other's rows (reuse the assertions from Task 5.9 if it already makes them; do not duplicate, call a shared helper); `inspect projects` lists both
+- [ ] `proof` and `proof-b` in one supervisor directory (from the clean run): each project's `runnable`, `blocked`, `verdicts`, and feed never show the other's rows (call the shared helper from Task 5.9a; do not duplicate it); `inspect projects` lists both
 
 **Success Criteria**:
 - [ ] Tests pass
@@ -350,17 +392,46 @@ status: not_started
 
 ## Section 9: Pruning (D7)
 
+### Task 9.0: Move the Squadron run-file reader into `amoeba.upstream.squadron`
+**Owner**: Junior AI
+**Dependencies**: 3.3, 1.1 (105 present)
+**Effort**: 2
+**Objective**: The pruning classifier must read run files without importing from the process layer. `parse_run_file` and `SquadronRun` currently live in `amoeba/process/observers/sq_runs.py`. This is a behavior-preserving move, and it is a small addition to the LLD (which only says `run_pruning.py` sits next to 105's parser); report it to the PM with the task summary.
+
+**Steps**:
+- [ ] First check whether 105 already exposes a run-file reader in `amoeba.upstream.squadron`. If it does, point the observer at it and skip the move
+- [ ] Otherwise create `src/amoeba/upstream/squadron/run_files.py` holding `SquadronRun`, `parse_run_file`, and the one named constant for Squadron's `paused` status string. Move them unchanged (same fields, same logging, same `None`-on-failure behavior). `process/observers/sq_runs.py` imports them from the new module. Process may depend on upstream; the reverse is never allowed
+- [ ] Export `SquadronRun` and `parse_run_file` from the package `__init__` and add them to the squadron pin test from Task 3.3
+
+**Success Criteria**:
+- [ ] `tests/test_observer_sq_runs.py` and `tests/test_recovery.py` pass with no edits to their assertions
+- [ ] `grep -rn "amoeba.process" src/amoeba/upstream` finds nothing
+- [ ] Committed with Task 9.0a
+
+### Task 9.0a: Check the move against real run files
+**Owner**: Junior AI
+**Dependencies**: 9.0
+**Effort**: 1
+**Objective**: The moved reader still reads every captured run.
+
+**Steps**:
+- [ ] Add a test in `tests/upstream/` (create the directory if absent) that calls `parse_run_file` on each file in `tests/fixtures/sq_runs/` and asserts none returns `None`, and that the captured paused run reports the `paused` constant as its status
+
+**Success Criteria**:
+- [ ] Test passes; full default suite passes
+- [ ] Commit `refactor: move Squadron run-file reader into the upstream package`
+
 ### Task 9.1: `run_pruning.py`
 **Owner**: Junior AI
-**Dependencies**: 3.3
+**Dependencies**: 9.0, 3.3, PM naming ruling (Task 1.1)
 **Effort**: 3
 **Objective**: `classify_paused_runs(runs_dir, *, owned) -> list[RunDisposition]`, pure over a directory listing and an ownership map; reads files, writes nothing.
 
 **Steps**:
-- [ ] Create `src/amoeba/upstream/squadron/run_pruning.py`. The LLD uses the name `RunDisposition` twice (a status `StrEnum` in Patterns, and the result record in API Contracts). This file settles it: `RunDisposition` is the **result record** (frozen dataclass with `run_id`, `path`, `status` (Squadron's string, or `None` if unreadable), `disposition`, `owner_node_ids`), matching the function's return type; the status enum is `DispositionKind` (`StrEnum`: `prunable`, `not_owned`, `not_paused`, `owner_not_done`, `unreadable`). Tell the PM of the rename when reporting. Define Squadron's `paused` status string as one named constant in this module; read how `process/observers/sq_runs.py` reads the same field and reuse its parsing helper if it exposes one (do not duplicate; if the helper is private, stop and tell the PM rather than importing it)
+- [ ] Create `src/amoeba/upstream/squadron/run_pruning.py`. Use the names the PM ruled in Task 1.1 (proposed: `RunDisposition` for the frozen result record with `run_id`, `path`, `status` (Squadron's string, or `None` if unreadable), `disposition`, `owner_node_ids`; `DispositionKind` for the `StrEnum` `prunable`, `not_owned`, `not_paused`, `owner_not_done`, `unreadable`). Read runs with `parse_run_file` and the `paused` constant from `run_files.py` (Task 9.0). Import nothing from `amoeba.process`
 - [ ] Classification order per the LLD: unreadable (cannot read or parse) → `unreadable`; run id not in `owned` → `not_owned`; status not `paused` → `not_paused`; any owning node not `done` → `owner_not_done`; otherwise `prunable`. `owned` maps run id to the nodes that reference it (`Mapping[str, Sequence[Node]]`)
-- [ ] Swallow `FileNotFoundError` for a file that disappears between listing and reading, with a comment: Squadron pruned it in between, so there is nothing to report. Any other unexpected error is logged with `logger.exception` and re-raised. A malformed file is a normal `unreadable` row, not an exception
-- [ ] The module imports no store internals (only `Node` from `amoeba.store`'s public exports) and writes nothing; export `classify_paused_runs`, `RunDisposition` and `DispositionKind` from the package `__init__` and add them to the squadron pin test from Task 3.3
+- [ ] `parse_run_file` returns `None` for any unreadable file, including one Squadron removed between listing and reading. When it returns `None`, check whether the path still exists: if it does not, omit the row, with a comment that Squadron pruned it in between so there is nothing to report; if it does, the row is `unreadable`. Any other unexpected error is logged with `logger.exception` and re-raised. A malformed file is a normal `unreadable` row, not an exception
+- [ ] The module imports no store internals (only `Node` from `amoeba.store`'s public exports) and writes nothing; export `classify_paused_runs` and the two ruled names from the package `__init__` and add them to the squadron pin test from Task 3.3
 
 **Success Criteria**:
 - [ ] Module near or under 150 lines; `ruff`, `pyright` strict clean; the store still imports nothing from `amoeba.upstream`
@@ -413,7 +484,7 @@ status: not_started
 
 ### Task 9.5: Pruning assertions in the proof
 **Owner**: Junior AI
-**Dependencies**: 9.4, 5.9
+**Dependencies**: 9.4, 5.9a
 **Effort**: 2
 **Objective**: Per the LLD success criterion, on the real sequence's leftovers.
 
@@ -433,17 +504,17 @@ All markdown carries YAML front matter per `file-naming-conventions.md` where th
 
 ### Task 10.1: Hosting a tenant in `process-contract.md`
 **Owner**: Junior AI
-**Dependencies**: 5.9
+**Dependencies**: 5.9a
 **Effort**: 2
 **Objective**: A "Hosting a tenant" section a 120 designer can follow without reading source.
 
 **Steps**:
-- [ ] Add the section: the exported names, `standard_tenants` order (inbox first, detection second), and the construction lines quoted verbatim from `proof_host.py` (Task 4.7). State that `amoeba start` calls `standard_tenants` too, so there is one list. State that a `--tenant` flag is not provided (120 may add it)
+- [ ] Add the section: the exported names, `standard_tenants` order (inbox first, detection second), and the construction lines quoted verbatim from `proof_host.py` as Task 5.9 left it (standard tenants followed by `ProofRunner`); re-open the file now rather than quoting Task 4.7's earlier version. State that `amoeba start` calls `standard_tenants` too, so there is one list. State that a `--tenant` flag is not provided (120 may add it)
 - [ ] Document `amoeba prune sq-runs` and the unchanged exit-code behavior; update the exports list if the contract has one
 
 **Success Criteria**:
 - [ ] The quoted lines match `proof_host.py` exactly (diff them)
-- [ ] Committed with Task 10.2
+- [ ] Commit `docs: add hosting-a-tenant section to process contract`
 
 ### Task 10.2: Update `store-contract.md` for D5 and D6
 **Owner**: Junior AI
@@ -528,14 +599,14 @@ All markdown carries YAML front matter per `file-naming-conventions.md` where th
 **Objective**: Everything green; the LLD walkthrough run once with real output.
 
 **Steps**:
-- [ ] Run once each: `uv run pytest` (default suite), `uv run pytest tests/load`, `uv run ruff check .`, `uv run pyright`. Fix failures at the cause. Check no source file exceeds roughly 300 lines (`wc -l` on new and edited files) and split any that do
+- [ ] Run once each: `uv run pytest` (default suite), `uv run pytest tests/load`, `uv run ruff check .`, `uv run ruff format --check .` (CI runs it as its own step), `uv run pyright`. Fix failures at the cause. Check no source file exceeds roughly 300 lines (`wc -l` on new and edited files) and split any that do
 - [ ] Confirm the structural criteria: the store imports nothing from `amoeba.upstream`, `amoeba.process`, or `amoeba.feed` (grep); `run_pruning.py` imports no store internals (grep); `test_writer_guard.py` passes; `proof_host.py` opens stores only through `ResidentProcess`
 - [ ] Run the LLD's Verification Walkthrough steps 1–6 (bash, repo root). For step 4 use a fresh `mktemp -d` store directory. Note any differences from the draft text (output shapes, test directory names) and update the LLD's walkthrough with the real output, keeping the LLD's front matter dates current
 - [ ] Review the LLD Success Criteria list line by line against the tests; for any criterion with no test, add the test or report it to the PM
 - [ ] Delegate the checklist update for both task files to the `task-checker` agent
 
 **Success Criteria**:
-- [ ] Default suite, load tier, `ruff`, and `pyright` all clean
+- [ ] Default suite, load tier, `ruff check`, `ruff format --check`, and `pyright` all clean
 - [ ] Every LLD success criterion maps to a passing test, or the gap is reported
 - [ ] Walkthrough text refined with real output and committed: `docs: refine slice 110 walkthrough with real output`
 - [ ] Work is committed on `110-slice.contract-proof-and-hardening`; no merge

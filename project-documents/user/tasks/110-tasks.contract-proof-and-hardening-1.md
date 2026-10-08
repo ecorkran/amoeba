@@ -4,7 +4,7 @@ slice: contract-proof-and-hardening
 project: amoeba
 lld: user/slices/110-slice.contract-proof-and-hardening.md
 dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
-projectState: Slices 101–104 are merged (store schema 5, inbox, verdicts and findings). In the working tree `src/amoeba/` holds `cli`, `inbox`, `process`, `store`; `amoeba.process.__init__` exports nothing and `cli/lifecycle.py` `start()` builds `tenants=(InboxTenant(supervisor_dir),)` inline. `store/paths.py` uses `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME` verbatim and `validate_project_id` only calls `validate_path_component`. `NodeOperations.update_node_status` does not refuse leaving `done`. Slices 105–109 are designed and may not be merged when this file starts; Sections 2 and 3, and (in File 2) Tasks 9.1–9.4, 10.2 and 10.3, need only 101–104. Sections 4 and 5–8, Task 9.5, and Tasks 10.1 and 10.4–10.6 need 105–109 for part or all of their content (File 2 says which).
+projectState: Slices 101–104 are merged (store schema 5, inbox, verdicts and findings). In the working tree `src/amoeba/` holds `cli`, `inbox`, `process`, `store`; `amoeba.process.__init__` exports nothing and `cli/lifecycle.py` `start()` builds `tenants=(InboxTenant(supervisor_dir),)` inline. `store/paths.py` uses `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME` verbatim and `validate_project_id` only calls `validate_path_component`. `NodeOperations.update_node_status` does not refuse leaving `done`. Slices 105–109 are designed and may not be merged when this file starts; Sections 2 and 3 and (in File 2) Tasks 10.2 and 10.3 need only 101–104. Tasks 9.0–9.4 also need 105 (they live in `amoeba.upstream.squadron`). Task 1.2 needs 106. Section 4 needs 101–104 except where it reads detections, judge samples, or 105's parser. Sections 5–8, Task 9.5, and Tasks 10.1 and 10.4–10.6 need 105–109 (File 2 says which).
 dateCreated: 20261008
 dateUpdated: 20261008
 status: not_started
@@ -25,7 +25,7 @@ status: not_started
 
 **PM ratification:** both D5 changes were ratified 20261008 (LLD "PM ratification"). No further ruling is needed.
 
-**Commit cadence:** one commit per task unless a task says "committed with Task N.M" (then it is committed together with its test task). A commit never holds untested behavior. Semantic prefixes per project CLAUDE.md. Tests that start a process or subprocess use only throwaway directories under `tmp_path`, never the real supervisor directory or the real Squadron runs directory.
+**Commit cadence:** one commit per task unless a task says "Committed with Task N.M". That wording always names the test task that exercises it, and means: make one commit after Task N.M's tests pass, covering every task that names N.M. A task never names a partner that itself defers to a third task, so commit chains cannot form. A commit never holds untested behavior; scaffolding with no behavior (Task 4.1) commits on its own. Semantic prefixes per project CLAUDE.md. Tests that start a process or subprocess use only throwaway directories under `tmp_path`, never the real supervisor directory or the real Squadron runs directory.
 
 **Section map:** this file: 1 branch, gate, baseline; 2 hardening (locality, slug ids, `done` terminal); 3 hosting seam and export pins; 4 proof scaffolding. **File 2 (`...-2.md`):** 5 `ProofRunner` and the clean run; 6 kill points and subscribers; 7 restart matrix; 8 locality under the sequence; 9 pruning; 10 docs and index; 11 final validation.
 
@@ -45,13 +45,45 @@ status: not_started
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once. If any fail before changes, stop and tell the PM
 - [ ] **Presence check, by file, not branch name.** For each of 105, 106, 107, 108, 109 record present/absent: `src/amoeba/upstream/squadron/` exists (105); `src/amoeba/feed/` exists and exports `follow` (106); `judge_invocation_id` appears in `src/amoeba/store/` (107); a 108 module exists (see `user/slices/108-*.md` Component Structure); `src/amoeba/serve/` and `src/amoeba/cli/token.py` exist (109). Write the result in the task's notes
 - [ ] For each present slice, record the real names the proof will bind to: 106's one-transaction report-back method (LLD says `record_runner_report`; open `user/slices/106-*.md` API Contracts and the merged `Store` to get the exact signature), `attribute_review`, `record_detection`; 105's `parse_review_artifact` and `to_verdict_input`; 109's SSE client helper in `tests/` if it has one (search `tests/` for `text/event-stream`), and which HTTP client library 109's tests use (check the `dev` group in `pyproject.toml` and the imports in `tests/`); Tasks 5.8b and 6.5 use that client and add no second one
-- [ ] If 106's report-back method is absent while 106 is merged, stop: the LLD says this slice adds it, but the signature is a PM decision. Tell the PM
+- [ ] Record whether 106's report-back method exists. If 106 is merged and it does not, Task 1.2 adds it (the LLD makes this slice responsible). If 106 is not merged, Task 1.2 waits with the other gated tasks
+- [ ] **Ask the PM to rule on one naming conflict and record the answer:** the LLD uses `RunDisposition` for two things (the result record in API Contracts, and a status `StrEnum` in Patterns). This file proposes `RunDisposition` for the record and `DispositionKind` for the enum. Task 9.1 uses whichever the PM rules; until ruled, do not start Task 9.1
 - [ ] Locate the per-node journal query (search `store/journal.py` for a method taking a node id). Record its name; Task 2.5 uses it
 
 **Success Criteria**:
 - [ ] On the slice branch; baseline suite, `ruff`, `pyright` clean
-- [ ] Presence table for 105–109 and the confirmed names are written down
+- [ ] Presence table for 105–109 and the confirmed names are written down; the PM's naming ruling is recorded (or Task 9.1 is marked blocked on it)
 - [ ] No commit needed
+
+### Task 1.2: Add the one-transaction report-back if 106 shipped without it
+**Owner**: Junior AI
+**Dependencies**: 1.1
+**Effort**: 3
+**Objective**: A public `Store` method that records the verdict, marks the review file `runner_issued`, and resolves the journal entry in **one** transaction, so initiative 120 can meet 106's own requirement (106 D5 point 3). Skip this task if Task 1.1 found the method already in the merged `Store`; if 106 is not merged, skip it for now and do it when the gate opens.
+
+**Steps**:
+- [ ] Read 106's LLD API Contracts row for `record_runner_report`: `record_runner_report(project_id, *, verdict: VerdictInput, path, digest, journal_entry_id, ...)`. The remaining parameters are those `journal_resolve` and `record_detection` need that are not already listed; take them from those two methods' real signatures and do not add any other parameter
+- [ ] Read how `record_verdict`, `record_detection`, and `journal_resolve` each open their own transaction. Implement the new method with one `with self._connection:` block that performs all three writes. Reuse each method's body by extracting its non-transactional part into a private helper that both the existing method and the new one call; do not copy their SQL
+- [ ] Idempotent on `(project_id, path, digest)`: a retry returns the existing verdict and writes nothing. A journal entry that is unknown or already resolved raises before any write
+- [ ] Export it through the existing `Store` surface (it is a method; no new package export). Add it to `store-contract.md` when Task 10.2 runs
+
+**Success Criteria**:
+- [ ] Method exists with the signature fixed above; existing tests still pass
+- [ ] Committed with Task 1.3
+
+### Task 1.3: Test the one-transaction report-back
+**Owner**: Junior AI
+**Dependencies**: 1.2
+**Effort**: 2
+**Objective**: Prove all-or-nothing and idempotence.
+
+**Steps**:
+- [ ] `tests/store/test_runner_report.py`: the happy path leaves one verdict, one `runner_issued` detection for that `(path, digest)`, and a resolved entry
+- [ ] Failure atomicity: an unknown journal entry id, and an already-resolved entry, each raise and leave **no** verdict and **no** detection behind
+- [ ] Retrying the same call returns the same verdict and creates no second verdict, detection, or resolution
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit `feat: add one-transaction runner report-back to the store`
 
 ---
 
@@ -223,12 +255,12 @@ All files under `tests/contract/`. Every module there may import only the five p
 **Objective**: A package with throwaway-directory fixtures.
 
 **Steps**:
-- [ ] Create `tests/contract/__init__.py` and `conftest.py`, copying the `sys.path` approach and the `supervisor_dir` / `runs_dir` fixtures from `tests/load/conftest.py`. Add a `reviews_dir` fixture (throwaway, under `tmp_path`) and a `work_dir` fixture (a second directory, used as the CLI actors' working directory, different from the process's)
+- [ ] Create `tests/contract/__init__.py` and `conftest.py`, copying the `sys.path` approach and the `supervisor_dir` / `runs_dir` fixtures from `tests/load/conftest.py`. Add a `reviews_dir` fixture (throwaway, under `tmp_path`), a `host_dir` fixture (the resident process's working directory), and a `work_dir` fixture (the CLI actors' working directory); the two are different directories
 - [ ] Mark nothing slow: the default suite runs this directory
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/contract --collect-only` succeeds with zero tests
-- [ ] Committed with Task 4.3
+- [ ] Commit `test: add contract-proof package and fixtures` (scaffolding only, no behavior)
 
 ### Task 4.2: `fake_squadron.py`
 **Owner**: Junior AI
@@ -263,11 +295,10 @@ All files under `tests/contract/`. Every module there may import only the five p
 **Owner**: Junior AI
 **Dependencies**: 4.3
 **Effort**: 4
-**Objective**: Build the final state from public reads only, keyed by node title, and compare two snapshots (D4).
+**Objective**: Build the final state from public reads only, keyed by node title (D4). Comparison is Task 4.4a.
 
 **Steps**:
-- [ ] Define `LifecycleSnapshot` (frozen dataclass) and `build_snapshot(supervisor_dir, project_id)`. It opens the store read-only through `Store.open_read_only` (exported by `amoeba.store`; check the name) and reads through public methods only. Contents per the LLD: node status by title; set of verdict record ids with verdict and standing; finding keys per node; journal entries per node as `(kind, outcome class)` where `completed` and `adopted` are one class "applied"; blocked-state count per node; message count per channel; judge samples per gate; detection outcomes (via 106's read method if present)
-- [ ] `compare(clean, other, *, allowed_differences)` returns the list of differences; an empty list means equal. `allowed_differences` is a set of named differences defined once as a `StrEnum` or constants in this module (per kill point, Task 6.1 fills them: `after-issue` adds one `unknown` entry, one human block, one escalation on the slice node)
+- [ ] Define `LifecycleSnapshot` (frozen dataclass) and `build_snapshot(supervisor_dir, project_id)`. It opens the store read-only through `Store.open_read_only` (exported by `amoeba.store`; check the name) and reads through public methods only. Contents per the LLD: node status by title; set of verdict record ids with verdict and standing; finding keys per node; journal entries per node as `(kind, outcome class)` where `completed` and `adopted` are one class "applied"; blocked-state count per node; message count per channel; judge samples per gate (read with the public `verdicts(..., judge_invocation_id=J)` filter from 107); detection outcomes (via 106's read method if present)
 - [ ] Parts needing a later slice (detections, judge samples, finding keys) are included when the read exists; otherwise the field is omitted and a module-level comment lists which field waits for which slice. Do not stub with fake values
 - [ ] Verdict record ids are compared as a set of ids; if ids differ between runs because they embed a timestamp, use the record id 105 derives from parsed content (identical across runs) and otherwise compare `(title, verdict, standing)` tuples. Check by building two snapshots in Task 4.5
 
@@ -275,9 +306,22 @@ All files under `tests/contract/`. Every module there may import only the five p
 - [ ] Module under ~300 lines, no private attribute reads, no `sqlite3`
 - [ ] Committed with Task 4.5
 
-### Task 4.5: Test `snapshot.py`
+### Task 4.4a: Snapshot comparison
 **Owner**: Junior AI
 **Dependencies**: 4.4
+**Effort**: 2
+**Objective**: Compare two snapshots and report differences, with named allowed differences (D4).
+
+**Steps**:
+- [ ] `compare(clean, other, *, allowed_differences)` returns the list of differences; an empty list means equal. `allowed_differences` is a set of named differences defined once as a `StrEnum` or constants in this module (per kill point, Task 6.1 fills them: `after-issue` adds one `unknown` entry, one human block, one escalation on the slice node)
+
+**Success Criteria**:
+- [ ] Module still under ~300 lines (split `compare` into its own module if not), no private attribute reads, no `sqlite3`
+- [ ] Committed with Task 4.5
+
+### Task 4.5: Test `snapshot.py`
+**Owner**: Junior AI
+**Dependencies**: 4.4a
 **Effort**: 2
 **Objective**: Snapshot equality and difference reporting work on built stores.
 
@@ -297,11 +341,12 @@ All files under `tests/contract/`. Every module there may import only the five p
 **Steps**:
 - [ ] Read `tests/host_harness.py` and `tests/cli_harness.py` first and reuse what they provide (a subprocess runner, env building, wait helpers); extend them only if a needed capability is missing, otherwise import them. Do not write a second subprocess helper
 - [ ] Provide: `start_host(...)` launching `proof_host.py` (Task 4.7) as a subprocess with `AMOEBA_STORE_DIR`, the throwaway runs directory, and an optional kill-point environment variable; `wait_until(condition, timeout)` polling public state (never a fixed sleep); `run_cli(args, env)` running `amoeba …` from `work_dir` (a different working directory from the host's); `kill_host()` for the harness-side `kill -9`
+- [ ] `start_host` launches the process with `cwd=host_dir`; `run_cli` and every actor use `cwd=work_dir`; the two are never the same path (assert it in the harness). This is what makes the locality claim in Task 8.1 mean something
 - [ ] The timeout of every wait is a named constant in one place; a timeout fails the test with the last observed state in the message
 
 **Success Criteria**:
 - [ ] A scratch test starts the host, `amoeba status` from `work_dir` reports it running, `stop` stops it
-- [ ] Committed with Task 4.7
+- [ ] Committed with Task 4.8
 
 ### Task 4.7: `proof_host.py` — bootstrap through public exports
 **Owner**: Junior AI
@@ -315,7 +360,7 @@ All files under `tests/contract/`. Every module there may import only the five p
 
 **Success Criteria**:
 - [ ] The harness scratch test from Task 4.6 now runs through `proof_host.py`
-- [ ] Commit `test: add proof host bootstrap and harness`
+- [ ] Committed with Task 4.8
 
 ### Task 4.8: Harness smoke test
 **Owner**: Junior AI
@@ -328,7 +373,7 @@ All files under `tests/contract/`. Every module there may import only the five p
 
 **Success Criteria**:
 - [ ] Test passes twice in a row (no leaked processes or lock files: assert the lock is free at the end)
-- [ ] Committed with Task 4.9
+- [ ] Commit `test: add proof host bootstrap, harness, and smoke test`
 
 ### Task 4.9: `test_public_only.py` — the no-internal-access guard
 **Owner**: Junior AI
