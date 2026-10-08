@@ -27,13 +27,13 @@ status: not_started
 
 **Triggers and tables grow in place.** Migration 008 is unreleased until this slice merges; later tasks that touch it edit the one file. Never create another migration.
 
-**Task-level mechanisms the LLD does not spell out** (each is flagged where it appears and reported to the PM in Task 8.6): the watch-revision counter (Task 4.3), the idle-tick subprocess reading (Task 6.4), and the `cf_max_attempts` flag (Task 5.1).
+**Task-level mechanisms the LLD does not spell out** (each is flagged where it appears and reported to the PM in Task 8.6): the watch-revision counter (Task 4.3), the idle-tick subprocess reading (Task 6.3), and the `cf_max_attempts` flag (Task 5.1).
 
-**Section map (this file):** 1 branch and real fixtures; 2 upstream reader and diff; 3 store models, migration, operations, feed; 4 the `watch_cf` kind; 5 settings. **File 2 (`...-2.md`):** 6 `CFWatchTenant`; 7 listings and wiring; 8 end-to-end, docs, final validation.
+**Section map (this file):** 1 branch, real fixtures, and the real-`cf` test harness; 2 upstream reader and diff; 3 store models, migration, operations, feed; 4 the `watch_cf` kind; 5 settings. **File 2 (`...-2.md`):** 6 `CFWatchTenant`; 7 listings and wiring; 8 end-to-end, docs, final validation.
 
 ---
 
-## Section 1: Branch and Real Fixtures
+## Section 1: Branch, Real Fixtures, and Test Harness
 
 ### Task 1.1: Create the branch, confirm prerequisites, record the starting state
 **Owner**: Junior AI
@@ -77,11 +77,30 @@ status: not_started
 
 ---
 
+### Task 1.3: Real-`cf` test harness
+**Owner**: Junior AI
+**Dependencies**: Task 1.2
+**Effort**: 2
+**Objective**: One shared helper for every test that drives the real `cf` CLI (Tasks 6.3, 6.4, 8.1), so none of them can skip silently.
+
+**Steps**:
+- [ ] Create `tests/cf_harness.py` (follow `tests/cli_harness.py` style): a fixture `real_cf` that **fails** the test with a clear message when `cf` is not on `PATH`. It never skips and never falls back to a hand-built file (a silent skip would let the success paths go untested)
+- [ ] Helpers over a temporary `CONTEXT_FORGE_DATA_DIR`: create the data directory; `init_cf_project(name)` running `cf init --lite --no-ide --name <name>` in a temp project directory; `cf_project_id(name)` reading the id from `cf get --json`; `cf_set(name, field, value)`; `cf_project_rm(name)`; `rewrite_projects_file(mutator)`, which applies a function to the parsed JSON and replaces `projects.json` by writing a temp file and renaming it over (as CF does), for cases the `cf` CLI cannot produce (a `customData`-only change)
+- [ ] Add `tests/test_cf_harness.py`: init then `cf_project_id` returns a non-empty string present in the file; `cf_set` changes the stored value; `rewrite_projects_file` changes the inode; with `PATH` emptied the fixture fails (assert with `pytest.raises` on the underlying check function, not by running a failing test)
+
+**Success Criteria**:
+- [ ] Tests, `ruff`, `pyright` pass on a machine with `cf` installed
+- [ ] Commit, e.g. `test: add real-cf harness`
+
+**Files to Create**: `tests/cf_harness.py`, `tests/test_cf_harness.py`
+
+---
+
 ## Section 2: The Upstream Reader and Diff
 
 ### Task 2.1: `resolve_cf_data_dir`, with tests
 **Owner**: Junior AI
-**Dependencies**: Task 1.2
+**Dependencies**: Task 1.3
 **Effort**: 2
 **Objective**: Mirror CF's location rule in exactly one place (LLD "Interfaces Required", Location; Settings).
 
@@ -195,6 +214,7 @@ status: not_started
 **Steps**:
 - [ ] Add `tests/store/test_migration_008.py` modeled on 106's `test_migration_006.py`: build a store at the previous version (`migrate(connection, expected_version=<previous>)`) holding nodes, a verdict, a message, and `changes` rows; migrate to the new version
 - [ ] Assert every pre-existing row is intact, `cf_watches` and `cf_snapshots` are empty, the `changes` count is unchanged (the upgrade emits nothing), and the index and trigger exist in `sqlite_master`
+- [ ] Test the trigger here, before it is committed, by inserting `cf_snapshots` rows with raw SQL (the store operations arrive in Task 3.5), reading `changes` rows raw (as 106's first trigger tests did before its read API): one insert adds exactly one `cf_project_changed` row with `node_id` null, `subject_id` the new snapshot id, `recorded_at` equal to `observed_at`, and payload keys `cf_project_id`, `present` (a JSON boolean `true`/`false`, not 1/0), `changed` (an array equal to the stored column); a rolled-back insert adds none; an insert with `present = 0` and `changed` of `["$present"]` carries `present` false
 
 **Success Criteria**:
 - [ ] New tests pass; full suite passes
@@ -250,7 +270,7 @@ status: not_started
 
 **Steps**:
 - [ ] Add `cf_watches(project_id)` and `set_cf_watch_state(project_id, cf_project_id, state, detail)`. The latter is a no-op (no write, no `updated_at` change) when state and detail are unchanged, and raises if the watch does not exist. Add the composition used by the tenant: one method that records a snapshot and sets the watch state in a single transaction
-- [ ] Add `tests/store/test_cf_watches.py`: a snapshot round-trips (fields, changed, `present`, `cf_updated_at` kept as written); `latest_cf_snapshot` is the newest per key and `None` before any; `cf_snapshots` filters by cf id and is oldest first; `cf_snapshot` of an unknown id raises; two cf ids and two projects stay independent; state set to the same value writes nothing; a failure partway through the combined method leaves neither the snapshot nor the state change (force it with an invalid state)
+- [ ] Add `tests/store/test_cf_watches.py`: a snapshot round-trips (fields, changed, `present`, `cf_updated_at` kept as written); `latest_cf_snapshot` is the newest per key and `None` before any; `cf_snapshots` filters by cf id and is oldest first; `cf_snapshot` of an unknown id raises; two cf ids and two projects stay independent; state set to the same value writes nothing; a failure partway through the combined method leaves neither the snapshot, nor the feed row, nor the state change (the state has no database constraint to trip, so force the failure by patching the private state-update helper to raise after the snapshot insert, inside the transaction)
 - [ ] Add a public-API check that the new names are exported (follow `tests/test_public_api.py`)
 
 **Success Criteria**:
@@ -269,7 +289,7 @@ status: not_started
 **Objective**: Pin the feed entry, and extend 106's invariant (LLD "Feed invariant").
 
 **Steps**:
-- [ ] Add to `tests/store/test_feed_triggers.py`: recording a snapshot emits exactly one `cf_project_changed` with `node_id` null, `subject_id` the snapshot id, and payload keys `cf_project_id`, `present` (a JSON boolean, not 0/1), `changed` (an array equal to the stored value); a rolled-back record emits none; `set_cf_watch_state` alone emits none
+- [ ] The trigger's own behavior was pinned by raw inserts in Task 3.3. Add to `tests/store/test_feed_triggers.py` only the store-API level, read through `changes()`: `record_cf_snapshot` emits exactly one `cf_project_changed` whose `subject_id` equals the returned snapshot's id and whose payload equals the snapshot's `changed`; the combined record-and-state method emits one; `set_cf_watch_state` alone emits none
 - [ ] Extend the scripted sequence in `tests/store/test_feed_invariant.py` with a linked CF project: a first snapshot, a change, a disappearance. Add the reconciliation rule: snapshot ids from `cf_project_changed` equal the `cf_snapshots` table
 - [ ] Extend 106's "dropped trigger" parametrized test with the `cf_snapshots` trigger
 - [ ] Confirm 106's "every `ChangeKind` appears" and "trigger literals match the enums" checks pass with the new member; do not weaken them
