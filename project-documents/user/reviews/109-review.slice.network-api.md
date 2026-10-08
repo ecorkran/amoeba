@@ -11,55 +11,50 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: 07aa0b7963eedfa5e37c8ac9c3ea858e56087bdd
-revision_number: 1
+reviewedSha: be189d63a745e6baa86db39be1915e94384dcede
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-durationSeconds: 37.3
+toolCallsMade: 5
+durationSeconds: 38.2
 runId: run-20261008-p4-76c1c140
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: pass
-    category: alignment
-    summary: "Core architectural constraints honored"
-    location: "project-documents/user/slices/109-slice.network-api.md#Overview"
+    severity: concern
+    category: dependency-direction
+    summary: "Import rule conflicts with where `discover_project_ids` and `store_path_for` live"
+    location: "project-documents/user/slices/109-slice.network-api.md:129"
   - id: F002
     severity: concern
-    category: error-handling
-    summary: "Open SSE streams are never re-authenticated"
-    location: "project-documents/user/slices/109-slice.network-api.md#State Management"
+    category: under-specification
+    summary: "Stream-slot limiter and thread-pool separation is under-specified"
+    location: "project-documents/user/slices/109-slice.network-api.md:243"
   - id: F003
     severity: concern
-    category: architecture
-    summary: "Multi-host claim conflicts with SQLite WAL"
-    location: "project-documents/user/slices/109-slice.network-api.md#D8"
+    category: error-handling
+    summary: "Mid-stream terminal behavior for non-auth failures is implicit"
+    location: "project-documents/user/slices/109-slice.network-api.md:246"
   - id: F004
     severity: concern
-    category: error-handling
-    summary: "Status lookup race with quarantine and failed moves is unspecified"
-    location: "project-documents/user/slices/109-slice.network-api.md#Data Flow"
-  - id: F005
-    severity: concern
     category: scope
-    summary: "Scope extends well beyond the architecture's three surfaces"
-    location: "project-documents/user/slices/109-slice.network-api.md#Technical Scope"
+    summary: "Group A rewrites finished code from slices 102–108 inside this slice"
+    location: "project-documents/user/slices/109-slice.network-api.md:57-62"
+  - id: F005
+    severity: note
+    category: architecture-alignment
+    summary: "Architecture's \"push, not poll\" is met at the client edge only"
+    location: "project-documents/user/slices/109-slice.network-api.md:27"
   - id: F006
-    severity: concern
-    category: under-specification
-    summary: "Stall bound rests on an unverified uvicorn behavior"
-    location: "project-documents/user/slices/109-slice.network-api.md#D5"
+    severity: note
+    category: scope
+    summary: "TLS, scopes, and principal binding go beyond the architecture and are routed to PM ratification"
+    location: "project-documents/user/slices/109-slice.network-api.md:296-306"
   - id: F007
-    severity: note
-    category: documentation
-    summary: "Frontmatter dependencies omit 105, 107 and 108"
-    location: "project-documents/user/slices/109-slice.network-api.md:6"
+    severity: pass
+    category: architecture-alignment
+    summary: "Boundaries and writer model preserved"
+    location: "project-documents/user/slices/109-slice.network-api.md#Technical Decisions"
   - id: F008
-    severity: note
-    category: integration
-    summary: "Token directory name could collide with project discovery"
-    location: "project-documents/user/slices/109-slice.network-api.md#Database / Storage Schema"
-  - id: F009
     severity: pass
     category: error-handling
     summary: "Failure modes and bounds enumerated for new I/O paths"
@@ -73,79 +68,47 @@ findings:
 
 ## Findings
 
-### [PASS] Core architectural constraints honored
+### [CONCERN] Import rule conflicts with where `discover_project_ids` and `store_path_for` live
 
-The architecture's constraints are met:
-- `amoeba serve` is its own process and takes no lock (D8).
-- It binds to `127.0.0.1` by default, and non-loopback binds require tokens and TLS (D6).
-- Stores are opened read-only.
-- The only write is `inbox.submit()` (D4).
-- The writer guard is extended to cover `amoeba.serve` and `amoeba.inspection`.
+The slice says `amoeba.serve` "does not import `amoeba.process`" and lists this as a technical requirement (line 453). The read path calls `store_path_for(supervisor_dir, project)` (line 139), and D8 relies on `discover_project_ids`. In the repo, both functions are defined in `src/amoeba/process/supervisor.py:28` and `:44`. As written, the server cannot meet its own boundary rule. The slice's Migration Plan doesn't mention relocating these two functions. Either move them to a neutral module such as `amoeba.store.paths`, with `amoeba.process` re-importing them, or relax the rule. Add the relocation to Group A and to the Consumers list. This matters because the architecture's reason for a separate process is that the server must not depend on recovery-critical code.
 
-Dependency directions are stated and correct. `serve` imports `inspection`, `inbox`, `feed` and `store`, and nothing imports `serve` except `cli/serve.py`. Restating the 106 `follow_interval_seconds` and 103 `idle_interval_seconds` latency bounds is the right treatment of the NFR, since the architecture sets no numeric targets. The slice says so explicitly.
+### [CONCERN] Stream-slot limiter and thread-pool separation is under-specified
 
-### [CONCERN] Open SSE streams are never re-authenticated
+D5 says streams draw "their own limiter" separate from Starlette's sync pool, so "too many streams cannot starve reads". The slice doesn't say how that is built. Starlette and anyio sync endpoints and `run_in_threadpool` share one default 40-token limiter. Dedicated threads or a separate executor would give the isolation. The success criterion (line 439) tests the outcome, but the mechanism is left open. Name the mechanism, because this property protects the architecture's read-availability goal.
 
-Tokens are checked when a stream connects. The doc says the token file is re-read on every authenticated request "so a revocation takes effect at once", and D6 defines fail-closed behavior when the file breaks. But a stream lives for hours. The design doesn't say what happens to an already-open stream when:
-- its token is revoked,
-- the token file becomes unreadable or malformed, or
-- the principal's scope changes.
+### [CONCERN] Mid-stream terminal behavior for non-auth failures is implicit
 
-As written, a revoked client keeps receiving the feed until it disconnects. That contradicts the "revocation takes effect at once" claim and the fail-closed table. Decide one of two things:
-- Re-validate on each heartbeat and close the stream with a terminal event when validation fails.
-- Document that revocation applies only to new connections, and add that to the contract and Success Criteria.
+Auth failures get an explicit `event: closed` with a code. Store errors after streaming starts (schema bump, `StoreBusyError`, worker-thread exception) just "end the stream". The client cannot tell that from a network drop and has to reconnect to learn the cause. The strategy is acceptable, but state it for each case. Also say whether the worker thread logs the exception, per the project's exception rules. The POST path has a similar gap: a client disconnecting mid-body is covered only by the timeout, not stated as a case.
 
-### [CONCERN] Multi-host claim conflicts with SQLite WAL
+### [CONCERN] Group A rewrites finished code from slices 102–108 inside this slice
 
-D8 says several servers "on different ports or hosts" may run at once. Read-only opens of a WAL-mode SQLite store need shared-memory access to `-shm`, which is not supported across hosts or network filesystems. Submissions from a server on another host would also need a shared inbox filesystem. The architecture's "no new state, no new write path" holds only for same-machine deployment. Restrict the claim to multiple servers on the same host, and state in `network-contract.md` that the server must run on the supervisor's machine.
+The row-function signature change, `Listing.abbreviated_columns`, the `change_as_json` move, and the relocation of every listing module are a cross-slice refactor of five or more slices' code. The slice explicitly rejects making it a separate slice. It does mitigate the risk with a hard merge gate, a byte-for-byte output comparison, and the group boundary. The rationale is sound, but effort 4 and two task groups push this toward over-scoping. Keep Group A independently committable and reviewable, as the doc says. Phase 5 should be ready to split it if the gate task finds 105–108 unmerged.
 
-### [CONCERN] Status lookup race with quarantine and failed moves is unspecified
+### [NOTE] Architecture's "push, not poll" is met at the client edge only
 
-The status flow handles the applied transition with a store, directory, store sequence. It says nothing about the process moving a file from `new/` to `quarantine/` or `failed/` while `locate` scans. If `locate` scans `quarantine/` and then `new/`, it can miss a file that moved in between. The client then gets `404 unknown_submission` for a submission that exists. Specify the scan order, or a re-scan, so a rename mid-lookup cannot produce a false 404. Add a test for it.
+The server's `follow()` still polls the store every `follow_interval_seconds`. The slice states this honestly and restates the latency bound (0.25 s plus encode time, and up to 1.0 s idle tick for submissions). The architecture sets no numeric NFR, so this is consistent.
 
-### [CONCERN] Scope extends well beyond the architecture's three surfaces
+### [NOTE] TLS, scopes, and principal binding go beyond the architecture and are routed to PM ratification
 
-The architecture asks for reads, inbox writes and a live feed. This slice also adds:
-- a relocation of 102, 104 and 105–108 listing code into a new `amoeba.inspection` package,
-- a signature change from `argparse.Namespace` to `ListingQuery`,
-- an `abbreviated_columns` change,
-- `inbox.locate`,
-- a token file and `amoeba token` CLI with scopes,
-- a TLS requirement,
-- listing discovery.
+Required TLS off-loopback, `read` and `submit` scopes, `submitted_by` bound to the principal, the new exit code 12, and the Starlette and uvicorn dependencies are each tabled with a fallback. Listing discovery is called out as an addition. The architecture left the protocol, authentication scheme, and endpoint shape to slice design, so these are within latitude. Phase 5 should honor the stated ratification gate.
 
-Each addition is justified, and the PM-ratification table gates the dependency, TLS, principal-binding, scope and exit-code decisions. But the registry move is a cross-slice refactor that depends on an ordering assumption: 105–108 task documents target `amoeba.cli`. The effort estimate also grew from 3 to 4. Consider splitting the registry move and `change_as_json` relocation into a precursor slice or task group, so the network work isn't blocked by a large no-behavior-change refactor. At minimum, make the ordering assumption a hard gate rather than a note.
+### [PASS] Boundaries and writer model preserved
 
-### [CONCERN] Stall bound rests on an unverified uvicorn behavior
-
-The `stream_stall_seconds` mechanism assumes "uvicorn's send waits for the transport to drain". Slow-header handling is explicitly deferred to verification (D5a), but this assumption isn't. If it fails, the stalled-peer and slot-exhaustion mitigations fail. Add the same verify-at-implementation task, with a fallback of an explicit write timeout around each send.
-
-### [NOTE] Frontmatter dependencies omit 105, 107 and 108
-
-The body states 105, 107 and 108 are an ordering assumption, not functional prerequisites, and the frontmatter lists only 101–104 and 106. This is consistent but easy to miss. The body also says the ordering is "recorded on the 109 entry in the slice plan". Confirm that entry actually exists.
-
-### [NOTE] Token directory name could collide with project discovery
-
-The new `{supervisor_dir}/serve/tokens` path sits beside project stores. I did not verify how `discover_project_ids` enumerates the supervisor directory. Confirm that a `serve/` directory is never treated as a project, and that `validate_project_id` rejects it. Add a test if it isn't already covered.
+The server is a separate, lock-free process that opens stores only read-only and writes only inbox files. Its writer guard covers `amoeba.serve` and `amoeba.inspection`. It binds to loopback by default and refuses off-loopback binds without tokens and TLS. It never infers trust from the peer address. The feed uses 106's `follow()` with a client-owned `seq` cursor. Resident-process status is excluded for a stated reason (D7). The same-host limit for WAL and the inbox is stated. Together these match the architecture's network-surface constraints and add no write path.
 
 ### [PASS] Failure modes and bounds enumerated for new I/O paths
 
-Waits and failures are bounded and mapped to explicit statuses in D5a:
-- a contended store,
-- a slow body or slow headers,
-- a stalled stream reader,
-- idle connections,
-- too many streams or connections,
-- shutdown,
-- token file corruption.
-
-Errors that occur before streaming are separated from errors that occur during it. The retry-with-same-id semantics for submissions are explicit, and the checkpoint-pinning risk is covered by a named test.
+D5a lists every remote-caused wait with a bound and an outcome. These cover store contention, a slow body, a stalled stream reader, a full socket buffer, idle connections, connection cap, and slow headers. The doc also specifies:
+- fail-closed handling when the token file goes bad at runtime, with once-only ERROR and INFO logging;
+- re-checking authentication on open streams at each heartbeat;
+- the submission-status race handled by scan order and two passes;
+- an explicit stop-and-ask path if uvicorn's `send` does not apply backpressure.
 
 ### Run Digest
 
-- Response length: 6925 chars
+- Response length: 6047 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -155,10 +118,10 @@ Errors that occur before streaming are separated from errors that occur during i
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 37.3 s
+- Duration: 38.2 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
