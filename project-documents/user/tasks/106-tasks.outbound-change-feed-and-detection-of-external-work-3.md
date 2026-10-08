@@ -132,8 +132,8 @@ status: not_started
 **Objective**: One tested helper set for Tasks 11.2–11.4, so the three end-to-end tests share proven helpers instead of one fragile copy.
 
 **Steps**:
-- [ ] Read `tests/cli_harness.py` and the helper `start_cli_process` (Tasks 10.3a/10.4) first; reuse them, do not duplicate
-- [ ] Create `tests/cli/detection_e2e_harness.py` with: `start_process(env)` / `stop_process` / `kill_process` / `wait_running` (condition waits with a timeout, never fixed sleeps longer than one scan interval); `start_follower(project, after=None)` returning an object that collects stdout JSON lines in a thread and exposes `lines`, `wait_for(predicate, timeout)` (on timeout it fails with the lines collected so far), `last_seq`, and `terminate`/`kill`; `seed_demo(env)` that runs `scripts/demo_detection.py` and returns the two ids; `copy_fixture(name, directory)` from `tests/fixtures/sq_reviews/`; `inspect_json(env, listing, project, *args)` that runs a read-only `amoeba inspect ... --json`
+- [ ] Read `tests/cli_harness.py` first. Task 10.4 adds a `start_cli_process` helper there only if the existing harness could not run a long-lived `amoeba start`; reuse whichever exists, and if neither does, add it here. Do not duplicate
+- [ ] Create `tests/cli/detection_e2e_harness.py` with: `start_process(env)` / `stop_process` / `kill_process` / `wait_running` (condition waits with a timeout, never fixed sleeps longer than one scan interval); `start_follower(project, after=None)` returning an object that collects stdout JSON lines in a thread and exposes `lines`, `wait_for(predicate, timeout)` (on timeout it fails with the lines collected so far), `last_seq`, and `terminate`/`kill`; `build_scenario(env, *, reviews_dir_pre_files=())` that performs the whole setup sequence from scratch in a fresh scratch store (start, `create-project`, stop, `seed_demo`, start the follower while stopped, start, register the directory, wait for baseline) and returns a handle with the env, ids, follower, and reviews directory, so each end-to-end test builds its own state; `seed_demo(env)` that runs `scripts/demo_detection.py` and returns the two ids; `copy_fixture(name, directory)` from `tests/fixtures/sq_reviews/`; `inspect_json(env, listing, project, *args)` that runs a read-only `amoeba inspect ... --json`
 - [ ] Add `tests/cli/test_detection_e2e_harness.py`, one smoke test per helper: process starts and stops; a killed process is detected as not running; the follower collects a known line and `wait_for` fails with the collected lines on timeout (use a short timeout); `copy_fixture` copies bytes exactly; `inspect_json` returns parsed rows
 - [ ] The helpers hold no assertions about detection behavior; those stay in the end-to-end tests
 
@@ -172,13 +172,13 @@ status: not_started
 **Objective**: Survive `kill -9` with nothing recorded twice (LLD Integration Requirements, second half).
 
 **Steps**:
-- [ ] Extend the same module with a second test (reusing the Task 11.1 helpers) that continues the sequence: `kill -9` the process, start it again, then copy the part 2 provider-failure file in
+- [ ] Add a second, self-contained test to the same module: build its own scenario with `build_scenario` (nothing carried from part A), copy part 1 round 1 and round 2 in and wait for both to be ingested, then `kill -9` the process, start it again, and copy the part 2 provider-failure file in
 - [ ] Assert: after restart no new ledger rows or verdicts appear for the earlier files; the provider failure is recorded with standing `provider_failure`; the final verdict count is exactly three; the follower printed no `verdict_recorded` twice for one verdict id
 - [ ] Kill the follower, restart it with `--after` its last printed `seq`: it prints nothing old; then add a further change (a second `resolution` or a new file) and assert exactly that change arrives
 - [ ] Final agreement check: every `verdict_recorded` and `review_detected` subject id in the follower's lines matches a row from read-only `inspect verdicts` / `inspect detections`, and the converse (no row without a change line), with both sides non-empty
 
 **Success Criteria**:
-- [ ] Both end-to-end tests pass three times consecutively
+- [ ] All three end-to-end tests pass three times consecutively, and each passes when run alone (`pytest -k` on one test)
 - [ ] Commit, e.g. `test(cli): add detection end-to-end test, part B`
 
 **Files to Modify**: `tests/cli/test_detection_end_to_end.py`
@@ -192,12 +192,12 @@ status: not_started
 **Objective**: LLD walkthrough steps 7 and 8 through the real CLI, so they are not covered only by unit tests and a manual run.
 
 **Steps**:
-- [ ] Add a third test to `tests/cli/test_detection_end_to_end.py`, reusing the Task 11.1 helpers, starting from a registered, baselined directory with the slice node seeded
+- [ ] Add a third, self-contained test to `tests/cli/test_detection_end_to_end.py`: build its own scenario with `build_scenario` (nothing carried from parts A or B), giving a registered, baselined directory with the slice node seeded
 - [ ] Unattributed through the CLI, using only files under `tests/fixtures/sq_reviews/` (never a live file under `project-documents/`, which can move): create a second project `other` that has **no** slice node, register a second temp directory for it, and copy the real part 1 round 1 fixture in. Also copy a `notes.md` containing `# not a review` into the `demo` directory. Assert via read-only `inspect detections --outcome unattributed --project other` and `--outcome unparseable --project demo` that each is listed with the right outcome, the unattributed one has no candidates, and no verdict was added in either project. (The LLD walkthrough's use of the 104 review stays a manual step in Task 11.11)
 - [ ] Copy a real part 1 round 1 file, wait for ingest, append a `resolution: accepted` frontmatter line to the copy, `kill -9` the process and restart it. Assert: one new `ingested` ledger row pointing at the **same** verdict id, verdict count unchanged, and the follower (still running, or restarted from its last `seq`) printed that `review_detected` line and no `verdict_recorded`
 
 **Success Criteria**:
-- [ ] Passes three times consecutively with parts A and B
+- [ ] Passes three times consecutively with parts A and B, and alone
 - [ ] Commit, e.g. `test(cli): add detection end-to-end test, part C`
 
 **Files to Modify**: `tests/cli/test_detection_end_to_end.py`
@@ -333,11 +333,11 @@ status: not_started
 
 ---
 
-### Task 11.12: Trace Functional Requirements to tests
+### Task 11.12: Trace the LLD Functional Requirements to tests
 **Owner**: Junior AI
 **Dependencies**: Task 11.11
-**Effort**: 2
-**Objective**: Every LLD Functional Requirement and Technical Requirement has a passing test (LLD Success Criteria).
+**Effort**: 4
+**Objective**: Every LLD Functional Requirement has a passing test (LLD Success Criteria). Technical and Integration Requirements follow in Task 11.12a.
 
 **Steps**:
 - [ ] Confirm each requirement below is covered by the named test; run those tests by name. Where the named test lacks the assertion, add it there. The list follows the LLD's Success Criteria in order
@@ -358,11 +358,27 @@ status: not_started
   - Directory registered before it exists: `unreachable`, baselined on the first scan that can list it: `test_review_detection_baseline`
   - One unreadable file at registration: no rows, `baseline_pending`, then whole directory at once: `test_review_detection_baseline`
   - Hand `ingest review` after the slice node exists: `recorded_since` true, second ingest a no-op: `test_review_detection_refusals`, `test_detections`, `test_inspect_feed`
-  - Defer on open `SQ_RUN`; `runner_issued` skip: `test_review_detection_lifecycle` (defer and skip cases)
+  - Defer on open `SQ_RUN`; `runner_issued` skip: `test_review_detection_ownership`
   - Restart re-ingests nothing: `test_review_detection`, `test_review_detection_process`, end-to-end part B
   - Removed directory shows `unreachable`, process keeps running, resumes: `test_review_detection_lifecycle` and `test_inspect_feed`
   - File deleted between listing and read: `test_review_sources` and `test_review_detection_lifecycle`
   - Store failure bounded; `failed` listed in `inspect detections`; later files still detected; deleting the sidecar retries: `test_review_detection_failure` and `test_inspect_feed`
+- [ ] Run the named tests by name. For each requirement lacking its assertion, add it in the named test and note it for the report in Task 11.12a
+
+**Success Criteria**:
+- [ ] Each Functional bullet above is confirmed or fixed; the named tests pass
+- [ ] Commit any additions, e.g. `test: close slice 106 functional coverage gaps`
+
+---
+
+### Task 11.12a: Trace the Technical and Integration Requirements and close out
+**Owner**: Junior AI
+**Dependencies**: Task 11.12
+**Effort**: 2
+**Objective**: The remaining LLD Success Criteria have passing tests, and the slice branch is left clean.
+
+**Steps**:
+- [ ] Confirm each requirement below is covered by the named test; run those tests by name. Where the named test lacks the assertion, add it there
   - **Technical**
   - Enums and SQL defined once; attribution and review-producing kinds defined once; store imports nothing from upstream, process, or feed: `test_import_boundaries`
   - Follower opens the store read-only; writer guard passes with the demo script listed: `test_follower` (row counts unchanged), `test_writer_guard`

@@ -61,7 +61,7 @@ status: not_started
 - [ ] `ChangeKind` and `DetectionOutcome` as `StrEnum`s with exactly the members in the LLD word lists
 - [ ] Frozen dataclasses: `Change` (`seq, project_id, kind, node_id, subject_id, payload: Mapping[str, object], recorded_at`), `ReviewWatch` (columns of `review_watches`), `DetectedReview` (columns of `detected_reviews`), and `DetectionInput` (what `record_detection` takes: project, path, digest, outcome, optional node id, verdict id, record id, detail)
 - [ ] A comment on `DetectionOutcome` names the two outcomes that emit no change (`baseline`, `runner_issued`) and says `failed` is a listing state, not a member
-- [ ] Define the set of silent outcomes once here (e.g. `SILENT_OUTCOMES`) for the trigger-literal test in Task 2.6 and the `detected_reviews` trigger in Task 5.1
+- [ ] Define the set of silent outcomes once here (e.g. `SILENT_OUTCOMES`) for the `detected_reviews` trigger in Task 5.1 and the trigger-literal test it extends in Task 5.2
 - [ ] Add `tests/store/test_feed_models.py`: `ChangeKind` and `DetectionOutcome` have exactly the LLD's members and string values; `SILENT_OUTCOMES` is exactly `baseline` and `runner_issued`; the dataclasses are frozen
 
 **Success Criteria**:
@@ -206,7 +206,7 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 **Steps**:
 - [ ] Add `AFTER INSERT ON verdicts` (payload `verdict`, `review_type`, `provider_failure` as a JSON boolean, not 0/1) and `AFTER INSERT ON messages` (payload `channel`; `node_id` may be null)
 - [ ] Tests, each as its own case: a verdict recorded with `record_verdict` emits one row; a retried `record_verdict` with the same id emits none; a provider-failure verdict has `provider_failure` true; an intent submission posts a message and emits one `message_posted`; a recovery escalation message (stage a journal entry whose kind has no observer, run `reconcile` as `tests/test_recovery.py` does) emits one `message_posted`
-- [ ] Confirm no `verdict_recorded` payload carries a trust label
+- [ ] Assert that every `verdict_recorded` payload's keys are exactly `verdict`, `review_type`, `provider_failure` (so no trust label can be present)
 
 **Success Criteria**:
 - [ ] Tests pass
@@ -273,32 +273,50 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 
 ## Section 3: `source_document` (D7)
 
-### Task 3.1: Add `source_document` to `VerdictInput`, the writer, mapping, and payload
+### Task 3.1: Carry `source_document` through the store write and read path
 **Owner**: Junior AI
 **Dependencies**: Task 2.6
 **Effort**: 3
-**Objective**: Carry the reviewed document through the store (LLD D7). This changes 104's contract additively.
+**Objective**: Add the reviewed document to `VerdictInput` and the `verdicts` row (LLD D7). This changes 104's contract additively. The inbox payload path is Task 3.1a.
 
 **Steps**:
 - [ ] Add `source_document: str | None = None` to `VerdictInput` and the matching field to `VerdictRecord` (`store/evidence_models.py`)
 - [ ] Add the column to the insert statement and select columns in `sql_evidence.py`; map it in `mapping_evidence.py`; pass it in `_verdict_writer.py`
-- [ ] Add the optional field to `VerdictPayload` (`inbox/evidence_payloads.py`) and to `_apply_verdict` / `verdict_from_payload` / `verdict_payload.py`. If `verdict_payload.py` keeps `VERDICT_*` key constants, add one for it (defined once)
-- [ ] Retry rule (decided here): `record_verdict` keys a retry by verdict id, returns the existing record, and logs a WARNING ("already recorded with different content; keeping the first") when the stored content differs from the retry, comparing via `_as_input(existing) != verdict`. Add `source_document` to `_as_input` so a retry with a different `source_document` takes that same path: first record kept, WARNING logged, nothing updated. Add no new conflict error. Mention `source_document` in the docstring's retry sentence
+- [ ] Retry rule. The LLD leaves open what a retry carrying a different `source_document` does; this task settles it and Task 11.11 reports it to the PM. `record_verdict` keys a retry by verdict id, returns the existing record, and logs a WARNING ("already recorded with different content; keeping the first") when the stored content differs, comparing via `_as_input(existing) != verdict`. Add `source_document` to `_as_input` so a differing `source_document` takes that same path: first record kept, WARNING logged, nothing updated. Add no new conflict error. Mention `source_document` in the docstring's retry sentence
 - [ ] Do not edit any existing test to make it pass; if one fails, stop and diagnose
-- [ ] Add `tests/store/test_verdict_source_document.py`: a verdict recorded with a `source_document` reads back with it; one without reads back `None`; a `verdict` submission through `apply_submission` with the optional payload field stores it, and without the field stores `None`; a retry of the same id with a different `source_document` returns the first record with its original `source_document`, logs the WARNING (use `caplog`), and inserts nothing
+- [ ] Add `tests/store/test_verdict_source_document.py`: a verdict recorded with a `source_document` reads back with it; one without reads back `None`; a retry of the same id with a different `source_document` returns the first record with its original `source_document`, logs the WARNING (use `caplog`), and inserts nothing
 
 **Success Criteria**:
 - [ ] Every existing 104 test passes unchanged; the new tests pass
 - [ ] Commit, e.g. `feat(store): carry source_document on verdicts`
 
 **Files to Create**: `tests/store/test_verdict_source_document.py`
-**Files to Modify**: `store/evidence_models.py`, `store/sql_evidence.py`, `store/mapping_evidence.py`, `store/_verdict_writer.py`, `store/verdict_payload.py`, `inbox/evidence_payloads.py`, `store/verdicts.py` (the `_as_input` comparison and docstring)
+**Files to Modify**: `store/evidence_models.py`, `store/sql_evidence.py`, `store/mapping_evidence.py`, `store/_verdict_writer.py`, `store/verdicts.py` (the `_as_input` comparison and docstring)
+
+---
+
+### Task 3.1a: Accept `source_document` in the `verdict` inbox payload
+**Owner**: Junior AI
+**Dependencies**: Task 3.1
+**Effort**: 2
+**Objective**: The same optional field through the inbox (LLD D7, "The `verdict` inbox payload gains the optional field").
+
+**Steps**:
+- [ ] Add the optional field to `VerdictPayload` (`inbox/evidence_payloads.py`) and to `_apply_verdict` / `verdict_from_payload` / `verdict_payload.py`. If `verdict_payload.py` keeps `VERDICT_*` key constants, add one for it (defined once)
+- [ ] Add to `tests/store/test_verdict_source_document.py`: a `verdict` submission through `apply_submission` with the payload field stores it; without the field stores `None`
+- [ ] Do not edit any existing test to make it pass
+
+**Success Criteria**:
+- [ ] Every existing 104 test passes unchanged; the new tests pass
+- [ ] Commit, e.g. `feat(inbox): accept source_document in the verdict payload`
+
+**Files to Modify**: `inbox/evidence_payloads.py`, `store/verdict_payload.py`, `tests/store/test_verdict_source_document.py`
 
 ---
 
 ### Task 3.2: Group `finding_changes` by `source_document`
 **Owner**: Junior AI
-**Dependencies**: Task 3.1
+**Dependencies**: Task 3.1a
 **Effort**: 3
 **Objective**: Previous round = same node, same `review_type`, same `source_document` (compared with `IS`, so two nulls match).
 
@@ -373,7 +391,7 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Add `read_transaction() -> AbstractContextManager[None]` to `Store`: `BEGIN` on entry, `COMMIT` on normal exit; if the block raises, roll back to release the read lock, then re-raise. Statement text comes from `sql.py` constants. Raise a clear error if called on a handle with a transaction already open (no nesting)
 - [ ] Decided: it is available on read-only handles only (LLD D1a). Add a keyword-only `read_only: bool = False` to `Store.__init__`; `open_read_only` passes `True`, `open` and `open_temporary` leave it false. `read_transaction()` on a handle where it is false raises `StoreError` with a message saying it is for read-only handles. Nested use (a transaction already open via `connection.in_transaction`) raises the same type. Update any direct `Store(...)` constructions in tests
 - [ ] Docstring shows the snapshot-then-head usage from the LLD
-- [ ] The `read_only` constructor flag is a task-level mechanism the LLD does not spell out (it only says the method lives on the read-only handle). Record it in `store-contract.md` in Task 11.7 and mention it to the PM in the Task 11.11 report
+- [ ] This changes 101's `Store.__init__` signature, additively (keyword-only, default false, so every existing caller is unaffected). The `read_only` constructor flag is a task-level mechanism the LLD does not spell out (it only says the method lives on the read-only handle). Record it in `store-contract.md` in Task 11.7 and mention it to the PM in the Task 11.11 report
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean

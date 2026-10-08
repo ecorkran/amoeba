@@ -123,13 +123,13 @@ status: not_started
 
 ### Task 7.1: Implement `amoeba.feed.follow`
 **Owner**: Junior AI
-**Dependencies**: Task 6.3
+**Dependencies**: Task 4.4 (needs only the feed reads; it is placed after Section 6 by file order)
 **Effort**: 4
 **Objective**: The subscriber-side blocking iterator (LLD "Following the feed", D2).
 
 **Steps**:
 - [ ] Create `src/amoeba/feed/__init__.py` and `follower.py`. `FeedSettings` is a frozen dataclass with `follow_interval_seconds = 0.25` and `feed_batch_size = 500`, defined here once (no other default for either anywhere)
-- [ ] `follow(store_dir, project_id, *, after, settings, stop=None) -> Iterator[Change]`. Open the project store with `Store.open_read_only` (path from `store_dir`; reuse `store_path_for` in `process/supervisor.py` only if importing it does not make `amoeba.feed` depend on `amoeba.process` — otherwise use `store/paths`). An unknown project raises the store's error before yielding anything
+- [ ] `follow(store_dir, project_id, *, after, settings, stop=None) -> Iterator[Change]`. Open the project store with `Store.open_read_only` (path from `store_dir`). `store_path_for` lives in `amoeba.process.supervisor`, which `amoeba.feed` must not import, so read `store/paths.py`: if it has no function taking an explicit directory and project id, add `project_store_path(store_dir, project_id)` there and make `store_path_for` delegate to it (no behavior change; its tests prove it). The follower imports only the `store/paths.py` function. An unknown project raises the store's error before yielding anything
 - [ ] Loop per the LLD: read `changes(after=cursor, limit=feed_batch_size)`, yield each, advance the cursor to the last `seq`; when empty, wait until `PRAGMA data_version` changes, checking every `follow_interval_seconds`; check `stop` between waits and between yielded changes, and return when it is true
 - [ ] Put the `PRAGMA data_version` statement in `store/sql.py` and expose it as a small `Store` method (e.g. `data_version()`); the follower holds no SQL
 - [ ] Close the store in a `finally` (generator closure included)
@@ -177,7 +177,7 @@ status: not_started
 **Steps**:
 - [ ] Create `src/amoeba/cli/feed.py` and register `feed` in `cli/main.py` the way `inspect` and `submit` are registered, with `--project` (required), `--after` (non-negative int, default stated in `--help`: from the start), `--follow`
 - [ ] One JSON object per line, keys as in `Change` (`seq, project_id, kind, node_id, subject_id, payload, recorded_at` with `recorded_at` as ISO text), flushed per line so a pipe consumer sees it at once
-- [ ] Without `--follow`: print everything after `--after` and exit 0 (loop `follow` with a `stop` that is true once the head read at start is reached — or read in batches; choose the simpler and note it in the docstring). With `--follow`: run until interrupted; `KeyboardInterrupt` and `SIGTERM` exit cleanly with `ExitCode.OK`
+- [ ] Without `--follow`: print everything after `--after` and exit 0 (decided: read `change_head` once at start, then loop `follow` with a `stop` that returns true once the last printed `seq` is at or past that head; changes committed after start are not printed). With `--follow`: run until interrupted; `KeyboardInterrupt` and `SIGTERM` exit cleanly with `ExitCode.OK`
 - [ ] Unknown project or missing store maps to the existing `ExitCode` for those errors (see `_dispatch` / the boundary handler in `main.py`); add no new exit code unless none fits, and then ask the PM
 - [ ] The command takes no lock and works with the process running or stopped
 
@@ -418,7 +418,8 @@ status: not_started
 - [ ] `ruff`, `pyright` clean
 - [ ] Committed with Task 9.6
 
-**Files to Modify**: `src/amoeba/process/review_detection.py` (move scan logic to `review_scan.py` if the file passes ~300 lines)
+**Files to Create**: `src/amoeba/process/review_scan.py` (the per-file detection path: digest, ledger check, parse, attribute, record, and later the guarded recording of Task 9.9)
+**Files to Modify**: `src/amoeba/process/review_detection.py` (keeps registration, cadence, baselining, and the per-watch loop; it calls into `review_scan.py`). Splitting now is planned, not conditional, because Tasks 9.7 and 9.9 add to the scan path and the tenant file would otherwise pass ~300 lines
 
 ---
 
@@ -470,7 +471,7 @@ status: not_started
 **Owner**: Junior AI
 **Dependencies**: Task 9.6a
 **Effort**: 3
-**Objective**: Scan-time directory loss, cadence, activation, and file races.
+**Objective**: Scan-time directory loss, cadence, activation, and file races. Task 9.8 adds defer and skip cases; if this module passes ~300 lines then, put those cases in a new `tests/process/test_review_detection_ownership.py` instead.
 
 **Steps**:
 - [ ] Add `tests/process/test_review_detection_lifecycle.py` using `detection_harness.py`
@@ -501,7 +502,7 @@ status: not_started
 **Success Criteria**:
 - [ ] Committed with Task 9.8
 
-**Files to Modify**: `src/amoeba/process/review_detection.py`
+**Files to Modify**: `src/amoeba/process/review_detection.py`, `src/amoeba/process/review_scan.py`
 
 ---
 
@@ -512,7 +513,7 @@ status: not_started
 **Objective**: Pin LLD bullets "While the project has an open `SQ_RUN` entry…" and "A file already marked `runner_issued`…".
 
 **Steps**:
-- [ ] Add cases to `test_review_detection_lifecycle.py`: with an open `SQ_RUN` entry, a settled new file is not processed and the source is not polled; after the entry resolves, it is ingested on the next scan
+- [ ] Add cases to `tests/process/test_review_detection_ownership.py` (new, using `detection_harness.py`): with an open `SQ_RUN` entry, a settled new file is not processed and the source is not polled; after the entry resolves, it is ingested on the next scan
 - [ ] With an open `SQ_RUN` entry and a freshly registered (unbaselined) watch, the baseline is still taken and no verdict is recorded
 - [ ] A file whose `(path, digest)` is pre-marked `runner_issued` is never ingested and emits no change
 - [ ] A project with an open `CF_WRITE` entry is **not** deferred
@@ -521,7 +522,7 @@ status: not_started
 - [ ] Tests pass
 - [ ] Commit, e.g. `feat(process): defer detection while the runner owns a review`
 
-**Files to Modify**: `tests/process/test_review_detection_lifecycle.py`
+**Files to Create**: `tests/process/test_review_detection_ownership.py`
 
 ---
 
@@ -543,7 +544,7 @@ status: not_started
 - [ ] `ruff`, `pyright` clean
 - [ ] Committed with Task 9.10
 
-**Files to Modify**: `src/amoeba/process/review_detection.py`
+**Files to Modify**: `src/amoeba/process/review_detection.py`, `src/amoeba/process/review_scan.py`
 
 ---
 
