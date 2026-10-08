@@ -9,66 +9,50 @@ verdictSource: stated
 sourceDocument: project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md
 aiModel: claude-sonnet-5-5
 status: complete
-dateCreated: 20261007
-dateUpdated: 20261007
-reviewedSha: 157bbb34e9c0e3e4bd7d3699f8cc525b31507933
-revision_number: 2
+dateCreated: 20261008
+dateUpdated: 20261008
+reviewedSha: deda74ce568821093adce58148a7d32cda716340
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 4
-durationSeconds: 56.6
-runId: run-20261007-tasks-plan-25f0a00a
+toolCallsMade: 7
+durationSeconds: 41.8
+runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: concern
-    category: clarity
-    summary: "Fixture references use ellipses where two files share a stem"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:254"
-  - id: F002
-    severity: concern
-    category: prompt-hygiene
-    summary: "Task 1.2 puts a hardcoded version next to a \"record the actual value\" instruction"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:77"
-  - id: F003
-    severity: concern
-    category: scope
-    summary: "review.py may exceed ~300 lines after Section 5, but the size check happens only in Task 4.1"
-    location: "src/amoeba/upstream/squadron/review.py"
-  - id: F004
-    severity: concern
-    category: testing
-    summary: "The \"defined once\" test in Task 5.5 can false-positive on short, common strings"
-    location: "tests/upstream/test_field_names_defined_once.py"
-  - id: F005
-    severity: note
-    category: sizing
-    summary: "Task 3.5 is large"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:288"
-  - id: F006
-    severity: note
-    category: traceability
-    summary: "The task file correctly diverges from the slice on trailing stdout lines"
-    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:363"
-  - id: F007
-    severity: note
-    category: sequencing
-    summary: "Minor dependency and scope tidy-ups"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:123"
-  - id: F008
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage for Sections 1–5"
-    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:354-374"
-  - id: F009
+    summary: "Success-criteria coverage is complete"
+    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:354-392"
+  - id: F002
     severity: pass
     category: sequencing
     summary: "Sequencing, test-with pattern, and commit cadence"
     location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:28"
-  - id: F010
-    severity: pass
-    category: nfr
-    summary: "No NFR or load-test obligation"
-    location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md"
+  - id: F003
+    severity: concern
+    category: sequencing
+    summary: "Task 8.2 commits an interim state where ingest reports `OK` without submitting"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:175"
+  - id: F004
+    severity: concern
+    category: risk
+    summary: "Task 1.2 is an external-dependency gate with a large downstream blast radius"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:68-92"
+  - id: F005
+    severity: note
+    category: coverage
+    summary: "Task 4.2's trailing-line test differs from the design's criterion"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:343"
+  - id: F006
+    severity: note
+    category: scoping
+    summary: "Several tasks are large but acceptable"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-1.md:288-309"
+  - id: F007
+    severity: note
+    category: process
+    summary: "Task 9.3 edits the slice design file"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:357"
 ---
 
 # Review: tasks — slice 105
@@ -78,68 +62,59 @@ findings:
 
 ## Findings
 
-### [CONCERN] Fixture references use ellipses where two files share a stem
+### [PASS] Success-criteria coverage is complete
 
-`tests/fixtures/sq_reviews/` holds two files for each 102 part: `…part-1.20260921T112529.md` and `…part-1.md`, and `…part-2.20260921T112635.md` and `…part-2.md`. Tasks 3.3 and 3.5 refer to "`102-…part-2.md` (round 2)" and "the round 1 part 1 file". Task 3.5 also calls part-2 "the 0.14.0 `102-…part-2.md` heading-only". A junior AI can't tell which of the two part-2 files is the heading-only provider failure. The unstamped `…part-1.md` is round 2 per the slice walkthrough, which makes "round 1 part 1" easy to mix up. Spell out the full filenames, or use the `tests/review_fixtures.py` constants by name. Task 1.3 already gives the full name for one of them.
+- **Parser behavior:** file fixtures are covered by Tasks 3.3/3.5, and stdout captures, the `fallback_used` branches, and `requested_model` by 4.2. File/stdout key equality is in 4.2.
+- **Record id:** hand-edit invariance is in 5.2.
+- **Composition:** the D4 cases are in 5.4.
+- **Error cases:** each listed error raises in 3.5, 4.2, and 5.4. `provider_failure_problem` is pinned in 2.3.
+- **Dependency rules:** the import-direction rule and the single definition of Squadron keys are asserted by Task 5.5.
+- **Payload round trip:** Tasks 6.1/6.2.
+- **Test migration:** Tasks 7.1–7.4.
+- **Ingest command:**
+  - Failure paths and the no-store refusal are in 8.3.
+  - The success path, the D7 slice mismatch, and the stderr output are in 8.5.
+  - The running, stopped, and `kill -9` scenarios are in 8.6/8.7. The unknown project is in 8.7.
+  - The stdout/file pair is in 8.8.
+- **Docs and walkthrough:** Tasks 9.1–9.3.
 
-### [CONCERN] Task 1.2 puts a hardcoded version next to a "record the actual value" instruction
-
-Step 3 tells the implementer to run `sq --version` and record the actual value, and in the same sentence names "0.15.0" as the expected value. The project's CLAUDE.md calls this pattern a hallucination trap. If the command output is empty or odd, the nearest plausible token is the literal. Later steps and Tasks 4.2 and 5.4 also say "0.15.0 pair". Reword to say: print the version, and stop with an error if no version is printed. Refer to the pair by its fixture constant rather than a version.
-
-### [CONCERN] review.py may exceed ~300 lines after Section 5, but the size check happens only in Task 4.1
-
-Task 4.1 is the only place that tells the implementer to split `review.py` into `review_json.py` and `review_artifact.py` if it passes ~300 lines. Tasks 5.1 and 5.3 then add `review_record_id`, `to_verdict_input`, and the re-exports. The project limit applies to the file as it stands after each addition. Add a size check to Task 5.3, with the same split instruction. Task 3.2's note about moving the helpers should also name the split.
-
-### [CONCERN] The "defined once" test in Task 5.5 can false-positive on short, common strings
-
-The test fails on any string constant equal to a Squadron key. Keys such as `id`, `score`, `model`, `slice`, `location`, and `verdict` are also ordinary words. They may legitimately appear as `getattr` names, dict keys for non-Squadron data, or short messages. The step says to fix the source and not loosen the test, which could push a junior AI toward contortions. Say how to handle a legitimate non-key use of such a word, for example by scoping the scan to subscript and `.get()` arguments. Alternatively, tell the implementer to stop and ask the PM when the hit is not a Squadron key access.
-
-### [NOTE] Task 3.5 is large
-
-Task 3.5 combines a table over about eight fixtures, seven named cases, three missing-key tests, five finding-error tests, two provider-failure error tests, and an unknown-key test. Effort 3 looks low for the volume. It could be split into "real-file table and named cases" and "error cases". Both halves are completable as written, so this is not blocking.
-
-### [NOTE] The task file correctly diverges from the slice on trailing stdout lines
-
-The slice's success criteria say "The 0.14.0 captures, which have a trailing stdout line, parse the same as a pure-JSON capture." A grep of `tests/fixtures/sq_reviews/` finds no `Saved review to` line in either existing stdout capture. Task 4.2 handles this by appending the line to a real capture's text, and that satisfies the intent. The slice wording is inaccurate, and the PM may want to correct it. Task 4.1's criterion also says "the new pair's stdout file", which means two existing captures plus the new one.
-
-### [NOTE] Minor dependency and scope tidy-ups
-
-- Task 2.1 lists "Dependencies: None (branch from Task 1.1 exists)". It actually needs the branch Task 1.1 creates, so it should list Task 1.1.
-- Task 3.1 says `tests/upstream/__init__.py` "(if other test packages use one)". Check `tests/store/` once and state the answer.
-- Task 4.1 has no commit line. Add "committed with Task 4.2", as 3.2, 3.4, 5.1, and 5.3 do.
-- Task 5.5 does not trace to a bullet in the "Development Approach" list. It does trace to the Technical Requirements ("A test asserts both"), so it is not scope creep.
-
-### [PASS] Success-criteria coverage for Sections 1–5
-
-The following slice criteria map to tasks:
-- Every fixture parses, with the table-driven expectations: Task 3.5.
-- Both provider-failure files: Task 3.5.
-- *Findings Not Parsed*, with the edited-copy known gap: Tasks 1.3 and 3.5.
-- PR review with `pr:` ignored: Task 3.5.
-- 0.15.0 `sq_run_id` and stamp: Task 3.5.
-- Stdout captures, the `findings_parsed` branches, and `requested_model` handling: Task 4.2.
-- File/stdout finding-key equality on the new pair, and `template_name` equal to `reviewType`: Tasks 1.2 and 4.2.
-- Record-id stability under hand edits, and change under summary edits: Task 5.2.
-- All listed `SquadronParseError` and `UpstreamVersionError` cases: Tasks 3.3, 3.5, 4.2, and 5.4.
-- `provider_failure_problem` as the single definition: Tasks 2.2 and 2.3.
-- Import direction and single key definitions: Task 5.5.
-- PyYAML as a runtime dependency: Task 2.1.
-
-I found no scope creep in Sections 1–5.
+No scope creep found. The extra tests in 5.5 and 8.1 trace to the Technical Requirements.
 
 ### [PASS] Sequencing, test-with pattern, and commit cadence
 
-Dependencies run in a single chain, with no cycles. Fixtures come before the code that reads them. PyYAML moves to runtime before the first `import yaml`. Each implementation task is followed immediately by its test task and committed with it (3.2/3.3, 3.4/3.5, 5.1/5.2, 5.3/5.4). Commits land throughout the file, not batched at the end. The task file states its commit rule explicitly. Tasks 1.1 and 1.2 have sensible "stop and ask the PM" guards. These cover a hand-edited fixture, a missing `sq`, and non-JSON stdout, and they prevent hand-built fixtures.
+- Every implementation task is committed together with the test task that follows it: 3.2/3.3, 3.4/3.5, 5.1/5.2, 5.3/5.4, 8.2/8.3, and 8.4/8.5.
+- Commits are spread across all nine sections, not batched at the end.
+- Moving PyYAML to runtime first (Task 2.1) satisfies the parser's import need.
+- Task 7.4 deletes the old fixture reader only after 7.1–7.3.
+- Task 7.2 correctly notes that `test_finding_changes.py` imports no removed helpers. A grep of `tests/` confirms only four files use them: `review_fixtures.py`, `test_demo_evidence_payloads.py`, `test_finding_identity.py`, and `evidence_harness.py`.
 
-### [PASS] No NFR or load-test obligation
+### [CONCERN] Task 8.2 commits an interim state where ingest reports `OK` without submitting
 
-The slice design restates no performance or load NFR. No `tests/load/` task or CI-gating task is required for this breakdown.
+Task 8.2 ends with a `TODO(8.4)` stub that returns `OK` after step 5, and the commit "covers 8.2 and 8.3". Task 8.3 tests only failure paths, so that commit ships a command that reports success while doing nothing. The project rules say never to use silent fallback values. Either have the stub fail explicitly, for example with a nonzero `ExitCode` or `NotImplementedError`, until 8.4. Or merge 8.2 and 8.4 (about 5 effort points together) and keep 8.3/8.5 as the tests.
+
+### [CONCERN] Task 1.2 is an external-dependency gate with a large downstream blast radius
+
+Task 1.2 needs `sq`, a provider key, and network access, and its stop conditions rightly forbid hand-building a pair. Four later tasks depend on its output: 3.5 (new file stamp and `sq_run_id` case), 4.2 (pair equality), 5.2 (file versus stdout ids), and 8.8 (end-to-end). A blocked 1.2 therefore stalls work in Sections 3–5 and 8.
+- Add a note that if 1.2 is blocked, the dependent assertions are deferred to a follow-up. Alternatively, move 1.2 later, since 1.1 and 1.3 already cover most parser tests.
+- The `sq review slice 105` step also uses a slice design that will change as the review runs. The note about recording the actual version covers this, but the `sq` run and the PM stop condition should stay visible.
+
+### [NOTE] Task 4.2's trailing-line test differs from the design's criterion
+
+The slice design says "The 0.14.0 captures, which have a trailing stdout line, parse the same as a pure-JSON capture." The task instead builds the case by appending a `Saved review to` line, noting that no existing capture has one. That is correct: `tests/fixtures/README.md:86` confirms the 104 capture has no trailing line. The criterion is still satisfied, but the design's wording is inaccurate and could be corrected in a later pass.
+
+### [NOTE] Several tasks are large but acceptable
+
+Tasks 3.5, 4.2, and 8.6 each pack many cases (effort 3). Each case is enumerated and independent, so a junior AI can work through them, and splitting would add churn without benefit. Task 5.5 is small but cohesive.
+
+### [NOTE] Task 9.3 edits the slice design file
+
+The only file modified is the LLD itself, to replace the draft walkthrough with real output. This is intentional, and the "do not edit the LLD to match" rule is explicit. It is fine as long as the edit is limited to the Verification Walkthrough section.
 
 ### Run Digest
 
-- Response length: 7582 chars
+- Response length: 5474 chars
 - Response is newline-free: no
-- Tool calls made: 4
+- Tool calls made: 7
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -149,10 +124,10 @@ The slice design restates no performance or load NFR. No `tests/load/` task or C
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 56.6 s
+- Duration: 41.8 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
