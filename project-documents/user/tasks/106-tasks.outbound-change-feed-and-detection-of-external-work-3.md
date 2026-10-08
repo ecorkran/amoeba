@@ -28,8 +28,8 @@ status: not_started
 
 **Steps**:
 - [ ] Create `src/amoeba/cli/inspect_feed.py` with `watch_rows` and `detection_rows`; register both in `LISTINGS` (project-scoped, `rows=`). Columns exactly as in the LLD CLI table
-- [ ] `watches`: `state` comes from `watch_state` (Task 9.3); the listing opens the store read-only plus the supervisor directory and writes nothing
-- [ ] `detections`: ledger rows with `--outcome` as a `choice_options` entry (choices from `DetectionOutcome`, defined once), `recorded_since` from the store read, plus parked files as `failed` rows read from the sidecars through the layout module (they have no store row; leave unknown columns empty, not guessed). Add the pure sidecar-directory reader here if Task 9.9 did not
+- [ ] `watches`: `state` comes from `watch_state` (Task 9.2a); the listing opens the store read-only plus the supervisor directory and writes nothing
+- [ ] `detections`: ledger rows with `--outcome` as a `choice_options` entry (choices from `DetectionOutcome`, defined once), `recorded_since` from the store read, plus parked files as `failed` rows read from the sidecars through the layout module (they have no store row; leave unknown columns empty, not guessed). Use `parked_files` from `detection_layout.py` (Task 9.2a); this task defines no reader
 - [ ] Update the test that pins the listing set to the new set
 
 **Success Criteria**:
@@ -66,7 +66,7 @@ status: not_started
 **Objective**: Register the second tenant; run `sq --version` once, before the loop.
 
 **Steps**:
-- [ ] In `cli/lifecycle.py::start`, capture the `sq` label with the shared helper and `settings.sq_timeout_seconds` **before** building the process, and pass it to `ReviewDetectionTenant`. Register it after `InboxTenant` (comment: a backlog of submissions, including `watch_reviews`, drains first)
+- [ ] In `cli/lifecycle.py`, extract the tenant assembly from `start` into a function `build_tenants(settings, supervisor_dir)` that returns the tenant tuple. It captures the `sq` label with the shared helper and `settings.sq_timeout_seconds` and passes it to `ReviewDetectionTenant`; `start` calls it **before** building the process. Register the detection tenant after `InboxTenant` (comment: a backlog of submissions, including `watch_reviews`, drains first)
 - [ ] Recovery still runs before any tenant ticks (unchanged)
 
 **Success Criteria**:
@@ -81,20 +81,22 @@ status: not_started
 **Owner**: Junior AI
 **Dependencies**: Task 10.3
 **Effort**: 3
-**Objective**: Both tenants run in the real host; no tick starts a subprocess.
+**Objective**: Both tenants run in the real `amoeba start`; no tick starts a subprocess; the label is captured once.
+
+`tests/host_harness.py` cannot be used here: it builds its own bootstrap program with one throwaway tenant and does not call `start`. Use the real CLI for the process test and in-process objects for the patching tests.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection_process.py` using `start_host` from `tests/host_harness.py`: a registered directory is baselined and a new file is ingested end to end; `kill -9` and restart re-ingest nothing
-- [ ] No tick spawns a subprocess: patch `subprocess.run` after start-up (in-process host), run several ticks with files arriving, assert zero calls
-- [ ] The label is captured once: patch the helper to count calls; assert one call at start-up regardless of tick count
+- [ ] Read `tests/cli_harness.py` and `tests/test_cli_lifecycle.py` for how they launch `amoeba start`. If neither can run a long-lived `amoeba start` subprocess with a chosen `PATH`, add a small `start_cli_process` helper to `tests/cli_harness.py`. Put a fake `sq` script (prints a fixed label) first on `PATH` so the test never calls a real `sq`
+- [ ] Add `tests/process/test_review_detection_process.py`, CLI-subprocess case: start the process, create a project and seed a slice node (demo script), register a directory, copy a real review in; wait on a condition until it is ingested (read-only `inspect verdicts`); `kill -9`, restart, and assert nothing is re-ingested
+- [ ] In-process case: `build_tenants` called once with the helper patched to count calls: exactly one call, and the label reaches the tenant
+- [ ] In-process case: with a `LocalHost` (`tests/local_host_harness.py`) and a tenant built directly, patch `subprocess.run` to raise, run several ticks with files arriving and being ingested; no call occurs
 
 **Success Criteria**:
 - [ ] Tests pass
 - [ ] Commit, e.g. `feat(cli): register the detection tenant in start`
 
 **Files to Create**: `tests/process/test_review_detection_process.py`
-
----
+**Files to Modify**: `tests/cli_harness.py` (only if the helper is needed)
 
 ---
 
@@ -161,9 +163,28 @@ status: not_started
 
 ---
 
-### Task 11.4: Write `docs/feed-contract.md`
+### Task 11.4: End-to-end test, part C: what detection refuses to guess
 **Owner**: Junior AI
 **Dependencies**: Task 11.3
+**Effort**: 3
+**Objective**: LLD walkthrough steps 7 and 8 through the real CLI, so they are not covered only by unit tests and a manual run.
+
+**Steps**:
+- [ ] Add a third test to `tests/cli/test_detection_end_to_end.py`, reusing the helpers, starting from a registered, baselined directory with the slice node seeded
+- [ ] Copy `project-documents/user/reviews/104-review.slice.findings-verdicts-and-provenance.md` (or another real review whose slice has no node) and a `notes.md` containing `# not a review`. Assert via read-only `inspect detections --outcome unattributed` and `--outcome unparseable` that each is listed with the right outcome, the unattributed one has no candidates, and no verdict was added
+- [ ] Copy a real part 1 round 1 file, wait for ingest, append a `resolution: accepted` frontmatter line to the copy, `kill -9` the process and restart it. Assert: one new `ingested` ledger row pointing at the **same** verdict id, verdict count unchanged, and the follower (still running, or restarted from its last `seq`) printed that `review_detected` line and no `verdict_recorded`
+
+**Success Criteria**:
+- [ ] Passes three times consecutively with parts A and B
+- [ ] Commit, e.g. `test(cli): add detection end-to-end test, part C`
+
+**Files to Modify**: `tests/cli/test_detection_end_to_end.py`
+
+---
+
+### Task 11.5: Write `docs/feed-contract.md`
+**Owner**: Junior AI
+**Dependencies**: Task 11.4
 **Effort**: 3
 **Objective**: Enough for initiative 160 to consume the feed without reading code (LLD Integration Requirements).
 
@@ -174,21 +195,21 @@ status: not_started
 
 **Success Criteria**:
 - [ ] The document exists with front matter and all the topics above
-- [ ] Committed with Task 11.5
+- [ ] Committed with Task 11.6
 
 **Files to Create**: `docs/feed-contract.md`
 
 ---
 
-### Task 11.5: Test the feed contract against the code
+### Task 11.6: Test the feed contract against the code
 **Owner**: Junior AI
-**Dependencies**: Task 11.4
+**Dependencies**: Task 11.5
 **Effort**: 2
 **Objective**: A doc that names things the code lacks fails a test.
 
 **Steps**:
 - [ ] Add `tests/test_contract_docs.py`. For `docs/feed-contract.md`: every `ChangeKind` value and every `Change` field name appears in the text; every flag of `amoeba feed` (read from the argparse parser) appears; every `FeedSettings` field name appears; every backticked `amoeba.` dotted name in the document resolves with `importlib` plus `getattr`
-- [ ] Design the helper so Task 11.6 can call it for other contracts with their own required-terms lists
+- [ ] Design the helper so Tasks 11.7–11.9 can call it for other documents with their own required-terms lists
 
 **Success Criteria**:
 - [ ] Test passes; temporarily deleting one `ChangeKind` from the doc makes it fail (verify once, then restore)
@@ -198,39 +219,74 @@ status: not_started
 
 ---
 
-### Task 11.6: Update the existing contracts and `CHANGELOG.md`
+### Task 11.7: Update `store-contract.md` and `inbox-contract.md`
 **Owner**: Junior AI
-**Dependencies**: Task 11.5
-**Effort**: 3
-**Objective**: Record every contract change this slice made (LLD Technical Scope, last bullet).
+**Dependencies**: Task 11.6
+**Effort**: 2
+**Objective**: Record the store and inbox contract changes.
 
 **Steps**:
-- [ ] `store-contract.md`: `read_transaction()` under 101's section, credited to 106; the feed read API; `watches`, `detections`, `record_detection`, `record_detected_verdict`; `attribute_review`; schema 6; the trigger convention
+- [ ] `store-contract.md`: `read_transaction()` under 101's section, credited to 106, and the `read_only` constructor flag behind it; the feed read API; `watches`, `detections`, `recorded_since`, `record_detection`, `DetectionInput`, `record_detected_verdict`; `attribute_review`; schema 6; the trigger convention
 - [ ] `inbox-contract.md`: the `watch_reviews` kind and payload; the `verdict` payload's optional `source_document`
-- [ ] `process-contract.md`: `ReviewDetectionTenant`, the three settings, scan cadence and settle rule, the filesystem-latency posture (watched directories are expected to be local), the once-at-start `sq --version` label, the ownership rule (defer / skip)
-- [ ] `evidence-contract.md`: the series definition (node, review type, source document); the attribution rule and that **initiative 120 must use it**; D5 requirements 3 and 5 on 120; the label meaning (what the process observed at start-up)
-- [ ] `CHANGELOG.md`: entries under Unreleased for the feed, detection, and an explicit line that `source_document` changes 104's contract additively
-- [ ] Update the forward reference in `103-slice.durable-inbox-and-message-queue.md` (line near 319) per D8a so it points at effects, not `applied_seq`; edit only that sentence
-- [ ] Extend `tests/test_contract_docs.py` with one required-terms list per updated contract (the new method, kind, setting, and setting-name strings listed above) and a check that `CHANGELOG.md` mentions `source_document`
+- [ ] Extend `tests/test_contract_docs.py` with required-terms lists for these two documents (every method, kind, and field named above)
 
 **Success Criteria**:
-- [ ] The extended doc test passes; each contract points to `feed-contract.md` where relevant
-- [ ] Commit, e.g. `docs: update contracts and changelog for slice 106`
+- [ ] The doc test passes; each document points to `feed-contract.md` where relevant
+- [ ] Commit, e.g. `docs: update store and inbox contracts for slice 106`
 
-**Files to Modify**: the four contracts, `CHANGELOG.md`, `tests/test_contract_docs.py`, `project-documents/user/slices/103-slice.durable-inbox-and-message-queue.md`
+**Files to Modify**: `docs/store-contract.md`, `docs/inbox-contract.md`, `tests/test_contract_docs.py`
 
 ---
 
-### Task 11.7: Pin the import boundary and run the full checks
+### Task 11.8: Update `process-contract.md` and `evidence-contract.md`
 **Owner**: Junior AI
-**Dependencies**: Task 11.6
+**Dependencies**: Task 11.7
+**Effort**: 2
+**Objective**: Record the process and evidence contract changes, including what initiative 120 must do.
+
+**Steps**:
+- [ ] `process-contract.md`: `ReviewDetectionTenant`, the three settings, scan cadence and settle rule, the filesystem-latency posture (watched directories are expected to be local), the once-at-start `sq --version` label, the ownership rule (defer / skip)
+- [ ] `evidence-contract.md`: the series definition (node, review type, source document); the attribution rule and that **initiative 120 must use it**; D5 requirements 3 and 5 on 120; the label meaning (what the process observed at start-up)
+- [ ] Extend `tests/test_contract_docs.py` with required-terms lists for these two documents (setting names, tenant name, `attribute_review`, `source_document`)
+
+**Success Criteria**:
+- [ ] The doc test passes
+- [ ] Commit, e.g. `docs: update process and evidence contracts for slice 106`
+
+**Files to Modify**: `docs/process-contract.md`, `docs/evidence-contract.md`, `tests/test_contract_docs.py`
+
+---
+
+### Task 11.9: Update `CHANGELOG.md` and the 103 forward reference
+**Owner**: Junior AI
+**Dependencies**: Task 11.8
+**Effort**: 1
+**Objective**: The remaining paper trail.
+
+**Steps**:
+- [ ] `CHANGELOG.md`: entries under Unreleased for the feed and for detection, and an explicit line that `source_document` changes 104's contract additively
+- [ ] Update the forward reference in `project-documents/user/slices/103-slice.durable-inbox-and-message-queue.md` (the sentence near line 319 naming `applied_seq` as a change source) per D8a so it points at effects; edit only that sentence
+- [ ] Extend `tests/test_contract_docs.py`: `CHANGELOG.md` mentions `source_document`
+
+**Success Criteria**:
+- [ ] The doc test passes; `git diff` on the 103 slice shows one changed sentence
+- [ ] Commit, e.g. `docs: add slice 106 changelog entries`
+
+**Files to Modify**: `CHANGELOG.md`, the 103 slice document, `tests/test_contract_docs.py`
+
+---
+
+### Task 11.10: Pin the boundaries and run the full checks
+**Owner**: Junior AI
+**Dependencies**: Task 11.9
 **Effort**: 2
 **Objective**: Technical Requirements that a test can hold.
 
 **Steps**:
 - [ ] Add `tests/test_import_boundaries.py` (AST-based, like `tests/test_writer_guard.py`): nothing under `src/amoeba/store/` imports `amoeba.upstream`, `amoeba.process`, or `amoeba.feed`; nothing under `src/amoeba/feed/` imports `amoeba.process`
+- [ ] In the same module, a text scan of `src/amoeba/`: the table names `changes`, `review_watches`, and `detected_reviews` appear in SQL statements only in `sql_feed.py` (and the migration file); and the string values of `ChangeKind` and `DetectionOutcome` are each defined as enum members in `feed_models.py` only (outside the migration and tests)
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; fix failures at their cause
-- [ ] `wc -l` every new source file; any beyond ~330 lines is split by concern, with tests rerun
+- [ ] `wc -l` every new source file; any beyond ~300 lines is split by concern and the tests rerun
 
 **Success Criteria**:
 - [ ] Suite, `ruff`, and `pyright` clean
@@ -240,15 +296,16 @@ status: not_started
 
 ---
 
-### Task 11.8: Run the Verification Walkthrough
+### Task 11.11: Run the Verification Walkthrough
 **Owner**: Junior AI
-**Dependencies**: Task 11.7
+**Dependencies**: Task 11.10
 **Effort**: 2
 **Objective**: Compare the real output with the LLD walkthrough.
 
 **Steps**:
 - [ ] Run walkthrough steps 1–9 from the LLD in bash against a scratch `AMOEBA_STORE_DIR`, using a second terminal or background job for the follower
 - [ ] For each step, compare with the stated expectation. Write each difference (command, expected, actual) into a short list in your final message to the PM. Do not edit the LLD. If a step cannot run, say which and why
+- [ ] In the same message, list the task-level additions that go beyond the LLD's text: the `read_only` constructor flag, `recorded_since`, `DetectionInput`, and `record_detected_verdict`
 
 **Success Criteria**:
 - [ ] All nine steps run; every difference is reported to the PM (an empty list is stated as such)
@@ -256,27 +313,33 @@ status: not_started
 
 ---
 
-### Task 11.9: Trace Functional Requirements to tests
+### Task 11.12: Trace Functional Requirements to tests
 **Owner**: Junior AI
-**Dependencies**: Task 11.8
+**Dependencies**: Task 11.11
 **Effort**: 2
-**Objective**: Every LLD Functional Requirement has a passing test (LLD Success Criteria).
+**Objective**: Every LLD Functional Requirement and Technical Requirement has a passing test (LLD Success Criteria).
 
 **Steps**:
 - [ ] Confirm each requirement below is covered by the named test; run those tests by name. Where the named test lacks the assertion, add it there
   - Invariant and reconciliation: `test_feed_invariant`
   - No tick starts a subprocess; label captured once: `test_review_detection_process`
-  - `resolution` produces `node_status_changed` to `runnable`: `test_feed_triggers` (block/resolve) and the end-to-end test
+  - `resolution` produces `node_status_changed` to `runnable`: `test_feed_triggers` (block/resolve) and the end-to-end test, part A
   - `read_transaction()` atomic against a concurrent commit: `test_read_transaction`
   - `--after N`, resume, no gap or repeat: `test_follower`, `tests/cli/test_feed.py`, end-to-end part B
-  - `--follow` while the process is stopped: end-to-end part A
-  - Real file, provider failure, series, hand edit, unattributed, non-review, hand ingest and `recorded_since`: `test_review_detection`
-  - Baseline, unreachable directory, unreadable file at registration, removed directory: `test_review_detection_baseline`
+  - `--follow` while the process is stopped, and then starts: `tests/cli/test_feed.py` and end-to-end part A
+  - Real file, provider failure, series, hand edit, hand ingest and `recorded_since`: `test_review_detection`; hand edit and refusals again in end-to-end part C
+  - Attribution (zero, one, several): `test_attribution` and `test_review_detection`
+  - Non-review file not retried until its bytes change: `test_review_detection`
+  - Baseline, unreachable directory, unreadable file at registration, removed directory: `test_review_detection_baseline` and `test_review_detection`
   - Defer on open `SQ_RUN`, `runner_issued` skip: `test_review_detection` (defer and skip cases)
-  - Restart re-ingests nothing: `test_review_detection` and `test_review_detection_process`
+  - Restart re-ingests nothing: `test_review_detection`, `test_review_detection_process`, end-to-end part B
   - File deleted between listing and read: `test_review_sources` and `test_review_detection`
   - Store failure bounded: `test_review_detection_failure`
   - 5 → 6 upgrade: `test_migration_006`
+  - Enums and SQL defined once; store imports nothing from upstream, process, or feed: `test_import_boundaries`
+  - Writer guard still passes with the demo script listed: `test_writer_guard`
+  - Real fixtures used, no hand-built reviews: confirm by reading the detection tests' fixture setup
+  - `feed-contract.md` complete: `test_contract_docs`
 - [ ] Report any requirement for which no test could be named, with the one you added
 
 **Success Criteria**:

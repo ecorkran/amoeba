@@ -23,7 +23,7 @@ status: not_started
 
 ### Task 6.1: Define the review-producing kinds set
 **Owner**: Junior AI
-**Dependencies**: Task 5.7
+**Dependencies**: Task 5.9
 **Effort**: 1
 **Objective**: One definition of which journal kinds produce reviews (LLD D5).
 
@@ -195,6 +195,7 @@ status: not_started
 - [ ] Add `tests/cli/test_feed.py`: seed a store (via the supervisor-dir harness other CLI tests use), run `amoeba feed --project P`; each line parses as JSON with exactly the `Change` keys; exit code 0; process stopped
 - [ ] `--after N` prints only later lines; an unknown project exits with the not-found code and prints nothing on stdout
 - [ ] `--follow` as a subprocess: read the first lines, write a new change from a read-write store, assert the new line arrives, send SIGTERM, assert clean exit
+- [ ] `--follow` started while no process is running (store exists, no lock held): it prints existing changes, then, when a separate read-write store handle commits a new node (standing in for the process), prints the new line. The full process-starts case is in Task 11.2
 - [ ] Killed follower: `kill -9` a `--follow` subprocess mid-stream, restart with `--after` its last printed `seq`, assert no gap and no repeat
 
 **Success Criteria**:
@@ -327,26 +328,45 @@ status: not_started
 
 ---
 
-### Task 9.3: Implement the tenant skeleton and baselining
+### Task 9.2a: Sidecar layout, parked-file reader, and `watch_state`, with tests
 **Owner**: Junior AI
 **Dependencies**: Task 9.2
-**Effort**: 4
+**Effort**: 3
+**Objective**: Define the on-disk attempts layout and the pure read functions once, before the tenant and the listings use them.
+
+**Steps**:
+- [ ] Create `src/amoeba/process/detection_layout.py`: the path `{store_dir}/detection/attempts/{project_id}/{key}.attempts.json` with directory names and suffix defined once, and the two key forms (`{digest}` for files; `baseline-{sha256 of the dir}` for baselines)
+- [ ] Add `parked_files(store_dir, project_id, max_attempts) -> list[ParkedFile]` (key, attempts, last error, last failed time) reading `AttemptsSidecar` files at or above `max_attempts`. This module owns the reader; Task 9.9 and Task 10.1 import it and define no reader of their own. A malformed sidecar is reported (raise `SidecarError`'s subtype or skip with a WARNING naming the file — pick the warning, since one bad sidecar must not hide the others)
+- [ ] Add `watch_state(watch, directory_listable, store_dir, max_attempts) -> str` returning `failed` (a baseline sidecar at or above the limit), `baseline_pending` (active, `baselined_at` null, directory listable), `unreachable` (not listable), else `ok`. The state strings are a `StrEnum` defined here once. Pure: it takes the listability as an argument and touches no filesystem except the sidecar directory
+- [ ] Add `tests/process/test_detection_layout.py`: path and key forms; `parked_files` returns only sidecars at or above the limit and tolerates one malformed file; `watch_state` returns each of the four values, including `failed` staged with a real written sidecar
+
+**Success Criteria**:
+- [ ] Tests, `ruff`, `pyright` pass
+- [ ] Commit, e.g. `feat(process): add detection sidecar layout and watch_state`
+
+**Files to Create**: `src/amoeba/process/detection_layout.py`, `tests/process/test_detection_layout.py`
+
+---
+
+### Task 9.3: Implement the tenant skeleton and baselining
+**Owner**: Junior AI
+**Dependencies**: Task 9.2a
+**Effort**: 3
 **Objective**: Tenant registration shape, scan cadence, and the all-or-nothing baseline (LLD "Registering a directory" and its failure table).
 
 **Steps**:
 - [ ] Create `src/amoeba/process/review_detection.py` with `ReviewDetectionTenant(supervisor_dir, *, version_label, source_factory)`; `name` property; `tick(host) -> bool` using the same `Host` protocol shape as `InboxTenant`. `source_factory` builds a `ReviewSource` for a directory (default `DirectoryReviewSource`) so tests can substitute a source
 - [ ] A tick does nothing unless `review_scan_interval_seconds` has elapsed since the last scan (use a clock passed in or `time.monotonic`; tests must not sleep for the real interval)
-- [ ] For each open project, for each **active** watch: if `baselined_at` is null, baseline it; otherwise scan (Task 9.4)
-- [ ] Baseline: list and read every top-level `*.md` (not through the settle rule); any failure → write nothing, retry next scan. On success call the store's `baseline_watch` once. Failure table: missing/unreadable directory → `unreachable` (one ERROR on the transition, one INFO on recovery); one unreadable file → one WARNING naming it, watch stays `baseline_pending`; a file deleted between list and read is dropped; a store failure follows the bounded-failure rule keyed `baseline-{sha256 of the dir}` (counting and parking are built in Task 9.9; this task only creates the layout they use)
-- [ ] Create the sidecar layout module first (e.g. `detection_layout.py` beside the tenant): the path `{store_dir}/detection/attempts/{project_id}/{key}.attempts.json`, with directory names and suffix defined once, and the key forms (`{digest}` for files, `baseline-{sha256 of the dir}` for baselines). Task 9.9 and Task 10.1 reuse it
-- [ ] Expose a pure function `watch_state(watch, directory, store_dir) -> str` returning `failed` (a baseline sidecar at or above `detection_max_attempts`), `baseline_pending` (active, `baselined_at` null, directory readable), `unreachable` (directory cannot be listed), else `ok`. Nothing is persisted; the listing calls it at read time (Task 10.1)
+- [ ] For each open project, for each **active** watch: if `baselined_at` is null, baseline it; otherwise call a scan method that Task 9.5 fills in (here it is a stub that returns without work)
+- [ ] Baseline: list and read every top-level `*.md` (not through the settle rule); any failure → write nothing, retry next scan. On success call the store's `baseline_watch` once. Failure table: missing/unreadable directory → `unreachable` (one ERROR on the transition, one INFO on recovery); one unreadable file → one WARNING naming it, watch stays `baseline_pending`; a file deleted between list and read is dropped; a store failure follows the bounded-failure rule keyed `baseline-{sha256 of the dir}` (counting and parking are built in Task 9.9, using the layout from Task 9.2a)
+- [ ] Write one small reachability helper used by both baselining and scanning (Task 9.5): given a watch and whether its directory could be listed, it logs exactly one ERROR on the good→bad transition and one INFO on bad→good, remembering the last state per watch in memory, and never logs on repeat ticks
 - [ ] Never write into a watched directory
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
 - [ ] Committed with Task 9.4
 
-**Files to Create**: `src/amoeba/process/review_detection.py`, `src/amoeba/process/detection_layout.py`
+**Files to Create**: `src/amoeba/process/review_detection.py`
 
 ---
 
@@ -360,12 +380,11 @@ status: not_started
 - [ ] Add `tests/process/test_review_detection_baseline.py` using `local_host` from `tests/process/conftest.py` and real fixtures copied into `tmp_path`
 - [ ] Registration then tick: existing files become `baseline` rows, `baselined_at` is set, no verdict, no change on the feed
 - [ ] Directory missing at registration: `watch_state` is `unreachable`, nothing ingested; created later, baselined on the next scan
-- [ ] Transitions and logging (`caplog`): across several ticks while the directory stays missing, exactly one ERROR is logged (no repeat per tick); when it returns, exactly one INFO; removing a baselined directory later and restoring it logs the same pair and the process keeps ticking
-- [ ] `watch_state` returns `ok`, `baseline_pending`, `unreachable`, and `failed` (stage `failed` by writing a baseline sidecar at the limit using the layout module)
+- [ ] Transitions and logging (`caplog`) while baselining: across several ticks while the directory stays missing, exactly one ERROR is logged (no repeat per tick); when it appears, exactly one INFO (the scan-time case for already-baselined watches is tested in Task 9.6)
 - [ ] One unreadable file: no rows, state `baseline_pending`, one WARNING; after `chmod`, whole directory baselined at once
 - [ ] File deleted between list and read: dropped; a later reappearance is detected as new (Task 9.5 asserts the detection; here assert it is absent from the baseline)
-- [ ] Scan interval: two ticks inside the interval scan once (fake clock)
-- [ ] Inactive watch is not scanned; reactivation does not re-baseline
+- [ ] Scan interval: with an unreadable file making the baseline retry each scan, two ticks inside the interval attempt it once (count calls on a substitute `source_factory`; fake clock)
+- [ ] An inactive watch is never baselined; a watch with `baselined_at` already set is never baselined again
 
 **Success Criteria**:
 - [ ] Tests pass
@@ -382,10 +401,11 @@ status: not_started
 **Objective**: Digest, ledger check, parse, attribute, record (LLD "Detecting a review").
 
 **Steps**:
-- [ ] For each `DetectedFile` from the source: `sha256` of the bytes; skip if `(project, path, digest)` is in the ledger or has a parked sidecar (Task 9.9)
+- [ ] For each `DetectedFile` from the source: `sha256` of the bytes; skip if `(project, path, digest)` is in the ledger (the parked-sidecar skip is added in Task 9.9)
 - [ ] Parse with `parse_review_artifact`. On `SquadronReviewError`: `record_detection(unparseable, detail=error text)`. Catch only that base class; log at INFO, since a parse failure is an outcome. Do not catch anything wider
 - [ ] Attribute with `attribute_review(store, project, parsed.slice)`. Zero or several: `record_detection(unattributed, detail=candidate ids, record_id=review_record_id(parsed))`. Exactly one: call `store.record_detected_verdict(verdict_input, detection_input)` (built and tested in Task 6.4–6.5), with `verdict_input = to_verdict_input(parsed, node_id=..., source_path=str(path), upstream_version=<label>)`. That one call records both in one transaction; the tenant never calls `record_verdict` and `record_detection` separately for an ingest
 - [ ] Version label: the file's own stamp wins (105's D4 rule inside `to_verdict_input`); the tenant passes the start-up label only as the caller's fallback
+- [ ] Fill in the scan method from Task 9.3: obtain the source, call `poll()`; if it raises `ReviewDirectoryUnavailableError`, report it through the reachability helper (same ERROR-once / INFO-once rule as baselining) and move on to the next watch; a successful poll reports reachable
 - [ ] Set `record_id` on the ledger row for every file that parsed, including `unattributed`
 - [ ] Do not retry `unparseable` or `unattributed` files: the ledger row is terminal for that digest; changed bytes make a new digest and a new attempt
 
@@ -413,6 +433,8 @@ status: not_started
 - [ ] `# not a review` in a `.md`: `unparseable` with the parser's error, not retried until its bytes change
 - [ ] Restart: build a new tenant over the same store; nothing re-ingested
 - [ ] Version label: construct the tenant with a distinctive test label. A copied fixture whose frontmatter has no `squadronVersion` is recorded with that label as `upstream_version`; one whose frontmatter has a stamp keeps its own stamp; with the label set to the `VERSION_UNAVAILABLE` marker, the recorded version is that marker, not empty. Pick fixtures by checking which real files carry the key
+- [ ] Already-baselined directory removed: across several ticks exactly one ERROR is logged and the process keeps ticking; restored, exactly one INFO and detection resumes with a newly copied file
+- [ ] Scan interval: with a substitute source counting `poll()` calls and a fake clock, two ticks inside the interval poll once
 - [ ] Reactivation: register, baseline, deactivate (`active false`), copy a new fixture in, tick (nothing happens), reactivate, tick twice: the file is detected as new and the earlier baseline rows are unchanged
 - [ ] A file deleted between listing and read and later restored is detected normally (patched source)
 - [ ] `unattributed` then slice node created then `ingest review` (105's function, called in-process) by hand: `recorded_since` true, a second ingest records nothing
@@ -469,10 +491,10 @@ status: not_started
 **Objective**: A store failure on one file must not crash-loop the process (LLD Errors, "Counter first").
 
 **Steps**:
-- [ ] Sidecars use `AttemptsSidecar` and `write_durably` at the paths from `detection_layout.py` (Task 9.3); do not define any path or key form here
+- [ ] Sidecars use `AttemptsSidecar` and `write_durably` at the paths from `detection_layout.py` (Task 9.2a); do not define any path or key form here
+- [ ] Add the parked-sidecar skip to the scan path from Task 9.5: a file whose digest has a sidecar at or above `detection_max_attempts` is skipped before parsing
 - [ ] Before the recording transaction, write or increment the sidecar. On exception: below `detection_max_attempts`, `logger.exception` at ERROR and re-raise; at the limit, `logger.exception`, leave the sidecar, move on to the next file. On success delete the sidecar after commit. A leftover sidecar for a file already in the ledger is deleted on the next scan
 - [ ] Detection skips any `(project, digest)` with a parked sidecar (count at or above the limit). Removing the sidecar by hand retries. A parked baseline leaves the watch `failed` and unscanned until the sidecar is removed
-- [ ] Expose a pure reader of the sidecar directory for Task 10.1's listing (parked files and their last error)
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean

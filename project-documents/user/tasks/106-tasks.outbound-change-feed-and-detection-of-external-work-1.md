@@ -61,13 +61,14 @@ status: not_started
 - [ ] `ChangeKind` and `DetectionOutcome` as `StrEnum`s with exactly the members in the LLD word lists
 - [ ] Frozen dataclasses: `Change` (`seq, project_id, kind, node_id, subject_id, payload: Mapping[str, object], recorded_at`), `ReviewWatch` (columns of `review_watches`), `DetectedReview` (columns of `detected_reviews`), and `DetectionInput` (what `record_detection` takes: project, path, digest, outcome, optional node id, verdict id, record id, detail)
 - [ ] A comment on `DetectionOutcome` names the two outcomes that emit no change (`baseline`, `runner_issued`) and says `failed` is a listing state, not a member
-- [ ] Define the set of silent outcomes once here (e.g. `SILENT_OUTCOMES`) for the trigger-consistency test in Task 5.7
+- [ ] Define the set of silent outcomes once here (e.g. `SILENT_OUTCOMES`) for the trigger-consistency test in Task 5.8
+- [ ] Add `tests/store/test_feed_models.py`: `ChangeKind` and `DetectionOutcome` have exactly the LLD's members and string values; `SILENT_OUTCOMES` is exactly `baseline` and `runner_issued`; the dataclasses are frozen
 
 **Success Criteria**:
 - [ ] Module imports; `ruff` and `pyright` clean
-- [ ] Committed with Task 1.5
+- [ ] Commit, e.g. `feat(store): add feed models`
 
-**Files to Create**: `src/amoeba/store/feed_models.py`
+**Files to Create**: `src/amoeba/store/feed_models.py`, `tests/store/test_feed_models.py`
 
 ---
 
@@ -81,14 +82,14 @@ status: not_started
 - [ ] Read `005_verdicts_and_findings.sql` and `sql_evidence.py` for the pairing convention (SQL file names match constants)
 - [ ] Create `src/amoeba/store/schema/006_change_feed_and_detection.sql`: tables `changes`, `review_watches`, `detected_reviews` exactly per the LLD (including `changes` index on `(project_id, seq)`, `detected_reviews` UNIQUE `(project_id, path, digest)`, no FK on `changes.node_id`)
 - [ ] In the same file: `ALTER TABLE verdicts ADD COLUMN source_document TEXT`; drop `idx_verdicts_previous_round` and recreate it on `(project_id, node_id, review_type, source_document, recorded_seq)`. No `IF NOT EXISTS` (migration convention)
-- [ ] Create `src/amoeba/store/sql_feed.py` holding every table/column name and statement for these tables (inserts and selects are added by Tasks 4.1, 5.1, 5.2). No SQL outside `sql_*.py`
+- [ ] Create `src/amoeba/store/sql_feed.py` holding every table/column name and statement for these tables (inserts and selects are added by Tasks 4.1, 5.1, 5.5). No SQL outside `sql_*.py`
 - [ ] Set `EXPECTED_SCHEMA_VERSION` to 6 in `store/migrations.py`
 - [ ] Update every existing test that pins version 5 or the table/column set (search `tests/` for `EXPECTED_SCHEMA_VERSION`, `schema_version`, `== 5`)
 
 **Success Criteria**:
 - [ ] A fresh store reaches version 6 with the three tables and the new column
 - [ ] Full suite passes with the updated pins
-- [ ] Committed with Task 1.5
+- [ ] Committed with Task 1.4
 
 **Files to Create**: `006_change_feed_and_detection.sql`, `src/amoeba/store/sql_feed.py`
 **Files to Modify**: `store/migrations.py`, version-pinning tests
@@ -109,7 +110,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] New tests pass; full suite passes
-- [ ] Committed with Task 1.5
+- [ ] Commit, e.g. `feat(store): add migration 006 tables and source_document column`
 
 **Files to Create**: `tests/store/test_migration_006.py`
 
@@ -127,7 +128,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Tests, `ruff`, `pyright` pass
-- [ ] Commit, e.g. `feat(store): add migration 006 tables, feed models, and mapping`
+- [ ] Commit, e.g. `feat(store): add feed row mapping`
 
 **Files to Create**: `src/amoeba/store/mapping_feed.py`, `tests/store/test_mapping_feed.py`
 
@@ -135,7 +136,7 @@ status: not_started
 
 ## Section 2: Emission Triggers
 
-All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one `changes` row in the writer's transaction, with `payload` built by `json_object` and `recorded_at` copied from the row's own timestamp. Column and kind literals follow the LLD payload table; the invariant test (Task 5.7) ties the literals to the enums.
+All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one `changes` row in the writer's transaction, with `payload` built by `json_object` and `recorded_at` copied from the row's own timestamp. Column and kind literals follow the LLD payload table; the invariant tests (Tasks 5.7–5.9) tie the literals to the enums.
 
 ### Task 2.1: Trigger for node creation
 **Owner**: Junior AI
@@ -311,6 +312,7 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Add `read_transaction() -> AbstractContextManager[None]` to `Store`: `BEGIN` on entry, `COMMIT` on normal exit; if the block raises, roll back to release the read lock, then re-raise. Statement text comes from `sql.py` constants. Raise a clear error if called on a handle with a transaction already open (no nesting)
 - [ ] Decided: it is available on read-only handles only (LLD D1a). Add a keyword-only `read_only: bool = False` to `Store.__init__`; `open_read_only` passes `True`, `open` and `open_temporary` leave it false. `read_transaction()` on a handle where it is false raises `StoreError` with a message saying it is for read-only handles. Nested use (a transaction already open via `connection.in_transaction`) raises the same type. Update any direct `Store(...)` constructions in tests
 - [ ] Docstring shows the snapshot-then-head usage from the LLD
+- [ ] The `read_only` constructor flag is a task-level mechanism the LLD does not spell out (it only says the method lives on the read-only handle). Record it in `store-contract.md` in Task 11.7 and mention it to the PM in the Task 11.11 report
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
@@ -354,6 +356,8 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Add to `FeedOperations`: `record_detection(DetectionInput) -> DetectedReview` (idempotent: a repeat returns the existing row unchanged, no second row), `detections(project_id, *, outcome=None)`, and `recorded_since(project_id, record_id) -> bool`
 - [ ] Add the `AFTER INSERT ON detected_reviews ... WHEN new.outcome NOT IN (...)` trigger. Take the excluded literals from the silent set in `feed_models.py`; write them into the SQL once, with a comment pointing at the enum
 - [ ] `ingested` and `unattributed` rows with a node carry that `node_id`; payload is `outcome` and `path`
+- [ ] Transaction shape (settled here, reused by Tasks 5.5 and 6.4): write one private method that inserts a ledger row **without** opening a transaction. `record_detection` wraps it in its own transaction using the same pattern as `apply_submission` (`with self._connection:` then the `BEGIN IMMEDIATE` statement; import the existing statement constant rather than redefining it). Callers that already hold a transaction call the private method directly
+- [ ] `recorded_since` and `DetectionInput` are task-level additions to the LLD's API table (the table names `record_detection` but not its input type or the read behind the listing's `recorded_since` column). Record both in `store-contract.md` in Task 11.7
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
@@ -431,7 +435,7 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 
 **Steps**:
 - [ ] Add statements to `sql_feed.py` and methods to `FeedOperations`: `watches(project_id) -> list[ReviewWatch]` and `baseline_watch(project_id, reviews_dir, entries)`. The latter, in one transaction, inserts one `baseline` ledger row per `(path, digest)` and sets `baselined_at`; nothing is written if any part raises
-- [ ] Reuse `record_detection`'s insert statement rather than a second one
+- [ ] One transaction, same pattern as Task 5.1: `with self._connection:` then `BEGIN IMMEDIATE`, calling the private no-transaction insert from Task 5.1 once per file and then the `baselined_at` update. A duplicate `(path, digest)` already in the ledger is skipped, not an error
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
@@ -458,24 +462,57 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 
 ---
 
-### Task 5.7: The invariant test
+### Task 5.7: Invariant test: the feed reconciles with every tracked table
 **Owner**: Junior AI
 **Dependencies**: Task 5.6
-**Effort**: 4
-**Objective**: Prove the triggers are right (LLD "The invariant test checks every tracked table"). Riskiest piece; it gates the rest.
+**Effort**: 3
+**Objective**: Replaying the feed rebuilds the store's state (LLD "The invariant test checks every tracked table"). Riskiest piece; it gates the rest.
 
 **Steps**:
-- [ ] Create `tests/store/test_feed_invariant.py` with a scripted sequence through every write path that exists: node create, status updates, block and resolve, verdicts (including a retried one and a provider failure), an intent message, a recovery escalation, and detections of all five outcomes
-- [ ] Replay the feed from seq 0 and reconcile table by table, exactly as the LLD lists: node ids and rebuilt statuses; verdict ids; message ids; ledger ids excluding `baseline` and `runner_issued`
-- [ ] Assert every `ChangeKind` member appears at least once
-- [ ] Assert the literals in the migration SQL match the enums: read the trigger SQL from `sqlite_master` and check each `ChangeKind` value and each silent outcome appears in it
-- [ ] Prove the test catches a miss: temporarily drop one trigger in a scratch copy of the store inside the test (not in the migration) and assert the reconciliation then fails
+- [ ] Create `tests/store/test_feed_invariant.py` with a scripted-sequence helper that drives every write path that exists: node create, status updates, block and resolve, verdicts (including a retried one and a provider failure), an intent message, a recovery escalation, and detections of all five outcomes
+- [ ] Replay the feed from seq 0 and reconcile table by table, exactly as the LLD lists: node ids from `node_created` equal the `nodes` table and each node's status rebuilt from `node_created.status` plus `node_status_changed` equals its stored status; verdict ids; message ids; ledger ids excluding `baseline` and `runner_issued`
 
 **Success Criteria**:
-- [ ] All assertions pass on the real migration; the drop-a-trigger case fails reconciliation as expected
-- [ ] Full suite, `ruff`, `pyright` clean
-- [ ] Commit, e.g. `test(store): add feed invariant test`
+- [ ] Reconciliation passes on the real migration; `ruff`, `pyright` clean
+- [ ] Commit, e.g. `test(store): reconcile the feed with every tracked table`
 
 **Files to Create**: `tests/store/test_feed_invariant.py`
+
+---
+
+### Task 5.8: Invariant test: every kind appears and trigger literals match the enums
+**Owner**: Junior AI
+**Dependencies**: Task 5.7
+**Effort**: 2
+**Objective**: A kind with no trigger, or a drifted literal in the frozen SQL, fails a test (LLD D8 "The cost").
+
+**Steps**:
+- [ ] In the same module, using the Task 5.7 sequence: assert every `ChangeKind` member appears at least once
+- [ ] Read the trigger SQL from `sqlite_master` and assert each `ChangeKind` value and each `SILENT_OUTCOMES` value appears in it as a literal
+
+**Success Criteria**:
+- [ ] Both assertions pass; they are separate test functions with names that say which failed
+- [ ] Commit, e.g. `test(store): pin trigger literals to the enums`
+
+**Files to Modify**: `tests/store/test_feed_invariant.py`
+
+---
+
+### Task 5.9: Invariant test: a missing trigger is caught
+**Owner**: Junior AI
+**Dependencies**: Task 5.8
+**Effort**: 2
+**Objective**: Prove the reconciliation is not vacuous.
+
+**Steps**:
+- [ ] Add a test that opens a scratch store inside the test, drops one trigger with `DROP TRIGGER` (never touching the migration file), runs the Task 5.7 sequence, and asserts the reconciliation fails. Repeat for one trigger per tracked table (nodes insert, nodes status, verdicts, messages, detected_reviews) with a parametrized test
+- [ ] Reuse the Task 5.7 reconciliation as a function that returns differences, so the same code is both asserted empty and asserted non-empty
+
+**Success Criteria**:
+- [ ] Each dropped-trigger case reports a difference; the intact store reports none
+- [ ] Full suite, `ruff`, `pyright` clean
+- [ ] Commit, e.g. `test(store): prove the invariant test detects a missing trigger`
+
+**Files to Modify**: `tests/store/test_feed_invariant.py`
 
 ---
