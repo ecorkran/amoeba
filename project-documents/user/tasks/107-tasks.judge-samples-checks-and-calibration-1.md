@@ -45,7 +45,7 @@ status: not_started
 - [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
 - [ ] Create `107-slice.judge-samples-checks-and-calibration` from the target; if it exists, switch to it
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once. If any fail before changes, stop and tell the PM
-- [ ] Record, in the Task 1.1 notes: the value of `EXPECTED_SCHEMA_VERSION` and the highest file in `src/amoeba/store/schema/`; whether `src/amoeba/upstream/squadron/review.py` exists (105); whether a `source_document` column exists in `sql_evidence.py` (106)
+- [ ] Record, under a heading `## Task 1.1 Notes` appended at the end of this file (later tasks, here and in `-2.md`, read it from there): the value of `EXPECTED_SCHEMA_VERSION` and the highest file in `src/amoeba/store/schema/`; whether `src/amoeba/upstream/squadron/review.py` exists (105); whether a `source_document` column exists in `sql_evidence.py` (106); whether `verdict_to_payload` exists in `store/verdict_payload.py` (105)
 - [ ] Derive the new migration number N from what you recorded: N is the highest existing migration number plus one, and `EXPECTED_SCHEMA_VERSION` rises to N. Write N in the Task 1.1 notes. If 106 is not merged, tell the PM, who coordinates 106's rebase (LLD "Dependencies"). Wherever these tasks say "migration N", use that recorded number; never copy a number from an example
 - [ ] Ask the PM to confirm D2, D3, D4, and D6 are ratified. If the answer is no or unknown, stop
 
@@ -65,7 +65,7 @@ status: not_started
 **Objective**: Define the check and work-record vocabularies once (LLD D5, D6, "Component Structure").
 
 **Steps**:
-- [ ] In `evidence_models.py`, add `judge_invocation_id: str | None = None` to `VerdictInput` and `VerdictRecord` (the model field only; Task 4.1 wires SQL, mapping, and replay comparison). Task 2.3's function reads this field, so it must exist first
+- [ ] In `evidence_models.py`, add `judge_invocation_id: str | None = None` to `VerdictRecord` only (the read model; Task 2.3's function reads it, so it must exist first). Do **not** add it to `VerdictInput` yet: until Task 4.1 wires storage, an input field would be accepted and silently dropped
 - [ ] In `evidence_models.py`, add `command_output` and `document` to `RecordSource`; update that enum's docstring (describes what the caller read the record from; not restricted per record type)
 - [ ] Create `src/amoeba/store/check_models.py`, no SQL, no `sqlite3`, following `evidence_models.py` style
 - [ ] `CheckOutcome` (`passed`, `failed`, `errored`), `CheckStanding` (`errored`, `unattested`, `vacuous`, `passed`, `failed`), and `WorkRecordKind` (`task_progress`, `devlog`) as `StrEnum`s
@@ -91,7 +91,7 @@ status: not_started
 - [ ] Vocabularies have exactly the LLD members and string values; the dataclasses are frozen
 - [ ] Table-driven `check_standing` cases: `errored` with count 12, 0, and `None` is `errored`; `passed` with `None` is `unattested`; `failed` with `None` is `unattested`; `passed` with 0 and `failed` with 0 are both `vacuous`; `passed` with 12 is `passed`; `failed` with 3 is `failed`
 - [ ] `RecordSource` has the two new members and keeps the old ones
-- [ ] `VerdictInput` and `VerdictRecord` accept `judge_invocation_id`, and it is `None` when omitted (existing constructions unchanged)
+- [ ] `VerdictRecord` accepts `judge_invocation_id`, and it is `None` when omitted (existing constructions unchanged)
 
 **Success Criteria**:
 - [ ] Tests pass; `ruff` and `pyright` clean
@@ -198,7 +198,7 @@ status: not_started
 **Objective**: A verdict can be written and read back with its invocation id (LLD D1).
 
 **Steps**:
-- [ ] The `judge_invocation_id` field already exists on `VerdictInput` and `VerdictRecord` (Task 2.1). Update `_INPUT_FIELDS` / `_as_input` in `verdicts.py` so a replay comparison includes it
+- [ ] `VerdictRecord` already has `judge_invocation_id` (Task 2.1). Add `judge_invocation_id: str | None = None` to `VerdictInput` in `evidence_models.py` now, together with the storage wiring below, so the field is never accepted without being stored. Update `_INPUT_FIELDS` / `_as_input` in `verdicts.py` so a replay comparison includes it
 - [ ] Add the column to the verdict column list and `INSERT_VERDICT` in `sql_evidence.py`; update `verdict_parameters` and `map_verdict` in `mapping_evidence.py`. `mapping_evidence.py` is 293 lines and the change should add only a few. If it ends well over ~300 lines, do not split it here; report the length to the PM
 - [ ] Extend `tests/evidence_harness.py` `verdict_input` with an optional `judge_invocation_id` argument (default `None`; existing callers unchanged)
 
@@ -219,6 +219,7 @@ status: not_started
 - [ ] Create `tests/store/test_judge_samples.py`
 - [ ] Record a verdict with `judge_invocation_id="j1"`: `verdict(id)` and `verdicts(...)` return it; a verdict without one returns `None`
 - [ ] Replaying the same id with a different invocation id returns the first record and logs a WARNING (use `caplog`)
+- [ ] `VerdictInput` accepts `judge_invocation_id` and it is `None` when omitted (existing constructions unchanged)
 
 **Success Criteria**:
 - [ ] Tests pass; `ruff` and `pyright` clean
@@ -238,7 +239,7 @@ status: not_started
 - [ ] Add `VERDICT_JUDGE_INVOCATION_ID` to `verdict_payload.py`, and read it (optional key) in `verdict_from_payload`
 - [ ] Add `judge_invocation_id: str | None = None` to `VerdictPayload` in `inbox/evidence_payloads.py`; payload validation refuses an empty string
 - [ ] `VERDICT_JUDGE_INVOCATION_ID` and `VerdictPayload.judge_invocation_id` must agree by name; Task 4.4 owns the test that pins this
-- [ ] Do not touch `verdict_to_payload`; it is 105's function and Task 6.1 always updates it
+- [ ] `verdict_to_payload` is 105's function. Read the Task 1.1 notes. If it exists, update it **in this task** so it emits the key when the id is set and omits it when `None`, then run 105's tests for it; they must pass (adding a payload field must not break a test that compares payload fields to the emitted keys). If it does not exist, leave it; Task 6.1 does it. Task 6.1 repeats this condition
 
 **Success Criteria**:
 - [ ] A payload with the key becomes a `VerdictInput` with the id; one without it has `None`
@@ -274,7 +275,7 @@ status: not_started
 **Steps**:
 - [ ] Add a statement to `sql_evidence.py` (or the new module): one indexed lookup for a sample of `(project_id, judge_invocation_id)` whose node differs from the new node
 - [ ] In `_verdict_rejection`, after the provider-failure rules, add an explicit branch returning a `VerdictRejection` whose reason names the invocation id and the node it is already on. Applies only when `judge_invocation_id` is set. Do not catch exceptions to do this
-- [ ] In the same function, an empty-string `judge_invocation_id` returns a `VerdictRejection` too (a `ValueError` on the direct path), not a silent `None`
+- [ ] In the same function, an empty-string `judge_invocation_id` returns a `VerdictRejection` too (a `ValueError` on the direct path), not a silent `None`. This guards the direct `record_verdict` path; the inbox never reaches it with an empty id, because payload validation (Task 4.3) refuses it first
 - [ ] No change to `record_verdict`: its existing raise-on-rejection covers the direct path; the inbox returns the reason as `rejected`
 
 **Success Criteria**:
@@ -295,7 +296,7 @@ status: not_started
 - [ ] Inbox: the same submission is `rejected` with that reason; the first sample is untouched
 - [ ] Samples of one invocation on the same node may differ in model, review type, and verdict; all are recorded
 - [ ] Two different invocations on different nodes are fine; review verdicts (no id) on any node are fine
-- [ ] An empty-string `judge_invocation_id` raises `ValueError` on the direct path and is `rejected` on the inbox path; nothing written
+- [ ] An empty-string `judge_invocation_id` raises `ValueError` on the direct path; nothing written. (The inbox case is covered once, in Task 4.4: payload validation quarantines it)
 - [ ] A sample on a node outside the project still raises `NodeNotFoundError` (precedence is unchanged)
 
 **Success Criteria**:
@@ -408,3 +409,16 @@ status: not_started
 - [ ] Commit with Task 4.11, e.g. `feat(store): add calibration report`
 
 ---
+
+## Task 1.1 Notes
+
+*Task 1.1 fills this in. Nothing below is known until then.*
+
+- EXPECTED_SCHEMA_VERSION:
+- Highest existing migration file:
+- Migration number N:
+- 105 merged (`upstream/squadron/review.py` exists):
+- `verdict_to_payload` exists:
+- 106 merged (`source_document` column exists):
+- PM ratification of D2, D3, D4, D6:
+- Fresh judge fixture decision (Task 6.3):

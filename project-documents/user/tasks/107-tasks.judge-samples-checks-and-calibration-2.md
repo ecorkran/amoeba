@@ -16,9 +16,9 @@ status: not_started
 - **Sections in this file:** 5 checks and work records; 6 parser, ingest, fixtures (needs slice 105); 7 listings; 8 proof, docs, final validation.
 - **Branch:** still `107-slice.judge-samples-checks-and-calibration`. No task here merges.
 - **Migration number:** use the number N recorded in Task 1.1 wherever a migration is named.
-- **Order if slice 105 is not merged:** only Section 6 and Tasks 8.3–8.5 (the end-to-end tests) need 105. Sections 5 and 7 and Tasks 8.1–8.2 do not, so run those first and return to Section 6, then 8.3–8.5, then 8.6–8.8. If 105 is merged, run the sections in numeric order.
-- **Coverage of file 1's criteria:** judge samples, D2, D3, the filter, and `calibration` are owned by Tasks 4.1–4.12 (file 1); the migration and upgrade test by Tasks 3.1–3.2; `check_standing` and `summarize_judge_samples` by Tasks 2.1–2.4. Task 8.8 re-checks them all against the LLD.
-- **Coverage of this file's criteria:** checks and work records: Tasks 5.1–5.7; parser and ingest id and judge fixtures: Tasks 6.1–6.6; listings: Tasks 7.1–7.6; demo script: Tasks 8.1–8.2; end-to-end behavior and crash recovery: Tasks 8.3–8.5; docs: Tasks 8.6–8.7; walkthrough: Task 8.8.
+- **Order if slice 105 is not merged:** only Section 6 and Tasks 8.3–8.5 (the end-to-end tests) need 105. Sections 5 and 7 and Tasks 8.1–8.2 do not, so run those first and return to Section 6, then 8.3–8.5, then 8.6–8.10. If 105 is merged, run the sections in numeric order.
+- **Coverage of file 1's criteria:** judge samples, D2, D3, the filter, and `calibration` are owned by Tasks 4.1–4.12 (file 1); the migration and upgrade test by Tasks 3.1–3.2; `check_standing` and `summarize_judge_samples` by Tasks 2.1–2.4. Task 8.9 re-checks them all against the LLD.
+- **Coverage of this file's criteria:** checks and work records: Tasks 5.1–5.7; parser and ingest id and judge fixtures: Tasks 6.1–6.6; listings: Tasks 7.1–7.6; demo script: Tasks 8.1–8.2; end-to-end behavior and crash recovery: Tasks 8.3–8.5; docs: Tasks 8.6–8.7; walkthrough: Task 8.10; widened metrology test: Task 8.8; final validation and requirements trace: Task 8.9.
 
 ---
 
@@ -166,7 +166,7 @@ status: not_started
 
 **Steps**:
 - [ ] In `src/amoeba/upstream/squadron/review.py`, add a `judge_invocation_id: str | None = None` keyword to `to_verdict_input` and set it on the `VerdictInput`. It must **not** enter `review_record_id` (LLD D1: one file is one sample)
-- [ ] In `src/amoeba/store/verdict_payload.py`, make `verdict_to_payload` emit `VERDICT_JUDGE_INVOCATION_ID` when the id is set, and omit the key when `None` (Task 4.3 did not touch this function)
+- [ ] In `src/amoeba/store/verdict_payload.py`, make `verdict_to_payload` emit `VERDICT_JUDGE_INVOCATION_ID` when the id is set, and omit the key when `None` only if the Task 1.1 notes say `verdict_to_payload` did not exist when Task 4.3 ran; if it existed, Task 4.3 already did this, so only confirm it
 - [ ] No tests here; Task 6.2 owns them
 
 **Success Criteria**:
@@ -201,12 +201,12 @@ status: not_started
 
 **Steps**:
 - [ ] Locate Squadron's `302-review.judge.slice-vs-arch.design-phase-judge-templates.md` in the Squadron repository (ask the PM for the path if it is not found; do not recreate it). Copy it byte for byte (`cp`) into `tests/fixtures/sq_reviews/`
-- [ ] Capture one fresh judge file: run `sq review` on a judge template with `--model glmflash` in a throwaway copy of this repository, never in this working tree. Copy the saved file byte for byte. If `sq` or its provider key is unavailable, tell the PM and continue with the 302 file only; the fresh file is then an open item that Task 8.8 checks. Likewise, if the 302 file cannot be found, ask the PM for its path and do not recreate it
+- [ ] Capture one fresh judge file: run `sq review` on a judge template with `--model glmflash` in a throwaway copy of this repository, never in this working tree. Copy the saved file byte for byte. If `sq` or its provider key is unavailable, stop this task and ask the PM whether to proceed with the 302 file only. Record the PM's answer under "Fresh judge fixture decision" in the Task 1.1 notes (file 1). Tasks 6.4 onward do not start until that line is filled in; Task 8.9 checks it Likewise, if the 302 file cannot be found, ask the PM for its path and do not recreate it
 - [ ] Add README entries for both in `tests/fixtures/README.md` in the existing style: capture date, source, exact command for the fresh file, and what each pins. Record Squadron's version only as a dated observation
 - [ ] Check each file with a read-only look: `score` and a `criteria` mapping present; no `verdictSource` key; the 302 file has no stamp
 
 **Success Criteria**:
-- [ ] Each copied file is byte-identical to its source and has a README entry; the 302 file is present, and the fresh file is present or reported to the PM as blocked
+- [ ] Each copied file is byte-identical to its source and has a README entry; the 302 file is present, and the fresh file is present or the PM's decision to go without it is recorded in the Task 1.1 notes
 - [ ] No assumption about the fresh file's content is made before it is read
 
 **Files to Create/Modify**: two files in `tests/fixtures/sq_reviews/`, `tests/fixtures/README.md`
@@ -308,11 +308,12 @@ status: not_started
 **Steps**:
 - [ ] In `cli/inspect_evidence.py`, add `calibration_rows` with columns exactly: `review_type, model, samples, invocations, split_invocations, pass, concerns, fail, unknown, score_min, score_mean, score_max`; `--json` rows also carry `by_standing` and `scored`
 - [ ] Register `calibration` in `LISTINGS` (project-scoped, no other options); use the `ReviewVerdict` members to build the verdict count columns rather than repeating literals where practical
+- [ ] In the same task, update the pinned `LISTINGS` registry test (`tests/test_cli_inspect.py` or wherever the names are pinned) to include `calibration`, so the suite is green at this commit
 
 **Success Criteria**:
-- [ ] `ruff` and `pyright` clean
+- [ ] `ruff` and `pyright` clean; the registry test passes
 
-**Files to Modify**: `cli/inspect_evidence.py`, `cli/inspect.py`
+**Files to Modify**: `cli/inspect_evidence.py`, `cli/inspect.py`, registry test
 
 ---
 
@@ -342,7 +343,7 @@ status: not_started
 **Steps**:
 - [ ] Create `src/amoeba/cli/inspect_checks.py` with `check_rows` (columns `recorded_seq, id, node_id, name, outcome, examined_count, standing, upstream_version`; `--json` adds `examined` and the provenance fields) and `work_record_rows` (columns `recorded_seq, id, node_id, kind, upstream_version, recorded_at`; `--json` adds `content`)
 - [ ] Register `checks` (option `--node`) and `work-records` (options `--node`, `--kind` restricted to `WorkRecordKind` values via `value_options`) in `LISTINGS`
-- [ ] Update the pinned registry test (`tests/test_cli_inspect.py` or wherever `LISTINGS` names are pinned) to include `calibration`, `checks`, `work-records`
+- [ ] Update the pinned registry test (the one Task 7.3 updated) to add `checks` and `work-records`
 
 **Success Criteria**:
 - [ ] `ruff` and `pyright` clean; an invalid `--kind` follows the existing invalid-option exit behavior
@@ -499,21 +500,49 @@ status: not_started
 
 ---
 
-### Task 8.8: Final validation and walkthrough
+### Task 8.8: Widen the metrology-reference test
 **Owner**: Junior AI
 **Dependencies**: Task 8.7
-**Effort**: 3
-**Objective**: Confirm the slice against the LLD Success Criteria.
+**Effort**: 1
+**Objective**: One change, covering every new or edited module.
+
+**Steps**:
+- [ ] Widen 104's metrology-reference test (the one place for this change), if it does not already scan all of `src/amoeba/`, to cover `store/check_models.py`, `calibration.py`, `checks.py`, `sql_checks.py`, `mapping_checks.py`, and `cli/inspect_evidence.py`, `cli/inspect_checks.py`, `cli/ingest.py`
+- [ ] Check source file lengths for new and edited files; anything well over ~300 lines is reported to the PM
+
+**Success Criteria**:
+- [ ] The test passes; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: extend metrology-reference scan to slice 107 modules`
+
+---
+
+### Task 8.9: Final validation and requirements trace
+**Owner**: Junior AI
+**Dependencies**: Task 8.8
+**Effort**: 2
+**Objective**: Confirm the suite and trace the LLD requirements to tests.
 
 **Steps**:
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; all clean
-- [ ] Check source file lengths for new and edited files; anything well over ~300 lines is split
-- [ ] Widen 104's metrology-reference test (the one place for this change), if it does not already scan all of `src/amoeba/`, to cover every new or edited module: `store/check_models.py`, `calibration.py`, `checks.py`, `sql_checks.py`, `mapping_checks.py`, and `cli/inspect_evidence.py`, `cli/inspect_checks.py`, `cli/ingest.py`; it must pass
-- [ ] Confirm the fresh judge fixture from Task 6.3 exists with its README entry; if it is still blocked, report it to the PM as an open item
-- [ ] Run the LLD Verification Walkthrough steps 1–7 with a scratch `AMOEBA_STORE_DIR`. The LLD's commands are not trusted as written: before each step, check its flags against `--help` (it mixes `--node` and `--node-id`, step 4 says "as in step 2" without naming the model, step 1 names a `--json` listing without the id filter, and step 3 names a "minimax" row whose model comes from the fixture file). Use the real flags and the model read from the fixture's frontmatter, compare each result with the LLD's expected text, and list every command or expectation that differed for the PM
+- [ ] Check "Fresh judge fixture decision" in the Task 1.1 notes (file 1): the fresh fixture exists with its README entry, or the PM's decision to go without it is recorded; otherwise report it to the PM as an open item
 - [ ] Walk the LLD Functional and Technical Requirements lists and tick each against a named test
+
+**Success Criteria**:
+- [ ] Full suite, `ruff`, `pyright` clean; every requirement names a test, or the gap is reported
+- [ ] No commit needed unless a gap fix is made
+
+---
+
+### Task 8.10: Run the LLD verification walkthrough
+**Owner**: Junior AI
+**Dependencies**: Task 8.9
+**Effort**: 2
+**Objective**: Run the walkthrough by hand and report differences.
+
+**Steps**:
+- [ ] Run the LLD Verification Walkthrough steps 1–7 with a scratch `AMOEBA_STORE_DIR`. The LLD's commands are not trusted as written: before each step, check its flags against `--help` (it mixes `--node` and `--node-id`, step 4 says "as in step 2" without naming the model, step 1 names a `--json` listing without the id filter, and step 3 names a "minimax" row whose model comes from the fixture file). Use the real flags and the model read from the fixture's frontmatter, compare each result with the LLD's expected text, and list every command or expectation that differed for the PM
 - [ ] Update the LLD's walkthrough section with captured output only if the PM asks
 
 **Success Criteria**:
-- [ ] Full suite, `ruff`, `pyright` clean; walkthrough output matches the LLD or differences are reported
+- [ ] Walkthrough output matches the LLD or differences are reported
 - [ ] Committed on the slice branch (e.g. `docs: finalize slice 107 verification`). Do not merge; merging happens in Phase 7 after the code review

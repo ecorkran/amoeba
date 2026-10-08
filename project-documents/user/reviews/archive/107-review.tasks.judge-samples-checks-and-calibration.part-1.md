@@ -11,58 +11,64 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261008
 dateUpdated: 20261008
-reviewedSha: c739f1e105e628b788302c45ea34caf6ac5a8f2b
+reviewedSha: 4fd958020c7e37572dac8c6350dd73247072076d
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-durationSeconds: 38.2
+toolCallsMade: 3
+durationSeconds: 35.7
 runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Judge-sample, D2, D3, D4 and migration criteria each have an implementation task and a test task"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md"
+    summary: "Judge-sample, D2, D3, filter, and calibration criteria all have implementation and test tasks"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:293-296"
   - id: F002
-    severity: concern
-    category: hallucination-trap
-    summary: "Hardcoded migration number and schema version sit next to a value Task 1.1 must retrieve"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:47"
+    severity: pass
+    category: coverage
+    summary: "Criteria not owned by this file are explicitly handed off to file 2"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:32"
   - id: F003
-    severity: concern
-    category: sequencing
-    summary: "Task 4.3 branches on external merge state, and it ends in an unwritten test"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:241"
+    severity: pass
+    category: nfr
+    summary: "No load test or CI gate is required"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:19"
   - id: F004
     severity: concern
-    category: test-coverage
-    summary: "Task 4.3 says to confirm the payload field-name test, but 4.4 has no step for it"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:240"
+    category: sequencing
+    summary: "Task 4.6's empty-id inbox case contradicts Tasks 4.3 and 4.4"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:298"
   - id: F005
     severity: concern
-    category: task-sizing
-    summary: "Task 4.1 bundles several concerns, including a conditional file split"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:192-207"
+    category: error-handling
+    summary: "An intermediate commit accepts `judge_invocation_id` and silently discards it"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:68"
   - id: F006
-    severity: note
+    severity: concern
     category: sequencing
-    summary: "Task 3.1 depends on Task 2.4 without need"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:153"
+    summary: "Task 4.3 may break 105's `verdict_to_payload` tests if 105 is already merged"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:241-245"
   - id: F007
     severity: note
     category: documentation
-    summary: "Minor task-file inconsistencies"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:145"
+    summary: "Task 1.1 asks for \"notes\" with no stated location"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:48-49"
   - id: F008
     severity: note
-    category: nfr
-    summary: "No load-test or CI-gating task is required"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md"
+    category: task-sizing
+    summary: "Task 4.5 and Task 4.9 are on the larger side but acceptable"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:268-355"
   - id: F009
     severity: note
-    category: coverage
-    summary: "Criteria that depend on Sections 5–8 in `-2.md`"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md"
+    category: commits
+    summary: "Commit cadence and test-with pattern are respected"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:28"
+  - id: F010
+    severity: note
+    category: sequencing
+    summary: "Dependencies are acyclic"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md"
 ---
 
 # Review: tasks — slice 107
@@ -72,75 +78,73 @@ findings:
 
 ## Findings
 
-### [PASS] Judge-sample, D2, D3, D4 and migration criteria each have an implementation task and a test task
+### [PASS] Judge-sample, D2, D3, filter, and calibration criteria all have implementation and test tasks
 
-- **Three samples stay three records:** Tasks 4.7 and 4.8 cover this.
-- **D2:** Tasks 4.5 and 4.6 cover both the direct and inbox paths and the `NodeNotFoundError` precedence.
-- **D3:** Tasks 4.9 and 4.10 cover the exclusion, the earlier-invocation case and the cross-type case.
-- **Calibration:** Tasks 2.3 and 2.4 cover the pure function on built records. Tasks 4.11 and 4.12 cover the store-level report, including a read-only handle.
-- **Check standing:** Tasks 2.1 and 2.2 cover the standing table.
-- **Upgrade path:** Tasks 3.1 and 3.2 cover the previous-version upgrade, with every verdict's `judge_invocation_id` left `NULL`.
-- **Pattern and cadence:** Implementation tasks are followed immediately by their tests. Commits are spread across sections: 2.1/2.2, 2.3/2.4, 3.1/3.2, 4.1/4.2, 4.3/4.4, 4.5/4.6, 4.7/4.8, 4.9/4.10 and 4.11/4.12.
+- The three-separate-records criterion maps to Tasks 4.1, 4.2, 4.7 and 4.8.
+- D2 maps to Tasks 4.5 and 4.6.
+- D3 maps to Tasks 4.9 and 4.10.
+- The calibration cases map to Tasks 2.3, 2.4, 4.11 and 4.12. Task 2.4 tests the pure function on built records with no store, as the criterion requires.
+- The `check_standing` rows map to Tasks 2.1 and 2.2, and the upgrade criterion maps to Tasks 3.1 and 3.2.
 
-### [CONCERN] Hardcoded migration number and schema version sit next to a value Task 1.1 must retrieve
+### [PASS] Criteria not owned by this file are explicitly handed off to file 2
 
-- **Retrieval step:** Task 1.1 tells the implementer to read the highest migration file and `EXPECTED_SCHEMA_VERSION` from disk.
-- **Hardcoded values:** The same step states "the highest is `005`... `006`... becomes 6". Task 3.1 names the file `007_...`, and the Context Summary also says "007 (or 006...)".
-- **Risk:** The project's CLAUDE.md warns against this pattern. If the retrieval returns nothing or is misread, the implementer is likely to use the nearest literal.
-- **Fix:** Phrase the rule as `max(existing) + 1`, with no literal example numbers. In Task 3.1, say "the number recorded in Task 1.1" and give the filename as `NNN_judge_samples_checks_and_work.sql`.
+- File 1's Context Summary lists the criteria it does not own.
+- A grep of file 2 shows the public-API export (Task 5.7), the metrology-reference test (Task 8.x), the writer-guard allow-list, and the `verdict_to_payload` update (Task 6.1) all exist there.
+- No gap was found.
 
-### [CONCERN] Task 4.3 branches on external merge state, and it ends in an unwritten test
+### [PASS] No load test or CI gate is required
 
-- **Conditional step:** The `verdict_to_payload` step depends on whether 105 is merged. If it is, add the key and a round-trip case in 4.3. If not, Task 6.1 does it.
-- **Cross-file dependency:** The branch depends on a task in the other file, so a junior implementer cannot resolve it from this file alone.
-- **Missing test task:** The round-trip test is added inside the implementation task (4.3). Task 4.4 does not list it, which breaks the test-with pattern.
-- **Fix:** Add the `verdict_to_payload` step and its test to 4.4's step list under the "if 105 merged" condition, and state in Task 1.1 that the outcome is recorded for 4.3 and 6.1 to use. Alternatively, move the step unconditionally into Section 6.
+The slice states no NFR, and the task file says so explicitly. No `tests/load/` task or CI wiring task is needed.
 
-### [CONCERN] Task 4.3 says to confirm the payload field-name test, but 4.4 has no step for it
+### [CONCERN] Task 4.6's empty-id inbox case contradicts Tasks 4.3 and 4.4
 
-- **Gap:** Task 4.3 asks the implementer to confirm that the existing test pinning payload names covers the new key, and to extend it if not. That is test work inside an implementation task, and 4.4 has no matching step.
-- **Fix:** Move the step to 4.4. Also assert there that `verdict_from_payload` yields `None` when the key is absent.
+- Tasks 4.3 and 4.4 say payload validation refuses an empty-string `judge_invocation_id`, so the submission is quarantined as an invalid payload.
+- Task 4.6 then expects the same input to be `rejected` on the inbox path, by the `_verdict_rejection` branch added in Task 4.5.
+- Payload validation runs first, so the Task 4.5 branch cannot be reached from the inbox. The Task 4.6 assertion would fail, or a junior AI would weaken it to make it pass.
+- Decide which behaviour applies. Either:
+  - Keep the Task 4.5 empty-id branch for the direct path only and have Task 4.6 assert quarantine on the inbox path, or
+  - Drop payload-level validation.
+- The LLD only specifies payload validation. The direct-path `ValueError` for an empty id is a small addition the LLD does not mention. Note that in the task.
 
-### [CONCERN] Task 4.1 bundles several concerns, including a conditional file split
+### [CONCERN] An intermediate commit accepts `judge_invocation_id` and silently discards it
 
-- **Scope:** Task 4.1 covers the replay comparison, the SQL column and insert, parameters and mapping, the empty-string refusal, a possible `mapping_evidence.py` split with import updates in two modules, and the harness change.
-- **Effort estimate:** Effort 3 looks low, since the conditional extraction touches several modules.
-- **Test gap:** The empty-string `ValueError` branch is part of this task, and nothing proves it until 4.2.
-- **Fix:** Split the optional `mapping_observations.py` extraction into its own refactor task. That task would do a pure move with existing tests green and commit separately as `refactor:`. Also give the "if above ~310 lines" threshold a deterministic form, such as "run `wc -l` after the edit".
+- Task 2.1 adds `judge_invocation_id` to `VerdictInput` and `VerdictRecord`, and it is committed with Task 2.2.
+- Task 4.1 does not persist the field until later, so every commit in between has a store that accepts the id and drops it.
+- That conflicts with the project rule against silent fallbacks. It also makes Task 2.1 mix check vocabularies with a verdict-model change.
+- Move the model field into Task 4.1, so the field and its persistence land in one commit.
+- Task 2.3 and Task 2.4 only need the field to exist on `VerdictRecord`. If it stays in Task 2.1, say explicitly that the id is not yet persisted until Task 4.1.
 
-### [NOTE] Task 3.1 depends on Task 2.4 without need
+### [CONCERN] Task 4.3 may break 105's `verdict_to_payload` tests if 105 is already merged
 
-- The migration and `sql_checks.py` do not use the calibration code.
-- The dependency only serializes the work. It is harmless, but it is not a real dependency.
+- Task 4.3 adds the payload field and key but deliberately leaves `verdict_to_payload` alone until Task 6.1.
+- If 105 is merged, its round-trip test and any payload-field pinning test may require `verdict_to_payload` to emit every `VerdictPayload` field. Task 4.4 extends such a pinning test, so the suite could fail between Task 4.4 and Task 6.1.
+- Add a step in Task 4.4 to run 105's tests, and either update `verdict_to_payload` earlier or state which assertions are expected to stay green.
+- The step-by-step success criteria say only that `ruff` and `pyright` are clean, with no full-suite run.
 
-### [NOTE] Minor task-file inconsistencies
+### [NOTE] Task 1.1 asks for "notes" with no stated location
 
-- **File list:** Task 2.4 lists `tests/store/test_calibration.py` under "Files to Modify", though the file is created in that task.
-- **Missing field:** Tasks 4.4, 4.6, 4.8, 4.10 and 4.12 have no "Files" field.
-- **Task 1.1 notes:** Task 1.1 asks the implementer to "record in the Task 1.1 notes", but the file has no notes area. Say where the notes go, such as an appended `## Task 1.1 notes` section, since Tasks 3.1, 4.3 and 4.9 consume the values.
-- **Vague builder step:** Task 4.7's "prefer one statement builder" is advisory, so it is not verifiable as a success criterion. State the expected outcome instead, such as "no third `SELECT_VERDICTS_*` constant added".
+Task 1.1 records the migration number and merge state "in the Task 1.1 notes", but no notes file or section is named. Later tasks depend on the recorded N. Name the place, for example a section appended to this task file. The task already says "no commit needed", so persistence matters.
 
-### [NOTE] No load-test or CI-gating task is required
+### [NOTE] Task 4.5 and Task 4.9 are on the larger side but acceptable
 
-- The slice restates no performance NFR, so the load-test and CI-wiring rules do not apply.
-- The only quantitative statement is that judge samples per project are few, which is a design assumption and not an NFR.
+Both touch `_verdict_writer.py`, `sql_evidence.py` and `verdicts.py`, which are near the size limit. Each is scoped to one rule, with a test task right after. Task 4.9 depends on whether 106 is merged, but it handles both cases. Task 4.1 already tells the junior to report line counts over ~300.
 
-### [NOTE] Criteria that depend on Sections 5–8 in `-2.md`
+### [NOTE] Commit cadence and test-with pattern are respected
 
-- The `-2.md` review should confirm tasks for the following criteria:
-  - `record_check` and `record_work` preconditions and first-wins behaviour.
-  - Ingest `--judge-invocation-id` and the judge fixtures.
-  - The four listings and the `verdicts` CLI filter.
-  - `scripts/demo_checks.py`, with the writer-guard allow-list.
-  - The pinned public-API export set, which here gains `calibration` and `CalibrationRow`.
-  - The no-metrology-reference test covering the new modules.
-  - The end-to-end CLI test, docs and `CHANGELOG`.
+Every implementation task is followed by its test task and committed together, at roughly 2–3 tasks per commit across Sections 2–4. Commits are distributed through the file, not batched at the end.
+
+### [NOTE] Dependencies are acyclic
+
+- Section 2 depends only on Task 1.1, and Section 3 on Task 1.1.
+- Section 4 builds linearly from 3.2.
+- Task 4.11 correctly depends on both 4.10 and 2.4.
+- No scope creep was found; each task traces to an LLD decision or criterion.
 
 ### Run Digest
 
-- Response length: 7107 chars
+- Response length: 6055 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -150,10 +154,10 @@ findings:
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 38.2 s
+- Duration: 35.7 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 10
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 10
+- Finding-shaped matches — surviving validation: 10
