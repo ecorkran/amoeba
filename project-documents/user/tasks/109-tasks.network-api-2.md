@@ -13,8 +13,10 @@ status: not_started
 ## Context Summary
 
 - Continuation file for the **network-api** slice (109). See `109-tasks.network-api-1.md` for the full context summary, branch rule, reading note, PM-ratification note, and commit cadence; they apply here unchanged.
-- **This file:** Section 3 continued (project-scoped listing endpoints), Section 4 (`inbox.locate` and submissions), Section 5 (the feed: `feed/page`, SSE, bounds, and the stall verification).
-- **Authentication placeholder:** until Section 6, `build_app` takes the no-op `NoAuth` authenticator. Streams are written to call an `authorize()` hook on the authenticator at every heartbeat tick; Task 6.8 supplies the real check and its tests. Do not add token logic in this file.
+- **This file:** Section 3 continued (project-scoped listing endpoints), Section 4 (`inbox.locate` and submissions), Section 5 (the feed: `feed/page`, the stream worker, SSE, bounds, and the stall verification).
+- **Authentication placeholder:** until Section 6, `build_app` takes `NoAuth` (defined in Task 3.5a). Streams call the authenticator's `authorize()` at every heartbeat tick; Task 6.8 supplies the real check and its tests. Do not add token logic in this file.
+- **Feed settings:** the LLD's `ServeSettings` has no feed fields. `build_app` stores a default-constructed `FeedSettings` (106; read how 106 constructs it) at `app.state.feed_settings`; every feed endpoint reads it there, and tests replace it before serving (for small intervals). No new flags are added for it. Task 8.5 reports this to the PM.
+- **Server harness:** streaming tests need a real server. Task 5.5 adds `tests/serve/server_harness.py`, which runs `uvicorn.Server` for a built app in a thread on an ephemeral port; Task 7.1's `server.run` reuses the same uvicorn settings but not the harness.
 - **Next file:** `109-tasks.network-api-3.md` (Sections 6–8).
 
 ---
@@ -29,7 +31,7 @@ status: not_started
 
 **Steps**:
 - [ ] In `serve/reads.py`, add the endpoint: `validate_project_id` (→ `invalid_project_id`), listing exists and is project-scoped (else `unknown_listing`), `query_from_params`, store path via `store_path_for(supervisor_dir, project)`; a project with no store file is `unknown_project`
-- [ ] Open with `Store.open_read_only(path, busy_timeout_seconds=settings.store_busy_timeout_seconds)`. Inside `store.read_transaction()` call `listing.rows(store, query)` and `store.change_head(project)`; close the store in a `finally`/context manager
+- [ ] Open with `Store.open_read_only(path, busy_timeout_seconds=settings.store_busy_timeout_seconds)`. Inside `store.read_transaction()` call the listing's rows (through `read_listing` if Task 2.10 added it, else `listing.rows(store, query)`) and `store.change_head(project)`; close the store in a `finally`/context manager
 - [ ] If `len(rows) > settings.max_listing_rows`, raise `listing_too_large` (413) with the row count in the message and a hint to narrow (`node=`, `unresolved=true`, `channel=`). Never truncate
 - [ ] Respond `200 {"listing", "columns", "rows": encode_rows(rows), "change_head": head}`
 - [ ] Map `StoreBusyError` → `503 store_busy`, schema mismatch or unreadable → `503 store_unavailable` through the Task 3.4 table (add entries there if a subclass is missing; do not pick statuses in the endpoint). `VerdictNotFoundError` → `404 not_found`; `VerdictNotComparableError` → `409 not_comparable`
@@ -47,7 +49,7 @@ status: not_started
 **Objective**: "Same answers as `amoeba inspect`" proven over the whole registry; the bounds behave as stated.
 
 **Steps**:
-- [ ] `tests/serve/test_reads_project.py`: iterate **every** project-scoped listing in `LISTINGS` (so later listings are covered) on the seeded store. For each, with no options and with each option exercised where the listing has any, assert the response `rows` equal the parsed output of `amoeba inspect <name> --json` run against the same store. Assert `columns` equal too
+- [ ] `tests/serve/test_reads_project.py`: iterate **every** project-scoped listing in `LISTINGS` (so later listings are covered) on the store from `seed_all_listings` (Task 1.2). For each, with no options and with each option exercised where the listing has any, assert the response `rows` equal the parsed output of `amoeba inspect <name> --json` run against the same store. Assert `columns` equal too
 - [ ] Snapshot test: with `read_transaction` held by a hook between the rows read and the `change_head` read, commit a change from a writer; assert it appears in neither (use the existing harness for a second connection; if the read functions cannot be interleaved, patch `change_head` to commit first and assert the returned head equals the head seen by the rows)
 - [ ] `max_listing_rows`: build the app with a tiny limit; a listing over it → `413 listing_too_large` with the count in the body and no `rows` key
 - [ ] `StoreBusyError` (patch the open to raise it) → `503 store_busy` with `Retry-After`. A store at an unexpected schema version → `503 store_unavailable` while another project still serves
@@ -142,6 +144,7 @@ status: not_started
 - [ ] `create_project` for a project with no store → `202`; an `intent` into a missing project → `202` (quarantine is reported by status in Task 4.5)
 - [ ] Oversized body → `413` with no file written, and the body is not fully held (feed a chunked body larger than the cap and assert reading stops at the cap). Slow body (an async stream that stalls, with a tiny timeout) → `408`. Malformed JSON and a non-object body → `422`
 - [ ] `SubmissionWriteError` (patch `submit` to raise) → `503 submission_write_failed`
+- [ ] Invalid project id in the path → `400 invalid_project_id` and nothing written
 - [ ] Server accepts a submission with no resident process running (no host in the test)
 
 **Success Criteria**:
@@ -150,18 +153,16 @@ status: not_started
 
 ---
 
-### Task 4.5: Submission status endpoint and tests
+### Task 4.5: Submission status endpoint
 **Owner**: Junior AI
 **Dependencies**: Task 4.4
-**Effort**: 4
+**Effort**: 3
 **Objective**: `GET /v1/projects/{project}/submissions/{id}` reports `applied`, `rejected`, `pending`, `quarantined`, or `failed` (LLD Data Flow "Submission status").
 
 **Steps**:
 - [ ] Add `SubmissionState` (`StrEnum`) to `serve/` (once): `applied`/`rejected` reuse the store's outcome enum values by reference, not retyped
 - [ ] Up to two passes of: `store.submission(id)` if the store exists (read-only open, as in Task 3.8) → `applied | rejected` (include `applied_seq` when applied and `reason` when rejected); then `inbox.locate(id)` → `pending | quarantined | failed` with `reason`; then `store.submission(id)` again. Nothing found in either pass → `404 unknown_submission`
-- [ ] Tests (`tests/serve/test_submission_status.py`): `pending` after submit; `applied` after the apply helper; `rejected` for a rejected record; `quarantined` with reason `no_store_for_project` for an `intent` into a project with no store; `failed` for a parked file; unknown id → `404`
-- [ ] Race tests using the `locate` hook: pause between directories and (a) move `new/` → `quarantine/`, (b) move `new/` → `failed/`, (c) apply the submission and delete the file. Each lookup reports the real state, never `404`
-- [ ] Round trip: submit with the resident process stopped → `pending`; start the host harness → `applied`, and the record equals one from `amoeba submit`
+- [ ] Tests (`tests/serve/test_submission_status.py`): `pending` after submit; `applied` after the apply helper; `rejected` for a rejected record; `quarantined` with reason `no_store_for_project` for an `intent` into a project with no store; `failed` for a parked file; unknown id → `404`; bad project id → `400`
 
 **Success Criteria**:
 - [ ] Tests pass; suite, `ruff`, `pyright` clean
@@ -169,16 +170,32 @@ status: not_started
 
 ---
 
+### Task 4.6: Status races and the resident-process round trip
+**Owner**: Junior AI
+**Dependencies**: Task 4.5
+**Effort**: 3
+**Objective**: A lookup that races the process moving a file reports the real state, never `404`; a submission made with the process stopped is applied at next start.
+
+**Steps**:
+- [ ] `tests/serve/test_submission_races.py`, using the `locate` hook: pause between directories and (a) move `new/` → `quarantine/`, (b) move `new/` → `failed/`, (c) apply the submission and delete the file. Each lookup reports the real state, never `404`
+- [ ] Round trip: submit with the resident process stopped → `pending`; start the host harness → `applied`, and the stored record equals one from `amoeba submit` with the same fields
+
+**Success Criteria**:
+- [ ] Tests pass; suite clean
+- [ ] Commit, e.g. `test: pin submission status races and round trip`
+
+---
+
 ## Section 5: The Feed
 
 ### Task 5.1: `feed/page`
 **Owner**: Junior AI
-**Dependencies**: Task 4.5
+**Dependencies**: Task 4.6
 **Effort**: 3
 **Objective**: `GET /v1/projects/{project}/feed/page?after=N[&limit=M]`, the non-streaming form (LLD D5).
 
 **Steps**:
-- [ ] Create `serve/stream.py` (page endpoint first). `after` is required: missing or non-integer → `400 invalid_query` naming `after`. `limit` defaults to `FeedSettings.feed_batch_size` and may not exceed it (over → `400 invalid_query`)
+- [ ] Set `app.state.feed_settings` in `build_app` as described in the Context Summary. Create `serve/stream.py` (page endpoint first). `after` is required: missing or non-integer → `400 invalid_query` naming `after`. `limit` defaults to `FeedSettings.feed_batch_size` and may not exceed it (over → `400 invalid_query`)
 - [ ] Open the store read-only (errors before any body, as in Task 3.8), read one page with 106's changes reader, return `{"changes": [change_as_json(c)…], "next_after"}`. `next_after` is the last `seq`, or `after` when empty
 - [ ] Do not reuse the `changes` listing; the two names are unrelated (LLD D5)
 
@@ -194,7 +211,7 @@ status: not_started
 **Objective**: The page equals `amoeba feed`.
 
 **Steps**:
-- [ ] `tests/serve/test_feed_page.py`: seed changes; the `changes` array equals the parsed output of `amoeba feed --project P` read from 0 (same objects); paging with `next_after` returns every change once, in order; empty page returns `next_after == after`; missing/bad `after` and over-limit `limit` → `400 invalid_query`; unknown project → `404`
+- [ ] `tests/serve/test_feed_page.py`: seed changes; the `changes` array equals the parsed output of `amoeba feed --project P` read from 0 (same objects); paging with `next_after` returns every change once, in order; empty page returns `next_after == after`; missing/bad `after` and over-limit `limit` → `400 invalid_query`; unknown project → `404`; bad project id → `400`
 
 **Success Criteria**:
 - [ ] Tests pass; suite clean
@@ -205,87 +222,133 @@ status: not_started
 ### Task 5.3: Stream worker and bounded buffer
 **Owner**: Junior AI
 **Dependencies**: Task 5.2
-**Effort**: 4
+**Effort**: 3
 **Objective**: One thread per stream running 106's `follow()` into a bounded buffer, with one way to stop it (LLD D5, Mitigation Strategies).
 
 **Steps**:
 - [ ] Create `serve/stream_worker.py` (keep `stream.py` near 300 lines). A `StreamWorker` owns: a `threading.Event` stop, a bounded queue sized `settings.stream_buffer_size`, and a thread that runs `follow(store_dir, project, after=N, settings=feed_settings, stop=stop.is_set)` and puts each `Change` in the queue. When the queue is full, wait in short slices that re-check `stop` (never block forever)
-- [ ] A single `close()` ends the stream: sets `stop`, releases a thread blocked on a full buffer, and joins within a bound. All three end paths (client gone, stall, shutdown) call it
+- [ ] A single `close()` ends the stream: sets `stop`, releases a thread blocked on a full buffer, and joins within a bound. All end paths (client gone, stall, shutdown) call it
 - [ ] A store error raised by `follow()` in the thread is passed through the queue as a terminal marker so the response ends the stream (after streaming has started the status code cannot change; the client reconnects and gets the code then). Log it at ERROR with `logger.exception`
-- [ ] Expose a live-thread count for tests (module-level registry or a counter on the stream limiter), not a global scan of all threads
+- [ ] Expose a live-thread count for tests (a counter on the worker class), not a global scan of all threads
 
 **Success Criteria**:
 - [ ] Commit with Task 5.4
 
 ---
 
-### Task 5.4: Stream limiter and the SSE endpoint
+### Task 5.4: Tests for the stream worker
 **Owner**: Junior AI
 **Dependencies**: Task 5.3
-**Effort**: 4
-**Objective**: `GET /v1/projects/{project}/feed` as `text/event-stream` (LLD D5, API Contracts).
+**Effort**: 3
+**Objective**: Lifecycle and backpressure, without HTTP.
 
 **Steps**:
-- [ ] A limiter of `settings.max_feed_streams` slots, separate from Starlette's thread pool (use its own `ThreadPoolExecutor` or the worker threads themselves; reads and submissions must still work at the cap). Past the cap: `503 too_many_streams` with `Retry-After`
-- [ ] Cursor: `Last-Event-ID` if present, else `?after=N`; neither → `400 invalid_query` naming both forms. Never default to 0 or to the head
-- [ ] Before sending headers: authenticate, validate the project, open the store read-only to prove it opens (so `404`/`503` are real status codes), acquire a slot. Release the slot in a `finally` on every exit path
-- [ ] Response headers include `Cache-Control: no-store`. Event format: `id: {seq}\nevent: change\ndata: {change_as_json}\n\n`
-- [ ] Nothing to send for `settings.heartbeat_seconds` → send `: keepalive\n\n`. At each heartbeat tick call `authenticator.authorize()` (a no-op for `NoAuth`; Task 6.8 gives it meaning); if it denies, send the terminal event `event: closed` / `data: {"code": …}` and end the stream
-- [ ] Every send (events and keepalives) must complete within `settings.stream_stall_seconds`, else log at INFO with the principal and last `seq` sent, then close
-- [ ] Client disconnect or server shutdown calls `StreamWorker.close()`. Add `shutdown` handling that sets every stream's stop event (Task 7.3 wires it to uvicorn)
+- [ ] `tests/serve/test_stream_worker.py` against a seeded store: delivers changes in order from `after`; stops within a small `follow_interval_seconds` of `close()`; a worker blocked on a full buffer is released by `close()`; a worker does not read ahead of a full buffer (assert the number of changes taken from the store stays within the buffer bound plus one batch while the consumer is idle); a store error from `follow()` arrives as the terminal marker; live-thread count is zero after every case
 
 **Success Criteria**:
-- [ ] Commit with Task 5.5
+- [ ] Tests pass; suite clean
+- [ ] Commit, e.g. `feat: add stream worker` (includes Task 5.3)
 
 ---
 
-### Task 5.5: Verify uvicorn's `send` drains (D5 stop-and-ask check)
+### Task 5.5: SSE endpoint, server harness, and shutdown hook
 **Owner**: Junior AI
 **Dependencies**: Task 5.4
-**Effort**: 3
-**Objective**: Establish, not assume, that a never-reading client makes uvicorn's `send` wait (LLD D5 and D5a).
+**Effort**: 4
+**Objective**: `GET /v1/projects/{project}/feed` as `text/event-stream` (LLD D5, API Contracts), without the cap and stall bounds (Task 5.7).
 
 **Steps**:
-- [ ] `tests/serve/test_stream_stall.py`, with `amoeba serve`-equivalent wiring started as a real uvicorn server in a subprocess or thread on an ephemeral port (use the Task 7 launcher if it exists; otherwise `uvicorn.Server` directly with the same `limit_concurrency`)
-- [ ] Open a raw socket with a small `SO_RCVBUF`, send the GET, read nothing. Produce enough changes to fill the socket buffers. Assert (a) the server closes the stream within `stream_stall_seconds` plus a margin (use a small `stream_stall_seconds`), (b) the server's resident memory (`resource`/`psutil`-free: read `/proc` or `ps -o rss=` for the server process) stays flat while waiting, (c) the slot is freed
-- [ ] **If (a) or (b) fails, STOP.** It means `send` returns while uvicorn buffers in memory and no application-level timeout can detect the stall. Do not hand-roll a transport workaround. Tell the PM; the candidate remedy is Hypercorn under the same Starlette app (LLD D5). Record the outcome (pass or fail, uvicorn version) in the task notes for Task 8.5
+- [ ] Cursor: `Last-Event-ID` if present, else `?after=N`; neither → `400 invalid_query` naming both forms. Never default to 0 or to the head
+- [ ] Before sending headers: authenticate, validate the project, open the store read-only to prove it opens (so `404`/`503` are real status codes). Headers include `Cache-Control: no-store`. Event format: `id: {seq}\nevent: change\ndata: {change_as_json}\n\n`
+- [ ] Nothing to send for `settings.heartbeat_seconds` → send `: keepalive\n\n`. At each heartbeat tick call `authenticator.authorize(principal)`; if it returns a denial code, send one terminal `event: closed` with `data: {"code": …}` and end the stream (a no-op for `NoAuth`; Task 6.8 tests it)
+- [ ] Client disconnect ends the stream through `StreamWorker.close()`
+- [ ] **Shutdown lives in the app, not in the launcher:** register a Starlette lifespan shutdown handler in `build_app` that sets the stop event of every open stream. Keep a registry of open workers on `app.state` for this
+- [ ] Create `tests/serve/server_harness.py`: a context manager that runs `uvicorn.Server` for a given app in a thread on an ephemeral port and stops it by setting `should_exit`, so the lifespan shutdown handler runs. It is the only server launcher the Section 5 tests use
 
 **Success Criteria**:
-- [ ] The test passes, or work has stopped with the PM informed
-- [ ] Commit with Task 5.6 only if it passes
+- [ ] Commit with Task 5.6
 
 ---
 
-### Task 5.6: SSE behavior tests
+### Task 5.6: SSE core tests
 **Owner**: Junior AI
 **Dependencies**: Task 5.5
-**Effort**: 5
-**Objective**: Ordering, resume, heartbeat, caps, and cleanup (LLD Success Criteria, Functional Requirements). Use a real subprocess or threaded uvicorn server with stdlib `http.client`; `TestClient` does not stream incrementally.
+**Effort**: 4
+**Objective**: Ordering, resume, heartbeat, and pre-stream errors. Use the harness with stdlib `http.client`; `TestClient` does not stream incrementally.
 
 **Steps**:
 - [ ] `tests/serve/test_stream_sse.py`: each change arrives once, in order, with correct `id:`/`event:`/`data:`. The transcript equals `amoeba feed --project P` read from 0
 - [ ] Resume: disconnect mid-stream, reconnect with `Last-Event-ID`; no gap, no repeat. `Last-Event-ID` wins over `?after=`. No cursor → `400`
 - [ ] Heartbeat: no changes for `heartbeat_seconds` (small value) → a `: keepalive` comment
-- [ ] Cap: fill `max_feed_streams` (small) with open streams → next is `503 too_many_streams` with `Retry-After`, and a listing read still succeeds. Non-reading clients fill the slots and the slots free within the stall bound
-- [ ] Thread count: after client disconnect, after stall timeout, and after server shutdown, the live stream-thread count is zero
-- [ ] Errors before streaming: unknown project → `404`, schema mismatch → `503 store_unavailable`, with no event bytes sent
-- [ ] Backpressure: a slow reader does not grow server memory; the worker blocks on the full buffer and stops reading the store
+- [ ] Errors before streaming: unknown project → `404`, bad project id → `400`, schema mismatch → `503 store_unavailable`, each with no event bytes sent
+- [ ] Shutdown: stopping the harness while a stream is open ends the stream and the live-thread count reaches zero
 
 **Success Criteria**:
 - [ ] Tests pass; suite clean
-- [ ] Commit, e.g. `feat: add SSE feed endpoint` (includes Tasks 5.3–5.5)
+- [ ] Commit, e.g. `feat: add SSE feed endpoint` (includes Task 5.5)
 
 ---
 
-### Task 5.7: Checkpoint and latency tests
+### Task 5.7: Stream cap and stall bound
 **Owner**: Junior AI
 **Dependencies**: Task 5.6
 **Effort**: 3
-**Objective**: A blocked stream pins no snapshot; the latency bound holds (LLD D5, Success Criteria).
+**Objective**: Bound the two ways a remote client can hold a stream slot (LLD D5, D5a).
 
 **Steps**:
-- [ ] Checkpoint test (in `tests/serve/test_stream_checkpoint.py`): fill a stream's buffer with a non-reading client, commit from a writer, run `PRAGMA wal_checkpoint(TRUNCATE)` from the writer connection, and assert `busy = 0`. If it fails, `follow()` is holding a read transaction across a `yield`; stop and tell the PM (106 interface). Do not work around it in the server
-- [ ] Latency test: with a small `FeedSettings.follow_interval_seconds`, a change committed while a follower waits is received within that interval plus delivery time, with a generous margin. Do not assert exact timings
+- [ ] A limiter of `settings.max_feed_streams` slots, separate from Starlette's thread pool (reads and submissions must still work at the cap). Past the cap: `503 too_many_streams` with `Retry-After`. Acquire after the pre-stream checks; release in a `finally` on every exit path
+- [ ] Every send (events and keepalives) must complete within `settings.stream_stall_seconds`, else log at INFO with the principal and last `seq` sent, close the stream through `StreamWorker.close()`, and free the slot
+- [ ] Do not wrap the stall bound in any transport workaround; Task 5.8 verifies that it is able to fire
+
+**Success Criteria**:
+- [ ] Commit with Task 5.8
+
+---
+
+### Task 5.8: Verify uvicorn's `send` drains (D5 stop-and-ask check)
+**Owner**: Junior AI
+**Dependencies**: Task 5.7
+**Effort**: 3
+**Objective**: Establish, not assume, that a never-reading client makes uvicorn's `send` wait (LLD D5 and D5a).
+
+**Steps**:
+- [ ] `tests/serve/test_stream_stall.py` using the server harness with a small `stream_stall_seconds`. Open a raw socket with a small `SO_RCVBUF`, send the GET, read nothing. Produce enough changes to fill the socket buffers. Assert (a) the server closes the stream within `stream_stall_seconds` plus a margin, (b) the server's resident memory (read with `ps -o rss= -p <pid>`; run the server as a subprocess for this test so the pid is its own) stays flat while waiting, (c) the slot is freed
+- [ ] Then reconnect with `Last-Event-ID` set to the last id received before the stall and assert the stream resumes with no gap and no repeat
+- [ ] **If (a) or (b) fails, STOP.** It means `send` returns while uvicorn buffers in memory and no application-level timeout can detect the stall. Do not hand-roll a transport workaround. Tell the PM; the candidate remedy is Hypercorn under the same Starlette app (LLD D5). Record the outcome (pass or fail, uvicorn version) in the task notes for Task 8.2
+
+**Success Criteria**:
+- [ ] The test passes, or work has stopped with the PM informed
+- [ ] Commit with Task 5.9 only if it passes
+
+---
+
+### Task 5.9: Cap, cleanup, and backpressure tests
+**Owner**: Junior AI
+**Dependencies**: Task 5.8
+**Effort**: 3
+**Objective**: The remaining stream Success Criteria.
+
+**Steps**:
+- [ ] `tests/serve/test_stream_limits.py`: fill `max_feed_streams` (small) with open streams → the next is `503 too_many_streams` with `Retry-After`, and a listing read still succeeds
+- [ ] Fill every slot with non-reading clients; assert the slots free within the stall bound and a new stream is then accepted
+- [ ] Thread count: after client disconnect, after stall timeout, and after server shutdown, the live stream-thread count is zero
+- [ ] Backpressure: a slow but reading client never hits the stall bound; a non-reading client does not grow server memory and the worker stops reading the store
+
+**Success Criteria**:
+- [ ] Tests pass; suite clean
+- [ ] Commit, e.g. `feat: bound stream slots and stalled sends` (includes Tasks 5.7–5.8)
+
+---
+
+### Task 5.10: Checkpoint and latency tests
+**Owner**: Junior AI
+**Dependencies**: Task 5.9
+**Effort**: 3
+**Objective**: A blocked stream pins no snapshot; the latency bound holds (LLD D5, Success Criteria). These run in the default suite; the LLD sets no throughput target, so no separate load test or CI gate exists.
+
+**Steps**:
+- [ ] Checkpoint test (`tests/serve/test_stream_checkpoint.py`): fill a stream's buffer with a non-reading client, commit from a writer, run `PRAGMA wal_checkpoint(TRUNCATE)` from the writer connection, and assert `busy = 0`. If it fails, `follow()` is holding a read transaction across a `yield`; stop and tell the PM (106 interface). Do not work around it in the server
+- [ ] Latency test: with a small `FeedSettings.follow_interval_seconds` set on `app.state.feed_settings`, a change committed while a follower waits is received within that interval plus delivery time, with a generous margin. Do not assert exact timings. If it is flaky, widen the margin and tell the PM; never mark it skipped
 
 **Success Criteria**:
 - [ ] Tests pass without flakiness on three consecutive runs; suite clean
