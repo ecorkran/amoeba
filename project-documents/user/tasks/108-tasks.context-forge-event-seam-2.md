@@ -23,7 +23,7 @@ status: not_started
 
 ## Section 6: `CFWatchTenant`
 
-All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in `src/amoeba/process/cf_layout.py` (Task 6.5; a module the LLD's component list does not name, added so the path is defined once; reported in Task 8.6). Tasks 6.3–6.4 use the real-`cf` harness from Task 1.3. The tenant follows `InboxTenant`'s host protocol shape (`settings`, `stop_requested`, `project_ids()`, `store_for()`). It takes its clock and its label-capture callable as constructor arguments so tests never sleep and never start a subprocess.
+All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in `src/amoeba/process/cf_layout.py` (Task 6.6; a module the LLD's component list does not name, added so the path is defined once; reported in Task 8.6). Tasks 6.3 and 6.5 use the real-`cf` harness from Task 1.3. The tenant follows `InboxTenant`'s host protocol shape (`settings`, `stop_requested`, `project_ids()`, `store_for()`). It takes its clock and its label-capture callable as constructor arguments so tests never sleep and never start a subprocess.
 
 ### Task 6.1: Tenant skeleton, scan cadence, watch cache, and the idle path
 **Owner**: Junior AI
@@ -54,10 +54,10 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 **Objective**: The two file-wide failures change every active watch's state and record nothing (LLD Errors).
 
 **Steps**:
-- [ ] In dispatch: signature `None` → every active watch `unreachable` via `set_cf_watch_state` (a no-op when already so); `ProjectsFileUnrecognized` → every active watch `unrecognized` with the error text as `detail`. `ProjectsFileMissing` raised after a successful `stat` (a race) is treated as `unreachable`
+- [ ] In dispatch: signature `None` → every active watch `unreachable` via `set_cf_watch_state` (a no-op when already so); `ProjectsFileUnrecognized` → every active watch `unrecognized` with the error text as `detail`. `ProjectsFileMissing` raised after a successful `stat` (a race) is treated as `unreachable`. A recognized file moves any watch currently `unreachable` or `unrecognized` back to `pending` (the leave transition belongs to this task); Task 6.3 then resolves each `pending` watch
 - [ ] Logging on transitions only, remembered per watch in memory: one ERROR when entering `unreachable` or `unrecognized`, one INFO when a watch leaves either for any other state. Never on a repeat scan. Neither failure raises: CF absent is not a sick store
 - [ ] Never write into the CF data directory
-- [ ] Add `tests/process/test_cf_watch_file_states.py`: no file → `unreachable`, one ERROR across several scans; file appears → INFO once and the state leaves `unreachable` (assert the state, not the snapshot, which Task 6.3 covers); `{}`, invalid JSON, an entry without `id`, and a duplicate `id` each give `unrecognized` with a distinct `detail`; an unrecognized file is not re-read on later scans until its signature changes (spy on the reader); a recognized file after it restores the state; a malformed entry in an unlinked project's record still blinds the watch (the LLD's deliberate trade-off)
+- [ ] Add `tests/process/test_cf_watch_file_states.py`: no file → `unreachable`, one ERROR across several scans; file appears → INFO once and the watch is `pending` (assert the state only; Task 6.3 resolves it); `{}`, invalid JSON, an entry without `id`, and a duplicate `id` each give `unrecognized` with a distinct `detail`; an unrecognized file is not re-read on later scans until its signature changes (spy on the reader); a recognized file after it returns the watches to `pending`; a malformed entry in an unlinked project's record still blinds the watch (the LLD's deliberate trade-off)
 
 **Success Criteria**:
 - [ ] Tests pass; no snapshot and no feed entry is produced by any case here
@@ -68,33 +68,51 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 
 ---
 
-### Task 6.3: Per-watch diff, snapshot recording, and version label
+### Task 6.3: Per-watch diff and snapshot recording
 **Owner**: Junior AI
 **Dependencies**: Task 6.2
 **Effort**: 4
-**Objective**: Compare each active watch with its stored baseline and record one snapshot when anything moved, carrying the version label (LLD Data Flow; D2, D4). Covers records that are present; absence and catch-up are Task 6.4.
+**Objective**: Compare each active watch with its stored baseline and record one snapshot when anything moved, (LLD Data Flow; D2, D4). Covers records that are present; absence and catch-up are Task 6.5.
 
 **Steps**:
 - [ ] Writer guard (moved here from Task 3.6, where it would have passed vacuously): add an AST test in `tests/test_writer_guard.py` (or a sibling) that every call to `record_cf_snapshot` and `set_cf_watch_state` under `src/amoeba/` sits in a permitted-module set, defined once as a constant and equal to `{process/cf_watch.py}`. Assert equality, so the test fails if the tenant stops calling them. The `watch_cf` effect writes `cf_watches` itself inside `store/inbox.py` and is outside this set
 - [ ] For each active watch (checking `host.stop_requested` between watches): `current = tracked_fields(record)`; `previous = store.latest_cf_snapshot(...)`; `changed = changed_keys(previous fields, current)`. Empty → state `ok`, no snapshot. Non-empty → one call to the Task 3.6 combined method with `present`, `fields`, `changed`, `cf_updated_at` taken as written from the record's `updatedAt` (`None` if absent; never parsed), and the label; state `ok`. The feed entry comes from the trigger; the tenant never writes `changes`
-- [ ] The label: call `capture_label()` at most once per file read, and only when a snapshot is about to be recorded; store whatever it returns, parsing and comparing nothing. The real callable is wired in Task 7.2 and is `capture_version_label`, which already returns `VERSION_UNAVAILABLE` on failure; add no second copy of that logic. **Task-level reading of "one `cf --version` subprocess per detected change": a read that records nothing starts no subprocess, and an idle tick never does. This reading conflicts with the LLD's "no tick starts a subprocess" (Non-functional Requirements and Data Flow); report the conflict to the PM in Task 8.6 so the LLD can be amended**
-- [ ] A watch whose record is absent from the file is not handled until Task 6.4. Until then dispatch leaves such a watch untouched (no state write, no snapshot, no error), with a comment pointing to Task 6.4; `test_cf_watch_snapshots` includes one case asserting an absent record raises nothing and records nothing
+- [ ] The label comes from the injected `capture_label`, called once per recording and stored as returned (semantics and tests in Task 6.4). Tests in this task inject a fake returning a fixed string
+- [ ] A watch whose record is absent from the file is not handled until Task 6.5. Until then dispatch leaves such a watch untouched (no state write, no snapshot, no error), with a comment pointing to Task 6.5; `test_cf_watch_snapshots` includes one case asserting an absent record raises nothing and records nothing
 - [ ] The tenant never creates, updates, or blocks a node (D2) and does not consult `cf_write` journal entries (D5)
 - [ ] Add `tests/process/test_cf_watch_snapshots.py` using the Task 1.3 harness (`real_cf` fixture; success paths use files written by the real `cf`): link → first snapshot with every key in `changed`; `cf set phase` → one snapshot, `changed == ["developmentPhase"]`, `cf_updated_at` equal to the record's `updatedAt`; a write touching only `updatedAt` records nothing; a write touching only `customData` (use `rewrite_projects_file`) records nothing and stores no `customData`; a change to an unlinked CF project records nothing. In each recording case assert the feed gained exactly one `cf_project_changed` with matching `changed`
-- [ ] Add `tests/process/test_cf_watch_label.py`: two recordings with a fake `capture_label` whose value changes between them store the two labels; a fake returning `VERSION_UNAVAILABLE` stores exactly that; the fake is called once per recording read and not at all for a read that records nothing; with `subprocess.run` patched to raise, idle ticks and non-recording reads complete without a call, and a recording read still records, labelled `unavailable` when the real callable is used
 
 **Success Criteria**:
 - [ ] Tests, `ruff`, `pyright` pass; each new test file stays under about 300 lines
 - [ ] Commit, e.g. `feat(process): record Context Forge snapshots from file changes`
 
-**Files to Create**: `tests/process/test_cf_watch_snapshots.py`, `tests/process/test_cf_watch_label.py`
+**Files to Create**: `tests/process/test_cf_watch_snapshots.py`
 **Files to Modify**: `src/amoeba/process/cf_watch.py`, `tests/test_writer_guard.py`
 
 ---
 
-### Task 6.4: Absence, reactivation, multiple writes, and catch-up
+### Task 6.4: Version-label capture
 **Owner**: Junior AI
 **Dependencies**: Task 6.3
+**Effort**: 2
+**Objective**: Each snapshot carries the CF version label captured at recording time (LLD Data Flow).
+
+**Steps**:
+- [ ] The label: call `capture_label()` at most once per file read, and only when a snapshot is about to be recorded; store whatever it returns, parsing and comparing nothing. The real callable is wired in Task 7.2 and is `capture_version_label`, which already returns `VERSION_UNAVAILABLE` on failure; add no second copy of that logic. **Task-level reading of "one `cf --version` subprocess per detected change": a read that records nothing starts no subprocess, and an idle tick never does. This reading conflicts with the LLD's "no tick starts a subprocess" (Non-functional Requirements and Data Flow); report the conflict to the PM in Task 8.6 so the LLD can be amended**
+- [ ] Add `tests/process/test_cf_watch_label.py`: two recordings with a fake `capture_label` whose value changes between them store the two labels; a fake returning `VERSION_UNAVAILABLE` stores exactly that; the fake is called once per recording read and not at all for a read that records nothing; with `subprocess.run` patched to raise, idle ticks and non-recording reads complete without a call, and a recording read still records, labelled `unavailable` when the real callable is used
+
+**Success Criteria**:
+- [ ] Tests, `ruff`, `pyright` pass
+- [ ] Commit, e.g. `feat(process): label Context Forge snapshots with the CF version`
+
+**Files to Create**: `tests/process/test_cf_watch_label.py`
+**Files to Modify**: `src/amoeba/process/cf_watch.py`
+
+---
+
+### Task 6.5: Absence, reactivation, multiple writes, and catch-up
+**Owner**: Junior AI
+**Dependencies**: Task 6.4
 **Effort**: 3
 **Objective**: The remaining per-watch outcomes (LLD Functional Requirements; Errors, "Linked id never present" and "present before, now gone").
 
@@ -112,17 +130,17 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 
 ---
 
-### Task 6.5: Bounded failure for recording errors
+### Task 6.6: Bounded failure for recording errors
 **Owner**: Junior AI
-**Dependencies**: Task 6.4
+**Dependencies**: Task 6.5
 **Effort**: 3
-**Objective**: A store failure on one watch must not crash-loop the process (LLD Errors, last bullet; 106's bounded-failure rule). Counting, parking, and skipping here; the retry trigger is Task 6.6.
+**Objective**: A store failure on one watch must not crash-loop the process (LLD Errors, last bullet; 106's bounded-failure rule). Counting, parking, and skipping here; the retry trigger is Task 6.7.
 
 **Steps**:
 - [ ] Create `src/amoeba/process/cf_layout.py` defining once the sidecar path `{store_dir}/cf/attempts/{project_id}/{sha256(cf_project_id).hexdigest()}.attempts.json` (D3: the id is never a path component). The tenant and the tests import it; no other module builds the path
 - [ ] Around the recording transaction, using 106's `AttemptsSidecar` and durable-write helper (locations from Task 1.1): write or increment the sidecar first. Catch only the store's error base class and `sqlite3.Error`, never a bare `except` or `except Exception`. Below `cf_max_attempts`: `logger.exception` at ERROR, then re-raise. At the limit: `logger.exception`, then swallow, with a comment saying why swallowing is correct (the watch is parked `failed` and the other watches must continue); set the watch `failed` in its own transaction (if that write also fails, `logger.exception` and continue), leave the sidecar, update the cache entry's state, and go on to the next watch
-- [ ] Skipping lives here: dispatch skips a `failed` watch (cache state) whose sidecar exists with attempts at or above `cf_max_attempts`, without reading its record. Task 6.6 only adds the retry trigger
-- [ ] Sidecar deletion has exactly one owner, this task: delete the sidecar after a successful commit, and also in the empty-diff branch of a dispatch (a crash between commit and delete leaves a sidecar for a watch with nothing left to record). Task 6.6 never deletes a sidecar
+- [ ] Skipping lives here: dispatch skips a `failed` watch (cache state) whose sidecar exists with attempts at or above `cf_max_attempts`, without reading its record. Task 6.7 only adds the retry trigger
+- [ ] Sidecar deletion has exactly one owner, this task: delete the sidecar after a successful commit, and also in the empty-diff branch of a dispatch (a crash between commit and delete leaves a sidecar for a watch with nothing left to record). Task 6.7 never deletes a sidecar
 - [ ] Add `tests/process/test_cf_watch_failure.py`; inject the failure by wrapping the store's combined record method to raise (as `tests/process/test_inbox_tenant.py` does): attempts 1 and 2 re-raise, log ERROR, and increment the sidecar; at the limit the watch is `failed`, nothing raises, a later scan skips the parked watch while a second watch still records; success after a transient failure removes the sidecar; a sidecar left over for a watch whose diff is now empty (stage it, simulating a crash between commit and delete) is removed on the next dispatch and records nothing new; the path contains no part of the raw CF id (use an id containing `/` and `..`)
 
 **Success Criteria**:
@@ -134,14 +152,14 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 
 ---
 
-### Task 6.6: Retry parked watches on sidecar removal
+### Task 6.7: Retry parked watches on sidecar removal
 **Owner**: Junior AI
-**Dependencies**: Task 6.5
+**Dependencies**: Task 6.6
 **Effort**: 2
-**Objective**: A `failed` watch is retried once its sidecar is deleted (LLD Functional Requirements, store-failure bullet). Skipping while parked is Task 6.5.
+**Objective**: A `failed` watch is retried once its sidecar is deleted (LLD Functional Requirements, store-failure bullet). Skipping while parked is Task 6.6.
 
 **Steps**:
-- [ ] Each scan interval the tenant makes one existence check per `failed` watch (none exist in the normal case, so the idle path of Task 6.1 is unchanged). Where it sits: in `tick`, after the interval gate and before the signature comparison, iterate the cached watches (Task 6.1 keeps each one's state) whose state is `failed` and test their sidecar paths from `cf_layout.py`. A missing sidecar sets the cache entry back to `pending` (written to the store with `set_cf_watch_state`) and marks the tenant dirty, so the dispatch that follows in the same tick retries it even though the file's signature has not changed. A sidecar still at or above the limit leaves the watch skipped (Task 6.5). This task deletes nothing; deletion belongs to Task 6.5
+- [ ] Each scan interval the tenant makes one existence check per `failed` watch (none exist in the normal case, so the idle path of Task 6.1 is unchanged). Where it sits: in `tick`, after the interval gate and before the signature comparison, iterate the cached watches (Task 6.1 keeps each one's state) whose state is `failed` and test their sidecar paths from `cf_layout.py`. A missing sidecar sets the cache entry back to `pending` (written to the store with `set_cf_watch_state`) and marks the tenant dirty, so the dispatch that follows in the same tick retries it even though the file's signature has not changed. A sidecar still at or above the limit leaves the watch skipped (Task 6.6). This task deletes nothing; deletion belongs to Task 6.6
 - [ ] Add `tests/process/test_cf_watch_retry.py`: deleting the sidecar retries and succeeds once the failure is lifted, ending `ok` with the sidecar gone; with no `failed` watch, an idle scan makes no sidecar check (spy on the existence check); the retried watch passes through `pending` and ends `ok`
 
 **Success Criteria**:
@@ -178,7 +196,7 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 
 ### Task 7.2: Wire the tenant into `start`, with tests
 **Owner**: Junior AI
-**Dependencies**: Task 6.6, Task 7.1 (the process test reads `inspect cf-snapshots`)
+**Dependencies**: Task 6.7, Task 7.1 (the process test reads `inspect cf-snapshots`)
 **Effort**: 4
 **Objective**: Register the third tenant (LLD "Consumes from Other Slices"); prove it runs in the real `amoeba start` and honors `--cf-data-dir`. One commit with its test.
 
@@ -268,14 +286,15 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 **Steps**:
 - [ ] Extend 106's `tests/test_import_boundaries.py`, parsing source with `ast` and inspecting import nodes (never text search): nothing under `amoeba.store` imports `amoeba.upstream` or `amoeba.process`; `amoeba.upstream` imports nothing from `amoeba.store`
 - [ ] Add a test that `IGNORED_KEYS`, the `$present` marker, and the CF location rule each have one definition by `ast`, not text search: each of `IGNORED_KEYS`, the marker constant, and `resolve_cf_data_dir` is bound at module level in exactly one module under `src/`, and a string constant exactly equal to `"CONTEXT_FORGE_DATA_DIR"` (docstrings and comments excluded, substrings not matched) appears in exactly one module. If a legitimate second site is found, fix the duplication rather than loosening the test
-- [ ] `tests/test_writer_guard.py` still passes; the record and state methods are not called outside `amoeba.process`
+- [ ] Extend 106's single-definition checks (the "trigger literals match the enums" family) to the new names: the `CFWatchState` values and the `cf_watches`/`cf_snapshots` table and column names appear as literals only in `cf_models.py`, `sql_cf.py`, and the migration. Fix duplication rather than loosening the test
+- [ ] `tests/test_writer_guard.py` still passes (its Task 6.3 equality test included); the record and state methods are not called outside `amoeba.process`
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; check no new source file exceeds about 300 lines (`wc -l`)
 
 **Success Criteria**:
 - [ ] Suite, `ruff`, `pyright` clean; file lengths within guidance
 - [ ] Commit, e.g. `test: pin Context Forge import and definition boundaries`
 
-**Files to Modify**: `tests/test_import_boundaries.py`
+**Files to Modify**: `tests/test_import_boundaries.py`, 106's single-definition test
 
 ---
 
@@ -302,11 +321,11 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 **Objective**: Make sure choices the LLD left open reach the PM.
 
 **Steps**:
-- [ ] In the final message list, with the code location of each: the `cf_watch_revision` counter (Task 4.3); the `--cf-max-attempts` flag (Task 5.1); the label captured once per recording read rather than per file-signature change (Task 6.3); the per-scan existence check of `failed` watches' sidecars, an exception to the one-`stat` idle guarantee that applies only while a watch is `failed` (Task 6.6); the migration number actually used and the CF version the fixture was captured on (Tasks 1.1, 1.2); the conflict between per-recording label capture and the LLD's \"no tick starts a subprocess\", with a request to amend the LLD (Task 6.3); the new `cf_layout.py` module, absent from the LLD's component list (Task 6.5); every place the task wording on settings, flags, or the idle-check differs from the LLD
+- [ ] Assemble the list now and deliver it in the final message after Task 8.7. Include, with the code location of each: the `cf_watch_revision` counter (Task 4.3); the `--cf-max-attempts` flag (Task 5.1); the label captured once per recording read rather than per file-signature change (Task 6.4); the per-scan existence check of `failed` watches' sidecars, an exception to the one-`stat` idle guarantee that applies only while a watch is `failed` (Task 6.7); the migration number actually used and the CF version the fixture was captured on (Tasks 1.1, 1.2); the conflict between per-recording label capture and the LLD's \"no tick starts a subprocess\", with a request to amend the LLD (Task 6.4); the new `cf_layout.py` module, absent from the LLD's component list (Task 6.6); every place the task wording on settings, flags, or the idle-check differs from the LLD
 - [ ] Say whether a worktree-overlay fixture could be captured (Task 1.2)
 
 **Success Criteria**:
-- [ ] The list is in the final message; no commit needed
+- [ ] The list is assembled; it is delivered in the final message after Task 8.7; no commit needed
 
 ---
 
@@ -330,7 +349,7 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
   - Reader on real fixture; two-fact contract: `test_cf_projects_file`
   - 7 → 8 upgrade: `test_migration_008`
   - Feed invariant with new step and rule: `test_feed_invariant`
-  - Enums, SQL, and constants defined once; store imports nothing upstream: `test_import_boundaries`
+  - Enums, SQL, and constants defined once; store imports nothing upstream: `test_import_boundaries` and the single-definition test extended in Task 8.4; writers called only from the tenant: `test_writer_guard`
   - `cf-contract.md` complete: `test_contract_docs`
   - Real fixtures and real-`cf`-written files in success paths: confirm by reading the fixture setup
 - [ ] Report any requirement for which no test could be named, with the one you added
@@ -338,6 +357,7 @@ All tenant code is in `src/amoeba/process/cf_watch.py`, with the sidecar path in
 **Success Criteria**:
 - [ ] Each bullet confirmed or fixed; the suite is green
 - [ ] Working tree committed on the slice branch; no merge performed
+- [ ] The final message carries Task 8.6's list and any Task 8.7 additions
 - [ ] Commit any additions, e.g. `test: close slice 108 requirement coverage gaps`
 
 ---

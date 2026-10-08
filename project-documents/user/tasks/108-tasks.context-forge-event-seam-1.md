@@ -28,7 +28,7 @@ status: not_started
 
 **Triggers and tables grow in place.** Migration 008 is unreleased until this slice merges; later tasks that touch it edit the one file. Never create another migration.
 
-**Task-level mechanisms the LLD does not spell out** (each is flagged where it appears and reported to the PM in Task 8.6): the watch-revision counter (Task 4.3), the idle-tick subprocess reading (Task 6.3), and the `cf_max_attempts` flag (Task 5.1).
+**Task-level mechanisms the LLD does not spell out** (each is flagged where it appears and reported to the PM in Task 8.6): the watch-revision counter (Task 4.3), the idle-tick subprocess reading (Task 6.4), and the `cf_max_attempts` flag (Task 5.1).
 
 **Section map (this file):** 1 branch, real fixtures, and the real-`cf` test harness; 2 upstream reader and diff; 3 store models, migration, operations, feed; 4 the `watch_cf` kind; 5 settings. **File 2 (`...-2.md`):** 6 `CFWatchTenant`; 7 listings and wiring; 8 end-to-end, docs, final validation.
 
@@ -46,8 +46,9 @@ status: not_started
 - [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
 - [ ] Create `108-slice.context-forge-event-seam` from the target; if it exists, switch to it
 - [ ] Confirm 106 is merged: `src/amoeba/store/schema/006_*.sql` exists and `ChangeKind` is defined in `src/amoeba/store/feed_models.py`. If either is missing, stop and tell the PM
-- [ ] Record in your notes: the highest file in `src/amoeba/store/schema/` and `EXPECTED_SCHEMA_VERSION`. The new migration is `max + 1`. The LLD assumes 007 exists, making this `008`; if the highest is `006` (107 unmerged), this slice takes `007`, and you tell the PM. Use the actual number wherever these tasks say "008"
-- [ ] Find and note where 106's `AttemptsSidecar` consumers and the durable-write helper live (`grep -rn "write_durably" src/`); Task 6.5 imports them
+- [ ] Record in your notes: the highest file in `src/amoeba/store/schema/` and `EXPECTED_SCHEMA_VERSION`. The new migration is `max + 1`. The LLD assumes 007 exists, making this `008`; if the highest is `006` (107 unmerged), this slice takes `007`, and you tell the PM. Use the actual number wherever these tasks say "008", including in file and test names (`008_cf_watches_and_snapshots.sql`, `test_migration_008.py`: rename to the real number)
+- [ ] Find and note where 106's `AttemptsSidecar` consumers and the durable-write helper live (`grep -rn "write_durably" src/`); Task 6.6 imports them
+- [ ] Tell the PM, before coding, of the departures from the LLD that these tasks make, and proceed on the task wording unless told otherwise: (a) the version label is captured per recorded change, not per tick (Task 6.4); (b) while any watch is `failed`, each scan makes one sidecar existence check, weakening the idle guarantee only for that period (Task 6.7); (c) the added `--cf-max-attempts` flag (Task 5.1). Task 8.6 reports them again with code locations
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once and note any pre-existing failure. If any fail before changes, stop and tell the PM
 
 **Success Criteria**:
@@ -82,7 +83,7 @@ status: not_started
 **Owner**: Junior AI
 **Dependencies**: Task 1.2
 **Effort**: 2
-**Objective**: One shared helper for every test that drives the real `cf` CLI (Tasks 6.3, 6.4, 8.1), so none of them can skip silently.
+**Objective**: One shared helper for every test that drives the real `cf` CLI (Tasks 6.3, 6.5, 8.1), so none of them can skip silently.
 
 **Steps**:
 - [ ] Create `tests/cf_harness.py` (follow `tests/cli_harness.py` style): a fixture `real_cf` that **fails** the test with a clear message when `cf` is not on `PATH`. It never skips and never falls back to a hand-built file (a silent skip would let the success paths go untested)
@@ -350,20 +351,38 @@ status: not_started
 ### Task 4.3: The watch-revision counter
 **Owner**: Junior AI
 **Dependencies**: Task 4.2
-**Effort**: 4
-**Objective**: Let the tenant's idle tick detect a newly added or reactivated watch without a query (LLD Data Flow; Functional Requirements, last bullet). **Task-level mechanism: the LLD requires the in-memory cache but not how it learns of `watch_cf` applies. Report this choice to the PM in Task 8.6.**
+**Effort**: 3
+**Objective**: Let the tenant's idle tick detect a newly added, reactivated, or deactivated watch without a query (LLD Data Flow; Functional Requirements, last bullet). **Task-level mechanism: the LLD requires the in-memory cache but not how it learns of `watch_cf` applies. Report this choice to the PM in Task 8.6.**
 
 **Steps**:
 - [ ] Confirm by reading `process/project_stores.py` and `process/inbox_tenant.py` that the `Store` returned by `host.store_for(project_id)` is the same handle the inbox applies submissions on. If it is not, stop and tell the PM
-- [ ] Add to the `CFWatchOperations` mixin an in-memory integer `cf_watch_revision` (property, starts 0), incremented once per `apply_submission` call that committed a change to a watch row (link, reactivate, deactivate). Timing: effects run inside `apply_submission`'s transaction (`with self._connection:`), so the effect must not bump. It sets a private pending flag on the store handle; `apply_submission` bumps the counter and clears the flag only after the `with` block has exited normally (the commit has happened). The flag is cleared at the start of every apply and on any exception, so a rolled-back or rejected apply never bumps and a stale flag never leaks into the next apply. A rejected submission (`SubmissionOutcome.REJECTED`) writes no watch row and does not bump. It is process memory only, never persisted. A replay that changes nothing does not bump it, and `set_cf_watch_state` (the tenant's own writes) never does. The tenant (Task 6.1) re-reads the project's watches only when the revision differs from the one it last saw, so a deactivation is noticed too
-- [ ] Add `tests/store/test_cf_watch_revision.py`: a link bumps it; a replay does not; a deactivate does; a reactivate does; `set_cf_watch_state` does not; a rolled-back apply (force the failure after the effect, by patching the submission-record insert to raise) does not, and a following successful apply of a different kind does not bump either (no stale flag); the counter value read from inside the effect is still the old one; a fresh `Store` handle starts at 0
+- [ ] Add to the `CFWatchOperations` mixin an in-memory integer `cf_watch_revision` (property, starts 0, process memory only, never persisted). Effects run inside `apply_submission`'s transaction (`with self._connection:`), so the effect must not bump: it sets a private pending flag on the store handle, and `apply_submission` bumps the counter and clears the flag only after the `with` block has exited normally (the commit has happened). A replay that changes nothing does not bump, and `set_cf_watch_state` (the tenant's own writes) never does. The tenant (Task 6.1) re-reads a project's watches only when the revision differs from the one it last saw
+- [ ] Add `tests/store/test_cf_watch_revision.py`: a link bumps it; a replay does not; a deactivate does; a reactivate does; `set_cf_watch_state` does not; the value read from inside the effect is still the old one; a fresh `Store` handle starts at 0
 
 **Success Criteria**:
 - [ ] Tests, `ruff`, `pyright` pass
-- [ ] Commit, e.g. `feat(store): track watch additions in memory for the idle tick`
+- [ ] Commit, e.g. `feat(store): count committed watch changes in memory`
 
 **Files to Create**: `tests/store/test_cf_watch_revision.py`
 **Files to Modify**: `store/cf_watches.py`, `store/inbox.py`
+
+---
+
+### Task 4.4: Revision counter under rollback and rejection
+**Owner**: Junior AI
+**Dependencies**: Task 4.3
+**Effort**: 3
+**Objective**: A failed or rejected apply never bumps the counter and never leaves a stale flag.
+
+**Steps**:
+- [ ] Clear the pending flag at the start of every `apply_submission` and on any exception, so a rolled-back apply cannot bump and a stale flag cannot leak into the next apply. A rejected submission (`SubmissionOutcome.REJECTED`) writes no watch row and does not bump
+- [ ] Extend `tests/store/test_cf_watch_revision.py`: a rolled-back apply (force the failure after the effect by patching the submission-record insert to raise) does not bump, and a following successful apply of a different kind does not bump either; a rejected submission does not bump
+
+**Success Criteria**:
+- [ ] Tests, `ruff`, `pyright` pass
+- [ ] Commit, e.g. `fix(store): keep the watch revision exact across rollback`
+
+**Files to Modify**: `store/inbox.py`, `tests/store/test_cf_watch_revision.py`
 
 ---
 
@@ -371,7 +390,7 @@ status: not_started
 
 ### Task 5.1: Add the three settings and flags
 **Owner**: Junior AI
-**Dependencies**: Task 4.3
+**Dependencies**: Task 2.1 (`resolve_cf_data_dir`), Task 4.4
 **Effort**: 2
 **Objective**: `cf_data_dir`, `cf_scan_interval_seconds`, `cf_max_attempts` (LLD "Settings"). **`cf_max_attempts` has no flag in the LLD's text, which lists flags only for the data directory; add one for consistency with `--detection-max-attempts` and report it in Task 8.6.**
 
