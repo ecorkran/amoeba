@@ -27,7 +27,7 @@ status: not_started
 
 **Triggers grow in place.** Migration `006_change_feed_and_detection.sql` is unreleased until this slice merges, so Tasks 1.3, 2.1–2.3 and 5.1 each add to the one file. Never create a 007.
 
-**Section map (this file):** 1 models and migration; 2 emission triggers; 3 `source_document` (D7); 4 feed reads and `read_transaction`; 5 detection storage and the `watch_reviews` kind; 6 attribution and review-producing kinds. **Sections 7–10 are in `...-2.md`:** 7 follower and `amoeba feed`; 8 review sources; 9 detection tenant; 10 listings and wiring. **Section 11 is in `...-3.md`:** end-to-end, docs, final validation.
+**Section map (this file):** 1 models and migration; 2 emission triggers; 3 `source_document` (D7); 4 feed reads and `read_transaction`; 5 detection storage and the `watch_reviews` kind. **File 2 (`...-2.md`):** 6 attribution, review-producing kinds, and the one-transaction ingest; 7 follower and `amoeba feed`; 8 review sources; 9 detection tenant. **File 3 (`...-3.md`):** 10 listings and wiring; 11 end-to-end, docs, final validation.
 
 ---
 
@@ -61,7 +61,7 @@ status: not_started
 - [ ] `ChangeKind` and `DetectionOutcome` as `StrEnum`s with exactly the members in the LLD word lists
 - [ ] Frozen dataclasses: `Change` (`seq, project_id, kind, node_id, subject_id, payload: Mapping[str, object], recorded_at`), `ReviewWatch` (columns of `review_watches`), `DetectedReview` (columns of `detected_reviews`), and `DetectionInput` (what `record_detection` takes: project, path, digest, outcome, optional node id, verdict id, record id, detail)
 - [ ] A comment on `DetectionOutcome` names the two outcomes that emit no change (`baseline`, `runner_issued`) and says `failed` is a listing state, not a member
-- [ ] Define the set of silent outcomes once here (e.g. `SILENT_OUTCOMES`) for the trigger-consistency test in Task 5.5
+- [ ] Define the set of silent outcomes once here (e.g. `SILENT_OUTCOMES`) for the trigger-consistency test in Task 5.7
 
 **Success Criteria**:
 - [ ] Module imports; `ruff` and `pyright` clean
@@ -135,7 +135,7 @@ status: not_started
 
 ## Section 2: Emission Triggers
 
-All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one `changes` row in the writer's transaction, with `payload` built by `json_object` and `recorded_at` copied from the row's own timestamp. Column and kind literals follow the LLD payload table; the invariant test (Task 5.5) ties the literals to the enums.
+All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one `changes` row in the writer's transaction, with `payload` built by `json_object` and `recorded_at` copied from the row's own timestamp. Column and kind literals follow the LLD payload table; the invariant test (Task 5.7) ties the literals to the enums.
 
 ### Task 2.1: Trigger for node creation
 **Owner**: Junior AI
@@ -207,12 +207,13 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Add the column to the insert statement and select columns in `sql_evidence.py`; map it in `mapping_evidence.py`; pass it in `_verdict_writer.py`
 - [ ] Add the optional field to `VerdictPayload` (`inbox/evidence_payloads.py`) and to `_apply_verdict` / `verdict_from_payload` / `verdict_payload.py`. If `verdict_payload.py` keeps `VERDICT_*` key constants, add one for it (defined once)
 - [ ] Do not edit any existing test to make it pass; if one fails, stop and diagnose
+- [ ] Add `tests/store/test_verdict_source_document.py`: a verdict recorded with a `source_document` reads back with it; one without reads back `None`; a `verdict` submission through `apply_submission` with the optional payload field stores it, and without the field stores `None`
 
 **Success Criteria**:
-- [ ] Every existing 104 test passes unchanged
-- [ ] A verdict recorded with a `source_document` reads back with it; one without reads back `None`
-- [ ] Committed with Task 3.3
+- [ ] Every existing 104 test passes unchanged; the new tests pass
+- [ ] Commit, e.g. `feat(store): carry source_document on verdicts`
 
+**Files to Create**: `tests/store/test_verdict_source_document.py`
 **Files to Modify**: `store/evidence_models.py`, `store/sql_evidence.py`, `store/mapping_evidence.py`, `store/_verdict_writer.py`, `store/verdict_payload.py`, `inbox/evidence_payloads.py`
 
 ---
@@ -227,32 +228,33 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Read `SELECT_EARLIER_ROUNDS` in `sql_evidence.py` and `_previous_round` in `verdicts.py`
 - [ ] Add the `source_document` condition (using `IS`) and pass the target's value as a parameter
 - [ ] Do not touch the comparable-standings filter
+- [ ] Add `tests/store/test_finding_changes_source_document.py` (LLD D7): on one node and one review type, record part 1 round 1, part 2 round 1, part 1 round 2 (distinct `source_document`s); part 1 round 2's previous round is part 1 round 1, never part 2
+- [ ] Same file: verdicts all with null `source_document` behave as before (previous round is the latest earlier comparable one); one verdict with a `source_document` and one without are different series. Use `tests/evidence_harness.py` helpers where they fit
 
 **Success Criteria**:
-- [ ] All 104 `finding_changes` tests pass unchanged
-- [ ] Committed with Task 3.3
+- [ ] All 104 `finding_changes` tests pass unchanged; the new tests pass
+- [ ] Commit, e.g. `feat(store): separate review series by source document`
 
+**Files to Create**: `tests/store/test_finding_changes_source_document.py`
 **Files to Modify**: `store/sql_evidence.py`, `store/verdicts.py`
 
 ---
 
-### Task 3.3: Test series separation by `source_document`
+### Task 3.3: Test the part-1 / part-2 series through the inbox
 **Owner**: Junior AI
 **Dependencies**: Task 3.2
 **Effort**: 2
-**Objective**: One new test covers the part-1 / part-2 case (LLD D7); 104's behavior is unchanged for nulls.
+**Objective**: Prove the series rule holds when verdicts arrive the way production delivers them.
 
 **Steps**:
-- [ ] Add `tests/store/test_finding_changes_source_document.py`, using `tests/evidence_harness.py` helpers where they fit
-- [ ] Case 1: on one node and one review type, record part 1 round 1, part 2 round 1, part 1 round 2 (distinct `source_document`s). Part 1 round 2's previous round is part 1 round 1, never part 2
-- [ ] Case 2: all verdicts with null `source_document` behave as before (previous round is the latest earlier comparable one)
-- [ ] Case 3: the `verdict` inbox payload accepts and stores the optional field (one assertion through `apply_submission`)
+- [ ] Extend `tests/store/test_finding_changes_source_document.py`: record the Case 1 sequence (three verdicts) through `apply_submission` with `verdict` payloads carrying `source_document`, then assert the same previous-round result
+- [ ] Run the whole 104 evidence suite once more and confirm it passes with no edits
 
 **Success Criteria**:
 - [ ] Tests pass; full suite passes
-- [ ] Commit, e.g. `feat(store): separate review series by source document`
+- [ ] Commit, e.g. `test(store): cover source_document series through the inbox`
 
-**Files to Create**: `tests/store/test_finding_changes_source_document.py`
+**Files to Modify**: `tests/store/test_finding_changes_source_document.py`
 
 ---
 
@@ -268,7 +270,7 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Add select statements to `sql_feed.py`: changes with `seq > after` for a project in `seq` order with a limit; max `seq` for a project (0 when none)
 - [ ] Create `src/amoeba/store/feed.py` with `FeedOperations(StoreBase)` providing `changes(project_id, *, after=0, limit)` and `change_head(project_id)`. `limit` has no default (no magic defaults); reject `limit < 1` with `ValueError`
 - [ ] Add the mixin to `Store`'s bases (`store/store.py`) and export `Change`, `ChangeKind`, `DetectionOutcome`, `ReviewWatch`, `DetectedReview`, `DetectionInput` from `store/__init__.py`
-- [ ] Switch `tests/store/test_feed_triggers.py` to the read API where convenient
+- [ ] In `tests/store/test_feed_triggers.py`, replace the raw-`changes`-row helper with `changes()` so later trigger tests read through the public API
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
@@ -307,7 +309,7 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 **Steps**:
 - [ ] Read `Store.open_read_only` and `_connect_read_only`; the connection uses `isolation_level="DEFERRED"`
 - [ ] Add `read_transaction() -> AbstractContextManager[None]` to `Store`: `BEGIN` on entry, `COMMIT` on normal exit; if the block raises, roll back to release the read lock, then re-raise. Statement text comes from `sql.py` constants. Raise a clear error if called on a handle with a transaction already open (no nesting)
-- [ ] Per the LLD it lives on the read-only handle. `Store` is one class for both modes, so if the class cannot tell its mode, document in the docstring that it is intended for read-only handles; do not add mode tracking
+- [ ] Decided: it is available on read-only handles only (LLD D1a). Add a keyword-only `read_only: bool = False` to `Store.__init__`; `open_read_only` passes `True`, `open` and `open_temporary` leave it false. `read_transaction()` on a handle where it is false raises `StoreError` with a message saying it is for read-only handles. Nested use (a transaction already open via `connection.in_transaction`) raises the same type. Update any direct `Store(...)` constructions in tests
 - [ ] Docstring shows the snapshot-then-head usage from the LLD
 
 **Success Criteria**:
@@ -329,6 +331,7 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Inside `read_transaction()`: read state, commit a new node from the read-write store, then read `change_head()`. Assert the head equals the pre-write head. After the block, a fresh read sees the new head
 - [ ] Control case: the same sequence **without** `read_transaction()` sees the write in the second read (proves the primitive is what makes the difference). If the control does not differ, stop and tell the PM rather than weakening the test
 - [ ] An exception inside the block rolls back and releases the lock: afterward a writer commit is not blocked and the exception propagates
+- [ ] `read_transaction()` on a read-write handle raises `StoreError`; nesting raises `StoreError`
 
 **Success Criteria**:
 - [ ] Tests pass
@@ -380,16 +383,15 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 
 ---
 
-### Task 5.3: Add the `watch_reviews` inbox kind, watch reads, and baseline write
+### Task 5.3: Add the `watch_reviews` inbox kind and its effect
 **Owner**: Junior AI
 **Dependencies**: Task 5.2
-**Effort**: 4
+**Effort**: 3
 **Objective**: Register or deactivate a directory (LLD "Registering a directory", "Inbox, the `watch_reviews` kind").
 
 **Steps**:
 - [ ] Follow the three-part rule in `SubmissionKind`'s docstring: add `WATCH_REVIEWS = "watch_reviews"`; add `WatchReviewsPayload` (`reviews_dir: str`, absolute path validated by pydantic, `active: bool`) to `inbox/envelope.py` and `KIND_PAYLOAD_MODELS`; add the effect to `KIND_EFFECTS` in `store/inbox.py`
 - [ ] Effect: upsert `review_watches`; first activation leaves `baselined_at` null; reactivating an existing watch updates `active` and `updated_at` and does **not** clear `baselined_at`. A relative path is quarantined as invalid by the envelope layer, not rejected by the effect
-- [ ] Add `watches(project_id)` and `baseline_watch(project_id, reviews_dir, entries)` to `FeedOperations`. The latter, in one transaction, inserts one `baseline` ledger row per `(path, digest)` and sets `baselined_at`; nothing is written if it raises
 - [ ] Confirm the `amoeba submit watch-reviews` subcommand appears automatically (`cli/submit.py` derives subcommands from `SubmissionKind`; flag `--active` must accept `true|false` under 104's flag rule). Fix only if it does not
 - [ ] Update the test that pins the kind set and any envelope-version/kind-coverage tests
 
@@ -398,33 +400,67 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] `ruff`, `pyright` clean
 - [ ] Committed with Task 5.4
 
-**Files to Modify**: `store/inbox_models.py`, `inbox/envelope.py`, `store/inbox.py`, `store/feed.py`, `store/sql_feed.py`
+**Files to Modify**: `store/inbox_models.py`, `inbox/envelope.py`, `store/inbox.py`, `store/sql_feed.py`
 
 ---
 
-### Task 5.4: Test the kind, watches, and baseline write
+### Task 5.4: Test the kind and its effect
 **Owner**: Junior AI
 **Dependencies**: Task 5.3
-**Effort**: 3
+**Effort**: 2
 **Objective**: Pin registration semantics.
 
 **Steps**:
-- [ ] Add `tests/store/test_watch_reviews.py`: register creates a watch with `baselined_at` null; deactivate then reactivate keeps `baselined_at`; a replayed submission is a no-op; a relative path is rejected at the envelope (`tests/inbox/test_envelope.py` style)
-- [ ] `baseline_watch` writes one row per file plus `baselined_at` atomically; force a failure partway (an invalid outcome in the batch) and assert no rows and `baselined_at` still null
+- [ ] Add `tests/store/test_watch_reviews.py`: register creates a watch with `baselined_at` null; deactivate then reactivate keeps `baselined_at` (stage it by setting the column directly in the test); a replayed submission is a no-op; a relative path is rejected at the envelope (`tests/inbox/test_envelope.py` style)
 - [ ] Extend `tests/cli/test_submit.py` with `submit watch-reviews` flag parsing (`--active true`, `--active false`)
 
 **Success Criteria**:
 - [ ] Tests pass
-- [ ] Commit, e.g. `feat(inbox): add watch_reviews kind and watch storage`
+- [ ] Commit, e.g. `feat(inbox): add watch_reviews kind`
 
 **Files to Create**: `tests/store/test_watch_reviews.py`
 **Files to Modify**: `tests/cli/test_submit.py`
 
 ---
 
-### Task 5.5: The invariant test
+### Task 5.5: Add `watches` and `baseline_watch`
 **Owner**: Junior AI
 **Dependencies**: Task 5.4
+**Effort**: 2
+**Objective**: The store side of baselining (LLD "Registering a directory").
+
+**Steps**:
+- [ ] Add statements to `sql_feed.py` and methods to `FeedOperations`: `watches(project_id) -> list[ReviewWatch]` and `baseline_watch(project_id, reviews_dir, entries)`. The latter, in one transaction, inserts one `baseline` ledger row per `(path, digest)` and sets `baselined_at`; nothing is written if any part raises
+- [ ] Reuse `record_detection`'s insert statement rather than a second one
+
+**Success Criteria**:
+- [ ] `ruff`, `pyright` clean
+- [ ] Committed with Task 5.6
+
+**Files to Modify**: `store/sql_feed.py`, `store/feed.py`
+
+---
+
+### Task 5.6: Test `watches` and `baseline_watch`
+**Owner**: Junior AI
+**Dependencies**: Task 5.5
+**Effort**: 2
+**Objective**: Pin atomicity and read shape.
+
+**Steps**:
+- [ ] Add to `tests/store/test_watch_reviews.py`: `watches` lists registered directories with all columns; `baseline_watch` writes one row per file plus `baselined_at`; force a failure partway (an invalid outcome in the batch) and assert no rows and `baselined_at` still null; baselining emits no change on the feed
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit, e.g. `feat(store): add watch reads and atomic baseline`
+
+**Files to Modify**: `tests/store/test_watch_reviews.py`
+
+---
+
+### Task 5.7: The invariant test
+**Owner**: Junior AI
+**Dependencies**: Task 5.6
 **Effort**: 4
 **Objective**: Prove the triggers are right (LLD "The invariant test checks every tracked table"). Riskiest piece; it gates the rest.
 
@@ -441,62 +477,5 @@ All triggers go in `006_change_feed_and_detection.sql`. Each trigger writes one 
 - [ ] Commit, e.g. `test(store): add feed invariant test`
 
 **Files to Create**: `tests/store/test_feed_invariant.py`
-
----
-
-## Section 6: Attribution and Review-Producing Kinds
-
-### Task 6.1: Define the review-producing kinds set
-**Owner**: Junior AI
-**Dependencies**: Task 5.5
-**Effort**: 1
-**Objective**: One definition of which journal kinds produce reviews (LLD D5).
-
-**Steps**:
-- [ ] Add a frozen set in `store/journal_models.py` (e.g. `REVIEW_PRODUCING_KINDS`) containing `CommandKind.SQ_RUN` only, with a comment: initiative 120 adds its review command kind here
-- [ ] Add a store read (in `journal.py`/`sql_journal.py`, following existing conventions) answering whether a project has an unresolved entry whose kind is in the set. Reuse the existing unresolved-entries select if one exists
-
-**Success Criteria**:
-- [ ] Committed with Task 6.3
-
-**Files to Modify**: `store/journal_models.py`, `store/journal.py`, `store/sql_journal.py`
-
----
-
-### Task 6.2: Implement `attribute_review`
-**Owner**: Junior AI
-**Dependencies**: Task 6.1
-**Effort**: 2
-**Objective**: The attribution rule (LLD D4), defined once and exported.
-
-**Steps**:
-- [ ] Create `src/amoeba/store/attribution.py`: `Attribution(node_id: str | None, candidates: tuple[str, ...])` frozen dataclass and `attribute_review(store, project_id, slice_name) -> Attribution`. Match nodes with `kind == slice` and `cf.slice_name == slice_name` in that project only
-- [ ] Exactly one match: `node_id` set. Zero or several: `node_id` None and `candidates` lists every match id (empty for zero). A `slice_name` of `None` (a review with no `slice`) is handled explicitly as zero matches, not by a crash
-- [ ] Use an existing node listing read; add SQL only if none fits (in `sql.py`). Export both names from `store/__init__.py`
-
-**Success Criteria**:
-- [ ] `ruff`, `pyright` clean
-- [ ] Committed with Task 6.3
-
-**Files to Create**: `src/amoeba/store/attribution.py`
-**Files to Modify**: `store/__init__.py`
-
----
-
-### Task 6.3: Test attribution and the kinds set
-**Owner**: Junior AI
-**Dependencies**: Task 6.2
-**Effort**: 2
-**Objective**: The LLD's "table of cases".
-
-**Steps**:
-- [ ] Add `tests/store/test_attribution.py`: one matching slice node; zero matches; two matching nodes (both ids listed); a node with the right name but `kind` not slice; same name in another project; `slice_name` None
-- [ ] Test the open-entry read: false with no entries; true with an open `SQ_RUN` entry; false with an open `CF_WRITE` entry; false after the `SQ_RUN` entry resolves
-
-**Success Criteria**:
-- [ ] Tests pass; full suite passes
-- [ ] Commit, e.g. `feat(store): add review attribution and review-producing kinds`
-
-**Files to Create**: `tests/store/test_attribution.py`
 
 ---

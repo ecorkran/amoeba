@@ -4,7 +4,7 @@ slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
 lld: user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md
 dependencies: [101, 102, 103, 104, 105]
-projectState: Sections 1–6 (file 1) are complete — migration 006, triggers, `source_document`, the feed read API with `read_transaction()`, the detection ledger, the `watch_reviews` kind, `attribute_review`, and the review-producing kinds set. This file adds the follower, the review sources, the detection tenant, and the listings. Sections 8 onward require slice 105's parser to be merged.
+projectState: Sections 1–5 (file 1) are complete — migration 006, triggers, `source_document`, the feed read API with `read_transaction()`, the detection ledger, and the `watch_reviews` kind with watch storage. This file adds attribution, the one-transaction ingest, the follower, the review sources, and the detection tenant. Sections 8 onward require slice 105's parser to be merged.
 dateCreated: 20261007
 dateUpdated: 20261007
 status: not_started
@@ -13,9 +13,105 @@ status: not_started
 ## Context Summary
 
 - Working on the **outbound-change-feed-and-detection-of-external-work** slice (106), continued from `106-tasks.outbound-change-feed-and-detection-of-external-work-1.md`. Read that file's Context Summary, branch, reading note, and commit cadence; they apply here unchanged.
-- **Sections in this file:** 7 follower and `amoeba feed`; 8 review sources; 9 `ReviewDetectionTenant`; 10 listings, settings flags, and `start` wiring. Section 11 (demo script, end-to-end test, docs, final validation) is in `106-tasks.outbound-change-feed-and-detection-of-external-work-3.md`.
+- **Sections in this file:** 6 attribution, review-producing kinds, and the one-transaction ingest (continued from file 1's Section 5); 7 follower and `amoeba feed`; 8 review sources; 9 `ReviewDetectionTenant`. Sections 10–11 are in `106-tasks.outbound-change-feed-and-detection-of-external-work-3.md`.
 - **Models for new code:** `InboxTenant` (`process/inbox_tenant.py`) for the tenant's host protocol, attempts sidecar, and bounded-failure shape; `inbox/sidecars.py` and `inbox/durable.py` for `AttemptsSidecar` and `write_durably`; `cli/inspect_inbox.py` and `cli/inspect_evidence.py` for listing modules; `cli/settings_flags.py` for flags.
 - **Branch:** still `106-slice.outbound-change-feed-and-detection-of-external-work`. No task here merges.
+
+---
+
+## Section 6: Attribution and Review-Producing Kinds
+
+### Task 6.1: Define the review-producing kinds set
+**Owner**: Junior AI
+**Dependencies**: Task 5.7
+**Effort**: 1
+**Objective**: One definition of which journal kinds produce reviews (LLD D5).
+
+**Steps**:
+- [ ] Add a frozen set in `store/journal_models.py` (e.g. `REVIEW_PRODUCING_KINDS`) containing `CommandKind.SQ_RUN` only, with a comment: initiative 120 adds its review command kind here
+- [ ] Add a store read (in `journal.py`/`sql_journal.py`, following existing conventions) answering whether a project has an unresolved entry whose kind is in the set. Reuse the existing unresolved-entries select if one exists
+
+**Success Criteria**:
+- [ ] Committed with Task 6.3
+
+**Files to Modify**: `store/journal_models.py`, `store/journal.py`, `store/sql_journal.py`
+
+---
+
+### Task 6.2: Implement `attribute_review`
+**Owner**: Junior AI
+**Dependencies**: Task 6.1
+**Effort**: 2
+**Objective**: The attribution rule (LLD D4), defined once and exported.
+
+**Steps**:
+- [ ] Create `src/amoeba/store/attribution.py`: `Attribution(node_id: str | None, candidates: tuple[str, ...])` frozen dataclass and `attribute_review(store, project_id, slice_name) -> Attribution`. Match nodes with `kind == slice` and `cf.slice_name == slice_name` in that project only
+- [ ] Exactly one match: `node_id` set. Zero or several: `node_id` None and `candidates` lists every match id (empty for zero). A `slice_name` of `None` (a review with no `slice`) is handled explicitly as zero matches, not by a crash
+- [ ] Use an existing node listing read; add SQL only if none fits (in `sql.py`). Export both names from `store/__init__.py`
+
+**Success Criteria**:
+- [ ] `ruff`, `pyright` clean
+- [ ] Committed with Task 6.3
+
+**Files to Create**: `src/amoeba/store/attribution.py`
+**Files to Modify**: `store/__init__.py`
+
+---
+
+### Task 6.3: Test attribution and the kinds set
+**Owner**: Junior AI
+**Dependencies**: Task 6.2
+**Effort**: 2
+**Objective**: The LLD's "table of cases".
+
+**Steps**:
+- [ ] Add `tests/store/test_attribution.py`: one matching slice node; zero matches; two matching nodes (both ids listed); a node with the right name but `kind` not slice; same name in another project; `slice_name` None
+- [ ] Test the open-entry read: false with no entries; true with an open `SQ_RUN` entry; false with an open `CF_WRITE` entry; false after the `SQ_RUN` entry resolves
+
+**Success Criteria**:
+- [ ] Tests pass; full suite passes
+- [ ] Commit, e.g. `feat(store): add review attribution and review-producing kinds`
+
+**Files to Create**: `tests/store/test_attribution.py`
+
+---
+
+### Task 6.4: Add `record_detected_verdict` (one-transaction ingest)
+**Owner**: Junior AI
+**Dependencies**: Task 6.3
+**Effort**: 3
+**Objective**: Record a verdict and its `ingested` ledger row in one transaction, so detection can never leave a verdict with no ledger row (LLD "Detecting a review").
+
+**Steps**:
+- [ ] Read `_verdict_writer.py` and `apply_submission` in `store/inbox.py`. `apply_submission` already runs the verdict write inside its own `BEGIN IMMEDIATE`; reuse that shape. If the verdict write is not callable inside an already-open transaction, extract its body into an inner method (no behavior change; 104's tests prove it)
+- [ ] Add `record_detected_verdict(verdict: VerdictInput, detection: DetectionInput) -> tuple[VerdictRecord, DetectedReview]` to `FeedOperations`. The detection's outcome must be `ingested` (else `ValueError`, nothing written). In one transaction: record the verdict (a retry returning the existing record is fine), then insert the ledger row with that verdict's id and node id
+- [ ] Idempotent: a repeat with the same verdict id and the same ledger key returns the existing records and writes nothing
+- [ ] Export nothing new beyond the method; document in the docstring that it exists for the detection tenant
+
+**Success Criteria**:
+- [ ] 104's tests pass unchanged; `ruff`, `pyright` clean
+- [ ] Committed with Task 6.5
+
+**Files to Modify**: `store/feed.py`, `store/_verdict_writer.py` (only if the inner method is needed), `store/sql_feed.py`
+
+---
+
+### Task 6.5: Test `record_detected_verdict`
+**Owner**: Junior AI
+**Dependencies**: Task 6.4
+**Effort**: 2
+**Objective**: Pin atomicity and idempotence.
+
+**Steps**:
+- [ ] Add `tests/store/test_record_detected_verdict.py`: success writes one verdict and one `ingested` row, emitting one `verdict_recorded` then one `review_detected`; a repeat writes nothing; a failure injected on the ledger insert (e.g. a duplicate key with a different verdict id, or a patched statement) leaves no verdict behind; a non-`ingested` outcome raises `ValueError` and writes nothing
+
+**Success Criteria**:
+- [ ] Tests pass; full suite passes
+- [ ] Commit, e.g. `feat(store): record a detected verdict and its ledger row atomically`
+
+**Files to Create**: `tests/store/test_record_detected_verdict.py`
+
+---
 
 ---
 
@@ -203,7 +299,7 @@ status: not_started
 **Steps**:
 - [ ] Add `review_scan_interval_seconds = 2.0`, `sq_timeout_seconds = 10.0`, `detection_max_attempts = 3` to `ProcessSettings` with docstring entries stating what each bounds, in the file's style. Add the three `start` flags in `cli/settings_flags.py` (use `positive_int` for attempts) and map them in the settings-building code that reads those flags
 - [ ] Generalize `capture_version_label` in `process/observers/cf_readback.py`: extract its subprocess logic into a shared helper parameterized by executable name, used by both cf and sq. cf behavior, logging, and `VERSION_UNAVAILABLE` stay the same; existing cf tests pass unchanged. Define the `sq` executable name and version args once, next to the helper
-- [ ] No tick may start a subprocess. The tenant takes the label from a value captured before the loop (Task 10.2 does the capture and wiring); here only the helper exists
+- [ ] No tick may start a subprocess. The tenant takes the label from a value captured before the loop (Task 10.3 does the capture and wiring); here only the helper exists
 
 **Success Criteria**:
 - [ ] Existing observer, settings, and lifecycle tests pass; `--help` for `start` lists the three flags
@@ -241,15 +337,16 @@ status: not_started
 - [ ] Create `src/amoeba/process/review_detection.py` with `ReviewDetectionTenant(supervisor_dir, *, version_label, source_factory)`; `name` property; `tick(host) -> bool` using the same `Host` protocol shape as `InboxTenant`. `source_factory` builds a `ReviewSource` for a directory (default `DirectoryReviewSource`) so tests can substitute a source
 - [ ] A tick does nothing unless `review_scan_interval_seconds` has elapsed since the last scan (use a clock passed in or `time.monotonic`; tests must not sleep for the real interval)
 - [ ] For each open project, for each **active** watch: if `baselined_at` is null, baseline it; otherwise scan (Task 9.4)
-- [ ] Baseline: list and read every top-level `*.md` (not through the settle rule); any failure → write nothing, retry next scan. On success call the store's `baseline_watch` once. Failure table: missing/unreadable directory → `unreachable` (one ERROR on the transition, one INFO on recovery); one unreadable file → one WARNING naming it, watch stays `baseline_pending`; a file deleted between list and read is dropped; a store failure follows the bounded-failure rule keyed `baseline-{sha256 of the dir}` (built in Task 9.6)
-- [ ] Per-watch state (`ok`, `unreachable`, `baseline_pending`, `failed`) is held in the tenant for `inspect watches` only to the extent the listing can derive it; do not persist it. Decide the derivation in Task 10.1; here expose a pure function that computes the state from the filesystem and the sidecar directory
+- [ ] Baseline: list and read every top-level `*.md` (not through the settle rule); any failure → write nothing, retry next scan. On success call the store's `baseline_watch` once. Failure table: missing/unreadable directory → `unreachable` (one ERROR on the transition, one INFO on recovery); one unreadable file → one WARNING naming it, watch stays `baseline_pending`; a file deleted between list and read is dropped; a store failure follows the bounded-failure rule keyed `baseline-{sha256 of the dir}` (counting and parking are built in Task 9.9; this task only creates the layout they use)
+- [ ] Create the sidecar layout module first (e.g. `detection_layout.py` beside the tenant): the path `{store_dir}/detection/attempts/{project_id}/{key}.attempts.json`, with directory names and suffix defined once, and the key forms (`{digest}` for files, `baseline-{sha256 of the dir}` for baselines). Task 9.9 and Task 10.1 reuse it
+- [ ] Expose a pure function `watch_state(watch, directory, store_dir) -> str` returning `failed` (a baseline sidecar at or above `detection_max_attempts`), `baseline_pending` (active, `baselined_at` null, directory readable), `unreachable` (directory cannot be listed), else `ok`. Nothing is persisted; the listing calls it at read time (Task 10.1)
 - [ ] Never write into a watched directory
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
 - [ ] Committed with Task 9.4
 
-**Files to Create**: `src/amoeba/process/review_detection.py`
+**Files to Create**: `src/amoeba/process/review_detection.py`, `src/amoeba/process/detection_layout.py`
 
 ---
 
@@ -262,7 +359,9 @@ status: not_started
 **Steps**:
 - [ ] Add `tests/process/test_review_detection_baseline.py` using `local_host` from `tests/process/conftest.py` and real fixtures copied into `tmp_path`
 - [ ] Registration then tick: existing files become `baseline` rows, `baselined_at` is set, no verdict, no change on the feed
-- [ ] Directory missing at registration: state `unreachable`, nothing ingested; created later, baselined on the next scan
+- [ ] Directory missing at registration: `watch_state` is `unreachable`, nothing ingested; created later, baselined on the next scan
+- [ ] Transitions and logging (`caplog`): across several ticks while the directory stays missing, exactly one ERROR is logged (no repeat per tick); when it returns, exactly one INFO; removing a baselined directory later and restoring it logs the same pair and the process keeps ticking
+- [ ] `watch_state` returns `ok`, `baseline_pending`, `unreachable`, and `failed` (stage `failed` by writing a baseline sidecar at the limit using the layout module)
 - [ ] One unreadable file: no rows, state `baseline_pending`, one WARNING; after `chmod`, whole directory baselined at once
 - [ ] File deleted between list and read: dropped; a later reappearance is detected as new (Task 9.5 asserts the detection; here assert it is absent from the baseline)
 - [ ] Scan interval: two ticks inside the interval scan once (fake clock)
@@ -283,9 +382,9 @@ status: not_started
 **Objective**: Digest, ledger check, parse, attribute, record (LLD "Detecting a review").
 
 **Steps**:
-- [ ] For each `DetectedFile` from the source: `sha256` of the bytes; skip if `(project, path, digest)` is in the ledger or has a parked sidecar (Task 9.6)
+- [ ] For each `DetectedFile` from the source: `sha256` of the bytes; skip if `(project, path, digest)` is in the ledger or has a parked sidecar (Task 9.9)
 - [ ] Parse with `parse_review_artifact`. On `SquadronReviewError`: `record_detection(unparseable, detail=error text)`. Catch only that base class; log at INFO, since a parse failure is an outcome. Do not catch anything wider
-- [ ] Attribute with `attribute_review(store, project, parsed.slice)`. Zero or several: `record_detection(unattributed, detail=candidate ids, record_id=review_record_id(parsed))`. Exactly one: in **one transaction** `record_verdict(to_verdict_input(parsed, node_id=..., source_path=str(path), upstream_version=<label>))` and `record_detection(ingested, verdict_id, node_id, record_id)`. If the store API cannot share a transaction across these two calls, add a single store method that does both (e.g. `record_detected_verdict`) rather than two commits; ask the PM only if that requires a contract change beyond `FeedOperations`
+- [ ] Attribute with `attribute_review(store, project, parsed.slice)`. Zero or several: `record_detection(unattributed, detail=candidate ids, record_id=review_record_id(parsed))`. Exactly one: call `store.record_detected_verdict(verdict_input, detection_input)` (built and tested in Task 6.4–6.5), with `verdict_input = to_verdict_input(parsed, node_id=..., source_path=str(path), upstream_version=<label>)`. That one call records both in one transaction; the tenant never calls `record_verdict` and `record_detection` separately for an ingest
 - [ ] Version label: the file's own stamp wins (105's D4 rule inside `to_verdict_input`); the tenant passes the start-up label only as the caller's fallback
 - [ ] Set `record_id` on the ledger row for every file that parsed, including `unattributed`
 - [ ] Do not retry `unparseable` or `unattributed` files: the ledger row is terminal for that digest; changed bytes make a new digest and a new attempt
@@ -313,6 +412,8 @@ status: not_started
 - [ ] No slice node for the review's slice (use the 104 review in `project-documents/user/reviews/`): `unattributed`, empty candidates, nothing written to any node. Two matching nodes: both ids in `detail`
 - [ ] `# not a review` in a `.md`: `unparseable` with the parser's error, not retried until its bytes change
 - [ ] Restart: build a new tenant over the same store; nothing re-ingested
+- [ ] Version label: construct the tenant with a distinctive test label. A copied fixture whose frontmatter has no `squadronVersion` is recorded with that label as `upstream_version`; one whose frontmatter has a stamp keeps its own stamp; with the label set to the `VERSION_UNAVAILABLE` marker, the recorded version is that marker, not empty. Pick fixtures by checking which real files carry the key
+- [ ] Reactivation: register, baseline, deactivate (`active false`), copy a new fixture in, tick (nothing happens), reactivate, tick twice: the file is detected as new and the earlier baseline rows are unchanged
 - [ ] A file deleted between listing and read and later restored is detected normally (patched source)
 - [ ] `unattributed` then slice node created then `ingest review` (105's function, called in-process) by hand: `recorded_since` true, a second ingest records nothing
 
@@ -368,7 +469,7 @@ status: not_started
 **Objective**: A store failure on one file must not crash-loop the process (LLD Errors, "Counter first").
 
 **Steps**:
-- [ ] Sidecar path: `{store_dir}/detection/attempts/{project_id}/{digest}.attempts.json`, using `AttemptsSidecar` and `write_durably`. Define the layout (directory names, filename suffix) once in a small module beside the tenant; baseline sidecars use `baseline-{sha256 of the dir}` as the key
+- [ ] Sidecars use `AttemptsSidecar` and `write_durably` at the paths from `detection_layout.py` (Task 9.3); do not define any path or key form here
 - [ ] Before the recording transaction, write or increment the sidecar. On exception: below `detection_max_attempts`, `logger.exception` at ERROR and re-raise; at the limit, `logger.exception`, leave the sidecar, move on to the next file. On success delete the sidecar after commit. A leftover sidecar for a file already in the ledger is deleted on the next scan
 - [ ] Detection skips any `(project, digest)` with a parked sidecar (count at or above the limit). Removing the sidecar by hand retries. A parked baseline leaves the watch `failed` and unscanned until the sidecar is removed
 - [ ] Expose a pure reader of the sidecar directory for Task 10.1's listing (parked files and their last error)
@@ -377,7 +478,6 @@ status: not_started
 - [ ] `ruff`, `pyright` clean
 - [ ] Committed with Task 9.10
 
-**Files to Create**: a sidecar-layout module under `src/amoeba/process/`
 **Files to Modify**: `src/amoeba/process/review_detection.py`
 
 ---
@@ -403,64 +503,3 @@ status: not_started
 **Files to Create**: `tests/process/test_review_detection_failure.py`
 
 ---
-
-## Section 10: Listings and Wiring
-
-### Task 10.1: Add `inspect watches` and `inspect detections`
-**Owner**: Junior AI
-**Dependencies**: Task 9.10
-**Effort**: 3
-**Objective**: Two registry entries (LLD CLI table).
-
-**Steps**:
-- [ ] Create `src/amoeba/cli/inspect_feed.py` with `watch_rows` and `detection_rows`; register both in `LISTINGS` (project-scoped, `rows=`). Columns exactly as in the LLD CLI table
-- [ ] `watches`: `state` is derived at read time: `failed` (parked baseline sidecar), `baseline_pending` (active, `baselined_at` null, directory readable), `unreachable` (directory cannot be listed), else `ok`. Use the pure functions from Tasks 9.3 and 9.9; the listing opens the store read-only and the supervisor directory, writes nothing
-- [ ] `detections`: ledger rows with `--outcome` as a `choice_options` entry (choices from `DetectionOutcome`, defined once), `recorded_since` from the store read, plus parked files as `failed` rows read from the sidecars (they have no store row; leave unknown columns empty, not guessed)
-- [ ] Update the test that pins the listing set to the new set
-
-**Success Criteria**:
-- [ ] Committed with Task 10.2
-
-**Files to Create**: `src/amoeba/cli/inspect_feed.py`
-**Files to Modify**: `src/amoeba/cli/inspect.py`, the listing-set test
-
----
-
-### Task 10.2: Wire the tenant into `start` and capture the label once
-**Owner**: Junior AI
-**Dependencies**: Task 10.1
-**Effort**: 2
-**Objective**: Register the second tenant; run `sq --version` once, before the loop.
-
-**Steps**:
-- [ ] In `cli/lifecycle.py::start`, capture the `sq` label with the shared helper and `settings.sq_timeout_seconds` **before** building the process, and pass it to `ReviewDetectionTenant`. Register it after `InboxTenant` (comment: a backlog of submissions, including `watch_reviews`, drains first)
-- [ ] Recovery still runs before any tenant ticks (unchanged)
-- [ ] Add a test that no tick spawns a subprocess (patch `subprocess.run` after start-up, run several ticks with files arriving, assert zero calls)
-
-**Success Criteria**:
-- [ ] `amoeba start` runs both tenants; `tests/test_cli_lifecycle.py` passes
-- [ ] Committed with Task 10.3
-
-**Files to Modify**: `src/amoeba/cli/lifecycle.py`
-
----
-
-### Task 10.3: Test the listings and wiring
-**Owner**: Junior AI
-**Dependencies**: Task 10.2
-**Effort**: 3
-**Objective**: Listings show the right state in each scenario.
-
-**Steps**:
-- [ ] Add `tests/cli/test_inspect_feed.py`: `watches` shows `ok`, `unreachable`, `baseline_pending`, and `failed` (staged by the Task 9 scenarios); `detections` shows every outcome, filters with `--outcome`, shows parked files as `failed`, and `recorded_since` flips true after a hand ingest
-- [ ] `--json` output has the same columns; table and JSON agree
-- [ ] Process test (`tests/process/test_review_detection_process.py`, using `start_host` from `tests/host_harness.py`): the host runs both tenants; a registered directory is baselined and a new file is ingested end to end; `kill -9` and restart re-ingest nothing
-
-**Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(cli): add inspect watches and detections; register the detection tenant`
-
-**Files to Create**: `tests/cli/test_inspect_feed.py`, `tests/process/test_review_detection_process.py`
-
----
-
