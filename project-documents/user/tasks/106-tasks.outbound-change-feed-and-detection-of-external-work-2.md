@@ -16,6 +16,8 @@ status: not_started
 - **Sections in this file:** 6 attribution, review-producing kinds, and the one-transaction ingest (continued from file 1's Section 5); 7 follower and `amoeba feed`; 8 review sources; 9 `ReviewDetectionTenant`. Sections 10–11 are in `106-tasks.outbound-change-feed-and-detection-of-external-work-3.md`.
 - **Models for new code:** `InboxTenant` (`process/inbox_tenant.py`) for the tenant's host protocol, attempts sidecar, and bounded-failure shape; `inbox/sidecars.py` and `inbox/durable.py` for `AttemptsSidecar` and `write_durably`; `cli/inspect_inbox.py` and `cli/inspect_evidence.py` for listing modules; `cli/settings_flags.py` for flags.
 - **Branch:** still `106-slice.outbound-change-feed-and-detection-of-external-work`. No task here merges.
+- **Criteria verified in file 3:** the LLD criteria for `inspect watches` / `inspect detections` states (Task 10.2), the no-subprocess-per-tick and label-captured-once criteria (Task 10.4), and the whole-system integration criteria (Tasks 11.2–11.5) cannot be proven until the listings, `start` wiring, and end-to-end tests exist. Task 11.12 traces every criterion to its test.
+- **No load test or CI gate:** the LLD sets no numeric targets (its Settings section says so), the follower polls one integer on a local file, and a tick is bounded to one pass per watch. Task 11.11 states this to the PM so the PM can overrule it. No task here adds one.
 
 ---
 
@@ -23,7 +25,7 @@ status: not_started
 
 ### Task 6.1: Define the review-producing kinds set
 **Owner**: Junior AI
-**Dependencies**: Task 5.9
+**Dependencies**: Task 5.6
 **Effort**: 1
 **Objective**: One definition of which journal kinds produce reviews (LLD D5).
 
@@ -46,6 +48,7 @@ status: not_started
 
 **Steps**:
 - [ ] Create `src/amoeba/store/attribution.py`: `Attribution(node_id: str | None, candidates: tuple[str, ...])` frozen dataclass and `attribute_review(store, project_id, slice_name) -> Attribution`. Match nodes with `kind == slice` and `cf.slice_name == slice_name` in that project only
+- [ ] Signature note: the LLD's file-layout sketch shows `attribute_review(nodes, slice_name)`, while its API Contracts table and Data Flow say `attribute_review(store, project_id, slice_name)`. Implement the API Contracts form (it is the one initiative 120 will call). Do not edit the LLD; report the inconsistency in Task 11.11
 - [ ] Exactly one match: `node_id` set. Zero or several: `node_id` None and `candidates` lists every match id (empty for zero). A `slice_name` of `None` (a review with no `slice`) is handled explicitly as zero matches, not by a crash
 - [ ] Use an existing node listing read; add SQL only if none fits (in `sql.py`). Export both names from `store/__init__.py`
 
@@ -104,6 +107,7 @@ status: not_started
 
 **Steps**:
 - [ ] Add `tests/store/test_record_detected_verdict.py`: success writes one verdict and one `ingested` row, emitting one `verdict_recorded` then one `review_detected`; a repeat writes nothing; a failure injected on the ledger insert (e.g. a duplicate key with a different verdict id, or a patched statement) leaves no verdict behind; a non-`ingested` outcome raises `ValueError` and writes nothing
+- [ ] Hand-edit shape (the production case in Task 9.6): record a detected verdict with ledger key `(path, digest_1)`; call again with the **same** verdict id and a **new** ledger key `(path, digest_2)`. Assert: still one verdict, two `ingested` ledger rows both pointing at that verdict id, and the second call emitted one `review_detected` and no `verdict_recorded`
 
 **Success Criteria**:
 - [ ] Tests pass; full suite passes
@@ -154,6 +158,7 @@ status: not_started
 - [ ] `stop` returning true ends the iterator; closing the generator closes the store (no open handle left)
 - [ ] Unknown project raises before any yield; a store at the wrong schema version raises `StoreSchemaError`
 - [ ] Batching: with `feed_batch_size` of 2 and five changes, all five arrive in order
+- [ ] Snapshot then follow (LLD D1a usage): on a read-only handle, inside `read_transaction()` read a node listing and `change_head()`; commit a new node from a read-write store after the head read; then `follow(after=head)` yields that new change exactly once and nothing earlier
 
 **Success Criteria**:
 - [ ] Tests pass, no sleeps longer than needed, no flakiness over three consecutive runs of the module
@@ -417,44 +422,79 @@ status: not_started
 
 ---
 
-### Task 9.6: Test the detection path with real fixtures
+### Task 9.6: Test the detection path: ingest, series, hand edit, restart
 **Owner**: Junior AI
 **Dependencies**: Task 9.5
-**Effort**: 4
-**Objective**: The LLD's functional bullets for ingest, attribution, and idempotence.
+**Effort**: 3
+**Objective**: The LLD's functional bullets for ingest, series, and idempotence. Tasks 9.6a and 9.6b cover refusals and lifecycle in their own modules, so no test file grows past ~300 lines.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection.py`. Seed a slice node with `cf.slice_name` of `resident-process-and-recovery` (the 102 series' slice) and a registered, baselined watch; copy fixtures in; tick twice (settle), assert results
+- [ ] Create `tests/process/detection_harness.py` holding what all three detection test modules share: seed a project with a slice node whose `cf.slice_name` is `resident-process-and-recovery` (the 102 series' slice); register and baseline a watch; copy a named fixture from `tests/fixtures/sq_reviews/` into a `tmp_path` directory; build the tenant with a fake clock and a distinctive version label; `run_scans(n)` that ticks past the scan interval twice (settle). Put the helpers here, not in the test modules
+- [ ] Add `tests/process/test_review_detection.py` using the harness
 - [ ] Round 1 and round 2 of part 1: two verdicts on the node, `source: artifact_frontmatter`, `source_path` the copied file, ledger `ingested`, one `verdict_recorded` and one `review_detected` change each
 - [ ] The captured provider-failure file is recorded with standing `provider_failure`
 - [ ] Series: `finding_changes` on part 1 round 2 names part 1 round 1 as previous, never part 2
 - [ ] Hand edit: append a `resolution: accepted` frontmatter key to a detected file; next scans add one `ingested` ledger row (new digest) pointing at the **same** verdict id, and no second verdict
-- [ ] No slice node for the review's slice (use the 104 review in `project-documents/user/reviews/`): `unattributed`, empty candidates, nothing written to any node. Two matching nodes: both ids in `detail`
-- [ ] `# not a review` in a `.md`: `unparseable` with the parser's error, not retried until its bytes change
 - [ ] Restart: build a new tenant over the same store; nothing re-ingested
-- [ ] Version label: construct the tenant with a distinctive test label. A copied fixture whose frontmatter has no `squadronVersion` is recorded with that label as `upstream_version`; one whose frontmatter has a stamp keeps its own stamp; with the label set to the `VERSION_UNAVAILABLE` marker, the recorded version is that marker, not empty. Pick fixtures by checking which real files carry the key
-- [ ] Already-baselined directory removed: across several ticks exactly one ERROR is logged and the process keeps ticking; restored, exactly one INFO and detection resumes with a newly copied file
-- [ ] Scan interval: with a substitute source counting `poll()` calls and a fake clock, two ticks inside the interval poll once
-- [ ] Reactivation: register, baseline, deactivate (`active false`), copy a new fixture in, tick (nothing happens), reactivate, tick twice: the file is detected as new and the earlier baseline rows are unchanged
-- [ ] A file deleted between listing and read and later restored is detected normally (patched source)
-- [ ] `unattributed` then slice node created then `ingest review` (105's function, called in-process) by hand: `recorded_since` true, a second ingest records nothing
 
 **Success Criteria**:
 - [ ] Tests pass
 - [ ] Commit, e.g. `feat(process): detect external reviews and record them as verdicts`
 
-**Files to Create**: `tests/process/test_review_detection.py`
+**Files to Create**: `tests/process/detection_harness.py`, `tests/process/test_review_detection.py`
+
+---
+
+### Task 9.6a: Test what detection refuses to guess, and the version label
+**Owner**: Junior AI
+**Dependencies**: Task 9.6
+**Effort**: 3
+**Objective**: Attribution failures, unparseable files, hand ingest, and the label rule, all with real fixtures.
+
+**Steps**:
+- [ ] Add `tests/process/test_review_detection_refusals.py` using `detection_harness.py`
+- [ ] No slice node for the review's slice (seed the project with **no** slice node and copy a real 102 fixture in; do not read files from `project-documents/`): `unattributed`, empty candidates, `record_id` set, nothing written to any node. Two matching slice nodes: both ids in `detail`
+- [ ] `# not a review` in a `.md`: `unparseable` with the parser's error, not retried until its bytes change
+- [ ] Version label: construct the tenant with a distinctive test label. A copied fixture whose frontmatter has no `squadronVersion` is recorded with that label as `upstream_version`; one whose frontmatter has a stamp keeps its own stamp; with the label set to the `VERSION_UNAVAILABLE` marker, the recorded version is that marker, not empty. Pick fixtures by checking which real files carry the key
+- [ ] `unattributed` then slice node created then `ingest review` (105's function, called in-process) by hand: `recorded_since` true, a second ingest records nothing
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit, e.g. `test(process): cover unattributed, unparseable, and label cases`
+
+**Files to Create**: `tests/process/test_review_detection_refusals.py`
+
+---
+
+### Task 9.6b: Test the detection lifecycle: availability, cadence, reactivation, races
+**Owner**: Junior AI
+**Dependencies**: Task 9.6a
+**Effort**: 3
+**Objective**: Scan-time directory loss, cadence, activation, and file races.
+
+**Steps**:
+- [ ] Add `tests/process/test_review_detection_lifecycle.py` using `detection_harness.py`
+- [ ] Already-baselined directory removed: across several ticks exactly one ERROR is logged and the process keeps ticking; restored, exactly one INFO and detection resumes with a newly copied file
+- [ ] Scan interval: with a substitute source counting `poll()` calls and a fake clock, two ticks inside the interval poll once
+- [ ] Reactivation: register, baseline, deactivate (`active false`), copy a new fixture in, tick (nothing happens), reactivate, tick twice: the file is detected as new and the earlier baseline rows are unchanged
+- [ ] A file deleted between listing and read and later restored is detected normally (patched source)
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit, e.g. `test(process): cover detection availability, cadence, and reactivation`
+
+**Files to Create**: `tests/process/test_review_detection_lifecycle.py`
 
 ---
 
 ### Task 9.7: Implement the defer and skip rules (D5)
 **Owner**: Junior AI
-**Dependencies**: Task 9.6
+**Dependencies**: Task 9.6b
 **Effort**: 2
 **Objective**: Detection yields to the Runner for reviews the Runner launches.
 
 **Steps**:
-- [ ] Before scanning a project, call the open-review-entry read from Task 6.1; if true, skip that project this tick (no listing, no reads)
+- [ ] The defer check applies to **scanning only**, not to baselining. In the per-watch loop, an unbaselined watch is baselined first exactly as in Task 9.3, whether or not a review-producing entry is open (baselining writes only silent `baseline` rows and reads no review content). Then, for a baselined watch, call the open-review-entry read from Task 6.1; if true, skip that project's scan this tick (no `poll()`, no reads)
 - [ ] The skip rule needs no tenant code: a `runner_issued` ledger row for `(path, digest)` already makes the existing ledger check skip the file. Confirm that by test rather than adding code
 - [ ] Add a comment citing the ownership rule and the five requirements it rests on, with the two that fall on 120 (ledger mark in the resolving transaction; record from the artifact through 105's parser)
 
@@ -472,7 +512,8 @@ status: not_started
 **Objective**: Pin LLD bullets "While the project has an open `SQ_RUN` entry…" and "A file already marked `runner_issued`…".
 
 **Steps**:
-- [ ] Add cases to `test_review_detection.py`: with an open `SQ_RUN` entry, a settled new file is not processed and the source is not polled; after the entry resolves, it is ingested on the next scan
+- [ ] Add cases to `test_review_detection_lifecycle.py`: with an open `SQ_RUN` entry, a settled new file is not processed and the source is not polled; after the entry resolves, it is ingested on the next scan
+- [ ] With an open `SQ_RUN` entry and a freshly registered (unbaselined) watch, the baseline is still taken and no verdict is recorded
 - [ ] A file whose `(path, digest)` is pre-marked `runner_issued` is never ingested and emits no change
 - [ ] A project with an open `CF_WRITE` entry is **not** deferred
 
@@ -480,7 +521,7 @@ status: not_started
 - [ ] Tests pass
 - [ ] Commit, e.g. `feat(process): defer detection while the runner owns a review`
 
-**Files to Modify**: `tests/process/test_review_detection.py`
+**Files to Modify**: `tests/process/test_review_detection_lifecycle.py`
 
 ---
 
@@ -491,10 +532,12 @@ status: not_started
 **Objective**: A store failure on one file must not crash-loop the process (LLD Errors, "Counter first").
 
 **Steps**:
-- [ ] Sidecars use `AttemptsSidecar` and `write_durably` at the paths from `detection_layout.py` (Task 9.2a); do not define any path or key form here
-- [ ] Add the parked-sidecar skip to the scan path from Task 9.5: a file whose digest has a sidecar at or above `detection_max_attempts` is skipped before parsing
-- [ ] Before the recording transaction, write or increment the sidecar. On exception: below `detection_max_attempts`, `logger.exception` at ERROR and re-raise; at the limit, `logger.exception`, leave the sidecar, move on to the next file. On success delete the sidecar after commit. A leftover sidecar for a file already in the ledger is deleted on the next scan
-- [ ] Detection skips any `(project, digest)` with a parked sidecar (count at or above the limit). Removing the sidecar by hand retries. A parked baseline leaves the watch `failed` and unscanned until the sidecar is removed
+- [ ] Sidecars use `AttemptsSidecar` and `write_durably` at the paths and keys from `detection_layout.py` (Task 9.2a); do not define any path or key form here
+- [ ] Write one private method `_guarded(project_id, key, action)` in the tenant that implements the whole counter rule once: write or increment the sidecar for `key` **before** running `action`; on exception below `detection_max_attempts`, `logger.exception` at ERROR and re-raise; at the limit, `logger.exception`, leave the sidecar, and return a "parked" result so the caller moves on; on success, delete the sidecar **after** the action's transaction has committed. No other code touches sidecars
+- [ ] Wrap exactly these three recording paths in `_guarded`, and no others: (1) the `record_detected_verdict` call (key `{digest}`); (2) each `record_detection` call for `unparseable` and for `unattributed` (key `{digest}`); (3) the `baseline_watch` call (key `baseline-{sha256 of the dir}`)
+- [ ] File skip, added to the scan path from Task 9.5 before parsing: a digest whose sidecar count is at or above `detection_max_attempts` is skipped. A leftover sidecar for a digest already in the ledger (crash between commit and delete) is deleted on the next scan, before the skip check
+- [ ] Baseline-failure path, stated fully: below the limit the failure re-raises, the watch stays unbaselined, and the next process start retries. At the limit the baseline sidecar stays, the tick logs ERROR and moves on to the next watch, and the watch is neither baselined nor scanned (`watch_state` reads `failed`) until the sidecar is removed by hand; removal makes the next scan retry the baseline. A successful baseline deletes its sidecar
+- [ ] Removing a file sidecar by hand retries that file on the next scan
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
@@ -511,12 +554,13 @@ status: not_started
 **Objective**: Pin LLD bullet "A store failure while recording one file stops the process below `detection_max_attempts`…".
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection_failure.py`; inject the failure by wrapping the store's record call to raise (as `tests/process/test_inbox_tenant.py` does for apply)
+- [ ] Add `tests/process/test_review_detection_failure.py`; inject the failure by wrapping the store's record call (`record_detected_verdict`, `record_detection`, or `baseline_watch`) to raise (as `tests/process/test_inbox_tenant.py` does for apply); use `detection_harness.py`
 - [ ] Below the limit: attempt 1 and 2 re-raise and log ERROR; the sidecar count increments; the file is not in the ledger
 - [ ] At the limit: logged, no raise, a later file in the same scan is still detected, the parked file is skipped on later scans
 - [ ] Removing the sidecar retries and succeeds once the failure is lifted; success deletes the sidecar
 - [ ] A crash between commit and sidecar delete (simulate by leaving a sidecar for a recorded file): the next scan deletes it and records nothing new
-- [ ] Baseline failure: same bounded shape; at the limit the watch reads `failed`
+- [ ] Each wrapped path fails the same bounded way (parametrize over them): `record_detected_verdict` (ingest), `record_detection` for an `unparseable` file, `record_detection` for an `unattributed` file
+- [ ] Baseline failure (`baseline_watch` raising): below the limit re-raises and the watch stays unbaselined; at the limit the watch reads `failed`, is not scanned, and a later watch in the same tick is still processed; removing the baseline sidecar retries and succeeds once the failure is lifted
 
 **Success Criteria**:
 - [ ] Tests pass
