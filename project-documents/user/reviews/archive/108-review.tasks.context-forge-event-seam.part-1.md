@@ -11,58 +11,59 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: bd800af745253d59f5b55593780327acd05bc420
+reviewedSha: f5d55a58aa9aabb0a35ac75ec7b1518452b70078
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 6
-durationSeconds: 53.2
+toolCallsMade: 7
+durationSeconds: 205.6
 runId: run-20261007-tasks-plan-25f0a00a
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: pass
-    category: coverage
-    summary: "Success-criteria coverage is complete"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:320-347"
+    severity: concern
+    category: ci-wiring
+    summary: "Real-`cf` tests will fail in CI because no task installs `cf`"
+    location: ".github/workflows/ci.yml:48"
   - id: F002
     severity: concern
-    category: sequencing
-    summary: "Feed trigger is committed without its behavioural test until Task 3.7"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md:166-205"
+    category: test-coverage
+    summary: "New writers are not explicitly registered with the writer guard until the last section"
+    location: "tests/test_writer_guard.py"
   - id: F003
     severity: concern
-    category: testability
-    summary: "Rollback test in Task 3.6 cannot force its failure as written"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md:253"
+    category: correctness
+    summary: "`cf_watch_revision` bump timing is ambiguous against the inbox transaction"
+    location: "src/amoeba/store/inbox.py"
   - id: F004
-    severity: concern
-    category: task-sizing
-    summary: "Tasks 6.3 and 6.5 are oversized, and their test files risk the 300-line guidance"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:70-127"
+    severity: note
+    category: sequencing
+    summary: "Task 3.5 and Task 4.1 each carry no tests of their own, but their commit grouping is sound"
+    location: "unverified"
   - id: F005
-    severity: concern
-    category: test-quality
-    summary: "Success-path tests that need the real `cf` CLI can skip silently"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:81, 215, 328-341"
+    severity: note
+    category: coverage
+    summary: "Cross-file requirement coverage is complete"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md"
   - id: F006
     severity: note
-    category: task-sizing
-    summary: "Task 6.4 is a test-only task that largely repeats Task 6.3's assertions"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:92-108"
+    category: nfr
+    summary: "No load test or NFR is required"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md"
   - id: F007
     severity: note
-    category: test-quality
-    summary: "The boundary test in Task 8.4 may be brittle"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:277"
+    category: scope
+    summary: "Scope additions are flagged and reported"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md"
   - id: F008
     severity: note
-    category: dependencies
-    summary: "Prerequisites on 106 are stopped on, not worked around"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md:47-49"
+    category: test-fidelity
+    summary: "The worktree overlay may have no real fixture"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md"
   - id: F009
-    severity: note
-    category: nfr
-    summary: "No load-test or CI-gating task is needed"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:260-290"
+    severity: pass
+    category: task-sizing
+    summary: "Sizing and sequencing"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md"
 ---
 
 # Review: tasks — slice 108
@@ -72,64 +73,56 @@ findings:
 
 ## Findings
 
-### [PASS] Success-criteria coverage is complete
+### [CONCERN] Real-`cf` tests will fail in CI because no task installs `cf`
 
-Each Functional Requirement maps to a task and test:
-- First snapshot, a single-key change, noise-only writes, unlinked projects, remove and restore, and `missing`: Task 6.3.
-- Down-time catch-up: Tasks 6.3, 7.4 and 8.1.
-- `unreachable` and `unrecognized`: Task 6.2.
-- Deactivate and reactivate: Tasks 4.2 and 6.3.
-- Bounded failure: Task 6.5.
-- Idle tick: Tasks 6.1 and 6.4.
+Task 1.3's `real_cf` fixture fails when `cf` is not on `PATH`. It never skips, and that is deliberate. Tasks 6.3, 6.4 and 8.1 depend on it. `.github/workflows/ci.yml` runs `uv run pytest` (line 48) and has no step that installs Context Forge. Once those tests land, CI goes red. The alternative is that someone adds a skip, which would undo the no-silent-skip guarantee. No task in either file edits the workflow or names the `cf` version CI should install. Add a task, ideally right after 1.3, that installs `cf` in CI and records the version. Task 8.6 should then report that version.
 
-Each Technical Requirement also has a task:
-- Single definitions and import boundaries: Task 8.4.
-- 7→8 upgrade: Task 3.3.
-- Invariant extension: Task 3.7.
-- Real fixtures: Task 1.2.
-- Contract docs: Tasks 8.2 and 8.3.
+### [CONCERN] New writers are not explicitly registered with the writer guard until the last section
 
-I found no uncovered criterion and no scope creep. The three extras (the `cf_watch_revision` counter, the `--cf-max-attempts` flag, and the label timing) are each flagged in the tasks and reported to the PM in Task 8.6.
+Task 3.5 says `record_cf_snapshot` and `set_cf_watch_state` are "in-process only (writer guard)". No task extends the guard's test or registry to cover the new methods. Task 8.4 only says the guard test "still passes". That passes trivially if the new methods are not registered. Add the registration and a refusal test in Task 3.6, where the methods are tested. In Task 8.4, assert that the new methods are present in the guard.
 
-### [CONCERN] Feed trigger is committed without its behavioural test until Task 3.7
+### [CONCERN] `cf_watch_revision` bump timing is ambiguous against the inbox transaction
 
-Task 3.2 creates the `AFTER INSERT ON cf_snapshots` trigger, and Task 3.3 commits it. Task 3.3 only checks that the trigger exists in `sqlite_master`. Task 3.7, four tasks later, is the first to assert what the trigger emits: payload shape, the JSON boolean for `present`, `changed` equal to the stored value, and rollback behaviour. This breaks the test-with pattern and the "a commit never holds untested behavior" rule in the file's own commit-cadence note. Either move the trigger-emission cases into Task 3.6 or 3.7 and commit them with 3.5–3.6, or add a minimal emission assertion to Task 3.3 using a raw insert.
+Task 4.3 says the revision is "incremented after the `watch_cf` effect commits". Effects run inside the inbox apply transaction, so the effect cannot see the commit. A bump made inside the effect would also fire on rollback. The planned "rolled-back apply does not bump" test would then fail, or pass only through an accidental design. The task should say where the bump hooks in, for example a post-commit callback or a compare-and-bump after apply returns. It should also say who owns that hook. The "same handle" check at the start of 4.3 is good, but it does not settle this.
 
-### [CONCERN] Rollback test in Task 3.6 cannot force its failure as written
+### [NOTE] Task 3.5 and Task 4.1 each carry no tests of their own, but their commit grouping is sound
 
-The test says to force a mid-transaction failure "with an invalid state". Task 3.2 says no `CHECK` on vocabulary columns, and Task 3.6 doesn't say the combined method validates `state`. A bad state string would therefore insert without error and the atomicity test would pass vacuously or fail confusingly. Specify the forcing mechanism. Either the method validates the state against `CFWatchState`, or the test uses a watch that doesn't exist, which `set_cf_watch_state` is already specified to raise on. The second option is the simpler fix.
+Task 3.5 is committed with 3.6, 3.2 with 3.3, and 4.1 with 4.2. The test-with pattern holds. Commits are spread across all eight sections, with no batching at the end.
 
-### [CONCERN] Tasks 6.3 and 6.5 are oversized, and their test files risk the 300-line guidance
+### [NOTE] Cross-file requirement coverage is complete
 
-Task 6.3 combines the per-watch diff loop, the combined record call, label wiring, and a test file of about twelve scenarios. Those scenarios run against the real `cf` CLI, with several `cf init` and `cf set` setups. Task 6.5 combines a new module, sidecar attempt logic, `failed` skipping, per-scan sidecar existence checks, and a five-scenario test file. Each is rated Effort 4 but mixes several separable behaviours. A junior AI would have trouble landing each with a clean commit and a test file under about 300 lines. Suggested splits:
-- **Task 6.3:** snapshot logic and its tests (link, change, noise, unlinked), then lifecycle cases (remove/restore, inactive/reactivate, restart/catch-up) in a second test file.
-- **Task 6.5:** `cf_layout.py` with its tests, then the attempt/skip logic.
+Every Functional and Technical requirement in the slice maps to a task.
+- Reader, diff and `IGNORED_KEYS`: Tasks 2.1–2.3.
+- Migration, trigger and invariant: Tasks 3.2–3.7.
+- `watch_cf` kind: Tasks 4.1–4.3.
+- Settings: Task 5.1.
+- Idle path, file states, snapshots, absence and catch-up, bounded failure and retry: Tasks 6.1–6.6.
+- Listings and wiring: Tasks 7.1–7.4.
+- End-to-end test, docs and boundaries: Tasks 8.1–8.4.
 
-### [CONCERN] Success-path tests that need the real `cf` CLI can skip silently
+Task 8.7 traces each requirement to a named test. I found no cross-file gaps or circular dependencies.
 
-The design requires that "no hand-built file stands in for the real shape in the success-path tests". Tasks 6.3 and 8.1 skip when `cf` isn't on `PATH`. Nothing says CI or the developer environment guarantees `cf`, and Task 8.7 runs the tests "by name" without checking for skips. If `cf` is absent, the most important tests (snapshots, end-to-end) skip, and the suite stays green while the requirement is unproven. Make Task 8.7 and the final validation fail if those tests were skipped, for example by reporting skip counts. Alternatively, state in Task 1.1 that `cf` must be installed to proceed, and say how CI provides it.
+### [NOTE] No load test or NFR is required
 
-### [NOTE] Task 6.4 is a test-only task that largely repeats Task 6.3's assertions
+The slice states no quantitative NFR. The idle-tick "one `stat`" guarantee is a functional criterion, and the spy-based tests in 6.1 and 6.6 cover it. The repo CI does run `tests/load`, so adding a load test is not needed here.
 
-Task 6.4 has one real step, "confirm the tenant stores whatever `capture_label()` returns", plus a small test file. Task 6.3 already asserts the label is called once per recording read. Folding 6.4's tests into 6.3's split-out lifecycle test file would remove a task. Keeping it separate is harmless.
+### [NOTE] Scope additions are flagged and reported
 
-### [NOTE] The boundary test in Task 8.4 may be brittle
+The slice does not list `--cf-max-attempts` as a flag in its Technical Scope, though it does list the setting. Task 5.1 adds the flag and Task 8.6 reports it. The same applies to the revision counter (4.3), the per-recording-read label capture (6.3), and the failed-watch existence check (6.6). All four are small, justified, and reported to the PM. The clock and label-callable injection is also consistent with the slice's no-subprocess-in-a-tick rule.
 
-The check that `CONTEXT_FORGE_DATA_DIR` appears in exactly one source module could trip on help text in `cli/settings_flags.py` or docstrings. It could also trip on any 102 code that already mentions the variable. Scope the search to code literals, or allow a documented exception list.
+### [NOTE] The worktree overlay may have no real fixture
 
-### [NOTE] Prerequisites on 106 are stopped on, not worked around
+Task 1.2 allows capturing no overlay fixture. In that case, recursion of `IGNORED_KEYS` into `worktrees` is tested only on in-memory-modified records (Task 2.3). That is acceptable because Task 8.6 reports it. Still, the PM should know the recursive rule is not verified against real CF output if no overlay is captured.
 
-Task 1.1 stops if 106 isn't merged, and handles the 007/008 migration numbering ambiguity explicitly. The `test_contract_docs.py` and `test_import_boundaries.py` files that Tasks 8.2–8.4 extend are not in the repo at this commit (my glob found neither). They are 106's files, so the Task 1.1 gate covers them. Reaching Task 8.2 without them means 106's tasks need re-checking.
+### [PASS] Sizing and sequencing
 
-### [NOTE] No load-test or CI-gating task is needed
-
-The slice restates no quantitative NFR. The idle-tick behaviour ("one `stat`, no file read, no query") is functional and is asserted with call-count spies in Tasks 6.1 and 6.4. A `tests/load/` task and a CI-gate task are therefore not required.
+Dependencies run in order, with the harness and fixtures first and wiring, docs and validation last. Tasks 6.3 and 6.5 are the largest, at effort 4 and 3. Both are bounded, and each has a clear success criterion and a named test file.
 
 ### Run Digest
 
-- Response length: 6808 chars
+- Response length: 4971 chars
 - Response is newline-free: no
-- Tool calls made: 6
+- Tool calls made: 7
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -139,7 +132,7 @@ The slice restates no quantitative NFR. The idle-tick behaviour ("one `stat`, no
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 53.2 s
+- Duration: 205.6 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 9
