@@ -16,6 +16,8 @@ status: not_started
 - **Sections in this file:** 5 checks and work records; 6 parser, ingest, fixtures (needs slice 105); 7 listings; 8 proof, docs, final validation.
 - **Branch:** still `107-slice.judge-samples-checks-and-calibration`. No task here merges.
 - **Migration number:** use the number recorded in Task 1.1 wherever "007" appears.
+- **Order if slice 105 is not merged:** only Section 6 and Task 8.2 need 105. Sections 5 and 7 and Task 8.1 do not, so run those first and return to Section 6 afterward; Task 8.2 comes last of the three. If 105 is merged, run the sections in numeric order.
+- **Coverage of file 1's criteria:** judge samples, D2, D3, the filter, and `calibration` are owned by Tasks 4.1–4.12 (file 1); the migration and upgrade test by Tasks 3.1–3.2; `check_standing` and `summarize_judge_samples` by Tasks 2.1–2.4. Task 8.7 re-checks them all against the LLD.
 
 ---
 
@@ -138,7 +140,7 @@ status: not_started
 **Steps**:
 - [ ] Export from `amoeba.store`: `CheckOutcome`, `CheckStanding`, `check_standing`, `CheckInput`, `CheckRecord`, `WorkRecordKind`, `WorkRecordInput`, `WorkRecordRecord`, `CalibrationRow`
 - [ ] Update the pinned export set in `tests/test_public_api.py` to match, and nothing else
-- [ ] Extend 104's metrology-reference test, if it enumerates modules, to include `check_models.py`, `calibration.py`, `checks.py`, `sql_checks.py`, `mapping_checks.py`
+- [ ] Extend 104's metrology-reference test so it also covers the new store modules (`check_models.py`, `calibration.py`, `checks.py`, `sql_checks.py`, `mapping_checks.py`) **and** the CLI modules that will read them (`cli/inspect_evidence.py`, `cli/inspect_checks.py`, `cli/ingest.py`). If the test scans only `store/`, widen it to scan these paths; if a listed file does not exist yet, list it anyway so Tasks 6.5 and 7.5 are covered when they create it
 
 **Success Criteria**:
 - [ ] Full suite, `ruff`, `pyright` clean
@@ -150,24 +152,24 @@ status: not_started
 
 ## Section 6: Parser, Ingest, and Fixtures
 
-*Requires slice 105. If Task 1.1 found `upstream/squadron/review.py` missing, stop and ask the PM before this section.*
+*Requires slice 105. If Task 1.1 found `upstream/squadron/review.py` missing, skip to Section 7, then Task 8.1, and ask the PM before returning here.*
 
 ### Task 6.1: Pass `judge_invocation_id` through `to_verdict_input` and `verdict_to_payload`
 **Owner**: Junior AI
-**Dependencies**: Task 5.7
+**Dependencies**: Task 4.4
 **Effort**: 2
 **Objective**: 105's parser and its payload inverse carry the id (LLD "105's parser").
 
 **Steps**:
-- [ ] Add a `judge_invocation_id: str | None = None` keyword to `to_verdict_input` and set it on the `VerdictInput`. It must **not** enter `review_record_id` (LLD D1: one file is one sample)
-- [ ] Make `verdict_to_payload` emit `VERDICT_JUDGE_INVOCATION_ID` when the id is set, and omit the key when `None`
+- [ ] In `src/amoeba/upstream/squadron/review.py`, add a `judge_invocation_id: str | None = None` keyword to `to_verdict_input` and set it on the `VerdictInput`. It must **not** enter `review_record_id` (LLD D1: one file is one sample)
+- [ ] In `src/amoeba/store/verdict_payload.py`, make `verdict_to_payload` emit `VERDICT_JUDGE_INVOCATION_ID` when the id is set, and omit the key when `None`
 - [ ] Extend 105's round-trip test (`verdict_to_payload` then `verdict_from_payload`) with a record that has an id
 
 **Success Criteria**:
 - [ ] The same file ingested with two different ids has the same record id
 - [ ] Existing 105 tests pass; `ruff` and `pyright` clean
 
-**Files to Modify**: `src/amoeba/upstream/squadron/review.py` (and its payload module), 105's round-trip test
+**Files to Modify**: `src/amoeba/upstream/squadron/review.py`, `src/amoeba/store/verdict_payload.py`, 105's round-trip test (`tests/store/test_verdict_to_payload.py`, or the module 105 chose)
 
 ---
 
@@ -215,7 +217,8 @@ status: not_started
 
 **Steps**:
 - [ ] For each judge fixture: `parse_review_artifact` then `to_verdict_input(..., judge_invocation_id="j1")` gives a sample with `score` and `criteria` from the file, `derivation` `not_reported`, and `standing` `unattested`
-- [ ] For the 302 file: `review_type` is `judge.slice-vs-arch`, verdict PASS, score 98.0 (the LLD walkthrough value; assert what the file actually says, and report to the PM if it differs)
+- [ ] For each fixture, read `score`, `reviewType`, and the verdict from the file's own frontmatter (`read_frontmatter` in `tests/review_fixtures.py`) and assert the parsed sample equals what the file says. Do not type expected values into the test
+- [ ] The 302 file's `reviewType` starts with `judge.`; report to the PM if the file's score or verdict differs from the LLD walkthrough's step 1 and 3 text
 
 **Success Criteria**:
 - [ ] Tests pass; `ruff` and `pyright` clean
@@ -261,7 +264,7 @@ status: not_started
 
 ### Task 7.1: Add the judge column and filter to `inspect verdicts`
 **Owner**: Junior AI
-**Dependencies**: Task 6.6
+**Dependencies**: Task 5.7
 **Effort**: 2
 **Objective**: `inspect verdicts` shows and filters by invocation (LLD "CLI").
 
@@ -284,7 +287,7 @@ status: not_started
 
 **Steps**:
 - [ ] Extend 104's `inspect verdicts` tests: the column exists; filter returns exactly one invocation's rows; review verdicts show a blank id; the filter and `--node` combine
-- [ ] Works against a stopped process (read-only handle)
+- [ ] Works against a stopped process (read-only handle) **and** against a running one (start via `tests/cli_harness.py` as the existing `inspect` tests do)
 
 **Success Criteria**:
 - [ ] Tests pass; `ruff` and `pyright` clean
@@ -318,7 +321,7 @@ status: not_started
 **Steps**:
 - [ ] Seed a store with the Task 4.12 set; table output has the exact column header and expected counts
 - [ ] `--json` rows carry `by_standing` and `scored`; unscored groups show `null` scores
-- [ ] Runs with the process stopped; an unknown project follows the existing listing behavior
+- [ ] Runs with the process stopped and with it running; an unknown project follows the existing listing behavior
 
 **Success Criteria**:
 - [ ] Tests pass; `ruff` and `pyright` clean
@@ -354,7 +357,7 @@ status: not_started
 - [ ] Seed checks of standing `passed`, `vacuous`, `unattested` and one `task_progress` and one `devlog` record
 - [ ] `checks` table shows the standing column; `--node` filters; `--json` has `examined` and provenance
 - [ ] `work-records` table columns; `--kind task_progress` filters; `--json` shows `content` as recorded; an invalid `--kind` is refused
-- [ ] Both work with the process stopped
+- [ ] Both work with the process stopped and with it running (same harness as Task 7.2)
 
 **Success Criteria**:
 - [ ] Tests pass; full suite, `ruff`, `pyright` clean
@@ -383,28 +386,67 @@ status: not_started
 
 ---
 
-### Task 8.2: End-to-end test through the real CLI
+### Task 8.2: Test `scripts/demo_checks.py`
 **Owner**: Junior AI
 **Dependencies**: Task 8.1
-**Effort**: 4
-**Objective**: Prove the LLD "Integration Requirements" scenario with subprocesses.
+**Effort**: 2
+**Objective**: The walkthrough's seeding script is itself tested.
+
+**Steps**:
+- [ ] Follow `tests/test_demo_evidence_payloads.py` and the existing demo-script subprocess tests: create `tests/test_demo_checks.py`
+- [ ] Run the script as a subprocess against a scratch `AMOEBA_STORE_DIR` seeded with a project and a node; assert stdout is exactly one node id, and that id is a second node in the same project
+- [ ] Open the store afterward: three checks on the first node with standings `passed`, `vacuous`, `unattested`, and one `task_progress` record
+- [ ] Re-running the script leaves the same rows (first wins)
+- [ ] The script refuses (non-zero exit) while the instance lock is held
+
+**Success Criteria**:
+- [ ] Tests pass; `ruff` and `pyright` clean
+- [ ] Commit with Task 8.1, e.g. `feat: add demo_checks seeding script`
+
+**Files to Create**: `tests/test_demo_checks.py`
+
+---
+
+### Task 8.3: End-to-end test, running process: samples, rejection, listings
+**Owner**: Junior AI
+**Dependencies**: Task 6.6, Task 7.6, Task 8.2
+**Effort**: 3
+**Objective**: Drive the LLD "Integration Requirements" scenario through the real CLI up to the crash point.
 
 **Steps**:
 - [ ] Create `tests/cli/test_judge_end_to_end.py` modeled on `tests/cli/test_evidence_end_to_end.py` (scratch `AMOEBA_STORE_DIR`, empty `--sq-runs-dir`, wait for `running`)
 - [ ] Create a project, stop, seed a node with `demo_evidence.py` and a second node with `demo_checks.py`, start
 - [ ] Ingest the 302 fixture as a sample of `j1`; submit two built `j1` samples with other models via `amoeba submit verdict --judge-invocation-id j1` (one CONCERNS); submit one `j1` sample on the second node
-- [ ] `kill -9` the process, start it again, then read only with `inspect`: three `j1` samples; one `rejected` submission whose reason names D2's invocation and node; `calibration` shows `split_invocations` 1 in every row `j1` touches; `checks` shows `passed`, `vacuous`, `unattested`; `work-records` shows the `task_progress` record
-- [ ] Nothing is applied twice after the crash (row counts unchanged)
+- [ ] **Wait until applied:** poll `amoeba inspect submissions --project ... --json` until every submission is `applied` or `rejected` (bounded timeout, then fail the test); do not use a fixed sleep
+- [ ] While the process runs, assert: three `j1` samples; one `rejected` submission whose reason names the invocation and its node; `calibration` shows `split_invocations` 1 in every row `j1` touches; `checks` shows `passed`, `vacuous`, `unattested`; `work-records` shows the `task_progress` record. Capture each listing's `--json` output for Task 8.4
 
 **Success Criteria**:
-- [ ] Test passes; no leftover processes; `ruff` and `pyright` clean
-- [ ] Commit with Task 8.1, e.g. `test: add judge sample and check end-to-end proof`
+- [ ] Test passes up to this point with the process left running (Task 8.4 extends it); `ruff` and `pyright` clean
+- [ ] Commit with Task 8.4
 
 ---
 
-### Task 8.3: Update `docs/evidence-contract.md`
+### Task 8.4: End-to-end test, crash and restart
 **Owner**: Junior AI
-**Dependencies**: Task 8.2
+**Dependencies**: Task 8.3
+**Effort**: 2
+**Objective**: Every listing returns the same rows after `kill -9`, with nothing applied twice.
+
+**Steps**:
+- [ ] In the same test file, after the wait in Task 8.3 has passed, `kill -9` the process, start it again, and wait for `running`
+- [ ] Re-read every listing with `--json` and assert equality with the output captured before the crash (row counts, ids, standings, rejection reason)
+- [ ] Also read with the process stopped (a read-only handle) and assert the same rows
+- [ ] Teardown stops the process; no leftover processes
+
+**Success Criteria**:
+- [ ] Test passes; `ruff` and `pyright` clean
+- [ ] Commit with Task 8.3, e.g. `test: add judge sample and check end-to-end proof`
+
+---
+
+### Task 8.5: Update `docs/evidence-contract.md`
+**Owner**: Junior AI
+**Dependencies**: Task 8.4
 **Effort**: 3
 **Objective**: Document the contract (LLD Technical Requirements, last bullet).
 
@@ -415,14 +457,15 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Each LLD-required topic has a heading or paragraph; no statement contradicts the LLD or the code
+- [ ] Commit, e.g. `docs: document judge samples, calibration, checks, and work records`
 
 **Files to Modify**: `docs/evidence-contract.md`
 
 ---
 
-### Task 8.4: Update the other docs and CHANGELOG
+### Task 8.6: Update the other docs and CHANGELOG
 **Owner**: Junior AI
-**Dependencies**: Task 8.3
+**Dependencies**: Task 8.5
 **Effort**: 2
 **Objective**: Correct the stale line and record the change.
 
@@ -433,14 +476,15 @@ status: not_started
 
 **Success Criteria**:
 - [ ] The stale line is gone; the three files are consistent with the code
+- [ ] Commit, e.g. `docs: update inbox and store contracts and changelog for slice 107`
 
 **Files to Modify**: `docs/inbox-contract.md`, `docs/store-contract.md`, `CHANGELOG.md`
 
 ---
 
-### Task 8.5: Final validation and walkthrough
+### Task 8.7: Final validation and walkthrough
 **Owner**: Junior AI
-**Dependencies**: Task 8.4
+**Dependencies**: Task 8.6
 **Effort**: 3
 **Objective**: Confirm the slice against the LLD Success Criteria.
 

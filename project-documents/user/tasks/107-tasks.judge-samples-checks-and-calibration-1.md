@@ -63,6 +63,7 @@ status: not_started
 **Objective**: Define the check and work-record vocabularies once (LLD D5, D6, "Component Structure").
 
 **Steps**:
+- [ ] In `evidence_models.py`, add `judge_invocation_id: str | None = None` to `VerdictInput` and `VerdictRecord` (the model field only; Task 4.1 wires SQL, mapping, and replay comparison). Task 2.3's function reads this field, so it must exist first
 - [ ] In `evidence_models.py`, add `command_output` and `document` to `RecordSource`; update that enum's docstring (describes what the caller read the record from; not restricted per record type)
 - [ ] Create `src/amoeba/store/check_models.py`, no SQL, no `sqlite3`, following `evidence_models.py` style
 - [ ] `CheckOutcome` (`passed`, `failed`, `errored`), `CheckStanding` (`errored`, `unattested`, `vacuous`, `passed`, `failed`), and `WorkRecordKind` (`task_progress`, `devlog`) as `StrEnum`s
@@ -88,6 +89,7 @@ status: not_started
 - [ ] Vocabularies have exactly the LLD members and string values; the dataclasses are frozen
 - [ ] Table-driven `check_standing` cases: `errored` with count 12, 0, and `None` is `errored`; `passed` with `None` is `unattested`; `failed` with `None` is `unattested`; `passed` with 0 and `failed` with 0 are both `vacuous`; `passed` with 12 is `passed`; `failed` with 3 is `failed`
 - [ ] `RecordSource` has the two new members and keeps the old ones
+- [ ] `VerdictInput` and `VerdictRecord` accept `judge_invocation_id`, and it is `None` when omitted (existing constructions unchanged)
 
 **Success Criteria**:
 - [ ] Tests pass; `ruff` and `pyright` clean
@@ -192,7 +194,7 @@ status: not_started
 **Objective**: A verdict can be written and read back with its invocation id (LLD D1).
 
 **Steps**:
-- [ ] Add `judge_invocation_id: str | None = None` to `VerdictInput` and `VerdictRecord` in `evidence_models.py`. Update `_INPUT_FIELDS` / `_as_input` in `verdicts.py` so a replay comparison includes it
+- [ ] The `judge_invocation_id` field already exists on `VerdictInput` and `VerdictRecord` (Task 2.1). Update `_INPUT_FIELDS` / `_as_input` in `verdicts.py` so a replay comparison includes it
 - [ ] Add the column to the verdict column list and `INSERT_VERDICT` in `sql_evidence.py`; update `verdict_parameters` and `map_verdict` in `mapping_evidence.py`. If either file would exceed ~300 lines, move the new code into a new module instead
 - [ ] An empty-string id is refused: a `ValueError` message from the store path (precondition in `_verdict_rejection`), not a silent `None`
 - [ ] Extend `tests/evidence_harness.py` `verdict_input` with an optional `judge_invocation_id` argument (default `None`; existing callers unchanged)
@@ -200,7 +202,7 @@ status: not_started
 **Success Criteria**:
 - [ ] Existing verdict tests pass unchanged; `ruff` and `pyright` clean
 
-**Files to Modify**: `evidence_models.py`, `sql_evidence.py`, `mapping_evidence.py`, `verdicts.py`, `_verdict_writer.py`, `tests/evidence_harness.py`
+**Files to Modify**: `sql_evidence.py`, `mapping_evidence.py`, `verdicts.py`, `_verdict_writer.py`, `tests/evidence_harness.py`
 
 ---
 
