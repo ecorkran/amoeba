@@ -11,54 +11,44 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: 83153c08b9faacf705a3f27a258826318111750f
-revision_number: 1
+reviewedSha: 157bbb34e9c0e3e4bd7d3699f8cc525b31507933
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 9
-durationSeconds: 55.4
+toolCallsMade: 6
+durationSeconds: 34.2
 runId: run-20261007-tasks-plan-25f0a00a
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: concern
-    category: scope
-    summary: "Task 7.2 targets a file that does not import the four helpers"
-    location: "tests/store/test_finding_changes.py:6-14"
-  - id: F002
-    severity: concern
-    category: sequencing
-    summary: "Task 7.5 does not depend on Tasks 7.1–7.3"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:139-143"
-  - id: F003
-    severity: concern
-    category: commit-cadence
-    summary: "Task 8.1 has no commit checkpoint and no test"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:162-175"
-  - id: F004
-    severity: concern
-    category: task-sizing
-    summary: "Tasks 8.2 and 8.3 are large for one junior AI task"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:179-221"
-  - id: F005
-    severity: concern
-    category: test-coverage
-    summary: "\"No `Store` import in `ingest.py`\" is checked by hand, not enforced"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:193-196"
-  - id: F006
-    severity: note
-    category: verification
-    summary: "Task 9.3 runs `tests/load`, which exists"
-    location: "tests/load"
-  - id: F007
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage for Sections 6–9"
+    summary: "Success criteria traceability for Sections 6–9"
     location: "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:354-392"
-  - id: F008
+  - id: F002
     severity: pass
-    category: commit-cadence
-    summary: "Commit distribution and test-with pattern"
-    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md"
+    category: sequencing
+    summary: "Sequencing and test-with pattern"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:21-298"
+  - id: F003
+    severity: concern
+    category: error-handling
+    summary: "Task 8.2 leaves a committed command that returns OK without submitting"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:175"
+  - id: F004
+    severity: note
+    category: sequencing
+    summary: "Task 7.3's dependency on Task 6.2 is a soft one"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:104"
+  - id: F005
+    severity: note
+    category: process
+    summary: "No explicit merge-to-target step"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:340-357"
+  - id: F006
+    severity: pass
+    category: coverage
+    summary: "NFR and load-test requirement"
+    location: "project-documents/user/tasks/105-tasks.squadron-review-parser-and-ingest-2.md:347"
 ---
 
 # Review: tasks — slice 105
@@ -68,56 +58,51 @@ findings:
 
 ## Findings
 
-### [CONCERN] Task 7.2 targets a file that does not import the four helpers
+### [PASS] Success criteria traceability for Sections 6–9
 
-Task 7.2 says to "apply the same replacement" as Task 7.1. It also requires "No import of the four removed helpers". But `test_finding_changes.py` imports only `ROUND_*` paths from `review_fixtures` and builds verdicts through `captured_verdict` from `evidence_harness` (lines 153–175). A grep of `tests/` for `review_findings`, `read_frontmatter`, `CapturedFinding` and `has_provider_failure_heading` finds `review_fixtures.py`, `test_demo_evidence_payloads.py`, `test_finding_identity.py` and `evidence_harness.py`. It does not find `test_finding_changes.py`.
+Each criterion that falls in this file's range maps to a task:
+- **Payload round trip:** Task 6.2 covers `verdict_to_payload` against every field, nulls, and a fixture-derived input.
+- **Test migration:** Tasks 7.1–7.4 move 104's tests onto the parser and reduce `review_fixtures.py` to paths.
+- **Ingest on a real file:** Task 8.5 covers the success path, and Task 8.6 covers the digest id, `source_path`, and no second record on re-ingest.
+- **Failure exits:** Task 8.3 covers unreadable input, a missing version label, and a stamp/argument disagreement, each leaving `inbox/new/` empty. It also covers a project with no store file.
+- **Stopped process and unknown project:** Task 8.7 covers both with the process running and stopped, and checks `inspect inbox`.
+- **stderr line and D7:** Task 8.5 covers the node/slice/type line and a slice mismatch that is still submitted.
+- **Stdout/file id divergence:** Task 8.8.
+- **No Store in ingest:** the AST test in Task 8.3.
+- **Docs and CHANGELOG:** Tasks 9.1 and 9.2.
+- **Walkthrough steps 1–9:** Task 9.3 for steps 1–9, with the `kill -9` and restart from step 8 covered by Task 8.6.
 
-So the success criterion is already true, and the task has nothing to change. The real migration for this file happens in Task 7.3. A junior AI could invent edits to satisfy the task. Fold 7.2 into 7.3. Alternatively, reframe it as "run `test_finding_changes.py` after 7.3 and confirm it passes unchanged". Note that the slice design lists this file as a direct user of the old reader, which appears to be inaccurate.
+I found no scope creep. Every task traces to a slice criterion, an enforced rule, or the Development Approach list.
 
-### [CONCERN] Task 7.5 does not depend on Tasks 7.1–7.3
+### [PASS] Sequencing and test-with pattern
 
-Task 7.5 deletes the old reader from `tests/review_fixtures.py`. It lists only Task 7.4 as a dependency. Tasks 7.1–7.3 are independent of 7.4, so the declared graph lets 7.5 run before the other three users are migrated. Step 1 of the task does check this with a grep, which is a mitigation. The dependency list should still read 7.1, 7.2, 7.3 and 7.4.
+Dependencies are acyclic and respected: 6.1→6.2, 7.1–7.3→7.4→8.1, then 8.2→8.3→8.4→8.5→8.6→8.7→8.8. Each implementation task is immediately followed by its test task. Commits fall at 6.2, 7.1, 7.2, 7.3, 7.4, 8.1, 8.3, 8.5, 8.6, 8.7, 8.8, 9.1, 9.2, and 9.3, so they are not batched at the end.
 
-### [CONCERN] Task 8.1 has no commit checkpoint and no test
+Task 7.2's claim that `tests/store/test_finding_changes.py` needs no edit holds. That file imports only `evidence_harness` and the `ROUND_*` paths from `review_fixtures`. The LLD names it as a migration user, and the task explains why it is covered anyway.
 
-The file's Context Summary says every task not marked "committed with Task N.M" commits on its own. Task 8.1 has no commit criterion and no "committed with 8.3" note. Task 8.2 follows that "committed with" convention. Add a commit line, or state that 8.1 is committed with 8.2 and 8.3. The new member is only exercised by Task 8.3's tests, so the second option fits the test-with pattern better.
+### [CONCERN] Task 8.2 leaves a committed command that returns OK without submitting
 
-### [CONCERN] Tasks 8.2 and 8.3 are large for one junior AI task
+Task 8.2 ends with a `TODO(8.4)` stub that returns `OK` without submitting. Task 8.2 has no commit of its own and is committed together with Task 8.3. Task 8.4 then lands in a later commit, so there is a commit where `amoeba ingest review` reports success and writes nothing. That sits badly with the project rule against silent success or fallback behavior. Two options:
+- Merge 8.2 and 8.4 into one task: parse, compose, and submit. 8.3 and 8.5 would also merge into one test task, or 8.5 would still follow.
+- Keep the split, but make the stub fail explicitly (for example, raise `NotImplementedError`), and remove it in 8.4.
 
-Task 8.2 (effort 4) holds a seven-step ordered pipeline, a mutually exclusive argument group, explicit exception branches, and registration. Task 8.3 (effort 3) packs about a dozen scenarios into one module. These include a multi-process fixture (`start_running`, `submit_cli`, `await_condition`, `stop_running`), six failure paths, the success path, D7 and `--id`.
+### [NOTE] Task 7.3's dependency on Task 6.2 is a soft one
 
-Consider splitting 8.2 into the argument parser and registration, then the `run_ingest` pipeline. Consider splitting 8.3 into a failure-path module and a success-path module. Keep each implementation committed with its tests.
+The task says the test "may use" `verdict_to_payload`, which does not make 6.2 a hard prerequisite. It does no harm, since 7.3 runs after Section 6 anyway.
 
-### [CONCERN] "No `Store` import in `ingest.py`" is checked by hand, not enforced
+### [NOTE] No explicit merge-to-target step
 
-The slice design says ingest opens no store (D6). Task 8.2 states this only as a success-criterion line, and Task 5.5's import-direction test covers `upstream` and `store` only. A later change could add a `Store` import with no test failing. Extend Task 5.5, or add an assertion in Task 8.3, that `cli/ingest.py` does not import `Store`.
+Task 9.3 commits on the slice branch. The repository's Git Rules require re-reading `git.integration_branch` and merging the slice branch into the target when implementation is done. The task list has no step for that. If it is handled outside the task list, this is fine. Otherwise, add a final checklist item or state in the Context Summary that the merge is the PM's step.
 
-### [NOTE] Task 9.3 runs `tests/load`, which exists
+### [PASS] NFR and load-test requirement
 
-`uv run pytest tests/load` is valid because the directory exists. The slice has no NFR, so no new load test and no CI-wiring task is needed. Task 9.3 states this.
-
-### [PASS] Success-criteria coverage for Sections 6–9
-
-Each criterion maps to a task:
-- **Payload inverse:** the `verdict_to_payload` round trip is in 6.1 and 6.2.
-- **Test migration:** the migration of 104's tests and the deletion of the old reader are in 7.1–7.5.
-- **Exit code:** `ExitCode.REVIEW_UNREADABLE = 12` is in 8.1, and 11 is currently the last member.
-- **Ingest command:** the command is in 8.2. 8.3 covers the failure paths, the unknown-project refusal, the stamp/argument disagreement, D7 and `--id`.
-- **End to end:** running process, double ingest, `kill -9` and standings are in 8.4. The stopped process and unknown project, in both states, are in 8.5. The stdout/file pair and the doubled counts are in 8.6.
-- **Docs:** the evidence-contract section, the process-contract entry and the CHANGELOG are in 9.1 and 9.2.
-- **Walkthrough:** the walkthrough refresh is in 9.3.
-
-I found no scope creep in Sections 6–9. Dependencies are acyclic.
-
-### [PASS] Commit distribution and test-with pattern
-
-Commits fall after 6.2, each of 7.1–7.5, 8.3, 8.4, 8.5, 8.6, 9.1, 9.2 and 9.3, so they are spread through the work and not batched at the end. Each implementation task (6.1, 8.2) is immediately followed by its test task and committed with it.
+The slice restates no NFR, so no `tests/load/` task and no CI gating task are required. Task 9.3 runs `uv run pytest tests/load` and says it checks only for regressions, which is a reasonable choice.
 
 ### Run Digest
 
-- Response length: 5664 chars
+- Response length: 4446 chars
 - Response is newline-free: no
-- Tool calls made: 9
+- Tool calls made: 6
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -127,10 +112,10 @@ Commits fall after 6.2, each of 7.1–7.5, 8.3, 8.4, 8.5, 8.6, 9.1, 9.2 and 9.3,
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 55.4 s
+- Duration: 34.2 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
