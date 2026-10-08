@@ -133,6 +133,8 @@ status: not_started
 - [ ] An invocation whose samples all agree: `split_invocations` 0
 - [ ] A `provider_failure` sample and an `unparsed` sample alongside one PASS: not split
 - [ ] A sample with no score: `scored` excludes it; a group with none scored has `score_min`, `score_mean`, `score_max` all `None`
+- [ ] Distinct-invocation counting: two samples of the same invocation and model give `samples` 2 and `invocations` 1; the same invocation id under two models counts once in each model's row
+- [ ] Numeric aggregation: scores 71, 80, 98 in one group give `scored` 3, `score_min` 71, `score_mean` 83.0, `score_max` 98 (computed by hand, not by the code under test)
 - [ ] `by_verdict` and `by_standing` counts, including zero-filled members; row ordering; empty input gives `()`
 - [ ] A record without `judge_invocation_id` raises `ValueError`
 
@@ -195,7 +197,7 @@ status: not_started
 
 **Steps**:
 - [ ] The `judge_invocation_id` field already exists on `VerdictInput` and `VerdictRecord` (Task 2.1). Update `_INPUT_FIELDS` / `_as_input` in `verdicts.py` so a replay comparison includes it
-- [ ] Add the column to the verdict column list and `INSERT_VERDICT` in `sql_evidence.py`; update `verdict_parameters` and `map_verdict` in `mapping_evidence.py`. If either file would exceed ~300 lines, move the new code into a new module instead
+- [ ] Add the column to the verdict column list and `INSERT_VERDICT` in `sql_evidence.py`; update `verdict_parameters` and `map_verdict` in `mapping_evidence.py`. `mapping_evidence.py` is 293 lines and the change should add only a few; if it ends above ~310 lines, move `map_observation`, `observation_as_finding`, and `observation_parameters` into a new `mapping_observations.py` and update imports (`_verdict_writer.py`, `verdicts.py`). `sql_evidence.py` (204) needs no split
 - [ ] An empty-string id is refused: a `ValueError` message from the store path (precondition in `_verdict_rejection`), not a silent `None`
 - [ ] Extend `tests/evidence_harness.py` `verdict_input` with an optional `judge_invocation_id` argument (default `None`; existing callers unchanged)
 
@@ -236,6 +238,7 @@ status: not_started
 - [ ] Add `VERDICT_JUDGE_INVOCATION_ID` to `verdict_payload.py`, and read it (optional key) in `verdict_from_payload`
 - [ ] Add `judge_invocation_id: str | None = None` to `VerdictPayload` in `inbox/evidence_payloads.py`; payload validation refuses an empty string
 - [ ] Confirm the existing test that pins payload field names against `verdict_payload.py` covers the new key; extend it if it does not
+- [ ] `verdict_to_payload` is 105's function. If Task 1.1 found 105 merged, make it emit the key when the id is set (omit when `None`) and add its round-trip case here. If 105 is not merged, Task 6.1 does this
 
 **Success Criteria**:
 - [ ] A payload with the key becomes a `VerdictInput` with the id; one without it has `None`
@@ -359,7 +362,7 @@ status: not_started
 **Steps**:
 - [ ] Two samples of `j1` with the same finding: `finding_changes` on the second has no previous round (not `recurring`)
 - [ ] An earlier invocation `j0` (same node and review type) is present: the second `j1` sample compares against `j0`'s latest comparable sample
-- [ ] Review verdicts on the same node and review type are not used as a judge sample's previous round and vice versa (review types differ; assert the actual behavior)
+- [ ] Cross-type: on one node, a review verdict (no invocation id, review type `tasks`) and a judge sample (review type `judge.tasks-vs-slice`) carry the same finding. The judge sample has no previous round, and the review verdict's previous round is never the judge sample. Both hold because review types differ; no other mechanism is needed
 - [ ] An existing multi-round review-verdict case gives the same result as before
 
 **Success Criteria**:
