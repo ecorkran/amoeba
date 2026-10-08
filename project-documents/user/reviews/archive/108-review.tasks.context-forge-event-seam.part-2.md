@@ -9,56 +9,65 @@ verdictSource: stated
 sourceDocument: project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md
 aiModel: claude-sonnet-5-5
 status: complete
-dateCreated: 20261007
-dateUpdated: 20261007
-reviewedSha: fc660a6040b82597a1cda97452f62011ffa226c7
-revision_number: 2
+dateCreated: 20261008
+dateUpdated: 20261008
+reviewedSha: 471687558981a404e164767dfe4136f6e517c8bd
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
-durationSeconds: 39.9
-runId: run-20261007-tasks-plan-25f0a00a
+durationSeconds: 40.3
+runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
     severity: concern
-    category: error-handling
-    summary: "File-level states can overwrite `failed` and bypass parking"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:56"
+    category: sequencing
+    summary: "Task 7.3 does not depend on the completed tenant"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:192-196"
   - id: F002
     severity: concern
     category: sequencing
-    summary: "Parking skip logic is split across 6.5 and 6.6, leaving 6.5 incomplete"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:121"
+    summary: "Behaviour for an absent record between Tasks 6.3 and 6.4 is undefined"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:70-77"
   - id: F003
     severity: concern
-    category: testing
-    summary: "Negative assertions are required but \"no fixed sleeps\" gives no method for them"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:218"
+    category: task-scoping
+    summary: "Where parked watches are skipped is spread over Tasks 6.5 and 6.6"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:121-141"
   - id: F004
     severity: concern
-    category: task-scope
-    summary: "Task 6.3 bundles too much"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:70"
+    category: commit-checkpoints
+    summary: "Sections 7.1 and 7.3 defer their commits to the following test task"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:168, 204"
   - id: F005
     severity: note
-    category: scope
-    summary: "6.5 and 6.6 add behaviour beyond the LLD, and both are reported to the PM"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:122"
+    category: requirements-consistency
+    summary: "\"No tick starts a subprocess\" conflicts with the per-change label capture"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:140, 280"
   - id: F006
     severity: note
-    category: task-scope
-    summary: "Non-code tasks 8.5, 8.6 and 8.7 could be fewer"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:327"
+    category: traceability
+    summary: "Settings, flags and idle-check wording differ slightly from the slice"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:35, 141"
   - id: F007
     severity: note
-    category: nfr
-    summary: "No performance NFR, so no `tests/load/` task is needed"
-    location: "unverified"
+    category: scope
+    summary: "`cf_layout.py` is not in the slice's component list"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:120"
   - id: F008
+    severity: note
+    category: nfr-coverage
+    summary: "No load test or CI gate is required"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:275"
+  - id: F009
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage and sequencing"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:342"
+    summary: "Success criteria trace to tasks in this file"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:23-370"
+  - id: F010
+    severity: pass
+    category: task-scoping
+    summary: "Sizing, test-with pattern and checkpoints are sound"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:23-340"
 ---
 
 # Review: tasks — slice 108
@@ -68,41 +77,61 @@ findings:
 
 ## Findings
 
-### [CONCERN] File-level states can overwrite `failed` and bypass parking
+### [CONCERN] Task 7.3 does not depend on the completed tenant
 
-Task 6.2 sets every active watch to `unreachable` or `unrecognized` through `set_cf_watch_state`. It makes no exception for `failed` watches. Task 6.6 finds parked watches by cache state `failed` (line 141), and the parked sidecar is meant to persist. A parked watch that passes through `unreachable` (file removed, then restored) loses its `failed` marker. After recovery it is no longer `failed`, so the 6.6 existence check never sees it. Dispatch would then re-attempt the recording unless it also tests the sidecar. Line 141 says a watch is skipped "while its sidecar exists", but it keys retry detection on state. Decide the intended behaviour: either file-level states leave `failed` watches alone, or dispatch skips on sidecar presence regardless of state. Add a test for the `failed` → `unreachable` → restored sequence in `test_cf_watch_retry.py` or `test_cf_watch_file_states.py`.
+Task 7.1 depends on Task 3.6, Task 7.2 on 7.1, and Task 7.3 on 7.2. No dependency chain reaches Tasks 6.1–6.6. Task 7.3 wires `CFWatchTenant` into `start`, so it should name Task 6.6, the last tenant task, as a dependency. The file order currently supplies this ordering only by convention. A junior AI could start Section 7 before the tenant is finished.
 
-### [CONCERN] Parking skip logic is split across 6.5 and 6.6, leaving 6.5 incomplete
+### [CONCERN] Behaviour for an absent record between Tasks 6.3 and 6.4 is undefined
 
-Task 6.5 sets a watch to `failed` at the attempt limit. The rule that dispatch skips a parked watch is added only in Task 6.6 (line 141). Between the two commits, any later dirty scan or signature change re-attempts a `failed` watch. Each retry increments the sidecar past `cf_max_attempts`, which contradicts the 6.5 objective. Move the "skip while parked" check into 6.5 and keep only the sidecar-removal retry in 6.6. Alternatively, state that 6.5's bounded failure is incomplete until 6.6.
+Task 6.3 says it "covers records that are present; absence … is Task 6.4". Its per-watch loop reads `tracked_fields(record)` from the file, and it never says what happens when the linked id is not in the file. At the end of 6.3, which has its own commit and passing tests, that path is undefined. It would likely raise a `KeyError` or hit an untyped branch. Add a step so 6.3 skips the watch explicitly or leaves a clearly marked stub. Alternatively, move the absent-record branch to 6.3 and keep only the vanish and reactivation semantics in 6.4.
 
-### [CONCERN] Negative assertions are required but "no fixed sleeps" gives no method for them
+### [CONCERN] Where parked watches are skipped is spread over Tasks 6.5 and 6.6
 
-Task 7.4 ("restart, assert nothing new is recorded") and Task 8.1 ("restart with no CF change → nothing new"; no feed line for `missing` or for a restored file) assert that something did not happen. A condition-with-deadline wait cannot prove that. The tasks forbid fixed sleeps but give no positive signal to wait on. A junior would either sleep or write a test that passes before the tenant has scanned. Specify the synchronization point. For example, wait until `inspect cf-watches` shows the watch `ok` after the restart, or until a second scan has happened. Then assert the snapshot count or the follower output. A short bounded settle, with the reason stated, would also be acceptable.
+Task 6.5 sets the watch to `failed` and says "go on to the next watch". Task 6.6 says a sidecar at or above the limit "leaves the watch skipped in dispatch". Neither task has a step for the skip predicate in the dispatch loop. After 6.5, a `failed` watch would be retried on the next dirty dispatch, which contradicts the slice criterion. The Task 6.6 test "a failed watch is skipped on later scans" does check the behaviour, but the implementing step is only implied. Add an explicit step in 6.6 to filter `failed` watches in the dispatch loop, based on sidecar existence.
 
-### [CONCERN] Task 6.3 bundles too much
+### [CONCERN] Sections 7.1 and 7.3 defer their commits to the following test task
 
-Task 6.3 covers the diff-and-record loop, the version-label capture, the tightening of the 3.6 writer test, and two new test files. That is effort 4 for one session. The label path (`capture_label` once per recording read, `unavailable` handling, `test_cf_watch_label.py`) is separable from snapshot recording. Splitting it into its own task would keep each unit about the size of 6.2 and 6.4.
+Tasks 7.1 and 7.3 are "Committed with" 7.2 and 7.4, so their implementation and tests land in one commit. This fits the test-with pattern, and the gap is only one task. The project rule is at least one commit per task, so either commit each task or state the exception in the Context Summary.
 
-### [NOTE] 6.5 and 6.6 add behaviour beyond the LLD, and both are reported to the PM
+### [NOTE] "No tick starts a subprocess" conflicts with the per-change label capture
 
-Two things go beyond the LLD text. Task 6.5 deletes a stale sidecar in the empty-diff branch. Task 6.6 adds one existence check per `failed` watch per scan, an exception to the LLD's "one `stat`" idle guarantee. Both are defensible and are surfaced in 8.6 or documented in 8.3. The label-capture-per-recording-read deviation from the LLD's "per detected change" (line 78) is surfaced the same way. I traced all three to a reasonable intent, so none is scope creep.
+The slice's Technical Requirements say no tick starts a subprocess. The Data Flow section says to re-capture `cf --version` on each detected change. The tasks resolve this sensibly: Task 6.3 captures the label only on a recording read, it tests that idle ticks never start a subprocess, and Task 8.6 reports the reading to the PM. Consider fixing the slice wording so the contradiction does not reach later readers.
 
-### [NOTE] Non-code tasks 8.5, 8.6 and 8.7 could be fewer
+### [NOTE] Settings, flags and idle-check wording differ slightly from the slice
 
-Task 8.6 is effort 1 and is just a final-message list. It could be folded into 8.5 or 8.7. This is optional.
+The slice describes an "in-memory cache of known watch ids updated when `watch_cf` submissions are applied". The tasks use a `cf_watch_revision` counter and a per-scan existence check for `failed` sidecars. Task 8.6 reports both as PM-visible decisions, which is the right handling. Task 8.3 documents the idle-tick exception in `process-contract.md`.
 
-### [NOTE] No performance NFR, so no `tests/load/` task is needed
+### [NOTE] `cf_layout.py` is not in the slice's component list
 
-The slice has no numeric throughput or latency NFR. The idle-tick guarantee is a structural property and is verified by the spy tests in `test_cf_watch_idle.py` and `test_cf_watch_label.py`. No load test or CI gating task is required.
+The small `cf_layout.py` module is not in the slice's Component Structure. It is justified by the DRY rule (one definition of the sidecar path) and its scope is minimal, so it is not scope creep.
 
-### [PASS] Success-criteria coverage and sequencing
+### [NOTE] No load test or CI gate is required
 
-Every Functional and Technical Requirement in the slice maps to a task and a named test in Task 8.7. Dependencies are linear with no cycles. Listings (7.1–7.2) precede wiring (7.3–7.4). The end-to-end test, docs, and boundary pins follow. Commits are distributed per task or per implementation/test pair, and none are batched at the end.
+The slice restates no throughput or latency NFR. The idle-tick "one `stat`" guarantee is a functional criterion, covered by `test_cf_watch_idle` and `test_cf_watch_label`. A `tests/load/` task and CI wiring are not needed.
+
+### [PASS] Success criteria trace to tasks in this file
+
+Each slice criterion handled here has a task and a named test:
+- **First snapshot, `cf set phase`, noise-only writes and unlinked changes:** Task 6.3.
+- **Remove and restore, never-present id, deactivate and reactivate, multiple writes, restart and catch-up:** Task 6.4 and Task 7.4.
+- **`unreachable` and `unrecognized`, re-read only on signature change:** Task 6.2.
+- **Bounded failure and sidecar retry:** Tasks 6.5 and 6.6.
+- **Idle tick cost:** Task 6.1.
+- **Listings, `start` wiring, and the end-to-end CLI test:** Sections 7 and 8.1.
+- **Contract docs and the four contract updates plus `CHANGELOG`:** Tasks 8.2–8.3.
+- **Single-definition and import-boundary rules:** Task 8.4.
+- **Verification Walkthrough:** Task 8.5.
+- **Requirement-to-test trace:** Task 8.7.
+
+I found no gaps and no untraced scope.
+
+### [PASS] Sizing, test-with pattern and checkpoints are sound
+
+Efforts of 1–4 are reasonable for a junior AI. Every implementation task in Section 6 is followed by its own test file. Commits are spread across Tasks 6.1–6.6, 7.2, 7.4 and 8.1–8.4 rather than batched at the end. Tasks 8.5–8.6 are report-only, and they are small enough to leave as separate tasks.
 
 ### Run Digest
 
-- Response length: 5563 chars
+- Response length: 6390 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -114,10 +143,10 @@ Every Functional and Technical Requirement in the slice maps to a task and a nam
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 39.9 s
+- Duration: 40.3 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 10
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 10
+- Finding-shaped matches — surviving validation: 10
