@@ -11,59 +11,54 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: f5d55a58aa9aabb0a35ac75ec7b1518452b70078
-revision_number: 1
+reviewedSha: fc660a6040b82597a1cda97452f62011ffa226c7
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 7
-durationSeconds: 205.6
+toolCallsMade: 6
+durationSeconds: 47.3
 runId: run-20261007-tasks-plan-25f0a00a
 squadronVersion: 0.21.1
 findings:
   - id: F001
     severity: concern
-    category: ci-wiring
-    summary: "Real-`cf` tests will fail in CI because no task installs `cf`"
-    location: ".github/workflows/ci.yml:48"
+    category: sequencing
+    summary: "Watch-cache \"dirty\" rule is ambiguous for reactivation"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md:35"
   - id: F002
     severity: concern
-    category: test-coverage
-    summary: "New writers are not explicitly registered with the writer guard until the last section"
-    location: "tests/test_writer_guard.py"
+    category: process
+    summary: "Hallucination trap: example package name next to a \"confirm\" instruction"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md:89"
   - id: F003
     severity: concern
-    category: correctness
-    summary: "`cf_watch_revision` bump timing is ambiguous against the inbox transaction"
-    location: "src/amoeba/store/inbox.py"
+    category: sequencing
+    summary: "Tenant skips `failed` watches only after Task 6.6, but Task 6.5 commits first"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:113-149"
   - id: F004
     severity: note
-    category: sequencing
-    summary: "Task 3.5 and Task 4.1 each carry no tests of their own, but their commit grouping is sound"
-    location: "unverified"
+    category: requirements
+    summary: "Slice design contradiction on subprocess use is resolved, and disclosed"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:140"
   - id: F005
     severity: note
-    category: coverage
-    summary: "Cross-file requirement coverage is complete"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md"
+    category: testing
+    summary: "No load test, and no CI gate beyond `cf` installation"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md:275"
   - id: F006
     severity: note
-    category: nfr
-    summary: "No load test or NFR is required"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md"
+    category: dependencies
+    summary: "Unverified references in the tasks"
+    location: "src/amoeba/store/schema"
   - id: F007
     severity: note
-    category: scope
-    summary: "Scope additions are flagged and reported"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md"
+    category: granularity
+    summary: "Tasks 8.5 and 8.6 are non-code and could be merged"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:311-340"
   - id: F008
-    severity: note
-    category: test-fidelity
-    summary: "The worktree overlay may have no real fixture"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-1.md"
-  - id: F009
     severity: pass
-    category: task-sizing
-    summary: "Sizing and sequencing"
-    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md"
+    category: coverage
+    summary: "Success-criteria coverage and test-with sequencing"
+    location: "project-documents/user/tasks/108-tasks.context-forge-event-seam-2.md:342-370"
 ---
 
 # Review: tasks — slice 108
@@ -73,56 +68,43 @@ findings:
 
 ## Findings
 
-### [CONCERN] Real-`cf` tests will fail in CI because no task installs `cf`
+### [CONCERN] Watch-cache "dirty" rule is ambiguous for reactivation
 
-Task 1.3's `real_cf` fixture fails when `cf` is not on `PATH`. It never skips, and that is deliberate. Tasks 6.3, 6.4 and 8.1 depend on it. `.github/workflows/ci.yml` runs `uv run pytest` (line 48) and has no step that installs Context Forge. Once those tests land, CI goes red. The alternative is that someone adds a skip, which would undo the no-silent-skip guarantee. No task in either file edits the workflow or names the `cf` version CI should install. Add a task, ideally right after 1.3, that installs `cf` in CI and records the version. Task 8.6 should then report that version.
+Task 6.1 says "A refresh that finds an active watch not in the previous cache marks the tenant dirty." A reactivated watch was already in the cache, as inactive, so a literal reading never marks it dirty. If the file signature hasn't moved since the watch went inactive, the dispatch is skipped and no snapshot is recorded. That breaks the slice design requirement that a reactivated watch records one snapshot covering everything that changed while it was inactive. The rule should read "an active watch that was not active in the previous cache". Task 6.4's reactivation test only passes if CF also changes after reactivation, so add a case with an unchanged file after reactivation.
 
-### [CONCERN] New writers are not explicitly registered with the writer guard until the last section
+### [CONCERN] Hallucination trap: example package name next to a "confirm" instruction
 
-Task 3.5 says `record_cf_snapshot` and `set_cf_watch_state` are "in-process only (writer guard)". No task extends the guard's test or registry to cover the new methods. Task 8.4 only says the guard test "still passes". That passes trivially if the new methods are not registered. Add the registration and a refusal test in Task 3.6, where the methods are tested. In Task 8.4, assert that the new methods are present in the guard.
+Task 1.3 tells the implementer to run `npm install -g @context-forge/cli` and then to "confirm the package name against the one installed locally (`npm ls -g --depth=0`)". The project's CLAUDE.md names this pattern as a hallucination trap: an example value placed next to a retrieval instruction. If the lookup comes back empty or ambiguous, the example gets used and CI breaks. Reword it so the name comes only from `npm ls -g`, with an explicit stop if it can't be found. The hardcoded Node "22" is a smaller version of the same problem.
 
-### [CONCERN] `cf_watch_revision` bump timing is ambiguous against the inbox transaction
+### [CONCERN] Tenant skips `failed` watches only after Task 6.6, but Task 6.5 commits first
 
-Task 4.3 says the revision is "incremented after the `watch_cf` effect commits". Effects run inside the inbox apply transaction, so the effect cannot see the commit. A bump made inside the effect would also fire on rollback. The planned "rolled-back apply does not bump" test would then fail, or pass only through an accidental design. The task should say where the bump hooks in, for example a post-commit callback or a compare-and-bump after apply returns. It should also say who owns that hook. The "same handle" check at the start of 4.3 is good, but it does not settle this.
+Task 6.5 parks a watch as `failed`, but nothing skips it until Task 6.6. Between those two commits, every dispatch retries the parked watch and keeps incrementing its sidecar past the limit. The slice design's cadence rule (no commit holds unfinished behavior) is arguably broken here. Either merge 6.5 and 6.6, or give 6.5 a minimal skip-while-sidecar-exists check and leave only the retry transition to 6.6.
 
-### [NOTE] Task 3.5 and Task 4.1 each carry no tests of their own, but their commit grouping is sound
+### [NOTE] Slice design contradiction on subprocess use is resolved, and disclosed
 
-Task 3.5 is committed with 3.6, 3.2 with 3.3, and 4.1 with 4.2. The test-with pattern holds. Commits are spread across all eight sections, with no batching at the end.
+The slice design says `cf --version` runs "per detected change", and also says "No tick starts a subprocess". Task 6.3 resolves this by capturing the label only when a snapshot is about to be recorded, so a read that records nothing starts no subprocess. Task 8.6 reports the choice to the PM. This is reasonable. I suggest the PM amend the slice design wording.
 
-### [NOTE] Cross-file requirement coverage is complete
+### [NOTE] No load test, and no CI gate beyond `cf` installation
 
-Every Functional and Technical requirement in the slice maps to a task.
-- Reader, diff and `IGNORED_KEYS`: Tasks 2.1–2.3.
-- Migration, trigger and invariant: Tasks 3.2–3.7.
-- `watch_cf` kind: Tasks 4.1–4.3.
-- Settings: Task 5.1.
-- Idle path, file states, snapshots, absence and catch-up, bounded failure and retry: Tasks 6.1–6.6.
-- Listings and wiring: Tasks 7.1–7.4.
-- End-to-end test, docs and boundaries: Tasks 8.1–8.4.
+The slice design states no quantified non-functional requirement. The nearest are "within about two scan intervals" and the one-`stat` idle guarantee. The idle guarantee is pinned by spy-based unit tests in Tasks 6.1 and 6.3, so a `tests/load/` task isn't required. Task 1.3 does edit `.github/workflows/ci.yml` so the real-`cf` tests run in CI, which covers the CI-wiring check.
 
-Task 8.7 traces each requirement to a named test. I found no cross-file gaps or circular dependencies.
+### [NOTE] Unverified references in the tasks
 
-### [NOTE] No load test or NFR is required
+The `schema/` directory currently holds only 001–005. Tasks 1.1 and 3.2 depend on 106's `006` and 107's `007` being merged, and Task 1.1 stops if they aren't. `settings.cf_timeout_seconds`, which Task 7.3 uses, does exist in `src/amoeba/process/settings.py:57`.
 
-The slice states no quantitative NFR. The idle-tick "one `stat`" guarantee is a functional criterion, and the spy-based tests in 6.1 and 6.6 cover it. The repo CI does run `tests/load`, so adding a load test is not needed here.
+### [NOTE] Tasks 8.5 and 8.6 are non-code and could be merged
 
-### [NOTE] Scope additions are flagged and reported
+Task 8.6 (effort 1) only restates items for the final message, and Task 8.5 already produces that message. Merging them removes a task with nothing to check. Leaving them separate does no harm.
 
-The slice does not list `--cf-max-attempts` as a flag in its Technical Scope, though it does list the setting. Task 5.1 adds the flag and Task 8.6 reports it. The same applies to the revision counter (4.3), the per-recording-read label capture (6.3), and the failed-watch existence check (6.6). All four are small, justified, and reported to the PM. The clock and label-callable injection is also consistent with the slice's no-subprocess-in-a-tick rule.
+### [PASS] Success-criteria coverage and test-with sequencing
 
-### [NOTE] The worktree overlay may have no real fixture
-
-Task 1.2 allows capturing no overlay fixture. In that case, recursion of `IGNORED_KEYS` into `worktrees` is tested only on in-memory-modified records (Task 2.3). That is acceptable because Task 8.6 reports it. Still, the PM should know the recursive rule is not verified against real CF output if no overlay is captured.
-
-### [PASS] Sizing and sequencing
-
-Dependencies run in order, with the harness and fixtures first and wiring, docs and validation last. Tasks 6.3 and 6.5 are the largest, at effort 4 and 3. Both are bounded, and each has a clear success criterion and a named test file.
+Each slice design requirement maps to a task and a named test, and Task 8.7 re-checks the full list. The functional criteria map as follows: first snapshot, `cf set`, noise, and unlinked changes to 6.3; absence, restore, catch-up, and reactivation to 6.4; `unreachable` and `unrecognized` to 6.2; bounded failure to 6.5 and 6.6; the idle tick to 6.1. The technical criteria map as follows: single definitions and import boundaries to 8.4, the 7→8 upgrade to 3.3, the feed invariant to 3.7, and the contract docs to 8.2 and 8.3. Dependencies run one way with no cycles, and each deferred commit ("committed with Task N.M") pairs an implementation task with the test task that follows it immediately.
 
 ### Run Digest
 
-- Response length: 4971 chars
+- Response length: 5427 chars
 - Response is newline-free: no
-- Tool calls made: 7
+- Tool calls made: 6
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -132,10 +114,10 @@ Dependencies run in order, with the harness and fixtures first and wiring, docs 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 205.6 s
+- Duration: 47.3 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
