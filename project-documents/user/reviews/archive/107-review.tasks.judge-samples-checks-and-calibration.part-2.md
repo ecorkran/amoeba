@@ -9,56 +9,55 @@ verdictSource: stated
 sourceDocument: project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md
 aiModel: claude-sonnet-5-5
 status: complete
-dateCreated: 20261007
-dateUpdated: 20261007
-reviewedSha: b1a8e2fee89c1042152dd6190c726d0b3ee3f4dd
-revision_number: 2
+dateCreated: 20261008
+dateUpdated: 20261008
+reviewedSha: c739f1e105e628b788302c45ea34caf6ac5a8f2b
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 3
-durationSeconds: 44.6
-runId: run-20261007-tasks-plan-25f0a00a
+toolCallsMade: 2
+durationSeconds: 32.0
+runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: concern
-    category: task-scoping
-    summary: "End-to-end test split across Tasks 8.3 and 8.4 is not independently completable"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:412-445"
-  - id: F002
-    severity: concern
-    category: task-scoping
-    summary: "Task 8.7 is too large and bundles unrelated work, including code changes, into a final validation step"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:487-504"
-  - id: F003
-    severity: concern
-    category: task-clarity
-    summary: "Task 6.1 lists a test file to modify but says no tests are written there"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:168-173"
-  - id: F004
-    severity: concern
-    category: completeness
-    summary: "Fresh judge fixture can be left unresolved while later tasks complete"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:194-210"
-  - id: F005
-    severity: note
-    category: sequencing
-    summary: "Dependency chain is more linear than the actual needs"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:270"
-  - id: F006
-    severity: note
-    category: nfr-coverage
-    summary: "No NFR in the slice, so no load test or CI gating task is needed"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md"
-  - id: F007
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage for this file's scope"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:24-504"
+    summary: "Success criteria are traced to tasks"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:20"
+  - id: F002
+    severity: concern
+    category: sequencing
+    summary: "Tasks 8.3 and 8.4 conflict on how the end-to-end test is structured"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:412-445"
+  - id: F003
+    severity: concern
+    category: task-sizing
+    summary: "Task 8.3 is overloaded"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:412-427"
+  - id: F004
+    severity: concern
+    category: scope
+    summary: "Task 6.1 lists a test file to modify but says no tests are written there"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:168-173"
+  - id: F005
+    severity: concern
+    category: sequencing
+    summary: "Metrology-test widening is split across Tasks 5.7 and 8.7"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:147,496"
+  - id: F006
+    severity: note
+    category: sequencing
+    summary: "Task 5.1 is sequenced after Task 4.12 without a real dependency"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:28"
+  - id: F007
+    severity: note
+    category: maintainability
+    summary: "Task 8.1 cites a fragile line number"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:380"
   - id: F008
-    severity: pass
-    category: process
-    summary: "Test-with pattern and commit cadence"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:24-504"
+    severity: note
+    category: coverage
+    summary: "The LLD walkthrough is inconsistent with its own commands"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:356-374"
 ---
 
 # Review: tasks — slice 107
@@ -68,77 +67,65 @@ findings:
 
 ## Findings
 
-### [CONCERN] End-to-end test split across Tasks 8.3 and 8.4 is not independently completable
+### [PASS] Success criteria are traced to tasks
 
-- **Task 8.3's pass condition.** It must pass "with the process left running". That is not a valid end state for a pytest test, which must tear down its own process.
-- **Task 8.3's capture step.** It tells the implementer to "capture each listing's `--json` output for Task 8.4". Task 8.4 is a separate test function that would also have to run after 8.3's wait and then `kill -9`. Two test functions cannot share a live instance or captured output unless the test file keeps module-level state. That would make the tests order-dependent.
-- **Task 8.3's commit.** It carries no commit of its own ("Commit with Task 8.4"), so the 8.3 work is uncommitted when the 8.3 checkbox is ticked.
+Checks, work records, the `--judge-invocation-id` ingest option, the three new listings, and the verdicts column and filter are all covered by tasks.
+- **Checks (5.1–5.4):** every `CheckStanding` row, each rejection, replay, and the other-project case.
+- **Work records (5.5–5.6):** content handling, rejections, and the `kind` filter.
+- **Ingest (6.5–6.6):** `--judge-invocation-id`.
+- **Listings (7.x):** `calibration`, `checks`, `work-records`, and the verdicts column and filter, each tested running and stopped.
+- **Supporting items:** both fixtures (6.3–6.4), the demo script and writer guard (8.1–8.2), docs and `CHANGELOG` (8.5–8.6), the public-API export (5.7), and the metrology test (5.7, 8.7).
 
-A junior AI will likely guess at one of these. Pick one design explicitly:
-- **Option A:** merge 8.3 and 8.4 into one test with one setup, effort about 4–5.
-- **Option B:** keep both as separate tests that each build the seeded instance from a shared fixture, with 8.4 capturing its own pre-crash listings.
+Task 8.7 re-checks file 1's items (judge samples, D2, D3, the filter, `calibration`, and the migration) against the LLD. I did not read file 1, so I could not confirm that those items are covered there.
 
-Either way, give 8.3 a self-contained pass condition and its own commit.
+### [CONCERN] Tasks 8.3 and 8.4 conflict on how the end-to-end test is structured
 
-### [CONCERN] Task 8.7 is too large and bundles unrelated work, including code changes, into a final validation step
+- **Process state:** Task 8.3 says its test passes "with the process left running (Task 8.4 extends it)". Task 8.4 asks for "a second test function reusing Task 8.3's seeded-instance helper".
+- **Captured output:** Task 8.3 says to capture each listing's `--json` output "for Task 8.4". A second pytest function cannot see the first one's captured output or its running process.
+- **Teardown:** Task 8.4 requires teardown with no leftover processes, which contradicts leaving the process running.
+- **Structure:** 8.3 plus 8.4 is a single test that was split into two tasks for size.
 
-Task 8.7 combines five things:
-- the full suite, lint and typecheck;
-- source-file-length refactoring ("anything well over ~300 lines is split");
-- widening the metrology-reference test to the CLI modules;
-- the fresh-fixture follow-up;
-- the seven-step walkthrough plus a traceability pass over all LLD requirements.
+Pick one structure.
+- **Preferred:** a module-scoped fixture or helper that builds the scenario and returns the pre-crash captures, with 8.3 asserting on it. Task 8.4 would then do its own setup, capture, crash and restart, and compare, inside one test.
+- **Alternative:** merge them into one task.
 
-The refactor and the test widening are code changes with no test or commit of their own. The metrology widening also overlaps Task 5.7's step. Suggested split:
-- Move the metrology widening into Task 7.5 or 7.6, alongside the CLI modules it covers.
-- Make the file-length check a step that reports to the PM, as Task 5.3 does, rather than an open-ended refactor.
-- Split the walkthrough and traceability pass from the lint, typecheck and suite run.
+### [CONCERN] Task 8.3 is overloaded
+
+Task 8.3 is rated effort 3 but combines several jobs.
+- Building the project and nodes with two seeding scripts.
+- Mixed ingest and submit.
+- Polling for applied submissions.
+- Assertions across five listings.
+- Capturing output for reuse.
+- A shared helper.
+
+Splitting it would help. One task could build the shared helper plus the seeding and wait; a second could hold the assertions. Even after the 8.3/8.4 fix, the helper and the setup flow are worth their own checkpoint. It also has no commit of its own: it says "Commit with Task 8.4".
 
 ### [CONCERN] Task 6.1 lists a test file to modify but says no tests are written there
 
-Task 6.1's "Files to Modify" includes 105's round-trip test, but its steps say "No tests here; Task 6.2 owns them". That conflicts with the test-with pattern and confuses the file list. Its step on `verdict_to_payload` is also conditional ("skip if Task 4.3 already did this"), which makes the task's scope ambiguous. Remove the test file from 6.1's list. Make the `verdict_to_payload` step a verification of Task 4.3's work rather than a conditional edit.
+Step 3 says "No tests here; Task 6.2 owns them". Yet "Files to Modify" includes 105's round-trip test (`tests/store/test_verdict_to_payload.py`). Remove that entry from 6.1, or state that only fixing existing tests broken by the signature change is allowed. Otherwise a junior AI may edit tests in the wrong task, or break the existing 105 tests that the success criteria say must still pass.
 
-### [CONCERN] Fresh judge fixture can be left unresolved while later tasks complete
+### [CONCERN] Metrology-test widening is split across Tasks 5.7 and 8.7
 
-The slice's Technical Requirements require two fixtures, the 302 file and a fresh capture. Task 6.3 lets the fresh capture be "reported to the PM as blocked", and Task 8.7 only checks that it was reported. The slice can therefore reach final validation without a required fixture, and Task 6.4's tests only run "for each fixture present". That is a reasonable escape hatch for an external dependency. The task should still say the PM must sign off on the gap before Task 8.7 is ticked, so the gap is an explicit decision and not an implicit pass.
+Task 5.7 extends the metrology-reference test to the new store modules. Task 8.7 widens it again to the CLI modules. The LLD only says 104's test "covers the new modules". Make one task do the whole extension, ideally after the last new module exists in Task 7.5, with 8.7 only verifying it. A final-validation task should not be where new test code gets added.
 
-### [NOTE] Dependency chain is more linear than the actual needs
+### [NOTE] Task 5.1 is sequenced after Task 4.12 without a real dependency
 
-Task 7.1 (verdicts column and filter) depends on Task 5.7, though it only needs Task 4.7. Task 7.3 (calibration listing) only needs Task 4.11. This does no harm, since the stated order runs 5, then 7, then 8. It does hide the real parallelism, and it makes the "105 not merged" reordering in the Context Summary look more constrained than it is.
+`mapping_checks.py` only needs the models and the migration (Sections 1–3). Depending on Task 4.12 (calibration tests) serializes work that could proceed independently. It is harmless, but it does give Section 5 a longer critical path than it needs.
 
-### [NOTE] No NFR in the slice, so no load test or CI gating task is needed
+### [NOTE] Task 8.1 cites a fragile line number
 
-The slice design states no performance or load NFR. The only scale remark is that judge samples per project are few. The load-test and CI-wiring criteria therefore do not apply. The `ruff`, `pyright` and full-suite checks in 5.7, 7.6 and 8.7 stand in as the quality gate.
+"The set asserted near line 290 in `tests/test_writer_guard.py`" will drift. Describe it by symbol, `PERMITTED_SCRIPTS` and the test that asserts its contents.
 
-### [PASS] Success-criteria coverage for this file's scope
+### [NOTE] The LLD walkthrough is inconsistent with its own commands
 
-Each LLD criterion in this file's scope maps to tasks:
-
-| LLD criterion | Tasks |
-| --- | --- |
-| Check standing rows and rejections | 5.3–5.4 |
-| Replay with WARNING | 5.4, 5.6 |
-| `record_work` content rules and `kind` filter | 5.5–5.6 |
-| Public API export test | 5.7 |
-| `ingest review --judge-invocation-id` on the judge fixture, with standing `unattested` | 6.5–6.6 |
-| Judge fixtures with README entries | 6.3–6.4 |
-| Four listings, running and stopped | 7.1–7.6 |
-| `demo_checks.py` and the writer guard | 8.1–8.2 |
-| End-to-end crash proof | 8.3–8.4 |
-| Docs and CHANGELOG | 8.5–8.6 |
-| Metrology reference test | 5.7 and 8.7 |
-
-Judge samples, D2, D3, the filter, calibration, the migration and the vocabularies are owned by file 1. Its Tasks 1.1–4.12 line up with the LLD development-approach steps 1–3.
-
-### [PASS] Test-with pattern and commit cadence
-
-Every implementation task is immediately followed by its test task, and each pair carries a commit instruction (5.1/5.2, 5.3/5.4, 5.5/5.6, 6.1/6.2, 6.3/6.4, 6.5/6.6, 7.1/7.2, 7.3/7.4, 7.5/7.6, 8.1/8.2). Commits are spread across Sections 5–8, not batched at the end. I found no scope creep: every task traces to an LLD scope item or requirement.
+Step 2 submits samples for `glm-5.3` and `kimi-k3`. Step 3 expects "the minimax row" with score 98. Task 8.7 already says to compare results with the LLD and report differences, which will surface this. The PM should know about it before Phase 6, because the models in the fixture and in the commands need to match.
 
 ### Run Digest
 
-- Response length: 6523 chars
+- Response length: 5682 chars
 - Response is newline-free: no
-- Tool calls made: 3
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -148,7 +135,7 @@ Every implementation task is immediately followed by its test task, and each pai
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 44.6 s
+- Duration: 32.0 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 8

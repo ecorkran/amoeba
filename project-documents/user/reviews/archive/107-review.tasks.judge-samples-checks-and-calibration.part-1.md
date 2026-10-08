@@ -9,61 +9,60 @@ verdictSource: stated
 sourceDocument: project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md
 aiModel: claude-sonnet-5-5
 status: complete
-dateCreated: 20261007
-dateUpdated: 20261007
-reviewedSha: b1a8e2fee89c1042152dd6190c726d0b3ee3f4dd
-revision_number: 2
+dateCreated: 20261008
+dateUpdated: 20261008
+reviewedSha: c739f1e105e628b788302c45ea34caf6ac5a8f2b
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
-durationSeconds: 53.1
-runId: run-20261007-tasks-plan-25f0a00a
+durationSeconds: 38.2
+runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "File-1 success criteria are traced to implementation and test tasks"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:57-406"
+    summary: "Judge-sample, D2, D3, D4 and migration criteria each have an implementation task and a test task"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md"
   - id: F002
-    severity: pass
-    category: sequencing
-    summary: "Sequencing, test-with pairing, and commit cadence are sound"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:28"
+    severity: concern
+    category: hallucination-trap
+    summary: "Hardcoded migration number and schema version sit next to a value Task 1.1 must retrieve"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:47"
   - id: F003
     severity: concern
-    category: testing
-    summary: "D3 exclusion can silently drop review verdicts through SQL NULL semantics, and no test pins it"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:344-370"
+    category: sequencing
+    summary: "Task 4.3 branches on external merge state, and it ends in an unwritten test"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:241"
   - id: F004
     severity: concern
-    category: scope
-    summary: "`sql_evidence.py` receives statements from five tasks with no size check, and Task 4.5 names an ambiguous location"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:200"
+    category: test-coverage
+    summary: "Task 4.3 says to confirm the payload field-name test, but 4.4 has no step for it"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:240"
   - id: F005
     severity: concern
-    category: dependencies
-    summary: "Task 1.1 does not say what to do if slice 105 is absent, though Section 6 depends on it"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:46"
+    category: task-sizing
+    summary: "Task 4.1 bundles several concerns, including a conditional file split"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:192-207"
   - id: F006
     severity: note
-    category: prompt-hygiene
-    summary: "Task 1.1 puts a concrete migration number next to a value the agent must read"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:47"
+    category: sequencing
+    summary: "Task 3.1 depends on Task 2.4 without need"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:153"
   - id: F007
     severity: note
-    category: task-sizing
-    summary: "Task 2.1 mixes check vocabularies with a verdict-model change"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:66"
+    category: documentation
+    summary: "Minor task-file inconsistencies"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:145"
   - id: F008
-    severity: note
-    category: task-clarity
-    summary: "Several test tasks omit a \"Files to Modify\" line"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-1.md:251-265"
-  - id: F009
     severity: note
     category: nfr
     summary: "No load-test or CI-gating task is required"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:289-320"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md"
+  - id: F009
+    severity: note
+    category: coverage
+    summary: "Criteria that depend on Sections 5–8 in `-2.md`"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md"
 ---
 
 # Review: tasks — slice 107
@@ -73,65 +72,73 @@ findings:
 
 ## Findings
 
-### [PASS] File-1 success criteria are traced to implementation and test tasks
+### [PASS] Judge-sample, D2, D3, D4 and migration criteria each have an implementation task and a test task
 
-Each criterion in this file's scope has a task and a test:
-- **Three samples stay three records, in order:** 4.7 and 4.8.
-- **D2 on both paths, with error precedence:** 4.5 and 4.6.
-- **D3 exclusion, with the 104/106 tests unchanged:** 4.9 and 4.10.
-- **Calibration:** 2.3 and 2.4 test the pure function on built records with no store. 4.11 and 4.12 add the store and read-only cases.
-- **Every standing row and the vocabularies:** 2.1 and 2.2.
-- **Upgrade path with `judge_invocation_id` NULL:** 3.1 and 3.2.
-- **Payload key through inbox and `amoeba submit`:** 4.3 and 4.4.
+- **Three samples stay three records:** Tasks 4.7 and 4.8 cover this.
+- **D2:** Tasks 4.5 and 4.6 cover both the direct and inbox paths and the `NodeNotFoundError` precedence.
+- **D3:** Tasks 4.9 and 4.10 cover the exclusion, the earlier-invocation case and the cross-type case.
+- **Calibration:** Tasks 2.3 and 2.4 cover the pure function on built records. Tasks 4.11 and 4.12 cover the store-level report, including a read-only handle.
+- **Check standing:** Tasks 2.1 and 2.2 cover the standing table.
+- **Upgrade path:** Tasks 3.1 and 3.2 cover the previous-version upgrade, with every verdict's `judge_invocation_id` left `NULL`.
+- **Pattern and cadence:** Implementation tasks are followed immediately by their tests. Commits are spread across sections: 2.1/2.2, 2.3/2.4, 3.1/3.2, 4.1/4.2, 4.3/4.4, 4.5/4.6, 4.7/4.8, 4.9/4.10 and 4.11/4.12.
 
-I found no scope creep. Every task traces to a slice design section or decision.
+### [CONCERN] Hardcoded migration number and schema version sit next to a value Task 1.1 must retrieve
 
-### [PASS] Sequencing, test-with pairing, and commit cadence are sound
+- **Retrieval step:** Task 1.1 tells the implementer to read the highest migration file and `EXPECTED_SCHEMA_VERSION` from disk.
+- **Hardcoded values:** The same step states "the highest is `005`... `006`... becomes 6". Task 3.1 names the file `007_...`, and the Context Summary also says "007 (or 006...)".
+- **Risk:** The project's CLAUDE.md warns against this pattern. If the retrieval returns nothing or is misread, the implementer is likely to use the nearest literal.
+- **Fix:** Phrase the rule as `max(existing) + 1`, with no literal example numbers. In Task 3.1, say "the number recorded in Task 1.1" and give the filename as `NNN_judge_samples_checks_and_work.sql`.
 
-- **Test-with pattern:** each implementation task is followed immediately by its test task, and the pair is committed together.
-- **Commits:** they are spread across Sections 2–4 and none is batched at the end.
-- **Dependencies:** they are acyclic.
-- **Pure rules first:** vocabularies and the calibration function come before the migration, so they have no store dependency.
-- **Task 2.1 field ordering:** adding the `judge_invocation_id` field there is explained by Task 2.3's need for it.
+### [CONCERN] Task 4.3 branches on external merge state, and it ends in an unwritten test
 
-### [CONCERN] D3 exclusion can silently drop review verdicts through SQL NULL semantics, and no test pins it
+- **Conditional step:** The `verdict_to_payload` step depends on whether 105 is merged. If it is, add the key and a round-trip case in 4.3. If not, Task 6.1 does it.
+- **Cross-file dependency:** The branch depends on a task in the other file, so a junior implementer cannot resolve it from this file alone.
+- **Missing test task:** The round-trip test is added inside the implementation task (4.3). Task 4.4 does not list it, which breaks the test-with pattern.
+- **Fix:** Add the `verdict_to_payload` step and its test to 4.4's step list under the "if 105 merged" condition, and state in Task 1.1 that the outcome is recorded for 4.3 and 6.1 to use. Alternatively, move the step unconditionally into Section 6.
 
-Task 4.9 says "Rows with a different id, or none, remain candidates." The natural implementation is `judge_invocation_id != ?`, and in SQLite that evaluates to NULL for rows with no id. Those rows would then be excluded from the previous round. Task 4.9 does not warn about this, and Task 4.10 does not catch it:
-- The cross-type case differs by review type, which the task itself says is "no other mechanism needed".
-- The `j0` case uses another invocation id, not a NULL one.
-- The regression case uses review verdicts as the target, so the exclusion never applies.
+### [CONCERN] Task 4.3 says to confirm the payload field-name test, but 4.4 has no step for it
 
-Add a Task 4.9 step to compare NULL-safely (`IS NOT`, or `IS NULL OR !=`). Add a Task 4.10 case where a judge sample and an id-less verdict share node, review type and `source_document`. The id-less verdict must still be the candidate previous round. This should match the LLD only if judge review types never overlap with ordinary ones, so confirm that expectation.
+- **Gap:** Task 4.3 asks the implementer to confirm that the existing test pinning payload names covers the new key, and to extend it if not. That is test work inside an implementation task, and 4.4 has no matching step.
+- **Fix:** Move the step to 4.4. Also assert there that `verdict_from_payload` yields `None` when the key is absent.
 
-### [CONCERN] `sql_evidence.py` receives statements from five tasks with no size check, and Task 4.5 names an ambiguous location
+### [CONCERN] Task 4.1 bundles several concerns, including a conditional file split
 
-Task 4.1 states "`sql_evidence.py` (204) needs no split". Tasks 3.1 (shared provenance constant), 4.1, 4.5, 4.7, 4.9 and 4.11 each add statements to it. Task 4.5 says "`sql_evidence.py` (or the new module)", but the only new SQL module planned is `sql_checks.py`, which is for the check and work-record tables. Task 4.1's conditional split rule covers `mapping_evidence.py` only. `verdicts.py` also gains the filter, D3 and `calibration()` with no size check.
+- **Scope:** Task 4.1 covers the replay comparison, the SQL column and insert, parameters and mapping, the empty-string refusal, a possible `mapping_evidence.py` split with import updates in two modules, and the harness change.
+- **Effort estimate:** Effort 3 looks low, since the conditional extraction touches several modules.
+- **Test gap:** The empty-string `ValueError` branch is part of this task, and nothing proves it until 4.2.
+- **Fix:** Split the optional `mapping_observations.py` extraction into its own refactor task. That task would do a pure move with existing tests green and commit separately as `refactor:`. Also give the "if above ~310 lines" threshold a deterministic form, such as "run `wc -l` after the edit".
 
-Add a line-count check to Task 4.11's success criteria for `sql_evidence.py` and `verdicts.py`. Say where overflow statements go, for example a `sql_judge.py`. Remove the "(or the new module)" ambiguity from Task 4.5.
+### [NOTE] Task 3.1 depends on Task 2.4 without need
 
-### [CONCERN] Task 1.1 does not say what to do if slice 105 is absent, though Section 6 depends on it
+- The migration and `sql_checks.py` do not use the calibration code.
+- The dependency only serializes the work. It is harmless, but it is not a real dependency.
 
-Task 1.1 records whether `src/amoeba/upstream/squadron/review.py` exists. It only adjusts migration numbering and tells the PM when 106 is unmerged. Task 4.3 defers `verdict_to_payload` to "Task 6.1" if 105 is absent. The slice design lists 105 as a prerequisite (`to_verdict_input`, `ingest review`). If 105 is unmerged, Section 6 cannot be done and the end-to-end criterion cannot be met. Add an explicit instruction: either proceed through Section 5 and stop before Section 6 until 105 merges, or ask the PM now. Verify that Task 6.1 in file 2 actually owns the deferred `verdict_to_payload` work.
+### [NOTE] Minor task-file inconsistencies
 
-### [NOTE] Task 1.1 puts a concrete migration number next to a value the agent must read
-
-The step says "the highest is `005`... takes `006`... `EXPECTED_SCHEMA_VERSION` becomes 6". Task 3.1 hard-codes the file name `007_...`. The prose does say to use the actual number, but a literal next to a retrieval instruction is the pattern the project's CLAUDE.md warns about. Phrase it as "max(existing)+1, taken from the directory listing", and have Task 1.1 write the number into the task notes so Task 3.1 reads it from there. Also say where "the Task 1.1 notes" live.
-
-### [NOTE] Task 2.1 mixes check vocabularies with a verdict-model change
-
-Adding `judge_invocation_id` to `VerdictInput` and `VerdictRecord` is a judge-sample change inside a "check vocabularies" task. The task justifies it by sequencing, and Task 2.2 tests it, so the pairing holds. Effort 2 is on the small side for four distinct edits, but the work is mechanical. No action is needed. Splitting the verdict-model field into its own step would make the commit message clearer.
-
-### [NOTE] Several test tasks omit a "Files to Modify" line
-
-Tasks 4.4, 4.6, 4.8, 4.10 and 4.12 have no file list. Task 4.1's list omits the conditional `mapping_observations.py`. Task 4.4 names the style to follow but not the test files to touch. A junior agent can infer them, but listing them would cut exploration.
+- **File list:** Task 2.4 lists `tests/store/test_calibration.py` under "Files to Modify", though the file is created in that task.
+- **Missing field:** Tasks 4.4, 4.6, 4.8, 4.10 and 4.12 have no "Files" field.
+- **Task 1.1 notes:** Task 1.1 asks the implementer to "record in the Task 1.1 notes", but the file has no notes area. Say where the notes go, such as an appended `## Task 1.1 notes` section, since Tasks 3.1, 4.3 and 4.9 consume the values.
+- **Vague builder step:** Task 4.7's "prefer one statement builder" is advisory, so it is not verifiable as a success criterion. State the expected outcome instead, such as "no third `SELECT_VERDICTS_*` constant added".
 
 ### [NOTE] No load-test or CI-gating task is required
 
-The slice design's Success Criteria state no performance or throughput NFR. The only related remark is that judge samples per project are few, which is not a requirement. A `tests/load/` task and a CI-wiring task are therefore not required.
+- The slice restates no performance NFR, so the load-test and CI-wiring rules do not apply.
+- The only quantitative statement is that judge samples per project are few, which is a design assumption and not an NFR.
+
+### [NOTE] Criteria that depend on Sections 5–8 in `-2.md`
+
+- The `-2.md` review should confirm tasks for the following criteria:
+  - `record_check` and `record_work` preconditions and first-wins behaviour.
+  - Ingest `--judge-invocation-id` and the judge fixtures.
+  - The four listings and the `verdicts` CLI filter.
+  - `scripts/demo_checks.py`, with the writer-guard allow-list.
+  - The pinned public-API export set, which here gains `calibration` and `CalibrationRow`.
+  - The no-metrology-reference test covering the new modules.
+  - The end-to-end CLI test, docs and `CHANGELOG`.
 
 ### Run Digest
 
-- Response length: 6910 chars
+- Response length: 7107 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -143,7 +150,7 @@ The slice design's Success Criteria state no performance or throughput NFR. The 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 53.1 s
+- Duration: 38.2 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 9

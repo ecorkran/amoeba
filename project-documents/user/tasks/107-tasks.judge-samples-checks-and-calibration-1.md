@@ -4,7 +4,7 @@ slice: judge-samples-checks-and-calibration
 project: amoeba
 lld: user/slices/107-slice.judge-samples-checks-and-calibration.md
 dependencies: [101, 102, 103, 104, 105, 106]
-projectState: Slices 101–104 are merged (store schema 5, inbox, verdicts and findings). Slices 105 (parser and `amoeba ingest review`) and 106 (change feed, migration 006) are planned with reviewed tasks and may or may not be merged when this file starts. `verdicts` has no `judge_invocation_id`; there is no calibration report, no check or work-record storage. This slice adds migration 007 (or 006 if 106 slips), judge samples, `calibration`, checks, work records, and their listings.
+projectState: Slices 101–104 are merged (store schema 5, inbox, verdicts and findings). Slices 105 (parser and `amoeba ingest review`) and 106 (change feed, migration 006) are planned with reviewed tasks and may or may not be merged when this file starts. `verdicts` has no `judge_invocation_id`; there is no calibration report, no check or work-record storage. This slice adds one migration (number derived in Task 1.1), judge samples, `calibration`, checks, work records, and their listings.
 dateCreated: 20261007
 dateUpdated: 20261007
 status: not_started
@@ -14,9 +14,9 @@ status: not_started
 
 - Working on the **judge-samples-checks-and-calibration** slice (107), the seventh slice of initiative 100.
 - **Current state:** `Store` is built from mixins (`store/store.py`); SQL lives in `sql_*.py`, row mapping in `mapping_*.py`, vocabularies and transfer objects in `*_models.py`. Verdicts are written by `VerdictWriter` (`_verdict_writer.py`: `_verdict_rejection` returns a reason, `_insert_verdict`, `_apply_verdict_submission`) and read by `VerdictOperations` (`verdicts.py`: `record_verdict`, `verdicts`, `_previous_round`). Inbox payloads are in `inbox/evidence_payloads.py`; payload key names are defined once in `store/verdict_payload.py`. `LISTINGS` in `cli/inspect.py` is the listing registry. Tests use `tests/evidence_harness.py` (`seed_node`, `verdict_input`) and `tests/test_writer_guard.py` (`PERMITTED_SCRIPTS`).
-- **Dependencies:** 101–104 through their contracts. **105** supplies `to_verdict_input`, `verdict_to_payload`, `amoeba ingest review` (Section 6 needs them). **106** takes migration 006 and changes `_previous_round` to group by `source_document` (Task 4.4 builds on it).
-- **What this slice delivers:** `judge_invocation_id` on verdicts end to end; the D2 same-node rule; the D3 previous-round exclusion; `calibration` and `summarize_judge_samples`; `record_check` / `check` / `checks` with derived standing; `record_work` / `work_records`; migration 007; four listings; `scripts/demo_checks.py`; two judge fixtures; docs.
-- **Not in this slice:** consensus, thresholds or recommendations, excluding escalated-gate samples, cross-project calibration, inbox kinds or feed events for checks and work records, fields for `task_progress` / `devlog` (LLD "Technical Scope", Excluded).
+- **Dependencies:** 101–104 through their contracts. **105** supplies `to_verdict_input`, `verdict_to_payload`, `amoeba ingest review` (Section 6 needs them). **106** takes migration 006 and changes `_previous_round` to group by `source_document` (Task 4.9 builds on it).
+- **What this slice delivers:** `judge_invocation_id` on verdicts end to end; the D2 same-node rule; the D3 previous-round exclusion; `calibration` and `summarize_judge_samples`; `record_check` / `check` / `checks` with derived standing; `record_work` / `work_records`; the migration; four listings; `scripts/demo_checks.py`; two judge fixtures; docs.
+- **Not in this slice:** consensus, thresholds or recommendations, excluding escalated-gate samples, cross-project calibration, inbox kinds or feed events for checks and work records, fields for `task_progress` / `devlog` (LLD "Technical Scope", Excluded). The LLD requires no load test and no CI gate, so none is planned.
 - **Next planned slice:** 108.
 
 **Branch:** all implementation happens on `107-slice.judge-samples-checks-and-calibration`, forked from the target (`cf config get git.integration_branch`; empty means `main`). No task here merges. Merging comes after the code review (Phase 7).
@@ -28,6 +28,8 @@ status: not_started
 **Commit cadence:** a commit never holds untested behavior. A task that says "committed with Task N.M" is committed together with its test task, which follows immediately; every other task commits on its own. Commit messages follow the semantic prefixes in the project CLAUDE.md.
 
 **Section map:** this file: 1 branch and prerequisites; 2 vocabularies and pure rules; 3 migration; 4 judge samples. **File 2 (`...-2.md`):** 5 checks and work records; 6 parser, ingest, fixtures; 7 listings; 8 proof, docs, final validation.
+
+**Criteria owned by file 2:** LLD criteria for checks and work records (Section 5), the parser and `amoeba ingest review` id (Section 6), the four listings (Section 7), and the end-to-end, docs, and walkthrough criteria (Section 8) have no task in this file. File 2's Context Summary maps them. Do not treat the slice as complete when this file is.
 
 ---
 
@@ -44,7 +46,7 @@ status: not_started
 - [ ] Create `107-slice.judge-samples-checks-and-calibration` from the target; if it exists, switch to it
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once. If any fail before changes, stop and tell the PM
 - [ ] Record, in the Task 1.1 notes: the value of `EXPECTED_SCHEMA_VERSION` and the highest file in `src/amoeba/store/schema/`; whether `src/amoeba/upstream/squadron/review.py` exists (105); whether a `source_document` column exists in `sql_evidence.py` (106)
-- [ ] The new migration is `max(existing) + 1`. If 106 is not merged, the highest is `005`, so this slice takes `006` and `EXPECTED_SCHEMA_VERSION` becomes 6; tell the PM, who coordinates 106's rebase (LLD "Dependencies"). Use the actual number wherever these tasks say "007"
+- [ ] Derive the new migration number N from what you recorded: N is the highest existing migration number plus one, and `EXPECTED_SCHEMA_VERSION` rises to N. Write N in the Task 1.1 notes. If 106 is not merged, tell the PM, who coordinates 106's rebase (LLD "Dependencies"). Wherever these tasks say "migration N", use that recorded number; never copy a number from an example
 - [ ] Ask the PM to confirm D2, D3, D4, and D6 are ratified. If the answer is no or unknown, stop
 
 **Success Criteria**:
@@ -142,21 +144,21 @@ status: not_started
 - [ ] Tests pass; `ruff` and `pyright` clean
 - [ ] Commit with Task 2.3, e.g. `feat(store): add judge-sample calibration summary`
 
-**Files to Modify**: `tests/store/test_calibration.py`
+**Files to Create**: `tests/store/test_calibration.py`
 
 ---
 
 ## Section 3: Migration
 
-### Task 3.1: Write migration 007 and `sql_checks.py`
+### Task 3.1: Write the migration and `sql_checks.py`
 **Owner**: Junior AI
-**Dependencies**: Task 2.4
+**Dependencies**: Task 1.1
 **Effort**: 3
 **Objective**: Create the schema (LLD "Database / Storage Schema") with every name defined once in Python.
 
 **Steps**:
-- [ ] Create `src/amoeba/store/schema/007_judge_samples_checks_and_work.sql` (use the number from Task 1.1): `ALTER TABLE verdicts ADD COLUMN judge_invocation_id TEXT`, the `(project_id, judge_invocation_id)` index, and the `check_results` and `work_records` tables with their indexes, columns exactly as in the LLD. No `CHECK` constraints on vocabulary columns; no backfill
-- [ ] Raise `EXPECTED_SCHEMA_VERSION` by one in `store/migrations.py`
+- [ ] Create `src/amoeba/store/schema/{N}_judge_samples_checks_and_work.sql` (N, zero-padded like its neighbors, from Task 1.1): `ALTER TABLE verdicts ADD COLUMN judge_invocation_id TEXT`, the `(project_id, judge_invocation_id)` index, and the `check_results` and `work_records` tables with their indexes, columns exactly as in the LLD. No `CHECK` constraints on vocabulary columns; no backfill
+- [ ] Set `EXPECTED_SCHEMA_VERSION` to N in `store/migrations.py`
 - [ ] Create `src/amoeba/store/sql_checks.py`: column-name tuples and statements (insert, select by id, select by project/node, select work records with optional kind) for both tables. Import the provenance column names from `sql_evidence.py` (move them to a shared constant there if they are not already importable; do not repeat them)
 - [ ] Do not edit the `verdicts` statements yet (Task 4.1)
 
@@ -197,18 +199,17 @@ status: not_started
 
 **Steps**:
 - [ ] The `judge_invocation_id` field already exists on `VerdictInput` and `VerdictRecord` (Task 2.1). Update `_INPUT_FIELDS` / `_as_input` in `verdicts.py` so a replay comparison includes it
-- [ ] Add the column to the verdict column list and `INSERT_VERDICT` in `sql_evidence.py`; update `verdict_parameters` and `map_verdict` in `mapping_evidence.py`. `mapping_evidence.py` is 293 lines and the change should add only a few; if it ends above ~310 lines, move `map_observation`, `observation_as_finding`, and `observation_parameters` into a new `mapping_observations.py` and update imports (`_verdict_writer.py`, `verdicts.py`). `sql_evidence.py` (204) needs no split
-- [ ] An empty-string id is refused: a `ValueError` message from the store path (precondition in `_verdict_rejection`), not a silent `None`
+- [ ] Add the column to the verdict column list and `INSERT_VERDICT` in `sql_evidence.py`; update `verdict_parameters` and `map_verdict` in `mapping_evidence.py`. `mapping_evidence.py` is 293 lines and the change should add only a few. If it ends well over ~300 lines, do not split it here; report the length to the PM
 - [ ] Extend `tests/evidence_harness.py` `verdict_input` with an optional `judge_invocation_id` argument (default `None`; existing callers unchanged)
 
 **Success Criteria**:
 - [ ] Existing verdict tests pass unchanged; `ruff` and `pyright` clean
 
-**Files to Modify**: `sql_evidence.py`, `mapping_evidence.py`, `verdicts.py`, `_verdict_writer.py`, `tests/evidence_harness.py`
+**Files to Modify**: `sql_evidence.py`, `mapping_evidence.py`, `verdicts.py`, `tests/evidence_harness.py`
 
 ---
 
-### Task 4.2: Test round trip of the id and the empty-string refusal
+### Task 4.2: Test round trip of the id
 **Owner**: Junior AI
 **Dependencies**: Task 4.1
 **Effort**: 2
@@ -218,13 +219,12 @@ status: not_started
 - [ ] Create `tests/store/test_judge_samples.py`
 - [ ] Record a verdict with `judge_invocation_id="j1"`: `verdict(id)` and `verdicts(...)` return it; a verdict without one returns `None`
 - [ ] Replaying the same id with a different invocation id returns the first record and logs a WARNING (use `caplog`)
-- [ ] Empty-string id raises `ValueError`
 
 **Success Criteria**:
 - [ ] Tests pass; `ruff` and `pyright` clean
 - [ ] Commit with Task 4.1, e.g. `feat(store): record judge_invocation_id on verdicts`
 
-**Files to Modify**: `tests/store/test_judge_samples.py`
+**Files to Create**: `tests/store/test_judge_samples.py`
 
 ---
 
@@ -237,8 +237,8 @@ status: not_started
 **Steps**:
 - [ ] Add `VERDICT_JUDGE_INVOCATION_ID` to `verdict_payload.py`, and read it (optional key) in `verdict_from_payload`
 - [ ] Add `judge_invocation_id: str | None = None` to `VerdictPayload` in `inbox/evidence_payloads.py`; payload validation refuses an empty string
-- [ ] Confirm the existing test that pins payload field names against `verdict_payload.py` covers the new key; extend it if it does not
-- [ ] `verdict_to_payload` is 105's function. If Task 1.1 found 105 merged, make it emit the key when the id is set (omit when `None`) and add its round-trip case here. If 105 is not merged, Task 6.1 does this
+- [ ] `VERDICT_JUDGE_INVOCATION_ID` and `VerdictPayload.judge_invocation_id` must agree by name; Task 4.4 owns the test that pins this
+- [ ] Do not touch `verdict_to_payload`; it is 105's function and Task 6.1 always updates it
 
 **Success Criteria**:
 - [ ] A payload with the key becomes a `VerdictInput` with the id; one without it has `None`
@@ -255,6 +255,7 @@ status: not_started
 **Objective**: Judge samples arrive through the existing path with no new CLI code.
 
 **Steps**:
+- [ ] Find the existing test that pins payload field names against `verdict_payload.py` and extend it so the new key is covered; if no such test exists, add one that fails when `VerdictPayload`'s field names and the `verdict_payload.py` constants diverge
 - [ ] Add inbox-apply tests (follow `tests/store/test_inbox_apply.py` style): a submission with the key records a sample; an empty-string key is refused by payload validation (quarantined as the existing invalid-payload tests show)
 - [ ] Add a CLI flag test (follow the existing `amoeba submit verdict` tests): `--judge-invocation-id J` appears in `amoeba submit verdict --help` and is written into the submission
 
@@ -264,7 +265,7 @@ status: not_started
 
 ---
 
-### Task 4.5: Enforce the D2 same-node rule on both paths
+### Task 4.5: Enforce the D2 same-node rule and the empty-id precondition on both paths
 **Owner**: Junior AI
 **Dependencies**: Task 4.4
 **Effort**: 3
@@ -273,6 +274,7 @@ status: not_started
 **Steps**:
 - [ ] Add a statement to `sql_evidence.py` (or the new module): one indexed lookup for a sample of `(project_id, judge_invocation_id)` whose node differs from the new node
 - [ ] In `_verdict_rejection`, after the provider-failure rules, add an explicit branch returning a `VerdictRejection` whose reason names the invocation id and the node it is already on. Applies only when `judge_invocation_id` is set. Do not catch exceptions to do this
+- [ ] In the same function, an empty-string `judge_invocation_id` returns a `VerdictRejection` too (a `ValueError` on the direct path), not a silent `None`
 - [ ] No change to `record_verdict`: its existing raise-on-rejection covers the direct path; the inbox returns the reason as `rejected`
 
 **Success Criteria**:
@@ -293,6 +295,7 @@ status: not_started
 - [ ] Inbox: the same submission is `rejected` with that reason; the first sample is untouched
 - [ ] Samples of one invocation on the same node may differ in model, review type, and verdict; all are recorded
 - [ ] Two different invocations on different nodes are fine; review verdicts (no id) on any node are fine
+- [ ] An empty-string `judge_invocation_id` raises `ValueError` on the direct path and is `rejected` on the inbox path; nothing written
 - [ ] A sample on a node outside the project still raises `NodeNotFoundError` (precedence is unchanged)
 
 **Success Criteria**:

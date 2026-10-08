@@ -15,9 +15,10 @@ status: not_started
 - Working on the **judge-samples-checks-and-calibration** slice (107), continued from `107-tasks.judge-samples-checks-and-calibration-1.md` (Sections 1–4). Read file 1's Context Summary, branch, reading note, PM-ratification note, and commit cadence; they apply here unchanged.
 - **Sections in this file:** 5 checks and work records; 6 parser, ingest, fixtures (needs slice 105); 7 listings; 8 proof, docs, final validation.
 - **Branch:** still `107-slice.judge-samples-checks-and-calibration`. No task here merges.
-- **Migration number:** use the number recorded in Task 1.1 wherever "007" appears.
-- **Order if slice 105 is not merged:** only Section 6 and Tasks 8.3–8.4 (the end-to-end test) need 105. Sections 5 and 7 and Tasks 8.1–8.2 do not, so run those first and return to Section 6, then 8.3–8.4, then 8.5–8.7. If 105 is merged, run the sections in numeric order.
-- **Coverage of file 1's criteria:** judge samples, D2, D3, the filter, and `calibration` are owned by Tasks 4.1–4.12 (file 1); the migration and upgrade test by Tasks 3.1–3.2; `check_standing` and `summarize_judge_samples` by Tasks 2.1–2.4. Task 8.7 re-checks them all against the LLD.
+- **Migration number:** use the number N recorded in Task 1.1 wherever a migration is named.
+- **Order if slice 105 is not merged:** only Section 6 and Tasks 8.3–8.5 (the end-to-end tests) need 105. Sections 5 and 7 and Tasks 8.1–8.2 do not, so run those first and return to Section 6, then 8.3–8.5, then 8.6–8.8. If 105 is merged, run the sections in numeric order.
+- **Coverage of file 1's criteria:** judge samples, D2, D3, the filter, and `calibration` are owned by Tasks 4.1–4.12 (file 1); the migration and upgrade test by Tasks 3.1–3.2; `check_standing` and `summarize_judge_samples` by Tasks 2.1–2.4. Task 8.8 re-checks them all against the LLD.
+- **Coverage of this file's criteria:** checks and work records: Tasks 5.1–5.7; parser and ingest id and judge fixtures: Tasks 6.1–6.6; listings: Tasks 7.1–7.6; demo script: Tasks 8.1–8.2; end-to-end behavior and crash recovery: Tasks 8.3–8.5; docs: Tasks 8.6–8.7; walkthrough: Task 8.8.
 
 ---
 
@@ -25,7 +26,7 @@ status: not_started
 
 ### Task 5.1: Add `mapping_checks.py`
 **Owner**: Junior AI
-**Dependencies**: Task 4.12
+**Dependencies**: Task 3.2
 **Effort**: 2
 **Objective**: Row ↔ record mapping for the two tables, raising on unknown vocabulary values (LLD "Database / Storage Schema").
 
@@ -142,7 +143,6 @@ status: not_started
 **Steps**:
 - [ ] Export from `amoeba.store`: `CheckOutcome`, `CheckStanding`, `check_standing`, `CheckInput`, `CheckRecord`, `WorkRecordKind`, `WorkRecordInput`, `WorkRecordRecord`, `CalibrationRow`
 - [ ] Update the pinned export set in `tests/test_public_api.py` to match, and nothing else
-- [ ] Extend 104's metrology-reference test so it also covers the new store modules (`check_models.py`, `calibration.py`, `checks.py`, `sql_checks.py`, `mapping_checks.py`). If it already scans all of `src/amoeba/`, no change is needed. The CLI modules are covered in Task 8.7
 
 **Success Criteria**:
 - [ ] Full suite, `ruff`, `pyright` clean
@@ -156,6 +156,8 @@ status: not_started
 
 *Requires slice 105. If Task 1.1 found `upstream/squadron/review.py` missing, skip to Section 7, then Tasks 8.1–8.2, and ask the PM before returning here.*
 
+*Task 6.2 is where this section's tests for `to_verdict_input` and the `verdict_to_payload` round trip live; they modify 105's test modules, so name the modules in the commit.*
+
 ### Task 6.1: Pass `judge_invocation_id` through `to_verdict_input` and `verdict_to_payload`
 **Owner**: Junior AI
 **Dependencies**: Task 4.4
@@ -164,13 +166,13 @@ status: not_started
 
 **Steps**:
 - [ ] In `src/amoeba/upstream/squadron/review.py`, add a `judge_invocation_id: str | None = None` keyword to `to_verdict_input` and set it on the `VerdictInput`. It must **not** enter `review_record_id` (LLD D1: one file is one sample)
-- [ ] In `src/amoeba/store/verdict_payload.py`, make `verdict_to_payload` emit `VERDICT_JUDGE_INVOCATION_ID` when the id is set, and omit the key when `None` (skip if Task 4.3 already did this)
+- [ ] In `src/amoeba/store/verdict_payload.py`, make `verdict_to_payload` emit `VERDICT_JUDGE_INVOCATION_ID` when the id is set, and omit the key when `None` (Task 4.3 did not touch this function)
 - [ ] No tests here; Task 6.2 owns them
 
 **Success Criteria**:
 - [ ] Existing 105 tests pass; `ruff` and `pyright` clean
 
-**Files to Modify**: `src/amoeba/upstream/squadron/review.py`, `src/amoeba/store/verdict_payload.py`, 105's round-trip test (`tests/store/test_verdict_to_payload.py`, or the module 105 chose)
+**Files to Modify**: `src/amoeba/upstream/squadron/review.py`, `src/amoeba/store/verdict_payload.py`
 
 ---
 
@@ -199,7 +201,7 @@ status: not_started
 
 **Steps**:
 - [ ] Locate Squadron's `302-review.judge.slice-vs-arch.design-phase-judge-templates.md` in the Squadron repository (ask the PM for the path if it is not found; do not recreate it). Copy it byte for byte (`cp`) into `tests/fixtures/sq_reviews/`
-- [ ] Capture one fresh judge file: run `sq review` on a judge template with `--model glmflash` in a throwaway copy of this repository, never in this working tree. Copy the saved file byte for byte. If `sq` or its provider key is unavailable, tell the PM and continue with the 302 file only; the fresh file is then an open item that Task 8.7 checks. Likewise, if the 302 file cannot be found, ask the PM for its path and do not recreate it
+- [ ] Capture one fresh judge file: run `sq review` on a judge template with `--model glmflash` in a throwaway copy of this repository, never in this working tree. Copy the saved file byte for byte. If `sq` or its provider key is unavailable, tell the PM and continue with the 302 file only; the fresh file is then an open item that Task 8.8 checks. Likewise, if the 302 file cannot be found, ask the PM for its path and do not recreate it
 - [ ] Add README entries for both in `tests/fixtures/README.md` in the existing style: capture date, source, exact command for the fresh file, and what each pins. Record Squadron's version only as a dated observation
 - [ ] Check each file with a read-only look: `score` and a `criteria` mapping present; no `verdictSource` key; the 302 file has no stamp
 
@@ -377,7 +379,7 @@ status: not_started
 
 **Steps**:
 - [ ] Create `scripts/demo_checks.py` modeled on `scripts/demo_evidence.py`: takes the instance lock and refuses while the process runs; requires `--node NODE`; records on that node three checks (12 examined and passed; 0 examined and passed; no count) and one `task_progress` work record; seeds a second node in the same project; **prints only that second node's id** to stdout
-- [ ] Add `demo_checks.py` to `PERMITTED_SCRIPTS` and to the set asserted near line 290 in `tests/test_writer_guard.py`; update the explanatory comment
+- [ ] Add `demo_checks.py` to `PERMITTED_SCRIPTS` and to the set asserted in `tests/test_writer_guard.py` that already names `demo_evidence.py` (search for it; do not rely on a line number); update the explanatory comment
 - [ ] Use fixed record ids so a re-run is a first-wins no-op; log nothing to stdout besides the id
 
 **Success Criteria**:
@@ -409,46 +411,59 @@ status: not_started
 
 ---
 
-### Task 8.3: End-to-end test, running process: samples, rejection, listings
+### Task 8.3: End-to-end scenario fixture and the sample/rejection test
 **Owner**: Junior AI
 **Dependencies**: Task 6.6, Task 7.6, Task 8.2
 **Effort**: 3
-**Objective**: Drive the LLD "Integration Requirements" scenario through the real CLI up to the crash point.
+**Objective**: Build the LLD "Integration Requirements" scenario once, as a reusable fixture, and prove samples and the D2 rejection through the real CLI.
 
 **Steps**:
 - [ ] Create `tests/cli/test_judge_end_to_end.py` modeled on `tests/cli/test_evidence_end_to_end.py` (scratch `AMOEBA_STORE_DIR`, empty `--sq-runs-dir`, wait for `running`)
-- [ ] Create a project, stop, seed a node with `demo_evidence.py` and a second node with `demo_checks.py`, start
-- [ ] Ingest the 302 fixture as a sample of `j1`; submit two built `j1` samples with other models via `amoeba submit verdict --judge-invocation-id j1` (one CONCERNS); submit one `j1` sample on the second node
-- [ ] **Wait until applied:** poll `amoeba inspect submissions --project ... --json` until every submission is `applied` or `rejected` (bounded timeout, then fail the test); do not use a fixed sleep
-- [ ] While the process runs, assert: three `j1` samples; one `rejected` submission whose reason names the invocation and its node; `calibration` shows `split_invocations` 1 in every row `j1` touches; `checks` shows `passed`, `vacuous`, `unattested`; `work-records` shows the `task_progress` record. Capture each listing's `--json` output for Task 8.4. Define the project/node/instance setup as a shared helper or fixture in the file so Task 8.4's test reuses it
+- [ ] Define a **function-scoped** fixture `judge_scenario` in that file: create a project, stop, seed a node with `demo_evidence.py` and a second node with `demo_checks.py`, start; ingest the 302 fixture as a sample of `j1`; submit two built `j1` samples with other models via `amoeba submit verdict --judge-invocation-id j1` (one CONCERNS); submit one `j1` sample on the second node; then wait until settled. It yields the running instance and tears it down (no leftover processes). Each test below gets its own instance and captures what it needs itself; no test depends on another's state
+- [ ] **Wait until settled:** poll `amoeba inspect submissions --project ... --json` until every submission is `applied` or `rejected` (bounded timeout, then fail the test); do not use a fixed sleep
+- [ ] Test `test_samples_and_rejection`: three `j1` samples in `inspect verdicts --judge-invocation-id j1`; exactly one `rejected` submission, whose reason names the invocation and its node
 
 **Success Criteria**:
-- [ ] Test passes up to this point with the process left running (Task 8.4 extends it); `ruff` and `pyright` clean
-- [ ] Commit with Task 8.4
+- [ ] Test passes; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: add judge end-to-end scenario and sample rejection proof`
 
 ---
 
-### Task 8.4: End-to-end test, crash and restart
+### Task 8.4: End-to-end test, calibration, checks, and work-record listings
 **Owner**: Junior AI
 **Dependencies**: Task 8.3
+**Effort**: 2
+**Objective**: The remaining listings show the right rows on the running scenario.
+
+**Steps**:
+- [ ] In the same file, add `test_listings` using `judge_scenario`: `calibration` shows `split_invocations` 1 in every row `j1` touches; `checks` shows `passed`, `vacuous`, `unattested`; `work-records` shows the `task_progress` record
+
+**Success Criteria**:
+- [ ] Test passes; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: add judge end-to-end listing proof`
+
+---
+
+### Task 8.5: End-to-end test, crash and restart
+**Owner**: Junior AI
+**Dependencies**: Task 8.4
 **Effort**: 2
 **Objective**: Every listing returns the same rows after `kill -9`, with nothing applied twice.
 
 **Steps**:
-- [ ] In the same test file, as a second test function reusing Task 8.3's seeded-instance helper, after the wait in Task 8.3 has passed, `kill -9` the process, start it again, and wait for `running`
-- [ ] Re-read every listing with `--json` and assert equality with the output captured before the crash (row counts, ids, standings, rejection reason)
-- [ ] Also read with the process stopped (a read-only handle) and assert the same rows
-- [ ] Teardown stops the process; no leftover processes
+- [ ] In the same file, add `test_crash_and_restart` using `judge_scenario`: first capture the `--json` output of `verdicts` (filtered to `j1`), `submissions`, `calibration`, `checks`, and `work-records`
+- [ ] `kill -9` the process, start it again, wait for `running`; re-read every listing with `--json` and assert equality with the captured output (row counts, ids, standings, rejection reason)
+- [ ] Stop the process and read again (a read-only handle); assert the same rows
 
 **Success Criteria**:
 - [ ] Test passes; `ruff` and `pyright` clean
-- [ ] Commit with Task 8.3, e.g. `test: add judge sample and check end-to-end proof`
+- [ ] Commit, e.g. `test: add judge end-to-end crash recovery proof`
 
 ---
 
-### Task 8.5: Update `docs/evidence-contract.md`
+### Task 8.6: Update `docs/evidence-contract.md`
 **Owner**: Junior AI
-**Dependencies**: Task 8.4
+**Dependencies**: Task 8.5
 **Effort**: 3
 **Objective**: Document the contract (LLD Technical Requirements, last bullet).
 
@@ -465,9 +480,9 @@ status: not_started
 
 ---
 
-### Task 8.6: Update the other docs and CHANGELOG
+### Task 8.7: Update the other docs and CHANGELOG
 **Owner**: Junior AI
-**Dependencies**: Task 8.5
+**Dependencies**: Task 8.6
 **Effort**: 2
 **Objective**: Correct the stale line and record the change.
 
@@ -484,18 +499,18 @@ status: not_started
 
 ---
 
-### Task 8.7: Final validation and walkthrough
+### Task 8.8: Final validation and walkthrough
 **Owner**: Junior AI
-**Dependencies**: Task 8.6
+**Dependencies**: Task 8.7
 **Effort**: 3
 **Objective**: Confirm the slice against the LLD Success Criteria.
 
 **Steps**:
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; all clean
 - [ ] Check source file lengths for new and edited files; anything well over ~300 lines is split
-- [ ] Widen the metrology-reference test, if it does not already scan them, to the CLI modules `cli/inspect_evidence.py`, `cli/inspect_checks.py`, and `cli/ingest.py`; it must pass
+- [ ] Widen 104's metrology-reference test (the one place for this change), if it does not already scan all of `src/amoeba/`, to cover every new or edited module: `store/check_models.py`, `calibration.py`, `checks.py`, `sql_checks.py`, `mapping_checks.py`, and `cli/inspect_evidence.py`, `cli/inspect_checks.py`, `cli/ingest.py`; it must pass
 - [ ] Confirm the fresh judge fixture from Task 6.3 exists with its README entry; if it is still blocked, report it to the PM as an open item
-- [ ] Run the LLD Verification Walkthrough steps 1–7 with a scratch `AMOEBA_STORE_DIR`; compare each result with the expected text in the LLD and note any difference for the PM
+- [ ] Run the LLD Verification Walkthrough steps 1–7 with a scratch `AMOEBA_STORE_DIR`. The LLD's commands are not trusted as written: before each step, check its flags against `--help` (it mixes `--node` and `--node-id`, step 4 says "as in step 2" without naming the model, step 1 names a `--json` listing without the id filter, and step 3 names a "minimax" row whose model comes from the fixture file). Use the real flags and the model read from the fixture's frontmatter, compare each result with the LLD's expected text, and list every command or expectation that differed for the PM
 - [ ] Walk the LLD Functional and Technical Requirements lists and tick each against a named test
 - [ ] Update the LLD's walkthrough section with captured output only if the PM asks
 
