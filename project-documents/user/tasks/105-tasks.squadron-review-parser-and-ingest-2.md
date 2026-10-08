@@ -22,7 +22,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 6.1: Implement `verdict_to_payload`
 **Owner**: Junior AI
-**Dependencies**: Task 5.5
+**Dependencies**: Task 2.4 (the code uses only store modules; Task 6.2's real-fixture case needs Task 5.4)
 **Effort**: 2
 **Objective**: The inverse of `verdict_from_payload`, so ingest can submit a `VerdictInput` through the inbox.
 
@@ -41,7 +41,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 6.2: Test the round trip
 **Owner**: Junior AI
-**Dependencies**: Task 6.1
+**Dependencies**: Task 6.1, Task 5.4
 **Effort**: 2
 **Objective**: Pin the inverse over every field.
 
@@ -102,7 +102,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 7.3: Switch `tests/test_demo_evidence_payloads.py` to the parser
 **Owner**: Junior AI
-**Dependencies**: Task 6.2 (this test compares payloads, so it may use `verdict_to_payload`), Task 5.4
+**Dependencies**: Task 5.4 (add Task 6.2 only if the migrated test ends up calling `verdict_to_payload`)
 **Effort**: 2
 **Objective**: Same migration for the demo payload test.
 
@@ -126,13 +126,13 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Objective**: Remove the test-only parser; `tests/review_fixtures.py` keeps only fixture paths.
 
 **Steps**:
-- [ ] Confirm Tasks 7.1–7.3 above are committed, so nothing still imports the helpers (`grep -rn "review_findings\|read_frontmatter" tests`)
+- [ ] Confirm Tasks 7.1–7.3 above are committed, so nothing still uses the helpers: `grep -rnE "review_findings|read_frontmatter|CapturedFinding|has_provider_failure_heading" tests scripts src` finds hits only in `tests/review_fixtures.py` itself. Also list every module that imports from `review_fixtures` (`grep -rn "review_fixtures" tests scripts`) and confirm each imports only paths
 - [ ] Delete the YAML reader, frontmatter regex, heading regex, `CapturedFinding`, and the `yaml` and `re` imports from `tests/review_fixtures.py`. Keep `SQ_REVIEWS` and the four `ROUND_*` paths
 - [ ] Update the module docstring to say it holds paths only
 - [ ] Run the full suite once
 
 **Success Criteria**:
-- [ ] `grep -n "yaml\|re\.compile" tests/review_fixtures.py` finds nothing
+- [ ] `grep -n "yaml\|re\.compile" tests/review_fixtures.py` finds nothing, and the removed names appear nowhere under `tests`, `scripts` or `src`
 - [ ] `uv run pytest`, `ruff`, and `pyright` clean
 - [ ] Commit, e.g. `refactor(tests): reduce review_fixtures to fixture paths`
 
@@ -231,7 +231,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Steps**:
 - [ ] In `tests/cli/test_ingest.py`, reusing the Task 8.3 fixture: a real fixture with `--upstream-version` writes exactly one file to `inbox/new/`; stdout is the digest id; stderr names the node, slice, and review type
 - [ ] `--stdout-json` works on a capture
-- [ ] D7: a review whose `slice` differs from any node's slice name is still submitted
+- [ ] D7: seed a node (`scripts/demo_evidence.py`, as in Task 8.6) and ingest a fixture whose parsed `slice` differs from that node's id and name. First assert the precondition in the test (parsed `slice` != the node id; use `parse_review_artifact`, not a retyped value), then assert exit `OK`, one file in `inbox/new/`, and a stderr line showing both the node and the review's slice. Also ingest the PR fixture (`slice` is `None`) and assert stderr shows `-`
 - [ ] `--id` overrides the digest id, and the submission id equals it
 
 **Success Criteria**:
@@ -252,7 +252,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 - [ ] Create `tests/cli/test_ingest_end_to_end.py`, modelled on `tests/cli/test_evidence_end_to_end.py`: from an empty supervisor directory, start, create the project, stop, seed a node with `scripts/demo_evidence.py`, start
 - [ ] Ingest round 1 part 1, round 2 part 1 (`102-…part-1.md`), and the round 2 part 2 provider-failure file, each with `--upstream-version` (all three predate the stamp). Ingest round 1 again from a different path, a copy with a `resolution:` key added
 - [ ] `kill -9` the process; start again
-- [ ] Expose the setup and the post-restart state as module-level helpers or a fixture, so Task 8.6b reuses them rather than repeating the sequence
+- [ ] Put the setup and the post-restart state in a shared helper module, `tests/cli/ingest_e2e_harness.py`, so Tasks 8.6b, 8.7 and 8.8 reuse them rather than repeating the sequence. Keep each test module near 300 lines: this module holds 8.6 and 8.6b, and Tasks 8.7 and 8.8 go in `tests/cli/test_ingest_end_to_end_modes.py`
 - [ ] Read-only inspection shows exactly three verdicts with the expected standings (`stated`, `stated`, `provider_failure`) after the restart
 
 **Success Criteria**:
@@ -271,6 +271,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 **Steps**:
 - [ ] In the same module, reusing the Task 8.6 setup: round 1's `source_path` is the first ingest's absolute path (not the second ingest's copy), and `source` is `artifact_frontmatter`
+- [ ] Digest id and replay: each stored verdict's id equals `review_record_id` of the same file parsed in the test, and the stdout printed by each ingest equals that id. The second ingest of round 1 (the `resolution:` copy) printed the same id as the first, and `inspect submissions` shows exactly one submission for that id and still exactly three verdicts
 - [ ] `inspect changes` on round 2 names round 1 as previous with every round-1 finding `gone`
 
 **Success Criteria**:
@@ -288,14 +289,14 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Objective**: Cover D6 with the process both stopped and running.
 
 **Steps**:
-- [ ] In the same test module, with the same setup as Task 8.6: ingest with the process **stopped**, then start it; the verdict is applied and appears in `inspect verdicts`
+- [ ] In `tests/cli/test_ingest_end_to_end_modes.py`, with the Task 8.6 harness: ingest with the process **stopped**, then start it; the verdict is applied and appears in `inspect verdicts`
 - [ ] Ingest into the nonexistent project `nosuch`, once with the process running and once stopped: exit `SUBMISSION_REFUSED`, stderr names the project, `inbox/new/` stays empty, and `inspect inbox` shows nothing quarantined
 
 **Success Criteria**:
 - [ ] Both tests pass; `ruff` and `pyright` clean
 - [ ] Commit, e.g. `test: ingest with a stopped process and an unknown project`
 
-**Files to Modify**: `tests/cli/test_ingest_end_to_end.py`
+**Files to Create**: `tests/cli/test_ingest_end_to_end_modes.py`
 
 ---
 
@@ -308,14 +309,14 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Pair-dependent**: needs Task 1.2's output. If Task 1.2 is blocked, leave this task unchecked and marked `blocked on 1.2`.
 
 **Steps**:
-- [ ] With a running process and a seeded node, ingest the pair's stdout file with `--stdout-json` and its saved `.md` with `--artifact` (no `--upstream-version`; both carry a stamp)
+- [ ] In `tests/cli/test_ingest_end_to_end_modes.py`, with a running process and a seeded node, ingest the pair's stdout file with `--stdout-json` and its saved `.md` with `--artifact` (no `--upstream-version`; both carry a stamp)
 - [ ] Assert two different ids; the JSON row has `source: stdout_json` and `reviewed_sha` null; `inspect findings` for the node shows each of the pair's finding keys seen twice
 
 **Success Criteria**:
 - [ ] The test passes; `ruff` and `pyright` clean
 - [ ] Commit, e.g. `test: ingest a stdout capture and its saved file`
 
-**Files to Modify**: `tests/cli/test_ingest_end_to_end.py`
+**Files to Modify**: `tests/cli/test_ingest_end_to_end_modes.py`
 
 ---
 
@@ -323,7 +324,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 9.1: Write the "Parsing Squadron output" section
 **Owner**: Junior AI
-**Dependencies**: Task 8.8
+**Dependencies**: Task 8.7 (not 8.8: the docs do not wait on the externally gated capture pair; the doc text covers the pair as designed, and Task 9.3 re-checks it against the real pair)
 **Effort**: 3
 **Objective**: Replace 104's "Mapping Squadron's flags (for slice 105)" notes with the parser's contract.
 
@@ -361,7 +362,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 9.3: Final validation and the walkthrough
 **Owner**: Junior AI
-**Dependencies**: Task 9.2
+**Dependencies**: Task 9.2, Task 8.8 (the only task here that may be blocked on Task 1.2; if so, report per the first step below)
 **Effort**: 2
 **Objective**: Run everything and replace the LLD's draft walkthrough note with real output.
 
@@ -369,6 +370,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 - [ ] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean (the slice has no performance requirement and adds no load test; this run only checks for regressions)
 - [ ] `wc -l` the new source files; split any well over ~300 lines
 - [ ] Confirm no item is still marked `blocked on 1.2`; if any is, report it to the PM instead of closing the slice
+- [ ] In the report to the PM, list the stale LLD wording found in Task 4.2 (the 0.14.0 stdout captures do not carry a trailing `Saved review to` line) so the PM can correct the design; do not edit it
 - [ ] Run the LLD's Verification Walkthrough steps 1–9 by hand (with the real filenames for the captured pair) and replace its draft note with the real commands and trimmed output. The LLD itself says the walkthrough is "refined with captured output when Phase 6 completes", so this one section, and only it, is edited in the design file
 - [ ] If any step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match, and do not touch any other section of it
 

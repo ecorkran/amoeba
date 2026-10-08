@@ -102,7 +102,7 @@ status: not_started
 **Objective**: Give the *Findings Not Parsed* + CONCERNS branch a fixture, and say plainly that it is edited (LLD Technical Requirements, "A known gap").
 
 **Steps**:
-- [ ] `cp` the round 1 part 1 file (`102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md`, verdict CONCERNS) to a new name ending `.findings-not-parsed-edited.md` in `tests/fixtures/sq_reviews/`
+- [ ] `cp` the `ROUND_1_PART_1` file (`102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md`, verdict CONCERNS) to a new name ending `.findings-not-parsed-edited.md` in `tests/fixtures/sq_reviews/`
 - [ ] In the copy only, add one body heading line `## Findings Not Parsed` (no other change). Never edit the original
 - [ ] Add a README section "Known gap": no real review file has a *Findings Not Parsed* heading together with a CONCERNS or FAIL verdict; this edited copy stands in for it. Mark the copy **edited** in the file table, naming the one line added and its source file
 - [ ] Add a path constant to `tests/review_fixtures.py`
@@ -122,7 +122,7 @@ status: not_started
 
 ### Task 2.1: Move PyYAML to a runtime dependency
 **Owner**: Junior AI
-**Dependencies**: None (branch from Task 1.1 exists)
+**Dependencies**: Task 1.1 (creates the branch)
 **Effort**: 1
 **Objective**: The parser imports `yaml`, so it must be a runtime dependency (LLD D2).
 
@@ -151,7 +151,7 @@ status: not_started
 - [ ] Do not change any existing test
 
 **Success Criteria**:
-- [ ] The provider-failure message texts appear once in `src/` (in `evidence_models.py`)
+- [ ] The provider-failure message texts appear once in `src/` (in `evidence_models.py`; Task 2.3 enforces it with a test)
 - [ ] 104's existing rejection tests pass unchanged
 - [ ] `uv run ruff check .` and `uv run pyright` clean
 - [ ] Commit, e.g. `refactor(store): extract provider_failure_problem`
@@ -168,9 +168,10 @@ status: not_started
 
 **Steps**:
 - [ ] Add a small test module under `tests/store/`: non-failure returns `None`; failure with `UNKNOWN` and no findings returns `None`; failure with another verdict returns the verdict reason; failure with findings returns the findings reason
+- [ ] Single definition, enforced: with `ast`, collect every string constant under `src/amoeba/` and assert that each of the two reason strings (obtained by calling the function, not retyped) occurs in exactly one place, `evidence_models.py`
 
 **Success Criteria**:
-- [ ] The four cases pass
+- [ ] The four cases and the single-definition test pass
 - [ ] Commit, e.g. `test(store): pin provider_failure_problem`
 
 **Files to Create**: `tests/store/test_provider_failure_problem.py`
@@ -253,7 +254,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/upstream/test_review_frontmatter.py`
 - [ ] Real input: each `.md` file in `tests/fixtures/sq_reviews/` yields a non-empty mapping containing `verdict`
-- [ ] Heading flags: the 928 file and `102-…part-2.md` (round 2) have *Provider Failure*; the 925 file and the edited-copy fixture have *Findings Not Parsed*; the round 1 part 1 file has neither
+- [ ] Heading flags: the 928 file and `ROUND_2_PART_2` (the 102 round 2 part 2 file, `…part-2.md`) have *Provider Failure*; the 925 file and the edited-copy fixture have *Findings Not Parsed*; `ROUND_1_PART_1` has neither. Refer to the 102 files by their `tests/review_fixtures.py` constants (`ROUND_1_PART_1`, `ROUND_1_PART_2`, `ROUND_2_PART_1`, `ROUND_2_PART_2`) everywhere; two files share each part number, and the constants say which
 - [ ] Leniency: leading blank lines before the fence; trailing spaces on a fence; heading at another level and in another case
 - [ ] Errors, each a `SquadronParseError` naming the problem: no frontmatter (text `# not a review`), malformed YAML (cause is chained), frontmatter that is not a mapping
 
@@ -296,7 +297,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/upstream/test_review_artifact.py`
 - [ ] Table-driven test over every `.md` fixture: expected verdict, derivation, `findings_parsed`, `provider_failure`, review type, finding count, and for each finding its order, severity, summary, location, and positional id. Write the expected values by reading each file, not by printing the parser's output. Each row also asserts `findings` or another field is non-default where the file has data (catches silent empty results)
-- [ ] Named cases: both provider-failure files (the 0.14.0 `102-…part-2.md` heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file gives `sq_run_id` (`run-20260928-slices-plan-a04bdb07`) and its `upstream_version` stamp; pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): the new captured file gives its stamp, and `sq_run_id` equal to its `runId` if it has one and `None` if it does not
+- [ ] Named cases: both provider-failure files (the 0.14.0 `ROUND_2_PART_2`, heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file gives `sq_run_id` (`run-20260928-slices-plan-a04bdb07`) and its `upstream_version` stamp; pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): the new captured file gives its stamp, and `sq_run_id` equal to its `runId` if it has one and `None` if it does not
 - [ ] Missing-key errors, each its own test: no `verdict`, no `reviewType`, no `aiModel`; each message names the key
 - [ ] Finding errors, each its own test (mutate a copy of a real file's text): a finding that is not a mapping; a finding without `severity`; a finding without `summary`; an unknown severity word; an unknown verdict word
 - [ ] Provider-failure errors: a failure with a verdict other than `UNKNOWN`; a failure with findings
@@ -342,7 +343,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/upstream/test_review_json.py`
 - [ ] Real captures: `stdout-slice-927-clean-pass.json` gives `findings_parsed=True` and standing `stated`; `stdout-slice-104-concerns-glmflash.json` gives ten findings in order (check the count and order against the file)
-- [ ] Trailing-line tolerance: append a `Saved review to <path>` line to the text of a real capture; the result equals the pure-JSON parse. This is synthetic on purpose: the fixtures README confirms neither existing capture carries the line (the LLD's success criterion says the 0.14.0 captures do; that wording is stale, so test the behavior it describes and note the difference in the commit message)
+- [ ] Trailing-line tolerance: append a `Saved review to <path>` line to the text of a real capture; the result equals the pure-JSON parse. This is synthetic on purpose: the fixtures README confirms neither existing capture carries the line. The LLD's success criterion (and its stdout-reader note) says the 0.14.0 captures do; that wording is stale. Test the behavior it describes, do not edit the LLD here, and list the stale wording in Task 9.3's report to the PM
 - [ ] `findings_parsed` rule, one test per branch, built by editing a real capture's dict:
   - `fallback_used: true` with `verdictSource: stated` → `False`
   - `fallback_used: true` with `verdictSource` null → `False` (derivation `not_reported`)
@@ -433,6 +434,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/upstream/test_review_compose.py`
 - [ ] Defaults and overrides: the id defaults to the digest; `record_id` overrides it; `source_path` and `journal_entry_id` pass through; `upstream` is `squadron`; `source_document` and `slice` do not reach `VerdictInput`
+- [ ] Standing on real files, through `to_verdict_input` (with an explicit version for pre-stamp files): `ROUND_2_PART_2` and the 928 file give `VerdictStanding.PROVIDER_FAILURE`; `ROUND_1_PART_1` gives `stated`. This pins the standing in a fast unit test, not only in the end-to-end test
 - [ ] D4 cases: stamp only; argument only (a pre-stamp file such as the round 1 files); neither raises `UpstreamVersionError`; stamp and a different argument raises and the message contains both labels; equal stamp and argument is accepted
 - [ ] The public-names import works for all eight names
 
