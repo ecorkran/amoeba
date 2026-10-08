@@ -86,6 +86,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/cf_harness.py` (follow `tests/cli_harness.py` style): a fixture `real_cf` that **fails** the test with a clear message when `cf` is not on `PATH`. It never skips and never falls back to a hand-built file (a silent skip would let the success paths go untested)
 - [ ] Helpers over a temporary `CONTEXT_FORGE_DATA_DIR`: create the data directory; `init_cf_project(name)` running `cf init --lite --no-ide --name <name>` in a temp project directory; `cf_project_id(name)` reading the id from `cf get --json`; `cf_set(name, field, value)`; `cf_project_rm(name)`; `rewrite_projects_file(mutator)`, which applies a function to the parsed JSON and replaces `projects.json` by writing a temp file and renaming it over (as CF does), for cases the `cf` CLI cannot produce (a `customData`-only change)
+- [ ] Make CI install `cf`, or every real-`cf` test fails there by design. In `.github/workflows/ci.yml`, add before the "Tests" step: `actions/setup-node@v4` (Node 22) and a step running `npm install -g @context-forge/cli` followed by `cf --version`, so a broken install fails the step rather than the tests. Do not pin a CF version (versions are moving targets; the fixtures record shape, not version). Update the file's header comment to say why the step exists. Confirm the package name against the one installed locally (`npm ls -g --depth=0`)
 - [ ] Add `tests/test_cf_harness.py`: init then `cf_project_id` returns a non-empty string present in the file; `cf_set` changes the stored value; `rewrite_projects_file` changes the inode; with `PATH` emptied the fixture fails (assert with `pytest.raises` on the underlying check function, not by running a failing test)
 
 **Success Criteria**:
@@ -93,6 +94,7 @@ status: not_started
 - [ ] Commit, e.g. `test: add real-cf harness`
 
 **Files to Create**: `tests/cf_harness.py`, `tests/test_cf_harness.py`
+**Files to Modify**: `.github/workflows/ci.yml`
 
 ---
 
@@ -272,6 +274,7 @@ status: not_started
 - [ ] Add `cf_watches(project_id)` and `set_cf_watch_state(project_id, cf_project_id, state, detail)`. The latter is a no-op (no write, no `updated_at` change) when state and detail are unchanged, and raises if the watch does not exist. Add the composition used by the tenant: one method that records a snapshot and sets the watch state in a single transaction
 - [ ] Add `tests/store/test_cf_watches.py`: a snapshot round-trips (fields, changed, `present`, `cf_updated_at` kept as written); `latest_cf_snapshot` is the newest per key and `None` before any; `cf_snapshots` filters by cf id and is oldest first; `cf_snapshot` of an unknown id raises; two cf ids and two projects stay independent; state set to the same value writes nothing; a failure partway through the combined method leaves neither the snapshot, nor the feed row, nor the state change (the state has no database constraint to trip, so force the failure by patching the private state-update helper to raise after the snapshot insert, inside the transaction)
 - [ ] Add a public-API check that the new names are exported (follow `tests/test_public_api.py`)
+- [ ] Register the new writers with the guard now, not at the end. Read `tests/test_writer_guard.py`: it restricts `Store.open`, not method calls, so it needs no change for these methods. Add beside it an AST test (in `tests/test_writer_guard.py` or a sibling) that every call to `record_cf_snapshot` and `set_cf_watch_state` under `src/amoeba/` sits in a named permitted-module set, defined once as a constant (`process/cf_watch.py` only; the file does not exist yet, so the test passes vacuously until Task 6.3, which tightens it to equality). The `watch_cf` effect writes `cf_watches` itself inside `store/inbox.py` and is outside this set
 
 **Success Criteria**:
 - [ ] Tests pass
@@ -352,8 +355,8 @@ status: not_started
 
 **Steps**:
 - [ ] Confirm by reading `process/project_stores.py` and `process/inbox_tenant.py` that the `Store` returned by `host.store_for(project_id)` is the same handle the inbox applies submissions on. If it is not, stop and tell the PM
-- [ ] Add to the `CFWatchOperations` mixin an in-memory integer `cf_watch_revision` (property, starts 0), incremented after the `watch_cf` effect commits any change to a watch row (link, reactivate, deactivate). It is process memory only, never persisted. A replay that changes nothing does not bump it, and `set_cf_watch_state` (the tenant's own writes) never does. The tenant (Task 6.1) re-reads the project's watches only when the revision differs from the one it last saw, so a deactivation is noticed too
-- [ ] Add `tests/store/test_cf_watch_revision.py`: a link bumps it; a replay does not; a deactivate does; a reactivate does; `set_cf_watch_state` does not; a failed (rolled-back) apply does not; a fresh `Store` handle starts at 0
+- [ ] Add to the `CFWatchOperations` mixin an in-memory integer `cf_watch_revision` (property, starts 0), incremented once per `apply_submission` call that committed a change to a watch row (link, reactivate, deactivate). Timing: effects run inside `apply_submission`'s transaction (`with self._connection:`), so the effect must not bump. It sets a private pending flag on the store handle; `apply_submission` bumps the counter and clears the flag only after the `with` block has exited normally (the commit has happened). The flag is cleared at the start of every apply and on any exception, so a rolled-back or rejected apply never bumps and a stale flag never leaks into the next apply. A rejected submission (`SubmissionOutcome.REJECTED`) writes no watch row and does not bump. It is process memory only, never persisted. A replay that changes nothing does not bump it, and `set_cf_watch_state` (the tenant's own writes) never does. The tenant (Task 6.1) re-reads the project's watches only when the revision differs from the one it last saw, so a deactivation is noticed too
+- [ ] Add `tests/store/test_cf_watch_revision.py`: a link bumps it; a replay does not; a deactivate does; a reactivate does; `set_cf_watch_state` does not; a rolled-back apply (force the failure after the effect, by patching the submission-record insert to raise) does not, and a following successful apply of a different kind does not bump either (no stale flag); the counter value read from inside the effect is still the old one; a fresh `Store` handle starts at 0
 
 **Success Criteria**:
 - [ ] Tests, `ruff`, `pyright` pass
