@@ -4,7 +4,7 @@ slice: contract-proof-and-hardening
 project: amoeba
 lld: user/slices/110-slice.contract-proof-and-hardening.md
 dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
-projectState: Slices 101–104 are merged (store schema 5, inbox, verdicts and findings). In the working tree `src/amoeba/` holds `cli`, `inbox`, `process`, `store`; `amoeba.process.__init__` exports nothing and `cli/lifecycle.py` `start()` builds `tenants=(InboxTenant(supervisor_dir),)` inline. `store/paths.py` uses `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME` verbatim and `validate_project_id` only calls `validate_path_component`. `NodeOperations.update_node_status` does not refuse leaving `done`. Slices 105–109 are designed and may not be merged when this file starts; Sections 4 (partly), 5, 6, 7 and the pruning proof assertions need them. Sections 2, 3, 8 and 9.1–9.4 need only 101–104.
+projectState: Slices 101–104 are merged (store schema 5, inbox, verdicts and findings). In the working tree `src/amoeba/` holds `cli`, `inbox`, `process`, `store`; `amoeba.process.__init__` exports nothing and `cli/lifecycle.py` `start()` builds `tenants=(InboxTenant(supervisor_dir),)` inline. `store/paths.py` uses `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME` verbatim and `validate_project_id` only calls `validate_path_component`. `NodeOperations.update_node_status` does not refuse leaving `done`. Slices 105–109 are designed and may not be merged when this file starts; Sections 2 and 3, and (in File 2) Tasks 9.1–9.4, 10.2 and 10.3, need only 101–104. Sections 4 and 5–8, Task 9.5, and Tasks 10.1 and 10.4–10.6 need 105–109 for part or all of their content (File 2 says which).
 dateCreated: 20261008
 dateUpdated: 20261008
 status: not_started
@@ -44,7 +44,7 @@ status: not_started
 - [ ] Create `110-slice.contract-proof-and-hardening` from the target; if it exists, switch to it
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once. If any fail before changes, stop and tell the PM
 - [ ] **Presence check, by file, not branch name.** For each of 105, 106, 107, 108, 109 record present/absent: `src/amoeba/upstream/squadron/` exists (105); `src/amoeba/feed/` exists and exports `follow` (106); `judge_invocation_id` appears in `src/amoeba/store/` (107); a 108 module exists (see `user/slices/108-*.md` Component Structure); `src/amoeba/serve/` and `src/amoeba/cli/token.py` exist (109). Write the result in the task's notes
-- [ ] For each present slice, record the real names the proof will bind to: 106's one-transaction report-back method (LLD says `record_runner_report`; open `user/slices/106-*.md` API Contracts and the merged `Store` to get the exact signature), `attribute_review`, `record_detection`; 105's `parse_review_artifact` and `to_verdict_input`; 109's SSE client helper in `tests/` if it has one (search `tests/` for `text/event-stream`)
+- [ ] For each present slice, record the real names the proof will bind to: 106's one-transaction report-back method (LLD says `record_runner_report`; open `user/slices/106-*.md` API Contracts and the merged `Store` to get the exact signature), `attribute_review`, `record_detection`; 105's `parse_review_artifact` and `to_verdict_input`; 109's SSE client helper in `tests/` if it has one (search `tests/` for `text/event-stream`), and which HTTP client library 109's tests use (check the `dev` group in `pyproject.toml` and the imports in `tests/`); Tasks 5.8b and 6.5 use that client and add no second one
 - [ ] If 106's report-back method is absent while 106 is merged, stop: the LLD says this slice adds it, but the signature is a PM decision. Tell the PM
 - [ ] Locate the per-node journal query (search `store/journal.py` for a method taking a node id). Record its name; Task 2.5 uses it
 
@@ -192,56 +192,22 @@ Each fix is a narrowing or enforcement in the store; each is tested at once. `st
 - [ ] New tests pass; `tests/test_writer_guard.py` still passes
 - [ ] Commit `feat: export tenant hosting seam from amoeba.process`
 
-### Task 3.3: Pin `amoeba.process` exports
+### Task 3.3: Pin the export sets of the four other public packages
 **Owner**: Junior AI
 **Dependencies**: 3.2
-**Effort**: 1
-**Objective**: A hand-written export set test, as `tests/test_public_api.py` does for the store.
+**Effort**: 2
+**Objective**: Hand-written export-set tests for `amoeba.process`, `amoeba.inbox`, `amoeba.feed`, `amoeba.upstream.squadron`, alongside the existing one for `amoeba.store`. One shared helper, four short test modules (each pin is the same check against a different literal set).
 
 **Steps**:
-- [ ] Read `tests/test_public_api.py` once and copy its approach. Add `tests/test_public_api_process.py` with the eight names from the LLD written out literally (not derived from `__all__`); assert `set(amoeba.process.__all__) == EXPECTED` and that every name resolves via `getattr`
+- [ ] Read `tests/test_public_api.py` once. Add `tests/export_pins.py` with one helper `assert_exports(module, expected)`: asserts `set(module.__all__) == expected` (the set is written out literally by the caller, never derived from `__all__`) and that every name resolves via `getattr`
+- [ ] `tests/test_public_api_process.py`: the eight names from the LLD (`ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`)
+- [ ] `tests/test_public_api_inbox.py`: re-read `src/amoeba/inbox/__init__.py` now and write out its current `__all__` (`submit`, `failed`, `pending`, `quarantined`, the three transfer objects, four exceptions, plus anything 105–109 added)
+- [ ] `tests/test_public_api_feed.py`: if `src/amoeba/feed/` is absent (Task 1.1), skip this module and record it; Task 6.5 does it once 106 lands. Otherwise write out the merged `__all__` (expected to include `follow`, `FeedSettings`, `Change`, and `change_as_json` if 109 landed)
+- [ ] `tests/test_public_api_squadron.py`: if `src/amoeba/upstream/squadron/` is absent, skip and record it (Task 6.5 does it later). Otherwise write out the merged `__all__` (105's list: `parse_review_json`, `parse_review_artifact`, `ParsedReview`, `to_verdict_input`, `review_record_id`, `SquadronReviewError`, `SquadronParseError`, `UpstreamVersionError`). Task 9.1 adds `classify_paused_runs`, `RunDisposition`, `DispositionKind`
 
 **Success Criteria**:
-- [ ] Test passes; adding a stray name to `__all__` makes it fail (check once by hand, then revert)
-- [ ] Committed with Task 3.4
-
-### Task 3.4: Pin `amoeba.inbox` exports
-**Owner**: Junior AI
-**Dependencies**: 3.3
-**Effort**: 1
-**Objective**: Same pin for `amoeba.inbox`.
-
-**Steps**:
-- [ ] Add `tests/test_public_api_inbox.py` listing the current `__all__` of `src/amoeba/inbox/__init__.py` literally (`submit`, `failed`, `pending`, `quarantined`, the three transfer objects, four exceptions, plus anything 105–109 added: re-read the file now). Same assertions as 3.3
-
-**Success Criteria**:
-- [ ] Test passes against the file as it stands
-- [ ] Committed with Task 3.5
-
-### Task 3.5: Pin `amoeba.feed` exports (needs 106)
-**Owner**: Junior AI
-**Dependencies**: 3.4
-**Effort**: 1
-**Objective**: Same pin for `amoeba.feed`.
-
-**Steps**:
-- [ ] If `src/amoeba/feed/` is absent (Task 1.1), skip this task and note it; Task 6.5 repeats it once 106 lands. Otherwise add `tests/test_public_api_feed.py` listing the merged `__all__` literally (expected to include `follow`, `FeedSettings`, `Change`, and `change_as_json` if 109 landed)
-
-**Success Criteria**:
-- [ ] Test passes, or the skip is recorded
-- [ ] Committed with Task 3.6
-
-### Task 3.6: Pin `amoeba.upstream.squadron` exports (needs 105)
-**Owner**: Junior AI
-**Dependencies**: 3.5
-**Effort**: 1
-**Objective**: Same pin for the Squadron adapter package.
-
-**Steps**:
-- [ ] If `src/amoeba/upstream/squadron/` is absent, skip and note it. Otherwise add `tests/test_public_api_squadron.py` listing the merged `__all__` literally (105's list: `parse_review_json`, `parse_review_artifact`, `ParsedReview`, `to_verdict_input`, `review_record_id`, `SquadronReviewError`, `SquadronParseError`, `UpstreamVersionError`; plus any later additions). Task 9.1 will add `classify_paused_runs` and `RunDisposition` to this test
-
-**Success Criteria**:
-- [ ] Test passes, or the skip is recorded
+- [ ] Every module that could be written passes; adding a stray name to one `__all__` makes its test fail (check once by hand, then revert)
+- [ ] Skips, if any, are recorded with the slice that unblocks them
 - [ ] Commit `test: pin public export sets for process, inbox, feed, squadron`
 
 ---
@@ -252,7 +218,7 @@ All files under `tests/contract/`. Every module there may import only the five p
 
 ### Task 4.1: Create `tests/contract/` and its conftest
 **Owner**: Junior AI
-**Dependencies**: 3.6
+**Dependencies**: 3.3
 **Effort**: 1
 **Objective**: A package with throwaway-directory fixtures.
 
@@ -316,7 +282,7 @@ All files under `tests/contract/`. Every module there may import only the five p
 **Objective**: Snapshot equality and difference reporting work on built stores.
 
 **Steps**:
-- [ ] `tests/contract/test_snapshot.py`: build two stores in two temp dirs with the same nodes, statuses, a journal entry, and a block; snapshots are equal though node ids differ. Change one node status in the second: `compare` reports exactly that difference. Add one unresolved `unknown` entry to the second: `compare` reports it, and passes when it is listed in `allowed_differences`. `completed` vs `adopted` entries compare equal
+- [ ] `tests/contract/test_snapshot.py`: build two stores in two temp dirs with the same nodes, statuses, a journal entry, and a block; snapshots are equal though node ids differ. Change one node status in the second: `compare` reports exactly that difference. Add one unresolved `unknown` entry to the second: `compare` reports it, and passes when it is listed in `allowed_differences`. `completed` vs `adopted` entries compare equal. Cover each remaining snapshot field with a one-field difference that `compare` must report: a verdict added or with a different standing; a finding key added to a node; a blocked state added; a message on one channel; a judge sample added to a gate and a detection outcome changed (these two only if 106/107 are present, else the test notes the skip)
 
 **Success Criteria**:
 - [ ] Tests pass

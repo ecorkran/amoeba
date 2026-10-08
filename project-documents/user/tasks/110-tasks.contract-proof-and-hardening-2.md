@@ -13,8 +13,9 @@ status: not_started
 ## Context Summary
 
 - Continuation of the **contract-proof-and-hardening** slice (110). Read File 1's Context Summary and reading note first; they apply here unchanged.
+- **Task numbers with letters (5.8a, 5.8b, 5.8c) are real tasks inserted to keep each commit tested; do them in order, as listed.**
 - **This file:** 5 `ProofRunner` and the clean run; 6 kill points and both subscribers; 7 restart matrix in the load tier; 8 locality under the sequence; 9 pruning; 10 docs and the contract index; 11 final validation.
-- **Hard gate for Sections 5–7:** 105–109 merged (Task 1.1's presence table). If any is absent, do the sections that do not need it (8, 9.1–9.4, 10.1–10.3) and stop before the rest. Tell the PM which are blocked. Do not stub a missing slice's API.
+- **Hard gate:** Sections 5, 6, 7 and 8, Task 9.5, and Tasks 10.1 and 10.4–10.6 need 105–109 merged (Task 1.1's presence table), because they run or describe the clean sequence. Tasks 9.1–9.4 (pruning classifier and command) and 10.2–10.3 (store-contract update, Squadron entry) need only 101–104 and depend only on Sections 2–3, so they may be done out of numeric order while the gate is closed. If any of 105–109 is absent: do those tasks, then stop and tell the PM which slices block the rest. Do not stub a missing slice's API.
 - **`ProofRunner` rule (LLD "Special Considerations"):** it follows a fixed table and keeps **no progress in memory**. Each tick it reads the store (`nodes_for_project`, `runnable`, `blocked`, `journal_entries`, `verdicts`), finds the first step whose "state afterwards" does not hold, and does that step. It makes exactly one decision: re-issue after an `unknown` entry whose block was resolved. Add nothing else.
 - **Waits:** every wait is "until a public-state condition holds, with a timeout" (Task 4.6's `wait_until`). No fixed sleeps.
 
@@ -34,6 +35,7 @@ status: not_started
 - [ ] Create `tests/contract/proof_runner.py`. Define `KillPoint` as one `StrEnum`: `after-issue`, `after-launch`, `inbox-while-down`, plus one boundary member per step 1–11 for the load-tier matrix (name them `after-step-1` … `after-step-11`; the harness and tests reference only the enum). `ProofRunner` reads the kill point from one environment variable whose name is a module constant
 - [ ] Define the step table as data: each row is a name, the "state that must hold afterwards" (a predicate over a store-reading view), and an action. Rows for runner-owned steps are 2, 3, 4, 6, 7, 11. Steps 1, 5, 8, 9, 10 are actors' (Task 5.5) and the runner only checks they have happened before continuing; its predicates for them read the store, never actor-side flags
 - [ ] `tick(host)` implements the `Tenant` protocol: for each project it is assigned (`proof`, and `proof-b` for steps 1–3), find the first row whose predicate is false and either do its action or return, if it waits on an actor. Return the tenant's "did work" boolean as the protocol requires (read `Tenant.tick` in `process/host.py`)
+- [ ] Define once, beside the enum, which side performs each kill (`KILL_OWNER`): the runner kills itself at `after-issue`, `after-launch`, and `after-step-N` for runner-owned steps 2, 3, 4, 6, 7, 11; the **harness** kills the host (`kill_host`) for `inbox-while-down` and for `after-step-N` of actor-owned steps 1, 5, 8, 9, 10, because the runner cannot observe those moments. `mid-follow` is deliberately not a kill point (see Task 6.1)
 - [ ] `kill_here(point)`: if the configured kill point equals `point`, `os.kill(os.getpid(), signal.SIGKILL)`. No mocks
 - [ ] Nothing in memory between ticks except the configuration. A second `ProofRunner` constructed fresh must continue from the store
 
@@ -110,7 +112,7 @@ status: not_started
 - [ ] Step 6: `journal_issue(sq_run)` on the gate; the fake writes a **paused** run; resolve the entry with the run id; set the gate's `sq.run_id` (public `update_sq_reference`); `block()` on `sq_checkpoint`. Predicate: gate is `blocked_on_sq_checkpoint` with `sq.run_id` set and the entry resolved
 - [ ] Step 7: `block()` the slice node on `human`, with the escalation row written with it (check how `block` and `journal_escalate` write the escalation message and use the same public call; the expected state is one human block and one escalation message on the slice node)
 - [ ] Step 11: mark gate, slice, initiative `done` in that order. Predicate: all `done`, nothing runnable or blocked in `proof`. This relies on Task 2.5: the step cannot succeed with an unresolved entry
-- [ ] Each row also calls its `after-step-N` kill point at the end of its action (step 3's after the report-back)
+- [ ] Each runner-owned row also calls `kill_here(after-step-N)` at the end of its action (step 3's after the report-back). Actor-owned steps have no runner kill call: the driver kills them (Task 5.9)
 
 **Success Criteria**:
 - [ ] Rows added; each action idempotent
@@ -129,32 +131,72 @@ status: not_started
 - [ ] Tests pass
 - [ ] Commit `test: add ProofRunner checkpoint, human block, and finish steps`
 
-### Task 5.8: Actors — Operator, Judge, Human, PM, Inspector
+### Task 5.8: CLI actors — Operator, Human, PM, Inspector
 **Owner**: Junior AI
 **Dependencies**: 5.7
-**Effort**: 4
-**Objective**: The out-of-process faces, each a function in `tests/contract/actors.py`, each using only a public surface.
+**Effort**: 3
+**Objective**: The CLI and file-copy actors, in `tests/contract/actors.py`, each using only a public surface.
 
 **Steps**:
-- [ ] Operator (steps 1): `amoeba submit create-project --project proof --by …` and `amoeba submit watch-reviews --project proof --reviews-dir <abs> --active true`, via the harness's `run_cli`. Wait for the project to be listed before submitting into it (the obligation "wait for `create_project` to apply")
-- [ ] Judge (step 5): start `amoeba serve --auth tokens` once for the whole sequence (add `start_server()` to the harness; the token comes from `amoeba token add --principal judge --scope submit`; a second `read` principal for the remote subscriber). The Judge POSTs to `/v1/projects/proof/submissions` with bearer auth: one `verdict` for the gate, two judge samples (same `judge_invocation_id`, submitted separately, via the `verdict` kind with 107's key), then a `resolution` for the judge block. Use the HTTP client 109's tests use (Task 1.1 recorded it; `httpx` if that is what 109 chose)
-- [ ] Human (steps 8, 10, and the `after-issue` / `inbox-while-down` recoveries): `amoeba submit resolution --project proof --by human --blocked-state-id … --detail …`. Find the blocked-state id through `amoeba inspect blocked --project proof --json` (never the store). Step 10's detail is "abandon, do not resume"
-- [ ] PM (step 9): copy round 2 (part 1) from `fake_squadron` into the registered reviews directory using a plain file copy; write to a temp name in the same directory first, then rename, so the detector never reads a half-written file
+- [ ] Operator (step 1): `amoeba submit create-project --project proof --by …` and `amoeba submit watch-reviews --project proof --reviews-dir <abs> --active true`, via the harness's `run_cli`. Wait for the project to be listed before submitting into it (the obligation "wait for `create_project` to apply")
+- [ ] Human (steps 8 and 10, and the `after-issue` and `inbox-while-down` recoveries): `amoeba submit resolution --project proof --by human --blocked-state-id … --detail …`. Find the blocked-state id through `amoeba inspect blocked --project proof --json`, never the store. Step 10's detail is "abandon, do not resume"
+- [ ] PM (step 9): copy round 2 (part 1) from `fake_squadron` into the registered reviews directory by writing a temp name in the same directory, then renaming, so the detector never reads a half-written file
 - [ ] Inspector: `inspect(args) -> parsed JSON` via `amoeba inspect … --json`
-- [ ] The server is never a kill target; the harness only stops it at the end
 
 **Success Criteria**:
-- [ ] Each actor works in a scratch run against the proof host through steps it needs (steps 1–5 smoke-test is enough); module passes the public-only guard
-- [ ] Committed with Task 5.9
+- [ ] Module passes the public-only guard
+- [ ] Committed with Task 5.8a
+
+### Task 5.8a: Test the CLI actors
+**Owner**: Junior AI
+**Dependencies**: 5.8
+**Effort**: 2
+**Objective**: Each actor works against the real host before the sequence relies on it.
+
+**Steps**:
+- [ ] `tests/contract/test_actors.py`: start the proof host (runner registered), run the Operator, and assert through the Inspector that the project and the watch exist. The Human actor needs a blocked state that only the full sequence produces, so it is exercised in the clean run (Task 5.9), not here
+- [ ] PM: after the Operator registers a reviews directory, copy a round into it and assert, with `wait_until`, that `inspect detections` shows one row (needs 106)
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit `test: add CLI actors for the lifecycle proof`
+
+### Task 5.8b: Server and Judge actor
+**Owner**: Junior AI
+**Dependencies**: 5.8a
+**Effort**: 3
+**Objective**: One `amoeba serve --auth tokens` for the whole sequence, and the Judge that posts through it (step 5).
+
+**Steps**:
+- [ ] Add `start_server()` to the harness: `amoeba token add --principal judge --scope submit` and `--principal subscriber --scope read` (the token is printed once; capture it from stdout), then start `amoeba serve --auth tokens` on a free loopback port bound to the throwaway supervisor directory. The server is never a kill target; the harness stops it only at the end
+- [ ] Create `tests/contract/judge_actor.py`. The Judge POSTs to `/v1/projects/proof/submissions` with `Authorization: Bearer` using the HTTP client recorded in Task 1.1: one `verdict` for the gate, two judge samples (same `judge_invocation_id`, each submitted separately, using 107's key), then a `resolution` for the judge block. Wait for each submission's state through `GET …/submissions/{id}` before the next
+- [ ] Tokens never appear in logs or assertion messages
+
+**Success Criteria**:
+- [ ] Module passes the public-only guard
+- [ ] Committed with Task 5.8c
+
+### Task 5.8c: Test the server and Judge actor
+**Owner**: Junior AI
+**Dependencies**: 5.8b
+**Effort**: 2
+**Objective**: Scopes and the judge writes work as the sequence needs.
+
+**Steps**:
+- [ ] In `test_actors.py` add: a `read` token's POST is refused (`403`); a `submit` token's POST is accepted and applied (`wait_until` the submission state is applied); after the Judge runs against a gate that is `blocked_on_judge` (build it by running steps 2–4 through the host), the gate is `runnable` and two judge samples exist as separate records (read through `inspect verdicts --json`)
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit `test: add serve harness and Judge actor`
 
 ### Task 5.9: The clean run
 **Owner**: Junior AI
-**Dependencies**: 5.8
+**Dependencies**: 5.8c
 **Effort**: 4
 **Objective**: Drive steps 1–11 end to end with no kill, with `proof-b` interleaved.
 
 **Steps**:
-- [ ] Register `ProofRunner` in `proof_host.py` (Task 4.7 left it out). Create `test_lifecycle_proof.py` with a driver function `run_sequence(kill_point=None)` returning the final snapshot; the clean test calls it with `None`. The driver waits on each step's "state afterwards" with `wait_until`, then triggers the next actor
+- [ ] Register `ProofRunner` in `proof_host.py` (Task 4.7 left it out). Create `test_lifecycle_proof.py` with a driver function `run_sequence(kill_point=None)` returning the final snapshot; the clean test calls it with `None`. The driver waits on each step's "state afterwards" with `wait_until`, then triggers the next actor. It accepts any `KillPoint`: for a point whose `KILL_OWNER` is the runner, it passes the point to the host environment; for a harness-owned point, it calls `kill_host` as soon as the named step's state-afterwards holds. In both cases it then restarts the host with no kill point and carries on. Section 7 reuses this driver unchanged
 - [ ] Assert the LLD functional criteria for the clean run: every node `done`; three verdicts (two review rounds and the Judge's); two judge samples recorded separately; one detection `ingested` (round 2), one `runner_issued` (round 1); nothing runnable or blocked; `finding_changes` on the round-2 verdict names round 1 as the previous round though one was recorded by the Runner and the other detected
 - [ ] Run `proof-b` through steps 1–3 interleaved (its create-project submitted between step 1 and step 2 of `proof`); assert neither project's `runnable`, `blocked`, `verdicts`, or feed ever shows the other's rows and that `inspect projects` lists both
 - [ ] Return the snapshot for later comparison; also return the paths of the runs directory and supervisor directory for Section 9
@@ -174,7 +216,7 @@ status: not_started
 **Objective**: Write down, once, how each kill point may differ from the clean snapshot.
 
 **Steps**:
-- [ ] In `snapshot.py` define the per-kill-point allowed differences as one mapping keyed by `KillPoint`: `after-issue` adds one `unknown` journal entry, one human block, and one escalation on the slice node; `after-launch`, `inbox-while-down`, and every `after-step-N` add nothing. Import the key type from `proof_runner.py`; do not repeat the names
+- [ ] In `snapshot.py` define the per-kill-point allowed differences as one mapping keyed by `KillPoint`: `after-issue` adds one `unknown` journal entry, one human block, and one escalation on the slice node; `after-launch`, `inbox-while-down`, and every `after-step-N` add nothing. `mid-follow` has no enum member and no row, on purpose: it is not a separate run but the subscriber checks of Task 6.5, which run in every kill run. Say so in a comment on the mapping. Import the key type from `proof_runner.py`; do not repeat the names
 
 **Success Criteria**:
 - [ ] One mapping, no duplicated kill-point strings (grep for the literal `after-issue` finds it only in the enum)
@@ -222,12 +264,12 @@ status: not_started
 
 ### Task 6.5: Subscribers — local feed and remote SSE
 **Owner**: Junior AI
-**Dependencies**: 6.4, 3.5
+**Dependencies**: 6.4, 3.3
 **Effort**: 4
 **Objective**: Both subscribers stay up through every kill and their transcripts are checked (`mid-follow`).
 
 **Steps**:
-- [ ] If Task 3.5 or 3.6 was skipped for a missing slice, do those pin tests now
+- [ ] If the feed or squadron modules of Task 3.3 were skipped for a missing slice, write those pin tests now
 - [ ] Local subscriber: start `amoeba feed --project proof --follow` as a subprocess at the beginning of `run_sequence`, capturing stdout lines. Never restarted by the kill points
 - [ ] Remote subscriber: an SSE client against `amoeba serve` with a `read` token, reading `/v1/projects/proof/feed?after=0`; on disconnect or error it reconnects with `Last-Event-ID` set to the last `id:` it received. It runs in a thread of the test process using the stdlib or the HTTP client 109's tests use; keep the reconnect logic in one function. The server is never killed, so disconnects happen only if the server closes a stream; add one deliberate disconnect (the client closes its own connection once, mid-sequence) so resume is exercised
 - [ ] At the end of every run (clean and each kill run) assert: the local transcript equals `amoeba feed --project proof --after 0` printed at the end (no gap, no repeat, compare the `seq` lists and the full lines); replaying the transcript rebuilds each node's final status (apply `node_status_changed`-style changes by title; use the change vocabulary 106's contract lists); the remote transcript equals the local one (same `seq` list and same payloads)
@@ -264,7 +306,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/load/test_restart_matrix.py` parametrized over the eleven `after-step-N` members of `KillPoint`. Reuse `run_sequence` from `tests/contract/test_lifecycle_proof.py` through `sys.path` as `tests/load/conftest.py` does for shared harnesses; do not copy it
 - [ ] Each case asserts the same things as Section 6: completion, snapshot equal to the clean run's (no allowed differences, except where a boundary coincides with a named point whose table row applies), transcripts equal
-- [ ] Steps owned by actors (1, 5, 8, 9, 10): the host is killed right after the actor's effect is observed in public state, then restarted
+- [ ] The driver already handles both owners (Task 5.9): runner-owned boundaries are killed by `ProofRunner` itself, actor-owned boundaries (1, 5, 8, 9, 10) by the harness once the step's state-afterwards holds. Assert in the test, from `KILL_OWNER`, that both kinds appear among the eleven cases
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/load/test_restart_matrix.py -v` runs eleven cases, all passing, twice in a row
@@ -310,15 +352,15 @@ status: not_started
 
 ### Task 9.1: `run_pruning.py`
 **Owner**: Junior AI
-**Dependencies**: 8.2
+**Dependencies**: 3.3
 **Effort**: 3
 **Objective**: `classify_paused_runs(runs_dir, *, owned) -> list[RunDisposition]`, pure over a directory listing and an ownership map; reads files, writes nothing.
 
 **Steps**:
-- [ ] Create `src/amoeba/upstream/squadron/run_pruning.py`. Define `RunDisposition` as a `StrEnum` (`prunable`, `not_owned`, `not_paused`, `owner_not_done`, `unreadable`) and a result record with `run_id`, `path`, `status` (Squadron's string, or `None` if unreadable), `disposition`, `owner_node_ids`. Define Squadron's `paused` status string as one named constant in this module; read how `process/observers/sq_runs.py` reads the same field and reuse its parsing helper if it exposes one (do not duplicate; if the helper is private, stop and tell the PM rather than importing it)
+- [ ] Create `src/amoeba/upstream/squadron/run_pruning.py`. The LLD uses the name `RunDisposition` twice (a status `StrEnum` in Patterns, and the result record in API Contracts). This file settles it: `RunDisposition` is the **result record** (frozen dataclass with `run_id`, `path`, `status` (Squadron's string, or `None` if unreadable), `disposition`, `owner_node_ids`), matching the function's return type; the status enum is `DispositionKind` (`StrEnum`: `prunable`, `not_owned`, `not_paused`, `owner_not_done`, `unreadable`). Tell the PM of the rename when reporting. Define Squadron's `paused` status string as one named constant in this module; read how `process/observers/sq_runs.py` reads the same field and reuse its parsing helper if it exposes one (do not duplicate; if the helper is private, stop and tell the PM rather than importing it)
 - [ ] Classification order per the LLD: unreadable (cannot read or parse) → `unreadable`; run id not in `owned` → `not_owned`; status not `paused` → `not_paused`; any owning node not `done` → `owner_not_done`; otherwise `prunable`. `owned` maps run id to the nodes that reference it (`Mapping[str, Sequence[Node]]`)
 - [ ] Swallow `FileNotFoundError` for a file that disappears between listing and reading, with a comment: Squadron pruned it in between, so there is nothing to report. Any other unexpected error is logged with `logger.exception` and re-raised. A malformed file is a normal `unreadable` row, not an exception
-- [ ] The module imports no store internals (only `Node` from `amoeba.store`'s public exports) and writes nothing; export `classify_paused_runs` and `RunDisposition` from the package `__init__` and add them to the pin test from Task 3.6
+- [ ] The module imports no store internals (only `Node` from `amoeba.store`'s public exports) and writes nothing; export `classify_paused_runs`, `RunDisposition` and `DispositionKind` from the package `__init__` and add them to the squadron pin test from Task 3.3
 
 **Success Criteria**:
 - [ ] Module near or under 150 lines; `ruff`, `pyright` strict clean; the store still imports nothing from `amoeba.upstream`
@@ -405,7 +447,7 @@ All markdown carries YAML front matter per `file-naming-conventions.md` where th
 
 ### Task 10.2: Update `store-contract.md` for D5 and D6
 **Owner**: Junior AI
-**Dependencies**: 10.1
+**Dependencies**: 2.6
 **Effort**: 2
 **Objective**: Record the narrowing and the enforcement as changes to 101's contract.
 
@@ -419,7 +461,7 @@ All markdown carries YAML front matter per `file-naming-conventions.md` where th
 
 ### Task 10.3: Squadron dependency entry
 **Owner**: Junior AI
-**Dependencies**: 10.2
+**Dependencies**: 2.6
 **Effort**: 1
 **Objective**: Ask Squadron for a command that discards a paused run, without tying it to a version.
 
@@ -433,12 +475,12 @@ All markdown carries YAML front matter per `file-naming-conventions.md` where th
 
 ### Task 10.4: `docs/README.md` — the contract index
 **Owner**: Junior AI
-**Dependencies**: 10.3
+**Dependencies**: 10.1, 10.2, 10.3
 **Effort**: 3
 **Objective**: One entry document (D8), every answer one link away.
 
 **Steps**:
-- [ ] Sections in order: **Which document answers what** (one row per contract doc: `store-contract.md`, `process-contract.md`, `inbox-contract.md`, `evidence-contract.md`, and 109's `network-contract.md` if present, each with the questions it answers); **The public packages** (the five, with their pinned-export tests linked); **Hosting a Runner** (link to Task 10.1's section, and the "work out the step from the store" pattern with a link to `tests/contract/proof_runner.py`); **Obligations on consumers**; **Known limits**; **Contract gaps** (link to the gap table, Task 10.5)
+- [ ] Sections in order: **Which document answers what** (one row for every contract document that exists in `docs/` when you write it: run `ls docs/*.md` and list each file, including any added by 105–109 such as `network-contract.md` and any feed or detection contract; do not list from memory. Each row names the questions that document answers; for sections that 105–109 added to an existing contract, say so in the row); **The public packages** (the five, with their pinned-export tests linked); **Hosting a Runner** (link to Task 10.1's section, and the "work out the step from the store" pattern with a link to `tests/contract/proof_runner.py`); **Obligations on consumers**; **Known limits**; **Contract gaps** (link to the gap table, Task 10.5)
 - [ ] Obligations list, each a bullet with a link to the source section (open each contract and link its real heading; do not link from memory): journal before side effect; issue `sq` with non-TTY stdin and resume only by explicit id; attach reviews by `attribute_review`; report back in one transaction from the artifact through 105's parser; poll `stop_requested` and return promptly; never cache `project_ids`; save a feed cursor after acting and make handling repeatable; resolutions target a blocked state, not a node; wait for `create_project` to apply before submitting into it; no secrets in any payload; project ids are slugs; `done` is final
 - [ ] Known limits: link each contract's future-work section. If a link target is missing, say so to the PM rather than inventing one
 - [ ] Add the five Integration Requirements questions (host the Runner; journal, launch and report back a Squadron review; block and learn of a resolution; follow the feed; valid project ids and what never to do) as the first screen, each with one link
