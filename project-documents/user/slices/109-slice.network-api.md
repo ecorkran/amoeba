@@ -3,7 +3,7 @@ docType: slice-design
 slice: network-api
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
-dependencies: [101, 102, 103, 104, 106]
+dependencies: [101, 102, 103, 104, 105, 106, 107, 108]
 interfaces: [110]
 dateCreated: 20261007
 dateUpdated: 20261007
@@ -43,6 +43,24 @@ For the PM: `curl` against `amoeba serve` replaces SSH for checking state, and a
 - `ServeSettings` with CLI flags; exit code `SERVE_REFUSED` (12).
 - `docs/network-contract.md`; updates to `inbox-contract.md`, `feed-contract.md`, `process-contract.md`, and `CHANGELOG.md`.
 
+**Beyond the architecture's three surfaces, and why.** Each item is either forced by a constraint the architecture sets or the smallest way to meet one:
+
+| Addition | Forced by |
+| --- | --- |
+| Registry move to `amoeba.inspection`, `ListingQuery`, `abbreviated_columns` | "Same answers as `amoeba inspect`" means sharing its code, and the server must not import `amoeba.cli` (D3) |
+| `change_as_json` move | The stream must emit what `amoeba feed` prints (D5) |
+| `inbox.locate` | A remote client cannot see the inbox directory, so without it a quarantined submission reads as pending forever (D4) |
+| Token file, `amoeba token`, scopes | "Any other bind requires authentication" needs credentials and a way to issue and revoke them (D6) |
+| TLS off-loopback | A bearer token sent in clear text can be replayed (D6; PM ratification) |
+| Listing discovery | A remote client has no `--help`. One read of registry metadata replaces a hand-kept list in the contract document. |
+
+**Two task groups, one slice.** Phase 5 splits the work so the refactor never blocks on the network code, or the reverse:
+
+- **Group A, the no-behavior-change refactor:** the gate task (Dependencies), the registry move, `ListingQuery` and `abbreviated_columns`, and the `change_as_json` move. It finishes with the byte comparison, and is committed and reviewable on its own, before any `amoeba.serve` code exists.
+- **Group B, the network surface:** everything else. It starts from a finished Group A.
+
+Splitting Group A into a slice of its own was considered and rejected: it has no consumer but this slice, and on its own it delivers no value a slice could claim. The group boundary gives the same isolation without a slice with no purpose.
+
 **Excluded**
 
 - Any endpoint that writes other than by submitting to the inbox.
@@ -63,7 +81,9 @@ For the PM: `curl` against `amoeba serve` replaces SSH for checking state, and a
 - **103:** `amoeba.inbox.submit()`, `InvalidSubmissionError` / `SubmissionWriteError`, `Store.submission(id)`, and the inbox layout (`new/`, `quarantine/`, `failed/`, `submission_filename`).
 - **104:** the evidence listings (`verdicts`, `findings`, `changes`) and `VerdictNotFoundError` / `VerdictNotComparableError`.
 - **106:** `follow()`, `FeedSettings`, `change_head`, `read_transaction()` on the read-only handle (106 D1a), and the `amoeba feed` JSON shape.
-- **105, 107, and 108 land first, by execution order.** They add listings and submission kinds but nothing here calls them by name, so they are not functional prerequisites: whatever the registry and `SubmissionKind` contain is served. They are an **ordering** assumption, because the registry move (Migration Plan) relocates their listing modules. The slice plan's order (`105 → … → 108 → 109`) puts all four before this slice, so their task documents stand as written and target `amoeba.cli`. If that order changes and any of them is still unbuilt when 109 is implemented, that slice's task breakdown must target `amoeba.inspection` instead. This is recorded on the 109 entry in the slice plan, so whoever reorders sees it.
+- **105, 107, and 108 must be merged first, and this is a hard gate.** They add listings and submission kinds but nothing here calls them by name, so they are not functional prerequisites: whatever the registry and `SubmissionKind` contain is served. They are listed in `dependencies` anyway, because the registry move (Migration Plan) relocates their listing modules. Their task documents target `amoeba.cli`, and the move is only correct once their modules are there.
+  - **Gate task.** The first task of the breakdown confirms that 105–108 are merged into the target branch and that their listing modules are in `amoeba.cli`. If either check fails, it stops and asks the PM. Work does not proceed on an assumed order.
+  - The slice plan's 109 entry carries the same dependency list and the reason, so anyone who reorders slices sees it.
 - **New runtime dependencies:** `starlette` and `uvicorn` (the plain package, not `uvicorn[standard]`). **New dev dependency:** `httpx`, which Starlette's `TestClient` needs. Versions are whatever is current at implementation, pinned in `uv.lock`.
 
 ### Interfaces Required
@@ -143,13 +163,14 @@ It works with the resident process stopped, as `amoeba submit` does. The process
 
 ```
 GET /v1/projects/{project}/submissions/{id}
-  store.submission(id)  → applied | rejected            (if the store exists)
-  else inbox.locate(id) → pending | quarantined | failed
-  else store.submission(id) again                       (it may have been applied in between)
-  else 404 unknown_submission
+  up to two passes of:
+    store.submission(id)  → applied | rejected            (if the store exists)
+    inbox.locate(id)      → pending | quarantined | failed (scans new/, then quarantine/, then failed/)
+    store.submission(id)  → applied | rejected            (it may have been applied in between)
+  nothing found in either pass → 404 unknown_submission
 ```
 
-The process commits the record before it deletes the file, so checking the store, then the directory, then the store again cannot miss a submission that moves while it is being looked up.
+The scan order follows the direction files move. The process moves a file with one atomic rename, and only in three ways: `new/` → `quarantine/`, `new/` → `failed/`, and `new/` → deleted, which happens after its record commits. So a file is always in exactly one place, and every move goes to a place scanned later in the pass. A file that leaves `new/` after `new/` was scanned is found in `quarantine/` or `failed/`, or by the final store check. The only move against that direction is an operator requeueing a file by hand, back into `new/`. The second pass covers a requeue that happens during the first. A 404 then needs two hand moves timed against two passes. **Test:** with `locate`'s scan paused between directories, move a file `new/` → `quarantine/` (and, separately, `new/` → `failed/`, and apply-and-delete). Each lookup reports the file's real state, never 404.
 
 **The feed stream:**
 
@@ -168,7 +189,7 @@ GET /v1/projects/{project}/feed?after=N       (or Last-Event-ID: N, which wins)
 
 ### State Management
 
-None that survives a restart. Per stream, the server holds a cursor and a bounded buffer in memory. The client owns the cursor (106's rule). After a disconnect it reconnects with the last `id:` it received. The token file is the only file the server reads that is not a store or inbox file. It is read on every authenticated request, so a revocation takes effect at once. It is a few lines, so reading it each time costs little. `amoeba token` rewrites it atomically, so a reader never sees half a file. What happens when the file goes bad while the server runs is in D6.
+None that survives a restart. Per stream, the server holds a cursor and a bounded buffer in memory. The client owns the cursor (106's rule). After a disconnect it reconnects with the last `id:` it received. The token file is the only file the server reads that is not a store or inbox file. It is read on every authenticated request, so a revocation takes effect at once for new requests, and within `heartbeat_seconds` for streams that are already open (D6). It is a few lines, so reading it each time costs little. `amoeba token` rewrites it atomically, so a reader never sees half a file. What happens when the file goes bad while the server runs is in D6.
 
 ## Technical Decisions
 
@@ -216,7 +237,7 @@ None that survives a restart. Per stream, the server holds a cursor and a bounde
 **D5 — The stream runs `follow()` in a bounded worker thread per connection.** The architecture fixes the source: "the live feed tails 106's change log with `follow()`". `follow()` blocks, so each stream runs it in a worker thread, and the async response reads from a bounded buffer the thread fills.
 
 - **Backpressure, not buffering.** The buffer is small (`stream_buffer_size`). When a slow client stops reading, the thread blocks on the full buffer and stops reading the store. Memory per stream is bounded, and nothing is dropped. The client is behind, not lost.
-- **A stalled client is closed, not waited on.** A peer that keeps its TCP connection open but stops reading would otherwise hold a stream slot indefinitely. A failed write only shows up once the kernel gives up on the connection, which can take many minutes. So every send to the client, events and keepalives alike, must complete within `stream_stall_seconds` (default 60), or the server closes the stream and logs it at INFO with the principal and last `seq` sent. uvicorn's send waits for the transport to drain, so a full socket buffer is exactly what this timeout measures. Closing loses nothing: the client reconnects with `Last-Event-ID` and resumes. A client that is slow but reading never hits the limit, because each send completes. Sixty seconds is four missed heartbeats, well past any network hiccup, and short enough that stalled peers cannot hold the cap for long.
+- **A stalled client is closed, not waited on.** A peer that keeps its TCP connection open but stops reading would otherwise hold a stream slot indefinitely. A failed write only shows up once the kernel gives up on the connection, which can take many minutes. So every send to the client, events and keepalives alike, must complete within `stream_stall_seconds` (default 60), or the server closes the stream and logs it at INFO with the principal and last `seq` sent. The timeout measures a full socket buffer only if the server's `send` waits for the transport to drain. uvicorn's HTTP protocols are understood to pause in `send` while the transport's write buffer is over its high-water mark. That is **not assumed: it is verified at implementation**, as for slow headers (D5a). The test opens a raw socket with a small receive buffer, never reads, and asserts that the stream is closed within `stream_stall_seconds` plus a margin, and that the server's resident memory stays flat while it waits. *If it fails,* `send` is returning while uvicorn buffers in memory. Then no timeout at the application level can detect the stall, because nothing in the application ever waits. Wrapping `send` in a timeout is the mechanism here; it cannot be the fallback. The implementer stops and raises it with the PM. The candidate remedy is a different ASGI server whose `send` does apply backpressure (Hypercorn), swapped under the same Starlette app. No hand-rolled transport hack is acceptable. Closing loses nothing: the client reconnects with `Last-Event-ID` and resumes. A client that is slow but reading never hits the limit, because each send completes. Sixty seconds is four missed heartbeats, well past any network hiccup, and short enough that stalled peers cannot hold the cap for long.
 - **A blocked stream pins no snapshot.** While the thread waits on a full buffer, it sits inside `follow()` at a `yield`, between batches, with no read transaction open (Interfaces Required). Its connection stays open, but in WAL mode an idle connection with no transaction does not hold back checkpoints. **Test:** fill a stream's buffer with a non-reading client, commit from a writer, run `PRAGMA wal_checkpoint(TRUNCATE)` from that writer, and assert the checkpoint completed (`busy = 0`).
 - **Stop.** `follow()` takes `stop: Callable[[], bool]` (106). The response sets a per-stream event when the client disconnects or the server shuts down. The thread notices within `follow_interval_seconds`. A thread blocked on a full buffer is released by closing the buffer.
 - **A cap on streams.** Each stream holds a thread for its lifetime. Streams draw from their own limiter of `max_feed_streams` (default 32), separate from the pool Starlette uses for sync reads and submissions. Too many streams cannot starve reads. Past the cap, `503 too_many_streams` with `Retry-After`.
@@ -235,6 +256,7 @@ None that survives a restart. Per stream, the server holds a cursor and a bounde
 | A stalled stream reader | `stream_stall_seconds` (D5) | Stream closed; client resumes |
 | Idle keep-alive connections | uvicorn's `timeout_keep_alive`, left at uvicorn's default | Connection closed |
 | Too many open connections (including slow-header clients) | `max_connections` (default 128), passed as uvicorn's `limit_concurrency` | uvicorn answers `503`; memory and threads stay bounded |
+| A stream send against a full socket buffer | `stream_stall_seconds`, **provided `send` waits for drain: verified at implementation** (D5) | Stream closed. If not verified, stop and ask the PM. |
 | Slow request headers | uvicorn's header handling, **verified at implementation** | The task records what uvicorn does. If it has no header-phase timeout, `network-contract.md` says so and requires a TLS-terminating proxy in front of any non-loopback deployment. A slow-header client can still only occupy a connection slot, which `max_connections` caps. |
 
 **D6 — Authentication is explicit configuration, never inferred from the peer address.** *(PM ratification required: TLS requirement and principal binding.)*
@@ -244,6 +266,14 @@ None that survives a restart. Per stream, the server holds a cursor and a bounde
 - **Non-loopback binds also require TLS** (`--tls-cert`, `--tls-key`), or the server refuses to start. A bearer token sent over plain HTTP on a network can be read and replayed by anyone on the path. Terminating TLS at a proxy is supported through the loopback bind with `--auth tokens`.
 - **Tokens.** `amoeba token add --principal NAME --scope read|submit` generates a token (`secrets.token_urlsafe(32)`), prints it once, and stores only its SHA-256, with the principal and scope, in `{supervisor_dir}/serve/tokens` (mode `0600`, rewritten atomically). `list` prints principals and scopes. `revoke --principal NAME` removes one. The server compares hashes with `hmac.compare_digest`. A stolen copy of the file cannot be used as tokens. File format: one `principal scope sha256:<hex>` per line, with `#` comments, blank lines, and any run of whitespace between the fields all accepted (lenient parsing). A malformed line, an unknown scope, or a duplicate principal refuses the whole file and names its line number. Skipping it would silently disable a token someone believes is active.
 - **Scopes: `read` and `submit`.** A `read` token may use the listing and feed endpoints. A `submit` token may also post submissions. Anything else is `403 insufficient_scope`. `--scope` has no default: the operator states it. This is the first network exposure of the only write path, and a status UI or a remote reader should not hold the bridge's power to resolve blocks and create projects. Defining the field now, while the file format is new, costs one column. Adding it after tokens are in use would be a format migration. `TokenScope` is a `StrEnum`, and the endpoint → required scope mapping is one table in `auth.py`. With `--auth none` there are no principals and no scopes, and every endpoint is open. That is the loopback-only mode.
+- **Open streams are re-checked, not trusted for their lifetime.** A stream outlives the request that opened it by hours. At every heartbeat tick, and so at least once every `heartbeat_seconds` whether or not events are flowing, the stream re-runs the same check a new request gets: token present in the file, scope still sufficient. The token file is read again, as for any request. If the check fails, the server sends one terminal event and closes:
+
+  ```
+  event: closed
+  data: {"code": "unauthenticated" | "insufficient_scope" | "auth_unavailable"}
+  ```
+
+  The codes are `ApiErrorCode` values, and the table above applies unchanged. A revoked token or a lowered scope ends the stream. A broken token file ends every stream with `auth_unavailable`. A client that reconnects gets the same answer as an HTTP status. So revocation takes effect at once for new requests and **within `heartbeat_seconds` (default 15) for open streams**, which `network-contract.md` and the Success Criteria state. With `--auth none` there is nothing to re-check.
 - **Per-kind and per-project scopes are excluded, deliberately.** Which roles need which kinds (may a Judge submit `resolution`?) is for initiatives 140 and 160 to define, and today a supervisor typically holds one project. The two-value scope is the coarse split every consumer needs now. A finer field can be added to the line format when one of them asks for it.
 - **The token file failing while the server runs fails closed and loud.** The file is re-read on each authenticated request, so it can break after a startup check passed:
 
@@ -261,7 +291,7 @@ None that survives a restart. Per stream, the server holds a cursor and a bounde
 
 **D7 — No resident-process status endpoint.** `amoeba status` decides "running" by trying to take the instance lock and dropping it at once (`InstanceLock.held_by_another_process`). A remote client polling that would hold the lock in brief bursts, and an `amoeba start` that landed in one would refuse with `ALREADY_RUNNING`. Reading only the PID file would give a second, weaker definition of "running" that disagrees with `amoeba status` after a `kill -9`. A remote client learns whether submissions are being applied from the status endpoint, which is what it actually needs to know. A safe status probe can be added if a consumer asks for one, and would be a change to 102's lock.
 
-**D8 — `amoeba serve` is a separate process that takes no lock.** This follows the architecture (PM, 20260928). It has no state, opens stores read-only, and writes only inbox files, which any number of writers may do. So several servers, on different ports or hosts, may run at once, and none needs to coordinate with the resident process. It discovers projects per request, honoring "never cache `project_ids`". Logging goes to stderr, as with `amoeba start`. It runs in the foreground; supervision is the operator's (launchd, systemd), exactly as for the resident process.
+**D8 — `amoeba serve` is a separate process that takes no lock.** This follows the architecture (PM, 20260928). It has no state, opens stores read-only, and writes only inbox files, which any number of writers may do. So several servers may run at once **on the supervisor's machine**, on different ports, and none needs to coordinate with the resident process. *Same host only:* a read-only open of a WAL-mode SQLite store needs the store's `-shm` shared-memory file, which does not work across hosts or over network filesystems. Submissions are also file writes into the supervisor's inbox directory. A server on another machine would need both to work over a shared filesystem, and SQLite does not support that. `network-contract.md` states that `amoeba serve` runs on the supervisor's machine, and that remote parts reach it over the network, not by mounting its directory. It discovers projects per request, honoring "never cache `project_ids`". Logging goes to stderr, as with `amoeba start`. It runs in the foreground; supervision is the operator's (launchd, systemd), exactly as for the resident process.
 
 ### PM ratification
 
@@ -372,6 +402,8 @@ The token file path is derived from the supervisor directory and is not a settin
 
 None. No migration and no table. The only new file is `{supervisor_dir}/serve/tokens`.
 
+It cannot be mistaken for a project. `discover_project_ids` lists only regular files named `*{STORE_FILE_SUFFIX}` in the supervisor directory, and `store_path_for` maps a project to such a file. A `serve/` directory matches neither, which is already true of the `inbox/` and `detection/` directories beside it. A project named `serve` is still valid: its store is `serve{STORE_FILE_SUFFIX}`, a different path from the directory. **Test:** with the token file present, `inspect projects` and `GET /v1/listings/projects` do not list `serve`, and creating a project named `serve` works with the token file untouched.
+
 ## Integration Points
 
 ### Provides to Other Slices
@@ -409,6 +441,10 @@ None. No migration and no table. The only new file is `{supervisor_dir}/serve/to
 - `amoeba serve --host 0.0.0.0` refuses to start without `--auth tokens`, and without TLS. With `--auth tokens` and no token file, it refuses. Each case exits `SERVE_REFUSED` naming the missing piece.
 - With `--auth tokens`, a request with no token, a wrong token, or a revoked token is `401`, including requests from `127.0.0.1`. A submission whose `submitted_by` differs from the principal is `403 principal_mismatch`. A submission made with a `read` token is `403 insufficient_scope`.
 - With the server running, deleting the token file, making it unreadable, or adding a malformed line makes every request `503 auth_unavailable` with one ERROR logged. Restoring it restores service with one INFO logged. Revoking the last token makes every request `401`.
+- An open stream whose token is revoked, or whose principal's scope is lowered to below `read`, receives `event: closed` with the matching code and is closed within `heartbeat_seconds`. A broken token file closes every open stream with `auth_unavailable` within the same bound.
+- A status lookup that races the process moving the file (`new/` → `quarantine/`, `new/` → `failed/`, or applied and deleted) reports the file's real state, never `404`.
+- A stream to a raw socket that never reads is closed within `stream_stall_seconds` plus a margin, and server memory stays flat. If this cannot be shown on uvicorn, the slice stops for a PM decision (D5).
+- With a token file present, `serve` is not listed as a project, and a project named `serve` can be created.
 - Killing the server (`kill -9`) leaves the resident process running and the store unchanged. Killing the resident process leaves the server serving reads and streams and accepting submissions.
 
 ### Technical Requirements
@@ -534,12 +570,12 @@ uv run pytest tests/serve tests/inspection -v
 
 Relative effort 4. The slice plan estimated 3, before the review added scopes, the typed listing query, and the stall, size, and timeout bounds.
 
-1. **The registry move**: relocate unchanged, then introduce `ListingQuery` and `abbreviated_columns` module by module, with the byte-comparison test (table and `--json`) after each. Then the `change_as_json` move if needed. No new behavior; the existing suite proves it.
-2. `amoeba.serve` skeleton: `ServeSettings`, `errors.py`, `build_app`, the listing endpoints with `query_from_params`, `max_listing_rows`, `store_busy`, and the parity test over the whole registry.
+1. **Group A.** The gate task (105–108 merged, their listing modules in `amoeba.cli`), then **the registry move**: relocate unchanged, then introduce `ListingQuery` and `abbreviated_columns` module by module, with the byte-comparison test (table and `--json`) after each. Then the `change_as_json` move if needed. No new behavior; the existing suite proves it.
+2. **Group B begins.** `amoeba.serve` skeleton: `ServeSettings`, `errors.py`, `build_app`, the listing endpoints with `query_from_params`, `max_listing_rows`, `store_busy`, and the parity test over the whole registry.
 3. `amoeba.inbox.locate`, then the submission endpoints (body size and timeout, same-id retry) and their status lookup.
-4. The feed: `feed/page` first, then SSE with the worker thread, buffer, heartbeat, stall timeout, cap, and stop handling. Then the thread-count, checkpoint, and latency tests.
+4. The feed: `feed/page` first, then SSE with the worker thread, buffer, heartbeat, stall timeout, cap, and stop handling. Then the drain verification (D5), which must pass before the rest of the stream work, then the thread-count, checkpoint, latency, and stream re-authentication tests.
 5. Auth: token file with scopes and `amoeba token`, `TokenAuth`, the scope table, principal binding, runtime file-failure handling, the startup refusal matrix, and `SERVE_REFUSED`. Steps 5–6 wait on the PM ratification gate where it applies.
-6. `amoeba serve` and uvicorn wiring (TLS, `limit_concurrency`, graceful shutdown). Record what uvicorn does with slow headers (D5a). Then the subprocess end-to-end and kill tests, docs, and `CHANGELOG`.
+6. `amoeba serve` and uvicorn wiring (TLS, `limit_concurrency`, graceful shutdown), and the same-host statement in the contract. Record what uvicorn does with slow headers (D5a). Then the subprocess end-to-end and kill tests, docs, and `CHANGELOG`.
 
 Test each step after building it; commit after each.
 

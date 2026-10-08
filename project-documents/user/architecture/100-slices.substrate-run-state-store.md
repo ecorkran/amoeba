@@ -146,7 +146,7 @@ Two consequences shape the decomposition:
    - No endpoint mutates the store except by submitting to the inbox.
    - The server refuses to bind off localhost without authentication configured, and unauthenticated requests to a non-local bind are rejected.
    - Killing the server leaves the resident process and the store unaffected; killing the resident process leaves the server serving reads and accepting submissions.
-   **Dependencies:** [101, 102, 103, 104, 106] — ordering, not function: 105, 107, and 108 must land first, because 109 moves every `inspect` listing module into `amoeba.inspection` (109 design, Migration Plan). If this order changes, an unbuilt slice among them writes its listings in `amoeba.inspection`.
+   **Dependencies:** [101, 102, 103, 104, 105, 106, 107, 108] — 105, 107, and 108 for ordering, not function: 109 moves every `inspect` listing module into `amoeba.inspection` (109 design, Migration Plan). This is a hard gate: 109's first task confirms all three are merged, and stops for the PM if not.
    **Interfaces:** Provides the network surface consumed by initiative 160, the notification bridge, and Cowork; consumes the read contract (101–104), the inbox (103), and the feed (106).
    **Risk Level:** Medium — first network exposure; authentication and the stream's resume semantics are the parts to get right.
    **Relative Effort:** 3
