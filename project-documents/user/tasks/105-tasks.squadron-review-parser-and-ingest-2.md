@@ -88,14 +88,15 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 **Steps**:
 - [ ] Apply the same replacement and rules as Task 7.1 to this file
-- [ ] Run every test module that imports it (`grep -rn evidence_harness tests`), not just one. `tests/store/test_finding_changes.py` imports no review helper itself (only `ROUND_*` paths and the harness), so it needs no edit; this run covers it
+- [ ] The LLD lists `tests/store/test_finding_changes.py` among the files that switch. Read it in full: it takes `captured_verdict` from the harness and imports `ROUND_*` paths from `review_fixtures`. Replace any direct use of the removed helpers (`review_findings`, `read_frontmatter`, `CapturedFinding`, `has_provider_failure_heading`) with the parser. If, after Task 7.2's harness change, it uses none, it needs no edit; say so in the commit message
+- [ ] Run every test module that imports the harness (`grep -rn evidence_harness tests`), not just one, including `test_finding_changes.py`
 
 **Success Criteria**:
 - [ ] All tests importing the harness pass with no expected-value changes
 - [ ] No import of the removed helpers
 - [ ] Commit, e.g. `test: build evidence harness verdicts through the parser`
 
-**Files to Modify**: `tests/evidence_harness.py`
+**Files to Modify**: `tests/evidence_harness.py`; `tests/store/test_finding_changes.py` only if it still uses a removed helper
 
 ---
 
@@ -143,7 +144,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ### Task 8.1: Add `ExitCode.REVIEW_UNREADABLE`
 **Owner**: Junior AI
-**Dependencies**: Task 7.4
+**Dependencies**: Task 5.5 (independent of Section 7)
 **Effort**: 1
 **Objective**: A distinct exit status (`12`) for unreadable reviews.
 
@@ -172,11 +173,11 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 - [ ] Catch `OSError`, `UnicodeDecodeError`, and `SquadronReviewError` in explicit branches only; print the error on stderr. Never catch plain `ValueError` or add a broad `except`
 - [ ] Do not compare `--node` with the review's `slice` (D7)
 - [ ] Register in `cli/main.py` next to `add_submit_parser`
-- [ ] Until Task 8.4, after step 5 return `OK` without submitting, with a `TODO(8.4)` comment on that line
+- [ ] Until Task 8.4, after step 5 return `SUBMISSION_REFUSED` with the stderr message `ingest: submit step not yet implemented`, and a `TODO(8.4)` comment on that line. Never return `OK` from the interim state: a commit of this task must not report success without submitting
 
 **Success Criteria**:
 - [ ] `amoeba ingest review --help` lists every flag
-- [ ] `ruff` and `pyright` clean (committed with Task 8.3)
+- [ ] `ruff` and `pyright` clean (committed with Task 8.3; Task 8.3's tests cover only failure paths, so the interim stub is never asserted as success)
 
 **Files to Create**: `src/amoeba/cli/ingest.py`
 **Files to Modify**: `src/amoeba/cli/main.py`
@@ -192,7 +193,7 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Steps**:
 - [ ] Read `tests/cli/test_submit.py` and `tests/cli_harness.py` and reuse their helpers; use a throwaway supervisor directory, never the real one
 - [ ] Create `tests/cli/test_ingest.py` with a fixture that makes the "store exists" precondition the way 104's end-to-end test does: in a `tmp_path` supervisor directory, `start_running`, `submit_cli` a `create-project` for project `demo`, `await_condition` until `paths.store_path("demo", env)` exists (use `cli_environment` for `env`), then `stop_running`. The project then has a real store file and the process is stopped. The "no project" case never creates one
-- [ ] Failure paths (all with that fixture), each asserting the exit code, a stderr message naming the problem, and an empty `inbox/new/`: missing file, non-UTF-8 file, `# not a review` text (message mentions no frontmatter), a pre-stamp file with no `--upstream-version`, stamp/argument disagreement, project with no store file (`SUBMISSION_REFUSED`, message names the project)
+- [ ] Failure paths (all with that fixture), each asserting the exit code, a stderr message naming the problem, and an empty `inbox/new/`: missing file, non-UTF-8 file, `# not a review` text (message mentions no frontmatter), a pre-stamp file with no `--upstream-version`, stamp/argument disagreement, project with no store file (`SUBMISSION_REFUSED`, message names the project). Repeat the unparseable cases through `--stdout-json`: text with no JSON object, and a JSON object with no `verdict` (a provider-error body) each give `REVIEW_UNREADABLE` with a message naming the problem
 - [ ] Argument errors: both flags together, neither flag
 - [ ] Enforced rule: a test parses `src/amoeba/cli/ingest.py` with `ast` and fails if it imports or references `Store` (D6: ingest opens no store)
 
@@ -251,7 +252,8 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 - [ ] Create `tests/cli/test_ingest_end_to_end.py`, modelled on `tests/cli/test_evidence_end_to_end.py`: from an empty supervisor directory, start, create the project, stop, seed a node with `scripts/demo_evidence.py`, start
 - [ ] Ingest round 1 part 1, round 2 part 1 (`102-…part-1.md`), and the round 2 part 2 provider-failure file, each with `--upstream-version` (all three predate the stamp). Ingest round 1 again from a different path, a copy with a `resolution:` key added
 - [ ] `kill -9` the process; start again
-- [ ] Read-only inspection shows exactly three verdicts with the expected standings (`stated`, `stated`, `provider_failure`), round 1's `source_path` is the first ingest's absolute path, `source` is `artifact_frontmatter`, and `inspect changes` on round 2 names round 1 as previous with every round-1 finding `gone`
+- [ ] Expose the setup and the post-restart state as module-level helpers or a fixture, so Task 8.6b reuses them rather than repeating the sequence
+- [ ] Read-only inspection shows exactly three verdicts with the expected standings (`stated`, `stated`, `provider_failure`) after the restart
 
 **Success Criteria**:
 - [ ] The test passes and leaves no stray processes or files outside `tmp_path`; `ruff` and `pyright` clean
@@ -261,9 +263,27 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 
 ---
 
-### Task 8.7: End to end, stopped process and unknown project
+### Task 8.6b: End to end, record contents and finding changes
 **Owner**: Junior AI
 **Dependencies**: Task 8.6
+**Effort**: 2
+**Objective**: Pin what the ingested records contain, on the state Task 8.6 leaves.
+
+**Steps**:
+- [ ] In the same module, reusing the Task 8.6 setup: round 1's `source_path` is the first ingest's absolute path (not the second ingest's copy), and `source` is `artifact_frontmatter`
+- [ ] `inspect changes` on round 2 names round 1 as previous with every round-1 finding `gone`
+
+**Success Criteria**:
+- [ ] The test passes; `ruff` and `pyright` clean
+- [ ] Commit, e.g. `test: check ingested review records and finding changes`
+
+**Files to Modify**: `tests/cli/test_ingest_end_to_end.py`
+
+---
+
+### Task 8.7: End to end, stopped process and unknown project
+**Owner**: Junior AI
+**Dependencies**: Task 8.6b
 **Effort**: 2
 **Objective**: Cover D6 with the process both stopped and running.
 
@@ -284,6 +304,8 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Dependencies**: Task 8.7
 **Effort**: 2
 **Objective**: Pin D5's accepted consequence on the newly captured pair.
+
+**Pair-dependent**: needs Task 1.2's output. If Task 1.2 is blocked, leave this task unchecked and marked `blocked on 1.2`.
 
 **Steps**:
 - [ ] With a running process and a seeded node, ingest the pair's stdout file with `--stdout-json` and its saved `.md` with `--artifact` (no `--upstream-version`; both carry a stamp)
@@ -346,12 +368,13 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Steps**:
 - [ ] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean (the slice has no performance requirement and adds no load test; this run only checks for regressions)
 - [ ] `wc -l` the new source files; split any well over ~300 lines
-- [ ] Run the LLD's Verification Walkthrough steps 1–9 by hand (with the real filenames for the captured pair) and replace its draft note with the real commands and trimmed output
-- [ ] If any step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match
+- [ ] Confirm no item is still marked `blocked on 1.2`; if any is, report it to the PM instead of closing the slice
+- [ ] Run the LLD's Verification Walkthrough steps 1–9 by hand (with the real filenames for the captured pair) and replace its draft note with the real commands and trimmed output. The LLD itself says the walkthrough is "refined with captured output when Phase 6 completes", so this one section, and only it, is edited in the design file
+- [ ] If any step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match, and do not touch any other section of it
 
 **Success Criteria**:
 - [ ] All four checks clean (the import rules are enforced by Task 5.5's test)
-- [ ] The walkthrough in the LLD shows real output
+- [ ] The walkthrough in the LLD shows real output, and `git diff` of the design file touches only the Verification Walkthrough section
 - [ ] Commit on the slice branch, e.g. `docs: record slice 105 verification walkthrough`
 
 **Files to Modify**: `project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md`

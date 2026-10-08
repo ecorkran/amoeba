@@ -71,6 +71,8 @@ status: not_started
 **Effort**: 3
 **Objective**: Record one real review as both a saved file and its stdout JSON, so file/stdout equality is tested on real output.
 
+**External gate, contained**: this task needs `sq`, a provider key, and network access. Only the "pair-dependent" items below need its output: the pair assertions in Tasks 3.5, 4.2, 5.2 and 8.8, and the captured-file mentions in them. Nothing else depends on it, so Tasks 1.3 and 2.1 onward do not wait for it. If this task is blocked, stop it and ask the PM, then carry on with everything that is not pair-dependent. Leave each pair-dependent item unchecked and marked `blocked on 1.2`. The slice is not complete until they run (Task 9.3 checks this). Never hand-build a pair.
+
 **Steps**:
 - [ ] Make a throwaway copy of this repo outside the working tree (`mktemp -d`). Never run the review in the real repo, so nothing lands in the real `reviews/` directory
 - [ ] In the copy, `cd` into it and run `sq review slice 105 --model glmflash --output json > <stdout file> 2> <stderr file>` (the slice **number** form is what makes Squadron save a review file; a path would not). Slice 105's design is the input. If `sq` cannot resolve the number, stop and ask the PM rather than substituting another command
@@ -95,7 +97,7 @@ status: not_started
 
 ### Task 1.3: Create the edited-copy fixture and record the known gap
 **Owner**: Junior AI
-**Dependencies**: Task 1.2
+**Dependencies**: Task 1.1 (not 1.2; see the gate note there)
 **Effort**: 1
 **Objective**: Give the *Findings Not Parsed* + CONCERNS branch a fixture, and say plainly that it is edited (LLD Technical Requirements, "A known gap").
 
@@ -294,7 +296,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/upstream/test_review_artifact.py`
 - [ ] Table-driven test over every `.md` fixture: expected verdict, derivation, `findings_parsed`, `provider_failure`, review type, finding count, and for each finding its order, severity, summary, location, and positional id. Write the expected values by reading each file, not by printing the parser's output. Each row also asserts `findings` or another field is non-default where the file has data (catches silent empty results)
-- [ ] Named cases: both provider-failure files (the 0.14.0 `102-…part-2.md` heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file gives `sq_run_id` (`run-20260928-slices-plan-a04bdb07`) and its `upstream_version` stamp; the new captured file gives its stamp, and `sq_run_id` equal to its `runId` if it has one and `None` if it does not
+- [ ] Named cases: both provider-failure files (the 0.14.0 `102-…part-2.md` heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file gives `sq_run_id` (`run-20260928-slices-plan-a04bdb07`) and its `upstream_version` stamp; pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): the new captured file gives its stamp, and `sq_run_id` equal to its `runId` if it has one and `None` if it does not
 - [ ] Missing-key errors, each its own test: no `verdict`, no `reviewType`, no `aiModel`; each message names the key
 - [ ] Finding errors, each its own test (mutate a copy of a real file's text): a finding that is not a mapping; a finding without `severity`; a finding without `summary`; an unknown severity word; an unknown verdict word
 - [ ] Provider-failure errors: a failure with a verdict other than `UNKNOWN`; a failure with findings
@@ -324,7 +326,7 @@ status: not_started
 - [ ] If `review.py` is now past ~300 lines, split into `review_json.py` and `review_artifact.py`, keeping `ParsedReview` and composition in `review.py` (per the LLD)
 
 **Success Criteria**:
-- [ ] `stdout-slice-927-clean-pass.json`, `stdout-slice-104-concerns-glmflash.json`, and the new pair's stdout file parse
+- [ ] `stdout-slice-927-clean-pass.json`, and `stdout-slice-104-concerns-glmflash.json` parse (plus the new pair's stdout file, once Task 1.2 has produced it)
 - [ ] `ruff` and `pyright` clean
 
 **Files to Modify**: `src/amoeba/upstream/squadron/review.py` (and the split files if needed)
@@ -340,7 +342,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/upstream/test_review_json.py`
 - [ ] Real captures: `stdout-slice-927-clean-pass.json` gives `findings_parsed=True` and standing `stated`; `stdout-slice-104-concerns-glmflash.json` gives ten findings in order (check the count and order against the file)
-- [ ] Trailing-line tolerance: append a `Saved review to <path>` line to the text of a real capture (none of the existing captures carries one); the result equals the pure-JSON parse
+- [ ] Trailing-line tolerance: append a `Saved review to <path>` line to the text of a real capture; the result equals the pure-JSON parse. This is synthetic on purpose: the fixtures README confirms neither existing capture carries the line (the LLD's success criterion says the 0.14.0 captures do; that wording is stale, so test the behavior it describes and note the difference in the commit message)
 - [ ] `findings_parsed` rule, one test per branch, built by editing a real capture's dict:
   - `fallback_used: true` with `verdictSource: stated` → `False`
   - `fallback_used: true` with `verdictSource` null → `False` (derivation `not_reported`)
@@ -349,7 +351,7 @@ status: not_started
   - `fallback_used` key absent → `None`
 - [ ] `requested_model` is kept only when `model_substituted` is true; `verdictSource` null → derivation `not_reported`
 - [ ] Errors: text with no JSON object; a JSON object with no `verdict`; malformed JSON; unknown severity; a finding without `severity`; a finding without `summary`
-- [ ] On the new captured pair (stdout file and saved `.md` from Task 1.2): file and stdout agree on verdict, review type, model, and **finding keys** (`finding_identity` over each finding) in the same order; `template_name` equals `reviewType`
+- [ ] Pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): on the new captured pair (stdout file and saved `.md` from Task 1.2): file and stdout agree on verdict, review type, model, and **finding keys** (`finding_identity` over each finding) in the same order; `template_name` equals `reviewType`
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/upstream` passes; `ruff` and `pyright` clean
@@ -391,7 +393,7 @@ status: not_started
 - [ ] The id matches `sq-review-` + 32 hex characters
 - [ ] Unchanged after adding `resolution:` and `resolvedBy:` keys and a `## Response` section to a fixture's text
 - [ ] Changes when one finding's summary changes, and when the verdict changes
-- [ ] The file parse and the stdout parse of the newly captured pair get different ids
+- [ ] Pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): the file parse and the stdout parse of the newly captured pair get different ids
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/upstream` passes; `ruff` and `pyright` clean
