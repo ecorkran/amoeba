@@ -4,128 +4,126 @@ layer: project
 reviewType: tasks
 slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
-verdict: PASS
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md
 aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: b5da659741742529433c377b91c455da5186e39a
+reviewedSha: cd233625952d49b287a151eea6dede5de055abfd
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 4
-durationSeconds: 100.8
+durationSeconds: 45.3
 runId: run-20261007-tasks-plan-25f0a00a
 squadronVersion: 0.21.1
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage for sections 1–6"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md"
+    summary: "Coverage of the slice criteria owned by Sections 1–5"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:34-481"
   - id: F002
-    severity: pass
-    category: sequencing
-    summary: "Sequencing and commit checkpoints"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md"
+    severity: concern
+    category: commit-cadence
+    summary: "Four tasks batched into one commit at the start"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:68"
   - id: F003
     severity: concern
-    category: task-sizing
-    summary: "Task 5.3 is oversized"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:383-401"
+    category: sequencing
+    summary: "Invariant test comes last and bundles five jobs"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:461-479"
   - id: F004
     severity: concern
-    category: test-with
-    summary: "Several implementation tasks have no test until a later task"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:199-235"
+    category: design-clarity
+    summary: "Transaction composition for `record_detection` and `baseline_watch` is unspecified"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:426-440"
   - id: F005
-    severity: concern
-    category: clarity
-    summary: "`read_transaction` mode handling is under-specified"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:301-318"
-  - id: F006
-    severity: note
-    category: nfr
-    summary: "No load-test or CI-gating task, and none is required"
-    location: "unverified"
-  - id: F007
     severity: note
     category: scope
-    summary: "Minor scope observations"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:269"
+    summary: "`recorded_since` and `DetectionInput` are not in the slice's API table"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:353-354"
+  - id: F006
+    severity: note
+    category: scope
+    summary: "Task 4.3 adds a constructor flag to `Store`"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:312"
+  - id: F007
+    severity: note
+    category: nfr
+    summary: "No numeric NFR in the parent slice, so no load-test or CI-gating task is required"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:314"
 ---
 
 # Review: tasks — slice 106
 
-**Verdict:** PASS
+**Verdict:** CONCERNS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [PASS] Success-criteria coverage for sections 1–6
+### [PASS] Coverage of the slice criteria owned by Sections 1–5
 
-Each criterion that belongs to these sections has a task:
-- Trigger emission and the 5 → 6 upgrade: Tasks 1.3–1.5 and 2.1–2.3.
-- The `verdict_recorded` payload and retry-emits-nothing rule: Task 2.3.
-- `source_document` and part-1/part-2 series separation (D7): Tasks 3.1–3.3.
-- `read_transaction` atomicity, with a control case (D1a): Tasks 4.3–4.4.
-- The ledger, silent outcomes and `recorded_since`: Tasks 5.1–5.2.
-- Registration, baseline atomicity and the `watch_reviews` kind: Tasks 5.3–5.4.
-- The invariant test, including "every `ChangeKind` appears" and the literal-drift check: Task 5.5.
-- `attribute_review` cases and the review-producing kinds set (D4/D5): Tasks 6.1–6.3.
+These criteria each have an implementing task and a test task:
+- Migration 006 and the version-5 upgrade (1.3, 1.4).
+- Emission by trigger for nodes, verdicts and messages (2.1–2.3).
+- `source_document` and the part-1/part-2 series, through both `record_verdict` and the inbox (3.1–3.3).
+- The `changes` and `change_head` reads (4.1, 4.2).
+- `read_transaction()` against a concurrent commit, with a control case (4.3, 4.4).
+- The detection ledger and its silent outcomes (5.1, 5.2).
+- The `watch_reviews` kind, baselining, and the invariant test (5.3–5.7).
 
-Items from the slice that sit outside this file are placed in the later files:
-- The `store-contract.md` update, including `read_transaction()`.
-- The D8a edit to the 103 slice document.
-- The `resolution` → `node_status_changed` end-to-end assertion.
+I found no scope creep. The remaining slice items are planned in the sibling files:
+- The D8a edit to the 103 slice document is in file 3, around line 213.
+- `scripts/demo_detection.py` and the writer-guard test are in Task 11.1.
+- The `store-contract.md` entry for `read_transaction()` is in file 3, around line 208.
 
-### [PASS] Sequencing and commit checkpoints
+### [CONCERN] Four tasks batched into one commit at the start
 
-- Dependencies run linearly with no cycles.
-- Every implementation task is paired with a test task immediately after it (1.3→1.4, 2.x with triggers, 3.x→3.3, 4.1→4.2, 4.3→4.4, 5.1→5.2, 5.3→5.4, 6.x→6.3).
-- Commit points are spread across the sections. The file states the rule that a commit never holds untested behavior.
-- Putting the invariant test (5.5) after detection storage is correct, because it needs all five outcomes.
-- The "triggers grow in place, never create a 007" note prevents a real mistake.
+Tasks 1.2, 1.3, 1.4 and 1.5 all say "Committed with Task 1.5". That puts the models, the migration, the version-pin edits across existing tests, the migration test and the mapping into one commit. The "a task commits with its test task" rule is meant for adjacent pairs.
 
-### [CONCERN] Task 5.3 is oversized
+Task 1.3 has its own test, 1.4, immediately after it. Commit 1.2 and 1.3 with 1.4, and 1.5 on its own. Otherwise a failure in the mapping tests makes the whole schema change hard to bisect.
 
-Task 5.3 (effort 4) bundles four separable pieces:
-- A new `SubmissionKind`, payload model and effect.
-- Upsert semantics that preserve `baselined_at`.
-- Two new store methods (`watches`, `baseline_watch`) with transactional atomicity.
-- A CLI-derivation check.
+### [CONCERN] Invariant test comes last and bundles five jobs
 
-A junior AI could stall partway. Consider splitting it into (a) the kind, payload and effect, and (b) `watches` and `baseline_watch`, each with its test. If it stays as one task, the "Fix only if it does not" step for the CLI flag needs a stop-and-ask rule.
+The slice's development approach puts the invariant test and the 5→6 upgrade test in step 1 as "riskiest piece". Task 5.7 only arrives after Sections 2–5 are built. Per-trigger tests in 2.x and 5.2 reduce the risk, but the whole-feed reconciliation that would catch a missing trigger runs last.
 
-### [CONCERN] Several implementation tasks have no test until a later task
+Task 5.7 is also large (effort 4). It combines four things:
+- A scripted sequence across every write path.
+- A table-by-table replay.
+- A check of the trigger SQL literals against the enums.
+- A drop-a-trigger negative case.
 
-- Tasks 3.1 and 3.2 modify the verdict writer, mapping, payload and previous-round query. They rely only on the existing 104 suite until Task 3.3.
-- 3.1's success criterion "reads back with it; without reads back `None`" is only implicitly exercised by 3.3's cases.
-- Tasks 1.2–1.5 form one commit spanning four tasks, which is a large checkpoint.
+Suggestions:
+- Split 5.7 into (a) the reconciliation with the "every `ChangeKind` appears" check, and (b) the literal check plus the negative case.
+- Add the reconciliation for nodes, verdicts and messages right after 2.3, then extend it in 5.2 for detections.
 
-None of this violates the "committed with" rule, but it makes failures harder to localize. Make 3.3 explicitly assert `source_document` read-back for both the value and the null case.
+This also makes the "gates the rest" claim real.
 
-### [CONCERN] `read_transaction` mode handling is under-specified
+### [CONCERN] Transaction composition for `record_detection` and `baseline_watch` is unspecified
 
-- Task 4.3 says to document the read-only intent in the docstring rather than add mode tracking. The LLD says the method lives on the read-only handle.
-- Nothing prevents it being called on a read-write handle, where `BEGIN` would interact with writer transactions.
-- The "error if a transaction is already open" step is a small addition beyond the LLD, and its detection mechanism is unspecified.
+Task 5.5 requires `baseline_watch` to be atomic and to "reuse `record_detection`'s insert statement". It does not say whether `record_detection` opens its own transaction or can run inside an outer one.
 
-Specify how an open transaction is detected (for example `connection.in_transaction`), and say whether a call on a read-write handle should fail.
+The `entries` parameter has no declared type. Task 5.1 defines `DetectionInput`, but 5.5 never says whether `entries` uses it. The ingest in file 2 (`record_detected_verdict`, per file 3) needs the same composition.
 
-### [NOTE] No load-test or CI-gating task, and none is required
+State the pattern (a shared private statement helper, or an existing store transaction context) in 5.1 and 5.5, so a junior implementer doesn't invent one. Task 5.6 only tests atomicity through an invalid outcome, which would fail either way.
 
-The slice states no throughput or latency NFR that needs a `tests/load/` test. The numbers it gives (scan interval, follow interval, attempts) are design choices, not NFRs, and `feed-contract.md` states only the follower latency bound. No load-test task or CI gating task is needed.
+### [NOTE] `recorded_since` and `DetectionInput` are not in the slice's API table
 
-### [NOTE] Minor scope observations
+Task 5.1 adds `recorded_since(project_id, record_id)` and `DetectionInput`. Neither appears in the slice's "Store additions" table. Both trace to the slice: `recorded_since` backs the `inspect detections` column, and `DetectionInput` is the argument to `record_detection`. They are justified, but the contract docs should list them. Task 11.x already names `record_detected_verdict`, so the docs task probably covers them.
 
-- `DetectionInput` and `recorded_since` appear in the tasks but not in the LLD's API table. They are justified by the `record_detection` signature and the `inspect detections` columns, so they are not scope creep.
-- The `limit` argument has no default, as the project's no-magic-defaults rule requires.
-- The Task 4.4 control case ("stop and tell the PM rather than weakening the test") is a good guard against a vacuous test.
+### [NOTE] Task 4.3 adds a constructor flag to `Store`
+
+The `read_only` keyword on `Store.__init__` is a design decision made in the task, not in the slice, and it touches existing test constructions. It supports D1a and is explicit about it, so I'm not flagging it. Confirm that "update any direct `Store(...)` constructions in tests" does not force edits to 101–104 tests beyond mechanical ones.
+
+### [NOTE] No numeric NFR in the parent slice, so no load-test or CI-gating task is required
+
+The slice states that the parent architecture sets no numeric targets. The follow-interval and scan-interval figures are design choices, and only the follower bound goes into a contract. No `tests/load/` task or CI-gating task is needed. If the PM wants the "within `follow_interval_seconds` plus read time" bound verified, that belongs in the follower tests in file 2.
 
 ### Run Digest
 
-- Response length: 5342 chars
+- Response length: 5740 chars
 - Response is newline-free: no
 - Tool calls made: 4
 - Tool calls failed: 0
@@ -137,7 +135,7 @@ The slice states no throughput or latency NFR that needs a `tests/load/` test. T
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 100.8 s
+- Duration: 45.3 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 7
