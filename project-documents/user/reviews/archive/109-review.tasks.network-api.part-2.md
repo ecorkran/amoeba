@@ -11,58 +11,49 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261008
 dateUpdated: 20261008
-reviewedSha: 43bc228b48f1f049e126d7936d3a492272bbe50f
+reviewedSha: e3175941e3b9b62b982951f504ae9c54428c3817
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 4
-durationSeconds: 44.8
+toolCallsMade: 3
+durationSeconds: 35.0
 runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
     severity: concern
     category: sequencing
-    summary: "Stream implementation tasks go untested and uncommitted across four tasks"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:205-276"
+    summary: "Task 5.8 needs a subprocess server that doesn't exist yet"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:315"
   - id: F002
     severity: concern
-    category: task-sizing
-    summary: "Task 5.6 is oversized"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:259-276"
+    category: sequencing
+    summary: "The drain verification comes after the stall bound it validates"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:292-321"
   - id: F003
     severity: concern
-    category: sequencing
-    summary: "Shutdown tests depend on wiring from a later task"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:235"
+    category: commit-checkpoints
+    summary: "Three tasks share one commit, and a failing check leaves 5.7 uncommitted"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:303-339"
   - id: F004
-    severity: concern
-    category: interface-gap
-    summary: "Source of `feed_settings` for the stream and page endpoints is unspecified"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:181-212"
-  - id: F005
-    severity: concern
-    category: nfr-coverage
-    summary: "Latency requirement has no load-test task or CI gate"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:280-292"
-  - id: F006
-    severity: concern
+    severity: note
     category: task-sizing
-    summary: "Task 4.5 bundles implementation, a large race matrix and a round trip without a separate commit"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:153-168"
-  - id: F007
+    summary: "Task 3.9 covers a lot but stays coherent"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:45-61"
+  - id: F005
     severity: note
-    category: coverage
-    summary: "Stall-then-resume is not asserted"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:263-272"
-  - id: F008
-    severity: note
-    category: coverage
-    summary: "POST invalid project id is not tested"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:114-149"
-  - id: F009
+    category: nfr-coverage
+    summary: "No load test or CI gate, with a stated reason"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:347"
+  - id: F006
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage within this file's scope"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:22-292"
+    summary: "Success Criteria coverage for this file's scope"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md"
+  - id: F007
+    severity: pass
+    category: sequencing
+    summary: "Sequencing, test-with pattern and error-table discipline"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:24-356"
 ---
 
 # Review: tasks — slice 109
@@ -72,75 +63,49 @@ findings:
 
 ## Findings
 
-### [CONCERN] Stream implementation tasks go untested and uncommitted across four tasks
+### [CONCERN] Task 5.8 needs a subprocess server that doesn't exist yet
 
-Tasks 5.3 (stream worker) and 5.4 (limiter and SSE endpoint) have no tests of their own. The success criterion of each is "Commit with Task 5.4" or "Commit with Task 5.5". Task 5.5 commits "with Task 5.6 only if it passes", and Task 5.6 closes with a single commit covering 5.3–5.5. That leaves roughly 16 effort points (4+4+3+5) of the riskiest code in the slice (threads, backpressure, stall handling) with no commit and no test of the endpoint's own behaviour until Task 5.6. This breaks the test-with pattern and the commit-checkpoint rule. Suggested fix:
-- Add a minimal test and commit directly after 5.3: stop, close and thread-count behaviour using a fake `follow`.
-- Add a basic SSE smoke test and commit after 5.4.
-- Keep 5.5 as the gate.
-- Commit 5.6 separately.
+Task 5.8 requires measuring the server's resident memory with `ps -o rss= -p <pid>`, and says to "run the server as a subprocess for this test so the pid is its own". The only launcher available at that point is the Task 5.5 harness, which runs `uvicorn.Server` in a thread of the test process. The pid would then be pytest's, and the RSS reading would be meaningless. `amoeba serve` is not built until Task 7.1, and the task says nothing about a launcher script or a subprocess mode for the harness. This test is also the stop-and-ask gate on the slice's riskiest assumption. A junior would have to invent the launcher. Add a step that extends `tests/serve/server_harness.py` with a subprocess variant, for example a tiny entry module that builds the app and runs uvicorn, and have it return the pid and port. Alternatively, say explicitly how the pid is obtained.
 
-### [CONCERN] Task 5.6 is oversized
+### [CONCERN] The drain verification comes after the stall bound it validates
 
-Task 5.6 has effort 5 and seven independent test groups: ordering and transcript parity, resume, heartbeat, cap, thread counts after three kinds of end, pre-stream errors, and backpressure. It also needs a real-server fixture. Split it into two or three tasks, each with a commit:
-- Ordering and resume.
-- Heartbeat, cap and pre-stream errors.
-- Thread-count and backpressure.
+The slice's Development Approach says the drain verification "must pass before the rest of the stream work". Task 5.7 builds the cap and the stall bound first, and Task 5.8 then checks that uvicorn's `send` can make the stall bound fire. If 5.8 fails, the stall-bound half of 5.7 is wasted. The test needs a stall bound to observe, so some order is forced. Consider splitting 5.7 into the cap and the stall-bound send wrapper. Then run the verification right after the stall bound and before the cap work. At minimum, tell the executor to commit 5.7 or hold it locally so a failed 5.8 leaves a clear state. The 5.8 text "Commit with Task 5.9 only if it passes" does not say what happens to 5.7's work if it fails.
 
-### [CONCERN] Shutdown tests depend on wiring from a later task
+### [CONCERN] Three tasks share one commit, and a failing check leaves 5.7 uncommitted
 
-Task 5.4 says shutdown handling is wired to uvicorn in Task 7.3. Task 5.6 requires a thread-count assertion "after server shutdown". It also says to use a real uvicorn server, with no launcher yet. Task 5.5 hedges with "use the Task 7 launcher if it exists; otherwise `uvicorn.Server` directly". Task 5.6 does not say how to trigger shutdown (for example `server.should_exit`) or whether the hook that sets every stream's stop event is exercised at all. The subprocess `SIGTERM` test is in Task 7.3 (file 3). State in 5.6 how shutdown is triggered in-process, or move that assertion to Task 7.3 and say so explicitly.
+Tasks 5.7, 5.8 and 5.9 are one commit ("includes Tasks 5.7–5.8"). That commit includes a stop-and-ask check that may halt the work. Everything else in the file commits every one or two tasks. Under the failure path, the stall and cap implementation is left in the working tree while the PM decides. Commit 5.7 separately, as `feat: bound stream slots and stalled sends`, or state explicitly that the work stays uncommitted on a 5.8 failure.
 
-### [CONCERN] Source of `feed_settings` for the stream and page endpoints is unspecified
+### [NOTE] Task 3.9 covers a lot but stays coherent
 
-Task 5.3 passes `settings=feed_settings` to `follow()`. Task 5.1 uses `FeedSettings.feed_batch_size`. Task 5.7 needs a small `follow_interval_seconds` injected. `ServeSettings` has no feed-settings field, and `build_app(supervisor_dir, settings, authenticator)` takes no `FeedSettings`. Nothing in this file says where it comes from. A junior will either hard-code a default, which CLAUDE.md forbids, or invent a seam. Add a step in 5.1 or 5.3 that fixes the injection:
-- Pass `FeedSettings` to `build_app` explicitly, or
-- Hold it on an app-state object.
+Task 3.9 holds six test groups: registry-wide parity, snapshot, size bound, busy and schema errors, status codes, and the writer-guard extension. It is rated effort 4 and the groups are independent. The writer-guard and file-bytes check could be its own small task if the executor struggles. That is optional.
 
-Say that tests override it through that same path.
+### [NOTE] No load test or CI gate, with a stated reason
 
-### [CONCERN] Latency requirement has no load-test task or CI gate
+The slice restates one latency bound (`follow_interval_seconds` plus delivery time) and sets no throughput target. Task 5.10 covers it with a timing test in the default suite and says no `tests/load/` task or CI gate is needed. That is consistent with the slice, and the default suite already runs in CI. The three-consecutive-runs flakiness check is a good guard. The 5.10 instruction to "tell the PM" if the latency test is flaky, rather than skip it, matches project rules.
 
-The slice restates a latency bound under Value and Functional Requirements: a change reaches the wire within `follow_interval_seconds` plus delivery time. It also states `max_feed_streams` and `max_connections` capacity bounds. Task 5.7 covers latency as a unit-style timing test in `tests/serve/`, with a deliberately loose margin and no exact timings. A grep of tasks files 2 and 3 finds no `tests/load/` task and no CI wiring task. File 3 should be checked for one before this is treated as final. If none exists, add a `tests/load/` task for the latency bound and stream-cap behaviour, plus a CI gating task. Alternatively, the PM can record that the slice's own wording ("a timing test with a generous margin") is the intended coverage.
+### [PASS] Success Criteria coverage for this file's scope
 
-### [CONCERN] Task 4.5 bundles implementation, a large race matrix and a round trip without a separate commit
+- **Listing parity, `change_head` snapshot, `listing_too_large`, `store_busy`, writer guard:** Tasks 3.8 and 3.9.
+- **`locate` and the status-race criterion:** Tasks 4.1, 4.2 and 4.6 (new→quarantine, new→failed, apply-and-delete).
+- **422 reason parity, retry with the same id, 408 and 413 while reading, no-store quarantine:** Tasks 4.3 to 4.5.
+- **Stopped-process submission becoming `applied`:** Task 4.6.
+- **SSE order, resume and transcript equality:** Task 5.6.
+- **Heartbeat:** Task 5.6.
+- **Cap and slot freeing:** Task 5.9.
+- **Thread counts, backpressure and stall:** Tasks 5.8 and 5.9.
+- **Checkpoint `busy = 0` and latency:** Task 5.10.
 
-Task 4.5 adds `SubmissionState`, a two-pass status algorithm, five state tests, three race tests and a host-harness round trip, all at effort 4 and in one commit. The round trip also assumes a "host harness" that this file never establishes; Task 4.4 says only "no host in the test". Consider splitting into:
-- The endpoint plus basic state tests.
-- Race and round-trip tests.
+No task is scope creep. The server harness is justified by the streaming tests.
 
-Confirm the harness exists, or name where it comes from.
+### [PASS] Sequencing, test-with pattern and error-table discipline
 
-### [NOTE] Stall-then-resume is not asserted
-
-The slice criterion "reconnecting with `Last-Event-ID` resumes with no gap" after a stall closure is covered only for voluntary disconnect in Task 5.6. Task 5.5 checks the stall close and slot release but not the resumed transcript. Add a one-line assertion to 5.5 or 5.6.
-
-### [NOTE] POST invalid project id is not tested
-
-Task 4.3 calls `validate_project_id`, but Task 4.4 does not assert `400 invalid_project_id` for a bad id on POST or on the status endpoint. Add it to the error-case list.
-
-### [PASS] Success-criteria coverage within this file's scope
-
-Each of these criteria maps to a task:
-- Registry parity (3.9).
-- Snapshot consistency (3.9).
-- `max_listing_rows`, `store_busy` and `store_unavailable` (3.9).
-- Writer guard for `amoeba.serve` (3.9).
-- `locate` and its race (4.1, 4.2).
-- Submission 202, 422, retry and body bounds (4.3, 4.4).
-- Status states and races (4.5).
-- `feed/page` parity (5.1, 5.2).
-- SSE ordering, resume, heartbeat, cap and thread cleanup (5.6).
-- Drain verification with a stop-and-ask gate (5.5).
-- Checkpoint and latency (5.7).
-
-I found no scope creep. Authentication, startup refusal, kill tests and docs are correctly deferred to file 3. Dependency order is acyclic, and the 3.8/3.9, 4.1/4.2 and 4.3/4.4 pairs follow the test-with pattern with commits.
+Dependencies are linear with no cycles, and the Group B read checkpoint (Task 3.10) sits before the writes begin. Each implementation task is immediately followed by its test task: 3.8→3.9, 4.1→4.2, 4.3→4.4, 5.1→5.2, 5.3→5.4, 5.5→5.6. Tasks instruct the executor to route statuses through the single error table and to reuse existing helpers, such as the 103 filename helpers, the 106 attempts-sidecar helper and `change_as_json`, rather than redefine them. That matches project rules on DRY and single-definition values.
 
 ### Run Digest
 
-- Response length: 6589 chars
+- Response length: 5822 chars
 - Response is newline-free: no
-- Tool calls made: 4
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -150,10 +115,10 @@ I found no scope creep. Authentication, startup refusal, kill tests and docs are
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 44.8 s
+- Duration: 35.0 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7

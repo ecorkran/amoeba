@@ -11,58 +11,59 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261008
 dateUpdated: 20261008
-reviewedSha: 43bc228b48f1f049e126d7936d3a492272bbe50f
+reviewedSha: e3175941e3b9b62b982951f504ae9c54428c3817
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-durationSeconds: 58.2
+toolCallsMade: 4
+durationSeconds: 49.7
 runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: pass
-    category: coverage
-    summary: "Auth, startup, and end-to-end success criteria trace to tasks"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:27-345"
-  - id: F002
-    severity: concern
-    category: correctness
-    summary: "`insufficient_scope` on an open stream cannot be produced with two scope values"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:164"
-  - id: F003
-    severity: concern
-    category: sequencing
-    summary: "Circular or out-of-order dependency between `tokens.py` and `auth.py`"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:36"
-  - id: F004
-    severity: concern
-    category: prompt-hygiene
-    summary: "Hallucination trap in the durable-write helper lookup"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:39"
-  - id: F005
     severity: concern
     category: completeness
-    summary: "The access-log requirement has no implementing mechanism and the test cannot observe it"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:94"
+    summary: "Fallback matrix omits tasks that carry scope-dependent content"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:19-24"
+  - id: F002
+    severity: concern
+    category: task-sizing
+    summary: "Task 8.1 bundles four scenarios and is too large for one pass"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:295-309"
+  - id: F003
+    severity: concern
+    category: task-sizing
+    summary: "Task 6.4 mixes the access-log middleware with token-file failure handling"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:87-100"
+  - id: F004
+    severity: concern
+    category: scope-creep
+    summary: "Task 6.9 adds a startup rule that is not in the slice design"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:183"
+  - id: F005
+    severity: concern
+    category: test-coverage
+    summary: "Auth-refusal tests use TestClient where the slice's Technical Requirements say subprocess"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:111"
   - id: F006
     severity: concern
-    category: scoping
-    summary: "Task 7.3 is oversized and leaves TLS certificate generation unresolved"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:229-238"
+    category: test-coverage
+    summary: "Success criterion \"listing reads still succeed at the stream cap\" is not asserted in this file"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:233"
   - id: F007
-    severity: concern
-    category: consistency
-    summary: "Fallback paths are not carried through the dependent tests and docs"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:17-22"
+    severity: note
+    category: architecture
+    summary: "Layering departure is handled narrowly and reported"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:130"
   - id: F008
     severity: note
-    category: nfr
-    summary: "No load test or CI gate for the latency target"
-    location: "project-documents/user/slices/109-slice.network-api.md:27"
+    category: nfr-coverage
+    summary: "No load test or CI gating task, justified in file 1"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:21"
   - id: F009
     severity: note
-    category: consistency
-    summary: "Layering departs from the slice's component rule"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:127"
+    category: sequencing
+    summary: "Sequencing and test-with pattern are sound"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:30-378"
 ---
 
 # Review: tasks — slice 109
@@ -72,74 +73,58 @@ findings:
 
 ## Findings
 
-### [PASS] Auth, startup, and end-to-end success criteria trace to tasks
+### [CONCERN] Fallback matrix omits tasks that carry scope-dependent content
 
-Each LLD criterion in this file's range has a task and a named test:
-- **401 and 403 paths, including requests from `127.0.0.1`:** Task 6.5.
-- **`principal_mismatch`:** Task 6.7.
-- **Runtime token-file failures:** Tasks 6.4 and 6.5, with one ERROR and one INFO.
-- **Revoke-last-token gives 401:** Task 6.5.
-- **Tokens absent from logs:** Task 6.5.
-- **Stream re-authentication:** Task 6.8.
-- **Startup refusal matrix and exit 12:** Tasks 6.9 and 7.3.
-- **TLS, graceful shutdown, `max_connections`, stall re-run:** Task 7.3.
-- **Independence, SSE transcript equals `amoeba feed`, and the authenticated variant:** Task 8.1.
-- **The `serve` project-name test:** Task 6.2.
-- **Docs, walkthrough, and final criterion-to-test mapping:** Tasks 8.2–8.5.
+The Context Summary says that if a ruling is "no", the fallback applies in every listed task, tests and docs included. The "D6 scopes" row lists 6.1, 6.3, 6.5, 6.6, 6.8, 8.2 and 8.5. It misses three tasks:
+- **Task 6.2** pins the scope column in the file format: unknown-scope refusal, the table-driven refusals, and the "exactly as `amoeba token add` writes it" fixture.
+- **Task 6.7** has a test, "a `read` token posting → `403 insufficient_scope`". The matrix lists 6.7 only under principal binding.
+- **Task 8.1** has an "Authenticated variant" with a `submit` token.
 
-I found no scope creep. Commit checkpoints are spread through the file and tests sit next to their implementation.
+The scope-denial wording in 6.5 is called out and the others are not. A junior following the matrix literally would leave scope tests in 6.2, 6.7 and 8.1 that fail under the fallback. The TLS row has a similar gap: 7.3 mentions the TLS fallback in prose, but it isn't in the table. Make the matrix complete.
 
-### [CONCERN] `insufficient_scope` on an open stream cannot be produced with two scope values
+### [CONCERN] Task 8.1 bundles four scenarios and is too large for one pass
 
-Task 6.8 tests "lower the principal's scope below `read` (rewrite the file) → `insufficient_scope`". The only scopes are `read` and `submit`, and `submit` includes `read`. No valid file rewrite puts a principal below `read`. An unknown scope makes the file malformed, which gives `auth_unavailable`, not `insufficient_scope`. A junior AI cannot write this test as specified. The same gap is in the LLD (D6 and Success Criteria). Decide how this is exercised and fix the task before work starts. For example, test `authorize()` at the heartbeat hook with a stub authenticator, or drop the case and record the unreachable code as a known departure. Also note that this case disappears under the "scopes not ratified" fallback.
+Task 8.1 is rated effort 5 and combines four separate end-to-end scenarios:
+- the resident-process kill and restart flow;
+- the two-way independence test (kill server, then kill resident);
+- SSE transcript equality with `amoeba feed`;
+- an authenticated rerun.
 
-### [CONCERN] Circular or out-of-order dependency between `tokens.py` and `auth.py`
+Each needs subprocess orchestration, and the success criterion requires three consecutive clean runs. Split it into two tasks, 8.1a for the end-to-end flow plus the transcript comparison and 8.1b for independence and the authenticated variant, each committed on its own. A flaky orchestration bug is then easier to isolate.
 
-Task 6.1 says `TokenScope` is "defined once in `serve/auth.py`'s vocabulary module and imported here". `TokenAuth` in Task 6.3 must import `tokens.py` to read the file, so `tokens.py` and `auth.py` would import each other. `auth.py` may already hold `NoAuth` from earlier files, but "vocabulary module" names nothing concrete. Name the exact module that holds `TokenScope`, `AuthMode`, and `ApiErrorCode`, and keep it free of imports from `tokens.py`.
+### [CONCERN] Task 6.4 mixes the access-log middleware with token-file failure handling
 
-### [CONCERN] Hallucination trap in the durable-write helper lookup
+Task 6.4 covers runtime fail-closed behavior and log deduplication, then adds an ASGI access-log middleware in `serve/app.py` as a fourth step. The middleware is a different concern: it is the sole access log and is needed by Task 7.1 and the token-leak tests. It also logs the principal, so it must run after authentication. Task 6.4 says nothing about that ordering. Move the middleware to its own small task, or to the start of 6.3 where the auth wiring happens. State the middleware-versus-authenticator order explicitly.
 
-Task 6.1 says: "if none was recorded, find it with `grep -rn "write_durably" src/`". Neither the slice nor this task establishes that a helper with that name exists. If the grep returns nothing, an implementer will likely invent `write_durably`, which is the trap the project guidelines describe. Replace the hard-coded name with a stop condition, for example: "If Task 1.1 recorded no helper, search `src/` for an existing atomic or fsync write. If none exists, create one shared helper and say so in the commit."
+### [CONCERN] Task 6.9 adds a startup rule that is not in the slice design
 
-### [CONCERN] The access-log requirement has no implementing mechanism and the test cannot observe it
+Task 6.9 says `tls_cert` and `tls_key` are "both required together; one without the other is refused for any host". D6 and the Success Criteria require TLS for non-loopback binds. They say nothing about a half-specified pair on loopback. The rule is sensible, but it is an unratified addition with its own test row and exit-code behavior. Either note it as a deliberate addition for the PM in Task 8.5, or drop it and rely on uvicorn's own failure. As written it does not trace to a success criterion.
 
-Task 6.4 says "the access log records method, path, status, and principal, never headers". Task 6.5 asserts the token is absent from "the access log" under `TestClient`. uvicorn's access log does not include a principal, and `TestClient` does not run uvicorn's logger, so the test would pass vacuously. Task 7.1 does not mention `access_log` or its configuration. Specify who emits the log line (an app middleware, with uvicorn's access log disabled or replaced) and where. Then have the 6.5 test capture that logger, and add a subprocess assertion in Task 7.3 that stderr never contains the token.
+### [CONCERN] Auth-refusal tests use TestClient where the slice's Technical Requirements say subprocess
 
-### [CONCERN] Task 7.3 is oversized and leaves TLS certificate generation unresolved
+The Technical Requirements say "Stream, auth-refusal, and kill tests run `amoeba serve` as a real subprocess and use stdlib `http.client`". Task 6.5 runs the 401/403/503 request-time refusals only through `TestClient`. Task 7.3 covers startup refusals as a subprocess, but no subprocess test exercises `--auth tokens` request-time rejection, except the authenticated variant in Task 8.1. That variant targets the submit path, not the 401 and 503 cases. Add one subprocess assertion, for example in 7.3: 401 without a token, 200 with one, and no token in stderr. Otherwise record `TestClient` as a deliberate deviation from the requirement.
 
-Task 7.3 has effort 4 and bundles:
-- refusal subprocess cases
-- settings-flag behavior
-- TLS
-- SIGTERM shutdown with a thread-count check
-- `max_connections` overflow
-- the stall re-run
+### [CONCERN] Success criterion "listing reads still succeed at the stream cap" is not asserted in this file
 
-"Generate a throwaway self-signed certificate at test time" has no stated mechanism. It needs either the `openssl` binary, which may be absent, or a new dev dependency such as `cryptography`. The latter is a footprint change that would need PM approval. State which one to use. Consider splitting into (a) serve/refusal/flags, (b) TLS, and (c) shutdown, `max_connections`, and stall. Task 7.1 also hides non-trivial work: ordering a stop-event set ahead of uvicorn's graceful wait means overriding uvicorn's `Server` signal handling. Add a pointer for that.
+The Success Criteria say that at `max_feed_streams` open streams, the next one is refused with `503 too_many_streams` and listing reads still succeed. Task 7.3 checks the `503` through a small `--max-feed-streams` flag but doesn't check that a listing read still works at the cap. I searched the sibling task files and found no assertion for it. Add the read check to 7.3, or confirm it exists in file 2.
 
-### [CONCERN] Fallback paths are not carried through the dependent tests and docs
+### [NOTE] Layering departure is handled narrowly and reported
 
-The ratification fallbacks are listed against the implementation tasks only. Downstream tasks still assume the ratified behavior:
-- **Task 7.3 and the walkthrough in 8.4:** assert exit `12`.
-- **Tasks 6.5, 6.8, and 8.1:** assert `insufficient_scope` and the `submit` token variant.
-- **Tasks 6.1–6.2:** are only partly adjusted for the missing scope column.
-- **Task 7.3:** has no TLS-refusal fallback.
+The slice says only `cli/serve.py` imports `amoeba.serve`. Task 6.6 has `cli/token.py` import `serve.tokens`. It keeps `serve/__init__.py` empty, narrows the layering test to exactly two importers, and reports the departure to the PM in 8.5. That is acceptable and honestly flagged. The alternative is to put the token store somewhere neutral, such as a small module outside `serve`, which would avoid the departure. The PM should choose.
 
-Add "if fallback X applied, change this assertion" lines to the affected tasks, or add a rule that the fallback commit must update every dependent test.
+### [NOTE] No load test or CI gating task, justified in file 1
 
-### [NOTE] No load test or CI gate for the latency target
+The slice's only contract promise is the latency bound under Value, and it names no throughput target. Task 5.10 in file 2 covers it with a timing test in the default suite. File 1 says explicitly that no `tests/load/` test and no CI gate is added. The repo has `tests/load/` and `.github/workflows/ci.yml`, so this is a conscious choice and not an oversight. It does leave the latency test without a dedicated gate. The stall, memory and thread-count tests are timing-sensitive, so running them in default CI is worth confirming. Task 7.5's "three consecutive runs" criterion partly covers this.
 
-The slice states one NFR-like bound under Value: a committed change is on the wire within `follow_interval_seconds` plus delivery time. The design calls for a generous-margin timing test, which belongs in file 2, not this one. No `tests/load/` task or CI-gating task exists in this file, and the slice itself says none of its numeric limits is a contract promise except that latency bound. If the PM wants this treated as an NFR under the review rules, add a load test and a CI wiring task. Otherwise record that the timing test is the intended coverage.
+### [NOTE] Sequencing and test-with pattern are sound
 
-### [NOTE] Layering departs from the slice's component rule
-
-The slice says "Nothing imports `amoeba.serve` except `cli/serve.py`". Task 6.6 also allows `cli/token.py` to import `amoeba.serve.tokens`. That is sensible, since the slice places `tokens.py` in `amoeba.serve`. Task 8.5 should list it as a departure from the LLD, and the LLD's layering sentence should be corrected. Separately, the `chmod 000` case in Task 6.5 fails when tests run as root, so add a skip condition.
+Dependencies chain linearly from 5.10 through 8.5 with no cycles. The test-with pattern holds: 6.1 is tested in 6.2, 6.3 and 6.4 in 6.5, 6.6 and 6.7 carry tests in-task, and 7.1 and 7.2 are tested in 7.3. Commits are spread across all three sections. Every task traces to a success criterion, an LLD requirement, or the ratification fallbacks. The LLD's open-stream `insufficient_scope` inconsistency is identified in 6.8 and carried to the 8.5 report.
 
 ### Run Digest
 
-- Response length: 7244 chars
+- Response length: 6984 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 4
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -149,9 +134,9 @@ The slice says "Nothing imports `amoeba.serve` except `cli/serve.py`". Task 6.6 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 58.2 s
+- Duration: 49.7 s
 - `## Summary` located: yes
-- `## Findings` located: yes
+- `## Findings` located: no
 - Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 9
