@@ -18,6 +18,7 @@ status: not_started
 - **What this slice delivers:** `amoeba.upstream.context_forge` (location rule, reader, diff); migration 008 (`cf_watches`, `cf_snapshots`, feed trigger); `ChangeKind.cf_project_changed`; the `watch_cf` kind; `CFWatchTenant`; three settings with flags; `inspect cf-watches` and `cf-snapshots`; `docs/cf-contract.md` and contract updates; `CHANGELOG.md`.
 - **Not in this slice:** any change to Context Forge; writing to nodes (D2); gate and review state; `customData`; per-field `worktrees` diffs; recovering intermediate CF states; changes to 102's `cf get --json` observer.
 - **Next planned slice:** 109, then 110 (end-to-end).
+- **No load test:** the LLD sets no throughput requirement, so no load test or CI gate is planned. The idle-tick guarantee is pinned by assertions (Task 6.1), not by timing.
 
 **Branch:** all implementation happens on `108-slice.context-forge-event-seam`, forked from the target (`cf config get git.integration_branch`; empty means `main`). No task here merges. Merging comes after the code review (Phase 7).
 
@@ -86,7 +87,7 @@ status: not_started
 **Steps**:
 - [ ] Create `tests/cf_harness.py` (follow `tests/cli_harness.py` style): a fixture `real_cf` that **fails** the test with a clear message when `cf` is not on `PATH`. It never skips and never falls back to a hand-built file (a silent skip would let the success paths go untested)
 - [ ] Helpers over a temporary `CONTEXT_FORGE_DATA_DIR`: create the data directory; `init_cf_project(name)` running `cf init --lite --no-ide --name <name>` in a temp project directory; `cf_project_id(name)` reading the id from `cf get --json`; `cf_set(name, field, value)`; `cf_project_rm(name)`; `rewrite_projects_file(mutator)`, which applies a function to the parsed JSON and replaces `projects.json` by writing a temp file and renaming it over (as CF does), for cases the `cf` CLI cannot produce (a `customData`-only change)
-- [ ] Make CI install `cf`, or every real-`cf` test fails there by design. In `.github/workflows/ci.yml`, add before the "Tests" step: `actions/setup-node@v4` (Node 22) and a step running `npm install -g @context-forge/cli` followed by `cf --version`, so a broken install fails the step rather than the tests. Do not pin a CF version (versions are moving targets; the fixtures record shape, not version). Update the file's header comment to say why the step exists. Confirm the package name against the one installed locally (`npm ls -g --depth=0`)
+- [ ] Make CI install `cf`, or every real-`cf` test fails there by design. In `.github/workflows/ci.yml`, add before the "Tests" step: `actions/setup-node@v4` (Node 22) and a step running `npm install -g <package determined below>` followed by `cf --version`, so a broken install fails the step rather than the tests. Do not pin a CF version (versions are moving targets; the fixtures record shape, not version). Update the file's header comment to say why the step exists. Determine the package name from the locally installed `cf`: run `npm ls -g --depth=0` and use the package that provides the `cf` binary, and write that name in the workflow step. If it cannot be determined, stop and ask the PM; do not guess a name
 - [ ] Add `tests/test_cf_harness.py`: init then `cf_project_id` returns a non-empty string present in the file; `cf_set` changes the stored value; `rewrite_projects_file` changes the inode; with `PATH` emptied the fixture fails (assert with `pytest.raises` on the underlying check function, not by running a failing test)
 
 **Success Criteria**:
@@ -164,7 +165,7 @@ status: not_started
 
 ### Task 3.1: `cf_models.py`, with tests
 **Owner**: Junior AI
-**Dependencies**: Task 2.3
+**Dependencies**: Task 1.1 (needs 106's `feed_models.py`; sequenced after Section 2, with no code dependency on it)
 **Effort**: 2
 **Objective**: Define the vocabulary and transfer objects once (LLD "Patterns and Conventions", "API Contracts").
 
@@ -274,7 +275,6 @@ status: not_started
 - [ ] Add `cf_watches(project_id)` and `set_cf_watch_state(project_id, cf_project_id, state, detail)`. The latter is a no-op (no write, no `updated_at` change) when state and detail are unchanged, and raises if the watch does not exist. Add the composition used by the tenant: one method that records a snapshot and sets the watch state in a single transaction
 - [ ] Add `tests/store/test_cf_watches.py`: a snapshot round-trips (fields, changed, `present`, `cf_updated_at` kept as written); `latest_cf_snapshot` is the newest per key and `None` before any; `cf_snapshots` filters by cf id and is oldest first; `cf_snapshot` of an unknown id raises; two cf ids and two projects stay independent; state set to the same value writes nothing; a failure partway through the combined method leaves neither the snapshot, nor the feed row, nor the state change (the state has no database constraint to trip, so force the failure by patching the private state-update helper to raise after the snapshot insert, inside the transaction)
 - [ ] Add a public-API check that the new names are exported (follow `tests/test_public_api.py`)
-- [ ] Register the new writers with the guard now, not at the end. Read `tests/test_writer_guard.py`: it restricts `Store.open`, not method calls, so it needs no change for these methods. Add beside it an AST test (in `tests/test_writer_guard.py` or a sibling) that every call to `record_cf_snapshot` and `set_cf_watch_state` under `src/amoeba/` sits in a named permitted-module set, defined once as a constant (`process/cf_watch.py` only; the file does not exist yet, so the test passes vacuously until Task 6.3, which tightens it to equality). The `watch_cf` effect writes `cf_watches` itself inside `store/inbox.py` and is outside this set
 
 **Success Criteria**:
 - [ ] Tests pass
@@ -350,7 +350,7 @@ status: not_started
 ### Task 4.3: The watch-revision counter
 **Owner**: Junior AI
 **Dependencies**: Task 4.2
-**Effort**: 3
+**Effort**: 4
 **Objective**: Let the tenant's idle tick detect a newly added or reactivated watch without a query (LLD Data Flow; Functional Requirements, last bullet). **Task-level mechanism: the LLD requires the in-memory cache but not how it learns of `watch_cf` applies. Report this choice to the PM in Task 8.6.**
 
 **Steps**:
@@ -376,7 +376,7 @@ status: not_started
 **Objective**: `cf_data_dir`, `cf_scan_interval_seconds`, `cf_max_attempts` (LLD "Settings"). **`cf_max_attempts` has no flag in the LLD's text, which lists flags only for the data directory; add one for consistency with `--detection-max-attempts` and report it in Task 8.6.**
 
 **Steps**:
-- [ ] Add to `ProcessSettings`: `cf_data_dir: Path` defaulting through `resolve_cf_data_dir` (call it once at module import with the real environment, as `DEFAULT_SQ_RUNS_DIR` is built; no second copy of the rule), `cf_scan_interval_seconds = 2.0`, `cf_max_attempts = 3`, with docstring entries stating what each bounds, in the file's style
+- [ ] Add to `ProcessSettings`: `cf_data_dir: Path` defaulting through `resolve_cf_data_dir` via a `default_factory` evaluated when the settings object is built, reading the real environment at that moment (not at import, so tests vary `CONTEXT_FORGE_DATA_DIR` with `monkeypatch.setenv` before constructing settings; no second copy of the rule), `cf_scan_interval_seconds = 2.0`, `cf_max_attempts = 3`, with docstring entries stating what each bounds, in the file's style
 - [ ] Add `start` flags in `cli/settings_flags.py`: `--cf-data-dir`, `--cf-scan-interval-seconds`, `--cf-max-attempts` (use `positive_int`), and map them where the other flags are mapped
 - [ ] Extend the existing settings and flag tests: defaults come from `ProcessSettings` (flags repeat none); each flag overrides; `--cf-max-attempts 0` is refused; `--cf-data-dir` beats `CONTEXT_FORGE_DATA_DIR`. `start --help` lists the three flags
 
