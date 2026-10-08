@@ -11,53 +11,54 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261008
 dateUpdated: 20261008
-reviewedSha: 5d387ea192f7f4469f164ec1550234e2cd0c06c8
+reviewedSha: 0fee83708104833e2eac43087fc2ac55009feebd
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 5
-durationSeconds: 46.8
+durationSeconds: 60.2
 runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "Invariant test sits at the end of Section 5, though the design makes it step 1 and the riskiest piece"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:465-469"
-  - id: F002
-    severity: concern
-    category: task-clarity
-    summary: "Task 5.6 failure injection cannot be done with Task 5.5's signature"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:437-459"
-  - id: F003
-    severity: note
-    category: scope
-    summary: "`read_only` constructor flag is scope beyond the design, but it is disclosed"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:313-315"
-  - id: F004
-    severity: note
-    category: task-clarity
-    summary: "`recorded_since` assumes the verdict id is the 105 `record_id`"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:355"
-  - id: F005
-    severity: note
-    category: edge-case
-    summary: "Retry rule for `record_verdict` with a differing `source_document` is not addressed"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:200-217"
-  - id: F006
-    severity: note
-    category: granularity
-    summary: "Task 3.3 is thin enough to merge into Task 3.2"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:244-258"
-  - id: F007
-    severity: note
-    category: task-clarity
-    summary: "Task 1.4 has a conditional step that is vague for a junior AI"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:109"
-  - id: F008
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage for Sections 1–5 and test-with / commit cadence"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:34-518"
+    summary: "Success criteria for this file's scope trace to tasks"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:158-529"
+  - id: F002
+    severity: pass
+    category: sequencing
+    summary: "Sequencing, test-with pattern, and commit cadence are sound"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:26"
+  - id: F003
+    severity: concern
+    category: task-sizing
+    summary: "Task 3.1 bundles too many concerns for one junior task"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:276-295"
+  - id: F004
+    severity: concern
+    category: scope
+    summary: "Task 3.1 settles a design question the slice design leaves open, and nothing reports it"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:286"
+  - id: F005
+    severity: note
+    category: scope
+    summary: "The `read_only` constructor flag is a task-level mechanism that changes 101's `Store.__init__`"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:374-376"
+  - id: F006
+    severity: note
+    category: consistency
+    summary: "`SILENT_OUTCOMES` is attributed to a test that does not use it"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:64"
+  - id: F007
+    severity: note
+    category: test-coverage
+    summary: "\"Confirm no trust label\" in Task 2.3 is not an assertion"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:209"
+  - id: F008
+    severity: pass
+    category: nfr
+    summary: "No load-test or CI-gating task is required"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:314"
 ---
 
 # Review: tasks — slice 106
@@ -67,49 +68,57 @@ findings:
 
 ## Findings
 
-### [CONCERN] Invariant test sits at the end of Section 5, though the design makes it step 1 and the riskiest piece
+### [PASS] Success criteria for this file's scope trace to tasks
 
-Task 5.7 says it is the "Riskiest piece; it gates the rest." But it follows about 20 tasks (Sections 2–5), and Sections 6–11 do not depend on it. The slice design's Development Approach step 1 pairs migration 006, its triggers and the invariant test. Triggers for nodes, verdicts and messages exist after Task 2.3, so a first reconciliation (nodes, verdicts, messages) could run right then. The detection part could be added in Task 5.2. As written, a wrong payload, a wrong `recorded_at` source or a missing trigger surfaces only after Sections 3–5 are built on top. Recommendation: either move a partial invariant test to follow Task 2.3 and extend it in Task 5.2, or drop the "gates the rest" wording and add a real dependency from Section 6 on Task 5.9.
+Each criterion that Sections 1–5 should own has a task and a test:
+- **Feed emission and replay:** Tasks 2.1–2.6 cover emission and the reconciliation test, including the dropped-trigger and enum-literal checks.
+- **`resolution` → `node_status_changed`:** Task 2.2 covers the block/resolve path.
+- **`read_transaction()` atomicity (D1a):** Tasks 4.3–4.4 cover it, including the control case and the rollback and nesting cases.
+- **`source_document` and series separation (D7):** Tasks 3.1–3.2.
+- **Version-5 upgrade:** Task 1.4.
+- **Single-definition and layering requirements:** Task 1.6.
+- **Ledger, silent outcomes, `watch_reviews` and baselining:** Tasks 5.1–5.6.
 
-### [CONCERN] Task 5.6 failure injection cannot be done with Task 5.5's signature
+Criteria not owned here (follower, attribution, tenant, listings, end-to-end) land in files 2 and 3, and Task 11.12 traces each one back to a test.
 
-Task 5.5 defines `baseline_watch(project_id, reviews_dir, entries)`, which inserts one `baseline` row per `(path, digest)`. The outcome is fixed, so entries carry no outcome. Task 5.6 then says to "force a failure partway (an invalid outcome in the batch)." There is no way to put an invalid outcome in the batch. A junior AI would have to invent a mechanism, or would weaken the atomicity test. Specify a concrete injection point, for example a malformed entry such as a non-string digest or an empty path that violates a constraint, or a monkeypatched private insert that raises on the Nth call. Say which one in Task 5.5 or 5.6.
+### [PASS] Sequencing, test-with pattern, and commit cadence are sound
 
-### [NOTE] `read_only` constructor flag is scope beyond the design, but it is disclosed
+There are no circular dependencies. Every implementation task is followed immediately by its test task (1.3→1.4, 4.1→4.2, 4.3→4.4, 5.1→5.2, 5.3→5.4, 5.5→5.6). The "committed with Task N.M" rule keeps untested behavior out of commits, and commits are spread through the file rather than batched. Putting the invariant test (2.4–2.6) right after the triggers it checks, then extending it in Task 5.2, matches the slice design's "riskiest piece first" step 1.
 
-Task 4.3 adds a keyword-only `read_only` flag to `Store.__init__`, which the design does not spell out. It enforces D1a's "read-only handle only" rule, and the task records it in `store-contract.md` (Task 11.7) and in the PM report (Task 11.11). It also touches 101's constructor and "any direct `Store(...)` constructions in tests". Keep it, but the PM should confirm the constructor change.
+### [CONCERN] Task 3.1 bundles too many concerns for one junior task
 
-### [NOTE] `recorded_since` assumes the verdict id is the 105 `record_id`
+Task 3.1 touches about nine files across four layers:
+- `VerdictInput` and `VerdictRecord`
+- SQL and mapping
+- the verdict writer
+- the inbox payload and `verdict_payload.py`
+- the `verdicts.py` retry comparison and its docstring
 
-Task 5.1 says "`record_id` is the verdict id 105 uses." The design says only that `recorded_since` is true when "a verdict with that `record_id` now exists." If 105's `review_record_id` is not literally `verdicts.id`, the select will be wrong. Task 5.2 tests only "a verdict with that id". Task 8.1 gates on 105, but this assumption is checked in Section 5, before 105 is verified. Add a check against 105's contract, or a note that the Task 8.1 test must confirm the equivalence.
+It also introduces a new retry behavior and a new test module, all at Effort 3. This is a change to 104's finished contract, so a mid-task failure is hard to diagnose. Consider splitting it into (a) model, SQL, mapping, writer and the read-back test, and (b) the inbox payload, the retry rule and their tests. Each half would then commit on its own.
 
-### [NOTE] Retry rule for `record_verdict` with a differing `source_document` is not addressed
+### [CONCERN] Task 3.1 settles a design question the slice design leaves open, and nothing reports it
 
-Task 3.1 adds `source_document` to `VerdictInput` and the writer. It does not say what a retried `record_verdict` with the same id but a different `source_document` should do. The Task 3.1 tests cover only the present and absent cases. It is probably a no-op under 104's retry rule, but state it, or add one test that pins the behavior.
+The slice design (D7) does not say what happens when a `record_verdict` retry carries a different `source_document`. Task 3.1 decides it: keep the first record, log a WARNING, add no conflict error. The Task 11.11 report lists the other task-level additions (`read_only`, `recorded_since`, `DetectionInput`, and so on) but omits this decision. It changes behavior for the Runner (120) and for hand-edited reviews. Add it to the Task 11.11 report list, and to `evidence-contract.md` in Task 11.8, so the PM can overrule it. The project guidelines say not to guess.
 
-### [NOTE] Task 3.3 is thin enough to merge into Task 3.2
+### [NOTE] The `read_only` constructor flag is a task-level mechanism that changes 101's `Store.__init__`
 
-Task 3.3 is effort 2. It extends the test file Task 3.2 creates, and it is a test-only variant that runs the same scenario through `apply_submission`. This is acceptable as written. Merging it into 3.2 would save a task boundary, but it would make 3.2 effort 4–5. No change required.
+The slice design only says `read_transaction()` lives on the read-only handle. Task 4.3 adds a keyword-only `read_only` flag to the constructor and requires updating direct `Store(...)` constructions in tests. The task discloses this and plans documentation (Task 11.7) and a PM report (Task 11.11), so I'm not flagging it as a gap. The implementer should confirm no lighter option exists, such as reading the connection's own read-only mode, before adding constructor surface.
 
-### [NOTE] Task 1.4 has a conditional step that is vague for a junior AI
+### [NOTE] `SILENT_OUTCOMES` is attributed to a test that does not use it
 
-"Assert the duplicate-column / re-apply case fails loudly … (same as 005's test, if it has one)". The instruction depends on a lookup and has no stated outcome if 005 has no such test. Tell the junior AI to read `test_migration_005.py` first. If it has no such test, they should either skip the step or write it from scratch.
+Task 1.2 says `SILENT_OUTCOMES` serves "the trigger-literal test in Task 2.6". Task 2.6 excludes `review_detected` and does not use the silent set. Task 5.2 is what adds the `SILENT_OUTCOMES` literal check. Correct the reference so the junior implementer is not confused.
 
-### [PASS] Success-criteria coverage for Sections 1–5 and test-with / commit cadence
+### [NOTE] "Confirm no trust label" in Task 2.3 is not an assertion
 
-These slice criteria trace to tasks in this file:
-- Migration 006 and the 5→6 upgrade: Tasks 1.3–1.4.
-- Triggers for nodes, status changes (including the same-status case), verdicts (including a retried verdict and provider failure) and messages (including recovery escalation): Tasks 2.1–2.3.
-- `source_document` and the part-1/part-2 series: Tasks 3.1–3.3.
-- `changes`, `change_head` and the `read_transaction` concurrency test with its control case: Tasks 4.1–4.4.
-- `watch_reviews`, baselining and atomicity: Tasks 5.3–5.6.
-- The invariant test: Tasks 5.7–5.9.
+The design requires that the `verdict_recorded` payload carries no trust label. The step says "Confirm", which a reader can satisfy without writing a test. Make it an assertion on the exact payload key set in the existing `verdict_recorded` test.
 
-No task is scope creep. Each implementation task is paired with its test, either in the same task or in the immediately following one. Commits are distributed throughout, not batched at the end. The design restates no numeric NFR: it says the parent architecture sets no targets and that the follow interval is a contract statement, not a load target. So no `tests/load/` task or CI gating task is required here.
+### [PASS] No load-test or CI-gating task is required
+
+The slice design states that the parent architecture sets no numeric targets. The 2 s scan, 0.25 s follow and 5 s detection figures are settings choices, not restated NFRs. Files 2 and 3 say explicitly that no load test was added, and Task 11.11 tells the PM so they can overrule it. That is consistent with the review criteria.
 
 ### Run Digest
 
-- Response length: 6548 chars
+- Response length: 5831 chars
 - Response is newline-free: no
 - Tool calls made: 5
 - Tool calls failed: 0
@@ -121,7 +130,7 @@ No task is scope creep. Each implementation task is paired with its test, either
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 46.8 s
+- Duration: 60.2 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 8

@@ -4,136 +4,127 @@ layer: project
 reviewType: tasks
 slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md
 aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261008
 dateUpdated: 20261008
-reviewedSha: 5d387ea192f7f4469f164ec1550234e2cd0c06c8
+reviewedSha: 0fee83708104833e2eac43087fc2ac55009feebd
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 4
-durationSeconds: 51.6
+durationSeconds: 66.1
 runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: concern
-    category: task-sizing
-    summary: "Task 9.6 is oversized and will likely exceed the ~300-line file guideline"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:420-446"
-  - id: F002
-    severity: concern
-    category: completeness
-    summary: "Task 9.9 does not spell out the baseline-failure path or which recording paths the counter wraps"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:487-503"
-  - id: F003
-    severity: concern
-    category: ambiguity
-    summary: "Task 9.7's wording could be read as deferring baselining"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:457"
-  - id: F004
-    severity: concern
-    category: test-coverage
-    summary: "Task 6.5 does not test the hand-edit shape of `record_detected_verdict`"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:105-110"
-  - id: F005
-    severity: note
-    category: traceability
-    summary: "Task 7.2 does not repeat the D1a follower-suite test, but it is covered"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:325-340"
-  - id: F006
-    severity: note
-    category: cross-file-coverage
-    summary: "Criteria whose verification falls in file 3"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md"
-  - id: F007
-    severity: note
-    category: design-consistency
-    summary: "Slice design is internally inconsistent on the `attribute_review` signature"
-    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:90"
-  - id: F008
-    severity: note
-    category: nfr
-    summary: "No NFR load test or CI gating task is required"
-    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:314"
-  - id: F009
-    severity: pass
-    category: sequencing
-    summary: "Sequencing, test-with pattern, and commit cadence"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md"
-  - id: F010
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage for Sections 6–9"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md"
+    summary: "Success criteria for attribution, follower, sources, and tenant all trace to tasks"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:24-570"
+  - id: F002
+    severity: pass
+    category: coverage
+    summary: "D1a read-transaction criterion is owned by file 1, with a follower-level check here"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:161"
+  - id: F003
+    severity: pass
+    category: sequencing
+    summary: "Test-with pattern and commit cadence are respected"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:24-570"
+  - id: F004
+    severity: note
+    category: consistency
+    summary: "Task 8.1 correctly follows slice 105 where slice 106 words it differently"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:216-232"
+  - id: F005
+    severity: note
+    category: nfr
+    summary: "No load test or CI gate, with the reasoning stated to the PM"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:20"
+  - id: F006
+    severity: note
+    category: task-scope
+    summary: "Large tenant file and a shared lifecycle test module may exceed ~300 lines"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:374"
+  - id: F007
+    severity: note
+    category: sequencing
+    summary: "Task 7.1 depends on Task 6.3 without needing it"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:127"
+  - id: F008
+    severity: note
+    category: task-clarity
+    summary: "Minor clarity items for junior execution"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:180"
 ---
 
 # Review: tasks — slice 106
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [CONCERN] Task 9.6 is oversized and will likely exceed the ~300-line file guideline
+### [PASS] Success criteria for attribution, follower, sources, and tenant all trace to tasks
 
-Task 9.6 bundles about 13 distinct scenarios into one task and one test file (`tests/process/test_review_detection.py`): ingest rounds, provider failure, series, hand edit, unattributed (zero and several), unparseable, restart, version-label variants, directory removal, interval, reactivation, delete/restore, and manual ingest. Task 9.8 then appends more cases to the same file. That is likely well over 300 lines and too much for one junior pass. Split it, for example into 9.6a (ingest, series, hand edit, restart, version label) and 9.6b (attribution outcomes, unparseable, unreachable, reactivation, interval, manual ingest). Put them in separate modules, and put the 9.8 cases in a third module or in the matching one.
+Each criterion this file can prove maps to a task:
+- **Attribution (D4):** Tasks 6.2–6.3.
+- **Feed (follower and CLI):** Tasks 7.1–7.4 cover the `--after` exactness, the kill-and-resume case, and following with the process stopped.
+- **Registration and baselining:** Tasks 9.3–9.4 cover baselining, `unreachable`, `baseline_pending`, and the scan interval.
+- **Ingest, series, and hand edit:** Task 9.6 covers the ingest rounds, the `provider_failure` file, the part-1/part-2 series, the hand edit, and restart.
+- **Refusals and the label rule:** Task 9.6a covers `unattributed` with zero and two candidates, `unparseable`, the version-label rule, and `recorded_since` after a hand ingest.
+- **Availability and races:** Task 9.6b covers directory loss and recovery, and the delete-and-restore race.
+- **Defer and skip (D5):** Tasks 9.7–9.8 cover the open `SQ_RUN` defer and `runner_issued` skip.
+- **Bounded failure:** Tasks 9.9–9.10 cover each wrapped path and sidecar removal.
 
-### [CONCERN] Task 9.9 does not spell out the baseline-failure path or which recording paths the counter wraps
+The deferred criteria are routed to file 3: `inspect watches`/`inspect detections` states, the no-subprocess-per-tick and label-captured-once criteria, and the whole-system tests. Task 11.12 traces each of them.
 
-Task 9.3 defers baseline counting and parking to 9.9. Task 9.9's steps only say "before the recording transaction, write or increment the sidecar", which reads as the ingest path. Baseline-key sidecar handling appears only as a trailing clause ("A parked baseline leaves the watch `failed`…"). The slice design says the same bounded rule covers `unparseable` and `unattributed` ledger writes (the store write can fail there too) and the baseline write. Add explicit steps for each. The baseline step needs: increment the `baseline-{sha}` sidecar, skip baselining when parked, and don't scan a `failed` watch. The record step needs: wrap all three recording outcomes, not only `ingested`. Also, the line "Detection skips any `(project, digest)` with a parked sidecar" duplicates step 2 and can be dropped.
+### [PASS] D1a read-transaction criterion is owned by file 1, with a follower-level check here
 
-### [CONCERN] Task 9.7's wording could be read as deferring baselining
+The design's `read_transaction()` atomicity test is Task 4.4 in file 1. It includes a control case without the transaction. Task 7.2's last bullet adds the snapshot-then-follow usage test, so the criterion is covered at both levels.
 
-"Before scanning a project… skip that project this tick" does not say that baselining of unbaselined watches is exempt. The slice design applies the defer rule only to "each active, baselined watch". A junior could place the check ahead of the baseline branch from Task 9.3, so a watch registered during an open `SQ_RUN` would sit un-baselined. Say explicitly that the check applies to the scan branch only, and add a Task 9.8 case showing a baseline still happens while an `SQ_RUN` entry is open.
+### [PASS] Test-with pattern and commit cadence are respected
 
-### [CONCERN] Task 6.5 does not test the hand-edit shape of `record_detected_verdict`
+Every implementation task is followed immediately by its test task:
+- 6.1–6.3 and 6.4–6.5
+- 7.1–7.2 and 7.3–7.4
+- 8.2–8.3 with 8.4
+- 9.1 with 9.2
+- 9.3 with 9.4
+- 9.5 with 9.6, 9.6a, and 9.6b
+- 9.7 with 9.8
+- 9.9 with 9.10
 
-Task 6.4 specifies the case where the same verdict id comes with a new ledger key (the hand-edit scenario). The verdict is a retry no-op and the new `ingested` row is added. Task 6.5 tests only the same-key repeat and a duplicate-key failure. The core atomicity method is first exercised for the hand-edit shape in Task 9.6 through the tenant. Add one store-level case: same verdict id, different digest, so no second verdict, one new ledger row, and one `review_detected` change.
+Commit points fall at 6.3, 6.5, 7.2, 7.4, 8.1, 8.4, 9.2, 9.2a, 9.4, 9.6, 9.6a, 9.6b, 9.8, and 9.10. No dependency is circular. Task 9.2a defines the sidecar layout and reader before the tenant and listings use them, which avoids duplicated readers.
 
-### [NOTE] Task 7.2 does not repeat the D1a follower-suite test, but it is covered
+### [NOTE] Task 8.1 correctly follows slice 105 where slice 106 words it differently
 
-The slice design says the `read_transaction()` test lives in "the follower test suite". The task breakdown places it in `tests/store/test_read_transaction.py` (Task 4.4). That is a reasonable placement, and Task 4.4 includes a control case. No action needed.
+Slice 106 ("Interfaces Required") says 105's `to_verdict_input` already carries `sourceDocument` into `VerdictInput`. Slice 105 (line 51) says the opposite: the parser exposes it and "slice 106 adds … the one-line pass-through in `to_verdict_input`." Task 8.1 follows 105 and gates on the parser's exports, so the task is right. The 106 slice wording is stale. Consider correcting it, but nothing here depends on that.
 
-### [NOTE] Criteria whose verification falls in file 3
+### [NOTE] No load test or CI gate, with the reasoning stated to the PM
 
-These slice criteria are not fully closed within this file and depend on Sections 10–11. The "`failed` in `inspect detections`" listing, from Task 9.10 and `parked_files`, needs Task 10.1. "`sq --version` runs once, before the loop; no tick starts a subprocess" needs the Task 10.3 wiring plus a test. "`amoeba feed --follow` started while the process is stopped" is in Task 11.2. I did not verify file 3's coverage of these. The reviewer of file 3 should confirm them. This file correctly defers to them.
+The slice states no numeric NFR. The ~5 s detection and 0.25 s follow figures are its own sizing choices, and only the follower bound is called a contract promise. The breakdown adds no `tests/load/` task or CI gate, says so, and defers the PM override to Task 11.11. Task 7.2 does exercise the follower's wake-up bound. That is acceptable. If the PM treats the follower bound as an NFR, a load task and a CI wiring task would be needed.
 
-### [NOTE] Slice design is internally inconsistent on the `attribute_review` signature
+### [NOTE] Large tenant file and a shared lifecycle test module may exceed ~300 lines
 
-The Component Structure lists `attribute_review(nodes, slice_name)`. The API Contracts table lists `attribute_review(store, project_id, slice_name)`. Task 6.2 follows the API table, which is the right choice. Consider correcting the Component Structure line in the slice design.
+`review_detection.py` accumulates the skeleton, baselining, the reachability helper, the scan path, the defer rule, and `_guarded` across Tasks 9.3, 9.5, 9.7, and 9.9. Task 9.5 allows a conditional split into `review_scan.py`. `test_review_detection_lifecycle.py` also absorbs Task 9.8's cases on top of 9.6b's. Both splits are conditional on the file passing ~300 lines. Making the split an explicit step in Task 9.5, so the later tasks edit the right module, would reduce junior-AI ambiguity.
 
-### [NOTE] No NFR load test or CI gating task is required
+### [NOTE] Task 7.1 depends on Task 6.3 without needing it
 
-The slice states that the parent architecture sets no numeric targets. The intervals are configuration defaults, not NFR commitments. The only contract bound is the follower's wake-up interval, which Task 7.2 tests functionally. No `tests/load/` or CI gate task is warranted.
+The follower depends only on the feed read API and `read_transaction()` from file 1. It does not use attribution. The chain is harmless in a linear plan, but the dependency is artificial and would block parallel work.
 
-### [PASS] Sequencing, test-with pattern, and commit cadence
+### [NOTE] Minor clarity items for junior execution
 
-Each implementation task is immediately followed by its test task: 6.1–6.3, 6.4/6.5, 7.1/7.2, 7.3/7.4, 8.2–8.4, 9.1/9.2, 9.3/9.4, 9.5/9.6, 9.7/9.8, and 9.9/9.10. Task 9.2a pairs its layout module with its tests. Dependencies run forward only, with no cycles. The Task 8.1 gate on slice 105 stops work and asks the PM rather than stubbing the parser. Commits fall at least once per section, not batched at the end.
-
-### [PASS] Success-criteria coverage for Sections 6–9
-
-These slice criteria each map to a task:
-- Follower resume and no-repeat, and killed follower: Tasks 7.2 and 7.4.
-- Ingest as `artifact_frontmatter` with `source_path`: Task 9.6.
-- Provider-failure standing: Task 9.6.
-- Part-1/part-2 series separation: Task 9.6, with the grouping built in file 1.
-- Hand-edit produces no second verdict: Task 9.6.
-- Unattributed with candidates, unparseable not retried, baseline-only for existing files: Tasks 9.4 and 9.6.
-- Unreachable directory and unreadable-file baseline: Task 9.4.
-- Manual `ingest review` yields `recorded_since`: Task 9.6.
-- `SQ_RUN` defer and `runner_issued` skip: Task 9.8.
-- Restart idempotence: Task 9.6.
-- Deleted-between-list-and-read: Tasks 8.4 and 9.6.
-- Bounded failure: Task 9.10.
-
-I found no scope creep. Task 6.4 (`record_detected_verdict`) is an addition to the design's API table, but it is justified by the design's "one transaction" requirement.
+- **Task 7.3:** "choose the simpler" of two implementations for the no-follow exit leaves a decision to the junior AI. Pick one.
+- **Task 8.3:** the `FileNotFoundError` drop is a deliberate swallow. CLAUDE.md's exception rule (b) requires a comment explaining why, and the task doesn't ask for one.
+- **Numbering:** 9.2a, 9.6a, and 9.6b are out of the integer sequence. That is fine if the task-checker handles it.
 
 ### Run Digest
 
-- Response length: 7660 chars
+- Response length: 5817 chars
 - Response is newline-free: no
 - Tool calls made: 4
 - Tool calls failed: 0
@@ -141,14 +132,14 @@ I found no scope creep. Task 6.4 (`record_detected_verdict`) is an addition to t
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: project
-- Reasoning characters: 0
+- Reasoning characters: 203
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 51.6 s
+- Duration: 66.1 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
