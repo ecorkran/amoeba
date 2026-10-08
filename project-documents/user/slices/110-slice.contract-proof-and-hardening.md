@@ -6,7 +6,7 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
 interfaces: []
 dateCreated: 20260928
-dateUpdated: 20260928
+dateUpdated: 20261007
 status: not_started
 ---
 
@@ -59,7 +59,7 @@ Developer value. After this slice, initiative 120 designs against a contract tha
 
 ### Prerequisites
 
-All of 101 through 109 implemented. At the time of writing, 101–104 are complete, 105 through 108 are designed, and 109 has no design yet. The proof binds to whatever their contracts publish; names below are from their slice-plan entries and the designs that exist.
+All of 101 through 109 implemented. At the time of writing, 101–104 are complete, 105 through 109 are designed. The proof binds to whatever their contracts publish; names below are from their slice-plan entries and the designs that exist.
 
 ### Interfaces Required
 
@@ -67,6 +67,7 @@ All of 101 through 109 implemented. At the time of writing, 101–104 are comple
 - **106:** `follow()`, `amoeba feed`, the `watch_reviews` kind, `record_detection`, `attribute_review`, and `inspect detections`.
 - **106, new requirement:** a public store method that does the Runner's report-back **in one transaction**: record the verdict, mark the file `runner_issued`, and resolve the journal entry. 106's D5 point 3 requires one transaction, but every public `Store` method is its own transaction and there is no public way to group them. Without this method 120 cannot meet 106's own requirement. This goes into 106's task breakdown; if 106 ships without it, this slice adds it.
 - **105:** `parse_review_artifact`, `to_verdict_input`, the parsed-content record id, and `amoeba ingest review`, exported from `amoeba.upstream.squadron`.
+- **109:** `amoeba serve`, SSE resume by `Last-Event-ID`, `POST` submission, and `read`/`submit` token scopes, used by the remote subscriber and the Judge actor. *(Added 20261007.)*
 - **107:** the inbox kind for judge samples and its read method, so the out-of-process Judge in the sequence records samples the way 140 will.
 - **Test fixtures:** `tests/fixtures/sq_reviews/` (the captured 102 task-review series, including the provider failure) and `tests/fixtures/sq_runs/` (including the captured paused run `run-20260505-review-a697ad3d.json`).
 
@@ -111,6 +112,8 @@ docs/README.md               the contract index
 | Human | CLI subprocess | `amoeba submit resolution` |
 | PM | Shell | Copies a review file into the registered reviews directory |
 | Subscriber (stands in for 160) | `amoeba feed --follow` subprocess, running for the whole sequence | Its stdout transcript |
+| Remote subscriber (stands in for 160 over the network) | SSE client against an `amoeba serve` subprocess (109), running for the whole sequence; reconnects with `Last-Event-ID` | Its event transcript |
+| Server | `amoeba serve` subprocess with `--auth tokens`, never killed by the kill points | 109's network contract |
 | Inspector | CLI subprocess | `amoeba inspect … --json` |
 
 **The sequence.** Project `proof`. Each step names the state it leaves behind; `ProofRunner` works out which step it is on from the store alone (D1).
@@ -121,7 +124,7 @@ docs/README.md               the contract index
 | 2 | Runner | Creates `initiative`, then `slice` (`cf.slice_name = resident-process-and-recovery`, matching the fixtures), then a `gate` under it | Three runnable nodes |
 | 3 | Runner | `journal_issue(sq_run)` on the slice node → fake Squadron writes a completed run and review round 1 (part 1) → report-back in one transaction | Verdict `CONCERNS`, detection `runner_issued`, journal `completed` |
 | 4 | Runner | Blocks the gate on `judge` | `blocked_on_judge` |
-| 5 | Judge | Submits a verdict and two judge samples for the gate, then a resolution for the judge block | Gate `runnable`; samples recorded individually |
+| 5 | Judge | Submits a verdict and two judge samples for the gate, then a resolution for the judge block, through `POST /v1/projects/proof/submissions` with a `submit`-scoped token (109) | Gate `runnable`; samples recorded individually |
 | 6 | Runner | `journal_issue(sq_run)` on the gate → fake Squadron writes a **paused** run → Runner resolves the entry with the run id, sets `sq.run_id`, blocks on `sq_checkpoint` | `blocked_on_sq_checkpoint`; a paused run on disk |
 | 7 | Runner | Blocks the slice node on `human` (escalation row written with it) | `blocked_on_human` |
 | 8 | Human | Resolves the slice block | Slice `runnable` |
@@ -195,7 +198,7 @@ Each package's `__all__` is pinned by a test written out by hand, as `tests/test
 - Kill points are fixed names in `ProofRunner`. Hitting one sends `SIGKILL` to the process's own pid: no mocks, as 102 requires.
 - `LifecycleSnapshot` is built only from public reads, keyed by node **title** (ids differ between runs). It holds each node's status; the set of verdict record ids with verdict and standing; finding keys per node; journal entries per node as `(kind, outcome class)`, where `completed` and `adopted` are one class, "applied"; blocked-state count per node; message count per channel; judge samples per gate; and detection outcomes.
 - A kill point either leaves the snapshot equal to the clean run's, or differs only as its row in the table says. `after-issue` adds one `unknown` entry, one human block, and one escalation on the slice node. `after-launch` and `inbox-while-down` add nothing.
-- The subscriber's transcript, across every kill, must equal `amoeba feed --project proof` read from 0 at the end: no gap, no repeat. Replaying it rebuilds each node's final status.
+- The subscriber's transcript, across every kill, must equal `amoeba feed --project proof` read from 0 at the end: no gap, no repeat. Replaying it rebuilds each node's final status. The remote subscriber's transcript must equal the local one. *(Added 20261007 with 109's design, so the contract is proven through the network surface as the slice plan requires.)*
 - **Default suite:** the clean run and the three kill runs. **Load tier:** a kill at every step boundary 1–11, each followed by restart, completion, and the same comparison.
 
 **D5 — Locality: no relative directories, and project ids that cannot collide on disk.** *(PM ratification required: both halves narrow 101's published contract. See [PM ratification](#pm-ratification).)*

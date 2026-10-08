@@ -8,7 +8,7 @@ component: substrate-run-state-store
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 100 — decomposes the substrate and run-state store into foundation, feature, and integration slices that each leave the system in a working state.
 dateCreated: 20260913
-dateUpdated: 20260928
+dateUpdated: 20261007
 status: not_started
 ---
 
@@ -146,7 +146,7 @@ Two consequences shape the decomposition:
    - No endpoint mutates the store except by submitting to the inbox.
    - The server refuses to bind off localhost without authentication configured, and unauthenticated requests to a non-local bind are rejected.
    - Killing the server leaves the resident process and the store unaffected; killing the resident process leaves the server serving reads and accepting submissions.
-   **Dependencies:** [101, 102, 103, 104, 106]
+   **Dependencies:** [101, 102, 103, 104, 106] — ordering, not function: 105, 107, and 108 must land first, because 109 moves every `inspect` listing module into `amoeba.inspection` (109 design, Migration Plan). If this order changes, an unbuilt slice among them writes its listings in `amoeba.inspection`.
    **Interfaces:** Provides the network surface consumed by initiative 160, the notification bridge, and Cowork; consumes the read contract (101–104), the inbox (103), and the feed (106).
    **Risk Level:** Medium — first network exposure; authentication and the stream's resume semantics are the parts to get right.
    **Relative Effort:** 3
