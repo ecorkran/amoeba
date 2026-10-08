@@ -334,6 +334,7 @@ None of these is a promise in a contract except the follower's, which `feed-cont
 | `detections(project_id, *, outcome=None) -> list[DetectedReview]` | The ledger, in detection order. |
 | `record_detection(DetectionInput) -> DetectedReview` | In-process only. Idempotent on `(project_id, path, digest)`. |
 | `attribute_review(store, project_id, slice_name) -> Attribution` | `Attribution(node_id | None, candidates: tuple[str, ...])`. |
+| `record_runner_report(project_id, *, verdict: VerdictInput, path, digest, journal_entry_id, ...) -> Verdict` | The Runner's report-back as one transaction: record the verdict, `record_detection(runner_issued)` for that `(path, digest)`, and resolve the journal entry. Required by D5 point 3: every other public `Store` method is its own transaction, so the Runner cannot group them itself. Exact signature is settled in the task breakdown. *(Added 20261008, from 110's requirement.)* |
 
 `Change` is `(seq, project_id, kind, node_id | None, subject_id, payload: Mapping, recorded_at)`.
 
@@ -372,7 +373,7 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 
 - **110:** the feed, so the end-to-end proof can assert that subscribers saw the whole sequence, including across a restart.
 - **108:** the change log and trigger convention. 108 adds a `cf_snapshots` table with its own trigger and a `cf_project_changed` kind, and extends the invariant test.
-- **Initiative 120:** `attribute_review`, `record_detection(outcome=runner_issued)`, and the review-producing kinds set. The Runner may also follow the feed instead of re-querying. 120 takes on the requirements in D5, points 3 and 5: mark the ledger in the same transaction that resolves the journal entry, and record its reviews from the artifact through 105's parser.
+- **Initiative 120:** `attribute_review`, `record_detection(outcome=runner_issued)`, `record_runner_report` (the one-transaction report-back), and the review-producing kinds set. The Runner may also follow the feed instead of re-querying. 120 takes on the requirements in D5, points 3 and 5: mark the ledger in the same transaction that resolves the journal entry, and record its reviews from the artifact through 105's parser.
 - **109:** `follow()` and `change_head` / `read_transaction()`, which the network API streams to remote subscribers.
 - **Initiative 160:** `follow()` and `amoeba feed` for the Translator surface and the notification bridge, locally or through 109.
 

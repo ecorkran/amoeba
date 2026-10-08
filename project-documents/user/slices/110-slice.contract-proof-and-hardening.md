@@ -65,7 +65,7 @@ All of 101 through 109 implemented. At the time of writing, 101–104 are comple
 
 - **101–104:** the contracts in `docs/store-contract.md`, `docs/process-contract.md`, `docs/inbox-contract.md`, and `docs/evidence-contract.md`, used as written.
 - **106:** `follow()`, `amoeba feed`, the `watch_reviews` kind, `record_detection`, `attribute_review`, and `inspect detections`.
-- **106, new requirement:** a public store method that does the Runner's report-back **in one transaction**: record the verdict, mark the file `runner_issued`, and resolve the journal entry. 106's D5 point 3 requires one transaction, but every public `Store` method is its own transaction and there is no public way to group them. Without this method 120 cannot meet 106's own requirement. This goes into 106's task breakdown; if 106 ships without it, this slice adds it.
+- **106, new requirement:** a public store method that does the Runner's report-back **in one transaction**: record the verdict, mark the file `runner_issued`, and resolve the journal entry. 106's D5 point 3 requires one transaction, but every public `Store` method is its own transaction and there is no public way to group them. Without this method 120 cannot meet 106's own requirement. 106's design now specifies it (`record_runner_report`, see 106's API Contracts) and its task breakdown carries it; if 106 ships without it, this slice adds it. *(Ruled 20261008.)*
 - **105:** `parse_review_artifact`, `to_verdict_input`, the parsed-content record id, and `amoeba ingest review`, exported from `amoeba.upstream.squadron`.
 - **109:** `amoeba serve`, SSE resume by `Last-Event-ID`, `POST` submission, and `read`/`submit` token scopes, used by the remote subscriber and the Judge actor. *(Added 20261007.)*
 - **107:** the inbox kind for judge samples and its read method, so the out-of-process Judge in the sequence records samples the way 140 will.
@@ -201,10 +201,10 @@ Each package's `__all__` is pinned by a test written out by hand, as `tests/test
 - The subscriber's transcript, across every kill, must equal `amoeba feed --project proof` read from 0 at the end: no gap, no repeat. Replaying it rebuilds each node's final status. The remote subscriber's transcript must equal the local one. *(Added 20261007 with 109's design, so the contract is proven through the network surface as the slice plan requires.)*
 - **Default suite:** the clean run and the three kill runs. **Load tier:** a kill at every step boundary 1–11, each followed by restart, completion, and the same comparison.
 
-**D5 — Locality: no relative directories, and project ids that cannot collide on disk.** *(PM ratification required: both halves narrow 101's published contract. See [PM ratification](#pm-ratification).)*
+**D5 — Locality: no relative directories, and project ids that cannot collide on disk.** *(Both halves narrow 101's published contract. Ratified by the PM 20261008. See [PM ratification](#pm-ratification).)*
 
 - **Relative directory variables are refused.** `paths.store_dir` uses `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME` verbatim, so a relative value resolves against each process's working directory. A process started in one directory and a submitter in another then use two different supervisors, and the submitter's files are never applied. `store_dir` raises `ValueError` naming the variable when either is relative. The XDG specification says to ignore a relative `XDG_CONFIG_HOME`; ignoring it would fall back to the default without saying so, which this project does not do.
-- **Project ids are ASCII slugs:** `[a-z0-9][a-z0-9._-]*`. macOS filesystems are case-insensitive by default, so `Demo` and `demo` are one store file today while being two projects to every query. Unicode ids have the same problem through normalization. `validate_project_id` is the one definition and every caller already goes through it. Mapping a Context Forge project name to an Amoeba project id is 120's job; the contract states the rule it must satisfy.
+- **Project ids are ASCII slugs:** `[a-z0-9]([a-z0-9._-]*[a-z0-9_-])?`: lowercase, and no trailing dot (Windows strips trailing dots, so `demo.` and `demo` would collide there). macOS filesystems are case-insensitive by default, so `Demo` and `demo` are one store file today while being two projects to every query. Unicode ids have the same problem through normalization. `validate_project_id` is the one definition and every caller already goes through it. Mapping a Context Forge project name to an Amoeba project id is 120's job; the contract states the rule it must satisfy.
 - Nothing is on disk yet that could break: Amoeba has no users outside this repository's tests.
 
 **D6 — `done` is terminal, and the store enforces it.** Not a contract change: `store-contract.md` already publishes `done` as terminal, and no write refuses to leave it. This is a defect against the published contract, fixed like any other. It matters here because D7's report calls a run dead when its nodes are `done`; that is only true if `done` is final. Four refusals, all `InvalidTransitionError`, are one rule, "nothing happens on a finished node":
@@ -267,9 +267,9 @@ Two changes narrow what 101's published store contract accepts. Nothing else in 
 | Change | Published today | After | If not ratified |
 | --- | --- | --- | --- |
 | Refuse a relative `AMOEBA_STORE_DIR` or `XDG_CONFIG_HOME` | "used verbatim" | `ValueError` naming the variable | The contract documents that both must be absolute, and the locality proof runs with absolute values only. The split-supervisor failure stays possible. |
-| Project ids are ASCII slugs, `[a-z0-9][a-z0-9._-]*` | Any non-empty id with no path separator, not `.` or `..` | `ValueError` / `SUBMISSION_REFUSED` | The contract documents the case-insensitive filesystem collision as a known limit and tells 120 to lowercase ids itself. |
+| Project ids are ASCII slugs, `[a-z0-9]([a-z0-9._-]*[a-z0-9_-])?` | Any non-empty id with no path separator, not `.` or `..` | `ValueError` / `SUBMISSION_REFUSED` | The contract documents the case-insensitive filesystem collision as a known limit and tells 120 to lowercase ids itself. |
 
-**Gate:** Phase 5 does not break these two into tasks until the PM rules. Everything else in the slice, including the rest of D5's locality proof, can proceed without them.
+**Ruling (PM, 20261008):** both ratified. The slug pattern excludes trailing dots (review note F006). Phase 5 may break both into tasks.
 
 ## Implementation Details
 
