@@ -4,127 +4,142 @@ layer: project
 reviewType: tasks
 slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
-verdict: CONCERNS
+verdict: FAIL
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md
 aiModel: claude-sonnet-5-5
 status: complete
-dateCreated: 20261007
-dateUpdated: 20261007
-reviewedSha: 5aade9e5d6aebd988061a3975597c6e24b572def
-revision_number: 2
+dateCreated: 20261008
+dateUpdated: 20261008
+reviewedSha: 5d387ea192f7f4469f164ec1550234e2cd0c06c8
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 4
-durationSeconds: 40.8
-runId: run-20261007-tasks-plan-25f0a00a
+toolCallsMade: 2
+durationSeconds: 77.9
+runId: run-20261008-tasks-plan-43872396
 squadronVersion: 0.21.1
 findings:
   - id: F001
-    severity: concern
-    category: coverage-gap
-    summary: "Coverage trace (11.12) omits several slice criteria"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:322-343"
+    severity: fail
+    category: sequencing
+    summary: "Task 10.4 depends on the demo script that Task 11.1 creates"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:90"
   - id: F002
     severity: concern
-    category: test-fragility
-    summary: "Task 11.4 depends on a mutable project document as a \"real fixture\""
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:174"
+    category: coverage
+    summary: "Traceability list omits several slice success criteria"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:324-342"
   - id: F003
     severity: concern
-    category: sequencing
-    summary: "Boundary and single-definition pins come only at the end"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:279-296"
+    category: accuracy
+    summary: "Task 11.11 mislabels what is \"beyond the LLD\""
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:308"
   - id: F004
-    severity: note
-    category: task-scope
-    summary: "Task 11.10 mixes a new test with whole-suite validation and file-size cleanup"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:285-289"
+    severity: concern
+    category: test-with-pattern
+    summary: "Import-boundary and single-definition test comes only at the end"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:286"
   - id: F005
+    severity: concern
+    category: task-sizing
+    summary: "End-to-end tasks 11.2–11.4 are large and share one fragile helper set"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:133"
+  - id: F006
+    severity: concern
+    category: test-fixtures
+    summary: "Part C depends on a live project file that may move"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:174"
+  - id: F007
+    severity: concern
+    category: error-handling
+    summary: "Wiring tests do not cover the `sq --version` failure path"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:89-92"
+  - id: F008
+    severity: concern
+    category: documentation
+    summary: "Some documented design caveats have no owning doc task"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:228-250"
+  - id: F009
     severity: note
     category: nfr
-    summary: "No load test or CI gating task, which is appropriate here"
-    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:314-321"
-  - id: F006
+    summary: "No load-test or CI-gating task is required"
+    location: "unverified"
+  - id: F010
     severity: note
-    category: verification
-    summary: "Task 11.11 is a manual verification with no pass/fail test"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:299-312"
-  - id: F007
+    category: coverage
+    summary: "Baseline behavior is not exercised end to end"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:133"
+  - id: F011
     severity: pass
     category: coverage
-    summary: "Success criteria for listings, wiring, and process behavior are covered"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:21-100"
-  - id: F008
-    severity: pass
-    category: coverage
-    summary: "End-to-end tests map to the Integration Requirements and walkthrough"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:105-181"
-  - id: F009
-    severity: pass
-    category: documentation
-    summary: "Documentation tasks are traceable and verified by tests"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:185-275"
+    summary: "Remaining criteria in this file are covered, ordered and checkpointed"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-3.md:21-348"
 ---
 
 # Review: tasks — slice 106
 
-**Verdict:** CONCERNS
+**Verdict:** FAIL
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [CONCERN] Coverage trace (11.12) omits several slice criteria
+### [FAIL] Task 10.4 depends on the demo script that Task 11.1 creates
 
-Task 11.12 is meant to be the check that every Functional and Technical Requirement has a passing test. Its bullet list leaves out several criteria:
-- The D7 series criterion: part-1 round 2 names part-1 round 1 as its previous round, and verdicts without `source_document` keep 104's behavior. File 1 has `test_finding_changes_source_document.py`, but 11.12 never names it.
-- "104's tests run unchanged and must pass" (design D7).
-- `watch_reviews` behaviors: a relative path is quarantined, and reactivation does not re-baseline. These are covered in file 1's `test_watch_reviews.py`, but the trace skips them.
-- Message and node-created emission through the recovery escalation path, beyond the single `test_feed_invariant` line.
+Task 10.4's CLI-subprocess case says to "create a project and seed a slice node (demo script)". That script, `scripts/demo_detection.py`, is created in Task 11.1, which lists Task 10.4 as its dependency (line 107). So 10.4 cannot be completed as written, and a junior AI would have to invent a seeding path or stall. The script needs only the store, so nothing in Section 10 blocks it. Move the demo-script task, with its writer-guard entry and test, ahead of 10.4. For example, make it Task 10.3a or 10.4 and renumber. Then have 10.4 depend on it.
 
-Add these bullets so the final trace can't pass while skipping them. Also say which test covers "the captured 102 series detected on one slice node yields the correct previous round". Today that check appears only in the manual walkthrough (step 5). The end-to-end tests assert no `finding_changes` result.
+### [CONCERN] Traceability list omits several slice success criteria
 
-### [CONCERN] Task 11.4 depends on a mutable project document as a "real fixture"
+Task 11.12 is the final check that every Functional and Technical Requirement has a passing test. It names no test for these criteria:
+- **D7 series separation.** With the captured 102 series detected, `finding_changes` on part 1 round 2 must name part 1 round 1 as previous, never part 2. Verdicts with no `source_document` must keep 104's behavior. 104's existing tests must pass unchanged.
+- **Follower read-only and non-mutating.** The follower must open the store read-only, and the `changes` table must be unchanged by following or resuming. Only `--after` and resume are mapped.
+- **Unattributed recovery by hand.** An `unattributed` file ingested with `amoeba ingest review` shows `recorded_since` true, and a second ingest records nothing. Task 10.2 touches `recorded_since`, but 11.12 does not list this criterion.
 
-The unattributed case copies `project-documents/user/reviews/104-review.slice.findings-verdicts-and-provenance.md`. The reviews directory is where the PM moves rounds into `archive/` by hand. The file can therefore be renamed, moved or overwritten, and the test would break or change meaning. The slice's Technical Requirements say tests use real files from `tests/fixtures/sq_reviews/`. Use a fixture in that directory whose slice name has no seeded node. The 102 series fixtures work if the demo script seeds a different slice name. If no suitable fixture exists, add one as an explicit step. Don't leave "or another real review" open-ended.
+The part-1/part-2 series case is also absent from end-to-end parts A–C, though walkthrough step 5 exercises it. These tests may exist in files 1 and 2, but a traceability task that omits them cannot confirm them. Add bullets for each.
 
-### [CONCERN] Boundary and single-definition pins come only at the end
+### [CONCERN] Task 11.11 mislabels what is "beyond the LLD"
 
-Task 11.10 adds `tests/test_import_boundaries.py`. It pins the "store imports nothing from upstream/process/feed" rule and the "SQL only in `sql_feed.py`" and "enums defined once" rules. These constrain code written in Sections 1–9, so a violation found now means rework. The text scan for enum string values (`ingested`, `baseline`, `unparseable`) across `src/amoeba/` is also prone to false positives from CLI help text and docstrings. State what the scan ignores, such as comments and docstrings, or limit it to quoted literals in comparisons. Consider adding the AST import check earlier, with the feed package. The final run can then just confirm it.
+Task 11.11 tells the junior to report `recorded_since` and `DetectionInput` as additions beyond the LLD. The LLD has both: `recorded_since` is in the `inspect detections` columns, and `record_detection(DetectionInput)` is in the store API table. Only the `read_only` constructor flag and `record_detected_verdict` look absent from the LLD. The PM would get a misleading list. Verify against the LLD and correct the list, or say "compare against the LLD and list what is missing".
 
-### [NOTE] Task 11.10 mixes a new test with whole-suite validation and file-size cleanup
+### [CONCERN] Import-boundary and single-definition test comes only at the end
 
-It bundles writing a test, the full pytest, ruff and pyright run, and splitting any file over about 300 lines. The split could be substantial and could touch many files. The effort of 2 is likely low if a split is needed. This is acceptable, but say that a split is its own commit with tests rerun.
+Task 11.10 adds `tests/test_import_boundaries.py` after all implementation. It checks that the store imports nothing from upstream, process, or feed, that SQL stays in `sql_feed.py`, and that the enums are defined once. A violation introduced in Section 1 or 2 would only surface at the end and force rework across earlier commits. Create the test with the store and feed code, and have 11.10 only run it. The same applies to the `wc -l` split pass at line 289, which risks late refactors after the end-to-end tests are green.
 
-### [NOTE] No load test or CI gating task, which is appropriate here
+### [CONCERN] End-to-end tasks 11.2–11.4 are large and share one fragile helper set
 
-The slice design states that the parent architecture sets no numeric targets. Its latency bounds (scan interval, follow interval) are described as slice choices, not NFRs. The only contract promise is the follower's latency bound, and the tasks test the follower's behavior. No `tests/load/` task or CI wiring is required.
+Each of these tasks is rated effort 3 but bundles subprocess orchestration (process, follower, stop, `kill -9`), timeout-aware line collection, and many exact-content assertions. Task 11.2 also builds the shared helpers that 11.3 and 11.4 reuse. Consider a separate task, with a smoke test, for the helpers (start and stop process, follower line collector, wait-on-condition). Then 11.2–11.4 become assertion tasks. Also in 11.2, the `resolution` submission needs a blocked-state id, from `inspect blocked`. The demo script prints only the two node ids, and no step says where the id comes from.
 
-### [NOTE] Task 11.11 is a manual verification with no pass/fail test
+### [CONCERN] Part C depends on a live project file that may move
 
-The run is reasonably scoped. It produces a report of differences instead of editing the LLD, and it states what to do if a step can't run. Walkthrough step 9 re-runs the end-to-end tests, so there is no extra gap. Success depends on the AI reporting accurately, and the task says to report empty results explicitly.
+Task 11.4 copies `project-documents/user/reviews/104-review.slice.findings-verdicts-and-provenance.md`, "or another real review". That directory is where reviews are rotated into `archive/` by hand (see the working-tree status), so the file can move or change. The slice's Technical Requirements say tests use real files from `tests/fixtures/sq_reviews/`. Pick a real review whose slice has no node, add it to the fixtures, and reference it there. Remove the "or another" hedge.
 
-### [PASS] Success criteria for listings, wiring, and process behavior are covered
+### [CONCERN] Wiring tests do not cover the `sq --version` failure path
 
-- Tasks 10.1/10.2 cover `inspect watches` and `inspect detections`. The `watches` states are `ok`, `unreachable`, `baseline_pending` and `failed`. The `detections` listing covers every outcome, the `--outcome` filter, parked files as `failed`, and `recorded_since`.
-- Task 10.3 registers the second tenant and captures the `sq` label once, before the loop. Task 10.4 tests restart with `kill -9`, the single label capture, and that no tick starts a subprocess.
+The slice design says that if `sq --version` fails or times out at start-up, the label becomes the explicit unavailable marker, and `start` must still proceed. Task 10.4 tests only a fake `sq` that succeeds and the call-count once-only check. If file 2 does not test the marker, add a case for a missing or timing-out `sq` (`sq_timeout_seconds` is already a setting). The case should assert that `start` runs and the marker reaches the tenant.
 
-### [PASS] End-to-end tests map to the Integration Requirements and walkthrough
+### [CONCERN] Some documented design caveats have no owning doc task
 
-- Tasks 11.1–11.4 cover walkthrough steps 1–8. They assert exact ordered feed content and guard against vacuous passes.
-- They cover the follower started while the process is stopped, `kill -9` with restart, the provider failure, resume with `--after`, hand edits that add no second verdict, and unattributed and unparseable files.
-- The demo script is added to the writer-guard permitted list with a refusal-case test.
+The slice design says two things are "documented, not handled". The first is that registering one directory under two spellings creates two watches, with extra ledger rows. The second is the manual recovery path for `unattributed` files (`inspect detections --outcome unattributed`, then `ingest review --node`, oldest first). Tasks 11.7 and 11.8 list neither. Add them to `process-contract.md` and `evidence-contract.md`, or confirm another task does. Also add them to the required-terms lists.
 
-### [PASS] Documentation tasks are traceable and verified by tests
+### [NOTE] No load-test or CI-gating task is required
 
-- Tasks 11.5–11.9 cover `feed-contract.md`, the four contract updates, the CHANGELOG, and the single-sentence edit to the 103 forward reference.
-- The docs are checked against code with a reusable `test_contract_docs` helper. The helper extends across 11.6–11.9.
-- The documentation includes the requirements on initiative 120 (attribution rule, D5 points 3 and 5) and the D8a note.
+The slice names no non-functional requirement that calls for a load test. It says "the parent architecture sets no numeric targets". Its timing figures (2 s scan, 0.25 s follow interval, detection within about 5 s) are design choices, and the contract states only the follower bound. No `tests/load/` or CI wiring task is needed. If the PM wants the follower latency bound gated, add it as a separate decision.
+
+### [NOTE] Baseline behavior is not exercised end to end
+
+Walkthrough step 3 (files present at registration are `baseline` and never ingested) appears only in the manual run in Task 11.11. Parts A–C register an empty directory. The Integration Requirements do not demand it, and 11.12 maps baseline to unit tests. A baseline file in part A would make the end-to-end test cover it, though the "two ingested rows" assertion would need to allow the extra `baseline` row. Optional.
+
+### [PASS] Remaining criteria in this file are covered, ordered and checkpointed
+
+- **Coverage.** The two listings and the `start` wiring (10.1–10.4) are tested alongside their implementation. The demo script and writer guard (11.1) are tested too. End-to-end parts A–C cover the Integration Requirements and walkthrough steps 1, 2, 4, 6, 7 and 8. The five doc deliverables are all assigned (11.5, 11.7–11.9). The 103 forward-reference fix is limited to one sentence. The invariant and boundary checks have their own task (11.10), and the walkthrough run has its own (11.11).
+- **Scope creep.** No task lacks a slice origin.
+- **Sequencing.** Apart from the 10.4/11.1 defect, dependencies run forward in order.
+- **Test-with pattern.** 10.1→10.2, 10.3→10.4, 11.5→11.6, and 11.7–11.9 each extend `tests/test_contract_docs.py`.
+- **Checkpoints.** Commits are spread throughout. They are paired only where a test task immediately follows its implementation task.
 
 ### Run Digest
 
-- Response length: 6857 chars
+- Response length: 8875 chars
 - Response is newline-free: no
-- Tool calls made: 4
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -134,10 +149,10 @@ The run is reasonably scoped. It produces a report of differences instead of edi
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 40.8 s
+- Duration: 77.9 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 11
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 11
+- Finding-shaped matches — surviving validation: 11
