@@ -11,6 +11,7 @@ import ast
 import json
 import shutil
 from pathlib import Path
+from typing import cast
 
 import pytest
 from cli_harness import (
@@ -258,9 +259,8 @@ def test_a_stdout_capture_is_ingested(supervisor_dir: Path) -> None:
     assert result.returncode == ExitCode.OK, result.stderr
     assert len(new_files(supervisor_dir)) == 1
     assert result.stdout.strip().startswith("sq-review-")
-    payload = _submission(supervisor_dir)["payload"]
-    assert isinstance(payload, dict)
-    assert payload["source"] == "stdout_json"  # pyright: ignore[reportUnknownMemberType]
+    payload = cast(dict[str, object], _submission(supervisor_dir)["payload"])
+    assert payload["source"] == "stdout_json"
 
 
 def test_a_node_that_differs_from_the_reviews_slice_is_accepted_and_shown(
@@ -330,3 +330,10 @@ def test_the_same_review_for_another_node_shares_its_id(supervisor_dir: Path) ->
     )
     assert first.stdout == second.stdout
     assert first.stdout.strip() in second.stderr
+
+
+def test_an_empty_source_path_is_unreadable_not_a_crash(supervisor_dir: Path) -> None:
+    result = ingest(supervisor_dir, "--artifact", "")
+    _assert_refused(result, supervisor_dir, ExitCode.REVIEW_UNREADABLE)
+    result = ingest(supervisor_dir, "--stdout-json", "")
+    _assert_refused(result, supervisor_dir, ExitCode.REVIEW_UNREADABLE)

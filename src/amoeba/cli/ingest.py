@@ -34,6 +34,13 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 #: Shown in place of a slice name when the review carries none (a PR review).
 NO_SLICE = "-"
 
+#: The id does not include the node (D5), so this cannot be detected without
+#: opening the store (D6); say it every time instead of staying silent.
+NODE_NOT_IN_ID_NOTE = (
+    "ingest: note: the id does not include the node; a review already ingested "
+    "onto another node is not recorded again unless a new --id is given"
+)
+
 
 def add_ingest_parser(subparsers: Any) -> None:
     """Add ``ingest`` and its ``review`` source.
@@ -91,7 +98,11 @@ def _compose(args: argparse.Namespace, path: Path) -> tuple[ParsedReview, Verdic
     caller maps each to an exit status.
     """
     text = path.read_text(encoding="utf-8")
-    parsed = parse_review_artifact(text) if args.artifact else parse_review_json(text)
+    parsed = (
+        parse_review_artifact(text)
+        if args.artifact is not None
+        else parse_review_json(text)
+    )
     verdict = to_verdict_input(
         parsed,
         node_id=args.node,
@@ -114,7 +125,8 @@ def run_ingest(args: argparse.Namespace) -> ExitCode:
     if not paths.store_path(args.project).is_file():
         _fail(f"no store for project {args.project!r}")
         return ExitCode.SUBMISSION_REFUSED
-    path = Path(args.artifact or args.stdout_json).resolve()
+    source = args.artifact if args.artifact is not None else args.stdout_json
+    path = Path(source).resolve()
     try:
         parsed, verdict = _compose(args, path)
     except (OSError, UnicodeDecodeError) as error:
@@ -129,6 +141,7 @@ def run_ingest(args: argparse.Namespace) -> ExitCode:
         f"review type {parsed.review_type}, id {verdict.id}",
         file=sys.stderr,
     )
+    print(NODE_NOT_IN_ID_NOTE, file=sys.stderr)
     # The digest (or --id) is both the record id and the submission id, so a
     # second ingest of the same review is a no-op replay (103's D2), even onto a
     # different node: the id does not include the node.

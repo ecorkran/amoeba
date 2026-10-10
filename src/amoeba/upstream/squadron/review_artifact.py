@@ -38,8 +38,9 @@ _FINDINGS_NOT_PARSED_HEADING = _heading_pattern(fields.HEADING_FINDINGS_NOT_PARS
 
 
 # A fenced code block (``` or ~~~) quotes text; a heading inside one is not one.
+# An unterminated fence runs to the end of the body, as in markdown.
 _CODE_FENCE_BLOCK = re.compile(
-    r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[ \t]*$", re.MULTILINE | re.DOTALL
+    r"^[ \t]*(`{3,}|~{3,}).*?(?:^[ \t]*\1[ \t]*$|\Z)", re.MULTILINE | re.DOTALL
 )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -24,7 +25,7 @@ CONCERNS = SQ_REVIEWS / "stdout-slice-104-concerns-glmflash.json"
 S = FindingSeverity
 
 
-def _capture(path=CONCERNS) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+def _capture(path: Path = CONCERNS) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -159,3 +160,8 @@ def test_a_finding_missing_a_required_key_is_rejected(key: str) -> None:
     del payload["structured_findings"][0][key]
     with pytest.raises(SquadronParseError, match=key):
         _parse(payload)
+
+
+def test_stray_braces_before_the_object_do_not_hide_it() -> None:
+    text = CONCERNS.read_text(encoding="utf-8")
+    assert parse_review_json("using {braces} first\n" + text) == parse_review_json(text)

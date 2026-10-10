@@ -29,15 +29,24 @@ _UNPARSED_WHEN_FALLBACK = frozenset(
 
 
 def _decode_first_object(text: str) -> dict[str, Any]:
-    """Decode from the first ``{``; anything after the object is ignored."""
+    """Decode the first JSON object; text before and after it is ignored.
+
+    Each ``{`` is tried in turn, so a stray brace in a preceding line does not
+    hide the object. If none decodes, the first decode error is reported.
+    """
+    decoder = json.JSONDecoder()
+    first_error: json.JSONDecodeError | None = None
     start = text.find("{")
     if start < 0:
         fail(_JSON, "no JSON object in the text")
-    try:
-        decoded, _ = json.JSONDecoder().raw_decode(text, start)
-    except json.JSONDecodeError as error:
-        raise SquadronParseError(_JSON, f"malformed JSON: {error}") from error
-    return cast(dict[str, Any], decoded)
+    while start >= 0:
+        try:
+            decoded, _ = decoder.raw_decode(text, start)
+            return cast(dict[str, Any], decoded)
+        except json.JSONDecodeError as error:
+            first_error = first_error or error
+        start = text.find("{", start + 1)
+    raise SquadronParseError(_JSON, f"malformed JSON: {first_error}") from first_error
 
 
 def _findings_parsed(

@@ -95,15 +95,17 @@ def _resolve_version(stamp: str | None, supplied: str | None) -> str:
     for label in (stamp, supplied):
         if label is not None and not label.strip():
             raise UpstreamVersionError("the upstream version label is empty")
-    if stamp is None and supplied is None:
-        raise UpstreamVersionError(
-            "no upstream version: the review carries no stamp and none was supplied"
-        )
-    if stamp is not None and supplied is not None and stamp != supplied:
+    if stamp is None:
+        if supplied is None:
+            raise UpstreamVersionError(
+                "no upstream version: the review carries no stamp and none was supplied"
+            )
+        return supplied
+    if supplied is not None and stamp != supplied:
         raise UpstreamVersionError(
             f"the review is stamped {stamp!r} but {supplied!r} was supplied"
         )
-    return stamp if stamp is not None else str(supplied)
+    return stamp
 
 
 def to_verdict_input(

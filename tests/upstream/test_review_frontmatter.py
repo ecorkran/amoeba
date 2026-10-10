@@ -100,3 +100,8 @@ def test_a_heading_quoted_inside_a_code_fence_is_not_a_heading() -> None:
     parsed = parse_review_artifact(quoted)
     assert parsed.provider_failure is False
     assert parsed.findings_parsed is True
+
+
+def test_an_unterminated_code_fence_hides_the_headings_after_it() -> None:
+    quoted = _text(ROUND_1_PART_1) + "\n```\n## Provider Failure\n"
+    assert parse_review_artifact(quoted).provider_failure is False
