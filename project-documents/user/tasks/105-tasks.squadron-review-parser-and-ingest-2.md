@@ -6,8 +6,8 @@ lld: user/slices/105-slice.squadron-review-parser-and-ingest.md
 dependencies: [101, 103, 104]
 projectState: Slices 101–104 are merged. The store holds verdicts and content-keyed findings (schema 5), the inbox accepts a `verdict` kind, and `amoeba submit verdict` takes about twenty hand-typed flags. Nothing reads Squadron output. 104's tests read fixtures through a test-only helper, `tests/review_fixtures.py`. This slice adds the production parser, `verdict_to_payload`, and `amoeba ingest review`.
 dateCreated: 20261007
-dateUpdated: 20261007
-status: not_started
+dateUpdated: 20261009
+status: in_progress
 ---
 
 ## Context Summary
