@@ -44,21 +44,21 @@ status: not_started
 **Objective**: Put real inputs in place before any code that is tested against them.
 
 **Steps**:
-- [ ] Confirm `pwd` is the amoeba repo root and create the branch `105-slice.squadron-review-parser-and-ingest` from the target
-- [ ] Copy byte for byte with `cp` into `tests/fixtures/sq_reviews/`:
+- [x] Confirm `pwd` is the amoeba repo root and create the branch `105-slice.squadron-review-parser-and-ingest` from the target
+- [x] Copy byte for byte with `cp` into `tests/fixtures/sq_reviews/`:
   - From Squadron's `project-documents/user/reviews/archive/` (repo at `../squadron`): `928-review.slice.codex-parity-for-skill-packs-and-provider-access.20260927T212759.md` and `925-review.code.command-install-target-parity-codex-via-the-agents-skill-layout.20260922T145229.md`
   - From Squadron's `project-documents/user/reviews/`: `github.com-ecorkran-squadron-116-review.code.md`
   - From this repo's `project-documents/user/reviews/archive/`: `106-review.slice.outbound-change-feed-and-detection-of-external-work.20260928T175751.md`
-- [ ] Before copying each, grep it for `^resolution:`, `^resolvedBy:` and `^## Response`. If any hit, leave the file out and stop to tell the PM
-- [ ] Check each file's frontmatter against the LLD's fixture list: 928 has `providerFailure: true` and `runId`; 925 has the *Findings Not Parsed* heading and verdict `UNKNOWN`; the PR file has a nested `pr:` and no `slice`; 106 has `runId` and `squadronVersion`. If any differs, stop and ask the PM
-- [ ] Add one README entry per file in `tests/fixtures/README.md` (existing table style): file, verdict, capture date, origin, why it is here. Extend the scan note to say the four files come from another repository, contain review text about Squadron code, and no secrets
-- [ ] Add one path constant per file to `tests/review_fixtures.py` (keep the existing constants)
+- [x] Before copying each, grep it for `^resolution:`, `^resolvedBy:` and `^## Response`. If any hit, leave the file out and stop to tell the PM
+- [x] Check each file's frontmatter against the LLD's fixture list: 928 has `providerFailure: true` and `runId`; 925 has the *Findings Not Parsed* heading and verdict `UNKNOWN`; the PR file has a nested `pr:` and no `slice`; 106 has `runId` and `squadronVersion`. If any differs, stop and ask the PM
+- [x] Add one README entry per file in `tests/fixtures/README.md` (existing table style): file, verdict, capture date, origin, why it is here. Extend the scan note to say the four files come from another repository, contain review text about Squadron code, and no secrets
+- [x] Add one path constant per file to `tests/review_fixtures.py` (keep the existing constants)
 
 **Success Criteria**:
-- [ ] `diff` of each copied file against its source is empty
-- [ ] The README names all four files with date, origin, and reason
-- [ ] No copied file contains `resolution`, `resolvedBy`, or a `## Response` section
-- [ ] Commit, e.g. `test: add real squadron review fixtures for slice 105`
+- [x] `diff` of each copied file against its source is empty
+- [x] The README names all four files with date, origin, and reason
+- [x] No copied file contains `resolution`, `resolvedBy`, or a `## Response` section
+- [x] Commit, e.g. `test: add real squadron review fixtures for slice 105`
 
 **Files to Create**: four files in `tests/fixtures/sq_reviews/`
 **Files to Modify**: `tests/fixtures/README.md`, `tests/review_fixtures.py`
@@ -70,6 +70,7 @@ status: not_started
 **Dependencies**: Task 1.1
 **Effort**: 3
 **Objective**: Record one real review as both a saved file and its stdout JSON, so file/stdout equality is tested on real output.
+Status: blocked on 1.2 — `sq review slice 105` (sq 0.21.2) failed in a throwaway clone with PROJECT_NOT_FOUND (clone is not a registered Context Forge project); awaiting PM.
 
 **External gate, contained**: this task needs `sq`, a provider key, and network access. Only the "pair-dependent" items below need its output: the pair assertions in Tasks 3.5, 4.2, 5.2 and 8.8, and the captured-file mentions in them. Nothing else depends on it, so Tasks 1.3 and 2.1 onward do not wait for it. If this task is blocked, stop it and ask the PM, then carry on with everything that is not pair-dependent. Leave each pair-dependent item unchecked and marked `blocked on 1.2`. The slice is not complete until they run (Task 9.3 checks this). Never hand-build a pair.
 
@@ -102,15 +103,15 @@ status: not_started
 **Objective**: Give the *Findings Not Parsed* + CONCERNS branch a fixture, and say plainly that it is edited (LLD Technical Requirements, "A known gap").
 
 **Steps**:
-- [ ] `cp` the `ROUND_1_PART_1` file (`102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md`, verdict CONCERNS) to a new name ending `.findings-not-parsed-edited.md` in `tests/fixtures/sq_reviews/`
-- [ ] In the copy only, add one body heading line `## Findings Not Parsed` (no other change). Never edit the original
-- [ ] Add a README section "Known gap": no real review file has a *Findings Not Parsed* heading together with a CONCERNS or FAIL verdict; this edited copy stands in for it. Mark the copy **edited** in the file table, naming the one line added and its source file
-- [ ] Add a path constant to `tests/review_fixtures.py`
+- [x] `cp` the `ROUND_1_PART_1` file (`102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md`, verdict CONCERNS) to a new name ending `.findings-not-parsed-edited.md` in `tests/fixtures/sq_reviews/`
+- [x] In the copy only, add one body heading line `## Findings Not Parsed` (no other change). Never edit the original
+- [x] Add a README section "Known gap": no real review file has a *Findings Not Parsed* heading together with a CONCERNS or FAIL verdict; this edited copy stands in for it. Mark the copy **edited** in the file table, naming the one line added and its source file
+- [x] Add a path constant to `tests/review_fixtures.py`
 
 **Success Criteria**:
-- [ ] `diff` between the copy and its source shows exactly the one added heading (plus any blank line around it)
-- [ ] The README labels the copy as edited and records the gap as missing real data
-- [ ] Commit, e.g. `test: add edited findings-not-parsed fixture and record the gap`
+- [x] `diff` between the copy and its source shows exactly the one added heading (plus any blank line around it)
+- [x] The README labels the copy as edited and records the gap as missing real data
+- [x] Commit, e.g. `test: add edited findings-not-parsed fixture and record the gap`
 
 **Files to Create**: one file in `tests/fixtures/sq_reviews/`
 **Files to Modify**: `tests/fixtures/README.md`, `tests/review_fixtures.py`
@@ -127,13 +128,13 @@ status: not_started
 **Objective**: The parser imports `yaml`, so it must be a runtime dependency (LLD D2).
 
 **Steps**:
-- [ ] Move `pyyaml` from the `dev` group to `[project] dependencies` in `pyproject.toml`; keep `types-pyyaml` in `dev`
-- [ ] Refresh the lock file with `uv`
+- [x] Move `pyyaml` from the `dev` group to `[project] dependencies` in `pyproject.toml`; keep `types-pyyaml` in `dev`
+- [x] Refresh the lock file with `uv`
 
 **Success Criteria**:
-- [ ] `pyyaml` appears under runtime dependencies and `types-pyyaml` under dev only
-- [ ] `uv run python -c "import yaml"` works; `uv run pytest` still passes
-- [ ] Commit, e.g. `package: make pyyaml a runtime dependency`
+- [x] `pyyaml` appears under runtime dependencies and `types-pyyaml` under dev only
+- [x] `uv run python -c "import yaml"` works; `uv run pytest` still passes
+- [x] Commit, e.g. `package: make pyyaml a runtime dependency`
 
 **Files to Modify**: `pyproject.toml`, `uv.lock`
 
@@ -146,15 +147,15 @@ status: not_started
 **Objective**: One definition of the provider-failure rule, shared by the store writer and the parser (LLD D3, first rule). Refactor only; no behavior change.
 
 **Steps**:
-- [ ] Add `provider_failure_problem(*, provider_failure, verdict, findings) -> str | None` to `store/evidence_models.py`. It returns the rejection reason or `None`. Reuse the existing two message texts exactly
-- [ ] Replace the two inline branches in `_verdict_writer.py::_verdict_rejection` with a call to it, returning its reason as a `VerdictRejection`
-- [ ] Do not change any existing test
+- [x] Add `provider_failure_problem(*, provider_failure, verdict, findings) -> str | None` to `store/evidence_models.py`. It returns the rejection reason or `None`. Reuse the existing two message texts exactly
+- [x] Replace the two inline branches in `_verdict_writer.py::_verdict_rejection` with a call to it, returning its reason as a `VerdictRejection`
+- [x] Do not change any existing test
 
 **Success Criteria**:
-- [ ] The provider-failure message texts appear once in `src/` (in `evidence_models.py`; Task 2.3 enforces it with a test)
-- [ ] 104's existing rejection tests pass unchanged
-- [ ] `uv run ruff check .` and `uv run pyright` clean
-- [ ] Commit, e.g. `refactor(store): extract provider_failure_problem`
+- [x] The provider-failure message texts appear once in `src/` (in `evidence_models.py`; Task 2.3 enforces it with a test)
+- [x] 104's existing rejection tests pass unchanged
+- [x] `uv run ruff check .` and `uv run pyright` clean
+- [x] Commit, e.g. `refactor(store): extract provider_failure_problem`
 
 **Files to Modify**: `src/amoeba/store/evidence_models.py`, `src/amoeba/store/_verdict_writer.py`
 
@@ -167,12 +168,12 @@ status: not_started
 **Objective**: Pin the pure function, which the parser will now also depend on.
 
 **Steps**:
-- [ ] Add a small test module under `tests/store/`: non-failure returns `None`; failure with `UNKNOWN` and no findings returns `None`; failure with another verdict returns the verdict reason; failure with findings returns the findings reason
-- [ ] Single definition, enforced: with `ast`, collect every string constant under `src/amoeba/` and assert that each of the two reason strings (obtained by calling the function, not retyped) occurs in exactly one place, `evidence_models.py`
+- [x] Add a small test module under `tests/store/`: non-failure returns `None`; failure with `UNKNOWN` and no findings returns `None`; failure with another verdict returns the verdict reason; failure with findings returns the findings reason
+- [x] Single definition, enforced: with `ast`, collect every string constant under `src/amoeba/` and assert that each of the two reason strings (obtained by calling the function, not retyped) occurs in exactly one place, `evidence_models.py`
 
 **Success Criteria**:
-- [ ] The four cases and the single-definition test pass
-- [ ] Commit, e.g. `test(store): pin provider_failure_problem`
+- [x] The four cases and the single-definition test pass
+- [x] Commit, e.g. `test(store): pin provider_failure_problem`
 
 **Files to Create**: `tests/store/test_provider_failure_problem.py`
 
