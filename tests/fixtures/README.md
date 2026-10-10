@@ -76,6 +76,25 @@ Both part-1 files say `verdictSource: stated`.
 
 The other Squadron review files in `project-documents/user/reviews/` are unedited but have no test that needs them, so they are not copied.
 
+### Review files from other runs (slice 105)
+
+Copied **20261009** with `cp`, byte for byte, for the slice 105 parser tests. Four files come from other repositories or other runs: three from the Squadron repository (`../squadron`) and one from this repository. They contain review text about Squadron code and about this project's design. They were checked for secrets and for `resolution:`, `resolvedBy:` and `## Response` markers; none has any.
+
+| File | `verdict` | Written | Origin | Why it is here |
+| --- | --- | --- | --- | --- |
+| `928-review.slice.codex-parity-for-skill-packs-and-provider-access.20260927T212759.md` | `UNKNOWN` | 20260927 | Squadron `reviews/archive/` | A current-format provider failure: `providerFailure: true`, a *Provider Failure* heading, `runId`, `squadronVersion: 0.14.0`. |
+| `925-review.code.command-install-target-parity-codex-via-the-agents-skill-layout.20260922T145229.md` | `UNKNOWN` | 20260922 | Squadron `reviews/archive/` | A *Findings Not Parsed* heading with verdict `UNKNOWN`. |
+| `github.com-ecorkran-squadron-116-review.code.md` | `UNKNOWN` | 20260918 | Squadron `reviews/` | A PR review: nested `pr:` mapping and no `slice` key. |
+| `106-review.slice.outbound-change-feed-and-detection-of-external-work.20260928T175751.md` | CONCERNS | 20260928 | this repo's `reviews/archive/` | A stamped review with `runId` and `squadronVersion: 0.15.0`. |
+
+### Known gap, and the one edited file
+
+No real review file has a *Findings Not Parsed* heading together with a CONCERNS or FAIL verdict. The parser still has to handle that combination, so one fixture stands in for it. It is **edited**, unlike every other file here, and the gap stays recorded as missing real data.
+
+| File | `verdict` | Why it is here |
+| --- | --- | --- |
+| `102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.findings-not-parsed-edited.md` | CONCERNS | **Edited.** A copy of the round 1, part 1 file (`102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md`) with one added line, the body heading `## Findings Not Parsed`. Nothing else differs. Replace it when a real file shows the combination. |
+
 ### Stdout captures
 
 Captured **20260926**.
@@ -83,4 +102,4 @@ Captured **20260926**.
 | File | Command | Why it is here |
 | --- | --- | --- |
 | `stdout-slice-927-clean-pass.json` | `sq review slice 927 --output json --no-save` in the Squadron repo (captured by the Squadron session, squadron c88e2587, minimax-m3) | A clean PASS: `verdictSource: stated`, zero findings, `fallback_used: false`. Must parse as findings parsed, not as a parse failure. |
-| `stdout-slice-104-concerns-glmflash.json` | `sq review slice <104 design path> --against <100-arch path> --model glmflash --output json` against a throwaway copy of this repo (squadron 0.14.0, z-ai/glm-5.3-flash) | A CONCERNS with ten findings, mixed PASS/CONCERN/NOTE severities, and 48 tool calls. The review was not saved (a path input carries no slice number), so stdout holds no trailing `Saved review to` line. |
+| `stdout-slice-104-concerns-glmflash.json` | `sq review slice <104 design path> --against <100-arch path> --model glmflash --output json` against a throwaway copy of this repo (squadron 0.14.0, z-ai/glm-5.3-flash) | A CONCERNS with eleven findings, mixed PASS/CONCERN/NOTE severities, and 48 tool calls. The review was not saved (a path input carries no slice number), so stdout holds no trailing `Saved review to` line. |

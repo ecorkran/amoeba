@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: findings-verdicts-and-provenance
 dateCreated: 20260927
-dateUpdated: 20260927
+dateUpdated: 20261009
 status: complete
 ---
 
@@ -147,45 +147,89 @@ caller supplies it, for example from `sq --version`. **No code compares versions
 or branches on them.** When Squadron changes its output, the version finds the
 affected records; it never changes how they are read.
 
-### Mapping Squadron's flags (for slice 105)
+### Parsing Squadron output
 
-Checked 20260926 against squadron 0.14.0.
+`amoeba.upstream.squadron` turns Squadron's review output into a `VerdictInput`.
+It is pure: it reads text, not files, and opens no store. Two readers share one
+mapping: `parse_review_json` (the stdout of `sq review … --output json`) and
+`parse_review_artifact` (a saved review file). Both return a frozen
+`ParsedReview`; `to_verdict_input` adds the node, path, and version label.
+`amoeba ingest review` is the command-line caller (see
+[`process-contract.md`](process-contract.md), "The CLI").
 
-- `verdictSource` becomes `derivation`. A file with no `verdictSource` (older
-  review files) is `not_reported`, which labels the verdict `unattested`.
-- `fallback_used` is set in exactly two cases: a derived verdict whose findings
-  parsed, and a CONCERNS or FAIL whose findings did **not** parse. So
-  `fallback_used` with `stated` maps to `findings_parsed=False`. The raw flag is
-  kept in `fallback_used`; the label never reads it.
-- A provider failure is a normal review slot with `verdict: UNKNOWN` and a
-  *Provider Failure* heading. Record it with `provider_failure=True` and no
-  findings.
-- A missing location is Squadron's literal `unverified`; pass it as is. The
-  matching rule treats it as empty.
+Squadron's key names are defined once, in `review_fields.py`. Nothing is
+defaulted: a missing `verdict`, review type, or model, an unknown verdict or
+severity word, a finding without `severity` or `summary`, malformed YAML or
+JSON, and a provider failure with a verdict or findings all raise
+`SquadronParseError`, naming the key and the source.
 
-**Observed 20260927 on squadron `main`, after SQ 927 and #139 merged.** Not in
-a PyPI release yet (the latest is 0.14.0). This is a dated observation, not a
-version pin:
+**The mapping** (design decision D3 in slice 105):
 
-- `verdictSource: imposed` appears when Squadron caps a PASS to CONCERNS: the
-  diff was truncated and the model made no successful tool calls. The capped
-  review carries a synthetic finding with category `review-coverage` and no
-  location.
-- `diffTruncated` (JSON `diff_truncated`) is written only on reviews that had
-  a diff. Absent means `diff_truncated=None`.
-- `requestedModel` (JSON `requested_model`) appears only on a substitution;
-  `aiModel` is then the model that actually answered, possibly a dated
-  snapshot id. Map `aiModel` to `model` and `requestedModel` to
-  `requested_model`.
-- `squadronVersion` (JSON `squadron_version`) can supply `upstream_version`,
-  and `runId` (JSON `run_id`, pipeline runs only) can supply `sq_run_id`.
-- `providerFailure: true` marks a provider failure in frontmatter, alongside
-  the *Provider Failure* heading.
-- JSON also adds `diff_chars`, `diff_chars_injected`, `answering_models`,
-  `model_substituted`, `finding_scan`, and `location_verified` per finding.
-  The store has no field for them; slice 105 decides whether any is needed.
-- Severity values and the `unverified` literal are unchanged. Under
-  `--output json`, the "Saved review to" line now goes to stderr.
+| `ParsedReview` field | From stdout JSON | From a review file |
+| --- | --- | --- |
+| `derivation` | `verdictSource`; `not_reported` if null or absent | the same key; `not_reported` if absent (older files) |
+| `fallback_used` | `fallback_used`; `None` if absent | `None` (the file does not carry it) |
+| `findings_parsed` | `False` when `fallback_used` is true and the derivation is `stated` or `not_reported`; `None` when `fallback_used` is absent; else `True` | `False` when the body has a *Findings Not Parsed* heading; else `True` |
+| `provider_failure` | `False` (a failure produces no JSON) | `providerFailure: true`, **or** a *Provider Failure* heading |
+| `requested_model` | only when `model_substituted` is true | `requestedModel` |
+| `reviewed_sha`, `slice`, `source_document` | `None` | `reviewedSha`, `slice` (absent on PR reviews), `sourceDocument` |
+| `sq_run_id`, stamp | `run_id`, `squadron_version` | `runId`, `squadronVersion` |
+| `findings` | `structured_findings[]` | `findings:` (absent means none) |
+
+Each finding maps `id` to `position_id`, reads `severity` case-insensitively,
+and passes `category`, `summary`, and `location` through as written, including
+Squadron's `unverified` literal (the matching rule treats it as empty).
+Headings match at any level and in any case. Keys the parser does not know are
+ignored, including the `resolution:` and `resolvedBy:` keys added to review
+files by hand. Keys dropped on purpose: `location_verified`, `finding_scan`,
+`diff_chars`, `diff_chars_injected`, `answering_models`, `stop_reason`,
+`tools_given`. `source_document` is read from files only, because JSON's
+input path is whatever the caller typed.
+
+**The version rule** (D4). Squadron's own stamp (`squadronVersion` or
+`squadron_version`) is the version when present. A review with no stamp takes
+the caller's label (`--upstream-version`). With neither, `to_verdict_input`
+raises `UpstreamVersionError`; with both and different, it raises, naming both.
+The label is never compared beyond that equality.
+
+**The record id** (D5). `review_record_id` is `sq-review-` plus the first 32 hex
+characters of the SHA-256 of a canonical JSON encoding of the `ParsedReview`,
+tagged `parsed-review-v1`. It covers every `ParsedReview` field and nothing the
+caller supplies (node, path, version label, journal entry). So:
+
+- Adding `resolution:` keys or a `## Response` section does not change the id.
+  Ingesting the same review from another path is a replay no-op, and the first
+  ingest's `source_path` stays on the record.
+- The id does not include the node. Ingesting the same review onto a second
+  node is a silent replay no-op (the first record wins); pass a new `--id` to
+  record it again. `ingest review` prints the id on stderr.
+- Changing any covered field changes every id. That is a contract change: it
+  needs a new format tag and a CHANGELOG entry.
+- A review's file and its stdout capture get **different** ids, because they
+  carry different fields (`reviewed_sha` exists only in the file). Ingesting
+  both stores the review twice: two verdict rows, every finding key seen twice,
+  and `finding_changes` reporting each finding as `recurring` against itself.
+  **Ingest the file whenever one exists;** use stdout only for `--no-save` runs.
+
+**Attribution** (D7). `ingest review --node` is the operator's explicit
+choice and is not checked against the review's `slice`. The command prints the
+node, the parsed slice (`-` when there is none), and the review type on stderr
+before submitting, so a wrong node is visible. There is no delete: recover by
+ingesting again onto the right node with a new `--id`.
+
+**Dated observation, not a version pin.** Checked 20260928 against squadron
+`373217ab` (0.15.0). Squadron moves without semver; the shapes above are what
+the parser reads, and the version label only finds the affected records:
+
+- `verdictSource: imposed` appears when Squadron caps a PASS to CONCERNS (the
+  diff was truncated and the model made no successful tool calls). The capped
+  review carries a synthetic finding with category `review-coverage`.
+- `diffTruncated` is written only on reviews that had a diff.
+- `requestedModel` appears only on a substitution; `aiModel` is then the model
+  that answered.
+- Under `--output json`, the "Saved review to" line goes to stderr. The JSON
+  reader still decodes only the first object, so a trailing line is harmless.
+- A run from the CLI has no `runId`; its JSON `run_id` is null.
 
 ## The matching rule
 
@@ -343,8 +387,6 @@ it is never defaulted.
 
 ## Future work
 
-- Slice 105 parses Squadron's JSON and review files into `VerdictInput`, and
-  re-runs this rule's captured-round tests through the parser.
 - Slice 107 adds judge samples, calibration over `score` and `criteria`, and
   check records.
 - Slice 106 records reviews it finds on disk through `record_verdict`; the

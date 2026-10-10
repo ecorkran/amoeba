@@ -6,16 +6,17 @@ import json
 from pathlib import Path
 
 import pytest
-from review_fixtures import SQ_REVIEWS, review_findings
+from review_fixtures import SQ_REVIEWS
 
 from amoeba.inbox.evidence_payloads import FindingPayload
+from amoeba.upstream.squadron import parse_review_artifact
 
 PAYLOAD_DIR = Path(__file__).parent.parent / "scripts" / "demo_evidence"
 
 _CAPTURED_SUMMARIES = {
     finding.summary
     for path in SQ_REVIEWS.glob("*.md")
-    for finding in review_findings(path)
+    for finding in parse_review_artifact(path.read_text(encoding="utf-8")).findings
 }
 
 

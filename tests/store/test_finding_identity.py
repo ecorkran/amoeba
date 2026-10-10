@@ -10,8 +10,6 @@ from review_fixtures import (
     ROUND_1_PART_2,
     ROUND_2_PART_1,
     ROUND_2_PART_2,
-    read_frontmatter,
-    review_findings,
 )
 
 from amoeba.store.finding_identity import (
@@ -20,6 +18,7 @@ from amoeba.store.finding_identity import (
     normalize_location,
     normalize_summary,
 )
+from amoeba.upstream.squadron import ParsedReview, parse_review_artifact
 
 
 @pytest.mark.parametrize(
@@ -120,23 +119,29 @@ def test_location_and_summary_cannot_be_shifted_between_fields(separator: str) -
     assert shifted_left != finding_identity("a", f"b{separator}c")
 
 
-# Frontmatter checked 20260926 against the LLD's Technical Requirements table.
-_CAPTURED: dict[Path, tuple[str, str, str | None]] = {
+def _parse(path: Path) -> ParsedReview:
+    return parse_review_artifact(path.read_text(encoding="utf-8"))
+
+
+# Checked 20260926 against the LLD's Technical Requirements table. A file with no
+# `verdictSource` key reads as the `not_reported` derivation.
+_CAPTURED: dict[Path, tuple[str, str, str]] = {
     ROUND_1_PART_1: ("CONCERNS", "bf6d292", "stated"),
     ROUND_1_PART_2: ("PASS", "bf6d292", "stated"),
     ROUND_2_PART_1: ("CONCERNS", "20b3d70", "stated"),
-    ROUND_2_PART_2: ("UNKNOWN", "20b3d70", None),
+    ROUND_2_PART_2: ("UNKNOWN", "20b3d70", "not_reported"),
 }
 
 
 @pytest.mark.parametrize("path", list(_CAPTURED), ids=lambda p: p.name)
 def test_captured_fixture_matches_the_lld_table(path: Path) -> None:
-    verdict, sha_prefix, verdict_source = _CAPTURED[path]
+    verdict, sha_prefix, derivation = _CAPTURED[path]
     assert path.is_file(), f"missing fixture {path.name}"
-    frontmatter = read_frontmatter(path)
-    assert frontmatter["verdict"] == verdict, f"{path.name}: verdict"
-    assert str(frontmatter["reviewedSha"]).startswith(sha_prefix), f"{path.name}: sha"
-    assert frontmatter.get("verdictSource") == verdict_source, f"{path.name}: source"
+    parsed = _parse(path)
+    assert parsed.verdict.value == verdict, f"{path.name}: verdict"
+    assert parsed.reviewed_sha is not None, f"{path.name}: sha"
+    assert parsed.reviewed_sha.startswith(sha_prefix), f"{path.name}: sha"
+    assert parsed.derivation.value == derivation, f"{path.name}: source"
 
 
 def test_captured_rounds_share_no_keys() -> None:
@@ -150,8 +155,8 @@ def test_captured_rounds_share_no_keys() -> None:
     is judgment and belongs to initiative 140; loosening the rule to make this
     test fail has to be a deliberate decision.
     """
-    round_1 = review_findings(ROUND_1_PART_1)
-    round_2 = review_findings(ROUND_2_PART_1)
+    round_1 = _parse(ROUND_1_PART_1).findings
+    round_2 = _parse(ROUND_2_PART_1).findings
     assert (len(round_1), len(round_2)) == (9, 7)
 
     round_1_keys = {finding_identity(f.location, f.summary) for f in round_1}
