@@ -87,6 +87,14 @@ Copied **20261009** with `cp`, byte for byte, for the slice 105 parser tests. Fo
 | `github.com-ecorkran-squadron-116-review.code.md` | `UNKNOWN` | 20260918 | Squadron `reviews/` | A PR review: nested `pr:` mapping and no `slice` key. |
 | `106-review.slice.outbound-change-feed-and-detection-of-external-work.20260928T175751.md` | CONCERNS | 20260928 | this repo's `reviews/archive/` | A stamped review with `runId` and `squadronVersion: 0.15.0`. |
 
+### Known gap, and the one edited file
+
+No real review file has a *Findings Not Parsed* heading together with a CONCERNS or FAIL verdict. The parser still has to handle that combination, so one fixture stands in for it. It is **edited**, unlike every other file here, and the gap stays recorded as missing real data.
+
+| File | `verdict` | Why it is here |
+| --- | --- | --- |
+| `102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.findings-not-parsed-edited.md` | CONCERNS | **Edited.** A copy of the round 1, part 1 file (`102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md`) with one added line, the body heading `## Findings Not Parsed`. Nothing else differs. Replace it when a real file shows the combination. |
+
 ### Stdout captures
 
 Captured **20260926**.

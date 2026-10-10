@@ -30,6 +30,10 @@ FINDINGS_NOT_PARSED_925 = SQ_REVIEWS / (
     "925-review.code.command-install-target-parity-codex-via-the-agents-skill-layout"
     ".20260922T145229.md"
 )
+FINDINGS_NOT_PARSED_EDITED = SQ_REVIEWS / (
+    "102-review.tasks.resident-process-and-recovery.part-1.20260921T112529"
+    ".findings-not-parsed-edited.md"
+)
 PR_REVIEW_116 = SQ_REVIEWS / "github.com-ecorkran-squadron-116-review.code.md"
 STAMPED_REVIEW_106 = SQ_REVIEWS / (
     "106-review.slice.outbound-change-feed-and-detection-of-external-work"
