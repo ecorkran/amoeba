@@ -14,7 +14,8 @@ from review_fixtures import (
     SQ_REVIEWS,
 )
 
-from amoeba.upstream.squadron.review import SquadronParseError, parse_review_artifact
+from amoeba.upstream.squadron.review import SquadronParseError
+from amoeba.upstream.squadron.review_artifact import parse_review_artifact
 
 _REAL_FILES = sorted(SQ_REVIEWS.glob("*.md"))
 

@@ -25,11 +25,8 @@ from amoeba.store.evidence_models import (
     ReviewVerdict,
     VerdictDerivation,
 )
-from amoeba.upstream.squadron.review import (
-    ParsedReview,
-    SquadronParseError,
-    parse_review_artifact,
-)
+from amoeba.upstream.squadron.review import ParsedReview, SquadronParseError
+from amoeba.upstream.squadron.review_artifact import parse_review_artifact
 
 
 def _parse(path: Path) -> ParsedReview:
