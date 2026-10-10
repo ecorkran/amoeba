@@ -90,3 +90,13 @@ def test_malformed_yaml_chains_the_yaml_error() -> None:
 def test_frontmatter_that_is_not_a_mapping_is_rejected() -> None:
     with pytest.raises(SquadronParseError, match="not a mapping"):
         parse_review_artifact("---\n- one\n- two\n---\nbody\n")
+
+
+def test_a_heading_quoted_inside_a_code_fence_is_not_a_heading() -> None:
+    quoted = (
+        _text(ROUND_1_PART_1)
+        + "\n```\n## Provider Failure\n## Findings Not Parsed\n```\n"
+    )
+    parsed = parse_review_artifact(quoted)
+    assert parsed.provider_failure is False
+    assert parsed.findings_parsed is True

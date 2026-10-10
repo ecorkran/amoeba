@@ -136,3 +136,9 @@ def test_the_public_names_import() -> None:
     )
     assert all(hasattr(squadron, name) for name in names)
     assert set(names) == set(squadron.__all__)
+
+
+@pytest.mark.parametrize("label", ["", "   "])
+def test_an_empty_version_label_is_an_error(label: str) -> None:
+    with pytest.raises(UpstreamVersionError, match="empty"):
+        to_verdict_input(_parse(ROUND_1_PART_1), node_id=NODE, upstream_version=label)

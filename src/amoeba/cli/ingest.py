@@ -21,6 +21,7 @@ from amoeba.store import SubmissionKind, paths
 from amoeba.store.evidence_models import VerdictInput
 from amoeba.store.verdict_payload import verdict_to_payload
 from amoeba.upstream.squadron import (
+    ParsedReview,
     SquadronReviewError,
     parse_review_artifact,
     parse_review_json,
@@ -71,7 +72,11 @@ def add_ingest_parser(subparsers: Any) -> None:
         "--id",
         dest="record_id",
         metavar="ID",
-        help="Record and submission id. Defaults to a digest of the parsed review.",
+        help=(
+            "Record and submission id. Defaults to a digest of the parsed review, "
+            "which does not include the node: ingesting the same review onto "
+            "another node is a no-op unless a new --id is given."
+        ),
     )
 
 
@@ -79,8 +84,8 @@ def _fail(message: str) -> None:
     print(f"amoeba: {message}", file=sys.stderr)
 
 
-def _compose(args: argparse.Namespace, path: Path) -> VerdictInput:
-    """Read, parse, and compose; then report what is being attributed where.
+def _compose(args: argparse.Namespace, path: Path) -> tuple[ParsedReview, VerdictInput]:
+    """Read, parse, and compose.
 
     Raises ``OSError``, ``UnicodeDecodeError``, or ``SquadronReviewError``; the
     caller maps each to an exit status.
@@ -94,12 +99,7 @@ def _compose(args: argparse.Namespace, path: Path) -> VerdictInput:
         upstream_version=args.upstream_version,
         source_path=str(path),
     )
-    print(
-        f"ingest: node {args.node}, slice {parsed.slice or NO_SLICE}, "
-        f"review type {parsed.review_type}",
-        file=sys.stderr,
-    )
-    return verdict
+    return parsed, verdict
 
 
 def run_ingest(args: argparse.Namespace) -> ExitCode:
@@ -116,15 +116,22 @@ def run_ingest(args: argparse.Namespace) -> ExitCode:
         return ExitCode.SUBMISSION_REFUSED
     path = Path(args.artifact or args.stdout_json).resolve()
     try:
-        verdict = _compose(args, path)
+        parsed, verdict = _compose(args, path)
     except (OSError, UnicodeDecodeError) as error:
         _fail(f"cannot read {path}: {error}")
         return ExitCode.REVIEW_UNREADABLE
     except SquadronReviewError as error:
         _fail(f"{path}: {error}")
         return ExitCode.REVIEW_UNREADABLE
+    # Informational only (D7): shown just before the submission is made.
+    print(
+        f"ingest: node {args.node}, slice {parsed.slice or NO_SLICE}, "
+        f"review type {parsed.review_type}, id {verdict.id}",
+        file=sys.stderr,
+    )
     # The digest (or --id) is both the record id and the submission id, so a
-    # second ingest of the same review is a no-op replay (103's D2).
+    # second ingest of the same review is a no-op replay (103's D2), even onto a
+    # different node: the id does not include the node.
     print(
         submit(
             project_id=args.project,

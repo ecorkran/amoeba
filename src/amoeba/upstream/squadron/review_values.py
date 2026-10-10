@@ -25,7 +25,9 @@ def fail(source: RecordSource, message: str) -> NoReturn:
     raise SquadronParseError(source, message)
 
 
-def typed(raw: Mapping[str, Any], key: str, kind: type, source: RecordSource) -> Any:
+def typed[ValueT](
+    raw: Mapping[str, Any], key: str, kind: type[ValueT], source: RecordSource
+) -> ValueT | None:
     """The value at ``key``, or ``None`` if absent or null. A wrong type raises."""
     value = raw.get(key)
     if value is None:
@@ -33,7 +35,7 @@ def typed(raw: Mapping[str, Any], key: str, kind: type, source: RecordSource) ->
     # bool is an int subclass; a flag where a number is expected is a mistake.
     if not isinstance(value, kind) or (isinstance(value, bool) and kind is not bool):
         fail(source, f"{key!r} has the wrong type: {value!r}")
-    return value
+    return cast(ValueT, value)
 
 
 def number(raw: Mapping[str, Any], key: str, source: RecordSource) -> float | None:
@@ -49,7 +51,7 @@ def required(raw: Mapping[str, Any], key: str, source: RecordSource) -> str:
     value = typed(raw, key, str, source)
     if value is None or not value.strip():
         fail(source, f"missing required key {key!r}")
-    return cast(str, value)
+    return value
 
 
 def read_verdict(
@@ -77,8 +79,12 @@ def read_derivation(
 def read_criteria(
     raw: Mapping[str, Any], key: str, source: RecordSource
 ) -> Mapping[str, object] | None:
-    value = typed(raw, key, dict, source)
-    return None if value is None else cast(dict[str, object], value)
+    value = raw.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        fail(source, f"{key!r} has the wrong type: {value!r}")
+    return cast(dict[str, object], value)
 
 
 def read_findings(

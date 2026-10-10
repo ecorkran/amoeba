@@ -92,6 +92,9 @@ def review_record_id(parsed: ParsedReview) -> str:
 
 def _resolve_version(stamp: str | None, supplied: str | None) -> str:
     """D4: Squadron's stamp, else the caller's label; the two may not disagree."""
+    for label in (stamp, supplied):
+        if label is not None and not label.strip():
+            raise UpstreamVersionError("the upstream version label is empty")
     if stamp is None and supplied is None:
         raise UpstreamVersionError(
             "no upstream version: the review carries no stamp and none was supplied"

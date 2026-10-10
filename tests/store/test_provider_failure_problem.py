@@ -11,7 +11,9 @@ SRC = Path(__file__).parents[2] / "src" / "amoeba"
 EVIDENCE_MODELS = SRC / "store" / "evidence_models.py"
 
 
-def _problem(verdict: ReviewVerdict, findings: list[object], failed: bool = True):
+def _problem(
+    verdict: ReviewVerdict, findings: list[object], failed: bool = True
+) -> str | None:
     return provider_failure_problem(
         provider_failure=failed, verdict=verdict, findings=findings
     )

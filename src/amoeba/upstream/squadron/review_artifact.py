@@ -37,6 +37,12 @@ _PROVIDER_FAILURE_HEADING = _heading_pattern(fields.HEADING_PROVIDER_FAILURE)
 _FINDINGS_NOT_PARSED_HEADING = _heading_pattern(fields.HEADING_FINDINGS_NOT_PARSED)
 
 
+# A fenced code block (``` or ~~~) quotes text; a heading inside one is not one.
+_CODE_FENCE_BLOCK = re.compile(
+    r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[ \t]*$", re.MULTILINE | re.DOTALL
+)
+
+
 def _split_frontmatter(text: str) -> tuple[str, str]:
     """The frontmatter text and the body after it. Leading blank lines are allowed."""
     fences = list(_FENCE.finditer(text))
@@ -58,6 +64,7 @@ def _load_frontmatter(block: str) -> Mapping[str, Any]:
 def parse_review_artifact(text: str) -> ParsedReview:
     """Read a saved Squadron review file (D3, "From a review file")."""
     block, body = _split_frontmatter(text)
+    body = _CODE_FENCE_BLOCK.sub("", body)
     raw = _load_frontmatter(block)
     verdict = read_verdict(raw, fields.FM_VERDICT, _ARTIFACT)
     findings = read_findings(raw.get(fields.FM_FINDINGS), fields.FM_FINDINGS, _ARTIFACT)

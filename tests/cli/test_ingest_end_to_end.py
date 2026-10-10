@@ -18,17 +18,17 @@ from cli_harness import (
     start_running,
     stop_running,
 )
-from review_fixtures import ROUND_1_PART_1, ROUND_2_PART_1, ROUND_2_PART_2
-
-from amoeba.inbox import pending
-from amoeba.upstream.squadron import parse_review_artifact, review_record_id
-from cli.ingest_e2e_harness import (
+from ingest_e2e_harness import (
     PRE_STAMP_LABEL,
     applied,
     ingest_ok,
     inspect_rows,
     start_with_node,
 )
+from review_fixtures import ROUND_1_PART_1, ROUND_2_PART_1, ROUND_2_PART_2
+
+from amoeba.inbox import pending
+from amoeba.upstream.squadron import parse_review_artifact, review_record_id
 
 
 @dataclass(frozen=True)

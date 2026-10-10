@@ -10,20 +10,18 @@ from __future__ import annotations
 import ast
 import json
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from cli_harness import (
     CommandResult,
     await_condition,
-    cli_environment,
     run_cli,
     start_running,
     stop_running,
     submit_cli,
 )
+from ingest_e2e_harness import PROJECT, seed_node, store_file
 from review_fixtures import (
     PR_REVIEW_116,
     ROUND_1_PART_1,
@@ -36,11 +34,9 @@ from amoeba.cli.main import ExitCode
 from amoeba.inbox import layout
 from amoeba.upstream.squadron import parse_review_artifact, review_record_id
 
-PROJECT = "demo"
 NODE = "node-1"
 PRE_STAMP_LABEL = "label-from-the-operator"
 ARGUMENT_ERROR_STATUS = 2  # argparse's own usage-error status
-DEMO_SCRIPT = Path(__file__).parents[2] / "scripts" / "demo_evidence.py"
 INGEST_SOURCE = Path(__file__).parents[2] / "src" / "amoeba" / "cli" / "ingest.py"
 
 
@@ -54,8 +50,7 @@ def template_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     runs_dir.mkdir()
     process = start_running(supervisor_dir, runs_dir)
     submit_cli(supervisor_dir, PROJECT, "create-project", "--by", "pm")
-    store_file = supervisor_dir / f"{PROJECT}.sqlite3"
-    await_condition(store_file.is_file, "the project store")
+    await_condition(store_file(supervisor_dir).is_file, "the project store")
     stop_running(supervisor_dir, process)
     return supervisor_dir
 
@@ -233,18 +228,6 @@ def _submission(supervisor_dir: Path) -> dict[str, object]:
     return submission
 
 
-def _seed_node(supervisor_dir: Path) -> str:
-    result = subprocess.run(
-        [sys.executable, str(DEMO_SCRIPT)],
-        capture_output=True,
-        text=True,
-        env=cli_environment(supervisor_dir),
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    return result.stdout.strip()
-
-
 def test_a_review_file_writes_one_submission_named_by_its_digest(
     supervisor_dir: Path,
 ) -> None:
@@ -283,7 +266,7 @@ def test_a_stdout_capture_is_ingested(supervisor_dir: Path) -> None:
 def test_a_node_that_differs_from_the_reviews_slice_is_accepted_and_shown(
     supervisor_dir: Path,
 ) -> None:
-    node = _seed_node(supervisor_dir)
+    node = seed_node(supervisor_dir)
     parsed = parse_review_artifact(ROUND_2_PART_1.read_text(encoding="utf-8"))
     assert parsed.slice is not None and parsed.slice != node  # the precondition
     result = ingest(
@@ -326,3 +309,24 @@ def test_id_overrides_the_digest_and_is_the_submission_id(
     assert result.returncode == ExitCode.OK, result.stderr
     assert result.stdout.strip() == "chosen-id"
     assert _submission(supervisor_dir)["id"] == "chosen-id"
+
+
+def test_the_same_review_for_another_node_shares_its_id(supervisor_dir: Path) -> None:
+    """The id is a digest of the review, not of the node (D5): pinned, and shown."""
+    first = ingest(
+        supervisor_dir,
+        "--artifact",
+        str(ROUND_1_PART_1),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+    )
+    second = ingest(
+        supervisor_dir,
+        "--artifact",
+        str(ROUND_1_PART_1),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+        node="another-node",
+    )
+    assert first.stdout == second.stdout
+    assert first.stdout.strip() in second.stderr

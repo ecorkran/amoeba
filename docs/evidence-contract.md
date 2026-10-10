@@ -200,6 +200,9 @@ caller supplies (node, path, version label, journal entry). So:
 - Adding `resolution:` keys or a `## Response` section does not change the id.
   Ingesting the same review from another path is a replay no-op, and the first
   ingest's `source_path` stays on the record.
+- The id does not include the node. Ingesting the same review onto a second
+  node is a silent replay no-op (the first record wins); pass a new `--id` to
+  record it again. `ingest review` prints the id on stderr.
 - Changing any covered field changes every id. That is a contract change: it
   needs a new format tag and a CHANGELOG entry.
 - A review's file and its stdout capture get **different** ids, because they

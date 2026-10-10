@@ -29,7 +29,7 @@ PROJECT = "demo"
 OPERATOR = "pm"
 #: Every 102 fixture predates Squadron's version stamp.
 PRE_STAMP_LABEL = "0.14.0"
-DEMO_SCRIPT = Path(__file__).parents[2] / "scripts" / "demo_evidence.py"
+DEMO_SCRIPT = Path(__file__).parent.parent / "scripts" / "demo_evidence.py"
 
 
 def store_file(supervisor_dir: Path) -> Path:

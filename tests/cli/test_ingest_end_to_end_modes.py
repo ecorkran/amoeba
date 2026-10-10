@@ -12,17 +12,17 @@ from cli_harness import (
     start_running,
     stop_running,
 )
-from review_fixtures import ROUND_1_PART_1
-
-from amoeba.cli.main import ExitCode
-from amoeba.inbox import layout
-from cli.ingest_e2e_harness import (
+from ingest_e2e_harness import (
     applied,
     ingest_artifact,
     ingest_ok,
     inspect_rows,
     start_with_node,
 )
+from review_fixtures import ROUND_1_PART_1
+
+from amoeba.cli.main import ExitCode
+from amoeba.inbox import layout
 
 MISSING_PROJECT = "nosuch"
 
