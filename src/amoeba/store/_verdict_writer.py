@@ -20,9 +20,9 @@ from amoeba.store import sql_evidence, sql_journal
 from amoeba.store._base import StoreBase
 from amoeba.store.evidence_models import (
     FindingObservation,
-    ReviewVerdict,
     VerdictInput,
     VerdictRecord,
+    provider_failure_problem,
 )
 from amoeba.store.mapping_evidence import (
     map_observation,
@@ -65,13 +65,13 @@ class VerdictWriter(StoreBase):
                     f"journal entry {verdict.journal_entry_id!r} is not on node "
                     f"{verdict.node_id!r}"
                 )
-        if verdict.provider_failure and verdict.verdict is not ReviewVerdict.UNKNOWN:
-            return VerdictRejection(
-                f"a provider failure must have verdict {ReviewVerdict.UNKNOWN.value}, "
-                f"not {verdict.verdict.value}"
-            )
-        if verdict.provider_failure and verdict.findings:
-            return VerdictRejection("a provider failure cannot carry findings")
+        failure_problem = provider_failure_problem(
+            provider_failure=verdict.provider_failure,
+            verdict=verdict.verdict,
+            findings=verdict.findings,
+        )
+        if failure_problem is not None:
+            return VerdictRejection(failure_problem)
         if not verdict.provenance.upstream_version.strip():
             return VerdictRejection("upstream_version must not be empty")
         return None

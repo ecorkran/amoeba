@@ -9,7 +9,7 @@ The trust label (``VerdictStanding``) is computed from stored fields by
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -117,6 +117,29 @@ def verdict_standing(
     if derivation is VerdictDerivation.NOT_REPORTED:
         return VerdictStanding.UNATTESTED
     return VerdictStanding.STATED
+
+
+def provider_failure_problem(
+    *,
+    provider_failure: bool,
+    verdict: ReviewVerdict,
+    findings: Sequence[object],
+) -> str | None:
+    """Why a provider-failure record is invalid, or ``None`` if it is acceptable.
+
+    The one definition of the rule, shared by the store writer and the Squadron
+    parser: a failed provider call has no verdict and no findings.
+    """
+    if not provider_failure:
+        return None
+    if verdict is not ReviewVerdict.UNKNOWN:
+        return (
+            f"a provider failure must have verdict {ReviewVerdict.UNKNOWN.value}, "
+            f"not {verdict.value}"
+        )
+    if findings:
+        return "a provider failure cannot carry findings"
+    return None
 
 
 @dataclass(frozen=True, kw_only=True)
