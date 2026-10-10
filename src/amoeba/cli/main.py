@@ -102,6 +102,10 @@ class ExitCode(IntEnum):
     #: changes to compare.
     NOT_COMPARABLE = 11
 
+    #: ``ingest review``: the review file could not be read or parsed, or it
+    #: carries no upstream version label. Nothing was left in the inbox.
+    REVIEW_UNREADABLE = 12
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every subcommand."""
@@ -143,6 +147,10 @@ def build_parser() -> argparse.ArgumentParser:
     from amoeba.cli.submit import add_submit_parser
 
     add_submit_parser(subparsers)
+
+    from amoeba.cli.ingest import add_ingest_parser
+
+    add_ingest_parser(subparsers)
 
     return parser
 
@@ -194,6 +202,7 @@ def _add_inspect_parser(subparsers: Any) -> None:
 
 def _dispatch(args: argparse.Namespace) -> ExitCode:
     """Route a parsed command to its implementation."""
+    from amoeba.cli import ingest as ingest_module
     from amoeba.cli import inspect as inspect_module
     from amoeba.cli import lifecycle
     from amoeba.cli import submit as submit_module
@@ -209,6 +218,8 @@ def _dispatch(args: argparse.Namespace) -> ExitCode:
             return inspect_module.run_listing(args.listing, args, use_json=args.json)
         case "submit":
             return submit_module.run_submit(args)
+        case "ingest":
+            return ingest_module.run_ingest(args)
         case _:
             raise ValueError(f"unhandled command {args.command!r}")
 
