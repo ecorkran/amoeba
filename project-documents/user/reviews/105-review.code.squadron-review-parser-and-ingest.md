@@ -11,55 +11,50 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261009
 dateUpdated: 20261009
-reviewedSha: ea7414f62ee393b8077a206939d6927131941c40
-revision_number: 1
+reviewedSha: bc63f3548d7d6cd5857b2815ae962e8de78fbaaf
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 0
+toolCallsMade: 1
 diffTruncated: false
-durationSeconds: 27.5
+durationSeconds: 27.1
 runId: run-20261010-p6-011bdb45
 squadronVersion: 0.21.2
 findings:
   - id: F001
     severity: concern
     category: error-handling
-    summary: "Source-flag dispatch relies on truthiness, so an empty path crashes"
-    location: "src/amoeba/cli/ingest.py:99-101"
+    summary: "Non-JSON-serializable YAML values crash the review-id digest and submission"
+    location: "src/amoeba/upstream/squadron/review.py:review_record_id"
   - id: F002
     severity: concern
-    category: design
-    summary: "The same review ingested onto another node is silently a no-op"
-    location: "src/amoeba/cli/ingest.py:118-132"
+    category: correctness
+    summary: "Scalar fields that YAML auto-types are rejected as \"wrong type\""
+    location: "src/amoeba/upstream/squadron/review_values.py:typed"
   - id: F003
-    severity: concern
-    category: typing
-    summary: "Type-suppression comments in test code under strict pyright"
-    location: "tests/upstream/test_review_json.py:27"
+    severity: note
+    category: design
+    summary: "Source selection is decided in two places"
+    location: "src/amoeba/cli/ingest.py:_compose"
   - id: F004
     severity: note
-    category: parsing
-    summary: "JSON reader is not lenient about text before the object"
-    location: "src/amoeba/upstream/squadron/review_json.py:30-38"
+    category: ux
+    summary: "Fixed informational note is printed on every successful ingest"
+    location: "src/amoeba/cli/ingest.py:NODE_NOT_IN_ID_NOTE"
   - id: F005
-    severity: note
-    category: parsing
-    summary: "Unterminated code fence is not stripped"
-    location: "src/amoeba/upstream/squadron/review_artifact.py:36-38"
-  - id: F006
-    severity: note
-    category: style
-    summary: "`str(supplied)` is a typing workaround"
-    location: "src/amoeba/upstream/squadron/review.py:_resolve_version"
-  - id: F007
     severity: pass
     category: design
     summary: "Single definition of the provider-failure rule"
     location: "src/amoeba/store/evidence_models.py:provider_failure_problem"
-  - id: F008
+  - id: F006
     severity: pass
-    category: design
-    summary: "Layering, constants and test coverage"
-    location: "src/amoeba/upstream/squadron/review_fields.py"
+    category: style
+    summary: "Exception handling, typing, and tooling conform to the Python rules"
+    location: "src/amoeba/cli/ingest.py:run_ingest"
+  - id: F007
+    severity: pass
+    category: testing
+    summary: "Test coverage uses real fixtures and subprocess-level checks"
+    location: "tests/upstream/test_review_artifact.py"
 ---
 
 # Review: code — slice 105
@@ -69,43 +64,39 @@ findings:
 
 ## Findings
 
-### [CONCERN] Source-flag dispatch relies on truthiness, so an empty path crashes
+### [CONCERN] Non-JSON-serializable YAML values crash the review-id digest and submission
 
-`--artifact ""` satisfies the required mutually exclusive group, because the flag is present. After that, `Path(args.artifact or args.stdout_json)` evaluates to `Path(None)`, which raises `TypeError`. `_compose` has the same problem: `parse_review_artifact(text) if args.artifact else parse_review_json(text)` would pick the JSON parser. The `TypeError` is not caught by the `OSError`/`SquadronReviewError` handlers, so the user gets a traceback instead of `REVIEW_UNREADABLE`. Test `args.artifact is not None`, or set a `dest`/mode once and use it in both places. The same condition is also written twice, which breaks the project's rule against scattering comparison values.
+`parse_review_artifact` passes `criteria` through from `yaml.safe_load` unchanged (`read_criteria` returns the raw dict). `safe_load` can produce `datetime.date`, `datetime.datetime`, or `bytes` values, for example from an unquoted `2026-09-21` or a `!!binary` tag. `review_record_id` then calls `json.dumps(asdict(parsed))` without a `default`, so it raises `TypeError`. `verdict_to_payload` and `submit` serialize the same data and have the same exposure. `_compose` and `run_ingest` catch only `OSError`, `UnicodeDecodeError`, and `SquadronReviewError`, so a hand-edited review file would produce a raw traceback instead of exit code 12. Validate that `criteria` is JSON-compatible at parse time and raise `SquadronParseError`, or catch `TypeError` at the boundary.
 
-### [CONCERN] The same review ingested onto another node is silently a no-op
+### [CONCERN] Scalar fields that YAML auto-types are rejected as "wrong type"
 
-`review_record_id` excludes the node by design (D5). The submission id is also that digest, so ingesting an identical review for a second node is replayed as a no-op. The command prints the id and exits `OK`, which looks like success. The data for the second node is dropped. It is documented in `--help` and pinned by a test. Even so, a zero exit status for a dropped write invites silent data loss. Consider including the node in the submission id, or at least warning on stderr when the id already exists.
+`typed(raw, key, str, ...)` is used for `reviewedSha`, `runId`, `squadronVersion`, `slice`, and `sourceDocument` in the frontmatter reader. YAML resolves some plausible values to non-strings. An abbreviated SHA that is all digits (`1234567`) or like `1e10345` becomes an int or float. A version written as `0.15` becomes a float. A slice named `2026-09-21` becomes a date. These files then fail with "has the wrong type", and exit code 12 gives the operator little help. CLAUDE.md prefers lenient parsing of format variations. Consider coercing scalar int/float/date values to `str` for fields that are textual by contract, or at least make the error say "quote the value".
 
-### [CONCERN] Type-suppression comments in test code under strict pyright
+### [NOTE] Source selection is decided in two places
 
-The rules require strict pyright with tests included, and zero errors is a merge blocker. `_capture(path=CONCERNS)  # type: ignore[no-untyped-def]` should be annotated (`path: Path = CONCERNS`). Other suppressions are `# type: ignore[arg-type]` in `tests/store/test_verdict_to_payload.py` (`_minimal`) and `# pyright: ignore[reportUnknownMemberType]` in `tests/cli/test_ingest.py`. They can be removed by typing the helpers or by narrowing with `cast`.
+`args.artifact is not None` is evaluated in `run_ingest`, to pick the path, and again in `_compose`, to pick the parser. Deriving a single `(path, parser)` pair once would remove the duplication and any chance of the two checks drifting apart.
 
-### [NOTE] JSON reader is not lenient about text before the object
+### [NOTE] Fixed informational note is printed on every successful ingest
 
-`_decode_first_object` starts at the first `{`. Trailing text is handled and tested. A captured stdout with a leading log line that contains a brace (for example `{debug}`) would fail as malformed JSON. The project prefers lenient parsing. Consider trying each `{` until one decodes to an object with a `verdict` key.
-
-### [NOTE] Unterminated code fence is not stripped
-
-`_CODE_FENCE_BLOCK` needs a closing fence. A hand-edited file with an unclosed fence that quotes `## Provider Failure` would still be read as a provider failure. This is an edge case and fails loudly if the verdict is not UNKNOWN. It is worth a test or a comment.
-
-### [NOTE] `str(supplied)` is a typing workaround
-
-After the checks, `stamp if stamp is not None else str(supplied)` only exists to satisfy the type checker. Restructuring with early returns (`if stamp is not None: ...; assert/raise for supplied`) would make the invariant explicit.
+The "id does not include the node" note goes to stderr on every run. This is a deliberate choice, per D6 and the comment, and the tests pin it. It will become noise in scripted use, though. Consider printing it only when a second ingest is likely, or put it in the `--help` text only. The `--id` help already documents it.
 
 ### [PASS] Single definition of the provider-failure rule
 
-The rule is extracted once and shared by the store writer and the parser. A test checks that each reason text is defined in exactly one place.
+The rule is extracted once and shared by `_verdict_writer.py` and the artifact parser. A test enforces that the reason text is defined in only one place. This follows the DRY and single-source-of-truth guidance.
 
-### [PASS] Layering, constants and test coverage
+### [PASS] Exception handling, typing, and tooling conform to the Python rules
 
-Squadron key names are defined once and a test enforces it. Import-direction tests keep the store and inbox independent of the upstream package. `verdict_to_payload` has round-trip tests. The parsers are tested against real captured fixtures, including a pinned id and end-to-end crash-recovery runs in throwaway supervisor directories. No test reads a production database URL.
+Every `except` maps a specific exception type to an explicit exit code with an ERROR-level message. There are no silent swallows, and errors chain with `from error`. `pyproject.toml` has the required ruff `select` list and the strict pyright block. Squadron literals are centralized in `review_fields.py` and enforced by a test.
+
+### [PASS] Test coverage uses real fixtures and subprocess-level checks
+
+Parsers are tested against every real captured review file, with a guard that the table covers all of them. Error cases are built by mutating real text. The CLI tests run as subprocesses against throwaway supervisor directories and never read a production URL variable. The inbox is checked to be empty after each failure, and an import-direction test guards layering.
 
 ### Run Digest
 
-- Response length: 4117 chars
+- Response length: 3984 chars
 - Response is newline-free: no
-- Tool calls made: 0
+- Tool calls made: 1
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -115,10 +106,10 @@ Squadron key names are defined once and a test enforces it. Import-direction tes
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 27.5 s
+- Duration: 27.1 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7

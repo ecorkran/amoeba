@@ -11,54 +11,55 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261009
 dateUpdated: 20261009
-reviewedSha: 9f54f7fcbb685bf2333e7c40ae61d8248e062a39
+reviewedSha: ea7414f62ee393b8077a206939d6927131941c40
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 0
 diffTruncated: false
-durationSeconds: 47.6
+durationSeconds: 27.5
 runId: run-20261010-p6-011bdb45
 squadronVersion: 0.21.2
 findings:
   - id: F001
     severity: concern
-    category: design
-    summary: "Re-ingesting a review for a different node is silently a no-op replay"
-    location: "src/amoeba/cli/ingest.py:127-136"
+    category: error-handling
+    summary: "Source-flag dispatch relies on truthiness, so an empty path crashes"
+    location: "src/amoeba/cli/ingest.py:99-101"
   - id: F002
     severity: concern
-    category: dry
-    summary: "Duplicated test setup and inconsistent import roots"
-    location: "tests/cli/test_ingest.py:57-62"
+    category: design
+    summary: "The same review ingested onto another node is silently a no-op"
+    location: "src/amoeba/cli/ingest.py:118-132"
   - id: F003
     severity: concern
     category: typing
-    summary: "Tests with weak typing under strict pyright"
-    location: "tests/store/test_provider_failure_problem.py:14"
+    summary: "Type-suppression comments in test code under strict pyright"
+    location: "tests/upstream/test_review_json.py:27"
   - id: F004
-    severity: concern
-    category: typing
-    summary: "`typed()` returns `Any`, so none of the field readers are type-checked"
-    location: "src/amoeba/upstream/squadron/review_values.py:26-34"
-  - id: F005
-    severity: concern
+    severity: note
     category: parsing
-    summary: "Provider-failure and findings-not-parsed detection searches the whole body for headings"
-    location: "src/amoeba/upstream/squadron/review_artifact.py:28-37"
+    summary: "JSON reader is not lenient about text before the object"
+    location: "src/amoeba/upstream/squadron/review_json.py:30-38"
+  - id: F005
+    severity: note
+    category: parsing
+    summary: "Unterminated code fence is not stripped"
+    location: "src/amoeba/upstream/squadron/review_artifact.py:36-38"
   - id: F006
     severity: note
-    category: validation
-    summary: "Empty `--upstream-version` is accepted"
-    location: "src/amoeba/upstream/squadron/review.py:93-102"
+    category: style
+    summary: "`str(supplied)` is a typing workaround"
+    location: "src/amoeba/upstream/squadron/review.py:_resolve_version"
   - id: F007
-    severity: note
-    category: structure
-    summary: "`_compose` reports to stderr before the submission is made"
-    location: "src/amoeba/cli/ingest.py:77-90"
+    severity: pass
+    category: design
+    summary: "Single definition of the provider-failure rule"
+    location: "src/amoeba/store/evidence_models.py:provider_failure_problem"
   - id: F008
     severity: pass
     category: design
-    summary: "Shared provider-failure rule and payload inverse"
-    location: "src/amoeba/store/evidence_models.py:122-143"
+    summary: "Layering, constants and test coverage"
+    location: "src/amoeba/upstream/squadron/review_fields.py"
 ---
 
 # Review: code — slice 105
@@ -68,41 +69,41 @@ findings:
 
 ## Findings
 
-### [CONCERN] Re-ingesting a review for a different node is silently a no-op replay
+### [CONCERN] Source-flag dispatch relies on truthiness, so an empty path crashes
 
-The submission id and record id come from `review_record_id`, which deliberately excludes the node, the path and the version label. A second `ingest review` of the same review with a different `--node` produces the same id. That id is then treated as an idempotent replay. `--node` is the operator's unchecked attribution (D7), and the command prints the node on stderr so a wrong one is visible. But correcting it by re-running with the right node can't work, and the success exit code gives no sign that the new attribution was dropped. I did not inspect how the inbox treats a replay whose payload differs from the first, so confirm that it rejects a conflicting payload instead of ignoring it. If it ignores it, add a test for the same review with a different node. The existing e2e test only covers the same node with a different path.
+`--artifact ""` satisfies the required mutually exclusive group, because the flag is present. After that, `Path(args.artifact or args.stdout_json)` evaluates to `Path(None)`, which raises `TypeError`. `_compose` has the same problem: `parse_review_artifact(text) if args.artifact else parse_review_json(text)` would pick the JSON parser. The `TypeError` is not caught by the `OSError`/`SquadronReviewError` handlers, so the user gets a traceback instead of `REVIEW_UNREADABLE`. Test `args.artifact is not None`, or set a `dest`/mode once and use it in both places. The same condition is also written twice, which breaks the project's rule against scattering comparison values.
 
-### [CONCERN] Duplicated test setup and inconsistent import roots
+### [CONCERN] The same review ingested onto another node is silently a no-op
 
-`test_ingest.py` redefines `PROJECT`, `PRE_STAMP_LABEL`, `DEMO_SCRIPT` and a `_seed_node` helper (around lines 190-200). `ingest_e2e_harness.py` already provides the same things as `seed_node`, `PROJECT`, `PRE_STAMP_LABEL` and `DEMO_SCRIPT`. The e2e tests also mix `from cli_harness import ...` with `from cli.ingest_e2e_harness import ...`, so two different import roots are in use. That is fragile and depends on how pytest's path is set up. Reuse the harness helpers and pick one import style.
+`review_record_id` excludes the node by design (D5). The submission id is also that digest, so ingesting an identical review for a second node is replayed as a no-op. The command prints the id and exits `OK`, which looks like success. The data for the second node is dropped. It is documented in `--help` and pinned by a test. Even so, a zero exit status for a dropped write invites silent data loss. Consider including the node in the submission id, or at least warning on stderr when the id already exists.
 
-### [CONCERN] Tests with weak typing under strict pyright
+### [CONCERN] Type-suppression comments in test code under strict pyright
 
-`_problem` has no return annotation. `_capture(path=CONCERNS)` in `tests/upstream/test_review_json.py:28` is untyped and uses `# type: ignore[no-untyped-def]`, a mypy-style code. The rules require strict pyright over `tests/` with zero errors. Annotate both functions instead of suppressing.
+The rules require strict pyright with tests included, and zero errors is a merge blocker. `_capture(path=CONCERNS)  # type: ignore[no-untyped-def]` should be annotated (`path: Path = CONCERNS`). Other suppressions are `# type: ignore[arg-type]` in `tests/store/test_verdict_to_payload.py` (`_minimal`) and `# pyright: ignore[reportUnknownMemberType]` in `tests/cli/test_ingest.py`. They can be removed by typing the helpers or by narrowing with `cast`.
 
-### [CONCERN] `typed()` returns `Any`, so none of the field readers are type-checked
+### [NOTE] JSON reader is not lenient about text before the object
 
-`typed(raw, key, kind: type, source) -> Any` makes every call site in `ParsedReview(...)` unchecked. A wrong `kind` at a call site, such as `int` where `str` was meant, would not be caught statically. Use a `TypeVar` (`kind: type[T] -> T | None`) so the readers are checked.
+`_decode_first_object` starts at the first `{`. Trailing text is handled and tested. A captured stdout with a leading log line that contains a brace (for example `{debug}`) would fail as malformed JSON. The project prefers lenient parsing. Consider trying each `{` until one decodes to an object with a `verdict` key.
 
-### [CONCERN] Provider-failure and findings-not-parsed detection searches the whole body for headings
+### [NOTE] Unterminated code fence is not stripped
 
-The `Provider Failure` and `Findings Not Parsed` headings are matched anywhere in the body. That includes text inside fenced code blocks, and text from hand-added sections such as `## Response`, which the tests show are expected. A response that quotes `## Provider Failure` would flip a normal review to `provider_failure=True`. That is loud when the verdict isn't UNKNOWN, but not otherwise. For `Findings Not Parsed` it silently changes `findings_parsed`, and with it the verdict's standing and the record id. This also leans on user-visible text as logical structure, which CLAUDE.md warns against. The headings are centralised and the matching is lenient, which helps. Still, restrict the search to the body before any hand-added section, or at least skip fenced blocks, and add a test for a quoted heading.
+`_CODE_FENCE_BLOCK` needs a closing fence. A hand-edited file with an unclosed fence that quotes `## Provider Failure` would still be read as a provider failure. This is an edge case and fails loudly if the verdict is not UNKNOWN. It is worth a test or a comment.
 
-### [NOTE] Empty `--upstream-version` is accepted
+### [NOTE] `str(supplied)` is a typing workaround
 
-`_resolve_version` only tests `is None`. `--upstream-version ""` passes through (the `str(supplied)` is redundant) and is rejected later by the store writer as "upstream_version must not be empty". That happens after the CLI has already printed an id and exited 0. Reject a blank label at composition time with `UpstreamVersionError`, as the reader does for blank required keys. Unquoted YAML stamps such as `squadronVersion: 1.0` parse as floats and are rejected with "wrong type". That is loud, so it is acceptable.
+After the checks, `stamp if stamp is not None else str(supplied)` only exists to satisfy the type checker. Restructuring with early returns (`if stamp is not None: ...; assert/raise for supplied`) would make the invariant explicit.
 
-### [NOTE] `_compose` reports to stderr before the submission is made
+### [PASS] Single definition of the provider-failure rule
 
-The function is named for composition but prints the "ingest: node ..., slice ..." line, mixing I/O into the compose step. The line also appears even if `submit` then fails. Moving the print next to `submit` would keep `_compose` pure. A leading UTF-8 BOM is also not stripped, because `read_text(encoding="utf-8")` is used rather than `utf-8-sig`, so such a file reports "no frontmatter".
+The rule is extracted once and shared by the store writer and the parser. A test checks that each reason text is defined in exactly one place.
 
-### [PASS] Shared provider-failure rule and payload inverse
+### [PASS] Layering, constants and test coverage
 
-The provider-failure rule now has one definition, used by both the store writer and the parser, and a test enforces that. `verdict_to_payload` is verified as an exact inverse of `verdict_from_payload` by round-trip tests. Squadron key names live in one file, also enforced by a test. Parsing is checked against every real captured file, as the project's parsing rules require. The upstream/store import direction is guarded by a test. Exceptions are narrow and chained, with no swallowed errors. `yaml.safe_load` is used, and the command opens no store (D6), which a test checks.
+Squadron key names are defined once and a test enforces it. Import-direction tests keep the store and inbox independent of the upstream package. `verdict_to_payload` has round-trip tests. The parsers are tested against real captured fixtures, including a pinned id and end-to-end crash-recovery runs in throwaway supervisor directories. No test reads a production database URL.
 
 ### Run Digest
 
-- Response length: 5381 chars
+- Response length: 4117 chars
 - Response is newline-free: no
 - Tool calls made: 0
 - Tool calls failed: 0
@@ -114,7 +115,7 @@ The provider-failure rule now has one definition, used by both the store writer 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 47.6 s
+- Duration: 27.5 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 8
