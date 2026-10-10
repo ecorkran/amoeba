@@ -34,7 +34,6 @@ from review_fixtures import (
 
 from amoeba.cli.main import ExitCode
 from amoeba.inbox import layout
-from amoeba.store import paths
 from amoeba.upstream.squadron import parse_review_artifact, review_record_id
 
 PROJECT = "demo"
@@ -169,9 +168,7 @@ def test_a_project_with_no_store_is_refused_before_anything_is_read(
     _assert_refused(
         result, supervisor_dir, ExitCode.SUBMISSION_REFUSED, "no store", "nosuch"
     )
-    assert not paths.store_path(
-        "nosuch", {"AMOEBA_STORE_DIR": str(supervisor_dir)}
-    ).exists()
+    assert not (supervisor_dir / "nosuch.sqlite3").exists()
 
 
 def test_stdout_text_with_no_json_object_is_unreadable(
