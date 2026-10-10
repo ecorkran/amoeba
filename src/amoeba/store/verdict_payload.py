@@ -211,3 +211,44 @@ def verdict_from_payload(
             source_path=_optional_text(payload, VERDICT_SOURCE_PATH),
         ),
     )
+
+
+def _finding_to_payload(finding: FindingInput) -> dict[str, object]:
+    return {
+        FINDING_POSITION_ID: finding.position_id,
+        FINDING_SEVERITY: finding.severity.value,
+        FINDING_CATEGORY: finding.category,
+        FINDING_SUMMARY: finding.summary,
+        FINDING_LOCATION: finding.location,
+    }
+
+
+def verdict_to_payload(verdict: VerdictInput) -> dict[str, object]:
+    """The inverse of ``verdict_from_payload``: the id travels as the submission id.
+
+    Enums are written by value and ``None`` stays ``None``, so the result is plain
+    JSON-compatible data holding exactly ``VERDICT_PAYLOAD_KEYS``.
+    """
+    return {
+        VERDICT_NODE_ID: verdict.node_id,
+        VERDICT_VERDICT: verdict.verdict.value,
+        VERDICT_DERIVATION: verdict.derivation.value,
+        VERDICT_FALLBACK_USED: verdict.fallback_used,
+        VERDICT_FINDINGS_PARSED: verdict.findings_parsed,
+        VERDICT_PROVIDER_FAILURE: verdict.provider_failure,
+        VERDICT_DIFF_TRUNCATED: verdict.diff_truncated,
+        VERDICT_REVIEW_TYPE: verdict.review_type,
+        VERDICT_MODEL: verdict.model,
+        VERDICT_REQUESTED_MODEL: verdict.requested_model,
+        VERDICT_REVIEWED_SHA: verdict.reviewed_sha,
+        VERDICT_SCORE: verdict.score,
+        VERDICT_CRITERIA: None if verdict.criteria is None else dict(verdict.criteria),
+        VERDICT_TOOL_CALLS_MADE: verdict.tool_calls_made,
+        VERDICT_SQ_RUN_ID: verdict.sq_run_id,
+        VERDICT_JOURNAL_ENTRY_ID: verdict.journal_entry_id,
+        VERDICT_FINDINGS: [_finding_to_payload(item) for item in verdict.findings],
+        VERDICT_UPSTREAM: verdict.provenance.upstream,
+        VERDICT_UPSTREAM_VERSION: verdict.provenance.upstream_version,
+        VERDICT_SOURCE: verdict.provenance.source.value,
+        VERDICT_SOURCE_PATH: verdict.provenance.source_path,
+    }
