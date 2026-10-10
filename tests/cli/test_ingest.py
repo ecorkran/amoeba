@@ -8,13 +8,17 @@ submits is seen by the next.
 from __future__ import annotations
 
 import ast
+import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from cli_harness import (
     CommandResult,
     await_condition,
+    cli_environment,
     run_cli,
     start_running,
     stop_running,
@@ -23,6 +27,7 @@ from cli_harness import (
 from review_fixtures import (
     PR_REVIEW_116,
     ROUND_1_PART_1,
+    ROUND_2_PART_1,
     SQ_REVIEWS,
     STAMPED_REVIEW_106,
 )
@@ -30,11 +35,13 @@ from review_fixtures import (
 from amoeba.cli.main import ExitCode
 from amoeba.inbox import layout
 from amoeba.store import paths
+from amoeba.upstream.squadron import parse_review_artifact, review_record_id
 
 PROJECT = "demo"
 NODE = "node-1"
 PRE_STAMP_LABEL = "label-from-the-operator"
 ARGUMENT_ERROR_STATUS = 2  # argparse's own usage-error status
+DEMO_SCRIPT = Path(__file__).parents[2] / "scripts" / "demo_evidence.py"
 INGEST_SOURCE = Path(__file__).parents[2] / "src" / "amoeba" / "cli" / "ingest.py"
 
 
@@ -67,10 +74,13 @@ def new_files(supervisor_dir: Path) -> list[Path]:
 
 
 def ingest(
-    supervisor_dir: Path, *arguments: str, project: str = PROJECT
+    supervisor_dir: Path,
+    *arguments: str,
+    project: str = PROJECT,
+    node: str = NODE,
 ) -> CommandResult:
     return run_cli(
-        ["ingest", "review", "--project", project, "--node", NODE, "--by", "pm"]
+        ["ingest", "review", "--project", project, "--node", node, "--by", "pm"]
         + list(arguments),
         supervisor_dir,
     )
@@ -211,3 +221,111 @@ def test_ingest_opens_no_store() -> None:
         if isinstance(node, ast.ImportFrom | ast.Import):
             mentioned.update(alias.name.split(".")[-1] for alias in node.names)
     assert "Store" not in mentioned
+
+
+# --- The success path --------------------------------------------------------
+
+
+def _digest(path: Path) -> str:
+    return review_record_id(parse_review_artifact(path.read_text(encoding="utf-8")))
+
+
+def _submission(supervisor_dir: Path) -> dict[str, object]:
+    (file,) = new_files(supervisor_dir)
+    submission: dict[str, object] = json.loads(file.read_text(encoding="utf-8"))
+    return submission
+
+
+def _seed_node(supervisor_dir: Path) -> str:
+    result = subprocess.run(
+        [sys.executable, str(DEMO_SCRIPT)],
+        capture_output=True,
+        text=True,
+        env=cli_environment(supervisor_dir),
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def test_a_review_file_writes_one_submission_named_by_its_digest(
+    supervisor_dir: Path,
+) -> None:
+    result = ingest(
+        supervisor_dir,
+        "--artifact",
+        str(ROUND_1_PART_1),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+    )
+    assert result.returncode == ExitCode.OK, result.stderr
+    assert result.stdout.strip() == _digest(ROUND_1_PART_1)
+    assert len(new_files(supervisor_dir)) == 1
+    assert NODE in result.stderr
+    assert "resident-process-and-recovery" in result.stderr
+    assert "tasks" in result.stderr
+
+
+def test_a_stdout_capture_is_ingested(supervisor_dir: Path) -> None:
+    capture = SQ_REVIEWS / "stdout-slice-104-concerns-glmflash.json"
+    result = ingest(
+        supervisor_dir,
+        "--stdout-json",
+        str(capture),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+    )
+    assert result.returncode == ExitCode.OK, result.stderr
+    assert len(new_files(supervisor_dir)) == 1
+    assert result.stdout.strip().startswith("sq-review-")
+    payload = _submission(supervisor_dir)["payload"]
+    assert isinstance(payload, dict)
+    assert payload["source"] == "stdout_json"  # pyright: ignore[reportUnknownMemberType]
+
+
+def test_a_node_that_differs_from_the_reviews_slice_is_accepted_and_shown(
+    supervisor_dir: Path,
+) -> None:
+    node = _seed_node(supervisor_dir)
+    parsed = parse_review_artifact(ROUND_2_PART_1.read_text(encoding="utf-8"))
+    assert parsed.slice is not None and parsed.slice != node  # the precondition
+    result = ingest(
+        supervisor_dir,
+        "--artifact",
+        str(ROUND_2_PART_1),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+        node=node,
+    )
+    assert result.returncode == ExitCode.OK, result.stderr
+    assert len(new_files(supervisor_dir)) == 1
+    assert node in result.stderr and parsed.slice in result.stderr
+
+
+def test_a_review_with_no_slice_shows_a_dash(supervisor_dir: Path) -> None:
+    result = ingest(
+        supervisor_dir,
+        "--artifact",
+        str(PR_REVIEW_116),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+    )
+    assert result.returncode == ExitCode.OK, result.stderr
+    assert "slice -," in result.stderr
+
+
+def test_id_overrides_the_digest_and_is_the_submission_id(
+    supervisor_dir: Path,
+) -> None:
+    result = ingest(
+        supervisor_dir,
+        "--artifact",
+        str(ROUND_1_PART_1),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+        "--id",
+        "chosen-id",
+    )
+    assert result.returncode == ExitCode.OK, result.stderr
+    assert result.stdout.strip() == "chosen-id"
+    assert _submission(supervisor_dir)["id"] == "chosen-id"

@@ -16,8 +16,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from amoeba.store import paths
+from amoeba.inbox import submit
+from amoeba.store import SubmissionKind, paths
 from amoeba.store.evidence_models import VerdictInput
+from amoeba.store.verdict_payload import verdict_to_payload
 from amoeba.upstream.squadron import (
     SquadronReviewError,
     parse_review_artifact,
@@ -121,7 +123,15 @@ def run_ingest(args: argparse.Namespace) -> ExitCode:
     except SquadronReviewError as error:
         _fail(f"{path}: {error}")
         return ExitCode.REVIEW_UNREADABLE
-    # TODO(8.4): submit the verdict.
-    _fail("ingest: submit step not yet implemented")
-    del verdict
-    return ExitCode.SUBMISSION_REFUSED
+    # The digest (or --id) is both the record id and the submission id, so a
+    # second ingest of the same review is a no-op replay (103's D2).
+    print(
+        submit(
+            project_id=args.project,
+            kind=SubmissionKind.VERDICT,
+            payload=verdict_to_payload(verdict),
+            submitted_by=args.by,
+            submission_id=verdict.id,
+        )
+    )
+    return ExitCode.OK
