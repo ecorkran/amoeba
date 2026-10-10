@@ -22,6 +22,20 @@ ROUND_1_PART_2 = SQ_REVIEWS / f"{_REVIEW_STEM}.part-2.20260921T112635.md"
 ROUND_2_PART_1 = SQ_REVIEWS / f"{_REVIEW_STEM}.part-1.md"
 ROUND_2_PART_2 = SQ_REVIEWS / f"{_REVIEW_STEM}.part-2.md"
 
+PROVIDER_FAILURE_928 = SQ_REVIEWS / (
+    "928-review.slice.codex-parity-for-skill-packs-and-provider-access"
+    ".20260927T212759.md"
+)
+FINDINGS_NOT_PARSED_925 = SQ_REVIEWS / (
+    "925-review.code.command-install-target-parity-codex-via-the-agents-skill-layout"
+    ".20260922T145229.md"
+)
+PR_REVIEW_116 = SQ_REVIEWS / "github.com-ecorkran-squadron-116-review.code.md"
+STAMPED_REVIEW_106 = SQ_REVIEWS / (
+    "106-review.slice.outbound-change-feed-and-detection-of-external-work"
+    ".20260928T175751.md"
+)
+
 # Frontmatter is the block between the first two lines consisting of `---`.
 _FRONTMATTER_FENCE = re.compile(r"^---[ \t]*$", re.MULTILINE)
 

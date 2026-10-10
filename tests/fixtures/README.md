@@ -76,6 +76,17 @@ Both part-1 files say `verdictSource: stated`.
 
 The other Squadron review files in `project-documents/user/reviews/` are unedited but have no test that needs them, so they are not copied.
 
+### Review files from other runs (slice 105)
+
+Copied **20261009** with `cp`, byte for byte, for the slice 105 parser tests. Four files come from other repositories or other runs: three from the Squadron repository (`../squadron`) and one from this repository. They contain review text about Squadron code and about this project's design. They were checked for secrets and for `resolution:`, `resolvedBy:` and `## Response` markers; none has any.
+
+| File | `verdict` | Written | Origin | Why it is here |
+| --- | --- | --- | --- | --- |
+| `928-review.slice.codex-parity-for-skill-packs-and-provider-access.20260927T212759.md` | `UNKNOWN` | 20260927 | Squadron `reviews/archive/` | A current-format provider failure: `providerFailure: true`, a *Provider Failure* heading, `runId`, `squadronVersion: 0.14.0`. |
+| `925-review.code.command-install-target-parity-codex-via-the-agents-skill-layout.20260922T145229.md` | `UNKNOWN` | 20260922 | Squadron `reviews/archive/` | A *Findings Not Parsed* heading with verdict `UNKNOWN`. |
+| `github.com-ecorkran-squadron-116-review.code.md` | `UNKNOWN` | 20260918 | Squadron `reviews/` | A PR review: nested `pr:` mapping and no `slice` key. |
+| `106-review.slice.outbound-change-feed-and-detection-of-external-work.20260928T175751.md` | CONCERNS | 20260928 | this repo's `reviews/archive/` | A stamped review with `runId` and `squadronVersion: 0.15.0`. |
+
 ### Stdout captures
 
 Captured **20260926**.
