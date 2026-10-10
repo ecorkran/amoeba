@@ -65,6 +65,7 @@ The directory holds:
 | `amoeba.lock` | The instance lock. **The truth about liveness.** |
 | `amoeba.pid` | JSON: pid, started-at, version. **Informational only.** |
 | `inbox/` | Submissions from outside the process: `tmp/`, `new/`, `quarantine/`, `failed/`. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
+| `amoeba ingest review --project ID --node NODE_ID --by NAME (--artifact PATH \| --stdout-json PATH) [--upstream-version LABEL] [--id ID]` | Read a Squadron review file, or the captured stdout of `sq review … --output json`, and submit it as a `verdict`. Prints the submission id on stdout and the node, parsed slice (`-` if none), and review type on stderr. Submits and does not wait: read the outcome with `inspect submissions` and `inspect inbox`. Refuses a project with no store file (`SUBMISSION_REFUSED`, nothing written) and opens no store. Works whether or not the process runs. See [`evidence-contract.md`](evidence-contract.md), "Parsing Squadron output". *(Slice 105.)* |
 
 **The lock is the truth; the PID file is a convenience.** The kernel releases an
 advisory `flock` when its holder dies by any means, so a stale lock cannot
@@ -319,9 +320,10 @@ Every status, and the condition that produces it. Defined once in
 | 6 | `GRACE_EXPIRED` | `start`: a tenant did not return within `--shutdown-grace`. |
 | 7 | `STARTUP_FAILED` | `start`: a store could not be opened, or recovery could not complete, for any project. **Also** any store error that stops a running process — including an inbox apply that fails below its attempt limit — since the boundary maps every `StoreError` here, except `VerdictNotFoundError` (`NOT_FOUND`). |
 | 8 | `NOT_RUNNING_STATUS` | `status`: the supervisor is not running. Not a failure — it distinguishes running from stopped by exit status alone. |
-| 9 | `SUBMISSION_REFUSED` | `submit`: the submission was invalid or could not be written. Nothing was left in the inbox. *(Slice 103.)* |
+| 9 | `SUBMISSION_REFUSED` | `submit` and `ingest review`: the submission was invalid or could not be written, or (`ingest review`) the project has no store. Nothing was left in the inbox. *(Slice 103.)* |
 | 10 | `NOT_FOUND` | `inspect`: a record named on the command line (e.g. `changes --verdict ID`) does not exist. *(Slice 104.)* |
 | 11 | `NOT_COMPARABLE` | `inspect changes`: the review failed or was unparsed, so it has no changes to report. *(Slice 104.)* |
+| 12 | `REVIEW_UNREADABLE` | `ingest review`: the file could not be read or parsed, or the review has no version label (or one that disagrees with its stamp). Nothing was left in the inbox. *(Slice 105.)* |
 
 ## Inspection
 

@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 105: `amoeba.upstream.squadron` — a pure parser for Squadron review files and `--output json` stdout (`ParsedReview`, `to_verdict_input`, `review_record_id`), tested against real captured reviews.
+- Slice 105: `amoeba ingest review` submits a review as a `verdict` without waiting; exit code `REVIEW_UNREADABLE` (12). It refuses a project with no store.
+- Slice 105: `verdict_to_payload` (the inverse of `verdict_from_payload`) and `provider_failure_problem` (one definition of the provider-failure rule, shared by the store and the parser).
+- Slice 105: PyYAML is now a runtime dependency.
+- Slice 105: the record id is a digest of the parsed review, tagged `parsed-review-v1`. The covered fields are a contract: changing them changes every id and needs a new tag and a changelog entry.
 - Slice 104: verdict records and findings in the store — schema version 5 (migration `005`: `verdicts`, `finding_observations`), `record_verdict` (one transaction, caller-supplied id, first record wins), and `verdict` / `verdicts` / `observations` / `findings` reads.
 - Slice 104: `amoeba.store.finding_identity`, a versioned content key per finding that survives formatting and moved line numbers but deliberately not rewording; pinned against the captured slice-102 review rounds.
 - Slice 104: `finding_changes` — new, recurring, and gone against the previous comparable round, never stored; provider failures and unparsed reviews are never a baseline.
