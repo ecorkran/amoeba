@@ -8,11 +8,13 @@ the transaction of whatever write fired them (D8).
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 
 from amoeba.store import sql, sql_feed, sql_inbox
 from amoeba.store._base import isoformat, now
 from amoeba.store._verdict_writer import VerdictWriter
+from amoeba.store.evidence_models import VerdictInput, VerdictRecord
 from amoeba.store.feed_models import (
     BaselineEntry,
     Change,
@@ -68,6 +70,36 @@ class FeedOperations(VerdictWriter):
                 return existing
             self._insert_detection(detection)
         return self._require_detection(detection)
+
+    def record_detected_verdict(
+        self, verdict: VerdictInput, detection: DetectionInput
+    ) -> tuple[VerdictRecord, DetectedReview]:
+        """Record a detected review's verdict and its ``ingested`` row, atomically.
+
+        104's retry rule applies to the verdict. The ledger row carries the
+        verdict's id and node. The hand-edit case — a new ``(path, digest)``
+        whose parsed content matches an existing verdict id — records no new
+        verdict and one new ``ingested`` row pointing at the existing one.
+
+        Raises:
+            ValueError: ``detection.outcome`` is not ``ingested``, or a verdict
+                check failed. Nothing is written.
+            StoreIntegrityError: The ledger key already exists. Callers skip
+                known keys first; this is the UNIQUE constraint's own error.
+        """
+        if detection.outcome is not DetectionOutcome.INGESTED:
+            raise ValueError(
+                f"record_detected_verdict records an ingested review, "
+                f"not {detection.outcome.value!r}"
+            )
+        with self._connection:
+            self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
+            record = self._record_verdict_within(verdict, detection.project_id)
+            linked = dataclasses.replace(
+                detection, verdict_id=record.id, node_id=record.node_id
+            )
+            self._insert_detection(linked)
+        return record, self._require_detection(linked)
 
     def detections(
         self, project_id: str, *, outcome: DetectionOutcome | None = None

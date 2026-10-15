@@ -13,11 +13,12 @@ not import a sibling operation class (the pattern ``BlockWriter`` set).
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from amoeba.store import sql_evidence, sql_journal
-from amoeba.store._base import StoreBase
+from amoeba.store._base import StoreBase, isoformat, now
 from amoeba.store.evidence_models import (
     FindingObservation,
     VerdictInput,
@@ -32,7 +33,10 @@ from amoeba.store.mapping_evidence import (
     verdict_parameters,
 )
 from amoeba.store.mapping_journal import map_journal_entry
+from amoeba.store.models import NodeNotFoundError, StoreIntegrityError
 from amoeba.store.verdict_payload import verdict_from_payload
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,13 @@ class VerdictRejection:
 
     reason: str
     node_missing: bool = False
+
+
+_INPUT_FIELDS = tuple(field.name for field in dataclasses.fields(VerdictInput))
+
+
+def _as_input(record: VerdictRecord) -> VerdictInput:
+    return VerdictInput(**{name: getattr(record, name) for name in _INPUT_FIELDS})
 
 
 class VerdictWriter(StoreBase):
@@ -89,6 +100,36 @@ class VerdictWriter(StoreBase):
                 sql_evidence.INSERT_OBSERVATION,
                 observation_parameters(verdict.id, ordinal, finding),
             )
+
+    def _record_verdict_within(
+        self, verdict: VerdictInput, project_id: str
+    ) -> VerdictRecord:
+        """``record_verdict``'s body, inside a transaction the caller opened.
+
+        The retry rule, then the checks, then the insert. Raises exactly as
+        ``record_verdict`` documents.
+        """
+        existing = self._load_verdict(verdict.id)
+        if existing is not None:
+            if existing.project_id != project_id or _as_input(existing) != verdict:
+                logger.warning(
+                    "verdict %r is already recorded with different content; "
+                    "keeping the first",
+                    verdict.id,
+                )
+            return existing
+
+        rejection = self._verdict_rejection(project_id, verdict)
+        if rejection is not None:
+            if rejection.node_missing:
+                raise NodeNotFoundError(rejection.reason)
+            raise ValueError(rejection.reason)
+
+        self._insert_verdict(project_id, verdict, isoformat(now()))
+        recorded = self._load_verdict(verdict.id)
+        if recorded is None:
+            raise StoreIntegrityError(f"verdict {verdict.id!r} vanished after insert")
+        return recorded
 
     def _apply_verdict_submission(
         self,

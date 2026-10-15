@@ -10,11 +10,7 @@ record wins, and a WARNING says so if the content differs.
 
 from __future__ import annotations
 
-import dataclasses
-import logging
-
 from amoeba.store import sql_evidence, sql_inbox
-from amoeba.store._base import isoformat, now
 from amoeba.store._verdict_writer import VerdictWriter
 from amoeba.store.evidence_models import (
     COMPARABLE_STANDINGS,
@@ -28,18 +24,8 @@ from amoeba.store.evidence_models import (
 )
 from amoeba.store.mapping_evidence import map_observation, map_verdict
 from amoeba.store.models import (
-    NodeNotFoundError,
-    StoreIntegrityError,
     VerdictNotFoundError,
 )
-
-logger = logging.getLogger(__name__)
-
-_INPUT_FIELDS = tuple(field.name for field in dataclasses.fields(VerdictInput))
-
-
-def _as_input(record: VerdictRecord) -> VerdictInput:
-    return VerdictInput(**{name: getattr(record, name) for name in _INPUT_FIELDS})
 
 
 class VerdictOperations(VerdictWriter):
@@ -67,28 +53,7 @@ class VerdictOperations(VerdictWriter):
         """
         with self._connection:
             self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
-            existing = self._load_verdict(verdict.id)
-            if existing is not None:
-                if existing.project_id != project_id or _as_input(existing) != verdict:
-                    logger.warning(
-                        "verdict %r is already recorded with different content; "
-                        "keeping the first",
-                        verdict.id,
-                    )
-                return existing
-
-            rejection = self._verdict_rejection(project_id, verdict)
-            if rejection is not None:
-                if rejection.node_missing:
-                    raise NodeNotFoundError(rejection.reason)
-                raise ValueError(rejection.reason)
-
-            self._insert_verdict(project_id, verdict, isoformat(now()))
-            recorded = self._load_verdict(verdict.id)
-
-        if recorded is None:
-            raise StoreIntegrityError(f"verdict {verdict.id!r} vanished after insert")
-        return recorded
+            return self._record_verdict_within(verdict, project_id)
 
     def verdict(self, verdict_id: str) -> VerdictRecord | None:
         """Return the verdict with this id, or ``None`` if there is none."""
