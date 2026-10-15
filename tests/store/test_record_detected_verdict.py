@@ -98,3 +98,14 @@ def test_an_existing_ledger_key_surfaces_the_integrity_error(store: Store) -> No
     store.record_detected_verdict(verdict_input("v-1", node_id), _detection())
     with pytest.raises(StoreError):
         store.record_detected_verdict(verdict_input("v-1", node_id), _detection())
+
+
+def test_a_verdict_id_from_another_project_is_refused(store: Store) -> None:
+    other_node = seed_node(store, "other")
+    store.record_verdict(verdict_input("v-1", other_node), project_id="other")
+    node_id = seed_node(store)
+
+    with pytest.raises(StoreError, match="other"):
+        store.record_detected_verdict(verdict_input("v-1", node_id), _detection())
+
+    assert store.detections(PROJECT) == []

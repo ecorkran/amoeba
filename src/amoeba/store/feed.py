@@ -84,8 +84,9 @@ class FeedOperations(VerdictWriter):
         Raises:
             ValueError: ``detection.outcome`` is not ``ingested``, or a verdict
                 check failed. Nothing is written.
-            StoreIntegrityError: The ledger key already exists. Callers skip
-                known keys first; this is the UNIQUE constraint's own error.
+            StoreIntegrityError: The ledger key already exists (callers skip
+                known keys first; this is the UNIQUE constraint's own error),
+                or the verdict id is already recorded in another project.
         """
         if detection.outcome is not DetectionOutcome.INGESTED:
             raise ValueError(
@@ -95,6 +96,13 @@ class FeedOperations(VerdictWriter):
         with self._connection:
             self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
             record = self._record_verdict_within(verdict, detection.project_id)
+            if record.project_id != detection.project_id:
+                # Raised inside the transaction, so nothing is written: a
+                # ledger row must never point at another project's verdict.
+                raise StoreIntegrityError(
+                    f"verdict {record.id!r} is recorded in project "
+                    f"{record.project_id!r}, not {detection.project_id!r}"
+                )
             linked = dataclasses.replace(
                 detection, verdict_id=record.id, node_id=record.node_id
             )
