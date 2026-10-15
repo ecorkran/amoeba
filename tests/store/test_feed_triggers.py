@@ -4,9 +4,23 @@ from __future__ import annotations
 
 import sqlite3
 
-from feed_harness import raw_changes
+from evidence_harness import REVIEW_TYPE, provider_failure, verdict_input
+from feed_harness import (
+    escalate_by_recovery,
+    post_intent,
+    raw_changes,
+    resolve_by_submission,
+)
 
-from amoeba.store import BlockedKind, CFReference, NodeKind, NodeStatus, Store, sql
+from amoeba.store import (
+    BlockedKind,
+    CFReference,
+    Channel,
+    NodeKind,
+    NodeStatus,
+    Store,
+    sql,
+)
 from amoeba.store.feed_models import ChangeKind
 
 PROJECT = "demo"
@@ -98,3 +112,72 @@ def test_a_rolled_back_write_leaves_no_change(store: Store) -> None:
         )
         connection.rollback()
     assert raw_changes(store, PROJECT) == []
+
+
+# --------------------------------------------------------------------------
+# Verdicts and messages
+# --------------------------------------------------------------------------
+
+
+def test_record_verdict_emits_one_verdict_recorded(store: Store) -> None:
+    node_id = _node(store)
+    record = store.record_verdict(verdict_input("v-1", node_id), project_id=PROJECT)
+
+    change = raw_changes(store, PROJECT)[-1]
+    assert change.kind is ChangeKind.VERDICT_RECORDED
+    assert (change.node_id, change.subject_id) == (node_id, "v-1")
+    assert change.recorded_at == record.recorded_at
+
+
+def test_the_verdict_payload_keys_are_exactly_the_three(store: Store) -> None:
+    node_id = _node(store)
+    store.record_verdict(verdict_input("v-1", node_id), project_id=PROJECT)
+    assert _of_kind(store, ChangeKind.VERDICT_RECORDED) == [
+        {"verdict": "CONCERNS", "review_type": REVIEW_TYPE, "provider_failure": False}
+    ]
+
+
+def test_a_retried_record_verdict_emits_nothing(store: Store) -> None:
+    node_id = _node(store)
+    store.record_verdict(verdict_input("v-1", node_id), project_id=PROJECT)
+    store.record_verdict(verdict_input("v-1", node_id), project_id=PROJECT)
+    assert len(_of_kind(store, ChangeKind.VERDICT_RECORDED)) == 1
+
+
+def test_a_provider_failure_is_a_json_true(store: Store) -> None:
+    node_id = _node(store)
+    store.record_verdict(provider_failure("v-1", node_id), project_id=PROJECT)
+    payload = _of_kind(store, ChangeKind.VERDICT_RECORDED)[0]
+    assert payload["provider_failure"] is True
+
+
+def test_an_intent_submission_emits_one_message_posted(store: Store) -> None:
+    node_id = _node(store)
+    post_intent(store, "s-1", node_id, PROJECT)
+
+    posted = [
+        c for c in raw_changes(store, PROJECT) if c.kind is ChangeKind.MESSAGE_POSTED
+    ]
+    assert len(posted) == 1
+    assert posted[0].node_id == node_id
+    assert posted[0].payload == {"channel": Channel.INTENT.value}
+
+
+def test_a_resolution_submission_flips_the_node_to_runnable(store: Store) -> None:
+    node_id = _node(store)
+    store.block(node_id, kind=BlockedKind.HUMAN, context="decide")
+    resolve_by_submission(store, "s-1", node_id, PROJECT)
+
+    assert _of_kind(store, ChangeKind.NODE_STATUS_CHANGED)[-1] == {
+        "from": NodeStatus.BLOCKED_ON_HUMAN.value,
+        "to": NodeStatus.RUNNABLE.value,
+    }
+
+
+def test_a_recovery_escalation_emits_one_message_posted(store: Store) -> None:
+    node_id = _node(store)
+    escalate_by_recovery(store, node_id, PROJECT)
+
+    assert _of_kind(store, ChangeKind.MESSAGE_POSTED) == [
+        {"channel": Channel.ESCALATION.value}
+    ]

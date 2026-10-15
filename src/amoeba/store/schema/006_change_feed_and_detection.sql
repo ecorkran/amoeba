@@ -95,3 +95,39 @@ BEGIN
         new.updated_at
     );
 END;
+
+-- provider_failure is emitted as a JSON boolean, not 0/1. No trust label: it
+-- is computed on read, and a trigger cannot call that function.
+CREATE TRIGGER changes_verdict_recorded
+AFTER INSERT ON verdicts
+BEGIN
+    INSERT INTO changes (project_id, kind, node_id, subject_id, payload, recorded_at)
+    VALUES (
+        new.project_id,
+        'verdict_recorded',
+        new.node_id,
+        new.id,
+        json_object(
+            'verdict', new.verdict,
+            'review_type', new.review_type,
+            'provider_failure',
+            json(CASE WHEN new.provider_failure THEN 'true' ELSE 'false' END)
+        ),
+        new.recorded_at
+    );
+END;
+
+-- Fires for every writer, including recovery's escalation messages.
+CREATE TRIGGER changes_message_posted
+AFTER INSERT ON messages
+BEGIN
+    INSERT INTO changes (project_id, kind, node_id, subject_id, payload, recorded_at)
+    VALUES (
+        new.project_id,
+        'message_posted',
+        new.node_id,
+        new.id,
+        json_object('channel', new.channel),
+        new.created_at
+    );
+END;
