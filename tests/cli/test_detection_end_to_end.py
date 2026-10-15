@@ -134,3 +134,35 @@ def test_a_follow_reply_and_detect(e2e: DetectionE2E, reviews_dir: Path) -> None
         str(reviews_dir / ROUND_TWO_PART_ONE),
     ]
     _assert_subjects_agree(e2e, lines)
+
+
+def test_b_crash_restart_and_provider_failure(
+    e2e: DetectionE2E, reviews_dir: Path
+) -> None:
+    _seeded_and_stopped(e2e)
+    process = e2e.start_process()
+    follower = e2e.start_follower(PROJECT)
+    _register(e2e, reviews_dir)
+    copy_fixture(ROUND_ONE_PART_ONE, reviews_dir)
+    follower.wait_for(_detected(1))
+    copy_fixture(ROUND_TWO_PART_ONE, reviews_dir)
+    follower.wait_for(_detected(2))
+    ledger_before = e2e.inspect_json("detections", PROJECT)
+
+    process.kill_and_wait()
+    e2e.start_process()
+    copy_fixture(PROVIDER_FAILURE, reviews_dir)
+    lines = follower.wait_for(_detected(3))
+
+    verdicts = e2e.inspect_json("verdicts", PROJECT)
+    assert len(verdicts) == 3
+    assert verdicts[-1]["standing"] == "provider_failure"
+    assert verdicts[-1]["source_path"] == str(reviews_dir / PROVIDER_FAILURE)
+    ledger_after = e2e.inspect_json("detections", PROJECT)
+    assert ledger_after[: len(ledger_before)] == ledger_before
+    assert [row["outcome"] for row in ledger_after[len(ledger_before) :]] == [
+        "ingested"
+    ]
+    recorded = [line["subject_id"] for line in _of_kind(lines, "verdict_recorded")]
+    assert len(recorded) == len(set(recorded)) == 3
+    _assert_subjects_agree(e2e, lines)
