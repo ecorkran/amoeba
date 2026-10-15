@@ -101,6 +101,15 @@ class FeedOperations(VerdictWriter):
             self._insert_detection(linked)
         return record, self._require_detection(linked)
 
+    def detection(
+        self, project_id: str, path: str, digest: str
+    ) -> DetectedReview | None:
+        """The ledger row for one ``(path, digest)``, or ``None`` if unseen."""
+        row = self._execute(
+            sql_feed.SELECT_DETECTION_BY_KEY, (project_id, path, digest)
+        ).fetchone()
+        return None if row is None else map_detected_review(row)
+
     def detections(
         self, project_id: str, *, outcome: DetectionOutcome | None = None
     ) -> list[DetectedReview]:
@@ -168,11 +177,7 @@ class FeedOperations(VerdictWriter):
                 )
 
     def _detection_by_key(self, detection: DetectionInput) -> DetectedReview | None:
-        row = self._execute(
-            sql_feed.SELECT_DETECTION_BY_KEY,
-            (detection.project_id, detection.path, detection.digest),
-        ).fetchone()
-        return None if row is None else map_detected_review(row)
+        return self.detection(detection.project_id, detection.path, detection.digest)
 
     def _require_detection(self, detection: DetectionInput) -> DetectedReview:
         recorded = self._detection_by_key(detection)

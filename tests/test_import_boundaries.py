@@ -28,6 +28,7 @@ SINGLE_DEFINITION_MODULES = (
     "cli/feed.py",
     "store/attribution.py",
     "process/review_sources.py",
+    "process/review_detection.py",
 )
 
 _VOCABULARY = frozenset(member.value for member in (*ChangeKind, *DetectionOutcome))
