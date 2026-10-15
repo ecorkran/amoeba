@@ -170,7 +170,7 @@ JSON, and a provider failure with a verdict or findings all raise
 | `derivation` | `verdictSource`; `not_reported` if null or absent | the same key; `not_reported` if absent (older files) |
 | `fallback_used` | `fallback_used`; `None` if absent | `None` (the file does not carry it) |
 | `findings_parsed` | `False` when `fallback_used` is true and the derivation is `stated` or `not_reported`; `None` when `fallback_used` is absent; else `True` | `False` when the body has a *Findings Not Parsed* heading; else `True` |
-| `provider_failure` | `False` (a failure produces no JSON) | `providerFailure: true`, **or** a *Provider Failure* heading |
+| `provider_failure` | `False` (a failure produces no JSON) | `providerFailure` when the key is present; otherwise a *Provider Failure* heading (files from before Squadron wrote the key) |
 | `requested_model` | only when `model_substituted` is true | `requestedModel` |
 | `reviewed_sha`, `slice`, `source_document` | `None` | `reviewedSha`, `slice` (absent on PR reviews), `sourceDocument` |
 | `sq_run_id`, stamp | `run_id`, `squadron_version` | `runId`, `squadronVersion` |
@@ -179,7 +179,7 @@ JSON, and a provider failure with a verdict or findings all raise
 Each finding maps `id` to `position_id`, reads `severity` case-insensitively,
 and passes `category`, `summary`, and `location` through as written, including
 Squadron's `unverified` literal (the matching rule treats it as empty).
-Headings match at any level and in any case. Keys the parser does not know are
+Headings match at any level and in any case, outside fenced code blocks; text that only mentions a heading mid-line is not one. Keys the parser does not know are
 ignored, including the `resolution:` and `resolvedBy:` keys added to review
 files by hand. Keys dropped on purpose: `location_verified`, `finding_scan`,
 `diff_chars`, `diff_chars_injected`, `answering_models`, `stop_reason`,
@@ -367,7 +367,8 @@ See [`inbox-contract.md`](inbox-contract.md) for the flag rule.
 
 - `amoeba inspect verdicts --project ID [--node ID]` — columns `recorded_seq,
   id, node_id, review_type, model, verdict, standing, upstream_version`. With
-  `--json`, rows also carry `upstream`, `source`, `source_path`, `recorded_at`.
+  `--json`, rows also carry `upstream`, `source`, `source_path`, `sq_run_id`,
+  `reviewed_sha` (both `null` when the review has none), `recorded_at`.
 - `amoeba inspect findings --project ID [--node ID]` — one row per key.
 - `amoeba inspect changes --project ID --verdict ID` — that review's findings
   tagged `new`/`recurring`, then the `gone` ones. Columns `change, severity,

@@ -20,13 +20,11 @@ from ingest_e2e_harness import (
     ingest_ok,
     inspect_rows,
     start_with_node,
-    store_file,
 )
 from review_fixtures import PAIR_ARTIFACT, PAIR_STDOUT, ROUND_1_PART_1
 
 from amoeba.cli.main import ExitCode
 from amoeba.inbox import layout
-from amoeba.store import Store
 
 MISSING_PROJECT = "nosuch"
 
@@ -138,16 +136,13 @@ def test_one_review_ingested_as_stdout_and_as_its_file_is_seen_twice(
         await_condition(
             lambda: applied(supervisor_dir, stdout_id, artifact_id), "the pair"
         )
-        sources = {
-            v["id"]: v["source"] for v in inspect_rows(supervisor_dir, "verdicts")
-        }
-        assert sources == {
-            stdout_id: "stdout_json",
-            artifact_id: "artifact_frontmatter",
-        }
-        with Store.open_read_only(store_file(supervisor_dir)) as store:
-            from_stdout = store.verdict(stdout_id)
-        assert from_stdout is not None and from_stdout.reviewed_sha is None
+        verdicts = {v["id"]: v for v in inspect_rows(supervisor_dir, "verdicts")}
+        assert verdicts[stdout_id]["source"] == "stdout_json"
+        assert verdicts[stdout_id]["reviewed_sha"] is None
+        assert verdicts[artifact_id]["source"] == "artifact_frontmatter"
+        assert verdicts[artifact_id]["reviewed_sha"] == (
+            "0c8a499b4df3639cbd9c2af1f6201c5cf920bdc2"
+        )
         findings = inspect_rows(supervisor_dir, "findings", "--node", node)
         assert len(findings) == 6
         assert all(row["times_seen"] == 2 for row in findings)

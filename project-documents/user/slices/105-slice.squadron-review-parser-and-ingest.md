@@ -176,7 +176,7 @@ D1 was set by PM direction at the 104 split. D2 through D7 are pending PM ratifi
 
 - The frontmatter fence is a line of `---` plus optional trailing whitespace. Leading blank lines are allowed.
 - The body headings match at any level (`#` through `######`), in any case, with surrounding whitespace ignored.
-- For stdout, decoding starts at the first `{`, and anything after the object is ignored. That tolerates a 0.14.0 capture whose `Saved review to` line is on stdout.
+- For stdout, decoding starts at the first `{`, and anything after the object is ignored. That tolerates trailing text after the object; the captured 0.14.0 stdout files carry none (no `Saved review to` line), and 0.21.9 sends that line to stderr.
 - Keys the parser does not know are ignored. That includes the `resolution:` and `resolvedBy:` keys this repository adds to review files by hand.
 
 ### Patterns and Conventions
@@ -189,7 +189,7 @@ D1 was set by PM direction at the 104 split. D2 through D7 are pending PM ratifi
 | `derivation` | `verdictSource`; `not_reported` if null or absent | `verdictSource`; `not_reported` if absent |
 | `fallback_used` | `fallback_used`; `None` if absent | `None` (the file does not carry it) |
 | `findings_parsed` | `False` when `fallback_used` is true and derivation is `stated` or `not_reported`; `None` when `fallback_used` is absent; otherwise `True` | `False` when the body has a *Findings Not Parsed* heading; otherwise `True` |
-| `provider_failure` | `False` (a failure produces no JSON) | `True` when `providerFailure: true`, **or** the body has a *Provider Failure* heading |
+| `provider_failure` | `False` (a failure produces no JSON) | `providerFailure` when the key is present; otherwise `True` when the body has a *Provider Failure* heading (a scoped legacy exception to the no-labels-as-logic rule: pre-#139 files carry no other signal) |
 | `review_type` | `template_name` | `reviewType` |
 | `model` | `model` | `aiModel` |
 | `requested_model` | `requested_model` only when `model_substituted` is true; otherwise `None` | `requestedModel` |
@@ -504,6 +504,8 @@ Expected: every fixture parses to its stated fields, and 104's matching tests pa
 | 7 | Ids `sq-review-62b01efa817fe4943156ca81765e1e93` (stdout) and `sq-review-60691997bdc9c93f2009c630dce97464` (file); rows `stdout_json` and `artifact_frontmatter`; all six pair findings show `times_seen` 2. **Differs:** `inspect verdicts --json` has no `reviewed_sha` key; the stored stdout verdict's `reviewed_sha` is null (checked through the store by `test_one_review_ingested_as_stdout_and_as_its_file_is_seen_twice`). |
 | 8 | After `kill -9` of the process pid (not the `uv` wrapper) and a restart, `inspect verdicts` and `inspect findings` are identical and no submission was applied twice. |
 | 9 | 163 passed. |
+
+Both *Differs* rows were fixed after this run: `inspect verdicts --json` now carries `sq_run_id` and `reviewed_sha`.
 
 ## Risk Assessment
 

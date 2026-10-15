@@ -69,9 +69,13 @@ def parse_review_artifact(text: str) -> ParsedReview:
     raw = _load_frontmatter(block)
     verdict = read_verdict(raw, fields.FM_VERDICT, _ARTIFACT)
     findings = read_findings(raw.get(fields.FM_FINDINGS), fields.FM_FINDINGS, _ARTIFACT)
+    # The frontmatter flag decides when present. The heading is a legacy signal,
+    # read only for files from before Squadron wrote the flag.
+    stated = typed(raw, fields.FM_PROVIDER_FAILURE, bool, _ARTIFACT)
     failed = (
-        typed(raw, fields.FM_PROVIDER_FAILURE, bool, _ARTIFACT) is True
-        or _PROVIDER_FAILURE_HEADING.search(body) is not None
+        stated
+        if stated is not None
+        else _PROVIDER_FAILURE_HEADING.search(body) is not None
     )
     problem = provider_failure_problem(
         provider_failure=failed, verdict=verdict, findings=findings
