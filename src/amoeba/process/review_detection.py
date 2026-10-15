@@ -14,13 +14,13 @@ re-raised.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Final, Protocol
 
+from amoeba.process.review_scan import content_digest, examine, recording
 from amoeba.process.review_sources import (
     DirectoryReviewSource,
     ReviewDirectoryUnavailableError,
@@ -36,11 +36,6 @@ logger = logging.getLogger(__name__)
 REVIEW_DETECTION_TENANT_NAME: Final = "review-detection"
 
 type WatchKey = tuple[str, str]
-
-
-def content_digest(content: bytes) -> str:
-    """The ledger's digest: sha256 of the bytes examined."""
-    return hashlib.sha256(content).hexdigest()
 
 
 class DetectionHost(Protocol):
@@ -160,7 +155,7 @@ class ReviewDetectionTenant:
             entries.append(BaselineEntry(str(path), content_digest(content)))
 
         self._baseline_blocked.pop(key, None)
-        _recording(
+        recording(
             watch.project_id,
             watch.reviews_dir,
             lambda: store.baseline_watch(watch.project_id, watch.reviews_dir, entries),
@@ -183,9 +178,26 @@ class ReviewDetectionTenant:
     # ----------------------------------------------------------------------
 
     def _scan(self, store: Store, watch: ReviewWatch) -> bool:
-        """Examine the watch's settled files. Filled in with the detection path."""
-        del store, watch
-        return False
+        """Examine the watch's settled files; ``False`` when it is unreachable."""
+        key = (watch.project_id, watch.reviews_dir)
+        source = self._sources.get(key)
+        if source is None:
+            source = self._source_factory(Path(watch.reviews_dir))
+            self._sources[key] = source
+        try:
+            settled = source.poll()
+        except ReviewDirectoryUnavailableError as error:
+            self._mark_unreachable(key, str(error))
+            return False
+        self._mark_reachable(key)
+
+        worked = False
+        for detected in settled:
+            worked = (
+                examine(store, watch.project_id, detected, self._version_label)
+                or worked
+            )
+        return worked
 
     # ----------------------------------------------------------------------
     # Reachability: one ERROR going bad, one INFO recovering, nothing between
@@ -201,20 +213,3 @@ class ReviewDetectionTenant:
     def _mark_reachable(self, key: WatchKey) -> None:
         if self._unreachable.pop(key, None) is not None:
             logger.info("watched review directory %s is reachable again", key[1])
-
-
-def _recording[ResultT](
-    project_id: str, path: str, write: Callable[[], ResultT]
-) -> ResultT:
-    """Run one store write; on failure log at ERROR naming it, and re-raise.
-
-    A store that cannot record a row is sick. Continuing past it would hide
-    that, so the exception stops the process (LLD Errors).
-    """
-    try:
-        return write()
-    except Exception:
-        logger.exception(
-            "cannot record review detection for %s in project %s", path, project_id
-        )
-        raise
