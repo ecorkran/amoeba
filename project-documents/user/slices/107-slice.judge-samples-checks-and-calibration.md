@@ -42,7 +42,7 @@ Developer value, and the substrate half of initiative 140's consensus work.
   - two tables, `check_results` and `progress_records`;
   - one feed trigger, for checks, following 106's convention.
 - `judge_invocation_id` on `VerdictInput`, on the `verdict` payload, on `to_verdict_input`, and on `amoeba ingest review` (`--judge-invocation`).
-- Store operations: `record_check`, `check`, `checks`, `record_progress`, `progress_records`, and `calibration`. `verdicts` gains a `judge_invocation_id` filter.
+- Store operations: `record_check`, `check`, `checks`, `record_progress` (write-only), and `calibration`. `verdicts` gains a `judge_invocation_id` filter.
 - The previous-round lookup skips samples of the target's own judge invocation.
 - One new check on recording a sample: all samples of one invocation are on the same node and the same review type.
 - One inbox kind, `check`, through 103's three-part seam.
@@ -55,8 +55,9 @@ Developer value, and the substrate half of initiative 140's consensus work.
 
 - **Consensus.** Turning N samples into `(resolution, confidence)` belongs to initiative 140. No consensus record is stored here. 140 adds one through the kind seam when it designs it.
 - **Thresholds and recommendations.** The calibration report describes. Recommending a threshold to the PM is 140's job. Nothing here writes to Squadron's metrology store or reads it.
-- **Excluding escalated-gate verdicts from agreement data.** Squadron's metrology rule is that these are inadmissible. Nothing records which samples came from an escalated gate, so the calibration report is **unfiltered**, and says so (D3). Recording that attribute and filtering on it is deferred to initiative 140, which defines how it invokes judges: GitHub issue #4.
-- **The progress-record inbox kind, listing, and feed change.** Nothing reads progress records yet. They arrive with the first consumer: GitHub issue #5.
+- **Excluding escalated-gate verdicts from agreement data.** Squadron's metrology rule is that these are inadmissible. The calibration report reports no agreement metric, so it carries no agreement data (D3). Agreement is 140's computation, and so is the escalated-gate attribute it filters on: GitHub issue #4.
+- **The progress-record reader, record type, inbox kind, listing, and feed change.** Nothing reads progress records yet. They arrive with the first consumer: GitHub issue #5.
+- **Per-criterion means in the calibration report.** No consumer is named: GitHub issue #6.
 - **Diffing a check against its baseline.** The store keeps `baseline_ref`. The Runner (120) decides what a red check means.
 - **Fields for `task_progress` and `devlog`.** Their content is opaque JSON until a consumer defines it.
 - **Multi-part task reviews sharing a series** (`source_document` as a series key, issue #3). It changes the same previous-round lookup, but it is its own follow-up, as 106 recorded.
@@ -97,17 +98,17 @@ From the store: `VerdictWriter._verdict_rejection`, `VerdictOperations._previous
 ```
 src/amoeba/store/
   check_models.py         CheckOutcome, CheckStanding, check_standing, ProgressKind,
-                          ToolSource, ToolProvenance; CheckInput/Record, ProgressInput/Record
+                          ToolSource; CheckInput/Record, ProgressInput;
+                          `check` payload keys, defined once; payload → input
   calibration.py          CalibrationRow; CalibrationOperations.calibration (read-only)
   sql_checks.py           every statement and column name for the two new tables
-  mapping_checks.py       row → record mapping (raises on an unknown enum value)
-  _check_writer.py        CheckWriter: checks and inserts for both tables, shared by
-                          direct calls and the `check` effect (the VerdictWriter pattern)
-  checks.py               CheckOperations: record_check, check, checks,
-                          record_progress, progress_records
-  check_payload.py        `check` payload keys, defined once; payload → input
+  mapping_checks.py       row → CheckRecord (raises on an unknown enum value)
+  _check_writer.py        CheckWriter: the check's checks and insert, shared by
+                          record_check and the `check` effect (the VerdictWriter pattern)
+  checks.py               CheckOperations: record_check, check, checks, record_progress
   schema/007_judge_samples_checks_and_progress.sql
-  evidence_models.py      + VerdictInput.judge_invocation_id
+  evidence_models.py      + VerdictInput.judge_invocation_id; Provenance generic
+                          over its source vocabulary
   verdicts.py             + sample-aware previous round; verdicts(judge_invocation_id=)
   _verdict_writer.py      + the invocation-consistency check
   feed_models.py          + ChangeKind.CHECK_RECORDED
@@ -122,7 +123,7 @@ src/amoeba/cli/
   ingest.py               + --judge-invocation, and the sample id
 ```
 
-This follows the per-concern pattern of 101–106: models, SQL, mapping, a writer base, and an operations mixin added to `Store`'s bases. `evidence_models.py` (264 lines), `mapping_evidence.py` (293), and `cli/inspect.py` (342) are at or past budget, so the new concerns get their own modules. Listings are appended to `LISTINGS` from `inspect_checks.py`, not written inline. The store never imports pydantic. `calibration.py` reads `verdicts` only and writes nothing.
+This follows the per-concern pattern of 101–106: models, SQL, mapping, a writer base, and an operations mixin added to `Store`'s bases. `evidence_models.py` (264 lines), `mapping_evidence.py` (293), and `cli/inspect.py` (342) are at or past budget, so the new concerns get their own modules. Two splits are required, not optional: the pydantic `CheckPayload` lives in `amoeba.inbox` because the store never imports pydantic (its keys are defined once in `check_models.py`, as 104 did for verdicts), and `CheckWriter` is a base class so the inbox effect does not import a sibling operation class (the `BlockWriter` and `VerdictWriter` pattern). Listings are appended to `LISTINGS` from `inspect_checks.py`, not written inline. The store never imports pydantic. `calibration.py` reads `verdicts` only and writes nothing.
 
 ### Data Flow
 
@@ -166,7 +167,7 @@ record_check(CheckInput)                      # one transaction
   insert the check_results row → trigger appends a check_recorded change
 ```
 
-`record_progress` is the same, without the count check and without a feed change.
+`record_progress` is write-only: it checks the node and `upstream_version`, then inserts with `INSERT OR IGNORE` on the id, so a retried id is a no-op. It returns nothing and appends no feed change. Reading the record back, and the first-wins WARNING on differing content, come with the reader (issue #5).
 
 **Calibration** is computed on read from judge-sample rows. See D3.
 
@@ -186,7 +187,7 @@ D1, D3 (the descriptive-only part), and D5 carry ratifications from the first dr
 - A **judge sample** is a verdict record whose `judge_invocation_id` is set.
 - A verdict without one is an ordinary **review verdict**.
 
-**D2 — Samples of one invocation are one question.** *(New, pending.)* An invocation asks one question N times, so every sample of it must be on the same node and of the same review type. The verdict writer checks this against the invocation's earlier samples and rejects a mismatch. Without it, a mistyped id would silently mix two questions into one invocation, and the calibration report's disagreement count would be wrong. Samples of one invocation are never each other's previous round, because they are parallel answers, not successive rounds.
+**D2 — Samples of one invocation are one question.** *(New, pending.)* An invocation asks one question N times, so every sample of it must be on the same node and of the same review type. The verdict writer checks this against the invocation's earlier samples and rejects a mismatch. Without it, a mistyped id would silently mix two questions into one invocation, and 140's agreement computation over it would be wrong. Samples of one invocation are never each other's previous round, because they are parallel answers, not successive rounds.
 
 D2 adds a check only to verdicts that carry `judge_invocation_id`, a field no shipped verdict has. Verdicts recorded under 104's rules are unaffected.
 
@@ -199,22 +200,23 @@ D2 adds a check only to verdicts that carry `judge_invocation_id`, a field no sh
 | --- | --- |
 | `samples` | Judge samples in this group. |
 | `invocations` | Distinct invocations with at least one sample in this group. |
-| `split_invocations` | Of those, how many have samples **in this group** that disagree on verdict. `UNKNOWN` samples are left out of the comparison. This is one model's consistency with itself. Disagreement across models is visible by listing one invocation's samples. |
 | `pass`, `concerns`, `fail`, `unknown` | Samples by verdict. |
 | `provider_failures` | Samples whose trust label is `provider_failure`. |
 | `score_min`, `score_mean`, `score_max` | Over samples with a score. `null` when none has one. |
-| `criteria_means` | Mean of each criterion key over samples that report it. In `--json` only, because the keys vary by template. |
 
-The report counts and averages. It does not compute agreement across models or recommend a threshold. Those are 140's.
+`model` is required on every verdict (104: NOT NULL, no default), so every sample has one. The report groups on the stored value as given and never substitutes or drops a row.
 
-**The report is unfiltered.** Squadron's metrology rule makes escalated-gate verdicts inadmissible as agreement data, and nothing in the store says which samples came from an escalated gate. So every sample is counted. `evidence-contract.md` says so, and so does `inspect calibration`'s help text, which names issue #4. Recording that attribute and filtering on it is deferred to initiative 140 (GitHub issue #4), because 140 defines how judges are invoked and is the only submitter that knows.
+**The report carries no agreement data.** It counts and describes each group's samples on their own. It does not compare samples with each other, within an invocation or across models, and it recommends no threshold. Squadron's metrology rule makes escalated-gate verdicts inadmissible as **agreement** data. Agreement is 140's computation, and so is the escalated-gate attribute it must filter on, because 140 defines how judges are invoked and is the only submitter that knows (GitHub issue #4). That attribute arrives with 140's own records and migration. The report must not be consumed as agreement evidence, and `evidence-contract.md` says so. Per-criterion means are deferred (GitHub issue #6).
 
 **D4 — Judge stdout that reports `UNKNOWN` with a score is refused.** *(New, pending. Closes issue #2.)* `parse_review_json` raises `SquadronParseError` when the JSON says `verdict: UNKNOWN` and carries a `score`. The message claims no version: "stdout JSON with a score reports verdict UNKNOWN; ingest the saved review file instead". `amoeba ingest review` exits `REVIEW_UNREADABLE` (12) and submits nothing.
 
-The input has two causes, and the saved file is the right source for both:
+The input has three causes, and the saved file is the right source for each:
 
 - *Squadron before 0.21.9* (squadron#140) put the real verdict only in the file. The file records it.
-- *An out-of-range score*, which still gives `UNKNOWN` today. The file also says `UNKNOWN`, and ingesting it records an explicit unknown: standing `unparsed`.
+- *An out-of-range judge score*, which still gives `UNKNOWN` today. The file also says `UNKNOWN`, and ingesting it records an explicit unknown: standing `unparsed`.
+- *A non-judge review with no verdict and an incidental score.* Squadron's score extraction is not judge-aware: any review whose output has a top-level `score:` line gets one (`review/parsers.py`, `_extract_score`; observed squadron 0.22.0). So a non-judge review can legitimately report `UNKNOWN` with a score. It is not blocked from ingest: its saved file records the same explicit unknown.
+
+The rule does not test for a judge template, because the only signal is the template's name, and names are never used as logic.
 
 **A deliberate exception to "unknown is a value".** That principle says unparseable input is recorded as explicitly unknown. Here the input is not unknown; it is a stdout capture whose verdict field may be wrong while a better source exists. Recording it would put a possibly wrong verdict in the store. The refusal is not silent: it fails at the ingest boundary with the reason, and the unknown case is still recorded, through the file. `evidence-contract.md` states the exception.
 
@@ -233,15 +235,15 @@ The rule reads the JSON's own fields, never the version label, which is never co
 
 A failed check that examined nothing is `vacuous` too: it tells you nothing about the code. `baseline_ref` is opaque, for example the SHA of `main` that a result should be compared against. `name` is free data (`cf check`, `pytest`) and is never used as logic.
 
-**D6 — SQ 280's four types map onto records; one new table holds two of them.** *(Pending since 20260926.)* `review_findings` is a verdict plus its observations (104). `checkpoint` is the `blocked_on_sq_checkpoint` node carrying the SQ run id (101). A second home for either would give one fact two records. `task_progress` and `devlog` have no home and no designed consumer, so they go into `progress_records`: a closed `progress_kind`, opaque JSON `content`, and the standard provenance, like 103's message payloads. This is exactly what the slice plan entry assigns: "a small record table with opaque content until a consumer defines their fields". The table and the in-process `record_progress` are built. The inbox kind, the listing, and the feed change are deferred until a consumer exists (GitHub issue #5). Store tests cover the table.
+**D6 — SQ 280's four types map onto records; one new table holds two of them.** *(Pending since 20260926.)* `review_findings` is a verdict plus its observations (104). `checkpoint` is the `blocked_on_sq_checkpoint` node carrying the SQ run id (101). A second home for either would give one fact two records. `task_progress` and `devlog` have no home and no designed consumer, so they go into `progress_records`: a closed `progress_kind`, opaque JSON `content`, and the standard provenance, like 103's message payloads. This is exactly what the slice plan entry assigns: "a small record table with opaque content until a consumer defines their fields". Only the table and a write-only `record_progress(ProgressInput)` are built, so the table has a tested way in. The reader, a `ProgressRecord` type and its row mapping, the inbox kind, the listing, and the feed change are cut until a consumer exists (GitHub issue #5). Store tests write through `record_progress` and read the row back with SQL.
 
 **D7 — Checks get an inbox kind now.** *(New, pending. The first draft deferred it.)* Every check producer that exists today is outside the process: the PM running a validator, CI, the Judge. The Runner, the only in-process writer, does not exist until 120. The kind is the documented three parts: a `SubmissionKind` member (`check`), a payload model, and an effect that calls `CheckWriter` inside `apply_submission`'s transaction. The submission id becomes the record id, as for `verdict`. Progress records get no kind yet (D6).
 
-**D8 — Checks and progress records have their own source vocabulary.** *(New, pending.)* They do not come from Squadron's review output, so they do not use `RecordSource`, which is unchanged. `ToolSource` (`command_output`, `document`) is a separate `StrEnum`, and `ToolProvenance` has the same four fields as `Provenance` (`upstream`, `upstream_version` required and non-empty and never compared, `source`, `source_path`). Verdicts cannot take a tool source by type, so no guard is needed and 104's verdict rules are unchanged. The provenance column names are shared.
+**D8 — Checks and progress records have their own source vocabulary.** *(New, pending.)* They do not come from Squadron's review output, so they do not use `RecordSource`, which is unchanged. `ToolSource` (`command_output`, `document`) is a separate `StrEnum`. There is still one provenance type: `Provenance` becomes generic over its source vocabulary (`Provenance[RecordSource]` on verdicts, `Provenance[ToolSource]` on checks and progress records), with the same four fields (`upstream`, `upstream_version` required and non-empty and never compared, `source`, `source_path`). Verdicts cannot take a tool source by type, so no guard is needed and 104's verdict rules are unchanged. The provenance column names are shared.
 
 **D9 — The check table gets a change kind; the verdict trigger is unchanged.** *(New, pending.)* 106's rule is that a new table with readers needs a new `ChangeKind`. Migration 007 adds `changes_check_recorded` (payload: `name`, `outcome`, `examined_count`). It carries no standing, for the same reason `verdict_recorded` carries no trust label: it is computed on read. `progress_records` gets no trigger until it has a reader (issue #5); 106's invariant test does not track that table. `verdict_recorded` does not gain `judge_invocation_id`. The Judge supplies its own sample ids and reads each record by `subject_id`, and rewriting a shipped trigger is churn without a consumer.
 
-**Retry.** All new records use 104's rule: the caller supplies the id; recording an existing id returns the existing record, with a WARNING if the content differs. `ingest review`'s default id for an ordinary review is 105's digest of the parsed review, unchanged. For a sample (`--judge-invocation J`), the default id is that digest followed by `.` and `J`. So the same file twice under one invocation is a no-op, and the same file under a second invocation is a separate sample. 105's digest and `RECORD_ID_FORMAT_TAG` do not change. `evidence-contract.md` states this.
+**Retry.** Checks and samples use 104's rule (progress records: D6): the caller supplies the id; recording an existing id returns the existing record, with a WARNING if the content differs. `ingest review`'s default id for an ordinary review is 105's digest of the parsed review, unchanged. For a sample (`--judge-invocation J`), the default id is that digest followed by `.` and `J`. So the same file twice under one invocation is a no-op, and the same file under a second invocation is a separate sample. 105's digest and `RECORD_ID_FORMAT_TAG` do not change. `evidence-contract.md` states this.
 
 **Word lists** are `StrEnum`s, each defined once in `check_models.py`:
 
@@ -264,8 +266,7 @@ An unknown word fails payload validation and is quarantined. It is never mapped 
 | `verdicts(project_id, *, node_id=None, judge_invocation_id=None)` | 104's method with one more filter. In arrival order. |
 | `record_check(CheckInput) -> CheckRecord` | One transaction: retry check, checks, insert. |
 | `check(check_id)` / `checks(project_id, *, node_id=None)` | In arrival order. |
-| `record_progress(ProgressInput) -> ProgressRecord` | Same pattern. |
-| `progress_records(project_id, *, node_id=None, progress_kind=None)` | In arrival order. |
+| `record_progress(ProgressInput) -> None` | Write-only (D6). A retried id is a no-op. |
 | `calibration(project_id) -> list[CalibrationRow]` | D3. Ordered by review type, then model. |
 
 All `record_*` methods take `project_id` as a keyword, as `record_verdict` does.
@@ -273,8 +274,8 @@ All `record_*` methods take `project_id` as a keyword, as `record_verdict` does.
 **Inputs** (frozen dataclasses; records mirror them, plus `project_id`, `recorded_seq`, `recorded_at`):
 
 - `VerdictInput` gains `judge_invocation_id: str | None = None`.
-- `CheckInput`: `id`, `node_id`, `name`, `outcome: CheckOutcome`, `examined_count: int | None`, `examined: Mapping | None` (what was checked, opaque), `baseline_ref: str | None`, `provenance: ToolProvenance`. `CheckRecord` adds a `standing` property.
-- `ProgressInput`: `id`, `node_id`, `progress_kind: ProgressKind`, `content: Mapping`, `provenance: ToolProvenance`.
+- `CheckInput`: `id`, `node_id`, `name`, `outcome: CheckOutcome`, `examined_count: int | None`, `examined: Mapping | None` (what was checked, opaque), `baseline_ref: str | None`, `provenance: Provenance[ToolSource]`. `CheckRecord` adds a `standing` property.
+- `ProgressInput`: `id`, `node_id`, `progress_kind: ProgressKind`, `content: Mapping`, `provenance: Provenance[ToolSource]`. It has no record type yet (D6).
 
 `examined_count` has no default: a submitter passes `null` to say "not reported", as for `findings_parsed`.
 
@@ -289,7 +290,7 @@ All `record_*` methods take `project_id` as a keyword, as `record_verdict` does.
 | `amoeba submit check --project P --by B --node-id N --name NAME --outcome O --examined-count JSON --upstream U --upstream-version V --source S [--examined JSON] [--baseline-ref R] [--source-path PATH] [--id ID]` | Flags from `CheckPayload`. |
 | `amoeba inspect verdicts --project P [--node ID] [--judge-invocation ID]` | Gains a `judge_invocation_id` column after `standing`. |
 | `amoeba inspect checks --project P [--node ID]` | `recorded_seq, id, node_id, name, outcome, examined_count, standing, baseline_ref, upstream_version` |
-| `amoeba inspect calibration --project P` | One row per `(review_type, model)`, D3's fields. `--json` adds `criteria_means`. Its help text says the report is unfiltered (D3, issue #4). |
+| `amoeba inspect calibration --project P` | One row per `(review_type, model)`, D3's fields. |
 
 All listings work whether the process is running or stopped, and accept `--json`.
 
@@ -332,12 +333,12 @@ Changes to earlier contracts, each recorded in the contract docs and `CHANGELOG.
 - A sample whose invocation already has samples on another node, or of another review type, fails when recorded directly and is rejected through the inbox, with a reason naming both and saying to use a new invocation id. A rejected first sample leaves the invocation undefined, so a correct sample after it is recorded.
 - Ingesting one judge file under invocations `j1` and `j2` gives two samples. Ingesting it twice under `j1` gives one.
 - `finding_changes` on a sample never names a sample of its own invocation as the previous round. It can name a sample of an earlier invocation. An ordinary review's previous round is unchanged.
-- `calibration` returns one row per `(review_type, model)`, with the counts D3 defines. Two samples by one model in one invocation that disagree on verdict count as one `split_invocation` for that model. An `UNKNOWN` sample is counted in `unknown` and left out of the split comparison. Score statistics ignore samples without a score.
+- `calibration` returns one row per `(review_type, model)`, with the counts D3 defines and no field comparing samples with each other. An `UNKNOWN` sample is counted in `unknown`. Score statistics ignore samples without a score.
 - Nothing in `src/` references Squadron's metrology directory or config key (a test asserts it), and `calibration` issues no write.
 - A check with `examined_count=0` and outcome `passed` has standing `vacuous`. So does one with outcome `failed`. A check with `examined_count` null has standing `unattested`. An `errored` outcome is `errored` whatever the count.
 - A negative `examined_count` fails directly and is rejected through the inbox.
-- `record_progress` records a progress record with its content unchanged, and `progress_records` filters it by node and kind.
-- Recording a check, progress record, or verdict with an existing id returns the existing record, writes nothing, and logs a WARNING if the content differs.
+- `record_progress` writes a row whose content reads back unchanged (through SQL in the test). A retried id writes nothing.
+- Recording a check or verdict with an existing id returns the existing record, writes nothing, and logs a WARNING if the content differs.
 - Every check and progress record carries a non-empty `upstream_version`. Recording one without it fails.
 - Recording a check appends exactly one `check_recorded` change. A retried check appends none. Recording a progress record appends none.
 - The real judge artifact in `tests/fixtures/sq_reviews/` parses to its stated verdict, score, and criteria. Ingested with `--judge-invocation`, it is a judge sample.
@@ -345,13 +346,13 @@ Changes to earlier contracts, each recorded in the contract docs and `CHANGELOG.
 
 ### Technical Requirements
 
-- Each word list is a `StrEnum` defined once. All SQL and column names for the new tables live in `sql_checks.py`. The check standing has one function. `ToolSource` is separate from `RecordSource`.
+- Each word list is a `StrEnum` defined once. All SQL and column names for the new tables live in `sql_checks.py`. The check standing has one function. `ToolSource` is separate from `RecordSource`, and `Provenance` is one generic type over both.
 - A store at version 6 with nodes, verdicts, findings, changes, watches, and detections upgrades to 7 with all of them intact, and its existing verdicts read back with `judge_invocation_id` null.
 - 106's feed invariant test passes with the two new kinds in its sequence, and fails if either trigger is missing.
 - The judge fixture is a real Squadron artifact from a pipeline run on squadron 0.21.9 or later, captured at implementation time in a throwaway copy of a repository. The fixture README records the command, the Squadron version, and the date. The D4 refusal test uses a real stdout capture with its verdict edited to `UNKNOWN` and a score added, labelled as edited in the README, like the existing `findings-not-parsed-edited` fixture.
 - The writer guard is not weakened. No new permitted scripts.
 - `ruff`, `pyright` strict, and the full suite are clean. Source files stay near 300 lines.
-- `docs/evidence-contract.md` gains sections on judge samples (names, D2 and its new-invocation remedy, previous-round skip, sample ids), calibration (D3, what it does not do, and that it is unfiltered, citing issue #4), checks (D5), progress records (D6, citing issue #5), and the D4 refusal as a stated exception to "unknown is a value". `inbox-contract.md` documents the `check` kind, `feed-contract.md` the `check_recorded` change kind, `store-contract.md` the new methods. GitHub issue #2 is closed with a pointer to D4.
+- `docs/evidence-contract.md` gains sections on judge samples (names, D2 and its new-invocation remedy, previous-round skip, sample ids), calibration (D3, what it does not do, and that it must not be consumed as agreement evidence, citing issues #4 and #6), checks (D5), progress records (D6, citing issue #5), and the D4 refusal as a stated exception to "unknown is a value". `inbox-contract.md` documents the `check` kind, `feed-contract.md` the `check_recorded` change kind, `store-contract.md` the new methods. GitHub issue #2 is closed with a pointer to D4.
 
 ### Integration Requirements
 
@@ -396,7 +397,7 @@ uv run amoeba submit verdict $BASE --id s3 --model model-b --verdict CONCERNS --
 uv run amoeba inspect calibration --project demo
 ```
 
-Expected: `inspect verdicts --judge-invocation j1` lists three rows. `inspect calibration` shows two rows. The `model-b` row has `samples` 2, `invocations` 1, `split_invocations` 1, `pass` 1, `concerns` 1, and `score_min` 62, `score_max` 81.
+Expected: `inspect verdicts --judge-invocation j1` lists three rows. `inspect calibration` shows two rows. The `model-b` row has `samples` 2, `invocations` 1, `pass` 1, `concerns` 1, and `score_min` 62, `score_max` 81.
 
 **3. A sample on the wrong node is refused.** Seeding a second node needs the process stopped (`demo_evidence.py` takes the lock). Instead, submit a sample of `j1` with `--review-type slice`.
 
@@ -442,7 +443,7 @@ Expected: the standing table, the calibration counts, the invariant test with th
 ### Development Approach
 
 1. Capture the judge fixture (a PM step: a pipeline run in a throwaway copy of a repository) and write its README entry. The parser test against it and the D4 refusal follow.
-2. `check_models.py` with the standing function and its table-driven test. `ToolSource` and `ToolProvenance`.
+2. `check_models.py` with the standing function and its table-driven test. `ToolSource`, and `Provenance` made generic (104's tests unchanged).
 3. Migration 007, `sql_checks.py`, mapping, `CheckWriter`, `CheckOperations`, and the 6 → 7 upgrade test.
 4. `judge_invocation_id` through `VerdictInput`, the payload, the writer's D2 check, `verdicts`' filter, and the previous-round skip.
 5. `calibration` and its tests.
