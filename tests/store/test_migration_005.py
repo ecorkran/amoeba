@@ -29,7 +29,7 @@ from amoeba.store.mapping_evidence import (
     observation_parameters,
     verdict_parameters,
 )
-from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, migrate
+from amoeba.store.migrations import migrate
 from amoeba.store.models import NodeStatus, UnknownVocabularyValueError
 
 INBOX_SCHEMA_VERSION = 4
@@ -97,15 +97,14 @@ _PRIOR_TABLES = (
 )
 
 
-def test_version_five_is_the_expected_version() -> None:
-    assert EXPECTED_SCHEMA_VERSION == EVIDENCE_SCHEMA_VERSION
-
-
 def test_upgrade_keeps_every_prior_row(store_file: Path) -> None:
     _stage_version_four_store(store_file)
     with sqlite3.connect(store_file) as connection:
         before = {table: _rows(connection, table) for table in _PRIOR_TABLES}
-        assert migrate(connection) == EVIDENCE_SCHEMA_VERSION
+        assert (
+            migrate(connection, expected_version=EVIDENCE_SCHEMA_VERSION)
+            == EVIDENCE_SCHEMA_VERSION
+        )
         after = {table: _rows(connection, table) for table in _PRIOR_TABLES}
 
     assert [len(before[table]) for table in _PRIOR_TABLES] == [2, 1, 1, 1]
