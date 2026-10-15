@@ -16,6 +16,7 @@ and deliberately not re-exported.
 
 from __future__ import annotations
 
+from amoeba.store.attribution import Attribution, attribute_review
 from amoeba.store.evidence_models import (
     COMPARABLE_STANDINGS,
     FindingChange,
@@ -55,6 +56,7 @@ from amoeba.store.inbox_models import (
 )
 from amoeba.store.journal_models import (
     REQUIRED_PARAMETER_KEYS,
+    REVIEW_PRODUCING_KINDS,
     CommandKind,
     JournalEntry,
     JournalOutcome,
@@ -90,6 +92,7 @@ __all__ = [
     "BLOCKED_KIND_TO_STATUS",
     "BLOCKED_STATUSES",
     "REQUIRED_PARAMETER_KEYS",
+    "REVIEW_PRODUCING_KINDS",
     "BlockedKind",
     "Channel",
     "CommandKind",
@@ -113,6 +116,7 @@ __all__ = [
     "parse_severity",
     "parse_verdict",
     "verdict_standing",
+    "attribute_review",
     # Transfer objects
     "BlockedNode",
     "BlockedState",
@@ -131,6 +135,7 @@ __all__ = [
     "TaggedFinding",
     "VerdictInput",
     "VerdictRecord",
+    "Attribution",
     "BaselineEntry",
     "Change",
     "DetectedReview",

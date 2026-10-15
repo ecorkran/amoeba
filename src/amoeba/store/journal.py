@@ -23,6 +23,7 @@ from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter
 from amoeba.store.journal_models import (
     REQUIRED_PARAMETER_KEYS,
+    REVIEW_PRODUCING_KINDS,
     CommandKind,
     JournalEntry,
     JournalOutcome,
@@ -252,6 +253,17 @@ class JournalOperations(BlockWriter):
             sql_journal.SELECT_UNRESOLVED_JOURNAL_ENTRIES, (project_id,)
         ).fetchall()
         return [map_journal_entry(row) for row in rows]
+
+    def has_unresolved_review_entry(self, project_id: str) -> bool:
+        """Whether the project has an unresolved entry of a review-producing kind.
+
+        "Unresolved" is literal: an entry stays unresolved whatever recovery
+        did around it, including blocking its node.
+        """
+        return any(
+            entry.kind in REVIEW_PRODUCING_KINDS
+            for entry in self.unresolved_journal_entries(project_id)
+        )
 
     def journal_entries(
         self,

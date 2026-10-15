@@ -74,6 +74,13 @@ REQUIRED_PARAMETER_KEYS: Final[Mapping[CommandKind, frozenset[str]]] = {
 }
 
 
+#: The command kinds whose side effect is a review file (D5 of slice 106).
+#: While a project has an unresolved entry of one of these kinds, review
+#: detection does not scan it: the Runner owns that review. Initiative 120
+#: adds its review command kind here.
+REVIEW_PRODUCING_KINDS: Final[frozenset[CommandKind]] = frozenset({CommandKind.SQ_RUN})
+
+
 @dataclass(frozen=True)
 class JournalEntry:
     """One journaled command: what was issued, and how it was closed.

@@ -26,6 +26,7 @@ SINGLE_DEFINITION_MODULES = (
     "store/feed.py",
     "feed/follower.py",
     "cli/feed.py",
+    "store/attribution.py",
 )
 
 _VOCABULARY = frozenset(member.value for member in (*ChangeKind, *DetectionOutcome))
