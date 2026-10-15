@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Slice 105: `amoeba.upstream.squadron` — a pure parser for Squadron review files and `--output json` stdout (`ParsedReview`, `to_verdict_input`, `review_record_id`), tested against real captured reviews.
 - Slice 105: `amoeba ingest review` submits a review as a `verdict` without waiting; exit code `REVIEW_UNREADABLE` (12). It refuses a project with no store.
 - Slice 105: `verdict_to_payload` (the inverse of `verdict_from_payload`) and `provider_failure_problem` (one definition of the provider-failure rule, shared by the store and the parser).
+- Slice 105: `inspect verdicts --json` rows carry `sq_run_id` and `reviewed_sha`.
 - Slice 105: PyYAML is now a runtime dependency.
 - Slice 105: the record id is a digest of the parsed review, tagged `parsed-review-v1`. The covered fields are a contract: changing them changes every id and needs a new tag and a changelog entry.
 - Slice 104: verdict records and findings in the store — schema version 5 (migration `005`: `verdicts`, `finding_observations`), `record_verdict` (one transaction, caller-supplied id, first record wins), and `verdict` / `verdicts` / `observations` / `findings` reads.
@@ -60,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Slice 105: a review file's `providerFailure` key, when present, decides `provider_failure`; the *Provider Failure* heading is read only for files without the key.
 - Slice 103: a `HUMAN` block now writes an escalation message in the same transaction; `block()` gains an optional `payload`. Every block goes through one internal writer.
 - Slice 103: `journal_escalate` now writes an escalation carrying the journal entry id, including on its already-blocked branch, where it points at the existing open block.
 - Slice 103: `amoeba start` registers `InboxTenant` first, where slice 102 registered no tenants.

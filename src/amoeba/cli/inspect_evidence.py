@@ -78,6 +78,8 @@ def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "upstream": record.provenance.upstream,
             "source": record.provenance.source.value,
             "source_path": record.provenance.source_path or "",
+            "sq_run_id": record.sq_run_id,
+            "reviewed_sha": record.reviewed_sha,
             "recorded_at": record.recorded_at.isoformat(),
         }
         for record in store.verdicts(args.project, node_id=args.node)

@@ -409,4 +409,5 @@ Test each step as soon as it is built, and commit after each step.
 ### Special Considerations
 
 - **Judge standing reads `unattested`, by design.** Squadron deliberately writes no `verdictSource` for a threshold verdict. A reader of the report may take `unattested` for a defect. The contract doc explains it in one paragraph, and the report shows verdicts and standings side by side so the judge verdict itself is still readable.
+- **Open: judge-template stdout ingest records `UNKNOWN`** ([issue #2](https://github.com/ecorkran/amoeba/issues/2)). 105's `--stdout-json` maps Squadron's stdout `verdict` straight through, and for judge templates that is `UNKNOWN` until squadron#140. Decide in task breakdown; the issue recommends refusing such a capture (exit 12, ingest the saved file).
 - **The report must not become a threshold tool.** It has no parameters beyond the project and returns counts only. Anything that turns counts into advice belongs to 140 and goes to the PM.

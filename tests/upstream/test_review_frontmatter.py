@@ -105,3 +105,22 @@ def test_a_heading_quoted_inside_a_code_fence_is_not_a_heading() -> None:
 def test_an_unterminated_code_fence_hides_the_headings_after_it() -> None:
     quoted = _text(ROUND_1_PART_1) + "\n```\n## Provider Failure\n"
     assert parse_review_artifact(quoted).provider_failure is False
+
+
+def test_a_response_section_that_mentions_the_headings_flips_nothing() -> None:
+    answered = _text(ROUND_1_PART_1) + (
+        "\n## Response\n\nNot a ## Provider Failure; the ## Findings Not Parsed "
+        "worry from round 1 is gone.\n"
+    )
+    parsed = parse_review_artifact(answered)
+    assert parsed.provider_failure is False
+    assert parsed.findings_parsed is True
+
+
+def test_a_stated_provider_failure_flag_outranks_the_heading() -> None:
+    stated = _text(ROUND_1_PART_1).replace(
+        "verdictSource: stated\n", "verdictSource: stated\nproviderFailure: false\n", 1
+    )
+    assert "providerFailure: false" in stated
+    parsed = parse_review_artifact(stated + "\n## Provider Failure\n")
+    assert parsed.provider_failure is False
