@@ -12,13 +12,12 @@ import json
 import signal
 import sys
 import threading
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from types import FrameType
 from typing import TYPE_CHECKING, Any
 
 from amoeba.feed import FeedSettings, follow
 from amoeba.store import Change, Store, paths
-from amoeba.store.paths import project_store_path
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from amoeba.cli.main import ExitCode
@@ -75,18 +74,16 @@ def _print_all(changes: Iterable[Change]) -> None:
         print(change_line(change), flush=True)
 
 
-def _existing(project_id: str, after: int, settings: FeedSettings) -> list[Change]:
-    """Every change after ``after`` that exists now, read in batches."""
-    path = project_store_path(paths.store_dir(), project_id)
-    collected: list[Change] = []
+def _existing(project_id: str, after: int, settings: FeedSettings) -> Iterator[Change]:
+    """Every change after ``after`` that exists now, streamed batch by batch."""
+    path = paths.project_store_path(paths.store_dir(), project_id)
     cursor = after
     with Store.open_read_only(path) as store:
         while batch := store.changes(
             project_id, after=cursor, limit=settings.feed_batch_size
         ):
-            collected.extend(batch)
+            yield from batch
             cursor = batch[-1].seq
-    return collected
 
 
 def run_feed(args: argparse.Namespace) -> ExitCode:
