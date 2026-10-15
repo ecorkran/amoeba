@@ -81,6 +81,8 @@ class ReviewDetectionTenant:
         self._unreachable: dict[WatchKey, str] = {}
         # The last reason a baseline could not be taken, per watch.
         self._baseline_blocked: dict[WatchKey, str] = {}
+        # Projects currently deferred, so the WARNING and INFO fire once each.
+        self._deferred: set[str] = set()
 
     @property
     def name(self) -> str:
@@ -116,14 +118,52 @@ class ReviewDetectionTenant:
 
     def _visit_project(self, store: Store, project_id: str) -> bool:
         worked = False
+        deferring: bool | None = None
         for watch in store.watches(project_id):
             if not watch.active:
                 continue
             if watch.baselined_at is None:
+                # Not deferred: a baseline writes only silent rows.
                 worked = self._baseline(store, watch) or worked
-            else:
+                continue
+            if deferring is None:
+                deferring = self._deferring(store, project_id)
+            if not deferring:
                 worked = self._scan(store, watch) or worked
         return worked
+
+    # ----------------------------------------------------------------------
+    # Defer (D5): the Runner owns the reviews it launches
+    # ----------------------------------------------------------------------
+    #
+    # While a project has an unresolved journal entry of a review-producing
+    # kind, its watches are not scanned. What the ordering rests on (D5):
+    #   1. no two tenants run at once (the loop is synchronous);
+    #   2. the Runner journals before it launches, so its review file appears
+    #      while its entry is open;
+    #   3. the Runner marks the file runner_issued no later than it resolves
+    #      the entry, in one transaction — a requirement on initiative 120;
+    #   4. recovery runs before any tenant ticks; a file recovery resolved
+    #      without marking is detected as external, and lands once because of 5;
+    #   5. the Runner records reviews through 105's parser, so its record id
+    #      equals detection's — a requirement on initiative 120.
+    # The skip half needs no code: a runner_issued row is in the ledger, and the
+    # ledger check skips it.
+
+    def _deferring(self, store: Store, project_id: str) -> bool:
+        """Whether to skip the project's scans; logs only on a change."""
+        deferring = store.has_unresolved_review_entry(project_id)
+        if deferring and project_id not in self._deferred:
+            logger.warning(
+                "deferring review detection for %s: a review-producing command "
+                "is unresolved",
+                project_id,
+            )
+            self._deferred.add(project_id)
+        elif not deferring and project_id in self._deferred:
+            logger.info("resuming review detection for %s", project_id)
+            self._deferred.discard(project_id)
+        return deferring
 
     # ----------------------------------------------------------------------
     # Baseline
