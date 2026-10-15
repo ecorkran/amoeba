@@ -4,19 +4,19 @@ slice: outbound-change-feed-and-detection-of-external-work
 project: amoeba
 lld: user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md
 dependencies: [101, 102, 103, 104, 105]
-projectState: Sections 1–5 (file 1) are complete — migration 006, triggers, `source_document`, the feed read API with `read_transaction()`, the detection ledger, and the `watch_reviews` kind with watch storage. This file adds attribution, the one-transaction ingest, the follower, the review sources, and the detection tenant. Sections 8 onward require slice 105's parser to be merged.
+projectState: Sections 1–5 (file 1) are complete — migration 006, triggers, `source_document`, the feed read API with `read_transaction()`, the detection ledger, and the `watch_reviews` kind with watch storage. Slice 105 is merged; Sections 8 onward use its parser from `amoeba.upstream.squadron`. This file adds attribution, the one-transaction ingest, the one-transaction Runner report-back, the follower, the review sources, and the detection tenant.
 dateCreated: 20261007
-dateUpdated: 20261007
+dateUpdated: 20261014
 status: not_started
 ---
 
 ## Context Summary
 
 - Working on the **outbound-change-feed-and-detection-of-external-work** slice (106), continued from `106-tasks.outbound-change-feed-and-detection-of-external-work-1.md`. Read that file's Context Summary, branch, reading note, and commit cadence; they apply here unchanged.
-- **Sections in this file:** 6 attribution, review-producing kinds, and the one-transaction ingest (continued from file 1's Section 5); 7 follower and `amoeba feed`; 8 review sources; 9 `ReviewDetectionTenant`. Sections 10–11 are in `106-tasks.outbound-change-feed-and-detection-of-external-work-3.md`.
+- **Sections in this file:** 6 attribution, review-producing kinds, the one-transaction ingest, and the one-transaction Runner report-back (continued from file 1's Section 5); 7 follower and `amoeba feed`; 8 review sources; 9 `ReviewDetectionTenant`. Sections 10–11 are in `106-tasks.outbound-change-feed-and-detection-of-external-work-3.md`.
 - **Models for new code:** `InboxTenant` (`process/inbox_tenant.py`) for the tenant's host protocol, attempts sidecar, and bounded-failure shape; `inbox/sidecars.py` and `inbox/durable.py` for `AttemptsSidecar` and `write_durably`; `cli/inspect_inbox.py` and `cli/inspect_evidence.py` for listing modules; `cli/settings_flags.py` for flags.
 - **Branch:** still `106-slice.outbound-change-feed-and-detection-of-external-work`. No task here merges.
-- **Criteria verified in file 3:** the LLD criteria for `inspect watches` / `inspect detections` states (Task 10.2), the no-subprocess-per-tick and label-captured-once criteria (Task 10.4), and the whole-system integration criteria (Tasks 11.2–11.5) cannot be proven until the listings, `start` wiring, and end-to-end tests exist. Task 11.12 traces every criterion to its test.
+- **Criteria verified in file 3:** the LLD criteria for `inspect watches` / `inspect detections` states (Task 10.2), the no-subprocess-per-tick and label-captured-once criteria (Task 10.5), restart through the real CLI (Task 10.6), and the whole-system integration criteria (Tasks 11.2–11.5) cannot be proven until the listings, `start` wiring, and end-to-end tests exist. Tasks 11.12–11.14 trace every criterion to its test.
 - **No load test or CI gate:** the LLD sets no numeric targets (its Settings section says so), the follower polls one integer on a local file, and a tick is bounded to one pass per watch. Task 11.11 states this to the PM so the PM can overrule it. No task here adds one.
 
 ---
@@ -87,8 +87,12 @@ status: not_started
 
 **Steps**:
 - [ ] Read `_verdict_writer.py` and `apply_submission` in `store/inbox.py`. `apply_submission` already runs the verdict write inside its own `BEGIN IMMEDIATE`; reuse that shape. If the verdict write is not callable inside an already-open transaction, extract its body into an inner method (no behavior change; 104's tests prove it)
-- [ ] Add `record_detected_verdict(verdict: VerdictInput, detection: DetectionInput) -> tuple[VerdictRecord, DetectedReview]` to `FeedOperations`. The detection's outcome must be `ingested` (else `ValueError`, nothing written). In one transaction: record the verdict (a retry returning the existing record is fine), then insert the ledger row with that verdict's id and node id
-- [ ] Idempotent: a repeat with the same verdict id and the same ledger key returns the existing records and writes nothing
+- [ ] Add `record_detected_verdict(verdict: VerdictInput, detection: DetectionInput) -> tuple[VerdictRecord, DetectedReview]` to `FeedOperations`. The detection's outcome must be `ingested` (else `ValueError`, nothing written). In one transaction: look up the ledger key; record the verdict (a retry returning the existing record is fine); then insert the ledger row with that verdict's id and node id
+- [ ] Write the verdict-then-ledger body as one private helper that opens no transaction and takes the ledger outcome as an argument (Task 6.6's `record_runner_report` calls it with `runner_issued`). It uses the private ledger insert from Task 5.1, not `record_detection`
+- [ ] The three key cases, each stated in the docstring:
+  - [ ] Same ledger key, same verdict id: returns the existing verdict and ledger row and writes nothing (a repeat)
+  - [ ] Same ledger key, **different** verdict id (including an existing row with no verdict id, such as `baseline`): raises `ValueError` naming the key and both ids, and writes nothing. The ledger row is checked **before** the verdict write, so no verdict is left behind. This differs from `record_detection`, which returns an existing row unchanged, because here a mismatch means two verdicts claim one file
+  - [ ] **New** ledger key, same verdict id (the hand-edit case: new bytes, same parsed content): the verdict write is 104's retry (no new verdict, no change), and the new `ingested` row is inserted pointing at the existing verdict id
 - [ ] Export nothing new beyond the method; document in the docstring that it exists for the detection tenant
 
 **Success Criteria**:
@@ -106,7 +110,9 @@ status: not_started
 **Objective**: Pin atomicity and idempotence.
 
 **Steps**:
-- [ ] Add `tests/store/test_record_detected_verdict.py`: success writes one verdict and one `ingested` row, emitting one `verdict_recorded` then one `review_detected`; a repeat writes nothing; a failure injected on the ledger insert (e.g. a duplicate key with a different verdict id, or a patched statement) leaves no verdict behind; a non-`ingested` outcome raises `ValueError` and writes nothing
+- [ ] Add `tests/store/test_record_detected_verdict.py`: success writes one verdict and one `ingested` row, emitting one `verdict_recorded` then one `review_detected`; a repeat (same key, same verdict id) writes nothing and returns the same records; a non-`ingested` outcome raises `ValueError` and writes nothing
+- [ ] Atomicity, injected on the ledger insert by a statement that fails, not by a duplicate key (a duplicate key is the repeat case above and raises nothing): in a scratch store, create a temporary `BEFORE INSERT ON detected_reviews` trigger that does `RAISE(ABORT, ...)`, as Task 5.6 does. The call raises, and no verdict, no ledger row, and no `changes` row remain
+- [ ] Same key, different verdict id: record once, then call with the same `(path, digest)` and another verdict id. It raises `ValueError`; still one verdict, one ledger row, and no new `changes` row
 - [ ] Hand-edit shape (the production case in Task 9.6): record a detected verdict with ledger key `(path, digest_1)`; call again with the **same** verdict id and a **new** ledger key `(path, digest_2)`. Assert: still one verdict, two `ingested` ledger rows both pointing at that verdict id, and the second call emitted one `review_detected` and no `verdict_recorded`
 
 **Success Criteria**:
@@ -116,6 +122,71 @@ status: not_started
 **Files to Create**: `tests/store/test_record_detected_verdict.py`
 
 ---
+
+### Task 6.6: Add `record_runner_report` (the Runner's one-transaction report-back)
+**Owner**: Junior AI
+**Dependencies**: Task 6.5
+**Effort**: 3
+**Objective**: The method D5 point 3 requires (LLD API Contracts, "`record_runner_report`"): record the verdict, mark `(path, digest)` `runner_issued`, and resolve the journal entry, all in one transaction. Every other public `Store` method is its own transaction, so initiative 120 cannot group them itself. The LLD leaves the exact signature to this task; it is settled here.
+
+**Steps**:
+- [ ] Signature, exactly:
+  ```python
+  def record_runner_report(
+      self,
+      project_id: str,
+      *,
+      verdict: VerdictInput,
+      path: str,
+      digest: str,
+      journal_entry_id: str,
+      outcome: JournalOutcome,
+      result: Mapping[str, object] | None = None,
+  ) -> VerdictRecord:
+  ```
+  `outcome` and `result` are what `journal_resolve` needs that the LLD row does not list; `resolved_by` is always `JournalResolver.ISSUER` (the Runner issued the command) and is not a parameter. Everything `record_detection` needs comes from the arguments: `node_id` and `verdict_id` from `verdict`, `record_id` is `verdict.id` (105's D5 default id, which D5 point 5 requires the Runner to use), no `detail`. The LLD row's return type `Verdict` is `VerdictRecord` in the code; report that in Task 11.11
+- [ ] `verdict.journal_entry_id` must be `None` or equal to `journal_entry_id` (else `ValueError`, nothing written). When it is `None`, record the verdict with `journal_entry_id` filled in (`dataclasses.replace`), so the verdict names the command that produced it
+- [ ] One transaction (`with self._connection:` then `BEGIN IMMEDIATE`, as Task 5.1 settled), steps in this order:
+  - [ ] Run 104's `_verdict_rejection(project_id, verdict)` first, on the verdict with `journal_entry_id` filled in. It already refuses an unknown node (`NodeNotFoundError`) and a journal entry that is unknown or on another node (`ValueError`); reuse it, do not restate those checks. Nothing written
+  - [ ] Look up the ledger key `(project_id, path, digest)`. If a row exists: its `verdict_id` equals `verdict.id` (detection got there first, the D5 point 4 case, or this is a retry) → write no verdict and no ledger row, resolve the entry only if it is still open, and return the existing verdict. A different or missing `verdict_id` (for example a `baseline` or `unattributed` row) → `ValueError` naming the key and its outcome, nothing written. A real retry of a successful call therefore writes nothing at all
+  - [ ] No ledger row: the entry must be open, **or** already resolved by recovery as `adopted` (D5 point 4: recovery adopted the run before the Runner reported; initiative 110's after-launch case reports back on exactly such an entry). Any other resolved entry → `InvalidTransitionError` (the error `journal_resolve` raises for "already resolved"), nothing written
+  - [ ] Call the private verdict-then-ledger helper from Task 6.4 with outcome `runner_issued` (104's retry rule applies to the verdict write, so a verdict already recorded under this id by `amoeba ingest review` is kept, with 104's WARNING if its content differs)
+  - [ ] Resolve the entry with `outcome`, `result`, and `ISSUER` if it is still open. An `adopted` entry is left exactly as recovery closed it (a first outcome is never overwritten)
+- [ ] Extract the non-transactional body of `journal_resolve` into a private helper both methods call (no behavior change; 102's journal tests prove it). Do not copy its SQL
+- [ ] Put the method in a new mixin `RunnerReportOperations` in `src/amoeba/store/runner_report.py`, added to `Store`'s bases, so `feed.py` stays near 300 lines. Its bases must give pyright strict the three helpers it calls (the verdict-then-ledger helper, the journal-resolve helper, and the entry read); follow the existing writer-base pattern (`JournalOperations(BlockWriter)`, `VerdictWriter`), and move a helper to a writer base if it lives on a mixin the new one cannot inherit cleanly
+- [ ] `runner_issued` is a silent outcome, so the call emits one `verdict_recorded` and no `review_detected`; a retry emits nothing. No trigger changes
+- [ ] The docstring states each rule above and that the Runner calls this instead of `record_verdict`, `record_detection`, and `journal_resolve` separately. It is a public `Store` method; no new package export. Record it in `store-contract.md` (Task 11.7) and name it as the way 120 meets D5 point 3 in `evidence-contract.md` (Task 11.8)
+
+**Success Criteria**:
+- [ ] Existing journal, verdict, and feed tests pass unchanged; `ruff`, `pyright` clean
+- [ ] Committed with Task 6.7
+
+**Files to Create**: `src/amoeba/store/runner_report.py`
+**Files to Modify**: `store/store.py`, `store/journal.py` (the extracted resolve helper), `store/feed.py` (only if the Task 6.4 helper must move to a writer base)
+
+---
+
+### Task 6.7: Test `record_runner_report`
+**Owner**: Junior AI
+**Dependencies**: Task 6.6
+**Effort**: 3
+**Objective**: Pin all-or-nothing across the three writes, every entry and ledger case, and idempotence.
+
+**Steps**:
+- [ ] Add `tests/store/test_record_runner_report.py`. Seed a slice node and an open `SQ_RUN` entry on it with `journal_issue`; build the verdict from a real fixture with 105's `parse_review_artifact` and `to_verdict_input` (no `record_id` override)
+- [ ] Happy path: one verdict carrying `journal_entry_id`; one `runner_issued` ledger row with that verdict id, node id, and `record_id` equal to the verdict id; the entry resolved with the given `outcome` and `result` by `issuer`; the feed gained one `verdict_recorded` and no `review_detected`; the open-review-entry read from Task 6.1 is now false
+- [ ] Atomicity, one case per step, each injected by a temporary `RAISE(ABORT, ...)` trigger in a scratch store: `BEFORE INSERT ON verdicts`, `BEFORE INSERT ON detected_reviews`, and `BEFORE UPDATE ON command_journal`. Each call raises and leaves no verdict, no ledger row, no `changes` row, and the entry still open
+- [ ] Retry: the same call again returns the same verdict and writes no verdict, ledger row, resolution, or change; the entry's `resolved_at` is unchanged
+- [ ] Entry cases: an unknown entry id and an entry on another node each raise `ValueError`; an entry already resolved by the issuer (`completed`) raises `InvalidTransitionError`; in all three nothing is written. An entry resolved by recovery as `adopted` (mark it through the journal's public methods): the verdict and `runner_issued` row are written and the entry still reads `adopted`, `recovery`
+- [ ] Ledger cases: detection got there first (an `ingested` row for the key with the same verdict id, the entry `adopted`): returns that verdict and writes nothing; a `baseline` row for the key raises `ValueError` and writes nothing
+- [ ] `verdict.journal_entry_id` set to another id raises `ValueError` and writes nothing
+- [ ] Defer interplay: a file reported this way is skipped by the ledger check that Task 9.5 builds (asserted there, in Task 9.8)
+
+**Success Criteria**:
+- [ ] Tests pass; full suite passes
+- [ ] Commit, e.g. `feat(store): add record_runner_report, the one-transaction runner report-back`
+
+**Files to Create**: `tests/store/test_record_runner_report.py`
 
 ---
 
@@ -158,10 +229,11 @@ status: not_started
 - [ ] `stop` returning true ends the iterator; closing the generator closes the store (no open handle left)
 - [ ] Unknown project raises before any yield; a store at the wrong schema version raises `StoreSchemaError`
 - [ ] Batching: with `feed_batch_size` of 2 and five changes, all five arrive in order
-- [ ] Snapshot then follow (LLD D1a usage): on a read-only handle, inside `read_transaction()` read a node listing and `change_head()`; commit a new node from a read-write store after the head read; then `follow(after=head)` yields that new change exactly once and nothing earlier
+- [ ] Snapshot then follow, the D1a test the LLD places in this suite: name it `test_snapshot_and_head_ignore_a_commit_between_them`. On a read-only handle, inside `read_transaction()`: read a node listing, then commit a new node from a read-write store, then read `change_head()`. Assert the listing lacks the new node and the head equals the head before the commit (the commit falls **between** the two reads, so a plain non-transactional read would fail this). After the block, `follow(after=head)` yields that new node's `node_created` exactly once and nothing earlier. File 1's `test_read_transaction.py` (Task 4.4) has the store-level version and its control case; this one proves the follower usage pattern
 
 **Success Criteria**:
 - [ ] Tests pass, no sleeps longer than needed, no flakiness over three consecutive runs of the module
+- [ ] `test_snapshot_and_head_ignore_a_commit_between_them` exists and fails if `read_transaction()` is replaced by a no-op context manager (check once by hand, then restore)
 - [ ] Commit, e.g. `feat(feed): add follow, the subscriber-side change follower`
 
 **Files to Create**: `tests/feed/test_follower.py`
@@ -213,23 +285,24 @@ status: not_started
 
 ## Section 8: Review Sources
 
-### Task 8.1: Gate on slice 105 and pass `source_document` through the parser
+### Task 8.1: Check 105's names and pass `source_document` through the parser
 **Owner**: Junior AI
 **Dependencies**: Task 7.4
 **Effort**: 2
-**Objective**: Confirm the parser exists, and finish the pass-through 105 deliberately left to this slice (105 LLD, `source_document` note).
+**Objective**: Confirm the 105 names this slice uses, and finish the pass-through 105 deliberately left to this slice (105 LLD, `source_document` note).
 
 **Steps**:
-- [ ] Check that `amoeba.upstream.squadron` exports `parse_review_artifact`, `ParsedReview`, `to_verdict_input`, and `review_record_id`, and that `ParsedReview` has `slice` and `source_document`. **If any is missing, stop and tell the PM: Sections 8–11 cannot proceed until 105 is merged into the target.** Do not stub the parser
-- [ ] In `to_verdict_input`, pass `ParsedReview.source_document` to `VerdictInput.source_document` (one line). `slice` still does not reach `VerdictInput`
-- [ ] Update 105's test(s) that assert `source_document` does not reach `VerdictInput`, to assert it does. Change nothing else in 105's tests
-- [ ] Confirm `review_record_id` is a digest of the parsed review (changes only with parsed content). Add one test here if 105's suite lacks "a `resolution:` key added to a real fixture leaves the id unchanged"; otherwise rely on it
+- [ ] Quick presence check (105 is merged): `amoeba.upstream.squadron` exports `parse_review_artifact`, `ParsedReview`, `to_verdict_input`, `review_record_id`, and `SquadronReviewError`, and `ParsedReview` has `slice` and `source_document`. One `python -c` import is enough. If any name is missing, stop and tell the PM; do not stub it
+- [ ] In `to_verdict_input` (`src/amoeba/upstream/squadron/review.py`), pass `ParsedReview.source_document` to `VerdictInput.source_document` (one line). `slice` still does not reach `VerdictInput`. Update the `ParsedReview` docstring sentence that says both fields "are not part of `VerdictInput`" so it names only `slice`
+- [ ] In `tests/upstream/test_review_compose.py`, `test_slice_and_source_document_do_not_reach_the_verdict_input` (its `source_document` line already reads `is None`, from Task 3.1): assert `composed.source_document == parsed.source_document` instead, keep the `slice` assertion, and rename it `test_source_document_reaches_the_verdict_input_and_slice_does_not`. Change nothing else in 105's tests
+- [ ] `review_record_id` is already a parsed-content digest, and 105's `tests/upstream/test_review_record_id.py::test_hand_added_resolution_keys_and_a_response_section_keep_the_id` pins that a hand-added `resolution:` leaves the id unchanged. Rely on it; add no test. Note that `source_document` is a `ParsedReview` field, so it is already inside the digest; this task does not change any id
+- [ ] `parse_review_json` sets `source_document` to `None` (JSON stdout carries no reviewed-document path); that stays
 
 **Success Criteria**:
-- [ ] 105's suite passes with only the intended assertion changed
+- [ ] 105's suite, including the `amoeba ingest review` tests, passes with only the intended assertion and test name changed; if another test fails, stop and diagnose
 - [ ] Commit, e.g. `feat(upstream): pass source_document into VerdictInput`
 
-**Files to Modify**: `src/amoeba/upstream/squadron/review.py` (or wherever `to_verdict_input` lives), the 105 test that pinned the old behavior
+**Files to Modify**: `src/amoeba/upstream/squadron/review.py`, `tests/upstream/test_review_compose.py`
 
 ---
 
@@ -305,7 +378,7 @@ status: not_started
 **Steps**:
 - [ ] Add `review_scan_interval_seconds = 2.0`, `sq_timeout_seconds = 10.0`, `detection_max_attempts = 3` to `ProcessSettings` with docstring entries stating what each bounds, in the file's style. Add the three `start` flags in `cli/settings_flags.py` (use `positive_int` for attempts) and map them in the settings-building code that reads those flags
 - [ ] Generalize `capture_version_label` in `process/observers/cf_readback.py`: extract its subprocess logic into a shared helper parameterized by executable name, used by both cf and sq. cf behavior, logging, and `VERSION_UNAVAILABLE` stay the same; existing cf tests pass unchanged. Define the `sq` executable name and version args once, next to the helper
-- [ ] No tick may start a subprocess. The tenant takes the label from a value captured before the loop (Task 10.3 does the capture and wiring); here only the helper exists
+- [ ] No tick may start a subprocess. The tenant takes the label from a value captured before the loop (Task 10.4 does the capture and wiring); here only the helper exists
 
 **Success Criteria**:
 - [ ] Existing observer, settings, and lifecycle tests pass; `--help` for `start` lists the three flags
@@ -360,8 +433,8 @@ status: not_started
 **Objective**: Tenant registration shape, scan cadence, and the all-or-nothing baseline (LLD "Registering a directory" and its failure table).
 
 **Steps**:
-- [ ] Create `src/amoeba/process/review_detection.py` with `ReviewDetectionTenant(supervisor_dir, *, version_label, source_factory)`; `name` property; `tick(host) -> bool` using the same `Host` protocol shape as `InboxTenant`. `source_factory` builds a `ReviewSource` for a directory (default `DirectoryReviewSource`) so tests can substitute a source
-- [ ] A tick does nothing unless `review_scan_interval_seconds` has elapsed since the last scan (use a clock passed in or `time.monotonic`; tests must not sleep for the real interval)
+- [ ] Create `src/amoeba/process/review_detection.py` with `ReviewDetectionTenant(supervisor_dir, *, version_label: str, source_factory: Callable[[Path], ReviewSource] = DirectoryReviewSource, clock: Callable[[], float] = time.monotonic)`; `name` property; `tick(host) -> bool` using the same `Host` protocol shape as `InboxTenant`. `source_factory` builds a `ReviewSource` for a directory so tests can substitute a source. Both defaults are stated once, in this signature, and are the production values; `build_tenants` (Task 10.4) passes neither
+- [ ] A tick does nothing unless `review_scan_interval_seconds` has elapsed since the last scan, measured with `clock()` only (never `time.monotonic` directly anywhere else in the tenant). Every tenant test passes a fake clock it advances by hand, so no test sleeps for the real interval
 - [ ] For each open project, for each **active** watch: if `baselined_at` is null, baseline it; otherwise call a scan method that Task 9.5 fills in (here it is a stub that returns without work)
 - [ ] Baseline: list and read every top-level `*.md` (not through the settle rule); any failure → write nothing, retry next scan. On success call the store's `baseline_watch` once. Failure table: missing/unreadable directory → `unreachable` (one ERROR on the transition, one INFO on recovery); one unreadable file → one WARNING naming it, watch stays `baseline_pending`; a file deleted between list and read is dropped; a store failure follows the bounded-failure rule keyed `baseline-{sha256 of the dir}` (counting and parking are built in Task 9.9, using the layout from Task 9.2a)
 - [ ] Write one small reachability helper used by both baselining and scanning (Task 9.5): given a watch and whether its directory could be listed, it logs exactly one ERROR on the good→bad transition and one INFO on bad→good, remembering the last state per watch in memory, and never logs on repeat ticks
@@ -433,7 +506,7 @@ status: not_started
 - [ ] Create `tests/process/detection_harness.py` holding what all three detection test modules share: seed a project with a slice node whose `cf.slice_name` is `resident-process-and-recovery` (the 102 series' slice); register and baseline a watch; copy a named fixture from `tests/fixtures/sq_reviews/` into a `tmp_path` directory; build the tenant with a fake clock and a distinctive version label; `run_scans(n)` that ticks past the scan interval twice (settle). Put the helpers here, not in the test modules
 - [ ] Add `tests/process/test_review_detection.py` using the harness
 - [ ] Round 1 and round 2 of part 1: two verdicts on the node, `source: artifact_frontmatter`, `source_path` the copied file, ledger `ingested`, one `verdict_recorded` and one `review_detected` change each
-- [ ] The captured provider-failure file is recorded with standing `provider_failure`
+- [ ] The captured provider-failure file (`...part-2.md`) is recorded with standing `provider_failure`. That file carries no `providerFailure` frontmatter key, so 105's parser decides it from the `## Provider Failure` heading; a file that has the key is decided by the key, and the heading is read only when the key is absent. The tenant does not look at either; it only passes the parsed value through
 - [ ] Series: `finding_changes` on part 1 round 2 names part 1 round 1 as previous, never part 2
 - [ ] Hand edit: append a `resolution: accepted` frontmatter key to a detected file; next scans add one `ingested` ledger row (new digest) pointing at the **same** verdict id, and no second verdict
 - [ ] Restart: build a new tenant over the same store; nothing re-ingested
@@ -457,7 +530,7 @@ status: not_started
 - [ ] No slice node for the review's slice (seed the project with **no** slice node and copy a real 102 fixture in; do not read files from `project-documents/`): `unattributed`, empty candidates, `record_id` set, nothing written to any node. Two matching slice nodes: both ids in `detail`
 - [ ] `# not a review` in a `.md`: `unparseable` with the parser's error, not retried until its bytes change
 - [ ] Version label: construct the tenant with a distinctive test label. A copied fixture whose frontmatter has no `squadronVersion` is recorded with that label as `upstream_version`; one whose frontmatter has a stamp keeps its own stamp; with the label set to the `VERSION_UNAVAILABLE` marker, the recorded version is that marker, not empty. Pick fixtures by checking which real files carry the key
-- [ ] `unattributed` then slice node created then `ingest review` (105's function, called in-process) by hand: `recorded_since` true, a second ingest records nothing
+- [ ] `unattributed` then slice node created then a hand ingest, done in-process the way `amoeba ingest review` does it (`parse_review_artifact`, `to_verdict_input` with no `record_id` override, then `apply_submission` with kind `verdict`, `submission_id` equal to the verdict id, and `verdict_to_payload(verdict)` as the payload): `store.recorded_since(project, record_id)` (the store read from Task 5.1, not the listing) is true, and a second ingest records nothing. The `inspect detections` column built on that read is checked in Task 10.2
 
 **Success Criteria**:
 - [ ] Tests pass
@@ -515,7 +588,7 @@ status: not_started
 **Steps**:
 - [ ] Add cases to `tests/process/test_review_detection_ownership.py` (new, using `detection_harness.py`): with an open `SQ_RUN` entry, a settled new file is not processed and the source is not polled; after the entry resolves, it is ingested on the next scan
 - [ ] With an open `SQ_RUN` entry and a freshly registered (unbaselined) watch, the baseline is still taken and no verdict is recorded
-- [ ] A file whose `(path, digest)` is pre-marked `runner_issued` is never ingested and emits no change
+- [ ] A file whose `(path, digest)` is pre-marked `runner_issued` is never ingested and emits no change. Mark it the way 120 will: an open `SQ_RUN` entry, then `record_runner_report` (Task 6.6) for that path and digest, which resolves the entry; then copy the file in and run scans. Detection records nothing more for it
 - [ ] A project with an open `CF_WRITE` entry is **not** deferred
 
 **Success Criteria**:

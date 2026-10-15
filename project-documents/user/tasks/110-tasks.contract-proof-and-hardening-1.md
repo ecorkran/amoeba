@@ -6,7 +6,7 @@ lld: user/slices/110-slice.contract-proof-and-hardening.md
 dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
 projectState: Slices 101–104 are merged (store schema 5, inbox, verdicts and findings). In the working tree `src/amoeba/` holds `cli`, `inbox`, `process`, `store`; `amoeba.process.__init__` exports nothing and `cli/lifecycle.py` `start()` builds `tenants=(InboxTenant(supervisor_dir),)` inline. `store/paths.py` uses `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME` verbatim and `validate_project_id` only calls `validate_path_component`. `NodeOperations.update_node_status` does not refuse leaving `done`. Slices 105–109 are designed and may not be merged when this file starts; Sections 2 and 3 and (in File 2) Tasks 10.2 and 10.3 need only 101–104. Tasks 9.0–9.4 also need 105 (they live in `amoeba.upstream.squadron`). Task 1.2 needs 106. Section 4 needs 101–104 except where it reads detections, judge samples, or 105's parser. Sections 5–8, Task 9.5, and Tasks 10.1 and 10.4–10.6 need 105–109 (File 2 says which).
 dateCreated: 20261008
-dateUpdated: 20261008
+dateUpdated: 20261014
 status: not_started
 ---
 
@@ -63,7 +63,7 @@ status: not_started
 **Steps**:
 - [ ] Read 106's LLD API Contracts row for `record_runner_report`: `record_runner_report(project_id, *, verdict: VerdictInput, path, digest, journal_entry_id, ...)`. The remaining parameters are those `journal_resolve` and `record_detection` need that are not already listed; take them from those two methods' real signatures and do not add any other parameter
 - [ ] Read how `record_verdict`, `record_detection`, and `journal_resolve` each open their own transaction. Implement the new method with one `with self._connection:` block that performs all three writes. Reuse each method's body by extracting its non-transactional part into a private helper that both the existing method and the new one call; do not copy their SQL
-- [ ] Idempotent on `(project_id, path, digest)`: a retry returns the existing verdict and writes nothing. A journal entry that is unknown or already resolved raises before any write
+- [ ] Idempotent on `(project_id, path, digest)`: a retry returns the existing verdict and writes nothing. A journal entry that is unknown, or already resolved other than by recovery as `adopted`, raises before any write; an `adopted` entry is reported back on and left as recovery closed it (Task 5.4's after-launch case). These are 106's rules (106 Task 6.6); match them
 - [ ] Export it through the existing `Store` surface (it is a method; no new package export). Task 10.2 documents it in `store-contract.md` (when this task fires)
 
 **Success Criteria**:
@@ -78,7 +78,7 @@ status: not_started
 
 **Steps**:
 - [ ] `tests/store/test_runner_report.py`: the happy path leaves one verdict, one `runner_issued` detection for that `(path, digest)`, and a resolved entry
-- [ ] Failure atomicity: an unknown journal entry id, and an already-resolved entry, each raise and leave **no** verdict and **no** detection behind
+- [ ] Failure atomicity: an unknown journal entry id, and an entry already resolved by the issuer (`completed`), each raise and leave **no** verdict and **no** detection behind
 - [ ] Retrying the same call returns the same verdict and creates no second verdict, detection, or resolution
 
 **Success Criteria**:
