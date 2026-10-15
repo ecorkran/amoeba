@@ -6,7 +6,7 @@ slice: context-forge-event-seam
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/108-slice.context-forge-event-seam.md
 aiModel: claude-sonnet-5-5
@@ -14,104 +14,103 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: c3c714fb756e474f991eabe40cb2fe793b68fd4f
+reviewedSha: 02ca4a5afe211e0f8ca3bd69381689a5ed55334a
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 3
 turns: 4
-promptTokens: 173989
-cachedTokens: 88194
-cacheWriteTokens: 85789
-completionTokens: 4949
-durationSeconds: 41.9
-costUsd: 0.402144
+promptTokens: 173001
+cachedTokens: 88584
+cacheWriteTokens: 84411
+completionTokens: 2015
+durationSeconds: 19.5
+costUsd: 0.367331
 costBasis: provider
 runId: run-20261015-slices-plan-fa1ba72e
 squadronVersion: 0.22.0
 findings:
   - id: F001
     severity: pass
-    category: alignment
-    summary: "Fulfils the architecture's CF event-seam commitment without touching CF"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Overview"
+    category: architectural-alignment
+    summary: "Push-not-poll principle honored"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#D1"
   - id: F002
     severity: pass
-    category: boundaries
-    summary: "Layering and dependency directions are correct"
+    category: layering
+    summary: "Layer boundaries, dependency direction, and writer model preserved"
     location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Component Structure"
   - id: F003
     severity: pass
     category: error-handling
-    summary: "Failure modes are enumerated with explicit handling"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Technical Decisions (D4)"
+    summary: "Failure modes enumerated for the new I/O path"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#D4"
   - id: F004
-    severity: concern
-    category: proportionality
-    summary: "Design is heavier than the slice needs; name what to cut or defer"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Technical Scope"
+    severity: pass
+    category: architectural-alignment
+    summary: "Reference-don't-duplicate and provenance honored"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#D2"
   - id: F005
     severity: note
-    category: open-decision
-    summary: "D7 is a pending decision that affects the default behavior"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Technical Decisions (D7)"
+    category: proportionality
+    summary: "Proportionality: slice is already trimmed and reasonably sized"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Deferred"
   - id: F006
     severity: note
-    category: architecture-drift
-    summary: "Architecture's Current State is stale relative to the observed CF shape"
-    location: "project-documents/user/architecture/100-arch.substrate-run-state-store.md#Current State"
+    category: open-decision
+    summary: "D7 awaits PM confirmation"
+    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#D7"
   - id: F007
     severity: note
-    category: error-handling
-    summary: "\"Push, not poll\" is met by file watching, and one transient-failure assumption is stated only implicitly"
-    location: "project-documents/user/slices/108-slice.context-forge-event-seam.md#Technical Decisions (D1, D4)"
+    category: document-consistency
+    summary: "Parent architecture's Current State already updated"
+    location: "project-documents/user/architecture/100-arch.substrate-run-state-store.md#Current State"
 ---
 
 # Review: slice — slice 108
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [PASS] Fulfils the architecture's CF event-seam commitment without touching CF
+### [PASS] Push-not-poll principle honored
 
-The slice does what the architecture's "CF 220 ownership" paragraph says. It watches `projects.json`, diffs it against a stored snapshot, and emits a feed change, with no CF change, no wire protocol, and no polling of `cf next`. The snapshot is stored "with provenance" as the "Reference, don't duplicate" principle requires. It carries `cf_updated_at`, `cf_version_label`, and `observed_at`. It is a projection of CF's pointers, not a competing source of truth. The slice also never writes to `projects.json`, which matches the "state is the interface" goal. The visible success criteria in the slice plan entry for 108 are all covered: only linked projects are recorded, down-time changes are caught, and unreadable, unrecognized, and missing cases are recorded explicitly.
+The slice polls one file's `stat` signature and never recomputes CF state. D1 states why this is not the "poll `cf next`" fallback the architecture forbids. This matches the parent's "CF 220 ownership" note (no CF change, no wire protocol) and mirrors 106 D3. The loop stays synchronous, as 102 D2 requires.
 
-### [PASS] Layering and dependency directions are correct
+### [PASS] Layer boundaries, dependency direction, and writer model preserved
 
-The store imports nothing from `amoeba.upstream`, `amoeba.process`, or `amoeba.feed`. It holds the projection as opaque JSON. Only the tenant knows both the parser and the store. The link is written through the inbox and the snapshots only by the resident process, so the sole-writer model holds. Interpreting a change is explicitly left to the Runner (120). That respects "no intelligence in the substrate".
+The store imports nothing from `amoeba.upstream` or `amoeba.process`. It holds the projection as uninterpreted JSON, and the tenant is the only module that knows both sides. All writes go through the resident process: `record_cf_snapshot` is in-process only, and linking goes through 103's inbox seam. Excluded scope is explicit: no CF writes, no interpretation of changes (120), and no review-gate state. This matches the "substrate contains zero intelligence" and "no part edits `projects.json`" principles.
 
-### [PASS] Failure modes are enumerated with explicit handling
+### [PASS] Failure modes enumerated for the new I/O path
 
-D4 gives a table covering absent file, permission error, invalid JSON, wrong top-level type, duplicate ids, wrong-typed projected fields, and missing project. Each case has an outcome and a scope. Rows are written on transitions only, so a file that stays broken doesn't flood the feed. Store exceptions are logged and re-raised, per 106. The stalled-mount hang is acknowledged and delegated to 102's standing remedy. No "TBD" appears in the failure handling. The architecture states no numeric NFR for this path, and the slice's own 1-second scan interval is stated.
+D4's table covers file absent, permission denied, invalid JSON, wrong top-level type, duplicate ids, malformed `worktrees`, and a missing linked id. Each has a named outcome and scope. Other cases are handled too:
+- Transition-only failure rows.
+- The stat-then-read race.
+- In-place-write noise.
+- Store exceptions are logged and re-raised.
+- Stalled mounts are named as a standing risk.
 
-### [CONCERN] Design is heavier than the slice needs; name what to cut or defer
+This fits the "Unknown is a value, not a default" principle. There is no external NFR on this path beyond the slice's own 1-second interval, which D1 states.
 
-The slice is rated Effort 2 and described as "one small tenant", but it carries these pieces:
-- **Link activation toggle (D5).** The `active` flag adds deactivation and reactivation-baseline semantics, plus two Functional Requirements. The slice plan success criteria I could see ask only that linked projects are recorded and others are not. Link-only, with removal deferred until someone needs it, would drop a column, a payload field, a tick filter, and a test group. If the PM wants the toggle, the design should say which requirement needs it.
-- **Listing filters.** `--cf-project-id` and `--outcome` on `inspect cf-snapshots`, plus a computed `last_outcome` and `last_observed_at` on `cf-links`. Nothing in the plan or the architecture consumes these. Defer the filters, since `--project` and `--json` already give the full data.
-- **Settings.** `cf_scan_interval_seconds` and its CLI flag. D1 fixes the interval at 1.0, and nothing needs a different value. The injected clock already covers tests. A constant would do until a real need appears.
-- **Documentation.** Updates to five contract docs plus a new one, in one slice. Restate only the deltas, and avoid re-describing 106's trigger convention or 102's process semantics.
-- **Per-field type strictness (D4 rows 4 and 5).** Duplicate worktree ids, worktrees without ids, and wrong-typed projected fields each get an `unrecognized` outcome with a detail. Only the row that decides whether the linked entry can be parsed is clearly needed. The rest are cases the real file does not exhibit.
+### [PASS] Reference-don't-duplicate and provenance honored
 
-None of this conflicts with the architecture. The concern is effort and review surface, and dropping the items above would not remove any scope the plan assigns to 108.
+Snapshots hold a projection of CF's pointers with provenance: `cf_updated_at`, `cf_version_label`, and `observed_at`. They are not a competing copy of CF's state. This matches "snapshot-with-provenance" and "upstream version stored on every ingested record". The observed shape is dated and is not treated as a version dependency. It also records that the parent's CF 0.14.x description is an earlier observation, which the parent already acknowledges in its Current State.
 
-### [NOTE] D7 is a pending decision that affects the default behavior
+### [NOTE] Proportionality: slice is already trimmed and reasonably sized
 
-D7 is marked "needs PM confirmation". It decides that Amoeba ignores `CONTEXT_FORGE_DATA_DIR`, so a PM who relies on that variable and omits the flag will see `unreadable` or `missing`. That is visible, not silent, which fits "unknown is a value". The decision should still be confirmed before task breakdown, because the Verification Walkthrough and the end-to-end test both assume it.
+Deferring unlink, listing filters, and computed columns was a sound cut, and nothing assigned by the slice plan is dropped. Remaining weight is modest for Effort 2. Two small items could be cut if implementation runs long: the dual `latest` / `baseline` lookup in the tick, and the three-state "first observed after failure" row. Both serve real requirements (restart baseline and visible recovery), so I am not asking for a change.
 
-### [NOTE] Architecture's Current State is stale relative to the observed CF shape
+### [NOTE] D7 awaits PM confirmation
 
-The architecture describes CF 0.14.x with project-level pointers only. The slice records CF 0.19.11, where the live pointers sit on worktrees, and its projection reads both levels. The slice flags this itself. The architecture's Current State should get a dated update, or point to `context-forge-contract.md`, so downstream initiatives (120, 160) don't design against the older shape.
+D7 (an explicit `--cf-data-dir` flag, with no read of `CONTEXT_FORGE_DATA_DIR`) is marked as needing PM confirmation before Phase 5. It is consistent with 102 D3's single-environment-read rule, and the architecture names `CONTEXT_FORGE_DATA_DIR` only as CF's own behavior. No architectural conflict. Just make sure the confirmation happens.
 
-### [NOTE] "Push, not poll" is met by file watching, and one transient-failure assumption is stated only implicitly
+### [NOTE] Parent architecture's Current State already updated
 
-The architecture lists "Push, not poll" as a goal and also endorses watching `projects.json`, so a 1-second stat loop is acceptable. The slice would be clearer if it said that this is poll-by-stat of one file and not `cf next`. Two points are implicit and worth one sentence each:
-- **Stat-then-read race.** A file replaced between the `stat` and the read is safe, because the remembered signature predates the read and the next tick rechecks. The doc doesn't say so.
-- **In-place edits.** D4 says a non-JSON file "is a real finding, not a race", because CF renames atomically. A hand-edit or another tool that writes in place can produce a transient truncated file. That would put an `unrecognized` row and then an `observed` row with `changed: []` on the feed. State that this is accepted.
+The architecture already carries the 20261015 observation and the pointer to slice 108's contract doc. No further architecture edit is needed for this slice.
 
 ### Run Digest
 
-- Response length: 6746 chars
+- Response length: 4498 chars
 - Response is newline-free: no
 - Tool calls made: 3
 - Tool calls failed: 0
@@ -122,9 +121,9 @@ The architecture lists "Push, not poll" as a goal and also endorses watching `pr
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 4
-- Tokens — prompt / cached / cache write / completion / reasoning: 173989 / 88194 / 85789 / 4949 / not computed
-- Duration: 41.9 s
-- Cost: $0.40 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 173001 / 88584 / 84411 / 2015 / not computed
+- Duration: 19.5 s
+- Cost: $0.37 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 7
