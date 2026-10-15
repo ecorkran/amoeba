@@ -14,51 +14,56 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: 6969de4056e02d0d60dc360abc143e6e700a39d4
-revision_number: 1
+reviewedSha: 0c1033a3ff81d33dec24ab562b2a26edfb338319
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-turns: 3
-promptTokens: 99335
-cachedTokens: 11028
-cacheWriteTokens: 88303
-completionTokens: 5726
-durationSeconds: 50.5
-costUsd: 0.412249
+toolCallsMade: 3
+turns: 4
+promptTokens: 176131
+cachedTokens: 84476
+cacheWriteTokens: 91649
+completionTokens: 4545
+durationSeconds: 39.6
+costUsd: 0.421172
 costBasis: provider
 runId: run-20261015-slices-plan-fa1ba72e
 squadronVersion: 0.22.0
 findings:
   - id: F001
     severity: pass
-    category: architecture-alignment
-    summary: "Network surface matches the architecture's required shape and constraints"
-    location: "project-documents/user/slices/109-slice.network-api.md#Technical Decisions"
+    category: architectural-alignment
+    summary: "Process boundary, writer model and read/write paths match the architecture"
+    location: "project-documents/user/slices/109-slice.network-api.md#Technical Scope"
   - id: F002
     severity: pass
     category: dependency-direction
-    summary: "Layering and writer-model boundaries are enforced structurally"
-    location: "project-documents/user/slices/109-slice.network-api.md#Component Structure"
+    summary: "Layering and dependency directions are enforced structurally"
+    location: "project-documents/user/slices/109-slice.network-api.md#Architecture"
   - id: F003
+    severity: pass
+    category: error-handling
+    summary: "Failure modes are enumerated for every new I/O path"
+    location: "project-documents/user/slices/109-slice.network-api.md#Data Flow"
+  - id: F004
+    severity: pass
+    category: nfr
+    summary: "NFR restatement is appropriate"
+    location: "project-documents/user/slices/109-slice.network-api.md#Technical Requirements"
+  - id: F005
     severity: concern
     category: proportionality
-    summary: "End-to-end restart test and load tier duplicate slice 110's role"
-    location: "project-documents/user/slices/109-slice.network-api.md:364-366"
-  - id: F004
-    severity: concern
-    category: error-handling
-    summary: "Request-side stall and start-up I/O failures are not enumerated"
-    location: "project-documents/user/slices/109-slice.network-api.md:138-145"
-  - id: F005
-    severity: note
-    category: architecture-alignment
-    summary: "Architecture's \"changes no contract in 101–108\" is slightly out of date"
-    location: "project-documents/user/slices/109-slice.network-api.md:39"
+    summary: "Design is heavier than an effort-3, medium-risk slice needs; several mechanisms can be cut or deferred"
+    location: "project-documents/user/slices/109-slice.network-api.md:258"
   - id: F006
     severity: note
-    category: dependencies
-    summary: "Design is written against unmerged 107 and 108"
+    category: hidden-dependency
+    summary: "Migration table names modules from designs that are not yet merged"
     location: "project-documents/user/slices/109-slice.network-api.md:62"
+  - id: F007
+    severity: note
+    category: architectural-alignment
+    summary: "Design is stricter than the architecture on the non-local bind"
+    location: "project-documents/user/slices/109-slice.network-api.md:206"
 ---
 
 # Review: slice — slice 109
@@ -68,72 +73,59 @@ findings:
 
 ## Findings
 
-### [PASS] Network surface matches the architecture's required shape and constraints
+### [PASS] Process boundary, writer model and read/write paths match the architecture
 
-The architecture's "Network surface" section requires:
-- a separate `amoeba serve` process;
-- read-only store reads;
-- writes only as inbox submissions;
-- the feed served from `follow()` with a `seq` resume cursor;
-- loopback by default;
-- authentication for any non-local bind.
+`amoeba serve` is a separate foreground process with no instance lock, PID file or tenant coupling (D7). That is the "its own process, not a tenant" decision ratified in the architecture's Network surface bullet. Reads open stores read-only. The only write is `inbox.submit()`, so the sole-writer model and 102/103's crash guarantees carry over unchanged. Streaming is `follow()` resumed by `seq`, as the architecture requires. The slice plan's six 109 success criteria are each covered by a Functional Requirement. These include kill-isolation in both directions and rejection of unauthenticated requests on a non-local bind.
 
-D1, D3, D5, D6 and D7 meet each of these:
-- **Process and writes:** there is no instance lock and no PID file, and the only write is `submit()`.
-- **Feed:** SSE `id` and `Last-Event-ID` map directly onto 106's cursor rule.
-- **Bind policy:** non-loopback requires a token plus TLS, enforced by a pure `check_bind` table. That is stricter than the architecture's floor.
+### [PASS] Layering and dependency directions are enforced structurally
 
-The decisions the architecture left to slice design (protocol, auth scheme, endpoint shape) are made and justified.
+`amoeba.serve` and `amoeba.inspection` may not import `amoeba.cli` or `amoeba.process`. Only `cli.serve` may import `amoeba.serve`. These are AST tests, and the writer guard is extended with a "`submit` only" assertion. Moving the registry to `amoeba.inspection` is what the slice plan assigns to 109. The design also rejects the cheaper options (serving from `cli`, or a separate preparatory slice) with reasons tied to the architecture's "server is not the resident process" rule.
 
-### [PASS] Layering and writer-model boundaries are enforced structurally
+### [PASS] Failure modes are enumerated for every new I/O path
 
-`amoeba.serve` may not import `amoeba.cli` or `amoeba.process`, so the server cannot reach the resident process's tenants or stores. `amoeba.inspection` is likewise independent of both, and `amoeba.cli.serve` is the only importer of `amoeba.serve`. Each rule is an AST test, and the writer guard's allow-list is untouched. A further test asserts that `serve` calls no inbox function except `submit`. This keeps the architecture's "not a second writer" promise checkable.
+- **Submissions:** oversized body, slow body, wrong content type, `InvalidSubmissionError` and `SubmissionWriteError` each have a status, a code and a retry rule. A mandatory `submission_id` makes retry safe.
+- **Stream:** slow-client backpressure, a stalled peer (send timeout), a silent disconnect (heartbeat), a blocked hand-off thread, the slot limit, and pre- and post-200 errors are each handled. Each handling has a bounded slot-hold time.
+- **Start-up:** failures split into exit 13 for pre-bind configuration and exit 1 for bind-time errors.
 
-### [CONCERN] End-to-end restart test and load tier duplicate slice 110's role
+### [PASS] NFR restatement is appropriate
 
-Integration Requirements asks for a subprocess test that runs:
-- `kill -9` of the resident process,
-- a second submission,
-- a restart,
-- `kill -9` of the server, and
-- a restart.
+The architecture states no numeric NFR for the network path. The design restates 106's delivery bound (`follow_interval_seconds` plus read time) with a 1 s p95 target and tests it under 32 followers. It promises nothing beyond 106's bound plus transport.
 
-The slice also lists 110 as the slice that will "run reads, submissions, and a follower over HTTP, with a restart of each process mid-sequence" (line 324). These are the same scenario.
+### [CONCERN] Design is heavier than an effort-3, medium-risk slice needs; several mechanisms can be cut or deferred
 
-Slice 109 already carries:
-- the full `amoeba.inspection` migration,
-- two store methods,
-- a custom SSE response class,
-- a threaded stream bridge, and
-- a load tier (32 followers × 2,000 changes, plus p95 gates).
+The slice combines these pieces:
+- a six-module migration;
+- a store amendment;
+- four endpoint groups;
+- a hand-written `EventStreamResponse`;
+- a bind policy with TLS validation;
+- a three-check browser-defence set;
+- an eleven-field `ServeSettings`;
+- a three-part load tier;
+- deltas to five contract docs.
 
-Cut the restart matrix from 109 and keep it in 110. 109's integration coverage can be a single smoke test: serve, read, submit, follow. Step 5 of the Verification Walkthrough (each process survives the other) already covers the mutual-survival check manually. The load tier is defensible because the Python rules require it for network paths. Consider trimming the 2,000-change burst to what proves ordering and no loss.
+The slice plan assigns "Relative Effort: 3". Candidates to cut or defer, none of which the plan's success criteria require:
+- **`GET /v1/listings` catalog** (lines 36, 297). Generic reads work by listing name. Nothing in the plan or the architecture needs discovery over HTTP. Defer it until a consumer asks.
+- **`body_read_timeout_seconds` with chunked read and `fail_after`** (lines 140-141, 347). No consumer sends slow bodies. A `Content-Length` cap alone, or a uvicorn-level limit, meets the 1 MiB bound. Defer the 408 path.
+- **Tunables with no demonstrated need** (line 258). `max_connections`/`limit_concurrency`, `shutdown_grace_seconds`, `body_read_timeout_seconds` and `send_timeout_seconds` could use uvicorn or anyio defaults until a load test shows a problem. The CLAUDE.md rule "resist adding complexity" applies here.
+- **Read-latency regression guard** (line 363). The design itself says no read latency is promised, so this p95 ≤ 200 ms test guards a number nobody consumes. Keep the starvation check (reads succeed with streams open) and drop the numeric target.
+- **Origin, Host and content-type triple** (lines 198-201). The threat is real. But the 415 rule is already needed for body parsing, and the Origin and Host checks are two small, justified middleware pieces. They are acceptable as written. The load-bearing cut is the catalog, then the body-timeout path, then the tunables.
 
-### [CONCERN] Request-side stall and start-up I/O failures are not enumerated
+Dropping these keeps every slice-plan success criterion intact. If the PM wants them kept, the design should say which consumer or criterion each one serves.
 
-Stream sends and store waits have explicit timeouts and handling. Two other I/O paths do not:
-- **POST body read.** The body is read chunk by chunk with a size cap, but there is no read timeout or minimum rate. A client that sends headers and then trickles or stops sending holds one of the `max_connections` (128) slots and a handler indefinitely. Authentication runs first, so this only matters for token holders, or for any local process on a loopback bind with no token. Name the strategy, such as a body-read deadline under `anyio.fail_after` mapped to an `ApiErrorCode` (e.g. 408), or state that uvicorn's timeouts cover it and pin that with a test.
-- **TLS file errors at start-up.** D3 covers the policy refusals (exit 13). A missing, unreadable, or mismatched cert/key pair is not covered. D7 says a port in use exits 1 via uvicorn's error. Say which of these start-up failures exits 13 and which exit 1, and whether the message is user-readable. As written, only the "files not supplied" case is specified.
+### [NOTE] Migration table names modules from designs that are not yet merged
 
-### [NOTE] Architecture's "changes no contract in 101–108" is slightly out of date
+The Migration Plan names `inspect_checks.py` and `inspect_cf.py`, and their row signatures, from 107 and 108's `not_started` designs. The slice plan makes the "107 and 108 are merged" check a hard gate, and Development Approach step 1 stops for the PM and requires the table to be revalidated against merged code. That mitigation is adequate. Until then, the Migration Plan table is provisional.
 
-The architecture says the API "changes no contract in 101–108". The slice makes these changes:
-- It replaces `argparse.Namespace` with `ListingRequest` in the listing row signature.
-- It moves `discover_project_ids` and `change_line`.
-- It rewrites `feed-contract.md`'s "Current state, then follow" section.
-- It adds `read_transaction()` and `change_head()` to the store contract.
+### [NOTE] Design is stricter than the architecture on the non-local bind
 
-106 explicitly deferred the last two, and the slice states that no row or behavior changes and that the migration commit must leave output byte-identical. The design is sound. Add a one-line amendment to the architecture's Network surface bullet so it does not contradict the slice, for example "no behavior change; the listing registry moves to `amoeba.inspection`."
-
-### [NOTE] Design is written against unmerged 107 and 108
-
-The migration table and component tree name `inspect_checks.py` and `inspect_cf.py`, whose designs are `not_started`. The slice handles this by making "confirm 107 and 108 are merged, stop for the PM otherwise" the first task. That is an adequate gate. Re-check the module names and row signatures against the merged code before step 2, because the design records their shape only from the other slices' designs.
+The architecture requires only "any non-local bind requires authentication". The design also requires TLS and a minimum token length (D3). It also adds an `Origin` refusal and a loopback `Host` check on every bind. These tighten the constraint without contradicting it, and they are justified by the cleartext-credential and DNS-rebinding risks. The slice plan's bind-refusal criterion is still met. No action is needed, but the PM should know the design goes beyond the stated minimum.
 
 ### Run Digest
 
-- Response length: 5828 chars
+- Response length: 6150 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -141,13 +133,13 @@ The migration table and component tree name `inspect_checks.py` and `inspect_cf.
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 99335 / 11028 / 88303 / 5726 / not computed
-- Duration: 50.5 s
-- Cost: $0.41 (provider)
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 176131 / 84476 / 91649 / 4545 / not computed
+- Duration: 39.6 s
+- Cost: $0.42 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
