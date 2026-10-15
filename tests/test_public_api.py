@@ -58,6 +58,13 @@ EXPECTED_EXPORTS = {
     "TaggedFinding",
     "VerdictInput",
     "VerdictRecord",
+    "BaselineEntry",
+    "Change",
+    "ChangeKind",
+    "DetectedReview",
+    "DetectionInput",
+    "DetectionOutcome",
+    "ReviewWatch",
     # The store
     "Store",
     # Exceptions

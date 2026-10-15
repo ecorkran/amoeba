@@ -36,6 +36,15 @@ from amoeba.store.evidence_models import (
     parse_verdict,
     verdict_standing,
 )
+from amoeba.store.feed_models import (
+    BaselineEntry,
+    Change,
+    ChangeKind,
+    DetectedReview,
+    DetectionInput,
+    DetectionOutcome,
+    ReviewWatch,
+)
 from amoeba.store.inbox_models import (
     Channel,
     Message,
@@ -98,6 +107,8 @@ __all__ = [
     "ReviewVerdict",
     "VerdictDerivation",
     "VerdictStanding",
+    "ChangeKind",
+    "DetectionOutcome",
     # Evidence rules
     "parse_severity",
     "parse_verdict",
@@ -120,6 +131,11 @@ __all__ = [
     "TaggedFinding",
     "VerdictInput",
     "VerdictRecord",
+    "BaselineEntry",
+    "Change",
+    "DetectedReview",
+    "DetectionInput",
+    "ReviewWatch",
     # The store
     "Store",
     # Exceptions

@@ -88,3 +88,22 @@ DETECTION_COLUMNS: Final = (
 
 #: Index names, so the migration test asserts against a constant.
 INDEX_CHANGES_PROJECT_SEQ: Final = "idx_changes_project_seq"
+
+
+def _select_list(table: str, columns: tuple[str, ...]) -> str:
+    return ", ".join(f"{table}.{column}" for column in columns)
+
+
+# --------------------------------------------------------------------------
+# changes statements
+# --------------------------------------------------------------------------
+
+#: One project's changes after a cursor, in seq order, capped by a limit.
+SELECT_CHANGES_AFTER: Final = f"""
+SELECT {_select_list(TABLE_CHANGES, CHANGE_COLUMNS)}
+FROM {TABLE_CHANGES}
+WHERE {COL_CHANGE_PROJECT_ID} = ?
+  AND {COL_CHANGE_SEQ} > ?
+ORDER BY {COL_CHANGE_SEQ}
+LIMIT ?
+"""

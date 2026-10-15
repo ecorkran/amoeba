@@ -2,33 +2,32 @@
 
 from __future__ import annotations
 
-import sqlite3
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from amoeba.process.recovery import reconcile
-from amoeba.store import CommandKind, Store, SubmissionKind, SubmissionRecord, sql_feed
-from amoeba.store.feed_models import Change
+from amoeba.store import Change, CommandKind, Store, SubmissionKind, SubmissionRecord
 from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
     RESOLUTION_BLOCKED_STATE_ID,
     RESOLUTION_DETAIL,
 )
-from amoeba.store.mapping_feed import map_change
+
+#: Batch size for reading a whole feed in tests.
+READ_BATCH = 100
 
 
 def raw_changes(store: Store, project_id: str) -> list[Change]:
-    """Every change for a project, in ``seq`` order, read on a second connection."""
-    columns = ", ".join(sql_feed.CHANGE_COLUMNS)
-    with sqlite3.connect(store.path) as connection:
-        rows = connection.execute(
-            f"SELECT {columns} FROM {sql_feed.TABLE_CHANGES} "
-            f"WHERE {sql_feed.COL_CHANGE_PROJECT_ID} = ? "
-            f"ORDER BY {sql_feed.COL_CHANGE_SEQ}",
-            (project_id,),
-        ).fetchall()
-    return [map_change(row) for row in rows]
+    """Every change for a project, in ``seq`` order, through the public read."""
+    collected: list[Change] = []
+    while batch := store.changes(
+        project_id,
+        after=collected[-1].seq if collected else 0,
+        limit=READ_BATCH,
+    ):
+        collected.extend(batch)
+    return collected
 
 
 SUBMITTED_AT = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
