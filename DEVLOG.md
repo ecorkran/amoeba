@@ -3,10 +3,16 @@ docType: devlog
 project: amoeba
 layer: project
 dateCreated: 20261009
-dateUpdated: '20261009'
+dateUpdated: '20261014'
 ---
 
 # Development Log
+
+---
+
+## 20261014
+
+**Slice 105 closed.** Task 1.2 unblocked: the throwaway copy is now a git worktree registered with `cf worktree init` (the earlier PROJECT_NOT_FOUND), with the repo's `.env` linked in for the provider key. Captured the file/stdout pair with `sq review slice 105 --model sonnet` (Squadron 0.21.9; the `glmflash` alias is gone and `glm-flash` stalled). Added the four pair tests; walkthrough run by hand and recorded. Two walkthrough claims don't hold: `inspect verdicts --json` has no `sq_run_id` or `reviewed_sha` key (the data is stored; only the listing omits it).
 
 ---
 

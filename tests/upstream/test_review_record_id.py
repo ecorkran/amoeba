@@ -5,10 +5,19 @@ from __future__ import annotations
 import dataclasses
 import re
 
-from review_fixtures import ROUND_1_PART_1, STAMPED_REVIEW_106
+from review_fixtures import (
+    PAIR_ARTIFACT,
+    PAIR_STDOUT,
+    ROUND_1_PART_1,
+    STAMPED_REVIEW_106,
+)
 
 from amoeba.store.evidence_models import ReviewVerdict
-from amoeba.upstream.squadron import parse_review_artifact, review_record_id
+from amoeba.upstream.squadron import (
+    parse_review_artifact,
+    parse_review_json,
+    review_record_id,
+)
 
 EXPECTED_ROUND_1_PART_1_ID = "sq-review-e1e00506963fd2f2aec41439b8ba3261"
 
@@ -64,3 +73,9 @@ def test_the_id_is_pinned_for_a_real_file() -> None:
     # CHANGELOG entry), not a refactor.
     parsed = parse_review_artifact(_text())
     assert review_record_id(parsed) == EXPECTED_ROUND_1_PART_1_ID
+
+
+def test_the_file_and_stdout_of_one_review_get_different_ids() -> None:
+    from_file = parse_review_artifact(PAIR_ARTIFACT.read_text(encoding="utf-8"))
+    from_stdout = parse_review_json(PAIR_STDOUT.read_text(encoding="utf-8"))
+    assert review_record_id(from_file) != review_record_id(from_stdout)

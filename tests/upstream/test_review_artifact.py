@@ -9,6 +9,7 @@ import pytest
 from review_fixtures import (
     FINDINGS_NOT_PARSED_925,
     FINDINGS_NOT_PARSED_EDITED,
+    PAIR_ARTIFACT,
     PR_REVIEW_116,
     PROVIDER_FAILURE_928,
     ROUND_1_PART_1,
@@ -147,6 +148,18 @@ EXPECTED = [
         "project-documents/user/slices/"
         "106-slice.outbound-change-feed-and-detection-of-external-work.md#dependencies",
     ),
+    Expected(
+        PAIR_ARTIFACT,
+        ReviewVerdict.CONCERNS,
+        VerdictDerivation.STATED,
+        True,
+        False,
+        "slice",
+        (S.CONCERN,) * 3 + (S.NOTE,) * 3,
+        "Judge-template stdout verdict is ingested as UNKNOWN with no handling",
+        "project-documents/user/slices/"
+        "105-slice.squadron-review-parser-and-ingest.md#Interfaces Required",
+    ),
 ]
 
 
@@ -204,6 +217,13 @@ def test_the_106_file_carries_run_id_stamp_and_sha() -> None:
     assert parsed.reviewed_sha == "c4c6d2c9dc1f4c1683ceab8cdf90e1685f134b19"
     assert parsed.tool_calls_made == 7
     assert parsed.slice == "outbound-change-feed-and-detection-of-external-work"
+
+
+def test_the_captured_pair_file_carries_its_stamp_and_no_run_id() -> None:
+    parsed = _parse(PAIR_ARTIFACT)
+    assert parsed.upstream_version == "0.21.9"
+    assert parsed.sq_run_id is None
+    assert parsed.reviewed_sha == "0c8a499b4df3639cbd9c2af1f6201c5cf920bdc2"
 
 
 def test_a_file_without_a_stamp_or_run_id_reads_them_as_none() -> None:

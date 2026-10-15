@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 103, 104]
 interfaces: [106, 107, 110]
 dateCreated: 20260928
-dateUpdated: 20261009
-status: in_progress
+dateUpdated: 20261014
+status: complete
 ---
 
 # Slice Design: squadron-review-parser-and-ingest
@@ -396,7 +396,7 @@ A failing run prints the error on stderr and leaves nothing in the inbox. The su
 
 ### Verification Walkthrough
 
-Draft; refined with captured output when Phase 6 completes. It reuses 104's `scripts/demo_evidence.py` to seed a node, because nothing outside the process can create one until 120. The setup follows 104's walkthrough, which was run by hand against the implementation. 104 found these caveats while running it, and they apply here too:
+Run by hand on 20261014 against the implementation; the results are recorded at the end of this section. It reuses 104's `scripts/demo_evidence.py` to seed a node, because nothing outside the process can create one until 120. The setup follows 104's walkthrough, which was run by hand against the implementation. 104 found these caveats while running it, and they apply here too:
 
 - Run from the repository root with `uv run`. The commands below are written for bash. Every expansion is quoted, so zsh works as well.
 - `amoeba start &` needs a moment before it applies anything. Wait until `amoeba status` prints `running`, including after the restart in step 8.
@@ -490,6 +490,20 @@ uv run pytest tests/upstream tests/store/test_finding_identity.py tests/store/te
 ```
 
 Expected: every fixture parses to its stated fields, and 104's matching tests pass reading through the parser.
+
+**Results (20261014, Squadron 0.21.9 pair).** In step 7, `PAIR_JSON` is `105-review.slice.squadron-review-parser-and-ingest.20261015T041112.stdout.json` and `PAIR_MD` is the same stem with `.md`.
+
+| Step | Observed |
+| --- | --- |
+| 1 | `sq-review-e1e00506963fd2f2aec41439b8ba3261`; one `tasks` row, `CONCERNS`, `stated`; `--json` shows `source: artifact_frontmatter`, the absolute fixture path, `upstream_version: 0.14.0`. |
+| 2 | Row shows `upstream_version: 0.15.0`. **Differs:** `inspect verdicts --json` has no `sq_run_id` key, so the run id is not visible there (the parser test reads it: `run-20260928-slices-plan-a04bdb07`). With `--upstream-version 0.14.0`: exit `12`, "the review is stamped '0.15.0' but '0.14.0' was supplied". |
+| 3 | Standings `provider_failure`, `provider_failure`, `unparsed`. |
+| 4 | Round 1 named as previous; seven findings `new`, none `recurring`, all nine round-1 findings `gone`. |
+| 5 | Same id both times; still one row with step 1's `source_path`; one submission under that id. |
+| 6 | `artifact_frontmatter: no frontmatter block`, exit `12`; `no store for project 'nosuch'`, exit `9`; `new/` empty; nothing quarantined. |
+| 7 | Ids `sq-review-62b01efa817fe4943156ca81765e1e93` (stdout) and `sq-review-60691997bdc9c93f2009c630dce97464` (file); rows `stdout_json` and `artifact_frontmatter`; all six pair findings show `times_seen` 2. **Differs:** `inspect verdicts --json` has no `reviewed_sha` key; the stored stdout verdict's `reviewed_sha` is null (checked through the store by `test_one_review_ingested_as_stdout_and_as_its_file_is_seen_twice`). |
+| 8 | After `kill -9` of the process pid (not the `uv` wrapper) and a restart, `inspect verdicts` and `inspect findings` are identical and no submission was applied twice. |
+| 9 | 163 passed. |
 
 ## Risk Assessment
 

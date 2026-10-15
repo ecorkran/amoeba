@@ -1,4 +1,4 @@
-"""`ingest review` with the process stopped, and into a project that is missing."""
+"""`ingest review` with the process stopped, into a missing project, and both ways."""
 
 from __future__ import annotations
 
@@ -13,16 +13,20 @@ from cli_harness import (
     stop_running,
 )
 from ingest_e2e_harness import (
+    OPERATOR,
+    PROJECT,
     applied,
     ingest_artifact,
     ingest_ok,
     inspect_rows,
     start_with_node,
+    store_file,
 )
-from review_fixtures import ROUND_1_PART_1
+from review_fixtures import PAIR_ARTIFACT, PAIR_STDOUT, ROUND_1_PART_1
 
 from amoeba.cli.main import ExitCode
 from amoeba.inbox import layout
+from amoeba.store import Store
 
 MISSING_PROJECT = "nosuch"
 
@@ -99,3 +103,53 @@ def test_an_unknown_project_is_refused_with_the_process_stopped(
     process, node = start_with_node(supervisor_dir, runs_dir)
     stop_running(supervisor_dir, process)
     _assert_refused_cleanly(supervisor_dir, node)
+
+
+def _ingest_stdout(supervisor_dir: Path, node: str, path: Path) -> str:
+    result = run_cli(
+        [
+            "ingest",
+            "review",
+            "--project",
+            PROJECT,
+            "--node",
+            node,
+            "--by",
+            OPERATOR,
+            "--stdout-json",
+            str(path),
+        ],
+        supervisor_dir,
+    )
+    assert result.returncode == ExitCode.OK, result.stderr
+    return result.stdout.strip()
+
+
+def test_one_review_ingested_as_stdout_and_as_its_file_is_seen_twice(
+    supervisor_dir: Path, runs_dir: Path
+) -> None:
+    process, node = start_with_node(supervisor_dir, runs_dir)
+    try:
+        stdout_id = _ingest_stdout(supervisor_dir, node, PAIR_STDOUT)
+        artifact = ingest_artifact(supervisor_dir, node, PAIR_ARTIFACT)
+        assert artifact.returncode == ExitCode.OK, artifact.stderr
+        artifact_id = artifact.stdout.strip()
+        assert stdout_id != artifact_id
+        await_condition(
+            lambda: applied(supervisor_dir, stdout_id, artifact_id), "the pair"
+        )
+        sources = {
+            v["id"]: v["source"] for v in inspect_rows(supervisor_dir, "verdicts")
+        }
+        assert sources == {
+            stdout_id: "stdout_json",
+            artifact_id: "artifact_frontmatter",
+        }
+        with Store.open_read_only(store_file(supervisor_dir)) as store:
+            from_stdout = store.verdict(stdout_id)
+        assert from_stdout is not None and from_stdout.reviewed_sha is None
+        findings = inspect_rows(supervisor_dir, "findings", "--node", node)
+        assert len(findings) == 6
+        assert all(row["times_seen"] == 2 for row in findings)
+    finally:
+        stop_running(supervisor_dir, process)

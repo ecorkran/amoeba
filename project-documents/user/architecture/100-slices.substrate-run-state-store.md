@@ -87,7 +87,7 @@ Two consequences shape the decomposition:
    **Risk Level:** Medium — matching correctness is the crux, and getting it wrong is silent.
    **Relative Effort:** 3
 
-5. [ ] **(105) Squadron Review Parser and Ingest** — Split from 104 on 20260926. An adapter package outside the store (`amoeba.upstream.squadron`) that turns `sq review --output json` stdout or a review file into a verdict record input, plus `amoeba ingest review`, which parses a file and submits it through the inbox. Reads keys Squadron has not shipped yet (run id, version stamp, provider-failure flag, SQ 927's fields) when present. Built here, not in initiative 120, because slice 106 must ingest reviews it finds on disk before 120 exists. The first draft of this design is in 104's git history (commit `c525a63`).
+5. [x] **(105) Squadron Review Parser and Ingest** — Split from 104 on 20260926. An adapter package outside the store (`amoeba.upstream.squadron`) that turns `sq review --output json` stdout or a review file into a verdict record input, plus `amoeba ingest review`, which parses a file and submits it through the inbox. Reads keys Squadron has not shipped yet (run id, version stamp, provider-failure flag, SQ 927's fields) when present. Built here, not in initiative 120, because slice 106 must ingest reviews it finds on disk before 120 exists. The first draft of this design is in 104's git history (commit `c525a63`).
    **Value:** Developer value — a real review becomes a stored record with one command, and 106 and the Runner share one parser.
    **Success Criteria:**
    - Every captured review file and stdout capture parses to the verdict, derivation, and findings it states; a provider-failure file parses as a provider failure.

@@ -6,8 +6,8 @@ lld: user/slices/105-slice.squadron-review-parser-and-ingest.md
 dependencies: [101, 103, 104]
 projectState: Slices 101–104 are merged. The store holds verdicts and content-keyed findings (schema 5), the inbox accepts a `verdict` kind, and `amoeba submit verdict` takes about twenty hand-typed flags. Nothing reads Squadron output. 104's tests read fixtures through a test-only helper, `tests/review_fixtures.py`. This slice adds the production parser, `verdict_to_payload`, and `amoeba ingest review`.
 dateCreated: 20261007
-dateUpdated: 20261009
-status: in_progress
+dateUpdated: 20261014
+status: complete
 ---
 
 ## Context Summary
@@ -70,26 +70,28 @@ status: in_progress
 **Dependencies**: Task 1.1
 **Effort**: 3
 **Objective**: Record one real review as both a saved file and its stdout JSON, so file/stdout equality is tested on real output.
-Status: blocked on 1.2 — `sq review slice 105` (sq 0.21.2) failed in a throwaway clone with PROJECT_NOT_FOUND (clone is not a registered Context Forge project); awaiting PM.
+Status: done 20261014 — captured with `sq review slice 105 --model sonnet` (Squadron 0.21.9) in a git worktree registered with `cf worktree init`; the earlier PROJECT_NOT_FOUND was the clone not being a registered CF project.
+
+Model used: `sonnet`, not `glmflash` (the `glmflash` alias no longer exists; `glm-flash` stalled).
 
 **External gate, contained**: this task needs `sq`, a provider key, and network access. Only the "pair-dependent" items below need its output: the pair assertions in Tasks 3.5, 4.2, 5.2 and 8.8, and the captured-file mentions in them. Nothing else depends on it, so Tasks 1.3 and 2.1 onward do not wait for it. If this task is blocked, stop it and ask the PM, then carry on with everything that is not pair-dependent. Leave each pair-dependent item unchecked and marked `blocked on 1.2`. The slice is not complete until they run (Task 9.3 checks this). Never hand-build a pair.
 
 **Steps**:
-- [ ] Make a throwaway copy of this repo outside the working tree (`mktemp -d`). Never run the review in the real repo, so nothing lands in the real `reviews/` directory
-- [ ] In the copy, `cd` into it and run `sq review slice 105 --model glmflash --output json > <stdout file> 2> <stderr file>` (the slice **number** form is what makes Squadron save a review file; a path would not). Slice 105's design is the input. If `sq` cannot resolve the number, stop and ask the PM rather than substituting another command
-- [ ] Run `sq --version` and record the actual value. It may be newer than 0.15.0 (the LLD's observation date version); use the file names, README text, and test names below with the version you actually got. If the output has keys the LLD's D3 table does not list, note them in the README; the parser ignores unknown keys
-- [ ] Confirm the stdout file is one JSON object (parses with `python -m json.tool`) and the `Saved review to` line is in the stderr file, not stdout
-- [ ] Confirm the saved review file has no hand edits, note whether it has a `runId` (a CLI run normally does not, and its JSON `run_id` is null), and that `template_name` in the JSON equals `reviewType` in the frontmatter
-- [ ] Copy the saved file and the stdout file into `tests/fixtures/sq_reviews/` with `cp`. Name them so the pair is obvious (e.g. same stem; stdout ends `.stdout.json`)
-- [ ] Add a README entry: command, Squadron version, model, capture date, why (pins pure-JSON stdout, `template_name == reviewType`, matching finding keys)
-- [ ] Add path constants for both files to `tests/review_fixtures.py`
-- [ ] If `sq` is unavailable, a provider key is missing, or the stdout is not pure JSON, **stop and ask the PM**. Do not hand-build a pair
+- [x] Make a throwaway copy of this repo outside the working tree (`mktemp -d`). Never run the review in the real repo, so nothing lands in the real `reviews/` directory
+- [x] In the copy, `cd` into it and run `sq review slice 105 --model glmflash --output json > <stdout file> 2> <stderr file>` (the slice **number** form is what makes Squadron save a review file; a path would not). Slice 105's design is the input. If `sq` cannot resolve the number, stop and ask the PM rather than substituting another command
+- [x] Run `sq --version` and record the actual value. It may be newer than 0.15.0 (the LLD's observation date version); use the file names, README text, and test names below with the version you actually got. If the output has keys the LLD's D3 table does not list, note them in the README; the parser ignores unknown keys
+- [x] Confirm the stdout file is one JSON object (parses with `python -m json.tool`) and the `Saved review to` line is in the stderr file, not stdout
+- [x] Confirm the saved review file has no hand edits, note whether it has a `runId` (a CLI run normally does not, and its JSON `run_id` is null), and that `template_name` in the JSON equals `reviewType` in the frontmatter
+- [x] Copy the saved file and the stdout file into `tests/fixtures/sq_reviews/` with `cp`. Name them so the pair is obvious (e.g. same stem; stdout ends `.stdout.json`)
+- [x] Add a README entry: command, Squadron version, model, capture date, why (pins pure-JSON stdout, `template_name == reviewType`, matching finding keys)
+- [x] Add path constants for both files to `tests/review_fixtures.py`
+- [x] If `sq` is unavailable, a provider key is missing, or the stdout is not pure JSON, **stop and ask the PM**. Do not hand-build a pair
 
 **Success Criteria**:
-- [ ] Both files exist, are unmodified Squadron output, and are listed in the README with the exact command
-- [ ] The stdout file parses as a single JSON object
-- [ ] The real `project-documents/user/reviews/` directory gained no files (`git status`)
-- [ ] Commit, e.g. `test: capture squadron review file and stdout pair`
+- [x] Both files exist, are unmodified Squadron output, and are listed in the README with the exact command
+- [x] The stdout file parses as a single JSON object
+- [x] The real `project-documents/user/reviews/` directory gained no files (`git status`)
+- [x] Commit, e.g. `test: capture squadron review file and stdout pair`
 
 **Files to Create**: two files in `tests/fixtures/sq_reviews/`
 **Files to Modify**: `tests/fixtures/README.md`, `tests/review_fixtures.py`
@@ -298,7 +300,7 @@ Status: blocked on 1.2 — `sq review slice 105` (sq 0.21.2) failed in a throwaw
 **Steps**:
 - [x] Create `tests/upstream/test_review_artifact.py`
 - [x] Table-driven test over every `.md` fixture: expected verdict, derivation, `findings_parsed`, `provider_failure`, review type, finding count, and for each finding its order, severity, summary, location, and positional id. Write the expected values by reading each file, not by printing the parser's output. Each row also asserts `findings` or another field is non-default where the file has data (catches silent empty results)
-- [ ] Named cases: both provider-failure files (the 0.14.0 `ROUND_2_PART_2`, heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file gives `sq_run_id` (`run-20260928-slices-plan-a04bdb07`) and its `upstream_version` stamp; pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): the new captured file gives its stamp, and `sq_run_id` equal to its `runId` if it has one and `None` if it does not (blocked on 1.2)
+- [x] Named cases: both provider-failure files (the 0.14.0 `ROUND_2_PART_2`, heading-only; the 928 file with `providerFailure: true`, `runId`, stamp) give `provider_failure=True` and no findings; the 925 file gives `findings_parsed=False`; the edited-copy fixture (CONCERNS + heading) gives `findings_parsed=False`; the PR file gives `slice=None` and ignores `pr:`; the 106 file gives `sq_run_id` (`run-20260928-slices-plan-a04bdb07`) and its `upstream_version` stamp; pair-dependent: the new captured file gives its stamp, and `sq_run_id` equal to its `runId` if it has one and `None` if it does not
 - [x] Missing-key errors, each its own test: no `verdict`, no `reviewType`, no `aiModel`; each message names the key
 - [x] Finding errors, each its own test (mutate a copy of a real file's text): a finding that is not a mapping; a finding without `severity`; a finding without `summary`; an unknown severity word; an unknown verdict word
 - [x] Provider-failure errors: a failure with a verdict other than `UNKNOWN`; a failure with findings
@@ -328,8 +330,7 @@ Status: blocked on 1.2 — `sq review slice 105` (sq 0.21.2) failed in a throwaw
 - [x] If `review.py` is now past ~300 lines, split into `review_json.py` and `review_artifact.py`, keeping `ParsedReview` and composition in `review.py` (per the LLD) — split done: `review_json.py`, `review_artifact.py`, `review_values.py`
 
 **Success Criteria**:
-- [x] `stdout-slice-927-clean-pass.json`, and `stdout-slice-104-concerns-glmflash.json` parse (plus the new pair's stdout file, once Task 1.2 has produced it) (pair file: blocked on 1.2)
-- [x] `ruff` and `pyright` clean
+- [x] `stdout-slice-927-clean-pass.json`, and `stdout-slice-104-concerns-glmflash.json` parse (plus the new pair's stdout file, once Task 1.2 has produced it)- [x] `ruff` and `pyright` clean
 
 **Files to Modify**: `src/amoeba/upstream/squadron/review.py` (and the split files if needed)
 
@@ -353,7 +354,7 @@ Status: blocked on 1.2 — `sq review slice 105` (sq 0.21.2) failed in a throwaw
   - `fallback_used` key absent → `None`
 - [x] `requested_model` is kept only when `model_substituted` is true; `verdictSource` null → derivation `not_reported`
 - [x] Errors: text with no JSON object; a JSON object with no `verdict`; malformed JSON; unknown severity; a finding without `severity`; a finding without `summary`
-- [ ] Pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): on the new captured pair (stdout file and saved `.md` from Task 1.2): file and stdout agree on verdict, review type, model, and **finding keys** (`finding_identity` over each finding) in the same order; `template_name` equals `reviewType` — blocked on 1.2
+- [x] Pair-dependent: on the new captured pair (stdout file and saved `.md` from Task 1.2): file and stdout agree on verdict, review type, model, and **finding keys** (`finding_identity` over each finding) in the same order; `template_name` equals `reviewType`
 
 **Success Criteria**:
 - [x] `uv run pytest tests/upstream` passes; `ruff` and `pyright` clean
@@ -395,7 +396,7 @@ Status: blocked on 1.2 — `sq review slice 105` (sq 0.21.2) failed in a throwaw
 - [x] The id matches `sq-review-` + 32 hex characters
 - [x] Unchanged after adding `resolution:` and `resolvedBy:` keys and a `## Response` section to a fixture's text
 - [x] Changes when one finding's summary changes, and when the verdict changes
-- [ ] Pair-dependent (`blocked on 1.2` if Task 1.2 is blocked): the file parse and the stdout parse of the newly captured pair get different ids — blocked on 1.2
+- [x] Pair-dependent: the file parse and the stdout parse of the newly captured pair get different ids
 
 **Success Criteria**:
 - [x] `uv run pytest tests/upstream` passes; `ruff` and `pyright` clean

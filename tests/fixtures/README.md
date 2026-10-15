@@ -2,7 +2,7 @@
 docType: reference
 purpose: Provenance of the real upstream fixtures the observers are tested against
 dateCreated: 20260921
-dateUpdated: 20260927
+dateUpdated: 20261014
 ---
 
 # Upstream fixtures
@@ -103,3 +103,16 @@ Captured **20260926**.
 | --- | --- | --- |
 | `stdout-slice-927-clean-pass.json` | `sq review slice 927 --output json --no-save` in the Squadron repo (captured by the Squadron session, squadron c88e2587, minimax-m3) | A clean PASS: `verdictSource: stated`, zero findings, `fallback_used: false`. Must parse as findings parsed, not as a parse failure. |
 | `stdout-slice-104-concerns-glmflash.json` | `sq review slice <104 design path> --against <100-arch path> --model glmflash --output json` against a throwaway copy of this repo (squadron 0.14.0, z-ai/glm-5.3-flash) | A CONCERNS with eleven findings, mixed PASS/CONCERN/NOTE severities, and 48 tool calls. The review was not saved (a path input carries no slice number), so stdout holds no trailing `Saved review to` line. |
+
+### File and stdout pair
+
+Captured **20261014** (the archive stamp is UTC 20261015T041112). One real review, saved by Squadron as a file and also printed as JSON on stdout, so the parser's file/stdout agreement is tested on real output.
+
+Command, run in a throwaway git worktree of this repo registered with `cf worktree init` (never the real checkout): `sq review slice 105 --model sonnet --output json > <stdout file> 2> <stderr file>`. Squadron 0.21.9, sdk profile, `claude-sonnet-5-5`. The stdout file is a single JSON object; the `Saved review to` line went to stderr.
+
+| File | `verdict` | Why it is here |
+| --- | --- | --- |
+| `105-review.slice.squadron-review-parser-and-ingest.20261015T041112.md` | CONCERNS | The saved file: `squadronVersion: 0.21.9`, `reviewedSha`, no `runId` (a CLI run carries none), six findings. |
+| `105-review.slice.squadron-review-parser-and-ingest.20261015T041112.stdout.json` | CONCERNS | The same review's stdout: `template_name` equals the file's `reviewType` (`slice`), `run_id` null, and the same finding keys in the same order. |
+
+The stdout carries keys the 105 design does not list (`cached_tokens`, `effort`, `failed_tool_calls`, `input_files`, `max_output_tokens`, `output_budget_exhausted`, `provenance`, `reasoning_chars`, `recovery_turn_used`, `setting_sources`, `structured_findings`, `system_prompt_mode`, `turns`, `timestamp`, `profile`). The parser ignores unknown keys.

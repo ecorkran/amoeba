@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from review_fixtures import SQ_REVIEWS
+from review_fixtures import PAIR_ARTIFACT, PAIR_STDOUT, SQ_REVIEWS
 
 from amoeba.store.evidence_models import (
     FindingSeverity,
@@ -17,7 +17,9 @@ from amoeba.store.evidence_models import (
     VerdictStanding,
     verdict_standing,
 )
+from amoeba.store.finding_identity import finding_identity
 from amoeba.upstream.squadron.review import ParsedReview, SquadronParseError
+from amoeba.upstream.squadron.review_artifact import parse_review_artifact
 from amoeba.upstream.squadron.review_json import parse_review_json
 
 CLEAN_PASS = SQ_REVIEWS / "stdout-slice-927-clean-pass.json"
@@ -165,3 +167,18 @@ def test_a_finding_missing_a_required_key_is_rejected(key: str) -> None:
 def test_stray_braces_before_the_object_do_not_hide_it() -> None:
     text = CONCERNS.read_text(encoding="utf-8")
     assert parse_review_json("using {braces} first\n" + text) == parse_review_json(text)
+
+
+def test_the_captured_pair_agrees_between_file_and_stdout() -> None:
+    from_file = parse_review_artifact(PAIR_ARTIFACT.read_text(encoding="utf-8"))
+    from_stdout = parse_review_json(PAIR_STDOUT.read_text(encoding="utf-8"))
+    assert _capture(PAIR_STDOUT)["template_name"] == from_file.review_type == "slice"
+    assert from_stdout.review_type == from_file.review_type
+    assert from_stdout.verdict is from_file.verdict is ReviewVerdict.CONCERNS
+    assert from_stdout.model == from_file.model
+    assert _keys(from_stdout) == _keys(from_file)
+    assert len(_keys(from_file)) == 6
+
+
+def _keys(parsed: ParsedReview) -> list[str]:
+    return [finding_identity(f.location, f.summary) for f in parsed.findings]
