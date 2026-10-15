@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from amoeba.process.review_sources import DetectedFile
 from amoeba.store import (
@@ -56,6 +57,33 @@ def recording[ResultT](
         raise
 
 
+@dataclass(frozen=True)
+class _Examined:
+    """One file under examination: the ledger key, and where to record it."""
+
+    store: Store
+    project_id: str
+    path: str
+    digest: str
+
+    def refuse(
+        self, outcome: DetectionOutcome, *, detail: str, record_id: str | None = None
+    ) -> None:
+        """Record a terminal refusal for this ``(path, digest)``."""
+        logger.info("review file %s is %s: %s", self.path, outcome.value, detail)
+        detection = DetectionInput(
+            self.project_id,
+            self.path,
+            self.digest,
+            outcome,
+            record_id=record_id,
+            detail=detail,
+        )
+        recording(
+            self.project_id, self.path, lambda: self.store.record_detection(detection)
+        )
+
+
 def examine(
     store: Store, project_id: str, detected: DetectedFile, version_label: str
 ) -> bool:
@@ -64,37 +92,49 @@ def examine(
     digest = content_digest(detected.content)
     if store.detection(project_id, path, digest) is not None:
         return False
-
-    def record(outcome: DetectionOutcome, **fields: str | None) -> None:
-        detection = DetectionInput(project_id, path, digest, outcome, **fields)
-        recording(project_id, path, lambda: store.record_detection(detection))
+    examined = _Examined(store, project_id, path, digest)
 
     try:
         parsed = parse_review_artifact(detected.content.decode("utf-8"))
     except (SquadronReviewError, UnicodeDecodeError) as error:
         # Specific: not a review this parser can read. An outcome, not an
         # exception; retried only if the bytes change.
-        logger.info("review file %s is unparseable: %s", path, error)
-        record(DetectionOutcome.UNPARSEABLE, detail=str(error))
+        examined.refuse(DetectionOutcome.UNPARSEABLE, detail=str(error))
         return True
 
     record_id = review_record_id(parsed)
-    attribution = (
-        attribute_review(store.nodes_for_project(project_id), parsed.slice)
-        if parsed.slice is not None
-        else None
-    )
-    if attribution is None or attribution.node_id is None:
-        candidates = () if attribution is None else attribution.candidates
-        logger.info("review file %s is unattributed: %s", path, list(candidates))
-        record(
-            DetectionOutcome.UNATTRIBUTED,
-            record_id=record_id,
-            detail=_candidates_detail(parsed, candidates),
-        )
-        return True
+    node_id = _attributed_node(examined, parsed, record_id)
+    if node_id is not None:
+        _ingest(examined, parsed, record_id, node_id, version_label)
+    return True
 
-    node_id = attribution.node_id
+
+def _attributed_node(
+    examined: _Examined, parsed: ParsedReview, record_id: str
+) -> str | None:
+    """The review's slice node; ``None`` after recording ``unattributed``."""
+    if parsed.slice is None:
+        candidates: tuple[str, ...] = ()
+        detail = "review carries no slice; candidates: []"
+    else:
+        nodes = examined.store.nodes_for_project(examined.project_id)
+        attribution = attribute_review(nodes, parsed.slice)
+        if attribution.node_id is not None:
+            return attribution.node_id
+        candidates = attribution.candidates
+        detail = f"slice {parsed.slice!r}; candidates: {list(candidates)}"
+    examined.refuse(DetectionOutcome.UNATTRIBUTED, detail=detail, record_id=record_id)
+    return None
+
+
+def _ingest(
+    examined: _Examined,
+    parsed: ParsedReview,
+    record_id: str,
+    node_id: str,
+    version_label: str,
+) -> None:
+    """Record the verdict and its ``ingested`` row in one transaction."""
     try:
         verdict = to_verdict_input(
             parsed,
@@ -105,25 +145,27 @@ def examine(
             upstream_version=(
                 version_label if parsed.upstream_version is None else None
             ),
-            source_path=path,
+            source_path=examined.path,
         )
     except SquadronReviewError as error:
         # Specific: parsed, but its stamp is unusable (an empty label). Not a
         # review this slice can record, so the same outcome as a parse error.
-        logger.info("review file %s cannot be recorded: %s", path, error)
-        record(DetectionOutcome.UNPARSEABLE, record_id=record_id, detail=str(error))
-        return True
+        examined.refuse(
+            DetectionOutcome.UNPARSEABLE, detail=str(error), record_id=record_id
+        )
+        return
     detection = DetectionInput(
-        project_id, path, digest, DetectionOutcome.INGESTED, record_id=record_id
+        examined.project_id,
+        examined.path,
+        examined.digest,
+        DetectionOutcome.INGESTED,
+        record_id=record_id,
     )
     recording(
-        project_id, path, lambda: store.record_detected_verdict(verdict, detection)
+        examined.project_id,
+        examined.path,
+        lambda: examined.store.record_detected_verdict(verdict, detection),
     )
-    logger.info("ingested review %s as verdict %s on %s", path, record_id, node_id)
-    return True
-
-
-def _candidates_detail(parsed: ParsedReview, candidates: tuple[str, ...]) -> str:
-    if parsed.slice is None:
-        return "review carries no slice; candidates: []"
-    return f"slice {parsed.slice!r}; candidates: {list(candidates)}"
+    logger.info(
+        "ingested review %s as verdict %s on %s", examined.path, record_id, node_id
+    )
