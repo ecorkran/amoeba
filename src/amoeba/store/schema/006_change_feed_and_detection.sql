@@ -55,3 +55,43 @@ CREATE TABLE detected_reviews (
     detected_at TEXT NOT NULL,
     UNIQUE (project_id, path, digest)
 );
+
+-- --------------------------------------------------------------------------
+-- Emission triggers (D8). Each writes one changes row inside the transaction of
+-- the write that fired it, so a change and its feed row commit together or not
+-- at all. recorded_at is copied from the row's own timestamp column.
+--
+-- The kind literals below mirror ChangeKind in feed_models.py. A shipped
+-- migration is frozen, so they are repeated here; the invariant test
+-- (tests/store/test_feed_invariant.py) requires every kind to appear, which
+-- fails if a literal drifts from the enum.
+-- --------------------------------------------------------------------------
+
+CREATE TRIGGER changes_node_created
+AFTER INSERT ON nodes
+BEGIN
+    INSERT INTO changes (project_id, kind, node_id, subject_id, payload, recorded_at)
+    VALUES (
+        new.project_id,
+        'node_created',
+        new.id,
+        new.id,
+        json_object('kind', new.kind, 'parent_id', new.parent_id, 'status', new.status),
+        new.created_at
+    );
+END;
+
+CREATE TRIGGER changes_node_status_changed
+AFTER UPDATE OF status ON nodes
+WHEN old.status IS NOT new.status
+BEGIN
+    INSERT INTO changes (project_id, kind, node_id, subject_id, payload, recorded_at)
+    VALUES (
+        new.project_id,
+        'node_status_changed',
+        new.id,
+        new.id,
+        json_object('from', old.status, 'to', new.status),
+        new.updated_at
+    );
+END;
