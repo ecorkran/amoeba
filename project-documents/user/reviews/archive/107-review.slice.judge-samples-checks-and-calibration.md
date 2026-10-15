@@ -14,60 +14,51 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: 29658d4520c3eea41c132c02effbc14f59dd8808
+reviewedSha: 02fb20c74023d7ac2731c4c99a977b241e6c409b
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-turns: 3
-promptTokens: 95705
-cachedTokens: 8746
-cacheWriteTokens: 86955
-completionTokens: 5482
-durationSeconds: 46.2
-costUsd: 0.404191
+toolCallsMade: 3
+turns: 4
+promptTokens: 179639
+cachedTokens: 91180
+cacheWriteTokens: 88453
+completionTokens: 3977
+durationSeconds: 35.6
+costUsd: 0.40338
 costBasis: provider
 runId: run-20261015-slices-plan-fa1ba72e
 squadronVersion: 0.22.0
 findings:
   - id: F001
     severity: concern
-    category: architectural-alignment
-    summary: "Calibration report cannot honour the \"escalated-gate verdicts are inadmissible\" constraint"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:58"
+    category: architectural-constraint
+    summary: "Calibration report knowingly includes data the architecture calls inadmissible"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Technical Decisions (D3)"
   - id: F002
     severity: concern
     category: proportionality
-    summary: "Progress records and the check/progress inbox kinds are heavier than a no-consumer table needs"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:222-224"
+    summary: "Footprint is heavy for a Low-risk, effort-3 slice; duplicated provenance and speculative table"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Component Structure"
   - id: F003
-    severity: concern
-    category: architectural-alignment
-    summary: "D4 refuses instead of recording unknown, and the refusal message is wrong for one case it catches"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:202-206"
+    severity: note
+    category: under-specification
+    summary: "Calibration grouping when `model` is not reported"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Technical Decisions (D3)"
   - id: F004
-    severity: concern
-    category: error-handling
-    summary: "D2 and D8 tighten shipped slice 104 behaviour, and the ordering of D2's check is under-specified"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:186"
+    severity: note
+    category: integration
+    summary: "Judge-stdout refusal scope"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Technical Decisions (D4)"
   - id: F005
-    severity: note
-    category: scope
-    summary: "Consensus and \"recommendations\" are deferred to 140, which narrows the architecture's wording"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:56"
-  - id: F006
-    severity: note
-    category: design-quality
-    summary: "One enum serves two vocabularies"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:226"
-  - id: F007
-    severity: pass
-    category: architectural-alignment
-    summary: "Layering, dependency direction, and closed vocabularies are respected"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Architecture"
-  - id: F008
     severity: pass
     category: error-handling
-    summary: "Failure modes for the new inbox kinds and the migration are enumerated"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:240"
+    summary: "Failure modes for the new write paths"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Data Flow"
+  - id: F006
+    severity: pass
+    category: architecture-alignment
+    summary: "Layering, dependency direction, and writer model"
+    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Architecture"
 ---
 
 # Review: slice — slice 107
@@ -77,87 +68,53 @@ findings:
 
 ## Findings
 
-### [CONCERN] Calibration report cannot honour the "escalated-gate verdicts are inadmissible" constraint
+### [CONCERN] Calibration report knowingly includes data the architecture calls inadmissible
 
-The architecture lists this constraint as permanent: "escalated-gate verdicts are inadmissible as agreement data". It also says the store exposes calibration evidence as a report. The slice excludes the filter because "the store cannot tell which samples came from an escalated gate". It then says "140 applies that filter when it computes agreement."
+The architecture lists "escalated-gate verdicts are inadmissible as agreement data" under its permanent metrology constraints. D3 ships a report that includes `split_invocations`, an agreement-style metric, with no filter. Its only mitigation is help text and a doc note, with the fix deferred to issue #4 and initiative 140.
 
-140 can only apply a filter if the store records the attribute it filters on. Nothing in the design stores it. The `calibration` report (D3, lines 188-200) counts every judge sample, escalated or not, and publishes the counts as evidence. A consumer reading `split_invocations` or the verdict counts gets data the architecture calls inadmissible, with no way to exclude it.
+The slice plan's success criteria do not require this filter, so deferral is allowed. Two problems remain:
+- A permanent constraint is breached, and the design does not record that the PM has accepted the breach.
+- The deferred fix is a schema change. Migration 007 is open now and already alters `verdicts`, so a nullable opaque attribute for gate or invocation context could be added at near-zero cost. Doing it later costs a further migration on a shipped table.
 
-Either:
-- add the attribute (for example an opaque nullable `gate_context` or `escalated` field on the sample, supplied by the submitter), or
-- say plainly in the contract and in `inspect calibration` output that the report is unfiltered, and name the slice that must add the attribute.
+Either add the nullable column now, without filter logic, or record the PM's explicit acceptance of the deviation. Also say whether the unfiltered report may be consumed as agreement evidence in the meantime. D3 is currently marked "pending ratification" only for the columns.
 
-As written, the deferral leaves a hole that 140 cannot fill on its own.
+### [CONCERN] Footprint is heavy for a Low-risk, effort-3 slice; duplicated provenance and speculative table
 
-### [CONCERN] Progress records and the check/progress inbox kinds are heavier than a no-consumer table needs
+The slice adds about 10 new modules, two tables, a trigger, an inbox kind, and a parallel provenance vocabulary. Parts of that can be cut or deferred:
+- **D8 `ToolSource` and `ToolProvenance`.** This duplicates `Provenance` with the same four fields and only a different source enum. A single `Provenance` generic over its source enum, or a shared base, avoids a second type that must be kept in step. The design should justify the duplication against the repo's DRY rule, or drop it.
+- **`progress_records` plus `record_progress`, `progress_records()`, `ProgressInput/Record`, and mapping and SQL for the table.** The slice plan assigns "a small record table", so the table is in scope. The in-process writer, reader, and record types have no consumer until issue #5. The table could be created with only the minimal writer, or the reader and tests deferred to the consumer slice. The design should name what it cuts.
+- **`criteria_means` in calibration.** The criteria keys vary by template and appear in `--json` only. No consumer is named, so it is a candidate to defer.
+- **Separate `_check_writer.py`, `check_payload.py` and `check_payloads.py`.** One module covers payload keys defined once and another the pydantic model. Confirm that both are needed, or merge them.
 
-D6 says `task_progress` and `devlog` have "no home and no designed consumer", and their content is opaque JSON. The slice still builds this for them:
-- a table,
-- a `ProgressKind` enum,
-- a payload model,
-- a `SubmissionKind`,
-- an effect,
-- a `ChangeKind` and trigger,
-- an `inspect progress` listing,
-- a `submit progress` CLI flag set,
-- three docs sections.
+### [NOTE] Calibration grouping when `model` is not reported
 
-The architecture does assign the SQ 280 typed-artifact scope to this component, so dropping it entirely would be a different concern. But nothing reads these records. Opaque content with no consumer is an abstraction nothing uses yet. The architecture's own rule of resisting complexity applies.
+D3 groups by `(review_type, model)`, but the design does not say how a sample with a null or absent model is grouped. The architecture says "unknown is a value" and the repo bans silent fallbacks. State that such samples form an explicit "model not reported" group, not an empty-string or dropped row.
 
-Cut or defer:
-- The `inspect progress` listing and the `progress_recorded` feed trigger, which have no reader.
-- The inbox kind for `progress`, which could come with the first consumer. D7's argument (outside producers exist) holds for `check`, which the Runner and the PM depend on. It is much weaker for `devlog`.
+### [NOTE] Judge-stdout refusal scope
 
-Keep the table and `record_progress` if the slice plan insists on delivering the scope. Say which items the slice plan entry assigns to 107 so the cut does not drop assigned scope.
+The D4 rule is stated on JSON content (`UNKNOWN` plus a score), not on whether the review is a judge template. That is consistent with "never compare the version label". Confirm that no non-judge review legitimately reports `UNKNOWN` with a score, since the refusal would then block it from ingest.
 
-### [CONCERN] D4 refuses instead of recording unknown, and the refusal message is wrong for one case it catches
+### [PASS] Failure modes for the new write paths
 
-The architecture's principle is "Unknown is a value, not a default. Missing or unparseable input is recorded as explicitly unknown and surfaces as a blocked-state". D4 submits nothing for a stdout capture with `verdict: UNKNOWN` plus a score. Nothing in the store shows the attempt, and no blocked-state surfaces. The reasoning (don't store a wrong fact) is sound, but it departs from the principle and the slice does not acknowledge the departure. State it as a deliberate exception, or record the refusal in a way the Runner can see.
+- **Direct calls** raise `NodeNotFoundError` or `ValueError`.
+- **The `check` kind** returns a rejection reason, and an unknown vocabulary word is quarantined.
+- **Retries** use 104's first-wins rule, with a WARNING when content differs.
+- **D2 rejections** write nothing, so a rejected sample never defines an invocation.
+- **Crash mid-apply** is covered by `apply_submission`'s single transaction, and the end-to-end `kill -9` test exercises it.
 
-The same rule also catches the post-fix case of an out-of-range score. The message is fixed text: "from before squadron 0.21.9 carries no verdict; ingest the saved review file". For that case the message is false, and the saved file holds the same `UNKNOWN`. The operator is sent to a dead end. The message should either distinguish the two cases or not claim a version.
+### [PASS] Layering, dependency direction, and writer model
 
-### [CONCERN] D2 and D8 tighten shipped slice 104 behaviour, and the ordering of D2's check is under-specified
-
-D2 rejects a sample whose invocation already has samples on another node or review type. The data-flow sketch (lines 133-138) puts this check after 104's checks and before the insert. Two cases are left implicit:
-- **A rejected first sample.** It leaves no invocation record, so the "earlier sample" that defines the invocation's node and review type is whichever sample arrived first. A mistyped first sample therefore fixes the wrong node, and every later correct sample is rejected. The design should say the PM's remedy is a new invocation id, and the contract doc should say so.
-- **Silent no-op on retry.** The retry rule (line 230) makes ingesting the same file under a second invocation a silent no-op. The design counts this as "WARNING if content differs", but `judge_invocation_id` is excluded from the digest, so the id collides and the second invocation silently loses its sample. A judge asking for N samples may then get N−1 and see no error.
-
-Name the handling for both: a rejection reason that points at the retry path, or include `judge_invocation_id` in the record id.
-
-### [NOTE] Consensus and "recommendations" are deferred to 140, which narrows the architecture's wording
-
-The architecture's Design Goals say the store "surfaces recommendations". The Envisioned State says "judge invocations record … the consensus result the Judge computed". The architecture's Scope says consensus aggregation and routing policy belong to 140. The slice reads the Scope clause as controlling. That is defensible, and nothing here writes to Squadron, so the metrology constraint holds, with a test asserting no reference to its directory or config key. Make sure the slice plan entry records that the consensus-result record and recommendations are 140's, so the architecture's two sentences are not read as unmet.
-
-### [NOTE] One enum serves two vocabularies
-
-`RecordSource` gains `command_output` and `document`, and `REVIEW_SOURCES` is then needed to stop verdicts from using them. One enum with a per-record-type allowlist works, but the allowlist is a second place that must change with the enum. A separate source type for checks and progress records would remove the guard. This is minor and only worth it if the guard is expected to grow.
-
-### [PASS] Layering, dependency direction, and closed vocabularies are respected
-
-- The store does not import pydantic. Payload models live under `inbox/`, and Squadron parsing stays in `upstream/squadron/`.
-- The new tables are written only through the apply loop or the in-process Runner, which keeps the sole-writer model.
-- `CheckOutcome`, `CheckStanding`, and `ProgressKind` are `StrEnum`s defined once.
-- `name` and `baseline_ref` are explicitly opaque and never routed on.
-- Standing and calibration are computed on read.
-- The check record carries what was examined and a `baseline_ref`, which satisfies the architecture's "baseline, not absolute, health signals" consideration.
-- `upstream_version` is stored and never compared, as the architecture's versioning consideration requires.
-
-### [PASS] Failure modes for the new inbox kinds and the migration are enumerated
-
-Each new write path has a stated handling:
-- Direct calls raise `NodeNotFoundError` or `ValueError`.
-- Inbox effects return a rejection reason.
-- Unknown vocabulary words are quarantined.
-- A retried id returns the existing record.
-- The 6 → 7 upgrade and the feed invariant are covered by named tests.
-
-The architecture states no latency or throughput NFR for these paths, so nothing needs restating.
+- **Store.** The store stays free of pydantic and of Squadron parsing.
+- **Adapter.** The Squadron adapter changes stay in `upstream/squadron`.
+- **Check kind.** Writes use the inbox kind seam, so the sole-writer model holds.
+- **Calibration.** It is read-only and never touches Squadron's metrology store, and a test asserts this.
+- **Consensus.** Consensus is excluded, as the slice plan's "Not in 107" note directs.
 
 ### Run Digest
 
-- Response length: 8457 chars
+- Response length: 5491 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -165,13 +122,13 @@ The architecture states no latency or throughput NFR for these paths, so nothing
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 95705 / 8746 / 86955 / 5482 / not computed
-- Duration: 46.2 s
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 179639 / 91180 / 88453 / 3977 / not computed
+- Duration: 35.6 s
 - Cost: $0.40 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
