@@ -16,7 +16,7 @@ status: not_started
 - **Sections in this file:** 5 attribution and review-producing kinds; 6 review sources; 7 `ReviewDetectionTenant`; 8 listings, demo script, and `start` wiring; 9 end-to-end, docs, final validation.
 - **Models for new code:** `InboxTenant` (`process/inbox_tenant.py`) for the tenant's host usage; `cli/inspect_evidence.py` for listing modules; `cli/settings_flags.py` for flags; `scripts/demo_evidence.py` for the demo script; `tests/local_host_harness.py` and `tests/process/conftest.py` for in-process tenant tests.
 - **Real fixtures** (`tests/fixtures/sq_reviews/`, slice `resident-process-and-recovery`): round 1 part 1 `102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md`; round 1 part 2 `...part-2.20260921T112635.md`; round 2 part 1 `...part-1.md`; round 2 part 2 `...part-2.md` (the captured provider failure). Files carrying `squadronVersion`: the 105, 106, and 928 fixtures. Never hand-build a review.
-- **No load test:** the LLD sets no numeric targets. Task 9.7 tells the PM so it can be overruled.
+- **No load test:** the LLD sets no numeric targets. Task 9.6 tells the PM so it can be overruled.
 
 ---
 
@@ -134,15 +134,13 @@ status: not_started
 
 **Steps**:
 - [ ] Add `review_scan_interval_seconds = 2.0` and `sq_timeout_seconds = 10.0` to `ProcessSettings` with docstring entries; add both `start` flags in `cli/settings_flags.py`, with defaults read from `ProcessSettings` only
-- [ ] Generalize `capture_version_label` in `process/observers/cf_readback.py`: extract the subprocess logic into a helper parameterized by executable (e.g. `capture_executable_version(executable, timeout_seconds)`), move it with `VERSION_UNAVAILABLE` to a new `process/observers/version_label.py`, and keep `capture_version_label` as the cf call. Define `SQ_EXECUTABLE` and its version args once there. cf behavior and logging are unchanged
-- [ ] Update imports of `VERSION_UNAVAILABLE`; existing cf tests pass unchanged
+- [ ] `sq --version` reuses cf's "label or `VERSION_UNAVAILABLE`" capture (`capture_version_label` in `process/observers/cf_readback.py`). Required outcome: one shared capture routine serves both executables; the `sq` executable and its version args are defined once; cf behavior and logging are unchanged. Where the shared routine lives and what it is called is the implementer's choice
 
 **Success Criteria**:
-- [ ] Existing observer, settings, and lifecycle tests pass; `amoeba start --help` lists the two flags
+- [ ] Existing observer, settings, and lifecycle tests pass unchanged; `amoeba start --help` lists the two flags
 - [ ] Committed with Task 7.2
 
-**Files to Create**: `src/amoeba/process/observers/version_label.py`
-**Files to Modify**: `process/settings.py`, `cli/settings_flags.py`, `process/observers/cf_readback.py`
+**Files to Modify**: `process/settings.py`, `cli/settings_flags.py`, `process/observers/cf_readback.py` (or a new module the implementer chooses)
 
 ---
 
@@ -197,6 +195,7 @@ status: not_started
 - [ ] Add `tests/process/test_review_detection_baseline.py`: existing files become `baseline` rows, `baselined_at` is set, no verdict, no change
 - [ ] A directory registered before it exists: one ERROR over several ticks, nothing written; created later, one INFO and baselined
 - [ ] One unreadable file: no rows, `baselined_at` null, one WARNING; after `chmod`, the whole directory is baselined at once
+- [ ] A file deleted between listing and read (patched read raising `FileNotFoundError` for one path): the baseline is taken without it, with no error
 - [ ] Two ticks inside the interval baseline once (count calls on a substitute `source_factory` or patched listing)
 - [ ] An inactive watch is never baselined; a baselined watch is never baselined again
 
@@ -243,6 +242,7 @@ status: not_started
 - [ ] The round 2 part 2 file is recorded with standing `provider_failure`
 - [ ] Hand edit: add a `resolution: accepted` frontmatter line to a detected file; the next scans add one `ingested` row pointing at the **same** verdict id and no second verdict
 - [ ] Restart: a new tenant over the same store re-ingests nothing
+- [ ] Deleted between listing and read: with the source's read patched to raise `FileNotFoundError` for one settled file, a scan writes no ledger row and raises nothing; restored, the file settles and is ingested
 - [ ] Refusals: a project with no slice node → `unattributed`, empty candidates, `record_id` set, no node written; two matching nodes → both ids in `detail`; `# not a review` in an `.md` → `unparseable`, not retried until its bytes change
 - [ ] Label: a fixture without `squadronVersion` records the tenant's label; one with it keeps its own stamp; with the label `VERSION_UNAVAILABLE`, the recorded version is that marker
 - [ ] Hand recovery: `unattributed`, then create the slice node and ingest the file the way `amoeba ingest review` does (`apply_submission` with the `verdict` kind and `verdict_to_payload`); `recorded_since` is true and a second ingest records nothing
@@ -338,22 +338,21 @@ status: not_started
 
 ---
 
-### Task 8.3: Write `scripts/demo_detection.py` and test it
+### Task 8.3: Write `scripts/demo_detection.py`
 **Owner**: Junior AI
 **Dependencies**: Task 8.2
 **Effort**: 2
-**Objective**: The seeding helper the walkthrough and end-to-end tests use (LLD Verification Walkthrough).
+**Objective**: The seeding helper the walkthrough and end-to-end tests use (LLD Verification Walkthrough). Its happy path is exercised by Task 9.1 through `seed_demo`; it has no test module of its own.
 
 **Steps**:
 - [ ] Model on `scripts/demo_evidence.py` (takes the instance lock, refuses while a process runs, requires `AMOEBA_STORE_DIR`): seed a slice node with `cf.slice_name` `resident-process-and-recovery` and a `blocked_on_human` node in project `demo`; print both ids on one line, slice node first
 - [ ] Add it to the permitted list in `tests/test_writer_guard.py`, with a comment, as 103 and 104 did
-- [ ] Add `tests/test_demo_detection.py`: against a scratch store with project `demo`, exit 0, two ids on stdout, and a read-only open shows both nodes; while the lock is held, non-zero exit, empty stdout, store unchanged
 
 **Success Criteria**:
-- [ ] Both test modules pass
+- [ ] `tests/test_writer_guard.py` passes
 - [ ] Commit, e.g. `feat(scripts): add demo_detection seeding script`
 
-**Files to Create**: `scripts/demo_detection.py`, `tests/test_demo_detection.py`
+**Files to Create**: `scripts/demo_detection.py`
 **Files to Modify**: `tests/test_writer_guard.py`
 
 ---
@@ -396,42 +395,44 @@ status: not_started
 
 ## Section 9: End-to-End, Docs, Final Validation
 
-### Task 9.1: Build the end-to-end helpers
+### Task 9.1: End-to-end test A: follow, reply, detect
 **Owner**: Junior AI
 **Dependencies**: Task 8.5
-**Effort**: 2
-**Objective**: One helper set for the end-to-end tests, exercised by Task 9.2 (no separate smoke tests).
+**Effort**: 4
+**Objective**: First half of the LLD Integration Requirements through the real CLI, with the helpers built as its first steps.
 
 **Steps**:
 - [ ] Read `tests/cli_harness.py` and `tests/test_cli_lifecycle.py` for launching a long-lived `amoeba start`; if no helper exists, add one `start_cli_process(env)` to `tests/cli_harness.py` as the only launcher
-- [ ] Create `tests/cli/detection_e2e_harness.py` over that launcher, with a fake `sq` first on `PATH`: process start/stop/kill with condition waits; `start_follower(project, after=None)` collecting `amoeba feed --follow` JSON lines in a thread, with `wait_for(predicate, timeout)` (fails showing the lines so far), `last_seq`, `terminate`, `kill`; `seed_demo(env)`; `copy_fixture(name, directory)`; `inspect_json(env, listing, project, *args)`. Helpers hold no detection assertions
+- [ ] Create `tests/cli/detection_e2e_harness.py` over that launcher, with a fake `sq` first on `PATH`: process start/stop/kill with condition waits; `start_follower(project, after=None)` collecting `amoeba feed --follow` JSON lines in a thread, with `wait_for(predicate, timeout)` (fails showing the lines so far), `last_seq`, `terminate`, `kill`; `seed_demo(env)` (runs `scripts/demo_detection.py`); `copy_fixture(name, directory)`; `inspect_json(env, listing, project, *args)`. Helpers hold no detection assertions and have no tests of their own; this task's test exercises them
+- [ ] Create `tests/cli/test_detection_end_to_end.py` with Test A: create `demo`, stop, seed, start the follower **while the process is stopped**, start the process, submit a `resolution` for the blocked node, pre-place round 1 part 2 in a temp directory, register it, wait for the baseline, copy round 1 part 1 then (after it is detected) round 2 part 1
+- [ ] Assert follower content in order: two `node_created`, the blocked node's `node_status_changed`, `node_status_changed` to `runnable`, then per round one `verdict_recorded` and one `review_detected`; no lines for the baseline file. `inspect verdicts --json` shows two verdicts with `source` `artifact_frontmatter` and `source_path` built from the registered directory string (compare named keys only)
+- [ ] Non-empty follower lines, and every `verdict_recorded`/`review_detected` subject id matches a row in `inspect verdicts`/`inspect detections` and conversely
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` clean
-- [ ] Committed with Task 9.2
+- [ ] Test A passes three times consecutively
+- [ ] Commit, e.g. `test(cli): add detection end-to-end test A`
 
-**Files to Create**: `tests/cli/detection_e2e_harness.py`
+**Files to Create**: `tests/cli/detection_e2e_harness.py`, `tests/cli/test_detection_end_to_end.py`
 **Files to Modify**: `tests/cli_harness.py` (only if the launcher is needed)
 
 ---
 
-### Task 9.2: End-to-end test
+### Task 9.2: End-to-end test B: crash, restart, provider failure
 **Owner**: Junior AI
 **Dependencies**: Task 9.1
-**Effort**: 4
-**Objective**: LLD Integration Requirements through the real CLI.
+**Effort**: 3
+**Objective**: Second half of the LLD Integration Requirements: `kill -9` of the process with nothing recorded twice. Follower resume is owned by Tasks 3.4 and 3.6 and is not repeated here.
 
 **Steps**:
-- [ ] Create `tests/cli/test_detection_end_to_end.py`. Test A: create `demo`, stop, seed, start the follower **while the process is stopped**, start the process, submit a `resolution` for the blocked node, pre-place round 1 part 2 in a temp directory, register it, wait for the baseline, copy round 1 part 1 then (after it is detected) round 2 part 1
-- [ ] Assert follower content in order: two `node_created`, the blocked node's `node_status_changed`, `node_status_changed` to `runnable`, then per round one `verdict_recorded` and one `review_detected`; no lines for the baseline file. `inspect verdicts --json` shows two verdicts with `source` `artifact_frontmatter` and `source_path` built from the registered directory string (compare named keys only)
-- [ ] Test B, self-contained: ingest the two part 1 rounds, `kill -9`, restart, copy round 2 part 2 in. It records standing `provider_failure`; verdicts total three; no verdict id appears twice in `verdict_recorded` lines. Kill the follower, restart it with `--after` its last `seq`; it prints nothing old, then exactly one new change after a further `resolution` or file
-- [ ] Both tests: non-empty follower lines, and every `verdict_recorded`/`review_detected` subject id matches a row in `inspect verdicts`/`inspect detections` and conversely
+- [ ] Add a self-contained Test B to `tests/cli/test_detection_end_to_end.py`: build its own scenario with the harness, start a follower, ingest the two part 1 rounds, `kill -9` the process, restart it, copy round 2 part 2 in
+- [ ] Assert: standing `provider_failure` on the new verdict; verdicts total three; no new ledger rows for the earlier files; no verdict id appears twice in `verdict_recorded` lines
+- [ ] Non-empty follower lines, and the same subject-id agreement check as Test A
 
 **Success Criteria**:
-- [ ] Both pass three times consecutively, and each alone
-- [ ] Commit, e.g. `test(cli): add detection end-to-end test`
+- [ ] Both tests pass three times consecutively, and each alone
+- [ ] Commit, e.g. `test(cli): add detection end-to-end test B`
 
-**Files to Create**: `tests/cli/test_detection_end_to_end.py`
+**Files to Modify**: `tests/cli/test_detection_end_to_end.py`
 
 ---
 
@@ -444,35 +445,19 @@ status: not_started
 **Steps**:
 - [ ] Front matter per `file-naming-conventions.md`; structure like `docs/inbox-contract.md`
 - [ ] Cover: `Change` shape and the payload table; `amoeba feed` and its line format; `follow()` and `FeedSettings`; the delivery guarantees as the LLD words them (save the cursor after acting); the latency bound; the follower failure table; "the feed says a change happened, the store is the truth"; bounded coverage (no blocked-state, finding, or journal changes); submission outcomes are not a kind and rejections are not on the feed (D8); nothing is deleted; "current state, then follow" before 109 means reading state, then following from 0 and applying idempotently; the trust boundary
-- [ ] Take names and values from the code
+- [ ] Take names and values from the code. Before committing, check by hand that every `ChangeKind` value, every `Change` field, every `amoeba feed` flag, and every `FeedSettings` field named in the doc matches the code
 
 **Success Criteria**:
-- [ ] Committed with Task 9.4
+- [ ] The document covers every topic above and the manual name check found no mismatch
+- [ ] Commit, e.g. `docs: add feed contract`
 
 **Files to Create**: `docs/feed-contract.md`
 
 ---
 
-### Task 9.4: Test the feed contract against the code
+### Task 9.4: Update the other contracts and `CHANGELOG.md`
 **Owner**: Junior AI
 **Dependencies**: Task 9.3
-**Effort**: 2
-**Objective**: A doc that drifts from the code fails a test.
-
-**Steps**:
-- [ ] Add `tests/test_contract_docs.py` with one reusable helper (document path, required terms): for `feed-contract.md`, every `ChangeKind` value, every `Change` field, every `amoeba feed` flag (from the argparse parser), and every `FeedSettings` field appear; every backticked `amoeba.` dotted name resolves via `importlib` and `getattr`
-
-**Success Criteria**:
-- [ ] Test passes; deleting one `ChangeKind` from the doc fails it (check once, then restore)
-- [ ] Commit, e.g. `docs: add feed contract`
-
-**Files to Create**: `tests/test_contract_docs.py`
-
----
-
-### Task 9.5: Update the other contracts and `CHANGELOG.md`
-**Owner**: Junior AI
-**Dependencies**: Task 9.4
 **Effort**: 2
 **Objective**: Record every contract change (LLD Technical Scope).
 
@@ -491,9 +476,9 @@ status: not_started
 
 ---
 
-### Task 9.6: Run the full checks
+### Task 9.5: Run the full checks
 **Owner**: Junior AI
-**Dependencies**: Task 9.5
+**Dependencies**: Task 9.4
 **Effort**: 1
 **Objective**: Final gate.
 
@@ -506,9 +491,9 @@ status: not_started
 
 ---
 
-### Task 9.7: Run the Verification Walkthrough and report
+### Task 9.6: Run the Verification Walkthrough and report
 **Owner**: Junior AI
-**Dependencies**: Task 9.6
+**Dependencies**: Task 9.5
 **Effort**: 2
 **Objective**: Compare real output with the LLD walkthrough.
 
@@ -522,14 +507,14 @@ status: not_started
 
 ---
 
-### Task 9.8: Trace the LLD Success Criteria to tests
+### Task 9.7: Trace the LLD Success Criteria to tests
 **Owner**: Junior AI
-**Dependencies**: Task 9.7
+**Dependencies**: Task 9.6
 **Effort**: 2
 **Objective**: Every Functional, Technical, and Integration requirement has a passing test that asserts it.
 
 **Steps**:
-- [ ] Walk the LLD Success Criteria in order. For each, name the test (from Tasks 1.4–9.4) and run it by name
+- [ ] Walk the LLD Success Criteria in order. For each, name the test (from Tasks 1.4–9.2) and run it by name
 - [ ] A missing assertion is a defect in the owning task: add it in the named test and list it (requirement, test, owning task) for the PM
 
 **Success Criteria**:

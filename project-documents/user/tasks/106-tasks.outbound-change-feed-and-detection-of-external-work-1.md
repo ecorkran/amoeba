@@ -26,7 +26,7 @@ status: not_started
 
 **Migration 006 grows in place.** It is unreleased until this slice merges, so Tasks 1.3, 2.1, 2.3, and 4.1 each add to the one file. Never create a 007.
 
-**Task-level additions to the LLD API table** (the LLD describes the behavior but names no method): `DetectionInput`'s fields, `recorded_since`, `baseline_watch` with `BaselineEntry`, `record_detected_verdict`, `project_store_path`, and `ReviewDirectoryUnavailableError`. Each is recorded in the contract docs (Task 9.5) and listed to the PM (Task 9.7).
+**Task-level additions to the LLD API table** (the LLD describes the behavior but names no method): `DetectionInput`'s fields, `recorded_since`, `baseline_watch` with `BaselineEntry`, `record_detected_verdict`, `project_store_path`, and `ReviewDirectoryUnavailableError`. Each is recorded in the contract docs (Task 9.4) and listed to the PM (Task 9.6).
 
 **Section map.** This file: 1 models and migration; 2 emission triggers and the invariant test; 3 feed reads, follower, `amoeba feed`; 4 detection storage and the `watch_reviews` kind. **File 2:** 5 attribution and review-producing kinds; 6 review sources; 7 the detection tenant; 8 listings and wiring; 9 end-to-end, docs, validation.
 
@@ -62,13 +62,13 @@ status: not_started
 - [ ] `ChangeKind` and `DetectionOutcome` as `StrEnum`s with exactly the LLD's members
 - [ ] `SILENT_OUTCOMES`: a frozenset of `baseline` and `runner_issued`, the outcomes that emit no change (D8). Defined once here
 - [ ] Frozen dataclasses: `Change` (`seq, project_id, kind, node_id, subject_id, payload: Mapping[str, object], recorded_at`), `ReviewWatch` (the `review_watches` columns), `DetectedReview` (the `detected_reviews` columns), `DetectionInput` (`project_id, path, digest, outcome`, and optional `node_id, verdict_id, record_id, detail`), `BaselineEntry` (`path, digest`)
-- [ ] Add `tests/store/test_feed_models.py`: each enum has exactly the LLD's values; `SILENT_OUTCOMES` is exactly the two; the dataclasses are frozen
+- [ ] No test module of its own: these are declarations, exercised by the mapping tests (Task 1.5) and the invariant test (Task 2.5)
 
 **Success Criteria**:
-- [ ] Tests, `ruff`, `pyright` pass
+- [ ] `ruff`, `pyright` pass
 - [ ] Commit, e.g. `feat(store): add feed models`
 
-**Files to Create**: `src/amoeba/store/feed_models.py`, `tests/store/test_feed_models.py`
+**Files to Create**: `src/amoeba/store/feed_models.py`
 
 ---
 
@@ -221,6 +221,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 **Steps**:
 - [ ] Add to `tests/store/test_feed_triggers.py`, each as its own case: `record_verdict` emits one `verdict_recorded`; a retried `record_verdict` with the same id emits none; a provider-failure verdict has `provider_failure` true; the payload keys are exactly `verdict`, `review_type`, `provider_failure`
 - [ ] An intent submission through `apply_submission` emits one `message_posted`
+- [ ] A `resolution` submission through `apply_submission` on a blocked node emits `node_status_changed` from the blocked status to `runnable`
 - [ ] A recovery escalation message (stage a journal entry whose kind has no observer and run reconciliation as `tests/test_recovery.py` does) emits one `message_posted`
 
 **Success Criteria**:
@@ -241,12 +242,10 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 - [ ] Create `tests/store/test_feed_invariant.py` with a scripted sequence driving every write path that exists: node create, status updates, block and resolve, verdicts (including a retry and a provider failure), an intent message, and a recovery escalation
 - [ ] One function `reconcile(store, project_id) -> list[str]` returning differences (empty means consistent): node ids from `node_created` equal the `nodes` rows; each node's status rebuilt from `node_created.status` plus `node_status_changed` equals the stored status; verdict ids equal the `verdicts` rows; message ids equal the `messages` rows
 - [ ] Test: the sequence on a real migrated store reconciles with no differences
-- [ ] Dropped-trigger test, parametrized: in a scratch store, `DROP TRIGGER` one trigger (names read from `sqlite_master`), run the sequence, assert `reconcile` is non-empty. One case per trigger present
-- [ ] Every-kind test: each `ChangeKind` appears at least once in the sequence's changes, except the members in one named constant `NOT_YET_EMITTED = {ChangeKind.REVIEW_DETECTED}` that Task 4.2 deletes
-- [ ] Literal test: read trigger SQL from `sqlite_master` and assert each `ChangeKind` value outside `NOT_YET_EMITTED` appears in it
+- [ ] Every-kind test: each `ChangeKind` appears at least once in the sequence's changes, except the members in one named constant `NOT_YET_EMITTED = {ChangeKind.REVIEW_DETECTED}` that Task 4.2 deletes. This also catches a trigger literal that drifted from the enum, since mapping would reject it or the kind would never appear
 
 **Success Criteria**:
-- [ ] All invariant tests pass; each dropped-trigger case reports a difference
+- [ ] Both invariant tests pass
 - [ ] Commit, e.g. `test(store): reconcile the feed with the tracked tables`
 
 **Files to Create**: `tests/store/test_feed_invariant.py`
@@ -295,26 +294,42 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 
 ---
 
-### Task 3.3: Implement `amoeba.feed.follow`
+### Task 3.2a: Add `project_store_path` and `Store.data_version()`
 **Owner**: Junior AI
 **Dependencies**: Task 3.2
+**Effort**: 2
+**Objective**: The two store-side pieces the follower needs, each tested directly.
+
+**Steps**:
+- [ ] `amoeba.feed` must not import `amoeba.process`. Add `project_store_path(store_dir, project_id)` to `store/paths.py` and make `store_path_for` in `process/supervisor.py` delegate to it (no behavior change)
+- [ ] Put the `PRAGMA data_version` statement in `store/sql.py` behind a small `Store.data_version()` method
+- [ ] Tests: in `tests/test_paths.py`, `project_store_path` and `store_path_for` return the same path for the same inputs. In `tests/store/test_feed_reads.py`, a read-only handle's `data_version()` is unchanged by its own reads and changes after another connection commits
+
+**Success Criteria**:
+- [ ] Tests pass; existing supervisor tests pass
+- [ ] Commit, e.g. `feat(store): add project_store_path and data_version`
+
+**Files to Modify**: `store/paths.py`, `process/supervisor.py`, `store/sql.py`, `store/store.py`, `tests/test_paths.py`, `tests/store/test_feed_reads.py`
+
+---
+
+### Task 3.3: Implement `amoeba.feed.follow`
+**Owner**: Junior AI
+**Dependencies**: Task 3.2a
 **Effort**: 3
 **Objective**: The subscriber-side blocking iterator (LLD "Following the feed", D2, and the follower failure table).
 
 **Steps**:
 - [ ] Create `src/amoeba/feed/__init__.py` and `follower.py`. `FeedSettings` is a frozen dataclass with `follow_interval_seconds = 0.25` and `feed_batch_size = 500`, defined here once
-- [ ] Path: `amoeba.feed` must not import `amoeba.process`. Add `project_store_path(store_dir, project_id)` to `store/paths.py` and make `store_path_for` in `process/supervisor.py` delegate to it (no behavior change; its tests prove it)
-- [ ] `follow(store_dir, project_id, *, after, settings, stop=None) -> Iterator[Change]`: open with `Store.open_read_only`; read `changes(after=cursor, limit=feed_batch_size)`, yield each, advance the cursor; when empty, wait until `PRAGMA data_version` changes, checking every `follow_interval_seconds`; check `stop` between waits and between yielded changes
-- [ ] Put the `PRAGMA data_version` statement in `store/sql.py` behind a small `Store.data_version()` method; the follower holds no SQL
+- [ ] `follow(store_dir, project_id, *, after, settings, stop=None) -> Iterator[Change]`: open `project_store_path(...)` with `Store.open_read_only`; read `changes(after=cursor, limit=feed_batch_size)`, yield each, advance the cursor; when empty, wait until `data_version()` changes, checking every `follow_interval_seconds`; check `stop` between waits and between yielded changes. The follower holds no SQL
 - [ ] Failure table exactly per the LLD: a busy or locked read (`sqlite3.OperationalError` whose message says busy/locked — check how 101 classifies it and reuse that) is retried on the next interval; a schema-version mismatch, unknown project, or missing store directory raises the store's error; a raising `stop` propagates; `stop` returning true ends cleanly. Comment the one specific `except` per CLAUDE.md
 - [ ] Close the store in a `finally`
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` clean; existing supervisor tests pass
+- [ ] `ruff`, `pyright` clean
 - [ ] Committed with Task 3.4
 
 **Files to Create**: `src/amoeba/feed/__init__.py`, `src/amoeba/feed/follower.py`
-**Files to Modify**: `store/paths.py`, `process/supervisor.py`, `store/sql.py`, `store/store.py`
 
 ---
 
@@ -371,7 +386,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 **Steps**:
 - [ ] Add `tests/cli/test_feed.py`: seeded store, `amoeba feed --project P` prints lines that each parse as JSON with exactly the `Change` keys; exit 0
 - [ ] `--after N` prints only later lines; an unknown project exits with the existing not-found code and prints nothing on stdout
-- [ ] `--follow` as a subprocess with no process running: existing lines print; a new node committed through a separate read-write store prints; `SIGTERM` exits cleanly. (The process-starts-later case is end-to-end, Task 9.2)
+- [ ] `--follow` as a subprocess with no process running: existing lines print; a new node committed through a separate read-write store prints; `SIGTERM` exits cleanly. (The process-starts-later case is end-to-end, Task 9.1)
 - [ ] Killed follower: `kill -9` mid-stream, restart with `--after` its last printed `seq`: no gap, no repeat
 
 **Success Criteria**:
@@ -415,7 +430,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 - [ ] Add `tests/store/test_detections.py`: each outcome records; a repeated key returns the first row and inserts nothing; `detections(outcome=...)` filters; order is detection order
 - [ ] `recorded_since`: false, then true after a verdict whose id equals the `record_id` is recorded (direct call and through `apply_submission`); a verdict under another id leaves it false
 - [ ] In `test_feed_triggers.py`: `ingested`, `unattributed`, `unparseable` each emit one `review_detected`; `baseline` and `runner_issued` emit none; a repeated `record_detection` emits none
-- [ ] In `test_feed_invariant.py`: add detections of all five outcomes to the sequence; `reconcile` also compares `review_detected` subject ids against ledger rows whose outcome is not in `SILENT_OUTCOMES`; delete `NOT_YET_EMITTED`; the literal test also checks each `SILENT_OUTCOMES` value; the dropped-trigger parametrization gains the new trigger
+- [ ] In `test_feed_invariant.py`: add detections of all five outcomes to the sequence; `reconcile` also compares `review_detected` subject ids against ledger rows whose outcome is not in `SILENT_OUTCOMES`; delete `NOT_YET_EMITTED`
 
 **Success Criteria**:
 - [ ] All tests pass with no exception constant left
