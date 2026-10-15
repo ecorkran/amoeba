@@ -8,16 +8,20 @@ the transaction of whatever write fired them (D8).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from amoeba.store import sql, sql_feed, sql_inbox
 from amoeba.store._base import isoformat, now
 from amoeba.store._verdict_writer import VerdictWriter
 from amoeba.store.feed_models import (
+    BaselineEntry,
     Change,
     DetectedReview,
     DetectionInput,
     DetectionOutcome,
+    ReviewWatch,
 )
-from amoeba.store.mapping_feed import map_change, map_detected_review
+from amoeba.store.mapping_feed import map_change, map_detected_review, map_watch
 from amoeba.store.models import StoreIntegrityError
 
 
@@ -86,6 +90,50 @@ class FeedOperations(VerdictWriter):
         """
         verdict = self._load_verdict(record_id)
         return verdict is not None and verdict.project_id == project_id
+
+    # ----------------------------------------------------------------------
+    # Review watches
+    # ----------------------------------------------------------------------
+
+    def watches(self, project_id: str) -> list[ReviewWatch]:
+        """The project's registered review directories, active or not."""
+        rows = self._execute(sql_feed.SELECT_WATCHES, (project_id,)).fetchall()
+        return [map_watch(row) for row in rows]
+
+    def baseline_watch(
+        self, project_id: str, reviews_dir: str, entries: Sequence[BaselineEntry]
+    ) -> None:
+        """Record every file present at registration, then mark the watch baselined.
+
+        One transaction, all or nothing: a partial baseline would let a missed
+        file be ingested later as new, out of order. An entry already in the
+        ledger is skipped. ``baseline`` rows emit no change.
+
+        Raises:
+            StoreIntegrityError: The watch is not registered, or is already
+                baselined. Nothing is written.
+        """
+        timestamp = isoformat(now())
+        with self._connection:
+            self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
+            for entry in entries:
+                detection = DetectionInput(
+                    project_id=project_id,
+                    path=entry.path,
+                    digest=entry.digest,
+                    outcome=DetectionOutcome.BASELINE,
+                )
+                if self._detection_by_key(detection) is None:
+                    self._insert_detection(detection)
+            marked = self._execute(
+                sql_feed.MARK_WATCH_BASELINED,
+                (timestamp, timestamp, project_id, reviews_dir),
+            ).rowcount
+            if marked != 1:
+                raise StoreIntegrityError(
+                    f"watch {reviews_dir!r} in {project_id!r} is not registered "
+                    "or is already baselined"
+                )
 
     def _detection_by_key(self, detection: DetectionInput) -> DetectedReview | None:
         row = self._execute(
