@@ -30,14 +30,9 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from amoeba.process import version_label
 from amoeba.process.recovery import Adopt, NotApplied, Observation, Unknown
-from amoeba.process.version_label import (
-    VERSION_ARGS,
-    VERSION_UNAVAILABLE,
-)
-from amoeba.process.version_label import (
-    capture_version_label as capture_shared_label,
-)
+from amoeba.process.version_label import VERSION_UNAVAILABLE
 from amoeba.store.journal_models import JournalEntry
 
 logger = logging.getLogger(__name__)
@@ -56,7 +51,6 @@ CF_FIELD_UPDATED_AT = "updatedAt"
 #: The executable, and the argument vectors used. Defined once so no call site
 #: assembles a command line of its own.
 CF_EXECUTABLE: Final = "cf"
-CF_VERSION_ARGS: Final = VERSION_ARGS
 
 
 def _cf_get_args(project: str) -> tuple[str, ...]:
@@ -96,7 +90,7 @@ def capture_version_label(timeout_seconds: float) -> str:
     Never raises and never escalates: a failure is recorded as
     :data:`VERSION_UNAVAILABLE`.
     """
-    return capture_shared_label(CF_EXECUTABLE, timeout_seconds, CF_VERSION_ARGS)
+    return version_label.capture_version_label(CF_EXECUTABLE, timeout_seconds)
 
 
 class CFReadbackObserver:
