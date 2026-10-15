@@ -18,7 +18,7 @@ Slices 101–109 each proved their own surface. No test yet drives the whole sub
 
 The slice has four parts:
 
-1. **The contract proof.** `tests/contract/` runs one realistic lifecycle sequence across two projects, through real processes, with crashes injected at named points. Its imports are limited, mechanically, to the names each public package exports. It runs twice, once with local transport and once over `amoeba serve`, and both runs must reach the same declared end state.
+1. **The contract proof.** `tests/contract/` runs one realistic lifecycle sequence across two projects, through real processes, with crashes injected at named points. Its imports are limited, mechanically, to the names each public package exports. The full sequence runs locally. A short subset then runs over `amoeba serve` and kills each process once (D2).
 2. **Hardening.** The proof surfaces gaps. Four are already known (H1–H4 in D7): `amoeba.process` exports nothing, the Runner's one-transaction report method was deferred "to 120 (or 110, if earlier)", a documented path helper lives in an internal module, and Squadron's run-file header model lives where the pruning code cannot import it. Each gap is closed additively in this slice. A gap that needs a behavior or schema change stops for the PM.
 3. **Paused-run pruning.** Squadron never prunes paused runs. `amoeba prune sq-runs` picks the paused runs Amoeba launched and has finished with, and deletes them through `sq runs prune`. It never deletes Squadron's files itself.
 4. **Consumer documentation.** `docs/substrate-guide.md` is the entry point for authors of initiatives 120, 140, and 160. It maps each initiative to the surfaces it uses and walks the proven sequence.
@@ -36,7 +36,7 @@ Store locality was decided in slice 101 (central, per supervisor, keyed by proje
 
 ### Included
 
-- `tests/contract/`: the scenario, a proof Runner tenant, two transports, crash injection, the end-state oracle, a feed-replay oracle, the locality checks, and the public-import rule (D1–D6).
+- `tests/contract/`: the local scenario, a proof Runner tenant, crash injection, the end-state oracle, a feed-replay oracle, the network subset, the locality checks, and the public-import rule (D1–D6).
 - **Hardening (D7):**
   - H1: `amoeba.process` exports its tenant-hosting contract. `build_tenants` moves out of `cli/lifecycle.py` as `standard_tenants`.
   - H2: `Store.record_runner_report`.
@@ -54,13 +54,14 @@ Store locality was decided in slice 101 (central, per supervisor, keyed by proje
 - **Automatic pruning.** Pruning is a command the PM runs, never a tenant (D8). Initiative 120 may call the selection rule later, but scheduling it is 120's decision.
 - **A tenant-registration mechanism** such as plugins, entry points, or a config file. The Runner is Amoeba code. 120 composes `standard_tenants(...)` with its own tenant in `amoeba start` (H1).
 - **New behavior on any existing surface.** If the proof finds a defect that needs one, the PM decides (D7).
+- **Re-proving what a dependency's own suite already proves.** The proof does not cover `cf_project_changed`, vacuous checks, or listing parity with `amoeba inspect`. 108's end-to-end test, 107's store tests, and 109's parity test own those. The scenario covers each dependency only where the plan's sequence passes through it.
 
 ## Dependencies
 
 ### Prerequisites
 
 - **101–106:** merged. Their contracts are in `docs/`.
-- **107, 108, and 109:** designed (all `not_started` on 20261015). This slice depends on them as their designs specify: the `check` inbox kind and judge samples (107); `link_cf_project`, `CFWatchTenant`, `--cf-data-dir`, and `cf_project_changed` (108); and `amoeba serve`, `amoeba.inspection`, `as_of_seq`, the SSE feed, and `store/discovery.py` (109). **The first task confirms all three are merged and stops for the PM if any is not.** It then checks the names this design takes from them against the merged code, and updates this design where the code differs.
+- **107, 108, and 109:** designed (all `not_started` on 20261015). This slice depends on them as their designs specify: judge samples (107); `CFWatchTenant` and `cf_version_label` capture, which move with `build_tenants` (108); and `amoeba serve`, `amoeba.inspection`, `as_of_seq`, the SSE feed, and `store/discovery.py` (109). **The first task confirms all three are merged and stops for the PM if any is not.** It then checks the names this design takes from them against the merged code, and updates this design where the code differs.
 - **Squadron:** `sq runs prune [run_ids…] --yes`. *Observed 20261015, Squadron 0.22.0:*
   - A named run is pruned in any category except a live run. A live run, or a name with no matching run, is reported as a refusal, and the command exits 1.
   - A file that is already gone counts as removed.
@@ -71,15 +72,15 @@ Store locality was decided in slice 101 (central, per supervisor, keyed by proje
 
 ### Interfaces Required
 
-- **Inbox (103):** `submit()` for `create_project`, `intent`, `resolution`, `verdict`, `watch_reviews`, `check` (107), and `link_cf_project` (108). Also `Store.submission(id)`.
+- **Inbox (103):** `submit()` for `create_project`, `intent`, `resolution`, `verdict` (with 107's `judge_invocation_id`), and `watch_reviews`. Also `Store.submission(id)`.
 - **Store (101, 102, 104, 106, 107):**
   - Nodes: `create_node`, `update_node_status`, `update_sq_reference`, `block`, `resolve`, `runnable`, and `blocked`.
   - Journal: `journal_issue`, `journal_resolve`, `recorded_result_run_ids`, and `journal_entries`.
   - Messages: `pending_intents` and `acknowledge_message`.
-  - Evidence and feed: `verdicts`, `finding_changes`, `detections`, `changes`, `checks`, and `calibration`.
+  - Evidence and feed: `verdicts`, `finding_changes`, `detections`, `changes`, and `calibration`.
 - **Process (102):** `ResidentProcess`, `Tenant`, `ProcessSettings`, recovery with the `sq_run` observer, and the lock-based `amoeba stop` and `amoeba status`.
 - **Feed (106):** `follow()`, `FeedSettings`, and `Change`.
-- **Network (109):** `POST …/submissions`, `GET /v1/listings/{name}`, and `GET …/feed` with `Last-Event-ID`.
+- **Network (109):** `POST …/submissions`, `GET …/submissions/{id}`, and `GET …/feed` with `Last-Event-ID`.
 - **Parser (105):** `parse_review_artifact` and `to_verdict_input`. The proof Runner reports its reviews through these (evidence contract, point 5).
 
 ## Architecture
@@ -91,12 +92,12 @@ tests/contract/
   __init__.py
   public_api.py        PUBLIC_ROOTS; the AST import rule (D1), applied to this directory
   test_public_api_rule.py
-  actors.py            Transport protocol; LocalTransport, NetworkTransport (D2)
   runner_tenant.py     ProofRunner: a Tenant driven by intents, with named crash points (D3)
   bootstrap.py         starts ResidentProcess(standard_tenants(...) + ProofRunner) in a subprocess
   scenario.py          the steps, as data: actor, action, crash point, expected changes (D4)
   oracle.py            declared end state; feed-replay reconstruction (D5)
-  test_lifecycle_proof.py   parametrized over the two transports
+  test_lifecycle_proof.py   the local scenario
+  test_network_subset.py    D2's network subset, with one kill of each process
   test_locality.py     D6
   test_docs_cover_exports.py  D9
 tests/fixtures/sq_runs/ + one schema-v5 paused run (sanitized from a real file)
@@ -118,29 +119,36 @@ scripts/demo_prune.py
 - `run_pruning.py` and `run_file.py` import nothing from `amoeba.store`, `amoeba.inbox`, or `amoeba.process`, which keeps 105's rule for this package.
 - `cli/prune.py` is the only module that knows both the selection rule and the store.
 - `amoeba.process` may import `amoeba.upstream.squadron.run_file`. The process already imports the review parser in 106's detection tenant.
+- `process/tenants.py` imports only tenant modules of `amoeba.process` and `process/version_label.py`, and nothing from `amoeba.upstream`, `amoeba.cli`, or `amoeba.store` internals. The process → upstream edges stay where they already are: 106's detection tenant and 108's `CFWatchTenant`. Moving `build_tenants` adds no new edge, and this rule keeps it that way. `amoeba.upstream` never imports `amoeba.process` (105's existing rule, unchanged).
 - Nothing under `tests/contract/` may import outside `PUBLIC_ROOTS` (D1).
 
 ### Data Flow
 
-**The proof** (one run, one transport):
+**The proof** (local):
 
 ```
 pytest ─┬─ bootstrap subprocess: ResidentProcess(tenants = standard_tenants(…) + ProofRunner)
         │     HOME, AMOEBA_STORE_DIR (or XDG_CONFIG_HOME), cf_data_dir: all under tmp_path
-        ├─ amoeba serve subprocess                                (network transport only)
-        ├─ subscriber A: follow() on a thread, or SSE via httpx   records every Change
-        ├─ subscriber B: a second follower on project beta        records every Change
+        ├─ subscriber: follow() on a thread on project alpha              records every Change
         └─ scenario driver, step by step:
-             PM / Judge actors ── Transport.submit(kind, payload, id) ──► inbox ──► InboxTenant applies
-             Runner steps      ── Transport.submit(intent{step, crash_at}) ──► ProofRunner.tick:
+             PM / Judge actors ── inbox.submit(kind, payload, id) ──► InboxTenant applies
+             Runner steps      ── inbox.submit(intent{step, crash_at}) ──► ProofRunner.tick:
                                     pending_intents → do the step with the store API → acknowledge
                                     crash_at reached → os.kill(getpid(), SIGKILL)
              crash → driver waits for exit, restarts bootstrap → recovery → tenants resume
-             external work ── write files: review artifact into the watched dir; projects.json by temp+rename
-             after each step: wait until both subscribers reach the step's expected change kinds
+             external work ── write a review artifact into the watched dir
+             after each step: wait until the subscriber has the step's expected change kinds
 end:  oracle reads every project through Store.open_read_only and compares with the declared end state
-      oracle replays subscriber A's changes from seq 0 and compares node statuses with the store
-      subscribers A (local) and A' (resumed after kills) hold identical seq lists: no gap, no repeat
+      oracle replays the subscriber's changes from seq 0 and compares node statuses with the store
+```
+
+**The network subset** (D2): the bootstrap process, then `amoeba serve`, then an httpx SSE follower:
+
+```
+POST intent → GET outcome until applied → SSE delivers message_posted
+kill -9 serve; POST is refused (connection error); restart serve; SSE resumes with Last-Event-ID
+kill -9 resident process; POST intent → 202 (queued); restart; SSE delivers it
+end: the SSE seq list equals a final local follow(after=0): no gap, no repeat
 ```
 
 **Pruning:**
@@ -179,12 +187,17 @@ No new dependency. The proof uses `httpx`, which slice 109 adds as a dev depende
 
 The CLI and HTTP are the other public surfaces, reached only by subprocess and by HTTP. An AST test fails if any module in `tests/contract/` imports a submodule of a root (`amoeba.store.paths`, for example), imports a name not in the root's `__all__`, or imports any `amoeba` module not in `PUBLIC_ROOTS`. This turns "no internal access" from a claim into a property the suite checks.
 
-**D2 — One scenario, two transports, one end state.** `Transport` is a protocol with three members: `submit(project_id, kind, payload, submission_id, submitted_by)`, `outcome(project_id, submission_id)`, and `subscribe(project_id, after) -> Iterator[Change-shaped dict]`.
+**D2 — The full scenario runs locally; a network subset proves the remote path.** The scenario's out-of-process actors use `amoeba.inbox.submit`, `Store.submission`, and `follow()` directly, with no transport abstraction. The Runner acts in-process through the store API, which is its documented position. The oracle reads through `Store.open_read_only`.
 
-- `LocalTransport` uses `amoeba.inbox.submit`, `Store.submission`, and `follow()`.
-- `NetworkTransport` uses 109's endpoints: POST with a mandatory id, then the outcome GET, then SSE with `Last-Event-ID` on reconnect. It converts each frame back through the same `change_record` shape.
+The slice plan asks that the contract be "proven through the network surface as well as locally". `test_network_subset.py` meets that with the remote path a consumer such as the notification bridge actually uses, and nothing more:
 
-The Runner always acts in-process through the store API. That is its documented position, so it has no transport. The oracle always reads through `Store.open_read_only`. The network run additionally checks one listing per step against `amoeba inspect --json`. Both runs must produce the same end state, which is the point of 109 being a dependency.
+- an intent POSTed, its outcome polled until `applied`, and the change received over SSE;
+- `kill -9` of `amoeba serve`, a restart, and SSE resumed with `Last-Event-ID`;
+- `kill -9` of the resident process, a POST accepted while it is down, a restart, and delivery.
+
+The SSE `seq` list must equal a final local `follow(after=0)`.
+
+109's design hands "`kill -9` of each process mid-sequence" to this slice, so both kills stay. The full scenario is not repeated over HTTP, because the network layer adds no write path and no state: what it could get wrong is transport, cursor, and survival, which the subset covers. Listing parity with `amoeba inspect` is 109's own test.
 
 **D3 — The proof Runner is a real tenant driven by `intent` messages.** `ProofRunner` implements `Tenant` and nothing more. Each tick it reads `pending_intents`, performs one step, and acknowledges the intent. The intent body names the step and an optional `crash_at` point:
 
@@ -193,7 +206,7 @@ The Runner always acts in-process through the store API. That is its documented 
 - `checkpoint` journals an `sq_run`, writes a paused run file, resolves the entry `completed` with the `run_id`, sets `sq.run_id`, and blocks the node on `sq_checkpoint`.
 - `finish` marks the slice and gate `done`.
 
-*Why a stand-in, not real `sq`.* The proof is about Amoeba's contract. A real `sq review` needs a model provider, costs money, and is not deterministic. The stand-in produces exactly what the observers and detection read (a run file and a review file), in the shapes the 102 and 105 fixtures pin. The real `sq` is exercised only by the pruning walkthrough and an opt-in test (D8).
+*Why a stand-in, not real `sq`.* The proof is about Amoeba's contract. A real `sq review` needs a model provider, costs money, and is not deterministic. The stand-in produces exactly what the observers and detection read (a run file and a review file), in the shapes the 102 and 105 fixtures pin. The real `sq` is exercised only by the pruning walkthrough (D8).
 
 Crash points are named constants in `runner_tenant.py`:
 
@@ -206,28 +219,25 @@ At a crash point the tenant sends itself `SIGKILL`. Nothing is caught, flushed, 
 
 | # | Actor and action | Proves |
 | --- | --- | --- |
-| 1 | PM: `create_project` alpha and beta; `watch_reviews` for each; `link_cf_project` alpha | Runtime project creation (103); per-project reviews directories; CF link (108) |
+| 1 | PM: `create_project` alpha and beta; `watch_reviews` for each | Runtime project creation (103); per-project reviews directories |
 | 2 | Runner: `build_tree` on both projects | Node writes; `node_created` on each project's own feed only |
 | 3 | Runner: `launch_review` | Command-before-result; `record_runner_report` writes the verdict, the `runner_issued` ledger row, and the `completed` entry in one commit; detection does not ingest the file again |
 | 4 | Runner: `launch_review` with `crash_at=AFTER_SIDE_EFFECT`; restart | Recovery adopts the run (exactly one match). Detection then ingests the artifact as `ingested`, with the same record id the Runner would have used (evidence contract, point 5). One verdict for the round, not two |
 | 5 | Runner: `launch_review` with `crash_at=AFTER_JOURNAL`; restart | Zero matches: entry `unknown`, node `blocked_on_human`, an escalation message on the feed |
 | 6 | PM: `resolution` for that node | The human reply flips the node runnable (103) |
 | 7 | External: a PM-launched review artifact is written into alpha's directory | Detection ingests it with correct provenance; `finding_changes` compares it with step 4's round |
-| 8 | Judge: two `verdict` submissions with one `judge_invocation_id`; one `check` with `examined_count = 0` | Samples recorded individually; calibration readable; a vacuous check is labelled vacuous (107) |
-| 9 | External: projects.json rewritten by temp+rename, moving alpha's slice pointer | One `cf_project_changed` snapshot naming the field (108) |
-| 10 | Runner: `checkpoint` on alpha and on beta | `blocked_on_sq_checkpoint` holding the run id |
-| 11 | Stop the resident process gracefully. While it is down: PM submits a `resolution` for alpha's checkpoint, and projects.json changes again. Start | Submissions while down are applied on start; the CF change made during down-time is recorded on the first check |
-| 12 | Network run only: `kill -9` of `amoeba serve` while subscriber A is streaming; restart it; A reconnects with `Last-Event-ID` | No gap, no repeat across a server crash |
-| 13 | Network run only: `kill -9` of the resident process while A is streaming; restart it | The stream stays open and idles, then resumes delivery (109 D7) |
-| 14 | Runner: `finish` on alpha | Final statuses; beta's checkpoint stays open |
-| 15 | PM: `amoeba prune sq-runs` (preview), then `--yes` with a stub `sq` on `PATH` | Selects only alpha's checkpoint run. Beta's run is held (its node is not `done`), and step 7's PM-launched run is not owned |
+| 8 | Judge: two `verdict` submissions with one `judge_invocation_id` | Samples recorded individually, through the inbox path initiative 140 will use (107) |
+| 9 | Runner: `checkpoint` on alpha and on beta | `blocked_on_sq_checkpoint` holding the run id |
+| 10 | Stop the resident process gracefully. While it is down, the PM submits a `resolution` for alpha's checkpoint. Start | Submissions made while the process is down are applied on start |
+| 11 | Runner: `finish` on alpha | Final statuses; beta's checkpoint stays open |
+| 12 | PM: `amoeba prune sq-runs` (preview), then `--yes` with a stub `sq` on `PATH` | Selects only alpha's checkpoint run. Beta's run is held (its node is not `done`), and step 7's PM-launched run is not owned |
 
-The scenario uses `kill -9` (steps 4, 5, 12, 13) and a graceful stop (step 11). Both are restart paths the process contract promises.
+The scenario uses `kill -9` (steps 4 and 5) and a graceful stop (step 10). Both are restart paths the process contract promises. The server's crash and a resident crash under a live stream are in the network subset (D2).
 
 **D5 — Two oracles.**
 
-- *End state.* `oracle.py` declares, per project: node statuses; blocked states and their resolutions; journal entries by outcome (`completed`, `adopted`, `unknown`, and resolvers); verdicts with their trust labels and `judge_invocation_id`; detection-ledger outcomes by path; checks; CF snapshot count and changed fields; message channels and acknowledgment state; and the submission outcomes. The oracle compares the store with this declaration through the public read API. A missing or extra row fails the test.
-- *Feed replay.* Replaying subscriber A's changes from `seq` 0 (`node_created` sets a status and `node_status_changed` moves it) must reproduce every node's final status. A's `seq` list must be strictly increasing with no gaps, across every restart and reconnect. In the network run, A's list must equal a fresh local `follow(after=0)` read at the end. This proves the feed is complete enough to rebuild state, which is what 106 promised subscribers.
+- *End state.* `oracle.py` declares, per project: node statuses; blocked states and their resolutions; journal entries by outcome (`completed`, `adopted`, `unknown`, and resolvers); verdicts with their trust labels and `judge_invocation_id`; detection-ledger outcomes by path; message channels and acknowledgment state; and the submission outcomes. The oracle compares the store with this declaration through the public read API. A missing or extra row fails the test.
+- *Feed replay.* Replaying the subscriber's changes from `seq` 0 (`node_created` sets a status and `node_status_changed` moves it) must reproduce every alpha node's final status. The `seq` list must be strictly increasing with no gaps, across every restart. This proves the feed is complete enough to rebuild state, which is what 106 promised subscribers.
 
 **D6 — Locality is proven across processes and directories, not reimplemented.** `test_locality.py` has three checks:
 
@@ -235,7 +245,14 @@ The scenario uses `kill -9` (steps 4, 5, 12, 13) and a graceful stop (step 11). 
 - With `AMOEBA_STORE_DIR` unset and `XDG_CONFIG_HOME` set to a temporary path, the same is true under `$XDG_CONFIG_HOME/amoeba`. No test ever leaves both unset, so the real home directory is never touched. `HOME` is always a temporary path too.
 - Project keying holds end to end. alpha's reviews directory never produces a beta row. Each project's feed carries only its own changes. alpha's oracle sees nothing of beta's.
 
-**D7 — Hardening: additive fixes only, everything else to the PM.** A gap is any symbol, method, or document a consumer would need that the public surface lacks. A gap is fixed in this slice when the fix is additive: an export, a document section, a new method composed from existing transactions, or a move with no behavior change. A gap whose fix changes existing behavior, a schema, or a recorded value is written up and **stops for the PM**. Every gap, whichever way it went, is listed in `CHANGELOG.md` and in the substrate guide's "Hardened in 110" section. The four known gaps:
+**D7 — Hardening: additive fixes only, everything else to the PM.** A gap is any symbol, method, or document a consumer would need that the public surface lacks. A gap is fixed in this slice when the fix is additive: an export, a document section, a new method composed from existing transactions, or a move with no behavior change. A gap whose fix changes existing behavior, a schema, or a recorded value is written up and **stops for the PM**. Every gap, whichever way it went, is listed in `CHANGELOG.md` and in the substrate guide's "Hardened in 110" section.
+
+**Closure rule for a stopped gap.** The PM chooses one of two outcomes:
+
+- **Fix here.** The change joins this slice's scope, through a design amendment.
+- **Defer.** A GitHub issue is filed. The assertions that expose the gap are marked `pytest.mark.xfail(strict=True, reason="#<issue>")`, so the suite goes red if the gap is fixed without the marker being removed. The gap is listed under the guide's "Known gaps", with the part of the contract it leaves unproven. The slice may then complete. Initiative 120 starts against a proof that names its exceptions, not one that hides them.
+
+Only the PM can choose; the implementer never marks an assertion `xfail` on their own. The four known gaps:
 
 - **H1: `amoeba.process` exports nothing.** The process contract says it is "sufficient for building a tenant". Building one today means importing `amoeba.process.host`, and composing with the shipped tenants means importing `amoeba.cli.lifecycle.build_tenants`. The fix:
   - `__all__` gains `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, and the process errors that `start` maps to exit codes.
@@ -246,7 +263,7 @@ The scenario uses `kill -9` (steps 4, 5, 12, 13) and a graceful stop (step 11). 
   - A `runner_issued` ledger row carrying the verdict's id and node.
   - `journal_resolve(outcome=completed, resolved_by=issuer)`.
 
-  It raises `ValueError` if the detection outcome is not `runner_issued`, and `InvalidTransitionError` if the entry is resolved, unknown, of a kind outside `REVIEW_PRODUCING_KINDS`, or in another project. In each case it writes nothing. A crash before the commit leaves the entry unresolved, which is exactly step 4's path. This closes the evidence contract's point 3, deferred "to 120 (or 110, if earlier)".
+  It raises `ValueError` if the detection outcome is not `runner_issued`, and `InvalidTransitionError` if the entry is resolved, unknown, of a kind outside `REVIEW_PRODUCING_KINDS`, or in another project. It raises `ValueError` if the entry is an `sq_run` and `result` has no `run_id` (D8's ownership guarantee). In each case it writes nothing. A crash before the commit leaves the entry unresolved, which is exactly step 4's path. This closes the evidence contract's point 3, deferred "to 120 (or 110, if earlier)".
 - **H3:** `store_dir` and `project_store_path` are exported from `amoeba.store`. `store-contract.md` already documents them by their internal path. Any consumer that opens a store read-only needs them.
 - **H4:** `SquadronRun` and `parse_run_file` move from `process/observers/sq_runs.py` to `amoeba.upstream.squadron.run_file`, so the observer and the pruning rule share one parser.
   - `SquadronRun` gains `updated_at: datetime | None`. It is optional because the observer never needed it, and a run without it is never a pruning candidate (`age_unknown`).
@@ -255,15 +272,25 @@ The scenario uses `kill -9` (steps 4, 5, 12, 13) and a graceful stop (step 11). 
 **D8 — Pruning: Amoeba chooses, Squadron deletes, a human confirms.**
 
 - *Which runs.* A run is a candidate only if **all four** of these hold:
-  1. Amoeba owns it: its id is in some project's `recorded_result_run_ids`, so Amoeba's journal adopted or completed it.
+  1. Amoeba owns it: its id is in some project's `recorded_result_run_ids`. See the ownership guarantee below.
   2. Its run file parses, with `status == paused`.
   3. No node in any project that is not `done` names it in `sq.run_id`.
   4. Its `updated_at` is at least `PruneSettings.retention` ago (default 7 days, *pending PM confirmation*).
 
-  Condition 3 is stricter than "no open checkpoint block". After a human resolves a checkpoint, the node is runnable and the Runner has not yet issued `sq run --resume`. Pruning in that window would delete the run it is about to resume. "Every node that names it is done" is the earliest point at which Amoeba is provably finished with a run. Runs the PM launched fail condition 1 and are never touched, and neither is a zero-match escalation's run, whatever it turns out to be.
+  Condition 3 is stricter than "no open checkpoint block". After a human resolves a checkpoint, the node is runnable and the Runner has not yet issued `sq run --resume`. Pruning in that window would delete the run it is about to resume. "Every node that names it is done" is the earliest point at which Amoeba is provably finished with a run. Runs the PM launched fail condition 1 and are never touched.
+- *The ownership guarantee.* This line is added to `process-contract.md` beside the shipped observers. `recorded_result_run_ids` returns every journal entry whose `result` carries the `run_id` key, whatever the entry's outcome or kind (`journal.py`, which reads `RESULT_KEY_RUN_ID`). Two writers put it there:
+  - **Recovery**, on `adopted`. The `sq_run` observer records `run_id` in the result (process contract, "Squadron runs"). Step 4 asserts this.
+  - **The issuer**, on `completed`. For an `sq_run` entry the issuer **must** include `run_id` in `result`. `record_runner_report` refuses an `sq_run` entry whose `result` lacks it, writing nothing. Initiative 120's own `journal_resolve` calls are bound by the same contract line. Steps 3 and 9 assert this.
+
+  An escalated entry (`unknown`) has no result, so the run behind it is never owned. It may exist, or there may be several candidates. A human resolves the escalation, and that run is the PM's to prune with `sq runs prune`. Amoeba never prunes it, because it never proved the run was its own.
+- *Re-linking.* Condition 3 reads every node's **current** `sq.run_id`, not its history. A run linked again to a new or reopened node is held for as long as that node is not `done`. `sq run --resume <id>` keeps the run's id, so a resumed run stays named by its node. A successor launched under a new journal entry gets a new id, and the old paused run becomes a candidate only once no live node names it. History is not consulted, because only a current reference can lead to a resume.
 - *Unknown is a value.* An unreadable project store, an unparseable run file, or a missing `updated_at` never becomes a guess. A store that cannot be read refuses the whole command, because the held set would be incomplete. A file that cannot be parsed, or a run with no `updated_at`, is kept and listed with its `KeepReason`: `not_paused`, `held_by_node`, `too_recent`, `age_unknown`, or `unreadable`. `KeepReason` is a closed `StrEnum`. Unowned runs are counted but not listed.
 - *Squadron deletes.* The architecture forbids any part from editing Squadron's run files directly. `--yes` runs `sq runs prune <ids…> --yes`, the command Squadron provides for this. It runs once, with non-TTY stdin (the architecture's invariant for every Squadron invocation) and `PruneSettings.sq_timeout_seconds`. Amoeba never unlinks a file itself, even if `sq` is missing or too old to have the command. That case is reported as `not_pruned`, with sq's message.
-- *The result is observed, not parsed.* `sq runs prune` has no JSON output, and its human text is not a contract. After the call, Amoeba re-reads the runs directory. A candidate whose file is gone was pruned, and one whose file remains was not. This is the same reconcile-by-observation rule recovery uses. A run that was resumed between the preview and `--yes` is live, so Squadron refuses it, and it is reported as `not_pruned`.
+- *`--yes` always selects afresh.* Nothing from a preview is saved or reused. `--yes` re-reads every store and the runs directory and runs `select_prunable` again immediately before calling `sq`, and it names only what that selection returns. The remaining window between that selection and `sq`'s deletion is covered by Squadron's own refusal: a run resumed in that window is live, and `sq runs prune` refuses a live run.
+- *The result is observed, not parsed.* `sq runs prune` has no JSON output, and its human text is not a contract. Its exit status is reported but never decides the outcome. Once `sq` has exited, Amoeba re-reads the runs directory and decides each candidate from the observation alone:
+  - `pruned`: the run's state file is gone. This includes a file removed by someone else in the window, for which `sq` reports "no such run" and exits 1. The goal state holds either way, so it is not a failure.
+  - `not_pruned`: the state file remains. The report carries sq's exit status and stderr. A run sq refused as live is reported here.
+- *Timeout.* At `sq_timeout_seconds`, Amoeba kills the `sq` process and waits for it to exit before observing. No deletion can still be in progress when the report is written, so the observation is final, not a snapshot of work underway. Some candidates may be `pruned` and others `not_pruned`. The command exits `PRUNE_INCOMPLETE` and says `sq` timed out. Running the command again converges, because it selects afresh and `sq` treats a file that is already gone as removed. A report sibling that `sq` had not yet deleted is not a run state file. Amoeba never selects it and never touches it, and the report names the run so that the PM can see it.
 - *No runs-directory flag.* Squadron's runs directory is always under `Path.home()`, and Amoeba's `DEFAULT_SQ_RUNS_DIR` uses the same derivation. A `--sq-runs-dir` here would let Amoeba select from one directory while Squadron deletes from another. Tests and the walkthrough point both at a scratch directory by setting `HOME`.
 - *No journal entry.* Pruning is not issued by the resident process, writes nothing to the store, and converges: every run recomputes the candidates from what is on disk, and a run that is already gone is simply absent. Command-before-result exists so that recovery can learn the outcome of a command the store depends on. No store state depends on whether a paused run's file still exists, and the store's `sq.run_id` references stay as history.
 - *Preview by default.* Deleting another tool's files is not reversible, so the command mirrors `sq runs prune`: it previews unless `--yes` is given. It is never a tenant (Excluded).
@@ -281,7 +308,7 @@ The scenario uses `kill -9` (steps 4, 5, 12, 13) and a graceful stop (step 11). 
 
 ### Patterns and Conventions
 
-- Step names, crash points, `KeepReason`, and transport names are each defined once, as enum members or constants, and referenced everywhere. No test spells one as a literal.
+- Step names, crash points, and `KeepReason` are each defined once, as enum members or constants, and referenced everywhere. No test spells one as a literal.
 - `PruneSettings` is a frozen dataclass and the only home of its defaults: `retention = timedelta(days=7)` and `sq_timeout_seconds = 30.0`. The CLI exposes `--older-than-days` and nothing else.
 - The proof harness never uses `uv run` inside a subprocess, because a temporary `HOME` would move uv's cache. It uses `sys.executable -m amoeba.cli.main`, as the existing harnesses do.
 - Every wait in the proof is a readiness or change predicate with a timeout (the `host_harness` pattern), never a bare sleep.
@@ -298,7 +325,12 @@ These moves change no behavior. Each is its own commit with the suite green.
 | `process/observers/sq_runs.py`: `SquadronRun`, `parse_run_file` | `upstream/squadron/run_file.py` | `observers/sq_runs.py`, `tests/test_observer_sq_runs.py` |
 | `amoeba.store.paths.store_dir` and `project_store_path` (internal path) | re-exported from `amoeba.store` (the module stays) | `store-contract.md`. Existing internal callers may keep their imports |
 
-`amoeba start` output, `amoeba status`, and recovery behavior must be identical before and after. The existing process, observer, and CLI lifecycle suites are the proof.
+`amoeba start` output, `amoeba status`, and recovery behavior must be identical before and after. The existing process, observer, and CLI lifecycle suites cover behavior. They do not pin what the moves could silently change, so two checks are added **before** the moves and must pass unchanged after them:
+
+- **Tenant order.** A test pins the `name` of each tenant `build_tenants` returns, in order. After H1, the same test runs against `standard_tenants`.
+- **Parse equivalence.** A test parses every file in `tests/fixtures/sq_runs/` (including the new v5 file) and pins each `SquadronRun`'s fields. After H4, the same test imports from the new module, and the only expected difference is the added `updated_at`.
+
+The import edge the move could add is closed by Layering's `process/tenants.py` rule.
 
 ### API Contracts
 
@@ -340,14 +372,15 @@ PruneSelection: candidates: tuple[SquadronRun, ...]; kept: tuple[tuple[str, Keep
 
 - Every surface of 101–109, through their contracts only (D1).
 - **If 107, 108, or 109 is not merged,** the first task stops. Proving a partial contract would not prove what the slice plan asks, so the slice does not degrade to that.
-- **If `sq` is absent,** pruning reports `not_pruned` and deletes nothing. The suite uses a stub `sq` on `PATH`. One opt-in test runs the real `sq runs prune` under a temporary `HOME`, and is skipped when `sq` is not on `PATH`.
+- **If `sq` is absent,** pruning reports `not_pruned` and deletes nothing. The suite uses a stub `sq` on `PATH`. The real `sq runs prune` is exercised by the walkthrough's step 4.
 
 ## Success Criteria
 
 ### Functional Requirements
 
-- The D4 scenario completes under both transports. Each run matches the D5 end-state declaration exactly, with no missing and no extra rows, and the two runs' end states are equal.
-- Feed replay from `seq` 0 reproduces every node's final status. Subscriber A's `seq` list is strictly increasing with no gap across every restart (steps 4, 5, 11, and 13) and the server crash (step 12). In the network run it equals a final local `follow(after=0)`.
+- The D4 scenario completes and matches the D5 end-state declaration exactly, with no missing and no extra rows.
+- Feed replay from `seq` 0 reproduces every alpha node's final status. The subscriber's `seq` list is strictly increasing with no gap across every restart (steps 4, 5, and 10).
+- The network subset (D2) delivers every change once, in order, across a `kill -9` of `amoeba serve` and a `kill -9` of the resident process. Its `seq` list equals a final local `follow(after=0)`. A POST made while the resident process is down returns 202 and is applied after the restart.
 - Step 3 records the verdict, the `runner_issued` row, and the resolved entry in one commit. A test that kills the process between `journal_issue` and `record_runner_report` reproduces step 4's outcome. Detection never records a runner-reported file as `ingested`.
 - Step 4 ends with one verdict for the round, the entry `adopted` by recovery, and the detection row `ingested`. Step 5 ends with the entry `unknown`, one escalation message, and, after step 6, the node runnable.
 - Every subprocess, started from two different working directories, resolves the same supervisor directory, under both `AMOEBA_STORE_DIR` and `XDG_CONFIG_HOME`. No project's rows, feed, or detections appear in another's.
@@ -356,13 +389,15 @@ PruneSelection: candidates: tuple[SquadronRun, ...]; kept: tuple[tuple[str, Keep
 
 ### Technical Requirements
 
-- The D1 import rule passes, and it fails a deliberately bad fixture module (a submodule import, a non-exported name).
+- The D1 import rule passes.
+- The tenant-order and parse-equivalence checks (Migration Plan) pass before and after the moves. The `process/tenants.py` import rule is an AST test.
+- `record_runner_report` refuses an `sq_run` entry whose `result` lacks `run_id`.
 - `test_docs_cover_exports.py` passes.
 - The writer guard is unchanged: `cli/prune.py` opens stores read-only only.
 - The `run_pruning.py` layering rule is an AST test.
 - No test touches the real `HOME`, Squadron runs directory, CF data directory, or supervisor directory. 101's store-safety guard covers `tests/contract/`.
 - `ruff`, `pyright` strict, and the full suite are clean. Files stay near 300 lines, so `scenario.py` holds data and `test_lifecycle_proof.py` holds the driver.
-- The proof runs in the default suite (it is the slice's deliverable) and completes in under 2 minutes on the development machine. If it does not, the network run moves to the load tier, and the local run stays in the default suite.
+- The proof and the network subset run in the default suite, because they are the slice's deliverable.
 
 ### Integration Requirements
 
@@ -382,7 +417,7 @@ FAKE_HOME="$(mktemp -d)"
    ```bash
    uv run pytest tests/contract -v
    ```
-   `test_lifecycle_proof.py[local]` and `[network]` pass, as do `test_locality.py`, `test_public_api_rule.py`, and `test_docs_cover_exports.py`. On failure, the test prints the step number and the oracle's diff.
+   `test_lifecycle_proof.py` and `test_network_subset.py` pass, as do `test_locality.py`, `test_public_api_rule.py`, and `test_docs_cover_exports.py`. On failure, the test prints the step number and the oracle's diff.
 
 2. **Locality by hand.** Create a project and seed a node, then list projects from another working directory:
    ```bash
@@ -433,13 +468,13 @@ Clean up with `uv run amoeba stop`, kill the server, then `rm -rf "$AMOEBA_STORE
 ### Development Approach
 
 1. Confirm that 107, 108, and 109 are merged. Stop for the PM if any is not. Reconcile every name this design takes from them against the merged code, and update this design if they differ.
-2. Migration commits, with no behavior change: H4's move, H1's `standard_tenants` move, and the exports for H1 and H3. Then `test_docs_cover_exports.py`, which will fail until each export is documented. Document them.
+2. Migration commits, with no behavior change. First add the tenant-order and parse-equivalence checks against the current code. Then make H4's move, H1's `standard_tenants` move, and the exports for H1 and H3. Then `test_docs_cover_exports.py`, which will fail until each export is documented. Document them.
 3. H2, `record_runner_report`, with store tests: the one-commit property, each refusal, and the retry rule.
-4. `tests/contract/` foundations: the D1 rule and its negative fixture, the bootstrap, `ProofRunner` with crash points, and `LocalTransport`.
-5. The scenario and both oracles, local transport. Fix the gaps it finds under D7's rule. Record each one.
-6. `NetworkTransport` and steps 12–13.
+4. `tests/contract/` foundations: the D1 rule, the bootstrap, and `ProofRunner` with crash points.
+5. The scenario and both oracles. Fix the gaps it finds under D7's rule, and record each one. A gap that stops for the PM follows D7's closure rule.
+6. `test_network_subset.py`.
 7. `test_locality.py`.
-8. Pruning: `run_pruning.py` with pure tests, `cli/prune.py`, the exit code, the stub-`sq` tests, the opt-in real-`sq` test, step 15, and `scripts/demo_prune.py`.
+8. Pruning: `run_pruning.py` with pure tests, `cli/prune.py`, the exit code, the stub-`sq` tests, step 12, and `scripts/demo_prune.py`.
 9. `docs/substrate-guide.md`, the contract deltas, and `CHANGELOG`.
 
 Test each step right after building it, and commit after each.
