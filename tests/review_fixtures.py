@@ -33,3 +33,8 @@ STAMPED_REVIEW_106 = SQ_REVIEWS / (
     "106-review.slice.outbound-change-feed-and-detection-of-external-work"
     ".20260928T175751.md"
 )
+
+_PAIR_STEM = "105-review.slice.squadron-review-parser-and-ingest.20261015T041112"
+#: One real review captured both ways: the saved file and its stdout JSON.
+PAIR_ARTIFACT = SQ_REVIEWS / f"{_PAIR_STEM}.md"
+PAIR_STDOUT = SQ_REVIEWS / f"{_PAIR_STEM}.stdout.json"
