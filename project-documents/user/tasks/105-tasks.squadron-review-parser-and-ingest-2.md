@@ -6,8 +6,8 @@ lld: user/slices/105-slice.squadron-review-parser-and-ingest.md
 dependencies: [101, 103, 104]
 projectState: Slices 101–104 are merged. The store holds verdicts and content-keyed findings (schema 5), the inbox accepts a `verdict` kind, and `amoeba submit verdict` takes about twenty hand-typed flags. Nothing reads Squadron output. 104's tests read fixtures through a test-only helper, `tests/review_fixtures.py`. This slice adds the production parser, `verdict_to_payload`, and `amoeba ingest review`.
 dateCreated: 20261007
-dateUpdated: 20261009
-status: in_progress
+dateUpdated: 20261014
+status: complete
 ---
 
 ## Context Summary
@@ -309,12 +309,12 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Pair-dependent**: needs Task 1.2's output. If Task 1.2 is blocked, leave this task unchecked and marked `blocked on 1.2`.
 
 **Steps**:
-- [ ] In `tests/cli/test_ingest_end_to_end_modes.py`, with a running process and a seeded node, ingest the pair's stdout file with `--stdout-json` and its saved `.md` with `--artifact` (no `--upstream-version`; both carry a stamp)
-- [ ] Assert two different ids; the JSON row has `source: stdout_json` and `reviewed_sha` null; `inspect findings` for the node shows each of the pair's finding keys seen twice
+- [x] In `tests/cli/test_ingest_end_to_end_modes.py`, with a running process and a seeded node, ingest the pair's stdout file with `--stdout-json` and its saved `.md` with `--artifact` (no `--upstream-version`; both carry a stamp)
+- [x] Assert two different ids; the JSON row has `source: stdout_json` and `reviewed_sha` null; `inspect findings` for the node shows each of the pair's finding keys seen twice
 
 **Success Criteria**:
-- [ ] The test passes; `ruff` and `pyright` clean
-- [ ] Commit, e.g. `test: ingest a stdout capture and its saved file`
+- [x] The test passes; `ruff` and `pyright` clean
+- [x] Commit, e.g. `test: ingest a stdout capture and its saved file`
 
 **Files to Modify**: `tests/cli/test_ingest_end_to_end_modes.py`
 
@@ -329,14 +329,14 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Objective**: Replace 104's "Mapping Squadron's flags (for slice 105)" notes with the parser's contract.
 
 **Steps**:
-- [ ] In `docs/evidence-contract.md`, replace the subsection "Mapping Squadron's flags (for slice 105)" with "Parsing Squadron output", covering: the D3 table, D4 (version rule), D5 (what changes an id; the consequence of ingesting both a file and its stdout, namely two records and doubled counts; the rule to ingest the file whenever it exists), D7, the dropped keys, and the dated observation (20260928, squadron `373217ab`, 0.15.0, labelled as an observation not a version pin)
-- [ ] Fix any other references in the repo to the removed subsection title (grep `docs/` and `project-documents/user/`, excluding the LLD itself)
-- [ ] Do not copy long passages from the LLD; summarize and link by section name
+- [x] In `docs/evidence-contract.md`, replace the subsection "Mapping Squadron's flags (for slice 105)" with "Parsing Squadron output", covering: the D3 table, D4 (version rule), D5 (what changes an id; the consequence of ingesting both a file and its stdout, namely two records and doubled counts; the rule to ingest the file whenever it exists), D7, the dropped keys, and the dated observation (20260928, squadron `373217ab`, 0.15.0, labelled as an observation not a version pin)
+- [x] Fix any other references in the repo to the removed subsection title (grep `docs/` and `project-documents/user/`, excluding the LLD itself)
+- [x] Do not copy long passages from the LLD; summarize and link by section name
 
 **Success Criteria**:
-- [ ] The old subsection title no longer appears in `docs/`
-- [ ] The new section covers each item above
-- [ ] Commit, e.g. `docs: add parsing squadron output to the evidence contract`
+- [x] The old subsection title no longer appears in `docs/`
+- [x] The new section covers each item above
+- [x] Commit, e.g. `docs: add parsing squadron output to the evidence contract`
 
 **Files to Modify**: `docs/evidence-contract.md`
 
@@ -349,12 +349,12 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Objective**: Document the command, the exit code, and the slice.
 
 **Steps**:
-- [ ] In `docs/process-contract.md` (section "The CLI"), add `amoeba ingest review` with its flags and outputs, and exit code 12 with its cause; note that it submits and does not wait, and refuses a project with no store (D6), with the outcome table location (`inspect submissions`, `inspect inbox`)
-- [ ] Add a `CHANGELOG.md` entry under `[Unreleased]` / `Added` in the existing style, one to two lines each: the parser package, `ingest review` and exit code 12, `verdict_to_payload` and `provider_failure_problem`, PyYAML now a runtime dependency, and the digest format tag as a contract
+- [x] In `docs/process-contract.md` (section "The CLI"), add `amoeba ingest review` with its flags and outputs, and exit code 12 with its cause; note that it submits and does not wait, and refuses a project with no store (D6), with the outcome table location (`inspect submissions`, `inspect inbox`)
+- [x] Add a `CHANGELOG.md` entry under `[Unreleased]` / `Added` in the existing style, one to two lines each: the parser package, `ingest review` and exit code 12, `verdict_to_payload` and `provider_failure_problem`, PyYAML now a runtime dependency, and the digest format tag as a contract
 
 **Success Criteria**:
-- [ ] Both documents mention `ingest review` and exit code 12
-- [ ] Commit, e.g. `docs: document ingest review and update changelog`
+- [x] Both documents mention `ingest review` and exit code 12
+- [x] Commit, e.g. `docs: document ingest review and update changelog`
 
 **Files to Modify**: `docs/process-contract.md`, `CHANGELOG.md`
 
@@ -367,16 +367,16 @@ Continuation of `105-tasks.squadron-review-parser-and-ingest-1.md`; read its Con
 **Objective**: Run everything and replace the LLD's draft walkthrough note with real output.
 
 **Steps**:
-- [ ] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean (the slice has no performance requirement and adds no load test; this run only checks for regressions)
-- [ ] `wc -l` the new source files; split any well over ~300 lines
-- [ ] Confirm no item is still marked `blocked on 1.2`; if any is, report it to the PM instead of closing the slice
-- [ ] In the report to the PM, list the stale LLD wording found in Task 4.2 (the 0.14.0 stdout captures do not carry a trailing `Saved review to` line) so the PM can correct the design; do not edit it
-- [ ] Run the LLD's Verification Walkthrough steps 1–9 by hand (with the real filenames for the captured pair) and replace its draft note with the real commands and trimmed output. The LLD itself says the walkthrough is "refined with captured output when Phase 6 completes", so this one section, and only it, is edited in the design file
-- [ ] If any step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match, and do not touch any other section of it
+- [x] `uv run ruff check .`, `uv run pyright`, `uv run pytest`, and `uv run pytest tests/load` all clean (the slice has no performance requirement and adds no load test; this run only checks for regressions)
+- [x] `wc -l` the new source files; split any well over ~300 lines
+- [x] Confirm no item is still marked `blocked on 1.2`; if any is, report it to the PM instead of closing the slice
+- [x] In the report to the PM, list the stale LLD wording found in Task 4.2 (the 0.14.0 stdout captures do not carry a trailing `Saved review to` line) so the PM can correct the design; do not edit it
+- [x] Run the LLD's Verification Walkthrough steps 1–9 by hand (with the real filenames for the captured pair) and replace its draft note with the real commands and trimmed output. The LLD itself says the walkthrough is "refined with captured output when Phase 6 completes", so this one section, and only it, is edited in the design file
+- [x] If any step does not behave as the LLD says, stop and report to the PM; do not edit the LLD to match, and do not touch any other section of it
 
 **Success Criteria**:
-- [ ] All four checks clean (the import rules are enforced by Task 5.5's test)
-- [ ] The walkthrough in the LLD shows real output, and `git diff` of the design file touches only the Verification Walkthrough section
-- [ ] Commit on the slice branch, e.g. `docs: record slice 105 verification walkthrough`
+- [x] All four checks clean (the import rules are enforced by Task 5.5's test)
+- [x] The walkthrough in the LLD shows real output, and `git diff` of the design file touches only the Verification Walkthrough section
+- [x] Commit on the slice branch, e.g. `docs: record slice 105 verification walkthrough`
 
 **Files to Modify**: `project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md`

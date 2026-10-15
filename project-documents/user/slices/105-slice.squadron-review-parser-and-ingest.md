@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 103, 104]
 interfaces: [106, 107, 110]
 dateCreated: 20260928
-dateUpdated: 20261009
-status: in_progress
+dateUpdated: 20261014
+status: complete
 ---
 
 # Slice Design: squadron-review-parser-and-ingest
