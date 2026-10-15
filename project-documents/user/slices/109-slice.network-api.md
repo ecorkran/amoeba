@@ -67,7 +67,7 @@ To make "same answers as `amoeba inspect`" structural, this slice moves the list
 - `follow(store_dir, project_id, after=, settings=, stop=)` yields changes in `seq` order. It checks `stop` between waits, at most one `follow_interval_seconds` apart. It raises `StorePermissionError` for an unknown or vanished store, and `StoreSchemaError` for a version mismatch.
 - The listing row functions, unchanged in what they return. Only their parameter type changes.
 - **External:** `starlette` and `uvicorn`, pinned with `>=` like the existing dependencies. *Observed 20261015 on PyPI:* starlette 1.8.0, uvicorn 0.54.0, httpx 0.28.1. These are dated observations, not requirements. The design depends on two behaviors, and a test pins each:
-  - `StreamingResponse` accepts an async iterator and does not run it in a threadpool.
+  - uvicorn's `send` waits while the socket's write buffer is full, so a stalled peer blocks the send rather than growing memory. This is why each send has a timeout (D6).
   - Under ASGI spec 2.4, a client disconnect is noticed only when a send fails. This is why the stream sends heartbeats (D6).
 
 ## Architecture
@@ -95,7 +95,7 @@ src/amoeba/serve/
   auth.py          BearerTokenMiddleware (constant-time compare)
   reads.py         GET /v1/listings, GET /v1/listings/{name}
   submissions.py   POST and GET /v1/projects/{project_id}/submissions[/{id}]
-  stream.py        GET /v1/projects/{project_id}/feed: follow bridge, SSE framing, heartbeats, stream slots
+  stream.py        GET /v1/projects/{project_id}/feed: follow bridge, EventStreamResponse (SSE framing, heartbeats, send timeout), stream slots
   app.py           build_app(settings, token) -> Starlette
   server.py        run(settings, token): uvicorn.Server with the TLS files and shutdown grace
 src/amoeba/cli/
@@ -136,11 +136,13 @@ Supervisor-level listings (`projects`, `inbox`) open no store, take no `project`
 
 ```
 POST /v1/projects/demo/submissions  {"kind": "intent", "submission_id": "…", "submitted_by": "bridge", "payload": {...}}
-  body over max_request_bytes → 413
+  content-type not application/json → 415; Content-Length over max_request_bytes → 413 before reading
+  body read chunk by chunk; reading stops and returns 413 at max_request_bytes + 1, with or without Content-Length
   worker thread: inbox.submit(project_id=…, kind=…, payload=…, submitted_by=…, submission_id=…)
     InvalidSubmissionError → 422 {"error": "invalid_submission", "reason": <QuarantineReason>, "detail": …}
-    SubmissionWriteError   → 503 submission_write_failed
+    SubmissionWriteError   → 503 submission_write_failed      (nothing left in the inbox, per 103)
   202 {"submission_id": "…"}
+  retry after a 503, a timeout, or a lost 202: POST again with the same id; 103's first-wins rule makes it safe
 GET /v1/projects/demo/submissions/{id}
   record = store.submission(id)  → 200 record, or 404 not_applied (also for a store that does not exist yet)
 ```
@@ -154,21 +156,24 @@ GET /v1/projects/demo/feed?after=40        (Last-Event-ID: 40 on reconnect)
   preflight: open read-only and close → 404 unknown_project, 503 store_schema_mismatch     (before any byte is sent)
   200 text/event-stream; one dedicated thread per stream:
     for change in follow(store_dir, project, after=cursor, stop=stop_event.is_set):
-        hand off to the event loop through a 1-slot queue (blocks the thread until the loop takes it)
-  event loop, per stream:
+        anyio.from_thread.run(send_channel.send, change)    # 1-slot memory object stream; blocks until the loop takes it
+        ClosedResourceError / BrokenResourceError / RuntimeError (loop gone) → return
+  event loop, per stream (EventStreamResponse, D6):
     wait for the next change, at most heartbeat_interval_seconds
       change  → "id: <seq>\nevent: change\ndata: <change_record JSON>\n\n"
       timeout → ": keepalive\n\n"       (a failed send is how a disconnect is noticed)
       follow raised → "event: error\ndata: {"error": …, "detail": …}\n\n", then close
-  on disconnect, cancellation, or shutdown: set stop_event; the thread exits within one follow interval; release the slot
+    every send runs under anyio.fail_after(send_timeout_seconds); timeout or OSError → close
+  finally (disconnect, send timeout, cancellation, shutdown): set stop_event, close receive_channel, release the slot
+    a thread blocked in send wakes at once with ClosedResourceError; one waiting inside follow() exits within one follow interval
 ```
 
 ### State Management
 
-The server holds no durable state and no cursor. Its only in-memory state is per stream (a thread, a stop event, a 1-slot hand-off queue) and one stream-slot counter (an `anyio.CapacityLimiter`). The two thread boundaries are each published through one mechanism:
+The server holds no durable state and no cursor. Its only in-memory state is per stream (a thread, a stop event, a 1-slot anyio memory object stream) and one stream-slot counter (an `anyio.CapacityLimiter`). The two thread boundaries are each published through one mechanism:
 
-- changes from the follow thread go to the event loop through the queue, put with `anyio.from_thread.run`;
-- stop requests go from the loop to the thread through a `threading.Event`.
+- changes from the follow thread go to the event loop through the memory object stream, sent with `anyio.from_thread.run`;
+- stop requests go from the loop to the thread through a `threading.Event`, and closing the receive side wakes a thread blocked in a send.
 
 No other state is shared. Each request opens its own read-only store and closes it, so no SQLite connection crosses threads.
 
@@ -189,6 +194,13 @@ No other state is shared. Each request opens its own read-only store and closes 
 - A token shorter than `MIN_TOKEN_LENGTH` (32 characters) is refused at start-up. It is compared with `hmac.compare_digest`. A missing or wrong token returns 401 with `WWW-Authenticate: Bearer`, and the response does not say which of the two it was.
 - When the token is set, every request needs it, including on a loopback bind. A reverse proxy in front of a loopback bind is otherwise an unauthenticated network exposure. The contract tells operators who front the server with a proxy to set the token.
 - When the token is unset on a loopback bind, requests are unauthenticated. This is the same trust boundary as the store file and the inbox directory, which any local user with filesystem permission can already read and write.
+- **Browser requests do not cross that boundary, so three checks apply on every bind.** A web page can make requests to `127.0.0.1` that the filesystem never sees.
+  - A request carrying an `Origin` header is refused with 403 `origin_not_allowed`. Browsers send `Origin` on cross-origin requests and on every POST; the native clients this slice serves send none, and CORS is excluded anyway.
+  - On a loopback bind, a `Host` header other than `localhost`, `127.0.0.1`, or `[::1]` (with any port) is refused with 421 `host_not_allowed`. This defeats DNS rebinding, where a page on the attacker's own name resolves to loopback.
+  - `POST` requires `content-type: application/json` (415 otherwise). That makes every submission a request a browser must preflight, and the server answers no preflight.
+- **Failed attempts are not throttled.** The contract requires a random token, for example `openssl rand -hex 24` (192 bits), which makes guessing infeasible without a limit. The length minimum catches a short token; it cannot detect a non-random one, and the contract says so.
+- **The token never reaches a log or a response.** uvicorn's access log records the method, path, and status, not headers. A test captures every log record and response body during authenticated and failed requests and asserts the token appears in none.
+- **Rotation is a restart.** The token is read once at start-up. Open streams end at shutdown and clients reconnect with the new token. The contract states this in one line.
 
 **D3 — Bind policy: loopback, or token plus TLS.** `check_bind` runs before uvicorn is constructed:
 
@@ -219,8 +231,11 @@ A refusal exits with `ExitCode.SERVE_REFUSED` (13) and a message that names the 
 **D6 — The stream: `follow()` on a dedicated thread, with backpressure, heartbeats, and a slot limit.**
 
 - *A dedicated thread per stream, not the anyio threadpool.* `follow()` blocks for as long as the client stays connected. On the shared pool, `max_streams` idle followers would take every worker token and starve reads. Stream threads are bounded separately by `max_streams` (default 32). When the slots are full, the request gets 503 `stream_limit_reached` with `Retry-After`, and the server keeps serving reads.
-- *A 1-slot hand-off queue.* The follow thread blocks until the event loop takes each change. A slow client therefore just reads the durable log more slowly, and the server buffers at most one change and one socket write per stream. No slow-client policy is needed, because there is nothing to drop. This is the property the architecture wanted kept out of the resident process.
-- *Heartbeats.* After `heartbeat_interval_seconds` (default 15) with no change, the stream sends an SSE comment. Under ASGI spec 2.4, a failed send is the only way a disconnect is noticed. The heartbeat therefore bounds how long a vanished client holds a slot: about one heartbeat interval plus one follow interval. It also keeps intermediaries from closing an idle connection.
+- *A 1-slot hand-off.* The follow thread sends each change into a 1-slot anyio memory object stream with `from_thread.run`, and blocks until the event loop takes it. A slow client therefore just reads the durable log more slowly, and the server buffers at most one change and one socket write per stream. No slow-client policy is needed, because there is nothing to drop. This is the property the architecture wanted kept out of the resident process.
+- *Waking a blocked thread.* A thread blocked in that send is not inside `follow()`, so it never checks `stop`. The stream's `finally` therefore closes the receive side as well as setting the stop event, and the blocked send raises `ClosedResourceError` at once. If the event loop itself is gone at shutdown, `from_thread.run` raises `RuntimeError`. The thread treats all three as "stop" and returns. A thread waiting inside `follow()` exits within one follow interval.
+- *Heartbeats.* After `heartbeat_interval_seconds` (default 15) with no change, the stream sends an SSE comment. Under ASGI spec 2.4, a failed send is the only way a disconnect is noticed. The heartbeat therefore bounds how long a cleanly closed client holds a slot: about one heartbeat interval plus one follow interval. It also keeps intermediaries from closing an idle connection.
+- *A send timeout for a stalled peer.* A client that stops reading while its connection stays open never makes a send fail. Once the socket buffer fills, the send blocks. Starlette's `StreamingResponse` gives no hook around its sends, so the stream is a small `EventStreamResponse` of its own (`serve/stream.py`) that runs every send under `anyio.fail_after(send_timeout_seconds)` (default 30) and closes the stream on timeout. A stalled client therefore holds a slot for at most one heartbeat interval plus `send_timeout_seconds`.
+- *Reads and submissions are bounded too.* They run on anyio's default thread limiter (40 workers). Each worker's wait on the store is bounded by the read-only open's busy timeout, after which it returns 503 `store_busy`. uvicorn's `limit_concurrency`, set from `max_connections` (default 128, which includes streams), returns 503 beyond that, so requests waiting for a worker cannot accumulate without limit.
 - *Cursor precedence.* `Last-Event-ID` wins over `?after=` when both are present. A browser `EventSource` reconnects with its original URL plus that header, and the header is by construction the later cursor. Both must be non-negative integers, or the request gets 400 `invalid_cursor`.
 - *Errors before and after the 200.* An unknown project or a schema mismatch is caught by a preflight open, before any byte is sent. A failure after streaming starts (the store vanished, a schema change) is sent as one `event: error` frame with an `ApiErrorCode`, and then the stream closes. An `EventSource` that reconnects then gets the preflight's 404 or 503 and stops.
 - *Exactly once, in order.* The SSE events are `follow()`'s changes, in its order, each sent once with `id` equal to `seq`. A client that resumes from the last `id` it processed gets every later change once. Acting on a change once remains the client's job, as 106's contract says for local followers.
@@ -237,12 +252,19 @@ A refusal exits with `ExitCode.SERVE_REFUSED` (13) and a message that names the 
 
 - **Labels derive from structure.** Option names are declared once in the registry. The CLI derives `--flag` from them, and the server derives query parameter names from them. URL listing names are `Listing.name`. Scope is the `ListingScope` enum (`project`, `supervisor`), set by which row function a listing declares.
 - **Event-loop discipline.** No route handler calls the store, the filesystem, or `submit()` on the loop. Each such call runs in `anyio.to_thread.run_sync`, or on the stream's own thread. Ruff's `ASYNC` rules are already enabled.
-- **Settings.** `ServeSettings` is a frozen dataclass, the one home of every serve default (D3 of 102's settings pattern). It holds `host="127.0.0.1"`, `port=8765`, `tls_certfile`, `tls_keyfile`, `heartbeat_interval_seconds=15.0`, `max_streams=32`, `max_request_bytes=1_048_576`, `shutdown_grace_seconds=5.0`, and a `FeedSettings`. CLI flags exist for host, port, and the two TLS files only.
+- **Settings.** `ServeSettings` is a frozen dataclass, the one home of every serve default (D3 of 102's settings pattern). It holds `host="127.0.0.1"`, `port=8765`, `tls_certfile`, `tls_keyfile`, `heartbeat_interval_seconds=15.0`, `send_timeout_seconds=30.0`, `max_streams=32`, `max_connections=128`, `max_request_bytes=1_048_576`, `shutdown_grace_seconds=5.0`, and a `FeedSettings`. CLI flags exist for host, port, and the two TLS files only.
 - **Exceptions.** Only the exceptions in D8's table are caught, plus the 500 boundary handler. `ServeRefusedError` is raised by `check_bind` and mapped to the exit code in `cli/main.py`, the same way lifecycle errors are.
 
 ## Implementation Details
 
 ### Migration Plan
+
+**Why the move is in this slice.** The slice plan assigns it here: its 109 entry says 109 moves every `inspect` listing module into `amoeba.inspection`, and it orders 105, 107, and 108 before 109 for that reason. The two cheaper options each give up something the plan or architecture requires:
+
+- *Serving from `amoeba.cli` directly* would make the server import the CLI, and through `cli/inspect.py` it would also import `amoeba.process.supervisor` and its observers. The architecture says the server is not the resident process. The layering rule is how that is enforced, so it is not bypassed.
+- *A separate preparatory slice* would add a slice the plan does not have. The work is already isolated: step 2 of the Development Approach is a gated commit range of its own, with no new behavior, which must leave `inspect` output byte-identical before any server code lands. Its contract-doc deltas are limited to updating paths.
+
+The move is mechanical and changes no row. Its effort is counted in this slice's 3.
 
 **What moves:**
 
@@ -274,7 +296,7 @@ All paths are under `/v1`. JSON bodies are UTF-8. When a token is configured, ev
 | `POST /v1/projects/{project_id}/submissions` | 202 `{submission_id}` | 400 `invalid_project_id`, 413 `request_too_large`, 422 `invalid_body` / `submission_id_required` / `invalid_submission` (with `reason`), 503 `submission_write_failed` |
 | `GET /v1/projects/{project_id}/submissions/{submission_id}` | 200 submission record | 404 `not_applied`, and the store errors as for reads |
 | `GET /v1/projects/{project_id}/feed?after=N` | 200 `text/event-stream` | 400 `invalid_cursor`, 404 `unknown_project`, 503 `stream_limit_reached` (with `Retry-After`) / `store_schema_mismatch`; after the 200, an `event: error` frame |
-| any | — | 401 `unauthorized` |
+| any | — | 401 `unauthorized`, 403 `origin_not_allowed`, 421 `host_not_allowed`, 415 `unsupported_media_type` (POST); beyond `max_connections`, uvicorn's own plain-text 503, which carries no `ApiErrorCode` because it is sent before the app runs |
 
 **SSE frames:**
 
@@ -318,7 +340,10 @@ There is no migration and no table. The only store change is the two read-only m
 - A listing read's `as_of_seq` equals the feed head at the moment of the read. A test commits between two statements of a multi-query listing and shows that the rows and `as_of_seq` come from one snapshot.
 - A submission POSTed over HTTP while the resident process is stopped is applied on `start`, and its outcome endpoint goes from 404 `not_applied` to 200 `applied`. A second POST with the same id returns 202 and applies nothing twice. An invalid payload returns 422 with the same `reason` that `amoeba submit` reports, and leaves nothing in the inbox.
 - A stream client receives every change after its cursor once, in `seq` order. Disconnecting and reconnecting with `Last-Event-ID` (or `?after=`) across commits made while it was away yields no gap and no repeat.
-- An idle stream sends a keepalive every `heartbeat_interval_seconds`. A client that vanishes frees its stream slot within one heartbeat interval plus one follow interval.
+- An idle stream sends a keepalive every `heartbeat_interval_seconds`. A client that closes its connection frees its stream slot within one heartbeat interval plus one follow interval. A client that stays connected but stops reading frees it within one heartbeat interval plus `send_timeout_seconds`. In both cases the follow thread has exited, including when it was blocked handing off a change.
+- A POST body over `max_request_bytes` gets 413, whether or not it declares `Content-Length`, and the server reads no more than `max_request_bytes + 1` bytes of it. A POST retried with the same id after a 503 `submission_write_failed` is applied once.
+- A request with an `Origin` header gets 403. On a loopback bind, a request with a `Host` other than a loopback name gets 421. A POST that is not `application/json` gets 415.
+- During authenticated and failed requests, the token appears in no log record and no response body.
 - At `max_streams` open streams, the next stream request gets 503 `stream_limit_reached`, and reads still succeed.
 - `amoeba serve --host 0.0.0.0` exits 13 without a token, exits 13 with a token but no TLS files, exits 13 with a token under 32 characters, and serves over HTTPS with all three. With a token configured, a request without it, or with a wrong one, gets 401 on every endpoint, loopback included.
 - A project id containing a path separator, `.`, or `..` gets 400 on every endpoint, and no file outside the supervisor directory is opened.
@@ -331,8 +356,8 @@ There is no migration and no table. The only store change is the two read-only m
 - `ApiErrorCode` and the exception table are the only place a status number or code appears in `amoeba.serve` (a single-definition test like 106's Rule 3).
 - **Load tier** (`tests/load/test_serve_load.py`, per the Python rules for network and concurrency paths), against a real uvicorn server on a loopback port:
   - 32 concurrent followers each receive all of a burst of 2,000 changes, in order, with none missed.
-  - Listing-read latency stays within a bound while those streams are open. Measure first, then set the assertion at about twice the observed p95, as 102's load tests do.
-  - With 32 idle streams open, a read is not delayed by thread-pool starvation.
+  - **Delivery latency:** with 32 followers connected and reading, the p95 time from a change's commit to its arrival at a client is at most 1 s. This is derived from 106's bound (`follow_interval_seconds`, 0.25 s, plus the read time) with room for the hand-off and loopback transport. `network-contract.md` promises 106's bound plus transport, and nothing more.
+  - **Read latency:** with 32 idle streams open, the p95 of `GET /v1/listings/nodes` against the walkthrough-sized store is at most 200 ms. This also proves streams do not starve the read pool. No read latency is promised in the contract; this is a regression guard.
 - `ruff`, `pyright` strict, and the full suite are clean. Files stay near 300 lines.
 - `docs/network-contract.md` documents the endpoints, the error codes, the bind and auth rules (including the proxy note), the stream frames, cursor precedence, delivery guarantees, `as_of_seq`, and the dated dependency observations. `feed-contract.md` replaces its "Current state, then follow" section. `inbox-contract.md` notes the required id over the network. `process-contract.md` adds the exit code and D2's tunable-versus-credential note. `store-contract.md` adds the two methods.
 
