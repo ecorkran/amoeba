@@ -51,14 +51,19 @@ def run_cli(
     supervisor_dir: Path,
     *,
     timeout: float = COMMAND_TIMEOUT_SECONDS,
+    environment: dict[str, str] | None = None,
 ) -> CommandResult:
-    """Invoke the real CLI and wait for it to finish."""
+    """Invoke the real CLI and wait for it to finish.
+
+    ``environment`` replaces :func:`cli_environment`; build it from that
+    function so ``AMOEBA_STORE_DIR`` still points at the throwaway directory.
+    """
     completed = subprocess.run(
         [sys.executable, "-m", "amoeba.cli.main", *arguments],
         capture_output=True,
         text=True,
         timeout=timeout,
-        env=cli_environment(supervisor_dir),
+        env=environment if environment is not None else cli_environment(supervisor_dir),
         check=False,
     )
     return CommandResult(
@@ -107,9 +112,11 @@ class BackgroundCli:
 
 
 def start_background(
-    supervisor_dir: Path, extra_arguments: list[str] | None = None
+    supervisor_dir: Path,
+    extra_arguments: list[str] | None = None,
+    environment: dict[str, str] | None = None,
 ) -> BackgroundCli:
-    """Launch ``amoeba start`` in the background."""
+    """Launch ``amoeba start`` in the background. ``environment`` as in run_cli."""
     return BackgroundCli(
         subprocess.Popen(
             [
@@ -123,7 +130,11 @@ def start_background(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            env=cli_environment(supervisor_dir),
+            env=(
+                environment
+                if environment is not None
+                else cli_environment(supervisor_dir)
+            ),
         )
     )
 
