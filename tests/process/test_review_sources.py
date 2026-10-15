@@ -151,3 +151,29 @@ def test_a_removed_directory_raises_and_polling_resumes_when_restored(
     _copy(ROUND_ONE, reviews)
     source.poll()
     assert _names(source) == [ROUND_ONE]
+
+
+def test_a_settled_file_is_read_once_per_signature(
+    reviews: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _copy(ROUND_ONE, reviews)
+    source = DirectoryReviewSource(reviews)
+    reads: list[Path] = []
+    real_read = Path.read_bytes
+
+    def counting(self: Path) -> bytes:
+        reads.append(self)
+        return real_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting)
+    source.poll()
+    assert _names(source) == [ROUND_ONE]
+    for _ in range(5):
+        assert source.poll() == []
+    assert reads == [path]
+
+    with path.open("ab") as handle:
+        handle.write(b"\nedited")
+    source.poll()
+    assert _names(source) == [ROUND_ONE]
+    assert DirectoryReviewSource(reviews).poll() == []  # a new source resettles

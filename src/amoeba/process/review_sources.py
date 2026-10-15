@@ -77,13 +77,16 @@ class DirectoryReviewSource:
 
     Settled means its ``(size, mtime_ns)`` is unchanged since the previous
     poll; a first sighting is remembered, not returned. A settled file is
-    returned on every poll while it stays settled — the tenant's ledger check,
-    not the source, decides whether it is new.
+    returned **once per signature**: an unchanged file is not re-read or
+    re-hashed on later polls, so a scan costs one ``stat`` per file. A new
+    source (a restart) returns every settled file once more; the tenant's
+    ledger check skips the ones already examined.
     """
 
     def __init__(self, directory: Path) -> None:
         self._directory = directory
         self._signatures: dict[Path, Signature] = {}
+        self._delivered: dict[Path, Signature] = {}
         self._unreadable: set[Path] = set()
 
     def poll(self) -> Sequence[DetectedFile]:
@@ -95,6 +98,7 @@ class DirectoryReviewSource:
         listed = list_review_files(self._directory)
         for forgotten in set(self._signatures) - set(listed):
             del self._signatures[forgotten]
+            self._delivered.pop(forgotten, None)
 
         settled: list[DetectedFile] = []
         for path in listed:
@@ -109,13 +113,14 @@ class DirectoryReviewSource:
             signature = (stat.st_size, stat.st_mtime_ns)
             previous = self._signatures.get(path)
             self._signatures[path] = signature
-            if previous != signature:
+            if previous != signature or self._delivered.get(path) == signature:
                 return None
             content = path.read_bytes()
         except FileNotFoundError:
             # Specific: gone between listing and stat or read. A file that is
             # gone is not a review; if it returns it settles from scratch.
             self._signatures.pop(path, None)
+            self._delivered.pop(path, None)
             return None
         except PermissionError:
             # Specific: nothing was examined, so no ledger row. Warned once
@@ -125,4 +130,5 @@ class DirectoryReviewSource:
                 self._unreadable.add(path)
             return None
         self._unreadable.discard(path)
+        self._delivered[path] = signature
         return DetectedFile(path=path, content=content, observed_at=datetime.now(UTC))
