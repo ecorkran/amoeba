@@ -14,59 +14,54 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: 63eb9efb6b38fec581d2cdbd1f514efa2e462865
-revision_number: 1
+reviewedSha: 4395a7694957241fac827b9f790727d13ccd22ba
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
-durationSeconds: 55.6
+toolCallsMade: 3
+durationSeconds: 57.1
 runId: run-20261015-p5-a36b1511
 squadronVersion: 0.21.9
 findings:
   - id: F001
-    severity: concern
-    category: scope
-    summary: "Doc-drift test task is not required by any success criterion"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:456-469"
+    severity: pass
+    category: coverage
+    summary: "Success criteria in this file's scope are covered"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:23-523"
   - id: F002
     severity: concern
-    category: scope
-    summary: "Demo-script test exceeds what the criteria need"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:341-357"
+    category: task-sizing
+    summary: "Task 9.1 is too large for one junior task"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:398-416"
   - id: F003
     severity: concern
-    category: granularity
-    summary: "Task 9.1 is a separate harness task with no behaviour of its own"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:399-414"
+    category: task-sizing
+    summary: "Task 7.6 is oversized, and its split is left conditional"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:233-255"
   - id: F004
     severity: concern
-    category: coverage
-    summary: "Tenant-level \"deleted between listing and read\" criterion has no test"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:112-117"
+    category: test-with-pattern
+    summary: "Scan-time reachability and reactivation tests are separated from the code they test"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:289"
   - id: F005
     severity: concern
-    category: scope
-    summary: "Task 7.1 prescribes a refactor beyond what the slice needs"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:137-138"
+    category: proportionality
+    summary: "Some tasks and tests can be merged or cut"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:25-58"
   - id: F006
     severity: note
-    category: nfr
-    summary: "No load test or CI gating task, which is correct for this slice"
-    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:277"
+    category: sequencing
+    summary: "Artificial linear dependencies and a late-tested script"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:84-88"
   - id: F007
     severity: note
-    category: sequencing
-    summary: "Dependency chain is more serial than necessary"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:84-88"
+    category: scope
+    summary: "`review_scan.py` is not in the slice's component structure"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:217"
   - id: F008
-    severity: pass
-    category: coverage
-    summary: "Success-criteria coverage for this file's scope"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:23-538"
-  - id: F009
-    severity: pass
-    category: process
-    summary: "Test-with pattern and commit cadence"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:62-80"
+    severity: note
+    category: prompt-hygiene
+    summary: "Hard-coded example next to a \"look it up\" instruction"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:172"
 ---
 
 # Review: tasks — slice 106
@@ -76,60 +71,62 @@ findings:
 
 ## Findings
 
-### [CONCERN] Doc-drift test task is not required by any success criterion
+### [PASS] Success criteria in this file's scope are covered
 
-Task 9.4 adds `tests/test_contract_docs.py` with a "reusable helper (document path, required terms)". It also asserts that every backticked `amoeba.` name resolves through `importlib`. The slice only asks that `docs/feed-contract.md` be "enough for initiative 160 to consume the feed without reading the code" (Integration Requirements), and no success criterion calls for a doc-versus-code test. The reusable helper serves no consumer in this slice. The doc is also written from the code (Task 9.3, "take names and values from the code"). Cut Task 9.4 and fold a manual check of the names into Task 9.3. If the PM wants the guard, keep only a single `ChangeKind`/`Change`-field check with no generic helper. Then Task 9.3's commit is the `docs:` commit.
+- **Detection:** ingest, provider failure, hand edit, `unattributed`, `unparseable`, hand recovery, restart and store-failure-stops-process map to 7.6. Baseline, unreadable file and pre-existing directory map to 7.4.
+- **Ownership:** defer and `runner_issued` are in 7.8, and `deferred` in `inspect watches` is in 8.2.
+- **Sources and wiring:** the race table and "deleted between listing and read" are in 6.2, and "`sq --version` once, no subprocess per tick" is in 8.5.
+- **Follower and integration:** "follower while the process is stopped" and the `resolution` → `runnable` change are in 9.1. The `kill -9` scenario is in 9.2.
+- **Docs and guard:** the doc deliverables are in 9.3–9.4, and the writer-guard addition is in 8.3.
+- **Load test:** the slice states no NFR, so no load test or CI gate is needed. 9.6 tells the PM this.
+- **Commits:** commit checkpoints are spread across every section, and each implementation task is paired with its test or the next task's commit.
 
-### [CONCERN] Demo-script test exceeds what the criteria need
+### [CONCERN] Task 9.1 is too large for one junior task
 
-Task 8.3 adds `tests/test_demo_detection.py` covering exit codes, stdout shape, a read-only open and a lock-held refusal case. The slice treats the script as a seeding helper for the walkthrough and end-to-end test, and only requires the writer-guard permitted-list change. Task 9.2 already exercises the script through `seed_demo(env)`, which proves the happy path. The lock-held and "store unchanged" cases test behaviour copied from `demo_evidence.py`, not anything this slice promises. Drop the standalone test module and rely on the Task 9.2 exercise. If the lock-refusal behaviour matters, keep one lock-held test.
+Effort 4 bundles three pieces of work:
+- possibly adding a CLI launcher to `tests/cli_harness.py`;
+- building a new harness module with about seven helpers (process control, a threaded follower collector, `seed_demo`, `copy_fixture`, `inspect_json`);
+- writing a long, order-sensitive end-to-end Test A with a three-consecutive-runs gate.
 
-### [CONCERN] Task 9.1 is a separate harness task with no behaviour of its own
+If the harness is wrong, the test failure is hard to diagnose. Split it into a harness task (launcher plus `detection_e2e_harness.py`, with a smoke check such as start, stop and follower prints one line) and a Test A task. 9.2 then depends only on the harness and Test A.
 
-Task 9.1 builds a thread-based follower collector, a process start/stop/kill wrapper and several helpers. Its own text says it is "exercised by Task 9.2 (no separate smoke tests)", and it is committed with 9.2. It is a prerequisite step inside Task 9.2, not an independently verifiable task. It also carries a conditional launcher edit to `tests/cli_harness.py`. Merge 9.1 into 9.2 as its first steps, or keep it and state plainly that it has no verification of its own. The merged task is large (about Effort 6), so splitting Test A and Test B into separate tasks would keep it junior-sized.
+### [CONCERN] Task 7.6 is oversized, and its split is left conditional
 
-### [CONCERN] Tenant-level "deleted between listing and read" criterion has no test
+- **Size:** it carries nine behavior groups: ingest rounds, provider failure, hand edit, restart, race, refusals, label, hand recovery, and store failure inside a real `ResidentProcess`. A junior will probably exceed the ~300-line module limit.
+- **Conditional split:** the success criterion says "split into a second module if this one passes ~300 lines". That decision belongs in the task plan, not at execution time.
+- **Suggested split:** pre-split into (a) ingest, provider failure, hand edit, restart and race, and (b) refusals, label, hand recovery and store failure. Each half then gets its own commit.
 
-The slice criterion says that "a file deleted between listing and read produces no ledger row and no error; restored, it is detected normally". Task 6.2 tests this only at the source level, where the file is dropped and settles again. No test asserts that the tenant writes no ledger row. The baseline variant is also untested: Task 7.3 says a file deleted between list and read is dropped from the baseline, but Task 7.4 has no case for it. Task 9.8 would catch the gap late. Add one case to Task 7.6 (patched read raising `FileNotFoundError` during a scan, then no row, then restored and detected). Add one baseline case to Task 7.4.
+### [CONCERN] Scan-time reachability and reactivation tests are separated from the code they test
 
-### [CONCERN] Task 7.1 prescribes a refactor beyond what the slice needs
+- **Misplaced bullet:** 7.8 ends with "Remaining LLD lifecycle bullets": a baselined directory removed and restored (one ERROR, one INFO), and deactivate/reactivate without re-baselining. 7.8 is the defer/ownership test, but those behaviors are implemented in 7.3 and 7.5, not 7.7.
+- **Result:** the scan-path reachability code from 7.5 goes untested through 7.6 and 7.7. The module name `test_review_detection_ownership.py` also no longer describes its contents.
+- **Fix:** move these bullets into 7.6, immediately after 7.5, or into a small lifecycle module there.
 
-The slice says only that `sq --version` reuses the "label or explicit unavailable marker" pattern. Task 7.1 dictates moving `VERSION_UNAVAILABLE` into a new `version_label.py`, generalizing `capture_version_label` and touching the import sites. That is a reasonable way to meet DRY, but the steps fix module layout and a helper name that the slice does not require. State the outcome instead: one shared capture routine, the `sq` executable and its version args defined once, and cf behaviour unchanged. Leave the module split to the implementer. The risk is moderate because the cf regression surface is large. The existing cf tests are named as the guard, which mitigates it.
+### [CONCERN] Some tasks and tests can be merged or cut
 
-### [NOTE] No load test or CI gating task, which is correct for this slice
+- **5.1 and 5.2:** both are Effort 1, edit a few lines each, and are tested together in 5.3. Merge them into one implementation task followed by 5.3.
+- **7.8 non-review kind:** "an open entry of a non-review kind does not defer" repeats a case 5.3 already pins at the store-read level, and the tenant just calls that read. Drop it or reduce it to one assertion.
+- **9.7:** the trace walk mostly repeats 9.5's full suite, and 9.2 already ends with named assertions. The only unique value is catching a missing assertion. Fold it into 9.6 as one step, or keep it but state that it adds no new test files.
 
-The slice sets no numeric NFR targets. The only contract promise is the follower's `follow_interval_seconds` latency bound, which is a documented bound, not a throughput target. No `tests/load/` task or CI wiring task is needed. Task 9.7 reports the omission to the PM, which is the right handling.
+### [NOTE] Artificial linear dependencies and a late-tested script
 
-### [NOTE] Dependency chain is more serial than necessary
+- **Unneeded chains:** 6.1 depends on 5.3 and 8.3 depends on 8.2, but neither needs the earlier task's output. The ordering is harmless and only serializes work.
+- **Late-tested script:** `scripts/demo_detection.py` (8.3) has no test until 9.1, so a defect surfaces a task and a half later. This is acceptable because the task says so explicitly.
+- **8.2 wording:** it says states are staged by "writing store rows directly (no tenant)". `unreachable` also needs a nonexistent directory on disk, and `deferred` needs a journal entry. Say so.
 
-Task 6.1 (`DirectoryReviewSource`) depends on Task 5.3, and Task 7.1 depends on Task 6.2. Neither has a real data dependency on its predecessor. The linear order is harmless for a single implementer, but it hides the fact that Sections 5 and 6 are independent. Nothing needs fixing.
+### [NOTE] `review_scan.py` is not in the slice's component structure
 
-### [PASS] Success-criteria coverage for this file's scope
+The slice's Component Structure lists only `review_sources.py` and `review_detection.py` under `process/`. Task 7.5 adds a third module, `review_scan.py`, to stay under ~300 lines. That is a reasonable call, but update the slice's component list, or note it as a task-level addition in file 1's list, so the design and plan agree.
 
-Each criterion maps to a task:
-- **Attribution rule and review-producing kinds:** Tasks 5.1–5.3.
-- **Settle rule and race table:** Tasks 6.1–6.2.
-- **Baselining, including the unreadable-file case:** Tasks 7.3–7.4.
-- **Ingest, provider failure, hand edit, restart, refusals and the label:** Tasks 7.5–7.6.
-- **Store error stops the process:** Task 7.6 runs the tenant inside a real `ResidentProcess`.
-- **Defer and `runner_issued` skip, plus the directory-removed and reactivation lifecycle:** Tasks 7.7–7.8.
-- **`inspect watches` and `inspect detections` with all five states:** Tasks 8.1–8.2.
-- **Subprocess only once at start-up:** Tasks 8.4–8.5.
-- **End-to-end through the real CLI, including `kill -9` and follower resume:** Task 9.2.
-- **Contract docs and changelog:** Tasks 9.3 and 9.5.
-- **Final trace of requirements to tests:** Task 9.8.
+### [NOTE] Hard-coded example next to a "look it up" instruction
 
-The deferred items (`read_transaction`, `record_runner_report`, `source_document`) are correctly absent. Real fixtures are used throughout, in line with the Technical Requirements.
-
-### [PASS] Test-with pattern and commit cadence
-
-Every implementation task is followed immediately by its test task: 5.2→5.3, 6.1→6.2, 7.1→7.2, 7.3→7.4, 7.5→7.6, 7.7→7.8, 8.1→8.2 and 8.4→8.5. Commits land at the end of each pair, with semantic prefixes, rather than batched at the end. Task 9.8 keeps the slice branch unmerged, which matches the branch policy in file 1.
+Task 7.3 says "Check `InboxTenant`'s constructor for what else it needs (e.g. `supervisor_dir`)". This is the pattern the project guidelines warn about: if the lookup yields nothing, a model may reach for the example. Here `supervisor_dir` is real, since 8.4 uses it. Still, drop the "e.g." and say "mirror every constructor argument `InboxTenant` takes beyond the store".
 
 ### Run Digest
 
-- Response length: 7529 chars
+- Response length: 6654 chars
 - Response is newline-free: no
-- Tool calls made: 5
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -139,10 +136,10 @@ Every implementation task is followed immediately by its test task: 5.2→5.3, 6
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 55.6 s
+- Duration: 57.1 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8

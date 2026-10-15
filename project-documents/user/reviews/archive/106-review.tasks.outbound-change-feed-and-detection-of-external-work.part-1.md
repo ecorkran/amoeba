@@ -14,48 +14,44 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: 22dc87252bc12ef4efec7290f20dcfbb1044f0b2
+reviewedSha: 63eb9efb6b38fec581d2cdbd1f514efa2e462865
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 4
-durationSeconds: 49.7
+toolCallsMade: 5
+durationSeconds: 65.1
 runId: run-20261015-p5-a36b1511
 squadronVersion: 0.21.9
 findings:
   - id: F001
-    severity: concern
-    category: test-coverage
-    summary: "Follower failure table: \"store directory gone\" has no test"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:332"
+    severity: pass
+    category: coverage
+    summary: "File 1 covers its share of the slice success criteria"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md"
   - id: F002
-    severity: concern
-    category: scope
-    summary: "`record_detected_verdict` specifies key-case behavior the slice never requires"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:515"
+    severity: pass
+    category: sequencing
+    summary: "Sequencing and commit checkpoints"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:25"
   - id: F003
     severity: concern
-    category: architecture
-    summary: "Verdict-existence query placed in `sql_feed.py`"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:393"
+    category: task-sizing
+    summary: "Task 3.3 bundles five separable pieces"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:298-317"
   - id: F004
     severity: concern
-    category: test-design
-    summary: "Task 1.6 Rule 3 is a broad scan that will probably hit unrelated code"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:145"
+    category: proportionality
+    summary: "Overlapping verification mechanisms add weight beyond what the criteria need"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:234-252"
   - id: F005
     severity: note
     category: coverage
-    summary: "Slice criteria that belong to File 2 are covered there"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:31"
+    summary: "The `resolution` → `runnable` criterion is first asserted end to end in file 2"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:215-230"
   - id: F006
     severity: note
-    category: sequencing
-    summary: "Sequencing and commit cadence are sound"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:25"
-  - id: F007
-    severity: note
-    category: proportionality
-    summary: "Proportionality: the slice is heavy but justified"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-1.md:35"
+    category: nfr
+    summary: "No load-test task, consistent with the design"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:19"
 ---
 
 # Review: tasks — slice 106
@@ -65,49 +61,56 @@ findings:
 
 ## Findings
 
-### [CONCERN] Follower failure table: "store directory gone" has no test
+### [PASS] File 1 covers its share of the slice success criteria
 
-The LLD failure table has the row "Unknown project, or store directory gone (at start or mid-follow) → raises `StoreError` subclasses". Task 3.3 implements it. Task 3.4's failure-table step tests only an unknown project, a schema mismatch, a busy read, a raising `stop`, and `stop` returning true. Neither the file's tests nor its success criteria cover a missing directory at start or mid-follow. Task 3.6 doesn't cover it either. Add two cases to Task 3.4: the directory absent before `follow` starts, and the directory removed after the first yield.
+Each criterion that file 1 owns has a task, with its test following immediately:
+- **Reconciliation and version upgrade:** feed replay reconciles with every tracked table (Task 2.5, extended in 4.2). The 5→6 upgrade is Task 1.4.
+- **Follower and CLI:** the `--after`/resume criterion (3.4, 3.6) and the follower failure table (3.4).
+- **Ledger and registration:** unattributed recovery via `recorded_since` (4.2). Baseline atomicity (4.5, 4.6) and the `watch_reviews` kind (4.3, 4.4).
+- **Detection write path:** the one-transaction `ingested` write (4.7, 4.8).
 
-### [CONCERN] `record_detected_verdict` specifies key-case behavior the slice never requires
+The detection-tenant, defer, listing, end-to-end and docs criteria are covered in file 2 (Sections 5–9). I found no unmet requirement and no task without a source in the design.
 
-Task 4.7 defines three key cases, and Task 4.8 tests all three. The LLD tenant loop skips any `(path, digest)` already in the ledger before it calls the write. So these two cases are unreachable from the tenant:
-- same key with the same verdict id, which returns both existing records;
-- same key with a different or missing verdict id, which raises `ValueError`.
+### [PASS] Sequencing and commit checkpoints
 
-Only the third case (new key, existing verdict id) is needed. It is the hand-edit success criterion. Cut the first two cases from 4.7 and 4.8, or reduce them to a single "same key is rejected" guard. This trims about a third of 4.8's assertions.
+- **Order:** dependencies run linearly with no cycles.
+- **Test-with:** each implementation task is followed immediately by its test task (1.3→1.4, 2.1→2.2, 2.3→2.4, 3.1→3.2, 3.3→3.4, 3.5→3.6, 4.1→4.2, 4.3→4.4, 4.5→4.6, 4.7→4.8).
+- **Commits:** checkpoints are spread across all four sections. The pairing rule ("a commit never holds untested behavior") is stated once and followed.
+- **Migration 006:** growing it in place across Tasks 1.3, 2.1, 2.3 and 4.1 is explained, and the "no 007" rule is explicit.
+- **`NOT_YET_EMITTED`:** the constant added in 2.5 and deleted in 4.2 keeps the suite green between tasks.
 
-### [CONCERN] Verdict-existence query placed in `sql_feed.py`
+### [CONCERN] Task 3.3 bundles five separable pieces
 
-Task 4.1 adds "a select of whether a verdict with a given id exists" to `sql_feed.py`. Task 1.3 scopes that file to the three feed tables. That statement reads `verdicts`, which `sql_evidence.py` owns, and 104's retry rule already looks up a verdict by id. A second query duplicates it and splits ownership of the `verdicts` columns, which breaks the DRY and single-definition rules. Reuse or expose the existing `sql_evidence.py` lookup for `recorded_since`. If none exists, add the statement there.
+Task 3.3 is rated effort 3 but combines five pieces:
+- `FeedSettings`.
+- Moving `project_store_path` into `store/paths.py` and making `process/supervisor.py` delegate to it.
+- `Store.data_version()` plus its statement in `sql.py`.
+- The `follow` loop.
+- The failure table, including busy-versus-other `OperationalError` classification.
 
-### [CONCERN] Task 1.6 Rule 3 is a broad scan that will probably hit unrelated code
+The path refactor and `data_version()` touch four existing files and are independent of the follower logic. As written, `data_version()` is only checked indirectly through the follower test, and the refactor rides on "existing supervisor tests". Split out a small preceding task, "`project_store_path` delegation and `Store.data_version()`", with a direct assertion for each. Task 3.3 then holds only `FeedSettings`, `follow` and the failure handling, which is what a junior AI can complete in one pass.
 
-Rule 3 fails on any string constant under `src/amoeba/` that equals a `ChangeKind` or `DetectionOutcome` value. Values like `ingested` and `baseline` are ordinary words. Task 105's `amoeba ingest review` and the CLI help text may well contain them. The task's answer to a false hit is to stop and ask the PM, and a junior AI shouldn't hit that on a routine task. Settle it up front. Either restrict the scan to specific modules (store, feed, process) and exclude help and message strings, or name the permitted exceptions. Rules 1 and 2 are sound and trace to the LLD's layering requirement.
+### [CONCERN] Overlapping verification mechanisms add weight beyond what the criteria need
 
-### [NOTE] Slice criteria that belong to File 2 are covered there
+These overlap, and the slice's own invariant-test criterion is already met by the reconcile test and the every-kind check:
+- **Task 2.5** has three overlapping mechanisms. The every-kind test fails if a literal drifts, because the kind never appears in the sequence's changes. The literal test (trigger SQL contains each kind) is therefore redundant. The parametrized dropped-trigger test checks the test itself rather than a success criterion. Keep `reconcile` plus the every-kind check, and cut the literal test, or fold it into the dropped-trigger check. Task 4.2 repeats the extra mechanisms ("the literal test also checks each `SILENT_OUTCOMES` value", "the dropped-trigger parametrization gains the new trigger"), so cut those there too.
+- **Follower resume** is asserted in Task 3.4, again with `kill -9` in Task 3.6, and again in Task 9.2 Test B. Keep the full resume case in 3.4 and the real-process kill in 3.6. In 9.2, assert only what needs the running process.
+- **Task 1.2's `test_feed_models.py`** (enums have exactly their values, dataclasses are frozen) mostly restates the declarations. Task 1.5 and the invariant test already catch a wrong value. Consider dropping the "frozen" and "exact values" checks.
+- **Task 1.6** is justified by the "defined once" and layering requirements and is reasonable. Its Rule 3 module list is long, so it needs upkeep as files change.
 
-I checked `-2.md` for the criteria File 1 doesn't test:
-- The `resolution` submission producing a blocked-to-`runnable` change is in the end-to-end test (Test A).
-- "Feed `--follow` started while the process is stopped" is also in Test A.
-- The store-exception-stops-the-process case is a File 2 test.
-- Hand-recovery of `unattributed` files, and `recorded_since` flipping, are covered.
+### [NOTE] The `resolution` → `runnable` criterion is first asserted end to end in file 2
 
-File 1 itself tests block and resolve only through `store/blocking.py`, which is fine at this level.
+The criterion "a `resolution` submission applied by the process produces `node_status_changed` blocked→`runnable`" is tested only in Task 9.2 through the real CLI. Task 2.2 covers `block` and `resolve` on the store, and Task 2.4 covers an `intent` submission through `apply_submission`. Adding one `resolution` submission case to Task 2.4 would catch a trigger regression eight sections earlier. This is optional.
 
-### [NOTE] Sequencing and commit cadence are sound
+### [NOTE] No load-test task, consistent with the design
 
-Dependencies run in one direction with no cycles. Every implementation task is followed immediately by its test task, and the "committed with Task N.M" pairs are explicit. The invariant test is built over three tables in Task 2.5 and extended in Task 4.2. The `NOT_YET_EMITTED` constant gives a clean handoff. Destructive SQL (`DROP TRIGGER`, `RAISE(ABORT)` triggers) is confined to scratch stores, which satisfies the project's database-protection rule.
-
-### [NOTE] Proportionality: the slice is heavy but justified
-
-File 1 has 30 tasks, and Section 4 alone has 8. The split into two task files fits the roughly 50 tasks the design needs. Task 1.2's test of enum values and frozen dataclasses is close to tautological, and `mapping_feed.py` plus its test (Task 1.5) is a thin task. Neither is worth restructuring. Consider merging 1.2 into 1.5 only if you want to cut the count.
+The slice sets no numeric NFR. Its only latency promise is "within `follow_interval_seconds` of the commit". Task 3.4's "generous multiple of the interval" check covers that. File 2 states that no load test is added and tells the PM in Task 9.7, so there is no CI-gating gap.
 
 ### Run Digest
 
-- Response length: 5372 chars
+- Response length: 5839 chars
 - Response is newline-free: no
-- Tool calls made: 4
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -117,10 +120,10 @@ File 1 has 30 tasks, and Section 4 alone has 8. The split into two task files fi
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 49.7 s
+- Duration: 65.1 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
