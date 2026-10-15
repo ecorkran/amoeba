@@ -138,6 +138,7 @@ Supervisor-level listings (`projects`, `inbox`) open no store, take no `project`
 POST /v1/projects/demo/submissions  {"kind": "intent", "submission_id": "…", "submitted_by": "bridge", "payload": {...}}
   content-type not application/json → 415; Content-Length over max_request_bytes → 413 before reading
   body read chunk by chunk; reading stops and returns 413 at max_request_bytes + 1, with or without Content-Length
+  the whole body read runs under anyio.fail_after(body_read_timeout_seconds) → 408 request_timeout; nothing is submitted
   worker thread: inbox.submit(project_id=…, kind=…, payload=…, submitted_by=…, submission_id=…)
     InvalidSubmissionError → 422 {"error": "invalid_submission", "reason": <QuarantineReason>, "detail": …}
     SubmissionWriteError   → 503 submission_write_failed      (nothing left in the inbox, per 103)
@@ -214,6 +215,8 @@ No other state is shared. Each request opens its own read-only store and closes 
 
 A refusal exits with `ExitCode.SERVE_REFUSED` (13) and a message that names the rule. It never falls back to a loopback bind. A host counts as loopback only if it is the literal name `localhost`, or `ipaddress.ip_address(host).is_loopback` is true for it. No name is resolved, so `0.0.0.0`, `::`, and every other hostname count as non-local. TLS is required with the token because a bearer token sent in cleartext is the credential itself, delivered to anyone on the path. There is no override flag in this slice.
 
+When TLS files are given, `check_bind` also loads them with `ssl.SSLContext.load_cert_chain` before uvicorn is constructed. A missing or unreadable file, or a certificate and key that do not match, is refused as `tls_unusable` (exit 13), with the file path and the `OSError` or `ssl.SSLError` message. Start-up failures therefore split two ways. Configuration the server can check before binding exits 13 with a message naming the rule. A failure at bind time, such as a port already in use or a host with no such interface, exits 1 with uvicorn's own message (for example `[Errno 48] address already in use`) (D7).
+
 **D4 — Reads go through the one listing registry, and nothing else.**
 
 - `GET /v1/listings/{name}` is generic. The listing's declared scope decides whether `project` is required. Each declared option becomes one query parameter, named from the option's `name`. A flag option takes `true` or `false`. A choice option is validated against its `choices`. A value option is passed through, and required if declared required. An undeclared parameter is a 400, never ignored.
@@ -252,7 +255,7 @@ A refusal exits with `ExitCode.SERVE_REFUSED` (13) and a message that names the 
 
 - **Labels derive from structure.** Option names are declared once in the registry. The CLI derives `--flag` from them, and the server derives query parameter names from them. URL listing names are `Listing.name`. Scope is the `ListingScope` enum (`project`, `supervisor`), set by which row function a listing declares.
 - **Event-loop discipline.** No route handler calls the store, the filesystem, or `submit()` on the loop. Each such call runs in `anyio.to_thread.run_sync`, or on the stream's own thread. Ruff's `ASYNC` rules are already enabled.
-- **Settings.** `ServeSettings` is a frozen dataclass, the one home of every serve default (D3 of 102's settings pattern). It holds `host="127.0.0.1"`, `port=8765`, `tls_certfile`, `tls_keyfile`, `heartbeat_interval_seconds=15.0`, `send_timeout_seconds=30.0`, `max_streams=32`, `max_connections=128`, `max_request_bytes=1_048_576`, `shutdown_grace_seconds=5.0`, and a `FeedSettings`. CLI flags exist for host, port, and the two TLS files only.
+- **Settings.** `ServeSettings` is a frozen dataclass, the one home of every serve default (D3 of 102's settings pattern). It holds `host="127.0.0.1"`, `port=8765`, `tls_certfile`, `tls_keyfile`, `heartbeat_interval_seconds=15.0`, `send_timeout_seconds=30.0`, `max_streams=32`, `max_connections=128`, `max_request_bytes=1_048_576`, `body_read_timeout_seconds=10.0`, `shutdown_grace_seconds=5.0`, and a `FeedSettings`. CLI flags exist for host, port, and the two TLS files only.
 - **Exceptions.** Only the exceptions in D8's table are caught, plus the 500 boundary handler. `ServeRefusedError` is raised by `check_bind` and mapped to the exit code in `cli/main.py`, the same way lifecycle errors are.
 
 ## Implementation Details
@@ -293,7 +296,7 @@ All paths are under `/v1`. JSON bodies are UTF-8. When a token is configured, ev
 | --- | --- | --- |
 | `GET /v1/listings` | 200 `[{name, scope, help, columns, options: [{name, type: flag\|choice\|value, choices?, required}]}]`, from `LISTINGS` | — |
 | `GET /v1/listings/{name}?project=P&<option>=…` | 200 `{listing, project_id?, as_of_seq?, rows}` | 404 `unknown_listing`, 400 `missing_project` / `unexpected_parameter` / `invalid_option`, 400 `invalid_project_id`, 404 `unknown_project`, 404 `not_found` (`VerdictNotFoundError`), 422 `not_comparable`, 503 `store_busy` (with `Retry-After`) / `store_schema_mismatch` / `store_unreadable` |
-| `POST /v1/projects/{project_id}/submissions` | 202 `{submission_id}` | 400 `invalid_project_id`, 413 `request_too_large`, 422 `invalid_body` / `submission_id_required` / `invalid_submission` (with `reason`), 503 `submission_write_failed` |
+| `POST /v1/projects/{project_id}/submissions` | 202 `{submission_id}` | 400 `invalid_project_id`, 408 `request_timeout`, 413 `request_too_large`, 422 `invalid_body` / `submission_id_required` / `invalid_submission` (with `reason`), 503 `submission_write_failed` |
 | `GET /v1/projects/{project_id}/submissions/{submission_id}` | 200 submission record | 404 `not_applied`, and the store errors as for reads |
 | `GET /v1/projects/{project_id}/feed?after=N` | 200 `text/event-stream` | 400 `invalid_cursor`, 404 `unknown_project`, 503 `stream_limit_reached` (with `Retry-After`) / `store_schema_mismatch`; after the 200, an `event: error` frame |
 | any | — | 401 `unauthorized`, 403 `origin_not_allowed`, 421 `host_not_allowed`, 415 `unsupported_media_type` (POST); beyond `max_connections`, uvicorn's own plain-text 503, which carries no `ApiErrorCode` because it is sent before the app runs |
@@ -341,11 +344,11 @@ There is no migration and no table. The only store change is the two read-only m
 - A submission POSTed over HTTP while the resident process is stopped is applied on `start`, and its outcome endpoint goes from 404 `not_applied` to 200 `applied`. A second POST with the same id returns 202 and applies nothing twice. An invalid payload returns 422 with the same `reason` that `amoeba submit` reports, and leaves nothing in the inbox.
 - A stream client receives every change after its cursor once, in `seq` order. Disconnecting and reconnecting with `Last-Event-ID` (or `?after=`) across commits made while it was away yields no gap and no repeat.
 - An idle stream sends a keepalive every `heartbeat_interval_seconds`. A client that closes its connection frees its stream slot within one heartbeat interval plus one follow interval. A client that stays connected but stops reading frees it within one heartbeat interval plus `send_timeout_seconds`. In both cases the follow thread has exited, including when it was blocked handing off a change.
-- A POST body over `max_request_bytes` gets 413, whether or not it declares `Content-Length`, and the server reads no more than `max_request_bytes + 1` bytes of it. A POST retried with the same id after a 503 `submission_write_failed` is applied once.
+- A POST body over `max_request_bytes` gets 413, whether or not it declares `Content-Length`, and the server reads no more than `max_request_bytes + 1` bytes of it. A POST retried with the same id after a 503 `submission_write_failed` is applied once. A POST whose body does not finish arriving within `body_read_timeout_seconds` gets 408 and submits nothing.
 - A request with an `Origin` header gets 403. On a loopback bind, a request with a `Host` other than a loopback name gets 421. A POST that is not `application/json` gets 415.
 - During authenticated and failed requests, the token appears in no log record and no response body.
 - At `max_streams` open streams, the next stream request gets 503 `stream_limit_reached`, and reads still succeed.
-- `amoeba serve --host 0.0.0.0` exits 13 without a token, exits 13 with a token but no TLS files, exits 13 with a token under 32 characters, and serves over HTTPS with all three. With a token configured, a request without it, or with a wrong one, gets 401 on every endpoint, loopback included.
+- `amoeba serve --host 0.0.0.0` exits 13 without a token, exits 13 with a token but no TLS files, exits 13 with a token under 32 characters, exits 13 with a missing, unreadable, or mismatched certificate and key, and serves over HTTPS with all three. With a token configured, a request without it, or with a wrong one, gets 401 on every endpoint, loopback included.
 - A project id containing a path separator, `.`, or `..` gets 400 on every endpoint, and no file outside the supervisor directory is opened.
 - `kill -9` of the server leaves the resident process running and the store unchanged. Stopping the resident process leaves the server serving reads, accepting submissions, and holding streams open.
 
@@ -355,7 +358,7 @@ There is no migration and no table. The only store change is the two read-only m
 - The layering rules in Component Structure are AST tests. The writer guard is unchanged and passes. A test asserts that `amoeba.serve` calls no inbox function other than `submit` and no `Store.open`.
 - `ApiErrorCode` and the exception table are the only place a status number or code appears in `amoeba.serve` (a single-definition test like 106's Rule 3).
 - **Load tier** (`tests/load/test_serve_load.py`, per the Python rules for network and concurrency paths), against a real uvicorn server on a loopback port:
-  - 32 concurrent followers each receive all of a burst of 2,000 changes, in order, with none missed.
+  - 32 concurrent followers each receive all of a burst of 600 changes, in order, with none missed. 600 is more than one `feed_batch_size` (500), so the burst crosses a batch boundary, which is where loss or reordering would appear.
   - **Delivery latency:** with 32 followers connected and reading, the p95 time from a change's commit to its arrival at a client is at most 1 s. This is derived from 106's bound (`follow_interval_seconds`, 0.25 s, plus the read time) with room for the hand-off and loopback transport. `network-contract.md` promises 106's bound plus transport, and nothing more.
   - **Read latency:** with 32 idle streams open, the p95 of `GET /v1/listings/nodes` against the walkthrough-sized store is at most 200 ms. This also proves streams do not starve the read pool. No read latency is promised in the contract; this is a regression guard.
 - `ruff`, `pyright` strict, and the full suite are clean. Files stay near 300 lines.
@@ -363,7 +366,7 @@ There is no migration and no table. The only store change is the two read-only m
 
 ### Integration Requirements
 
-- An end-to-end test through real subprocesses (`amoeba start`, `amoeba serve`, and an `httpx` client): create a project over HTTP, follow its feed, submit an intent, `kill -9` the resident process, submit a second intent, start it again, then `kill -9` the server and restart it. The client resumes and receives exactly two `message_posted` changes. Listings agree with `amoeba inspect --json` throughout.
+- One smoke test through real subprocesses (`amoeba start`, `amoeba serve`, and an `httpx` client): create a project over HTTP, read a listing, follow the feed, and submit an intent. The follower receives one `message_posted` change. The restart matrix (`kill -9` of each process mid-sequence) belongs to slice 110's contract proof, and step 5 of the walkthrough checks mutual survival by hand.
 
 ### Verification Walkthrough
 
@@ -420,7 +423,7 @@ API=http://127.0.0.1:8765/v1
    curl -sk -H "Authorization: Bearer $AMOEBA_SERVE_TOKEN" https://127.0.0.1:8766/v1/listings | jq length
    curl -s "$API/listings/nodes?project=..%2Fx" | jq '.error'                    # "invalid_project_id"
    ```
-7. **Automated:** `uv run pytest tests/serve tests/inspection tests/cli/test_serve_end_to_end.py -v`, then `uv run pytest tests/load/test_serve_load.py -v`.
+7. **Automated:** `uv run pytest tests/serve tests/inspection tests/cli/test_serve_smoke.py -v`, then `uv run pytest tests/load/test_serve_load.py -v`.
 
 Clean up with `uv run amoeba stop`, kill the servers, then `rm -rf "$AMOEBA_STORE_DIR" key.pem cert.pem; unset AMOEBA_SERVE_TOKEN`.
 
@@ -440,7 +443,7 @@ Clean up with `uv run amoeba stop`, kill the servers, then `rm -rf "$AMOEBA_STOR
 
 ### Development Approach
 
-1. Confirm that 107 and 108 are merged (`inspect checks` and `inspect cf-snapshots` exist). Stop for the PM if they are not.
+1. Confirm that 107 and 108 are merged (`inspect checks` and `inspect cf-snapshots` exist). Stop for the PM if they are not. This design takes their module names and row signatures from their designs, so check both against the merged code and update the Migration Plan's table before step 2.
 2. **Migration**, with no new behavior: `amoeba.inspection`, `ListingRequest`, option names, `compact`, `read_listing`, `store/discovery.py`, and `feed/wire.py`. Capture `inspect` and `--help` outputs before, and show them byte-identical after. Commit.
 3. `read_transaction()` and `change_head()`, with the snapshot test.
 4. `serve/settings.py`, `policy.py`, and `errors.py`, with pure tests (D3's table, the error table, the single-definition test).
@@ -448,7 +451,7 @@ Clean up with `uv run amoeba stop`, kill the servers, then `rm -rf "$AMOEBA_STOR
 6. Submissions and outcome lookup.
 7. The stream: the follow bridge, the hand-off queue, heartbeats, slots, cursor precedence, and preflight and mid-stream errors. Test against a real uvicorn on an ephemeral loopback port, because `TestClient` does not model a disconnect faithfully.
 8. `amoeba serve` in the CLI, `ExitCode.SERVE_REFUSED`, TLS wiring, and shutdown grace.
-9. The end-to-end test, the load tier, the docs, and `CHANGELOG`.
+9. The smoke test, the load tier, the docs, and `CHANGELOG`.
 
 Test each step right after building it, and commit after each.
 
