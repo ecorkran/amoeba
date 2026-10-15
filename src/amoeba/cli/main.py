@@ -152,6 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_ingest_parser(subparsers)
 
+    from amoeba.cli.feed import add_feed_parser
+
+    add_feed_parser(subparsers)
+
     return parser
 
 
@@ -202,6 +206,7 @@ def _add_inspect_parser(subparsers: Any) -> None:
 
 def _dispatch(args: argparse.Namespace) -> ExitCode:
     """Route a parsed command to its implementation."""
+    from amoeba.cli import feed as feed_module
     from amoeba.cli import ingest as ingest_module
     from amoeba.cli import inspect as inspect_module
     from amoeba.cli import lifecycle
@@ -220,6 +225,8 @@ def _dispatch(args: argparse.Namespace) -> ExitCode:
             return submit_module.run_submit(args)
         case "ingest":
             return ingest_module.run_ingest(args)
+        case "feed":
+            return feed_module.run_feed(args)
         case _:
             raise ValueError(f"unhandled command {args.command!r}")
 
