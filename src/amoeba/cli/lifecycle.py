@@ -17,9 +17,10 @@ import os
 import signal
 import sys
 import time
+from pathlib import Path
 
 from amoeba.cli.main import VERSION, ExitCode
-from amoeba.process.host import ResidentProcess
+from amoeba.process.host import ResidentProcess, Tenant
 from amoeba.process.inbox_tenant import InboxTenant
 from amoeba.process.instance_lock import (
     InstanceLock,
@@ -28,7 +29,9 @@ from amoeba.process.instance_lock import (
     pid_file_path,
     read_pid_file,
 )
+from amoeba.process.review_detection import ReviewDetectionTenant
 from amoeba.process.settings import ProcessSettings
+from amoeba.process.version_label import capture_sq_version_label
 from amoeba.store import paths
 
 #: How often ``stop`` re-checks whether the lock has been released.
@@ -53,9 +56,7 @@ def start(settings: ProcessSettings) -> ExitCode:
         settings,
         store_dir=supervisor_dir,
         version=VERSION,
-        # Tenants tick in registration order. The inbox is first, so a backlog
-        # of submissions drains ahead of any later tenant's work.
-        tenants=(InboxTenant(supervisor_dir),),
+        tenants=build_tenants(settings, supervisor_dir),
         grace_expired_exit_status=int(ExitCode.GRACE_EXPIRED),
         # A tenant that never returns must not hold the process forever; the
         # operator's remedy would otherwise be an external kill.
@@ -64,6 +65,24 @@ def start(settings: ProcessSettings) -> ExitCode:
     process.install_signal_handlers()
     process.run()
     return ExitCode.OK
+
+
+def build_tenants(
+    settings: ProcessSettings, supervisor_dir: Path
+) -> tuple[Tenant, ...]:
+    """The tenants ``start`` registers, in tick order.
+
+    ``sq --version`` is captured here, once, before the loop: no tick ever
+    starts a subprocess. Recovery still runs before any tenant ticks, inside
+    ``ResidentProcess.run``.
+    """
+    sq_label = capture_sq_version_label(settings.sq_timeout_seconds)
+    # Tenants tick in registration order. The inbox is first, so a backlog of
+    # submissions — ``watch_reviews`` included — drains ahead of detection.
+    return (
+        InboxTenant(supervisor_dir),
+        ReviewDetectionTenant(version_label=sq_label),
+    )
 
 
 def stop(settings: ProcessSettings) -> ExitCode:
