@@ -17,12 +17,15 @@ from feed_harness import (
 )
 
 from amoeba.store import BlockedKind, Channel, NodeKind, NodeStatus, Store
-from amoeba.store.feed_models import Change, ChangeKind
+from amoeba.store.feed_models import (
+    SILENT_OUTCOMES,
+    Change,
+    ChangeKind,
+    DetectionInput,
+    DetectionOutcome,
+)
 
 PROJECT = "demo"
-
-#: Kinds no write path emits yet. Deleted once detection writes the ledger.
-NOT_YET_EMITTED = frozenset({ChangeKind.REVIEW_DETECTED})
 
 
 def _run_sequence(store: Store) -> None:
@@ -41,6 +44,16 @@ def _run_sequence(store: Store) -> None:
     post_intent(store, "s-intent", gate, PROJECT)
     store.update_node_status(gate, NodeStatus.DONE)
     escalate_by_recovery(store, root, PROJECT)
+    for index, outcome in enumerate(DetectionOutcome):
+        store.record_detection(
+            DetectionInput(
+                project_id=PROJECT,
+                path=f"/r/{index}.md",
+                digest="d",
+                outcome=outcome,
+                node_id=root,
+            )
+        )
 
 
 def _rebuilt_statuses(changes: list[Change]) -> dict[str, object]:
@@ -81,6 +94,14 @@ def reconcile(store: Store, project_id: str) -> list[str]:
     if sorted(_subjects(changes, ChangeKind.MESSAGE_POSTED)) != message_ids:
         differences.append(f"message ids differ from {message_ids}")
 
+    loud_ids = sorted(
+        str(detection.id)
+        for detection in store.detections(project_id)
+        if detection.outcome not in SILENT_OUTCOMES
+    )
+    if sorted(_subjects(changes, ChangeKind.REVIEW_DETECTED)) != loud_ids:
+        differences.append(f"ledger ids differ from {loud_ids}")
+
     return differences
 
 
@@ -92,7 +113,7 @@ def test_the_sequence_reconciles_with_every_tracked_table(store: Store) -> None:
 def test_every_change_kind_appears(store: Store) -> None:
     _run_sequence(store)
     seen = {change.kind for change in raw_changes(store, PROJECT)}
-    assert set(ChangeKind) - NOT_YET_EMITTED <= seen
+    assert set(ChangeKind) <= seen
 
 
 def test_seq_has_no_gaps(store: Store) -> None:

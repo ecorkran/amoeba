@@ -131,3 +131,20 @@ BEGIN
         new.created_at
     );
 END;
+
+-- The outcome literals mirror SILENT_OUTCOMES in feed_models.py: a baseline
+-- row and a runner_issued row emit no change.
+CREATE TRIGGER changes_review_detected
+AFTER INSERT ON detected_reviews
+WHEN new.outcome NOT IN ('baseline', 'runner_issued')
+BEGIN
+    INSERT INTO changes (project_id, kind, node_id, subject_id, payload, recorded_at)
+    VALUES (
+        new.project_id,
+        'review_detected',
+        new.node_id,
+        CAST(new.id AS TEXT),
+        json_object('outcome', new.outcome, 'path', new.path),
+        new.detected_at
+    );
+END;

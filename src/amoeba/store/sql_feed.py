@@ -107,3 +107,43 @@ WHERE {COL_CHANGE_PROJECT_ID} = ?
 ORDER BY {COL_CHANGE_SEQ}
 LIMIT ?
 """
+
+# --------------------------------------------------------------------------
+# detected_reviews statements
+# --------------------------------------------------------------------------
+
+#: ``id`` is omitted from inserts so SQLite assigns detection order.
+DETECTION_INSERT_COLUMNS: Final = DETECTION_COLUMNS[1:]
+
+INSERT_DETECTION: Final = f"""
+INSERT INTO {TABLE_DETECTED_REVIEWS} ({", ".join(DETECTION_INSERT_COLUMNS)})
+VALUES ({", ".join("?" for _ in DETECTION_INSERT_COLUMNS)})
+"""
+
+_DETECTION_SELECT: Final = f"""
+SELECT {_select_list(TABLE_DETECTED_REVIEWS, DETECTION_COLUMNS)}
+FROM {TABLE_DETECTED_REVIEWS}
+"""
+
+SELECT_DETECTION_BY_KEY: Final = (
+    _DETECTION_SELECT
+    + f"""WHERE {COL_DETECTION_PROJECT_ID} = ?
+  AND {COL_DETECTION_PATH} = ?
+  AND {COL_DETECTION_DIGEST} = ?
+"""
+)
+
+SELECT_DETECTIONS: Final = (
+    _DETECTION_SELECT
+    + f"""WHERE {COL_DETECTION_PROJECT_ID} = ?
+ORDER BY {COL_DETECTION_ID}
+"""
+)
+
+SELECT_DETECTIONS_BY_OUTCOME: Final = (
+    _DETECTION_SELECT
+    + f"""WHERE {COL_DETECTION_PROJECT_ID} = ?
+  AND {COL_DETECTION_OUTCOME} = ?
+ORDER BY {COL_DETECTION_ID}
+"""
+)

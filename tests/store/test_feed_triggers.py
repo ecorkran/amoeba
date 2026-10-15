@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
 from evidence_harness import REVIEW_TYPE, provider_failure, verdict_input
 from feed_harness import (
     escalate_by_recovery,
@@ -21,7 +22,12 @@ from amoeba.store import (
     Store,
     sql,
 )
-from amoeba.store.feed_models import ChangeKind
+from amoeba.store.feed_models import (
+    SILENT_OUTCOMES,
+    ChangeKind,
+    DetectionInput,
+    DetectionOutcome,
+)
 
 PROJECT = "demo"
 
@@ -181,3 +187,42 @@ def test_a_recovery_escalation_emits_one_message_posted(store: Store) -> None:
     assert _of_kind(store, ChangeKind.MESSAGE_POSTED) == [
         {"channel": Channel.ESCALATION.value}
     ]
+
+
+# --------------------------------------------------------------------------
+# Detections
+# --------------------------------------------------------------------------
+
+
+def _detect(store: Store, outcome: DetectionOutcome, path: str = "/r/a.md") -> int:
+    return store.record_detection(
+        DetectionInput(project_id=PROJECT, path=path, digest="d", outcome=outcome)
+    ).id
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [o for o in DetectionOutcome if o not in SILENT_OUTCOMES],
+)
+def test_a_loud_outcome_emits_one_review_detected(
+    store: Store, outcome: DetectionOutcome
+) -> None:
+    ledger_id = _detect(store, outcome)
+    (change,) = raw_changes(store, PROJECT)
+    assert change.kind is ChangeKind.REVIEW_DETECTED
+    assert change.subject_id == str(ledger_id)
+    assert change.payload == {"outcome": outcome.value, "path": "/r/a.md"}
+
+
+@pytest.mark.parametrize("outcome", sorted(SILENT_OUTCOMES))
+def test_a_silent_outcome_emits_nothing(
+    store: Store, outcome: DetectionOutcome
+) -> None:
+    _detect(store, outcome)
+    assert raw_changes(store, PROJECT) == []
+
+
+def test_a_repeated_record_detection_emits_nothing(store: Store) -> None:
+    _detect(store, DetectionOutcome.UNPARSEABLE)
+    _detect(store, DetectionOutcome.UNPARSEABLE)
+    assert len(raw_changes(store, PROJECT)) == 1
