@@ -3,62 +3,64 @@ docType: review
 layer: project
 reviewType: tasks
 slice: outbound-change-feed-and-detection-of-external-work
+conventionsSource: AGENTS.md
+projectRules: []
 project: amoeba
 verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md
 aiModel: claude-sonnet-5-5
+aiProfile: sdk
 status: complete
-dateCreated: 20261008
-dateUpdated: 20261008
-reviewedSha: a92fb441db4f98e35252946dc0dcbd28d323284a
-revision_number: 2
+dateCreated: 20261015
+dateUpdated: 20261015
+reviewedSha: 22dc87252bc12ef4efec7290f20dcfbb1044f0b2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-durationSeconds: 66.3
-runId: run-20261008-tasks-plan-43872396
-squadronVersion: 0.21.1
+toolCallsMade: 3
+durationSeconds: 59.7
+runId: run-20261015-p5-a36b1511
+squadronVersion: 0.21.9
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Criteria owned by Sections 6–9 are covered, and each task traces to a criterion"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md"
+    summary: "Functional criteria for attribution, sources, tenant, listings and wiring all trace to tasks"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:23-395"
   - id: F002
-    severity: pass
-    category: sequencing
-    summary: "Sequencing and commit cadence are sound"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md"
+    severity: concern
+    category: scope-proportionality
+    summary: "Duplicate kill -9 / restart process test in Task 8.5 and Task 9.2 Test B"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:388"
   - id: F003
     severity: concern
-    category: test-coverage
-    summary: "Task 7.2 does not exercise the D1a atomicity guarantee"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:161"
+    category: scope-proportionality
+    summary: "Task 9.1 gives test helpers their own smoke-test module"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:409-410"
   - id: F004
     severity: concern
-    category: test-design
-    summary: "Task 6.5 failure injection contradicts Task 6.4's idempotence rule"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:109"
+    category: scope-proportionality
+    summary: "Doc-drift test extended to four other contracts has no matching success criterion"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:487"
   - id: F005
     severity: concern
-    category: interface-consistency
-    summary: "The tenant constructor has no clock, but the tests assume an injectable one"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:363-364"
+    category: test-coverage
+    summary: "Store-failure criterion is asserted only up to \"the tick raises\""
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:249"
   - id: F006
     severity: note
-    category: dependency
-    summary: "`recorded_since` is asserted in Task 9.6a, before any listing exists"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:460"
+    category: sequencing
+    summary: "Minor sequencing and cohesion points"
+    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:131"
   - id: F007
     severity: note
-    category: scope
-    summary: "Task 8.1 edits slice 105's code and tests"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:224-225"
+    category: nfr
+    summary: "No load test is expected, and Task 9.7 reports that decision"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:277"
   - id: F008
     severity: note
-    category: nfr
-    summary: "No load test or CI gating task, which is consistent with the slice"
-    location: "project-documents/user/tasks/106-tasks.outbound-change-feed-and-detection-of-external-work-2.md:20"
+    category: coverage
+    summary: "Deferred-issue filing is not tracked in this file"
+    location: "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md:57"
 ---
 
 # Review: tasks — slice 106
@@ -68,70 +70,59 @@ findings:
 
 ## Findings
 
-### [PASS] Criteria owned by Sections 6–9 are covered, and each task traces to a criterion
+### [PASS] Functional criteria for attribution, sources, tenant, listings and wiring all trace to tasks
 
-I checked the slice's success criteria against the tasks in this file, and each has a task and a test.
-- Attribution, the review-producing kinds set and the one-transaction ingest are in 6.1–6.5.
-- The follower and `amoeba feed` are in 7.1–7.4.
-- Settle and file races are in 8.3–8.4.
-- Baseline, including the unreachable and unreadable cases, is in 9.3–9.4.
-- Ingest, series, hand-edit and restart are in 9.6.
-- Unattributed, unparseable and version label are in 9.6a.
-- Directory loss, cadence and reactivation are in 9.6b.
-- Defer and skip are in 9.7–9.8.
-- Bounded failure is in 9.9–9.10.
+Each criterion in this file's scope has an implementing task and a test task that follows it.
+- Verdict ingest, the provider-failure file, the hand edit producing no second verdict, `unattributed` with candidate ids, `unparseable` without retry, and hand recovery with `recorded_since` are all in 7.6.
+- Baseline cases, including the all-or-nothing unreadable file, are in 7.4.
+- Defer, `runner_issued`, directory removal and restore, and reactivation are in 7.8.
+- `sq --version` once and no subprocess per tick are in 8.5.
+- Follow-while-stopped and the `resolution` → `runnable` change are in 9.2 Test A.
+- The `deferred` and `unreachable` precedence is in 8.2.
 
-I found no scope creep. Two tasks reach beyond the new code but trace to the slice. Task 7.1 adds `project_store_path` so `amoeba.feed` doesn't import `amoeba.process`. Task 8.1 passes `source_document` through the parser (D7).
+Commit checkpoints are spread through the file, and each implementation task is followed by its test task.
 
-The criteria this file does not own are explicitly deferred to files 1 and 3 in the Context Summary.
+### [CONCERN] Duplicate kill -9 / restart process test in Task 8.5 and Task 9.2 Test B
 
-### [PASS] Sequencing and commit cadence are sound
+Task 8.5 adds `test_review_detection_process.py`. It starts the real CLI, seeds, registers a directory, ingests a file, runs `kill -9`, restarts, and asserts counts are unchanged. Task 9.2 Test B (line 429) covers the same crash-and-restart scenario through the same launcher, and also covers the provider-failure file and follower resume. 7.6 already pins the same restart assertion in-process.
 
-- **Dependencies:** I found no cycles. The cross-file dependencies (5.6, 4.4) point backward. The ordering of 7.1 after Section 6 is explained. The 105 gate in 8.1 stops rather than stubbing the parser.
-- **Test-with pattern:** each implementation task is followed by its tests. The longest gap is 8.2–8.3 before 8.4, and 8.2 is a protocol definition.
-- **Commits:** they land at 6.3, 6.5, 7.2, 7.4, 8.1, 8.4, 9.2, 9.2a, 9.4, 9.6, 9.6a, 9.6b, 9.8 and 9.10. Nothing is batched at the end.
-- **File size:** 9.5 splits `review_scan.py` out up front, and the harness is a separate module, so no file should pass about 300 lines.
+This has two costs:
+- It adds a second slow subprocess test and a long scripted sequence.
+- It forces 8.5 to create the launcher conditionally, which 9.1 then wraps. That is an awkward dependency between sections.
 
-### [CONCERN] Task 7.2 does not exercise the D1a atomicity guarantee
+Cut the process test from 8.5. Keep the label-once and no-subprocess-per-tick tests, which don't need a real process. Let 9.2 own the real-CLI restart, with the launcher created in 9.1.
 
-The slice (D1a and the functional requirement on `read_transaction()`) requires a test that does the following:
-1. Seed state and open `read_transaction()`.
-2. Read state.
-3. Commit a change from a second connection.
-4. Read `change_head()`.
-5. Assert the head did not observe the commit.
+### [CONCERN] Task 9.1 gives test helpers their own smoke-test module
 
-The slice says this goes "in the follower test suite". The "Snapshot then follow" case in 7.2 commits only after the head read. A plain, non-transactional read would pass it too, so it can't catch a broken `read_transaction()`. Either file 1 already tests the between-the-reads case, or this case should be changed to commit between the state read and the head read. Confirm which, and add a criterion that names the test.
+No slice success criterion requires `tests/cli/test_detection_e2e_harness.py`, which holds one smoke test per helper and must pass three consecutive times. The helpers are exercised directly by the two end-to-end tests in 9.2, which already run three times consecutively and each alone. Fold 9.1 into 9.2 and drop the smoke module. If the helpers are worth a separate commit, keep the harness file and remove the test file.
 
-### [CONCERN] Task 6.5 failure injection contradicts Task 6.4's idempotence rule
+### [CONCERN] Doc-drift test extended to four other contracts has no matching success criterion
 
-Task 6.5 suggests injecting the ledger-insert failure with "a duplicate key with a different verdict id". Task 6.4 (line 91) says a repeat with the same ledger key returns the existing records and writes nothing. The slice also makes `record_detection` idempotent on `(project_id, path, digest)`. Under that rule a duplicate key returns the existing row silently and raises nothing, so the test would not fail as 6.5 expects.
+The slice requires `feed-contract.md` to be enough for initiative 160, and the 9.4 drift test is a reasonable check of that. Step 9.5 then extends `tests/test_contract_docs.py` with required-term lists for `store-contract.md`, `inbox-contract.md`, `process-contract.md` and `evidence-contract.md`. No success criterion asks for that. These docs are prose updates, and term-list tests will be brittle against wording changes. Drop that step from 9.5 and keep the 9.4 test for `feed-contract.md` only.
 
-6.4 also never says what happens when the ledger key matches but the verdict id differs. 6.4 should state that case explicitly: raise, or return the existing row. 6.5 should then use a patched statement as its primary injection, which is the alternative it already mentions. The "new ledger key, same verdict id" case that 6.5 tests (line 110) is likewise only implied by 6.4. Make it explicit there.
+### [CONCERN] Store-failure criterion is asserted only up to "the tick raises"
 
-### [CONCERN] The tenant constructor has no clock, but the tests assume an injectable one
+The slice criterion is "A store exception while recording a detection is logged at ERROR and **stops the process**." Task 7.6 patches `record_detected_verdict` and asserts the tick raises, the ERROR is logged with the path, and nothing is written. Task 7.5 (line 222) separately tells the implementer to read `ResidentProcess.run` and ask the PM if it doesn't stop. Neither task requires a test that a raising tenant actually ends the host. Add one assertion to 7.6 that runs the tenant under `LocalHost` or `ResidentProcess` and sees it stop. Alternatively, name the existing 102 test that pins this, and have 9.8 verify it.
 
-Task 9.3 gives the constructor as `ReviewDetectionTenant(supervisor_dir, *, version_label, source_factory)`. It then says the clock is "passed in or `time.monotonic`", which leaves the choice open. Tasks 9.4 (line 391), 9.6 (line 434) and 9.6b (line 479) all build tenants "with a fake clock". A junior implementer could pick `time.monotonic` directly and break every cadence test.
+### [NOTE] Minor sequencing and cohesion points
 
-Put a `clock: Callable[[], float]` parameter in the 9.3 signature and say whether it has a default. If it has one, state it once at the config or constructor level. Otherwise the tests become flaky or sleep for the real interval.
+- Task 7.1 (settings and the version-label helper) depends on 6.2 but uses nothing from Section 6. This is harmless, but it implies an ordering that isn't real.
+- Task 5.1's tests arrive two tasks later in 5.3, with 5.2 between them. The "committed with 5.3" note keeps the commits coherent.
+- Task 7.8 is named for ownership, but it also carries the directory-removed/restored and reactivation tests (line 289). These fit the baseline or detection modules better. Moving them would make the 7.8 module name honest and the task smaller.
 
-### [NOTE] `recorded_since` is asserted in Task 9.6a, before any listing exists
+### [NOTE] No load test is expected, and Task 9.7 reports that decision
 
-Task 9.6a asserts `recorded_since` true after an in-process `ingest review`. The slice defines `recorded_since` as a column of `amoeba inspect detections`, which is built in Section 10 (file 3). I can't confirm from this file whether a store read from file 1 (`detections()` or a helper) computes it. If the listing module computes it, 9.6a can't assert it. Name the function that provides it, or move the assertion to Task 10.x.
+The slice states that the parent architecture sets no numeric targets. It makes only the follower-interval latency bound a contract promise, which the follower tests cover. No `tests/load/` task or CI gating task is therefore needed. Task 9.7 tells the PM that no load test was added, so the PM can overrule that.
 
-### [NOTE] Task 8.1 edits slice 105's code and tests
+### [NOTE] Deferred-issue filing is not tracked in this file
 
-The slice's "Interfaces Required" section says 105's design already carries `sourceDocument` into `VerdictInput`. Task 8.1 instead says 105 left that pass-through to this slice and has a test pinning the opposite behavior. That test is changed here. The task traces to D7 and limits the change to one line plus one intended assertion, so I don't consider it scope creep. But it modifies a finished slice's tests and goes beyond what the slice's D7 describes for 104. Have the PM confirm, and have the CHANGELOG task in file 3 mention it.
-
-### [NOTE] No load test or CI gating task, which is consistent with the slice
-
-The slice restates no numeric NFR. Its Settings section says the figures are sizing choices, not promises. The only contractual figure is the follower's "within `follow_interval_seconds`", which Task 7.2 tests functionally. So no `tests/load/` task or CI gate is required. The file states the omission and defers it to Task 11.11 so the PM can overrule it. That is acceptable.
+The slice says each deferred item is "filed as a GitHub issue". They are `read_transaction()`/`change_head()`, `record_runner_report`, and `source_document`. This file has no task or check for that, and I did not verify that the issues exist. If they were filed during the design trim, no action is needed. Otherwise, add a one-line check to 9.7 or 9.8.
 
 ### Run Digest
 
-- Response length: 6730 chars
+- Response length: 6414 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -141,7 +132,7 @@ The slice restates no numeric NFR. Its Settings section says the figures are siz
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 66.3 s
+- Duration: 59.7 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 8
