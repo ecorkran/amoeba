@@ -133,7 +133,7 @@ Two consequences shape the decomposition:
    - Only linked projects are recorded; changes to other CF projects produce nothing.
    - An unreadable or unrecognized `projects.json`, or a linked project missing from it, is recorded as exactly that, never guessed around.
    - The `projects.json` fields Amoeba reads are documented as an observed shape.
-   **Dependencies:** [101, 102, 103, 106]
+   **Dependencies:** [101, 102, 103, 106, 107] — 107 added at slice design (20261015) for ordering, not function: this slice takes migration 008 after 107's 007, and its first task confirms 107 is merged.
    **Interfaces:** Consumes CF's `projects.json`; provides CF snapshots and `cf_project_changed` feed entries to 110 and initiative 120.
    **Risk Level:** Low
    **Relative Effort:** 2
