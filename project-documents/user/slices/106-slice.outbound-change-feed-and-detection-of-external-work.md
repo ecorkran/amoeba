@@ -7,7 +7,7 @@ dependencies: [101, 102, 103, 104, 105]
 interfaces: [108, 110]
 dateCreated: 20260928
 dateUpdated: 20261015
-status: not_started
+status: complete
 ---
 
 # Slice Design: outbound-change-feed-and-detection-of-external-work
@@ -377,15 +377,60 @@ Migration `006_change_feed_and_detection.sql`, `EXPECTED_SCHEMA_VERSION` 6. Noth
 
 ### Verification Walkthrough
 
-Draft; refined with real output when Phase 6 completes. Run in **bash** from the repository root. Nothing outside the process creates nodes until initiative 120, so `scripts/demo_detection.py` (new, lock-taking, refuses while the process runs, like `demo_evidence.py`) seeds a slice node with `cf.slice_name = resident-process-and-recovery` and a `blocked_on_human` node, and prints both ids. Review files come from 104's captured task-review series in `tests/fixtures/sq_reviews/`.
+Verified 20261015 against the implementation; every step ran as shown. Run in **bash** from the repository root, against a scratch store. Nothing outside the process creates nodes until initiative 120, so `scripts/demo_detection.py` (lock-taking; refuses while the process runs and refuses without `AMOEBA_STORE_DIR`) seeds a slice node with `cf.slice_name = resident-process-and-recovery` and a `blocked_on_human` node, and prints both ids. Review files are 102's captured task-review series in `tests/fixtures/sq_reviews/`.
 
-1. **Follow the feed.** Start the process, create a project, run the demo script, then `amoeba feed --project demo --follow` in a second terminal. It prints two `node_created` lines and the blocked node's `node_status_changed`, then waits.
-2. **A human reply is a change.** `amoeba submit resolution ...` on the blocked state. The follower prints `node_status_changed` to `runnable` within a second.
-3. **Register a directory; files already there are baseline.** Copy one review in, `amoeba submit watch-reviews`, wait one scan. `inspect watches` shows `ok` with `baselined_at` set; `inspect detections` shows one `baseline` row; no verdict, no feed line.
-4. **A PM-launched review is detected.** Copy two further rounds in a few seconds apart. Within about 5 seconds each produces `verdict_recorded` and `review_detected` (`ingested`); `inspect verdicts --json` shows `source: artifact_frontmatter` and `source_path` pointing into the watched directory. Copy the captured provider failure in: standing `provider_failure`.
-5. **What detection refuses to guess.** Copy a review for a slice with no node: `unattributed`, no verdict. `echo '# not a review' > notes.md`: `unparseable`.
-6. **Hand edits and restarts write nothing twice.** Add a `resolution: accepted` line to a detected file, `kill -9` the process, start it. `inspect detections` gains one `ingested` row pointing at the **same** `verdict_id`; no new `verdict_recorded`.
-7. **The invariant, automatically:** `uv run pytest tests/store/test_feed_invariant.py tests/cli/test_detection_end_to_end.py -v`.
+```bash
+export AMOEBA_STORE_DIR="$(mktemp -d)"; REVIEWS="$(mktemp -d)"; FIX=tests/fixtures/sq_reviews
+R1P1=102-review.tasks.resident-process-and-recovery.part-1.20260921T112529.md
+R1P2=102-review.tasks.resident-process-and-recovery.part-2.20260921T112635.md
+R2P1=102-review.tasks.resident-process-and-recovery.part-1.md
+PF=102-review.tasks.resident-process-and-recovery.part-2.md
+```
+
+1. **Follow the feed.** The demo script needs the process stopped, so create the project first:
+   ```bash
+   uv run amoeba start &                     # terminal 1, or background it
+   uv run amoeba submit create-project --project demo --by pm
+   uv run amoeba stop
+   read SLICE_NODE BLOCKED_NODE < <(uv run python scripts/demo_detection.py)
+   uv run amoeba start &
+   uv run amoeba feed --project demo --follow    # terminal 2
+   ```
+   The follower prints **four** lines: two `node_created`, the blocked node's `node_status_changed` (`runnable` → `blocked_on_human`), and a `message_posted` (`channel: escalation`) — blocking on a human always writes an escalation message (103). Then it waits.
+2. **A human reply is a change.** The resolution names the blocked state, whose id is on the escalation message:
+   ```bash
+   BS=$(uv run amoeba inspect messages --project demo --channel escalation --json \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["blocked_state_id"])')
+   uv run amoeba submit resolution --project demo --by pm --blocked-state-id "$BS" --detail go
+   ```
+   Within a second the follower prints `node_status_changed` with `{"from": "blocked_on_human", "to": "runnable"}`.
+3. **Register a directory; files already there are baseline.**
+   ```bash
+   cp $FIX/$R1P2 "$REVIEWS"/
+   uv run amoeba submit watch-reviews --project demo --by pm --reviews-dir "$REVIEWS" --active true
+   sleep 4
+   uv run amoeba inspect watches --project demo      # state ok, baselined_at set
+   uv run amoeba inspect detections --project demo   # one baseline row
+   ```
+   No verdict (`inspect verdicts` is empty) and no new feed line.
+4. **A PM-launched review is detected.**
+   ```bash
+   cp $FIX/$R1P1 "$REVIEWS"/; sleep 5; cp $FIX/$R2P1 "$REVIEWS"/; sleep 5
+   uv run amoeba inspect verdicts --project demo --json
+   cp $FIX/$PF "$REVIEWS"/; sleep 5
+   ```
+   Each round produces `verdict_recorded` then `review_detected` (`outcome: ingested`) on the follower within about 5 seconds (two scans to settle at the default 2 s interval). `inspect verdicts --json` shows `source: artifact_frontmatter` and `source_path` = `$REVIEWS/<file>`. The provider-failure file lands with `standing: provider_failure`.
+5. **What detection refuses to guess.**
+   ```bash
+   cp $FIX/105-review.slice.squadron-review-parser-and-ingest.20261015T041112.md "$REVIEWS"/
+   echo '# not a review' > "$REVIEWS"/notes.md; sleep 5
+   uv run amoeba inspect detections --project demo
+   ```
+   The 105 review (no node for its slice) is `unattributed`, detail `slice 'squadron-review-parser-and-ingest'; candidates: []`, no verdict. `notes.md` is `unparseable`, detail `artifact_frontmatter: no frontmatter block`.
+6. **Hand edits and restarts write nothing twice.** Add a `resolution: accepted` frontmatter line to `$REVIEWS/$R2P1`, then `kill -9` the process and start it again; wait 5 seconds. `inspect detections --outcome ingested` gains one row for that file pointing at the **same** `verdict_id`; the follower prints a `review_detected` but no new `verdict_recorded`.
+7. **The invariant, automatically:** `uv run pytest tests/store/test_feed_invariant.py tests/cli/test_detection_end_to_end.py -v` (5 tests).
+
+Clean up with `uv run amoeba stop; rm -rf "$AMOEBA_STORE_DIR" "$REVIEWS"`.
 
 ## Risk Assessment
 

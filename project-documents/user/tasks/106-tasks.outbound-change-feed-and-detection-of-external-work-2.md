@@ -7,7 +7,7 @@ dependencies: [101, 102, 103, 104, 105]
 projectState: Sections 1–4 (file 1) are complete — migration 006 with triggers, the invariant test, the `changes` read, `follow()` and `amoeba feed`, the detection ledger, `watch_reviews`, `baseline_watch`, and `record_detected_verdict`. This file adds attribution, the review source, `ReviewDetectionTenant`, the listings, `start` wiring, end-to-end tests, and docs.
 dateCreated: 20261015
 dateUpdated: 20261015
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -29,16 +29,16 @@ status: not_started
 **Objective**: One definition of which journal kinds produce reviews (LLD D5), and the attribution rule (LLD D4), pure, defined once, exported.
 
 **Steps**:
-- [ ] Add `REVIEW_PRODUCING_KINDS: frozenset[CommandKind]` to `store/journal_models.py` holding `CommandKind.SQ_RUN` only, with a comment: initiative 120 adds its review command kind here
-- [ ] Add `has_unresolved_review_entry(project_id) -> bool` to the journal mixin, built on `unresolved_journal_entries` (no new SQL unless that read cannot serve)
-- [ ] Create `src/amoeba/store/attribution.py` with the frozen `Attribution(node_id: str | None, candidates: tuple[str, ...])` and `attribute_review(slice_nodes: Sequence[Node], slice_name: str) -> Attribution`, exactly the LLD D4 signature
-- [ ] Match nodes with `kind == NodeKind.SLICE` and `cf.slice_name == slice_name`. The function filters `kind` itself, so a caller may pass all of a project's nodes (`nodes_for_project`). One match → `node_id` set and `candidates` holding that id; zero or several → `node_id` None and `candidates` every match id (empty for zero)
-- [ ] No I/O. Export both names from `store/__init__.py`
-- [ ] Add `store/attribution.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
+- [x] Add `REVIEW_PRODUCING_KINDS: frozenset[CommandKind]` to `store/journal_models.py` holding `CommandKind.SQ_RUN` only, with a comment: initiative 120 adds its review command kind here
+- [x] Add `has_unresolved_review_entry(project_id) -> bool` to the journal mixin, built on `unresolved_journal_entries` (no new SQL unless that read cannot serve)
+- [x] Create `src/amoeba/store/attribution.py` with the frozen `Attribution(node_id: str | None, candidates: tuple[str, ...])` and `attribute_review(slice_nodes: Sequence[Node], slice_name: str) -> Attribution`, exactly the LLD D4 signature
+- [x] Match nodes with `kind == NodeKind.SLICE` and `cf.slice_name == slice_name`. The function filters `kind` itself, so a caller may pass all of a project's nodes (`nodes_for_project`). One match → `node_id` set and `candidates` holding that id; zero or several → `node_id` None and `candidates` every match id (empty for zero)
+- [x] No I/O. Export both names from `store/__init__.py`
+- [x] Add `store/attribution.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` clean
-- [ ] Committed with Task 5.2
+- [x] `ruff`, `pyright` clean
+- [x] Committed with Task 5.2
 
 **Files to Create**: `src/amoeba/store/attribution.py`
 **Files to Modify**: `store/journal_models.py`, `store/journal.py`, `store/__init__.py`, `tests/test_import_boundaries.py`
@@ -52,13 +52,13 @@ status: not_started
 **Objective**: The LLD's table of cases.
 
 **Steps**:
-- [ ] Add `tests/store/test_attribution.py`: one match; zero; two matches (both ids); right name but not a slice node; a slice node with no `cf` reference
-- [ ] `has_unresolved_review_entry`: false with no entries; true with an open `SQ_RUN`; false with an open entry of another kind; false after the `SQ_RUN` entry resolves
-- [ ] Add the new exports to `tests/test_public_api.py`
+- [x] Add `tests/store/test_attribution.py`: one match; zero; two matches (both ids); right name but not a slice node; a slice node with no `cf` reference
+- [x] `has_unresolved_review_entry`: false with no entries; true with an open `SQ_RUN`; false with an open entry of another kind; false after the `SQ_RUN` entry resolves
+- [x] Add the new exports to `tests/test_public_api.py`
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(store): add review attribution and review-producing kinds`
+- [x] Tests pass
+- [x] Commit, e.g. `feat(store): add review attribution and review-producing kinds`
 
 **Files to Create**: `tests/store/test_attribution.py`
 **Files to Modify**: `tests/test_public_api.py`
@@ -74,17 +74,17 @@ status: not_started
 **Objective**: The one source interface and its directory implementation with the settle rule and race table (LLD D6, "Settled").
 
 **Steps**:
-- [ ] Create `src/amoeba/process/review_sources.py`: frozen `DetectedFile(path, content: bytes, observed_at)`; `ReviewSource` protocol with `poll() -> Sequence[DetectedFile]`; docstring states the S8 swap
-- [ ] `DirectoryReviewSource(directory)` keeps the last-scan `(size, mtime_ns)` per path in memory. `poll()` lists regular top-level `*.md` files only. A file is returned only when its signature equals the previous poll's; a first sighting is remembered, not returned
-- [ ] Read bytes only for settled files; `content` is the bytes actually read
-- [ ] Race table exactly per D6: `FileNotFoundError` on stat or read drops the file and forgets its signature; `PermissionError` logs one WARNING per file until readable; neither raises
-- [ ] Add `list_review_files(directory) -> list[Path]` here as the one listing rule (regular, top-level, `*.md`), used by `poll()`, the tenant's baseline (Task 7.3), and the listing (Task 8.1)
-- [ ] A directory that cannot be listed raises `ReviewDirectoryUnavailableError` (defined here); never an empty list. No writes, no symlink resolution
-- [ ] Add `process/review_sources.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
+- [x] Create `src/amoeba/process/review_sources.py`: frozen `DetectedFile(path, content: bytes, observed_at)`; `ReviewSource` protocol with `poll() -> Sequence[DetectedFile]`; docstring states the S8 swap
+- [x] `DirectoryReviewSource(directory)` keeps the last-scan `(size, mtime_ns)` per path in memory. `poll()` lists regular top-level `*.md` files only. A file is returned only when its signature equals the previous poll's; a first sighting is remembered, not returned
+- [x] Read bytes only for settled files; `content` is the bytes actually read
+- [x] Race table exactly per D6: `FileNotFoundError` on stat or read drops the file and forgets its signature; `PermissionError` logs one WARNING per file until readable; neither raises
+- [x] Add `list_review_files(directory) -> list[Path]` here as the one listing rule (regular, top-level, `*.md`), used by `poll()`, the tenant's baseline (Task 7.3), and the listing (Task 8.1)
+- [x] A directory that cannot be listed raises `ReviewDirectoryUnavailableError` (defined here); never an empty list. No writes, no symlink resolution
+- [x] Add `process/review_sources.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` clean
-- [ ] Committed with Task 6.2
+- [x] `ruff`, `pyright` clean
+- [x] Committed with Task 6.2
 
 **Files to Create**: `src/amoeba/process/review_sources.py`
 **Files to Modify**: `tests/test_import_boundaries.py`
@@ -98,15 +98,15 @@ status: not_started
 **Objective**: Pin settling and every race row with real fixtures copied into `tmp_path`.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_sources.py`
-- [ ] Settle: first poll returns nothing; a second unchanged poll returns the file with its exact bytes; a size or mtime change resets settling
-- [ ] Ignored: a subdirectory holding an `.md` (non-recursion), a non-`.md` file, a directory named `x.md`
-- [ ] Races: a file removed between polls produces nothing and no error; a patched read raising `FileNotFoundError` drops the file, and when it returns it settles from scratch; a mode-000 file warns once across several polls, then is returned after `chmod` (skip where the runner is root)
-- [ ] A removed directory raises `ReviewDirectoryUnavailableError`; restored, polling resumes
+- [x] Add `tests/process/test_review_sources.py`
+- [x] Settle: first poll returns nothing; a second unchanged poll returns the file with its exact bytes; a size or mtime change resets settling
+- [x] Ignored: a subdirectory holding an `.md` (non-recursion), a non-`.md` file, a directory named `x.md`
+- [x] Races: a file removed between polls produces nothing and no error; a patched read raising `FileNotFoundError` drops the file, and when it returns it settles from scratch; a mode-000 file warns once across several polls, then is returned after `chmod` (skip where the runner is root)
+- [x] A removed directory raises `ReviewDirectoryUnavailableError`; restored, polling resumes
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(process): add ReviewSource and DirectoryReviewSource`
+- [x] Tests pass
+- [x] Commit, e.g. `feat(process): add ReviewSource and DirectoryReviewSource`
 
 **Files to Create**: `tests/process/test_review_sources.py`
 
@@ -121,12 +121,12 @@ status: not_started
 **Objective**: Settings (LLD "Settings") and an `sq --version` capture that reuses cf's.
 
 **Steps**:
-- [ ] Add `review_scan_interval_seconds = 2.0` and `sq_timeout_seconds = 10.0` to `ProcessSettings` with docstring entries; add both `start` flags in `cli/settings_flags.py`, with defaults read from `ProcessSettings` only
-- [ ] `sq --version` reuses cf's "label or `VERSION_UNAVAILABLE`" capture (`capture_version_label` in `process/observers/cf_readback.py`). Required outcome: one shared capture routine serves both executables; the `sq` executable and its version args are defined once; cf behavior and logging are unchanged. Where the shared routine lives and what it is called is the implementer's choice
+- [x] Add `review_scan_interval_seconds = 2.0` and `sq_timeout_seconds = 10.0` to `ProcessSettings` with docstring entries; add both `start` flags in `cli/settings_flags.py`, with defaults read from `ProcessSettings` only
+- [x] `sq --version` reuses cf's "label or `VERSION_UNAVAILABLE`" capture (`capture_version_label` in `process/observers/cf_readback.py`). Required outcome: one shared capture routine serves both executables; the `sq` executable and its version args are defined once; cf behavior and logging are unchanged. Where the shared routine lives and what it is called is the implementer's choice
 
 **Success Criteria**:
-- [ ] Existing observer, settings, and lifecycle tests pass unchanged; `amoeba start --help` lists the two flags
-- [ ] Committed with Task 7.2
+- [x] Existing observer, settings, and lifecycle tests pass unchanged; `amoeba start --help` lists the two flags
+- [x] Committed with Task 7.2
 
 **Files to Modify**: `process/settings.py`, `cli/settings_flags.py`, `process/observers/cf_readback.py` (or a new module the implementer chooses)
 
@@ -139,12 +139,12 @@ status: not_started
 **Objective**: Pin defaults, flags, and the sq label path.
 
 **Steps**:
-- [ ] Extend the existing settings/flag tests: both defaults come from `ProcessSettings`; a flag overrides each
-- [ ] Add `tests/test_version_label.py` following `tests/test_observer_cf_readback.py`'s fake-executable pattern: a fake `sq` on `PATH` gives its trimmed stdout; a missing executable, a non-zero exit, and a timeout each give `VERSION_UNAVAILABLE`
+- [x] Extend the existing settings/flag tests: both defaults come from `ProcessSettings`; a flag overrides each
+- [x] Add `tests/test_version_label.py` following `tests/test_observer_cf_readback.py`'s fake-executable pattern: a fake `sq` on `PATH` gives its trimmed stdout; a missing executable, a non-zero exit, and a timeout each give `VERSION_UNAVAILABLE`
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(process): add detection settings and shared version-label capture`
+- [x] Tests pass
+- [x] Commit, e.g. `feat(process): add detection settings and shared version-label capture`
 
 **Files to Create**: `tests/test_version_label.py`
 
@@ -157,17 +157,17 @@ status: not_started
 **Objective**: Registration shape, scan cadence, reachability logging, and the all-or-nothing baseline (LLD "Registering a directory").
 
 **Steps**:
-- [ ] Create `src/amoeba/process/review_detection.py`: `ReviewDetectionTenant(*, version_label: str, source_factory: Callable[[Path], ReviewSource] = DirectoryReviewSource, clock: Callable[[], float] = time.monotonic)` with `name` and `tick(host) -> bool`, using the host as `InboxTenant` does. Mirror every constructor argument `InboxTenant` takes beyond the store
-- [ ] A tick does nothing until `review_scan_interval_seconds` has passed since the last scan, measured with `clock()` only
-- [ ] For each open project, for each **active** watch: if `baselined_at` is null, baseline it; else call a scan method (a stub here, filled in Task 7.5). Sources are kept per watch so settle signatures persist across ticks
-- [ ] Baseline: list with `list_review_files` and read every file; a file deleted between list and read is dropped; any other failure (directory unlistable, a file unreadable) writes nothing and retries next scan. On success, one `baseline_watch` call
-- [ ] One reachability helper used by baselining and scanning: one ERROR on the good→bad transition, one INFO on recovery, nothing on repeat ticks. An unreadable file during baseline logs one WARNING naming it, on change of reason only
-- [ ] Never write into a watched directory
-- [ ] Add `process/review_detection.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
+- [x] Create `src/amoeba/process/review_detection.py`: `ReviewDetectionTenant(*, version_label: str, source_factory: Callable[[Path], ReviewSource] = DirectoryReviewSource, clock: Callable[[], float] = time.monotonic)` with `name` and `tick(host) -> bool`, using the host as `InboxTenant` does. Mirror every constructor argument `InboxTenant` takes beyond the store
+- [x] A tick does nothing until `review_scan_interval_seconds` has passed since the last scan, measured with `clock()` only
+- [x] For each open project, for each **active** watch: if `baselined_at` is null, baseline it; else call a scan method (a stub here, filled in Task 7.5). Sources are kept per watch so settle signatures persist across ticks
+- [x] Baseline: list with `list_review_files` and read every file; a file deleted between list and read is dropped; any other failure (directory unlistable, a file unreadable) writes nothing and retries next scan. On success, one `baseline_watch` call
+- [x] One reachability helper used by baselining and scanning: one ERROR on the good→bad transition, one INFO on recovery, nothing on repeat ticks. An unreadable file during baseline logs one WARNING naming it, on change of reason only
+- [x] Never write into a watched directory
+- [x] Add `process/review_detection.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` clean
-- [ ] Committed with Task 7.4
+- [x] `ruff`, `pyright` clean
+- [x] Committed with Task 7.4
 
 **Files to Create**: `src/amoeba/process/review_detection.py`
 **Files to Modify**: `tests/test_import_boundaries.py`
@@ -181,17 +181,17 @@ status: not_started
 **Objective**: Each baseline case in the LLD, with a fake clock.
 
 **Steps**:
-- [ ] Create `tests/process/detection_harness.py` (shared by Tasks 7.4–7.10): seed a project and a slice node with `cf.slice_name` `resident-process-and-recovery`; register a watch through `apply_submission`; copy a named fixture into a `tmp_path` directory; build the tenant with a fake clock and a distinctive label; `run_scans(n)` that advances the clock past the interval before each tick
-- [ ] Add `tests/process/test_review_detection_baseline.py`: existing files become `baseline` rows, `baselined_at` is set, no verdict, no change
-- [ ] A directory registered before it exists: one ERROR over several ticks, nothing written; created later, one INFO and baselined
-- [ ] One unreadable file: no rows, `baselined_at` null, one WARNING; after `chmod`, the whole directory is baselined at once
-- [ ] A file deleted between listing and read (patched read raising `FileNotFoundError` for one path): the baseline is taken without it, with no error
-- [ ] Two ticks inside the interval baseline once (count calls on a substitute `source_factory` or patched listing)
-- [ ] An inactive watch is never baselined; a baselined watch is never baselined again
+- [x] Create `tests/process/detection_harness.py` (shared by Tasks 7.4–7.10): seed a project and a slice node with `cf.slice_name` `resident-process-and-recovery`; register a watch through `apply_submission`; copy a named fixture into a `tmp_path` directory; build the tenant with a fake clock and a distinctive label; `run_scans(n)` that advances the clock past the interval before each tick
+- [x] Add `tests/process/test_review_detection_baseline.py`: existing files become `baseline` rows, `baselined_at` is set, no verdict, no change
+- [x] A directory registered before it exists: one ERROR over several ticks, nothing written; created later, one INFO and baselined
+- [x] One unreadable file: no rows, `baselined_at` null, one WARNING; after `chmod`, the whole directory is baselined at once
+- [x] A file deleted between listing and read (patched read raising `FileNotFoundError` for one path): the baseline is taken without it, with no error
+- [x] Two ticks inside the interval baseline once (count calls on a substitute `source_factory` or patched listing)
+- [x] An inactive watch is never baselined; a baselined watch is never baselined again
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(process): add ReviewDetectionTenant with baselining`
+- [x] Tests pass
+- [x] Commit, e.g. `feat(process): add ReviewDetectionTenant with baselining`
 
 **Files to Create**: `tests/process/detection_harness.py`, `tests/process/test_review_detection_baseline.py`
 
@@ -204,17 +204,17 @@ status: not_started
 **Objective**: Digest, ledger check, parse, attribute, record (LLD "Detecting a review", Errors).
 
 **Steps**:
-- [ ] Create `src/amoeba/process/review_scan.py` holding the per-file path, called by the tenant's scan method. The scan method polls the watch's source; `ReviewDirectoryUnavailableError` goes to the reachability helper and the next watch
-- [ ] Per `DetectedFile`: `sha256` of `content`; skip if `(project, path, digest)` is in the ledger
-- [ ] `parse_review_artifact`; on `SquadronReviewError` only: `record_detection(unparseable, detail=str(error))`, logged at INFO
-- [ ] `attribute_review(store.nodes_for_project(project), parsed.slice)`. Zero or several: `record_detection(unattributed, detail=<candidate ids>, record_id=review_record_id(parsed))`. Exactly one: `record_detected_verdict(to_verdict_input(parsed, node_id=..., source_path=str(path), upstream_version=label), DetectionInput(..., outcome=ingested, record_id=review_record_id(parsed)))`. Check how `to_verdict_input` combines a frontmatter stamp with the passed `upstream_version` (105 D4); the file's stamp must win, the start-up label is only the fallback
-- [ ] Store errors (LLD Errors): wrap each recording call so any exception is logged with `logger.exception` at ERROR, naming the project and path, then re-raised. No counter, no parked state. Read how `ResidentProcess.run` (`process/host.py`) handles a raising tenant and confirm it stops the process; if it does not, stop and ask the PM
-- [ ] `unparseable` and `unattributed` are terminal for that digest; changed bytes make a new digest
-- [ ] Add `process/review_scan.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
+- [x] Create `src/amoeba/process/review_scan.py` holding the per-file path, called by the tenant's scan method. The scan method polls the watch's source; `ReviewDirectoryUnavailableError` goes to the reachability helper and the next watch
+- [x] Per `DetectedFile`: `sha256` of `content`; skip if `(project, path, digest)` is in the ledger
+- [x] `parse_review_artifact`; on `SquadronReviewError` only: `record_detection(unparseable, detail=str(error))`, logged at INFO
+- [x] `attribute_review(store.nodes_for_project(project), parsed.slice)`. Zero or several: `record_detection(unattributed, detail=<candidate ids>, record_id=review_record_id(parsed))`. Exactly one: `record_detected_verdict(to_verdict_input(parsed, node_id=..., source_path=str(path), upstream_version=label), DetectionInput(..., outcome=ingested, record_id=review_record_id(parsed)))`. Check how `to_verdict_input` combines a frontmatter stamp with the passed `upstream_version` (105 D4); the file's stamp must win, the start-up label is only the fallback
+- [x] Store errors (LLD Errors): wrap each recording call so any exception is logged with `logger.exception` at ERROR, naming the project and path, then re-raised. No counter, no parked state. Read how `ResidentProcess.run` (`process/host.py`) handles a raising tenant and confirm it stops the process; if it does not, stop and ask the PM
+- [x] `unparseable` and `unattributed` are terminal for that digest; changed bytes make a new digest
+- [x] Add `process/review_scan.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` clean; both modules near 300 lines or less
-- [ ] Committed with Task 7.6
+- [x] `ruff`, `pyright` clean; both modules near 300 lines or less
+- [x] Committed with Task 7.6
 
 **Files to Create**: `src/amoeba/process/review_scan.py`
 **Files to Modify**: `src/amoeba/process/review_detection.py`, `tests/test_import_boundaries.py`
@@ -228,13 +228,13 @@ status: not_started
 **Objective**: Pin the lifecycle behavior of the scan path (implemented in Tasks 7.3 and 7.5) right after it lands.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection_lifecycle.py` using `detection_harness.py`
-- [ ] Baselined directory removed: one ERROR and ticks continue (no repeat ERROR across ticks); restored: one INFO, and a newly copied file is ingested
-- [ ] Reactivation: deactivate, copy a file in, tick (nothing); reactivate, tick past settle: the file is detected, and the earlier baseline rows are unchanged, with no re-baseline
+- [x] Add `tests/process/test_review_detection_lifecycle.py` using `detection_harness.py`
+- [x] Baselined directory removed: one ERROR and ticks continue (no repeat ERROR across ticks); restored: one INFO, and a newly copied file is ingested
+- [x] Reactivation: deactivate, copy a file in, tick (nothing); reactivate, tick past settle: the file is detected, and the earlier baseline rows are unchanged, with no re-baseline
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(process): detect reviews after scan-path reachability changes`, including Task 7.5
+- [x] Tests pass
+- [x] Commit, e.g. `feat(process): detect reviews after scan-path reachability changes`, including Task 7.5
 
 **Files to Create**: `tests/process/test_review_detection_lifecycle.py`
 
@@ -247,16 +247,16 @@ status: not_started
 **Objective**: The LLD's functional bullets for ingest rounds, provider failure, hand edit, restart, and the read race.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection.py` using `detection_harness.py`
-- [ ] Round 1 then round 2 of part 1: each a verdict on the slice node with `source: artifact_frontmatter`, `source_path` the copied file, an `ingested` row, and one `verdict_recorded` plus one `review_detected`
-- [ ] The round 2 part 2 file is recorded with standing `provider_failure`
-- [ ] Hand edit: add a `resolution: accepted` frontmatter line to a detected file; the next scans add one `ingested` row pointing at the **same** verdict id and no second verdict
-- [ ] Restart: a new tenant over the same store re-ingests nothing
-- [ ] Deleted between listing and read: with the source's read patched to raise `FileNotFoundError` for one settled file, a scan writes no ledger row and raises nothing; restored, the file settles and is ingested
+- [x] Add `tests/process/test_review_detection.py` using `detection_harness.py`
+- [x] Round 1 then round 2 of part 1: each a verdict on the slice node with `source: artifact_frontmatter`, `source_path` the copied file, an `ingested` row, and one `verdict_recorded` plus one `review_detected`
+- [x] The round 2 part 2 file is recorded with standing `provider_failure`
+- [x] Hand edit: add a `resolution: accepted` frontmatter line to a detected file; the next scans add one `ingested` row pointing at the **same** verdict id and no second verdict
+- [x] Restart: a new tenant over the same store re-ingests nothing
+- [x] Deleted between listing and read: with the source's read patched to raise `FileNotFoundError` for one settled file, a scan writes no ledger row and raises nothing; restored, the file settles and is ingested
 
 **Success Criteria**:
-- [ ] Tests pass; the module stays near 300 lines or less
-- [ ] Commit, e.g. `feat(process): detect external reviews and record them as verdicts`
+- [x] Tests pass; the module stays near 300 lines or less
+- [x] Commit, e.g. `feat(process): detect external reviews and record them as verdicts`
 
 **Files to Create**: `tests/process/test_review_detection.py`
 
@@ -269,15 +269,15 @@ status: not_started
 **Objective**: The LLD's functional bullets for refusals, the version label, hand recovery, and store failure.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection_refusals.py` using `detection_harness.py`
-- [ ] Refusals: a project with no slice node gives `unattributed`, empty candidates, `record_id` set, no node written; two matching nodes give both ids in `detail`; `# not a review` in an `.md` gives `unparseable`, not retried until its bytes change
-- [ ] Label: a fixture without `squadronVersion` records the tenant's label; one with it keeps its own stamp; with the label `VERSION_UNAVAILABLE`, the recorded version is that marker
-- [ ] Hand recovery: `unattributed`, then create the slice node and ingest the file the way `amoeba ingest review` does (`apply_submission` with the `verdict` kind and `verdict_to_payload`); `recorded_since` is true and a second ingest records nothing
-- [ ] Store failure: patch `record_detected_verdict` to raise; the tick raises, the ERROR is logged with the path (`caplog`), nothing is written. Then run the same tenant inside a real `ResidentProcess`, built in-process as `tests/test_host.py` builds one, and assert `run()` ends by raising that error, so the process stops
+- [x] Add `tests/process/test_review_detection_refusals.py` using `detection_harness.py`
+- [x] Refusals: a project with no slice node gives `unattributed`, empty candidates, `record_id` set, no node written; two matching nodes give both ids in `detail`; `# not a review` in an `.md` gives `unparseable`, not retried until its bytes change
+- [x] Label: a fixture without `squadronVersion` records the tenant's label; one with it keeps its own stamp; with the label `VERSION_UNAVAILABLE`, the recorded version is that marker
+- [x] Hand recovery: `unattributed`, then create the slice node and ingest the file the way `amoeba ingest review` does (`apply_submission` with the `verdict` kind and `verdict_to_payload`); `recorded_since` is true and a second ingest records nothing
+- [x] Store failure: patch `record_detected_verdict` to raise; the tick raises, the ERROR is logged with the path (`caplog`), nothing is written. Then run the same tenant inside a real `ResidentProcess`, built in-process as `tests/test_host.py` builds one, and assert `run()` ends by raising that error, so the process stops
 
 **Success Criteria**:
-- [ ] Tests pass; the module stays near 300 lines or less
-- [ ] Commit, e.g. `test(process): pin detection refusals, label, hand recovery, and store failure`
+- [x] Tests pass; the module stays near 300 lines or less
+- [x] Commit, e.g. `test(process): pin detection refusals, label, hand recovery, and store failure`
 
 **Files to Create**: `tests/process/test_review_detection_refusals.py`
 
@@ -290,13 +290,13 @@ status: not_started
 **Objective**: Detection yields to the Runner for reviews it launches; deferral is visible.
 
 **Steps**:
-- [ ] Defer applies to scanning only. An unbaselined watch is still baselined (it writes only silent rows). For a baselined watch, if `has_unresolved_review_entry(project)` is true, skip the project's scan this tick (no `poll()`)
-- [ ] Log one WARNING when a project starts deferring and one INFO when it resumes, tracked per project in memory
-- [ ] The skip rule needs no code: a `runner_issued` row already makes the ledger check skip the file
-- [ ] Comment citing D5 and its five points, naming points 3 and 5 as requirements on 120
+- [x] Defer applies to scanning only. An unbaselined watch is still baselined (it writes only silent rows). For a baselined watch, if `has_unresolved_review_entry(project)` is true, skip the project's scan this tick (no `poll()`)
+- [x] Log one WARNING when a project starts deferring and one INFO when it resumes, tracked per project in memory
+- [x] The skip rule needs no code: a `runner_issued` row already makes the ledger check skip the file
+- [x] Comment citing D5 and its five points, naming points 3 and 5 as requirements on 120
 
 **Success Criteria**:
-- [ ] Committed with Task 7.10
+- [x] Committed with Task 7.10
 
 **Files to Modify**: `src/amoeba/process/review_detection.py`
 
@@ -309,14 +309,14 @@ status: not_started
 **Objective**: Pin the LLD's defer and `runner_issued` bullets.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection_ownership.py` using the harness: with an open `SQ_RUN` entry (`journal_issue`), a settled new file is not processed and the source is not polled; one WARNING over several ticks; after the entry resolves, one INFO and the file is ingested
-- [ ] An open `SQ_RUN` entry and a new watch: the baseline is still taken
-- [ ] A file pre-marked with `record_detection(outcome=runner_issued)` for its `(path, digest)` is never ingested and emits no change
-- [ ] One assertion that an open entry of a non-review kind does not defer
+- [x] Add `tests/process/test_review_detection_ownership.py` using the harness: with an open `SQ_RUN` entry (`journal_issue`), a settled new file is not processed and the source is not polled; one WARNING over several ticks; after the entry resolves, one INFO and the file is ingested
+- [x] An open `SQ_RUN` entry and a new watch: the baseline is still taken
+- [x] A file pre-marked with `record_detection(outcome=runner_issued)` for its `(path, digest)` is never ingested and emits no change
+- [x] One assertion that an open entry of a non-review kind does not defer
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(process): defer detection while the runner owns a review`
+- [x] Tests pass
+- [x] Commit, e.g. `feat(process): defer detection while the runner owns a review`
 
 **Files to Create**: `tests/process/test_review_detection_ownership.py`
 
@@ -331,15 +331,15 @@ status: not_started
 **Objective**: Two registry entries with the LLD's columns and watch states.
 
 **Steps**:
-- [ ] Create `src/amoeba/cli/inspect_feed.py` with `watch_rows` and `detection_rows`, registered in `LISTINGS` (project-scoped) like `cli/inspect_evidence.py`
-- [ ] `WatchState` `StrEnum` defined once here: `inactive`, `unreachable`, `baseline_pending`, `deferred`, `ok`. One function computes it in the LLD's precedence: inactive first; then `unreachable` (`list_review_files` raises), `baseline_pending`, `deferred` (`has_unresolved_review_entry`), `ok`. Read-only; writes nothing
-- [ ] `detections`: the LLD columns; `recorded_since` from the store read; `--outcome` choices from `DetectionOutcome`
-- [ ] Update the test that pins the listing set (search `tests/` for `LISTINGS`)
-- [ ] Add `cli/inspect_feed.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
+- [x] Create `src/amoeba/cli/inspect_feed.py` with `watch_rows` and `detection_rows`, registered in `LISTINGS` (project-scoped) like `cli/inspect_evidence.py`
+- [x] `WatchState` `StrEnum` defined once here: `inactive`, `unreachable`, `baseline_pending`, `deferred`, `ok`. One function computes it in the LLD's precedence: inactive first; then `unreachable` (`list_review_files` raises), `baseline_pending`, `deferred` (`has_unresolved_review_entry`), `ok`. Read-only; writes nothing
+- [x] `detections`: the LLD columns; `recorded_since` from the store read; `--outcome` choices from `DetectionOutcome`
+- [x] Update the test that pins the listing set (search `tests/` for `LISTINGS`)
+- [x] Add `cli/inspect_feed.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
-- [ ] `amoeba inspect --help` lists both; `ruff`, `pyright` clean
-- [ ] Committed with Task 8.2
+- [x] `amoeba inspect --help` lists both; `ruff`, `pyright` clean
+- [x] Committed with Task 8.2
 
 **Files to Create**: `src/amoeba/cli/inspect_feed.py`
 **Files to Modify**: `src/amoeba/cli/inspect.py`, the listing-set test, `tests/test_import_boundaries.py`
@@ -353,14 +353,14 @@ status: not_started
 **Objective**: Each state and column, staged by writing store rows directly (no tenant).
 
 **Steps**:
-- [ ] Staging: `unreachable` needs a registered watch whose directory does not exist on disk; `deferred` needs an unresolved review-kind journal entry (write it through the journal API); `baseline_pending` is a watch with `baselined_at` null over an existing directory
-- [ ] Add `tests/cli/test_inspect_feed.py`: `watches` shows each of the five states, including `unreachable` winning over `baseline_pending` and `deferred`
-- [ ] `detections` lists every outcome, filters with `--outcome`, and `recorded_since` flips true once a verdict with that id exists
-- [ ] `--json` has the same columns as the table
+- [x] Staging: `unreachable` needs a registered watch whose directory does not exist on disk; `deferred` needs an unresolved review-kind journal entry (write it through the journal API); `baseline_pending` is a watch with `baselined_at` null over an existing directory
+- [x] Add `tests/cli/test_inspect_feed.py`: `watches` shows each of the five states, including `unreachable` winning over `baseline_pending` and `deferred`
+- [x] `detections` lists every outcome, filters with `--outcome`, and `recorded_since` flips true once a verdict with that id exists
+- [x] `--json` has the same columns as the table
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(cli): add inspect watches and detections`
+- [x] Tests pass
+- [x] Commit, e.g. `feat(cli): add inspect watches and detections`
 
 **Files to Create**: `tests/cli/test_inspect_feed.py`
 
@@ -373,12 +373,12 @@ status: not_started
 **Objective**: The seeding helper the walkthrough and end-to-end tests use (LLD Verification Walkthrough). Its happy path is exercised by Task 9.1's smoke check and Task 9.2 through `seed_demo`; it has no test module of its own.
 
 **Steps**:
-- [ ] Model on `scripts/demo_evidence.py` (takes the instance lock, refuses while a process runs, requires `AMOEBA_STORE_DIR`): seed a slice node with `cf.slice_name` `resident-process-and-recovery` and a `blocked_on_human` node in project `demo`; print both ids on one line, slice node first
-- [ ] Add it to the permitted list in `tests/test_writer_guard.py`, with a comment, as 103 and 104 did
+- [x] Model on `scripts/demo_evidence.py` (takes the instance lock, refuses while a process runs, requires `AMOEBA_STORE_DIR`): seed a slice node with `cf.slice_name` `resident-process-and-recovery` and a `blocked_on_human` node in project `demo`; print both ids on one line, slice node first
+- [x] Add it to the permitted list in `tests/test_writer_guard.py`, with a comment, as 103 and 104 did
 
 **Success Criteria**:
-- [ ] `tests/test_writer_guard.py` passes
-- [ ] Commit, e.g. `feat(scripts): add demo_detection seeding script`
+- [x] `tests/test_writer_guard.py` passes
+- [x] Commit, e.g. `feat(scripts): add demo_detection seeding script`
 
 **Files to Create**: `scripts/demo_detection.py`
 **Files to Modify**: `tests/test_writer_guard.py`
@@ -392,12 +392,12 @@ status: not_started
 **Objective**: Register the second tenant; capture `sq --version` once, before the loop.
 
 **Steps**:
-- [ ] In `cli/lifecycle.py`, extract tenant assembly into `build_tenants(settings, supervisor_dir) -> tuple[Tenant, ...]`. It captures the sq label with the Task 7.1 helper and `settings.sq_timeout_seconds` and builds `ReviewDetectionTenant` with it, after `InboxTenant` (comment: a backlog of submissions, including `watch_reviews`, drains first)
-- [ ] Recovery still runs before any tenant ticks
+- [x] In `cli/lifecycle.py`, extract tenant assembly into `build_tenants(settings, supervisor_dir) -> tuple[Tenant, ...]`. It captures the sq label with the Task 7.1 helper and `settings.sq_timeout_seconds` and builds `ReviewDetectionTenant` with it, after `InboxTenant` (comment: a backlog of submissions, including `watch_reviews`, drains first)
+- [x] Recovery still runs before any tenant ticks
 
 **Success Criteria**:
-- [ ] `tests/test_cli_lifecycle.py` passes
-- [ ] Committed with Task 8.5
+- [x] `tests/test_cli_lifecycle.py` passes
+- [x] Committed with Task 8.5
 
 **Files to Modify**: `src/amoeba/cli/lifecycle.py`
 
@@ -410,12 +410,12 @@ status: not_started
 **Objective**: Label once and no subprocess per tick. The real-CLI restart is owned by Task 9.3.
 
 **Steps**:
-- [ ] Add `tests/process/test_review_detection_wiring.py`: `build_tenants` with the label helper patched to count calls → exactly one call, and the label reaches the tenant; with no `sq` on `PATH`, it completes and the label is `VERSION_UNAVAILABLE`
-- [ ] No subprocess per tick: with a tenant on a `LocalHost` and `subprocess.run` patched to raise, run several ticks that baseline and ingest files; no call occurs
+- [x] Add `tests/process/test_review_detection_wiring.py`: `build_tenants` with the label helper patched to count calls → exactly one call, and the label reaches the tenant; with no `sq` on `PATH`, it completes and the label is `VERSION_UNAVAILABLE`
+- [x] No subprocess per tick: with a tenant on a `LocalHost` and `subprocess.run` patched to raise, run several ticks that baseline and ingest files; no call occurs
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Commit, e.g. `feat(cli): register the detection tenant in start`
+- [x] Tests pass
+- [x] Commit, e.g. `feat(cli): register the detection tenant in start`
 
 **Files to Create**: `tests/process/test_review_detection_wiring.py`
 
@@ -430,13 +430,13 @@ status: not_started
 **Objective**: The CLI launcher and the end-to-end harness, proven by a smoke check before any scenario depends on them.
 
 **Steps**:
-- [ ] Read `tests/cli_harness.py` and `tests/test_cli_lifecycle.py` for launching a long-lived `amoeba start`; if no helper exists, add one `start_cli_process(env)` to `tests/cli_harness.py` as the only launcher
-- [ ] Create `tests/cli/detection_e2e_harness.py` over that launcher, with a fake `sq` first on `PATH`: process start/stop/kill with condition waits; `start_follower(project, after=None)` collecting `amoeba feed --follow` JSON lines in a thread, with `wait_for(predicate, timeout)` (fails showing the lines so far), `last_seq`, `terminate`, `kill`; `seed_demo(env)` (runs `scripts/demo_detection.py`); `copy_fixture(name, directory)`; `inspect_json(env, listing, project, *args)`. Helpers hold no detection assertions
-- [ ] Add a smoke test in `tests/cli/test_detection_e2e_harness.py`: seed with `seed_demo`, start the process, start a follower, stop the process cleanly, and assert the follower printed at least one JSON line
+- [x] Read `tests/cli_harness.py` and `tests/test_cli_lifecycle.py` for launching a long-lived `amoeba start`; if no helper exists, add one `start_cli_process(env)` to `tests/cli_harness.py` as the only launcher
+- [x] Create `tests/cli/detection_e2e_harness.py` over that launcher, with a fake `sq` first on `PATH`: process start/stop/kill with condition waits; `start_follower(project, after=None)` collecting `amoeba feed --follow` JSON lines in a thread, with `wait_for(predicate, timeout)` (fails showing the lines so far), `last_seq`, `terminate`, `kill`; `seed_demo(env)` (runs `scripts/demo_detection.py`); `copy_fixture(name, directory)`; `inspect_json(env, listing, project, *args)`. Helpers hold no detection assertions
+- [x] Add a smoke test in `tests/cli/test_detection_e2e_harness.py`: seed with `seed_demo`, start the process, start a follower, stop the process cleanly, and assert the follower printed at least one JSON line
 
 **Success Criteria**:
-- [ ] The smoke test passes three times consecutively
-- [ ] Commit, e.g. `test(cli): add detection end-to-end harness`
+- [x] The smoke test passes three times consecutively
+- [x] Commit, e.g. `test(cli): add detection end-to-end harness`
 
 **Files to Create**: `tests/cli/detection_e2e_harness.py`, `tests/cli/test_detection_e2e_harness.py`
 **Files to Modify**: `tests/cli_harness.py` (only if the launcher is needed)
@@ -450,13 +450,13 @@ status: not_started
 **Objective**: First half of the LLD Integration Requirements through the real CLI.
 
 **Steps**:
-- [ ] Create `tests/cli/test_detection_end_to_end.py` with Test A: create `demo`, stop, seed, start the follower **while the process is stopped**, start the process, submit a `resolution` for the blocked node, pre-place round 1 part 2 in a temp directory, register it, wait for the baseline, copy round 1 part 1 then (after it is detected) round 2 part 1
-- [ ] Assert follower content in order: two `node_created`, the blocked node's `node_status_changed`, `node_status_changed` to `runnable`, then per round one `verdict_recorded` and one `review_detected`; no lines for the baseline file. `inspect verdicts --json` shows two verdicts with `source` `artifact_frontmatter` and `source_path` built from the registered directory string (compare named keys only)
-- [ ] Non-empty follower lines, and every `verdict_recorded`/`review_detected` subject id matches a row in `inspect verdicts`/`inspect detections` and conversely
+- [x] Create `tests/cli/test_detection_end_to_end.py` with Test A: create `demo`, stop, seed, start the follower **while the process is stopped**, start the process, submit a `resolution` for the blocked node, pre-place round 1 part 2 in a temp directory, register it, wait for the baseline, copy round 1 part 1 then (after it is detected) round 2 part 1
+- [x] Assert follower content in order: two `node_created`, the blocked node's `node_status_changed`, `node_status_changed` to `runnable`, then per round one `verdict_recorded` and one `review_detected`; no lines for the baseline file. `inspect verdicts --json` shows two verdicts with `source` `artifact_frontmatter` and `source_path` built from the registered directory string (compare named keys only)
+- [x] Non-empty follower lines, and every `verdict_recorded`/`review_detected` subject id matches a row in `inspect verdicts`/`inspect detections` and conversely
 
 **Success Criteria**:
-- [ ] Test A passes three times consecutively
-- [ ] Commit, e.g. `test(cli): add detection end-to-end test A`
+- [x] Test A passes three times consecutively
+- [x] Commit, e.g. `test(cli): add detection end-to-end test A`
 
 **Files to Create**: `tests/cli/test_detection_end_to_end.py`
 
@@ -469,13 +469,13 @@ status: not_started
 **Objective**: Second half of the LLD Integration Requirements: `kill -9` of the process with nothing recorded twice. Follower resume is owned by Tasks 3.4 and 3.6 and is not repeated here.
 
 **Steps**:
-- [ ] Add a self-contained Test B to `tests/cli/test_detection_end_to_end.py`: build its own scenario with the harness, start a follower, ingest the two part 1 rounds, `kill -9` the process, restart it, copy round 2 part 2 in
-- [ ] Assert: standing `provider_failure` on the new verdict; verdicts total three; no new ledger rows for the earlier files; no verdict id appears twice in `verdict_recorded` lines
-- [ ] Non-empty follower lines, and the same subject-id agreement check as Test A
+- [x] Add a self-contained Test B to `tests/cli/test_detection_end_to_end.py`: build its own scenario with the harness, start a follower, ingest the two part 1 rounds, `kill -9` the process, restart it, copy round 2 part 2 in
+- [x] Assert: standing `provider_failure` on the new verdict; verdicts total three; no new ledger rows for the earlier files; no verdict id appears twice in `verdict_recorded` lines
+- [x] Non-empty follower lines, and the same subject-id agreement check as Test A
 
 **Success Criteria**:
-- [ ] Both tests pass three times consecutively, and each alone
-- [ ] Commit, e.g. `test(cli): add detection end-to-end test B`
+- [x] Both tests pass three times consecutively, and each alone
+- [x] Commit, e.g. `test(cli): add detection end-to-end test B`
 
 **Files to Modify**: `tests/cli/test_detection_end_to_end.py`
 
@@ -488,13 +488,13 @@ status: not_started
 **Objective**: Enough for initiative 160 to consume the feed without reading code.
 
 **Steps**:
-- [ ] Front matter per `file-naming-conventions.md`; structure like `docs/inbox-contract.md`
-- [ ] Cover: `Change` shape and the payload table; `amoeba feed` and its line format; `follow()` and `FeedSettings`; the delivery guarantees as the LLD words them (save the cursor after acting); the latency bound; the follower failure table; "the feed says a change happened, the store is the truth"; bounded coverage (no blocked-state, finding, or journal changes); submission outcomes are not a kind and rejections are not on the feed (D8); nothing is deleted; "current state, then follow" before 109 means reading state, then following from 0 and applying idempotently; the trust boundary
-- [ ] Take names and values from the code. Before committing, check by hand that every `ChangeKind` value, every `Change` field, every `amoeba feed` flag, and every `FeedSettings` field named in the doc matches the code
+- [x] Front matter per `file-naming-conventions.md`; structure like `docs/inbox-contract.md`
+- [x] Cover: `Change` shape and the payload table; `amoeba feed` and its line format; `follow()` and `FeedSettings`; the delivery guarantees as the LLD words them (save the cursor after acting); the latency bound; the follower failure table; "the feed says a change happened, the store is the truth"; bounded coverage (no blocked-state, finding, or journal changes); submission outcomes are not a kind and rejections are not on the feed (D8); nothing is deleted; "current state, then follow" before 109 means reading state, then following from 0 and applying idempotently; the trust boundary
+- [x] Take names and values from the code. Before committing, check by hand that every `ChangeKind` value, every `Change` field, every `amoeba feed` flag, and every `FeedSettings` field named in the doc matches the code
 
 **Success Criteria**:
-- [ ] The document covers every topic above and the manual name check found no mismatch
-- [ ] Commit, e.g. `docs: add feed contract`
+- [x] The document covers every topic above and the manual name check found no mismatch
+- [x] Commit, e.g. `docs: add feed contract`
 
 **Files to Create**: `docs/feed-contract.md`
 
@@ -507,15 +507,15 @@ status: not_started
 **Objective**: Record every contract change (LLD Technical Scope).
 
 **Steps**:
-- [ ] `store-contract.md`: schema 6 and the trigger convention; `changes`, `watches`, `detections`, `record_detection` with `DetectionInput`, `recorded_since` (and its overridden-id limit), `baseline_watch` with `BaselineEntry`, `record_detected_verdict`, `attribute_review`, `has_unresolved_review_entry`, `data_version`, `project_store_path`
-- [ ] `inbox-contract.md`: the `watch_reviews` kind and payload
-- [ ] `process-contract.md`: `ReviewDetectionTenant`, both settings, cadence and settle rule, local-directory posture, the once-at-start label, defer and its logging, the store-error-stops-the-process rule, absolute-as-given paths, the tick budget, parser-drift remedy
-- [ ] `evidence-contract.md`: the attribution rule and that **120 must use it**; D5 points 3 and 5 as requirements on 120 (point 3's one-call method is deferred); the label meaning; `unattributed` recovery by hand; the accepted multi-part series limit
-- [ ] `CHANGELOG.md` under Unreleased: the feed and detection
+- [x] `store-contract.md`: schema 6 and the trigger convention; `changes`, `watches`, `detections`, `record_detection` with `DetectionInput`, `recorded_since` (and its overridden-id limit), `baseline_watch` with `BaselineEntry`, `record_detected_verdict`, `attribute_review`, `has_unresolved_review_entry`, `data_version`, `project_store_path`
+- [x] `inbox-contract.md`: the `watch_reviews` kind and payload
+- [x] `process-contract.md`: `ReviewDetectionTenant`, both settings, cadence and settle rule, local-directory posture, the once-at-start label, defer and its logging, the store-error-stops-the-process rule, absolute-as-given paths, the tick budget, parser-drift remedy
+- [x] `evidence-contract.md`: the attribution rule and that **120 must use it**; D5 points 3 and 5 as requirements on 120 (point 3's one-call method is deferred); the label meaning; `unattributed` recovery by hand; the accepted multi-part series limit
+- [x] `CHANGELOG.md` under Unreleased: the feed and detection
 
 **Success Criteria**:
-- [ ] Each document covers the items listed for it
-- [ ] Commit, e.g. `docs: update contracts and changelog for slice 106`
+- [x] Each document covers the items listed for it
+- [x] Commit, e.g. `docs: update contracts and changelog for slice 106`
 
 **Files to Modify**: four `docs/*-contract.md` files, `CHANGELOG.md`
 
@@ -528,11 +528,11 @@ status: not_started
 **Objective**: Final gate.
 
 **Steps**:
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; fix failures at their cause
-- [ ] `wc -l` every new source file; split any well past ~300 lines by concern and rerun
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; fix failures at their cause
+- [x] `wc -l` every new source file; split any well past ~300 lines by concern and rerun
 
 **Success Criteria**:
-- [ ] All clean; commit only if a fix was needed
+- [x] All clean; commit only if a fix was needed
 
 ---
 
@@ -543,12 +543,12 @@ status: not_started
 **Objective**: Compare real output with the LLD walkthrough, and confirm every requirement has a passing test. This task adds no new test files.
 
 **Steps**:
-- [ ] Run walkthrough steps 1–7 in bash against a scratch `AMOEBA_STORE_DIR`. Record each difference (command, expected, actual); do not edit the LLD
-- [ ] Walk the LLD Success Criteria in order. For each, name the test (from Tasks 1.4–9.3) and run it by name. A missing assertion is a defect in the owning task: add it in the named existing test and list it (requirement, test, owning task) for the PM
-- [ ] In the final message to the PM, list: the walkthrough differences (or "none"); the trace additions (or "none"); the task-level additions from file 1's Context Summary; that no load test was added
+- [x] Run walkthrough steps 1–7 in bash against a scratch `AMOEBA_STORE_DIR`. Record each difference (command, expected, actual); do not edit the LLD
+- [x] Walk the LLD Success Criteria in order. For each, name the test (from Tasks 1.4–9.3) and run it by name. A missing assertion is a defect in the owning task: add it in the named existing test and list it (requirement, test, owning task) for the PM
+- [x] In the final message to the PM, list: the walkthrough differences (or "none"); the trace additions (or "none"); the task-level additions from file 1's Context Summary; that no load test was added
 
 **Success Criteria**:
-- [ ] All seven steps run, or the blocked step is named with its reason
-- [ ] Every requirement maps to a passing test
-- [ ] A defect found here is fixed in its own commit with a test
-- [ ] Working tree committed on the slice branch; no merge performed
+- [x] All seven steps run, or the blocked step is named with its reason
+- [x] Every requirement maps to a passing test
+- [x] A defect found here is fixed in its own commit with a test
+- [x] Working tree committed on the slice branch; no merge performed
