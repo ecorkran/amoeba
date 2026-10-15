@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 106: schema version 6 (migration `006`). A per-project change log written by SQLite triggers in the same transaction as every node, verdict, message, and detection write; `Store.changes`, `data_version`, and `amoeba.store.paths.project_store_path`.
+- Slice 106: `amoeba.feed.follow` and `amoeba feed --project ID [--after N] [--follow]`, a read-only follower printing changes as JSON lines; contract in `docs/feed-contract.md`.
+- Slice 106: `ReviewDetectionTenant`, registered by `amoeba start` after the inbox: baselines registered review directories, then records new settled Squadron reviews as verdicts on their slice node, or as `unattributed`/`unparseable`; defers while a review-producing journal entry is open.
+- Slice 106: the `watch_reviews` submission kind; `amoeba inspect watches` and `amoeba inspect detections`; `start` flags `--review-scan-interval` and `--sq-timeout`.
+- Slice 106: `attribute_review`, `REVIEW_PRODUCING_KINDS`, and the detection ledger API (`record_detection`, `detection`, `detections`, `watches`, `baseline_watch`, `record_detected_verdict`, `recorded_since`, `has_unresolved_review_entry`).
+- Slice 106: `scripts/demo_detection.py` seeds the walkthrough's slice and blocked nodes.
 - Slice 105: `amoeba.upstream.squadron` — a pure parser for Squadron review files and `--output json` stdout (`ParsedReview`, `to_verdict_input`, `review_record_id`), tested against real captured reviews.
 - Slice 105: `amoeba ingest review` submits a review as a `verdict` without waiting; exit code `REVIEW_UNREADABLE` (12). It refuses a project with no store.
 - Slice 105: `verdict_to_payload` (the inverse of `verdict_from_payload`) and `provider_failure_problem` (one definition of the provider-failure rule, shared by the store and the parser).

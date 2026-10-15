@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: findings-verdicts-and-provenance
 dateCreated: 20260927
-dateUpdated: 20261009
+dateUpdated: 20261015
 status: complete
 ---
 
@@ -379,6 +379,75 @@ See [`inbox-contract.md`](inbox-contract.md) for the flag rule.
 
 All three read through a read-only handle, whether the process is running or not.
 
+## Reviews found on disk
+
+*Added by slice 106.* The detection tenant (see
+[`process-contract.md`](process-contract.md#review-detection)) records reviews
+nobody in Amoeba launched as verdicts, through the same writer and retry rule
+as everything else.
+
+### The attribution rule — initiative 120 must use it
+
+A review attaches to **the one node in its project with `kind == slice` and
+`cf.slice_name` equal to the review's frontmatter `slice`**. Zero or several
+matches attach it nowhere: the ledger records `unattributed` with the
+candidate ids, and nothing is written to any node, and no node is created.
+The rule is defined once, as the pure function
+`amoeba.store.attribute_review(slice_nodes, slice_name) -> Attribution`.
+
+**Initiative 120 must attach the reviews it launches with the same rule**, or
+the Runner's rounds and detected rounds of one slice split across two nodes
+and "what changed since the last round" compares the wrong things. Slice,
+tasks, and code reviews on one slice node stay separate series because
+`finding_changes` groups by `review_type`.
+
+### Requirements on initiative 120 (D5)
+
+Detection defers while a project has an unresolved journal entry of a
+review-producing kind, and skips any file the ledger already holds. That
+ordering depends on two things the Runner must do:
+
+- **Point 3.** The Runner marks the review file it recorded as
+  `runner_issued` in the detection ledger **no later than it resolves the
+  journal entry, in one transaction**: record the verdict, mark the file,
+  resolve the entry. Otherwise the next detection tick takes the file as
+  external. The single store method that makes this one call
+  (`record_runner_report`) is deferred to 120 (or 110, if earlier); until it
+  exists, this is a stated requirement.
+- **Point 5.** The Runner records its reviews **from the artifact through
+  slice 105's parser**, so its record id and detection's are the same
+  parsed-content digest. Any overlap is then a `record_verdict` retry, a
+  no-op.
+
+### The version label on a detected verdict
+
+`upstream_version` is the file's own `squadronVersion` stamp when it carries
+one. Otherwise it is the `sq --version` label the process captured **once at
+start-up**, or the explicit `unavailable` marker if that failed. It is what
+the process observed at start-up, not necessarily what wrote the file.
+
+### Recovering an `unattributed` review by hand
+
+`unattributed` is terminal for detection: retrying later would record old
+rounds after newer ones. Once the right slice node exists:
+
+```bash
+amoeba inspect detections --project P --outcome unattributed
+amoeba ingest review --project P --node ID --by pm --artifact PATH   # oldest round first
+```
+
+The ledger row keeps the parsed record id, so `inspect detections` shows
+`recorded_since` true once that is done, and ingesting twice is a no-op. An
+ingest under an overridden id (`--id`) is not seen by `recorded_since`.
+
+### Accepted limit: multi-part task reviews share a series
+
+Task reviews come in parts (`part-1`, `part-2`, both `reviewType: tasks`, same
+slice), and they share one series per node, so part 2's round becomes part
+1's "previous round" in `finding_changes`. This affects only that comparison,
+not what is recorded. Fixing it (a `source_document` series key) changes this
+contract and is tracked as its own follow-up (GitHub issue #3).
+
 ## Storage
 
 Schema version 5 (migration `005`): `verdicts` and `finding_observations`. The
@@ -390,7 +459,5 @@ it is never defaulted.
 
 - Slice 107 adds judge samples, calibration over `score` and `criteria`, and
   check records.
-- Slice 106 records reviews it finds on disk through `record_verdict`; the
-  retry rule makes finding the same file twice harmless.
 - Initiative 140 owns deciding that two differently worded findings are the
   same issue.

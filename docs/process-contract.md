@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: resident-process-and-recovery
 dateCreated: 20260921
-dateUpdated: 20260923
+dateUpdated: 20261015
 status: complete
 ---
 
@@ -122,11 +122,15 @@ Tenants are ticked in registration order. When no tenant reports work, the loop
 waits on the stop event for `idle_interval_seconds` — it does not busy-loop, and
 the wait ends the moment stop is requested.
 
-**`amoeba start` registers one tenant, `InboxTenant`, first** (slice 103). It
-drains the inbox — see [`inbox-contract.md`](inbox-contract.md) — at most
-`inbox_batch_size` files per tick, checking `stop_requested` between files.
-Registered first so a backlog that accumulated while the process was down
-drains ahead of any later tenant's work.
+**`amoeba start` registers two tenants, in this order** (`build_tenants` in
+`cli/lifecycle.py`):
+
+1. `InboxTenant` (slice 103). It drains the inbox — see
+   [`inbox-contract.md`](inbox-contract.md) — at most `inbox_batch_size` files
+   per tick, checking `stop_requested` between files. Registered first so a
+   backlog that accumulated while the process was down — `watch_reviews`
+   submissions included — drains ahead of any later tenant's work.
+2. `ReviewDetectionTenant` (slice 106). See "Review detection" below.
 
 What a tenant may use on `host`:
 
@@ -171,6 +175,77 @@ interruption, and it is yours to avoid.
 
 A tenant that launches a long subprocess polls it and checks `stop_requested`;
 it does not block the loop invisibly.
+
+## Review detection
+
+*Added by slice 106.* `ReviewDetectionTenant` notices Squadron reviews nobody in
+Amoeba launched — a PM running `sq review` by hand — and records them as
+verdicts on the matching slice node, with a detection ledger entry.
+
+**Cadence.** A tick does nothing until `review_scan_interval_seconds` has
+passed since its last scan. A scan visits every **active** watch of every open
+project once and returns: the tick budget is one pass.
+
+**Baseline.** A watch registered through `watch_reviews` is first baselined:
+every top-level `*.md` file already in the directory becomes a silent
+`baseline` ledger row, in one transaction, and the watch is marked baselined.
+It is all or nothing. A directory that cannot be listed, or any file that
+cannot be read, writes nothing and is retried next scan (one WARNING naming
+the unreadable file, on a change of reason). A file deleted between listing
+and read is left out. Files present at registration are never ingested; use
+`amoeba ingest review` for those, oldest round first.
+
+**Settle rule.** A file is examined only once its `(size, mtime_ns)` is
+unchanged since the previous scan, so a half-written file is never parsed.
+Detection latency is about two scan intervals. The digest is taken from the
+bytes actually read.
+
+**Per file** (`review_scan.py`): a `(path, sha256)` already in the ledger is
+skipped. Otherwise it is parsed with slice 105's `parse_review_artifact`.
+Unparseable → an `unparseable` row with the parser's error. Parsed, but the
+review's `slice` matches no slice node or several → an `unattributed` row with
+the candidate ids and the parsed record id; nothing is written to any node.
+Exactly one match → the verdict and an `ingested` row, in one transaction.
+Both refusals are terminal for that digest; changed bytes make a new digest.
+**Parser drift:** if Squadron's shape moves and files become `unparseable`,
+fix the parser, then re-ingest those files with `amoeba ingest review`.
+
+**The version label** recorded on a detected verdict is the file's own
+`squadronVersion` stamp when it carries one; otherwise the `sq --version`
+label **captured once at start-up**, before the loop, with `sq_timeout_seconds`
+(the explicit `unavailable` marker if that fails). No tick starts a
+subprocess. A Squadron upgrade while the process runs is not reflected until
+restart.
+
+**Defer (D5).** While a project has an unresolved journal entry of a
+review-producing kind (today `sq_run`), its baselined watches are not scanned:
+the Runner owns that review. Baselining still happens. One WARNING when a
+project starts deferring, one INFO when it resumes. There is no timeout; a
+stuck entry shows as `deferred` in `inspect watches`.
+
+**Directories.** Watched directories are expected to be **local**. Listing,
+`stat`, and reads run inside the synchronous loop with no timeout, like the
+rest of the loop; a directory on a stalled network mount hangs the tick, and
+the tenant obligation's remedy applies. A directory that cannot be listed logs
+one ERROR when it goes bad and one INFO when it recovers, and never stops the
+process. Paths are absolute and stored as given; the same directory under two
+spellings is two watches. The tenant never writes into a watched directory.
+
+**A store that cannot record a detection stops the process.** The exception is
+logged at ERROR, naming the project and path, and re-raised out of the tick,
+which ends `run()`. No attempts counter, no parked state: a store that cannot
+record a row is sick.
+
+| Setting | Flag | Default | Meaning |
+| --- | --- | --- | --- |
+| `review_scan_interval_seconds` | `--review-scan-interval` | 2.0 | Seconds between scans. |
+| `sq_timeout_seconds` | `--sq-timeout` | 10.0 | Timeout for `sq --version` at start-up only. |
+
+`amoeba inspect watches --project P` shows each watch with a computed state:
+`inactive`; else, in precedence order, `unreachable`, `baseline_pending`,
+`deferred`, `ok`. `amoeba inspect detections --project P [--outcome O]` shows
+the ledger, with `recorded_since` true once a verdict with the row's record id
+exists.
 
 ## Lifecycle failure modes
 

@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20260927
+dateUpdated: 20261015
 status: complete
 ---
 
@@ -431,6 +431,78 @@ matching rule is `amoeba.store.finding_identity`, importable without a store.
 ### Retention
 
 Verdicts and observations are never deleted in this slice.
+
+## Change feed and detection ledger
+
+*Added by slice 106. Schema version 6 (migration `006`: `changes`,
+`review_watches`, `detected_reviews`).*
+
+The feed itself — the `Change` shape, payloads, coverage, delivery guarantees,
+and the follower — is [`feed-contract.md`](feed-contract.md)'s subject. The
+detection tenant is [`process-contract.md`](process-contract.md)'s. This
+section lists only what the store offers.
+
+### The trigger convention
+
+Changes are emitted by SQLite triggers on the tracked tables (`nodes` insert
+and status update, `verdicts` insert, `messages` insert, `detected_reviews`
+insert), never by writer code, so every write path emits — including ones
+added later. Each trigger writes one `changes` row inside the writing
+transaction, with `recorded_at` copied from the row's own timestamp. The
+`ChangeKind` and `DetectionOutcome` values appear as literals in the
+migration's trigger SQL as well as in the enums; the invariant test
+(`tests/store/test_feed_invariant.py`) ties them together. **A new tracked
+table** needs a new `ChangeKind`, a trigger in a new migration, and a step in
+the invariant test, which fails until all three exist.
+
+### Vocabularies
+
+| Vocabulary | Members |
+| --- | --- |
+| `ChangeKind` | `node_created`, `node_status_changed`, `verdict_recorded`, `message_posted`, `review_detected` |
+| `DetectionOutcome` | `baseline`, `ingested`, `unattributed`, `unparseable`, `runner_issued` |
+
+`SILENT_OUTCOMES` (`baseline`, `runner_issued`) are the outcomes that emit no
+change. `REVIEW_PRODUCING_KINDS` (today `{sq_run}`; initiative 120 adds its
+review command kind) are the journal kinds whose unresolved entries defer
+detection. `SubmissionKind` gains `watch_reviews`.
+
+### Types
+
+All frozen. `Change` (`seq, project_id, kind, node_id, subject_id, payload,
+recorded_at`); `ReviewWatch` (`project_id, reviews_dir, active, registered_at,
+baselined_at, updated_at`); `DetectedReview` (`id, project_id, path, digest,
+outcome, node_id, verdict_id, record_id, detail, detected_at`);
+`DetectionInput` (`project_id, path, digest, outcome`, and optional `node_id,
+verdict_id, record_id, detail`); `BaselineEntry` (`path, digest`);
+`Attribution` (`node_id`, `candidates`).
+
+### Methods
+
+| Method | Effect |
+| --- | --- |
+| `changes(project_id, *, after=0, limit)` | Changes with `seq > after`, in order. `limit` is required; below 1 raises `ValueError`. |
+| `data_version()` | SQLite's `PRAGMA data_version`: changes only when another connection commits. What `follow()` waits on. |
+| `watches(project_id)` | Registered review directories, active or not. |
+| `detection(project_id, path, digest)` | One ledger row, or `None`. |
+| `detections(project_id, *, outcome=None)` | The ledger in detection order. |
+| `record_detection(DetectionInput)` | In-process only. One transaction. Idempotent on `(project_id, path, digest)`: a known key returns the existing row and writes nothing. |
+| `baseline_watch(project_id, reviews_dir, entries)` | In-process only. **One transaction:** a `baseline` row per `BaselineEntry` (known keys skipped), then `baselined_at`. An unregistered or already baselined watch raises `StoreIntegrityError` and writes nothing. |
+| `record_detected_verdict(verdict, detection)` | In-process only. **One transaction:** `record_verdict`'s body (its retry rule applies), then an `ingested` ledger row carrying the verdict's id and node. A non-`ingested` outcome raises `ValueError`; an existing ledger key raises `StoreIntegrityError`. A new key whose verdict id already exists (a hand-edited file) records one new row pointing at the existing verdict. |
+| `recorded_since(project_id, record_id)` | Whether a verdict with id `record_id` exists in the project, however it got there. A verdict recorded under an overridden id (`amoeba ingest review --id`) is not seen. |
+| `has_unresolved_review_entry(project_id)` | Whether an unresolved journal entry of a review-producing kind exists. |
+
+`attribute_review(slice_nodes, slice_name) -> Attribution` is a pure function,
+not a method: the one node with `kind == slice` and `cf.slice_name ==
+slice_name`, or `None` with every match in `candidates`. The rule is in the
+evidence contract. `amoeba.store.paths.project_store_path(directory,
+project_id)` is the one definition of a project's store file inside a
+supervisor directory, shared by the process and out-of-process followers.
+
+### Retention
+
+Nothing is deleted from `changes`, `review_watches`, or `detected_reviews` in
+this slice.
 
 ## Writer model
 

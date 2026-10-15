@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: durable-inbox-and-message-queue
 dateCreated: 20260923
-dateUpdated: 20260927
+dateUpdated: 20261015
 status: complete
 ---
 
@@ -30,7 +30,9 @@ the store's single-writer model intact while many parts contribute to it.
 - **Not a network service.** Submission is a file write into the supervisor
   directory, on the same machine.
 - **Not a reply channel.** A submitter learns the outcome by reading, not by
-  being told. Push is slice 106.
+  being told — or by following the change feed
+  ([`feed-contract.md`](feed-contract.md)), on which an applied submission's
+  effect appears. A rejected submission lands nothing and is not on the feed.
 - **Not a way to create nodes.** The kinds create projects, resolve blocks,
   record intents, and record reviews of existing nodes. Node creation from
   outside the process arrives with initiative 120.
@@ -84,6 +86,7 @@ invalid payload is refused before anything is written.
 | `resolution` | `blocked_state_id`, `detail` | Fills that blocked state's resolution slot and returns its node to `runnable`. `resolved_by` is `submitted_by`. | The blocked state does not exist, belongs to another project, or is already resolved. |
 | `intent` | `body` (a JSON object), optional `node_id` | One unacknowledged row on the `intent` channel, carrying the submission id. | `node_id` is given and is not a node of this project. |
 | `verdict` | A review result: `VerdictInput`'s fields except `id`, with provenance flattened — see [`evidence-contract.md`](evidence-contract.md#through-the-inbox) | One verdict record, whose id is the submission id, and one observation per finding. | The node is not in this project; a provider failure carries findings or a verdict other than `UNKNOWN`; `upstream_version` is empty. An unknown word in an enum field, or an omitted `derivation`, `fallback_used`, or `findings_parsed`, fails validation and is quarantined instead. |
+| `watch_reviews` | `reviews_dir` (an absolute path), `active` (boolean) | Registers the directory for review detection, or sets whether it is watched. A first registration leaves it un-baselined; the detection tenant takes the baseline, so files already there are never ingested. Deactivating and reactivating never re-baselines: files that arrived while inactive are detected. Paths are stored as given, with no symlink resolution. See [`process-contract.md`](process-contract.md#review-detection). | Never. A relative `reviews_dir` fails validation and is quarantined. |
 
 **A resolution targets a blocked state, never a node.** If a node was resolved
 and blocked again since your reply was written, your reply names the old,
