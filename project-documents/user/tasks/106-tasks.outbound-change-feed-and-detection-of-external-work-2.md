@@ -246,7 +246,7 @@ status: not_started
 - [ ] Refusals: a project with no slice node → `unattributed`, empty candidates, `record_id` set, no node written; two matching nodes → both ids in `detail`; `# not a review` in an `.md` → `unparseable`, not retried until its bytes change
 - [ ] Label: a fixture without `squadronVersion` records the tenant's label; one with it keeps its own stamp; with the label `VERSION_UNAVAILABLE`, the recorded version is that marker
 - [ ] Hand recovery: `unattributed`, then create the slice node and ingest the file the way `amoeba ingest review` does (`apply_submission` with the `verdict` kind and `verdict_to_payload`); `recorded_since` is true and a second ingest records nothing
-- [ ] Store failure: patch `record_detected_verdict` to raise; the tick raises, the ERROR is logged with the path (`caplog`), nothing is written
+- [ ] Store failure: patch `record_detected_verdict` to raise; the tick raises, the ERROR is logged with the path (`caplog`), nothing is written. Then run the same tenant inside a real `ResidentProcess`, built in-process as `tests/test_host.py` builds one, and assert `run()` ends by raising that error, so the process stops
 
 **Success Criteria**:
 - [ ] Tests pass; split into a second module if this one passes ~300 lines
@@ -379,41 +379,39 @@ status: not_started
 ### Task 8.5: Test the wiring
 **Owner**: Junior AI
 **Dependencies**: Task 8.4
-**Effort**: 3
-**Objective**: Label once, no subprocess per tick, and restart through the real CLI.
+**Effort**: 2
+**Objective**: Label once and no subprocess per tick. The real-CLI restart is owned by Task 9.2.
 
 **Steps**:
 - [ ] Add `tests/process/test_review_detection_wiring.py`: `build_tenants` with the label helper patched to count calls → exactly one call, and the label reaches the tenant; with no `sq` on `PATH`, it completes and the label is `VERSION_UNAVAILABLE`
 - [ ] No subprocess per tick: with a tenant on a `LocalHost` and `subprocess.run` patched to raise, run several ticks that baseline and ingest files; no call occurs
-- [ ] Real CLI restart in `tests/process/test_review_detection_process.py`: read `tests/cli_harness.py` and `tests/test_cli_lifecycle.py` for launching a long-lived `amoeba start`; if no helper exists, add one `start_cli_process(env)` to `tests/cli_harness.py` (the only launcher; Task 9.1 wraps it). Put a fake `sq` first on `PATH`. Sequence: start, create project `demo`, stop, run the demo script, start, register a temp directory, wait for `baselined_at`, copy round 1 part 1 in, wait for its verdict, `kill -9`, start, run past two scan intervals; verdict and detection counts are unchanged
-- [ ] Every wait is a condition wait with a timeout
 
 **Success Criteria**:
-- [ ] Tests pass three times consecutively
+- [ ] Tests pass
 - [ ] Commit, e.g. `feat(cli): register the detection tenant in start`
 
-**Files to Create**: `tests/process/test_review_detection_wiring.py`, `tests/process/test_review_detection_process.py`
-**Files to Modify**: `tests/cli_harness.py` (only if the launcher is needed)
+**Files to Create**: `tests/process/test_review_detection_wiring.py`
 
 ---
 
 ## Section 9: End-to-End, Docs, Final Validation
 
-### Task 9.1: Build and smoke-test the end-to-end helpers
+### Task 9.1: Build the end-to-end helpers
 **Owner**: Junior AI
 **Dependencies**: Task 8.5
-**Effort**: 3
-**Objective**: One tested helper set for the end-to-end tests.
+**Effort**: 2
+**Objective**: One helper set for the end-to-end tests, exercised by Task 9.2 (no separate smoke tests).
 
 **Steps**:
-- [ ] Create `tests/cli/detection_e2e_harness.py` over the launcher from Task 8.5: process start/stop/kill with condition waits; `start_follower(project, after=None)` collecting `amoeba feed --follow` JSON lines in a thread, with `wait_for(predicate, timeout)` (fails showing the lines so far), `last_seq`, `terminate`, `kill`; `seed_demo(env)`; `copy_fixture(name, directory)`; `inspect_json(env, listing, project, *args)`
-- [ ] Add `tests/cli/test_detection_e2e_harness.py`, one smoke test per helper. Helpers hold no detection assertions
+- [ ] Read `tests/cli_harness.py` and `tests/test_cli_lifecycle.py` for launching a long-lived `amoeba start`; if no helper exists, add one `start_cli_process(env)` to `tests/cli_harness.py` as the only launcher
+- [ ] Create `tests/cli/detection_e2e_harness.py` over that launcher, with a fake `sq` first on `PATH`: process start/stop/kill with condition waits; `start_follower(project, after=None)` collecting `amoeba feed --follow` JSON lines in a thread, with `wait_for(predicate, timeout)` (fails showing the lines so far), `last_seq`, `terminate`, `kill`; `seed_demo(env)`; `copy_fixture(name, directory)`; `inspect_json(env, listing, project, *args)`. Helpers hold no detection assertions
 
 **Success Criteria**:
-- [ ] Smoke tests pass three times consecutively
-- [ ] Commit, e.g. `test(cli): add end-to-end helpers for detection`
+- [ ] `ruff`, `pyright` clean
+- [ ] Committed with Task 9.2
 
-**Files to Create**: `tests/cli/detection_e2e_harness.py`, `tests/cli/test_detection_e2e_harness.py`
+**Files to Create**: `tests/cli/detection_e2e_harness.py`
+**Files to Modify**: `tests/cli_harness.py` (only if the launcher is needed)
 
 ---
 
@@ -484,13 +482,12 @@ status: not_started
 - [ ] `process-contract.md`: `ReviewDetectionTenant`, both settings, cadence and settle rule, local-directory posture, the once-at-start label, defer and its logging, the store-error-stops-the-process rule, absolute-as-given paths, the tick budget, parser-drift remedy
 - [ ] `evidence-contract.md`: the attribution rule and that **120 must use it**; D5 points 3 and 5 as requirements on 120 (point 3's one-call method is deferred); the label meaning; `unattributed` recovery by hand; the accepted multi-part series limit
 - [ ] `CHANGELOG.md` under Unreleased: the feed and detection
-- [ ] Extend `tests/test_contract_docs.py` with required-terms lists for these documents
 
 **Success Criteria**:
-- [ ] The doc test passes
+- [ ] Each document covers the items listed for it
 - [ ] Commit, e.g. `docs: update contracts and changelog for slice 106`
 
-**Files to Modify**: four `docs/*-contract.md` files, `CHANGELOG.md`, `tests/test_contract_docs.py`
+**Files to Modify**: four `docs/*-contract.md` files, `CHANGELOG.md`
 
 ---
 
