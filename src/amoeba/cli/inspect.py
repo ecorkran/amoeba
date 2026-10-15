@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amoeba.cli import inspect_evidence, inspect_inbox
+from amoeba.cli import inspect_evidence, inspect_feed, inspect_inbox
 from amoeba.process.supervisor import discover_project_ids, store_path_for
 from amoeba.store import Channel, Store, paths
 
@@ -260,6 +260,25 @@ LISTINGS: tuple[Listing, ...] = (
                 help_text="The review to compare with its previous round.",
                 metavar="ID",
                 required=True,
+            ),
+        ),
+    ),
+    Listing(
+        name="watches",
+        help_text="Registered review directories and their detection state.",
+        columns=inspect_feed.WATCH_COLUMNS,
+        rows=inspect_feed.watch_rows,
+    ),
+    Listing(
+        name="detections",
+        help_text="Review files detection examined, in detection order.",
+        columns=inspect_feed.DETECTION_COLUMNS,
+        rows=inspect_feed.detection_rows,
+        choice_options=(
+            ChoiceOption(
+                flag="--outcome",
+                help_text="Only this outcome. Every outcome when omitted.",
+                choices=inspect_feed.OUTCOME_CHOICES,
             ),
         ),
     ),

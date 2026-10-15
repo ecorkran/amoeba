@@ -25,12 +25,19 @@ from amoeba.inbox import submit
 from amoeba.store import (
     BlockedKind,
     CommandKind,
+    DetectionInput,
+    DetectionOutcome,
     JournalOutcome,
     NodeKind,
     Store,
     SubmissionKind,
 )
-from amoeba.store.inbox_models import INTENT_BODY, INTENT_NODE_ID
+from amoeba.store.inbox_models import (
+    INTENT_BODY,
+    INTENT_NODE_ID,
+    WATCH_ACTIVE,
+    WATCH_REVIEWS_DIR,
+)
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
@@ -104,6 +111,27 @@ def populated(supervisor_dir: Path) -> Path:
         store.record_verdict(
             verdict_input(_FIXTURE_VERDICT, runnable.id, finding("x", "a.py:1")),
             project_id=PROJECT,
+        )
+        # Slice 106: one review watch and one detection ledger row.
+        store.apply_submission(
+            submission_id="fixture-watch",
+            project_id=PROJECT,
+            kind=SubmissionKind.WATCH_REVIEWS,
+            submitted_by="fixture",
+            submitted_at=datetime(2026, 10, 15, tzinfo=UTC),
+            payload={
+                WATCH_REVIEWS_DIR: str(supervisor_dir / "reviews"),
+                WATCH_ACTIVE: True,
+            },
+        )
+        store.record_detection(
+            DetectionInput(
+                project_id=PROJECT,
+                path=str(supervisor_dir / "reviews" / "notes.md"),
+                digest="fixture-digest",
+                outcome=DetectionOutcome.UNPARSEABLE,
+                detail="not a review",
+            )
         )
     # And one file still waiting in the inbox, written by the real submit().
     submit(
@@ -410,6 +438,9 @@ def test_the_registered_listings_are_pinned() -> None:
         "verdicts",
         "findings",
         "changes",
+        # Slice 106.
+        "watches",
+        "detections",
     }
 
 
@@ -424,6 +455,9 @@ def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
         "verdicts",
         "findings",
         "changes",
+        # Slice 106.
+        "watches",
+        "detections",
     }
 
     missing_project = run_cli(["inspect", "nodes"], supervisor_dir)
