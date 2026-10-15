@@ -80,6 +80,20 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         metavar="COUNT",
         help="Failed applies of one file before it is parked in inbox/failed/.",
     )
+    parser.add_argument(
+        "--review-scan-interval",
+        type=float,
+        default=defaults.review_scan_interval_seconds,
+        metavar="SECONDS",
+        help="How often watched review directories are scanned.",
+    )
+    parser.add_argument(
+        "--sq-timeout",
+        type=float,
+        default=defaults.sq_timeout_seconds,
+        metavar="SECONDS",
+        help="How long to wait for 'sq --version' at start-up.",
+    )
 
 
 def add_stop_flags(parser: argparse.ArgumentParser) -> None:
@@ -110,6 +124,8 @@ def start_settings(args: argparse.Namespace) -> ProcessSettings:
         sq_runs_dir=args.sq_runs_dir,
         inbox_batch_size=args.inbox_batch_size,
         inbox_max_attempts=args.inbox_max_attempts,
+        review_scan_interval_seconds=args.review_scan_interval,
+        sq_timeout_seconds=args.sq_timeout,
     )
 
 

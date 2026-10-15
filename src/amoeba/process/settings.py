@@ -48,6 +48,11 @@ class ProcessSettings:
             before it is parked in ``inbox/failed/``. Small on purpose: the
             first failures stop the process so a sick store stays loud; this
             bounds that loop rather than retrying a corrupt store into working.
+        review_scan_interval_seconds: How often the review-detection tenant
+            scans watched directories. A file settles across two scans, so
+            detection latency is about two intervals.
+        sq_timeout_seconds: How long to wait for ``sq --version`` at start-up.
+            Bounds start-up only: no tick starts a subprocess.
     """
 
     idle_interval_seconds: float = 1.0
@@ -58,3 +63,5 @@ class ProcessSettings:
     sq_runs_dir: Path = DEFAULT_SQ_RUNS_DIR
     inbox_batch_size: int = 100
     inbox_max_attempts: int = 3
+    review_scan_interval_seconds: float = 2.0
+    sq_timeout_seconds: float = 10.0
