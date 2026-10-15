@@ -8,7 +8,7 @@ the transaction of whatever write fired them (D8).
 
 from __future__ import annotations
 
-from amoeba.store import sql_feed
+from amoeba.store import sql, sql_feed
 from amoeba.store._base import StoreBase
 from amoeba.store.feed_models import Change
 from amoeba.store.mapping_feed import map_change
@@ -29,3 +29,13 @@ class FeedOperations(StoreBase):
             sql_feed.SELECT_CHANGES_AFTER, (project_id, after, limit)
         ).fetchall()
         return [map_change(row) for row in rows]
+
+    def data_version(self) -> int:
+        """SQLite's ``PRAGMA data_version`` for this connection.
+
+        It changes only when another connection commits, so a follower that
+        sees it unchanged knows nothing new was written. Its own reads never
+        change it.
+        """
+        row = self._execute(sql.PRAGMA_DATA_VERSION, ()).fetchone()
+        return int(row[0])

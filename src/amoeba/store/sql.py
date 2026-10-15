@@ -32,6 +32,9 @@ JOURNAL_MODE: Final = "WAL"
 PRAGMA_JOURNAL_MODE: Final = f"PRAGMA journal_mode = {JOURNAL_MODE}"
 PRAGMA_FOREIGN_KEYS_ON: Final = "PRAGMA foreign_keys = ON"
 
+#: Changes only when *another* connection commits; a follower's idle check.
+PRAGMA_DATA_VERSION: Final = "PRAGMA data_version"
+
 # --------------------------------------------------------------------------
 # Table names
 # --------------------------------------------------------------------------

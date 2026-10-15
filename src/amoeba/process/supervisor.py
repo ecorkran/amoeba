@@ -20,7 +20,7 @@ from amoeba.process.recovery import ObserverRegistry, reconcile
 from amoeba.process.settings import ProcessSettings
 from amoeba.store import Store
 from amoeba.store.journal_models import CommandKind
-from amoeba.store.paths import STORE_FILE_SUFFIX
+from amoeba.store.paths import STORE_FILE_SUFFIX, project_store_path
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def discover_project_ids(store_dir: Path) -> list[str]:
 
 def store_path_for(store_dir: Path, project_id: str) -> Path:
     """The store file for a project inside a given supervisor directory."""
-    return store_dir / f"{project_id}{STORE_FILE_SUFFIX}"
+    return project_store_path(store_dir, project_id)
 
 
 def build_observer_registry(

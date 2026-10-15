@@ -60,3 +60,13 @@ def test_the_payload_is_a_decoded_mapping(store: Store) -> None:
     change = store.changes(PROJECT, limit=10)[-1]
     assert change.kind is ChangeKind.NODE_STATUS_CHANGED
     assert change.payload["to"] == NodeStatus.DONE.value
+
+
+def test_data_version_moves_only_on_another_connections_commit(store: Store) -> None:
+    _node(store)
+    with Store.open_read_only(store.path) as reader:
+        before = reader.data_version()
+        reader.changes(PROJECT, limit=10)
+        assert reader.data_version() == before
+        _node(store)
+        assert reader.data_version() != before

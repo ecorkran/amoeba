@@ -118,3 +118,12 @@ def store_path(project_id: str, env: dict[str, str] | None = None) -> Path:
     """
     validate_project_id(project_id)
     return store_dir(env) / f"{project_id}{STORE_FILE_SUFFIX}"
+
+
+def project_store_path(directory: Path, project_id: str) -> Path:
+    """The store file for a project inside a given supervisor directory.
+
+    The one definition shared by the resident process and out-of-process
+    followers, which must not import the process.
+    """
+    return directory / f"{project_id}{STORE_FILE_SUFFIX}"

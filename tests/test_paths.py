@@ -11,12 +11,14 @@ from pathlib import Path
 
 import pytest
 
+from amoeba.process.supervisor import store_path_for
 from amoeba.store.paths import (
     DEFAULT_STORE_DIR,
     STORE_DIR_ENV_VAR,
     STORE_DIR_NAME,
     STORE_FILE_SUFFIX,
     XDG_CONFIG_HOME_ENV_VAR,
+    project_store_path,
     store_dir,
     store_path,
 )
@@ -92,3 +94,7 @@ def test_resolution_creates_nothing(tmp_path: Path) -> None:
     assert not resolved_dir.exists()
     assert not resolved_file.exists()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_project_store_path_matches_the_process_resolution(tmp_path: Path) -> None:
+    assert project_store_path(tmp_path, "demo") == store_path_for(tmp_path, "demo")
