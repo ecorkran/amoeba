@@ -26,7 +26,7 @@ status: not_started
 
 **Migration 006 grows in place.** It is unreleased until this slice merges, so Tasks 1.3, 2.1, 2.3, and 4.1 each add to the one file. Never create a 007.
 
-**Task-level additions to the LLD API table** (the LLD describes the behavior but names no method): `DetectionInput`'s fields, `recorded_since`, `baseline_watch` with `BaselineEntry`, `record_detected_verdict`, `project_store_path`, and `ReviewDirectoryUnavailableError`. Each is recorded in the contract docs (Task 9.4) and listed to the PM (Task 9.6).
+**Task-level additions to the LLD API table** (the LLD describes the behavior but names no method): `DetectionInput`'s fields, `recorded_since`, `baseline_watch` with `BaselineEntry`, `record_detected_verdict`, `project_store_path`, and `ReviewDirectoryUnavailableError`. Each is recorded in the contract docs (Task 9.5) and listed to the PM (Task 9.7).
 
 **Section map.** This file: 1 models and migration; 2 emission triggers and the invariant test; 3 feed reads, follower, `amoeba feed`; 4 detection storage and the `watch_reviews` kind. **File 2:** 5 attribution and review-producing kinds; 6 review sources; 7 the detection tenant; 8 listings and wiring; 9 end-to-end, docs, validation.
 
@@ -142,7 +142,7 @@ status: not_started
 - [ ] Create `tests/test_import_boundaries.py`, AST-based like `tests/test_writer_guard.py`. Read `tests/upstream/test_import_direction.py` first and reuse its approach
 - [ ] Rule 1: nothing under `src/amoeba/store/` imports `amoeba.upstream`, `amoeba.process`, or `amoeba.feed`
 - [ ] Rule 2: nothing under `src/amoeba/feed/` imports `amoeba.process`. A directory that does not exist yet passes; the rule applies once it appears
-- [ ] Rule 3: no string constant (docstrings excluded) equals a `ChangeKind` or `DetectionOutcome` value in the modules this slice creates, listed once in the test: `store/feed.py`, `store/mapping_feed.py`, `store/sql_feed.py`, `store/attribution.py`, `feed/follower.py`, `process/review_sources.py`, `process/review_scan.py`, `process/review_detection.py`, `cli/feed.py`, `cli/inspect_feed.py`. A listed module that does not exist yet is skipped. Older modules are out of scope, since words like `ingested` occur there legitimately
+- [ ] Rule 3: no string constant (docstrings excluded) equals a `ChangeKind` or `DetectionOutcome` value in the modules this slice creates, held in one list in the test. The list starts with `store/sql_feed.py` and `store/mapping_feed.py`; every other module is added to the list by the task that creates it (3.1 `store/feed.py`, 3.3 `feed/follower.py`, 3.5 `cli/feed.py`, then the file 2 tasks for `store/attribution.py`, `process/review_sources.py`, `process/review_scan.py`, `process/review_detection.py`, `cli/inspect_feed.py`). The test asserts every listed module exists and never skips one. Older modules are out of scope, since words like `ingested` occur there legitimately
 - [ ] One test function per rule, so a failure names the rule
 
 **Success Criteria**:
@@ -169,6 +169,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 - [ ] Put a comment above the triggers: the kind literals mirror `ChangeKind` in `feed_models.py`, and the invariant test (Task 2.5) ties them together
 
 **Success Criteria**:
+- [ ] A fresh store still migrates cleanly to version 6 with the triggers present (migration applies cleanly on a fresh store)
 - [ ] `git diff` shows no edits under `store/nodes.py` or `store/blocking.py`
 - [ ] Committed with Task 2.2
 
@@ -205,6 +206,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 - [ ] Add `AFTER INSERT ON messages`: payload `channel`; `node_id` may be null
 
 **Success Criteria**:
+- [ ] A fresh store still migrates cleanly to version 6 with the new triggers (migration applies cleanly on a fresh store)
 - [ ] `git diff` shows no edits to `_verdict_writer.py`, `verdicts.py`, or `messages.py`
 - [ ] Committed with Task 2.4
 
@@ -265,6 +267,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 - [ ] Create `src/amoeba/store/feed.py` with `FeedOperations(StoreBase)` providing `changes(project_id, *, after=0, limit)`. `limit` has no default; `limit < 1` raises `ValueError`
 - [ ] Add the mixin to `Store`'s bases; export `Change`, `ChangeKind`, `DetectionOutcome`, `ReviewWatch`, `DetectedReview`, `DetectionInput`, `BaselineEntry` from `store/__init__.py`
 - [ ] Replace `raw_changes` in `tests/feed_harness.py` with a call to `changes()` so later tests read through the public API
+- [ ] Add `store/feed.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean; existing trigger and invariant tests still pass
@@ -324,6 +327,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 - [ ] `follow(store_dir, project_id, *, after, settings, stop=None) -> Iterator[Change]`: open `project_store_path(...)` with `Store.open_read_only`; read `changes(after=cursor, limit=feed_batch_size)`, yield each, advance the cursor; when empty, wait until `data_version()` changes, checking every `follow_interval_seconds`; check `stop` between waits and between yielded changes. The follower holds no SQL
 - [ ] Failure table exactly per the LLD: a busy or locked read (`sqlite3.OperationalError` whose message says busy/locked — check how 101 classifies it and reuse that) is retried on the next interval; a schema-version mismatch, unknown project, or missing store directory raises the store's error; a raising `stop` propagates; `stop` returning true ends cleanly. Comment the one specific `except` per CLAUDE.md
 - [ ] Close the store in a `finally`
+- [ ] Add `feed/follower.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` clean
@@ -367,6 +371,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 - [ ] Without `--follow`: read changes after `--after` in batches until a read returns none, then exit 0. With `--follow`: use `follow()` until interrupted; `KeyboardInterrupt` and `SIGTERM` exit with `ExitCode.OK`
 - [ ] `StoreError` subclasses go through the existing boundary mapping in `main.py`; add no new exit code (if none fits, ask the PM)
 - [ ] Takes no lock; works with the process running or stopped
+- [ ] Add `cli/feed.py` to the module list in `tests/test_import_boundaries.py` (Rule 3)
 
 **Success Criteria**:
 - [ ] `amoeba feed --help` lists the three flags
@@ -386,7 +391,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 **Steps**:
 - [ ] Add `tests/cli/test_feed.py`: seeded store, `amoeba feed --project P` prints lines that each parse as JSON with exactly the `Change` keys; exit 0
 - [ ] `--after N` prints only later lines; an unknown project exits with the existing not-found code and prints nothing on stdout
-- [ ] `--follow` as a subprocess with no process running: existing lines print; a new node committed through a separate read-write store prints; `SIGTERM` exits cleanly. (The process-starts-later case is end-to-end, Task 9.1)
+- [ ] `--follow` as a subprocess with no process running: existing lines print; a new node committed through a separate read-write store prints; `SIGTERM` exits cleanly. (The process-starts-later case is end-to-end, Task 9.2)
 - [ ] Killed follower: `kill -9` mid-stream, restart with `--after` its last printed `seq`: no gap, no repeat
 
 **Success Criteria**:
@@ -527,7 +532,7 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 
 **Steps**:
 - [ ] Read `_verdict_writer.py` and `apply_submission` in `store/inbox.py`, which already records a verdict inside its own transaction. If the verdict write cannot run inside an open transaction, extract its body into an inner method with no behavior change (104's tests prove it)
-- [ ] `record_detected_verdict(verdict: VerdictInput, detection: DetectionInput) -> tuple[VerdictRecord, DetectedReview]` in `FeedOperations`. `detection.outcome` must be `ingested` (else `ValueError`, nothing written). In one transaction: if the ledger key already exists, raise `ValueError` naming it and write nothing (the tenant skips known keys first, so this is a guard only); record the verdict (104's retry rule applies); insert the ledger row with the verdict's id and node id
+- [ ] `record_detected_verdict(verdict: VerdictInput, detection: DetectionInput) -> tuple[VerdictRecord, DetectedReview]` in `FeedOperations`. `detection.outcome` must be `ingested` (else `ValueError`, nothing written). In one transaction: record the verdict (104's retry rule applies); insert the ledger row with the verdict's id and node id. A ledger key that already exists surfaces the UNIQUE constraint's own integrity error (the tenant skips known keys first); add no separate guard
 - [ ] Docstring states the hand-edit case: a new key with an existing verdict id records no new verdict and one new `ingested` row pointing at it
 
 **Success Criteria**:
@@ -542,12 +547,11 @@ All triggers go in migration 006 (LLD D8). Each writes one `changes` row in the 
 **Owner**: Junior AI
 **Dependencies**: Task 4.7
 **Effort**: 2
-**Objective**: Pin atomicity, the existing-key guard, and the hand-edit case.
+**Objective**: Pin atomicity and the hand-edit case.
 
 **Steps**:
 - [ ] Add `tests/store/test_record_detected_verdict.py`: success writes one verdict and one `ingested` row and emits `verdict_recorded` then `review_detected`; a non-`ingested` outcome raises and writes nothing
 - [ ] Atomicity: a temporary `RAISE(ABORT, ...)` trigger on `detected_reviews` inserts makes the call raise and leaves no verdict, ledger row, or `changes` row
-- [ ] An existing key raises `ValueError` and writes nothing
 - [ ] Hand edit (new key, existing verdict id): still one verdict, a second `ingested` row pointing at it, one `review_detected` and no `verdict_recorded`
 
 **Success Criteria**:

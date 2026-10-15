@@ -92,6 +92,7 @@ src/amoeba/feed/
   follower.py           follow(store_dir, project_id, after) -> Iterator[Change]
 src/amoeba/process/
   review_sources.py     ReviewSource protocol, DetectedFile, DirectoryReviewSource
+  review_scan.py        per-file detection path (digest, parse, attribute, record), called by the tenant
   review_detection.py   ReviewDetectionTenant
 src/amoeba/inbox/
   envelope.py           + WatchReviewsPayload
