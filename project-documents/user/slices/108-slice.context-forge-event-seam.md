@@ -38,10 +38,10 @@ Developer value.
 - One inbox kind, `link_cf_project`, through 103's three-part seam.
 - Store operations: `cf_links`, `cf_snapshots`, `record_cf_snapshot`.
 - `ChangeKind.CF_PROJECT_CHANGED`. 106's invariant test gains steps that write snapshots.
-- Listings: `amoeba inspect cf-links` and `amoeba inspect cf-snapshots`.
-- Settings: `cf_data_dir` and `cf_scan_interval_seconds`, each with a CLI flag.
+- Listings: `amoeba inspect cf-links` and `amoeba inspect cf-snapshots`, each taking `--project` only.
+- Settings: `cf_data_dir`, with a CLI flag, and `cf_scan_interval_seconds`, with no flag.
 - A captured real `projects.json` fixture.
-- `docs/context-forge-contract.md` (the observed shape), plus updates to `feed-contract.md`, `inbox-contract.md`, `store-contract.md`, `process-contract.md`, and `CHANGELOG.md`.
+- `docs/context-forge-contract.md` (the observed shape). The other contract docs and `CHANGELOG.md` gain only the deltas: the kind, the listings, the setting, and the methods. They do not restate 106's trigger convention or 102's process semantics.
 
 **Excluded**
 
@@ -52,6 +52,13 @@ Developer value.
 - **Review-gate state.** CF recomputes it from artifact frontmatter on every call, and it is not stored in `projects.json`. The Runner reads it through `workflow_status` (120).
 - **Writing to CF**, now or later. The architecture forbids editing `projects.json` directly.
 - **Snapshot retention or compaction.** Same position as the feed (106).
+
+### Deferred
+
+Cut at design review for proportionality. None of this is required by the slice plan.
+
+- **Unlinking or deactivating a link** (GitHub issue #7). A link is permanent in this slice.
+- **Listing filters and computed columns.** `--cf-project-id` and `--outcome` on `inspect cf-snapshots`, and `last_outcome` or `last_observed_at` on `inspect cf-links`, are not built. Nothing consumes them, and `--json` gives the full rows.
 
 ## Dependencies
 
@@ -109,15 +116,15 @@ The pattern is 106's. The store imports nothing from `amoeba.upstream` or `amoeb
 **Linking:**
 
 ```
-amoeba submit link-cf-project --project P --by pm --cf-project-id ID --active true
-  inbox apply: upsert cf_links(project, cf_project_id, active, linked_at, updated_at)
+amoeba submit link-cf-project --project P --by pm --cf-project-id ID
+  inbox apply: insert cf_links(project, cf_project_id, linked_at); linking again is a no-op
   the store reads no file; whether ID exists in CF is answered by the next check
 ```
 
 **One `CFWatchTenant.tick`** (does nothing until `cf_scan_interval_seconds` has passed since the last check):
 
 ```
-links = active cf_links across open projects
+links = cf_links across open projects
 signature = stat(cf_data_dir / "projects.json") -> (st_ino, st_size, st_mtime_ns), or the OS error
 if (signature, links) == remembered: return            # one stat per interval, nothing else
 read the bytes                                          # on OS error -> every link is unreadable
@@ -139,7 +146,7 @@ Every row insert fires the `cf_snapshots` trigger, so a change row is appended t
 
 **Down-time changes.** The remembered signature is held in memory, so it is empty after a start. The first tick reads the file and compares each link with its stored baseline. Recovery (102) runs before any tenant ticks, as it does for every tenant.
 
-**Why the link set is part of the remembered key.** A new or reactivated link must be checked even when the file has not changed since the last check. Checking an unchanged link again writes nothing, so a re-check is always safe.
+**Why the link set is part of the remembered key.** A new link must be checked even when the file has not changed since the last check. Checking an unchanged link again writes nothing, so a re-check is always safe.
 
 ### State Management
 
@@ -152,7 +159,10 @@ The only in-memory state is the tenant's remembered `(signature, links)` key, it
 
 ## Technical Decisions
 
-**D1: Watch the file by stat signature on an interval, in a tenant.** *(New, pending.)* This is the same choice as 106 D3, for the same reasons: no file-watching library, and the loop stays synchronous. CF replaces the file by renaming a new file over it, so every write gives `projects.json` a new inode. Comparing `(st_ino, st_size, st_mtime_ns)` detects every write, even one within the mtime resolution that leaves the size unchanged. A rename is atomic, so a reader never sees half a write, and no settle wait is needed (106 needed one). Each check costs one `stat`. The default `cf_scan_interval_seconds` is 1.0. A pointer move is a human-paced event, and a 1-second bound keeps the Runner prompt.
+**D1: Watch the file by stat signature on an interval, in a tenant.** *(New, pending.)* This is the same choice as 106 D3, for the same reasons: no file-watching library, and the loop stays synchronous. CF replaces the file by renaming a new file over it, so every write gives `projects.json` a new inode. Comparing `(st_ino, st_size, st_mtime_ns)` detects every write, even one within the mtime resolution that leaves the size unchanged. A rename is atomic, so a reader never sees half a write, and no settle wait is needed (106 needed one). Each check costs one `stat`. `cf_scan_interval_seconds` is 1.0, set in `ProcessSettings` with no CLI flag; tests inject a clock. A pointer move is a human-paced event, and a 1-second bound keeps the Runner prompt.
+
+- *Against "Push, not poll."* This is polling one file with `stat`. It is not polling `cf next`, and it never recomputes CF state to find out whether anything changed. The architecture endorses watching `projects.json`, and 106 D2 draws the same line.
+- *Stat-then-read race.* A file replaced between the `stat` and the read is safe. The remembered signature is the one taken before the read, so the next tick sees a new signature and checks again.
 
 **D2: A snapshot is a projection, not the whole CF entry.** *(New, pending.)* The field lists in Interfaces Required are defined once in `projects_file.py`, as two tuples. The projection is `{"project": {field: value}, "worktrees": {worktree_id: {field: value}}}` and holds only the keys present in the file. A write that touches only unread fields (`customData`, or `updatedAt` alone) produces no snapshot. *Why:* `updatedAt` changes on every write, and `customData` is free text. Comparing either would put noise on the feed that no consumer asked for. Adding a field later is a one-line change, and it shows up as an addition in the first snapshot after the upgrade.
 
@@ -168,22 +178,22 @@ The only in-memory state is the tenant's remembered `(signature, links)` key, it
 
 | Case | Outcome | Scope |
 | --- | --- | --- |
-| File absent, permission denied, or any other OS error on `stat` or read | `unreadable`, with detail `{error class}: {strerror}` | every active link |
-| Not valid JSON; top level is not an array; an element is not an object or has no string `id` | `unrecognized`, with a detail naming the rule | every active link |
+| File absent, permission denied, or any other OS error on `stat` or read | `unreadable`, with detail `{error class}: {strerror}` | every link |
+| Not valid JSON; top level is not an array; an element is not an object or has no string `id` | `unrecognized`, with a detail naming the rule | every link |
 | The linked id appears more than once | `unrecognized` | that link |
-| The linked entry, or one of its worktrees, has a projected field of the wrong type, a worktree without a string `id`, or duplicate worktree ids | `unrecognized`, with a detail naming the field | that link |
+| The linked entry's `worktrees` is present but is not an array of objects with distinct string `id`s | `unrecognized` | that link |
 | No element has the linked id | `missing` | that link |
 
-- Fields outside the projection are never type-checked. Parsing is lenient about everything Amoeba does not read, and strict about everything it does.
+- Only the rules that decide *which* entry and *which* worktree a value belongs to are checked. Projected field values are not type-checked: they are stored and compared as whatever JSON CF wrote.
 - A malformed element with no id makes the whole file `unrecognized`, because it could be the linked project. A file that is not even JSON is also `unrecognized`, never `unreadable`: CF validates JSON before renaming, so a bad file is a real finding, not a race.
+- *In-place writes are accepted noise.* A hand edit, or another tool that writes the file in place rather than renaming, can expose a truncated file for a moment. That produces an `unrecognized` row followed by an `observed` row with `changed: []`. This is accepted: it is visible, and it is accurate about what Amoeba saw.
 - A failure row is written only when the outcome or detail differs from the link's latest row. A file that stays broken produces one row, not one per interval. The tenant logs one ERROR when the file goes bad and one INFO when it recovers, as 106 does for unreachable directories. The process keeps running: a broken CF file is not a sick store.
 - **A store exception while recording is logged at ERROR and re-raised, which stops the process.** This is 106's rule.
 
-**D5: Linking goes through the inbox, keyed by CF's project id.** *(Slice plan; details new and pending.)* The `link_cf_project` payload is `cf_project_id: str` (non-empty, with no format check, because CF's id format is CF's business) and `active: bool`.
+**D5: Linking goes through the inbox, keyed by CF's project id.** *(Slice plan; details new and pending.)* The `link_cf_project` payload is `cf_project_id: str`, non-empty, with no format check, because CF's id format is CF's business.
 
 - One Amoeba project can link several CF projects. Several Amoeba projects can link the same CF project, and each records its own snapshots.
-- Deactivating a link stops checks and writes nothing.
-- Reactivating a link compares against the last `observed` snapshot, so whatever changed while the link was inactive arrives as a single change.
+- A link is permanent. Removing one is deferred (issue #7).
 - An id that CF does not have is `missing` on the first check. *Why an id and not a name or path:* names are user-editable labels (CLAUDE.md), and one `projectPath` can be shared by several worktrees.
 
 **D6: One change kind, one trigger.** *(New, pending.)* Migration 008 adds `changes_cf_project_changed`, which fires `AFTER INSERT ON cf_snapshots` for every outcome.
@@ -195,7 +205,7 @@ The only in-memory state is the tenant's remembered `(signature, links)` key, it
 - `cf_links` gets no trigger, as 106's `review_watches` has none. A link is configuration, not an event.
 - The invariant test's script gains one row for each outcome, plus a no-op re-check that must add nothing.
 
-**D7: CF's data directory is a setting with a flag, with no environment read.** *(New, pending, needs PM confirmation.)* `ProcessSettings.cf_data_dir` defaults to `DEFAULT_CF_DATA_DIR = ~/.config/context-forge`, CF's own default, and `amoeba start --cf-data-dir PATH` overrides it. Amoeba does **not** read `CONTEXT_FORGE_DATA_DIR`. 102's D3 keeps `AMOEBA_STORE_DIR` as the only environment read, and the shell that starts Amoeba need not have the same environment as the CF clients. A PM who uses `CONTEXT_FORGE_DATA_DIR` passes the same directory with the flag. The tenant logs the resolved file path at INFO on start, and `inspect cf-links` shows it, so a wrong directory surfaces as `unreadable` or `missing`, not as silence. `cf` has no command that prints its data directory (checked against 0.19.11), so asking CF is not an option.
+**D7: CF's data directory is a setting with a flag, with no environment read.** *(New, pending. The PM must confirm this before Phase 5: the walkthrough and the end-to-end test assume it.)* `ProcessSettings.cf_data_dir` defaults to `DEFAULT_CF_DATA_DIR = ~/.config/context-forge`, CF's own default, and `amoeba start --cf-data-dir PATH` overrides it. Amoeba does **not** read `CONTEXT_FORGE_DATA_DIR`. 102's D3 keeps `AMOEBA_STORE_DIR` as the only environment read, and the shell that starts Amoeba need not have the same environment as the CF clients. A PM who uses `CONTEXT_FORGE_DATA_DIR` passes the same directory with the flag. The tenant logs the resolved file path at INFO on start so a wrong directory surfaces as `unreadable` or `missing`, not as silence. `cf` has no command that prints its data directory (checked against 0.19.11), so asking CF is not an option.
 
 **D8: A snapshot mirrors CF's state and claims no author.** *(New, pending.)* A CF write the Runner issues (102's `cf_write` journal kind) also changes the file, and is also recorded as a snapshot. That is not double recording. The journal records the command and its result, and the snapshot records what CF now holds. Unlike 106 D5, nothing is deferred or skipped, because nothing is attributed. The Runner can match its own write to the snapshot through `cf_updated_at`, which both its read-back adoption and the snapshot record. `context-forge-contract.md` says so for 120.
 
@@ -218,7 +228,7 @@ The only in-memory state is the tenant's remembered `(signature, links)` key, it
 | Method | Effect |
 | --- | --- |
 | `cf_links(project_id) -> list[CFLink]` | Links, in the order they were linked. |
-| `cf_snapshots(project_id, *, cf_project_id=None, outcome=None) -> list[CFSnapshot]` | Rows in id order. |
+| `cf_snapshots(project_id) -> list[CFSnapshot]` | Rows in id order. |
 | `latest_cf_snapshots(project_id, cf_project_id) -> tuple[CFSnapshot \| None, CFSnapshot \| None]` | The latest row, and the latest `observed` row. |
 | `record_cf_snapshot(CFSnapshotInput) -> CFSnapshot` | In-process only. One insert, and its trigger. |
 
@@ -232,16 +242,16 @@ The only in-memory state is the tenant's remembered `(signature, links)` key, it
 
 | Command | What it does |
 | --- | --- |
-| `amoeba start [--cf-data-dir PATH] [--cf-scan-interval-seconds N]` | Existing command. The two flags are new. |
-| `amoeba submit link-cf-project --project ID --by NAME --cf-project-id CFID --active true\|false` | Built from the payload model, under 104's flag rule. |
-| `amoeba inspect cf-links --project ID` | `cf_project_id, active, linked_at, last_outcome, last_observed_at`. `last_*` is computed on read from `cf_snapshots`, and is empty before the first check. |
-| `amoeba inspect cf-snapshots --project ID [--cf-project-id CFID] [--outcome O]` | `id, observed_at, cf_project_id, outcome, changed (summarized as field names), detail, cf_updated_at`. Full values with `--json`. |
+| `amoeba start [--cf-data-dir PATH]` | Existing command. The flag is new. |
+| `amoeba submit link-cf-project --project ID --by NAME --cf-project-id CFID` | Built from the payload model, under 104's flag rule. |
+| `amoeba inspect cf-links --project ID` | `cf_project_id, linked_at`. |
+| `amoeba inspect cf-snapshots --project ID` | `id, observed_at, cf_project_id, outcome, changed (summarized as field names), detail, cf_updated_at`. Full values with `--json`. |
 
 ### Database / Storage Schema
 
 Migration `008_context_forge_snapshots.sql` sets `EXPECTED_SCHEMA_VERSION` to 8. Nothing needs backfilling.
 
-- **`cf_links`:** `project_id`, `cf_project_id`, `active` (INTEGER), `linked_at`, `updated_at`. Primary key `(project_id, cf_project_id)`.
+- **`cf_links`:** `project_id`, `cf_project_id`, `linked_at`. Primary key `(project_id, cf_project_id)`.
 - **`cf_snapshots`:** `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `project_id`, `cf_project_id`, `outcome`, `state` (JSON text, null unless `observed`), `changed` (JSON array text, null unless `observed`), `detail` (null when `observed`), `cf_updated_at` (nullable), `cf_version_label`, `observed_at`. Index on `(project_id, cf_project_id, id)`.
 - The trigger is described in D6.
 
@@ -274,8 +284,8 @@ Migration `008_context_forge_snapshots.sql` sets `EXPECTED_SCHEMA_VERSION` to 8.
 - A CF write that touches only another project, or only an unread field of a linked project, records nothing.
 - Changes made while the process is stopped are recorded, as one snapshot per link, on the first check after `start`.
 - Unreadable, unrecognized, and missing cases each record their outcome with a specific detail, once per transition and not once per interval. The process keeps running. The next good read records an `observed` row, with `changed: []` if nothing moved.
-- A wrong-typed projected field in the linked entry makes that link `unrecognized`. The same defect in another project's entry does not affect the link.
-- Linking an id CF does not have records `missing`. Deactivating stops checks. Reactivating records what changed meanwhile as one change.
+- A malformed `worktrees` in the linked entry makes that link `unrecognized`. The same defect in another project's entry does not affect the link.
+- Linking an id CF does not have records `missing`. Linking the same id again records nothing new.
 - No tick starts a subprocess. `cf --version` runs once, before the loop.
 - A store exception while recording is logged at ERROR and stops the process.
 
@@ -287,7 +297,7 @@ Migration `008_context_forge_snapshots.sql` sets `EXPECTED_SCHEMA_VERSION` to 8.
 - 106's feed invariant test passes with the new kind in its script, and fails if the trigger is missing.
 - A version-7 store with data from every earlier slice upgrades to 8 intact.
 - `ruff`, `pyright` strict, and the full suite are clean. Files stay near 300 lines.
-- `docs/context-forge-contract.md` documents the observed shape (dated, with its CF version), the projection, the four outcomes, the change payload, D7's directory rule, and D8. The other contract docs gain the kind, the listings, the settings, and the methods.
+- `docs/context-forge-contract.md` documents the observed shape (dated, with its CF version), the projection, the four outcomes, the change payload, D7's directory rule, and D8. The other contract docs gain only the deltas: the kind, the listings, the setting, and the methods.
 
 ### Integration Requirements
 
@@ -314,7 +324,7 @@ cf_scratch() { CONTEXT_FORGE_DATA_DIR="$CFDIR" cf "$@"; }
    ```bash
    uv run amoeba start --cf-data-dir "$CFDIR" &
    uv run amoeba submit create-project --project demo --by pm
-   uv run amoeba submit link-cf-project --project demo --by pm --cf-project-id "$CFID" --active true
+   uv run amoeba submit link-cf-project --project demo --by pm --cf-project-id "$CFID"
    uv run amoeba feed --project demo --follow        # terminal 2
    ```
    Within about a second, the follower prints one `cf_project_changed` with `outcome: observed`, and `changed` lists every projected field as added, including the default worktree's `activeSlice`.
@@ -338,7 +348,7 @@ cf_scratch() { CONTEXT_FORGE_DATA_DIR="$CFDIR" cf "$@"; }
    The follower, which kept running, prints one change, from `Phase 5: Task Breakdown` to `Phase 6: Implementation`.
 5. **Failures are recorded, not guessed.**
    ```bash
-   uv run amoeba submit link-cf-project --project demo --by pm --cf-project-id project_does_not_exist --active true; sleep 3
+   uv run amoeba submit link-cf-project --project demo --by pm --cf-project-id project_does_not_exist; sleep 3
    cp "$CFDIR/projects.json" "$CFDIR/keep.json"
    echo '{}' > "$CFDIR/projects.json.new" && mv "$CFDIR/projects.json.new" "$CFDIR/projects.json"; sleep 5
    mv "$CFDIR/keep.json" "$CFDIR/projects.json"; sleep 3
