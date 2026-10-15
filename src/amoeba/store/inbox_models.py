@@ -29,6 +29,7 @@ class SubmissionKind(StrEnum):
     RESOLUTION = "resolution"
     INTENT = "intent"
     VERDICT = "verdict"
+    WATCH_REVIEWS = "watch_reviews"
 
 
 #: Payload keys each kind's effect reads, defined once. The envelope's payload
@@ -38,6 +39,8 @@ RESOLUTION_BLOCKED_STATE_ID: Final = "blocked_state_id"
 RESOLUTION_DETAIL: Final = "detail"
 INTENT_NODE_ID: Final = "node_id"
 INTENT_BODY: Final = "body"
+WATCH_REVIEWS_DIR: Final = "reviews_dir"
+WATCH_ACTIVE: Final = "active"
 
 
 class SubmissionOutcome(StrEnum):

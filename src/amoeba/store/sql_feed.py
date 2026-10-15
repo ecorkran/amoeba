@@ -147,3 +147,25 @@ SELECT_DETECTIONS_BY_OUTCOME: Final = (
 ORDER BY {COL_DETECTION_ID}
 """
 )
+
+# --------------------------------------------------------------------------
+# review_watches statements
+# --------------------------------------------------------------------------
+
+#: Register a directory, or change an existing watch's ``active``. A new row
+#: starts with ``baselined_at`` NULL; an update never touches it, so
+#: reactivating a directory does not re-baseline.
+UPSERT_WATCH: Final = f"""
+INSERT INTO {TABLE_REVIEW_WATCHES} (
+    {COL_WATCH_PROJECT_ID},
+    {COL_WATCH_REVIEWS_DIR},
+    {COL_WATCH_ACTIVE},
+    {COL_WATCH_REGISTERED_AT},
+    {COL_WATCH_BASELINED_AT},
+    {COL_WATCH_UPDATED_AT}
+)
+VALUES (?, ?, ?, ?, NULL, ?)
+ON CONFLICT ({COL_WATCH_PROJECT_ID}, {COL_WATCH_REVIEWS_DIR}) DO UPDATE
+SET {COL_WATCH_ACTIVE} = excluded.{COL_WATCH_ACTIVE},
+    {COL_WATCH_UPDATED_AT} = excluded.{COL_WATCH_UPDATED_AT}
+"""

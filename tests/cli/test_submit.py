@@ -108,6 +108,7 @@ KIND_FLAGS: dict[SubmissionKind, tuple[str, ...]] = {
         "--source",
         "artifact_frontmatter",
     ),
+    SubmissionKind.WATCH_REVIEWS: ("--reviews-dir", "/abs/reviews", "--active", "true"),
 }
 
 
@@ -126,6 +127,18 @@ def test_submit_prints_the_id_of_the_file_it_wrote(
     [written] = _new_files(supervisor_dir)
     assert written.name.endswith(f"-{submission_id}{layout.SUBMISSION_SUFFIX}")
     assert json.loads(written.read_text())["kind"] == kind.value
+
+
+@pytest.mark.parametrize("active", [True, False])
+def test_watch_reviews_takes_active_as_json(supervisor_dir: Path, active: bool) -> None:
+    flags = ("--reviews-dir", "/abs/reviews", "--active", json.dumps(active))
+    result = run_cli(
+        _submit_arguments(SubmissionKind.WATCH_REVIEWS, *flags), supervisor_dir
+    )
+
+    assert result.returncode == ExitCode.OK, result.stderr
+    [written] = _new_files(supervisor_dir)
+    assert json.loads(written.read_text())["payload"]["active"] is active
 
 
 def test_a_supplied_id_is_used(supervisor_dir: Path) -> None:

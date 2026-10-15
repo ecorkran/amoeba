@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from datetime import datetime
+from pathlib import Path
 from typing import Final
 
 from pydantic import (
@@ -82,6 +83,24 @@ class IntentPayload(BaseModel):
     body: dict[str, object]
 
 
+class WatchReviewsPayload(BaseModel):
+    """Registers or deactivates one review directory for detection."""
+
+    model_config = MODEL_CONFIG
+
+    reviews_dir: str
+    active: bool
+
+    @field_validator("reviews_dir")
+    @classmethod
+    def _reviews_dir_is_absolute(cls, value: str) -> str:
+        # Stored as given and scanned by a process with its own cwd, so a
+        # relative path would name a different directory there.
+        if not Path(value).is_absolute():
+            raise ValueError(f"reviews_dir must be an absolute path: {value!r}")
+        return value
+
+
 #: The kind-to-payload-model table, defined once. A kind missing here fails a
 #: test, not a user.
 KIND_PAYLOAD_MODELS: Final[Mapping[SubmissionKind, type[BaseModel]]] = {
@@ -89,6 +108,7 @@ KIND_PAYLOAD_MODELS: Final[Mapping[SubmissionKind, type[BaseModel]]] = {
     SubmissionKind.RESOLUTION: ResolutionPayload,
     SubmissionKind.INTENT: IntentPayload,
     SubmissionKind.VERDICT: VerdictPayload,
+    SubmissionKind.WATCH_REVIEWS: WatchReviewsPayload,
 }
 
 #: The kind values, as plain strings, for checking a raw decoded field.

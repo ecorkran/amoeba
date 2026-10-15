@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import ClassVar
 
-from amoeba.store import sql, sql_inbox
+from amoeba.store import sql, sql_feed, sql_inbox
 from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter
 from amoeba.store._verdict_writer import VerdictWriter
@@ -36,6 +36,8 @@ from amoeba.store.inbox_models import (
     INTENT_NODE_ID,
     RESOLUTION_BLOCKED_STATE_ID,
     RESOLUTION_DETAIL,
+    WATCH_ACTIVE,
+    WATCH_REVIEWS_DIR,
     Channel,
     SubmissionKind,
     SubmissionOutcome,
@@ -271,6 +273,30 @@ class InboxOperations(BlockWriter, VerdictWriter):
             application.timestamp,
         )
 
+    def _apply_watch_reviews(
+        self: InboxOperations, application: _Application
+    ) -> str | None:
+        """Register a review directory, or change whether it is watched.
+
+        The baseline is the detection tenant's job, not this effect's: the
+        store does no filesystem reads.
+        """
+        reviews_dir = _payload_text(application.payload, WATCH_REVIEWS_DIR)
+        active = application.payload.get(WATCH_ACTIVE)
+        if not isinstance(active, bool):
+            raise ValueError(f"submission payload {WATCH_ACTIVE!r} must be a bool")
+        self._execute(
+            sql_feed.UPSERT_WATCH,
+            (
+                application.project_id,
+                reviews_dir,
+                int(active),
+                application.timestamp,
+                application.timestamp,
+            ),
+        )
+        return None
+
     #: The kind-to-effect table, defined once. A kind missing here fails a
     #: test, not a user.
     KIND_EFFECTS: ClassVar[Mapping[SubmissionKind, Effect]] = {
@@ -278,4 +304,5 @@ class InboxOperations(BlockWriter, VerdictWriter):
         SubmissionKind.RESOLUTION: _apply_resolution,
         SubmissionKind.INTENT: _apply_intent,
         SubmissionKind.VERDICT: _apply_verdict,
+        SubmissionKind.WATCH_REVIEWS: _apply_watch_reviews,
     }

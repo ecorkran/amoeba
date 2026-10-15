@@ -20,6 +20,8 @@ from amoeba.store.inbox_models import (
     INTENT_NODE_ID,
     RESOLUTION_BLOCKED_STATE_ID,
     RESOLUTION_DETAIL,
+    WATCH_ACTIVE,
+    WATCH_REVIEWS_DIR,
     QuarantineReason,
     SubmissionKind,
 )
@@ -32,6 +34,7 @@ EFFECT_KEYS = {
     SubmissionKind.RESOLUTION: {RESOLUTION_BLOCKED_STATE_ID, RESOLUTION_DETAIL},
     SubmissionKind.INTENT: {INTENT_NODE_ID, INTENT_BODY},
     SubmissionKind.VERDICT: set(VERDICT_PAYLOAD_KEYS),
+    SubmissionKind.WATCH_REVIEWS: {WATCH_REVIEWS_DIR, WATCH_ACTIVE},
 }
 
 
