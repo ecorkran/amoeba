@@ -141,6 +141,41 @@ def test_another_review_type_or_node_is_never_the_previous(store: Store) -> None
     assert store.finding_changes("r3").previous_verdict_id is None
 
 
+def test_samples_of_one_invocation_are_not_each_others_previous_round(
+    store: Store,
+) -> None:
+    node = seed_node(store)
+    for sample_id in ("a1", "a2"):
+        store.record_verdict(
+            verdict_input(sample_id, node, _KEPT, judge_invocation_id="j1"),
+            project_id=PROJECT,
+        )
+    assert store.finding_changes("a2").previous_verdict_id is None
+
+
+def test_a_sample_of_a_later_invocation_names_an_earlier_one(store: Store) -> None:
+    node = seed_node(store)
+    for sample_id, invocation in (("a1", "j1"), ("a2", "j1"), ("b1", "j2")):
+        store.record_verdict(
+            verdict_input(sample_id, node, _KEPT, judge_invocation_id=invocation),
+            project_id=PROJECT,
+        )
+    # The latest earlier comparable verdict that is not its own invocation's.
+    assert store.finding_changes("b1").previous_verdict_id == "a2"
+
+
+def test_an_ordinary_reviews_previous_round_ignores_the_sample_rule(
+    store: Store,
+) -> None:
+    node = seed_node(store)
+    store.record_verdict(verdict_input("r1", node, _KEPT), project_id=PROJECT)
+    store.record_verdict(
+        verdict_input("s1", node, _KEPT, judge_invocation_id="j1"), project_id=PROJECT
+    )
+    store.record_verdict(verdict_input("r2", node, _KEPT), project_id=PROJECT)
+    assert store.finding_changes("r2").previous_verdict_id == "s1"
+
+
 def test_the_captured_102_rounds_through_the_store(store: Store) -> None:
     """Every finding reworded between rounds, so nothing is recurring.
 

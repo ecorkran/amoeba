@@ -115,3 +115,37 @@ def test_a_verdict_without_an_invocation_is_unaffected(store: Store) -> None:
         verdict_input("v1", other, review_type="slice"), project_id=PROJECT
     )
     assert ordinary.judge_invocation_id is None
+
+
+# --------------------------------------------------------------------------
+# Reading an invocation back
+# --------------------------------------------------------------------------
+
+
+def test_three_samples_are_three_records_read_back_by_invocation(
+    store: Store,
+) -> None:
+    node = seed_node(store)
+    for index, model in enumerate(("model-a", "model-b", "model-c"), start=1):
+        store.record_verdict(
+            _sample(f"s{index}", node, model=model, sq_run_id=f"run-{index}"),
+            project_id=PROJECT,
+        )
+    store.record_verdict(_sample("other", node, invocation="j2"), project_id=PROJECT)
+    store.record_verdict(verdict_input("plain", node), project_id=PROJECT)
+
+    samples = store.verdicts(PROJECT, judge_invocation_id="j1")
+    assert [v.id for v in samples] == ["s1", "s2", "s3"]
+    assert [v.model for v in samples] == ["model-a", "model-b", "model-c"]
+    assert [v.sq_run_id for v in samples] == ["run-1", "run-2", "run-3"]
+    assert store.verdicts(PROJECT, judge_invocation_id="nope") == []
+
+
+def test_the_invocation_filter_combines_with_the_node_filter(store: Store) -> None:
+    node, other = seed_node(store), seed_node(store)
+    store.record_verdict(_sample("s1", node), project_id=PROJECT)
+    store.record_verdict(_sample("s2", other, invocation="j2"), project_id=PROJECT)
+    assert [
+        v.id for v in store.verdicts(PROJECT, node_id=node, judge_invocation_id="j1")
+    ] == ["s1"]
+    assert store.verdicts(PROJECT, node_id=other, judge_invocation_id="j1") == []

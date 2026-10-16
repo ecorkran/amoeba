@@ -154,6 +154,16 @@ WHERE {COL_VERDICT_PROJECT_ID} = ?
 ORDER BY {COL_VERDICT_RECORDED_SEQ}
 """
 
+#: One invocation's samples, in arrival order; ``node_id`` narrows when not NULL.
+SELECT_VERDICTS_FOR_INVOCATION: Final = f"""
+SELECT {_VERDICT_SELECT_LIST}
+FROM {TABLE_VERDICTS}
+WHERE {COL_VERDICT_PROJECT_ID} = ?
+  AND {COL_VERDICT_JUDGE_INVOCATION_ID} = ?
+  AND (? IS NULL OR {COL_VERDICT_NODE_ID} = ?)
+ORDER BY {COL_VERDICT_RECORDED_SEQ}
+"""
+
 #: The earliest recorded sample of one invocation: its node and review type define
 #: the invocation (D2). Served by ``idx_verdicts_judge_invocation``.
 SELECT_INVOCATION_DEFINITION: Final = f"""

@@ -60,14 +60,25 @@ class VerdictOperations(VerdictWriter):
         return self._load_verdict(verdict_id)
 
     def verdicts(
-        self, project_id: str, *, node_id: str | None = None
+        self,
+        project_id: str,
+        *,
+        node_id: str | None = None,
+        judge_invocation_id: str | None = None,
     ) -> list[VerdictRecord]:
-        """A project's verdicts, optionally for one node, in arrival order."""
+        """A project's verdicts in arrival order, optionally narrowed.
+
+        ``node_id`` keeps one node's verdicts; ``judge_invocation_id`` keeps
+        exactly that invocation's samples. They combine.
+        """
         statement, parameters = (
             (sql_evidence.SELECT_VERDICTS, (project_id,))
             if node_id is None
             else (sql_evidence.SELECT_VERDICTS_FOR_NODE, (project_id, node_id))
         )
+        if judge_invocation_id is not None:
+            statement = sql_evidence.SELECT_VERDICTS_FOR_INVOCATION
+            parameters = (project_id, judge_invocation_id, node_id, node_id)
         rows = self._execute(statement, parameters).fetchall()
         return [self._record_from_row(row) for row in rows]
 
@@ -159,6 +170,8 @@ class VerdictOperations(VerdictWriter):
         ).fetchall()
         for row in rows:
             candidate = map_verdict(row, ())
+            if _same_invocation(target, candidate):
+                continue  # one invocation's samples are never each other's round
             if candidate.standing in COMPARABLE_STANDINGS:
                 return candidate
         return None
@@ -168,6 +181,13 @@ class VerdictOperations(VerdictWriter):
         if record is None:
             raise VerdictNotFoundError(f"no verdict with id {verdict_id!r}")
         return record
+
+
+def _same_invocation(target: VerdictRecord, candidate: VerdictRecord) -> bool:
+    return (
+        target.judge_invocation_id is not None
+        and candidate.judge_invocation_id == target.judge_invocation_id
+    )
 
 
 def _key(observation: FindingObservation) -> tuple[int, str]:
