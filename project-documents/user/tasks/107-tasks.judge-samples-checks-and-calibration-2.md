@@ -216,13 +216,14 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Per LLD "CLI", the listing shows and filters on the field.
 
 **Steps**:
-- [ ] Read `cli/inspect_evidence.py` and the `Listing`/`ValueOption` definitions in `cli/inspect.py`. Add the column after `standing` and a `--judge-invocation-id` value option that passes through to `verdicts(…, judge_invocation_id=)`
-- [ ] Update the test that pins the verdicts columns (`tests/cli/test_inspect_evidence.py`, `test_verdicts_table_has_the_pinned_columns`)
-- [ ] Add a test: with samples of two invocations, the option returns only the named one; `--json` includes the field
+- [x] Read `cli/inspect_evidence.py` and the `Listing`/`ValueOption` definitions in `cli/inspect.py`. Add the column after `standing` and a `--judge-invocation-id` value option that passes through to `verdicts(…, judge_invocation_id=)`
+- [x] Update the test that pins the verdicts columns (`tests/cli/test_inspect_evidence.py`, `test_verdicts_table_has_the_pinned_columns`)
+- [x] Add a test: with samples of two invocations, the option returns only the named one; `--json` includes the field
 
 **Success Criteria**:
-- [ ] Tests, `ruff`, `pyright` pass
-- [ ] Commit, e.g. `feat(cli): show and filter verdicts by judge invocation`
+- [x] Tests, `ruff`, `pyright` pass
+- [x] Commit, e.g. `feat(cli): show and filter verdicts by judge invocation`
+  - Note: Committed with Task 7.6 in combined commit 9255baa; column and option are in cli/inspect_evidence.py and cli/inspect.py
 
 **Files to Modify**: `cli/inspect_evidence.py`, `tests/cli/test_inspect_evidence.py`
 
@@ -235,15 +236,16 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Two read-only listings registered through the registry (LLD "CLI", "Component Structure").
 
 **Steps**:
-- [ ] Create `src/amoeba/cli/inspect_checks.py` as a sibling of `inspect_evidence.py`, exposing the two `Listing`s; append them to `LISTINGS` from there, not inline in `inspect.py`
-- [ ] `checks`: `--project`, optional `--node`; columns `recorded_seq, id, node_id, name, outcome, examined_count, standing, baseline_ref, upstream_version`, with `standing` computed through `check_standing` (the one function)
-- [ ] `calibration`: `--project`; one row per `(review_type, model)` with the D3 columns under the names fixed in Task 5.1
-- [ ] Both work on a read-only store and accept `--json`
-- [ ] Update the pinned-registry test (`tests/inbox/test_listings.py`, where `LISTINGS` names are pinned)
+- [x] Create `src/amoeba/cli/inspect_checks.py` as a sibling of `inspect_evidence.py`, exposing the two `Listing`s; append them to `LISTINGS` from there, not inline in `inspect.py`
+- [x] `checks`: `--project`, optional `--node`; columns `recorded_seq, id, node_id, name, outcome, examined_count, standing, baseline_ref, upstream_version`, with `standing` computed through `check_standing` (the one function)
+- [x] `calibration`: `--project`; one row per `(review_type, model)` with the D3 columns under the names fixed in Task 5.1
+- [x] Both work on a read-only store and accept `--json`
+- [x] Update the pinned-registry test (`tests/inbox/test_listings.py`, where `LISTINGS` names are pinned)
 
 **Success Criteria**:
-- [ ] `inspect checks` and `inspect calibration` appear in `amoeba inspect --help`
-- [ ] Committed with Task 7.6
+- [x] `inspect checks` and `inspect calibration` appear in `amoeba inspect --help`
+- [x] Committed with Task 7.6
+  - Note: checks and calibration rows live in cli/inspect_checks.py and are registered in cli/inspect.py following the sibling pattern; the pinned-registry test is tests/test_cli_inspect.py
 
 **Files to Create**: `src/amoeba/cli/inspect_checks.py`
 **Files to Modify**: `cli/inspect.py` (registration only), listing registry tests
@@ -257,13 +259,13 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Pin the column sets and the key behaviors (LLD Functional Requirements, check standings).
 
 **Steps**:
-- [ ] Add `tests/cli/test_inspect_checks.py` following `test_inspect_evidence.py`: `checks` has the pinned columns; a check with count 12/passed shows `passed`, count 0/passed shows `vacuous`, count 0/failed shows `vacuous`, count null shows `unattested`, errored shows `errored`; `--node` filters; `--json` includes the same fields
-- [ ] `calibration` has the pinned columns, one row per group, and an empty project gives zero rows and a clean exit
-- [ ] Both run against a store while the process lock is held elsewhere (read-only open), as the other listing tests do
+- [x] Add `tests/cli/test_inspect_checks.py` following `test_inspect_evidence.py`: `checks` has the pinned columns; a check with count 12/passed shows `passed`, count 0/passed shows `vacuous`, count 0/failed shows `vacuous`, count null shows `unattested`, errored shows `errored`; `--node` filters; `--json` includes the same fields
+- [x] `calibration` has the pinned columns, one row per group, and an empty project gives zero rows and a clean exit
+- [x] Both run against a store while the process lock is held elsewhere (read-only open), as the other listing tests do
 
 **Success Criteria**:
-- [ ] Tests pass; full suite passes
-- [ ] Commit, e.g. `feat(cli): add checks and calibration listings`
+- [x] Tests pass; full suite passes
+- [x] Commit, e.g. `feat(cli): add checks and calibration listings`
 
 **Files to Create**: `tests/cli/test_inspect_checks.py`
 
