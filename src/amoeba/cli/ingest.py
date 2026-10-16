@@ -25,6 +25,7 @@ from amoeba.upstream.squadron import (
     SquadronReviewError,
     parse_review_artifact,
     parse_review_json,
+    review_record_id,
     to_verdict_input,
 )
 
@@ -76,6 +77,14 @@ def add_ingest_parser(subparsers: Any) -> None:
         help="Squadron's version, for a review that carries no stamp.",
     )
     review.add_argument(
+        "--judge-invocation-id",
+        metavar="ID",
+        help=(
+            "Mark the review as one judge sample of this invocation. Without "
+            "--id the record id is the digest followed by '.' and this id."
+        ),
+    )
+    review.add_argument(
         "--id",
         dest="record_id",
         metavar="ID",
@@ -85,6 +94,18 @@ def add_ingest_parser(subparsers: Any) -> None:
             "another node is a no-op unless a new --id is given."
         ),
     )
+
+
+def _sample_record_id(args: argparse.Namespace, parsed: ParsedReview) -> str | None:
+    """The record id for this ingest, or ``None`` to take 105's default digest.
+
+    An explicit ``--id`` is used as given. A judge sample's default id is the
+    digest followed by ``.`` and its invocation id, so the same file under one
+    invocation is a no-op replay and under a second invocation is a new sample.
+    """
+    if args.record_id is not None or args.judge_invocation_id is None:
+        return args.record_id
+    return f"{review_record_id(parsed)}.{args.judge_invocation_id}"
 
 
 def _fail(message: str) -> None:
@@ -106,9 +127,10 @@ def _compose(args: argparse.Namespace, path: Path) -> tuple[ParsedReview, Verdic
     verdict = to_verdict_input(
         parsed,
         node_id=args.node,
-        record_id=args.record_id,
+        record_id=_sample_record_id(args, parsed),
         upstream_version=args.upstream_version,
         source_path=str(path),
+        judge_invocation_id=args.judge_invocation_id,
     )
     return parsed, verdict
 

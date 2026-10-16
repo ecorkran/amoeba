@@ -321,6 +321,44 @@ def test_id_overrides_the_digest_and_is_the_submission_id(
     assert _submission(supervisor_dir)["id"] == "chosen-id"
 
 
+def _ingest_review(supervisor_dir: Path, *arguments: str) -> CommandResult:
+    return ingest(
+        supervisor_dir,
+        "--artifact",
+        str(ROUND_1_PART_1),
+        "--upstream-version",
+        PRE_STAMP_LABEL,
+        *arguments,
+    )
+
+
+def test_a_sample_id_is_the_digest_then_dot_then_the_invocation(
+    supervisor_dir: Path,
+) -> None:
+    digest = review_record_id(
+        parse_review_artifact(ROUND_1_PART_1.read_text(encoding="utf-8"))
+    )
+    plain = _ingest_review(supervisor_dir)
+    sample = _ingest_review(supervisor_dir, "--judge-invocation-id", "j1")
+
+    assert plain.stdout.strip() == digest  # 105's id, unchanged
+    assert sample.stdout.strip() == f"{digest}.j1"
+    submissions = [
+        cast(dict[str, object], json.loads(f.read_text(encoding="utf-8")))
+        for f in new_files(supervisor_dir)
+    ]
+    invocations = {s["id"]: cast(dict[str, object], s["payload"]) for s in submissions}
+    assert invocations[digest]["judge_invocation_id"] is None
+    assert invocations[f"{digest}.j1"]["judge_invocation_id"] == "j1"
+
+
+def test_id_overrides_the_sample_default(supervisor_dir: Path) -> None:
+    result = _ingest_review(
+        supervisor_dir, "--judge-invocation-id", "j1", "--id", "chosen-id"
+    )
+    assert result.stdout.strip() == "chosen-id"
+
+
 def test_the_same_review_for_another_node_shares_its_id(supervisor_dir: Path) -> None:
     """The id is a digest of the review, not of the node (D5): pinned, and shown."""
     first = ingest(
