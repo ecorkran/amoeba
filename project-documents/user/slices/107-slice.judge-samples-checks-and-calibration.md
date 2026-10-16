@@ -361,7 +361,7 @@ Changes to earlier contracts, each recorded in the contract docs and `CHANGELOG.
 
 ### Verification Walkthrough
 
-Draft; it is refined with real output when Phase 6 is complete. Run in **bash** from the repository root (`$BASE` relies on word splitting; in zsh use `${=BASE}`). `scripts/demo_evidence.py` (104) seeds one node in the `demo` project and prints its id. The judge fixture's filename is settled at capture; `$JUDGE` below stands for it.
+Run on 20261015 against the implemented slice; every expected result below was observed. Run in **bash** from the repository root (`$BASE` relies on word splitting; in zsh use `${=BASE}`). `scripts/demo_evidence.py` (104) seeds one node in the `demo` project and prints its id. `$JUDGE` is the real judge fixture captured in Task 7.2.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
@@ -372,7 +372,7 @@ uv run amoeba stop
 NODE=$(uv run python scripts/demo_evidence.py)
 uv run amoeba start --sq-runs-dir "$(mktemp -d)" &
 until uv run amoeba status | grep -q '^running'; do sleep 0.2; done
-JUDGE=tests/fixtures/sq_reviews/<judge fixture>.md
+JUDGE=tests/fixtures/sq_reviews/107-review.judge.slice-vs-arch.judge-samples-checks-and-calibration.20261015.md
 ```
 
 **1. A real judge sample.**
@@ -397,7 +397,7 @@ uv run amoeba submit verdict $BASE --id s3 --model model-b --verdict CONCERNS --
 uv run amoeba inspect calibration --project demo
 ```
 
-Expected: `inspect verdicts --judge-invocation-id j1` lists three rows. `inspect calibration` shows two rows. The `model-b` row has `samples` 2, `invocations` 1, `pass` 1, `concerns` 1, and `score_min` 62, `score_max` 81.
+Expected: `inspect verdicts --judge-invocation-id j1` lists three rows. `inspect calibration` shows two rows: the fixture's `claude-sonnet-5-5` (1 sample, score 86) and `model-b`. The `model-b` row has `samples` 2, `invocations` 1, `pass` 1, `concerns` 1, and `score_min` 62, `score_max` 81.
 
 **3. A sample on the wrong node is refused.** Seeding a second node needs the process stopped (`demo_evidence.py` takes the lock). Instead, submit a sample of `j1` with `--review-type slice`.
 
@@ -420,7 +420,7 @@ Expected standings: `c1` `passed`, `c2` `vacuous`, `c3` `unattested`.
 
 ```bash
 uv run amoeba ingest review --project demo --node "$NODE" --by judge \
-  --stdout-json tests/fixtures/sq_reviews/<edited judge stdout>.json; echo "exit $?"
+  --stdout-json tests/fixtures/sq_reviews/105-review.slice.squadron-review-parser-and-ingest.20261015T041112.stdout-unknown-with-score-edited.json; echo "exit $?"
 ```
 
 Expected: the stderr message points at the saved file, `exit 12`, and nothing new appears under the project's `inbox/new/`.
