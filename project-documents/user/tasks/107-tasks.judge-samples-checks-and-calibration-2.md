@@ -160,8 +160,8 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 **Success Criteria**:
 - [x] `ruff`, `pyright` pass; 105's ingest tests pass unchanged
-- [ ] Committed with Task 7.3
-  - Note: sample-id rule already tested against the existing real artifact ROUND_1_PART_1 in tests/cli/test_ingest.py
+- [x] Committed with Task 7.3
+  - Note: committed in abecb8b; sample-id rule already tested against the existing real artifact ROUND_1_PART_1 in tests/cli/test_ingest.py
 
 **Files to Modify**: `src/amoeba/cli/ingest.py`
 
@@ -169,20 +169,21 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 ### Task 7.2: Confirm the real judge artifact and test it against 105's parser
 
-> BLOCKED: no judge-template review artifact in tests/fixtures/sq_reviews/; PM asked.
 **Owner**: Junior AI (the capture itself is a PM step)
 **Dependencies**: Task 7.1
 **Effort**: 2
 **Objective**: The real judge artifact parses to its stated values (LLD Functional Requirements, Technical Requirements on the fixture). It sits here, not at the start, so the PM's capture does not block earlier work.
 
 **Steps**:
-- [ ] Look in `tests/fixtures/sq_reviews/` for a saved judge-template review artifact (`reviewType` starting `judge.`) from a pipeline run on squadron 0.21.9 or later. If it is missing, **stop and ask the PM** to capture it (a pipeline run in a throwaway copy of a repository). Do not hand-write it. Tasks 7.3, 8.1, and 8.3 need it; Task 1.1 asked for it up front
-- [ ] Confirm `tests/fixtures/README.md` records its command, Squadron version, and date. If an entry is missing, ask the PM; do not infer
-- [ ] Add a path constant to `tests/review_fixtures.py` and `tests/upstream/test_review_judge_fixture.py`, in the style of `test_review_artifact.py`: assert review type, verdict, score, model, and criteria equal the values stated in the file, and that `verdict_source` is absent, so the resulting trust label is `unattested`
+- [x] Look in `tests/fixtures/sq_reviews/` for a saved judge-template review artifact (`reviewType` starting `judge.`) from a pipeline run on squadron 0.21.9 or later. If it is missing, **stop and ask the PM** to capture it (a pipeline run in a throwaway copy of a repository). Do not hand-write it. Tasks 7.3, 8.1, and 8.3 need it; Task 1.1 asked for it up front
+  - Note: fixture is `tests/fixtures/sq_reviews/107-review.judge.slice-vs-arch.judge-samples-checks-and-calibration.20261015.md`, captured with squadron 0.22.0
+- [x] Confirm `tests/fixtures/README.md` records its command, Squadron version, and date. If an entry is missing, ask the PM; do not infer
+- [x] Add a path constant to `tests/review_fixtures.py` and `tests/upstream/test_review_judge_fixture.py`, in the style of `test_review_artifact.py`: assert review type, verdict, score, model, and criteria equal the values stated in the file, and that `verdict_source` is absent, so the resulting trust label is `unattested`
 
 **Success Criteria**:
-- [ ] The fixture is present, documented, and its tests pass against the unmodified parser
-- [ ] Commit, e.g. `test: add real judge review fixture tests`
+- [x] The fixture is present, documented, and its tests pass against the unmodified parser
+- [x] Commit, e.g. `test: add real judge review fixture tests`
+  - Note: committed in 6541f32
 
 **Files to Create**: `tests/upstream/test_review_judge_fixture.py`
 **Files to Modify**: `tests/review_fixtures.py`, `tests/fixtures/README.md` (if the PM's capture lacks an entry)
@@ -196,14 +197,15 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Pin the sample-id rule with the real judge fixture (LLD Functional Requirements, third and tenth bullets).
 
 **Steps**:
-- [ ] In `tests/cli/test_ingest.py` (or `test_ingest_end_to_end_modes.py` if it already runs the store): ingest the judge artifact under invocation `j1` and assert a verdict with `judge_invocation_id == "j1"`, the file's review type, verdict, score, and model, and trust label `unattested`
-- [ ] Ingest the same file under `j1` and `j2`: two samples. Ingest it twice under `j1`: one sample
-- [ ] An ordinary review ingested without the flag keeps 105's id exactly; `--id` overrides the default in both cases
-- [ ] If 105's ingest tests run through a harness (`tests/ingest_e2e_harness.py`), reuse it rather than building a second
+- [x] In `tests/cli/test_ingest.py` (or `test_ingest_end_to_end_modes.py` if it already runs the store): ingest the judge artifact under invocation `j1` and assert a verdict with `judge_invocation_id == "j1"`, the file's review type, verdict, score, and model, and trust label `unattested`
+- [x] Ingest the same file under `j1` and `j2`: two samples. Ingest it twice under `j1`: one sample
+- [x] An ordinary review ingested without the flag keeps 105's id exactly; `--id` overrides the default in both cases
+- [x] If 105's ingest tests run through a harness (`tests/ingest_e2e_harness.py`), reuse it rather than building a second
 
 **Success Criteria**:
-- [ ] Tests pass; full suite passes
-- [ ] Commit, e.g. `feat(cli): ingest judge samples under an invocation`
+- [x] Tests pass; full suite passes
+- [x] Commit, e.g. `feat(cli): ingest judge samples under an invocation`
+  - Note: committed in abecb8b (titled `test: ingest judge samples through the store`)
 
 **Files to Modify**: ingest tests as listed
 
@@ -280,13 +282,14 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: LLD Integration Requirements, first bullet. The wrong-review-type rejection and the stdout refusal are already pinned (Tasks 4.4 and 1.3) and are not repeated here.
 
 **Steps**:
-- [ ] Read `tests/cli/test_evidence_end_to_end.py` and `tests/ingest_e2e_harness.py`; add `tests/cli/test_judge_end_to_end.py` using the same subprocess harness. Seed the node the way those tests do
-- [ ] Flow: create a project, seed a node, ingest the judge artifact under `j1`, submit two more samples and a check with count 0 through `amoeba submit`, `kill -9` the process, `start` again
-- [ ] Assert via read-only inspection: three samples under `j1`, a calibration row with the expected counts, the check `vacuous`, nothing applied twice, and `amoeba feed` shows exactly one `verdict_recorded` per sample and one `check_recorded`
+- [x] Read `tests/cli/test_evidence_end_to_end.py` and `tests/ingest_e2e_harness.py`; add `tests/cli/test_judge_end_to_end.py` using the same subprocess harness. Seed the node the way those tests do
+- [x] Flow: create a project, seed a node, ingest the judge artifact under `j1`, submit two more samples and a check with count 0 through `amoeba submit`, `kill -9` the process, `start` again
+- [x] Assert via read-only inspection: three samples under `j1`, a calibration row with the expected counts, the check `vacuous`, nothing applied twice, and `amoeba feed` shows exactly one `verdict_recorded` per sample and one `check_recorded`
 
 **Success Criteria**:
-- [ ] The test passes and does not use the production store directory
-- [ ] Commit, e.g. `test: add judge samples and checks end-to-end`
+- [x] The test passes and does not use the production store directory
+- [x] Commit, e.g. `test: add judge samples and checks end-to-end`
+  - Note: committed in cf1b690
 
 **Files to Create**: `tests/cli/test_judge_end_to_end.py`
 
@@ -299,14 +302,15 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: LLD Technical Requirements, last bullet: 140 can design without reading code.
 
 **Steps**:
-- [ ] Every doc keeps its existing YAML frontmatter conventions; update `dateUpdated`
-- [ ] `docs/evidence-contract.md`: add sections on judge samples (the three names from D1, D2 and its new-invocation remedy, the previous-round skip, sample ids and retry), calibration (D3, what it does not do, and that it **must not be consumed as agreement evidence**, citing issues #4 and #6), checks (D5 standing table; `vacuous` is not `passed`), progress records (D6, write-only, citing issue #5), and the D4 refusal as a stated exception to "unknown is a value". State that judge samples are `unattested` because Squadron omits `verdictSource`, so 140 does not read it as untrustworthy
-- [ ] `docs/inbox-contract.md`: the `check` kind and its payload. `docs/feed-contract.md`: the `check_recorded` change kind and its payload. `docs/store-contract.md`: `record_check`, `check`, `checks`, `record_progress`, `calibration`, and the new `verdicts` filter
-- [ ] Add a `CHANGELOG.md` entry covering the changes to earlier contracts listed in the LLD "Consumes from Other Slices" (104, 105, 106, 103, 102)
+- [x] Every doc keeps its existing YAML frontmatter conventions; update `dateUpdated`
+- [x] `docs/evidence-contract.md`: add sections on judge samples (the three names from D1, D2 and its new-invocation remedy, the previous-round skip, sample ids and retry), calibration (D3, what it does not do, and that it **must not be consumed as agreement evidence**, citing issues #4 and #6), checks (D5 standing table; `vacuous` is not `passed`), progress records (D6, write-only, citing issue #5), and the D4 refusal as a stated exception to "unknown is a value". State that judge samples are `unattested` because Squadron omits `verdictSource`, so 140 does not read it as untrustworthy
+- [x] `docs/inbox-contract.md`: the `check` kind and its payload. `docs/feed-contract.md`: the `check_recorded` change kind and its payload. `docs/store-contract.md`: `record_check`, `check`, `checks`, `record_progress`, `calibration`, and the new `verdicts` filter
+- [x] Add a `CHANGELOG.md` entry covering the changes to earlier contracts listed in the LLD "Consumes from Other Slices" (104, 105, 106, 103, 102)
 
 **Success Criteria**:
-- [ ] Every name and flag in the docs matches the code (grep each)
-- [ ] Commit, e.g. `docs: document judge samples, calibration, and checks`
+- [x] Every name and flag in the docs matches the code (grep each)
+- [x] Commit, e.g. `docs: document judge samples, calibration, and checks`
+  - Note: committed in 85b7872
 
 **Files to Modify**: the four docs under `docs/`, `CHANGELOG.md`
 
@@ -319,15 +323,18 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Hold LLD Technical Requirements and the Verification Walkthrough.
 
 **Steps**:
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; fix and re-run only what failed
-- [ ] Check no new source file exceeds ~300 lines (`wc -l` on the files this slice created or edited) and that `tests/test_writer_guard.py` shows no new permitted scripts
-- [ ] Run the LLD Verification Walkthrough steps 1–7 in bash against a throwaway `AMOEBA_STORE_DIR` with the real judge fixture. Where its `<judge fixture>` and `<edited judge stdout>` placeholders appear, use the judge fixture from Task 7.2 and the edited stdout fixture from Task 1.3. Compare each result with the walkthrough's expected output
-- [ ] Update the LLD walkthrough with the real output and fixture names (its header says it is refined when Phase 6 completes). Edit the walkthrough section only
-- [ ] Do not close GitHub issue #2 here: the branch is unmerged. List it for the PM as a Phase 7 action after the merge, with a pointer to D4
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; fix and re-run only what failed
+- [x] Check no new source file exceeds ~300 lines (`wc -l` on the files this slice created or edited) and that `tests/test_writer_guard.py` shows no new permitted scripts
+- [x] Run the LLD Verification Walkthrough steps 1–7 in bash against a throwaway `AMOEBA_STORE_DIR` with the real judge fixture. Where its `<judge fixture>` and `<edited judge stdout>` placeholders appear, use the judge fixture from Task 7.2 and the edited stdout fixture from Task 1.3. Compare each result with the walkthrough's expected output
+- [x] Update the LLD walkthrough with the real output and fixture names (its header says it is refined when Phase 6 completes). Edit the walkthrough section only
+- [x] Do not close GitHub issue #2 here: the branch is unmerged. List it for the PM as a Phase 7 action after the merge, with a pointer to D4
+  - Note: issue #2 is still open; closing it is a Phase 7 action after merge (see D4)
 
 **Success Criteria**:
-- [ ] Suite, `ruff`, `pyright` clean; every walkthrough step matches
-- [ ] Commit, e.g. `docs: record 107 walkthrough output`
-- [ ] The slice branch holds all commits; nothing is merged (Phase 7 follows the code review)
+- [x] Suite, `ruff`, `pyright` clean; every walkthrough step matches
+  - Note: full suite 1378 passed; ruff and pyright clean; walkthrough steps 1-6 matched, step 7 is the suite
+- [x] Commit, e.g. `docs: record 107 walkthrough output`
+  - Note: committed in d355319
+- [x] The slice branch holds all commits; nothing is merged (Phase 7 follows the code review)
 
 **Files to Modify**: `project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md` (walkthrough only)
