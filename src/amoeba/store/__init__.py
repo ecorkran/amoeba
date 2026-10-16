@@ -17,6 +17,15 @@ and deliberately not re-exported.
 from __future__ import annotations
 
 from amoeba.store.attribution import Attribution, attribute_review
+from amoeba.store.check_models import (
+    CheckInput,
+    CheckOutcome,
+    CheckRecord,
+    CheckStanding,
+    ProgressInput,
+    ProgressKind,
+    check_standing,
+)
 from amoeba.store.evidence_models import (
     COMPARABLE_STANDINGS,
     FindingChange,
@@ -106,6 +115,9 @@ __all__ = [
     "COMPARABLE_STANDINGS",
     "FindingChange",
     "FindingSeverity",
+    "CheckOutcome",
+    "CheckStanding",
+    "ProgressKind",
     "RecordSource",
     "ReviewVerdict",
     "VerdictDerivation",
@@ -116,6 +128,7 @@ __all__ = [
     "parse_severity",
     "parse_verdict",
     "verdict_standing",
+    "check_standing",
     "attribute_review",
     # Transfer objects
     "BlockedNode",
@@ -131,6 +144,9 @@ __all__ = [
     "FindingInput",
     "FindingObservation",
     "FindingSummary",
+    "CheckInput",
+    "CheckRecord",
+    "ProgressInput",
     "Provenance",
     "TaggedFinding",
     "VerdictInput",

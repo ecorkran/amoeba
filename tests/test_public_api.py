@@ -36,6 +36,14 @@ EXPECTED_EXPORTS = {
     "ReviewVerdict",
     "VerdictDerivation",
     "VerdictStanding",
+    # Check vocabularies and rule, added by slice 107
+    "CheckOutcome",
+    "CheckStanding",
+    "ProgressKind",
+    "check_standing",
+    "CheckInput",
+    "CheckRecord",
+    "ProgressInput",
     # Evidence rules, added by slice 104
     "parse_severity",
     "parse_verdict",
