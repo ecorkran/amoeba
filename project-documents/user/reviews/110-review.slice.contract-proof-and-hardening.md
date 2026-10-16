@@ -14,56 +14,66 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: 4ffb8b8b6f10aea13ec50751e6930cbb8445e974
-revision_number: 1
+reviewedSha: e7957d157e1d5f4209dddfa1712c0c7c1add9676
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-turns: 3
-promptTokens: 99470
-cachedTokens: 11028
-cacheWriteTokens: 88438
-completionTokens: 5704
-durationSeconds: 47.6
-costUsd: 0.412571
+toolCallsMade: 3
+turns: 4
+promptTokens: 186046
+cachedTokens: 93512
+cacheWriteTokens: 92528
+completionTokens: 4898
+durationSeconds: 41.3
+costUsd: 0.429124
 costBasis: provider
 runId: run-20261015-slices-plan-fa1ba72e
 squadronVersion: 0.22.0
 findings:
   - id: F001
-    severity: concern
-    category: proportionality
-    summary: "Slice is overweight; several mechanisms have no consumer yet"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Technical Scope"
+    severity: pass
+    category: architecture-alignment
+    summary: "Writer model and layer boundaries respected"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Architecture"
   - id: F002
     severity: pass
     category: architecture-alignment
-    summary: "Writer model and Squadron boundaries are respected"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8, #D3"
+    summary: "Pruning ownership follows the architecture's stated intent"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8"
   - id: F003
-    severity: pass
-    category: error-handling
-    summary: "Failure modes are enumerated for each new I/O path"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8, #Success Criteria"
+    severity: concern
+    category: proportionality
+    summary: "Pruning design (D8) is heavier than the requirement needs"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8"
   - id: F004
-    severity: note
-    category: layer-responsibilities
-    summary: "Pruning policy lives in the upstream adapter package"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Component Structure"
+    severity: concern
+    category: specification-consistency
+    summary: "Export-documentation check is specified two contradictory ways"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:47"
   - id: F005
-    severity: note
-    category: integration
-    summary: "Ownership guarantee relies on a contract line that 120 must honor"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8 (The ownership guarantee)"
-  - id: F006
-    severity: note
+    severity: concern
     category: dependencies
-    summary: "Design names surfaces from unmerged slices, and two values are unconfirmed"
+    summary: "Heavy dependence on names from three unmerged slices"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Dependencies"
+  - id: F006
+    severity: concern
+    category: under-specification
+    summary: "Scenario step 12 leaves test-input setup under-specified"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D4"
   - id: F007
+    severity: concern
+    category: error-handling
+    summary: "Failure handling for the proof harness's own processes is not enumerated"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Data-Flow"
+  - id: F008
     severity: note
-    category: scope
-    summary: "The proof drives the Runner through the `intent` channel"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D3"
+    category: architecture-alignment
+    summary: "Moving the run-file parser into `amoeba.upstream.squadron`"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#H4"
+  - id: F009
+    severity: note
+    category: scope-control
+    summary: "Hardening scope is bounded by an explicit rule"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D7"
 ---
 
 # Review: slice — slice 110
@@ -73,51 +83,89 @@ findings:
 
 ## Findings
 
-### [CONCERN] Slice is overweight; several mechanisms have no consumer yet
+### [PASS] Writer model and layer boundaries respected
 
-The slice carries four parts (proof, hardening, pruning, docs) and an effort of 3. The gate for initiative 120 is the contract proof plus the hardening. Pruning is assigned scope, so it stays. The pieces around it can be cut or deferred:
-- **`--json` and `--older-than-days`** on `amoeba prune sq-runs` (D8, API Contracts). Nothing consumes either. `PruneSettings.retention` already holds the value, and 120 may call `select_prunable` directly (Excluded). Ship the preview and `--yes` only.
-- **`scripts/demo_prune.py`**, with instance-lock handling and a writer-guard allow-list entry (Technical Scope, Verification Walkthrough step 4). It exists only to seed a manual walkthrough. The stub-`sq` tests and the schema-v5 fixture already cover the selection and the deletion path. Cut the script, or limit the walkthrough to one real-`sq` run against a fixture-seeded `HOME`.
-- **`test_docs_cover_exports.py`** (D9). It makes every future export fail the suite unless its name appears in backticks in some `docs/*.md`. That couples all later slices to documentation formatting. H1 and H3 already require doc updates. Replace it with a one-time checklist item.
-- **`test_locality.py`** (D6). Slice 101 decided locality. The scenario already starts every subprocess against one supervisor directory. Keep only the unique check, which is the project-keying isolation (alpha vs beta). Drop the separate `XDG_CONFIG_HOME` and two-working-directory matrix unless 101's and 102's tests lack them.
-- **The network subset's second kill.** Both kills are handed to this slice by 109's design, so keep them. The point is that the subset should not grow past D2's three bullets.
-- **Prose that restates other documents.** The dated Squadron observations in Dependencies, and the "Hardened in 110" and "Known gaps" guide sections, repeat what D7 and `CHANGELOG.md` already carry. State each once.
+- The Runner (`ProofRunner`) is an in-process tenant that writes directly.
+- The PM and the Judge go through the inbox.
+- The oracle and `amoeba prune` open stores read-only.
+- Pruning deletes only through `sq runs prune`, so no part edits Squadron's run files directly.
+- This matches the architecture's sole-writer model and its state-is-the-interface goal.
+- `amoeba.upstream` never imports `amoeba.process`, and the Layering rules extend the existing import-boundary test.
 
-### [PASS] Writer model and Squadron boundaries are respected
+### [PASS] Pruning ownership follows the architecture's stated intent
 
-- **Runner and reads:** `ProofRunner` is an in-process tenant writing through the store API, which is the Runner's documented position. Pruning and the oracle open stores read-only, and no new state or migration is added. This matches the architecture's sole-writer model and its "reads open to every part" rule.
-- **Squadron files:** deletion goes only through `sq runs prune`, with non-TTY stdin as the architecture requires. Amoeba never unlinks a Squadron file, which satisfies "no part edits SQ's run files directly".
-- **Pruning policy:** it implements the architecture's line "pruning policy is Amoeba's" and its use of the owned-run record for pruning.
+- The architecture says "the store's record of which paused runs it owns serves reconciliation and pruning" and "pruning policy is Amoeba's."
+- D8 derives ownership from journal results and holds a run while any non-`done` node names it.
+- It never prunes escalated-unknown runs, because Amoeba never proved those were its own.
+- The slice plan's criterion "Pruning policy for paused SQ runs is implemented and documented" is met.
+- The store-retention exclusion is explained against the slice plan's later rescoping.
 
-### [PASS] Failure modes are enumerated for each new I/O path
+### [CONCERN] Pruning design (D8) is heavier than the requirement needs
 
-- **`sq` failures:** missing, failing, timing out, and refusing a live run are all handled. The result is decided by observing the runs directory, not by parsing sq's output.
-- **Timeout:** on timeout, the `sq` process is killed and awaited before observation, so the report is final.
-- **Retries:** reruns converge. An unreadable store refuses the whole command before `sq` is called.
-- **Proof harness:** waits are predicates with timeouts. The network subset covers a server kill, a resident-process kill, and a POST made while the resident process is down.
+The slice plan asks for one thing: "Pruning policy for paused SQ runs is implemented and documented." D8 builds a lot more than that, and several parts can be cut or deferred:
+- **KeepReason enum.** Five members plus an `UnreadableRun` type feed a "kept owned runs" listing. The preview needs to show candidates and why each owned run was kept. It does not need a closed enum plus a separate unowned-count output.
+- **Timeout handling.** The design kills `sq`, waits, observes, and then makes partial-success claims. A single "sq failed or timed out, rerun" result with `PRUNE_INCOMPLETE` meets the requirement.
+- **PruneSettings.** It is a frozen dataclass whose only consumers are the two values the CLI does not expose. Two module constants are enough until something configures them.
+- **Slice size.** The slice carries four parts (proof, hardening, pruning, docs) at effort 3. The pruning part is the likeliest to grow past that.
 
-### [NOTE] Pruning policy lives in the upstream adapter package
+Trim the observation and report layers to what the preview and `--yes` output need. Defer the rest to a follow-up.
 
-`amoeba.upstream.squadron.run_pruning` holds Amoeba's retention policy. The architecture treats `upstream` as the adapter for external formats, and pruning policy is Amoeba's. The layering rules keep it pure, with no store, inbox, or process imports, so no boundary is broken. If more Amoeba-side policy accumulates there, move it. No action is needed now.
+### [CONCERN] Export-documentation check is specified two contradictory ways
 
-### [NOTE] Ownership guarantee relies on a contract line that 120 must honor
+- Included/Docs (line 47) and D9 say a test checks that every exported name is documented.
+- Technical Requirements say "Checklist, once, at the end of the slice."
+- A test and a one-time checklist are different guarantees, and the Technical Requirements do not say which one is required.
+- The consumer-documentation guarantee (the substrate-guide entry for 120, 140, and 160 authors) depends on this check.
+- Pick one. A mechanical test matches the slice's "executable documentation" framing and the D1 AST rule.
 
-`record_runner_report` enforces `run_id` in `result` for `sq_run` entries. Direct `journal_resolve` calls by 120 are bound only by a documentation line. If 120 omits `run_id`, its runs are never owned and never pruned, so the failure is safe and the cost is leaked paused runs. Make sure 120's slice design cites this line.
+### [CONCERN] Heavy dependence on names from three unmerged slices
 
-### [NOTE] Design names surfaces from unmerged slices, and two values are unconfirmed
+- 107, 108, and 109 are `not_started`.
+- This design fixes many of their names and behaviors:
+  - `judge_invocation_id`, `CFWatchTenant`, `cf_version_label`, and `store/discovery.py`;
+  - `as_of_seq`, the `Last-Event-ID` semantics, and `inspection`;
+  - `ExitCode` 13/14 numbering.
+- The first-task gate handles this: it stops for the PM and reconciles names. That is the right mitigation.
+- The design is still committing in detail to unreviewed surfaces. Keep the stable parts (D1–D3, D5, D8) free of those names where possible, so a late change in 107–109 does not force a rewrite.
+- This is a risk note, not a defect.
 
-- **Unmerged surfaces:** 107, 108, and 109 are `not_started`. Names taken from them include `discover_project_ids`, `nodes_for_project`, `amoeba.upstream.context_forge`, and exit code 13. The first-task gate (stop for the PM, then reconcile names) handles this adequately.
-- **Unconfirmed values:** the 7-day retention default is "pending PM confirmation", and the exit code 14 is "confirmed after 109 merges". Settle both at that gate.
+### [CONCERN] Scenario step 12 leaves test-input setup under-specified
 
-### [NOTE] The proof drives the Runner through the `intent` channel
+- Step 12 expects step 7's PM-launched run to be counted as unowned and Beta's run to be held. Neither is set up anywhere in the design.
+  - Step 7 writes a review artifact. It does not say a paused run file is written, and an unowned run only counts if one exists in the runs directory.
+  - Step 9 does not say which node (slice or gate) holds `sq.run_id`. Step 11's `finish` marks the slice and gate `done`.
+- Alpha's checkpoint run becomes a candidate only if its holding node is `done`.
+- Beta's run is held only if its node stays not `done`.
+- The design should state the node, and the run file written for step 7, so the expected `KeepReason` and unowned count are derivable from the doc.
+- The "at least 7 days" age condition also needs the fixture `updated_at` values to be explicit, or the test relies on an injected `now`.
 
-The architecture defines `intent` as Translator → Runner. `ProofRunner` repurposes it as a test driver, with step and crash-point names in the body. This is acceptable for test code, but the substrate guide should say that the intent body format is the proof's own, so 120 does not read it as a contract.
+### [CONCERN] Failure handling for the proof harness's own processes is not enumerated
+
+- The design lists readiness and change predicates with timeouts, but it does not say what happens on:
+  - the bootstrap subprocess failing to reach readiness;
+  - the SSE follower's connection dropping outside the planned kills;
+  - the `follow()` subscriber thread dying.
+- The network subset exercises new I/O paths (the HTTP POST and SSE clients). It should say that a timeout fails the test with the step number and captured process output, not a hang or a skip.
+- Pruning's failure modes (sq missing, refusing, timing out, unreadable store) are well covered. The harness side needs the same treatment.
+
+### [NOTE] Moving the run-file parser into `amoeba.upstream.squadron`
+
+- The architecture's scope says the store-adjacent adapter owns parsing of Squadron review output and "does not own parsing of other SQ output."
+- The run-file parser already exists in 102's observer, so the move is placement only.
+- It is acceptable because it is additive and pure, and 105's no-store-import rule is preserved.
+- Say in `process-contract.md` or the CHANGELOG that `run_file` is an adapter for run state files, not part of the review-output contract. Otherwise a later reader may read the move as widening the scope.
+
+### [NOTE] Hardening scope is bounded by an explicit rule
+
+- D7 limits fixes to additive changes and routes behavior or schema changes to the PM. It also defines xfail closure.
+- The four known gaps (H1–H4) are each additive.
+- This keeps the unknown-gap risk bounded, as the Special Considerations section says.
 
 ### Run Digest
 
-- Response length: 6171 chars
+- Response length: 7351 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -125,13 +173,13 @@ The architecture defines `intent` as Translator → Runner. `ProofRunner` repurp
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 99470 / 11028 / 88438 / 5704 / not computed
-- Duration: 47.6 s
-- Cost: $0.41 (provider)
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 186046 / 93512 / 92528 / 4898 / not computed
+- Duration: 41.3 s
+- Cost: $0.43 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9
