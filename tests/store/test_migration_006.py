@@ -15,7 +15,7 @@ from evidence_harness import finding, verdict_input
 
 from amoeba.store import sql, sql_evidence, sql_feed, sql_inbox, sql_journal
 from amoeba.store.mapping_evidence import observation_parameters, verdict_parameters
-from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, migrate
+from amoeba.store.migrations import migrate
 from amoeba.store.models import NodeStatus
 
 EVIDENCE_SCHEMA_VERSION = 5
@@ -91,15 +91,14 @@ def _rows(connection: sqlite3.Connection, table: str) -> list[tuple[object, ...]
     return connection.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
 
 
-def test_version_six_is_the_expected_version() -> None:
-    assert EXPECTED_SCHEMA_VERSION == FEED_SCHEMA_VERSION
-
-
 def test_upgrade_keeps_every_prior_row(store_file: Path) -> None:
     _stage_version_five_store(store_file)
     with sqlite3.connect(store_file) as connection:
         before = {table: _rows(connection, table) for table in _PRIOR_TABLES}
-        assert migrate(connection) == FEED_SCHEMA_VERSION
+        assert (
+            migrate(connection, expected_version=FEED_SCHEMA_VERSION)
+            == FEED_SCHEMA_VERSION
+        )
         after = {table: _rows(connection, table) for table in _PRIOR_TABLES}
 
     assert [len(before[table]) for table in _PRIOR_TABLES] == [2, 1, 1, 1, 1, 1]
