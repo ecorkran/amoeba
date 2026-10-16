@@ -154,6 +154,17 @@ WHERE {COL_VERDICT_PROJECT_ID} = ?
 ORDER BY {COL_VERDICT_RECORDED_SEQ}
 """
 
+#: The earliest recorded sample of one invocation: its node and review type define
+#: the invocation (D2). Served by ``idx_verdicts_judge_invocation``.
+SELECT_INVOCATION_DEFINITION: Final = f"""
+SELECT {COL_VERDICT_NODE_ID}, {COL_VERDICT_REVIEW_TYPE}
+FROM {TABLE_VERDICTS}
+WHERE {COL_VERDICT_PROJECT_ID} = ?
+  AND {COL_VERDICT_JUDGE_INVOCATION_ID} = ?
+ORDER BY {COL_VERDICT_RECORDED_SEQ}
+LIMIT 1
+"""
+
 #: Earlier rounds of one node's reviews of one type, newest first. The caller
 #: takes the first comparable one: the trust label is computed, not stored.
 SELECT_EARLIER_ROUNDS: Final = f"""

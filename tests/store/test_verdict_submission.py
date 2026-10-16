@@ -195,3 +195,23 @@ def test_verdict_and_severity_are_accepted_in_any_case(store: Store) -> None:
         FindingSeverity.CONCERN,
         FindingSeverity.NOTE,
     ]
+
+
+def test_samples_mixing_nodes_or_review_types_are_rejected_through_the_inbox(
+    store: Store,
+) -> None:
+    node, other = seed_node(store), seed_node(store)
+    sample = {"judge_invocation_id": "j1"}
+    assert _submit(store, "s1", _payload(node, **sample)).outcome is (
+        SubmissionOutcome.APPLIED
+    )
+    for submission_id, payload in (
+        ("s2", _payload(other, **sample)),
+        ("s3", _payload(node, review_type="slice", **sample)),
+    ):
+        record = _submit(store, submission_id, payload)
+        assert record.outcome is SubmissionOutcome.REJECTED
+        assert record.reason is not None
+        assert "'j1'" in record.reason
+        assert "new invocation id" in record.reason
+    assert [v.id for v in store.verdicts(PROJECT)] == ["s1"]

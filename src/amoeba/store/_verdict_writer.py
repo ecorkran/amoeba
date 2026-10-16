@@ -85,7 +85,34 @@ class VerdictWriter(StoreBase):
             return VerdictRejection(failure_problem)
         if not verdict.provenance.upstream_version.strip():
             return VerdictRejection("upstream_version must not be empty")
-        return None
+        return self._invocation_mismatch(project_id, verdict)
+
+    def _invocation_mismatch(
+        self, project_id: str, verdict: VerdictInput
+    ) -> VerdictRejection | None:
+        """D2: every sample of an invocation shares a node and a review type.
+
+        The invocation is defined by its earliest recorded sample, so a rejected
+        first sample (which writes nothing) defines nothing. Verdicts without an
+        invocation id skip the check.
+        """
+        if verdict.judge_invocation_id is None:
+            return None
+        defined = self._execute(
+            sql_evidence.SELECT_INVOCATION_DEFINITION,
+            (project_id, verdict.judge_invocation_id),
+        ).fetchone()
+        if defined is None:
+            return None
+        node_id, review_type = str(defined[0]), str(defined[1])
+        if (node_id, review_type) == (verdict.node_id, verdict.review_type):
+            return None
+        return VerdictRejection(
+            f"judge invocation {verdict.judge_invocation_id!r} already has samples "
+            f"on node {node_id!r} with review type {review_type!r}; this sample is "
+            f"on node {verdict.node_id!r} with review type {verdict.review_type!r}. "
+            "Use a new invocation id."
+        )
 
     def _insert_verdict(
         self, project_id: str, verdict: VerdictInput, recorded_at: str
