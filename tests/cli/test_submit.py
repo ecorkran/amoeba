@@ -129,6 +129,17 @@ def test_submit_prints_the_id_of_the_file_it_wrote(
     assert json.loads(written.read_text())["kind"] == kind.value
 
 
+def test_submit_verdict_takes_the_judge_invocation_id_as_typed(
+    supervisor_dir: Path,
+) -> None:
+    flags = (*KIND_FLAGS[SubmissionKind.VERDICT], "--judge-invocation-id", "j-1")
+    result = run_cli(_submit_arguments(SubmissionKind.VERDICT, *flags), supervisor_dir)
+
+    assert result.returncode == ExitCode.OK, result.stderr
+    [written] = _new_files(supervisor_dir)
+    assert json.loads(written.read_text())["payload"]["judge_invocation_id"] == "j-1"
+
+
 @pytest.mark.parametrize("active", [True, False])
 def test_watch_reviews_takes_active_as_json(supervisor_dir: Path, active: bool) -> None:
     flags = ("--reviews-dir", "/abs/reviews", "--active", json.dumps(active))

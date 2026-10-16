@@ -175,7 +175,8 @@ class VerdictInput:
     """One review result, already parsed by the caller.
 
     ``derivation``, ``fallback_used``, and ``findings_parsed`` have no default:
-    "not reported" must be said explicitly.
+    "not reported" must be said explicitly. ``judge_invocation_id`` marks a judge
+    sample: samples of one invocation share it (107, D1).
     """
 
     id: str
@@ -197,6 +198,7 @@ class VerdictInput:
     tool_calls_made: int | None = None
     sq_run_id: str | None = None
     journal_entry_id: str | None = None
+    judge_invocation_id: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

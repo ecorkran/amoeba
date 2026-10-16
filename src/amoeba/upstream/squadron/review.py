@@ -116,6 +116,7 @@ def to_verdict_input(
     upstream_version: str | None = None,
     journal_entry_id: str | None = None,
     source_path: str | None = None,
+    judge_invocation_id: str | None = None,
 ) -> VerdictInput:
     """Compose the store input from a parsed review and the caller's values."""
     return VerdictInput(
@@ -145,4 +146,5 @@ def to_verdict_input(
         tool_calls_made=parsed.tool_calls_made,
         sq_run_id=parsed.sq_run_id,
         journal_entry_id=journal_entry_id,
+        judge_invocation_id=judge_invocation_id,
     )

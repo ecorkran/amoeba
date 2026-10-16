@@ -132,12 +132,7 @@ def test_columns_match_the_single_definition_site(store_file: Path) -> None:
     with sqlite3.connect(store_file) as connection:
         migrate(connection)
         for table, expected in (
-            (
-                sql_evidence.TABLE_VERDICTS,
-                # Migration 007 appends judge_invocation_id (wired in Task 4.1).
-                sql_evidence.VERDICT_COLUMNS
-                + (sql_evidence.COL_VERDICT_JUDGE_INVOCATION_ID,),
-            ),
+            (sql_evidence.TABLE_VERDICTS, sql_evidence.VERDICT_COLUMNS),
             (sql_evidence.TABLE_FINDING_OBSERVATIONS, sql_evidence.OBSERVATION_COLUMNS),
         ):
             info = connection.execute(f"PRAGMA table_info({table})").fetchall()

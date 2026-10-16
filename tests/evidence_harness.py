@@ -15,7 +15,9 @@ from amoeba.store import (
     Store,
     VerdictDerivation,
     VerdictInput,
+    sql_evidence,
 )
+from amoeba.store.mapping_evidence import verdict_parameters
 from amoeba.upstream.squadron import parse_review_artifact, to_verdict_input
 
 PROJECT = "demo"
@@ -90,3 +92,19 @@ def captured_verdict(verdict_id: str, node_id: str, path: Path) -> VerdictInput:
         upstream_version=UPSTREAM_VERSION,
         source_path=path.name,
     )
+
+
+def pre_judge_verdict_insert(
+    verdict: VerdictInput, project_id: str, recorded_at: str
+) -> tuple[str, tuple[object, ...]]:
+    """The verdict insert as it was before migration 007, for staging old stores.
+
+    ``judge_invocation_id`` is the last insert column; a store below version 7
+    has no such column, so both the column list and the parameters drop it.
+    """
+    columns = sql_evidence.VERDICT_INSERT_COLUMNS[:-1]
+    statement = (
+        f"INSERT INTO {sql_evidence.TABLE_VERDICTS} ({', '.join(columns)}) "
+        f"VALUES ({', '.join('?' for _ in columns)})"
+    )
+    return statement, verdict_parameters(verdict, project_id, recorded_at)[:-1]

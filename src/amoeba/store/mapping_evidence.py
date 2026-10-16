@@ -166,6 +166,9 @@ def map_verdict(
             c[sq.COL_VERDICT_TOOL_CALLS_MADE], sq.COL_VERDICT_TOOL_CALLS_MADE
         ),
         sq_run_id=_optional_text(c[sq.COL_VERDICT_SQ_RUN_ID], sq.COL_VERDICT_SQ_RUN_ID),
+        judge_invocation_id=_optional_text(
+            c[sq.COL_VERDICT_JUDGE_INVOCATION_ID], sq.COL_VERDICT_JUDGE_INVOCATION_ID
+        ),
         findings=findings,
         provenance=Provenance(
             upstream=_text(c[sq.COL_VERDICT_UPSTREAM], sq.COL_VERDICT_UPSTREAM),
@@ -267,6 +270,7 @@ def verdict_parameters(
         sq.COL_VERDICT_SOURCE: verdict.provenance.source.value,
         sq.COL_VERDICT_SOURCE_PATH: verdict.provenance.source_path,
         sq.COL_VERDICT_RECORDED_AT: recorded_at,
+        sq.COL_VERDICT_JUDGE_INVOCATION_ID: verdict.judge_invocation_id,
     }
     return tuple(by_column[column] for column in sq.VERDICT_INSERT_COLUMNS)
 

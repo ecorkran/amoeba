@@ -79,6 +79,16 @@ def test_a_fully_populated_verdict_round_trips() -> None:
     assert payload["source"] == "artifact_frontmatter"
 
 
+def test_the_judge_invocation_id_round_trips_with_and_without_the_key() -> None:
+    assert (
+        _round_trip(_minimal(judge_invocation_id="j1"))["judge_invocation_id"] == "j1"
+    )
+    assert _round_trip(_minimal())["judge_invocation_id"] is None
+    without_key = verdict_to_payload(_minimal())
+    del without_key["judge_invocation_id"]
+    assert verdict_from_payload("v-1", without_key).judge_invocation_id is None
+
+
 def test_a_verdict_with_every_optional_field_none_round_trips() -> None:
     payload = _round_trip(_minimal())
     assert payload["criteria"] is None

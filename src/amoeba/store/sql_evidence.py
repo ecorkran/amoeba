@@ -40,7 +40,7 @@ COL_VERDICT_UPSTREAM_VERSION: Final = "upstream_version"
 COL_VERDICT_SOURCE: Final = "source"
 COL_VERDICT_SOURCE_PATH: Final = "source_path"
 COL_VERDICT_RECORDED_AT: Final = "recorded_at"
-#: Added by migration 007. Not yet in ``VERDICT_COLUMNS``; wired with the verdict path.
+#: Added by migration 007, so last in table order.
 COL_VERDICT_JUDGE_INVOCATION_ID: Final = "judge_invocation_id"
 
 #: Column order for every verdict SELECT and for row mapping.
@@ -69,6 +69,7 @@ VERDICT_COLUMNS: Final = (
     COL_VERDICT_SOURCE,
     COL_VERDICT_SOURCE_PATH,
     COL_VERDICT_RECORDED_AT,
+    COL_VERDICT_JUDGE_INVOCATION_ID,
 )
 
 #: ``recorded_seq`` is omitted from inserts so SQLite assigns arrival order.

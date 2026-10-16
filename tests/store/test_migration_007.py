@@ -11,11 +11,11 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from evidence_harness import finding, verdict_input
+from evidence_harness import finding, pre_judge_verdict_insert, verdict_input
 
 from amoeba.store import sql, sql_checks, sql_evidence, sql_feed
 from amoeba.store.check_models import CheckOutcome, CheckStanding
-from amoeba.store.mapping_evidence import observation_parameters, verdict_parameters
+from amoeba.store.mapping_evidence import observation_parameters
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, migrate
 from amoeba.store.models import NodeStatus, UnknownVocabularyValueError
 
@@ -51,9 +51,7 @@ def _stage_version_six_store(path: Path) -> None:
         migrate(connection, expected_version=FEED_SCHEMA_VERSION)
         _insert_node(connection, "n-1")
         _insert_node(connection, "n-2")
-        connection.execute(
-            sql_evidence.INSERT_VERDICT, verdict_parameters(verdict, PROJECT, STAGED_AT)
-        )
+        connection.execute(*pre_judge_verdict_insert(verdict, PROJECT, STAGED_AT))
         connection.execute(
             sql_evidence.INSERT_OBSERVATION,
             observation_parameters(verdict.id, 0, verdict.findings[0]),

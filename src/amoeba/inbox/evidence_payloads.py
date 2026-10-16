@@ -67,6 +67,7 @@ class VerdictPayload(BaseModel):
     tool_calls_made: int | None = None
     sq_run_id: str | None = None
     journal_entry_id: str | None = None
+    judge_invocation_id: str | None = None
 
     @field_validator("verdict", mode="before")
     @classmethod

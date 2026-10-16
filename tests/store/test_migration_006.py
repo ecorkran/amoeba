@@ -11,10 +11,10 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from evidence_harness import finding, verdict_input
+from evidence_harness import finding, pre_judge_verdict_insert, verdict_input
 
 from amoeba.store import sql, sql_evidence, sql_feed, sql_inbox, sql_journal
-from amoeba.store.mapping_evidence import observation_parameters, verdict_parameters
+from amoeba.store.mapping_evidence import observation_parameters
 from amoeba.store.migrations import migrate
 from amoeba.store.models import NodeStatus
 
@@ -77,9 +77,7 @@ def _stage_version_five_store(path: Path) -> None:
             sql_inbox.INSERT_MESSAGE,
             ("m-1", PROJECT, "intent", "n-1", None, None, "s-1", "{}", STAGED_AT),
         )
-        connection.execute(
-            sql_evidence.INSERT_VERDICT, verdict_parameters(verdict, PROJECT, STAGED_AT)
-        )
+        connection.execute(*pre_judge_verdict_insert(verdict, PROJECT, STAGED_AT))
         connection.execute(
             sql_evidence.INSERT_OBSERVATION,
             observation_parameters(verdict.id, 0, verdict.findings[0]),

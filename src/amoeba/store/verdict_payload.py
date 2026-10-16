@@ -41,6 +41,7 @@ VERDICT_CRITERIA: Final = "criteria"
 VERDICT_TOOL_CALLS_MADE: Final = "tool_calls_made"
 VERDICT_SQ_RUN_ID: Final = "sq_run_id"
 VERDICT_JOURNAL_ENTRY_ID: Final = "journal_entry_id"
+VERDICT_JUDGE_INVOCATION_ID: Final = "judge_invocation_id"
 VERDICT_FINDINGS: Final = "findings"
 VERDICT_UPSTREAM: Final = "upstream"
 VERDICT_UPSTREAM_VERSION: Final = "upstream_version"
@@ -72,6 +73,7 @@ VERDICT_PAYLOAD_KEYS: Final = frozenset(
         VERDICT_TOOL_CALLS_MADE,
         VERDICT_SQ_RUN_ID,
         VERDICT_JOURNAL_ENTRY_ID,
+        VERDICT_JUDGE_INVOCATION_ID,
         VERDICT_FINDINGS,
         VERDICT_UPSTREAM,
         VERDICT_UPSTREAM_VERSION,
@@ -203,6 +205,7 @@ def verdict_from_payload(
         tool_calls_made=_optional_int(payload, VERDICT_TOOL_CALLS_MADE),
         sq_run_id=_optional_text(payload, VERDICT_SQ_RUN_ID),
         journal_entry_id=_optional_text(payload, VERDICT_JOURNAL_ENTRY_ID),
+        judge_invocation_id=_optional_text(payload, VERDICT_JUDGE_INVOCATION_ID),
         findings=_findings(payload),
         provenance=Provenance(
             upstream=_text(payload, VERDICT_UPSTREAM),
@@ -246,6 +249,7 @@ def verdict_to_payload(verdict: VerdictInput) -> dict[str, object]:
         VERDICT_TOOL_CALLS_MADE: verdict.tool_calls_made,
         VERDICT_SQ_RUN_ID: verdict.sq_run_id,
         VERDICT_JOURNAL_ENTRY_ID: verdict.journal_entry_id,
+        VERDICT_JUDGE_INVOCATION_ID: verdict.judge_invocation_id,
         VERDICT_FINDINGS: [_finding_to_payload(item) for item in verdict.findings],
         VERDICT_UPSTREAM: verdict.provenance.upstream,
         VERDICT_UPSTREAM_VERSION: verdict.provenance.upstream_version,
