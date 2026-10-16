@@ -122,3 +122,13 @@ Command, run in a throwaway git worktree of this repo registered with `cf worktr
 | `105-review.slice.squadron-review-parser-and-ingest.20261015T041112.stdout.json` | CONCERNS | The same review's stdout: `template_name` equals the file's `reviewType` (`slice`), `run_id` null, and the same finding keys in the same order. |
 
 The stdout carries keys the 105 design does not list (`cached_tokens`, `effort`, `failed_tool_calls`, `input_files`, `max_output_tokens`, `output_budget_exhausted`, `provenance`, `reasoning_chars`, `recovery_turn_used`, `setting_sources`, `structured_findings`, `system_prompt_mode`, `turns`, `timestamp`, `profile`). The parser ignores unknown keys.
+
+### Judge-template review
+
+Captured **20261015** (Squadron 0.22.0, sdk profile, `claude-sonnet-5-5`). One real judge review, saved by Squadron as a file, from the first step of the `judge-cycle` pipeline.
+
+Command, run in a throwaway clone of this repo registered with `cf init --lite --no-ide` and `cf set arch 100-arch.substrate-run-state-store` (never the real checkout): `sq run judge-cycle 107 -p max-revisions=0,review-model=sonnet`. Only `review-0` ran; the pipeline then stopped on `loop.max must be a positive integer`, which does not affect the saved file. The file is unmodified.
+
+| File | `verdict` | Why it is here |
+| --- | --- | --- |
+| `107-review.judge.slice-vs-arch.judge-samples-checks-and-calibration.20261015.md` | PASS | A `judge.slice-vs-arch` review: `score: 86.0`, seven `criteria` scores, a `runId` and `squadronVersion: 0.22.0` stamp, and no `verdictSource`, so its trust label is `unattested`. |

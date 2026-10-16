@@ -38,3 +38,8 @@ _PAIR_STEM = "105-review.slice.squadron-review-parser-and-ingest.20261015T041112
 #: One real review captured both ways: the saved file and its stdout JSON.
 PAIR_ARTIFACT = SQ_REVIEWS / f"{_PAIR_STEM}.md"
 PAIR_STDOUT = SQ_REVIEWS / f"{_PAIR_STEM}.stdout.json"
+
+#: A real judge-template review (``judge.slice-vs-arch``) from a ``judge-cycle`` run.
+JUDGE_REVIEW_107 = SQ_REVIEWS / (
+    "107-review.judge.slice-vs-arch.judge-samples-checks-and-calibration.20261015.md"
+)

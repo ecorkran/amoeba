@@ -9,6 +9,7 @@ import pytest
 from review_fixtures import (
     FINDINGS_NOT_PARSED_925,
     FINDINGS_NOT_PARSED_EDITED,
+    JUDGE_REVIEW_107,
     PAIR_ARTIFACT,
     PR_REVIEW_116,
     PROVIDER_FAILURE_928,
@@ -159,6 +160,18 @@ EXPECTED = [
         "Judge-template stdout verdict is ingested as UNKNOWN with no handling",
         "project-documents/user/slices/"
         "105-slice.squadron-review-parser-and-ingest.md#Interfaces Required",
+    ),
+    Expected(
+        JUDGE_REVIEW_107,
+        ReviewVerdict.PASS,
+        VerdictDerivation.NOT_REPORTED,
+        True,
+        False,
+        "judge.slice-vs-arch",
+        (S.CONCERN,) * 3 + (S.NOTE,) + (S.PASS,) * 2,
+        "Progress records skip the provenance guarantee the architecture requires",
+        "project-documents/user/slices/"
+        "107-slice.judge-samples-checks-and-calibration.md#Data Flow",
     ),
 ]
 
