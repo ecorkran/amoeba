@@ -30,6 +30,7 @@ class SubmissionKind(StrEnum):
     INTENT = "intent"
     VERDICT = "verdict"
     WATCH_REVIEWS = "watch_reviews"
+    CHECK = "check"
 
 
 #: Payload keys each kind's effect reads, defined once. The envelope's payload

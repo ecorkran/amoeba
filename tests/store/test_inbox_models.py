@@ -29,7 +29,14 @@ from amoeba.store.inbox_models import (
     [
         (
             SubmissionKind,
-            {"create_project", "resolution", "intent", "verdict", "watch_reviews"},
+            {
+                "create_project",
+                "resolution",
+                "intent",
+                "verdict",
+                "watch_reviews",
+                "check",
+            },
         ),
         (SubmissionOutcome, {"applied", "rejected"}),
         (Channel, {"intent", "escalation"}),

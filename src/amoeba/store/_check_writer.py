@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from amoeba.store import sql_checks
 from amoeba.store._base import StoreBase, isoformat, now
-from amoeba.store.check_models import CheckInput, CheckRecord
+from amoeba.store.check_models import CheckInput, CheckRecord, check_from_payload
 from amoeba.store.models import NodeNotFoundError, StoreIntegrityError
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,25 @@ class CheckWriter(StoreBase):
             sql_checks.INSERT_CHECK,
             sql_checks.check_parameters(check, project_id, recorded_at),
         )
+
+    def _apply_check_submission(
+        self,
+        project_id: str,
+        submission_id: str,
+        payload: Mapping[str, object],
+        recorded_at: str,
+    ) -> str | None:
+        """The inbox ``check`` effect, inside ``apply_submission``'s transaction.
+
+        Runs the same checks as ``record_check``, but returns the reason as a
+        rejection instead of raising. The submission id becomes the record id.
+        """
+        check = check_from_payload(submission_id, payload)
+        rejection = self._check_rejection(project_id, check)
+        if rejection is not None:
+            return rejection.reason
+        self._insert_check(project_id, check, recorded_at)
+        return None
 
     def _load_check(self, check_id: str) -> CheckRecord | None:
         row = self._execute(sql_checks.SELECT_CHECK_BY_ID, (check_id,)).fetchone()

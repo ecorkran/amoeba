@@ -29,6 +29,7 @@ from pydantic import (
     field_validator,
 )
 
+from amoeba.inbox.check_payloads import CheckPayload
 from amoeba.inbox.evidence_payloads import VerdictPayload
 from amoeba.inbox.payload_config import MODEL_CONFIG
 from amoeba.store.inbox_models import QuarantineReason, SubmissionKind
@@ -109,6 +110,7 @@ KIND_PAYLOAD_MODELS: Final[Mapping[SubmissionKind, type[BaseModel]]] = {
     SubmissionKind.INTENT: IntentPayload,
     SubmissionKind.VERDICT: VerdictPayload,
     SubmissionKind.WATCH_REVIEWS: WatchReviewsPayload,
+    SubmissionKind.CHECK: CheckPayload,
 }
 
 #: The kind values, as plain strings, for checking a raw decoded field.

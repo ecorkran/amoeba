@@ -108,6 +108,22 @@ KIND_FLAGS: dict[SubmissionKind, tuple[str, ...]] = {
         "--source",
         "artifact_frontmatter",
     ),
+    SubmissionKind.CHECK: (
+        "--node-id",
+        "n-1",
+        "--name",
+        "cf check",
+        "--outcome",
+        "passed",
+        "--examined-count",
+        "0",
+        "--upstream",
+        "context-forge",
+        "--upstream-version",
+        "1.2.3",
+        "--source",
+        "command_output",
+    ),
     SubmissionKind.WATCH_REVIEWS: ("--reviews-dir", "/abs/reviews", "--active", "true"),
 }
 
@@ -138,6 +154,21 @@ def test_submit_verdict_takes_the_judge_invocation_id_as_typed(
     assert result.returncode == ExitCode.OK, result.stderr
     [written] = _new_files(supervisor_dir)
     assert json.loads(written.read_text())["payload"]["judge_invocation_id"] == "j-1"
+
+
+@pytest.mark.parametrize("count", ["null", "0"])
+def test_submit_check_parses_examined_count_as_json(
+    supervisor_dir: Path, count: str
+) -> None:
+    flags = [*KIND_FLAGS[SubmissionKind.CHECK]]
+    flags[flags.index("--examined-count") + 1] = count
+    result = run_cli(_submit_arguments(SubmissionKind.CHECK, *flags), supervisor_dir)
+
+    assert result.returncode == ExitCode.OK, result.stderr
+    [written] = _new_files(supervisor_dir)
+    assert json.loads(written.read_text())["payload"]["examined_count"] == (
+        None if count == "null" else 0
+    )
 
 
 @pytest.mark.parametrize("active", [True, False])

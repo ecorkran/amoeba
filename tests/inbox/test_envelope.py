@@ -15,6 +15,7 @@ from amoeba.inbox.envelope import (
     validate_envelope,
 )
 from amoeba.inbox.evidence_payloads import FindingPayload
+from amoeba.store.check_models import CHECK_PAYLOAD_KEYS
 from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
@@ -35,6 +36,7 @@ EFFECT_KEYS = {
     SubmissionKind.INTENT: {INTENT_NODE_ID, INTENT_BODY},
     SubmissionKind.VERDICT: set(VERDICT_PAYLOAD_KEYS),
     SubmissionKind.WATCH_REVIEWS: {WATCH_REVIEWS_DIR, WATCH_ACTIVE},
+    SubmissionKind.CHECK: set(CHECK_PAYLOAD_KEYS),
 }
 
 

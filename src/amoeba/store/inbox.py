@@ -30,6 +30,7 @@ from typing import ClassVar
 from amoeba.store import sql, sql_feed, sql_inbox
 from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter
+from amoeba.store._check_writer import CheckWriter
 from amoeba.store._verdict_writer import VerdictWriter
 from amoeba.store.inbox_models import (
     INTENT_BODY,
@@ -90,7 +91,7 @@ def _payload_mapping(payload: Mapping[str, object], key: str) -> dict[str, objec
     return narrowed
 
 
-class InboxOperations(BlockWriter, VerdictWriter):
+class InboxOperations(BlockWriter, VerdictWriter, CheckWriter):
     """Apply a submission exactly once, and read back what was applied."""
 
     def apply_submission(
@@ -273,6 +274,15 @@ class InboxOperations(BlockWriter, VerdictWriter):
             application.timestamp,
         )
 
+    def _apply_check(self: InboxOperations, application: _Application) -> str | None:
+        """Record a check; the checks and insert live beside ``record_check``."""
+        return self._apply_check_submission(
+            application.project_id,
+            application.submission_id,
+            application.payload,
+            application.timestamp,
+        )
+
     def _apply_watch_reviews(
         self: InboxOperations, application: _Application
     ) -> str | None:
@@ -305,4 +315,5 @@ class InboxOperations(BlockWriter, VerdictWriter):
         SubmissionKind.INTENT: _apply_intent,
         SubmissionKind.VERDICT: _apply_verdict,
         SubmissionKind.WATCH_REVIEWS: _apply_watch_reviews,
+        SubmissionKind.CHECK: _apply_check,
     }
