@@ -17,6 +17,7 @@ and deliberately not re-exported.
 from __future__ import annotations
 
 from amoeba.store.attribution import Attribution, attribute_review
+from amoeba.store.calibration import CalibrationRow
 from amoeba.store.check_models import (
     CheckInput,
     CheckOutcome,
@@ -144,6 +145,7 @@ __all__ = [
     "FindingInput",
     "FindingObservation",
     "FindingSummary",
+    "CalibrationRow",
     "CheckInput",
     "CheckRecord",
     "ProgressInput",

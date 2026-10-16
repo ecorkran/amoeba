@@ -164,6 +164,16 @@ WHERE {COL_VERDICT_PROJECT_ID} = ?
 ORDER BY {COL_VERDICT_RECORDED_SEQ}
 """
 
+#: Every judge sample in a project, grouped for the calibration report: ordered by
+#: review type, then model, then arrival.
+SELECT_JUDGE_SAMPLES: Final = f"""
+SELECT {_VERDICT_SELECT_LIST}
+FROM {TABLE_VERDICTS}
+WHERE {COL_VERDICT_PROJECT_ID} = ?
+  AND {COL_VERDICT_JUDGE_INVOCATION_ID} IS NOT NULL
+ORDER BY {COL_VERDICT_REVIEW_TYPE}, {COL_VERDICT_MODEL}, {COL_VERDICT_RECORDED_SEQ}
+"""
+
 #: The earliest recorded sample of one invocation: its node and review type define
 #: the invocation (D2). Served by ``idx_verdicts_judge_invocation``.
 SELECT_INVOCATION_DEFINITION: Final = f"""

@@ -41,6 +41,7 @@ EXPECTED_EXPORTS = {
     "CheckStanding",
     "ProgressKind",
     "check_standing",
+    "CalibrationRow",
     "CheckInput",
     "CheckRecord",
     "ProgressInput",
