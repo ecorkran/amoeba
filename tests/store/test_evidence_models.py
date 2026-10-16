@@ -36,7 +36,10 @@ from amoeba.store.evidence_models import (
         (ReviewVerdict, {"PASS", "CONCERNS", "FAIL", "UNKNOWN"}),
         (FindingSeverity, {"pass", "note", "concern", "fail"}),
         (VerdictDerivation, {"stated", "derived", "imposed", "not_reported"}),
-        (RecordSource, {"stdout_json", "artifact_frontmatter"}),
+        (
+            RecordSource,
+            {"stdout_json", "artifact_frontmatter", "command_output", "document"},
+        ),
         (FindingChange, {"new", "recurring", "gone"}),
         (
             VerdictStanding,

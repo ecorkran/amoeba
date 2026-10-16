@@ -40,10 +40,17 @@ class VerdictDerivation(StrEnum):
 
 
 class RecordSource(StrEnum):
-    """Which Squadron output the caller read the verdict from."""
+    """Where the caller read a record from.
+
+    A label of origin, never used as logic: no rule branches on it. The first two
+    name Squadron outputs; the last two are for records that do not come from
+    Squadron's review output, such as checks (107, D8).
+    """
 
     STDOUT_JSON = "stdout_json"
     ARTIFACT_FRONTMATTER = "artifact_frontmatter"
+    COMMAND_OUTPUT = "command_output"
+    DOCUMENT = "document"
 
 
 class FindingChange(StrEnum):
