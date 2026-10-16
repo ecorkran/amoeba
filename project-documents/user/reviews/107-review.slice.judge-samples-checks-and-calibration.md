@@ -34,26 +34,36 @@ findings:
     category: proportionality
     summary: "Mechanism is heavier than the slice needs"
     location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Technical Decisions (D6, D8)"
+    resolution: accepted
+    resolvedBy: "D8 drops the generic Provenance and ToolSource: RecordSource gains command_output and document. D6's record_progress is a bare insert with no retry rule or extra checks. sql_checks.py and mapping_checks.py merged. Score min/mean/max kept (PM, 20261015): computed on read, nothing stored, cheap, and generally useful"
   - id: F002
     severity: concern
     category: consistency
     summary: "Naming is inconsistent for the concept D1 says must be named consistently"
     location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#API Contracts (CLI table)"
+    resolution: accepted
+    resolvedBy: "One spelling, --judge-invocation-id, on ingest review, submit verdict, and inspect verdicts; it matches the payload field"
   - id: F003
     severity: note
     category: scope
     summary: "Consensus storage is deferred, while the architecture lists it as store scope"
     location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Technical Scope (Excluded)"
+    resolution: no_change_needed
+    resolvedBy: "Slice plan entry 107 states consensus records and threshold recommendations are 140's ('Not in 107'), so the deferral is within plan"
   - id: F004
     severity: note
     category: architecture-alignment
     summary: "The calibration report stops short of \"surfaces recommendations\""
     location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Technical Decisions (D3)"
+    resolution: no_change_needed
+    resolvedBy: "The deferral is stated and owned by 140, as the reviewer notes"
   - id: F005
     severity: note
     category: architecture-alignment
     summary: "D4 is a stated exception to \"unknown is a value\""
     location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md#Technical Decisions (D4)"
+    resolution: no_change_needed
+    resolvedBy: "The design already requires evidence-contract.md to state the exception"
   - id: F006
     severity: pass
     category: architecture-alignment
