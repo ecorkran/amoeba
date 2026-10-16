@@ -14,50 +14,55 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: 16b074042139b5b5f54b3bf2388a2858e29304a8
-revision_number: 1
+reviewedSha: 4eecc95c13ed5ab6e94a4a307b099fe79c831026
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 6
-turns: 7
-promptTokens: 284436
-cachedTokens: 184025
-cacheWriteTokens: 100403
-completionTokens: 5485
-durationSeconds: 45.7
-costUsd: 0.475552
+toolCallsMade: 3
+turns: 4
+promptTokens: 97655
+cachedTokens: 10984
+cacheWriteTokens: 86667
+completionTokens: 3984
+durationSeconds: 33.8
+costUsd: 0.388286
 costBasis: provider
 runId: run-20261016-p56-6f6dfbbb
 squadronVersion: 0.22.0
 findings:
   - id: F001
     severity: concern
-    category: sequencing
-    summary: "Closing GitHub issue #2 is an outward-facing action before review and merge"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:320"
+    category: task-clarity
+    summary: "Calibration field-name instructions contradict each other"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:28-29,55"
   - id: F002
     severity: concern
-    category: sequencing
-    summary: "The PM-blocking fixture task sits earlier than its first consumer"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:147-154"
+    category: commit-checkpoints
+    summary: "Task 7.1 commit is deferred past Task 7.2's commit"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:163,182"
   - id: F003
     severity: concern
-    category: test-coverage
-    summary: "No test ties `CheckPayload` field names to the constants in `check_models.py`"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:74"
+    category: task-sizing
+    summary: "Task 6.2 is overweight"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:87-105"
   - id: F004
-    severity: concern
-    category: test-design
-    summary: "The no-metrology test can fail on an explanatory comment in new code"
-    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:28-55"
+    severity: note
+    category: sequencing
+    summary: "Migration 007 is edited again in Task 6.3"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:117"
   - id: F005
     severity: note
-    category: spec-consistency
-    summary: "Task 6.4 correctly follows D9 over the LLD's \"two new kinds\" wording"
-    location: "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md:351"
+    category: coverage
+    summary: "Issue #2 closure is deferred to the PM"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:327"
   - id: F006
     severity: note
-    category: proportionality
-    summary: "Test coverage is proportionate and the cadence holds"
+    category: code-structure
+    summary: "`inbox.py` is already over the line budget"
+    location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md:94"
+  - id: F007
+    severity: pass
+    category: coverage
+    summary: "Success-criteria coverage for Sections 5–8"
     location: "project-documents/user/tasks/107-tasks.judge-samples-checks-and-calibration-2.md"
 ---
 
@@ -68,46 +73,52 @@ findings:
 
 ## Findings
 
-### [CONCERN] Closing GitHub issue #2 is an outward-facing action before review and merge
+### [CONCERN] Calibration field-name instructions contradict each other
 
-Task 8.3 has the junior run `gh issue close 2 --comment "... Commit <sha>."` straight after the walkthrough commit. That commit sits on the unmerged slice branch, and Task 8.3 itself says Phase 7 code review follows. Review fixes or a rebase can change or orphan the sha, and the issue would be closed before the fix reaches the target branch. The slice's Technical Requirements only say the issue is "closed with a pointer to D4". They don't say when. Move the close to after merge, or make it an explicit PM-confirmed step instead of an automatic one.
+Task 5.1 says the row's fields are "exactly as the D3 table", then says `pass` can't be a Python name and tells the implementer to pick something like `pass_count`. Task 5.2 asserts "its field names equal the D3 list exactly". D3 lists `pass`, so the test either fails against a `pass_count` field or forces a mapping the tasks never describe. Task 7.5 and the JSON output also depend on the chosen names.
+- Fix: in 5.1, fix the exact Python field names and the CLI/JSON column names, including how `pass` maps.
+- Fix: in 5.2, assert against those names, and keep the "no cross-sample comparison field" check as an explicit expected list.
 
-### [CONCERN] The PM-blocking fixture task sits earlier than its first consumer
+### [CONCERN] Task 7.1 commit is deferred past Task 7.2's commit
 
-Task 6.5 stops and asks the PM if the judge fixture is missing. Task 7.1 depends on 6.5, but 7.1 only adds a flag and a helper and never touches the fixture. The task text says 7.2, 8.1 and 8.3 are the only consumers. As written, a missing capture also blocks 7.1, which doesn't need it. Move 6.5 to just before Task 7.2 (or drop 7.1's dependency on it) so more work proceeds unblocked.
+Task 7.1 is "Committed with Task 7.3", but Task 7.2 sits between them and has its own commit step. Task 7.2 does not depend on 7.1's code, so the 7.1 changes either get swept into 7.2's `test:` commit or stay uncommitted across a task. Either way it breaks the "at least once per task" rule.
+- Fix: swap the order so 7.2 (fixture) comes before 7.1 and 7.1 is followed directly by 7.3, or state that 7.2's commit stages only its own files.
 
-### [CONCERN] No test ties `CheckPayload` field names to the constants in `check_models.py`
+### [CONCERN] Task 6.2 is overweight
 
-Task 6.1 requires `CheckPayload`'s field names to be the constants defined in `check_models.py`. The slice's Technical Requirements say they are defined once. Task 6.2's tests cover validation, rejection, replay and the CLI. None checks that the pydantic model and the constants agree, so the two can drift apart silently. 104 has an analogue for verdicts in `tests/store/test_verdict_payload_types.py` and `test_verdict_to_payload.py`. Add one assertion that the model's field set equals the constant set.
+Task 6.2 combines the effect implementation, a writer-dependency refactor, extending two existing enumeration tests, a payload-key pin test, six inbox behavior tests, and a CLI submit test. Its effort rating is 4, the same as the simpler 5.1.
+- Fix: split it into 6.2a (effect, registration, enumeration and key-pin tests) and 6.2b (inbox behavior and `amoeba submit check` tests). Keep the single commit at the end of 6.2b.
+- Fix: also say how 6.2's own tests run, since the full suite is expected to fail between 6.1 and 6.2.
 
-### [CONCERN] The no-metrology test can fail on an explanatory comment in new code
+### [NOTE] Migration 007 is edited again in Task 6.3
 
-The Task 5.2 test scans all of `src/` for the substring `metrology`, case-insensitively. `src/` has no match today (I grepped it). The slice text repeatedly discusses the metrology constraint, though, so a junior writing `calibration.py` could easily put "never reads Squadron's metrology store" in a docstring and trip the test. The LLD only requires that `src/` not reference the directory or config key. Either tell Task 5.1 not to use the word in comments, or narrow the test to the actual directory and key strings.
+Task 6.3 adds a trigger to migration 007, which file 1's tasks already created and tested for the 6→7 upgrade. This is acceptable because the branch is unmerged. Task 6.3's success criterion only says the migration "applies cleanly on a fresh store", but file 1's upgrade test should also pass again after the edit. Say so explicitly.
 
-### [NOTE] Task 6.4 correctly follows D9 over the LLD's "two new kinds" wording
+### [NOTE] Issue #2 closure is deferred to the PM
 
-The LLD Technical Requirements say the invariant test passes with "the two new kinds". D9 defines only `check_recorded`. Task 6.4 flags this and follows D9, which is right. The LLD line itself is stale and should be fixed in the slice design when the walkthrough is updated in Task 8.3. That task is limited to editing the walkthrough section, so the fix needs a PM decision.
+The slice's Technical Requirements list "GitHub issue #2 is closed with a pointer to D4". Task 8.3 defers the closure to a Phase 7 PM action after the merge. That is reasonable because closing an issue is outward-facing, but it departs from the slice text. Task 8.3's listing for the PM should note that departure.
 
-### [NOTE] Test coverage is proportionate and the cadence holds
+### [NOTE] `inbox.py` is already over the line budget
 
-Every success criterion in this file's scope maps to a task:
-- **Calibration:** Tasks 5.1–5.2.
-- **Check kind, including inbox rejection of a negative count:** Tasks 6.1–6.2.
-- **Check feed change:** Tasks 6.3–6.4.
-- **Judge fixture:** Task 6.5.
-- **Sample ids:** Tasks 7.1–7.2.
-- **Listings and columns:** Tasks 7.3–7.5.
-- **End-to-end:** Task 8.1.
-- **Contract docs and CHANGELOG:** Task 8.2.
-- **Walkthrough and validation:** Task 8.3.
+Task 6.2 acknowledges `inbox.py` is at 308 lines and keeps the new effect small. Task 8.3's line-count check will flag the file regardless. Record that this is a pre-existing overage so validation doesn't treat it as new.
 
-The paired "committed with" tasks keep untested behavior out of commits. The one overlap is the field-name equality assertion in Task 5.2, which duplicates the D3 list; it is cheap and harmless. Splitting across two task files is justified by the amount of work (29 tasks across eight sections).
+### [PASS] Success-criteria coverage for Sections 5–8
+
+All of these map to a task:
+- **Calibration:** counts, ordering and unknown handling, the read-only and no-metrology constraints, and the descriptive-only row (5.1–5.2).
+- **`check` kind:** the three-part seam, rejections, and the CLI flags (6.1–6.2).
+- **Feed change:** one `check_recorded` per check, none per retry or progress record, and the invariant test extension (6.3–6.4). The "two new kinds" versus D9 discrepancy is called out.
+- **Ingest:** `--judge-invocation-id`, the sample-id rule, and the real judge fixture (7.1–7.3).
+- **Listings:** the `verdicts` column and filter, and `checks`/`calibration` with the pinned-registry update (7.4–7.6).
+- **End-to-end, docs, walkthrough:** the kill -9 flow and feed counts, the contract docs and CHANGELOG, and the walkthrough (8.1–8.3).
+
+I found no scope creep. The only extras are small, reasonable additions: the `ChangeKind` enumeration test updates and the README entry check.
 
 ### Run Digest
 
-- Response length: 4769 chars
+- Response length: 5130 chars
 - Response is newline-free: no
-- Tool calls made: 6
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -115,13 +126,13 @@ The paired "committed with" tasks keep untested behavior out of commits. The one
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 7
-- Tokens — prompt / cached / cache write / completion / reasoning: 284436 / 184025 / 100403 / 5485 / not computed
-- Duration: 45.7 s
-- Cost: $0.48 (provider)
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 97655 / 10984 / 86667 / 3984 / not computed
+- Duration: 33.8 s
+- Cost: $0.39 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
