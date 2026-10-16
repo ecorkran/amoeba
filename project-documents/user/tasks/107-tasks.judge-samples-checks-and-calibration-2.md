@@ -51,7 +51,7 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 - [ ] An `UNKNOWN` sample is counted under `unknown`; a sample with no score is excluded from score statistics; a group with no scored sample has `None` for all three
 - [ ] Ordinary review verdicts (no invocation id) never appear
 - [ ] No-write test: run `calibration` on a `Store.open_read_only` handle and assert it succeeds and the store file's contents (row counts of every table) are unchanged
-- [ ] No-metrology test: scan every file under `src/` (text, in the style of `tests/upstream/test_field_names_defined_once.py`) and assert none contains the substring `metrology`, case-insensitively. This needs no Squadron strings: the LLD requires only that `src/` never references that store
+- [ ] No-metrology test: parse every file under `src/` with `ast` and assert no identifier, import, or non-docstring string constant contains `metrology` (case-insensitive). Comments and docstrings are not checked, so explanatory text is allowed. This needs no Squadron strings: the LLD requires only that `src/` never references that store
 - [ ] The row type has no field comparing samples with each other: assert its field names equal the D3 list exactly
 
 **Success Criteria**:
@@ -94,6 +94,7 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 - [ ] In `store/inbox.py` add `_apply_check`, modeled on `_apply_verdict`: convert the payload through the `check_models.py` function, call `CheckWriter`'s retry lookup, rejection function, and insert; return the rejection reason on failure. The submission id is the record id. Register it in `KIND_EFFECTS`. `inbox.py` is at 308 lines: keep the effect to a few lines by delegating to `CheckWriter`
 - [ ] Make `InboxOperations` depend on `CheckWriter`, not on `CheckOperations` (the `BlockWriter`/`VerdictWriter` pattern)
 - [ ] Extend `tests/inbox/test_envelope.py` and `tests/store/test_inbox_models.py` where they enumerate kinds, and let 103's completeness tests cover `check`
+- [ ] Add a test that `CheckPayload`'s field names equal the payload key constants in `check_models.py` (as 104 pinned `VerdictPayload` against its keys)
 - [ ] Add inbox tests (in `tests/store/test_inbox_apply.py` or a new `test_check_submission.py`): a valid check is applied and readable; a negative count, a missing node, and an empty `upstream_version` each end `rejected` with a reason and write no row; an unknown outcome word is quarantined at validation; a replay of the same submission is a no-op
 - [ ] Add a CLI test in `tests/cli/test_submit.py`: `amoeba submit check` with the flags from `CheckPayload` (`--examined-count null` and `--examined-count 0` parse as JSON per the flag rule)
 
@@ -144,14 +145,35 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 ---
 
-### Task 6.5: Confirm the real judge artifact and test it against 105's parser
-**Owner**: Junior AI (the capture itself is a PM step)
+## Section 7: Ingest and Listings
+
+### Task 7.1: Add `--judge-invocation-id` and the sample id to `ingest review`
+**Owner**: Junior AI
 **Dependencies**: Task 6.4
+**Effort**: 3
+**Objective**: Judge samples are ingested through 105's command (LLD "Retry", "CLI").
+
+**Steps**:
+- [ ] Read `cli/ingest.py` (157 lines) and `add_ingest_parser`. Add `--judge-invocation-id ID`, passed to `to_verdict_input`
+- [ ] Without `--id` and with an invocation, the submission/record id is 105's digest id followed by `.` and the invocation id. Without an invocation, or with `--id`, the id is unchanged. Do not change the digest or `RECORD_ID_FORMAT_TAG`
+- [ ] Build the suffix in one named helper next to the existing id logic, not inline
+
+**Success Criteria**:
+- [ ] `ruff`, `pyright` pass; 105's ingest tests pass unchanged
+- [ ] Committed with Task 7.3
+
+**Files to Modify**: `src/amoeba/cli/ingest.py`
+
+---
+
+### Task 7.2: Confirm the real judge artifact and test it against 105's parser
+**Owner**: Junior AI (the capture itself is a PM step)
+**Dependencies**: Task 7.1
 **Effort**: 2
 **Objective**: The real judge artifact parses to its stated values (LLD Functional Requirements, Technical Requirements on the fixture). It sits here, not at the start, so the PM's capture does not block earlier work.
 
 **Steps**:
-- [ ] Look in `tests/fixtures/sq_reviews/` for a saved judge-template review artifact (`reviewType` starting `judge.`) from a pipeline run on squadron 0.21.9 or later. If it is missing, **stop and ask the PM** to capture it (a pipeline run in a throwaway copy of a repository). Do not hand-write it. Tasks 7.2, 8.1, and 8.3 need it; no earlier task does
+- [ ] Look in `tests/fixtures/sq_reviews/` for a saved judge-template review artifact (`reviewType` starting `judge.`) from a pipeline run on squadron 0.21.9 or later. If it is missing, **stop and ask the PM** to capture it (a pipeline run in a throwaway copy of a repository). Do not hand-write it. Tasks 7.3, 8.1, and 8.3 need it; Task 1.1 asked for it up front
 - [ ] Confirm `tests/fixtures/README.md` records its command, Squadron version, and date. If an entry is missing, ask the PM; do not infer
 - [ ] Add a path constant to `tests/review_fixtures.py` and `tests/upstream/test_review_judge_fixture.py`, in the style of `test_review_artifact.py`: assert review type, verdict, score, model, and criteria equal the values stated in the file, and that `verdict_source` is absent, so the resulting trust label is `unattested`
 
@@ -164,30 +186,9 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 ---
 
-## Section 7: Ingest and Listings
-
-### Task 7.1: Add `--judge-invocation-id` and the sample id to `ingest review`
+### Task 7.3: Test sample ingest
 **Owner**: Junior AI
-**Dependencies**: Task 6.5
-**Effort**: 3
-**Objective**: Judge samples are ingested through 105's command (LLD "Retry", "CLI").
-
-**Steps**:
-- [ ] Read `cli/ingest.py` (157 lines) and `add_ingest_parser`. Add `--judge-invocation-id ID`, passed to `to_verdict_input`
-- [ ] Without `--id` and with an invocation, the submission/record id is 105's digest id followed by `.` and the invocation id. Without an invocation, or with `--id`, the id is unchanged. Do not change the digest or `RECORD_ID_FORMAT_TAG`
-- [ ] Build the suffix in one named helper next to the existing id logic, not inline
-
-**Success Criteria**:
-- [ ] `ruff`, `pyright` pass; 105's ingest tests pass unchanged
-- [ ] Committed with Task 7.2
-
-**Files to Modify**: `src/amoeba/cli/ingest.py`
-
----
-
-### Task 7.2: Test sample ingest
-**Owner**: Junior AI
-**Dependencies**: Task 7.1
+**Dependencies**: Task 7.2
 **Effort**: 3
 **Objective**: Pin the sample-id rule with the real judge fixture (LLD Functional Requirements, third and tenth bullets).
 
@@ -205,9 +206,9 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 ---
 
-### Task 7.3: Add the `judge_invocation_id` column and option to `inspect verdicts`
+### Task 7.4: Add the `judge_invocation_id` column and option to `inspect verdicts`
 **Owner**: Junior AI
-**Dependencies**: Task 7.2
+**Dependencies**: Task 7.3
 **Effort**: 2
 **Objective**: Per LLD "CLI", the listing shows and filters on the field.
 
@@ -224,9 +225,9 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 ---
 
-### Task 7.4: Add the `checks` and `calibration` listings
+### Task 7.5: Add the `checks` and `calibration` listings
 **Owner**: Junior AI
-**Dependencies**: Task 7.3
+**Dependencies**: Task 7.4
 **Effort**: 3
 **Objective**: Two read-only listings registered through the registry (LLD "CLI", "Component Structure").
 
@@ -239,16 +240,16 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 **Success Criteria**:
 - [ ] `inspect checks` and `inspect calibration` appear in `amoeba inspect --help`
-- [ ] Committed with Task 7.5
+- [ ] Committed with Task 7.6
 
 **Files to Create**: `src/amoeba/cli/inspect_checks.py`
 **Files to Modify**: `cli/inspect.py` (registration only), listing registry tests
 
 ---
 
-### Task 7.5: Test the two listings
+### Task 7.6: Test the two listings
 **Owner**: Junior AI
-**Dependencies**: Task 7.4
+**Dependencies**: Task 7.5
 **Effort**: 3
 **Objective**: Pin the column sets and the key behaviors (LLD Functional Requirements, check standings).
 
@@ -269,7 +270,7 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 ### Task 8.1: End-to-end test through the real CLI
 **Owner**: Junior AI
-**Dependencies**: Task 7.5
+**Dependencies**: Task 7.6
 **Effort**: 4
 **Objective**: LLD Integration Requirements, first bullet. The wrong-review-type rejection and the stdout refusal are already pinned (Tasks 4.4 and 1.3) and are not repeated here.
 
@@ -315,9 +316,9 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Steps**:
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; fix and re-run only what failed
 - [ ] Check no new source file exceeds ~300 lines (`wc -l` on the files this slice created or edited) and that `tests/test_writer_guard.py` shows no new permitted scripts
-- [ ] Run the LLD Verification Walkthrough steps 1–7 in bash against a throwaway `AMOEBA_STORE_DIR` with the real judge fixture. Where its `<judge fixture>` and `<edited judge stdout>` placeholders appear, use the judge fixture from Task 6.5 and the edited stdout fixture from Task 1.3. Compare each result with the walkthrough's expected output
+- [ ] Run the LLD Verification Walkthrough steps 1–7 in bash against a throwaway `AMOEBA_STORE_DIR` with the real judge fixture. Where its `<judge fixture>` and `<edited judge stdout>` placeholders appear, use the judge fixture from Task 7.2 and the edited stdout fixture from Task 1.3. Compare each result with the walkthrough's expected output
 - [ ] Update the LLD walkthrough with the real output and fixture names (its header says it is refined when Phase 6 completes). Edit the walkthrough section only
-- [ ] Close GitHub issue #2 after the commit above: `gh issue close 2 --comment "Fixed by D4 (slice 107): judge stdout reporting UNKNOWN with a score is refused; ingest the saved review file instead. Commit <sha>."` using the real commit sha. If `gh` fails, report the error to the PM
+- [ ] Do not close GitHub issue #2 here: the branch is unmerged. List it for the PM as a Phase 7 action after the merge, with a pointer to D4
 
 **Success Criteria**:
 - [ ] Suite, `ruff`, `pyright` clean; every walkthrough step matches

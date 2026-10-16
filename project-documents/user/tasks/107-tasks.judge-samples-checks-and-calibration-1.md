@@ -28,7 +28,7 @@ status: not_started
 
 **Task-level additions to the LLD** (named by no LLD table): none beyond the LLD's own names. Anything a task needs that the LLD does not settle is a question for the PM, not a guess.
 
-**Section map.** This file: 1–4. File 2: 5–8. In full: 1 baseline and the D4 refusal; 2 check models; 3 migration 007 and check storage; 4 judge samples in the verdict path; 5 calibration; 6 the `check` kind, its feed change, and the real judge fixture test; 7 ingest and listings; 8 end-to-end, docs, validation.
+**Section map.** This file: 1–4. File 2: 5–8. In full: 1 baseline and the D4 refusal; 2 check models; 3 migration 007 and check storage; 4 judge samples in the verdict path; 5 calibration; 6 the `check` kind and its feed change; 7 ingest, the real judge fixture test, and listings; 8 end-to-end, docs, validation.
 
 ---
 
@@ -44,6 +44,7 @@ status: not_started
 - [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
 - [ ] Create `107-slice.judge-samples-checks-and-calibration` from the target; if it exists, switch to it
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
+- [ ] Check `tests/fixtures/sq_reviews/` for a saved judge-template review artifact (`reviewType` starting `judge.`, squadron 0.21.9 or later). If none, ask the PM now to capture one (a pipeline run in a throwaway copy of a repository), so it exists by Task 7.2. Work continues meanwhile
 
 **Success Criteria**:
 - [ ] On the slice branch; baseline suite, `ruff`, and `pyright` clean
@@ -198,34 +199,17 @@ status: not_started
 
 ---
 
-### Task 3.3: Add `CheckWriter`
+### Task 3.3: Add `CheckWriter` and `CheckOperations`
 **Owner**: Junior AI
 **Dependencies**: Task 3.2
-**Effort**: 3
-**Objective**: One place for the check's checks and insert, shared by `record_check` and the inbox effect (LLD "Data Flow", "Errors").
+**Effort**: 4
+**Objective**: One place for the check's checks and insert, shared by `record_check` and the inbox effect, plus the four store methods (LLD "Data Flow", "Errors", "API Contracts", D6). The two are one logical unit and are tested together in Task 3.4.
 
 **Steps**:
 - [ ] Read `_verdict_writer.py` and `_block_writer.py`; create `src/amoeba/store/_check_writer.py` with `CheckWriter(StoreBase)` in the same shape
 - [ ] A rejection function returns a reason string or `None`, in this order: node exists in this project; `examined_count` is non-negative when given; `upstream_version` is non-empty. Reasons name the offending value
 - [ ] An insert that runs inside the caller's transaction and returns the `CheckRecord`
 - [ ] A retry lookup: an existing id returns the existing record, with a WARNING (through the module logger) when the new input's content differs. First wins; nothing is written
-- [ ] Do not add a method to `Store` yet
-
-**Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 3.5
-
-**Files to Create**: `src/amoeba/store/_check_writer.py`
-
----
-
-### Task 3.4: Add `CheckOperations`
-**Owner**: Junior AI
-**Dependencies**: Task 3.3
-**Effort**: 3
-**Objective**: `record_check`, `check`, `checks`, and write-only `record_progress` on `Store` (LLD "API Contracts", D6).
-
-**Steps**:
 - [ ] Create `src/amoeba/store/checks.py` with `CheckOperations(CheckWriter)`, add it to `Store`'s bases, and export the new names from `amoeba.store`
 - [ ] `record_check(input, *, project_id)`: one transaction using `CheckWriter`; a failed check raises `NodeNotFoundError` for a missing node and `ValueError` for the others
 - [ ] `check(check_id)` returns `None` for an unknown id; `checks(project_id, *, node_id=None)` is in arrival order
@@ -233,16 +217,16 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` pass; full suite passes
-- [ ] Committed with Task 3.5
+- [ ] Committed with Task 3.4
 
-**Files to Create**: `src/amoeba/store/checks.py`
+**Files to Create**: `src/amoeba/store/_check_writer.py`, `src/amoeba/store/checks.py`
 **Files to Modify**: `store/store.py`, `store/__init__.py`
 
 ---
 
-### Task 3.5: Test check and progress operations
+### Task 3.4: Test the check writer and operations
 **Owner**: Junior AI
-**Dependencies**: Task 3.4
+**Dependencies**: Task 3.3
 **Effort**: 3
 **Objective**: Pin the check and progress behavior in the LLD Functional Requirements.
 
@@ -262,7 +246,7 @@ status: not_started
 
 ### Task 4.1: Carry `judge_invocation_id` through the verdict record
 **Owner**: Junior AI
-**Dependencies**: Task 3.5
+**Dependencies**: Task 3.4
 **Effort**: 3
 **Objective**: A verdict can carry an optional invocation id from input to row and back (LLD "API Contracts", "Inputs").
 
