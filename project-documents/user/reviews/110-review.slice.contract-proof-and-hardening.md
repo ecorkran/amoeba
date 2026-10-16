@@ -44,36 +44,50 @@ findings:
     category: proportionality
     summary: "Pruning design (D8) is heavier than the requirement needs"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8"
+    resolution: accepted
+    resolvedBy: "Cut KeepReason, UnreadableRun, PruneSelection, the kill-wait-observe timeout path, and PruneSettings (PM, 20261015). Preview lists candidates plus a kept count; unparseable files log WARNING; any candidate still present after sq (including timeout) exits PRUNE_INCOMPLETE; retention and sq timeout are module constants. The post-sq re-read of the runs dir is kept because sq exits 1 for an already-removed run"
   - id: F004
     severity: concern
     category: specification-consistency
     summary: "Export-documentation check is specified two contradictory ways"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:47"
+    resolution: accepted
+    resolvedBy: "Technical Requirements now specify a mechanical test that every __all__ name of each PUBLIC_ROOTS package appears in its contract doc"
   - id: F005
     severity: concern
     category: dependencies
     summary: "Heavy dependence on names from three unmerged slices"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Dependencies"
+    resolution: no_change_needed
+    resolvedBy: "Risk note only; Development Approach step 1 stops for the PM and reconciles every name taken from 107-109 against merged code"
   - id: F006
     severity: concern
     category: under-specification
     summary: "Scenario step 12 leaves test-input setup under-specified"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D4"
+    resolution: accepted
+    resolvedBy: "checkpoint sets and blocks the gate node; step 7 also writes a paused run file with an unjournaled run id; stand-in run files carry updated_at 8 days before wall clock; step 12 states the expected candidate, held run, unowned run, and kept count"
   - id: F007
     severity: concern
     category: error-handling
     summary: "Failure handling for the proof harness's own processes is not enumerated"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Data-Flow"
+    resolution: accepted
+    resolvedBy: "Patterns and Conventions add harness failure rules: a timed-out wait fails with the step number and all subprocess output; a subscriber-thread exception is re-raised on the main thread; an unplanned SSE drop fails the test"
   - id: F008
     severity: note
     category: architecture-alignment
     summary: "Moving the run-file parser into `amoeba.upstream.squadron`"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#H4"
+    resolution: accepted
+    resolvedBy: "H4 requires process-contract.md and the CHANGELOG to state run_file is a run-state adapter, not part of the review-output contract"
   - id: F009
     severity: note
     category: scope-control
     summary: "Hardening scope is bounded by an explicit rule"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D7"
+    resolution: no_change_needed
+    resolvedBy: "Positive note; no action"
 ---
 
 # Review: slice — slice 110

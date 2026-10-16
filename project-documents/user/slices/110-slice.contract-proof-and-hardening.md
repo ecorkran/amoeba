@@ -99,7 +99,7 @@ src/amoeba/store/__init__.py      + store_dir, project_store_path (H3)
 src/amoeba/store/runner_report.py record_runner_report (H2), a Store mixin
 src/amoeba/upstream/squadron/
   run_file.py          SquadronRun, parse_run_file   (moved from process/observers/sq_runs.py, H4)
-  run_pruning.py       PruneSettings, KeepReason, PruneSelection, select_prunable() (D8)
+  run_pruning.py       PRUNE_RETENTION, SQ_PRUNE_TIMEOUT_SECONDS, select_prunable() (D8)
 src/amoeba/cli/prune.py   add_prune_parser, run_prune
 docs/substrate-guide.md
 ```
@@ -148,13 +148,13 @@ amoeba prune sq-runs [--yes]
   for each project in discover_project_ids(store_dir()):        read-only opens; any failure → refuse, delete nothing
       owned |= recorded_result_run_ids(p)            run ids Amoeba's journal adopted or completed
       held  |= {n.sq.run_id for n in nodes_for_project(p) if n.status != DONE and n.sq.run_id}
-  runs = parse_run_file(f) for f in DEFAULT_SQ_RUNS_DIR/*.json   (unparseable → recorded, never a candidate)
-  selection = select_prunable(runs, owned, held, now, settings)   pure
-  print candidates and the owned paused runs kept, each with its KeepReason
+  runs = parse_run_file(f) for f in DEFAULT_SQ_RUNS_DIR/*.json   (unparseable → WARNING naming the file, never a candidate)
+  candidates = select_prunable(runs, owned, held, now)            pure
+  print the candidates, and how many owned paused runs were kept
   --yes and candidates:
-      sq runs prune <ids…> --yes        stdin=DEVNULL, timeout=settings.sq_timeout_seconds
-      re-parse the runs dir: each candidate absent → pruned, present → not_pruned (with sq's exit status and stderr)
-  exit OK if every candidate was pruned (or there were none); else ExitCode.PRUNE_INCOMPLETE
+      sq runs prune <ids…> --yes        stdin=DEVNULL, timeout=SQ_PRUNE_TIMEOUT_SECONDS
+      re-read the runs dir: any candidate still present → print it, with sq's exit status and stderr
+  exit OK if every candidate is gone (or there were none); else ExitCode.PRUNE_INCOMPLETE
 ```
 
 ### State Management
@@ -193,7 +193,9 @@ The SSE `seq` list must equal a final local `follow(after=0)`.
 
 - `build_tree` creates initiative → slice (`cf.slice_name` set, so 106's attribution rule finds it) → gate.
 - `launch_review` journals an `sq_run`, then performs the stand-in side effect. It writes a run file into the fake `HOME`'s runs directory, taken from a fixture with its `run_id`, `pipeline`, `params`, and `started_at` set to match, plus a review artifact from `tests/fixtures/sq_reviews/` into the project's watched directory. It then reports with `record_runner_report` (H2), parsing the artifact through 105's parser.
-- `checkpoint` journals an `sq_run`, writes a paused run file, resolves the entry `completed` with the `run_id`, sets `sq.run_id`, and blocks the node on `sq_checkpoint`.
+- `checkpoint` journals an `sq_run`, writes a paused run file, resolves the entry `completed` with the `run_id`, sets the **gate** node's `sq.run_id`, and blocks the gate on `sq_checkpoint`.
+
+Every run file the stand-in writes has `updated_at` set to 8 days before the step's wall-clock time, so step 12's real-clock prune sees it past `PRUNE_RETENTION`. The pure `select_prunable` tests inject `now` instead.
 - `finish` marks the slice and gate `done`.
 
 *Why a stand-in, not real `sq`.* The proof is about Amoeba's contract. A real `sq review` needs a model provider, costs money, and is not deterministic. The stand-in produces exactly what the observers and detection read (a run file and a review file), in the shapes the 102 and 105 fixtures pin. Pruning's deletion path is tested against a stub `sq` that reproduces the observed interface (D8): named ids, `--yes`, a refusal exiting 1, and an already-gone file counting as removed. No test in this slice runs the real `sq`.
@@ -217,12 +219,12 @@ At a crash point the tenant sends itself `SIGKILL`. Nothing is caught, flushed, 
 | 4 | Runner: `launch_review` with `crash_at=AFTER_SIDE_EFFECT`; restart | Recovery adopts the run (exactly one match). Detection then ingests the artifact as `ingested`, with the same record id the Runner would have used (evidence contract, point 5). One verdict for the round, not two |
 | 5 | Runner: `launch_review` with `crash_at=AFTER_JOURNAL`; restart | Zero matches: entry `unknown`, node `blocked_on_human`, an escalation message on the feed |
 | 6 | PM: `resolution` for that node | The human reply flips the node runnable (103) |
-| 7 | External: a PM-launched review artifact is written into alpha's directory | Detection ingests it with correct provenance; `finding_changes` compares it with step 4's round |
+| 7 | External: a PM-launched review artifact is written into alpha's directory, and a paused run file for it (a run id no journal entry carries) into the runs directory | Detection ingests it with correct provenance; `finding_changes` compares it with step 4's round |
 | 8 | Judge: two `verdict` submissions with one `judge_invocation_id` | Samples recorded individually, through the inbox path initiative 140 will use (107) |
 | 9 | Runner: `checkpoint` on alpha and on beta | `blocked_on_sq_checkpoint` holding the run id |
 | 10 | Stop the resident process gracefully. While it is down, the PM submits a `resolution` for alpha's checkpoint. Start | Submissions made while the process is down are applied on start |
 | 11 | Runner: `finish` on alpha | Final statuses; beta's checkpoint stays open |
-| 12 | PM: `amoeba prune sq-runs` (preview), then `--yes` with a stub `sq` on `PATH` | Selects only alpha's checkpoint run. Beta's run is held (its node is not `done`), and step 7's PM-launched run is not owned |
+| 12 | PM: `amoeba prune sq-runs` (preview), then `--yes` with a stub `sq` on `PATH` | Selects only alpha's checkpoint run (its gate is `done` after step 11). Beta's run is held (beta's gate is still blocked), and step 7's run is unowned. The preview reports one owned run kept (beta's) |
 
 The scenario uses `kill -9` (steps 4 and 5) and a graceful stop (step 10). Both are restart paths the process contract promises. The server's crash and a resident crash under a live stream are in the network subset (D2).
 
@@ -260,6 +262,7 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
 - **H3:** `store_dir` and `project_store_path` are exported from `amoeba.store`. `store-contract.md` already documents them by their internal path. Any consumer that opens a store read-only needs them.
 - **H4:** `SquadronRun` and `parse_run_file` move from `process/observers/sq_runs.py` to `amoeba.upstream.squadron.run_file`, so the observer and the pruning rule share one parser.
   - `SquadronRun` gains `updated_at: datetime | None`. It is optional because the observer never needed it, and a run without it is never a pruning candidate (`age_unknown`).
+  - `process-contract.md` and the CHANGELOG say `run_file` is an adapter for Squadron's run state files, not part of the review-output contract, so the move does not read as widening 105's scope.
   - The observer's behavior and tests are unchanged. A schema-v5 fixture is added, because the live directory now holds v5 files (*observed 20261015*) and the fixtures stop at v4.
 
 **D8 — Pruning: Amoeba chooses, Squadron deletes, a human confirms.**
@@ -268,7 +271,7 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
   1. Amoeba owns it: its id is in some project's `recorded_result_run_ids`. See the ownership guarantee below.
   2. Its run file parses, with `status == paused`.
   3. No node in any project that is not `done` names it in `sq.run_id`.
-  4. Its `updated_at` is at least `PruneSettings.retention` ago (default 7 days, *pending PM confirmation*).
+  4. Its `updated_at` is at least `PRUNE_RETENTION` ago (7 days, *pending PM confirmation*).
 
   Condition 3 is stricter than "no open checkpoint block". After a human resolves a checkpoint, the node is runnable and the Runner has not yet issued `sq run --resume`. Pruning in that window would delete the run it is about to resume. "Every node that names it is done" is the earliest point at which Amoeba is provably finished with a run. Runs the PM launched fail condition 1 and are never touched.
 - *The ownership guarantee.* This line is added to `process-contract.md` beside the shipped observers. `recorded_result_run_ids` returns every journal entry whose `result` carries the `run_id` key, whatever the entry's outcome or kind (`journal.py`, which reads `RESULT_KEY_RUN_ID`). Two writers put it there:
@@ -277,13 +280,10 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
 
   An escalated entry (`unknown`) has no result, so the run behind it is never owned. It may exist, or there may be several candidates. A human resolves the escalation, and that run is the PM's to prune with `sq runs prune`. Amoeba never prunes it, because it never proved the run was its own.
 - *Re-linking.* Condition 3 reads every node's **current** `sq.run_id`, not its history. A run linked again to a new or reopened node is held for as long as that node is not `done`. `sq run --resume <id>` keeps the run's id, so a resumed run stays named by its node. A successor launched under a new journal entry gets a new id, and the old paused run becomes a candidate only once no live node names it. History is not consulted, because only a current reference can lead to a resume.
-- *Unknown is a value.* An unreadable project store, an unparseable run file, or a missing `updated_at` never becomes a guess. A store that cannot be read refuses the whole command, because the held set would be incomplete. A file that cannot be parsed, or a run with no `updated_at`, is kept and listed with its `KeepReason`: `not_paused`, `held_by_node`, `too_recent`, `age_unknown`, or `unreadable`. `KeepReason` is a closed `StrEnum`. Unowned runs are counted but not listed.
-- *Squadron deletes.* The architecture forbids any part from editing Squadron's run files directly. `--yes` runs `sq runs prune <ids…> --yes`, the command Squadron provides for this. It runs once, with non-TTY stdin (the architecture's invariant for every Squadron invocation) and `PruneSettings.sq_timeout_seconds`. Amoeba never unlinks a file itself, even if `sq` is missing or too old to have the command. That case is reported as `not_pruned`, with sq's message.
+- *Unknown is a value.* An unreadable project store, an unparseable run file, or a missing `updated_at` never becomes a guess. A store that cannot be read refuses the whole command, because the held set would be incomplete. A file that cannot be parsed is logged at WARNING with its path and is never a candidate. A run with no `updated_at` is never a candidate. The preview lists only candidates, plus a count of owned paused runs that were kept.
+- *Squadron deletes.* The architecture forbids any part from editing Squadron's run files directly. `--yes` runs `sq runs prune <ids…> --yes`, the command Squadron provides for this. It runs once, with non-TTY stdin (the architecture's invariant for every Squadron invocation) and `SQ_PRUNE_TIMEOUT_SECONDS`. Amoeba never unlinks a file itself, even if `sq` is missing or too old to have the command. That case leaves the candidates present, so it is reported like any other incomplete prune, with sq's message.
 - *`--yes` always selects afresh.* Nothing from a preview is saved or reused. `--yes` re-reads every store and the runs directory and runs `select_prunable` again immediately before calling `sq`, and it names only what that selection returns. The remaining window between that selection and `sq`'s deletion is covered by Squadron's own refusal: a run resumed in that window is live, and `sq runs prune` refuses a live run.
-- *The result is observed, not parsed.* `sq runs prune` has no JSON output, and its human text is not a contract. Its exit status is reported but never decides the outcome. Once `sq` has exited, Amoeba re-reads the runs directory and decides each candidate from the observation alone:
-  - `pruned`: the run's state file is gone. This includes a file removed by someone else in the window, for which `sq` reports "no such run" and exits 1. The goal state holds either way, so it is not a failure.
-  - `not_pruned`: the state file remains. The report carries sq's exit status and stderr. A run sq refused as live is reported here.
-- *Timeout.* At `sq_timeout_seconds`, Amoeba kills the `sq` process and waits for it to exit before observing. No deletion can still be in progress when the report is written, so the observation is final, not a snapshot of work underway. Some candidates may be `pruned` and others `not_pruned`. The command exits `PRUNE_INCOMPLETE` and says `sq` timed out. Running the command again converges, because it selects afresh and `sq` treats a file that is already gone as removed. A report sibling that `sq` had not yet deleted is not a run state file. Amoeba never selects it and never touches it, and the report names the run so that the PM can see it.
+- *The result is observed, not parsed.* `sq runs prune` has no JSON output, and its human text is not a contract. Its exit status is printed but never decides the outcome: `sq` exits 1 for a file someone else already removed, and that is still the goal state. Once `sq` has exited or timed out, Amoeba re-reads the runs directory. Every candidate gone is success. Any candidate still present, including one `sq` refused as live, is printed with sq's exit status and stderr, and the command exits `PRUNE_INCOMPLETE`. A timeout is the same case, said in one line; `subprocess.run`'s timeout kills `sq` and waits for it. Running the command again converges, because it selects afresh.
 - *No runs-directory flag.* Squadron's runs directory is always under `Path.home()`, and Amoeba's `DEFAULT_SQ_RUNS_DIR` uses the same derivation. A `--sq-runs-dir` here would let Amoeba select from one directory while Squadron deletes from another. Tests and the walkthrough point both at a scratch directory by setting `HOME`.
 - *No journal entry.* Pruning is not issued by the resident process, writes nothing to the store, and converges: every run recomputes the candidates from what is on disk, and a run that is already gone is simply absent. Command-before-result exists so that recovery can learn the outcome of a command the store depends on. No store state depends on whether a paused run's file still exists, and the store's `sq.run_id` references stay as history.
 - *Preview by default.* Deleting another tool's files is not reversible, so the command mirrors `sq runs prune`: it previews unless `--yes` is given. It is never a tenant (Excluded).
@@ -299,10 +299,11 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
 
 ### Patterns and Conventions
 
-- Step names, crash points, and `KeepReason` are each defined once, as enum members or constants, and referenced everywhere. No test spells one as a literal.
-- `PruneSettings` is a frozen dataclass and the only home of its defaults: `retention = timedelta(days=7)` and `sq_timeout_seconds = 30.0`. The CLI exposes neither.
+- Step names and crash points are each defined once, as enum members or constants, and referenced everywhere. No test spells one as a literal.
+- `PRUNE_RETENTION = timedelta(days=7)` and `SQ_PRUNE_TIMEOUT_SECONDS = 30.0` are module constants in `run_pruning.py`, their only definition. The CLI exposes neither. They become settings when something needs to configure them.
 - The proof harness never uses `uv run` inside a subprocess, because a temporary `HOME` would move uv's cache. It uses `sys.executable -m amoeba.cli.main`, as the existing harnesses do.
 - Every wait in the proof is a readiness or change predicate with a timeout (the `host_harness` pattern), never a bare sleep.
+- **The harness fails loudly, never hangs or skips.** A wait that times out fails the test with the step number and the captured stdout and stderr of every subprocess (bootstrap, `amoeba serve`). This covers a bootstrap that never reaches readiness. An exception in the `follow()` subscriber thread is stored and re-raised on the main thread at the next wait. An SSE connection that drops outside a planned kill fails the test; the follower reconnects only at the planned points.
 
 ## Implementation Details
 
@@ -336,17 +337,18 @@ The import edge the move could add is closed by Layering's `process/tenants.py` 
 **Pruning (D8):**
 
 ```
-select_prunable(runs: Iterable[SquadronRun | UnreadableRun], *, owned: Mapping[str, str],
-                held: Set[str], now: datetime, settings: PruneSettings) -> PruneSelection
-PruneSelection: candidates: tuple[SquadronRun, ...]; kept: tuple[tuple[str, KeepReason], ...]; unowned_count: int
+select_prunable(runs: Iterable[SquadronRun], *, owned: Mapping[str, str],
+                held: Set[str], now: datetime) -> tuple[SquadronRun, ...]
 ```
+
+`owned` maps a run id to its owning project. The kept count is the owned paused runs not returned.
 
 **CLI:**
 
 | Command | Behavior |
 | --- | --- |
-| `amoeba prune sq-runs` | Preview: candidates with `run_id, pipeline, updated_at, owning project and node`; kept owned runs with `KeepReason`; unowned count. Exit 0. |
-| `amoeba prune sq-runs --yes` | Also deletes through `sq runs prune`, then reports `pruned` and `not_pruned` by observation. Exit 0, or `PRUNE_INCOMPLETE`. |
+| `amoeba prune sq-runs` | Preview: candidates with `run_id, pipeline, updated_at, owning project`, and the count of owned paused runs kept. Exit 0. |
+| `amoeba prune sq-runs --yes` | Also deletes through `sq runs prune`, then re-reads the directory and prints any candidate still present. Exit 0, or `PRUNE_INCOMPLETE`. |
 
 ## Integration Points
 
@@ -361,7 +363,7 @@ PruneSelection: candidates: tuple[SquadronRun, ...]; kept: tuple[tuple[str, Keep
 
 - Every surface of 101–109, through their contracts only (D1).
 - **If 107, 108, or 109 is not merged,** the first task stops. Proving a partial contract would not prove what the slice plan asks, so the slice does not degrade to that.
-- **If `sq` is absent,** pruning reports `not_pruned` and deletes nothing. The suite uses a stub `sq` on `PATH`. The real `sq runs prune` is exercised by the walkthrough's step 4.
+- **If `sq` is absent,** pruning exits `PRUNE_INCOMPLETE` and deletes nothing. The suite uses a stub `sq` on `PATH` that reproduces the observed interface (D3); no test runs the real `sq`.
 
 ## Success Criteria
 
@@ -373,15 +375,15 @@ PruneSelection: candidates: tuple[SquadronRun, ...]; kept: tuple[tuple[str, Keep
 - Step 3 records the verdict, the `runner_issued` row, and the resolved entry in one commit. A test that kills the process between `journal_issue` and `record_runner_report` reproduces step 4's outcome. Detection never records a runner-reported file as `ingested`.
 - Step 4 ends with one verdict for the round, the entry `adopted` by recovery, and the detection row `ingested`. Step 5 ends with the entry `unknown`, one escalation message, and, after step 6, the node runnable.
 - The supervisor directory holds exactly one store file per project. No project's rows, feed, or detections appear in another's (D6).
-- `amoeba prune sq-runs` against the scenario's end state lists exactly alpha's checkpoint run as a candidate. Beta's run is kept `held_by_node`, and the unowned runs are counted. `--yes` leaves only that run file gone. Pure tests of `select_prunable` cover each `KeepReason`, and they cover a resumed-but-not-done node holding its run.
-- With `sq` missing, failing, timing out, or refusing a run, `--yes` exits `PRUNE_INCOMPLETE`, names each run `not_pruned`, and Amoeba deletes no file. An unreadable project store refuses the command before `sq` is called.
+- `amoeba prune sq-runs` against the scenario's end state lists exactly alpha's checkpoint run as a candidate. Beta's run is kept and counted. `--yes` leaves only that run file gone. Pure tests of `select_prunable` cover each of D8's four conditions failing alone, a missing `updated_at`, and a resumed-but-not-done node holding its run.
+- With `sq` missing, failing, timing out, or refusing a run, `--yes` exits `PRUNE_INCOMPLETE`, prints each candidate still present, and Amoeba deletes no file. An unreadable project store refuses the command before `sq` is called.
 
 ### Technical Requirements
 
 - The D1 import rule passes.
 - The tenant-order and parse-equivalence checks (Migration Plan) pass before and after the moves. The `process/tenants.py` import rule is an AST test.
 - `record_runner_report` refuses an `sq_run` entry whose `result` lacks `run_id`.
-- Checklist, once, at the end of the slice: every name added to an `__all__` here (H1, H3) is documented in its contract doc.
+- A test checks that every name in the `__all__` of each `PUBLIC_ROOTS` package appears in that package's contract doc (D9).
 - The writer guard is unchanged: `cli/prune.py` opens stores read-only only.
 - The `run_pruning.py` layering rule is an AST test.
 - No test touches the real `HOME`, Squadron runs directory, CF data directory, or supervisor directory. 101's store-safety guard covers `tests/contract/`.
@@ -434,7 +436,7 @@ export AMOEBA_STORE_DIR="$(mktemp -d)"
    ```bash
    uv run pytest tests/contract tests/upstream -k prune -v
    ```
-   Scenario step 12 passes: the preview selects only alpha's checkpoint run, and `--yes` with the stub `sq` leaves only that run's file gone. The `select_prunable` tests cover each `KeepReason`. The stub-`sq` failure tests (`sq` missing, failing, timing out, or refusing) exit `PRUNE_INCOMPLETE` and delete nothing.
+   Scenario step 12 passes: the preview selects only alpha's checkpoint run, and `--yes` with the stub `sq` leaves only that run's file gone. The `select_prunable` tests cover each of D8's conditions. The stub-`sq` failure tests (`sq` missing, failing, timing out, or refusing) exit `PRUNE_INCOMPLETE` and delete nothing.
 
 5. **The guide.** Open `docs/substrate-guide.md`. Each row of the initiative table links to a contract section and a scenario step.
 
