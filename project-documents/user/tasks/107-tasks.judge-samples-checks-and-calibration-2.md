@@ -7,7 +7,7 @@ dependencies: [101, 102, 103, 104, 105, 106]
 projectState: Slices 101–106 are merged (store schema 6, listing registry, inbox kinds `create_project`/`resolution`/`intent`/`verdict`/`watch_reviews`, verdicts and findings, 105's parser and `amoeba ingest review`, 106's change feed). A verdict has no invocation id, no check or progress table exists, and `parse_review_json` accepts a stdout capture that says `UNKNOWN` with a score. This slice adds migration 007, judge samples, calibration, checks, progress records, the `check` kind, and the D4 refusal.
 dateCreated: 20261015
 dateUpdated: 20261015
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary (File 2 of 2)
@@ -25,15 +25,15 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: The descriptive, read-only report of LLD D3.
 
 **Steps**:
-- [ ] Create `src/amoeba/store/calibration.py` with a frozen `CalibrationRow` (fields exactly as the D3 table: `review_type`, `model`, `samples`, `invocations`, `pass`/`concerns`/`fail`/`unknown` counts, `provider_failures`, `score_min`, `score_mean`, `score_max`) and `CalibrationOperations` with `calibration(project_id) -> list[CalibrationRow]`
-- [ ] Python field names cannot be `pass`; pick names such as `pass_count` and define the CLI/JSON column names once next to the row, and record the choice in the commit message
-- [ ] Read verdict rows where `judge_invocation_id` is not null; group on the stored `(review_type, model)` as given, never substituting or dropping a row. Order by review type, then model
-- [ ] Verdict counts use the stored verdict. `provider_failures` counts samples whose trust label is `provider_failure`, computed with 104's existing trust function, not a second rule. Score statistics ignore samples without a score and are `None` when none has one
-- [ ] No agreement metric, no cross-sample comparison, no threshold. Issue only SELECTs. Add the mixin to `Store` and export the row type
+- [x] Create `src/amoeba/store/calibration.py` with a frozen `CalibrationRow` (fields exactly as the D3 table: `review_type`, `model`, `samples`, `invocations`, `pass`/`concerns`/`fail`/`unknown` counts, `provider_failures`, `score_min`, `score_mean`, `score_max`) and `CalibrationOperations` with `calibration(project_id) -> list[CalibrationRow]`
+- [x] Python field names cannot be `pass`; pick names such as `pass_count` and define the CLI/JSON column names once next to the row, and record the choice in the commit message
+- [x] Read verdict rows where `judge_invocation_id` is not null; group on the stored `(review_type, model)` as given, never substituting or dropping a row. Order by review type, then model
+- [x] Verdict counts use the stored verdict. `provider_failures` counts samples whose trust label is `provider_failure`, computed with 104's existing trust function, not a second rule. Score statistics ignore samples without a score and are `None` when none has one
+- [x] No agreement metric, no cross-sample comparison, no threshold. Issue only SELECTs. Add the mixin to `Store` and export the row type
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 5.2
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 5.2
 
 **Files to Create**: `src/amoeba/store/calibration.py`
 **Files to Modify**: `store/store.py`, `store/__init__.py`, `store/sql_evidence.py` (statement only, if one is needed)
@@ -47,16 +47,16 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Pin the counts and the permanent constraints (LLD Functional Requirements, fifth and sixth bullets).
 
 **Steps**:
-- [ ] Add `tests/store/test_calibration.py` with samples across two review types and two models: assert one row per `(review_type, model)`, ordering, `samples`, `invocations` (distinct), per-verdict counts, `provider_failures`, and min/mean/max
-- [ ] An `UNKNOWN` sample is counted under `unknown`; a sample with no score is excluded from score statistics; a group with no scored sample has `None` for all three
-- [ ] Ordinary review verdicts (no invocation id) never appear
-- [ ] No-write test: run `calibration` on a `Store.open_read_only` handle and assert it succeeds and the store file's contents (row counts of every table) are unchanged
-- [ ] No-metrology test: parse every file under `src/` with `ast` and assert no identifier, import, or non-docstring string constant contains `metrology` (case-insensitive). Comments and docstrings are not checked, so explanatory text is allowed. This needs no Squadron strings: the LLD requires only that `src/` never references that store
-- [ ] The row type has no field comparing samples with each other: assert its field names equal the D3 list exactly
+- [x] Add `tests/store/test_calibration.py` with samples across two review types and two models: assert one row per `(review_type, model)`, ordering, `samples`, `invocations` (distinct), per-verdict counts, `provider_failures`, and min/mean/max
+- [x] An `UNKNOWN` sample is counted under `unknown`; a sample with no score is excluded from score statistics; a group with no scored sample has `None` for all three
+- [x] Ordinary review verdicts (no invocation id) never appear
+- [x] No-write test: run `calibration` on a `Store.open_read_only` handle and assert it succeeds and the store file's contents (row counts of every table) are unchanged
+- [x] No-metrology test: parse every file under `src/` with `ast` and assert no identifier, import, or non-docstring string constant contains `metrology` (case-insensitive). Comments and docstrings are not checked, so explanatory text is allowed. This needs no Squadron strings: the LLD requires only that `src/` never references that store
+- [x] The row type has no field comparing samples with each other: assert its field names equal the D3 list exactly
 
 **Success Criteria**:
-- [ ] Tests pass; full suite passes
-- [ ] Commit, e.g. `feat(store): add descriptive judge calibration report`
+- [x] Tests pass; full suite passes
+- [x] Commit, e.g. `feat(store): add descriptive judge calibration report`
 
 **Files to Create**: `tests/store/test_calibration.py`
 
@@ -71,13 +71,13 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Parts one and two of the three-part seam (LLD D7).
 
 **Steps**:
-- [ ] Read `inbox/evidence_payloads.py` and `inbox/envelope.py`; create `src/amoeba/inbox/check_payloads.py` with `CheckPayload` (pydantic, `MODEL_CONFIG` like the others) whose field names are the constants defined in `check_models.py`. `examined_count` is required and nullable; `outcome` uses `CheckOutcome`, so an unknown word fails validation; `examined` is an optional opaque mapping; `upstream_version` is required
-- [ ] Add `SubmissionKind.CHECK = "check"` and the `KIND_PAYLOAD_MODELS` entry
-- [ ] Do not add the effect yet; the 103 completeness test is expected to fail until Task 6.2, so do not commit between
+- [x] Read `inbox/evidence_payloads.py` and `inbox/envelope.py`; create `src/amoeba/inbox/check_payloads.py` with `CheckPayload` (pydantic, `MODEL_CONFIG` like the others) whose field names are the constants defined in `check_models.py`. `examined_count` is required and nullable; `outcome` uses `CheckOutcome`, so an unknown word fails validation; `examined` is an optional opaque mapping; `upstream_version` is required
+- [x] Add `SubmissionKind.CHECK = "check"` and the `KIND_PAYLOAD_MODELS` entry
+- [x] Do not add the effect yet; the 103 completeness test is expected to fail until Task 6.2, so do not commit between
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 6.2
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 6.2
 
 **Files to Create**: `src/amoeba/inbox/check_payloads.py`
 **Files to Modify**: `store/inbox_models.py`, `inbox/envelope.py`
@@ -91,16 +91,16 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Part three: the effect, inside `apply_submission`'s transaction (LLD D7).
 
 **Steps**:
-- [ ] In `store/inbox.py` add `_apply_check`, modeled on `_apply_verdict`: convert the payload through the `check_models.py` function, call `CheckWriter`'s retry lookup, rejection function, and insert; return the rejection reason on failure. The submission id is the record id. Register it in `KIND_EFFECTS`. `inbox.py` is at 308 lines: keep the effect to a few lines by delegating to `CheckWriter`
-- [ ] Make `InboxOperations` depend on `CheckWriter`, not on `CheckOperations` (the `BlockWriter`/`VerdictWriter` pattern)
-- [ ] Extend `tests/inbox/test_envelope.py` and `tests/store/test_inbox_models.py` where they enumerate kinds, and let 103's completeness tests cover `check`
-- [ ] Add a test that `CheckPayload`'s field names equal the payload key constants in `check_models.py` (as 104 pinned `VerdictPayload` against its keys)
-- [ ] Add inbox tests (in `tests/store/test_inbox_apply.py` or a new `test_check_submission.py`): a valid check is applied and readable; a negative count, a missing node, and an empty `upstream_version` each end `rejected` with a reason and write no row; an unknown outcome word is quarantined at validation; a replay of the same submission is a no-op
-- [ ] Add a CLI test in `tests/cli/test_submit.py`: `amoeba submit check` with the flags from `CheckPayload` (`--examined-count null` and `--examined-count 0` parse as JSON per the flag rule)
+- [x] In `store/inbox.py` add `_apply_check`, modeled on `_apply_verdict`: convert the payload through the `check_models.py` function, call `CheckWriter`'s retry lookup, rejection function, and insert; return the rejection reason on failure. The submission id is the record id. Register it in `KIND_EFFECTS`. `inbox.py` is at 308 lines: keep the effect to a few lines by delegating to `CheckWriter`
+- [x] Make `InboxOperations` depend on `CheckWriter`, not on `CheckOperations` (the `BlockWriter`/`VerdictWriter` pattern)
+- [x] Extend `tests/inbox/test_envelope.py` and `tests/store/test_inbox_models.py` where they enumerate kinds, and let 103's completeness tests cover `check`
+- [x] Add a test that `CheckPayload`'s field names equal the payload key constants in `check_models.py` (as 104 pinned `VerdictPayload` against its keys)
+- [x] Add inbox tests (in `tests/store/test_inbox_apply.py` or a new `test_check_submission.py`): a valid check is applied and readable; a negative count, a missing node, and an empty `upstream_version` each end `rejected` with a reason and write no row; an unknown outcome word is quarantined at validation; a replay of the same submission is a no-op
+- [x] Add a CLI test in `tests/cli/test_submit.py`: `amoeba submit check` with the flags from `CheckPayload` (`--examined-count null` and `--examined-count 0` parse as JSON per the flag rule)
 
 **Success Criteria**:
-- [ ] Tests pass; full suite passes
-- [ ] Commit, e.g. `feat(inbox): add check submission kind`
+- [x] Tests pass; full suite passes
+- [x] Commit, e.g. `feat(inbox): add check submission kind`
 
 **Files to Modify**: `store/inbox.py`, inbox and store tests as listed
 
@@ -113,14 +113,14 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: One feed change per recorded check (LLD D9).
 
 **Steps**:
-- [ ] Add `CHECK_RECORDED = "check_recorded"` to `ChangeKind` in `feed_models.py`
-- [ ] Add trigger `changes_check_recorded` (AFTER INSERT ON `check_results`) to migration 007, written as 006 writes its triggers: payload from `json_object` with `name`, `outcome`, `examined_count` only; `recorded_at` copied from the row; `subject_id` the check id, `node_id` its node. No standing in the payload
-- [ ] Do not add a trigger for `progress_records`, and do not touch `verdict_recorded`
-- [ ] Update `feed_models` tests and any test that enumerates `ChangeKind` or `changes` triggers; expect 106's `test_feed_invariant.py` to fail until Task 6.4
+- [x] Add `CHECK_RECORDED = "check_recorded"` to `ChangeKind` in `feed_models.py`
+- [x] Add trigger `changes_check_recorded` (AFTER INSERT ON `check_results`) to migration 007, written as 006 writes its triggers: payload from `json_object` with `name`, `outcome`, `examined_count` only; `recorded_at` copied from the row; `subject_id` the check id, `node_id` its node. No standing in the payload
+- [x] Do not add a trigger for `progress_records`, and do not touch `verdict_recorded`
+- [x] Update `feed_models` tests and any test that enumerates `ChangeKind` or `changes` triggers; expect 106's `test_feed_invariant.py` to fail until Task 6.4
 
 **Success Criteria**:
-- [ ] Migration applies cleanly on a fresh store
-- [ ] Committed with Task 6.4
+- [x] Migration applies cleanly on a fresh store
+- [x] Committed with Task 6.4
 
 **Files to Modify**: `store/feed_models.py`, migration 007
 
@@ -133,13 +133,13 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Hold LLD Functional Requirements (one change per check, none per retry or progress record) and Technical Requirements (invariant test).
 
 **Steps**:
-- [ ] In `tests/store/test_feed_triggers.py` add: `record_check` appends exactly one `check_recorded` with the payload keys above; a retried check appends none; `record_progress` appends none; a check rejected through the inbox appends none; the change carries no `standing`
-- [ ] Extend `tests/store/test_feed_invariant.py`: its scripted sequence records a check, so the invariant test covers `check_recorded` and fails if that trigger is missing. Note: the LLD's Technical Requirements say "two new kinds", but D9 defines exactly one (`check_recorded`); follow D9
-- [ ] Check the public feed read (`changes`/`amoeba feed` path) returns the new kind without an unknown-vocabulary error
+- [x] In `tests/store/test_feed_triggers.py` add: `record_check` appends exactly one `check_recorded` with the payload keys above; a retried check appends none; `record_progress` appends none; a check rejected through the inbox appends none; the change carries no `standing`
+- [x] Extend `tests/store/test_feed_invariant.py`: its scripted sequence records a check, so the invariant test covers `check_recorded` and fails if that trigger is missing. Note: the LLD's Technical Requirements say "two new kinds", but D9 defines exactly one (`check_recorded`); follow D9
+- [x] Check the public feed read (`changes`/`amoeba feed` path) returns the new kind without an unknown-vocabulary error
 
 **Success Criteria**:
-- [ ] Tests pass; full suite passes
-- [ ] Commit, e.g. `feat(store): emit check_recorded changes by trigger`
+- [x] Tests pass; full suite passes
+- [x] Commit, e.g. `feat(store): emit check_recorded changes by trigger`
 
 **Files to Modify**: `tests/store/test_feed_triggers.py`, `tests/store/test_feed_invariant.py`
 
@@ -154,19 +154,22 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Objective**: Judge samples are ingested through 105's command (LLD "Retry", "CLI").
 
 **Steps**:
-- [ ] Read `cli/ingest.py` (157 lines) and `add_ingest_parser`. Add `--judge-invocation-id ID`, passed to `to_verdict_input`
-- [ ] Without `--id` and with an invocation, the submission/record id is 105's digest id followed by `.` and the invocation id. Without an invocation, or with `--id`, the id is unchanged. Do not change the digest or `RECORD_ID_FORMAT_TAG`
-- [ ] Build the suffix in one named helper next to the existing id logic, not inline
+- [x] Read `cli/ingest.py` (157 lines) and `add_ingest_parser`. Add `--judge-invocation-id ID`, passed to `to_verdict_input`
+- [x] Without `--id` and with an invocation, the submission/record id is 105's digest id followed by `.` and the invocation id. Without an invocation, or with `--id`, the id is unchanged. Do not change the digest or `RECORD_ID_FORMAT_TAG`
+- [x] Build the suffix in one named helper next to the existing id logic, not inline
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass; 105's ingest tests pass unchanged
+- [x] `ruff`, `pyright` pass; 105's ingest tests pass unchanged
 - [ ] Committed with Task 7.3
+  - Note: sample-id rule already tested against the existing real artifact ROUND_1_PART_1 in tests/cli/test_ingest.py
 
 **Files to Modify**: `src/amoeba/cli/ingest.py`
 
 ---
 
 ### Task 7.2: Confirm the real judge artifact and test it against 105's parser
+
+> BLOCKED: no judge-template review artifact in tests/fixtures/sq_reviews/; PM asked.
 **Owner**: Junior AI (the capture itself is a PM step)
 **Dependencies**: Task 7.1
 **Effort**: 2
