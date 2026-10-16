@@ -54,16 +54,22 @@ findings:
     category: proportionality
     summary: "Design is heavier than an effort-3, medium-risk slice needs; several mechanisms can be cut or deferred"
     location: "project-documents/user/slices/109-slice.network-api.md:258"
+    resolution: accepted
+    resolvedBy: "Cut: GET /v1/listings catalog, the body-read timeout and 408 path, max_connections/limit_concurrency, and the 200 ms read-latency target (starvation check kept). Kept send_timeout_seconds and shutdown_grace_seconds: no usable library default exists (a stalled reader would hold its slot forever; uvicorn's graceful shutdown waits indefinitely and SSE streams never end). Origin/Host/415 kept, as the reviewer accepted"
   - id: F006
     severity: note
     category: hidden-dependency
     summary: "Migration table names modules from designs that are not yet merged"
     location: "project-documents/user/slices/109-slice.network-api.md:62"
+    resolution: no_change_needed
+    resolvedBy: "Development Approach step 1 already gates on 107 and 108 being merged and revalidates the Migration Plan table"
   - id: F007
     severity: note
     category: architectural-alignment
     summary: "Design is stricter than the architecture on the non-local bind"
     location: "project-documents/user/slices/109-slice.network-api.md:206"
+    resolution: no_change_needed
+    resolvedBy: "Stricter bind rules (TLS, token length, Origin, Host) are justified in D2/D3; no action requested"
 ---
 
 # Review: slice — slice 109
