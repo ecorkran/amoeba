@@ -8,7 +8,7 @@ from the enum, fails here.
 
 from __future__ import annotations
 
-from evidence_harness import provider_failure, verdict_input
+from evidence_harness import check_input, provider_failure, verdict_input
 from feed_harness import (
     escalate_by_recovery,
     post_intent,
@@ -41,6 +41,8 @@ def _run_sequence(store: Store) -> None:
     store.record_verdict(verdict_input("v-1", root), project_id=PROJECT)
     store.record_verdict(verdict_input("v-1", root), project_id=PROJECT)
     store.record_verdict(provider_failure("v-2", root), project_id=PROJECT)
+    store.record_check(check_input("c-1", root), project_id=PROJECT)
+    store.record_check(check_input("c-1", root), project_id=PROJECT)
     post_intent(store, "s-intent", gate, PROJECT)
     store.update_node_status(gate, NodeStatus.DONE)
     escalate_by_recovery(store, root, PROJECT)
@@ -85,6 +87,10 @@ def reconcile(store: Store, project_id: str) -> list[str]:
     verdict_ids = [verdict.id for verdict in store.verdicts(project_id)]
     if _subjects(changes, ChangeKind.VERDICT_RECORDED) != verdict_ids:
         differences.append(f"verdict ids differ from {verdict_ids}")
+
+    check_ids = [check.id for check in store.checks(project_id)]
+    if _subjects(changes, ChangeKind.CHECK_RECORDED) != check_ids:
+        differences.append(f"check ids differ from {check_ids}")
 
     message_ids = sorted(
         message.id

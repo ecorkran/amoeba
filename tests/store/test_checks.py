@@ -6,39 +6,19 @@ import dataclasses
 import logging
 
 import pytest
-from evidence_harness import PROJECT, seed_node
+from evidence_harness import CHECK_PROVENANCE as PROVENANCE
+from evidence_harness import PROJECT, check_input, seed_node
 
 from amoeba.store import (
-    CheckInput,
     CheckOutcome,
     CheckStanding,
     NodeNotFoundError,
     ProgressInput,
     ProgressKind,
-    Provenance,
-    RecordSource,
     Store,
     StoreIntegrityError,
     sql_checks,
 )
-
-PROVENANCE = Provenance(
-    upstream="context-forge",
-    upstream_version="1.2.3",
-    source=RecordSource.COMMAND_OUTPUT,
-)
-
-
-def check_input(check_id: str, node_id: str, **overrides: object) -> CheckInput:
-    base = CheckInput(
-        id=check_id,
-        node_id=node_id,
-        name="cf check",
-        outcome=CheckOutcome.PASSED,
-        examined_count=3,
-        provenance=PROVENANCE,
-    )
-    return dataclasses.replace(base, **overrides)  # pyright: ignore[reportArgumentType]
 
 
 def test_a_check_round_trips_with_examined_and_baseline(store: Store) -> None:

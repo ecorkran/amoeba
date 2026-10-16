@@ -59,3 +59,26 @@ CREATE TABLE progress_records (
 
 CREATE INDEX idx_progress_records_node
     ON progress_records (project_id, node_id, recorded_seq);
+
+-- examined_count is emitted as a JSON number or null. No standing: it is
+-- computed on read, and a trigger cannot call that function. The kind literal
+-- mirrors ChangeKind.CHECK_RECORDED in feed_models.py; the invariant test
+-- (tests/store/test_feed_invariant.py) fails if it drifts. progress_records has
+-- no trigger until it has a reader (D9, GitHub issue #5).
+CREATE TRIGGER changes_check_recorded
+AFTER INSERT ON check_results
+BEGIN
+    INSERT INTO changes (project_id, kind, node_id, subject_id, payload, recorded_at)
+    VALUES (
+        new.project_id,
+        'check_recorded',
+        new.node_id,
+        new.id,
+        json_object(
+            'name', new.name,
+            'outcome', new.outcome,
+            'examined_count', new.examined_count
+        ),
+        new.recorded_at
+    );
+END;

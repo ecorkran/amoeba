@@ -5,8 +5,15 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
-from evidence_harness import REVIEW_TYPE, provider_failure, verdict_input
+from evidence_harness import (
+    REVIEW_TYPE,
+    check_input,
+    progress_input,
+    provider_failure,
+    verdict_input,
+)
 from feed_harness import (
+    apply,
     escalate_by_recovery,
     post_intent,
     raw_changes,
@@ -20,6 +27,8 @@ from amoeba.store import (
     NodeKind,
     NodeStatus,
     Store,
+    SubmissionKind,
+    SubmissionOutcome,
     sql,
 )
 from amoeba.store.feed_models import (
@@ -155,6 +164,67 @@ def test_a_provider_failure_is_a_json_true(store: Store) -> None:
     store.record_verdict(provider_failure("v-1", node_id), project_id=PROJECT)
     payload = _of_kind(store, ChangeKind.VERDICT_RECORDED)[0]
     assert payload["provider_failure"] is True
+
+
+# --------------------------------------------------------------------------
+# Checks and progress records
+# --------------------------------------------------------------------------
+
+
+def test_record_check_emits_one_check_recorded(store: Store) -> None:
+    node_id = _node(store)
+    record = store.record_check(check_input("c-1", node_id), project_id=PROJECT)
+
+    change = raw_changes(store, PROJECT)[-1]
+    assert change.kind is ChangeKind.CHECK_RECORDED
+    assert (change.node_id, change.subject_id) == (node_id, "c-1")
+    assert change.recorded_at == record.recorded_at
+
+
+def test_the_check_payload_keys_are_exactly_the_three_and_carry_no_standing(
+    store: Store,
+) -> None:
+    node_id = _node(store)
+    store.record_check(
+        check_input("c-1", node_id, examined_count=0), project_id=PROJECT
+    )
+    store.record_check(
+        check_input("c-2", node_id, examined_count=None), project_id=PROJECT
+    )
+    assert _of_kind(store, ChangeKind.CHECK_RECORDED) == [
+        {"name": "cf check", "outcome": "passed", "examined_count": 0},
+        {"name": "cf check", "outcome": "passed", "examined_count": None},
+    ]
+
+
+def test_a_retried_check_emits_nothing(store: Store) -> None:
+    node_id = _node(store)
+    store.record_check(check_input("c-1", node_id), project_id=PROJECT)
+    store.record_check(check_input("c-1", node_id), project_id=PROJECT)
+    assert len(_of_kind(store, ChangeKind.CHECK_RECORDED)) == 1
+
+
+def test_a_progress_record_emits_nothing(store: Store) -> None:
+    node_id = _node(store)
+    before = len(raw_changes(store, PROJECT))
+    store.record_progress(progress_input("p-1", node_id), project_id=PROJECT)
+    assert len(raw_changes(store, PROJECT)) == before
+
+
+def test_a_check_rejected_through_the_inbox_emits_nothing(store: Store) -> None:
+    node_id = _node(store)
+    payload: dict[str, object] = {
+        "node_id": node_id,
+        "name": "cf check",
+        "outcome": "passed",
+        "examined_count": -1,
+        "upstream": "context-forge",
+        "upstream_version": "1.2.3",
+        "source": "command_output",
+    }
+    record = apply(store, "s-1", SubmissionKind.CHECK, payload, PROJECT)
+    assert record.outcome is SubmissionOutcome.REJECTED
+    assert _of_kind(store, ChangeKind.CHECK_RECORDED) == []
 
 
 def test_an_intent_submission_emits_one_message_posted(store: Store) -> None:

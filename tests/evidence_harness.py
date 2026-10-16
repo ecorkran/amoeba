@@ -6,9 +6,13 @@ import dataclasses
 from pathlib import Path
 
 from amoeba.store import (
+    CheckInput,
+    CheckOutcome,
     FindingInput,
     FindingSeverity,
     NodeKind,
+    ProgressInput,
+    ProgressKind,
     Provenance,
     RecordSource,
     ReviewVerdict,
@@ -108,3 +112,33 @@ def pre_judge_verdict_insert(
         f"VALUES ({', '.join('?' for _ in columns)})"
     )
     return statement, verdict_parameters(verdict, project_id, recorded_at)[:-1]
+
+
+CHECK_PROVENANCE = Provenance(
+    upstream="context-forge",
+    upstream_version="1.2.3",
+    source=RecordSource.COMMAND_OUTPUT,
+)
+
+
+def check_input(check_id: str, node_id: str, **overrides: object) -> CheckInput:
+    """A passed check that examined three things; ``overrides`` replace any field."""
+    base = CheckInput(
+        id=check_id,
+        node_id=node_id,
+        name="cf check",
+        outcome=CheckOutcome.PASSED,
+        examined_count=3,
+        provenance=CHECK_PROVENANCE,
+    )
+    return dataclasses.replace(base, **overrides)  # pyright: ignore[reportArgumentType]
+
+
+def progress_input(progress_id: str, node_id: str) -> ProgressInput:
+    return ProgressInput(
+        id=progress_id,
+        node_id=node_id,
+        progress_kind=ProgressKind.DEVLOG,
+        content={"entry": "did a thing"},
+        provenance=CHECK_PROVENANCE,
+    )
