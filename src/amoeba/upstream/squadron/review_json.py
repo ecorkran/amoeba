@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
-from amoeba.store.evidence_models import RecordSource, VerdictDerivation
+from amoeba.store.evidence_models import RecordSource, ReviewVerdict, VerdictDerivation
 from amoeba.upstream.squadron import review_fields as fields
 from amoeba.upstream.squadron.review import ParsedReview, SquadronParseError
 from amoeba.upstream.squadron.review_values import (
@@ -25,6 +25,11 @@ _JSON = RecordSource.STDOUT_JSON
 # findings failed to parse; a derived verdict is not a parse failure.
 _UNPARSED_WHEN_FALLBACK = frozenset(
     {VerdictDerivation.STATED, VerdictDerivation.NOT_REPORTED}
+)
+
+_UNKNOWN_WITH_SCORE = (
+    "stdout JSON with a score reports verdict UNKNOWN; "
+    "ingest the saved review file instead"
 )
 
 
@@ -66,8 +71,13 @@ def parse_review_json(text: str) -> ParsedReview:
     derivation = read_derivation(raw, fields.JSON_VERDICT_SOURCE, _JSON)
     fallback_used = typed(raw, fields.JSON_FALLBACK_USED, bool, _JSON)
     substituted = typed(raw, fields.JSON_MODEL_SUBSTITUTED, bool, _JSON) is True
+    verdict = read_verdict(raw, fields.JSON_VERDICT, _JSON)
+    score = number(raw, fields.JSON_SCORE, _JSON)
+    # D4: the stdout verdict may be wrong while the saved file has the real one.
+    if verdict is ReviewVerdict.UNKNOWN and score is not None:
+        fail(_JSON, _UNKNOWN_WITH_SCORE)
     return ParsedReview(
-        verdict=read_verdict(raw, fields.JSON_VERDICT, _JSON),
+        verdict=verdict,
         derivation=derivation,
         fallback_used=fallback_used,
         findings_parsed=_findings_parsed(fallback_used, derivation),
@@ -81,7 +91,7 @@ def parse_review_json(text: str) -> ParsedReview:
         diff_truncated=typed(raw, fields.JSON_DIFF_TRUNCATED, bool, _JSON),
         reviewed_sha=None,  # not in the JSON
         tool_calls_made=typed(raw, fields.JSON_TOOL_CALLS_MADE, int, _JSON),
-        score=number(raw, fields.JSON_SCORE, _JSON),
+        score=score,
         criteria=read_criteria(raw, fields.JSON_CRITERIA, _JSON),
         sq_run_id=typed(raw, fields.JSON_RUN_ID, str, _JSON),
         findings=read_findings(

@@ -182,3 +182,30 @@ def test_the_captured_pair_agrees_between_file_and_stdout() -> None:
 
 def _keys(parsed: ParsedReview) -> list[str]:
     return [finding_identity(f.location, f.summary) for f in parsed.findings]
+
+
+UNKNOWN_WITH_SCORE = SQ_REVIEWS / PAIR_STDOUT.name.replace(
+    ".stdout.json", ".stdout-unknown-with-score-edited.json"
+)
+
+
+def test_stdout_unknown_with_a_score_is_refused_naming_the_saved_file() -> None:
+    with pytest.raises(SquadronParseError) as refused:
+        parse_review_json(UNKNOWN_WITH_SCORE.read_text(encoding="utf-8"))
+    message = str(refused.value)
+    assert "saved review file" in message
+    assert _capture(UNKNOWN_WITH_SCORE)["squadron_version"] not in message
+    assert _capture(UNKNOWN_WITH_SCORE)["template_name"] not in message
+
+
+def test_the_unedited_capture_and_a_real_verdict_with_a_score_still_parse() -> None:
+    assert parse_review_json(PAIR_STDOUT.read_text(encoding="utf-8")).score is None
+    scored = _parse({**_capture(PAIR_STDOUT), "score": 7.5})
+    assert scored.verdict is ReviewVerdict.CONCERNS
+    assert scored.score == 7.5  # noqa: PLR2004
+
+
+def test_stdout_unknown_without_a_score_still_parses() -> None:
+    parsed = _parse({**_capture(UNKNOWN_WITH_SCORE), "score": None})
+    assert parsed.verdict is ReviewVerdict.UNKNOWN
+    assert parsed.score is None

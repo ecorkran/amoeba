@@ -1,0 +1,154 @@
+{
+  "verdict": "UNKNOWN",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Judge-template stdout verdict is ingested as UNKNOWN with no handling",
+      "description": "The architecture (Technical Considerations, \"Verdict provenance\") says that for judge templates the store must hold the score-derived verdict read from the artifact, not stdout, until squadron#140 is fixed. The slice notes that stdout JSON still reports `verdict: UNKNOWN` for judge templates (the \"Judge templates\" bullet). But D3 maps `verdict` straight from stdout through `parse_verdict`, and no behavior is defined for that case. `--stdout-json` on a judge-template capture would silently record an UNKNOWN verdict with a populated `score`. Choose one of three options:\n- Refuse with `SquadronParseError` when a JSON capture carries `score`/`criteria` and `UNKNOWN`.\n- Mark the record's standing explicitly.\n- State that 107 owns this, and add a documented caller rule like the \"prefer the file\" one.\n\nThe success criteria do not cover it either way.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#Interfaces Required"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Body headings are used as logical structure for `provider_failure` and `findings_parsed`",
+      "description": "The project rule says \"NEVER use user-accessible labels as logical structure.\" D3 sets `provider_failure` and `findings_parsed` from the presence of the `## Provider Failure` and `## Findings Not Parsed` headings. Headings are free text in a file the PM hand-edits (for example, by appending a `## Response`). The matching is deliberately lenient: any level, any case. The slice does not say what part of the body is scanned, or whether a heading inside a code fence or quoted finding text counts. A false positive flips a review to `provider_failure`, which is a trust-relevant provenance flag. The heading is the only signal in pre-#139 files, so the exception may be justified. If so:\n- Record it explicitly as a scoped legacy exception.\n- Prefer frontmatter whenever it is present.\n- Define the scan scope, for example top-level headings only, outside fences.\n- Add a test with a `## Response` section that mentions the heading text.",
+      "file_ref": null,
+      "category": "project-conventions",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#D3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design weight: sections restate other documents or add machinery nothing yet consumes",
+      "description": "The core deliverable is a pure parser plus one CLI command. Several parts can be cut or deferred:\n- **D6 outcome table.** The four-outcome table restates 103's submission lifecycle. Replace it with a pointer to 103.\n- **Verification Walkthrough.** Nine steps, with a bash harness, restate what the Success Criteria and the e2e test already pin. Keep two or three steps.\n- **Parse-time provider-failure check.** The `provider_failure_problem` extraction touches slice 104's writer purely to fail earlier at the CLI. The same contradiction already ends as a visible `rejected` submission. The refactor is defensible against drift, but it is the heavier option. A lighter one is to call the check only from the parser and leave the writer alone until a second caller exists.\n- **`--id` and `record_id=` overrides.** Their only named consumer is the 120 Runner, which does not exist yet. D7's recovery path is the one in-slice use. The digest-format-tag governance paragraph could also move to the contract doc.",
+      "file_ref": null,
+      "category": "proportionality",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#Technical Decisions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "File and stdout ids diverge by design, so double-ingest inflates counts, and an id-format change has no migration path",
+      "description": "The slice documents the consequences honestly: two records, `times_seen` doubled, and findings reported as `recurring` against themselves. Mitigation is only a caller rule (\"ingest the file when it exists\"), and nothing enforces it. The architecture wants cross-run questions answerable from the store alone, so the overcount is a known fidelity gap. Separately, D5 says any change to the digest's covered fields, including adding a `ParsedReview` field, changes every id. Records already stored under the old id would then be re-recorded as duplicates. The slice requires a new format tag and a CHANGELOG entry but gives no reconciliation story. That is acceptable now, but 106's ledger should be aware of it.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#D5"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Failure modes for the new I/O path are enumerated",
+      "description": "The slice maps unreadable file, parse failure, version conflict, refused submission, missing store, and the residual check-versus-drain race to explicit exit codes. For each it states that nothing reaches `inbox/new/`. Exception handling follows the project rule: narrow catches, with no catch of plain `ValueError`. The architecture states no NFR numbers for this path, so none need restating.",
+      "file_ref": null,
+      "category": "error-handling",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#Data Flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependencies and interfaces frontmatter are slightly inconsistent with the body",
+      "description": "The slice adds 103 and 101 as dependencies beyond the slice plan and says so, which is fine. The body lists Initiative 120 as a consumer under \"Provides to Other Slices\", but `interfaces` names only 106, 107, and 110. Align them, or state that 120 is outside slice indexing.",
+      "file_ref": null,
+      "category": "integration",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:6-7"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "summary": "Judge-template stdout verdict is ingested as UNKNOWN with no handling",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#Interfaces Required",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "project-conventions",
+      "summary": "Body headings are used as logical structure for `provider_failure` and `findings_parsed`",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#D3",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "summary": "Design weight: sections restate other documents or add machinery nothing yet consumes",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "data-integrity",
+      "summary": "File and stdout ids diverge by design, so double-ingest inflates counts, and an id-format change has no migration path",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#D5",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling",
+      "summary": "Failure modes for the new I/O path are enumerated",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md#Data Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "integration",
+      "summary": "Dependencies and interfaces frontmatter are slightly inconsistent with the body",
+      "location": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md:6-7",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md",
+    "against": "project-documents/user/architecture/100-arch.substrate-run-state-store.md",
+    "cwd": "/private/var/folders/sh/z0st27515979z5n4v263_svc0000gn/T/tmp.6UQDs7As4T/amoeba-capture"
+  },
+  "timestamp": "2026-10-14T22:11:12.009643",
+  "model": "claude-sonnet-5-5",
+  "score": 7.5,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.21.9",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": null,
+  "prompt_tokens": null,
+  "cached_tokens": null,
+  "completion_tokens": null,
+  "reasoning_tokens": null,
+  "duration_seconds": 40.72568620799575
+}

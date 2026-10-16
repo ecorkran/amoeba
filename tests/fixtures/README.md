@@ -104,6 +104,12 @@ Captured **20260926**.
 | `stdout-slice-927-clean-pass.json` | `sq review slice 927 --output json --no-save` in the Squadron repo (captured by the Squadron session, squadron c88e2587, minimax-m3) | A clean PASS: `verdictSource: stated`, zero findings, `fallback_used: false`. Must parse as findings parsed, not as a parse failure. |
 | `stdout-slice-104-concerns-glmflash.json` | `sq review slice <104 design path> --against <100-arch path> --model glmflash --output json` against a throwaway copy of this repo (squadron 0.14.0, z-ai/glm-5.3-flash) | A CONCERNS with eleven findings, mixed PASS/CONCERN/NOTE severities, and 48 tool calls. The review was not saved (a path input carries no slice number), so stdout holds no trailing `Saved review to` line. |
 
+### Edited stdout capture
+
+| File | `verdict` | Why it is here |
+| --- | --- | --- |
+| `105-review.slice.squadron-review-parser-and-ingest.20261015T041112.stdout-unknown-with-score-edited.json` | UNKNOWN | **Edited.** A copy of the file-and-stdout pair's stdout capture (`105-review.slice.squadron-review-parser-and-ingest.20261015T041112.stdout.json`) with `verdict` set to `UNKNOWN` and `score` set to `7.5` (the real capture has a null score). Nothing else differs. It pins the 107 D4 refusal. Replace it when a real stdout capture shows the combination. |
+
 ### File and stdout pair
 
 Captured **20261014** (the archive stamp is UTC 20261015T041112). One real review, saved by Squadron as a file and also printed as JSON on stdout, so the parser's file/stdout agreement is tested on real output.

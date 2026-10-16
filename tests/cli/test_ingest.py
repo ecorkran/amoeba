@@ -187,6 +187,16 @@ def test_a_json_error_body_with_no_verdict_is_unreadable(
     _assert_refused(result, supervisor_dir, ExitCode.REVIEW_UNREADABLE, "verdict")
 
 
+def test_stdout_unknown_with_a_score_is_unreadable_and_submits_nothing(
+    supervisor_dir: Path,
+) -> None:
+    edited = next(SQ_REVIEWS.glob("*.stdout-unknown-with-score-edited.json"))
+    result = ingest(supervisor_dir, "--stdout-json", str(edited))
+    _assert_refused(
+        result, supervisor_dir, ExitCode.REVIEW_UNREADABLE, "saved review file"
+    )
+
+
 def test_both_source_flags_together_are_a_usage_error(supervisor_dir: Path) -> None:
     result = ingest(
         supervisor_dir,
