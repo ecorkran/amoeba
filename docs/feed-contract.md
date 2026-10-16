@@ -63,6 +63,7 @@ a default.
 | `verdict_recorded` | the node | verdict id | `verdict`, `review_type`, `provider_failure` (JSON boolean) |
 | `message_posted` | the node, or null | message id | `channel` (`intent` or `escalation`) |
 | `review_detected` | the node, or null | detection ledger id | `outcome`, `path` |
+| `check_recorded` | the node | check id | `name`, `outcome`, `examined_count` (integer or null) |
 
 - `node_created` carries the initial status, so replaying from `seq` 0 rebuilds
   every node's current status without reading the store.
@@ -70,7 +71,10 @@ a default.
   and resolve are status changes (for example `runnable` → `blocked_on_human`
   and back), so a human reply applied through the inbox shows up here.
 - `verdict_recorded` carries no trust label: it is computed on read. Read the
-  verdict from the store for its standing.
+  verdict from the store for its standing. It does not carry
+  `judge_invocation_id` either; read the record by `subject_id`.
+- `check_recorded` carries no standing, for the same reason: `vacuous` is
+  computed on read from `examined_count`. Read the check from the store.
 - `review_detected` is emitted for the `ingested`, `unattributed`, and
   `unparseable` outcomes. `baseline` and `runner_issued` ledger rows emit
   nothing.
@@ -79,8 +83,10 @@ a default.
 
 ## Coverage
 
-The feed announces node, verdict, message, and detection changes only. It does
+The feed announces node, verdict, message, detection, and check changes only. It does
 **not** announce:
+
+- progress records (write-only; no reader yet);
 
 - blocked-state rows themselves (their effect, the node status, is announced);
 - finding status or finding observations;

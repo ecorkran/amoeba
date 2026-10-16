@@ -66,6 +66,10 @@ amoeba submit resolution --project demo --by operator \
     --blocked-state-id <id> --detail "approved"
 amoeba submit intent --project demo --by operator \
     --body '{"want": "a review"}' [--node-id <id>]
+amoeba submit check --project demo --by ci --node-id <id> --name <name> \
+    --outcome passed --examined-count 412 --upstream <tool> \
+    --upstream-version <label> --source command_output [--examined '{…}'] \
+    [--baseline-ref <ref>] [--source-path <path>]
 ```
 
 Each prints the submission id. `--id` reuses an id.
@@ -85,7 +89,8 @@ invalid payload is refused before anything is written.
 | `create_project` | none | The project's store exists. The process creates it at once and it is usable immediately. | Never: a project that already exists is `applied` — the requested state holds. |
 | `resolution` | `blocked_state_id`, `detail` | Fills that blocked state's resolution slot and returns its node to `runnable`. `resolved_by` is `submitted_by`. | The blocked state does not exist, belongs to another project, or is already resolved. |
 | `intent` | `body` (a JSON object), optional `node_id` | One unacknowledged row on the `intent` channel, carrying the submission id. | `node_id` is given and is not a node of this project. |
-| `verdict` | A review result: `VerdictInput`'s fields except `id`, with provenance flattened — see [`evidence-contract.md`](evidence-contract.md#through-the-inbox) | One verdict record, whose id is the submission id, and one observation per finding. | The node is not in this project; a provider failure carries findings or a verdict other than `UNKNOWN`; `upstream_version` is empty. An unknown word in an enum field, or an omitted `derivation`, `fallback_used`, or `findings_parsed`, fails validation and is quarantined instead. |
+| `verdict` | A review result: `VerdictInput`'s fields except `id`, with provenance flattened — see [`evidence-contract.md`](evidence-contract.md#through-the-inbox) | One verdict record, whose id is the submission id, and one observation per finding. | The node is not in this project; a provider failure carries findings or a verdict other than `UNKNOWN`; `upstream_version` is empty; a judge sample (optional `judge_invocation_id`) is on another node or review type than the invocation's earlier samples. An unknown word in an enum field, or an omitted `derivation`, `fallback_used`, or `findings_parsed`, fails validation and is quarantined instead. |
+| `check` | A mechanical check result: `node_id`, `name`, `outcome` (`passed`, `failed`, `errored`), `examined_count` (integer or `null`; **required** — `null` says "not reported"), `upstream`, `upstream_version`, `source` (`RecordSource`), and optional `examined` (JSON object), `baseline_ref`, `source_path` — see [`evidence-contract.md`](evidence-contract.md#checks) | One check record, whose id is the submission id. Its standing (`vacuous` when `examined_count` is 0) is computed on read. | The node is not in this project; `examined_count` is negative; `upstream_version` is empty. An unknown `outcome` or `source`, or an omitted `examined_count`, fails validation and is quarantined instead. |
 | `watch_reviews` | `reviews_dir` (an absolute path), `active` (boolean) | Registers the directory for review detection, or sets whether it is watched. A first registration leaves it un-baselined; the detection tenant takes the baseline, so files already there are never ingested. Deactivating and reactivating never re-baselines: files that arrived while inactive are detected. Paths are stored as given, with no symlink resolution. See [`process-contract.md`](process-contract.md#review-detection). | Never. A relative `reviews_dir` fails validation and is quarantined. |
 
 **A resolution targets a blocked state, never a node.** If a node was resolved
@@ -263,4 +268,6 @@ Both are `ProcessSettings` fields with an `amoeba start` flag:
 - **Push notification of outcomes and new messages** — slice 106's change feed.
 - **Retention** of records, messages, and quarantined or failed files.
 - **More kinds.** Adding one is three things: a `SubmissionKind` member, a
-  payload model, and an effect. Slice 104 adds verdict and judge-sample kinds.
+  payload model, and an effect. Slice 104 added `verdict` (judge samples use it,
+with `judge_invocation_id`) and slice 107 added `check`. Progress records have
+no kind yet.

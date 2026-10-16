@@ -401,7 +401,7 @@ subject; this section lists only what the store offers.
 | `ReviewVerdict` | `PASS`, `CONCERNS`, `FAIL`, `UNKNOWN` |
 | `FindingSeverity` | `pass`, `note`, `concern`, `fail` |
 | `VerdictDerivation` | `stated`, `derived`, `imposed`, `not_reported` |
-| `RecordSource` | `stdout_json`, `artifact_frontmatter` |
+| `RecordSource` | `stdout_json`, `artifact_frontmatter`, `command_output`, `document` (the last two added by slice 107) |
 | `FindingChange` | `new`, `recurring`, `gone` |
 | `VerdictStanding` | `provider_failure`, `unparsed`, `findings_unparsed`, `imposed`, `derived`, `unattested`, `stated` |
 
@@ -419,7 +419,7 @@ all frozen. Fields are listed in the evidence contract.
 | --- | --- |
 | `record_verdict(verdict, *, project_id)` | **One transaction:** retry check, checks, the verdict row, one row per finding. An id already recorded returns the existing record, with a WARNING if the content differs. |
 | `verdict(verdict_id)` | One record, or `None`. |
-| `verdicts(project_id, *, node_id=None)` | Records in arrival (`recorded_seq`) order. |
+| `verdicts(project_id, *, node_id=None, judge_invocation_id=None)` | Records in arrival (`recorded_seq`) order. `judge_invocation_id` keeps one invocation's judge samples (slice 107). |
 | `observations(verdict_id)` | One review's findings in the reviewer's order. Raises `VerdictNotFoundError`. |
 | `findings(project_id, *, node_id=None)` | One summary per content key per node. |
 | `finding_changes(verdict_id)` | New, recurring, and gone against the previous comparable round. Raises `VerdictNotFoundError`. |
@@ -446,7 +446,7 @@ section lists only what the store offers.
 
 Changes are emitted by SQLite triggers on the tracked tables (`nodes` insert
 and status update, `verdicts` insert, `messages` insert, `detected_reviews`
-insert), never by writer code, so every write path emits — including ones
+insert, `check_results` insert), never by writer code, so every write path emits — including ones
 added later. Each trigger writes one `changes` row inside the writing
 transaction, with `recorded_at` copied from the row's own timestamp. The
 `ChangeKind` and `DetectionOutcome` values appear as literals in the
@@ -459,7 +459,7 @@ the invariant test, which fails until all three exist.
 
 | Vocabulary | Members |
 | --- | --- |
-| `ChangeKind` | `node_created`, `node_status_changed`, `verdict_recorded`, `message_posted`, `review_detected` |
+| `ChangeKind` | `node_created`, `node_status_changed`, `verdict_recorded`, `message_posted`, `review_detected`, `check_recorded` (slice 107) |
 | `DetectionOutcome` | `baseline`, `ingested`, `unattributed`, `unparseable`, `runner_issued` |
 
 `SILENT_OUTCOMES` (`baseline`, `runner_issued`) are the outcomes that emit no
@@ -503,6 +503,51 @@ supervisor directory, shared by the process and out-of-process followers.
 
 Nothing is deleted from `changes`, `review_watches`, or `detected_reviews` in
 this slice.
+
+## Judge samples, checks, and progress records
+
+*Added by slice 107. Schema version 7 (migration `007`: nullable
+`verdicts.judge_invocation_id`, `check_results`, `progress_records`, and the
+`changes_check_recorded` trigger).*
+
+What the records mean, the check standing rule, and the calibration report are
+[`evidence-contract.md`](evidence-contract.md)'s subject; this section lists
+only what the store offers.
+
+### Vocabularies
+
+| Vocabulary | Members |
+| --- | --- |
+| `CheckOutcome` | `passed`, `failed`, `errored` |
+| `CheckStanding` | `errored`, `unattested`, `vacuous`, `passed`, `failed` |
+| `ProgressKind` | `task_progress`, `devlog` |
+
+`SubmissionKind` gains `check`.
+
+### Types
+
+`CheckInput`, `CheckRecord`, `ProgressInput`, and `CalibrationRow`, all frozen.
+`VerdictInput` gains `judge_invocation_id: str | None = None`. `ProgressInput`
+has no record type. `check_standing(outcome, examined_count)` is exported.
+
+### Methods
+
+| Method | Effect |
+| --- | --- |
+| `record_check(check, *, project_id)` | **One transaction:** retry check (first wins), checks, insert. Raises `NodeNotFoundError` or `ValueError`. The trigger appends a `check_recorded` change. |
+| `check(check_id)` | One record, or `None`. |
+| `checks(project_id, *, node_id=None)` | Records in arrival order. |
+| `record_progress(progress, *, project_id)` | In-process only, **write-only**. A bare insert returning `None`: no validation, no retry rule, no feed change. A missing node or a repeated id raises `StoreIntegrityError`. |
+| `calibration(project_id)` | `list[CalibrationRow]`, one per `(review_type, model)` over judge samples, ordered by review type then model. Read-only. |
+
+`record_verdict` gains one check for judge samples: a sample must share the node
+and review type of its invocation's earliest recorded sample (`ValueError`
+naming both; remedy: a new invocation id). `check`, `checks`, and `calibration`
+work through a read-only handle.
+
+### Retention
+
+Check results and progress records are never deleted in this slice.
 
 ## Writer model
 

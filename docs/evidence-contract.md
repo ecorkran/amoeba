@@ -118,11 +118,12 @@ A frozen, keyword-only dataclass.
 | `diff_truncated` | `bool \| None` | Squadron's `diffTruncated` (SQ 927); null when absent. |
 | `requested_model` | `str \| None` | Squadron's `requestedModel` (SQ 927); set only on a substitution. |
 | `reviewed_sha` | `str \| None` | The commit reviewed. |
-| `score` | `float \| None` | Stored now; slice 107 uses it. |
-| `criteria` | `Mapping \| None` | Stored as JSON; slice 107 uses it. |
+| `score` | `float \| None` | Stored; the calibration report summarizes it. |
+| `criteria` | `Mapping \| None` | Stored as JSON; no reader yet. |
 | `tool_calls_made` | `int \| None` | |
 | `sq_run_id` | `str \| None` | Squadron's `runId` (#139), pipeline runs only. |
 | `journal_entry_id` | `str \| None` | The journaled Squadron run command, if any. |
+| `judge_invocation_id` | `str \| None` | Set: this verdict is a [judge sample](#judge-samples). Default `None`. |
 
 "Not reported" is said explicitly: `derivation`, `fallback_used`, and
 `findings_parsed` have no default. A caller passes `not_reported` or `None`.
@@ -141,8 +142,10 @@ severity lowercase in one place and uppercase in another) and raise
 ### Provenance
 
 Every verdict carries `upstream` (e.g. `squadron`), `upstream_version`
-(required, not empty), `source` (`stdout_json` or `artifact_frontmatter`), and
-`source_path` (optional). Until Squadron stamps its version on its output, the
+(required, not empty), `source` (`RecordSource`: `stdout_json`,
+`artifact_frontmatter`, and, for records that are not Squadron review output
+such as checks, `command_output` and `document`; a label of origin, never
+logic), and `source_path` (optional). Until Squadron stamps its version on its output, the
 caller supplies it, for example from `sq --version`. **No code compares versions
 or branches on them.** When Squadron changes its output, the version finds the
 affected records; it never changes how they are read.
@@ -314,7 +317,8 @@ covered for completeness, but Squadron cannot produce it today.
   the same node, with the same `review_type`, whose standing is comparable. A
   provider failure, an unparsed verdict, or a review whose findings did not
   parse is **never** a baseline — otherwise a failed round would report every
-  open finding as fixed.
+  open finding as fixed. When the target is a judge sample, samples of its own
+  invocation are skipped too (see [Judge samples](#judge-samples)).
 - Each target finding is `recurring` if its key (within the same rule version)
   is in the previous round, else `new`. No previous round means every finding
   is `new`.
@@ -329,7 +333,7 @@ covered for completeness, but Squadron cannot produce it today.
 | Method | Returns |
 | --- | --- |
 | `verdict(verdict_id)` | `VerdictRecord \| None` |
-| `verdicts(project_id, *, node_id=None)` | In arrival order. |
+| `verdicts(project_id, *, node_id=None, judge_invocation_id=None)` | In arrival order. `judge_invocation_id` keeps one invocation's samples. |
 | `observations(verdict_id)` | `FindingObservation`s in the reviewer's order. Raises `VerdictNotFoundError` for an unknown id. |
 | `findings(project_id, *, node_id=None)` | One `FindingSummary` per key per node: latest severity, summary, and location; first and last verdict ids; how many reviews reported it. |
 | `finding_changes(verdict_id)` | Above. Raises `VerdictNotFoundError` for an unknown id. |
@@ -365,8 +369,9 @@ See [`inbox-contract.md`](inbox-contract.md) for the flag rule.
 
 ## Inspection
 
-- `amoeba inspect verdicts --project ID [--node ID]` — columns `recorded_seq,
-  id, node_id, review_type, model, verdict, standing, upstream_version`. With
+- `amoeba inspect verdicts --project ID [--node ID] [--judge-invocation-id ID]`
+  — columns `recorded_seq, id, node_id, review_type, model, verdict, standing,
+  judge_invocation_id, upstream_version`. With
   `--json`, rows also carry `upstream`, `source`, `source_path`, `sq_run_id`,
   `reviewed_sha` (both `null` when the review has none), `recorded_at`.
 - `amoeba inspect findings --project ID [--node ID]` — one row per key.
@@ -448,6 +453,141 @@ slice), and they share one series per node, so part 2's round becomes part
 not what is recorded. Fixing it (a `source_document` series key) changes this
 contract and is tracked as its own follow-up (GitHub issue #3).
 
+## Judge samples
+
+*Added by slice 107.* Three names, used the same way everywhere:
+
+- A **judge invocation** is one request to the Judge for N samples. Its id,
+  `judge_invocation_id`, is opaque and supplied by the caller.
+- A **judge sample** is a verdict record whose `judge_invocation_id` is set. It
+  is recorded through the ordinary `verdict` path: `record_verdict`, the
+  `verdict` inbox kind (`--judge-invocation-id` on `amoeba submit verdict`), or
+  `amoeba ingest review --judge-invocation-id ID`.
+- A verdict without one is an ordinary **review verdict**. Nothing about it
+  changes.
+
+Samples of one invocation are recorded one by one and never merged.
+
+**One question (D2).** Every sample of an invocation must be on the same node
+and the same `review_type` as the invocation's earliest *recorded* sample. A
+mismatch is rejected (`ValueError` from `record_verdict`; `rejected` through the
+inbox) with a reason naming both. A rejected sample writes nothing, so it never
+defines an invocation. If the first recorded sample was the wrong one, samples
+are never edited: **the remedy is a new `judge_invocation_id`.**
+
+**The previous round skips the target's own invocation.** For a judge sample,
+`finding_changes` and the previous-round lookup skip samples with the same
+`judge_invocation_id`: parallel answers are not successive rounds. Its previous
+round can be a sample of an earlier invocation or an ordinary review of the
+same type. Ordinary reviews are unaffected.
+
+**Sample ids and retry.** The retry rule is unchanged (first wins). With
+`ingest review --judge-invocation-id J` and no `--id`, the record id is the
+parsed-review digest, then `.`, then `J`: the same file twice under one
+invocation is a no-op, and under a second invocation is a separate sample. The
+digest and its format tag do not change; an explicit `--id` is used as given.
+
+**Judge samples are `unattested`.** Squadron omits `verdictSource` on judge
+verdicts (the score decides the verdict), so the derivation is `not_reported`
+and the trust label is `unattested`. That is accurate, not a defect: it means
+"the input did not say how the verdict was reached". Initiative 140 must not
+read it as untrustworthy.
+
+**Consensus is not stored.** Turning N samples into a resolution belongs to
+initiative 140. The feed's `verdict_recorded` change does not carry
+`judge_invocation_id`; read the record by `subject_id`.
+
+### Judge stdout reporting `UNKNOWN` with a score is refused
+
+*An exception to "unknown is a value" (D4; closes GitHub issue #2).* Elsewhere,
+unparseable input is recorded as explicitly unknown. `parse_review_json`
+instead raises `SquadronParseError` when the stdout JSON has `verdict:
+UNKNOWN` **and** a `score`, and `amoeba ingest review --stdout-json` exits
+`REVIEW_UNREADABLE` (12) and submits nothing. The stdout verdict may be wrong
+(Squadron before 0.21.9 put the real verdict only in the saved file) while a
+better source exists. Ingest the saved review file: it records an explicit
+unknown (standing `unparsed`) if that is what it says. The rule reads the
+JSON's fields, not the template name or the version label. The artifact parser
+is unchanged.
+
+## Calibration
+
+`store.calibration(project_id) -> list[CalibrationRow]`, computed on read from
+judge samples; also `amoeba inspect calibration --project ID [--json]`. One row
+per `(review_type, model)`, ordered by review type, then model, grouped on the
+stored values as given.
+
+| Field (listing column) | Meaning |
+| --- | --- |
+| `samples` | Judge samples in the group. |
+| `invocations` | Distinct invocations with a sample in the group. |
+| `pass_count` (`pass`), `concerns_count` (`concerns`), `fail_count` (`fail`), `unknown_count` (`unknown`) | Samples by verdict. |
+| `provider_failures` | Samples whose trust label is `provider_failure`. |
+| `score_min`, `score_mean`, `score_max` | Over samples with a score; `None` when none has one. |
+
+**What it does not do.** It counts and describes each group's samples on their
+own. It compares no samples with each other, reports no agreement metric,
+recommends no threshold, and reads or writes nothing in Squadron's metrology
+store. Per-criterion means are deferred (GitHub issue #6).
+
+**It must not be consumed as agreement evidence.** Squadron's rule is that
+verdicts from escalated gates are inadmissible as agreement data, and this
+report has no escalated-gate attribute to filter on. Defining that attribute
+and computing agreement are initiative 140's (GitHub issue #4).
+
+## Checks
+
+*Added by slice 107.* A mechanical check (a validator, a test run, `cf check`)
+is recorded with what it examined. `store.record_check(CheckInput, *,
+project_id) -> CheckRecord` is one transaction: retry check (first wins,
+WARNING if content differs), then the checks, then the insert. Direct calls
+raise `NodeNotFoundError` (node not in the project) or `ValueError`
+(`examined_count` negative; empty `upstream_version`); the inbox `check` kind
+records the same reasons as `rejected`.
+
+`CheckInput`: `id`, `node_id`, `name` (free data, never logic), `outcome`
+(`CheckOutcome`: `passed`, `failed`, `errored`), `examined_count` (`int | None`,
+**no default**: pass `None` for "not reported"), `provenance`, optional
+`examined` (opaque JSON of what was checked) and `baseline_ref` (opaque, for
+example the SHA a result should be compared against; nothing here diffs it).
+`CheckRecord` adds `project_id`, `recorded_seq`, `recorded_at`, and `standing`.
+
+**Standing** (`CheckStanding`, `check_standing(outcome, examined_count)`),
+checked top to bottom, computed on read and never stored:
+
+| Standing | When |
+| --- | --- |
+| `errored` | the outcome is `errored` |
+| `unattested` | `examined_count` was not reported |
+| `vacuous` | `examined_count` is 0, whatever the outcome |
+| `passed` / `failed` | the outcome |
+
+**`vacuous` is not `passed`.** A validator that exits 0 having examined zero
+files tells you nothing about the code; a failed check that examined nothing
+is `vacuous` too. Route on `standing`, not on `outcome`.
+
+Reads: `check(check_id)` (`None` if unknown), `checks(project_id, *,
+node_id=None)` in arrival order. `amoeba inspect checks --project ID [--node
+ID]` — columns `recorded_seq, id, node_id, name, outcome, examined_count,
+standing, baseline_ref, upstream_version`; `--json` rows also carry `upstream`,
+`source`, `source_path`, `examined`, `recorded_at`. Through the inbox, see
+[`inbox-contract.md`](inbox-contract.md); on the feed,
+[`feed-contract.md`](feed-contract.md).
+
+## Progress records
+
+SQ 280's four typed artifacts map onto existing records: `review_findings` is a
+verdict and its observations; `checkpoint` is a `blocked_on_sq_checkpoint`
+node. The other two, `task_progress` and `devlog` (`ProgressKind`), have no
+consumer, so they share one table with opaque JSON `content` and the standard
+provenance.
+
+`store.record_progress(ProgressInput, *, project_id) -> None` is **write-only**:
+a bare insert with no validation beyond the table's constraints, no retry rule,
+no feed change, no inbox kind, no listing. A missing node or a repeated id
+raises `StoreIntegrityError`. The reader and the rest arrive with the first
+consumer (GitHub issue #5).
+
 ## Storage
 
 Schema version 5 (migration `005`): `verdicts` and `finding_observations`. The
@@ -455,9 +595,13 @@ column names are defined once, in `amoeba.store.sql_evidence`. An unknown
 vocabulary value in a stored row raises `UnknownVocabularyValueError` on read;
 it is never defaulted.
 
+Migration `007` (schema version 7) adds a nullable `verdicts.judge_invocation_id`
+and the `check_results` and `progress_records` tables (column names in
+`amoeba.store.sql_checks`). Existing verdicts read as `judge_invocation_id` null.
+
 ## Future work
 
-- Slice 107 adds judge samples, calibration over `score` and `criteria`, and
-  check records.
+- Initiative 140 owns consensus over judge samples, agreement, and the
+  escalated-gate attribute (GitHub issue #4).
 - Initiative 140 owns deciding that two differently worded findings are the
   same issue.

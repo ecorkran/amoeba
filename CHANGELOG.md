@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 107: judge samples — a verdict with a `judge_invocation_id` (`VerdictInput`, the `verdict` payload, `to_verdict_input`, `amoeba ingest review --judge-invocation-id`, `amoeba submit verdict`); `verdicts(..., judge_invocation_id=)`; schema version 7 (migration `007`).
+- Slice 107: `calibration` and `amoeba inspect calibration`, a descriptive per-`(review_type, model)` report of judge samples; it is not agreement evidence (GitHub issues #4, #6).
+- Slice 107: check results — `record_check`, `check`, `checks`, the `check` submission kind and `amoeba submit check`, `amoeba inspect checks`, and the `check_recorded` change kind; standing is derived (`vacuous` when `examined_count` is 0, never `passed`).
+- Slice 107: `record_progress`, a write-only store for SQ 280 `task_progress` and `devlog` records (GitHub issue #5); `docs/evidence-contract.md`, `inbox-contract.md`, `feed-contract.md`, and `store-contract.md` updated.
+
 - Slice 106: schema version 6 (migration `006`). A per-project change log written by SQLite triggers in the same transaction as every node, verdict, message, and detection write; `Store.changes`, `data_version`, and `amoeba.store.paths.project_store_path`.
 - Slice 106: `amoeba.feed.follow` and `amoeba feed --project ID [--after N] [--follow]`, a read-only follower printing changes as JSON lines; contract in `docs/feed-contract.md`.
 - Slice 106: `ReviewDetectionTenant`, registered by `amoeba start` after the inbox: baselines registered review directories, then records new settled Squadron reviews as verdicts on their slice node, or as `unattributed`/`unparseable`; defers while a review-producing journal entry is open.
@@ -67,6 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Slice 107 (104): `VerdictInput` and the `verdict` payload gain optional `judge_invocation_id`; the previous-round lookup skips samples of the target's own invocation; `record_verdict` rejects a sample on another node or review type than its invocation's earliest sample; `RecordSource` gains `command_output` and `document`; `inspect verdicts` gains a `judge_invocation_id` column and `--judge-invocation-id`.
+- Slice 107 (105): `parse_review_json` raises `SquadronParseError` on stdout JSON reporting `UNKNOWN` with a `score` (`ingest review` exits 12; ingest the saved file instead; GitHub issue #2). `to_verdict_input` and `ingest review` gain the optional invocation id; the record-id digest and `parsed-review-v1` are unchanged, and a sample's default id appends `.` and the invocation id.
+- Slice 107 (106): `ChangeKind` gains `check_recorded`, with migration `007`'s trigger.
+- Slice 107 (103): `SubmissionKind` gains `check`.
+- Slice 107 (102): the `checks` and `calibration` listings join `LISTINGS`.
 - Slice 105: a review file's `providerFailure` key, when present, decides `provider_failure`; the *Provider Failure* heading is read only for files without the key.
 - Slice 103: a `HUMAN` block now writes an escalation message in the same transaction; `block()` gains an optional `payload`. Every block goes through one internal writer.
 - Slice 103: `journal_escalate` now writes an escalation carrying the journal entry id, including on its already-blocked branch, where it points at the existing open block.
