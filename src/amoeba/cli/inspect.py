@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amoeba.cli import inspect_evidence, inspect_feed, inspect_inbox
+from amoeba.cli import inspect_checks, inspect_evidence, inspect_feed, inspect_inbox
 from amoeba.process.supervisor import discover_project_ids, store_path_for
 from amoeba.store import Channel, Store, paths
 
@@ -240,7 +240,14 @@ LISTINGS: tuple[Listing, ...] = (
         help_text="Recorded review verdicts for a project, in arrival order.",
         columns=inspect_evidence.VERDICT_COLUMNS,
         rows=inspect_evidence.verdict_rows,
-        value_options=(_NODE_OPTION,),
+        value_options=(
+            _NODE_OPTION,
+            ValueOption(
+                flag="--judge-invocation-id",
+                help_text="Only this judge invocation's samples.",
+                metavar="ID",
+            ),
+        ),
     ),
     Listing(
         name="findings",
@@ -262,6 +269,19 @@ LISTINGS: tuple[Listing, ...] = (
                 required=True,
             ),
         ),
+    ),
+    Listing(
+        name="checks",
+        help_text="Recorded check results, with the standing each one earns.",
+        columns=inspect_checks.CHECK_COLUMNS,
+        rows=inspect_checks.check_rows,
+        value_options=(_NODE_OPTION,),
+    ),
+    Listing(
+        name="calibration",
+        help_text="Descriptive judge-sample counts by review type and model.",
+        columns=inspect_checks.CALIBRATION_LISTING_COLUMNS,
+        rows=inspect_checks.calibration_rows,
     ),
     Listing(
         name="watches",

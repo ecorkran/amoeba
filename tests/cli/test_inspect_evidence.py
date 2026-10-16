@@ -79,9 +79,28 @@ def test_verdicts_table_has_the_pinned_columns(
         "model",
         "verdict",
         "standing",
+        "judge_invocation_id",
         "upstream_version",
     ]
     assert "provider_failure" in stdout
+
+
+def test_verdicts_filter_by_judge_invocation(
+    supervisor_dir: Path, nodes: tuple[str, str]
+) -> None:
+    node, _ = nodes
+    with Store.open(supervisor_dir / f"{PROJECT}.sqlite3") as store:
+        for sample_id, invocation in (("s1", "j1"), ("s2", "j1"), ("s3", "j2")):
+            store.record_verdict(
+                verdict_input(sample_id, node, judge_invocation_id=invocation),
+                project_id=PROJECT,
+            )
+
+    rows = _json(supervisor_dir, "verdicts", "--judge-invocation-id", "j1")
+    assert [r["id"] for r in rows] == ["s1", "s2"]
+    assert {r["judge_invocation_id"] for r in rows} == {"j1"}
+    everything = _json(supervisor_dir, "verdicts")
+    assert {r["judge_invocation_id"] for r in everything} == {None, "j1", "j2"}
 
 
 def test_verdicts_filter_by_node_and_carry_provenance(

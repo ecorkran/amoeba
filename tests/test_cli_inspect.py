@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 from cli_harness import await_running, run_cli, start_background
-from evidence_harness import finding, verdict_input
+from evidence_harness import check_input, finding, verdict_input
 
 from amoeba.cli.inspect import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.cli.main import ExitCode
@@ -111,6 +111,14 @@ def populated(supervisor_dir: Path) -> Path:
         store.record_verdict(
             verdict_input(_FIXTURE_VERDICT, runnable.id, finding("x", "a.py:1")),
             project_id=PROJECT,
+        )
+        # Slice 107: one judge sample (so calibration has a row) and one check.
+        store.record_verdict(
+            verdict_input("fixture-sample", runnable.id, judge_invocation_id="j1"),
+            project_id=PROJECT,
+        )
+        store.record_check(
+            check_input("fixture-check", runnable.id), project_id=PROJECT
         )
         # Slice 106: one review watch and one detection ledger row.
         store.apply_submission(
@@ -441,6 +449,9 @@ def test_the_registered_listings_are_pinned() -> None:
         # Slice 106.
         "watches",
         "detections",
+        # Slice 107.
+        "checks",
+        "calibration",
     }
 
 
@@ -458,6 +469,9 @@ def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
         # Slice 106.
         "watches",
         "detections",
+        # Slice 107.
+        "checks",
+        "calibration",
     }
 
     missing_project = run_cli(["inspect", "nodes"], supervisor_dir)

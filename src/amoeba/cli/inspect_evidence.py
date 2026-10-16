@@ -27,6 +27,7 @@ VERDICT_COLUMNS: Final = (
     "model",
     "verdict",
     "standing",
+    "judge_invocation_id",
     "upstream_version",
 )
 
@@ -64,7 +65,7 @@ class VerdictNotComparableError(Exception):
 
 
 def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
-    """A project's verdicts in arrival order, optionally for one node."""
+    """A project's verdicts in arrival order, optionally for a node or invocation."""
     return [
         {
             "recorded_seq": record.recorded_seq,
@@ -74,6 +75,7 @@ def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "model": record.model,
             "verdict": record.verdict.value,
             "standing": record.standing.value,
+            "judge_invocation_id": record.judge_invocation_id,
             "upstream_version": record.provenance.upstream_version,
             "upstream": record.provenance.upstream,
             "source": record.provenance.source.value,
@@ -82,7 +84,11 @@ def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "reviewed_sha": record.reviewed_sha,
             "recorded_at": record.recorded_at.isoformat(),
         }
-        for record in store.verdicts(args.project, node_id=args.node)
+        for record in store.verdicts(
+            args.project,
+            node_id=args.node,
+            judge_invocation_id=args.judge_invocation_id,
+        )
     ]
 
 
