@@ -28,11 +28,11 @@ status: not_started
 
 **Task-level additions to the LLD** (named by no LLD table): none beyond the LLD's own names. Anything a task needs that the LLD does not settle is a question for the PM, not a guess.
 
-**Section map.** This file: 1–4. File 2: 5–8. In full: 1 baseline, judge fixture, and the D4 refusal; 2 check models; 3 migration 007 and check storage; 4 judge samples in the verdict path; 5 calibration; 6 the `check` kind and its feed change; 7 ingest and listings; 8 end-to-end, docs, validation.
+**Section map.** This file: 1–4. File 2: 5–8. In full: 1 baseline and the D4 refusal; 2 check models; 3 migration 007 and check storage; 4 judge samples in the verdict path; 5 calibration; 6 the `check` kind, its feed change, and the real judge fixture test; 7 ingest and listings; 8 end-to-end, docs, validation.
 
 ---
 
-## Section 1: Baseline, Judge Fixture, and the D4 Refusal
+## Section 1: Baseline and the D4 Refusal
 
 ### Task 1.1: Create the branch and record the starting state
 **Owner**: Junior AI
@@ -51,47 +51,9 @@ status: not_started
 
 ---
 
-### Task 1.2: Confirm the real judge fixtures exist
-**Owner**: Junior AI (the capture itself is a PM step)
+### Task 1.2: Add the stdout-`UNKNOWN`-with-a-score refusal
+**Owner**: Junior AI
 **Dependencies**: Task 1.1
-**Effort**: 1
-**Objective**: Have the two real inputs the parser and refusal tests need (LLD Technical Requirements, Development Approach step 1).
-
-**Steps**:
-- [ ] Look in `tests/fixtures/sq_reviews/` for (a) a saved judge-template review artifact (`reviewType` starting `judge.`) and (b) a real stdout JSON capture of a judge review, both from a pipeline run on squadron 0.21.9 or later
-- [ ] If either is missing, **stop and ask the PM** to capture them (a pipeline run in a throwaway copy of a repository). Do not hand-write them
-- [ ] Read `tests/fixtures/README.md` and confirm it records, for each judge fixture, the command, the Squadron version, and the date. If an entry is missing, ask the PM for the values; do not infer them
-- [ ] Note the artifact's stated verdict, score, model, and criteria from the file, for Task 1.3
-
-**Success Criteria**:
-- [ ] Both fixtures are present and documented in the fixtures README
-- [ ] If anything was missing, the PM has been told and has answered before Task 1.3 starts
-
----
-
-### Task 1.3: Test the judge artifact against 105's parser
-**Owner**: Junior AI
-**Dependencies**: Task 1.2
-**Effort**: 2
-**Objective**: The real judge artifact parses to its stated values (LLD Functional Requirements).
-
-**Steps**:
-- [ ] Add `tests/upstream/test_review_judge_fixture.py`, following the style of `test_review_artifact.py` and the helpers in `tests/review_fixtures.py`
-- [ ] Parse the artifact with `parse_review_artifact`; assert review type, verdict, score, model, and criteria equal the values read in Task 1.2
-- [ ] Assert `verdict_source` is absent in the parse, so the trust label for the resulting verdict is `unattested`
-- [ ] Parse the stdout capture with `parse_review_json` and assert it has a real verdict (not `UNKNOWN`) and a score. This is the "a capture with a real verdict and a score parses" case
-
-**Success Criteria**:
-- [ ] New tests pass against the unmodified parser
-- [ ] Commit, e.g. `test: add real judge review fixture tests`
-
-**Files to Create**: `tests/upstream/test_review_judge_fixture.py`
-
----
-
-### Task 1.4: Add the stdout-`UNKNOWN`-with-a-score refusal
-**Owner**: Junior AI
-**Dependencies**: Task 1.3
 **Effort**: 2
 **Objective**: Per LLD D4, `parse_review_json` refuses a capture that says `verdict: UNKNOWN` and carries a `score`.
 
@@ -103,21 +65,21 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` pass; full suite passes
-- [ ] Committed with Task 1.5
+- [ ] Committed with Task 1.3
 
 **Files to Modify**: `src/amoeba/upstream/squadron/review_json.py`
 
 ---
 
-### Task 1.5: Test the refusal and its CLI exit
+### Task 1.3: Test the refusal and its CLI exit
 **Owner**: Junior AI
-**Dependencies**: Task 1.4
+**Dependencies**: Task 1.2
 **Effort**: 3
-**Objective**: Pin D4 at the parser and at `amoeba ingest review` (LLD Functional Requirements, last bullet).
+**Objective**: Pin D4 at the parser and at `amoeba ingest review` (LLD Functional Requirements, last bullet). The rule is not judge-aware (D4), so an existing real stdout capture serves; no new capture is needed here.
 
 **Steps**:
-- [ ] Create the edited stdout fixture: copy the real stdout capture from Task 1.2, set `verdict` to `UNKNOWN` and keep/add a `score`. Name it with an `-edited` marker like the existing `findings-not-parsed-edited` fixture, and add a README entry saying it is edited and from which capture
-- [ ] In `tests/upstream/test_review_json.py` add: the edited capture raises `SquadronParseError`; the message names the saved file and contains no version string; a real-verdict capture with a score parses; `UNKNOWN` without a score still parses
+- [ ] Create the edited stdout fixture: copy `tests/fixtures/sq_reviews/105-review.slice.squadron-review-parser-and-ingest.20261015T041112.stdout.json`, set `verdict` to `UNKNOWN` and keep/add a `score`. Name it with an `-edited` marker like the existing `findings-not-parsed-edited` fixture, and add a README entry saying it is edited and from which capture
+- [ ] In `tests/upstream/test_review_json.py` add: the edited capture raises `SquadronParseError`; the message names the saved file and contains no version string; the unedited capture (real verdict, with a score if it has one) parses; `UNKNOWN` without a score still parses
 - [ ] Add a case to `tests/cli/test_ingest.py`: `ingest review --stdout-json <edited>` exits 12 (`REVIEW_UNREADABLE`) and leaves `inbox/new/` empty. Use the constant, not a literal 12, where the test module already imports it
 
 **Success Criteria**:
@@ -133,7 +95,7 @@ status: not_started
 
 ### Task 2.1: Add `check_models.py`
 **Owner**: Junior AI
-**Dependencies**: Task 1.5
+**Dependencies**: Task 1.3
 **Effort**: 3
 **Objective**: Define every check word list, record type, and the standing function once (LLD D5, D6, "Word lists", "Inputs").
 
@@ -251,16 +213,16 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 3.4
+- [ ] Committed with Task 3.5
 
 **Files to Create**: `src/amoeba/store/_check_writer.py`
 
 ---
 
-### Task 3.4: Add `CheckOperations` and test it
+### Task 3.4: Add `CheckOperations`
 **Owner**: Junior AI
 **Dependencies**: Task 3.3
-**Effort**: 4
+**Effort**: 3
 **Objective**: `record_check`, `check`, `checks`, and write-only `record_progress` on `Store` (LLD "API Contracts", D6).
 
 **Steps**:
@@ -268,6 +230,23 @@ status: not_started
 - [ ] `record_check(input, *, project_id)`: one transaction using `CheckWriter`; a failed check raises `NodeNotFoundError` for a missing node and `ValueError` for the others
 - [ ] `check(check_id)` returns `None` for an unknown id; `checks(project_id, *, node_id=None)` is in arrival order
 - [ ] `record_progress(input, *, project_id) -> None`: a bare insert in one transaction, no validation, no retry rule, no feed change. A missing node or repeated id raises from SQLite
+
+**Success Criteria**:
+- [ ] `ruff`, `pyright` pass; full suite passes
+- [ ] Committed with Task 3.5
+
+**Files to Create**: `src/amoeba/store/checks.py`
+**Files to Modify**: `store/store.py`, `store/__init__.py`
+
+---
+
+### Task 3.5: Test check and progress operations
+**Owner**: Junior AI
+**Dependencies**: Task 3.4
+**Effort**: 3
+**Objective**: Pin the check and progress behavior in the LLD Functional Requirements.
+
+**Steps**:
 - [ ] Add `tests/store/test_checks.py`: round trip; arrival order and the `node_id` filter; unknown id returns `None`; missing node raises `NodeNotFoundError`; negative count raises `ValueError`; empty `upstream_version` raises `ValueError`; retry returns the existing record and writes no second row; a differing retry logs a WARNING and keeps the first; `examined` and `baseline_ref` read back unchanged
 - [ ] Add progress tests: `record_progress` writes a row whose `content` reads back unchanged (read through SQL with the column names from `sql_checks.py`); a repeated id raises; a missing node raises; no `changes` row is written for it
 
@@ -275,8 +254,7 @@ status: not_started
 - [ ] Tests, `ruff`, `pyright` pass; the writer-guard test still passes with no new permitted scripts
 - [ ] Commit, e.g. `feat(store): add check results and progress records`
 
-**Files to Create**: `src/amoeba/store/checks.py`, `tests/store/test_checks.py`
-**Files to Modify**: `store/store.py`, `store/__init__.py`
+**Files to Create**: `tests/store/test_checks.py`
 
 ---
 
@@ -284,7 +262,7 @@ status: not_started
 
 ### Task 4.1: Carry `judge_invocation_id` through the verdict record
 **Owner**: Junior AI
-**Dependencies**: Task 3.4
+**Dependencies**: Task 3.5
 **Effort**: 3
 **Objective**: A verdict can carry an optional invocation id from input to row and back (LLD "API Contracts", "Inputs").
 

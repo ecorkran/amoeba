@@ -51,7 +51,7 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 - [ ] An `UNKNOWN` sample is counted under `unknown`; a sample with no score is excluded from score statistics; a group with no scored sample has `None` for all three
 - [ ] Ordinary review verdicts (no invocation id) never appear
 - [ ] No-write test: run `calibration` on a `Store.open_read_only` handle and assert it succeeds and the store file's contents (row counts of every table) are unchanged
-- [ ] No-metrology test: scan `src/` (AST or text, in the style of `tests/upstream/test_field_names_defined_once.py`) and assert nothing references Squadron's metrology directory name or its config key. Take the two strings from the LLD and the 104 notes; if you cannot find the exact config key in the repo or LLD, ask the PM rather than guessing
+- [ ] No-metrology test: scan every file under `src/` (text, in the style of `tests/upstream/test_field_names_defined_once.py`) and assert none contains the substring `metrology`, case-insensitively. This needs no Squadron strings: the LLD requires only that `src/` never references that store
 - [ ] The row type has no field comparing samples with each other: assert its field names equal the D3 list exactly
 
 **Success Criteria**:
@@ -133,7 +133,7 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 **Steps**:
 - [ ] In `tests/store/test_feed_triggers.py` add: `record_check` appends exactly one `check_recorded` with the payload keys above; a retried check appends none; `record_progress` appends none; a check rejected through the inbox appends none; the change carries no `standing`
-- [ ] Extend `tests/store/test_feed_invariant.py`: its scripted sequence records a check and the sequence covers the new kind; the test fails if the `changes_check_recorded` trigger is missing (prove it by running the test once against a copy of the migration without the trigger, then discard the copy)
+- [ ] Extend `tests/store/test_feed_invariant.py`: its scripted sequence records a check, so the invariant test covers `check_recorded` and fails if that trigger is missing. Note: the LLD's Technical Requirements say "two new kinds", but D9 defines exactly one (`check_recorded`); follow D9
 - [ ] Check the public feed read (`changes`/`amoeba feed` path) returns the new kind without an unknown-vocabulary error
 
 **Success Criteria**:
@@ -144,11 +144,31 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 
 ---
 
+### Task 6.5: Confirm the real judge artifact and test it against 105's parser
+**Owner**: Junior AI (the capture itself is a PM step)
+**Dependencies**: Task 6.4
+**Effort**: 2
+**Objective**: The real judge artifact parses to its stated values (LLD Functional Requirements, Technical Requirements on the fixture). It sits here, not at the start, so the PM's capture does not block earlier work.
+
+**Steps**:
+- [ ] Look in `tests/fixtures/sq_reviews/` for a saved judge-template review artifact (`reviewType` starting `judge.`) from a pipeline run on squadron 0.21.9 or later. If it is missing, **stop and ask the PM** to capture it (a pipeline run in a throwaway copy of a repository). Do not hand-write it. Tasks 7.2, 8.1, and 8.3 need it; no earlier task does
+- [ ] Confirm `tests/fixtures/README.md` records its command, Squadron version, and date. If an entry is missing, ask the PM; do not infer
+- [ ] Add a path constant to `tests/review_fixtures.py` and `tests/upstream/test_review_judge_fixture.py`, in the style of `test_review_artifact.py`: assert review type, verdict, score, model, and criteria equal the values stated in the file, and that `verdict_source` is absent, so the resulting trust label is `unattested`
+
+**Success Criteria**:
+- [ ] The fixture is present, documented, and its tests pass against the unmodified parser
+- [ ] Commit, e.g. `test: add real judge review fixture tests`
+
+**Files to Create**: `tests/upstream/test_review_judge_fixture.py`
+**Files to Modify**: `tests/review_fixtures.py`, `tests/fixtures/README.md` (if the PM's capture lacks an entry)
+
+---
+
 ## Section 7: Ingest and Listings
 
 ### Task 7.1: Add `--judge-invocation-id` and the sample id to `ingest review`
 **Owner**: Junior AI
-**Dependencies**: Task 6.4
+**Dependencies**: Task 6.5
 **Effort**: 3
 **Objective**: Judge samples are ingested through 105's command (LLD "Retry", "CLI").
 
@@ -215,7 +235,7 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 - [ ] `checks`: `--project`, optional `--node`; columns `recorded_seq, id, node_id, name, outcome, examined_count, standing, baseline_ref, upstream_version`, with `standing` computed through `check_standing` (the one function)
 - [ ] `calibration`: `--project`; one row per `(review_type, model)` with the D3 columns under the names fixed in Task 5.1
 - [ ] Both work on a read-only store and accept `--json`
-- [ ] Update the pinned-registry test (`tests/inbox/test_listings.py` or wherever `LISTINGS` names are pinned) and add `inspect_checks.py` to the module list in `tests/test_import_boundaries.py` if that list exists for string-constant checks
+- [ ] Update the pinned-registry test (`tests/inbox/test_listings.py`, where `LISTINGS` names are pinned)
 
 **Success Criteria**:
 - [ ] `inspect checks` and `inspect calibration` appear in `amoeba inspect --help`
@@ -251,14 +271,12 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Owner**: Junior AI
 **Dependencies**: Task 7.5
 **Effort**: 4
-**Objective**: LLD Integration Requirements, first bullet.
+**Objective**: LLD Integration Requirements, first bullet. The wrong-review-type rejection and the stdout refusal are already pinned (Tasks 4.4 and 1.3) and are not repeated here.
 
 **Steps**:
 - [ ] Read `tests/cli/test_evidence_end_to_end.py` and `tests/ingest_e2e_harness.py`; add `tests/cli/test_judge_end_to_end.py` using the same subprocess harness. Seed the node the way those tests do
 - [ ] Flow: create a project, seed a node, ingest the judge artifact under `j1`, submit two more samples and a check with count 0 through `amoeba submit`, `kill -9` the process, `start` again
 - [ ] Assert via read-only inspection: three samples under `j1`, a calibration row with the expected counts, the check `vacuous`, nothing applied twice, and `amoeba feed` shows exactly one `verdict_recorded` per sample and one `check_recorded`
-- [ ] Add one wrong-review-type sample submission and assert `inspect submissions` shows it `rejected` with a reason naming the invocation
-- [ ] Add a stdout-refusal step: `ingest review --stdout-json` with the edited fixture exits 12 and leaves `inbox/new/` empty
 
 **Success Criteria**:
 - [ ] The test passes and does not use the production store directory
@@ -297,9 +315,9 @@ Continues `107-tasks.judge-samples-checks-and-calibration-1.md`; read its Contex
 **Steps**:
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each; fix and re-run only what failed
 - [ ] Check no new source file exceeds ~300 lines (`wc -l` on the files this slice created or edited) and that `tests/test_writer_guard.py` shows no new permitted scripts
-- [ ] Run the LLD Verification Walkthrough steps 1–7 in bash against a throwaway `AMOEBA_STORE_DIR` with the real judge fixture. Where its `<judge fixture>` and `<edited judge stdout>` placeholders appear, use the filenames from Tasks 1.2 and 1.5. Compare each result with the walkthrough's expected output
+- [ ] Run the LLD Verification Walkthrough steps 1–7 in bash against a throwaway `AMOEBA_STORE_DIR` with the real judge fixture. Where its `<judge fixture>` and `<edited judge stdout>` placeholders appear, use the judge fixture from Task 6.5 and the edited stdout fixture from Task 1.3. Compare each result with the walkthrough's expected output
 - [ ] Update the LLD walkthrough with the real output and fixture names (its header says it is refined when Phase 6 completes). Edit the walkthrough section only
-- [ ] Close GitHub issue #2 with a pointer to D4 **only if the PM has instructed it**; otherwise list it as pending for the PM
+- [ ] Close GitHub issue #2 after the commit above: `gh issue close 2 --comment "Fixed by D4 (slice 107): judge stdout reporting UNKNOWN with a score is refused; ingest the saved review file instead. Commit <sha>."` using the real commit sha. If `gh` fails, report the error to the PM
 
 **Success Criteria**:
 - [ ] Suite, `ruff`, `pyright` clean; every walkthrough step matches
