@@ -12,7 +12,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from amoeba.process.settings import DEFAULT_SQ_RUNS_DIR, ProcessSettings
+from amoeba.process.settings import (
+    DEFAULT_CF_DATA_DIR,
+    DEFAULT_SQ_RUNS_DIR,
+    ProcessSettings,
+)
 
 
 def positive_int(text: str) -> int:
@@ -94,6 +98,13 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         metavar="SECONDS",
         help="How long to wait for 'sq --version' at start-up.",
     )
+    parser.add_argument(
+        "--cf-data-dir",
+        type=Path,
+        default=DEFAULT_CF_DATA_DIR,
+        metavar="PATH",
+        help="The Context Forge data directory holding projects.json.",
+    )
 
 
 def add_stop_flags(parser: argparse.ArgumentParser) -> None:
@@ -126,6 +137,7 @@ def start_settings(args: argparse.Namespace) -> ProcessSettings:
         inbox_max_attempts=args.inbox_max_attempts,
         review_scan_interval_seconds=args.review_scan_interval,
         sq_timeout_seconds=args.sq_timeout,
+        cf_data_dir=args.cf_data_dir,
     )
 
 

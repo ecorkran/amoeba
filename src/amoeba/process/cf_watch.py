@@ -127,6 +127,10 @@ class CFWatchTenant:
     def version_label(self) -> str:
         return self._version_label
 
+    @property
+    def data_file(self) -> Path:
+        return self._data_file
+
     def tick(self, host: CFWatchHost) -> bool:
         """Check the file, at most once per scan interval.
 

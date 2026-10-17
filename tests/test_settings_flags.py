@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from amoeba.cli.main import build_parser
 from amoeba.cli.settings_flags import start_settings
 from amoeba.process.settings import ProcessSettings
@@ -23,3 +27,24 @@ def test_each_detection_flag_overrides_its_setting() -> None:
     settings = start_settings(args)
     assert settings.review_scan_interval_seconds == 0.5
     assert settings.sq_timeout_seconds == 3.0
+
+
+def test_cf_data_dir_defaults_from_process_settings_and_the_flag_overrides_it() -> None:
+    default = start_settings(build_parser().parse_args(["start"]))
+    assert default.cf_data_dir == ProcessSettings().cf_data_dir
+    assert default.cf_data_dir == Path.home() / ".config" / "context-forge"
+
+    args = build_parser().parse_args(["start", "--cf-data-dir", "/scratch/cf"])
+    assert start_settings(args).cf_data_dir == Path("/scratch/cf")
+
+
+def test_the_cf_scan_interval_has_no_flag() -> None:
+    assert "--cf-scan-interval" not in build_parser().format_help()
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["start", "--cf-scan-interval", "2"])
+
+
+def test_the_environment_variable_is_not_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CONTEXT_FORGE_DATA_DIR", "/from/the/environment")
+    settings = start_settings(build_parser().parse_args(["start"]))
+    assert settings.cf_data_dir == ProcessSettings().cf_data_dir

@@ -20,6 +20,12 @@ from pathlib import Path
 #: second source of truth. The CLI's ``--sq-runs-dir`` flag overrides it.
 DEFAULT_SQ_RUNS_DIR = Path.home() / ".config" / "squadron" / "runs"
 
+#: Where Context Forge keeps ``projects.json`` by default: CF's own default. Not
+#: overridable by environment (``CONTEXT_FORGE_DATA_DIR`` is deliberately not
+#: read): the shell that starts Amoeba need not match the CF clients'. The CLI's
+#: ``--cf-data-dir`` flag overrides it.
+DEFAULT_CF_DATA_DIR = Path.home() / ".config" / "context-forge"
+
 
 @dataclass(frozen=True)
 class ProcessSettings:
@@ -53,6 +59,9 @@ class ProcessSettings:
             detection latency is about two intervals.
         sq_timeout_seconds: How long to wait for ``sq --version`` at start-up.
             Bounds start-up only: no tick starts a subprocess.
+        cf_data_dir: The directory holding Context Forge's ``projects.json``,
+            which the Context Forge watch reads. Resolved once at start-up and
+            logged by the watch.
         cf_scan_interval_seconds: How often the Context Forge watch takes one
             ``stat`` of ``projects.json``. A pointer move is a human-paced
             event, so this bounds how stale the Runner's view can be. No flag.
@@ -68,4 +77,5 @@ class ProcessSettings:
     inbox_max_attempts: int = 3
     review_scan_interval_seconds: float = 2.0
     sq_timeout_seconds: float = 10.0
+    cf_data_dir: Path = DEFAULT_CF_DATA_DIR
     cf_scan_interval_seconds: float = 1.0
