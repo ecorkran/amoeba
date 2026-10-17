@@ -40,12 +40,13 @@ status: not_started
 
 **Tool knowledge:** there are no tool guides for Starlette, uvicorn, anyio, or httpx in `ai-project-guide/tool-guides/`. Use the context7 MCP for their current documentation, then the web. Where a task names a library parameter, confirm it in the docs for the installed version before using it; if it does not exist, stop and tell the PM.
 
-**Open item for the PM (gates Task 1.1):** the LLD says `ServeRefusedError` is "mapped to the exit code in `cli/main.py`", and also that "`amoeba.cli.serve` is the only module that imports `amoeba.serve`". Both cannot hold. Recommendation: `cli/serve.py`'s `run_serve` catches `ServeRefusedError`, prints it, and returns `ExitCode.SERVE_REFUSED`; `ExitCode` stays defined in `cli/main.py`. Tasks 8.1–8.2 assume this.
+**Open item for the PM (gates Task 8.1 only):** the LLD says `ServeRefusedError` is "mapped to the exit code in `cli/main.py`", and also that "`amoeba.cli.serve` is the only module that imports `amoeba.serve`". Both cannot hold. Recommendation: `cli/serve.py`'s `run_serve` catches `ServeRefusedError`, prints it, and returns `ExitCode.SERVE_REFUSED`; `ExitCode` stays defined in `cli/main.py`. Tasks 8.1–8.2 assume this.
 
 **Task-level additions to the LLD:**
 - `inspection/listing.py` holds the registry's types (`Row`, `ListingScope`, the option classes, `ListingRequest`, `Listing`) and the shared `NODE_OPTION`; `inspection/__init__.py` holds the registry and `read_listing`. Reason: the row modules need the option objects at runtime, and the package `__init__` imports the row modules, so defining the types in `__init__` would be an import cycle.
 - `FlagOption`, a typed replacement for the `(flag, help)` pairs, so flags gain a `name` like the other options (LLD "What changes shape").
 - `tests/inspection_harness.py`, the `populated` seeding extracted from `tests/test_cli_inspect.py`, so the baseline capture and the server parity test use one seeded store.
+- The guard order in Task 5.2 and the exception-to-code mapping in Task 4.5 are task-level choices; change them only with the PM.
 - In `serve/errors.py`, `ApiError` (an exception carrying an `ApiErrorCode` and detail) and one status-by-code mapping, because several codes (`missing_project`, `invalid_cursor`, …) come from no store exception (LLD D8).
 
 **Section map.** This file: 1–3. File 2: 4–6. File 3: 7–9. In full: 1 baseline and seeded harness; 2 migration to `amoeba.inspection`; 3 store amendment and `as_of_seq`; 4 serve foundations (dependencies, settings, policy, errors); 5 the app, auth, and reads; 6 submissions; 7 the stream; 8 `amoeba serve` in the CLI; 9 smoke, load, docs, validation.
@@ -63,7 +64,6 @@ status: not_started
 **Steps**:
 - [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
 - [ ] Confirm `uv run amoeba inspect checks --help` and `uv run amoeba inspect cf-snapshots --help` succeed. If not, stop and tell the PM (LLD "Prerequisites")
-- [ ] Confirm the PM has answered the open item above (where `ServeRefusedError` is mapped). If not, stop and wait
 - [ ] Create `109-slice.network-api` from the target; if it exists, switch to it
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
 
@@ -99,13 +99,13 @@ status: not_started
 **Owner**: Junior AI
 **Dependencies**: Task 1.2
 **Effort**: 2
-**Objective**: A fixed seeded store and the exact CLI output against it, so Task 2.9 can prove the migration changed nothing (LLD "Behavior preserved").
+**Objective**: A fixed seeded store and the exact CLI output against it, so Task 2.8 can prove the migration changed nothing (LLD "Behavior preserved").
 
 **Steps**:
-- [ ] Choose a scratch directory outside the repo, e.g. `BASE="$(mktemp -d)"`, and record its path in the task notes. It must survive until Task 2.9
+- [ ] Choose a scratch directory outside the repo, e.g. `BASE="$(mktemp -d)"`, and record its path in the task notes. It must survive until Task 2.8
 - [ ] Seed `"$BASE/store"` once with `seed_every_listing`, from a throwaway script kept outside the repo (put `tests/` on `sys.path`). Never seed again: ids and timestamps differ per seeding
 - [ ] With `AMOEBA_STORE_DIR="$BASE/store"`, write into `"$BASE/before/"` one file per command: `inspect --help`; for every listing, `inspect <name> --help`, the table form, and `--json`; and for each declared option, one run exercising it (each flag set, each choice option with one choice, each value option with the seeded id)
-- [ ] Generate the command list from the registry (iterate `LISTINGS`), not by hand, so no listing is missed. Keep the capture script with the scratch directory for reuse in Task 2.9
+- [ ] Generate the command list from the registry (iterate `LISTINGS`), not by hand, so no listing is missed. Keep the capture script with the scratch directory for reuse in Task 2.8
 
 **Success Criteria**:
 - [ ] `"$BASE/before/"` holds a non-empty file for every listing and every option run; no file contains a traceback
@@ -272,37 +272,22 @@ status: not_started
 
 ---
 
-### Task 2.8: Update path references in docs
+### Task 2.8: Prove `inspect` output is byte-identical
 **Owner**: Junior AI
 **Dependencies**: Task 2.7
-**Effort**: 1
-**Objective**: No doc names a moved path (LLD Migration Plan: "contract-doc deltas are limited to updating paths").
-
-**Steps**:
-- [ ] `grep -rn "cli/inspect\|inspect_inbox\|inspect_evidence\|inspect_feed\|inspect_checks\|inspect_cf\|change_line\|discover_project_ids" docs README.md CHANGELOG.md`. Update each hit to the new path. Leave dated history entries in `CHANGELOG.md` as they are
-- [ ] If there are no hits, record "none" in the task notes and skip the commit
-
-**Success Criteria**:
-- [ ] The grep, rerun, shows only historical CHANGELOG entries
-- [ ] Commit if changed, e.g. `docs: update moved inspection paths`
-
----
-
-### Task 2.9: Prove `inspect` output is byte-identical
-**Owner**: Junior AI
-**Dependencies**: Task 2.8
 **Effort**: 1
 **Objective**: The migration gate: the CLI is unchanged before any server code lands (LLD Technical Requirements, first bullet).
 
 **Steps**:
 - [ ] Rerun Task 1.3's capture script against the same `"$BASE/store"` into `"$BASE/after/"`. Do not reseed
 - [ ] `diff -r "$BASE/before" "$BASE/after"` must print nothing. If it prints anything, fix the cause; do not edit the baseline
+- [ ] Rerun `grep -rn "cli/inspect\|inspect_inbox\|inspect_evidence\|inspect_feed\|inspect_checks\|inspect_cf\|change_line\|discover_project_ids" docs README.md`. The Context Summary records no hits on 20261017; update any hit to the new path and commit it with `docs: update moved inspection paths`
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each
 - [ ] Delete `"$BASE"`
 
 **Success Criteria**:
 - [ ] `diff -r` empty; suite, `ruff`, `pyright` clean
-- [ ] No commit needed (nothing changed); note the result in the task notes
+- [ ] No other commit needed; note the result in the task notes
 
 ---
 
@@ -310,7 +295,7 @@ status: not_started
 
 ### Task 3.1: Add `read_transaction()` and `change_head()`
 **Owner**: Junior AI
-**Dependencies**: Task 2.9
+**Dependencies**: Task 2.8
 **Effort**: 2
 **Objective**: One WAL snapshot across several reads, and the feed head inside it (LLD D4, 106's deferral).
 

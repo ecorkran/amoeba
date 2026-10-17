@@ -155,12 +155,12 @@ status: not_started
 **Objective**: Test scaffolding before the app code it tests.
 
 **Steps**:
-- [ ] In `tests/serve/conftest.py`, add fixtures: `seeded` (a `tmp_path` supervisor directory seeded with `seed_every_listing`, `AMOEBA_STORE_DIR` set by `monkeypatch`); `client(token=None)` returning a Starlette `TestClient` over `build_app(settings, token, store_dir)` with base URL `http://127.0.0.1`; `TEST_TOKEN`, a 48-hex-character constant clearly marked as a test value
+- [ ] In `tests/serve/conftest.py`, add fixtures: `seeded` (a `tmp_path` supervisor directory seeded with `seed_every_listing`, `AMOEBA_STORE_DIR` set by `monkeypatch`); `make_client`, a factory fixture returning a callable `(token: str | None = None) -> TestClient` that builds a Starlette `TestClient` over `build_app(settings, token, store_dir)` with base URL `http://127.0.0.1`; `TEST_TOKEN`, a 48-hex-character constant clearly marked as a test value
 - [ ] The fixtures import `build_app` lazily, so this task commits before `app.py` exists; leave them unused until Task 5.4
 
 **Success Criteria**:
 - [ ] Suite green
-- [ ] Committed with Task 5.3
+- [ ] Committed with Task 5.5
 
 **Files to Modify**: `tests/serve/conftest.py`
 
@@ -173,7 +173,7 @@ status: not_started
 **Objective**: Token, Origin, Host, and content-type checks on every request (LLD D2).
 
 **Steps**:
-- [ ] Create `src/amoeba/serve/auth.py` with `RequestGuardMiddleware`, a **pure ASGI** middleware (not `BaseHTTPMiddleware`, which wraps streaming responses; confirm in the Starlette docs). Constructed with the token (or `None`) and whether the bind is loopback. In order:
+- [ ] Create `src/amoeba/serve/auth.py` with `RequestGuardMiddleware`, a **pure ASGI** middleware (not `BaseHTTPMiddleware`, which wraps streaming responses; confirm in the Starlette docs). Scopes other than `http` (uvicorn's `lifespan`; there is no websocket route) pass through to the app unchanged. Constructed with the token (or `None`) and whether the bind is loopback. In order:
   1. [ ] An `Origin` header → 403 `origin_not_allowed`
   2. [ ] Loopback bind and a `Host` whose name (port stripped; `[::1]` bracket form handled) is not `localhost`, `127.0.0.1`, or `::1` → 421 `host_not_allowed`. Hold the allowed names in one constant
   3. [ ] Token set and `Authorization` not `Bearer <token>` (compared with `hmac.compare_digest` on bytes) → 401 `unauthorized`, one detail for missing and wrong alike
@@ -182,7 +182,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `pyright` clean
-- [ ] Committed with Task 5.3
+- [ ] Committed with Task 5.5
 
 **Files to Create**: `src/amoeba/serve/auth.py`
 
@@ -205,7 +205,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `pyright` clean
-- [ ] Committed with Task 5.4
+- [ ] Committed with Task 5.5
 
 **Files to Create**: `src/amoeba/serve/reads.py`, `src/amoeba/serve/app.py`
 
@@ -226,7 +226,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Tests pass; full suite green
-- [ ] Commit (Tasks 5.1–5.4), e.g. `feat(serve): add reads endpoint and request guards`
+- [ ] Committed with Task 5.5
 
 **Files to Create**: `tests/serve/test_reads.py`
 
@@ -246,7 +246,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Tests pass
-- [ ] Commit, e.g. `test(serve): pin request guards and token secrecy`
+- [ ] Commit (Tasks 5.1–5.5), e.g. `feat(serve): add reads endpoint and request guards`. Uvicorn's access log is outside `TestClient`; Task 8.2 covers it
 
 **Files to Create**: `tests/serve/test_auth.py`
 
@@ -313,7 +313,7 @@ status: not_started
   - [ ] Missing id → 422 `submission_id_required`; unknown key, non-object body, bad JSON → 422 `invalid_body`
   - [ ] 413 with `Content-Length` too large; 413 for a chunked body with no `Content-Length` (a generator body), and the server read at most `max_request_bytes + 1` bytes (count the chunks the generator yielded)
   - [ ] `SubmissionWriteError` (monkeypatch `submit` to raise it) → 503 `submission_write_failed`; a retry with the same id then succeeds and applies once
-  - [ ] Traversal ids on both endpoints → 400
+  - [ ] Traversal ids on both endpoints → 400; after the POSTs, `inbox/` holds no file and no new path exists anywhere under `tmp_path`
 - [ ] `POST` with `content-type: text/plain` → 415 `unsupported_media_type`; `application/json; charset=utf-8` is accepted
 
 **Success Criteria**:

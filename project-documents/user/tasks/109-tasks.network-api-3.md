@@ -56,36 +56,53 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `pyright` clean
-- [ ] Committed with Task 7.4
+- [ ] Committed with Task 7.5
 
 **Files to Create**: `src/amoeba/serve/stream.py`
 
 ---
 
-### Task 7.3: Add the follow bridge, slots, and the feed route
+### Task 7.3: Add the feed route: cursor, slots, preflight
 **Owner**: Junior AI
 **Dependencies**: Task 7.2
-**Effort**: 3
-**Objective**: `GET /v1/projects/{project_id}/feed` (LLD D6, Data Flow "The feed").
+**Effort**: 2
+**Objective**: `GET /v1/projects/{project_id}/feed` up to the 200 (LLD D6, Data Flow "The feed").
 
 **Steps**:
-- [ ] Cursor: `Last-Event-ID` if present, else `?after=`, else 0; either must be a non-negative integer, else 400 `invalid_cursor`. Any other query parameter → `unexpected_parameter`
+- [ ] Cursor: `Last-Event-ID` if present, else `?after=`, else 0; either must be a non-negative integer, else 400 `invalid_cursor`
 - [ ] Slots: one `anyio.CapacityLimiter(max_streams)` created in `build_app`; acquire without waiting (`acquire_nowait`); `WouldBlock` → 503 `stream_limit_reached` with `Retry-After`
 - [ ] Preflight on a worker thread: `existing_store_path`, then open read-only and close. Errors map as for reads. Release the slot on any preflight failure
-- [ ] Follow thread: one `threading.Thread(daemon=True)` per stream running `follow(store_dir, project_id, after=cursor, settings=feed_settings, stop=stop_event.is_set)`; each change sent with `anyio.from_thread.run(send_stream.send, change)`. `ClosedResourceError`, `BrokenResourceError`, or `RuntimeError` (loop gone) → return. `StorePermissionError` / `StoreSchemaError` from `follow()` → send one error item, then return. Each `except` carries a comment saying why
-- [ ] Register the route in `build_app`
+- [ ] Register the route in `build_app`; it returns the Task 7.2 response wired to the Task 7.4 thread
 
 **Success Criteria**:
 - [ ] `pyright` clean
-- [ ] Committed with Task 7.4
+- [ ] Committed with Task 7.5
 
 **Files to Modify**: `src/amoeba/serve/stream.py`, `src/amoeba/serve/app.py`
 
 ---
 
-### Task 7.4: Test delivery, resume, and errors
+### Task 7.4: Add the follow thread
 **Owner**: Junior AI
 **Dependencies**: Task 7.3
+**Effort**: 2
+**Objective**: Bridge `follow()` to the event loop through the 1-slot hand-off (LLD D6, State Management).
+
+**Steps**:
+- [ ] One `threading.Thread(daemon=True)` per stream running `follow(store_dir, project_id, after=cursor, settings=feed_settings, stop=stop_event.is_set)`; each change sent with `anyio.from_thread.run(send_stream.send, change)`
+- [ ] `ClosedResourceError`, `BrokenResourceError`, or `RuntimeError` (loop gone) → return. `StorePermissionError` / `StoreSchemaError` from `follow()` → send one error item (Task 7.2), then return. Each `except` carries a comment saying why
+
+**Success Criteria**:
+- [ ] `pyright` clean
+- [ ] Committed with Task 7.5
+
+**Files to Modify**: `src/amoeba/serve/stream.py`
+
+---
+
+### Task 7.5: Test delivery, resume, and errors
+**Owner**: Junior AI
+**Dependencies**: Task 7.4
 **Effort**: 3
 **Objective**: Every change after the cursor, once, in order (LLD D6 "Exactly once, in order").
 
@@ -101,15 +118,15 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Tests pass; full suite green
-- [ ] Commit (Tasks 7.2–7.4), e.g. `feat(serve): add the SSE feed stream`
+- [ ] Commit (Tasks 7.2–7.5), e.g. `feat(serve): add the SSE feed stream`
 
 **Files to Create**: `tests/serve/test_stream_delivery.py`
 
 ---
 
-### Task 7.5: Test slot release and the library behaviors
+### Task 7.6: Test slot release and the library behaviors
 **Owner**: Junior AI
-**Dependencies**: Task 7.4
+**Dependencies**: Task 7.5
 **Effort**: 3
 **Objective**: Slots and threads are freed on every exit path, and the two uvicorn behaviors the design depends on are pinned (LLD "Interfaces Required", D6, Mitigation).
 
@@ -135,11 +152,12 @@ status: not_started
 
 ### Task 8.1: Add the server runner and the command
 **Owner**: Junior AI
-**Dependencies**: Task 7.5
+**Dependencies**: Task 7.6
 **Effort**: 2
 **Objective**: A foreground `amoeba serve` with the bind policy, TLS, and a shutdown grace (LLD D3, D7).
 
 **Steps**:
+- [ ] Confirm the PM has answered the open item in file 1's Context Summary (where `ServeRefusedError` is mapped). If not, stop and wait
 - [ ] `src/amoeba/serve/server.py`: `run(settings, token, store_dir)`: `check_bind` first; then `uvicorn.Server(uvicorn.Config(build_app(…), host, port, ssl_certfile, ssl_keyfile, timeout_graceful_shutdown=settings.shutdown_grace_seconds, …)).run()`. Confirm parameter names in the uvicorn docs. Leave uvicorn's access log on
 - [ ] `src/amoeba/cli/serve.py`: `add_serve_parser` with `--host`, `--port`, `--tls-cert`, `--tls-key` (defaults from `ServeSettings`, following `settings_flags.py`); `run_serve(args)`: read `os.environ.get(TOKEN_ENV_VAR)` once (empty string treated as unset), resolve `paths.store_dir()` once, call `server.run`; catch `ServeRefusedError`, print `amoeba: <message>` to stderr, return `ExitCode.SERVE_REFUSED` (per the PM's answer to the open item)
 - [ ] In `cli/main.py`: add `SERVE_REFUSED = 13` to `ExitCode` with its comment; register the parser and dispatch `"serve"` with lazy imports, so other commands never load uvicorn. A bind failure reaches the existing boundary and exits 1
@@ -162,7 +180,7 @@ status: not_started
 **Steps**:
 - [ ] `tests/cli/test_serve.py`, through subprocesses (`cli_harness`), with a scratch store and free ports. Refusal tests use `--host 0.0.0.0` but exit before binding:
   - [ ] No token → 13 and `token_required` in stderr; token but no TLS → 13 `tls_required`; a 31-character token → 13 `token_too_short`; missing, unreadable, or mismatched TLS files → 13 `tls_unusable`. The token never appears in stdout or stderr
-  - [ ] HTTPS on `127.0.0.1` with token and the Task 4.4 cert: 401 without the token, 200 with it (`httpx` with `verify=False`)
+  - [ ] HTTPS on `127.0.0.1` with token and the Task 4.4 cert: 401 without the token, 200 with it (`httpx` with `verify=False`). After stopping it, the token appears nowhere in the server's stdout or stderr (uvicorn's access log goes there)
   - [ ] A port already in use → exit 1
   - [ ] SIGTERM with a stream open: the process exits within `shutdown_grace_seconds` plus a small margin
   - [ ] `amoeba inspect projects` in a fresh interpreter does not import `uvicorn` (check `sys.modules` via `python -c`)
@@ -184,8 +202,9 @@ status: not_started
 **Objective**: The LLD's Integration Requirement through real processes.
 
 **Steps**:
-- [ ] `tests/cli/test_serve_smoke.py`: start `amoeba start` and `amoeba serve --port <free>` as subprocesses on a scratch store. Over `httpx`: POST `create_project`, wait for its outcome to be `applied`, seed one node as the walkthrough does, read `nodes`, open the feed from `as_of_seq`, POST an intent; the follower receives exactly one `message_posted` change
-- [ ] `kill -9` the server: the resident process still reports running. Stop the resident process: a restarted server still serves the read
+- [ ] `tests/cli/test_serve_smoke.py`, on a scratch store: start `amoeba serve --port <free>` as a subprocess. Over `httpx`, POST `create_project`; start `amoeba start`; wait for the outcome to be `applied`; stop the resident process and seed one node as the walkthrough does (the seeding requires it stopped); start it again. Then read `nodes`, open the feed from `as_of_seq`, POST an intent; the follower receives exactly one `message_posted` change
+- [ ] Stop the resident process with the follower open: the stream stays open (a keepalive arrives), `nodes` is still served, and a POST gets 202. Start it again
+- [ ] `kill -9` the server: the resident process still reports running
 - [ ] Clean up both processes in `finally`
 
 **Success Criteria**:
@@ -211,6 +230,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/load/test_serve_load.py` passes; measured p95 recorded in the task notes
+- [ ] CI gates it with no workflow change: `.github/workflows/ci.yml`'s `Load tests` step runs `uv run pytest tests/load`, which collects the new file. Confirm the step is still there
 - [ ] Commit, e.g. `test: add serve load tier`
 
 **Files to Create**: `tests/load/test_serve_load.py`
