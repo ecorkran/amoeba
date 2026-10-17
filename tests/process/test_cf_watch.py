@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,7 @@ from cf_fixture import (
 from cf_watch_harness import LABEL, CFRig
 from feed_harness import raw_changes
 
-from amoeba.store import CFSnapshotOutcome, ChangeKind
+from amoeba.store import CFSnapshotOutcome, Change, ChangeKind
 
 PROJECT = "demo"
 
@@ -34,7 +35,7 @@ def _moved(phase: str = "Phase 7: Testing") -> bytes:
     )
 
 
-def _cf_changes(rig: CFRig, project_id: str = PROJECT) -> list[Any]:
+def _cf_changes(rig: CFRig, project_id: str = PROJECT) -> list[Change]:
     store = rig.host.open_project(project_id)
     return [
         change
@@ -117,7 +118,7 @@ def _touch_updated_at(entries: list[dict[str, Any]]) -> None:
     ],
 )
 def test_writes_that_do_not_touch_the_projection_record_nothing(
-    cf_rig: CFRig, noise: Any
+    cf_rig: CFRig, noise: Callable[[list[dict[str, Any]]], object]
 ) -> None:
     cf_rig.write()
     cf_rig.link(AMOEBA_ID)

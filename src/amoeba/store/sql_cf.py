@@ -66,17 +66,17 @@ INDEX_CF_SNAPSHOTS_LINK: Final = "idx_cf_snapshots_link"
 #: SQLite's implicit insertion-order column; ``cf_links`` has no other order.
 ROWID: Final = "rowid"
 
-_LINK_SELECT_LIST: Final = ", ".join(LINK_COLUMNS)
+_LINK_COLUMN_LIST: Final = ", ".join(LINK_COLUMNS)
 _SNAPSHOT_SELECT_LIST: Final = ", ".join(SNAPSHOT_COLUMNS)
 
 #: Linking again is a no-op: the primary key refuses the second row silently.
 INSERT_LINK: Final = f"""
-INSERT OR IGNORE INTO {TABLE_CF_LINKS} ({_LINK_SELECT_LIST})
+INSERT OR IGNORE INTO {TABLE_CF_LINKS} ({_LINK_COLUMN_LIST})
 VALUES (?, ?, ?)
 """
 
 SELECT_LINKS: Final = f"""
-SELECT {_LINK_SELECT_LIST}
+SELECT {_LINK_COLUMN_LIST}
 FROM {TABLE_CF_LINKS}
 WHERE {COL_LINK_PROJECT_ID} = ?
 ORDER BY {ROWID}

@@ -19,7 +19,7 @@ from cf_fixture import (
 )
 from cf_watch_harness import CFRig
 
-from amoeba.store import CFSnapshotOutcome
+from amoeba.store import CFSnapshot, CFSnapshotInput, CFSnapshotOutcome
 
 OUTCOMES = CFSnapshotOutcome
 
@@ -250,7 +250,7 @@ def test_a_store_that_cannot_record_is_logged_reraised_and_retried(
     original = store.record_cf_snapshot
     failures = [True]
 
-    def flaky(snapshot: Any) -> Any:
+    def flaky(snapshot: CFSnapshotInput) -> CFSnapshot:
         if failures:
             failures.pop()
             raise RuntimeError("disk on fire")

@@ -10,6 +10,7 @@ from feed_harness import raw_changes
 
 from amoeba.store import (
     CFSnapshotOutcome,
+    Change,
     ChangeKind,
     Store,
     sql_cf,
@@ -26,7 +27,7 @@ FAILURES = [
 ]
 
 
-def _cf_changes(store: Store, project_id: str = PROJECT):
+def _cf_changes(store: Store, project_id: str = PROJECT) -> list[Change]:
     return [
         change
         for change in raw_changes(store, project_id)

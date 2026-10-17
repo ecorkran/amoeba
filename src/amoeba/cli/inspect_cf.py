@@ -13,6 +13,7 @@ fields that moved in ``changed_fields``; ``--json`` carries the full list as
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Final
 
 from amoeba.store import Store
@@ -46,13 +47,11 @@ def link_rows(store: Store, args: argparse.Namespace) -> list[Row]:
     ]
 
 
-def _field_names(changed: object) -> str:
+def _field_names(changed: Sequence[Mapping[str, object]] | None) -> str:
     """The distinct names of the fields that moved, in order; empty if none."""
-    if not isinstance(changed, list):
-        return ""
     names: list[str] = []
-    for change in changed:  # pyright: ignore[reportUnknownVariableType]
-        name = change.get(_FIELD_KEY)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    for change in changed or ():
+        name = change.get(_FIELD_KEY)
         if isinstance(name, str) and name not in names:
             names.append(name)
     return ", ".join(names)

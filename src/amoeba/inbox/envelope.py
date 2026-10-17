@@ -102,8 +102,6 @@ class WatchReviewsPayload(BaseModel):
         return value
 
 
-#: The kind-to-payload-model table, defined once. A kind missing here fails a
-#: test, not a user.
 class LinkCFProjectPayload(BaseModel):
     """Links the project to one Context Forge project by CF's own id."""
 
@@ -121,6 +119,8 @@ class LinkCFProjectPayload(BaseModel):
         return value
 
 
+#: The kind-to-payload-model table, defined once. A kind missing here fails a
+#: test, not a user.
 KIND_PAYLOAD_MODELS: Final[Mapping[SubmissionKind, type[BaseModel]]] = {
     SubmissionKind.CREATE_PROJECT: CreateProjectPayload,
     SubmissionKind.RESOLUTION: ResolutionPayload,

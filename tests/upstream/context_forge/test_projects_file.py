@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -122,7 +123,7 @@ DEFECTS = [
 
 @pytest.mark.parametrize(("make", "detail"), DEFECTS)
 def test_defects_are_unrecognized_with_a_specific_detail(
-    make: Any, detail: str
+    make: Callable[[], bytes], detail: str
 ) -> None:
     failure = _failure(make())
     assert failure.outcome is CFReadOutcome.UNRECOGNIZED
@@ -172,12 +173,14 @@ LINK_ONLY = [_duplicated_id, _worktrees_not_array, _duplicate_worktree_ids]
 
 
 @pytest.mark.parametrize("make", FILE_WIDE)
-def test_file_level_defects_are_file_wide(make: Any) -> None:
+def test_file_level_defects_are_file_wide(make: Callable[[], bytes]) -> None:
     assert _failure(make()).file_wide is True
 
 
 @pytest.mark.parametrize("make", LINK_ONLY)
-def test_defects_in_the_linked_entry_are_not_file_wide(make: Any) -> None:
+def test_defects_in_the_linked_entry_are_not_file_wide(
+    make: Callable[[], bytes],
+) -> None:
     assert _failure(make()).file_wide is False
 
 
