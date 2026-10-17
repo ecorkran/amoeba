@@ -31,6 +31,7 @@ class SubmissionKind(StrEnum):
     VERDICT = "verdict"
     WATCH_REVIEWS = "watch_reviews"
     CHECK = "check"
+    LINK_CF_PROJECT = "link_cf_project"
 
 
 #: Payload keys each kind's effect reads, defined once. The envelope's payload
@@ -42,6 +43,7 @@ INTENT_NODE_ID: Final = "node_id"
 INTENT_BODY: Final = "body"
 WATCH_REVIEWS_DIR: Final = "reviews_dir"
 WATCH_ACTIVE: Final = "active"
+LINK_CF_PROJECT_ID: Final = "cf_project_id"
 
 
 class SubmissionOutcome(StrEnum):

@@ -36,6 +36,7 @@ from amoeba.store.inbox_models import (
                 "verdict",
                 "watch_reviews",
                 "check",
+                "link_cf_project",
             },
         ),
         (SubmissionOutcome, {"applied", "rejected"}),

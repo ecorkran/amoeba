@@ -19,6 +19,7 @@ from amoeba.store.check_models import CHECK_PAYLOAD_KEYS
 from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
+    LINK_CF_PROJECT_ID,
     RESOLUTION_BLOCKED_STATE_ID,
     RESOLUTION_DETAIL,
     WATCH_ACTIVE,
@@ -37,6 +38,7 @@ EFFECT_KEYS = {
     SubmissionKind.VERDICT: set(VERDICT_PAYLOAD_KEYS),
     SubmissionKind.WATCH_REVIEWS: {WATCH_REVIEWS_DIR, WATCH_ACTIVE},
     SubmissionKind.CHECK: set(CHECK_PAYLOAD_KEYS),
+    SubmissionKind.LINK_CF_PROJECT: {LINK_CF_PROJECT_ID},
 }
 
 

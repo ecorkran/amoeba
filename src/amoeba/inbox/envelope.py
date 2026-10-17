@@ -104,6 +104,23 @@ class WatchReviewsPayload(BaseModel):
 
 #: The kind-to-payload-model table, defined once. A kind missing here fails a
 #: test, not a user.
+class LinkCFProjectPayload(BaseModel):
+    """Links the project to one Context Forge project by CF's own id."""
+
+    model_config = MODEL_CONFIG
+
+    cf_project_id: str
+
+    @field_validator("cf_project_id")
+    @classmethod
+    def _id_is_not_empty(cls, value: str) -> str:
+        # No format check: the id's format is Context Forge's business. Whether
+        # CF has it is answered by the watch's first check, not here.
+        if not value:
+            raise ValueError("cf_project_id must not be empty")
+        return value
+
+
 KIND_PAYLOAD_MODELS: Final[Mapping[SubmissionKind, type[BaseModel]]] = {
     SubmissionKind.CREATE_PROJECT: CreateProjectPayload,
     SubmissionKind.RESOLUTION: ResolutionPayload,
@@ -111,6 +128,7 @@ KIND_PAYLOAD_MODELS: Final[Mapping[SubmissionKind, type[BaseModel]]] = {
     SubmissionKind.VERDICT: VerdictPayload,
     SubmissionKind.WATCH_REVIEWS: WatchReviewsPayload,
     SubmissionKind.CHECK: CheckPayload,
+    SubmissionKind.LINK_CF_PROJECT: LinkCFProjectPayload,
 }
 
 #: The kind values, as plain strings, for checking a raw decoded field.

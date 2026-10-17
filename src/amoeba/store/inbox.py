@@ -32,9 +32,11 @@ from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter
 from amoeba.store._check_writer import CheckWriter
 from amoeba.store._verdict_writer import VerdictWriter
+from amoeba.store.cf_snapshots import CFWriter
 from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
+    LINK_CF_PROJECT_ID,
     RESOLUTION_BLOCKED_STATE_ID,
     RESOLUTION_DETAIL,
     WATCH_ACTIVE,
@@ -91,7 +93,7 @@ def _payload_mapping(payload: Mapping[str, object], key: str) -> dict[str, objec
     return narrowed
 
 
-class InboxOperations(BlockWriter, VerdictWriter, CheckWriter):
+class InboxOperations(BlockWriter, VerdictWriter, CheckWriter, CFWriter):
     """Apply a submission exactly once, and read back what was applied."""
 
     def apply_submission(
@@ -283,6 +285,17 @@ class InboxOperations(BlockWriter, VerdictWriter, CheckWriter):
             application.timestamp,
         )
 
+    def _apply_link_cf_project(
+        self: InboxOperations, application: _Application
+    ) -> str | None:
+        """Link a Context Forge project; the insert lives in ``cf_snapshots``."""
+        self._link_cf_project(
+            application.project_id,
+            _payload_text(application.payload, LINK_CF_PROJECT_ID),
+            application.timestamp,
+        )
+        return None
+
     def _apply_watch_reviews(
         self: InboxOperations, application: _Application
     ) -> str | None:
@@ -316,4 +329,5 @@ class InboxOperations(BlockWriter, VerdictWriter, CheckWriter):
         SubmissionKind.VERDICT: _apply_verdict,
         SubmissionKind.WATCH_REVIEWS: _apply_watch_reviews,
         SubmissionKind.CHECK: _apply_check,
+        SubmissionKind.LINK_CF_PROJECT: _apply_link_cf_project,
     }

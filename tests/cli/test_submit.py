@@ -125,6 +125,7 @@ KIND_FLAGS: dict[SubmissionKind, tuple[str, ...]] = {
         "command_output",
     ),
     SubmissionKind.WATCH_REVIEWS: ("--reviews-dir", "/abs/reviews", "--active", "true"),
+    SubmissionKind.LINK_CF_PROJECT: ("--cf-project-id", "project_1_abc"),
 }
 
 
@@ -400,3 +401,22 @@ def test_text_flags_are_taken_as_typed() -> None:
 def test_bad_json_on_a_json_flag_names_the_flag() -> None:
     with pytest.raises(argparse.ArgumentError, match="--flag"):
         _parse("--name", "n", "--color", "red", "--flag", "nope")
+
+
+def test_link_cf_project_writes_the_id_as_typed_and_help_lists_it(
+    supervisor_dir: Path,
+) -> None:
+    result = run_cli(
+        _submit_arguments(
+            SubmissionKind.LINK_CF_PROJECT, "--cf-project-id", "project_1_abc"
+        ),
+        supervisor_dir,
+    )
+
+    assert result.returncode == ExitCode.OK, result.stderr
+    [written] = _new_files(supervisor_dir)
+    assert json.loads(written.read_text())["payload"] == {
+        "cf_project_id": "project_1_abc"
+    }
+    help_result = run_cli(["submit", "--help"], supervisor_dir)
+    assert "link-cf-project" in help_result.stdout
