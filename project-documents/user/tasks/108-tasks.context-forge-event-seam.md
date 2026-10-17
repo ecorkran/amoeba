@@ -24,7 +24,7 @@ status: not_started
 
 **Commit cadence:** a commit never holds untested behavior. A task that says "committed with Task N.M" is committed together with its test task, which follows immediately; every other task commits on its own.
 
-**Open item for the PM (LLD D7):** the LLD says the PM must confirm D7 (`cf_data_dir` setting with `--cf-data-dir`, no read of `CONTEXT_FORGE_DATA_DIR`) before this phase. Section 6 builds it as written. If D7 changes, Tasks 6.1, 6.2, and 6.5 change.
+**Open item for the PM (LLD D7):** the LLD says the PM must confirm D7 (`cf_data_dir` setting with `--cf-data-dir`, no read of `CONTEXT_FORGE_DATA_DIR`) before this phase. Task 1.1 gates on it. If D7 changes, Tasks 6.1, 6.2, 6.4, 6.5, and 6.6 change.
 
 **Task-level additions to the LLD** (named by no LLD table): none. Anything a task needs that the LLD does not settle is a question for the PM, not a guess.
 
@@ -43,6 +43,7 @@ status: not_started
 **Steps**:
 - [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
 - [ ] Confirm `src/amoeba/store/schema/007_judge_samples_checks_and_progress.sql` exists and `EXPECTED_SCHEMA_VERSION` is 7. If not, stop and tell the PM (LLD "Prerequisites")
+- [ ] Ask the PM to confirm LLD D7. If not confirmed, stop and wait
 - [ ] Create `108-slice.context-forge-event-seam` from the target; if it exists, switch to it
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
 
@@ -86,7 +87,7 @@ status: not_started
 - [ ] Create package `src/amoeba/upstream/context_forge/` with `__init__.py`, in the style of `upstream/squadron/`
 - [ ] In `projects_file.py` define: `PROJECTS_FILE_NAME = "projects.json"`; two tuples, the project-level and worktree-level projected field names, exactly as the LLD "Observed shape" lists them (`updatedAt` is not in either)
 - [ ] Define frozen types: `CFProjectState` (project fields mapping, worktree-id → fields mapping, `cf_updated_at | None`, with `to_json()` producing `{"project": {...}, "worktrees": {...}}` holding only keys present), `CFFieldChange` (`worktree_id: str | None`, `field`, optional `from`/`to`, with a JSON form that omits an absent `from`/`to`), and `CFReadFailure` (outcome word, detail)
-- [ ] The outcome words `unreadable`, `unrecognized`, `missing` must not be restated here: import `CFSnapshotOutcome` from the store models after Task 3.1, or, to keep this section store-free, hold the failure's outcome as a `str` that Task 5.1 maps. Choose the second and say so in a module comment (the store imports nothing from upstream, and upstream imports nothing from the store, per `tests/upstream/test_import_direction.py`)
+- [ ] Hold `CFReadFailure`'s outcome as a `str` that Task 5.1 maps to `CFSnapshotOutcome`, and say so in a module comment: the store imports nothing from upstream, and upstream imports nothing from the store (`tests/upstream/test_import_direction.py`)
 
 **Success Criteria**:
 - [ ] `ruff`, `pyright` pass
@@ -103,10 +104,8 @@ status: not_started
 **Objective**: `parse(data: bytes, cf_project_id: str) -> CFProjectState | CFReadFailure`, applying exactly the rules of the LLD D4 table.
 
 **Steps**:
-- [ ] Not valid JSON, top level not an array, an element not an object or without a string `id` → `unrecognized`, whole file, detail naming the rule
-- [ ] The linked id appears more than once → `unrecognized`; `worktrees` present but not an array of objects with distinct string `id`s → `unrecognized` for that link only; no element has the id → `missing`
-- [ ] Project and worktree field values are copied as given, never type-checked (D4). Only keys present are projected. `updatedAt` goes to `cf_updated_at` when it is a string
-- [ ] A malformed `worktrees` in a *different* project's entry must not affect the link
+- [ ] Return the outcome, scope, and detail for each case in the D4 table; only the rules that decide which entry and worktree a value belongs to are checked
+- [ ] Only keys present are projected, copied as given. `updatedAt` goes to `cf_updated_at` when it is a string
 - [ ] Each detail string is specific enough to identify the rule that failed; define each message where it is raised, not duplicated in tests (tests check a distinguishing substring)
 
 **Success Criteria**:
@@ -294,6 +293,7 @@ status: not_started
 
 **Steps**:
 - [ ] Read `process/review_detection.py` first and follow its structure: a small host protocol (settings, `stop_requested`, `project_ids`, `store_for`), injected clock, constructor takes `version_label`, injected data directory/file path, `name` property
+- [ ] Add `cf_scan_interval_seconds` (1.0, with docstring entry) to `ProcessSettings` in `process/settings.py`; no flag
 - [ ] Create `process/cf_watch.py`. `tick` does nothing until `cf_scan_interval_seconds` has passed since the last check. Then: gather links across open projects; `stat` the file to `(st_ino, st_size, st_mtime_ns)` or the OS error; if `(signature, links)` equals the remembered key, return with no read
 - [ ] Otherwise read the bytes (an OS error means every link is `unreadable` with detail `{error class}: {strerror}`), `parse` once per link, load `latest_cf_snapshots`, and apply the LLD rules: for a state, diff against the latest `observed` row and record when there are changes **or** the latest row was not `observed` (then `changed: []` if nothing moved); for a failure, record only when the outcome or detail differs from the latest row. The remembered signature is the one taken before the read (D1)
 - [ ] Remember `(signature, links)` only if every record succeeded. A store exception while recording is logged with `logger.exception` at ERROR and re-raised (D4). A broken CF file is not an exception: one ERROR log when the file goes bad, one INFO when it recovers, the process keeps running
@@ -320,8 +320,8 @@ status: not_started
 - [ ] First check records one `observed` snapshot listing every present projected field as added (including the `default` worktree's `activeSlice`) and one `cf_project_changed` change
 - [ ] Rewrite with the `default` worktree's `developmentPhase` moved: exactly one new snapshot whose `changed` names that worktree id and field with `from` and `to`. A project-level change has `worktree_id` None
 - [ ] Rewrites that touch only another project, only `customData`, or only `updatedAt`: no new snapshot
-- [ ] Interval gating: ticks before `cf_scan_interval_seconds` do nothing (assert no `stat`/read, via an injected stat/reader seam or a call counter)
-- [ ] Unchanged signature and link set: no read. A new link with an unchanged file is checked. Re-checking an unchanged link writes nothing
+- [ ] Interval gating: after the file is rewritten, a tick before `cf_scan_interval_seconds` has passed (by the injected clock) records nothing; advancing the clock past it records the change
+- [ ] Unchanged signature and link set: nothing recorded. A new link with an unchanged file is checked. Re-checking an unchanged link writes nothing
 - [ ] Two Amoeba projects linking the same CF id each record their own snapshots
 - [ ] Restart: a new tenant instance over the same store, after the file changed while "down", records one snapshot per link on its first tick, and none when nothing changed
 
@@ -362,10 +362,10 @@ status: not_started
 **Owner**: Junior AI
 **Dependencies**: Task 5.3
 **Effort**: 2
-**Objective**: `cf_data_dir` with a flag, `cf_scan_interval_seconds` without one (LLD D1, D7).
+**Objective**: `cf_data_dir` with a flag (LLD D7).
 
 **Steps**:
-- [ ] `process/settings.py`: `DEFAULT_CF_DATA_DIR = ~/.config/context-forge`; `ProcessSettings.cf_data_dir` and `cf_scan_interval_seconds` (1.0), with docstring entries. No environment read
+- [ ] `process/settings.py`: `DEFAULT_CF_DATA_DIR = ~/.config/context-forge`; `ProcessSettings.cf_data_dir`, with a docstring entry. No environment read (`cf_scan_interval_seconds` was added in Task 5.1)
 - [ ] `cli/settings_flags.py`: `--cf-data-dir PATH`, default taken from `ProcessSettings`, none repeated; map it back into `ProcessSettings`. No flag for the interval
 - [ ] Update any test that enumerates settings or `start` flags
 
