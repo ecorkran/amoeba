@@ -53,6 +53,9 @@ class ProcessSettings:
             detection latency is about two intervals.
         sq_timeout_seconds: How long to wait for ``sq --version`` at start-up.
             Bounds start-up only: no tick starts a subprocess.
+        cf_scan_interval_seconds: How often the Context Forge watch takes one
+            ``stat`` of ``projects.json``. A pointer move is a human-paced
+            event, so this bounds how stale the Runner's view can be. No flag.
     """
 
     idle_interval_seconds: float = 1.0
@@ -65,3 +68,4 @@ class ProcessSettings:
     inbox_max_attempts: int = 3
     review_scan_interval_seconds: float = 2.0
     sq_timeout_seconds: float = 10.0
+    cf_scan_interval_seconds: float = 1.0

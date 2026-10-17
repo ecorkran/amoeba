@@ -72,10 +72,15 @@ class CFReadOutcome(StrEnum):
 
 @dataclass(frozen=True)
 class CFReadFailure:
-    """The linked project could not be read. ``detail`` names the rule."""
+    """The linked project could not be read. ``detail`` names the rule.
+
+    ``file_wide`` is true when every link would fail the same way (the file is
+    not JSON, or an element could be any link), false when only this link does.
+    """
 
     outcome: CFReadOutcome
     detail: str
+    file_wide: bool
 
 
 @dataclass(frozen=True)
@@ -181,9 +186,13 @@ def parse(data: bytes, cf_project_id: str) -> CFProjectState | CFReadFailure:
     except ValueError as error:
         # JSONDecodeError and UnicodeDecodeError: CF validates before it renames,
         # so a bad file is a real finding, not a race.
-        return CFReadFailure(CFReadOutcome.UNRECOGNIZED, f"not valid JSON: {error}")
+        return CFReadFailure(
+            CFReadOutcome.UNRECOGNIZED, f"not valid JSON: {error}", file_wide=True
+        )
     if not isinstance(document, list):
-        return CFReadFailure(CFReadOutcome.UNRECOGNIZED, "top level is not an array")
+        return CFReadFailure(
+            CFReadOutcome.UNRECOGNIZED, "top level is not an array", file_wide=True
+        )
     entries: list[dict[str, Any]] = []
     for index, element in enumerate(cast("list[object]", document)):
         entry = _object(element)
@@ -191,18 +200,23 @@ def parse(data: bytes, cf_project_id: str) -> CFProjectState | CFReadFailure:
             return CFReadFailure(
                 CFReadOutcome.UNRECOGNIZED,
                 f"element {index} is not an object with a string id",
+                file_wide=True,
             )
         entries.append(entry)
     matches = [entry for entry in entries if entry[_ID_KEY] == cf_project_id]
     if not matches:
         return CFReadFailure(
-            CFReadOutcome.MISSING, f"no project has id {cf_project_id!r}"
+            CFReadOutcome.MISSING,
+            f"no project has id {cf_project_id!r}",
+            file_wide=False,
         )
     if len(matches) > 1:
         return CFReadFailure(
-            CFReadOutcome.UNRECOGNIZED, f"id {cf_project_id!r} appears more than once"
+            CFReadOutcome.UNRECOGNIZED,
+            f"id {cf_project_id!r} appears more than once",
+            file_wide=False,
         )
     worktrees = _worktrees_of(matches[0])
     if isinstance(worktrees, str):
-        return CFReadFailure(CFReadOutcome.UNRECOGNIZED, worktrees)
+        return CFReadFailure(CFReadOutcome.UNRECOGNIZED, worktrees, file_wide=False)
     return _project_of(matches[0], worktrees)

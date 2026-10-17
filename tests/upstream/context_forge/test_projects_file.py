@@ -165,3 +165,21 @@ def test_to_json_round_trips_and_rejects_other_shapes() -> None:
         CFProjectState.from_json({"project": {}}, None)
     with pytest.raises(ValueError, match="not an object"):
         CFProjectState.from_json({"project": {}, "worktrees": {"wt": 1}}, None)
+
+
+FILE_WIDE = [_non_json, _top_level_object, _element_without_id]
+LINK_ONLY = [_duplicated_id, _worktrees_not_array, _duplicate_worktree_ids]
+
+
+@pytest.mark.parametrize("make", FILE_WIDE)
+def test_file_level_defects_are_file_wide(make: Any) -> None:
+    assert _failure(make()).file_wide is True
+
+
+@pytest.mark.parametrize("make", LINK_ONLY)
+def test_defects_in_the_linked_entry_are_not_file_wide(make: Any) -> None:
+    assert _failure(make()).file_wide is False
+
+
+def test_a_missing_id_is_not_file_wide() -> None:
+    assert _failure(fixture_bytes(), "project_nope").file_wide is False

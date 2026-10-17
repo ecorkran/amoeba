@@ -166,13 +166,13 @@ status: in_progress
 **Objective**: Define the outcome word list and record types once (LLD "API Contracts", "Patterns and Conventions").
 
 **Steps**:
-- [ ] Create `src/amoeba/store/cf_models.py` in the style of `check_models.py` (no SQL, no `sqlite3`, no pydantic, no import from `amoeba.upstream`)
-- [ ] `CFSnapshotOutcome` (`observed`, `unreadable`, `unrecognized`, `missing`) as a `StrEnum`
-- [ ] Frozen dataclasses `CFLink`, `CFSnapshot` (fields exactly as the LLD gives), and `CFSnapshotInput` (everything except `id`); `state` and `changed` are plain JSON-compatible values the store does not interpret
+- [x] Create `src/amoeba/store/cf_models.py` in the style of `check_models.py` (no SQL, no `sqlite3`, no pydantic, no import from `amoeba.upstream`)
+- [x] `CFSnapshotOutcome` (`observed`, `unreadable`, `unrecognized`, `missing`) as a `StrEnum`
+- [x] Frozen dataclasses `CFLink`, `CFSnapshot` (fields exactly as the LLD gives), and `CFSnapshotInput` (everything except `id`); `state` and `changed` are plain JSON-compatible values the store does not interpret
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 3.3
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 3.3
 
 **Files to Create**: `src/amoeba/store/cf_models.py`
 
@@ -185,14 +185,14 @@ status: in_progress
 **Objective**: Two tables and one trigger, per the LLD "Database / Storage Schema" and D6.
 
 **Steps**:
-- [ ] Read `006_…` and `007_…` for trigger and table style. Create `src/amoeba/store/schema/008_context_forge_snapshots.sql`: `cf_links` (primary key `(project_id, cf_project_id)`), `cf_snapshots` (columns per the LLD, `INTEGER PRIMARY KEY AUTOINCREMENT`, index on `(project_id, cf_project_id, id)`)
-- [ ] Trigger `changes_cf_project_changed`, `AFTER INSERT ON cf_snapshots`, every outcome, following 106's convention: `node_id` null, `subject_id` the snapshot id, payload `json_object('cf_project_id', …, 'outcome', …, 'changed', json(new.changed))`, `recorded_at = new.observed_at`. `changed` is null for failures. Do not repeat the outcome words in SQL. No trigger on `cf_links`
-- [ ] Set `EXPECTED_SCHEMA_VERSION` to 8 in `store/migrations.py`; update any test that pins 7
-- [ ] Add `ChangeKind.CF_PROJECT_CHANGED = "cf_project_changed"` in `store/feed_models.py`; export per `store/__init__.py` conventions
+- [x] Read `006_…` and `007_…` for trigger and table style. Create `src/amoeba/store/schema/008_context_forge_snapshots.sql`: `cf_links` (primary key `(project_id, cf_project_id)`), `cf_snapshots` (columns per the LLD, `INTEGER PRIMARY KEY AUTOINCREMENT`, index on `(project_id, cf_project_id, id)`)
+- [x] Trigger `changes_cf_project_changed`, `AFTER INSERT ON cf_snapshots`, every outcome, following 106's convention: `node_id` null, `subject_id` the snapshot id, payload `json_object('cf_project_id', …, 'outcome', …, 'changed', json(new.changed))`, `recorded_at = new.observed_at`. `changed` is null for failures. Do not repeat the outcome words in SQL. No trigger on `cf_links`
+- [x] Set `EXPECTED_SCHEMA_VERSION` to 8 in `store/migrations.py`; update any test that pins 7
+- [x] Add `ChangeKind.CF_PROJECT_CHANGED = "cf_project_changed"` in `store/feed_models.py`; export per `store/__init__.py` conventions
 
 **Success Criteria**:
-- [ ] A fresh store opens at version 8; `ruff`, `pyright` pass
-- [ ] Committed with Task 3.3
+- [x] A fresh store opens at version 8; `ruff`, `pyright` pass
+- [x] Committed with Task 3.3
 
 **Files to Create**: `schema/008_context_forge_snapshots.sql`
 **Files to Modify**: `store/migrations.py`, `store/feed_models.py`, `store/__init__.py`, tests pinning the version
@@ -206,14 +206,14 @@ status: in_progress
 **Objective**: The store methods of the LLD "API Contracts" table.
 
 **Steps**:
-- [ ] `sql_cf.py`: every statement and column name for the two tables. `mapping_cf.py`: row → record, decoding the JSON columns
-- [ ] `cf_snapshots.py` `CFOperations` mixin, added to `Store`: `cf_links(project_id)` (link order), `cf_snapshots(project_id)` (id order), `latest_cf_snapshots(project_id, cf_project_id) -> (latest | None, latest observed | None)`, `record_cf_snapshot(CFSnapshotInput) -> CFSnapshot` (in-process only; one insert; the trigger writes the change in the same transaction)
-- [ ] Use 101's timestamp convention and the writer guard as `_check_writer.py` does. `observed_at` comes from the input, not from the store reading a clock
-- [ ] Export the new names from `amoeba.store`; the store imports nothing from `amoeba.upstream`, `amoeba.process`, or `amoeba.feed`
+- [x] `sql_cf.py`: every statement and column name for the two tables. `mapping_cf.py`: row → record, decoding the JSON columns
+- [x] `cf_snapshots.py` `CFOperations` mixin, added to `Store`: `cf_links(project_id)` (link order), `cf_snapshots(project_id)` (id order), `latest_cf_snapshots(project_id, cf_project_id) -> (latest | None, latest observed | None)`, `record_cf_snapshot(CFSnapshotInput) -> CFSnapshot` (in-process only; one insert; the trigger writes the change in the same transaction)
+- [x] Use 101's timestamp convention and the writer guard as `_check_writer.py` does. `observed_at` comes from the input, not from the store reading a clock
+- [x] Export the new names from `amoeba.store`; the store imports nothing from `amoeba.upstream`, `amoeba.process`, or `amoeba.feed`
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 3.4
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 3.4
 
 **Files to Create**: `store/sql_cf.py`, `store/mapping_cf.py`, `store/cf_snapshots.py`
 **Files to Modify**: `store/store.py`, `store/__init__.py`
@@ -227,14 +227,14 @@ status: in_progress
 **Objective**: Pin the schema, the operations, and the feed invariant.
 
 **Steps**:
-- [ ] `tests/store/test_migration_008.py`, modeled on `test_migration_007.py`: a version-7 store with data from every earlier slice upgrades to 8 intact
-- [ ] `tests/store/test_cf_snapshots.py`: record each of the four outcomes and read back; `latest_cf_snapshots` returns the latest row and the latest `observed` row (including when they differ, and when none exist); each insert adds exactly one `cf_project_changed` change with the payload keys of D6 and `changed` null for failures; `cf_links` and `cf_snapshots` order
-- [ ] Extend `tests/store/test_feed_invariant.py`: its script gains one snapshot row per outcome plus a no-op re-check that must add nothing. The suite must fail if the trigger is missing (verify once by temporarily dropping it, then restore)
-- [ ] Extend `tests/store/test_import_direction`-style check (wherever the store's import rule is tested) to cover `cf_*` modules
+- [x] `tests/store/test_migration_008.py`, modeled on `test_migration_007.py`: a version-7 store with data from every earlier slice upgrades to 8 intact
+- [x] `tests/store/test_cf_snapshots.py`: record each of the four outcomes and read back; `latest_cf_snapshots` returns the latest row and the latest `observed` row (including when they differ, and when none exist); each insert adds exactly one `cf_project_changed` change with the payload keys of D6 and `changed` null for failures; `cf_links` and `cf_snapshots` order
+- [x] Extend `tests/store/test_feed_invariant.py`: its script gains one snapshot row per outcome plus a no-op re-check that must add nothing. The suite must fail if the trigger is missing (verify once by temporarily dropping it, then restore)
+- [x] Extend `tests/store/test_import_direction`-style check (wherever the store's import rule is tested) to cover `cf_*` modules
 
 **Success Criteria**:
-- [ ] New tests pass; full suite, `ruff`, `pyright` pass
-- [ ] Commit, e.g. `feat(store): add Context Forge links and snapshots (migration 008)`
+- [x] New tests pass; full suite, `ruff`, `pyright` pass
+- [x] Commit, e.g. `feat(store): add Context Forge links and snapshots (migration 008)`
 
 **Files to Create**: `tests/store/test_migration_008.py`, `tests/store/test_cf_snapshots.py`
 **Files to Modify**: `tests/store/test_feed_invariant.py`
@@ -250,14 +250,14 @@ status: in_progress
 **Objective**: Linking through 103's three-part seam (LLD D5).
 
 **Steps**:
-- [ ] `store/inbox_models.py`: `SubmissionKind.LINK_CF_PROJECT = "link_cf_project"` and the payload key constant for `cf_project_id`, defined once
-- [ ] `inbox/envelope.py`: `LinkCFProjectPayload` (`cf_project_id: str`, non-empty, no format check) in `KIND_PAYLOAD_MODELS`. An empty id is quarantined as invalid by the existing path
-- [ ] Effect function in `cf_snapshots.py` (not `inbox.py`): insert `cf_links(project, cf_project_id, linked_at)`; linking again is a no-op. Register only its `KIND_EFFECTS` line in `store/inbox.py`
-- [ ] The store reads no file and does not check that the id exists in CF
+- [x] `store/inbox_models.py`: `SubmissionKind.LINK_CF_PROJECT = "link_cf_project"` and the payload key constant for `cf_project_id`, defined once
+- [x] `inbox/envelope.py`: `LinkCFProjectPayload` (`cf_project_id: str`, non-empty, no format check) in `KIND_PAYLOAD_MODELS`. An empty id is quarantined as invalid by the existing path
+- [x] Effect function in `cf_snapshots.py` (not `inbox.py`): insert `cf_links(project, cf_project_id, linked_at)`; linking again is a no-op. Register only its `KIND_EFFECTS` line in `store/inbox.py`
+- [x] The store reads no file and does not check that the id exists in CF
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 4.2
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 4.2
 
 **Files to Modify**: `store/inbox_models.py`, `inbox/envelope.py`, `store/inbox.py`, `store/cf_snapshots.py`
 
@@ -270,14 +270,14 @@ status: in_progress
 **Objective**: Extend 103's completeness tests and prove the CLI form.
 
 **Steps**:
-- [ ] Update every test that pins the kind set or `KIND_EFFECTS` completeness (`tests/inbox/`, `tests/store/test_inbox_*`); read how 107's `check` kind extended them and do the same
-- [ ] Effect test: first submission inserts a link; the second identical submission leaves one row; two Amoeba projects may link the same CF id; one project may link several
-- [ ] Empty `cf_project_id` is quarantined as invalid
-- [ ] `tests/cli/test_submit.py`: `amoeba submit link-cf-project --project P --by pm --cf-project-id ID` writes one inbox file whose flags come from the payload model (104's flag rule). Check the CLI help lists the new subcommand
+- [x] Update every test that pins the kind set or `KIND_EFFECTS` completeness (`tests/inbox/`, `tests/store/test_inbox_*`); read how 107's `check` kind extended them and do the same
+- [x] Effect test: first submission inserts a link; the second identical submission leaves one row; two Amoeba projects may link the same CF id; one project may link several
+- [x] Empty `cf_project_id` is quarantined as invalid
+- [x] `tests/cli/test_submit.py`: `amoeba submit link-cf-project --project P --by pm --cf-project-id ID` writes one inbox file whose flags come from the payload model (104's flag rule). Check the CLI help lists the new subcommand
 
 **Success Criteria**:
-- [ ] New tests pass; full suite, `ruff`, `pyright` pass
-- [ ] Commit, e.g. `feat(inbox): add link_cf_project submission kind`
+- [x] New tests pass; full suite, `ruff`, `pyright` pass
+- [x] Commit, e.g. `feat(inbox): add link_cf_project submission kind`
 
 **Files to Modify**: the tests named above
 

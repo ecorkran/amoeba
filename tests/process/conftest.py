@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from cf_watch_harness import CFRig
 from detection_harness import DetectionRig
 from local_host_harness import LocalHost
 
@@ -37,3 +38,17 @@ def reviews_dir(tmp_path: Path) -> Path:
 def rig(local_host: LocalHost, reviews_dir: Path) -> DetectionRig:
     """A detection rig over ``local_host`` with an empty reviews directory."""
     return DetectionRig(local_host, reviews_dir)
+
+
+@pytest.fixture
+def cf_dir(tmp_path: Path) -> Path:
+    """An empty stand-in for Context Forge's data directory. Under ``tmp_path``."""
+    directory = tmp_path / "context-forge"
+    directory.mkdir()
+    return directory
+
+
+@pytest.fixture
+def cf_rig(local_host: LocalHost, cf_dir: Path) -> CFRig:
+    """A CF watch rig over ``local_host`` with an empty data directory."""
+    return CFRig(local_host, cf_dir)
