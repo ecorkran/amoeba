@@ -14,55 +14,66 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261017
 dateUpdated: 20261017
-reviewedSha: ea7825b57979f2aad8bd2b6679a9d958035e1260
+reviewedSha: 364974b3c106633ee43ac06490d82dd99fe17a4d
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 7
-turns: 8
-promptTokens: 366367
-cachedTokens: 270025
-cacheWriteTokens: 96332
-completionTokens: 6163
+toolCallsMade: 5
+turns: 6
+promptTokens: 192381
+cachedTokens: 97087
+cacheWriteTokens: 95288
+completionTokens: 5508
 durationSeconds: 57.8
-costUsd: 0.474647
+costUsd: 0.446619
 costBasis: provider
 runId: run-20261017-p5-dcc30257
 squadronVersion: 0.23.0
 findings:
   - id: F001
-    severity: pass
-    category: coverage
-    summary: "Migration and snapshot criteria are covered and gated"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:291-307"
-  - id: F002
     severity: concern
     category: sequencing
-    summary: "Open item for the PM blocks the whole slice, but only affects Task 8.1"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:43,66"
-  - id: F003
+    summary: "Byte-identical baseline is deleted before Task 3.3 changes the CLI read path"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:286"
+  - id: F002
     severity: concern
     category: task-sizing
-    summary: "Task 2.8 is a likely no-op and is too granular"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:30,275-287"
-  - id: F004
-    severity: concern
-    category: ci-gating
-    summary: "CI gating of the new load tier is implicit"
-    location: ".github/workflows/ci.yml:53-54"
-  - id: F005
-    severity: note
-    category: task-sizing
-    summary: "Tasks 2.5 and 2.6 form a large red-suite window"
+    summary: "Tasks 2.5 and 2.6 form one very large, red-in-between commit"
     location: "project-documents/user/tasks/109-tasks.network-api-1.md:204-253"
-  - id: F006
+  - id: F003
     severity: note
     category: scope
-    summary: "Task-level additions go beyond the design but are justified"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:45-49"
-  - id: F007
+    summary: "Task 2.4 adds `feed/wire.py` to `SINGLE_DEFINITION_MODULES`"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:193"
+  - id: F004
     severity: note
     category: proportionality
-    summary: "Step detail is heavy but mostly traceable"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:105-108,317-321"
+    summary: "Task 1.2 adds a \"every listing returns at least one row\" test"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:86"
+  - id: F005
+    severity: note
+    category: proportionality
+    summary: "Task 2.8 re-greps docs already confirmed clean"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:284"
+  - id: F006
+    severity: pass
+    category: coverage
+    summary: "Section 1–3 coverage of the slice design"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:56-370"
+  - id: F007
+    severity: pass
+    category: sequencing
+    summary: "Test-with pattern and commit distribution"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:118-370"
+  - id: F008
+    severity: pass
+    category: coverage
+    summary: "Load test and CI gating exist in later files"
+    location: "project-documents/user/tasks/109-tasks.network-api-3.md:225-236"
+  - id: F009
+    severity: pass
+    category: dependencies
+    summary: "Open PM item is flagged and scoped"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md:43"
 ---
 
 # Review: tasks — slice 109
@@ -72,54 +83,58 @@ findings:
 
 ## Findings
 
-### [PASS] Migration and snapshot criteria are covered and gated
+### [CONCERN] Byte-identical baseline is deleted before Task 3.3 changes the CLI read path
 
-- **Byte-identical migration:** Task 1.3 captures the baseline once and generates the commands from `LISTINGS`. Task 2.9 diffs the output, including `--help`, before any server code lands. This matches the slice's Technical Requirements, first bullet, and "Behavior preserved".
-- **Snapshot consistency:** Tasks 3.1–3.4 cover `read_transaction()`, `change_head()` and `as_of_seq`. Task 3.4's mid-read commit test maps directly to the functional requirement on one snapshot.
-- **Layering and the writer guard:** Task 2.7 adds the inspection layering rule, and the writer-guard check runs with no allow-list change.
+Task 2.8 proves `inspect` output is byte-identical, then deletes `$BASE`, which holds the seeded store and the capture script. Task 3.3 then changes `read_listing`, which the CLI calls. Every project listing now runs inside `read_transaction()` and also issues `change_head`. Its only guard is "`tests/test_cli_inspect.py` passes unchanged". The slice design's Technical Requirement is that `inspect` output and `--help` stay byte-identical. Either keep `$BASE` until Task 3.4 and rerun the diff there, or add a one-line rerun to Task 3.4's success criteria. The capture script already exists, so the rerun costs almost nothing.
 
-### [CONCERN] Open item for the PM blocks the whole slice, but only affects Task 8.1
+### [CONCERN] Tasks 2.5 and 2.6 form one very large, red-in-between commit
 
-- The `ServeRefusedError` mapping question is stated as gating Task 1.1. Task 1.1 step 3 tells the junior to stop and wait for the PM, even though nothing before Task 8.1 depends on the answer.
-- Move the gate to Task 8.1, or to the start of Section 8. Sections 1–7 can then proceed while the PM decides.
-- The task file also departs from the slice design without a fix to the design. The design says the error is "mapped … in `cli/main.py`", and the tasks assume `cli/serve.py`'s `run_serve` maps it. Once the PM answers, add a step to correct the slice design, or record the delta in Task 9.3. Otherwise the two documents keep contradicting each other.
+Tasks 2.5 and 2.6 are committed together. The combined change moves 5 source modules and 4 test files, creates `core.py`, moves the registry, rewrites `run_listing` and `_add_inspect_parser`, and edits several test files. Task 2.5 cannot be verified on its own, because it says "the suite will not pass until Task 2.6", and each is rated Effort 3. The cadence rule ("no red suite") is respected only by merging the two. A junior AI could get lost mid-way.
+- **Option 1:** split 2.6 so the registry move keeps temporary imports from the old modules until the end. The cost is a shim, which the slice design forbids.
+- **Option 2:** keep the combined commit but add an intermediate checkpoint. Run `pyright` and `ruff` after 2.5, since they can pass before the registry is rewired. Add a "stop and ask the PM if 2.5 plus 2.6 touches more than the listed files" guard.
+I'd take option 2.
 
-### [CONCERN] Task 2.8 is a likely no-op and is too granular
+### [NOTE] Task 2.4 adds `feed/wire.py` to `SINGLE_DEFINITION_MODULES`
 
-- The Context Summary already records that no contract doc references the moved module paths (grep, 20261017). Task 2.8 then asks for the same grep, with a "none, skip commit" branch.
-- Fold the grep into Task 2.6's success criteria (next to the existing `grep` for `amoeba.cli.inspect_`). Alternatively fold it into Task 9.3, which edits those docs anyway.
-- A separate task adds a sequencing hop and a checkpoint with nothing to commit.
+The slice design requires this test only for `ApiErrorCode` and the exception table (Technical Requirements). The `feed/wire.py` entry is a small, defensible extra, since it protects the "one definition of a change's wire form" claim. I'd keep it, but it is the only task step that traces to no success criterion in Sections 1–3.
 
-### [CONCERN] CI gating of the new load tier is implicit
+### [NOTE] Task 1.2 adds a "every listing returns at least one row" test
 
-- The slice's Technical Requirements specify a load tier in `tests/load/test_serve_load.py`. Task 9.2 in file 3 creates it.
-- CI already has a separate "Load tests" step running `uv run pytest tests/load` (ci.yml:53-54), so the new file would be picked up. No task in files 1–3 says so. The task file never mentions `ci.yml`, whether the default `uv run pytest` step also collects `tests/load`, or whether the real-uvicorn tests need a loopback port on the runner.
-- Add one step to Task 9.2 to confirm the existing step covers the file and that the default step does not run it twice. If either check fails, this slice needs a small CI change.
-- This finding rests on files 2–3 only through my grep of Task 9.2, so please confirm against that task.
+This test is conditional ("if one does not already assert it"). It supports the parity success criterion, because a listing with no seeded row would pass parity vacuously. It is proportionate; no change needed.
 
-### [NOTE] Tasks 2.5 and 2.6 form a large red-suite window
+### [NOTE] Task 2.8 re-greps docs already confirmed clean
 
-- Both tasks have effort 3 and commit together: six module moves, the registry move, `read_listing`, CLI rewiring, four test moves and the boundary test.
-- This is reasonable for an unavoidable atomic migration, and the file says why. The risk is a junior stuck mid-way with nothing committed.
-- If it seems too large, 2.5 could land `core.py` and the registry types first, using a temporary adapter. That would add complexity, so I would only do it if the PM wants smaller checkpoints.
+The Context Summary records no contract-doc references to the moved paths (grep, 20261017). Task 2.8 runs the grep again. That is cheap and safe, since files may have changed, so I'd leave it.
 
-### [NOTE] Task-level additions go beyond the design but are justified
+### [PASS] Section 1–3 coverage of the slice design
 
-- `FlagOption`, the `inspection/listing.py` types split, and `tests/inspection_harness.py` are not in the slice design. Each is documented with a reason.
-- They trace to the design's "What changes shape" (options gaining a `name`), the import-cycle problem, and the shared seeded store for the baseline and parity tests.
-- Task 2.2's "both or neither row function raises `ValueError`" test assumes `Listing` already has that validation. The design does not require it, so confirm it exists, or drop the assertion if it would mean adding new behavior.
+- **Migration byte-identical gate:** Tasks 1.3 and 2.8 cover it, including `--help`, table and `--json` output.
+- **Inspection layering rule:** Task 2.7 covers it.
+- **`discover_project_ids` and `change_line` moves:** Tasks 2.3 and 2.4.
+- **`read_transaction()` and `change_head()`:** Tasks 3.1 and 3.2.
+- **Shared-snapshot test for rows and `as_of_seq`:** Task 3.4.
+- **Prerequisite check that 107 and 108 are merged:** Task 1.1.
+- **Writer-guard unchanged:** confirmed in Task 2.7.
 
-### [NOTE] Step detail is heavy but mostly traceable
+### [PASS] Test-with pattern and commit distribution
 
-- Task 1.3 prescribes shell mechanics such as `mktemp`, and Task 3.1 prescribes the `BEGIN`/`ROLLBACK` handling and constant names.
-- Most of this follows from verified facts in the Context Summary, such as `sqlite3` not opening a transaction for a `SELECT`. It is acceptable for a junior-AI audience.
-- The three-file split fits this slice's size, at 16 tasks in this file alone, so I am not flagging it as overweight.
+Each implementation task is followed immediately by its tests (2.1→2.2, 3.1→3.2, 3.3→3.4). Deferred commits are explicitly paired. Commits land at 1.2, 2.2, 2.3, 2.4, 2.6, 2.7, 3.2 and 3.4, so nothing is batched at the end. Dependencies are linear, with no cycles.
+
+### [PASS] Load test and CI gating exist in later files
+
+- **Load test:** the slice restates the delivery-latency NFR (p95 ≤ 1 s). Task file 3 creates `tests/load/test_serve_load.py` for it.
+- **CI gating:** file 3 states that CI gates it with no workflow change, because the `Load tests` step already runs `uv run pytest tests/load`. It tells the implementer to confirm that step is still there. `.github/workflows/ci.yml` exists, so the explicit-gating requirement is met.
+- **Contract docs:** the four contract-doc deltas and `CHANGELOG` are in file 3.
+
+### [PASS] Open PM item is flagged and scoped
+
+The slice design contradicts itself about where `ServeRefusedError` is mapped to an exit code. The task file names the conflict, recommends a resolution, and gates only Task 8.1 on the PM's answer, so Sections 1–7 are not blocked.
 
 ### Run Digest
 
-- Response length: 5468 chars
+- Response length: 5706 chars
 - Response is newline-free: no
-- Tool calls made: 7
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -127,13 +142,13 @@ findings:
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 8
-- Tokens — prompt / cached / cache write / completion / reasoning: 366367 / 270025 / 96332 / 6163 / not computed
+- Turns: 6
+- Tokens — prompt / cached / cache write / completion / reasoning: 192381 / 97087 / 95288 / 5508 / not computed
 - Duration: 57.8 s
-- Cost: $0.47 (provider)
+- Cost: $0.45 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9
