@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20261015
+dateUpdated: 20261016
 status: complete
 ---
 
@@ -459,7 +459,7 @@ the invariant test, which fails until all three exist.
 
 | Vocabulary | Members |
 | --- | --- |
-| `ChangeKind` | `node_created`, `node_status_changed`, `verdict_recorded`, `message_posted`, `review_detected`, `check_recorded` (slice 107) |
+| `ChangeKind` | `node_created`, `node_status_changed`, `verdict_recorded`, `message_posted`, `review_detected`, `check_recorded` (slice 107), `cf_project_changed` (slice 108) |
 | `DetectionOutcome` | `baseline`, `ingested`, `unattributed`, `unparseable`, `runner_issued` |
 
 `SILENT_OUTCOMES` (`baseline`, `runner_issued`) are the outcomes that emit no
@@ -549,7 +549,50 @@ work through a read-only handle.
 
 Check results and progress records are never deleted in this slice.
 
-## Writer model
+## Context Forge links and snapshots
+
+*Added by slice 108. Schema version 8 (migration `008`: `cf_links`,
+`cf_snapshots`, and the `changes_cf_project_changed` trigger).*
+
+What a snapshot means, the outcomes, and the projection are
+[`context-forge-contract.md`](context-forge-contract.md)'s subject; this section
+lists only what the store offers. The store reads no file, asks nothing of
+Context Forge, and imports nothing from `amoeba.upstream`: `state` and `changed`
+are plain JSON it stores and returns without interpreting.
+
+### Vocabularies
+
+| Vocabulary | Members |
+| --- | --- |
+| `CFSnapshotOutcome` | `observed`, `unreadable`, `unrecognized`, `missing` |
+
+`SubmissionKind` gains `link_cf_project`; `ChangeKind` gains `cf_project_changed`.
+
+### Types
+
+`CFLink` (`project_id, cf_project_id, linked_at`), `CFSnapshotInput` and
+`CFSnapshot` (`project_id, cf_project_id, outcome, state, changed, detail,
+cf_updated_at, cf_version_label, observed_at`; a recorded snapshot adds `id`),
+all frozen. `state` and `changed` are set exactly when `outcome` is `observed`,
+`detail` exactly when it is not.
+
+### Methods
+
+| Method | Effect |
+| --- | --- |
+| `cf_links(project_id)` | Links, in the order they were linked. |
+| `cf_snapshots(project_id)` | Snapshots in id order. |
+| `latest_cf_snapshots(project_id, cf_project_id)` | `(latest, latest observed)`; either may be `None`, and they are the same row when the latest is `observed`. |
+| `record_cf_snapshot(CFSnapshotInput)` | In-process only. One insert in one transaction; the trigger appends a `cf_project_changed` change. `observed_at` is the caller's. An outcome that disagrees with its state, changes, and detail raises `ValueError` and writes nothing. |
+
+Links are written only through the `link_cf_project` submission (insert, or no-op
+if already linked). `cf_links`, `cf_snapshots`, and `latest_cf_snapshots` work
+through a read-only handle.
+
+### Retention
+
+Snapshots are never deleted in this slice. A link is permanent (GitHub issue #7).
+
 
 **This library does not enforce single-writer on its own.** WAL journal mode is
 set at open, which permits concurrent readers alongside one writer. Two

@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: resident-process-and-recovery
 dateCreated: 20260921
-dateUpdated: 20261015
+dateUpdated: 20261016
 status: complete
 ---
 
@@ -122,7 +122,7 @@ Tenants are ticked in registration order. When no tenant reports work, the loop
 waits on the stop event for `idle_interval_seconds` — it does not busy-loop, and
 the wait ends the moment stop is requested.
 
-**`amoeba start` registers two tenants, in this order** (`build_tenants` in
+**`amoeba start` registers three tenants, in this order** (`build_tenants` in
 `cli/lifecycle.py`):
 
 1. `InboxTenant` (slice 103). It drains the inbox — see
@@ -131,6 +131,8 @@ the wait ends the moment stop is requested.
    backlog that accumulated while the process was down — `watch_reviews`
    submissions included — drains ahead of any later tenant's work.
 2. `ReviewDetectionTenant` (slice 106). See "Review detection" below.
+3. `CFWatchTenant` (slice 108). See "Context Forge watch" below. After the inbox,
+   so a `link_cf_project` submission is applied before the tenant looks.
 
 What a tenant may use on `host`:
 
@@ -246,6 +248,26 @@ record a row is sick.
 `deferred`, `ok`. `amoeba inspect detections --project P [--outcome O]` shows
 the ledger, with `recorded_since` true once a verdict with the row's record id
 exists.
+
+## Context Forge watch
+
+*Added by slice 108.* `CFWatchTenant` notices Context Forge pointer moves by
+taking one `stat` of CF's `projects.json` per `cf_scan_interval_seconds`, and
+records a snapshot per linked project whose watched fields changed. What it
+records, the outcomes, and the file's shape are
+[`context-forge-contract.md`](context-forge-contract.md)'s subject. The process
+semantics are the same as review detection's: a file that cannot be read is
+logged once going bad and once recovering and never stops the process; a store
+that cannot record a snapshot is logged at ERROR and stops it; no tick starts a
+subprocess. `cf --version` is captured once at start-up with `cf_timeout_seconds`.
+
+| Setting | Flag | Default | Meaning |
+| --- | --- | --- | --- |
+| `cf_data_dir` | `--cf-data-dir` | `~/.config/context-forge` | Directory holding `projects.json`. `CONTEXT_FORGE_DATA_DIR` is not read. |
+| `cf_scan_interval_seconds` | none | 1.0 | Seconds between checks. |
+
+`amoeba inspect cf-links --project P` and `amoeba inspect cf-snapshots --project
+P` show the links and the recorded snapshots.
 
 ## Lifecycle failure modes
 
@@ -376,7 +398,8 @@ provenance and never parsed, ordered, or branched on.
 
 `start` exposes every loop-governing `ProcessSettings` tunable as a flag:
 `--idle-interval`, `--shutdown-grace`, `--clock-tolerance`, `--cf-timeout`,
-`--sq-runs-dir`, `--inbox-batch-size`, `--inbox-max-attempts`. `stop` exposes the
+`--sq-runs-dir`, `--inbox-batch-size`, `--inbox-max-attempts`,
+`--review-scan-interval`, `--sq-timeout`, `--cf-data-dir`. `stop` exposes the
 one tunable it consumes: `--stop-timeout`.
 
 ### Exit codes

@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 108: schema version 8 (migration `008`) — `cf_links` and `cf_snapshots`, a `cf_project_changed` change kind, and the `CFSnapshotOutcome` word list (`observed`, `unreadable`, `unrecognized`, `missing`); store methods `cf_links`, `cf_snapshots`, `latest_cf_snapshots`, `record_cf_snapshot`.
+- Slice 108: `amoeba.upstream.context_forge` — a parser for CF's `projects.json` into a watched projection of pointer fields (project and worktree level) and a pure diff; tested against a real captured file.
+- Slice 108: `CFWatchTenant`, registered third by `amoeba start`: a `stat` check of `projects.json` once per second records one snapshot, and one `cf_project_changed` feed entry, per linked project whose pointers moved; failures are recorded once per transition. `start` flag `--cf-data-dir` (`CONTEXT_FORGE_DATA_DIR` is not read).
+- Slice 108: the `link_cf_project` submission kind and `amoeba submit link-cf-project`; `amoeba inspect cf-links` and `cf-snapshots`; `docs/context-forge-contract.md`.
 - Slice 107: judge samples — a verdict with a `judge_invocation_id` (`VerdictInput`, the `verdict` payload, `to_verdict_input`, `amoeba ingest review --judge-invocation-id`, `amoeba submit verdict`); `verdicts(..., judge_invocation_id=)`; schema version 7 (migration `007`).
 - Slice 107: `calibration` and `amoeba inspect calibration`, a descriptive per-`(review_type, model)` report of judge samples; it is not agreement evidence (GitHub issues #4, #6).
 - Slice 107: check results — `record_check`, `check`, `checks`, the `check` submission kind and `amoeba submit check`, `amoeba inspect checks`, and the `check_recorded` change kind; standing is derived (`vacuous` when `examined_count` is 0, never `passed`).

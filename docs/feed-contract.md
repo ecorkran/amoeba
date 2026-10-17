@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: outbound-change-feed-and-detection-of-external-work
 dateCreated: 20261015
-dateUpdated: 20261015
+dateUpdated: 20261016
 status: complete
 ---
 
@@ -64,6 +64,7 @@ a default.
 | `message_posted` | the node, or null | message id | `channel` (`intent` or `escalation`) |
 | `review_detected` | the node, or null | detection ledger id | `outcome`, `path` |
 | `check_recorded` | the node | check id | `name`, `outcome`, `examined_count` (integer or null) |
+| `cf_project_changed` | null | snapshot id | `cf_project_id`, `outcome`, `changed` (a list of field changes, or null for a failure) |
 
 - `node_created` carries the initial status, so replaying from `seq` 0 rebuilds
   every node's current status without reading the store.
@@ -75,6 +76,10 @@ a default.
   `judge_invocation_id` either; read the record by `subject_id`.
 - `check_recorded` carries no standing, for the same reason: `vacuous` is
   computed on read from `examined_count`. Read the check from the store.
+- `cf_project_changed` is emitted for every Context Forge snapshot, including a
+  failure (`changed` null; read `detail` by `subject_id`) and a recovery with
+  `changed: []`. Its payload is defined in
+  [`context-forge-contract.md`](context-forge-contract.md#the-feed-entry).
 - `review_detected` is emitted for the `ingested`, `unattributed`, and
   `unparseable` outcomes. `baseline` and `runner_issued` ledger rows emit
   nothing.
@@ -83,7 +88,8 @@ a default.
 
 ## Coverage
 
-The feed announces node, verdict, message, detection, and check changes only. It does
+The feed announces node, verdict, message, detection, check, and Context Forge
+snapshot changes only. It does
 **not** announce:
 
 - progress records (write-only; no reader yet);

@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: durable-inbox-and-message-queue
 dateCreated: 20260923
-dateUpdated: 20261015
+dateUpdated: 20261016
 status: complete
 ---
 
@@ -91,6 +91,7 @@ invalid payload is refused before anything is written.
 | `intent` | `body` (a JSON object), optional `node_id` | One unacknowledged row on the `intent` channel, carrying the submission id. | `node_id` is given and is not a node of this project. |
 | `verdict` | A review result: `VerdictInput`'s fields except `id`, with provenance flattened — see [`evidence-contract.md`](evidence-contract.md#through-the-inbox) | One verdict record, whose id is the submission id, and one observation per finding. | The node is not in this project; a provider failure carries findings or a verdict other than `UNKNOWN`; `upstream_version` is empty; a judge sample (optional `judge_invocation_id`) is on another node or review type than the invocation's earlier samples. An unknown word in an enum field, or an omitted `derivation`, `fallback_used`, or `findings_parsed`, fails validation and is quarantined instead. |
 | `check` | A mechanical check result: `node_id`, `name`, `outcome` (`passed`, `failed`, `errored`), `examined_count` (integer or `null`; **required** — `null` says "not reported"), `upstream`, `upstream_version`, `source` (`RecordSource`), and optional `examined` (JSON object), `baseline_ref`, `source_path` — see [`evidence-contract.md`](evidence-contract.md#checks) | One check record, whose id is the submission id. Its standing (`vacuous` when `examined_count` is 0) is computed on read. | The node is not in this project; `examined_count` is negative; `upstream_version` is empty. An unknown `outcome` or `source`, or an omitted `examined_count`, fails validation and is quarantined instead. |
+| `link_cf_project` | `cf_project_id` (a non-empty string) | Links the project to that Context Forge project, so the watch records its pointer moves. Linking again is a no-op; several CF projects per Amoeba project, and several Amoeba projects per CF project, are allowed. The store does not check the id exists in CF: the first check records `missing` if it does not. See [`context-forge-contract.md`](context-forge-contract.md). | Never. An empty `cf_project_id` fails validation and is quarantined. |
 | `watch_reviews` | `reviews_dir` (an absolute path), `active` (boolean) | Registers the directory for review detection, or sets whether it is watched. A first registration leaves it un-baselined; the detection tenant takes the baseline, so files already there are never ingested. Deactivating and reactivating never re-baselines: files that arrived while inactive are detected. Paths are stored as given, with no symlink resolution. See [`process-contract.md`](process-contract.md#review-detection). | Never. A relative `reviews_dir` fails validation and is quarantined. |
 
 **A resolution targets a blocked state, never a node.** If a node was resolved
