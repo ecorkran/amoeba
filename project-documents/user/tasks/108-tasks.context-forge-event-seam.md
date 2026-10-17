@@ -469,7 +469,6 @@ status: not_started
 - [ ] Record the walkthrough output (as 107 did) and correct the LLD draft wherever reality differs, flagging each correction to the PM
 - [ ] Clean up with `uv run amoeba stop; rm -rf "$AMOEBA_STORE_DIR" "$CFDIR"`
 - [ ] Delegate checklist updates to the `task-checker` agent; set this file's `status` to `complete`
-- [ ] Do not merge. Report that the branch is ready for code review
 
 **Success Criteria**:
 - [ ] Suite, `ruff`, `pyright` clean; every walkthrough step matches its expected result, or the difference is reported
