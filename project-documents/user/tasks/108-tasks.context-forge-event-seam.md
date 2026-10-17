@@ -7,7 +7,7 @@ dependencies: [101, 102, 103, 106, 107]
 projectState: Slices 101–107 are merged (store schema 7, tenant seam and `ProcessSettings`, listing registry, inbox kinds through `check`, 106's change feed with `ChangeKind` and the feed invariant test, 107's migration 007). No Context Forge file watcher, `cf_links`/`cf_snapshots` tables, or `link_cf_project` kind exists. This slice adds migration 008, the `amoeba.upstream.context_forge` parser and diff, `CFWatchTenant`, the `link_cf_project` kind, `ChangeKind.CF_PROJECT_CHANGED`, two listings, two settings, and `docs/context-forge-contract.md`.
 dateCreated: 20261016
 dateUpdated: 20261016
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -292,18 +292,18 @@ status: in_progress
 **Objective**: One `tick` per the LLD "Data Flow" algorithm and D1, D3, D4, D9.
 
 **Steps**:
-- [ ] Read `process/review_detection.py` first and follow its structure: a small host protocol (settings, `stop_requested`, `project_ids`, `store_for`), injected clock, constructor takes `version_label`, injected data directory/file path, `name` property
-- [ ] Add `cf_scan_interval_seconds` (1.0, with docstring entry) to `ProcessSettings` in `process/settings.py`; no flag
-- [ ] Create `process/cf_watch.py`. `tick` does nothing until `cf_scan_interval_seconds` has passed since the last check. Then: gather links across open projects; `stat` the file to `(st_ino, st_size, st_mtime_ns)` or the OS error; if `(signature, links)` equals the remembered key, return with no read
-- [ ] Otherwise read the bytes (an OS error means every link is `unreadable` with detail `{error class}: {strerror}`), `parse` once per link, load `latest_cf_snapshots`, and apply the LLD rules: for a state, diff against the latest `observed` row and record when there are changes **or** the latest row was not `observed` (then `changed: []` if nothing moved); for a failure, record only when the outcome or detail differs from the latest row. The remembered signature is the one taken before the read (D1)
-- [ ] Remember `(signature, links)` only if every record succeeded. A store exception while recording is logged with `logger.exception` at ERROR and re-raised (D4). A broken CF file is not an exception: one ERROR log when the file goes bad, one INFO when it recovers, the process keeps running
-- [ ] Map the parser's outcome strings to `CFSnapshotOutcome` in this module (the one place that knows both). Record `cf_updated_at` and the tenant's `version_label` on each row. No subprocess is started in `tick`
-- [ ] Log the resolved file path at INFO on first tick (D7)
-- [ ] Keep functions near 50 lines: split the per-link logic from the file read
+- [x] Read `process/review_detection.py` first and follow its structure: a small host protocol (settings, `stop_requested`, `project_ids`, `store_for`), injected clock, constructor takes `version_label`, injected data directory/file path, `name` property
+- [x] Add `cf_scan_interval_seconds` (1.0, with docstring entry) to `ProcessSettings` in `process/settings.py`; no flag
+- [x] Create `process/cf_watch.py`. `tick` does nothing until `cf_scan_interval_seconds` has passed since the last check. Then: gather links across open projects; `stat` the file to `(st_ino, st_size, st_mtime_ns)` or the OS error; if `(signature, links)` equals the remembered key, return with no read
+- [x] Otherwise read the bytes (an OS error means every link is `unreadable` with detail `{error class}: {strerror}`), `parse` once per link, load `latest_cf_snapshots`, and apply the LLD rules: for a state, diff against the latest `observed` row and record when there are changes **or** the latest row was not `observed` (then `changed: []` if nothing moved); for a failure, record only when the outcome or detail differs from the latest row. The remembered signature is the one taken before the read (D1)
+- [x] Remember `(signature, links)` only if every record succeeded. A store exception while recording is logged with `logger.exception` at ERROR and re-raised (D4). A broken CF file is not an exception: one ERROR log when the file goes bad, one INFO when it recovers, the process keeps running
+- [x] Map the parser's outcome strings to `CFSnapshotOutcome` in this module (the one place that knows both). Record `cf_updated_at` and the tenant's `version_label` on each row. No subprocess is started in `tick`
+- [x] Log the resolved file path at INFO on first tick (D7)
+- [x] Keep functions near 50 lines: split the per-link logic from the file read
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Tasks 5.2 and 5.3
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Tasks 5.2 and 5.3
 
 **Files to Create**: `src/amoeba/process/cf_watch.py`
 
@@ -316,18 +316,18 @@ status: in_progress
 **Objective**: Pin the success-path behavior with an injected clock and a scratch directory; no `cf` on PATH.
 
 **Steps**:
-- [ ] Create `tests/process/test_cf_watch.py`, reusing `tests/process/conftest.py` and `detection_harness.py` patterns. The data file is written by temp-file-and-rename, as CF does, copied from `tests/fixtures/cf/projects.json`
-- [ ] First check records one `observed` snapshot listing every present projected field as added (including the `default` worktree's `activeSlice`) and one `cf_project_changed` change
-- [ ] Rewrite with the `default` worktree's `developmentPhase` moved: exactly one new snapshot whose `changed` names that worktree id and field with `from` and `to`. A project-level change has `worktree_id` None
-- [ ] Rewrites that touch only another project, only `customData`, or only `updatedAt`: no new snapshot
-- [ ] Interval gating: after the file is rewritten, a tick before `cf_scan_interval_seconds` has passed (by the injected clock) records nothing; advancing the clock past it records the change
-- [ ] Unchanged signature and link set: nothing recorded. A new link with an unchanged file is checked. Re-checking an unchanged link writes nothing
-- [ ] Two Amoeba projects linking the same CF id each record their own snapshots
-- [ ] Restart: a new tenant instance over the same store, after the file changed while "down", records one snapshot per link on its first tick, and none when nothing changed
+- [x] Create `tests/process/test_cf_watch.py`, reusing `tests/process/conftest.py` and `detection_harness.py` patterns. The data file is written by temp-file-and-rename, as CF does, copied from `tests/fixtures/cf/projects.json`
+- [x] First check records one `observed` snapshot listing every present projected field as added (including the `default` worktree's `activeSlice`) and one `cf_project_changed` change
+- [x] Rewrite with the `default` worktree's `developmentPhase` moved: exactly one new snapshot whose `changed` names that worktree id and field with `from` and `to`. A project-level change has `worktree_id` None
+- [x] Rewrites that touch only another project, only `customData`, or only `updatedAt`: no new snapshot
+- [x] Interval gating: after the file is rewritten, a tick before `cf_scan_interval_seconds` has passed (by the injected clock) records nothing; advancing the clock past it records the change
+- [x] Unchanged signature and link set: nothing recorded. A new link with an unchanged file is checked. Re-checking an unchanged link writes nothing
+- [x] Two Amoeba projects linking the same CF id each record their own snapshots
+- [x] Restart: a new tenant instance over the same store, after the file changed while "down", records one snapshot per link on its first tick, and none when nothing changed
 
 **Success Criteria**:
-- [ ] New tests pass; full suite, `ruff`, `pyright` pass
-- [ ] Committed with Task 5.3
+- [x] New tests pass; full suite, `ruff`, `pyright` pass
+- [x] Committed with Task 5.3
 
 **Files to Create**: `tests/process/test_cf_watch.py`
 
@@ -340,17 +340,17 @@ status: in_progress
 **Objective**: Failures are outcomes recorded once per transition (LLD D4 and Functional Requirements).
 
 **Steps**:
-- [ ] Create `tests/process/test_cf_watch_failures.py`
-- [ ] File absent and permission denied → `unreadable` for every link, detail `{error class}: {strerror}`; invalid JSON and `{}` → `unrecognized` for every link; unknown id → `missing` for that link only; malformed `worktrees` in the linked entry → `unrecognized` for that link, and the same defect in another entry leaves the link `observed`
-- [ ] Several intervals with the file still broken record one row per link, not one per interval. A changed detail records a new row
-- [ ] Recovery: the next good read records `observed` with `changed: []` when nothing moved, and the diff after recovery is against the last `observed` row, not the failure row
-- [ ] Log assertions: one ERROR when the file goes bad, one INFO when it recovers; the tick returns normally
-- [ ] A store that raises on `record_cf_snapshot`: the error is logged at ERROR and re-raised, and the remembered key is not updated (the next tick tries again)
-- [ ] Assert `tick` starts no subprocess (patch `subprocess` to fail if called)
+- [x] Create `tests/process/test_cf_watch_failures.py`
+- [x] File absent and permission denied → `unreadable` for every link, detail `{error class}: {strerror}`; invalid JSON and `{}` → `unrecognized` for every link; unknown id → `missing` for that link only; malformed `worktrees` in the linked entry → `unrecognized` for that link, and the same defect in another entry leaves the link `observed`
+- [x] Several intervals with the file still broken record one row per link, not one per interval. A changed detail records a new row
+- [x] Recovery: the next good read records `observed` with `changed: []` when nothing moved, and the diff after recovery is against the last `observed` row, not the failure row
+- [x] Log assertions: one ERROR when the file goes bad, one INFO when it recovers; the tick returns normally
+- [x] A store that raises on `record_cf_snapshot`: the error is logged at ERROR and re-raised, and the remembered key is not updated (the next tick tries again)
+- [x] Assert `tick` starts no subprocess (patch `subprocess` to fail if called)
 
 **Success Criteria**:
-- [ ] New tests pass; full suite, `ruff`, `pyright` pass
-- [ ] Commit (with Tasks 5.1 and 5.2), e.g. `feat(process): add CFWatchTenant for projects.json changes`
+- [x] New tests pass; full suite, `ruff`, `pyright` pass
+- [x] Commit (with Tasks 5.1 and 5.2), e.g. `feat(process): add CFWatchTenant for projects.json changes`
 
 **Files to Create**: `tests/process/test_cf_watch_failures.py`
 
@@ -365,13 +365,13 @@ status: in_progress
 **Objective**: `cf_data_dir` with a flag (LLD D7).
 
 **Steps**:
-- [ ] `process/settings.py`: `DEFAULT_CF_DATA_DIR = ~/.config/context-forge`; `ProcessSettings.cf_data_dir`, with a docstring entry. No environment read (`cf_scan_interval_seconds` was added in Task 5.1)
-- [ ] `cli/settings_flags.py`: `--cf-data-dir PATH`, default taken from `ProcessSettings`, none repeated; map it back into `ProcessSettings`. No flag for the interval
-- [ ] Update any test that enumerates settings or `start` flags
+- [x] `process/settings.py`: `DEFAULT_CF_DATA_DIR = ~/.config/context-forge`; `ProcessSettings.cf_data_dir`, with a docstring entry. No environment read (`cf_scan_interval_seconds` was added in Task 5.1)
+- [x] `cli/settings_flags.py`: `--cf-data-dir PATH`, default taken from `ProcessSettings`, none repeated; map it back into `ProcessSettings`. No flag for the interval
+- [x] Update any test that enumerates settings or `start` flags
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 6.2
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 6.2
 
 **Files to Modify**: `process/settings.py`, `cli/settings_flags.py`
 
@@ -384,13 +384,13 @@ status: in_progress
 **Objective**: Register `CFWatchTenant` third in `build_tenants` (LLD D9).
 
 **Steps**:
-- [ ] Read `process/version_label.py` and `process/observers/cf_readback.capture_version_label`; reuse the existing capture with its explicit unavailable marker, do not write a new one
-- [ ] In `cli/lifecycle.py` `build_tenants`, capture the CF label before the loop and register `CFWatchTenant(version_label=..., data_file=settings.cf_data_dir / PROJECTS_FILE_NAME)` after `ReviewDetectionTenant`, so the inbox drains first
-- [ ] Update tests that pin the tenant set or order (`tests/test_cli_lifecycle.py`, `tests/process/test_review_detection_wiring.py` as a model); add a test that `cf --version` is captured once in `build_tenants`, and that an unavailable `cf` yields the marker and not a crash
+- [x] Read `process/version_label.py` and `process/observers/cf_readback.capture_version_label`; reuse the existing capture with its explicit unavailable marker, do not write a new one
+- [x] In `cli/lifecycle.py` `build_tenants`, capture the CF label before the loop and register `CFWatchTenant(version_label=..., data_file=settings.cf_data_dir / PROJECTS_FILE_NAME)` after `ReviewDetectionTenant`, so the inbox drains first
+- [x] Update tests that pin the tenant set or order (`tests/test_cli_lifecycle.py`, `tests/process/test_review_detection_wiring.py` as a model); add a test that `cf --version` is captured once in `build_tenants`, and that an unavailable `cf` yields the marker and not a crash
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass; wiring tests pass
-- [ ] Commit (with Task 6.1), e.g. `feat(cli): add --cf-data-dir and register CFWatchTenant`
+- [x] `ruff`, `pyright` pass; wiring tests pass
+- [x] Commit (with Task 6.1), e.g. `feat(cli): add --cf-data-dir and register CFWatchTenant`
 
 **Files to Modify**: `cli/lifecycle.py`, tests named above
 
@@ -403,14 +403,14 @@ status: in_progress
 **Objective**: The two listings of the LLD "CLI" table, each taking `--project` only.
 
 **Steps**:
-- [ ] Read `cli/inspect_checks.py` and its test `tests/cli/test_inspect_checks.py`. Create `cli/inspect_cf.py` with row functions; append two `Listing` entries to `LISTINGS` in `cli/inspect.py` (one line each plus the import)
-- [ ] `cf-links`: columns `cf_project_id, linked_at`. `cf-snapshots`: `id, observed_at, cf_project_id, outcome, changed, detail, cf_updated_at`, where `changed` is summarized as field names in text mode and full in `--json`
-- [ ] Create `tests/cli/test_inspect_cf.py`: empty project; rows after links and each outcome; text vs `--json`; no other flags accepted
-- [ ] Update the test that pins the listing set (`tests/inbox/test_listings.py`, `tests/test_cli_inspect.py`)
+- [x] Read `cli/inspect_checks.py` and its test `tests/cli/test_inspect_checks.py`. Create `cli/inspect_cf.py` with row functions; append two `Listing` entries to `LISTINGS` in `cli/inspect.py` (one line each plus the import)
+- [x] `cf-links`: columns `cf_project_id, linked_at`. `cf-snapshots`: `id, observed_at, cf_project_id, outcome, changed, detail, cf_updated_at`, where `changed` is summarized as field names in text mode and full in `--json`
+- [x] Create `tests/cli/test_inspect_cf.py`: empty project; rows after links and each outcome; text vs `--json`; no other flags accepted
+- [x] Update the test that pins the listing set (`tests/inbox/test_listings.py`, `tests/test_cli_inspect.py`)
 
 **Success Criteria**:
-- [ ] New tests pass; full suite, `ruff`, `pyright` pass
-- [ ] Commit, e.g. `feat(cli): add inspect cf-links and cf-snapshots`
+- [x] New tests pass; full suite, `ruff`, `pyright` pass
+- [x] Commit, e.g. `feat(cli): add inspect cf-links and cf-snapshots`
 
 **Files to Create**: `cli/inspect_cf.py`, `tests/cli/test_inspect_cf.py`
 **Files to Modify**: `cli/inspect.py`, listing-set tests
@@ -424,14 +424,14 @@ status: in_progress
 **Objective**: The LLD "Integration Requirements" test, with subprocesses and a scratch CF data directory.
 
 **Steps**:
-- [ ] Read `tests/cli/test_detection_end_to_end.py` and `tests/detection_e2e_harness.py`; build `tests/cli/test_cf_watch_end_to_end.py` on the same harness, extending it only where needed
-- [ ] Steps per the LLD: create a project and link the fixture's amoeba entry; start a follower, then the process with `--cf-data-dir`; rewrite the file by temp-file-and-rename with one moved pointer; `kill -9` the process, rewrite again, start it
-- [ ] Assert the follower output and `inspect cf-snapshots` agree, with one change per rewrite and nothing recorded twice. The test needs no `cf` on PATH (the `cf --version` marker path is exercised)
-- [ ] Keep it deterministic: poll with a bounded timeout, no fixed sleeps as assertions
+- [x] Read `tests/cli/test_detection_end_to_end.py` and `tests/detection_e2e_harness.py`; build `tests/cli/test_cf_watch_end_to_end.py` on the same harness, extending it only where needed
+- [x] Steps per the LLD: create a project and link the fixture's amoeba entry; start a follower, then the process with `--cf-data-dir`; rewrite the file by temp-file-and-rename with one moved pointer; `kill -9` the process, rewrite again, start it
+- [x] Assert the follower output and `inspect cf-snapshots` agree, with one change per rewrite and nothing recorded twice. The test needs no `cf` on PATH (the `cf --version` marker path is exercised)
+- [x] Keep it deterministic: poll with a bounded timeout, no fixed sleeps as assertions
 
 **Success Criteria**:
-- [ ] Test passes repeatedly (run it 3 times); full suite passes
-- [ ] Commit, e.g. `test: end-to-end CF watch across a kill -9 restart`
+- [x] Test passes repeatedly (run it 3 times); full suite passes
+- [x] Commit, e.g. `test: end-to-end CF watch across a kill -9 restart`
 
 **Files to Create**: `tests/cli/test_cf_watch_end_to_end.py`
 
@@ -444,13 +444,13 @@ status: in_progress
 **Objective**: Document the observed shape and the deltas, without restating 106's trigger convention or 102's process semantics (LLD Technical Scope, last Included bullet).
 
 **Steps**:
-- [ ] Read `file-naming-conventions` for frontmatter. Create `docs/context-forge-contract.md`: the observed shape (dated, with the CF version it was observed on, as an observation not a dependency); the projection and why `updatedAt`/`customData` are excluded; the four outcomes and their scope; the change payload; D3's rules (first snapshot, recovery row); D7's directory rule; D8 (a snapshot claims no author; match a Runner write through `cf_updated_at`); D9 (label captured at start-up only); the in-place-write noise note
-- [ ] Add only deltas to `docs/store-contract.md` (tables, methods, `CFSnapshotOutcome`), `docs/inbox-contract.md` (the kind and payload), `docs/feed-contract.md` (the `cf_project_changed` kind and payload), `docs/process-contract.md` (the tenant, two settings, flag). Add a `CHANGELOG.md` entry in its existing style
-- [ ] `docs/store-contract.md` is already large: if the delta pushes a file past its limits, ask the PM before splitting
+- [x] Read `file-naming-conventions` for frontmatter. Create `docs/context-forge-contract.md`: the observed shape (dated, with the CF version it was observed on, as an observation not a dependency); the projection and why `updatedAt`/`customData` are excluded; the four outcomes and their scope; the change payload; D3's rules (first snapshot, recovery row); D7's directory rule; D8 (a snapshot claims no author; match a Runner write through `cf_updated_at`); D9 (label captured at start-up only); the in-place-write noise note
+- [x] Add only deltas to `docs/store-contract.md` (tables, methods, `CFSnapshotOutcome`), `docs/inbox-contract.md` (the kind and payload), `docs/feed-contract.md` (the `cf_project_changed` kind and payload), `docs/process-contract.md` (the tenant, two settings, flag). Add a `CHANGELOG.md` entry in its existing style
+- [x] `docs/store-contract.md` is already large: if the delta pushes a file past its limits, ask the PM before splitting
 
 **Success Criteria**:
-- [ ] Docs match shipped names (grep each documented name in `src/`); no restatement of 106/102 material
-- [ ] Commit, e.g. `docs: add Context Forge contract and 108 deltas`
+- [x] Docs match shipped names (grep each documented name in `src/`); no restatement of 106/102 material
+- [x] Commit, e.g. `docs: add Context Forge contract and 108 deltas`
 
 **Files to Create**: `docs/context-forge-contract.md`
 **Files to Modify**: the four contract docs, `CHANGELOG.md`
@@ -464,14 +464,14 @@ status: in_progress
 **Objective**: Confirm the slice against the LLD "Verification Walkthrough" with the real `cf`, and leave the branch clean for review.
 
 **Steps**:
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright`, once each
-- [ ] Run walkthrough steps 1–5 in bash against a scratch store and a scratch CF directory only (never the PM's real `projects.json`). First confirm which level (worktree or project) `cf set` writes to from the current directory, and adjust the expected `worktree_id` accordingly. If `cf` is not on PATH, stop and tell the PM
-- [ ] Record the walkthrough output (as 107 did) and correct the LLD draft wherever reality differs, flagging each correction to the PM
-- [ ] Clean up with `uv run amoeba stop; rm -rf "$AMOEBA_STORE_DIR" "$CFDIR"`
-- [ ] Delegate checklist updates to the `task-checker` agent; set this file's `status` to `complete`
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright`, once each
+- [x] Run walkthrough steps 1–5 in bash against a scratch store and a scratch CF directory only (never the PM's real `projects.json`). First confirm which level (worktree or project) `cf set` writes to from the current directory, and adjust the expected `worktree_id` accordingly. If `cf` is not on PATH, stop and tell the PM
+- [x] Record the walkthrough output (as 107 did) and correct the LLD draft wherever reality differs, flagging each correction to the PM
+- [x] Clean up with `uv run amoeba stop; rm -rf "$AMOEBA_STORE_DIR" "$CFDIR"`
+- [x] Delegate checklist updates to the `task-checker` agent; set this file's `status` to `complete`
 
 **Success Criteria**:
-- [ ] Suite, `ruff`, `pyright` clean; every walkthrough step matches its expected result, or the difference is reported
-- [ ] Commit, e.g. `docs: record 108 walkthrough output`
+- [x] Suite, `ruff`, `pyright` clean; every walkthrough step matches its expected result, or the difference is reported
+- [x] Commit, e.g. `docs: record 108 walkthrough output`
 
 **Files to Modify**: `user/slices/108-slice.context-forge-event-seam.md` (walkthrough note), this task file

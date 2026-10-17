@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102, 103, 106, 107]
 interfaces: [109, 110]
 dateCreated: 20261015
-dateUpdated: 20261015
-status: not_started
+dateUpdated: 20261016
+status: complete
 ---
 
 # Slice Design: context-forge-event-seam
@@ -311,7 +311,7 @@ Migration `008_context_forge_snapshots.sql` sets `EXPECTED_SCHEMA_VERSION` to 8.
 
 ### Verification Walkthrough
 
-*Draft, to be confirmed at the end of Phase 6.* Run in **bash** from the repository root, against a scratch Amoeba store and a **scratch CF data directory**, so the PM's real `projects.json` is never written. `cf` must be on PATH (0.19.x). Which pointer `cf set` moves (worktree or project level) depends on the current directory; confirm the routing at implementation time.
+*Verified 2026-10-16 against `cf` 0.19.13, run from the repository root. Steps 1–5 ran against a scratch Amoeba store and a **scratch CF data directory**, so the PM's real `projects.json` was never written (its `amoeba` entry was unchanged afterwards).* Run in **bash** from the repository root. `cf` must be on PATH (0.19.x). Run from the repository root, `cf set -p ID` writes at **worktree level**, to the entry's `default` worktree ("on worktree context \"default\""); `--project-level` forces project level (`worktree_id: null`).
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"; CFDIR="$(mktemp -d)"
@@ -323,29 +323,30 @@ cf_scratch() { CONTEXT_FORGE_DATA_DIR="$CFDIR" cf "$@"; }
 1. **Link a CF project, and follow the feed.**
    ```bash
    uv run amoeba start --cf-data-dir "$CFDIR" &
-   uv run amoeba submit create-project --project demo --by pm
+   uv run amoeba submit create-project --project demo --by pm        # prints a submission id
+   uv run amoeba feed --project demo --follow                        # terminal 2
    uv run amoeba submit link-cf-project --project demo --by pm --cf-project-id "$CFID"
-   uv run amoeba feed --project demo --follow        # terminal 2
    ```
-   Within about a second, the follower prints one `cf_project_changed` with `outcome: observed`, and `changed` lists every projected field as added, including the default worktree's `activeSlice`.
+   Within about a second, the follower prints one `cf_project_changed` with `outcome: observed`. Its `changed` lists every present projected field as added (17 changes on the fixture), including the default worktree's `activeSlice`, `activeTaskFile`, and `developmentPhase`. The process logs the resolved `projects.json` path at INFO.
 2. **A CF client moves a pointer.**
    ```bash
    cf_scratch set -p "$CFID" phase "Phase 5: Task Breakdown"
    ```
-   One `cf_project_changed` appears, naming `developmentPhase` with `from` `Phase 4: Slice Design` and `to` `Phase 5: Task Breakdown`, on the default worktree's id (or with `worktree_id: null` if `cf` routed the write to the project level). `uv run amoeba inspect cf-snapshots --project demo` shows two rows.
+   One `cf_project_changed` appears. `cf set phase` also sets `instruction`, so `changed` names **two** fields on the default worktree's id: `developmentPhase` and `instruction`, each `from` `Phase 6: Implementation` (the fixture's value) and `to` `Phase 5: Task Breakdown`. `uv run amoeba inspect cf-snapshots --project demo` shows two rows; in the table, `changed_fields` reads `developmentPhase, instruction` (`--json` carries the full `changed`).
 3. **Unrelated writes are silent.** Change another project in the file, and an unread field of this one:
    ```bash
    OTHER=$(python3 -c 'import json,sys; print([p["id"] for p in json.load(open(sys.argv[1])) if p["name"]!="amoeba"][0])' "$CFDIR/projects.json")
-   cf_scratch set -p "$OTHER" instruction "elsewhere"
+   cf_scratch set -p "$OTHER" phase "Phase 2: Architecture"
+   cf_scratch set -p "$CFID" notes "an unread field"          # customData.additionalNotes
    ```
-   No new feed line, and no new snapshot.
+   No new feed line, and no new snapshot (still two rows). (`cf set instruction` accepts only the known phase names, so it cannot make free-text noise.)
 4. **Changes made while down.**
    ```bash
    uv run amoeba stop
    cf_scratch set -p "$CFID" phase "Phase 6: Implementation"
    uv run amoeba start --cf-data-dir "$CFDIR" &
    ```
-   The follower, which kept running, prints one change, from `Phase 5: Task Breakdown` to `Phase 6: Implementation`.
+   The follower, which kept running, prints one change, `developmentPhase` and `instruction` from `Phase 5: Task Breakdown` to `Phase 6: Implementation`.
 5. **Failures are recorded, not guessed.**
    ```bash
    uv run amoeba submit link-cf-project --project demo --by pm --cf-project-id project_does_not_exist; sleep 3
@@ -354,15 +355,17 @@ cf_scratch() { CONTEXT_FORGE_DATA_DIR="$CFDIR" cf "$@"; }
    mv "$CFDIR/keep.json" "$CFDIR/projects.json"; sleep 3
    uv run amoeba inspect cf-snapshots --project demo
    ```
-   Expected new rows, in order:
-   - `missing` for the bogus id.
+   Expected new rows (4–8 after the three above), in order:
+   - `missing` for the bogus id (`no project has id 'project_does_not_exist'`).
    - `unrecognized` (`top level is not an array`) for each of the two links. Only one per link, although several intervals passed.
-   - After the restore, `observed` with `changed: []` for `$CFID`, and `missing` again for the bogus id.
+   - After the restore, `observed` with empty `changed_fields` (`changed: []`) for `$CFID`, and `missing` again for the bogus id.
 
-   The process is still running throughout.
-6. **Automated:** `uv run pytest tests/upstream/context_forge tests/process/test_cf_watch.py tests/store/test_feed_invariant.py tests/cli/test_cf_watch_end_to_end.py -v`.
+   The process is still running throughout (`uv run amoeba status`), and its log has exactly one ERROR (`Context Forge projects file is unusable: top level is not an array`) and one INFO (`... usable again`).
+6. **Automated:** `uv run pytest tests/upstream/context_forge tests/process/test_cf_watch.py tests/process/test_cf_watch_failures.py tests/store/test_feed_invariant.py tests/cli/test_cf_watch_end_to_end.py -v`.
 
 Clean up with `uv run amoeba stop; rm -rf "$AMOEBA_STORE_DIR" "$CFDIR"`.
+
+**Corrections to the draft, found by running it** (each flagged to the PM): step 2 expected one field and a `from` of `Phase 4: Slice Design`; `cf set phase` also sets `instruction`, and the fixture's phase was `Phase 6: Implementation`. Step 3 used `cf set instruction "elsewhere"`, which CF refuses; it now uses a valid phase on the other project and `cf set notes`. The `cf-snapshots` table column is `changed_fields` (the field names), because the table prints only declared columns and `--json` carries the full `changed` beside it. Step 5's expected rows now give their order and count.
 
 ## Implementation Notes
 
