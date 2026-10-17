@@ -110,10 +110,10 @@ class DetectionE2E:
             list(arguments), self.supervisor_dir, environment=self.environment
         )
 
-    def start_process(self) -> BackgroundCli:
+    def start_process(self, *extra_flags: str) -> BackgroundCli:
         process = start_background(
             self.supervisor_dir,
-            ["--sq-runs-dir", str(self.runs_dir), *FAST_FLAGS],
+            ["--sq-runs-dir", str(self.runs_dir), *FAST_FLAGS, *extra_flags],
             environment=self.environment,
         )
         self._cleanups.append(process.cleanup)
