@@ -14,66 +14,66 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261017
 dateUpdated: 20261017
-reviewedSha: 364974b3c106633ee43ac06490d82dd99fe17a4d
-revision_number: 1
+reviewedSha: e5b1908e439d674939e91e52b6f4e261c36dd51a
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 5
 turns: 6
-promptTokens: 192381
-cachedTokens: 97087
-cacheWriteTokens: 95288
-completionTokens: 5508
-durationSeconds: 57.8
-costUsd: 0.446619
+promptTokens: 191455
+cachedTokens: 97118
+cacheWriteTokens: 94331
+completionTokens: 4131
+durationSeconds: 38.1
+costUsd: 0.429025
 costBasis: provider
 runId: run-20261017-p5-dcc30257
 squadronVersion: 0.23.0
 findings:
   - id: F001
     severity: concern
-    category: sequencing
-    summary: "Byte-identical baseline is deleted before Task 3.3 changes the CLI read path"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:286"
+    category: task-scoping
+    summary: "Task 2.5 bundles too many independent changes into one task"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md"
   - id: F002
     severity: concern
-    category: task-sizing
-    summary: "Tasks 2.5 and 2.6 form one very large, red-in-between commit"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:204-253"
+    category: scope-traceability
+    summary: "Task 2.5 puts the option-definition locations in the task, not in the LLD"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md"
   - id: F003
-    severity: note
-    category: scope
-    summary: "Task 2.4 adds `feed/wire.py` to `SINGLE_DEFINITION_MODULES`"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:193"
+    severity: concern
+    category: test-sufficiency
+    summary: "Task 1.2 asks for a test that may duplicate existing coverage and has a weak criterion"
+    location: "tests/test_cli_inspect.py"
   - id: F004
     severity: note
-    category: proportionality
-    summary: "Task 1.2 adds a \"every listing returns at least one row\" test"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:86"
+    category: granularity
+    summary: "Tasks 1.1 and 1.3 are setup/capture steps with no commit"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md"
   - id: F005
     severity: note
     category: proportionality
-    summary: "Task 2.8 re-greps docs already confirmed clean"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:284"
+    summary: "Task 3.1's \"ask the PM\" guard for file size is appropriate"
+    location: "src/amoeba/store/feed.py"
   - id: F006
     severity: pass
-    category: coverage
-    summary: "Section 1–3 coverage of the slice design"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:56-370"
+    category: sequencing
+    summary: "Migration sequencing and byte-identical gate"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md"
   - id: F007
     severity: pass
-    category: sequencing
+    category: commit-checkpoints
     summary: "Test-with pattern and commit distribution"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:118-370"
+    location: "project-documents/user/tasks/109-tasks.network-api-1.md"
   - id: F008
     severity: pass
-    category: coverage
-    summary: "Load test and CI gating exist in later files"
-    location: "project-documents/user/tasks/109-tasks.network-api-3.md:225-236"
+    category: accuracy
+    summary: "File and path references check out against the repo"
+    location: "tests/cli/test_inspect_evidence.py"
   - id: F009
-    severity: pass
-    category: dependencies
-    summary: "Open PM item is flagged and scoped"
-    location: "project-documents/user/tasks/109-tasks.network-api-1.md:43"
+    severity: note
+    category: coverage
+    summary: "Load test, CI wiring, and later-section coverage not assessed here"
+    location: "unverified"
 ---
 
 # Review: tasks — slice 109
@@ -83,56 +83,75 @@ findings:
 
 ## Findings
 
-### [CONCERN] Byte-identical baseline is deleted before Task 3.3 changes the CLI read path
+### [CONCERN] Task 2.5 bundles too many independent changes into one task
 
-Task 2.8 proves `inspect` output is byte-identical, then deletes `$BASE`, which holds the seeded store and the capture script. Task 3.3 then changes `read_listing`, which the CLI calls. Every project listing now runs inside `read_transaction()` and also issues `change_head`. Its only guard is "`tests/test_cli_inspect.py` passes unchanged". The slice design's Technical Requirement is that `inspect` output and `--help` stay byte-identical. Either keep `$BASE` until Task 3.4 and rerun the diff there, or add a one-line rerun to Task 3.4's success criteria. The capture script already exists, so the rerun costs almost nothing.
+Task 2.5 (effort 3) does five things:
+- `git mv` of five source modules, each with its own option definitions and row conversions.
+- Conversion of the four core row functions in `cli/inspect.py`.
+- A rewrite of `run_listing`.
+- A rewrite of `_add_inspect_parser` in `cli/main.py`.
+- Four test-file moves plus edits to two other test files.
 
-### [CONCERN] Tasks 2.5 and 2.6 form one very large, red-in-between commit
+The only reason it is a single task is "this commit is green". A junior AI can hit a broken intermediate state anywhere in it with no checkpoint to fall back to. The task already lists the five modules as numbered sub-steps, so a split along those lines is cheap.
 
-Tasks 2.5 and 2.6 are committed together. The combined change moves 5 source modules and 4 test files, creates `core.py`, moves the registry, rewrites `run_listing` and `_add_inspect_parser`, and edits several test files. Task 2.5 cannot be verified on its own, because it says "the suite will not pass until Task 2.6", and each is rated Effort 3. The cadence rule ("no red suite") is respected only by merging the two. A junior AI could get lost mid-way.
-- **Option 1:** split 2.6 so the registry move keeps temporary imports from the old modules until the end. The cost is a shim, which the slice design forbids.
-- **Option 2:** keep the combined commit but add an intermediate checkpoint. Run `pyright` and `ruff` after 2.5, since they can pass before the registry is rewired. Add a "stop and ask the PM if 2.5 plus 2.6 touches more than the listed files" guard.
-I'd take option 2.
+The split could be:
+- 2.5a: converts the rows and the `run_listing` and `main.py` adapter while the modules are still in `cli/`. It stays green and is committed.
+- 2.5b: pure `git mv` plus import fixes. It is a separate commit and keeps git history clean.
 
-### [NOTE] Task 2.4 adds `feed/wire.py` to `SINGLE_DEFINITION_MODULES`
+If the PM prefers the single commit, add an intermediate "suite green" check after the module moves and before the `cli/main.py` edit.
 
-The slice design requires this test only for `ApiErrorCode` and the exception table (Technical Requirements). The `feed/wire.py` entry is a small, defensible extra, since it protects the "one definition of a change's wire form" claim. I'd keep it, but it is the only task step that traces to no success criterion in Sections 1–3.
+### [CONCERN] Task 2.5 puts the option-definition locations in the task, not in the LLD
 
-### [NOTE] Task 1.2 adds a "every listing returns at least one row" test
+The "Task-level additions" list says the guard order, bind-rule order, and exception mapping are task-level choices that change only with the PM. It does not flag the placement of the option objects. `CHANNEL_OPTION`, `JUDGE_INVOCATION_OPTION`, `VERDICT_OPTION`, `OUTCOME_OPTION`, and `UNRESOLVED_OPTION` are each defined in the row module that reads them, and `NODE_OPTION` is shared in `listing.py`. The LLD says only that options gain a `name` and that rows read `request.option(NODE_OPTION)`.
 
-This test is conditional ("if one does not already assert it"). It supports the parity success criterion, because a listing with no seeded row would pass parity vacuously. It is proportionate; no change needed.
+The placement is a reasonable choice, but it is not recorded as an addition to the LLD. Add one line to the "Task-level additions" list so reviewers of later tasks, such as the server's query-parameter derivation, know where the option objects live.
 
-### [NOTE] Task 2.8 re-greps docs already confirmed clean
+### [CONCERN] Task 1.2 asks for a test that may duplicate existing coverage and has a weak criterion
 
-The Context Summary records no contract-doc references to the moved paths (grep, 20261017). Task 2.8 runs the grep again. That is cheap and safe, since files may have changed, so I'd leave it.
+Task 1.2 adds a "every listing returns at least one row" test "if one does not already assert it". That conditional leaves a junior AI to decide whether the test is needed. The criterion "`test_cli_inspect.py` is shorter" is a proxy, not a behavior.
 
-### [PASS] Section 1–3 coverage of the slice design
+Replace the conditional with a direct instruction. For example: grep for an existing all-listings non-empty assertion, and add one only if none exists. Alternatively drop the line-count criterion and keep "no test removed".
 
-- **Migration byte-identical gate:** Tasks 1.3 and 2.8 cover it, including `--help`, table and `--json` output.
-- **Inspection layering rule:** Task 2.7 covers it.
-- **`discover_project_ids` and `change_line` moves:** Tasks 2.3 and 2.4.
-- **`read_transaction()` and `change_head()`:** Tasks 3.1 and 3.2.
-- **Shared-snapshot test for rows and `as_of_seq`:** Task 3.4.
-- **Prerequisite check that 107 and 108 are merged:** Task 1.1.
-- **Writer-guard unchanged:** confirmed in Task 2.7.
+### [NOTE] Tasks 1.1 and 1.3 are setup/capture steps with no commit
+
+Both tasks are explicitly non-committing, and both are needed. 1.1 gates on 107/108 being merged, and 1.3 produces the artifact that Tasks 2.8 and 3.4 diff against. They could be merged, but keeping the baseline capture separate from the branch setup is defensible. No change needed.
+
+### [NOTE] Task 3.1's "ask the PM" guard for file size is appropriate
+
+Task 3.1 adds two methods to the store's feed mixin (`src/amoeba/store/feed.py`, which exists). The "if it passes ~300 lines, ask the PM before splitting" step respects the repo's file-size rule without over-specifying. No change needed.
+
+### [PASS] Migration sequencing and byte-identical gate
+
+The order is sound:
+- Task 1.3 captures the baseline once.
+- Tasks 2.1 to 2.7 move code, each leaving the suite green.
+- Task 2.8 diffs against the baseline before any server code lands.
+- Task 3.4 re-diffs after the read-path change in Task 3.3, then deletes the scratch directory.
+
+This matches the LLD "Behavior preserved" paragraph and the Technical Requirement that the migration commit leaves `inspect` and `--help` output identical.
 
 ### [PASS] Test-with pattern and commit distribution
 
-Each implementation task is followed immediately by its tests (2.1→2.2, 3.1→3.2, 3.3→3.4). Deferred commits are explicitly paired. Commits land at 1.2, 2.2, 2.3, 2.4, 2.6, 2.7, 3.2 and 3.4, so nothing is batched at the end. Dependencies are linear, with no cycles.
+Every implementation task is immediately followed by its test task, or contains its own test:
+- 2.1 is followed by 2.2.
+- 2.4 includes `test_wire.py`.
+- 2.7 is the layering test.
+- 3.1 is followed by 3.2.
+- 3.3 is followed by 3.4.
 
-### [PASS] Load test and CI gating exist in later files
+Commits are spread through the section, with seven commits across fourteen tasks. Joint commits are stated explicitly ("Committed with Task N.M"). Nothing commits untested behavior.
 
-- **Load test:** the slice restates the delivery-latency NFR (p95 ≤ 1 s). Task file 3 creates `tests/load/test_serve_load.py` for it.
-- **CI gating:** file 3 states that CI gates it with no workflow change, because the `Load tests` step already runs `uv run pytest tests/load`. It tells the implementer to confirm that step is still there. `.github/workflows/ci.yml` exists, so the explicit-gating requirement is met.
-- **Contract docs:** the four contract-doc deltas and `CHANGELOG` are in file 3.
+### [PASS] File and path references check out against the repo
 
-### [PASS] Open PM item is flagged and scoped
+The paths the tasks move or modify exist: `tests/cli/test_inspect_{evidence,feed,checks,cf}.py`, `tests/cli/test_feed.py`, `src/amoeba/feed/`, `src/amoeba/store/{feed,sql_feed,paths}.py`, `tests/feed/`, and `tests/store/`. `tests/inspection/` and `tests/feed/test_wire.py` are correctly listed as files to create. The dependency chain on 107 and 108 is confirmed by the presence of `test_inspect_checks.py` and `test_inspect_cf.py`.
 
-The slice design contradicts itself about where `ServeRefusedError` is mapped to an exit code. The task file names the conflict, recommends a resolution, and gates only Task 8.1 on the PM's answer, so Sections 1–7 are not blocked.
+### [NOTE] Load test, CI wiring, and later-section coverage not assessed here
+
+The LLD's load tier (`tests/load/test_serve_load.py`) and its p95 latency NFR belong to the serve sections. They should appear in Section 9 of File 3, together with a CI task that gates on them. This file correctly contains neither. Whoever reviews `109-tasks.network-api-3.md` should verify both the load-test task and the CI wiring task. The "Open item for the PM" about `ServeRefusedError` mapping gates only Task 8.1.
 
 ### Run Digest
 
-- Response length: 5706 chars
+- Response length: 6389 chars
 - Response is newline-free: no
 - Tool calls made: 5
 - Tool calls failed: 0
@@ -143,11 +162,11 @@ The slice design contradicts itself about where `ServeRefusedError` is mapped to
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 6
-- Tokens — prompt / cached / cache write / completion / reasoning: 192381 / 97087 / 95288 / 5508 / not computed
-- Duration: 57.8 s
-- Cost: $0.45 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 191455 / 97118 / 94331 / 4131 / not computed
+- Duration: 38.1 s
+- Cost: $0.43 (provider)
 - `## Summary` located: yes
-- `## Findings` located: yes
+- `## Findings` located: no
 - Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 9

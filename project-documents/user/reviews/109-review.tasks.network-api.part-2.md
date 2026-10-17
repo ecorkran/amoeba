@@ -14,17 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261017
 dateUpdated: 20261017
-reviewedSha: 364974b3c106633ee43ac06490d82dd99fe17a4d
-revision_number: 1
+reviewedSha: e5b1908e439d674939e91e52b6f4e261c36dd51a
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 8
-turns: 9
-promptTokens: 315961
-cachedTokens: 223963
-cacheWriteTokens: 91990
-completionTokens: 9237
-durationSeconds: 78.3
-costUsd: 0.483409
+toolCallsMade: 3
+turns: 4
+promptTokens: 100963
+cachedTokens: 10984
+cacheWriteTokens: 89975
+completionTokens: 7488
+durationSeconds: 61.5
+costUsd: 0.436553
 costBasis: provider
 runId: run-20261017-p5-dcc30257
 squadronVersion: 0.23.0
@@ -32,53 +32,38 @@ findings:
   - id: F001
     severity: concern
     category: sequencing
-    summary: "Five tasks share one commit, and the guard's tests come two tasks after the code"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:161-251"
+    summary: "Task 5.5's `amoeba.inbox` import rule conflicts with Task 6.1"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:256"
   - id: F002
     severity: concern
-    category: scope
-    summary: "Task 5.1 is too small to stand alone"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:151-165"
+    category: test-quality
+    summary: "Task 6.2's 413 test may not observe early termination"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:306"
   - id: F003
     severity: concern
-    category: requirements-clarity
-    summary: "Bind-policy rule precedence is ambiguous, and some inputs are unspecified"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:73"
+    category: clarity
+    summary: "Task 4.2 miscounts the `ServeSettings` fields"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:51"
   - id: F004
-    severity: concern
-    category: requirements-clarity
-    summary: "`InvalidSubmissionError` handling has no clear owner"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:117"
+    severity: note
+    category: slice-conformance
+    summary: "Task 4.3 rule 3 refuses a half TLS pair on loopback, against D3's table"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:76"
   - id: F005
-    severity: concern
-    category: requirements-clarity
-    summary: "Submission body shape leaves required fields undefined"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:287"
-  - id: F006
-    severity: concern
-    category: test-feasibility
-    summary: "Traversal tests on path-parameter endpoints probably can't reach the handler as written"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:316"
-  - id: F007
-    severity: concern
-    category: test-coverage
-    summary: "Single-definition rule is checked once by hand, not by a committed test"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:138"
-  - id: F008
     severity: note
-    category: test-coverage
-    summary: "Reads error paths: `store_busy` and `store_unreadable` have no end-to-end test"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:223-225"
-  - id: F009
-    severity: note
-    category: proportionality
-    summary: "Step detail is heavy but broadly traceable"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:176-181"
-  - id: F010
-    severity: pass
     category: coverage
-    summary: "Coverage of Sections 4–6 against the slice's success criteria"
-    location: "project-documents/user/tasks/109-tasks.network-api-2.md:22-325"
+    summary: "\"401 on every endpoint\" is only exercised on the read route"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md:234"
+  - id: F006
+    severity: pass
+    category: structure
+    summary: "Sequencing, test-with pattern, and commit cadence"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md"
+  - id: F007
+    severity: pass
+    category: scope
+    summary: "Traceability and proportionality"
+    location: "project-documents/user/tasks/109-tasks.network-api-2.md"
 ---
 
 # Review: tasks — slice 109
@@ -88,76 +73,51 @@ findings:
 
 ## Findings
 
-### [CONCERN] Five tasks share one commit, and the guard's tests come two tasks after the code
+### [CONCERN] Task 5.5's `amoeba.inbox` import rule conflicts with Task 6.1
 
-Tasks 5.1, 5.2, 5.3 and 5.4 all say "Committed with Task 5.5", so Sections 5.1–5.5 land as a single commit. That conflicts with the project rule of at least one commit per task and with the slice's "commit after each". It also breaks the test-with pattern for the guard. The guard is written in 5.2 and its tests are in 5.5, after the reads code and tests. A defect in the guard would first surface in a commit that also holds the reads. Reorder so each implementation task is followed by its tests and committed:
-- Reads: write the app and reads, test them, commit.
-- Guard: write the guard, test it, commit.
+Task 5.5 asserts that every name `serve/` imports from `amoeba.inbox` is `submit` or an exception type in `CODE_BY_EXCEPTION`. Task 4.5 says `InvalidSubmissionError` is deliberately not in that table, and Task 6.1 (line 283) adds a dedicated handler for it. So 6.1 must import `InvalidSubmissionError`, and probably `SubmissionKind`, from `amoeba.inbox`. That breaks the rule 5.5 has already committed. Until then the check passes vacuously, since no module imports anything from `inbox` yet.
 
-Alternatively, have 5.2 add a minimal `test_auth.py` that tests the middleware directly over a stub ASGI app, which doesn't need `build_app`.
+The slice only requires that `serve` call no inbox function other than `submit` (LLD line 116). An import allow-list is stricter than that. Either name the allowed set explicitly (`submit`, `SubmissionKind`, `InvalidSubmissionError`, and the table's exceptions), or restrict the rule to call sites. Also say that the `submit`-only check bites from 6.1 onward, and have 6.1 re-run it.
 
-### [CONCERN] Task 5.1 is too small to stand alone
+### [CONCERN] Task 6.2's 413 test may not observe early termination
 
-Task 5.1 adds fixtures that nothing uses until 5.4. It uses a lazy import so it can be committed before `app.py` exists, and it has no tests or commit of its own. Fold it into 5.4 (or into the reordered reads and guard tasks above). The lazy-import workaround then goes away.
+The slice criterion is that the server "reads no more than `max_request_bytes + 1` bytes" of an oversized body. Task 6.2 tests this through Starlette's `TestClient`, counting the chunks a generator body yielded. I haven't confirmed this, but I believe `TestClient` consumes the whole request body before dispatching to the ASGI app. If so, the generator is always fully drained and the test can't show the handler stopped reading. Counting chunks is also not counting bytes. A single chunk can overshoot the cap, and Task 6.1 only says to stop "once more than `max_request_bytes` bytes have arrived".
 
-### [CONCERN] Bind-policy rule precedence is ambiguous, and some inputs are unspecified
+Specify a way to observe this. One option is to call `build_app(...)` directly with a hand-written ASGI `receive` that counts the bytes it hands out and asserts it was not called again after the crossing chunk. Another is a real-uvicorn test, which belongs in file 3. State the exact assertion, for example "bytes delivered ≤ cap + one chunk". If the criterion is meant literally as +1 byte, Task 6.1 must say how the crossing chunk is handled.
 
-Task 4.3 says to apply D3's table "in its row order (a short token is refused on every bind)". These two instructions conflict:
-- In row order, the loopback row ("serves") comes first and `token_too_short` is last. A short token on loopback would pass, or, off loopback, `tls_required` would win over `token_too_short`.
-- The parenthetical implies the short-token check runs first.
+### [CONCERN] Task 4.2 miscounts the `ServeSettings` fields
 
-Task 4.4 then parametrizes "each row's result", which cannot pin the outcome for combined cases such as a short token with no TLS files off loopback. Three inputs are also unspecified:
-- An empty `AMOEBA_SERVE_TOKEN` (treated as unset or as short?).
-- Exactly one TLS file given on a loopback bind. `load_cert_chain(certfile, None)` has its own semantics.
-- Which rule applies to a short token when other rules also fail.
+The step lists "the four interval/limit fields, `max_request_bytes`, `shutdown_grace_seconds`". The LLD (Patterns, Settings) has only three before those two: `heartbeat_interval_seconds`, `send_timeout_seconds` and `max_streams`. A junior AI told to add "four" may invent a fourth field, which is scope creep in the one place the project says every default must live. Name each field and default explicitly, or write "the three fields". The `__post_init__` list also leaves `shutdown_grace_seconds` unaddressed (validated or not). Say which.
 
-State an explicit check order and these cases, or ask the PM. Don't leave them for the junior to guess.
+### [NOTE] Task 4.3 rule 3 refuses a half TLS pair on loopback, against D3's table
 
-### [CONCERN] `InvalidSubmissionError` handling has no clear owner
+D3's table says loopback with any token and any TLS state "serves". Rule 3 refuses exactly one TLS file on every bind, and rule 4 refuses unusable files on every bind. The task labels rule 3 as a task-level choice, which is the right way to do it. Rule 4 is consistent with the LLD prose, but rule 3 is not in the LLD at all. Task 9.4 should carry a contract-doc delta for it, alongside the traversal correction already noted at line 308. The tests in 4.4 already cover the overlap cases.
 
-Task 4.5 lists `InvalidSubmissionError` → `invalid_submission` with its `reason` after the `CODE_BY_EXCEPTION` entries, so it may or may not be in that table. Task 5.3 registers handlers "for each `CODE_BY_EXCEPTION` type". Task 6.1 says exceptions "map through `CODE_BY_EXCEPTION`", but the error body must carry `reason`, which a plain table lookup doesn't produce. Say whether it is in the table and which task registers the handler that adds `reason`. Otherwise the 422 `invalid_submission` test in 6.2 depends on a guess. Task 4.6's mapping test should include it.
+### [NOTE] "401 on every endpoint" is only exercised on the read route
 
-### [CONCERN] Submission body shape leaves required fields undefined
+The slice requires 401 without or with a wrong token "on every endpoint, loopback included". Task 5.4 tests it, and the other guards, on the read endpoint only. The middleware is app-wide, so the behaviour holds. The submission routes arrive in 6.1 and the feed in 7.x, and nothing pins them. A parametrized line over the submission and feed paths would close this at almost no cost. A request that fails auth never reaches routing, so it could be added in 5.4 against paths that don't exist yet.
 
-Step 3 of Task 6.1 makes only `submission_id` explicitly required. The LLD body is `{kind, submission_id, submitted_by, payload}`. The task doesn't say whether a missing `kind`, `submitted_by` or `payload` is `invalid_body` or is defaulted. A default would be a silent fallback, which project rules forbid. `submit()`'s signature may settle `submitted_by`, but the task doesn't say so. Name the required keys, or ask the PM, and add a test for a missing required key (Task 6.2 currently tests only the missing id).
+### [PASS] Sequencing, test-with pattern, and commit cadence
 
-### [CONCERN] Traversal tests on path-parameter endpoints probably can't reach the handler as written
+Dependencies run strictly forward (4.1→…→6.2) with no cycles. 4.3, 4.5, 5.1, 5.3 and 6.1 are each paired with the test task that follows them and commit together. Commits land at 4.1, 4.2, 4.4, 4.6, 5.2, 5.4, 5.5 and 6.2, so none are batched at the end. Task 5.1 creates the shared fixtures in `conftest.py` before 5.2 needs them.
 
-Task 6.2 expects 400 for traversal ids on both submission endpoints, and the LLD criterion says the same for every endpoint. In the path, these ids are likely to be handled before `validated_project_id` runs:
-- `..` and `.` segments are normally normalized away by the HTTP client.
-- `%2F` is decoded before Starlette routing, and the default `{project_id}` converter excludes `/`. That gives a 404 route miss, not a 400.
+### [PASS] Traceability and proportionality
 
-I have not run this. Task 5.4's query-string cases don't have the problem. For the path endpoints, the task should say which encodings actually reach the handler and what status the rest produce. Alternatively, test `validated_project_id` directly for the hostile values and test the endpoints with ids that route. Otherwise the junior will chase failures that come from the test client.
+Each task traces to a slice criterion or a Technical Requirement:
+- **Bind policy and refusals:** Tasks 4.3–4.4, covering D3.
+- **Single-definition error test:** Tasks 4.5–4.6.
+- **Reads, parity and traversal:** Tasks 5.1–5.2.
+- **Origin, Host, token and content-type guards, plus token secrecy:** Tasks 5.3–5.4.
+- **Layering rules:** Task 5.5.
+- **Submissions, idempotent retry and 413:** Tasks 6.1–6.2.
 
-### [CONCERN] Single-definition rule is checked once by hand, not by a committed test
-
-Task 4.6 proves the new import-boundaries rule by adding a temporary `"not_found"` literal and removing it. The rule is a durable guard, so its failure case should be a committed unit test. Run the check against a fixture source string containing an `ApiErrorCode` value, and another containing an integer literal in 400–599. Keep the manual confirmation as an optional extra.
-
-### [NOTE] Reads error paths: `store_busy` and `store_unreadable` have no end-to-end test
-
-The LLD's reads error row includes 503 `store_busy` (with `Retry-After`) and `store_unreadable`. Task 5.4 tests `store_schema_mismatch` only. Task 4.6 covers the table mapping and headers, which is probably enough. A `monkeypatch` that raises each exception inside `read_listing` would exercise the registered handlers cheaply.
-
-### [NOTE] Step detail is heavy but broadly traceable
-
-Tasks 5.2, 5.3 and 4.3 spell out middleware order, header handling and `ssl.SSLContext` construction. Most of this restates the LLD, so I'm not asking for cuts. Task 5.3 combines `reads.py`, `app.py` and all exception handlers at effort 3 and is the one to split if it overruns. A reasonable split is the listing-request parsing and route in one task, and `build_app` with its handlers in another.
-
-### [PASS] Coverage of Sections 4–6 against the slice's success criteria
-
-The criteria that belong in this file all have a task and a test:
-- Reads parity with `inspect` and `as_of_seq` (5.3 and 5.4).
-- Origin, Host and content-type guards, plus the token never appearing in a log or body (5.2 and 5.5).
-- Bind-policy table and TLS failures (4.3 and 4.4).
-- Single-definition rule for status numbers and codes (4.6).
-- Layering and writer-guard tests (5.6).
-- Submission requirements: required id, idempotent retry, `reason` parity with `amoeba submit`, 413 with and without `Content-Length`, and retry after `submission_write_failed` (6.1 and 6.2).
-
-Each task traces to an LLD section, and the dependencies are linear with no cycles. File 3 covers the load test in `tests/load/` and the CI gate for it.
+I found no unjustified tasks. Task sizes (effort 1–3) fit a junior implementer. Splitting into three task files matches the slice's breadth. This file has no NFR load test, because the load-tier test and its CI gating belong to Sections 7–9 in file 3. I did not check that file.
 
 ### Run Digest
 
-- Response length: 7821 chars
+- Response length: 5867 chars
 - Response is newline-free: no
-- Tool calls made: 8
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -165,13 +125,13 @@ Each task traces to an LLD section, and the dependencies are linear with no cycl
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 9
-- Tokens — prompt / cached / cache write / completion / reasoning: 315961 / 223963 / 91990 / 9237 / not computed
-- Duration: 78.3 s
-- Cost: $0.48 (provider)
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 100963 / 10984 / 89975 / 7488 / not computed
+- Duration: 61.5 s
+- Cost: $0.44 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
