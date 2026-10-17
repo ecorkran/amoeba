@@ -22,7 +22,7 @@ status: not_started
   - `discover_project_ids` is in `process/supervisor.py`; consumers are `cli/inspect.py`, `process/project_stores.py`, `tests/process/test_project_stores.py`.
   - `change_line` is in `cli/feed.py`, used only there.
   - 103's id rule is `paths.validate_project_id` (raises `ValueError`). `paths.project_store_path` does **not** validate.
-  - `Store.open_read_only` raises `StorePermissionError` both for "no store exists" and for "cannot read". The server tells them apart with an existence check before opening (Task 5.3).
+  - `Store.open_read_only` raises `StorePermissionError` both for "no store exists" and for "cannot read". The server tells them apart with an existence check before opening (Task 5.1).
   - Connections use `isolation_level="DEFERRED"`; Python's `sqlite3` does not open a transaction for a `SELECT`, so `read_transaction()` must issue `BEGIN` itself (Task 3.1).
   - `FeedOperations` (`store/feed.py`) is the feed mixin of the one `Store` class.
   - `tests/test_cli_inspect.py` (496 lines) has a `populated` fixture that seeds a row for every listing, including one pending inbox file.
@@ -46,7 +46,7 @@ status: not_started
 - `inspection/listing.py` holds the registry's types (`Row`, `ListingScope`, the option classes, `ListingRequest`, `Listing`) and the shared `NODE_OPTION`; `inspection/__init__.py` holds the registry and `read_listing`. Reason: the row modules need the option objects at runtime, and the package `__init__` imports the row modules, so defining the types in `__init__` would be an import cycle.
 - `FlagOption`, a typed replacement for the `(flag, help)` pairs, so flags gain a `name` like the other options (LLD "What changes shape").
 - `tests/inspection_harness.py`, the `populated` seeding extracted from `tests/test_cli_inspect.py`, so the baseline capture and the server parity test use one seeded store.
-- The guard order in Task 5.2 and the exception-to-code mapping in Task 4.5 are task-level choices; change them only with the PM.
+- The guard order in Task 5.3, the bind-rule order in Task 4.3, and the exception-to-code mapping in Task 4.5 are task-level choices; change them only with the PM.
 - In `serve/errors.py`, `ApiError` (an exception carrying an `ApiErrorCode` and detail) and one status-by-code mapping, because several codes (`missing_project`, `invalid_cursor`, …) come from no store exception (LLD D8).
 
 **Section map.** This file: 1–3. File 2: 4–6. File 3: 7–9. In full: 1 baseline and seeded harness; 2 migration to `amoeba.inspection`; 3 store amendment and `as_of_seq`; 4 serve foundations (dependencies, settings, policy, errors); 5 the app, auth, and reads; 6 submissions; 7 the stream; 8 `amoeba serve` in the CLI; 9 smoke, load, docs, validation.
@@ -83,7 +83,7 @@ status: not_started
 - [ ] Create `tests/inspection_harness.py`. Move the body of `tests/test_cli_inspect.py`'s `populated` fixture into `seed_every_listing(supervisor_dir: Path) -> SeededStore`, where `SeededStore` is a frozen dataclass holding the project id and the ids a listing option needs (the node id, the verdict id `changes` takes, the judge invocation id)
 - [ ] Move the constants the seeding uses (`PROJECT`, `_FIXTURE_VERDICT`, …) with it; `test_cli_inspect.py` imports them
 - [ ] Keep `populated` as a thin fixture calling `seed_every_listing`
-- [ ] Add a test in `tests/test_cli_inspect.py` (if one does not already assert it) that every listing in `LISTINGS` returns at least one row from the seeded store with `--json`
+- [ ] Add a test in `tests/test_cli_inspect.py` (if one does not already assert it) that every listing in `LISTINGS` returns at least one row from the seeded store with `--json`, so the Task 5.2 parity test cannot pass on empty rows
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/test_cli_inspect.py` passes, with no test removed
@@ -102,7 +102,7 @@ status: not_started
 **Objective**: A fixed seeded store and the exact CLI output against it, so Task 2.8 can prove the migration changed nothing (LLD "Behavior preserved").
 
 **Steps**:
-- [ ] Choose a scratch directory outside the repo, e.g. `BASE="$(mktemp -d)"`, and record its path in the task notes. It must survive until Task 2.8
+- [ ] Choose a scratch directory outside the repo, e.g. `BASE="$(mktemp -d)"`, and record its path in the task notes. It must survive until Task 3.4
 - [ ] Seed `"$BASE/store"` once with `seed_every_listing`, from a throwaway script kept outside the repo (put `tests/` on `sys.path`). Never seed again: ids and timestamps differ per seeding
 - [ ] With `AMOEBA_STORE_DIR="$BASE/store"`, write into `"$BASE/before/"` one file per command: `inspect --help`; for every listing, `inspect <name> --help`, the table form, and `--json`; and for each declared option, one run exercising it (each flag set, each choice option with one choice, each value option with the seeded id)
 - [ ] Generate the command list from the registry (iterate `LISTINGS`), not by hand, so no listing is missed. Keep the capture script with the scratch directory for reuse in Task 2.8
@@ -190,65 +190,62 @@ status: not_started
 - [ ] Create `src/amoeba/feed/wire.py` with `change_record(change: Change) -> dict[str, object]`: the dict currently built inside `change_line`, same keys, same order
 - [ ] In `cli/feed.py`, replace `change_line` with printing `json.dumps(change_record(change))`; remove `change_line`
 - [ ] Add `tests/feed/test_wire.py`: the keys and their order, `kind` as the enum value, `recorded_at` as ISO text, `payload` a plain dict
-- [ ] Add `feed/wire.py` to `SINGLE_DEFINITION_MODULES` in `tests/test_import_boundaries.py`
 
 **Success Criteria**:
 - [ ] `tests/cli/test_feed.py` passes unchanged (proves `amoeba feed` output is identical); new test passes
 - [ ] Commit, e.g. `refactor(feed): extract change_record wire form`
 
 **Files to Create**: `src/amoeba/feed/wire.py`, `tests/feed/test_wire.py`
-**Files to Modify**: `src/amoeba/cli/feed.py`, `tests/test_import_boundaries.py`
+**Files to Modify**: `src/amoeba/cli/feed.py`
 
 ---
 
-### Task 2.5: Move the row modules into `amoeba.inspection`
+### Task 2.5: Convert the rows to `ListingRequest` and move the sibling modules
 **Owner**: Junior AI
 **Dependencies**: Task 2.4
 **Effort**: 3
-**Objective**: Every row function lives in `amoeba.inspection` and takes a `ListingRequest` (LLD Migration Plan, rows 1–2).
+**Objective**: Every row function takes a `ListingRequest`, and the five sibling modules live in `amoeba.inspection`; the registry stays in `cli/inspect.py` for one more task, so this commit is green (LLD Migration Plan, rows 1–2).
 
 **Steps**:
 - [ ] Use `git mv` for each move so history follows the file. In each moved module: import `Row` and the option types from `amoeba.inspection.listing`; replace `args.project` with `request.project_id`; drop `import argparse`. Define each listing-specific option once, in the module whose row function reads it, and read it with `request.option(THAT_OPTION)`:
-  1. [ ] `cli/inspect.py`'s `_node_rows`, `_blocked_rows`, `_journal_rows`, `_project_rows` → new `inspection/core.py` (public names, no underscore). Define `UNRESOLVED_OPTION` (`FlagOption`, name `unresolved`) here. `project_rows` uses `paths.project_store_path`, not `store_path_for`
-  2. [ ] `cli/inspect_inbox.py` → `inspection/inbox.py`. Define `CHANNEL_OPTION` (`ChoiceOption`, name `channel`)
-  3. [ ] `cli/inspect_evidence.py` → `inspection/evidence.py`, with `VerdictNotComparableError`. Define `JUDGE_INVOCATION_OPTION` (name `judge_invocation_id`) and `VERDICT_OPTION` (name `verdict`, required). `args.json` becomes `not request.compact`; use `NODE_OPTION`
-  4. [ ] `cli/inspect_feed.py` → `inspection/feed.py`. Define `OUTCOME_OPTION` (`ChoiceOption`, name `outcome`, choices `OUTCOME_CHOICES`)
-  5. [ ] `cli/inspect_checks.py` → `inspection/checks.py`; use `NODE_OPTION`
-  6. [ ] `cli/inspect_cf.py` → `inspection/cf.py`
-- [ ] Keep help texts, choices, metavars, and `required` exactly as today
-- [ ] Update each module docstring that names `inspect.py` or a sibling to the new names
-- [ ] The suite will not pass until Task 2.6 rewires the registry; do not commit here
+  1. [ ] `cli/inspect_inbox.py` → `inspection/inbox.py`. Define `CHANNEL_OPTION` (`ChoiceOption`, name `channel`)
+  2. [ ] `cli/inspect_evidence.py` → `inspection/evidence.py`, with `VerdictNotComparableError`. Define `JUDGE_INVOCATION_OPTION` (name `judge_invocation_id`) and `VERDICT_OPTION` (name `verdict`, required). `args.json` becomes `not request.compact`; use `NODE_OPTION`
+  3. [ ] `cli/inspect_feed.py` → `inspection/feed.py`. Define `OUTCOME_OPTION` (`ChoiceOption`, name `outcome`, choices `OUTCOME_CHOICES`)
+  4. [ ] `cli/inspect_checks.py` → `inspection/checks.py`; use `NODE_OPTION`
+  5. [ ] `cli/inspect_cf.py` → `inspection/cf.py`
+- [ ] In `cli/inspect.py` (registry still here): convert the four core row functions the same way, defining `UNRESOLVED_OPTION` (`FlagOption`, name `unresolved`); build `LISTINGS` from `amoeba.inspection.listing.Listing` and the option objects; `run_listing` builds a `ListingRequest` from `args` (each option's value read by its `name`, `compact = not args.json`) and prints exactly as before
+- [ ] In `cli/main.py`: `_add_inspect_parser` uses `listing.scope` instead of `requires_project` and adds each option by its derived `flag`, flags first, then choices, then values, as today. Import `VerdictNotComparableError` from `amoeba.inspection.evidence`
+- [ ] Keep help texts, choices, metavars, and `required` exactly as today. Update each module docstring that names `inspect.py` or a sibling
+- [ ] Tests: `scope` instead of `requires_project` in `tests/test_cli_inspect.py`; `git mv` `tests/cli/test_inspect_{evidence,feed,checks,cf}.py` to `tests/inspection/test_{evidence,feed,checks,cf}.py` and fix their imports; in `tests/test_import_boundaries.py`, change `cli/inspect_feed.py` to `inspection/feed.py`
 
 **Success Criteria**:
-- [ ] No `argparse` import in `src/amoeba/inspection/`
-- [ ] Committed with Task 2.6
+- [ ] No `argparse` import in `src/amoeba/inspection/`; `grep -rn "amoeba.cli.inspect_\|cli import inspect_" src tests` finds nothing
+- [ ] Suite, `ruff`, `pyright` clean
+- [ ] Commit, e.g. `refactor(inspection): move listing rows out of the CLI`
 
-**Files to Create**: `src/amoeba/inspection/core.py`
-**Files to Move**: the five `cli/inspect_*.py` modules, as listed
+**Files to Modify**: `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_cli_inspect.py`, `tests/test_import_boundaries.py`
+**Files to Move**: the five `cli/inspect_*.py` modules and four `tests/cli/test_inspect_*.py` files, as listed
 
 ---
 
 ### Task 2.6: Move the registry and add `read_listing`
 **Owner**: Junior AI
 **Dependencies**: Task 2.5
-**Effort**: 3
+**Effort**: 2
 **Objective**: One registry and one open-read-only path, used by the CLI and later the server (LLD "What changes shape", `read_listing`).
 
 **Steps**:
-- [ ] Move `LISTINGS`, `LISTINGS_BY_NAME`, and `PROJECTS_LISTING` from `cli/inspect.py` into `inspection/__init__.py`, referencing the option objects from Task 2.5. Re-export the `listing.py` types from `__init__`
+- [ ] Move the four core row functions from `cli/inspect.py` to new `inspection/core.py` (public names, no underscore), with `UNRESOLVED_OPTION`. `project_rows` uses `paths.project_store_path`, not `store_path_for`
+- [ ] Move `LISTINGS`, `LISTINGS_BY_NAME`, and `PROJECTS_LISTING` into `inspection/__init__.py`. Re-export the `listing.py` types from `__init__`
 - [ ] Add `ListingResult` (frozen: `rows: list[Row]`, `as_of_seq: int | None`) and `read_listing(name, request, store_dir) -> ListingResult`: resolve the listing, call `supervisor_rows(store_dir)` or open `paths.project_store_path(store_dir, project_id)` read-only and call `rows`. `as_of_seq` is `None` for now (Task 3.3 fills it). Raise `ValueError` if a project listing gets `project_id=None`
-- [ ] Reduce `cli/inspect.py` to argparse helpers and printing: `run_listing` builds a `ListingRequest` from `args` (each option's value read by its `name`, `compact = not args.json`), calls `read_listing(…, paths.store_dir())`, and prints exactly as before (`json.dumps(rows, indent=2, default=str)` or the table)
-- [ ] In `cli/main.py`: `_add_inspect_parser` iterates `amoeba.inspection.LISTINGS`, uses `listing.scope` instead of `requires_project`, and adds each option by its derived `flag`, flags first, then choices, then values, as today. Import `VerdictNotComparableError` from `amoeba.inspection.evidence`
-- [ ] Update test imports: `tests/test_cli_inspect.py` (registry from `amoeba.inspection`, `scope` instead of `requires_project`); `git mv` `tests/cli/test_inspect_{evidence,feed,checks,cf}.py` to `tests/inspection/test_{evidence,feed,checks,cf}.py` and fix their imports
-- [ ] In `tests/test_import_boundaries.py`, change `cli/inspect_feed.py` to `inspection/feed.py`
+- [ ] Reduce `cli/inspect.py` to argparse helpers and printing: `run_listing` calls `read_listing(…, paths.store_dir())` and prints as before. `cli/main.py` and `tests/test_cli_inspect.py` import the registry from `amoeba.inspection`
 
 **Success Criteria**:
-- [ ] `grep -rn "amoeba.cli.inspect_\|cli import inspect_" src tests` finds nothing
 - [ ] Suite, `ruff`, `pyright` clean
-- [ ] Commit (Tasks 2.5–2.6 together), e.g. `refactor(inspection): move listing registry and rows out of the CLI`
+- [ ] Commit, e.g. `refactor(inspection): move listing registry out of the CLI`
 
-**Files to Modify**: `src/amoeba/inspection/__init__.py`, `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_cli_inspect.py`, `tests/test_import_boundaries.py`
-**Files to Move**: four `tests/cli/test_inspect_*.py` files
+**Files to Create**: `src/amoeba/inspection/core.py`
+**Files to Modify**: `src/amoeba/inspection/__init__.py`, `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_cli_inspect.py`
 
 ---
 
@@ -281,13 +278,11 @@ status: not_started
 **Steps**:
 - [ ] Rerun Task 1.3's capture script against the same `"$BASE/store"` into `"$BASE/after/"`. Do not reseed
 - [ ] `diff -r "$BASE/before" "$BASE/after"` must print nothing. If it prints anything, fix the cause; do not edit the baseline
-- [ ] Rerun `grep -rn "cli/inspect\|inspect_inbox\|inspect_evidence\|inspect_feed\|inspect_checks\|inspect_cf\|change_line\|discover_project_ids" docs README.md`. The Context Summary records no hits on 20261017; update any hit to the new path and commit it with `docs: update moved inspection paths`
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each
-- [ ] Delete `"$BASE"`
 
 **Success Criteria**:
 - [ ] `diff -r` empty; suite, `ruff`, `pyright` clean
-- [ ] No other commit needed; note the result in the task notes
+- [ ] No commit needed; note the result in the task notes. Keep `"$BASE"` for Task 3.4
 
 ---
 
@@ -362,9 +357,10 @@ status: not_started
 - [ ] Test: `as_of_seq` equals `change_head` after a read with no concurrent writes; supervisor listings return `None`
 - [ ] Snapshot test: use `messages` (one query per channel). Wrap the read-only `Store.messages` with `monkeypatch` so that after its first call it commits a new intent message through a separate read-write store. Assert the rows do not contain the new message and `as_of_seq` is the pre-commit head; a second `read_listing` shows both
 - [ ] Test: a project listing with `project_id=None` raises `ValueError`
+- [ ] Rerun Task 1.3's capture into `"$BASE/after/"` (replacing it); `diff -r "$BASE/before" "$BASE/after"` must print nothing, because Task 3.3 changed the CLI's read path. Then delete `"$BASE"`
 
 **Success Criteria**:
-- [ ] New tests pass; full suite, `ruff`, `pyright` clean
+- [ ] New tests pass; `diff -r` empty; full suite, `ruff`, `pyright` clean
 - [ ] Commit, e.g. `feat(inspection): report as_of_seq from one read snapshot`
 
 **Files to Create**: `tests/inspection/test_read_listing.py`

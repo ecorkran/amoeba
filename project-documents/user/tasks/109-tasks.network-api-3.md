@@ -49,54 +49,57 @@ status: not_started
   - waits for the next item at most `heartbeat_interval_seconds`
   - a `Change` → `id: <seq>`, `event: change`, `data: <json.dumps(change_record(c))>` frame
   - a timeout → `: keepalive` comment
-  - an error item (an `ApiErrorCode` with a detail, sent by the follow thread) → one `event: error` frame with `error_body(...)`, then close
+  - an error item (an `ApiErrorCode` with a detail) → one `event: error` frame with `error_body(...)`, then close
   - every send runs under `anyio.fail_after(send_timeout_seconds)`; `TimeoutError` or `OSError` → close
 - [ ] `finally`, always: close the receive side, call `on_close` (which sets the stop event and releases the slot)
-- [ ] Frame building is a pure function, so it can be tested without a server
+- [ ] Frame building is a pure function
+- [ ] `tests/serve/test_stream_response.py`, in-process with a fake ASGI `send` (no server): exact bytes for a change, a keepalive, and an error frame; a keepalive after an idle heartbeat interval; an error item closes the response; a `send` that never returns closes it after `send_timeout_seconds`; `on_close` runs once on every exit
 
 **Success Criteria**:
-- [ ] `pyright` clean
-- [ ] Committed with Task 7.5
+- [ ] Tests pass; `pyright` clean
+- [ ] Commit, e.g. `feat(serve): add EventStreamResponse`
 
-**Files to Create**: `src/amoeba/serve/stream.py`
+**Files to Create**: `src/amoeba/serve/stream.py`, `tests/serve/test_stream_response.py`
 
 ---
 
-### Task 7.3: Add the feed route: cursor, slots, preflight
+### Task 7.3: Add the follow thread
 **Owner**: Junior AI
 **Dependencies**: Task 7.2
 **Effort**: 2
-**Objective**: `GET /v1/projects/{project_id}/feed` up to the 200 (LLD D6, Data Flow "The feed").
+**Objective**: Bridge `follow()` to the event loop through the 1-slot hand-off (LLD D6, State Management).
+
+**Steps**:
+- [ ] In `stream.py`, a function that starts one `threading.Thread(daemon=True)` running `follow(store_dir, project_id, after=cursor, settings=feed_settings, stop=stop_event.is_set)`; each change sent with `anyio.from_thread.run(send_stream.send, change)`
+- [ ] `ClosedResourceError`, `BrokenResourceError`, or `RuntimeError` (loop gone) → return. `StorePermissionError` / `StoreSchemaError` from `follow()` → send one error item (Task 7.2), then return. Each `except` carries a comment saying why
+- [ ] `tests/serve/test_follow_thread.py`, in an anyio event loop with a throwaway store (no server): changes arrive in `seq` order from the cursor; closing the receive side while the thread is blocked in the hand-off makes it exit; setting the stop event while it waits in `follow()` makes it exit within one follow interval; deleting the store yields one error item. Every wait bounded
+
+**Success Criteria**:
+- [ ] Tests pass; `pyright` clean
+- [ ] Commit, e.g. `feat(serve): add the follow thread`
+
+**Files to Create**: `tests/serve/test_follow_thread.py`
+**Files to Modify**: `src/amoeba/serve/stream.py`
+
+---
+
+### Task 7.4: Add the feed route: cursor, slots, preflight
+**Owner**: Junior AI
+**Dependencies**: Task 7.3
+**Effort**: 2
+**Objective**: `GET /v1/projects/{project_id}/feed`, joining Tasks 7.2 and 7.3 (LLD D6, Data Flow "The feed").
 
 **Steps**:
 - [ ] Cursor: `Last-Event-ID` if present, else `?after=`, else 0; either must be a non-negative integer, else 400 `invalid_cursor`
 - [ ] Slots: one `anyio.CapacityLimiter(max_streams)` created in `build_app`; acquire without waiting (`acquire_nowait`); `WouldBlock` → 503 `stream_limit_reached` with `Retry-After`
 - [ ] Preflight on a worker thread: `existing_store_path`, then open read-only and close. Errors map as for reads. Release the slot on any preflight failure
-- [ ] Register the route in `build_app`; it returns the Task 7.2 response wired to the Task 7.4 thread
+- [ ] Start the Task 7.3 thread and return the Task 7.2 response. Register the route in `build_app`
 
 **Success Criteria**:
 - [ ] `pyright` clean
 - [ ] Committed with Task 7.5
 
 **Files to Modify**: `src/amoeba/serve/stream.py`, `src/amoeba/serve/app.py`
-
----
-
-### Task 7.4: Add the follow thread
-**Owner**: Junior AI
-**Dependencies**: Task 7.3
-**Effort**: 2
-**Objective**: Bridge `follow()` to the event loop through the 1-slot hand-off (LLD D6, State Management).
-
-**Steps**:
-- [ ] One `threading.Thread(daemon=True)` per stream running `follow(store_dir, project_id, after=cursor, settings=feed_settings, stop=stop_event.is_set)`; each change sent with `anyio.from_thread.run(send_stream.send, change)`
-- [ ] `ClosedResourceError`, `BrokenResourceError`, or `RuntimeError` (loop gone) → return. `StorePermissionError` / `StoreSchemaError` from `follow()` → send one error item (Task 7.2), then return. Each `except` carries a comment saying why
-
-**Success Criteria**:
-- [ ] `pyright` clean
-- [ ] Committed with Task 7.5
-
-**Files to Modify**: `src/amoeba/serve/stream.py`
 
 ---
 
@@ -108,17 +111,16 @@ status: not_started
 
 **Steps**:
 - [ ] `tests/serve/test_stream_delivery.py`, against `running_server` with short intervals in `ServeSettings`/`FeedSettings`:
-  - [ ] Frame builder: exact bytes for a change, a keepalive, and an error frame
   - [ ] A follower from `after=as_of_seq` receives each new change once, `id` equal to `seq`
   - [ ] Disconnect, commit changes while away, reconnect with `Last-Event-ID`: no gap, no repeat. Same with `?after=`. Both given → `Last-Event-ID` wins
   - [ ] `after=-1`, `after=x`, `Last-Event-ID: x` → 400 `invalid_cursor`
-  - [ ] Unknown project → 404 and no `200`; schema mismatch → 503; traversal → 400
+  - [ ] Unknown project → 404 and no `200`; schema mismatch → 503; traversal ids sent as in Task 6.2 (`.`/`..` → 400, `a%2Fb` → 404, no store opened)
   - [ ] Delete the store file mid-stream → one `event: error` with `store_unreadable`, then the stream ends
   - [ ] An idle stream sends a keepalive within one heartbeat interval
 
 **Success Criteria**:
 - [ ] Tests pass; full suite green
-- [ ] Commit (Tasks 7.2–7.5), e.g. `feat(serve): add the SSE feed stream`
+- [ ] Commit (Tasks 7.4–7.5), e.g. `feat(serve): add the SSE feed route`
 
 **Files to Create**: `tests/serve/test_stream_delivery.py`
 
@@ -137,7 +139,7 @@ status: not_started
   - [ ] Stalled reader: a raw socket client that sends the request and never reads, while many changes are committed. The slot frees within one heartbeat plus `send_timeout_seconds`, and the follow thread, blocked in the hand-off, has exited
   - [ ] Server shutdown with an open stream: the server stops and the thread exits
 - [ ] Pin behavior 1: with a stalled reader, server memory does not grow with the change count (assert the follow thread is blocked in the hand-off, i.e. it has sent at most a bounded number of changes)
-- [ ] Pin behavior 2: after a clean client close and no new changes, the slot is held until the next heartbeat, not freed at once (proves disconnect is noticed on send)
+- [ ] Pin behavior 2 (disconnect is noticed on send), with `max_streams=1` and `heartbeat_interval_seconds=30` so no heartbeat falls inside the test: after a clean client close, a new stream request 0.5 s later still gets 503; then commit one change and poll (bounded, e.g. 5 s) until a new stream opens
 - [ ] Bound every wait in these tests; none may hang the suite
 
 **Success Criteria**:
@@ -163,7 +165,7 @@ status: not_started
 - [ ] In `cli/main.py`: add `SERVE_REFUSED = 13` to `ExitCode` with its comment; register the parser and dispatch `"serve"` with lazy imports, so other commands never load uvicorn. A bind failure reaches the existing boundary and exits 1
 
 **Success Criteria**:
-- [ ] `pyright` clean; Task 5.6's "only `cli/serve.py` imports `amoeba.serve`" test passes
+- [ ] `pyright` clean; Task 5.5's "only `cli/serve.py` imports `amoeba.serve`" test passes
 - [ ] Committed with Task 8.2
 
 **Files to Create**: `src/amoeba/serve/server.py`, `src/amoeba/cli/serve.py`
@@ -203,8 +205,7 @@ status: not_started
 
 **Steps**:
 - [ ] `tests/cli/test_serve_smoke.py`, on a scratch store: start `amoeba serve --port <free>` as a subprocess. Over `httpx`, POST `create_project`; start `amoeba start`; wait for the outcome to be `applied`; stop the resident process and seed one node as the walkthrough does (the seeding requires it stopped); start it again. Then read `nodes`, open the feed from `as_of_seq`, POST an intent; the follower receives exactly one `message_posted` change
-- [ ] Stop the resident process with the follower open: the stream stays open (a keepalive arrives), `nodes` is still served, and a POST gets 202. Start it again
-- [ ] `kill -9` the server: the resident process still reports running
+- [ ] Stop the resident process with the follower open: the stream stays open (a keepalive arrives), `nodes` is still served, and a POST gets 202. Start it again. (`kill -9` survival is walkthrough step 5; the restart matrix is slice 110's)
 - [ ] Clean up both processes in `finally`
 
 **Success Criteria**:
@@ -223,14 +224,14 @@ status: not_started
 
 **Steps**:
 - [ ] `tests/load/test_serve_load.py`, using `running_server` and default `FeedSettings`, `max_streams=32`:
-  - [ ] 32 concurrent followers; commit a burst of 600 changes; each follower receives all 600, in `seq` order, none missing
+  - [ ] 32 concurrent followers; commit a burst of 600 changes, as 600 `post_intent` calls (`tests/feed_harness.py`) through one read-write `Store` in the test process; each follower receives all 600, in `seq` order, none missing
   - [ ] Latency: with 32 followers reading, record commit time per change and arrival time per client; p95 ≤ 1 s. Report the measured value with `load_harness.measured`
   - [ ] No starvation: 32 idle streams open; `GET /v1/listings/nodes` succeeds (no latency asserted)
 - [ ] Follow `tests/load/` conventions (`conftest.py`, `load_harness.py`)
 
 **Success Criteria**:
 - [ ] `uv run pytest tests/load/test_serve_load.py` passes; measured p95 recorded in the task notes
-- [ ] CI gates it with no workflow change: `.github/workflows/ci.yml`'s `Load tests` step runs `uv run pytest tests/load`, which collects the new file. Confirm the step is still there
+- [ ] CI gates it with no workflow change: `.github/workflows/ci.yml`'s `Load tests` step runs `uv run pytest tests/load`, which collects the new file. Confirm the step is still there; if it is missing, stop and tell the PM
 - [ ] Commit, e.g. `test: add serve load tier`
 
 **Files to Create**: `tests/load/test_serve_load.py`
