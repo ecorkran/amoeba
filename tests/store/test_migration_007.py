@@ -80,8 +80,8 @@ def _upgrade(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def test_version_seven_is_the_expected_version() -> None:
-    assert EXPECTED_SCHEMA_VERSION == JUDGE_SCHEMA_VERSION
+def test_the_expected_version_is_at_least_seven() -> None:
+    assert EXPECTED_SCHEMA_VERSION >= JUDGE_SCHEMA_VERSION
 
 
 def test_upgrade_keeps_every_prior_row_and_nulls_the_new_column(

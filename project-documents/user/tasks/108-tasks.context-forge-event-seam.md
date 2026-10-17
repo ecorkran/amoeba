@@ -7,7 +7,7 @@ dependencies: [101, 102, 103, 106, 107]
 projectState: Slices 101–107 are merged (store schema 7, tenant seam and `ProcessSettings`, listing registry, inbox kinds through `check`, 106's change feed with `ChangeKind` and the feed invariant test, 107's migration 007). No Context Forge file watcher, `cf_links`/`cf_snapshots` tables, or `link_cf_project` kind exists. This slice adds migration 008, the `amoeba.upstream.context_forge` parser and diff, `CFWatchTenant`, the `link_cf_project` kind, `ChangeKind.CF_PROJECT_CHANGED`, two listings, two settings, and `docs/context-forge-contract.md`.
 dateCreated: 20261016
 dateUpdated: 20261016
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -41,15 +41,15 @@ status: not_started
 **Objective**: Work on the right branch from a clean baseline, with 107 confirmed merged.
 
 **Steps**:
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Confirm `src/amoeba/store/schema/007_judge_samples_checks_and_progress.sql` exists and `EXPECTED_SCHEMA_VERSION` is 7. If not, stop and tell the PM (LLD "Prerequisites")
-- [ ] Ask the PM to confirm LLD D7. If not confirmed, stop and wait
-- [ ] Create `108-slice.context-forge-event-seam` from the target; if it exists, switch to it
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Confirm `src/amoeba/store/schema/007_judge_samples_checks_and_progress.sql` exists and `EXPECTED_SCHEMA_VERSION` is 7. If not, stop and tell the PM (LLD "Prerequisites")
+- [x] Ask the PM to confirm LLD D7. If not confirmed, stop and wait
+- [x] Create `108-slice.context-forge-event-seam` from the target; if it exists, switch to it
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
 
 **Success Criteria**:
-- [ ] On the slice branch; baseline suite, `ruff`, and `pyright` clean
-- [ ] No commit needed
+- [x] On the slice branch; baseline suite, `ruff`, and `pyright` clean
+- [x] No commit needed
 
 ---
 
@@ -60,15 +60,15 @@ status: not_started
 **Objective**: A real CF data file for the parser tests (LLD Technical Requirements, "Privacy of the fixture").
 
 **Steps**:
-- [ ] Copy `~/.config/context-forge/projects.json` (or the directory `CONTEXT_FORGE_DATA_DIR` names; ask the PM if neither exists) into a scratch directory outside the repo. Do not write to the original
-- [ ] Reduce to exactly three entries: this repository's entry (it has `worktrees`), one entry without `worktrees`, and one other. Leave entries otherwise unedited
-- [ ] Check the result for secrets and local content you would not publish. `customData` values may be emptied (no test reads them); no other edit is allowed. Anything else suspicious: ask the PM
-- [ ] Save as `tests/fixtures/cf/projects.json`. Add a `tests/fixtures/README.md` entry: capture date (today), source, the reduction, and any `customData` edit. Record the observed CF version as a dated observation, not a pin
-- [ ] Confirm the fixture matches the LLD "Observed shape": array of objects with string `id`; the amoeba entry has `worktrees` with a `default` worktree holding `developmentPhase`, `activeSlice`, `activeTaskFile`. If the real shape differs, stop and tell the PM
+- [x] Copy `~/.config/context-forge/projects.json` (or the directory `CONTEXT_FORGE_DATA_DIR` names; ask the PM if neither exists) into a scratch directory outside the repo. Do not write to the original
+- [x] Reduce to exactly three entries: this repository's entry (it has `worktrees`), one entry without `worktrees`, and one other. Leave entries otherwise unedited
+- [x] Check the result for secrets and local content you would not publish. `customData` values may be emptied (no test reads them); no other edit is allowed. Anything else suspicious: ask the PM
+- [x] Save as `tests/fixtures/cf/projects.json`. Add a `tests/fixtures/README.md` entry: capture date (today), source, the reduction, and any `customData` edit. Record the observed CF version as a dated observation, not a pin
+- [x] Confirm the fixture matches the LLD "Observed shape": array of objects with string `id`; the amoeba entry has `worktrees` with a `default` worktree holding `developmentPhase`, `activeSlice`, `activeTaskFile`. If the real shape differs, stop and tell the PM
 
 **Success Criteria**:
-- [ ] Fixture valid JSON, three entries, README entry present
-- [ ] Commit, e.g. `test: add real Context Forge projects.json fixture`
+- [x] Fixture valid JSON, three entries, README entry present
+- [x] Commit, e.g. `test: add real Context Forge projects.json fixture`
 
 **Files to Create**: `tests/fixtures/cf/projects.json`
 **Files to Modify**: `tests/fixtures/README.md`
@@ -84,14 +84,14 @@ status: not_started
 **Objective**: Define the projection's types and the field lists once (LLD D2, D3, D4).
 
 **Steps**:
-- [ ] Create package `src/amoeba/upstream/context_forge/` with `__init__.py`, in the style of `upstream/squadron/`
-- [ ] In `projects_file.py` define: `PROJECTS_FILE_NAME = "projects.json"`; two tuples, the project-level and worktree-level projected field names, exactly as the LLD "Observed shape" lists them (`updatedAt` is not in either)
-- [ ] Define frozen types: `CFProjectState` (project fields mapping, worktree-id → fields mapping, `cf_updated_at | None`, with `to_json()` producing `{"project": {...}, "worktrees": {...}}` holding only keys present), `CFFieldChange` (`worktree_id: str | None`, `field`, optional `from`/`to`, with a JSON form that omits an absent `from`/`to`), and `CFReadFailure` (outcome word, detail)
-- [ ] Hold `CFReadFailure`'s outcome as a `str` that Task 5.1 maps to `CFSnapshotOutcome`, and say so in a module comment: the store imports nothing from upstream, and upstream imports nothing from the store (`tests/upstream/test_import_direction.py`)
+- [x] Create package `src/amoeba/upstream/context_forge/` with `__init__.py`, in the style of `upstream/squadron/`
+- [x] In `projects_file.py` define: `PROJECTS_FILE_NAME = "projects.json"`; two tuples, the project-level and worktree-level projected field names, exactly as the LLD "Observed shape" lists them (`updatedAt` is not in either)
+- [x] Define frozen types: `CFProjectState` (project fields mapping, worktree-id → fields mapping, `cf_updated_at | None`, with `to_json()` producing `{"project": {...}, "worktrees": {...}}` holding only keys present), `CFFieldChange` (`worktree_id: str | None`, `field`, optional `from`/`to`, with a JSON form that omits an absent `from`/`to`), and `CFReadFailure` (outcome word, detail)
+- [x] Hold `CFReadFailure`'s outcome as a `str` that Task 5.1 maps to `CFSnapshotOutcome`, and say so in a module comment: the store imports nothing from upstream, and upstream imports nothing from the store (`tests/upstream/test_import_direction.py`)
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 2.4
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 2.4
 
 **Files to Create**: `upstream/context_forge/__init__.py`, `projects_file.py`
 
@@ -104,13 +104,13 @@ status: not_started
 **Objective**: `parse(data: bytes, cf_project_id: str) -> CFProjectState | CFReadFailure`, applying exactly the rules of the LLD D4 table.
 
 **Steps**:
-- [ ] Return the outcome, scope, and detail for each case in the D4 table; only the rules that decide which entry and worktree a value belongs to are checked
-- [ ] Only keys present are projected, copied as given. `updatedAt` goes to `cf_updated_at` when it is a string
-- [ ] Each detail string is specific enough to identify the rule that failed; define each message where it is raised, not duplicated in tests (tests check a distinguishing substring)
+- [x] Return the outcome, scope, and detail for each case in the D4 table; only the rules that decide which entry and worktree a value belongs to are checked
+- [x] Only keys present are projected, copied as given. `updatedAt` goes to `cf_updated_at` when it is a string
+- [x] Each detail string is specific enough to identify the rule that failed; define each message where it is raised, not duplicated in tests (tests check a distinguishing substring)
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 2.4
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 2.4
 
 **Files to Modify**: `upstream/context_forge/projects_file.py` (split into a sibling module if it passes ~300 lines)
 
@@ -123,13 +123,13 @@ status: not_started
 **Objective**: A pure `diff_states(previous | None, current) -> tuple[CFFieldChange, ...]` per LLD D3.
 
 **Steps**:
-- [ ] Create `diff.py`. `previous=None` lists every present field as added (`to` only)
-- [ ] Absent vs `null` are different: `from` omitted when the key was absent, `to` omitted when it became absent. A worktree added or removed appears as its fields added or removed
-- [ ] Order: project level (`worktree_id` None) first, then by worktree id, then by field name; equal states give an empty tuple
+- [x] Create `diff.py`. `previous=None` lists every present field as added (`to` only)
+- [x] Absent vs `null` are different: `from` omitted when the key was absent, `to` omitted when it became absent. A worktree added or removed appears as its fields added or removed
+- [x] Order: project level (`worktree_id` None) first, then by worktree id, then by field name; equal states give an empty tuple
 
 **Success Criteria**:
-- [ ] `ruff`, `pyright` pass
-- [ ] Committed with Task 2.4
+- [x] `ruff`, `pyright` pass
+- [x] Committed with Task 2.4
 
 **Files to Create**: `upstream/context_forge/diff.py`
 
@@ -142,16 +142,16 @@ status: not_started
 **Objective**: Every row of D4's table and every D3 rule, on the real fixture.
 
 **Steps**:
-- [ ] Create `tests/upstream/context_forge/` (with `__init__.py` if neighbours have one) and a loader for `tests/fixtures/cf/projects.json`
-- [ ] Parser, unedited fixture: the amoeba entry parses with the `default` worktree's `activeSlice`; the entry without `worktrees` parses with an empty worktree map; an unknown id → `missing`
-- [ ] Parser defects, each derived from the fixture bytes by one stated edit (state the edit in the test): non-JSON; top-level object; element with no `id`; duplicated linked id; `worktrees` not an array; duplicate worktree ids; empty file. Also: the same defect in a *different* entry's `worktrees` leaves the link `observed`
-- [ ] Parser: a changed `customData` or `updatedAt` alone gives equal projections; `cf_updated_at` is copied
-- [ ] Diff: first snapshot (all added); changed value (`from`/`to`); field added; field removed; absent vs `null`; worktree added; worktree removed; project-level change (`worktree_id` None); ordering is stable regardless of input key order; equal states → empty
-- [ ] Add a test that the field tuples are defined once, modeled on `tests/upstream/test_field_names_defined_once.py`; extend `test_import_direction.py` if it enumerates packages
+- [x] Create `tests/upstream/context_forge/` (with `__init__.py` if neighbours have one) and a loader for `tests/fixtures/cf/projects.json`
+- [x] Parser, unedited fixture: the amoeba entry parses with the `default` worktree's `activeSlice`; the entry without `worktrees` parses with an empty worktree map; an unknown id → `missing`
+- [x] Parser defects, each derived from the fixture bytes by one stated edit (state the edit in the test): non-JSON; top-level object; element with no `id`; duplicated linked id; `worktrees` not an array; duplicate worktree ids; empty file. Also: the same defect in a *different* entry's `worktrees` leaves the link `observed`
+- [x] Parser: a changed `customData` or `updatedAt` alone gives equal projections; `cf_updated_at` is copied
+- [x] Diff: first snapshot (all added); changed value (`from`/`to`); field added; field removed; absent vs `null`; worktree added; worktree removed; project-level change (`worktree_id` None); ordering is stable regardless of input key order; equal states → empty
+- [x] Add a test that the field tuples are defined once, modeled on `tests/upstream/test_field_names_defined_once.py`; extend `test_import_direction.py` if it enumerates packages
 
 **Success Criteria**:
-- [ ] New tests pass; full suite, `ruff`, `pyright` pass
-- [ ] Commit, e.g. `feat(upstream): parse projects.json into a watched projection and diff it`
+- [x] New tests pass; full suite, `ruff`, `pyright` pass
+- [x] Commit, e.g. `feat(upstream): parse projects.json into a watched projection and diff it`
 
 **Files to Create**: `tests/upstream/context_forge/test_projects_file.py`, `test_diff.py`
 

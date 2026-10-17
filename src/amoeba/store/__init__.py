@@ -18,6 +18,12 @@ from __future__ import annotations
 
 from amoeba.store.attribution import Attribution, attribute_review
 from amoeba.store.calibration import CalibrationRow
+from amoeba.store.cf_models import (
+    CFLink,
+    CFSnapshot,
+    CFSnapshotInput,
+    CFSnapshotOutcome,
+)
 from amoeba.store.check_models import (
     CheckInput,
     CheckOutcome,
@@ -116,6 +122,7 @@ __all__ = [
     "COMPARABLE_STANDINGS",
     "FindingChange",
     "FindingSeverity",
+    "CFSnapshotOutcome",
     "CheckOutcome",
     "CheckStanding",
     "ProgressKind",
@@ -146,6 +153,9 @@ __all__ = [
     "FindingObservation",
     "FindingSummary",
     "CalibrationRow",
+    "CFLink",
+    "CFSnapshot",
+    "CFSnapshotInput",
     "CheckInput",
     "CheckRecord",
     "ProgressInput",

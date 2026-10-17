@@ -25,6 +25,7 @@ class ChangeKind(StrEnum):
     MESSAGE_POSTED = "message_posted"
     REVIEW_DETECTED = "review_detected"
     CHECK_RECORDED = "check_recorded"
+    CF_PROJECT_CHANGED = "cf_project_changed"
 
 
 class DetectionOutcome(StrEnum):

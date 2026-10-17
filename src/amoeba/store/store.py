@@ -23,6 +23,7 @@ from typing import Self
 from amoeba.store import paths, sql
 from amoeba.store.blocking import BlockingOperations
 from amoeba.store.calibration import CalibrationOperations
+from amoeba.store.cf_snapshots import CFOperations
 from amoeba.store.checks import CheckOperations
 from amoeba.store.feed import FeedOperations
 from amoeba.store.inbox import InboxOperations
@@ -58,6 +59,7 @@ class Store(
     CheckOperations,
     CalibrationOperations,
     FeedOperations,
+    CFOperations,
 ):
     """A project-keyed lifecycle node store backed by one SQLite file.
 
