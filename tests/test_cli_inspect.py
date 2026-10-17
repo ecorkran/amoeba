@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from cf_harness import observed
 from cli_harness import await_running, run_cli, start_background
 from evidence_harness import check_input, finding, verdict_input
 
@@ -35,6 +36,7 @@ from amoeba.store import (
 from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
+    LINK_CF_PROJECT_ID,
     WATCH_ACTIVE,
     WATCH_REVIEWS_DIR,
 )
@@ -120,6 +122,16 @@ def populated(supervisor_dir: Path) -> Path:
         store.record_check(
             check_input("fixture-check", runnable.id), project_id=PROJECT
         )
+        # Slice 108: one Context Forge link and one observed snapshot.
+        store.apply_submission(
+            submission_id="fixture-cf-link",
+            project_id=PROJECT,
+            kind=SubmissionKind.LINK_CF_PROJECT,
+            submitted_by="fixture",
+            submitted_at=datetime(2026, 10, 16, tzinfo=UTC),
+            payload={LINK_CF_PROJECT_ID: "fixture-cf-project"},
+        )
+        store.record_cf_snapshot(observed(PROJECT, "fixture-cf-project"))
         # Slice 106: one review watch and one detection ledger row.
         store.apply_submission(
             submission_id="fixture-watch",
@@ -452,6 +464,9 @@ def test_the_registered_listings_are_pinned() -> None:
         # Slice 107.
         "checks",
         "calibration",
+        # Slice 108.
+        "cf-links",
+        "cf-snapshots",
     }
 
 
@@ -472,6 +487,9 @@ def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
         # Slice 107.
         "checks",
         "calibration",
+        # Slice 108.
+        "cf-links",
+        "cf-snapshots",
     }
 
     missing_project = run_cli(["inspect", "nodes"], supervisor_dir)

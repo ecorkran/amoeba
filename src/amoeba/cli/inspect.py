@@ -20,7 +20,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amoeba.cli import inspect_checks, inspect_evidence, inspect_feed, inspect_inbox
+from amoeba.cli import (
+    inspect_cf,
+    inspect_checks,
+    inspect_evidence,
+    inspect_feed,
+    inspect_inbox,
+)
 from amoeba.process.supervisor import discover_project_ids, store_path_for
 from amoeba.store import Channel, Store, paths
 
@@ -301,6 +307,18 @@ LISTINGS: tuple[Listing, ...] = (
                 choices=inspect_feed.OUTCOME_CHOICES,
             ),
         ),
+    ),
+    Listing(
+        name="cf-links",
+        help_text="Context Forge projects this project watches.",
+        columns=inspect_cf.LINK_COLUMNS,
+        rows=inspect_cf.link_rows,
+    ),
+    Listing(
+        name="cf-snapshots",
+        help_text="What the Context Forge watch recorded, with the fields that moved.",
+        columns=inspect_cf.SNAPSHOT_COLUMNS,
+        rows=inspect_cf.snapshot_rows,
     ),
 )
 
