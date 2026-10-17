@@ -1,0 +1,325 @@
+---
+docType: tasks
+slice: network-api
+project: amoeba
+lld: user/slices/109-slice.network-api.md
+dependencies: [101, 102, 103, 104, 105, 106, 107, 108]
+projectState: After file 1, every listing lives in `amoeba.inspection` behind `read_listing`, which returns rows and `as_of_seq` from one snapshot; `discover_project_ids` is in `amoeba.store`, `change_record` in `amoeba.feed.wire`. No `amoeba.serve` package, HTTP dependency, or `amoeba serve` command exists yet.
+dateCreated: 20261017
+dateUpdated: 20261017
+status: not_started
+---
+
+## Context Summary (File 2 of 3)
+
+- Continues `109-tasks.network-api-1.md`. Its Context Summary (verified code facts, branch, commit cadence, tool knowledge, open item, task-level additions) applies here unchanged.
+- **This file:** Sections 4–6: serve foundations; the app, auth, and reads; submissions. File 3: Sections 7–9.
+- **Event-loop discipline (LLD "Patterns"):** no route handler calls the store, the filesystem, or `submit()` on the loop. Each such call runs in `anyio.to_thread.run_sync`, or on the stream's own thread.
+- **Test rule (LLD "Special Considerations"):** tests never bind off loopback and never touch the real supervisor directory. Every server test uses a scratch `AMOEBA_STORE_DIR` and an ephemeral port.
+
+---
+
+## Section 4: Serve Foundations
+
+### Task 4.1: Add the HTTP dependencies
+**Owner**: Junior AI
+**Dependencies**: Task 3.4
+**Effort**: 1
+**Objective**: Starlette and uvicorn at runtime, httpx for tests (LLD "Interfaces Required", External).
+
+**Steps**:
+- [ ] `uv add "starlette>=<current>" "uvicorn>=<current>"` and `uv add --dev "httpx>=<current>"`, where `<current>` is the version uv resolves today (pin with `>=` like the existing dependencies). Do not add the `uvicorn[standard]` extra
+- [ ] Record the resolved versions in the task notes as a dated observation
+- [ ] Run `uv run pyright` once. If it reports missing types for either library, stop and tell the PM
+
+**Success Criteria**:
+- [ ] Suite, `ruff`, `pyright` clean
+- [ ] Commit, e.g. `chore: add starlette, uvicorn, and httpx`
+
+**Files to Modify**: `pyproject.toml`, `uv.lock`
+
+---
+
+### Task 4.2: Add `ServeSettings`
+**Owner**: Junior AI
+**Dependencies**: Task 4.1
+**Effort**: 1
+**Objective**: The one home of every serve default (LLD "Patterns", Settings).
+
+**Steps**:
+- [ ] Create `src/amoeba/serve/__init__.py` (docstring only; it must not import uvicorn) and `src/amoeba/serve/settings.py`
+- [ ] `ServeSettings`: a frozen dataclass with exactly the fields and defaults the LLD lists (`host`, `port`, `tls_certfile`, `tls_keyfile` as `Path | None`, the four interval/limit fields, `max_request_bytes`, `shutdown_grace_seconds`, and a `FeedSettings`). Follow `process/settings.py`'s style
+- [ ] `TOKEN_ENV_VAR = "AMOEBA_SERVE_TOKEN"`, `MIN_TOKEN_LENGTH = 32`. The token is never a field of `ServeSettings`
+- [ ] `__post_init__` raises `ValueError` for a non-positive interval, timeout, `max_streams`, or `max_request_bytes`, and for a port outside 0–65535 (0 is allowed: tests use an ephemeral port)
+- [ ] Add `tests/serve/__init__.py` and `tests/serve/test_settings.py`: defaults as the LLD states; each invalid value raises
+
+**Success Criteria**:
+- [ ] Tests pass; `pyright` clean
+- [ ] Commit, e.g. `feat(serve): add ServeSettings`
+
+**Files to Create**: `src/amoeba/serve/__init__.py`, `src/amoeba/serve/settings.py`, `tests/serve/__init__.py`, `tests/serve/test_settings.py`
+
+---
+
+### Task 4.3: Add the bind policy
+**Owner**: Junior AI
+**Dependencies**: Task 4.2
+**Effort**: 2
+**Objective**: A pure check that refuses an unsafe bind before uvicorn exists (LLD D3).
+
+**Steps**:
+- [ ] Create `src/amoeba/serve/policy.py` with `RefusalRule(StrEnum)`: `token_required`, `tls_required`, `token_too_short`, `tls_unusable`; and `ServeRefusedError(rule, detail)`, whose message names the rule
+- [ ] `is_loopback(host) -> bool`: true only for the literal `localhost` or an address whose `ipaddress.ip_address(host).is_loopback` is true. A non-address name returns false. Never resolve a name
+- [ ] `check_bind(settings, token: str | None) -> None`: apply D3's table in its row order (a short token is refused on every bind). When either TLS file is given, build an `ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)` and call `load_cert_chain(certfile, keyfile)`; an `OSError` or `ssl.SSLError` becomes `tls_unusable` with the file path and the error message. Exactly one TLS file given off loopback is `tls_required`
+- [ ] Never fall back to loopback; never log the token
+
+**Success Criteria**:
+- [ ] `pyright` clean
+- [ ] Committed with Task 4.4
+
+**Files to Create**: `src/amoeba/serve/policy.py`
+
+---
+
+### Task 4.4: Test the bind policy
+**Owner**: Junior AI
+**Dependencies**: Task 4.3
+**Effort**: 2
+**Objective**: Every row of D3's table, and every TLS failure, pinned.
+
+**Steps**:
+- [ ] Add a session fixture in `tests/serve/conftest.py` that writes a self-signed cert and key, and a second key that does not match, into a temp directory with `openssl req -x509 -newkey rsa:2048 -nodes -subj /CN=localhost -days 1 …`. If `openssl` is not on PATH, fail with a message saying so (no skip)
+- [ ] `tests/serve/test_policy.py`: `is_loopback` for `localhost`, `127.0.0.1`, `127.1.2.3`, `::1` (true) and `0.0.0.0`, `::`, `example.com`, `192.168.1.1` (false)
+- [ ] Parametrized over D3's table: each row's result (`check_bind` returns, or raises with the right `RefusalRule`)
+- [ ] `tls_unusable` for: a missing cert path, a missing key path, a directory as the cert, and the mismatched key. The detail names the path
+- [ ] A short-token refusal's message does not contain the token
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit, e.g. `feat(serve): add bind policy`
+
+**Files to Create**: `tests/serve/conftest.py`, `tests/serve/test_policy.py`
+
+---
+
+### Task 4.5: Add the error vocabulary
+**Owner**: Junior AI
+**Dependencies**: Task 4.4
+**Effort**: 2
+**Objective**: One closed set of codes and the only place a status number appears (LLD D8).
+
+**Steps**:
+- [ ] Create `src/amoeba/serve/errors.py`:
+  - `ApiErrorCode(StrEnum)`: every code in the LLD "API Contracts" table, plus `internal_error`
+  - `STATUS_BY_CODE: Mapping[ApiErrorCode, int]`, one status for each code, from the table. An import-time check (or test) that every member has a status
+  - `RETRY_AFTER_CODES`: `store_busy`, `stream_limit_reached`, with one named `RETRY_AFTER_SECONDS` constant
+  - `ApiError(Exception)`: code, detail, optional `reason`. Handlers raise it; they never build a response with a status
+  - `CODE_BY_EXCEPTION`: `StoreBusyError` → `store_busy`, `StoreSchemaError` → `store_schema_mismatch`, `StorePermissionError` and `StoreCorruptError` → `store_unreadable`, `VerdictNotFoundError` → `not_found`, `VerdictNotComparableError` → `not_comparable`, `SubmissionWriteError` → `submission_write_failed`. `InvalidSubmissionError` → `invalid_submission` with its `reason`
+  - `error_body(code, detail, reason=None) -> dict` and `error_response(...) -> JSONResponse` adding `WWW-Authenticate: Bearer` for `unauthorized` and `Retry-After` for the codes above
+- [ ] An error body is exactly `{"error", "detail"}`, plus `reason` only for `invalid_submission`
+
+**Success Criteria**:
+- [ ] `pyright` clean
+- [ ] Committed with Task 4.6
+
+**Files to Create**: `src/amoeba/serve/errors.py`
+
+---
+
+### Task 4.6: Test the error vocabulary and its single definition
+**Owner**: Junior AI
+**Dependencies**: Task 4.5
+**Effort**: 2
+**Objective**: Pin the table and enforce that no other serve module spells a status or code (LLD Technical Requirements, single-definition test).
+
+**Steps**:
+- [ ] `tests/serve/test_errors.py`: every `ApiErrorCode` has a status; each exception maps to its code and status; headers for `unauthorized`, `store_busy`, `stream_limit_reached`; body shapes
+- [ ] Add a rule to `tests/test_import_boundaries.py` (reuse `_string_literals`): no module in `src/amoeba/serve/` other than `errors.py` contains an `ApiErrorCode` value as a string literal, and none contains an integer literal in 400–599 (AST `ast.Constant` of type `int`). The rule iterates `serve/` with `rglob`, so later modules are covered automatically
+- [ ] Confirm the rule fails on a temporary `"not_found"` literal in `serve/settings.py`; remove it
+
+**Success Criteria**:
+- [ ] Tests pass; full suite green
+- [ ] Commit, e.g. `feat(serve): add the API error vocabulary`
+
+**Files to Create**: `tests/serve/test_errors.py`
+**Files to Modify**: `tests/test_import_boundaries.py`
+
+---
+
+## Section 5: The App, Auth, and Reads
+
+### Task 5.1: Add the app test harness
+**Owner**: Junior AI
+**Dependencies**: Task 4.6
+**Effort**: 1
+**Objective**: Test scaffolding before the app code it tests.
+
+**Steps**:
+- [ ] In `tests/serve/conftest.py`, add fixtures: `seeded` (a `tmp_path` supervisor directory seeded with `seed_every_listing`, `AMOEBA_STORE_DIR` set by `monkeypatch`); `client(token=None)` returning a Starlette `TestClient` over `build_app(settings, token, store_dir)` with base URL `http://127.0.0.1`; `TEST_TOKEN`, a 48-hex-character constant clearly marked as a test value
+- [ ] The fixtures import `build_app` lazily, so this task commits before `app.py` exists; leave them unused until Task 5.4
+
+**Success Criteria**:
+- [ ] Suite green
+- [ ] Committed with Task 5.3
+
+**Files to Modify**: `tests/serve/conftest.py`
+
+---
+
+### Task 5.2: Add the request guard middleware
+**Owner**: Junior AI
+**Dependencies**: Task 5.1
+**Effort**: 2
+**Objective**: Token, Origin, Host, and content-type checks on every request (LLD D2).
+
+**Steps**:
+- [ ] Create `src/amoeba/serve/auth.py` with `RequestGuardMiddleware`, a **pure ASGI** middleware (not `BaseHTTPMiddleware`, which wraps streaming responses; confirm in the Starlette docs). Constructed with the token (or `None`) and whether the bind is loopback. In order:
+  1. [ ] An `Origin` header → 403 `origin_not_allowed`
+  2. [ ] Loopback bind and a `Host` whose name (port stripped; `[::1]` bracket form handled) is not `localhost`, `127.0.0.1`, or `::1` → 421 `host_not_allowed`. Hold the allowed names in one constant
+  3. [ ] Token set and `Authorization` not `Bearer <token>` (compared with `hmac.compare_digest` on bytes) → 401 `unauthorized`, one detail for missing and wrong alike
+  4. [ ] `POST` whose `content-type` media type is not `application/json` (parameters such as `charset` allowed) → 415 `unsupported_media_type`
+- [ ] Responses come from `errors.error_response`. Nothing here logs a header
+
+**Success Criteria**:
+- [ ] `pyright` clean
+- [ ] Committed with Task 5.3
+
+**Files to Create**: `src/amoeba/serve/auth.py`
+
+---
+
+### Task 5.3: Add the reads endpoint and `build_app`
+**Owner**: Junior AI
+**Dependencies**: Task 5.2
+**Effort**: 3
+**Objective**: `GET /v1/listings/{name}` over the one registry (LLD D4, Data Flow "A read").
+
+**Steps**:
+- [ ] Create `src/amoeba/serve/reads.py`:
+  - `validated_project_id(value) -> str`: `paths.validate_project_id`; `ValueError` → `ApiError(invalid_project_id)`. Used by every endpoint that takes a project id
+  - `existing_store_path(store_dir, project_id) -> Path`: `project_store_path`, and `ApiError(unknown_project)` if it is not a file. Shared with the stream preflight (Task 7.3)
+  - `listing_request(listing, query) -> ListingRequest`: `project` required for `ListingScope.PROJECT` (`missing_project`) and refused for `SUPERVISOR` (`unexpected_parameter`); any parameter not `project` and not a declared option `name` → `unexpected_parameter`; a flag accepts `true`/`false` only, absent is `False`; a choice must be in `choices`; a required value option must be present (`invalid_option`); repeated parameters → `invalid_option`; `compact=False`
+  - the route: unknown name → `unknown_listing`; then validate, then on a worker thread (`anyio.to_thread.run_sync`) check the store exists and call `read_listing`. Body: `{"listing", "project_id", "as_of_seq", "rows"}`, without `project_id`/`as_of_seq` for supervisor listings. Serialize rows with `json.dumps(…, default=str)`, as the CLI does
+- [ ] Create `src/amoeba/serve/app.py` with `build_app(settings, token, store_dir) -> Starlette`: routes, the middleware, an exception handler for `ApiError`, one for each `CODE_BY_EXCEPTION` type, and the one boundary handler for anything else (`logger.exception`, 500 `internal_error`), commented as the server's process-boundary handler
+- [ ] `store_dir` is resolved once by the caller and passed in; the app never reads the environment
+
+**Success Criteria**:
+- [ ] `pyright` clean
+- [ ] Committed with Task 5.4
+
+**Files to Create**: `src/amoeba/serve/reads.py`, `src/amoeba/serve/app.py`
+
+---
+
+### Task 5.4: Test reads and parity with `inspect`
+**Owner**: Junior AI
+**Dependencies**: Task 5.3
+**Effort**: 3
+**Objective**: Rows equal `amoeba inspect --json` for every listing (LLD Functional Requirements, first bullet).
+
+**Steps**:
+- [ ] `tests/serve/test_reads.py`. Parity, parametrized over `LISTINGS`: for each listing, and for each declared option once (the seeded ids from `SeededStore`), `rows` equals `json.loads` of `run_cli(... "inspect", name, ..., "--json")`. The parameter set is generated from the registry, not written by hand
+- [ ] `as_of_seq` equals `change_head` for project listings; absent for `projects` and `inbox`
+- [ ] Refusals: unknown listing, missing project, `project` on a supervisor listing, undeclared parameter, bad flag value, bad choice, missing required `verdict`, unknown project (404), `VerdictNotFoundError` (404 `not_found`), a non-comparable verdict (422, if the seeding has one; otherwise seed one in the test)
+- [ ] Traversal: `project` values `../x`, `a/b`, `.`, `..` (URL-encoded) → 400 `invalid_project_id`; assert with `monkeypatch` on `Store.open_read_only` that it was never called
+- [ ] `store_schema_mismatch`: a store stamped another version (reuse the approach in `tests/test_read_only_open.py`) → 503
+
+**Success Criteria**:
+- [ ] Tests pass; full suite green
+- [ ] Commit (Tasks 5.1–5.4), e.g. `feat(serve): add reads endpoint and request guards`
+
+**Files to Create**: `tests/serve/test_reads.py`
+
+---
+
+### Task 5.5: Test the request guards and token secrecy
+**Owner**: Junior AI
+**Dependencies**: Task 5.4
+**Effort**: 2
+**Objective**: D2's checks, and the token in no log or body.
+
+**Steps**:
+- [ ] `tests/serve/test_auth.py`: with a token, a request without it and with a wrong one get 401 and `WWW-Authenticate: Bearer`, with identical bodies; a correct one gets 200. Without a token on loopback, requests pass
+- [ ] `Origin` present → 403. Host `evil.example` → 421; `localhost:8765`, `127.0.0.1`, `[::1]:8765` pass
+- [ ] Secrecy: with `caplog` at DEBUG for all loggers, make authenticated and failed requests; assert `TEST_TOKEN` appears in no record's message or args and no response body or header
+- [ ] Order: a request with both `Origin` and a bad token gets 403 (Origin first)
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit, e.g. `test(serve): pin request guards and token secrecy`
+
+**Files to Create**: `tests/serve/test_auth.py`
+
+---
+
+### Task 5.6: Add the serve layering tests
+**Owner**: Junior AI
+**Dependencies**: Task 5.5
+**Effort**: 2
+**Objective**: The server cannot reach the CLI, the process, or a write path (LLD "Layering rules" and Technical Requirements).
+
+**Steps**:
+- [ ] In `tests/test_import_boundaries.py`: `amoeba.serve` imports nothing from `amoeba.cli` or `amoeba.process`
+- [ ] No module in `src/amoeba/` other than `cli/serve.py` imports `amoeba.serve` (the test tolerates `cli/serve.py` not existing yet; it will by Task 8.1)
+- [ ] AST check over `serve/`: every attribute or name imported from `amoeba.inbox` is `submit` (or an exception type in `CODE_BY_EXCEPTION`), and no call to `Store.open` (attribute `open` on `Store`) appears
+- [ ] Confirm `tests/test_writer_guard.py` passes with no allow-list change
+
+**Success Criteria**:
+- [ ] Tests pass
+- [ ] Commit, e.g. `test: add serve layering rules`
+
+**Files to Modify**: `tests/test_import_boundaries.py`
+
+---
+
+## Section 6: Submissions
+
+### Task 6.1: Add the submission endpoints
+**Owner**: Junior AI
+**Dependencies**: Task 5.6
+**Effort**: 3
+**Objective**: `POST` a submission through `submit()` with a required id, and `GET` its outcome (LLD D5, Data Flow "A submission").
+
+**Steps**:
+- [ ] Create `src/amoeba/serve/submissions.py`. `POST /v1/projects/{project_id}/submissions`:
+  1. [ ] Validate the project id
+  2. [ ] `Content-Length` over `max_request_bytes` → 413 `request_too_large` before reading. Then read the body chunk by chunk from `request.stream()`, stopping with 413 once more than `max_request_bytes` bytes have arrived, with or without `Content-Length`
+  3. [ ] Parse JSON; not an object, unknown top-level keys, or a wrong type → 422 `invalid_body`. Missing `submission_id` → 422 `submission_id_required`. `kind` via `SubmissionKind(value)`; an unknown kind → `invalid_body`
+  4. [ ] On a worker thread: `submit(project_id=…, kind=…, payload=…, submitted_by=…, submission_id=…, store_dir=store_dir)`. Exceptions map through `CODE_BY_EXCEPTION`
+  5. [ ] 202 `{"submission_id": …}`
+- [ ] `GET …/submissions/{submission_id}`: validate the project id; on a worker thread, if the store file is absent → 404 `not_applied`; else open read-only, `store.submission(id)`; `None` → 404 `not_applied`; else 200 with the record fields the LLD D5 lists
+- [ ] Register both routes in `build_app`
+
+**Success Criteria**:
+- [ ] `pyright` clean
+- [ ] Committed with Task 6.2
+
+**Files to Create**: `src/amoeba/serve/submissions.py`
+**Files to Modify**: `src/amoeba/serve/app.py`
+
+---
+
+### Task 6.2: Test submissions
+**Owner**: Junior AI
+**Dependencies**: Task 6.1
+**Effort**: 3
+**Objective**: The submission requirements in the LLD's Functional Requirements, in-process.
+
+**Steps**:
+- [ ] `tests/serve/test_submissions.py` (no resident process; apply files with the store's existing apply path from `tests/inbox_harness.py` or `feed_harness.py` where needed):
+  - [ ] A valid intent → 202, and exactly one file in `inbox/new/`. A second POST with the same id → 202; after applying, one record
+  - [ ] Outcome: 404 `not_applied` before apply, 200 with `outcome` after; 404 for a `create_project` whose store does not exist yet
+  - [ ] An invalid payload → 422 with the same `reason` `amoeba submit` reports for that payload (run the CLI once to obtain it, not a literal) and nothing in the inbox
+  - [ ] Missing id → 422 `submission_id_required`; unknown key, non-object body, bad JSON → 422 `invalid_body`
+  - [ ] 413 with `Content-Length` too large; 413 for a chunked body with no `Content-Length` (a generator body), and the server read at most `max_request_bytes + 1` bytes (count the chunks the generator yielded)
+  - [ ] `SubmissionWriteError` (monkeypatch `submit` to raise it) → 503 `submission_write_failed`; a retry with the same id then succeeds and applies once
+  - [ ] Traversal ids on both endpoints → 400
+- [ ] `POST` with `content-type: text/plain` → 415 `unsupported_media_type`; `application/json; charset=utf-8` is accepted
+
+**Success Criteria**:
+- [ ] Tests pass; full suite green
+- [ ] Commit, e.g. `feat(serve): add submission and outcome endpoints`
+
+**Files to Create**: `tests/serve/test_submissions.py`
+
+Continue in `109-tasks.network-api-3.md` (Section 7).
