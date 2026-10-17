@@ -24,6 +24,9 @@ from amoeba.store.check_models import (
 from amoeba.store.evidence_models import Provenance, RecordSource
 from amoeba.store.mapping_journal import decode_mapping, decode_timestamp
 from amoeba.store.models import UnknownVocabularyValueError
+from amoeba.store.row_values import integer as _integer
+from amoeba.store.row_values import optional_text as _optional_text
+from amoeba.store.row_values import text as _text
 
 TABLE_CHECK_RESULTS: Final = "check_results"
 TABLE_PROGRESS_RECORDS: Final = "progress_records"
@@ -144,22 +147,6 @@ VALUES ({_placeholders(len(PROGRESS_INSERT_COLUMNS))})
 # --------------------------------------------------------------------------
 # Row mapping and insert parameters
 # --------------------------------------------------------------------------
-
-
-def _text(value: object, column: str) -> str:
-    if not isinstance(value, str):
-        raise UnknownVocabularyValueError(f"{column} is not a string: {value!r}")
-    return value
-
-
-def _optional_text(value: object, column: str) -> str | None:
-    return None if value is None else _text(value, column)
-
-
-def _integer(value: object, column: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise UnknownVocabularyValueError(f"{column} is not an integer: {value!r}")
-    return value
 
 
 def _vocabulary[VocabularyT: (CheckOutcome, RecordSource)](

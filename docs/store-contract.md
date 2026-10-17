@@ -537,7 +537,7 @@ has no record type. `check_standing(outcome, examined_count)` is exported.
 | `record_check(check, *, project_id)` | **One transaction:** retry check (first wins), checks, insert. Raises `NodeNotFoundError` or `ValueError`. The trigger appends a `check_recorded` change. |
 | `check(check_id)` | One record, or `None`. |
 | `checks(project_id, *, node_id=None)` | Records in arrival order. |
-| `record_progress(progress, *, project_id)` | In-process only, **write-only**. A bare insert returning `None`: no validation, no retry rule, no feed change. A missing node or a repeated id raises `StoreIntegrityError`. |
+| `record_progress(progress, *, project_id)` | In-process only, **write-only**. A bare insert returning `None`: no content validation, no retry rule, no feed change. A missing node, a node in another project, or a repeated id raises `StoreIntegrityError`. |
 | `calibration(project_id)` | `list[CalibrationRow]`, one per `(review_type, model)` over judge samples, ordered by review type then model. Read-only. |
 
 `record_verdict` gains one check for judge samples: a sample must share the node

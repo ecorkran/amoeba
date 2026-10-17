@@ -167,7 +167,7 @@ record_check(CheckInput)                      # one transaction
   insert the check_results row → trigger appends a check_recorded change
 ```
 
-`record_progress` is a bare insert. It returns nothing and appends no feed change. The node foreign key and the unique id are SQLite's constraints, so a missing node or a repeated id raises from the insert. No retry rule, no extra checks: those come with the reader (issue #5).
+`record_progress` is a bare insert. It returns nothing and appends no feed change. The unique id is SQLite's constraint, so a repeated id raises from the insert; the node must be in the given project (the foreign key sees only the node), else `StoreIntegrityError`. No retry rule, no content checks: those come with the reader (issue #5).
 
 **Calibration** is computed on read from judge-sample rows. See D3.
 

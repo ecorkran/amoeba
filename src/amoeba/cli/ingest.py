@@ -102,6 +102,8 @@ def _sample_record_id(args: argparse.Namespace, parsed: ParsedReview) -> str | N
     An explicit ``--id`` is used as given. A judge sample's default id is the
     digest followed by ``.`` and its invocation id, so the same file under one
     invocation is a no-op replay and under a second invocation is a new sample.
+    The id is an opaque key: invocation ids may contain ``.``, so never split it
+    back into digest and invocation.
     """
     if args.record_id is not None or args.judge_invocation_id is None:
         return args.record_id

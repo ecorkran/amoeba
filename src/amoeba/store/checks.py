@@ -15,6 +15,7 @@ from amoeba.store import sql_checks, sql_inbox
 from amoeba.store._base import isoformat, now
 from amoeba.store._check_writer import CheckWriter
 from amoeba.store.check_models import CheckInput, CheckRecord, ProgressInput
+from amoeba.store.models import StoreIntegrityError
 
 
 class CheckOperations(CheckWriter):
@@ -58,14 +59,22 @@ class CheckOperations(CheckWriter):
         ]
 
     def record_progress(self, progress: ProgressInput, *, project_id: str) -> None:
-        """Insert one progress record. No validation and no retry rule (D6).
+        """Insert one progress record. No retry rule and no content checks (D6).
+
+        The one check is that the node is in ``project_id``: the table's foreign
+        key sees only the node, so a mismatch would silently mis-attribute it.
 
         Raises:
-            StoreIntegrityError: If the node is missing or the id is already
-                recorded; the table's own constraints are the only checks.
+            StoreIntegrityError: If the node is missing or in another project,
+                or the id is already recorded.
         """
         with self._connection:
             self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
+            node = self.get_node(progress.node_id)
+            if node is None or node.project_id != project_id:
+                raise StoreIntegrityError(
+                    f"no node {progress.node_id!r} in project {project_id!r}"
+                )
             self._execute(
                 sql_checks.INSERT_PROGRESS,
                 sql_checks.progress_parameters(progress, project_id, isoformat(now())),

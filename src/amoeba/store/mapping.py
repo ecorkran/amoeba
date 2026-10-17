@@ -27,6 +27,8 @@ from amoeba.store.models import (
     SQReference,
     UnknownVocabularyValueError,
 )
+from amoeba.store.row_values import optional_text as _optional_text
+from amoeba.store.row_values import text as _text
 
 
 def _vocabulary[VocabularyT: (NodeStatus, NodeKind, BlockedKind)](
@@ -43,16 +45,6 @@ def _vocabulary[VocabularyT: (NodeStatus, NodeKind, BlockedKind)](
         raise UnknownVocabularyValueError(
             f"{column} value {value!r} is not a valid {vocabulary.__name__}"
         ) from error
-
-
-def _text(value: object, column: str) -> str:
-    if not isinstance(value, str):
-        raise UnknownVocabularyValueError(f"{column} is not a string: {value!r}")
-    return value
-
-
-def _optional_text(value: object, column: str) -> str | None:
-    return None if value is None else _text(value, column)
 
 
 def _timestamp(value: object, column: str) -> datetime | None:

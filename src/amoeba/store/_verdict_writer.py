@@ -85,6 +85,10 @@ class VerdictWriter(StoreBase):
             return VerdictRejection(failure_problem)
         if not verdict.provenance.upstream_version.strip():
             return VerdictRejection("upstream_version must not be empty")
+        if verdict.judge_invocation_id is not None and not (
+            verdict.judge_invocation_id.strip()
+        ):
+            return VerdictRejection("judge_invocation_id must not be blank")
         return self._invocation_mismatch(project_id, verdict)
 
     def _invocation_mismatch(

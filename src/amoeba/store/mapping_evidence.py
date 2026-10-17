@@ -31,6 +31,9 @@ from amoeba.store.finding_identity import (
 )
 from amoeba.store.mapping_journal import decode_mapping, decode_timestamp
 from amoeba.store.models import UnknownVocabularyValueError
+from amoeba.store.row_values import integer as _integer
+from amoeba.store.row_values import optional_text as _optional_text
+from amoeba.store.row_values import text as _text
 
 
 def _columns(
@@ -57,22 +60,6 @@ def _vocabulary[
         raise UnknownVocabularyValueError(
             f"{column} value {value!r} is not a valid {vocabulary.__name__}"
         ) from error
-
-
-def _text(value: object, column: str) -> str:
-    if not isinstance(value, str):
-        raise UnknownVocabularyValueError(f"{column} is not a string: {value!r}")
-    return value
-
-
-def _optional_text(value: object, column: str) -> str | None:
-    return None if value is None else _text(value, column)
-
-
-def _integer(value: object, column: str) -> int:
-    if not isinstance(value, int):
-        raise UnknownVocabularyValueError(f"{column} is not an integer: {value!r}")
-    return value
 
 
 def _optional_integer(value: object, column: str) -> int | None:

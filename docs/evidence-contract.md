@@ -583,9 +583,9 @@ consumer, so they share one table with opaque JSON `content` and the standard
 provenance.
 
 `store.record_progress(ProgressInput, *, project_id) -> None` is **write-only**:
-a bare insert with no validation beyond the table's constraints, no retry rule,
-no feed change, no inbox kind, no listing. A missing node or a repeated id
-raises `StoreIntegrityError`. The reader and the rest arrive with the first
+a bare insert with no content validation, no retry rule, no feed change, no
+inbox kind, no listing. A missing node, a node in another project, or a
+repeated id raises `StoreIntegrityError`. The reader and the rest arrive with the first
 consumer (GitHub issue #5).
 
 ## Storage

@@ -57,7 +57,6 @@ def _record(
 
 def _seed(store: Store) -> None:
     node = seed_node(store)
-    V = ReviewVerdict
     # judge.a / model-b: two invocations, mixed verdicts and scores.
     _record(
         store,
@@ -66,7 +65,7 @@ def _seed(store: Store) -> None:
         invocation="j1",
         review_type="judge.a",
         model="model-b",
-        verdict=V.PASS,
+        verdict=ReviewVerdict.PASS,
         score=81,
     )
     _record(
@@ -76,7 +75,7 @@ def _seed(store: Store) -> None:
         invocation="j1",
         review_type="judge.a",
         model="model-b",
-        verdict=V.CONCERNS,
+        verdict=ReviewVerdict.CONCERNS,
         score=62,
     )
     _record(
@@ -86,7 +85,7 @@ def _seed(store: Store) -> None:
         invocation="j2",
         review_type="judge.a",
         model="model-b",
-        verdict=V.FAIL,
+        verdict=ReviewVerdict.FAIL,
     )
     # judge.a / model-a: one scoreless UNKNOWN (not a provider failure).
     _record(
@@ -96,7 +95,7 @@ def _seed(store: Store) -> None:
         invocation="j1",
         review_type="judge.a",
         model="model-a",
-        verdict=V.UNKNOWN,
+        verdict=ReviewVerdict.UNKNOWN,
     )
     # judge.b / model-a
     _record(
@@ -106,7 +105,7 @@ def _seed(store: Store) -> None:
         invocation="j3",
         review_type="judge.b",
         model="model-a",
-        verdict=V.PASS,
+        verdict=ReviewVerdict.PASS,
         score=70,
     )
     # An ordinary review never appears.

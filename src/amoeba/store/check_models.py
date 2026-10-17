@@ -147,9 +147,11 @@ def _examined_count(payload: Mapping[str, object]) -> int | None:
     if CHECK_EXAMINED_COUNT not in payload:
         raise _malformed(CHECK_EXAMINED_COUNT, None, "present (an integer or null)")
     value = payload[CHECK_EXAMINED_COUNT]
-    if value is not None and (not isinstance(value, int) or isinstance(value, bool)):
-        raise _malformed(CHECK_EXAMINED_COUNT, value, "an integer or null")
-    return value
+    if value is None:
+        return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise _malformed(CHECK_EXAMINED_COUNT, value, "an integer or null")
 
 
 def _examined(payload: Mapping[str, object]) -> Mapping[str, object] | None:

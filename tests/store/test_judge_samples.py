@@ -93,6 +93,14 @@ def test_a_rejected_first_sample_leaves_the_invocation_undefined(
     assert recorded.node_id == other
 
 
+@pytest.mark.parametrize("blank", ["", " ", "\t\n"])
+def test_a_blank_invocation_id_raises(store: Store, blank: str) -> None:
+    node = seed_node(store)
+    with pytest.raises(ValueError, match="judge_invocation_id"):
+        store.record_verdict(_sample("s1", node, invocation=blank), project_id=PROJECT)
+    assert store.verdicts(PROJECT) == []
+
+
 def _blank_version() -> Provenance:
     return dataclasses.replace(PROVENANCE, upstream_version=" ")
 

@@ -170,6 +170,13 @@ def test_a_progress_record_for_a_missing_node_raises(store: Store) -> None:
     assert _progress_rows(store) == []
 
 
+def test_a_progress_record_for_another_projects_node_raises(store: Store) -> None:
+    node = seed_node(store)
+    with pytest.raises(StoreIntegrityError):
+        store.record_progress(_progress("p1", node), project_id="another-project")
+    assert _progress_rows(store) == []
+
+
 def test_progress_writes_no_feed_change(store: Store) -> None:
     node = seed_node(store)
     count = "SELECT COUNT(*) FROM changes"
