@@ -1,0 +1,66 @@
+[
+  {
+    "id": "project_1773962297191_18jiro1z8",
+    "name": "hydrology-dashboard",
+    "template": "default",
+    "fileSlice": "",
+    "fileTasks": "",
+    "instruction": "Phase 1: Concept",
+    "developmentPhase": "Phase 1: Concept",
+    "dateProject": "20260319",
+    "projectPath": "/Users/manta/source/repos/manta/hydrology-dashboard",
+    "customData": {},
+    "createdAt": "2026-03-19T23:18:17.191Z",
+    "updatedAt": "2026-03-19T23:18:17.191Z"
+  },
+  {
+    "id": "project_1781844717321_1gukaohbc",
+    "name": "amoeba",
+    "template": "default",
+    "fileSlice": "",
+    "fileTasks": "",
+    "instruction": "",
+    "developmentPhase": "",
+    "dateProject": "20261016",
+    "projectPath": "/Users/manta/source/repos/manta/amoeba",
+    "customData": {},
+    "createdAt": "2026-06-19T04:51:57.320Z",
+    "updatedAt": "2026-10-17T03:41:03.738Z",
+    "fileArch": "",
+    "fileSlicePlan": "",
+    "worktrees": [
+      {
+        "id": "wt_1792034653114_tcyv1a3ry",
+        "name": "default",
+        "indexRange": [
+          100,
+          799
+        ],
+        "worktreePath": "/Users/manta/source/repos/manta/amoeba",
+        "isDefault": true,
+        "developmentPhase": "Phase 6: Implementation",
+        "activeSlice": "108-slice.context-forge-event-seam",
+        "activeTaskFile": "108-tasks.context-forge-event-seam",
+        "instruction": "Phase 6: Implementation",
+        "archDoc": "100-arch.substrate-run-state-store",
+        "slicePlan": "100-slices.substrate-run-state-store"
+      }
+    ]
+  },
+  {
+    "id": "project_1782680529434_oxdc201u1",
+    "name": "ai-project-guide",
+    "template": "default",
+    "fileSlice": "120-slice.setup-ide-behavior-tests",
+    "fileTasks": "120-tasks.setup-ide-behavior-tests",
+    "instruction": "Phase 6: Implementation",
+    "developmentPhase": "Phase 6: Implementation",
+    "dateProject": "20261013",
+    "projectPath": "/Users/manta/source/repos/manta/ai-project-guide",
+    "customData": {},
+    "createdAt": "2026-06-28T21:02:09.433Z",
+    "updatedAt": "2026-10-13T13:29:13.834Z",
+    "fileArch": "120-arch.guide-tooling",
+    "fileSlicePlan": "120-slices.guide-tooling"
+  }
+]

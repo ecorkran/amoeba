@@ -48,6 +48,15 @@ Captured **20260921** from `cf get --json` run against this repository.
 | File | Why it is here |
 | --- | --- |
 | `cf_get_amoeba.json` | A real project record, carrying `updatedAt` — the field the CF observer records as provenance |
+| `projects.json` | A real CF data file reduced to three entries, for the `projects.json` parser (slice 108) |
+
+`projects.json` was captured 2026-10-16 from `~/.config/context-forge/projects.json`
+(observed on CF 0.19.13, a dated observation, not a pin). Reduction: the 29 entries
+were cut to three, unedited and in original order: `hydrology-dashboard` and
+`ai-project-guide` (neither has `worktrees`), and `amoeba` (has `worktrees`, with a
+`default` worktree holding `developmentPhase`, `activeSlice`, `activeTaskFile`). The only edit
+is re-serialization at 2-space indent. No `customData` was edited (all three are empty
+objects). The entries hold local paths and nothing secret.
 
 Note what this fixture does **not** contain: any version field. That absence is
 why the CF observer captures an opaque `cf --version` label separately, once per
