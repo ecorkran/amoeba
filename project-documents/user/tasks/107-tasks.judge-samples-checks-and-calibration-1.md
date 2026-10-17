@@ -6,8 +6,8 @@ lld: user/slices/107-slice.judge-samples-checks-and-calibration.md
 dependencies: [101, 102, 103, 104, 105, 106]
 projectState: Slices 101–106 are merged (store schema 6, listing registry, inbox kinds `create_project`/`resolution`/`intent`/`verdict`/`watch_reviews`, verdicts and findings, 105's parser and `amoeba ingest review`, 106's change feed). A verdict has no invocation id, no check or progress table exists, and `parse_review_json` accepts a stdout capture that says `UNKNOWN` with a score. This slice adds migration 007, judge samples, calibration, checks, progress records, the `check` kind, and the D4 refusal.
 dateCreated: 20261015
-dateUpdated: 20261015
-status: in_progress
+dateUpdated: 20261016
+status: complete
 ---
 
 ## Context Summary

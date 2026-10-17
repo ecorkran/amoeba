@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102, 103, 104, 105, 106]
 interfaces: [108, 109, 110]
 dateCreated: 20261015
-dateUpdated: 20261015
-status: not_started
+dateUpdated: 20261016
+status: complete
 ---
 
 # Slice Design: judge-samples-checks-and-calibration
