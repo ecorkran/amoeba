@@ -7,6 +7,11 @@ a string literal; each names the enum member instead.
 Rule 4: inspection imports nothing from the CLI, the server, or the process.
 Rule 5: no server module but ``serve/errors.py`` spells an API error code as a
 string literal or an error status (400-599) as an integer literal.
+Rule 6: the server imports nothing from the CLI or the process.
+Rule 7: only ``cli/serve.py`` imports the server, so no other command loads uvicorn.
+Rule 8: the server takes from ``amoeba.inbox`` only ``submit`` and its two
+errors, takes ``SubmissionKind`` from its defining module, and never calls
+``Store.open``.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ SRC = Path(__file__).parents[1] / "src" / "amoeba"
 FORBIDDEN_FOR_STORE = ("amoeba.upstream", "amoeba.process", "amoeba.feed")
 FORBIDDEN_FOR_FEED = ("amoeba.process",)
 FORBIDDEN_FOR_INSPECTION = ("amoeba.cli", "amoeba.serve", "amoeba.process")
+FORBIDDEN_FOR_SERVE = ("amoeba.cli", "amoeba.process")
 
 #: Modules held to Rule 3. Each task that creates a module adds it here; a
 #: listed module that does not exist fails rather than being skipped.
@@ -149,4 +155,87 @@ def test_rule_5_reports_a_code_and_a_status(tmp_path: Path) -> None:
 
     assert _error_vocabulary_violations(tmp_path) == [
         "handler.py spells ['not_found'] [404]"
+    ]
+
+
+def test_rule_6_the_server_imports_no_cli_or_process() -> None:
+    """It is not the resident process and cannot reach its host or tenants."""
+    assert _violations("serve", FORBIDDEN_FOR_SERVE) == []
+
+
+#: The one module allowed to import the server.
+_SERVE_IMPORTER = SRC / "cli" / "serve.py"
+
+
+def test_rule_7_only_cli_serve_imports_the_server() -> None:
+    importers = [
+        str(path.relative_to(SRC))
+        for path in sorted(SRC.rglob("*.py"))
+        if path != _SERVE_IMPORTER
+        and (SRC / "serve") not in path.parents
+        and _mentions(_imported_names(path), "amoeba.serve")
+    ]
+    assert importers == []
+
+
+#: Everything the server may take from the inbox: its one write path and errors.
+_INBOX_ALLOWED = frozenset({"submit", "InvalidSubmissionError", "SubmissionWriteError"})
+_INBOX = "amoeba.inbox"
+_SUBMISSION_KIND_HOME = "amoeba.store.inbox_models"
+
+
+def _inbox_violations(path: Path) -> list[str]:
+    found: list[str] = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found.extend(
+                f"{path.name}: import {alias.name}"
+                for alias in node.names
+                if _mentions({alias.name}, _INBOX)
+            )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names = {alias.name for alias in node.names}
+            if _mentions({node.module}, _INBOX):
+                found.extend(
+                    f"{path.name}: {node.module}.{name}"
+                    for name in sorted(names - _INBOX_ALLOWED)
+                )
+            if "SubmissionKind" in names and node.module != _SUBMISSION_KIND_HOME:
+                found.append(f"{path.name}: SubmissionKind from {node.module}")
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "open"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "Store"
+        ):
+            found.append(f"{path.name}: Store.open")
+    return found
+
+
+def test_rule_8_the_server_writes_only_through_submit() -> None:
+    found = [
+        v
+        for path in sorted((SRC / "serve").rglob("*.py"))
+        for v in _inbox_violations(path)
+    ]
+    assert found == []
+
+
+def test_rule_8_reports_every_kind_of_violation(tmp_path: Path) -> None:
+    module = tmp_path / "bad.py"
+    module.write_text(
+        "from amoeba.inbox import pending, submit\n"
+        "from amoeba.inbox import SubmissionKind\n"
+        "import amoeba.inbox.durable\n"
+        "Store.open(path)\n",
+        encoding="utf-8",
+    )
+
+    assert _inbox_violations(module) == [
+        "bad.py: amoeba.inbox.pending",
+        "bad.py: amoeba.inbox.SubmissionKind",
+        "bad.py: SubmissionKind from amoeba.inbox",
+        "bad.py: import amoeba.inbox.durable",
+        "bad.py: Store.open",
     ]
