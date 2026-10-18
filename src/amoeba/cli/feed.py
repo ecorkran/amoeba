@@ -17,6 +17,7 @@ from types import FrameType
 from typing import TYPE_CHECKING, Any
 
 from amoeba.feed import FeedSettings, follow
+from amoeba.feed.wire import change_record
 from amoeba.store import Change, Store, paths
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -54,24 +55,9 @@ def _non_negative(text: str) -> int:
     return value
 
 
-def change_line(change: Change) -> str:
-    """One change as a JSON object, keys as in :class:`Change`."""
-    return json.dumps(
-        {
-            "seq": change.seq,
-            "project_id": change.project_id,
-            "kind": change.kind.value,
-            "node_id": change.node_id,
-            "subject_id": change.subject_id,
-            "payload": dict(change.payload),
-            "recorded_at": change.recorded_at.isoformat(),
-        }
-    )
-
-
 def _print_all(changes: Iterable[Change]) -> None:
     for change in changes:
-        print(change_line(change), flush=True)
+        print(json.dumps(change_record(change)), flush=True)
 
 
 def _existing(project_id: str, after: int, settings: FeedSettings) -> Iterator[Change]:
