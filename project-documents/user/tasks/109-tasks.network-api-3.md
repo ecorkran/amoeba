@@ -12,7 +12,7 @@ status: not_started
 
 ## Context Summary (File 3 of 3)
 
-- Continues `109-tasks.network-api-1.md` and `-2.md`. File 1's Context Summary (verified code facts, branch, commit cadence, tool knowledge, open item, task-level additions) and file 2's event-loop and test rules apply here unchanged.
+- Continues `109-tasks.network-api-1.md` and `-2.md`. File 1's Context Summary (verified code facts, branch, commit cadence, tool knowledge, task-level additions) and file 2's event-loop and test rules apply here unchanged.
 - **This file:** Sections 7–9: the stream; `amoeba serve` in the CLI; smoke, load, docs, validation.
 
 ---
@@ -136,10 +136,9 @@ status: not_started
 - [ ] `tests/serve/test_stream_slots.py`, with `max_streams=2` and short intervals:
   - [ ] Two open streams, a third → 503 `stream_limit_reached` with `Retry-After`; a listing read still succeeds
   - [ ] Abrupt client close: the slot is free (a new stream opens) within one heartbeat plus one follow interval, and the follow thread has exited (track threads by name)
-  - [ ] Stalled reader: a raw socket client that sends the request and never reads, while many changes are committed. The slot frees within one heartbeat plus `send_timeout_seconds`, and the follow thread, blocked in the hand-off, has exited
+  - [ ] Stalled reader, which also pins behavior 1 (server memory does not grow with the change count): a raw socket client that sends the request and never reads, while many changes are committed. Before the send timeout fires, assert the follow thread is blocked in the hand-off and has handed off at most a bounded number of changes, far fewer than were committed. Then the slot frees within one heartbeat plus `send_timeout_seconds`, and the follow thread has exited
   - [ ] Server shutdown with an open stream: the server stops and the thread exits
-- [ ] Pin behavior 1: with a stalled reader, server memory does not grow with the change count (assert the follow thread is blocked in the hand-off, i.e. it has sent at most a bounded number of changes)
-- [ ] Pin behavior 2 (disconnect is noticed on send), with `max_streams=1` and `heartbeat_interval_seconds=30` so no heartbeat falls inside the test: after a clean client close, a new stream request 0.5 s later still gets 503; then commit one change and poll (bounded, e.g. 5 s) until a new stream opens
+- [ ] Pin behavior 2 (disconnect is noticed on send), with `max_streams=1` and `heartbeat_interval_seconds=30` so no heartbeat falls inside the test: after a clean client close, a new stream request 0.5 s later still gets 503; then commit one change and poll (bounded, e.g. 5 s) until a new stream opens. Put a comment on this test: it pins a uvicorn limitation the heartbeat design relies on, so if it fails because the 503 never comes, uvicorn got better at noticing disconnects. The server has not regressed; revisit the heartbeat rationale in the LLD (D6) instead of forcing the test green
 - [ ] Bound every wait in these tests; none may hang the suite
 
 **Success Criteria**:
@@ -159,9 +158,8 @@ status: not_started
 **Objective**: A foreground `amoeba serve` with the bind policy, TLS, and a shutdown grace (LLD D3, D7).
 
 **Steps**:
-- [ ] Confirm the PM has answered the open item in file 1's Context Summary (where `ServeRefusedError` is mapped). If not, stop and wait
 - [ ] `src/amoeba/serve/server.py`: `run(settings, token, store_dir)`: `check_bind` first; then `uvicorn.Server(uvicorn.Config(build_app(…), host, port, ssl_certfile, ssl_keyfile, timeout_graceful_shutdown=settings.shutdown_grace_seconds, …)).run()`. Confirm parameter names in the uvicorn docs. Leave uvicorn's access log on
-- [ ] `src/amoeba/cli/serve.py`: `add_serve_parser` with `--host`, `--port`, `--tls-cert`, `--tls-key` (defaults from `ServeSettings`, following `settings_flags.py`); `run_serve(args)`: read `os.environ.get(TOKEN_ENV_VAR)` once (empty string treated as unset), resolve `paths.store_dir()` once, call `server.run`; catch `ServeRefusedError`, print `amoeba: <message>` to stderr, return `ExitCode.SERVE_REFUSED` (per the PM's answer to the open item)
+- [ ] `src/amoeba/cli/serve.py`: `add_serve_parser` with `--host`, `--port`, `--tls-cert`, `--tls-key` (defaults from `ServeSettings`, following `settings_flags.py`); `run_serve(args)`: read `os.environ.get(TOKEN_ENV_VAR)` once (empty string treated as unset), resolve `paths.store_dir()` once, call `server.run`; catch `ServeRefusedError`, print `amoeba: <message>` to stderr, return `ExitCode.SERVE_REFUSED` (file 1's "Task-level additions"; LLD "Exceptions")
 - [ ] In `cli/main.py`: add `SERVE_REFUSED = 13` to `ExitCode` with its comment; register the parser and dispatch `"serve"` with lazy imports, so other commands never load uvicorn. A bind failure reaches the existing boundary and exits 1
 
 **Success Criteria**:

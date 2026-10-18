@@ -139,7 +139,7 @@ Supervisor-level listings (`projects`, `inbox`) open no store, take no `project`
 ```
 POST /v1/projects/demo/submissions  {"kind": "intent", "submission_id": "…", "submitted_by": "bridge", "payload": {...}}
   content-type not application/json → 415; Content-Length over max_request_bytes → 413 before reading
-  body read chunk by chunk; reading stops and returns 413 at max_request_bytes + 1, with or without Content-Length
+  body read chunk by chunk; reading stops at the first chunk that passes max_request_bytes and returns 413, with or without Content-Length
   worker thread: inbox.submit(project_id=…, kind=…, payload=…, submitted_by=…, submission_id=…)
     InvalidSubmissionError → 422 {"error": "invalid_submission", "reason": <QuarantineReason>, "detail": …}
     SubmissionWriteError   → 503 submission_write_failed      (nothing left in the inbox, per 103)
@@ -208,11 +208,14 @@ No other state is shared. Each request opens its own read-only store and closes 
 
 | Host | Token | TLS cert and key | Result |
 | --- | --- | --- | --- |
-| loopback | any | any | serves |
+| loopback | any | neither, or both usable | serves |
 | other | set | both set | serves over HTTPS |
 | other | unset | any | refused: `token_required` |
 | other | set | either missing | refused: `tls_required` |
 | any | set but too short | any | refused: `token_too_short` |
+| loopback | any | exactly one set | refused: `tls_required` |
+
+Half a TLS pair is refused on every bind, loopback included, so a missing `--tls-key` never silently turns an HTTPS start into plain HTTP.
 
 A refusal exits with `ExitCode.SERVE_REFUSED` (13) and a message that names the rule. It never falls back to a loopback bind. A host counts as loopback only if it is the literal name `localhost`, or `ipaddress.ip_address(host).is_loopback` is true for it. No name is resolved, so `0.0.0.0`, `::`, and every other hostname count as non-local. TLS is required with the token because a bearer token sent in cleartext is the credential itself, delivered to anyone on the path. There is no override flag in this slice.
 
@@ -257,7 +260,7 @@ When TLS files are given, `check_bind` also loads them with `ssl.SSLContext.load
 - **Labels derive from structure.** Option names are declared once in the registry. The CLI derives `--flag` from them, and the server derives query parameter names from them. URL listing names are `Listing.name`. Scope is the `ListingScope` enum (`project`, `supervisor`), set by which row function a listing declares.
 - **Event-loop discipline.** No route handler calls the store, the filesystem, or `submit()` on the loop. Each such call runs in `anyio.to_thread.run_sync`, or on the stream's own thread. Ruff's `ASYNC` rules are already enabled.
 - **Settings.** `ServeSettings` is a frozen dataclass, the one home of every serve default (D3 of 102's settings pattern). It holds `host="127.0.0.1"`, `port=8765`, `tls_certfile`, `tls_keyfile`, `heartbeat_interval_seconds=15.0`, `send_timeout_seconds=30.0`, `max_streams=32`, `max_request_bytes=1_048_576`, `shutdown_grace_seconds=5.0`, and a `FeedSettings`. Each is load-bearing: the send timeout, the stream limit, and the size cap are what bound a slot, the stream threads, and a body's memory, and none has a usable library default. CLI flags exist for host, port, and the two TLS files only.
-- **Exceptions.** Only the exceptions in D8's table are caught, plus the 500 boundary handler. `ServeRefusedError` is raised by `check_bind` and mapped to the exit code in `cli/main.py`, the same way lifecycle errors are.
+- **Exceptions.** Only the exceptions in D8's table are caught, plus the 500 boundary handler. `ServeRefusedError` is raised by `check_bind` and caught in `cli/serve.py`, which maps it to `ExitCode.SERVE_REFUSED`. It cannot be caught in `cli/main.py`, because `cli/serve.py` is the only module that imports `amoeba.serve`.
 
 ## Implementation Details
 
@@ -344,7 +347,7 @@ There is no migration and no table. The only store change is the two read-only m
 - A submission POSTed over HTTP while the resident process is stopped is applied on `start`, and its outcome endpoint goes from 404 `not_applied` to 200 `applied`. A second POST with the same id returns 202 and applies nothing twice. An invalid payload returns 422 with the same `reason` that `amoeba submit` reports, and leaves nothing in the inbox.
 - A stream client receives every change after its cursor once, in `seq` order. Disconnecting and reconnecting with `Last-Event-ID` (or `?after=`) across commits made while it was away yields no gap and no repeat.
 - An idle stream sends a keepalive every `heartbeat_interval_seconds`. A client that closes its connection frees its stream slot within one heartbeat interval plus one follow interval. A client that stays connected but stops reading frees it within one heartbeat interval plus `send_timeout_seconds`. In both cases the follow thread has exited, including when it was blocked handing off a change.
-- A POST body over `max_request_bytes` gets 413, whether or not it declares `Content-Length`, and the server reads no more than `max_request_bytes + 1` bytes of it. A POST retried with the same id after a 503 `submission_write_failed` is applied once.
+- A POST body over `max_request_bytes` gets 413, whether or not it declares `Content-Length`, and the server stops reading at the first chunk that takes it past `max_request_bytes` (it reads at most the cap plus that one chunk). A POST retried with the same id after a 503 `submission_write_failed` is applied once.
 - A request with an `Origin` header gets 403. On a loopback bind, a request with a `Host` other than a loopback name gets 421. A POST that is not `application/json` gets 415.
 - During authenticated and failed requests, the token appears in no log record and no response body.
 - At `max_streams` open streams, the next stream request gets 503 `stream_limit_reached`, and reads still succeed.

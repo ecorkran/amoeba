@@ -40,9 +40,9 @@ status: not_started
 
 **Tool knowledge:** there are no tool guides for Starlette, uvicorn, anyio, or httpx in `ai-project-guide/tool-guides/`. Use the context7 MCP for their current documentation, then the web. Where a task names a library parameter, confirm it in the docs for the installed version before using it; if it does not exist, stop and tell the PM.
 
-**Open item for the PM (gates Task 8.1 only):** the LLD says `ServeRefusedError` is "mapped to the exit code in `cli/main.py`", and also that "`amoeba.cli.serve` is the only module that imports `amoeba.serve`". Both cannot hold. Recommendation: `cli/serve.py`'s `run_serve` catches `ServeRefusedError`, prints it, and returns `ExitCode.SERVE_REFUSED`; `ExitCode` stays defined in `cli/main.py`. Tasks 8.1–8.2 assume this.
-
 **Task-level additions to the LLD:**
+- `ServeRefusedError` is caught in `cli/serve.py`'s `run_serve`, which prints it and returns `ExitCode.SERVE_REFUSED`; `ExitCode` stays defined in `cli/main.py`. Reason: `cli/serve.py` is the only module allowed to import `amoeba.serve` (LLD "Layering rules"), so `cli/main.py` cannot catch it. The LLD's "Exceptions" bullet says the same.
+- Each listing-specific option object is defined once, in the `inspection` module whose row function reads it: `CHANNEL_OPTION` in `inbox.py`, `JUDGE_INVOCATION_OPTION` and `VERDICT_OPTION` in `evidence.py`, `OUTCOME_OPTION` in `feed.py`, `UNRESOLVED_OPTION` in `core.py`. `NODE_OPTION` is shared, in `listing.py`. The server derives query parameters from these objects through the registry, never by importing them by name.
 - `inspection/listing.py` holds the registry's types (`Row`, `ListingScope`, the option classes, `ListingRequest`, `Listing`) and the shared `NODE_OPTION`; `inspection/__init__.py` holds the registry and `read_listing`. Reason: the row modules need the option objects at runtime, and the package `__init__` imports the row modules, so defining the types in `__init__` would be an import cycle.
 - `FlagOption`, a typed replacement for the `(flag, help)` pairs, so flags gain a `name` like the other options (LLD "What changes shape").
 - `tests/inspection_harness.py`, the `populated` seeding extracted from `tests/test_cli_inspect.py`, so the baseline capture and the server parity test use one seeded store.
@@ -83,11 +83,10 @@ status: not_started
 - [ ] Create `tests/inspection_harness.py`. Move the body of `tests/test_cli_inspect.py`'s `populated` fixture into `seed_every_listing(supervisor_dir: Path) -> SeededStore`, where `SeededStore` is a frozen dataclass holding the project id and the ids a listing option needs (the node id, the verdict id `changes` takes, the judge invocation id)
 - [ ] Move the constants the seeding uses (`PROJECT`, `_FIXTURE_VERDICT`, …) with it; `test_cli_inspect.py` imports them
 - [ ] Keep `populated` as a thin fixture calling `seed_every_listing`
-- [ ] Add a test in `tests/test_cli_inspect.py` (if one does not already assert it) that every listing in `LISTINGS` returns at least one row from the seeded store with `--json`, so the Task 5.2 parity test cannot pass on empty rows
+- [ ] Add no new test. `test_every_listing_renders_json` already asserts that every listing returns at least one row from the seeded store, which is what keeps the Task 5.2 parity test from passing on empty rows
 
 **Success Criteria**:
-- [ ] `uv run pytest tests/test_cli_inspect.py` passes, with no test removed
-- [ ] `tests/test_cli_inspect.py` is shorter by the moved seeding
+- [ ] `uv run pytest tests/test_cli_inspect.py` passes, with no test removed, and `test_every_listing_renders_json` still runs for every listing
 - [ ] Commit, e.g. `test: extract shared seeded-store harness for listings`
 
 **Files to Create**: `tests/inspection_harness.py`
@@ -200,37 +199,63 @@ status: not_started
 
 ---
 
-### Task 2.5: Convert the rows to `ListingRequest` and move the sibling modules
+### Task 2.5a: Convert the rows to `ListingRequest` in place
 **Owner**: Junior AI
 **Dependencies**: Task 2.4
-**Effort**: 3
-**Objective**: Every row function takes a `ListingRequest`, and the five sibling modules live in `amoeba.inspection`; the registry stays in `cli/inspect.py` for one more task, so this commit is green (LLD Migration Plan, rows 1–2).
+**Effort**: 2
+**Objective**: Every row function takes a `ListingRequest` while every module stays where it is, so the change of shape is committed green before anything moves (LLD "What changes shape").
 
 **Steps**:
-- [ ] Use `git mv` for each move so history follows the file. In each moved module: import `Row` and the option types from `amoeba.inspection.listing`; replace `args.project` with `request.project_id`; drop `import argparse`. Define each listing-specific option once, in the module whose row function reads it, and read it with `request.option(THAT_OPTION)`:
-  1. [ ] `cli/inspect_inbox.py` → `inspection/inbox.py`. Define `CHANNEL_OPTION` (`ChoiceOption`, name `channel`)
-  2. [ ] `cli/inspect_evidence.py` → `inspection/evidence.py`, with `VerdictNotComparableError`. Define `JUDGE_INVOCATION_OPTION` (name `judge_invocation_id`) and `VERDICT_OPTION` (name `verdict`, required). `args.json` becomes `not request.compact`; use `NODE_OPTION`
-  3. [ ] `cli/inspect_feed.py` → `inspection/feed.py`. Define `OUTCOME_OPTION` (`ChoiceOption`, name `outcome`, choices `OUTCOME_CHOICES`)
-  4. [ ] `cli/inspect_checks.py` → `inspection/checks.py`; use `NODE_OPTION`
-  5. [ ] `cli/inspect_cf.py` → `inspection/cf.py`
-- [ ] In `cli/inspect.py` (registry still here): convert the four core row functions the same way, defining `UNRESOLVED_OPTION` (`FlagOption`, name `unresolved`); build `LISTINGS` from `amoeba.inspection.listing.Listing` and the option objects; `run_listing` builds a `ListingRequest` from `args` (each option's value read by its `name`, `compact = not args.json`) and prints exactly as before
-- [ ] In `cli/main.py`: `_add_inspect_parser` uses `listing.scope` instead of `requires_project` and adds each option by its derived `flag`, flags first, then choices, then values, as today. Import `VerdictNotComparableError` from `amoeba.inspection.evidence`
-- [ ] Keep help texts, choices, metavars, and `required` exactly as today. Update each module docstring that names `inspect.py` or a sibling
-- [ ] Tests: `scope` instead of `requires_project` in `tests/test_cli_inspect.py`; `git mv` `tests/cli/test_inspect_{evidence,feed,checks,cf}.py` to `tests/inspection/test_{evidence,feed,checks,cf}.py` and fix their imports; in `tests/test_import_boundaries.py`, change `cli/inspect_feed.py` to `inspection/feed.py`
+- [ ] In each sibling module, still under `cli/`: import `Row` and the option types from `amoeba.inspection.listing`; replace `args.project` with `request.project_id`; drop `import argparse`. Define each listing-specific option once, in the module whose row function reads it (file 1's "Task-level additions"), and read it with `request.option(THAT_OPTION)`:
+  1. [ ] `cli/inspect_inbox.py`: define `CHANNEL_OPTION` (`ChoiceOption`, name `channel`)
+  2. [ ] `cli/inspect_evidence.py`: define `JUDGE_INVOCATION_OPTION` (name `judge_invocation_id`) and `VERDICT_OPTION` (name `verdict`, required). `args.json` becomes `not request.compact`; use `NODE_OPTION`
+  3. [ ] `cli/inspect_feed.py`: define `OUTCOME_OPTION` (`ChoiceOption`, name `outcome`, choices `OUTCOME_CHOICES`)
+  4. [ ] `cli/inspect_checks.py`: use `NODE_OPTION`
+  5. [ ] `cli/inspect_cf.py`: `request.project_id` only
+- [ ] Run `uv run pytest tests/cli` once after the five modules; it must be green before the next step
+- [ ] In `cli/inspect.py`: convert the four core row functions the same way, defining `UNRESOLVED_OPTION` (`FlagOption`, name `unresolved`); build `LISTINGS` from `amoeba.inspection.listing.Listing` and the option objects; `run_listing` builds a `ListingRequest` from `args` (each option's value read by its `name`, `compact = not args.json`) and prints exactly as before
+- [ ] In `cli/main.py`: `_add_inspect_parser` uses `listing.scope` instead of `requires_project` and adds each option by its derived `flag`, flags first, then choices, then values, as today
+- [ ] Keep help texts, choices, metavars, and `required` exactly as today
+- [ ] Tests: `scope` instead of `requires_project` in `tests/test_cli_inspect.py`
 
 **Success Criteria**:
-- [ ] No `argparse` import in `src/amoeba/inspection/`; `grep -rn "amoeba.cli.inspect_\|cli import inspect_" src tests` finds nothing
+- [ ] No `argparse` import in any of the five sibling modules
+- [ ] Suite, `ruff`, `pyright` clean
+- [ ] Commit, e.g. `refactor(inspect): read listing options through ListingRequest`
+
+**Files to Modify**: the five `cli/inspect_*.py` modules, `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_cli_inspect.py`
+
+---
+
+### Task 2.5b: Move the sibling modules to `amoeba.inspection`
+**Owner**: Junior AI
+**Dependencies**: Task 2.5a
+**Effort**: 1
+**Objective**: The five sibling modules live in `amoeba.inspection`, as a pure move so git history follows each file; the registry stays in `cli/inspect.py` for one more task (LLD Migration Plan, row 2).
+
+**Steps**:
+- [ ] `git mv` each module, then fix imports only. No other edit in this commit:
+  1. [ ] `cli/inspect_inbox.py` → `inspection/inbox.py`
+  2. [ ] `cli/inspect_evidence.py` → `inspection/evidence.py` (with `VerdictNotComparableError`)
+  3. [ ] `cli/inspect_feed.py` → `inspection/feed.py`
+  4. [ ] `cli/inspect_checks.py` → `inspection/checks.py`
+  5. [ ] `cli/inspect_cf.py` → `inspection/cf.py`
+- [ ] Update `cli/inspect.py`'s imports, and `cli/main.py`'s `VerdictNotComparableError` import to `amoeba.inspection.evidence`. Update each module docstring that names `inspect.py` or a sibling
+- [ ] Tests: `git mv` `tests/cli/test_inspect_{evidence,feed,checks,cf}.py` to `tests/inspection/test_{evidence,feed,checks,cf}.py` and fix their imports; in `tests/test_import_boundaries.py`, change `cli/inspect_feed.py` to `inspection/feed.py`
+
+**Success Criteria**:
+- [ ] `grep -rn "amoeba.cli.inspect_\|cli import inspect_" src tests` finds nothing; `git log --follow` on each moved file shows its history
 - [ ] Suite, `ruff`, `pyright` clean
 - [ ] Commit, e.g. `refactor(inspection): move listing rows out of the CLI`
 
-**Files to Modify**: `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_cli_inspect.py`, `tests/test_import_boundaries.py`
+**Files to Modify**: `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_import_boundaries.py`
 **Files to Move**: the five `cli/inspect_*.py` modules and four `tests/cli/test_inspect_*.py` files, as listed
 
 ---
 
 ### Task 2.6: Move the registry and add `read_listing`
 **Owner**: Junior AI
-**Dependencies**: Task 2.5
+**Dependencies**: Task 2.5b
 **Effort**: 2
 **Objective**: One registry and one open-read-only path, used by the CLI and later the server (LLD "What changes shape", `read_listing`).
 

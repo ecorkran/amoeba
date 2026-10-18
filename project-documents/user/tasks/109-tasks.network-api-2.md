@@ -12,7 +12,7 @@ status: not_started
 
 ## Context Summary (File 2 of 3)
 
-- Continues `109-tasks.network-api-1.md`. Its Context Summary (verified code facts, branch, commit cadence, tool knowledge, open item, task-level additions) applies here unchanged.
+- Continues `109-tasks.network-api-1.md`. Its Context Summary (verified code facts, branch, commit cadence, tool knowledge, task-level additions) applies here unchanged.
 - **This file:** Sections 4–6: serve foundations; the app, auth, and reads; submissions. File 3: Sections 7–9.
 - **Event-loop discipline (LLD "Patterns"):** no route handler calls the store, the filesystem, or `submit()` on the loop. Each such call runs in `anyio.to_thread.run_sync`, or on the stream's own thread.
 - **Test rule (LLD "Special Considerations"):** tests never bind off loopback and never touch the real supervisor directory. Every server test uses a scratch `AMOEBA_STORE_DIR` and an ephemeral port.
@@ -48,9 +48,14 @@ status: not_started
 
 **Steps**:
 - [ ] Create `src/amoeba/serve/__init__.py` (docstring only; it must not import uvicorn) and `src/amoeba/serve/settings.py`
-- [ ] `ServeSettings`: a frozen dataclass with exactly the fields and defaults the LLD lists (`host`, `port`, `tls_certfile`, `tls_keyfile` as `Path | None`, the four interval/limit fields, `max_request_bytes`, `shutdown_grace_seconds`, and a `FeedSettings`). Follow `process/settings.py`'s style
+- [ ] `ServeSettings`: a frozen dataclass with exactly these ten fields and defaults, as the LLD lists them (LLD "Patterns", Settings). Add no other field. Follow `process/settings.py`'s style:
+  - `host = "127.0.0.1"`, `port = 8765`
+  - `tls_certfile` and `tls_keyfile`, both `Path | None = None`
+  - `heartbeat_interval_seconds = 15.0`, `send_timeout_seconds = 30.0`, `max_streams = 32`
+  - `max_request_bytes = 1_048_576`, `shutdown_grace_seconds = 5.0`
+  - `feed`, a `FeedSettings` with its own defaults
 - [ ] `TOKEN_ENV_VAR = "AMOEBA_SERVE_TOKEN"`, `MIN_TOKEN_LENGTH = 32`. The token is never a field of `ServeSettings`
-- [ ] `__post_init__` raises `ValueError` for a non-positive interval, timeout, `max_streams`, or `max_request_bytes`, and for a port outside 0–65535 (0 is allowed: tests use an ephemeral port)
+- [ ] `__post_init__` raises `ValueError` when `heartbeat_interval_seconds`, `send_timeout_seconds`, `max_streams`, `max_request_bytes`, or `shutdown_grace_seconds` is not positive, and for a port outside 0–65535 (0 is allowed: tests use an ephemeral port)
 - [ ] Add `tests/serve/__init__.py` and `tests/serve/test_settings.py`: defaults as the LLD states; each invalid value raises
 
 **Success Criteria**:
@@ -73,7 +78,7 @@ status: not_started
 - [ ] `check_bind(settings, token: str | None) -> None`. `token` is `None` when unset (the CLI turns an empty variable into `None`, Task 8.1). Apply these rules in this order; the first that matches decides:
   1. [ ] Token given and shorter than `MIN_TOKEN_LENGTH` → `token_too_short`, on every bind (D2)
   2. [ ] Non-loopback host and no token → `token_required` (D3 row 3: whatever the TLS files)
-  3. [ ] Exactly one of the two TLS files given → `tls_required`, on every bind (task-level choice: half a TLS pair is never silently ignored)
+  3. [ ] Exactly one of the two TLS files given → `tls_required`, on every bind, loopback included (D3's last row: half a TLS pair is never silently ignored)
   4. [ ] Both given → build an `ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)` and call `load_cert_chain(certfile, keyfile)`; an `OSError` or `ssl.SSLError` → `tls_unusable` with the file path and the error message, on every bind (D3)
   5. [ ] Loopback host → allowed
   6. [ ] No TLS files → `tls_required`
@@ -232,6 +237,7 @@ status: not_started
 
 **Steps**:
 - [ ] `tests/serve/test_auth.py`: with a token, a request without it and with a wrong one get 401 and `WWW-Authenticate: Bearer`, with identical bodies; a correct one gets 200. Without a token on loopback, requests pass
+- [ ] "401 on every endpoint": parametrize the missing-token and wrong-token cases over every route, `GET /v1/listings/nodes`, `POST /v1/projects/p/submissions`, `GET /v1/projects/p/submissions/s`, and `GET /v1/projects/p/feed`. The middleware refuses before routing, so the routes Sections 6 and 7 add need not exist yet
 - [ ] `Origin` present → 403. Host `evil.example` → 421; `localhost:8765`, `127.0.0.1`, `[::1]:8765` pass
 - [ ] Secrecy: with `caplog` at DEBUG for all loggers, make authenticated and failed requests; assert `TEST_TOKEN` appears in no record's message or args and no response body or header
 - [ ] Order: a request with both `Origin` and a bad token gets 403 (Origin first)
@@ -253,7 +259,11 @@ status: not_started
 **Steps**:
 - [ ] In `tests/test_import_boundaries.py`: `amoeba.serve` imports nothing from `amoeba.cli` or `amoeba.process`
 - [ ] No module in `src/amoeba/` other than `cli/serve.py` imports `amoeba.serve` (the test tolerates `cli/serve.py` not existing yet; it will by Task 8.1)
-- [ ] AST check over `serve/`: every attribute or name imported from `amoeba.inbox` is `submit` (or an exception type in `CODE_BY_EXCEPTION`), and no call to `Store.open` (attribute `open` on `Store`) appears
+- [ ] AST check over `serve/`, enforcing the LLD rule that `serve` calls no inbox function other than `submit`:
+  - every name imported from `amoeba.inbox` is in one named allow-set: `submit`, `InvalidSubmissionError`, `SubmissionWriteError`. Anything else (`pending`, `failed`, `quarantined`, …) fails the test
+  - `SubmissionKind` comes from `amoeba.store.inbox_models`, where it is defined, not through `amoeba.inbox`
+  - no call to `Store.open` (attribute `open` on `Store`) appears
+- [ ] The check passes vacuously until Task 6.1 adds the first inbox import; Task 6.1 re-runs it
 - [ ] Confirm `tests/test_writer_guard.py` passes with no allow-list change
 
 **Success Criteria**:
@@ -275,7 +285,7 @@ status: not_started
 **Steps**:
 - [ ] Create `src/amoeba/serve/submissions.py`. `POST /v1/projects/{project_id}/submissions`:
   1. [ ] Validate the project id
-  2. [ ] `Content-Length` over `max_request_bytes` → 413 `request_too_large` before reading. Then read the body chunk by chunk from `request.stream()`, stopping with 413 once more than `max_request_bytes` bytes have arrived, with or without `Content-Length`
+  2. [ ] `Content-Length` over `max_request_bytes` → 413 `request_too_large` before reading. Then read the body chunk by chunk from `request.stream()`, keeping a running byte count. As soon as one chunk takes the count past `max_request_bytes`, stop reading, and do not take another chunk, then return 413. This holds with or without `Content-Length`. The server cannot choose the chunk size, so the bound is "the cap plus the one chunk that crossed it", not "the cap plus one byte"
   3. [ ] Parse JSON. The body must be an object with exactly these keys: `kind` (string), `submission_id` (string), `submitted_by` (string), `payload` (object). Missing `submission_id` → 422 `submission_id_required`; any other missing key, an unknown key, a wrong type, bad JSON, or a non-object → 422 `invalid_body`. `kind` via `SubmissionKind(value)`; an unknown kind → `invalid_body`. String contents (e.g. empty) are left to `submit()`
   4. [ ] On a worker thread: `submit(project_id=…, kind=…, payload=…, submitted_by=…, submission_id=…, store_dir=store_dir)`. Exceptions map through `CODE_BY_EXCEPTION`
   5. [ ] 202 `{"submission_id": …}`
@@ -283,7 +293,7 @@ status: not_started
 - [ ] Register both routes in `build_app`, and a handler for `InvalidSubmissionError` → 422 `invalid_submission` with `reason=error.reason` and `detail=error.detail`
 
 **Success Criteria**:
-- [ ] `pyright` clean
+- [ ] `pyright` clean; Task 5.5's inbox allow-set test passes now that `serve/` imports from `amoeba.inbox`
 - [ ] Committed with Task 6.2
 
 **Files to Create**: `src/amoeba/serve/submissions.py`
@@ -303,7 +313,11 @@ status: not_started
   - [ ] Outcome: 404 `not_applied` before apply, 200 with `outcome` after; 404 for a `create_project` whose store does not exist yet
   - [ ] An invalid payload → 422 with the same `reason` `amoeba submit` reports for that payload (run the CLI once to obtain it, not a literal) and nothing in the inbox
   - [ ] Missing id → 422 `submission_id_required`; unknown key, non-object body, bad JSON → 422 `invalid_body`
-  - [ ] 413 with `Content-Length` too large; 413 for a chunked body with no `Content-Length` (a generator body), and the server read at most `max_request_bytes + 1` bytes (count the chunks the generator yielded)
+  - [ ] 413 with `Content-Length` too large (through `TestClient`)
+  - [ ] Early stop on a body with no `Content-Length`. Do not use `TestClient`, which may drain the request body before the app sees it. Call the app from `build_app(...)` directly as an ASGI callable, with a hand-written `receive` that hands out fixed 64 KiB `http.request` chunks (`more_body=True`), up to well past the cap. It counts the bytes it hands out and records every call. Use a small `max_request_bytes`, e.g. 200 KiB, and a hand-written `send` that collects the response. The `http` scope must pass the Task 5.3 guards: `host: 127.0.0.1`, `content-type: application/json`, no `Origin`, and no token configured. Assert:
+    - the status is 413 `request_too_large`
+    - `receive` was not called again after the chunk that took the count past the cap
+    - bytes handed out ≤ `max_request_bytes` + one chunk
   - [ ] `SubmissionWriteError` (monkeypatch `submit` to raise it) → 503 `submission_write_failed`; a retry with the same id then succeeds and applies once
   - [ ] Traversal ids on both endpoints. Send the path unnormalized (confirm the client keeps `.`/`..` segments; if it removes them, send the request on a raw socket): `.` and `..` reach the handler → 400 `invalid_project_id`. `a%2Fb` is decoded before routing and matches no route → 404; record this as a correction to the LLD's "400 on every endpoint" for path parameters (Task 9.4). In every case `submit` and `Store.open_read_only` were not called (monkeypatch), `inbox/` holds no file, and no new path exists under `tmp_path`
 - [ ] `POST` with `content-type: text/plain` → 415 `unsupported_media_type`; `application/json; charset=utf-8` is accepted
