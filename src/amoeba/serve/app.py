@@ -11,16 +11,19 @@ from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 from amoeba.serve import reads
+from amoeba.serve.auth import RequestGuardMiddleware
 from amoeba.serve.errors import (
     CODE_BY_EXCEPTION,
     ApiError,
     ApiErrorCode,
     error_response,
 )
+from amoeba.serve.policy import is_loopback
 from amoeba.serve.settings import ServeSettings
 
 logger = logging.getLogger(__name__)
@@ -69,7 +72,11 @@ def build_app(settings: ServeSettings, token: str | None, store_dir: Path) -> St
         token: The bearer token, or ``None`` when unset.
         store_dir: The supervisor directory, resolved once by the caller.
     """
+    guard = Middleware(
+        RequestGuardMiddleware, token=token, loopback=is_loopback(settings.host)
+    )
     return Starlette(
         routes=[*reads.routes(store_dir)],
+        middleware=[guard],
         exception_handlers=dict(_exception_handlers()),
     )

@@ -42,7 +42,7 @@ PROJECT_PARAMETER: Final = "project"
 #: The values a flag option accepts in a query string.
 FLAG_VALUES: Final = {"true": True, "false": False}
 
-#: The response media type for every JSON body this module writes.
+#: The media type of every JSON body, sent or accepted.
 JSON_MEDIA_TYPE: Final = "application/json"
 
 
