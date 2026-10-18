@@ -39,7 +39,7 @@ To make "same answers as `amoeba inspect`" structural, this slice moves the list
 - **Migration:** `amoeba.inspection` takes the registry and every listing module (`cli/inspect.py`'s registry and rows, `inspect_inbox.py`, `inspect_evidence.py`, `inspect_feed.py`, 107's `inspect_checks.py`, and 108's `inspect_cf.py`). `argparse.Namespace` is replaced by a typed `ListingRequest`. `discover_project_ids` moves to `amoeba.store`, and `change_line` moves to `amoeba.feed`.
 - **Store amendment (106's deferral):** `read_transaction()` and `change_head(project_id)` on the read-only handle.
 - `ServeSettings`, a new `ExitCode` member, `docs/network-contract.md`, and deltas to the other contract docs and `CHANGELOG.md`.
-- New dependencies: `starlette` and `uvicorn` (runtime), and `httpx` (dev, for Starlette's test client and the load tests).
+- New dependencies: `starlette` and `uvicorn` (runtime), and `httpx2` (dev, for Starlette's test client and the load tests). *PM decision 20261018:* `httpx2` replaces the originally planned `httpx`, because Starlette 1.8's `TestClient` is typed against `httpx2` and warns at runtime when only `httpx` is installed.
 
 ### Excluded
 
@@ -68,7 +68,7 @@ To make "same answers as `amoeba inspect`" structural, this slice moves the list
 - `submit(project_id=, kind=, payload=, submitted_by=, submission_id=)` returns the id once the file is durable. It works with the resident process stopped.
 - `follow(store_dir, project_id, after=, settings=, stop=)` yields changes in `seq` order. It checks `stop` between waits, at most one `follow_interval_seconds` apart. It raises `StorePermissionError` for an unknown or vanished store, and `StoreSchemaError` for a version mismatch.
 - The listing row functions, unchanged in what they return. Only their parameter type changes.
-- **External:** `starlette` and `uvicorn`, pinned with `>=` like the existing dependencies. *Observed 20261015 on PyPI:* starlette 1.8.0, uvicorn 0.54.0, httpx 0.28.1. These are dated observations, not requirements. The design depends on two behaviors, and a test pins each:
+- **External:** `starlette` and `uvicorn`, pinned with `>=` like the existing dependencies. *Observed 20261015 on PyPI:* starlette 1.8.0, uvicorn 0.54.0, httpx 0.28.1. *Resolved 20261018:* starlette 1.8.0, uvicorn 0.54.0, anyio 4.15.1, httpx2 2.13.1. These are dated observations, not requirements. The design depends on two behaviors, and a test pins each:
   - uvicorn's `send` waits while the socket's write buffer is full, so a stalled peer blocks the send rather than growing memory. This is why each send has a timeout (D6).
   - Under ASGI spec 2.4, a client disconnect is noticed only when a send fails. This is why the stream sends heartbeats (D6).
 
