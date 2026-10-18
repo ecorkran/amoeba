@@ -8,19 +8,16 @@ memory and is right whether or not the process is running.
 
 from __future__ import annotations
 
-import argparse
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
+from amoeba.inspection.listing import ChoiceOption, ListingRequest, Row
 from amoeba.process.review_sources import (
     ReviewDirectoryUnavailableError,
     list_review_files,
 )
 from amoeba.store import DetectionOutcome, ReviewWatch, Store
-
-if TYPE_CHECKING:  # pragma: no cover - typing only; inspect.py imports this
-    from amoeba.cli.inspect import Row
 
 
 class WatchState(StrEnum):
@@ -55,6 +52,12 @@ DETECTION_COLUMNS: Final = (
 #: The ``--outcome`` choices, from the one definition.
 OUTCOME_CHOICES: Final = tuple(outcome.value for outcome in DetectionOutcome)
 
+OUTCOME_OPTION = ChoiceOption(
+    name="outcome",
+    help_text="Only this outcome. Every outcome when omitted.",
+    choices=OUTCOME_CHOICES,
+)
+
 
 def _reachable(directory: str) -> bool:
     try:
@@ -78,7 +81,7 @@ def watch_state(store: Store, watch: ReviewWatch) -> WatchState:
     return WatchState.OK
 
 
-def watch_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def watch_rows(store: Store, request: ListingRequest) -> list[Row]:
     """Every registered review directory and its computed state."""
     return [
         {
@@ -90,13 +93,14 @@ def watch_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             ),
             "state": watch_state(store, watch).value,
         }
-        for watch in store.watches(args.project)
+        for watch in store.watches(request.require_project_id())
     ]
 
 
-def detection_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def detection_rows(store: Store, request: ListingRequest) -> list[Row]:
     """The detection ledger in detection order, optionally one outcome."""
-    outcome = None if args.outcome is None else DetectionOutcome(args.outcome)
+    outcome_value = request.option(OUTCOME_OPTION)
+    outcome = None if outcome_value is None else DetectionOutcome(outcome_value)
     return [
         {
             "detected_at": detection.detected_at.isoformat(),
@@ -107,9 +111,11 @@ def detection_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "record_id": detection.record_id or "",
             "recorded_since": (
                 detection.record_id is not None
-                and store.recorded_since(args.project, detection.record_id)
+                and store.recorded_since(
+                    request.require_project_id(), detection.record_id
+                )
             ),
             "detail": detection.detail or "",
         }
-        for detection in store.detections(args.project, outcome=outcome)
+        for detection in store.detections(request.require_project_id(), outcome=outcome)
     ]

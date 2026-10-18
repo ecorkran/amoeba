@@ -12,14 +12,11 @@ fields that moved in ``changed_fields``; ``--json`` carries the full list as
 
 from __future__ import annotations
 
-import argparse
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
+from amoeba.inspection.listing import ListingRequest, Row
 from amoeba.store import Store
-
-if TYPE_CHECKING:  # pragma: no cover - typing only; inspect.py imports this
-    from amoeba.cli.inspect import Row
 
 LINK_COLUMNS: Final = ("cf_project_id", "linked_at")
 
@@ -36,14 +33,14 @@ SNAPSHOT_COLUMNS: Final = (
 _FIELD_KEY: Final = "field"
 
 
-def link_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def link_rows(store: Store, request: ListingRequest) -> list[Row]:
     """A project's Context Forge links, in the order they were linked."""
     return [
         {
             "cf_project_id": link.cf_project_id,
             "linked_at": link.linked_at.isoformat(),
         }
-        for link in store.cf_links(args.project)
+        for link in store.cf_links(request.require_project_id())
     ]
 
 
@@ -57,7 +54,7 @@ def _field_names(changed: Sequence[Mapping[str, object]] | None) -> str:
     return ", ".join(names)
 
 
-def snapshot_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def snapshot_rows(store: Store, request: ListingRequest) -> list[Row]:
     """A project's snapshots in id order."""
     return [
         {
@@ -72,5 +69,5 @@ def snapshot_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "state": None if snapshot.state is None else dict(snapshot.state),
             "cf_version_label": snapshot.cf_version_label,
         }
-        for snapshot in store.cf_snapshots(args.project)
+        for snapshot in store.cf_snapshots(request.require_project_id())
     ]

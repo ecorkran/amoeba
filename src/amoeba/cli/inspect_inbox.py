@@ -10,19 +10,21 @@ the supervisor directory and opens no store at all.
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from amoeba import inbox
 from amoeba.inbox import layout
+from amoeba.inspection.listing import ChoiceOption, ListingRequest, Row
 from amoeba.store import Channel, Store
 
-if TYPE_CHECKING:  # pragma: no cover - typing only; inspect.py imports this
-    from amoeba.cli.inspect import Row
+CHANNEL_OPTION = ChoiceOption(
+    name="channel",
+    help_text="Only this channel. Every channel when omitted.",
+    choices=tuple(channel.value for channel in Channel),
+)
 
 
-def submission_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def submission_rows(store: Store, request: ListingRequest) -> list[Row]:
     """Applied and rejected submissions for a project, in ``applied_seq`` order."""
     return [
         {
@@ -35,18 +37,19 @@ def submission_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "submitted_at": record.submitted_at.isoformat(),
             "payload": dict(record.payload),
         }
-        for record in store.submissions(args.project)
+        for record in store.submissions(request.require_project_id())
     ]
 
 
-def message_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def message_rows(store: Store, request: ListingRequest) -> list[Row]:
     """Messages for a project in ``seq`` order: one channel, or every one."""
-    channels = list(Channel) if args.channel is None else [Channel(args.channel)]
+    channel_value = request.option(CHANNEL_OPTION)
+    channels = list(Channel) if channel_value is None else [Channel(channel_value)]
     messages = sorted(
         (
             message
             for channel in channels
-            for message in store.messages(args.project, channel=channel)
+            for message in store.messages(request.require_project_id(), channel=channel)
         ),
         key=lambda message: message.seq,
     )

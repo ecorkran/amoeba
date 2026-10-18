@@ -11,13 +11,23 @@ round with nothing in it.
 
 from __future__ import annotations
 
-import argparse
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
+from amoeba.inspection.listing import NODE_OPTION, ListingRequest, Row, ValueOption
 from amoeba.store import FindingChange, FindingObservation, Store
 
-if TYPE_CHECKING:  # pragma: no cover - typing only; inspect.py imports this
-    from amoeba.cli.inspect import Row
+JUDGE_INVOCATION_OPTION = ValueOption(
+    name="judge_invocation_id",
+    help_text="Only this judge invocation's samples.",
+    metavar="ID",
+)
+
+VERDICT_OPTION = ValueOption(
+    name="verdict",
+    help_text="The review to compare with its previous round.",
+    metavar="ID",
+    required=True,
+)
 
 VERDICT_COLUMNS: Final = (
     "recorded_seq",
@@ -64,7 +74,7 @@ class VerdictNotComparableError(Exception):
         )
 
 
-def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def verdict_rows(store: Store, request: ListingRequest) -> list[Row]:
     """A project's verdicts in arrival order, optionally for a node or invocation."""
     return [
         {
@@ -85,14 +95,14 @@ def verdict_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "recorded_at": record.recorded_at.isoformat(),
         }
         for record in store.verdicts(
-            args.project,
-            node_id=args.node,
-            judge_invocation_id=args.judge_invocation_id,
+            request.require_project_id(),
+            node_id=request.option(NODE_OPTION),
+            judge_invocation_id=request.option(JUDGE_INVOCATION_OPTION),
         )
     ]
 
 
-def finding_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def finding_rows(store: Store, request: ListingRequest) -> list[Row]:
     """One row per content key, optionally for one node."""
     return [
         {
@@ -103,26 +113,32 @@ def finding_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "times_seen": summary.times_seen,
             "first_verdict_id": summary.first_verdict_id,
             "last_verdict_id": summary.last_verdict_id,
-            "key": _key(summary.identity, use_json=args.json),
+            "key": _key(summary.identity, compact=request.compact),
         }
-        for summary in store.findings(args.project, node_id=args.node)
+        for summary in store.findings(
+            request.require_project_id(), node_id=request.option(NODE_OPTION)
+        )
     ]
 
 
-def change_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def change_rows(store: Store, request: ListingRequest) -> list[Row]:
     """One review's findings tagged new or recurring, plus the ones now gone.
 
     Raises:
         VerdictNotFoundError: For an unknown ``--verdict`` id.
         VerdictNotComparableError: When the review is not comparable.
+        ValueError: When the request carries no verdict id.
     """
-    changes = store.finding_changes(args.verdict)
+    verdict_id = request.option(VERDICT_OPTION)
+    if verdict_id is None:
+        raise ValueError("the changes listing requires a verdict id")
+    changes = store.finding_changes(verdict_id)
     if not changes.comparable:
         raise VerdictNotComparableError(changes.verdict_id)
     tagged = [(t.change, t.observation) for t in changes.findings]
     tagged += [(FindingChange.GONE, observation) for observation in changes.gone]
     return [
-        _change_row(change, observation, changes.previous_verdict_id, args.json)
+        _change_row(change, observation, changes.previous_verdict_id, request.compact)
         for change, observation in tagged
     ]
 
@@ -131,18 +147,18 @@ def _change_row(
     change: FindingChange,
     observation: FindingObservation,
     previous_verdict_id: str | None,
-    use_json: bool,
+    compact: bool,
 ) -> Row:
     return {
         "change": change.value,
         "severity": observation.severity.value,
         "summary": observation.summary,
         "location": observation.location or "",
-        "key": _key(observation.identity, use_json=use_json),
+        "key": _key(observation.identity, compact=compact),
         "previous_verdict_id": previous_verdict_id,
         "verdict_id": observation.verdict_id,
     }
 
 
-def _key(identity: str, *, use_json: bool) -> str:
-    return identity if use_json else identity[:_SHORT_KEY_LENGTH]
+def _key(identity: str, *, compact: bool) -> str:
+    return identity[:_SHORT_KEY_LENGTH] if compact else identity

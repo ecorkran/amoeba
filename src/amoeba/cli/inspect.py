@@ -15,8 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,80 +26,28 @@ from amoeba.cli import (
     inspect_feed,
     inspect_inbox,
 )
+from amoeba.inspection.listing import (
+    NODE_OPTION,
+    FlagOption,
+    Listing,
+    ListingRequest,
+    ListingScope,
+    OptionValue,
+    Row,
+)
 from amoeba.process.supervisor import store_path_for
-from amoeba.store import Channel, Store, paths
+from amoeba.store import Store, paths
 from amoeba.store.discovery import discover_project_ids
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from amoeba.cli.main import ExitCode
 
-#: One row of a listing: ordered column name/value pairs, so the table and the
-#: JSON forms cannot disagree about either content or order.
-type Row = dict[str, object]
+UNRESOLVED_OPTION = FlagOption(
+    name="unresolved", help_text="Only entries still in flight."
+)
 
 
-@dataclass(frozen=True)
-class ChoiceOption:
-    """An optional flag taking one value from a closed set, e.g. ``--channel``."""
-
-    flag: str
-    help_text: str
-    choices: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class ValueOption:
-    """A flag taking one free value, e.g. ``--node ID``."""
-
-    flag: str
-    help_text: str
-    metavar: str
-    required: bool = False
-
-
-@dataclass(frozen=True)
-class Listing:
-    """One inspection listing: its name, its query, and its columns.
-
-    Exactly one of ``rows`` and ``supervisor_rows`` is set. Which one is what
-    makes a listing project-scoped or supervisor-level — never its name.
-
-    Attributes:
-        name: The subcommand name. Derived *from* this registry entry.
-        help_text: One line, shown by ``--help``.
-        columns: Column order for the table form.
-        rows: For a project-scoped listing: receives an open **read-only**
-            store and the parsed arguments.
-        supervisor_rows: For a supervisor-level listing: receives the
-            supervisor directory, and opens no store.
-        flags: Extra boolean flags, as ``(flag, help)`` pairs.
-        choice_options: Extra optional flags taking one value from a set.
-        value_options: Extra optional flags taking one free value.
-    """
-
-    name: str
-    help_text: str
-    columns: tuple[str, ...]
-    rows: Callable[[Store, argparse.Namespace], list[Row]] | None = None
-    supervisor_rows: Callable[[Path], list[Row]] | None = None
-    flags: tuple[tuple[str, str], ...] = field(default_factory=tuple)
-    choice_options: tuple[ChoiceOption, ...] = field(default_factory=tuple)
-    value_options: tuple[ValueOption, ...] = field(default_factory=tuple)
-
-    def __post_init__(self) -> None:
-        if (self.rows is None) == (self.supervisor_rows is None):
-            raise ValueError(
-                f"listing {self.name!r} must set exactly one of rows and "
-                "supervisor_rows"
-            )
-
-    @property
-    def requires_project(self) -> bool:
-        """Whether ``--project`` is required: every project-scoped listing."""
-        return self.supervisor_rows is None
-
-
-def _node_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def _node_rows(store: Store, request: ListingRequest) -> list[Row]:
     """Every node in a project."""
     return [
         {
@@ -110,11 +57,11 @@ def _node_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "title": node.title,
             "parent_id": node.parent_id or "",
         }
-        for node in store.nodes_for_project(args.project)
+        for node in store.nodes_for_project(request.require_project_id())
     ]
 
 
-def _blocked_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def _blocked_rows(store: Store, request: ListingRequest) -> list[Row]:
     """Every blocked node, with what it is blocked on."""
     return [
         {
@@ -123,13 +70,16 @@ def _blocked_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "blocked_on": blocked.blocked_state.kind.value,
             "context": blocked.blocked_state.context,
         }
-        for blocked in store.blocked(args.project)
+        for blocked in store.blocked(request.require_project_id())
     ]
 
 
-def _journal_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def _journal_rows(store: Store, request: ListingRequest) -> list[Row]:
     """Journal entries for a project, optionally only the unresolved ones."""
-    entries = store.journal_entries(args.project, include_resolved=not args.unresolved)
+    entries = store.journal_entries(
+        request.require_project_id(),
+        include_resolved=not request.option(UNRESOLVED_OPTION),
+    )
     return [
         {
             "id": entry.id,
@@ -162,8 +112,6 @@ def _project_rows(supervisor_dir: Path) -> list[Row]:
 
 #: The name of the ``projects`` listing, which tests refer to.
 PROJECTS_LISTING = "projects"
-
-_NODE_OPTION = ValueOption(flag="--node", help_text="Only this node.", metavar="ID")
 
 #: The listing registry — the single structural definition of what ``inspect``
 #: can show. Adding a listing is appending here; nothing else changes.
@@ -204,7 +152,7 @@ LISTINGS: tuple[Listing, ...] = (
             "issued_at",
         ),
         rows=_journal_rows,
-        flags=(("--unresolved", "Only entries still in flight."),),
+        flags=(UNRESOLVED_OPTION,),
     ),
     Listing(
         name="submissions",
@@ -234,55 +182,35 @@ LISTINGS: tuple[Listing, ...] = (
             "acknowledged_at",
         ),
         rows=inspect_inbox.message_rows,
-        choice_options=(
-            ChoiceOption(
-                flag="--channel",
-                help_text="Only this channel. Every channel when omitted.",
-                choices=tuple(channel.value for channel in Channel),
-            ),
-        ),
+        choice_options=(inspect_inbox.CHANNEL_OPTION,),
     ),
     Listing(
         name="verdicts",
         help_text="Recorded review verdicts for a project, in arrival order.",
         columns=inspect_evidence.VERDICT_COLUMNS,
         rows=inspect_evidence.verdict_rows,
-        value_options=(
-            _NODE_OPTION,
-            ValueOption(
-                flag="--judge-invocation-id",
-                help_text="Only this judge invocation's samples.",
-                metavar="ID",
-            ),
-        ),
+        value_options=(NODE_OPTION, inspect_evidence.JUDGE_INVOCATION_OPTION),
     ),
     Listing(
         name="findings",
         help_text="Findings by content key, with how often each was seen.",
         columns=inspect_evidence.FINDING_COLUMNS,
         rows=inspect_evidence.finding_rows,
-        value_options=(_NODE_OPTION,),
+        value_options=(NODE_OPTION,),
     ),
     Listing(
         name="changes",
         help_text="One review's findings as new, recurring, or gone.",
         columns=inspect_evidence.CHANGE_COLUMNS,
         rows=inspect_evidence.change_rows,
-        value_options=(
-            ValueOption(
-                flag="--verdict",
-                help_text="The review to compare with its previous round.",
-                metavar="ID",
-                required=True,
-            ),
-        ),
+        value_options=(inspect_evidence.VERDICT_OPTION,),
     ),
     Listing(
         name="checks",
         help_text="Recorded check results, with the standing each one earns.",
         columns=inspect_checks.CHECK_COLUMNS,
         rows=inspect_checks.check_rows,
-        value_options=(_NODE_OPTION,),
+        value_options=(NODE_OPTION,),
     ),
     Listing(
         name="calibration",
@@ -301,13 +229,7 @@ LISTINGS: tuple[Listing, ...] = (
         help_text="Review files detection examined, in detection order.",
         columns=inspect_feed.DETECTION_COLUMNS,
         rows=inspect_feed.detection_rows,
-        choice_options=(
-            ChoiceOption(
-                flag="--outcome",
-                help_text="Only this outcome. Every outcome when omitted.",
-                choices=inspect_feed.OUTCOME_CHOICES,
-            ),
-        ),
+        choice_options=(inspect_feed.OUTCOME_OPTION,),
     ),
     Listing(
         name="cf-links",
@@ -340,12 +262,16 @@ def run_listing(name: str, args: argparse.Namespace, *, use_json: bool) -> ExitC
     listing = LISTINGS_BY_NAME[name]
     supervisor_dir = paths.store_dir()
 
+    request = listing_request(listing, args)
+
     if listing.supervisor_rows is not None:
         rows = listing.supervisor_rows(supervisor_dir)
     elif listing.rows is not None:
-        project_store_file = store_path_for(supervisor_dir, args.project)
+        project_store_file = store_path_for(
+            supervisor_dir, request.require_project_id()
+        )
         with Store.open_read_only(project_store_file) as store:
-            rows = listing.rows(store, args)
+            rows = listing.rows(store, request)
     else:
         raise ValueError(f"listing {name!r} declares no rows")
 
@@ -355,6 +281,20 @@ def run_listing(name: str, args: argparse.Namespace, *, use_json: bool) -> ExitC
         _print_table(listing.columns, rows)
 
     return ExitCode.OK
+
+
+def listing_request(listing: Listing, args: argparse.Namespace) -> ListingRequest:
+    """The request one listing's parsed arguments describe.
+
+    Each option's value is read by its ``name``, which is the ``dest`` the
+    parser stores it under. ``compact`` is the table form.
+    """
+    options: dict[str, OptionValue] = {
+        option.name: getattr(args, option.name)
+        for option in (*listing.flags, *listing.choice_options, *listing.value_options)
+    }
+    project_id = args.project if listing.scope is ListingScope.PROJECT else None
+    return ListingRequest(project_id=project_id, options=options, compact=not args.json)
 
 
 def _print_table(columns: Sequence[str], rows: Sequence[Row]) -> None:

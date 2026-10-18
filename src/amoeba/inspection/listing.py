@@ -98,6 +98,16 @@ class ListingRequest:
     options: Mapping[str, OptionValue]
     compact: bool
 
+    def require_project_id(self) -> str:
+        """The project id, for a project-scoped row function.
+
+        Raises:
+            ValueError: If the request carries no project.
+        """
+        if self.project_id is None:
+            raise ValueError("a project-scoped listing needs a project id")
+        return self.project_id
+
     @overload
     def option(self, opt: FlagOption) -> bool: ...
     @overload

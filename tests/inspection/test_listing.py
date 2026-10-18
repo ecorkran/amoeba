@@ -101,3 +101,16 @@ def test_option_with_a_value_of_the_wrong_type_raises() -> None:
 
     with pytest.raises(TypeError, match="only_open"):
         request.option(_FLAG)
+
+
+def test_require_project_id_returns_the_project() -> None:
+    request = ListingRequest(project_id="demo", options={}, compact=False)
+
+    assert request.require_project_id() == "demo"
+
+
+def test_require_project_id_without_a_project_raises() -> None:
+    request = ListingRequest(project_id=None, options={}, compact=False)
+
+    with pytest.raises(ValueError, match="project id"):
+        request.require_project_id()

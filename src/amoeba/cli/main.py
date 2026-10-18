@@ -170,6 +170,7 @@ def _add_inspect_parser(subparsers: Any) -> None:
     to be named here. It is used only to call ``add_parser``.
     """
     from amoeba.cli.inspect import LISTINGS
+    from amoeba.inspection.listing import ListingScope
 
     inspect = subparsers.add_parser(
         "inspect",
@@ -182,19 +183,25 @@ def _add_inspect_parser(subparsers: Any) -> None:
         listing_parser = listing_parsers.add_parser(
             listing.name, help=listing.help_text
         )
-        if listing.requires_project:
+        if listing.scope is ListingScope.PROJECT:
             listing_parser.add_argument(
                 "--project", required=True, help="The project to list."
             )
-        for flag, flag_help in listing.flags:
-            listing_parser.add_argument(flag, action="store_true", help=flag_help)
+        for flag in listing.flags:
+            listing_parser.add_argument(
+                flag.flag, dest=flag.name, action="store_true", help=flag.help_text
+            )
         for option in listing.choice_options:
             listing_parser.add_argument(
-                option.flag, choices=option.choices, help=option.help_text
+                option.flag,
+                dest=option.name,
+                choices=option.choices,
+                help=option.help_text,
             )
         for value in listing.value_options:
             listing_parser.add_argument(
                 value.flag,
+                dest=value.name,
                 metavar=value.metavar,
                 help=value.help_text,
                 required=value.required,

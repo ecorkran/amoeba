@@ -20,6 +20,7 @@ from inspection_harness import FIXTURE_VERDICT, PROJECT, seed_every_listing
 
 from amoeba.cli.inspect import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.cli.main import ExitCode
+from amoeba.inspection.listing import ListingScope
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
@@ -28,7 +29,7 @@ from amoeba.store.migrations import (
 
 #: Listings that take ``--project``; ``projects`` reads the directory instead.
 PROJECT_LISTINGS = tuple(
-    listing.name for listing in LISTINGS if listing.requires_project
+    listing.name for listing in LISTINGS if listing.scope is ListingScope.PROJECT
 )
 
 
@@ -79,7 +80,7 @@ def _listing_arguments(name: str, extra: list[str] | None = None) -> list[str]:
     """Build the argument vector for one listing."""
     listing = LISTINGS_BY_NAME[name]
     arguments = ["inspect", name]
-    if listing.requires_project:
+    if listing.scope is ListingScope.PROJECT:
         arguments += ["--project", PROJECT]
     for option in listing.value_options:
         if option.required:

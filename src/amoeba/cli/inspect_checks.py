@@ -8,14 +8,11 @@ store, so they work whether or not the resident process is running.
 
 from __future__ import annotations
 
-import argparse
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
+from amoeba.inspection.listing import NODE_OPTION, ListingRequest, Row
 from amoeba.store import Store
 from amoeba.store.calibration import CALIBRATION_COLUMNS
-
-if TYPE_CHECKING:  # pragma: no cover - typing only; inspect.py imports this
-    from amoeba.cli.inspect import Row
 
 CHECK_COLUMNS: Final = (
     "recorded_seq",
@@ -33,7 +30,7 @@ CHECK_COLUMNS: Final = (
 CALIBRATION_LISTING_COLUMNS: Final = tuple(column for _, column in CALIBRATION_COLUMNS)
 
 
-def check_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def check_rows(store: Store, request: ListingRequest) -> list[Row]:
     """A project's checks in arrival order, optionally for one node."""
     return [
         {
@@ -52,13 +49,15 @@ def check_rows(store: Store, args: argparse.Namespace) -> list[Row]:
             "examined": None if record.examined is None else dict(record.examined),
             "recorded_at": record.recorded_at.isoformat(),
         }
-        for record in store.checks(args.project, node_id=args.node)
+        for record in store.checks(
+            request.require_project_id(), node_id=request.option(NODE_OPTION)
+        )
     ]
 
 
-def calibration_rows(store: Store, args: argparse.Namespace) -> list[Row]:
+def calibration_rows(store: Store, request: ListingRequest) -> list[Row]:
     """One row per ``(review_type, model)`` over a project's judge samples."""
     return [
         {column: getattr(row, field) for field, column in CALIBRATION_COLUMNS}
-        for row in store.calibration(args.project)
+        for row in store.calibration(request.require_project_id())
     ]
