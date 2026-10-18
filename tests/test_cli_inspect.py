@@ -18,8 +18,8 @@ import pytest
 from cli_harness import await_running, run_cli, start_background
 from inspection_harness import FIXTURE_VERDICT, PROJECT, seed_every_listing
 
-from amoeba.cli.inspect import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.cli.main import ExitCode
+from amoeba.inspection import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.inspection.listing import ListingScope
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,

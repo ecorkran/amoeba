@@ -169,7 +169,7 @@ def _add_inspect_parser(subparsers: Any) -> None:
     is private; it would have to be reached for through the module's internals
     to be named here. It is used only to call ``add_parser``.
     """
-    from amoeba.cli.inspect import LISTINGS
+    from amoeba.inspection import LISTINGS
     from amoeba.inspection.listing import ListingScope
 
     inspect = subparsers.add_parser(
