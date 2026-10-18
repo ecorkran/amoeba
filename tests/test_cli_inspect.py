@@ -12,45 +12,21 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from cf_harness import observed
 from cli_harness import await_running, run_cli, start_background
-from evidence_harness import check_input, finding, verdict_input
+from inspection_harness import FIXTURE_VERDICT, PROJECT, seed_every_listing
 
 from amoeba.cli.inspect import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.cli.main import ExitCode
-from amoeba.inbox import submit
-from amoeba.store import (
-    BlockedKind,
-    CommandKind,
-    DetectionInput,
-    DetectionOutcome,
-    JournalOutcome,
-    NodeKind,
-    Store,
-    SubmissionKind,
-)
-from amoeba.store.inbox_models import (
-    INTENT_BODY,
-    INTENT_NODE_ID,
-    LINK_CF_PROJECT_ID,
-    WATCH_ACTIVE,
-    WATCH_REVIEWS_DIR,
-)
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
     read_schema_version,
 )
 
-PROJECT = "demo"
-
 #: Listings that take ``--project``; ``projects`` reads the directory instead.
-_FIXTURE_VERDICT = "fixture-review"
-
 PROJECT_LISTINGS = tuple(
     listing.name for listing in LISTINGS if listing.requires_project
 )
@@ -74,94 +50,8 @@ def runs_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def populated(supervisor_dir: Path) -> Path:
-    """A store carrying a node, a blocked node, and both journal states."""
-    project_store_file = supervisor_dir / f"{PROJECT}.sqlite3"
-    with Store.open(project_store_file) as store:
-        runnable = store.create_node(
-            project_id=PROJECT, kind=NodeKind.SLICE, title="runnable slice"
-        )
-        blocked = store.create_node(
-            project_id=PROJECT, kind=NodeKind.GATE, title="awaiting review"
-        )
-        store.block(blocked.id, kind=BlockedKind.JUDGE, context="needs a verdict")
-
-        resolved = store.journal_issue(
-            runnable.id,
-            kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": "p6", "params": {"slice": "102"}},
-        )
-        store.journal_resolve(
-            resolved.id,
-            outcome=JournalOutcome.COMPLETED,
-            result={"run_id": "run-20260921-p6-abcd1234"},
-        )
-        store.journal_issue(
-            runnable.id,
-            kind=CommandKind.CF_WRITE,
-            parameters={"project": "amoeba", "expected": {"phase": "6"}},
-        )
-        # Slice 103: a submission record and the intent message it produced.
-        store.apply_submission(
-            submission_id="fixture-intent",
-            project_id=PROJECT,
-            kind=SubmissionKind.INTENT,
-            submitted_by="fixture",
-            submitted_at=datetime(2026, 9, 23, tzinfo=UTC),
-            payload={INTENT_NODE_ID: runnable.id, INTENT_BODY: {"want": "a run"}},
-        )
-        # Slice 104: one review verdict with one finding.
-        store.record_verdict(
-            verdict_input(_FIXTURE_VERDICT, runnable.id, finding("x", "a.py:1")),
-            project_id=PROJECT,
-        )
-        # Slice 107: one judge sample (so calibration has a row) and one check.
-        store.record_verdict(
-            verdict_input("fixture-sample", runnable.id, judge_invocation_id="j1"),
-            project_id=PROJECT,
-        )
-        store.record_check(
-            check_input("fixture-check", runnable.id), project_id=PROJECT
-        )
-        # Slice 108: one Context Forge link and one observed snapshot.
-        store.apply_submission(
-            submission_id="fixture-cf-link",
-            project_id=PROJECT,
-            kind=SubmissionKind.LINK_CF_PROJECT,
-            submitted_by="fixture",
-            submitted_at=datetime(2026, 10, 16, tzinfo=UTC),
-            payload={LINK_CF_PROJECT_ID: "fixture-cf-project"},
-        )
-        store.record_cf_snapshot(observed(PROJECT, "fixture-cf-project"))
-        # Slice 106: one review watch and one detection ledger row.
-        store.apply_submission(
-            submission_id="fixture-watch",
-            project_id=PROJECT,
-            kind=SubmissionKind.WATCH_REVIEWS,
-            submitted_by="fixture",
-            submitted_at=datetime(2026, 10, 15, tzinfo=UTC),
-            payload={
-                WATCH_REVIEWS_DIR: str(supervisor_dir / "reviews"),
-                WATCH_ACTIVE: True,
-            },
-        )
-        store.record_detection(
-            DetectionInput(
-                project_id=PROJECT,
-                path=str(supervisor_dir / "reviews" / "notes.md"),
-                digest="fixture-digest",
-                outcome=DetectionOutcome.UNPARSEABLE,
-                detail="not a review",
-            )
-        )
-    # And one file still waiting in the inbox, written by the real submit().
-    submit(
-        project_id=PROJECT,
-        kind=SubmissionKind.INTENT,
-        payload={INTENT_BODY: {"want": "later"}},
-        submitted_by="fixture",
-        store_dir=supervisor_dir,
-    )
-    return project_store_file
+    """A store carrying a row for every listing; returns the store file."""
+    return seed_every_listing(supervisor_dir).store_file
 
 
 @pytest.fixture
@@ -182,7 +72,7 @@ def running_supervisor(
 
 
 #: A value in the ``populated`` store for every required flag a listing takes.
-_REQUIRED_VALUES: dict[str, str] = {"--verdict": _FIXTURE_VERDICT}
+_REQUIRED_VALUES: dict[str, str] = {"--verdict": FIXTURE_VERDICT}
 
 
 def _listing_arguments(name: str, extra: list[str] | None = None) -> list[str]:
