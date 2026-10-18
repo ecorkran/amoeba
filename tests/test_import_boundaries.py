@@ -4,6 +4,7 @@ Rule 1: the store imports nothing from upstream, the process, or the feed.
 Rule 2: the feed follower imports nothing from the process.
 Rule 3: no module this slice adds spells a change kind or detection outcome as
 a string literal; each names the enum member instead.
+Rule 4: inspection imports nothing from the CLI, the server, or the process.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ SRC = Path(__file__).parents[1] / "src" / "amoeba"
 
 FORBIDDEN_FOR_STORE = ("amoeba.upstream", "amoeba.process", "amoeba.feed")
 FORBIDDEN_FOR_FEED = ("amoeba.process",)
+FORBIDDEN_FOR_INSPECTION = ("amoeba.cli", "amoeba.serve", "amoeba.process")
 
 #: Modules held to Rule 3. Each task that creates a module adds it here; a
 #: listed module that does not exist fails rather than being skipped.
@@ -88,6 +90,11 @@ def test_rule_1_the_store_imports_no_upstream_process_or_feed() -> None:
 def test_rule_2_the_feed_imports_no_process() -> None:
     # A directory that does not exist yet has no files, so it passes.
     assert _violations("feed", FORBIDDEN_FOR_FEED) == []
+
+
+def test_rule_4_inspection_imports_no_cli_serve_or_process() -> None:
+    """The listings are shared by the CLI and the server, so own neither."""
+    assert _violations("inspection", FORBIDDEN_FOR_INSPECTION) == []
 
 
 def test_rule_3_no_vocabulary_literal_in_this_slices_modules() -> None:
