@@ -15,7 +15,8 @@ from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from amoeba.serve import reads
+from amoeba.inbox import InvalidSubmissionError
+from amoeba.serve import reads, submissions
 from amoeba.serve.auth import RequestGuardMiddleware
 from amoeba.serve.errors import (
     CODE_BY_EXCEPTION,
@@ -46,6 +47,13 @@ async def _mapped_error(request: Request, exc: Exception) -> Response:
     return error_response(code, str(exc))
 
 
+async def _invalid_submission(request: Request, exc: Exception) -> Response:
+    """``submit()`` refused the payload; ``reason`` is the quarantine reason."""
+    if not isinstance(exc, InvalidSubmissionError):
+        raise TypeError(f"_invalid_submission registered for {type(exc).__name__}")
+    return error_response(ApiErrorCode.INVALID_SUBMISSION, exc.detail, exc.reason.value)
+
+
 async def _internal_error(request: Request, exc: Exception) -> Response:
     """The server's one process-boundary handler: anything not mapped above.
 
@@ -60,6 +68,7 @@ async def _internal_error(request: Request, exc: Exception) -> Response:
 def _exception_handlers() -> Mapping[type[Exception], _Handler]:
     handlers: dict[type[Exception], _Handler] = {ApiError: _api_error}
     handlers.update(dict.fromkeys(CODE_BY_EXCEPTION, _mapped_error))
+    handlers[InvalidSubmissionError] = _invalid_submission
     handlers[Exception] = _internal_error
     return handlers
 
@@ -76,7 +85,7 @@ def build_app(settings: ServeSettings, token: str | None, store_dir: Path) -> St
         RequestGuardMiddleware, token=token, loopback=is_loopback(settings.host)
     )
     return Starlette(
-        routes=[*reads.routes(store_dir)],
+        routes=[*reads.routes(store_dir), *submissions.routes(settings, store_dir)],
         middleware=[guard],
         exception_handlers=dict(_exception_handlers()),
     )
