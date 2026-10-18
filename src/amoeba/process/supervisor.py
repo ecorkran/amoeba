@@ -1,7 +1,7 @@
 """What the supervisor directory contains, and the observers to reconcile it.
 
-Separate from ``host.py`` so the loop module stays near its line budget, and so
-the CLI's inspection path can discover projects without importing the host.
+Separate from ``host.py`` so the loop module stays near its line budget. Project
+discovery itself lives in ``amoeba.store.discovery``.
 
 Nothing here opens a store read-write; ``project_stores.py`` remains the only
 module permitted to do that. Recovery receives stores already open.
@@ -20,25 +20,9 @@ from amoeba.process.recovery import ObserverRegistry, reconcile
 from amoeba.process.settings import ProcessSettings
 from amoeba.store import Store
 from amoeba.store.journal_models import CommandKind
-from amoeba.store.paths import STORE_FILE_SUFFIX, project_store_path
+from amoeba.store.paths import project_store_path
 
 logger = logging.getLogger(__name__)
-
-
-def discover_project_ids(store_dir: Path) -> list[str]:
-    """Project ids having a store in the supervisor directory.
-
-    An absent directory yields no projects rather than an error: a supervisor
-    that has never run is a valid, empty state — which is what
-    ``amoeba inspect projects`` reports against a fresh directory.
-    """
-    if not store_dir.is_dir():
-        return []
-    return sorted(
-        path.name[: -len(STORE_FILE_SUFFIX)]
-        for path in store_dir.glob(f"*{STORE_FILE_SUFFIX}")
-        if path.is_file()
-    )
 
 
 def store_path_for(store_dir: Path, project_id: str) -> Path:

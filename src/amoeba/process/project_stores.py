@@ -18,8 +18,9 @@ from pathlib import Path
 
 from amoeba.inbox.durable import fsync_directory
 from amoeba.process.errors import StartupFailedError
-from amoeba.process.supervisor import discover_project_ids, store_path_for
+from amoeba.process.supervisor import store_path_for
 from amoeba.store import Store, StoreError
+from amoeba.store.discovery import discover_project_ids
 from amoeba.store.paths import STORE_CREATING_SUFFIX, validate_project_id
 
 logger = logging.getLogger(__name__)

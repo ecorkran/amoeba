@@ -27,8 +27,9 @@ from amoeba.cli import (
     inspect_feed,
     inspect_inbox,
 )
-from amoeba.process.supervisor import discover_project_ids, store_path_for
+from amoeba.process.supervisor import store_path_for
 from amoeba.store import Channel, Store, paths
+from amoeba.store.discovery import discover_project_ids
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from amoeba.cli.main import ExitCode

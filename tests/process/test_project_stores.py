@@ -11,8 +11,9 @@ from pathlib import Path
 import pytest
 
 from amoeba.process.project_stores import ProjectStores
-from amoeba.process.supervisor import discover_project_ids, store_path_for
+from amoeba.process.supervisor import store_path_for
 from amoeba.store import NodeKind, Store
+from amoeba.store.discovery import discover_project_ids
 from amoeba.store.paths import STORE_CREATING_SUFFIX
 
 PROJECT = "fresh"
