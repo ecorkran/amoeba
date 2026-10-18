@@ -8,6 +8,8 @@ license = { file = "LICENSE" }
 dependencies = [
     "pydantic>=2.13.5",
     "pyyaml>=6.0.3",
+    "starlette>=1.8.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
@@ -28,6 +30,7 @@ dev = [
     "pyright>=1.1.390",
     "ruff>=0.8",
     "types-pyyaml>=6.0.12.20260906",
+    "httpx>=0.28.1",
 ]
 
 [tool.ruff]
