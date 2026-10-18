@@ -6,8 +6,8 @@ lld: user/slices/109-slice.network-api.md
 dependencies: [101, 102, 103, 104, 105, 106, 107, 108]
 projectState: Slices 101–108 are merged (store schema 8, listing registry in `cli/inspect.py` with siblings `inspect_inbox.py`, `inspect_evidence.py`, `inspect_feed.py`, `inspect_checks.py`, `inspect_cf.py`; `inbox.submit()`; 106's `follow()` and `Change`; `ExitCode` up to 12). No `amoeba.inspection`, `amoeba.serve`, `read_transaction()`, `change_head()`, or HTTP dependency exists. This slice moves the listings into `amoeba.inspection`, adds the two read-only store methods, and adds `amoeba serve` (Starlette + uvicorn) with reads, submissions, an SSE feed, bind policy, and token auth.
 dateCreated: 20261017
-dateUpdated: 20261017
-status: not_started
+dateUpdated: 20261018
+status: in_progress
 ---
 
 ## Context Summary (File 1 of 3)
@@ -62,14 +62,14 @@ status: not_started
 **Objective**: Work on the right branch from a clean baseline, with 107 and 108 confirmed merged.
 
 **Steps**:
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Confirm `uv run amoeba inspect checks --help` and `uv run amoeba inspect cf-snapshots --help` succeed. If not, stop and tell the PM (LLD "Prerequisites")
-- [ ] Create `109-slice.network-api` from the target; if it exists, switch to it
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Confirm `uv run amoeba inspect checks --help` and `uv run amoeba inspect cf-snapshots --help` succeed. If not, stop and tell the PM (LLD "Prerequisites")
+- [x] Create `109-slice.network-api` from the target; if it exists, switch to it
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
 
 **Success Criteria**:
-- [ ] On the slice branch; baseline suite, `ruff`, and `pyright` clean
-- [ ] No commit needed
+- [x] On the slice branch; baseline suite, `ruff`, and `pyright` clean
+- [x] No commit needed
 
 ---
 
@@ -80,14 +80,14 @@ status: not_started
 **Objective**: One function that seeds a supervisor directory with at least one row for every listing, usable from tests and from a plain script.
 
 **Steps**:
-- [ ] Create `tests/inspection_harness.py`. Move the body of `tests/test_cli_inspect.py`'s `populated` fixture into `seed_every_listing(supervisor_dir: Path) -> SeededStore`, where `SeededStore` is a frozen dataclass holding the project id and the ids a listing option needs (the node id, the verdict id `changes` takes, the judge invocation id)
-- [ ] Move the constants the seeding uses (`PROJECT`, `_FIXTURE_VERDICT`, …) with it; `test_cli_inspect.py` imports them
-- [ ] Keep `populated` as a thin fixture calling `seed_every_listing`
-- [ ] Add no new test. `test_every_listing_renders_json` already asserts that every listing returns at least one row from the seeded store, which is what keeps the Task 5.2 parity test from passing on empty rows
+- [x] Create `tests/inspection_harness.py`. Move the body of `tests/test_cli_inspect.py`'s `populated` fixture into `seed_every_listing(supervisor_dir: Path) -> SeededStore`, where `SeededStore` is a frozen dataclass holding the project id and the ids a listing option needs (the node id, the verdict id `changes` takes, the judge invocation id)
+- [x] Move the constants the seeding uses (`PROJECT`, `_FIXTURE_VERDICT`, …) with it; `test_cli_inspect.py` imports them
+- [x] Keep `populated` as a thin fixture calling `seed_every_listing`
+- [x] Add no new test. `test_every_listing_renders_json` already asserts that every listing returns at least one row from the seeded store, which is what keeps the Task 5.2 parity test from passing on empty rows
 
 **Success Criteria**:
-- [ ] `uv run pytest tests/test_cli_inspect.py` passes, with no test removed, and `test_every_listing_renders_json` still runs for every listing
-- [ ] Commit, e.g. `test: extract shared seeded-store harness for listings`
+- [x] `uv run pytest tests/test_cli_inspect.py` passes, with no test removed, and `test_every_listing_renders_json` still runs for every listing
+- [x] Commit, e.g. `test: extract shared seeded-store harness for listings`
 
 **Files to Create**: `tests/inspection_harness.py`
 **Files to Modify**: `tests/test_cli_inspect.py`
@@ -101,14 +101,16 @@ status: not_started
 **Objective**: A fixed seeded store and the exact CLI output against it, so Task 2.8 can prove the migration changed nothing (LLD "Behavior preserved").
 
 **Steps**:
-- [ ] Choose a scratch directory outside the repo, e.g. `BASE="$(mktemp -d)"`, and record its path in the task notes. It must survive until Task 3.4
-- [ ] Seed `"$BASE/store"` once with `seed_every_listing`, from a throwaway script kept outside the repo (put `tests/` on `sys.path`). Never seed again: ids and timestamps differ per seeding
-- [ ] With `AMOEBA_STORE_DIR="$BASE/store"`, write into `"$BASE/before/"` one file per command: `inspect --help`; for every listing, `inspect <name> --help`, the table form, and `--json`; and for each declared option, one run exercising it (each flag set, each choice option with one choice, each value option with the seeded id)
-- [ ] Generate the command list from the registry (iterate `LISTINGS`), not by hand, so no listing is missed. Keep the capture script with the scratch directory for reuse in Task 2.8
+- [x] Choose a scratch directory outside the repo, e.g. `BASE="$(mktemp -d)"`, and record its path in the task notes. It must survive until Task 3.4
+- [x] Seed `"$BASE/store"` once with `seed_every_listing`, from a throwaway script kept outside the repo (put `tests/` on `sys.path`). Never seed again: ids and timestamps differ per seeding
+- [x] With `AMOEBA_STORE_DIR="$BASE/store"`, write into `"$BASE/before/"` one file per command: `inspect --help`; for every listing, `inspect <name> --help`, the table form, and `--json`; and for each declared option, one run exercising it (each flag set, each choice option with one choice, each value option with the seeded id)
+- [x] Generate the command list from the registry (iterate `LISTINGS`), not by hand, so no listing is missed. Keep the capture script with the scratch directory for reuse in Task 2.8
 
 **Success Criteria**:
-- [ ] `"$BASE/before/"` holds a non-empty file for every listing and every option run; no file contains a traceback
-- [ ] No commit (nothing in the repo changes)
+- [x] `"$BASE/before/"` holds a non-empty file for every listing and every option run; no file contains a traceback
+- [x] No commit (nothing in the repo changes)
+
+**Notes**: Baseline at /tmp/amoeba-109-baseline.jeId4e (store/, commands.json, before/, capture.sh, seed_and_list.py). 56 captures, all exit 0, no tracebacks; a repeat capture was byte-identical. Replay with: capture.sh "$BASE" "$BASE/after".
 
 ---
 
@@ -121,18 +123,18 @@ status: not_started
 **Objective**: The typed request and option model the row functions will take (LLD "What changes shape").
 
 **Steps**:
-- [ ] Create `src/amoeba/inspection/listing.py` with:
+- [x] Create `src/amoeba/inspection/listing.py` with:
   - `Row` (moved type alias), and `ListingScope(StrEnum)` with `PROJECT = "project"`, `SUPERVISOR = "supervisor"`
   - `FlagOption`, `ChoiceOption`, `ValueOption`: frozen dataclasses with a `name` field (a Python identifier, e.g. `judge_invocation_id`) and their existing fields except `flag`. `flag` becomes a property: `"--" + name.replace("_", "-")`
   - `ListingRequest`: frozen; `project_id: str | None`, `options: Mapping[str, str | bool | None]` keyed by option `name`, `compact: bool`; method `option(opt) -> str | bool | None` that raises `KeyError` naming the option when absent (never a default)
   - `Listing`: as today, but `rows: Callable[[Store, ListingRequest], list[Row]] | None`, `flags: tuple[FlagOption, ...]`, and a `scope` property replacing `requires_project`. Keep `flags`, `choice_options`, `value_options` as three separate tuples: argparse adds them in that order, and `--help` must not change
   - `NODE_OPTION = ValueOption(name="node", help_text="Only this node.", metavar="ID")`
-- [ ] Create an empty `src/amoeba/inspection/__init__.py` with a module docstring (filled in Task 2.6)
-- [ ] Nothing imports these yet
+- [x] Create an empty `src/amoeba/inspection/__init__.py` with a module docstring (filled in Task 2.6)
+- [x] Nothing imports these yet
 
 **Success Criteria**:
-- [ ] `uv run pyright` clean
-- [ ] Committed with Task 2.2
+- [x] `uv run pyright` clean
+- [x] Committed with Task 2.2
 
 **Files to Create**: `src/amoeba/inspection/__init__.py`, `src/amoeba/inspection/listing.py`
 
@@ -145,14 +147,14 @@ status: not_started
 **Objective**: Pin flag derivation, scope, and the request accessor.
 
 **Steps**:
-- [ ] Create `tests/inspection/__init__.py` and `tests/inspection/test_listing.py`
-- [ ] Test: `ValueOption(name="judge_invocation_id", …).flag == "--judge-invocation-id"`; each option class derives its flag the same way
-- [ ] Test: a `Listing` with both or neither row function raises `ValueError`; `scope` is `PROJECT` for `rows`, `SUPERVISOR` for `supervisor_rows`
-- [ ] Test: `ListingRequest.option` returns the stored value, and raises `KeyError` for an option not in `options`
+- [x] Create `tests/inspection/__init__.py` and `tests/inspection/test_listing.py`
+- [x] Test: `ValueOption(name="judge_invocation_id", …).flag == "--judge-invocation-id"`; each option class derives its flag the same way
+- [x] Test: a `Listing` with both or neither row function raises `ValueError`; `scope` is `PROJECT` for `rows`, `SUPERVISOR` for `supervisor_rows`
+- [x] Test: `ListingRequest.option` returns the stored value, and raises `KeyError` for an option not in `options`
 
 **Success Criteria**:
-- [ ] New tests pass; full suite green
-- [ ] Commit, e.g. `feat(inspection): add typed listing request and options`
+- [x] New tests pass; full suite green
+- [x] Commit, e.g. `feat(inspection): add typed listing request and options`
 
 **Files to Create**: `tests/inspection/__init__.py`, `tests/inspection/test_listing.py`
 
@@ -165,14 +167,14 @@ status: not_started
 **Objective**: Inspection can list projects without importing the process (LLD Migration Plan, row 3).
 
 **Steps**:
-- [ ] Create `src/amoeba/store/discovery.py` holding `discover_project_ids` unchanged (it uses `STORE_FILE_SUFFIX`; import it from `store/paths.py`)
-- [ ] Delete it from `process/supervisor.py`. `store_path_for` stays there
-- [ ] Update `process/project_stores.py`, `cli/inspect.py`, and `tests/process/test_project_stores.py` to import from `amoeba.store.discovery`. No re-export shim
+- [x] Create `src/amoeba/store/discovery.py` holding `discover_project_ids` unchanged (it uses `STORE_FILE_SUFFIX`; import it from `store/paths.py`)
+- [x] Delete it from `process/supervisor.py`. `store_path_for` stays there
+- [x] Update `process/project_stores.py`, `cli/inspect.py`, and `tests/process/test_project_stores.py` to import from `amoeba.store.discovery`. No re-export shim
 
 **Success Criteria**:
-- [ ] `grep -rn discover_project_ids src tests` shows only `store/discovery.py` as the definition
-- [ ] Suite, `ruff`, `pyright` clean
-- [ ] Commit, e.g. `refactor(store): move discover_project_ids into amoeba.store`
+- [x] `grep -rn discover_project_ids src tests` shows only `store/discovery.py` as the definition
+- [x] Suite, `ruff`, `pyright` clean
+- [x] Commit, e.g. `refactor(store): move discover_project_ids into amoeba.store`
 
 **Files to Create**: `src/amoeba/store/discovery.py`
 **Files to Modify**: `src/amoeba/process/supervisor.py`, `src/amoeba/process/project_stores.py`, `src/amoeba/cli/inspect.py`, `tests/process/test_project_stores.py`
@@ -186,13 +188,13 @@ status: not_started
 **Objective**: One definition of a change's wire form, shared by `amoeba feed` and the stream (LLD Migration Plan, row 4).
 
 **Steps**:
-- [ ] Create `src/amoeba/feed/wire.py` with `change_record(change: Change) -> dict[str, object]`: the dict currently built inside `change_line`, same keys, same order
-- [ ] In `cli/feed.py`, replace `change_line` with printing `json.dumps(change_record(change))`; remove `change_line`
-- [ ] Add `tests/feed/test_wire.py`: the keys and their order, `kind` as the enum value, `recorded_at` as ISO text, `payload` a plain dict
+- [x] Create `src/amoeba/feed/wire.py` with `change_record(change: Change) -> dict[str, object]`: the dict currently built inside `change_line`, same keys, same order
+- [x] In `cli/feed.py`, replace `change_line` with printing `json.dumps(change_record(change))`; remove `change_line`
+- [x] Add `tests/feed/test_wire.py`: the keys and their order, `kind` as the enum value, `recorded_at` as ISO text, `payload` a plain dict
 
 **Success Criteria**:
-- [ ] `tests/cli/test_feed.py` passes unchanged (proves `amoeba feed` output is identical); new test passes
-- [ ] Commit, e.g. `refactor(feed): extract change_record wire form`
+- [x] `tests/cli/test_feed.py` passes unchanged (proves `amoeba feed` output is identical); new test passes
+- [x] Commit, e.g. `refactor(feed): extract change_record wire form`
 
 **Files to Create**: `src/amoeba/feed/wire.py`, `tests/feed/test_wire.py`
 **Files to Modify**: `src/amoeba/cli/feed.py`
@@ -206,22 +208,24 @@ status: not_started
 **Objective**: Every row function takes a `ListingRequest` while every module stays where it is, so the change of shape is committed green before anything moves (LLD "What changes shape").
 
 **Steps**:
-- [ ] In each sibling module, still under `cli/`: import `Row` and the option types from `amoeba.inspection.listing`; replace `args.project` with `request.project_id`; drop `import argparse`. Define each listing-specific option once, in the module whose row function reads it (file 1's "Task-level additions"), and read it with `request.option(THAT_OPTION)`:
-  1. [ ] `cli/inspect_inbox.py`: define `CHANNEL_OPTION` (`ChoiceOption`, name `channel`)
-  2. [ ] `cli/inspect_evidence.py`: define `JUDGE_INVOCATION_OPTION` (name `judge_invocation_id`) and `VERDICT_OPTION` (name `verdict`, required). `args.json` becomes `not request.compact`; use `NODE_OPTION`
-  3. [ ] `cli/inspect_feed.py`: define `OUTCOME_OPTION` (`ChoiceOption`, name `outcome`, choices `OUTCOME_CHOICES`)
-  4. [ ] `cli/inspect_checks.py`: use `NODE_OPTION`
-  5. [ ] `cli/inspect_cf.py`: `request.project_id` only
-- [ ] Run `uv run pytest tests/cli` once after the five modules; it must be green before the next step
-- [ ] In `cli/inspect.py`: convert the four core row functions the same way, defining `UNRESOLVED_OPTION` (`FlagOption`, name `unresolved`); build `LISTINGS` from `amoeba.inspection.listing.Listing` and the option objects; `run_listing` builds a `ListingRequest` from `args` (each option's value read by its `name`, `compact = not args.json`) and prints exactly as before
-- [ ] In `cli/main.py`: `_add_inspect_parser` uses `listing.scope` instead of `requires_project` and adds each option by its derived `flag`, flags first, then choices, then values, as today
-- [ ] Keep help texts, choices, metavars, and `required` exactly as today
-- [ ] Tests: `scope` instead of `requires_project` in `tests/test_cli_inspect.py`
+- [x] In each sibling module, still under `cli/`: import `Row` and the option types from `amoeba.inspection.listing`; replace `args.project` with `request.project_id`; drop `import argparse`. Define each listing-specific option once, in the module whose row function reads it (file 1's "Task-level additions"), and read it with `request.option(THAT_OPTION)`:
+  1. [x] `cli/inspect_inbox.py`: define `CHANNEL_OPTION` (`ChoiceOption`, name `channel`)
+  2. [x] `cli/inspect_evidence.py`: define `JUDGE_INVOCATION_OPTION` (name `judge_invocation_id`) and `VERDICT_OPTION` (name `verdict`, required). `args.json` becomes `not request.compact`; use `NODE_OPTION`
+  3. [x] `cli/inspect_feed.py`: define `OUTCOME_OPTION` (`ChoiceOption`, name `outcome`, choices `OUTCOME_CHOICES`)
+  4. [x] `cli/inspect_checks.py`: use `NODE_OPTION`
+  5. [x] `cli/inspect_cf.py`: `request.project_id` only
+- [x] Run `uv run pytest tests/cli` once after the five modules; it must be green before the next step
+- [x] In `cli/inspect.py`: convert the four core row functions the same way, defining `UNRESOLVED_OPTION` (`FlagOption`, name `unresolved`); build `LISTINGS` from `amoeba.inspection.listing.Listing` and the option objects; `run_listing` builds a `ListingRequest` from `args` (each option's value read by its `name`, `compact = not args.json`) and prints exactly as before
+- [x] In `cli/main.py`: `_add_inspect_parser` uses `listing.scope` instead of `requires_project` and adds each option by its derived `flag`, flags first, then choices, then values, as today
+- [x] Keep help texts, choices, metavars, and `required` exactly as today
+- [x] Tests: `scope` instead of `requires_project` in `tests/test_cli_inspect.py`
 
 **Success Criteria**:
-- [ ] No `argparse` import in any of the five sibling modules
-- [ ] Suite, `ruff`, `pyright` clean
-- [ ] Commit, e.g. `refactor(inspect): read listing options through ListingRequest`
+- [x] No `argparse` import in any of the five sibling modules
+- [x] Suite, `ruff`, `pyright` clean
+- [x] Commit, e.g. `refactor(inspect): read listing options through ListingRequest`
+
+**Notes**: Added ListingRequest.require_project_id() (raises ValueError when project_id is None) because store methods take a str project id; row functions call it instead of reading request.project_id. The intermediate "run tests/cli after the five modules" step could not be green on its own (cli/inspect.py still passed an argparse.Namespace), so the suite was run once after inspect.py and main.py were converted. Argparse options now use dest=option.name. Baseline replay byte-identical.
 
 **Files to Modify**: the five `cli/inspect_*.py` modules, `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_cli_inspect.py`
 
@@ -234,19 +238,21 @@ status: not_started
 **Objective**: The five sibling modules live in `amoeba.inspection`, as a pure move so git history follows each file; the registry stays in `cli/inspect.py` for one more task (LLD Migration Plan, row 2).
 
 **Steps**:
-- [ ] `git mv` each module, then fix imports only. No other edit in this commit:
-  1. [ ] `cli/inspect_inbox.py` → `inspection/inbox.py`
-  2. [ ] `cli/inspect_evidence.py` → `inspection/evidence.py` (with `VerdictNotComparableError`)
-  3. [ ] `cli/inspect_feed.py` → `inspection/feed.py`
-  4. [ ] `cli/inspect_checks.py` → `inspection/checks.py`
-  5. [ ] `cli/inspect_cf.py` → `inspection/cf.py`
-- [ ] Update `cli/inspect.py`'s imports, and `cli/main.py`'s `VerdictNotComparableError` import to `amoeba.inspection.evidence`. Update each module docstring that names `inspect.py` or a sibling
-- [ ] Tests: `git mv` `tests/cli/test_inspect_{evidence,feed,checks,cf}.py` to `tests/inspection/test_{evidence,feed,checks,cf}.py` and fix their imports; in `tests/test_import_boundaries.py`, change `cli/inspect_feed.py` to `inspection/feed.py`
+- [x] `git mv` each module, then fix imports only. No other edit in this commit:
+  1. [x] `cli/inspect_inbox.py` → `inspection/inbox.py`
+  2. [x] `cli/inspect_evidence.py` → `inspection/evidence.py` (with `VerdictNotComparableError`)
+  3. [x] `cli/inspect_feed.py` → `inspection/feed.py`
+  4. [x] `cli/inspect_checks.py` → `inspection/checks.py`
+  5. [x] `cli/inspect_cf.py` → `inspection/cf.py`
+- [x] Update `cli/inspect.py`'s imports, and `cli/main.py`'s `VerdictNotComparableError` import to `amoeba.inspection.evidence`. Update each module docstring that names `inspect.py` or a sibling
+- [x] Tests: `git mv` `tests/cli/test_inspect_{evidence,feed,checks,cf}.py` to `tests/inspection/test_{evidence,feed,checks,cf}.py` and fix their imports; in `tests/test_import_boundaries.py`, change `cli/inspect_feed.py` to `inspection/feed.py`
 
 **Success Criteria**:
-- [ ] `grep -rn "amoeba.cli.inspect_\|cli import inspect_" src tests` finds nothing; `git log --follow` on each moved file shows its history
-- [ ] Suite, `ruff`, `pyright` clean
-- [ ] Commit, e.g. `refactor(inspection): move listing rows out of the CLI`
+- [x] `grep -rn "amoeba.cli.inspect_\|cli import inspect_" src tests` finds nothing; `git log --follow` on each moved file shows its history
+- [x] Suite, `ruff`, `pyright` clean
+- [x] Commit, e.g. `refactor(inspection): move listing rows out of the CLI`
+
+**Notes**: Preceded by commit 7c2c766, which moved process/review_sources.py to store/review_sources.py (PM decision 20261018): inspection/feed.py's watches rows call list_review_files, and Task 2.7 forbids inspection importing amoeba.process. Recorded in the LLD Migration Plan table.
 
 **Files to Modify**: `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_import_boundaries.py`
 **Files to Move**: the five `cli/inspect_*.py` modules and four `tests/cli/test_inspect_*.py` files, as listed
@@ -260,14 +266,14 @@ status: not_started
 **Objective**: One registry and one open-read-only path, used by the CLI and later the server (LLD "What changes shape", `read_listing`).
 
 **Steps**:
-- [ ] Move the four core row functions from `cli/inspect.py` to new `inspection/core.py` (public names, no underscore), with `UNRESOLVED_OPTION`. `project_rows` uses `paths.project_store_path`, not `store_path_for`
-- [ ] Move `LISTINGS`, `LISTINGS_BY_NAME`, and `PROJECTS_LISTING` into `inspection/__init__.py`. Re-export the `listing.py` types from `__init__`
-- [ ] Add `ListingResult` (frozen: `rows: list[Row]`, `as_of_seq: int | None`) and `read_listing(name, request, store_dir) -> ListingResult`: resolve the listing, call `supervisor_rows(store_dir)` or open `paths.project_store_path(store_dir, project_id)` read-only and call `rows`. `as_of_seq` is `None` for now (Task 3.3 fills it). Raise `ValueError` if a project listing gets `project_id=None`
-- [ ] Reduce `cli/inspect.py` to argparse helpers and printing: `run_listing` calls `read_listing(…, paths.store_dir())` and prints as before. `cli/main.py` and `tests/test_cli_inspect.py` import the registry from `amoeba.inspection`
+- [x] Move the four core row functions from `cli/inspect.py` to new `inspection/core.py` (public names, no underscore), with `UNRESOLVED_OPTION`. `project_rows` uses `paths.project_store_path`, not `store_path_for`
+- [x] Move `LISTINGS`, `LISTINGS_BY_NAME`, and `PROJECTS_LISTING` into `inspection/__init__.py`. Re-export the `listing.py` types from `__init__`
+- [x] Add `ListingResult` (frozen: `rows: list[Row]`, `as_of_seq: int | None`) and `read_listing(name, request, store_dir) -> ListingResult`: resolve the listing, call `supervisor_rows(store_dir)` or open `paths.project_store_path(store_dir, project_id)` read-only and call `rows`. `as_of_seq` is `None` for now (Task 3.3 fills it). Raise `ValueError` if a project listing gets `project_id=None`
+- [x] Reduce `cli/inspect.py` to argparse helpers and printing: `run_listing` calls `read_listing(…, paths.store_dir())` and prints as before. `cli/main.py` and `tests/test_cli_inspect.py` import the registry from `amoeba.inspection`
 
 **Success Criteria**:
-- [ ] Suite, `ruff`, `pyright` clean
-- [ ] Commit, e.g. `refactor(inspection): move listing registry out of the CLI`
+- [x] Suite, `ruff`, `pyright` clean
+- [x] Commit, e.g. `refactor(inspection): move listing registry out of the CLI`
 
 **Files to Create**: `src/amoeba/inspection/core.py`
 **Files to Modify**: `src/amoeba/inspection/__init__.py`, `src/amoeba/cli/inspect.py`, `src/amoeba/cli/main.py`, `tests/test_cli_inspect.py`
@@ -281,14 +287,14 @@ status: not_started
 **Objective**: Enforce that inspection imports nothing from the CLI, the server, or the process (LLD "Layering rules", first rule).
 
 **Steps**:
-- [ ] In `tests/test_import_boundaries.py`, add `FORBIDDEN_FOR_INSPECTION = ("amoeba.cli", "amoeba.serve", "amoeba.process")` and a test using the existing `_violations("inspection", …)`
-- [ ] Update the module docstring's rule list
-- [ ] Confirm the test fails if you temporarily add `import amoeba.cli` to `inspection/core.py`; then remove it
-- [ ] Confirm `tests/test_writer_guard.py` passes with no allow-list change
+- [x] In `tests/test_import_boundaries.py`, add `FORBIDDEN_FOR_INSPECTION = ("amoeba.cli", "amoeba.serve", "amoeba.process")` and a test using the existing `_violations("inspection", …)`
+- [x] Update the module docstring's rule list
+- [x] Confirm the test fails if you temporarily add `import amoeba.cli` to `inspection/core.py`; then remove it
+- [x] Confirm `tests/test_writer_guard.py` passes with no allow-list change
 
 **Success Criteria**:
-- [ ] Layering and writer-guard tests pass
-- [ ] Commit, e.g. `test: forbid inspection from importing cli, serve, or process`
+- [x] Layering and writer-guard tests pass
+- [x] Commit, e.g. `test: forbid inspection from importing cli, serve, or process`
 
 **Files to Modify**: `tests/test_import_boundaries.py`
 
@@ -301,13 +307,15 @@ status: not_started
 **Objective**: The migration gate: the CLI is unchanged before any server code lands (LLD Technical Requirements, first bullet).
 
 **Steps**:
-- [ ] Rerun Task 1.3's capture script against the same `"$BASE/store"` into `"$BASE/after/"`. Do not reseed
-- [ ] `diff -r "$BASE/before" "$BASE/after"` must print nothing. If it prints anything, fix the cause; do not edit the baseline
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each
+- [x] Rerun Task 1.3's capture script against the same `"$BASE/store"` into `"$BASE/after/"`. Do not reseed
+- [x] `diff -r "$BASE/before" "$BASE/after"` must print nothing. If it prints anything, fix the cause; do not edit the baseline
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each
 
 **Success Criteria**:
-- [ ] `diff -r` empty; suite, `ruff`, `pyright` clean
-- [ ] No commit needed; note the result in the task notes. Keep `"$BASE"` for Task 3.4
+- [x] `diff -r` empty; suite, `ruff`, `pyright` clean
+- [x] No commit needed; note the result in the task notes. Keep `"$BASE"` for Task 3.4
+
+**Notes**: diff -r before/after empty (56 files); suite 1558 passed, ruff and pyright clean.
 
 ---
 
@@ -320,14 +328,16 @@ status: not_started
 **Objective**: One WAL snapshot across several reads, and the feed head inside it (LLD D4, 106's deferral).
 
 **Steps**:
-- [ ] In `store/sql_feed.py`, add `BEGIN_DEFERRED` (or reuse an existing `BEGIN` constant if one exists), and `SELECT_CHANGE_HEAD`: the highest `seq` for a project, `0` when there is none (`COALESCE(MAX(seq), 0)`)
-- [ ] In `FeedOperations` (`store/feed.py`), add `change_head(project_id) -> int`
-- [ ] Add `read_transaction()`, a context manager: executes the `BEGIN`, yields, and always ends the transaction (`ROLLBACK` is enough; nothing is written). Docstring: SQLite takes the snapshot at the first read inside the transaction, not at `BEGIN`; it is for reads only; it must not be nested
-- [ ] If `store/feed.py` passes ~300 lines, ask the PM where the two methods go before splitting
+- [x] In `store/sql_feed.py`, add `BEGIN_DEFERRED` (or reuse an existing `BEGIN` constant if one exists), and `SELECT_CHANGE_HEAD`: the highest `seq` for a project, `0` when there is none (`COALESCE(MAX(seq), 0)`)
+- [x] In `FeedOperations` (`store/feed.py`), add `change_head(project_id) -> int`
+- [x] Add `read_transaction()`, a context manager: executes the `BEGIN`, yields, and always ends the transaction (`ROLLBACK` is enough; nothing is written). Docstring: SQLite takes the snapshot at the first read inside the transaction, not at `BEGIN`; it is for reads only; it must not be nested
+- [x] If `store/feed.py` passes ~300 lines, ask the PM where the two methods go before splitting
 
 **Success Criteria**:
-- [ ] `pyright` clean
-- [ ] Committed with Task 3.2
+- [x] `pyright` clean
+- [x] Committed with Task 3.2
+
+**Notes**: read_transaction is typed Generator[None]; typeshed marks @contextmanager on an Iterator return as deprecated under pyright strict.
 
 **Files to Modify**: `src/amoeba/store/sql_feed.py`, `src/amoeba/store/feed.py`
 
@@ -340,14 +350,14 @@ status: not_started
 **Objective**: Prove reads inside `read_transaction()` see one snapshot.
 
 **Steps**:
-- [ ] Create `tests/store/test_read_transaction.py`, using a throwaway store in `tmp_path`
-- [ ] Test: `change_head` is `0` on an empty feed, and equals the last `seq` from `changes()` after commits
-- [ ] Test: open the store read-only; inside `read_transaction()`, read `change_head`; commit a change through a separate read-write `Store.open`; read `change_head` again inside the same transaction — unchanged; after the block — the new value
-- [ ] Test: the read-only handle is still usable after an exception raised inside the block (the transaction was ended)
+- [x] Create `tests/store/test_read_transaction.py`, using a throwaway store in `tmp_path`
+- [x] Test: `change_head` is `0` on an empty feed, and equals the last `seq` from `changes()` after commits
+- [x] Test: open the store read-only; inside `read_transaction()`, read `change_head`; commit a change through a separate read-write `Store.open`; read `change_head` again inside the same transaction — unchanged; after the block — the new value
+- [x] Test: the read-only handle is still usable after an exception raised inside the block (the transaction was ended)
 
 **Success Criteria**:
-- [ ] New tests pass; full suite green
-- [ ] Commit, e.g. `feat(store): add read_transaction and change_head`
+- [x] New tests pass; full suite green
+- [x] Commit, e.g. `feat(store): add read_transaction and change_head`
 
 **Files to Create**: `tests/store/test_read_transaction.py`
 
@@ -360,12 +370,12 @@ status: not_started
 **Objective**: Every project read reports the feed `seq` it is current as of (LLD D4, Data Flow "A read").
 
 **Steps**:
-- [ ] In `read_listing`, for a project listing, run `listing.rows(store, request)` and then `store.change_head(project_id)` inside one `store.read_transaction()`, and set `as_of_seq`. Supervisor listings keep `None`
-- [ ] The CLI ignores `as_of_seq`; its output must not change
+- [x] In `read_listing`, for a project listing, run `listing.rows(store, request)` and then `store.change_head(project_id)` inside one `store.read_transaction()`, and set `as_of_seq`. Supervisor listings keep `None`
+- [x] The CLI ignores `as_of_seq`; its output must not change
 
 **Success Criteria**:
-- [ ] `pyright` clean; `tests/test_cli_inspect.py` passes unchanged
-- [ ] Committed with Task 3.4
+- [x] `pyright` clean; `tests/test_cli_inspect.py` passes unchanged
+- [x] Committed with Task 3.4
 
 **Files to Modify**: `src/amoeba/inspection/__init__.py`
 
@@ -378,15 +388,17 @@ status: not_started
 **Objective**: The LLD's Functional Requirement: a commit between two statements of a multi-query listing does not split the read.
 
 **Steps**:
-- [ ] Create `tests/inspection/test_read_listing.py`
-- [ ] Test: `as_of_seq` equals `change_head` after a read with no concurrent writes; supervisor listings return `None`
-- [ ] Snapshot test: use `messages` (one query per channel). Wrap the read-only `Store.messages` with `monkeypatch` so that after its first call it commits a new intent message through a separate read-write store. Assert the rows do not contain the new message and `as_of_seq` is the pre-commit head; a second `read_listing` shows both
-- [ ] Test: a project listing with `project_id=None` raises `ValueError`
-- [ ] Rerun Task 1.3's capture into `"$BASE/after/"` (replacing it); `diff -r "$BASE/before" "$BASE/after"` must print nothing, because Task 3.3 changed the CLI's read path. Then delete `"$BASE"`
+- [x] Create `tests/inspection/test_read_listing.py`
+- [x] Test: `as_of_seq` equals `change_head` after a read with no concurrent writes; supervisor listings return `None`
+- [x] Snapshot test: use `messages` (one query per channel). Wrap the read-only `Store.messages` with `monkeypatch` so that after its first call it commits a new intent message through a separate read-write store. Assert the rows do not contain the new message and `as_of_seq` is the pre-commit head; a second `read_listing` shows both
+- [x] Test: a project listing with `project_id=None` raises `ValueError`
+- [x] Rerun Task 1.3's capture into `"$BASE/after/"` (replacing it); `diff -r "$BASE/before" "$BASE/after"` must print nothing, because Task 3.3 changed the CLI's read path. Then delete `"$BASE"`
 
 **Success Criteria**:
-- [ ] New tests pass; `diff -r` empty; full suite, `ruff`, `pyright` clean
-- [ ] Commit, e.g. `feat(inspection): report as_of_seq from one read snapshot`
+- [x] New tests pass; `diff -r` empty; full suite, `ruff`, `pyright` clean
+- [x] Commit, e.g. `feat(inspection): report as_of_seq from one read snapshot`
+
+**Notes**: The snapshot test commits an escalation message (journal_escalate on the seeded unresolved entry), not an intent message: messages queries intent first and escalation second, so an intent committed after the first query would be missed with or without a snapshot. Verified non-vacuous: with read_transaction removed, the test fails. Baseline replay identical (56 files); baseline directory deleted.
 
 **Files to Create**: `tests/inspection/test_read_listing.py`
 
