@@ -108,6 +108,19 @@ ORDER BY {COL_CHANGE_SEQ}
 LIMIT ?
 """
 
+#: The feed head: one project's highest seq, or 0 when it has no changes.
+SELECT_CHANGE_HEAD: Final = f"""
+SELECT COALESCE(MAX({COL_CHANGE_SEQ}), 0)
+FROM {TABLE_CHANGES}
+WHERE {COL_CHANGE_PROJECT_ID} = ?
+"""
+
+#: A read transaction: every statement until ``ROLLBACK`` sees one snapshot.
+BEGIN_DEFERRED: Final = "BEGIN DEFERRED"
+
+#: Ends a read transaction; nothing was written, so nothing is lost.
+ROLLBACK: Final = "ROLLBACK"
+
 # --------------------------------------------------------------------------
 # detected_reviews statements
 # --------------------------------------------------------------------------

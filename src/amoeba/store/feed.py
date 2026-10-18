@@ -9,7 +9,8 @@ the transaction of whatever write fired them (D8).
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 
 from amoeba.store import sql, sql_feed, sql_inbox
 from amoeba.store._base import isoformat, now
@@ -52,6 +53,30 @@ class FeedOperations(VerdictWriter):
         """
         row = self._execute(sql.PRAGMA_DATA_VERSION, ()).fetchone()
         return int(row[0])
+
+    def change_head(self, project_id: str) -> int:
+        """The project's highest ``seq``, or ``0`` when its feed is empty.
+
+        Read inside :meth:`read_transaction`, it is the ``seq`` the other reads
+        in that transaction are current as of.
+        """
+        row = self._execute(sql_feed.SELECT_CHANGE_HEAD, (project_id,)).fetchone()
+        return int(row[0])
+
+    @contextmanager
+    def read_transaction(self) -> Generator[None]:
+        """Run several reads against one WAL snapshot.
+
+        SQLite takes the snapshot at the first read inside the transaction, not
+        at ``BEGIN``. For reads only: nothing inside may write. Must not be
+        nested; SQLite refuses a ``BEGIN`` inside an open transaction. The
+        transaction always ends, with ``ROLLBACK``, even when a read raises.
+        """
+        self._execute(sql_feed.BEGIN_DEFERRED, ())
+        try:
+            yield
+        finally:
+            self._execute(sql_feed.ROLLBACK, ())
 
     # ----------------------------------------------------------------------
     # The detection ledger
