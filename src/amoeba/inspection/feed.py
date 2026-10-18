@@ -1,7 +1,7 @@
 """Rows for the detection listings: ``watches`` and ``detections``.
 
-A sibling of ``inspect.py``, which registers these in its one ``LISTINGS``
-registry. Both receive a **read-only** store and write nothing. A watch's state
+The one ``LISTINGS`` registry registers these. Both receive a **read-only**
+store and write nothing. A watch's state
 is computed on read, from the directory and the journal, so it needs no tenant
 memory and is right whether or not the process is running.
 """

@@ -22,8 +22,8 @@ from importlib import metadata
 from typing import Any, Final
 
 from amoeba.cli import settings_flags
-from amoeba.cli.inspect_evidence import VerdictNotComparableError
 from amoeba.inbox import InboxSubmitError
+from amoeba.inspection.evidence import VerdictNotComparableError
 from amoeba.process.errors import (
     AlreadyRunningError,
     GraceExpiredError,

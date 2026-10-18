@@ -19,13 +19,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from amoeba.cli import (
-    inspect_cf,
-    inspect_checks,
-    inspect_evidence,
-    inspect_feed,
-    inspect_inbox,
-)
+from amoeba.inspection import cf as inspect_cf
+from amoeba.inspection import checks as inspect_checks
+from amoeba.inspection import evidence as inspect_evidence
+from amoeba.inspection import feed as inspect_feed
+from amoeba.inspection import inbox as inspect_inbox
 from amoeba.inspection.listing import (
     NODE_OPTION,
     FlagOption,

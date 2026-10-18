@@ -1,9 +1,8 @@
 """Rows for the ``checks`` and ``calibration`` listings.
 
-A sibling of ``inspect_evidence.py``: this module holds the columns and the row
-functions, and ``inspect.py`` registers them in its one ``LISTINGS`` registry
-(registering needs ``Listing``, which lives there). Both receive a **read-only**
-store, so they work whether or not the resident process is running.
+This module holds the columns and the row functions; the one ``LISTINGS``
+registry registers them. Both receive a **read-only** store, so they work
+whether or not the resident process is running.
 """
 
 from __future__ import annotations

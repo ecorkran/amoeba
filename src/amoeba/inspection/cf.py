@@ -1,9 +1,8 @@
 """Rows for the ``cf-links`` and ``cf-snapshots`` listings.
 
-A sibling of ``inspect_checks.py``: this module holds the columns and the row
-functions, and ``inspect.py`` registers them in its one ``LISTINGS`` registry.
-Both receive a **read-only** store, so they work whether or not the resident
-process is running.
+This module holds the columns and the row functions; the one ``LISTINGS``
+registry registers them. Both receive a **read-only** store, so they work
+whether or not the resident process is running.
 
 A snapshot's ``changed`` is a list of objects. The table shows the names of the
 fields that moved in ``changed_fields``; ``--json`` carries the full list as

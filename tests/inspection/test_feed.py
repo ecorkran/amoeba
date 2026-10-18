@@ -14,8 +14,8 @@ import pytest
 from cli_harness import run_cli
 from evidence_harness import verdict_input
 
-from amoeba.cli.inspect_feed import DETECTION_COLUMNS, WATCH_COLUMNS, WatchState
 from amoeba.cli.main import ExitCode
+from amoeba.inspection.feed import DETECTION_COLUMNS, WATCH_COLUMNS, WatchState
 from amoeba.store import (
     CommandKind,
     DetectionInput,

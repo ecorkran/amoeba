@@ -1,8 +1,7 @@
 """Rows for the evidence listings: ``verdicts``, ``findings``, and ``changes``.
 
-A sibling of ``inspect.py``, which registers these in its one ``LISTINGS``
-registry. All receive a **read-only** store, so they work whether or not the
-resident process is running.
+The one ``LISTINGS`` registry registers these. All receive a **read-only**
+store, so they work whether or not the resident process is running.
 
 ``changes --verdict ID`` refuses a review that is not comparable rather than
 printing no rows, so neither output form can pass a failed round off as a

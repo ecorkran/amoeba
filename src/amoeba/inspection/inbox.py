@@ -1,8 +1,7 @@
 """Rows for the inbox listings: ``inbox``, ``submissions``, and ``messages``.
 
-A sibling of ``inspect.py``, which registers these in its one ``LISTINGS``
-registry. Split out to keep that module near its line budget; nothing here is
-reachable except through the registry.
+The one ``LISTINGS`` registry registers these; nothing here is reachable
+except through it.
 
 ``submissions`` and ``messages`` receive a **read-only** store. ``inbox`` reads
 the supervisor directory and opens no store at all.
