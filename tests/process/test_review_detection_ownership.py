@@ -11,7 +11,6 @@ from detection_harness import PROJECT, ROUND_TWO_PART_ONE, DetectionRig
 
 import amoeba.process.review_detection as review_detection
 from amoeba.process.review_scan import content_digest
-from amoeba.process.review_sources import DetectedFile, DirectoryReviewSource
 from amoeba.store import (
     ChangeKind,
     CommandKind,
@@ -19,6 +18,7 @@ from amoeba.store import (
     DetectionOutcome,
     JournalOutcome,
 )
+from amoeba.store.review_sources import DetectedFile, DirectoryReviewSource
 
 SETTLE_SCANS = 2
 SQ_PARAMETERS: dict[str, object] = {"pipeline": "p6", "params": {}}

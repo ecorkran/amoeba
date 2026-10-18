@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Final
 
 from amoeba.inspection.listing import ChoiceOption, ListingRequest, Row
-from amoeba.process.review_sources import (
+from amoeba.store import DetectionOutcome, ReviewWatch, Store
+from amoeba.store.review_sources import (
     ReviewDirectoryUnavailableError,
     list_review_files,
 )
-from amoeba.store import DetectionOutcome, ReviewWatch, Store
 
 
 class WatchState(StrEnum):

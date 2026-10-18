@@ -14,7 +14,6 @@ from pathlib import Path
 from local_host_harness import LocalHost
 
 from amoeba.process.review_detection import ReviewDetectionTenant
-from amoeba.process.review_sources import DirectoryReviewSource, ReviewSource
 from amoeba.store import (
     CFReference,
     NodeKind,
@@ -23,6 +22,7 @@ from amoeba.store import (
     SubmissionOutcome,
 )
 from amoeba.store.inbox_models import WATCH_ACTIVE, WATCH_REVIEWS_DIR
+from amoeba.store.review_sources import DirectoryReviewSource, ReviewSource
 
 PROJECT = "demo"
 SLICE_NAME = "resident-process-and-recovery"

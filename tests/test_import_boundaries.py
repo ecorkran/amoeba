@@ -27,7 +27,7 @@ SINGLE_DEFINITION_MODULES = (
     "feed/follower.py",
     "cli/feed.py",
     "store/attribution.py",
-    "process/review_sources.py",
+    "store/review_sources.py",
     "process/review_detection.py",
     "process/review_scan.py",
     "cli/inspect_feed.py",

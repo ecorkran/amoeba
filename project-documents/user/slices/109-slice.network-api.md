@@ -281,6 +281,7 @@ The move is mechanical and changes no row. Its effort is counted in this slice's
 | `cli/inspect_inbox.py`, `cli/inspect_evidence.py`, `cli/inspect_feed.py`, 107's `cli/inspect_checks.py`, and 108's `cli/inspect_cf.py` | `inspection/{inbox,evidence,feed,checks,cf}.py` | the registry, `cli/main.py` (`VerdictNotComparableError` import), `test_import_boundaries.py`'s `SINGLE_DEFINITION_MODULES` paths, and tests importing them |
 | `process/supervisor.py`: `discover_project_ids` | `store/discovery.py` | `process/project_stores.py`, `inspection/core.py`, `tests/process/test_project_stores.py`. `store_path_for` stays in `supervisor.py`, and `inspection` uses `paths.project_store_path` directly. |
 | `cli/feed.py`: the body of `change_line` | `feed/wire.py`: `change_record` | `cli/feed.py` (keeps printing `json.dumps(change_record(c))`), `serve/stream.py` |
+| `process/review_sources.py` (added in Phase 6, PM decision 20261018: the `watches` rows call its `list_review_files`, and `inspection` may not import `amoeba.process`) | `store/review_sources.py`, whole module | `inspection/feed.py`, `process/review_detection.py`, `process/review_scan.py`, `tests/detection_harness.py`, `test_import_boundaries.py`'s `SINGLE_DEFINITION_MODULES`, and its tests, moved to `tests/store/` |
 
 Consumers change their imports. No re-export shims are left in `amoeba.cli`, because nothing outside the repository imports these modules.
 

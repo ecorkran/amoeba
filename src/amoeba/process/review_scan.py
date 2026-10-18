@@ -17,13 +17,13 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from amoeba.process.review_sources import DetectedFile
 from amoeba.store import (
     DetectionInput,
     DetectionOutcome,
     Store,
     attribute_review,
 )
+from amoeba.store.review_sources import DetectedFile
 from amoeba.upstream.squadron import (
     ParsedReview,
     SquadronReviewError,

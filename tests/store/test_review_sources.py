@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.process.review_sources import (
+from amoeba.store.review_sources import (
     DirectoryReviewSource,
     ReviewDirectoryUnavailableError,
 )

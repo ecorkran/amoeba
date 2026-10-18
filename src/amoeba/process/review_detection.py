@@ -21,14 +21,14 @@ from pathlib import Path
 from typing import Final, Protocol
 
 from amoeba.process.review_scan import content_digest, examine, recording
-from amoeba.process.review_sources import (
+from amoeba.process.settings import ProcessSettings
+from amoeba.store import BaselineEntry, ReviewWatch, Store
+from amoeba.store.review_sources import (
     DirectoryReviewSource,
     ReviewDirectoryUnavailableError,
     ReviewSource,
     list_review_files,
 )
-from amoeba.process.settings import ProcessSettings
-from amoeba.store import BaselineEntry, ReviewWatch, Store
 
 logger = logging.getLogger(__name__)
 
