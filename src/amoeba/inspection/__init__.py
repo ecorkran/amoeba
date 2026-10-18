@@ -215,4 +215,7 @@ def read_listing(name: str, request: ListingRequest, store_dir: Path) -> Listing
         raise ValueError(f"listing {name!r} declares no rows")
     project_id = request.require_project_id()
     with Store.open_read_only(paths.project_store_path(store_dir, project_id)) as store:
-        return ListingResult(rows=listing.rows(store, request), as_of_seq=None)
+        with store.read_transaction():
+            rows = listing.rows(store, request)
+            as_of_seq = store.change_head(project_id)
+    return ListingResult(rows=rows, as_of_seq=as_of_seq)
