@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: outbound-change-feed-and-detection-of-external-work
 dateCreated: 20261015
-dateUpdated: 20261016
+dateUpdated: 20261018
 status: complete
 ---
 
@@ -176,10 +176,14 @@ for change in follow(store_dir, project_id, after=last_seq, settings=FeedSetting
 
 ## "Current state, then follow"
 
-Until slice 109 adds a consistent snapshot-plus-head read, a subscriber that
-needs current state and then everything after it reads state from the store,
-then follows from `after=0` and applies changes idempotently. Replaying a
-change the snapshot already reflects must be harmless.
+*Slice 109.* A read reports the feed `seq` it is current as of. Inside one
+`Store.read_transaction()`, the listing's rows and `change_head(project_id)` are
+read from one WAL snapshot; `amoeba.inspection.read_listing` returns both, as
+`rows` and `as_of_seq`. A subscriber that needs current state and then
+everything after it reads a listing, then follows with `after=as_of_seq`: no
+change is missed and none the snapshot already reflects is repeated. Over the
+network, every project listing response carries `as_of_seq`
+([`network-contract.md`](network-contract.md)).
 
 ## Latency
 

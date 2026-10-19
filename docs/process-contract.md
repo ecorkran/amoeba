@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: resident-process-and-recovery
 dateCreated: 20260921
-dateUpdated: 20261016
+dateUpdated: 20261018
 status: complete
 ---
 
@@ -54,8 +54,13 @@ not the PID file, not the store.
 
 Resolved by `amoeba.store.paths`, which reads `AMOEBA_STORE_DIR` and otherwise
 falls back to XDG and then `~/.config/amoeba`. That is the **only** environment
-variable the project reads. Every process tunable is a CLI flag instead, so
-there is never a second source of truth.
+variable the project reads **for a tunable**. Every process tunable is a CLI
+flag instead, so there is never a second source of truth.
+
+*Slice 109:* a credential is not a tunable. `amoeba serve` reads its bearer
+token from `AMOEBA_SERVE_TOKEN`, once, at start-up, because a token passed as a
+flag would show in `ps`. It is never a field of `ServeSettings` and never
+logged. See [`network-contract.md`](network-contract.md).
 
 The directory holds:
 
@@ -395,6 +400,7 @@ provenance and never parsed, ordered, or branched on.
 | `amoeba inspect projects\|inbox` | Supervisor-level: project ids with a store; inbox files pending, quarantined, or failed. Open no store. |
 | `amoeba inspect nodes\|blocked\|journal\|submissions\|messages --project ID` | Read-only listings. `journal` accepts `--unresolved`; `messages` accepts `--channel`. All accept `--json`. |
 | `amoeba submit create-project\|resolution\|intent ...` | Write one submission to the inbox and print its id. Opens no store; works whether or not the process runs. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
+| `amoeba serve [--host] [--port] [--tls-cert --tls-key]` | A second, foreground process serving reads, submissions, and the feed over HTTP. Independent of the resident process: no lock, no PID file, works with it stopped. See [`network-contract.md`](network-contract.md). *(Slice 109.)* |
 
 `start` exposes every loop-governing `ProcessSettings` tunable as a flag:
 `--idle-interval`, `--shutdown-grace`, `--clock-tolerance`, `--cf-timeout`,
@@ -422,6 +428,7 @@ Every status, and the condition that produces it. Defined once in
 | 10 | `NOT_FOUND` | `inspect`: a record named on the command line (e.g. `changes --verdict ID`) does not exist. *(Slice 104.)* |
 | 11 | `NOT_COMPARABLE` | `inspect changes`: the review failed or was unparsed, so it has no changes to report. *(Slice 104.)* |
 | 12 | `REVIEW_UNREADABLE` | `ingest review`: the file could not be read or parsed, or the review has no version label (or one that disagrees with its stamp). Nothing was left in the inbox. *(Slice 105.)* |
+| 13 | `SERVE_REFUSED` | `serve`: the bind policy refused the configuration (`token_required`, `tls_required`, `token_too_short`, `tls_unusable`). Nothing was bound. A bind failure at start-up (a port in use) is `FAILURE` (1), not uvicorn's own status. On `SIGTERM` the server exits by the signal after its shutdown grace. *(Slice 109.)* |
 
 ## Inspection
 

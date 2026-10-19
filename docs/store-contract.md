@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20261016
+dateUpdated: 20261018
 status: complete
 ---
 
@@ -483,6 +483,8 @@ verdict_id, record_id, detail`); `BaselineEntry` (`path, digest`);
 | --- | --- |
 | `changes(project_id, *, after=0, limit)` | Changes with `seq > after`, in order. `limit` is required; below 1 raises `ValueError`. |
 | `data_version()` | SQLite's `PRAGMA data_version`: changes only when another connection commits. What `follow()` waits on. |
+| `change_head(project_id)` | The project's highest `seq`, or 0 when its feed is empty. *(Slice 109.)* |
+| `read_transaction()` | A context manager: a deferred read transaction, so every statement inside sees one WAL snapshot (taken at the first read, not at `BEGIN`). Reads only; not nestable; always ended with `ROLLBACK`, even when a read raises. *(Slice 109.)* |
 | `watches(project_id)` | Registered review directories, active or not. |
 | `detection(project_id, path, digest)` | One ledger row, or `None`. |
 | `detections(project_id, *, outcome=None)` | The ledger in detection order. |

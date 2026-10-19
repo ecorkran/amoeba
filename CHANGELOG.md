@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 109: `amoeba serve` (Starlette + uvicorn), a second foreground process: `GET /v1/listings/{name}` over the one listing registry, `POST`/`GET` submissions through `submit()` with a required id, and an SSE feed per project resumable by `Last-Event-ID` or `?after=`; contract in `docs/network-contract.md`.
+- Slice 109: bind policy (loopback, or a bearer token from `AMOEBA_SERVE_TOKEN` plus TLS), Origin/Host/content-type guards, one `ApiErrorCode` vocabulary, stream slots (`max_streams`), heartbeats, and a per-send timeout; exit code 13 `SERVE_REFUSED`.
+- Slice 109: `Store.read_transaction()` and `change_head()`; every project read reports `as_of_seq` from one snapshot ("current state, then follow").
+- Slice 109: dependencies `starlette`, `uvicorn` (runtime) and `httpx2` (dev).
+
 - Slice 108: schema version 8 (migration `008`) — `cf_links` and `cf_snapshots`, a `cf_project_changed` change kind, and the `CFSnapshotOutcome` word list (`observed`, `unreadable`, `unrecognized`, `missing`); store methods `cf_links`, `cf_snapshots`, `latest_cf_snapshots`, `record_cf_snapshot`.
 - Slice 108: `amoeba.upstream.context_forge` — a parser for CF's `projects.json` into a watched projection of pointer fields (project and worktree level) and a pure diff; tested against a real captured file.
 - Slice 108: `CFWatchTenant`, registered third by `amoeba start`: a `stat` check of `projects.json` once per second records one snapshot, and one `cf_project_changed` feed entry, per linked project whose pointers moved; failures are recorded once per transition. `start` flag `--cf-data-dir` (`CONTEXT_FORGE_DATA_DIR` is not read).
@@ -75,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Slice 101: contract documentation at `docs/store-contract.md`, sufficient to design a consumer without reading the implementation.
 
 ### Changed
+
+- Slice 109: the `inspect` listings moved from `amoeba.cli` to `amoeba.inspection` (typed `ListingRequest`, `read_listing`); `discover_project_ids` to `amoeba.store.discovery`; `review_sources` to `amoeba.store`; `change_record` to `amoeba.feed.wire`. `inspect` output and `--help` are byte-identical.
 
 - Slice 107 (104): `VerdictInput` and the `verdict` payload gain optional `judge_invocation_id`; the previous-round lookup skips samples of the target's own invocation; `record_verdict` rejects a sample on another node or review type than its invocation's earliest sample; `RecordSource` gains `command_output` and `document`; `inspect verdicts` gains a `judge_invocation_id` column and `--judge-invocation-id`.
 - Slice 107 (105): `parse_review_json` raises `SquadronParseError` on stdout JSON reporting `UNKNOWN` with a `score` (`ingest review` exits 12; ingest the saved file instead; GitHub issue #2). `to_verdict_input` and `ingest review` gain the optional invocation id; the record-id digest and `parsed-review-v1` are unchanged, and a sample's default id appends `.` and the invocation id.

@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: durable-inbox-and-message-queue
 dateCreated: 20260923
-dateUpdated: 20261016
+dateUpdated: 20261018
 status: complete
 ---
 
@@ -109,6 +109,13 @@ legitimately differs.
 
 Ids and project ids become filenames, so each must be non-empty, contain no
 path separator, and be neither `.` nor `..`.
+
+**Over the network the id is required** *(slice 109)*. A client whose 202 was
+lost cannot retry safely unless it chose the id, so `POST
+/v1/projects/{project_id}/submissions` refuses a body without
+`submission_id` (422 `submission_id_required`). Everything else is `submit()`
+unchanged: the same validation, the same `reason` on refusal, and the same
+first-wins rule. See [`network-contract.md`](network-contract.md).
 
 ### Errors
 
