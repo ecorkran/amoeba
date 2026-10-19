@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from amoeba.inbox import InvalidSubmissionError
-from amoeba.serve import reads, submissions
+from amoeba.serve import feed_route, reads, submissions
 from amoeba.serve.auth import RequestGuardMiddleware
 from amoeba.serve.errors import (
     CODE_BY_EXCEPTION,
@@ -83,7 +83,11 @@ def build_app(settings: ServeSettings, token: str | None, store_dir: Path) -> St
         RequestGuardMiddleware, token=token, loopback=is_loopback(settings.host)
     )
     return Starlette(
-        routes=[*reads.routes(store_dir), *submissions.routes(settings, store_dir)],
+        routes=[
+            *reads.routes(store_dir),
+            *submissions.routes(settings, store_dir),
+            *feed_route.routes(settings, store_dir),
+        ],
         middleware=[guard],
         exception_handlers=dict(_exception_handlers()),
     )
