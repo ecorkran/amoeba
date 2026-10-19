@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from inbox_harness import RealSubmission, damaged_variants, write_real_submission
+from serve_harness import TlsFiles, write_tls_files
 
 from amoeba.store import Store
 
@@ -72,3 +73,16 @@ def real_submission(supervisor_dir: Path) -> RealSubmission:
 def damaged_envelopes(real_submission: RealSubmission) -> dict[str, bytes]:
     """Truncated, wrong-version, and extra-fields copies of the real file."""
     return damaged_variants(real_submission)
+
+
+@pytest.fixture(scope="session")
+def tls_files(tmp_path_factory: pytest.TempPathFactory) -> TlsFiles:
+    """A self-signed localhost certificate and keys, written once per session.
+
+    Safety: written under pytest's own temporary directory, which pytest removes.
+    Fails (never skips) when ``openssl`` is missing.
+    """
+    try:
+        return write_tls_files(tmp_path_factory.mktemp("tls"))
+    except RuntimeError as error:
+        pytest.fail(str(error))

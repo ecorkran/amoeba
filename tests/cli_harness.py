@@ -9,6 +9,7 @@ directory, rather than trusting that nobody wrote such a test.
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -201,3 +202,50 @@ def await_stopped(supervisor_dir: Path, timeout: float = START_TIMEOUT_SECONDS) 
             return
         time.sleep(0.05)
     raise AssertionError(f"the supervisor never reported stopped within {timeout}s")
+
+
+def start_serve(
+    supervisor_dir: Path,
+    arguments: list[str],
+    environment: dict[str, str] | None = None,
+) -> BackgroundCli:
+    """Launch ``amoeba serve`` in the background. ``environment`` as in run_cli."""
+    return BackgroundCli(
+        subprocess.Popen(
+            [sys.executable, "-m", "amoeba.cli.main", "serve", *arguments],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=(
+                environment
+                if environment is not None
+                else cli_environment(supervisor_dir)
+            ),
+        )
+    )
+
+
+def free_port() -> int:
+    """A loopback port nothing is listening on right now."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def await_listening(
+    port: int, process: BackgroundCli, timeout: float = START_TIMEOUT_SECONDS
+) -> None:
+    """Wait until ``port`` accepts a connection, or fail if ``process`` exits."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not process.is_running():
+            raise AssertionError(f"the server exited: {process.output()}")
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+        except OSError:
+            # Specific: not listening yet; poll again until the deadline.
+            time.sleep(0.05)
+            continue
+        return
+    raise AssertionError(f"nothing listened on port {port} within {timeout}s")

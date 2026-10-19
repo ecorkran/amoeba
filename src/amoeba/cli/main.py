@@ -106,6 +106,10 @@ class ExitCode(IntEnum):
     #: carries no upstream version label. Nothing was left in the inbox.
     REVIEW_UNREADABLE = 12
 
+    #: ``serve``: the bind policy refused the configuration (a token, TLS, or a
+    #: TLS file). Nothing was bound.
+    SERVE_REFUSED = 13
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every subcommand."""
@@ -155,6 +159,10 @@ def build_parser() -> argparse.ArgumentParser:
     from amoeba.cli.feed import add_feed_parser
 
     add_feed_parser(subparsers)
+
+    from amoeba.cli.serve import add_serve_parser
+
+    add_serve_parser(subparsers)
 
     return parser
 
@@ -217,6 +225,7 @@ def _dispatch(args: argparse.Namespace) -> ExitCode:
     from amoeba.cli import ingest as ingest_module
     from amoeba.cli import inspect as inspect_module
     from amoeba.cli import lifecycle
+    from amoeba.cli import serve as serve_module
     from amoeba.cli import submit as submit_module
 
     match args.command:
@@ -234,6 +243,8 @@ def _dispatch(args: argparse.Namespace) -> ExitCode:
             return ingest_module.run_ingest(args)
         case "feed":
             return feed_module.run_feed(args)
+        case "serve":
+            return serve_module.run_serve(args)
         case _:
             raise ValueError(f"unhandled command {args.command!r}")
 

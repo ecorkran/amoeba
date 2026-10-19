@@ -21,7 +21,7 @@ def test_defaults_are_the_lld_values() -> None:
     assert settings.send_timeout_seconds == 30.0
     assert settings.max_streams == 32
     assert settings.max_request_bytes == 1_048_576
-    assert settings.shutdown_grace_seconds == 5.0
+    assert settings.shutdown_grace_seconds == 5
     assert settings.feed == FeedSettings()
 
 

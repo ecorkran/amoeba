@@ -44,6 +44,7 @@ class ServeSettings:
             gets 413, and reading stops at the chunk that passed it.
         shutdown_grace_seconds: How long shutdown waits for open connections
             before cancelling them. Set because an SSE stream never ends alone.
+            Whole seconds: uvicorn's ``timeout_graceful_shutdown`` is an int.
         feed: The follow interval and batch size the streams use.
     """
 
@@ -55,7 +56,7 @@ class ServeSettings:
     send_timeout_seconds: float = 30.0
     max_streams: int = 32
     max_request_bytes: int = 1_048_576
-    shutdown_grace_seconds: float = 5.0
+    shutdown_grace_seconds: int = 5
     feed: FeedSettings = field(default_factory=FeedSettings)
 
     def __post_init__(self) -> None:

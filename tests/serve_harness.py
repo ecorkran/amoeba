@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import threading
 import time
 from collections.abc import Callable, Generator, Iterator, Sequence
@@ -21,6 +23,32 @@ class TlsFiles:
     certfile: Path
     keyfile: Path
     other_keyfile: Path
+
+
+def write_tls_files(directory: Path) -> TlsFiles:
+    """A self-signed localhost cert, its key, and an unrelated key, via openssl.
+
+    Raises:
+        RuntimeError: If ``openssl`` is not on PATH. The TLS tests need it.
+    """
+    openssl = shutil.which("openssl")
+    if openssl is None:
+        raise RuntimeError("openssl is not on PATH; the TLS tests need it")
+    certfile, keyfile = directory / "cert.pem", directory / "key.pem"
+    other_keyfile = directory / "other-key.pem"
+    subprocess.run(
+        [openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes"]
+        + ["-subj", "/CN=localhost", "-days", "1"]
+        + ["-keyout", str(keyfile), "-out", str(certfile)],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [openssl, "genpkey", "-algorithm", "RSA", "-out", str(other_keyfile)],
+        check=True,
+        capture_output=True,
+    )
+    return TlsFiles(certfile=certfile, keyfile=keyfile, other_keyfile=other_keyfile)
 
 
 #: A TEST VALUE ONLY, never a real credential: 48 hex characters, as
