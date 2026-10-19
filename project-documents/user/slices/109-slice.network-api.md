@@ -70,7 +70,7 @@ To make "same answers as `amoeba inspect`" structural, this slice moves the list
 - The listing row functions, unchanged in what they return. Only their parameter type changes.
 - **External:** `starlette` and `uvicorn`, pinned with `>=` like the existing dependencies. *Observed 20261015 on PyPI:* starlette 1.8.0, uvicorn 0.54.0, httpx 0.28.1. *Resolved 20261018:* starlette 1.8.0, uvicorn 0.54.0, anyio 4.15.1, httpx2 2.13.1. These are dated observations, not requirements. The design depends on two behaviors, and a test pins each:
   - uvicorn's `send` waits while the socket's write buffer is full, so a stalled peer blocks the send rather than growing memory. This is why each send has a timeout (D6).
-  - Under ASGI spec 2.4, a client disconnect is noticed only when a send fails. This is why the stream sends heartbeats (D6).
+  - ~~Under ASGI spec 2.4, a client disconnect is noticed only when a send fails.~~ *Corrected in Phase 6 (measured 20261018, PM decision):* uvicorn 0.54 (h11; httptools not installed) advertises ASGI spec 2.3. After a client closes, `receive()` returns `http.disconnect` within milliseconds, and every later send silently succeeds. The stream therefore watches `receive()` for the disconnect (D6), and a test pins this behavior.
 
 ## Architecture
 
@@ -163,7 +163,8 @@ GET /v1/projects/demo/feed?after=40        (Last-Event-ID: 40 on reconnect)
   event loop, per stream (EventStreamResponse, D6):
     wait for the next change, at most heartbeat_interval_seconds
       change  → "id: <seq>\nevent: change\ndata: <change_record JSON>\n\n"
-      timeout → ": keepalive\n\n"       (a failed send is how a disconnect is noticed)
+      timeout → ": keepalive\n\n"       (keeps intermediaries from idling the connection out)
+    beside the send loop: receive() → http.disconnect ends the stream at once
       follow raised → "event: error\ndata: {"error": …, "detail": …}\n\n", then close
     every send runs under anyio.fail_after(send_timeout_seconds); timeout or OSError → close
   finally (disconnect, send timeout, cancellation, shutdown): set stop_event, close receive_channel, release the slot
@@ -240,7 +241,7 @@ When TLS files are given, `check_bind` also loads them with `ssl.SSLContext.load
 - *A dedicated thread per stream, not the anyio threadpool.* `follow()` blocks for as long as the client stays connected. On the shared pool, `max_streams` idle followers would take every worker token and starve reads. Stream threads are bounded separately by `max_streams` (default 32). When the slots are full, the request gets 503 `stream_limit_reached` with `Retry-After`, and the server keeps serving reads.
 - *A 1-slot hand-off.* The follow thread sends each change into a 1-slot anyio memory object stream with `from_thread.run`, and blocks until the event loop takes it. A slow client therefore just reads the durable log more slowly, and the server buffers at most one change and one socket write per stream. No slow-client policy is needed, because there is nothing to drop. This is the property the architecture wanted kept out of the resident process.
 - *Waking a blocked thread.* A thread blocked in that send is not inside `follow()`, so it never checks `stop`. The stream's `finally` therefore closes the receive side as well as setting the stop event, and the blocked send raises `ClosedResourceError` at once. If the event loop itself is gone at shutdown, `from_thread.run` raises `RuntimeError`. The thread treats all three as "stop" and returns. A thread waiting inside `follow()` exits within one follow interval.
-- *Heartbeats.* After `heartbeat_interval_seconds` (default 15) with no change, the stream sends an SSE comment. Under ASGI spec 2.4, a failed send is the only way a disconnect is noticed. The heartbeat therefore bounds how long a cleanly closed client holds a slot: about one heartbeat interval plus one follow interval. It also keeps intermediaries from closing an idle connection.
+- *Heartbeats and disconnects.* After `heartbeat_interval_seconds` (default 15) with no change, the stream sends an SSE comment, which keeps intermediaries from closing an idle connection. *Corrected in Phase 6 (PM decision 20261018):* a disconnect is noticed on `receive()`, not on a failed send. uvicorn 0.54 advertises ASGI spec 2.3, returns `http.disconnect` as soon as the client goes, and lets later sends succeed silently. `EventStreamResponse` runs a watcher on `receive()` beside its send loop, and a disconnect ends the stream at once. A closed client therefore frees its slot within about one follow interval (the follow thread's exit), which is inside the heartbeat-plus-follow-interval bound below.
 - *A send timeout for a stalled peer.* A client that stops reading while its connection stays open never makes a send fail. Once the socket buffer fills, the send blocks. Starlette's `StreamingResponse` gives no hook around its sends, so the stream is a small `EventStreamResponse` of its own (`serve/stream.py`) that runs every send under `anyio.fail_after(send_timeout_seconds)` (default 30) and closes the stream on timeout. A stalled client therefore holds a slot for at most one heartbeat interval plus `send_timeout_seconds`.
 - *Reads and submissions are bounded too.* They run on anyio's default thread limiter (40 workers). Each worker's wait on the store is bounded by the read-only open's busy timeout, after which it returns 503 `store_busy`. No connection cap is set (uvicorn's default); one is added if a load test shows requests piling up.
 - *Cursor precedence.* `Last-Event-ID` wins over `?after=` when both are present. A browser `EventSource` reconnects with its original URL plus that header, and the header is by construction the later cursor. Both must be non-negative integers, or the request gets 400 `invalid_cursor`.
@@ -439,7 +440,7 @@ Clean up with `uv run amoeba stop`, kill the servers, then `rm -rf "$AMOEBA_STOR
 
 ### Mitigation Strategies
 
-- The heartbeat makes disconnect detection independent of which mechanism the server uses, because any failed send ends the stream. A test pins slot release after an abrupt client close, so an upgrade that breaks it fails the suite rather than leaking in the field.
+- The stream ends on either signal: `http.disconnect` from `receive()`, or a send that fails or times out. Tests pin slot release after an abrupt client close and after a clean close with no heartbeat due, and a test pins uvicorn's current behavior (disconnect on `receive()`, silent sends after it), so an upgrade that changes either fails the suite rather than leaking in the field.
 - `check_bind` is a pure function, tested against every row of D3's table. Project ids pass through 103's id rule before any path is built. There are traversal tests on every endpoint that takes a project id, and the defaults are loopback with no override flag.
 
 ## Implementation Notes
