@@ -6,8 +6,8 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102, 103, 104, 105, 106, 107, 108]
 interfaces: [110]
 dateCreated: 20261015
-dateUpdated: 20261015
-status: not_started
+dateUpdated: 20261018
+status: complete
 ---
 
 # Slice Design: network-api
@@ -167,8 +167,9 @@ GET /v1/projects/demo/feed?after=40        (Last-Event-ID: 40 on reconnect)
     beside the send loop: receive() → http.disconnect ends the stream at once
       follow raised → "event: error\ndata: {"error": …, "detail": …}\n\n", then close
     every send runs under anyio.fail_after(send_timeout_seconds); timeout or OSError → close
-  finally (disconnect, send timeout, cancellation, shutdown): set stop_event, close receive_channel, release the slot
+  finally (disconnect, send timeout, cancellation, shutdown): set stop_event, close both sides of the hand-off on the loop, release the slot
     a thread blocked in send wakes at once with ClosedResourceError; one waiting inside follow() exits within one follow interval
+    the thread never closes the hand-off itself (Phase 6 fix: a close from the thread waits on the loop, which may never run it at shutdown)
 ```
 
 ### State Management
@@ -375,14 +376,15 @@ There is no migration and no table. The only store change is the two read-only m
 
 ### Verification Walkthrough
 
-*Draft, to be confirmed at the end of Phase 6.* Run in **bash** from the repository root against a scratch store. Use three terminals, and export the same `AMOEBA_STORE_DIR` in each. `jq` and `openssl` must be on PATH.
+*Confirmed 20261018 at the end of Phase 6.* Run in **bash** from the repository root against a scratch store. Use three terminals, and export the same `AMOEBA_STORE_DIR` in each. `jq` and `openssl` must be on PATH. Port 8765 (and 8766 for step 6) must be free: `lsof -nP -iTCP:8765 -sTCP:LISTEN` prints nothing.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
-uv run amoeba submit create-project --project demo --by pm
-NODE=$(uv run python scripts/demo_evidence.py)        # seeds one node; the process must be stopped
-uv run amoeba start &                                   # terminal 1
-uv run amoeba serve &                                   # terminal 2: listens on 127.0.0.1:8765
+unset AMOEBA_SERVE_TOKEN
+uv run amoeba submit create-project --project demo --by pm   # prints a submission id
+NODE=$(uv run python scripts/demo_evidence.py)               # seeds one node; the process must be stopped
+uv run amoeba start &                                        # terminal 1
+uv run amoeba serve &                                        # terminal 2: logs "Uvicorn running on http://127.0.0.1:8765"
 API=http://127.0.0.1:8765/v1
 ```
 
@@ -390,8 +392,9 @@ API=http://127.0.0.1:8765/v1
    ```bash
    diff <(curl -s "$API/listings/nodes?project=demo" | jq '.rows') <(uv run amoeba inspect nodes --project demo --json | jq '.')
    curl -s "$API/listings/nodes?project=demo" | jq '.as_of_seq'
+   uv run amoeba feed --project demo | tail -1 | jq '.seq'
    ```
-   The `diff` prints nothing. `as_of_seq` is the `seq` of the last line of `uv run amoeba feed --project demo`.
+   The `diff` prints nothing. The two numbers are equal (observed: `1` and `1`, the seeded node's `node_created`).
 2. **Follow the feed, from the snapshot.** In terminal 3:
    ```bash
    SEQ=$(curl -s "$API/listings/nodes?project=demo" | jq '.as_of_seq')
@@ -400,36 +403,38 @@ API=http://127.0.0.1:8765/v1
    Nothing prints except a `: keepalive` line every 15 seconds.
 3. **Submit over the network.**
    ```bash
-   curl -s -X POST $API/projects/demo/submissions -H 'content-type: application/json' \
-     -d "{\"kind\":\"intent\",\"submission_id\":\"remote-1\",\"submitted_by\":\"pm\",\"payload\":{\"node_id\":\"$NODE\",\"body\":{\"ask\":\"status\"}}}"
-   curl -s $API/projects/demo/submissions/remote-1 | jq '.outcome'
+   BODY="{\"kind\":\"intent\",\"submission_id\":\"remote-1\",\"submitted_by\":\"pm\",\"payload\":{\"node_id\":\"$NODE\",\"body\":{\"ask\":\"status\"}}}"
+   curl -s -w ' [%{http_code}]\n' -X POST $API/projects/demo/submissions -H 'content-type: application/json' -d "$BODY"
+   curl -s $API/projects/demo/submissions/remote-1 | jq -r '.outcome'
+   curl -s -w ' [%{http_code}]\n' -X POST $API/projects/demo/submissions -H 'content-type: application/json' -d "$BODY"
    ```
-   The POST returns `{"submission_id":"remote-1"}`. Within a second, terminal 3 prints one `event: change` with `"kind":"message_posted"`, and the outcome is `"applied"`. Repeating the POST returns 202, and nothing new appears.
-4. **Submit while the resident process is down, and resume.** Stop the follower (Ctrl-C) and note the last `id:` it printed as `LAST`.
+   The first POST prints `{"submission_id": "remote-1"} [202]`. Within a second, terminal 3 prints one frame, `id: 2`, `event: change`, with `"kind": "message_posted"` in its `data`. The outcome is `applied`. Repeating the POST prints the same `[202]`, and nothing new appears: the feed head and `inspect messages` stay where they were. *(Keep the body in a variable: nesting the escaped JSON inside `"$( … )"` mangles it into a 422 `invalid_body`.)*
+4. **Submit while the resident process is down, and resume.** Stop the follower (Ctrl-C) and note the last `id:` it printed as `LAST` (observed: `2`).
    ```bash
-   uv run amoeba stop
+   uv run amoeba stop                                        # "amoeba: stopped (pid …)"
    curl -s -X POST $API/projects/demo/submissions -H 'content-type: application/json' \
      -d "{\"kind\":\"intent\",\"submission_id\":\"remote-2\",\"submitted_by\":\"pm\",\"payload\":{\"node_id\":\"$NODE\",\"body\":{\"ask\":\"again\"}}}"
-   curl -s $API/projects/demo/submissions/remote-2       # 404 not_applied
+   curl -s $API/projects/demo/submissions/remote-2           # {"error":"not_applied","detail":"submission 'remote-2' is not applied yet"}
    uv run amoeba start &
    curl -sN $API/projects/demo/feed -H "Last-Event-ID: $LAST"
    ```
-   The resumed stream prints exactly one change, for `remote-2`, and no repeat of `remote-1`. The outcome endpoint now returns `applied`.
-5. **Each process survives the other.** `kill -9` the server's pid, then run `uv run amoeba status` (still running) and `uv run amoeba inspect messages --project demo` (two messages). Start `uv run amoeba serve &` again; step 1's `diff` still prints nothing.
+   The resumed stream prints exactly one change (`id: 3`, `message_posted`) for `remote-2`, and no repeat of `remote-1`. The outcome endpoint now returns `applied`.
+5. **Each process survives the other.** Kill the **server process itself**: `kill -9 $(lsof -ti tcp:8765 -sTCP:LISTEN)`. *(Correction: under `uv run`, `$!` is uv's pid; killing it orphans the real server, which keeps listening.)* Then `uv run amoeba status` still prints `running  pid=…`, `lsof -nP -iTCP:8765 -sTCP:LISTEN` prints nothing, and `uv run amoeba inspect messages --project demo --json | jq length` prints `2`. Start `uv run amoeba serve &` again; step 1's `diff` still prints nothing.
 6. **Refusals and authentication.**
    ```bash
-   uv run amoeba serve --host 0.0.0.0; echo $?                                   # 13, token_required
+   uv run amoeba serve --host 0.0.0.0; echo $?        # amoeba: token_required: binding '0.0.0.0' requires a bearer token / 13
    export AMOEBA_SERVE_TOKEN="$(openssl rand -hex 24)"
-   uv run amoeba serve --host 0.0.0.0; echo $?                                   # 13, tls_required
+   uv run amoeba serve --host 0.0.0.0; echo $?        # amoeba: tls_required: binding '0.0.0.0' requires a TLS certificate and key / 13
    openssl req -x509 -newkey rsa:2048 -nodes -subj /CN=localhost -days 1 -keyout key.pem -out cert.pem
    uv run amoeba serve --host 0.0.0.0 --port 8766 --tls-cert cert.pem --tls-key key.pem &
-   curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8766/v1/listings/projects  # 401
-   curl -sk -H "Authorization: Bearer $AMOEBA_SERVE_TOKEN" https://127.0.0.1:8766/v1/listings/projects | jq '.rows | length'
-   curl -s "$API/listings/nodes?project=..%2Fx" | jq '.error'                    # "invalid_project_id"
+   curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8766/v1/listings/projects                     # 401
+   curl -sk -H "Authorization: Bearer $AMOEBA_SERVE_TOKEN" https://127.0.0.1:8766/v1/listings/projects | jq '.rows | length'   # 1
+   curl -s "$API/listings/nodes?project=..%2Fx" | jq '.error'                                                 # "invalid_project_id"
    ```
-7. **Automated:** `uv run pytest tests/serve tests/inspection tests/cli/test_serve_smoke.py -v`, then `uv run pytest tests/load/test_serve_load.py -v`.
+   The token never appears in either server's output.
+7. **Automated:** `uv run pytest tests/serve tests/inspection tests/cli/test_serve.py tests/cli/test_serve_smoke.py -v` (observed: all pass; the smoke test takes about 20 s, one default heartbeat), then `uv run pytest -s tests/load/test_serve_load.py -v` (observed: 3 passed, about 12 s; it prints the burst drain time, about 2.7 s, and the paced p95, about 0.25 s).
 
-Clean up with `uv run amoeba stop`, kill the servers, then `rm -rf "$AMOEBA_STORE_DIR" key.pem cert.pem; unset AMOEBA_SERVE_TOKEN`.
+Clean up in this order, so `stop` still finds the store: `uv run amoeba stop`; stop each server with `kill $(lsof -ti tcp:8765 -sTCP:LISTEN) $(lsof -ti tcp:8766 -sTCP:LISTEN)`; then `rm -rf "$AMOEBA_STORE_DIR" key.pem cert.pem; unset AMOEBA_SERVE_TOKEN`. On `SIGTERM` the server shuts down within its 5-second grace and exits by the signal (a shell sees 143).
 
 ## Risk Assessment
 
