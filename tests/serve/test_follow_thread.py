@@ -56,6 +56,7 @@ def _run(scratch_dir: Path, after: int, body: _Body) -> threading.Thread:
                 await body(receive, stop, thread)
         finally:
             stop.set()
+            send.close()  # as the stream's on_close does, on the loop
             receive.close()
             await anyio.to_thread.run_sync(thread.join, DEADLINE)
         return thread
@@ -137,8 +138,9 @@ def test_a_store_deleted_mid_follow_yields_one_error_item(scratch_dir: Path) -> 
         await anyio.sleep(FOLLOW_INTERVAL * 2)
         for path in store_file.parent.glob(f"{store_file.name}*"):
             path.unlink()
-        async for item in items:  # ends when the thread closes its side
-            items_seen.append(item)
+        items_seen.append(await items.receive())
+        await anyio.to_thread.run_sync(thread.join, DEADLINE)
+        assert not thread.is_alive(), "the thread did not exit after its error"
 
     _run(scratch_dir, seqs[-1], body)
 

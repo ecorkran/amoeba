@@ -104,7 +104,10 @@ class FeedEndpoint:
         stop = threading.Event()
 
         def on_close() -> None:
+            # On the loop: stop the thread, wake it if it is blocked handing
+            # off a change, and free the slot.
             stop.set()
+            send_items.close()
             release()
 
         follow = FollowRequest(self._store_dir, project_id, cursor, self._settings.feed)

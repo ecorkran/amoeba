@@ -10,6 +10,7 @@ open through intermediaries.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import threading
@@ -157,11 +158,13 @@ async def _cancel_on_disconnect(receive: Receive, scope: anyio.CancelScope) -> N
 #: Every follow thread's name starts with this, so tests can find leaks.
 FOLLOW_THREAD_PREFIX: Final = "amoeba-follow-"
 
-#: Raised by a hand-off once the response has ended, or the loop has gone.
+#: Raised by a hand-off once the response has ended, or the loop has gone: the
+#: last when the loop stops while the hand-off is pending (shutdown).
 _HAND_OFF_ENDED: Final = (
     anyio.ClosedResourceError,
     anyio.BrokenResourceError,
     anyio.RunFinishedError,
+    concurrent.futures.CancelledError,
 )
 
 
@@ -185,6 +188,10 @@ def start_follow_thread(
     Call it on the event loop: it captures the loop's token. Each change is
     handed off through the 1-slot ``items`` stream and the thread waits until
     the loop takes it, so a slow client only slows the read of the durable log.
+
+    The caller closes ``items`` on the loop when the stream ends; the thread
+    never does. A close from the thread would wait on the loop, and at shutdown
+    the loop may never run it.
     """
     token = anyio.lowlevel.current_token()
     thread = threading.Thread(
@@ -203,7 +210,7 @@ def _follow_into(
     stop: threading.Event,
     token: EventLoopToken,
 ) -> None:
-    """The thread body. Every exit closes the send side, so the response ends."""
+    """The thread body. It exits only when the response is ending already."""
     changes = follow(
         request.store_dir,
         request.project_id,
@@ -231,8 +238,6 @@ def _follow_into(
         _hand_off_error(
             items, StreamError(ApiErrorCode.INTERNAL_ERROR, "internal error"), token
         )
-    finally:
-        _close(items, token)
 
 
 def _hand_off_error(
@@ -243,11 +248,3 @@ def _hand_off_error(
     except _HAND_OFF_ENDED:
         # Specific: the client is already gone; there is no one to tell.
         pass
-
-
-def _close(items: MemoryObjectSendStream[StreamItem], token: EventLoopToken) -> None:
-    try:
-        anyio.from_thread.run_sync(items.close, token=token)
-    except anyio.RunFinishedError:
-        # Specific: the loop is gone, so no one can race the close.
-        items.close()

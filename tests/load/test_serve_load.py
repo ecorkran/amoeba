@@ -75,7 +75,9 @@ def _follow_threads() -> int:
 def _wait_for(condition: Callable[[], bool], what: str) -> None:
     deadline = time.monotonic() + DEADLINE_SECONDS
     while not condition():
-        assert time.monotonic() < deadline, f"{what} did not happen"
+        assert time.monotonic() < deadline, (
+            f"{what} did not happen ({_follow_threads()} follow threads)"
+        )
         time.sleep(0.01)
 
 
@@ -87,6 +89,9 @@ def node(supervisor_dir: Path) -> str:
 
 @pytest.fixture
 def base_url(supervisor_dir: Path, node: str) -> Iterator[str]:
+    # A previous test's follow threads finish within a follow interval of its
+    # server stopping; the stream counts below assume none are left.
+    _wait_for(lambda: _follow_threads() == 0, "earlier follow threads exited")
     with running_server(build_app(SETTINGS, None, supervisor_dir)) as url:
         yield url
 
@@ -96,8 +101,12 @@ def _head(supervisor_dir: Path) -> int:
         return store.change_head(PROJECT)
 
 
-def _follow(base_url: str, after: int, last: list[int], into: _Follower) -> None:
-    """Read until the seq in ``last`` (set once the burst ends) arrives."""
+def _follow(base_url: str, after: int, count: int, into: _Follower) -> None:
+    """Read until ``count`` changes have arrived.
+
+    A count known before the write, not the final seq published after it: a
+    paced write's last change can arrive before the writer could publish it.
+    """
     try:
         with (
             httpx2.Client(base_url=base_url, timeout=DEADLINE_SECONDS) as client,
@@ -111,7 +120,7 @@ def _follow(base_url: str, after: int, last: list[int], into: _Follower) -> None
                 seq = int(event.id)
                 into.arrivals[seq] = time.monotonic()
                 into.order.append(seq)
-                if last and seq >= last[0]:
+                if len(into.order) >= count:
                     return
     except httpx2.HTTPError as error:
         # Specific: recorded and asserted on by the test thread.
@@ -137,10 +146,9 @@ def _followed_write(
 ) -> _Run:
     """``FOLLOWERS`` streams open, then ``BURST`` intents with a pause between."""
     start = _head(supervisor_dir)
-    last: list[int] = []
     followers = [_Follower() for _ in range(FOLLOWERS)]
     threads = [
-        threading.Thread(target=_follow, args=(base_url, start, last, f), daemon=True)
+        threading.Thread(target=_follow, args=(base_url, start, BURST, f), daemon=True)
         for f in followers
     ]
     for thread in threads:
@@ -161,7 +169,6 @@ def _followed_write(
         expected = [
             c.seq for c in writer.changes(PROJECT, after=start, limit=10 * BURST)
         ]
-    last.append(head)
 
     for thread in threads:
         thread.join(DEADLINE_SECONDS)
@@ -207,11 +214,11 @@ def test_p95_latency_at_a_steady_rate_is_within_a_second(
 def test_32_idle_streams_do_not_starve_a_read(
     base_url: str, supervisor_dir: Path
 ) -> None:
-    stop = [_head(supervisor_dir) + 10**9]  # never reached: the streams stay idle
+    never = 10**9  # a count no idle stream reaches
     threads = [
         threading.Thread(
             target=_follow,
-            args=(base_url, _head(supervisor_dir), stop, _Follower()),
+            args=(base_url, _head(supervisor_dir), never, _Follower()),
             daemon=True,
         )
         for _ in range(FOLLOWERS)
