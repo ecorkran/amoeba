@@ -7,7 +7,7 @@ dependencies: [101, 102, 103, 104, 105, 106, 107, 108]
 projectState: After file 1, every listing lives in `amoeba.inspection` behind `read_listing`, which returns rows and `as_of_seq` from one snapshot; `discover_project_ids` is in `amoeba.store`, `change_record` in `amoeba.feed.wire`. No `amoeba.serve` package, HTTP dependency, or `amoeba serve` command exists yet.
 dateCreated: 20261017
 dateUpdated: 20261018
-status: in_progress
+status: complete
 ---
 
 ## Context Summary (File 2 of 3)

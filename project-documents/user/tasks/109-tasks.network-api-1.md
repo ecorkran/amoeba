@@ -7,7 +7,7 @@ dependencies: [101, 102, 103, 104, 105, 106, 107, 108]
 projectState: Slices 101–108 are merged (store schema 8, listing registry in `cli/inspect.py` with siblings `inspect_inbox.py`, `inspect_evidence.py`, `inspect_feed.py`, `inspect_checks.py`, `inspect_cf.py`; `inbox.submit()`; 106's `follow()` and `Change`; `ExitCode` up to 12). No `amoeba.inspection`, `amoeba.serve`, `read_transaction()`, `change_head()`, or HTTP dependency exists. This slice moves the listings into `amoeba.inspection`, adds the two read-only store methods, and adds `amoeba serve` (Starlette + uvicorn) with reads, submissions, an SSE feed, bind policy, and token auth.
 dateCreated: 20261017
 dateUpdated: 20261018
-status: in_progress
+status: complete
 ---
 
 ## Context Summary (File 1 of 3)
