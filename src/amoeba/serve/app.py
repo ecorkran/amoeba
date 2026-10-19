@@ -22,6 +22,7 @@ from amoeba.serve.errors import (
     CODE_BY_EXCEPTION,
     ApiError,
     ApiErrorCode,
+    code_for_exception,
     error_response,
 )
 from amoeba.serve.policy import is_loopback
@@ -41,10 +42,7 @@ async def _api_error(request: Request, exc: Exception) -> Response:
 
 async def _mapped_error(request: Request, exc: Exception) -> Response:
     """A store, inbox, or inspection exception in :data:`CODE_BY_EXCEPTION`."""
-    code = next(
-        CODE_BY_EXCEPTION[cls] for cls in type(exc).__mro__ if cls in CODE_BY_EXCEPTION
-    )
-    return error_response(code, str(exc))
+    return error_response(code_for_exception(exc), str(exc))
 
 
 async def _invalid_submission(request: Request, exc: Exception) -> Response:

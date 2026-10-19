@@ -11,16 +11,29 @@ open through intermediaries.
 from __future__ import annotations
 
 import json
+import logging
+import threading
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 import anyio
-from anyio.streams.memory import MemoryObjectReceiveStream
+import anyio.from_thread
+import anyio.lowlevel
+from anyio.lowlevel import EventLoopToken
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from starlette.types import Message, Receive, Scope, Send
 
+from amoeba.feed import FeedSettings, follow
 from amoeba.feed.wire import change_record
-from amoeba.serve.errors import ApiErrorCode, error_body
+from amoeba.serve.errors import (
+    CODE_BY_EXCEPTION,
+    ApiErrorCode,
+    code_for_exception,
+    error_body,
+)
 from amoeba.store import Change
 
 #: The SSE comment an idle stream sends every heartbeat interval.
@@ -40,6 +53,8 @@ _START: Final[Message] = {
 }
 _END: Final[Message] = {"type": "http.response.body", "body": b"", "more_body": False}
 _DISCONNECT: Final = "http.disconnect"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -137,3 +152,102 @@ async def _cancel_on_disconnect(receive: Receive, scope: anyio.CancelScope) -> N
     while (await receive())["type"] != _DISCONNECT:
         pass
     scope.cancel()
+
+
+#: Every follow thread's name starts with this, so tests can find leaks.
+FOLLOW_THREAD_PREFIX: Final = "amoeba-follow-"
+
+#: Raised by a hand-off once the response has ended, or the loop has gone.
+_HAND_OFF_ENDED: Final = (
+    anyio.ClosedResourceError,
+    anyio.BrokenResourceError,
+    anyio.RunFinishedError,
+)
+
+
+@dataclass(frozen=True)
+class FollowRequest:
+    """What one stream follows, and from where."""
+
+    store_dir: Path
+    project_id: str
+    after: int
+    feed: FeedSettings
+
+
+def start_follow_thread(
+    request: FollowRequest,
+    items: MemoryObjectSendStream[StreamItem],
+    stop: threading.Event,
+) -> threading.Thread:
+    """Start the dedicated thread bridging ``follow()`` to this event loop.
+
+    Call it on the event loop: it captures the loop's token. Each change is
+    handed off through the 1-slot ``items`` stream and the thread waits until
+    the loop takes it, so a slow client only slows the read of the durable log.
+    """
+    token = anyio.lowlevel.current_token()
+    thread = threading.Thread(
+        target=_follow_into,
+        args=(request, items, stop, token),
+        name=f"{FOLLOW_THREAD_PREFIX}{request.project_id}",
+        daemon=True,
+    )
+    thread.start()
+    return thread
+
+
+def _follow_into(
+    request: FollowRequest,
+    items: MemoryObjectSendStream[StreamItem],
+    stop: threading.Event,
+    token: EventLoopToken,
+) -> None:
+    """The thread body. Every exit closes the send side, so the response ends."""
+    changes = follow(
+        request.store_dir,
+        request.project_id,
+        after=request.after,
+        settings=request.feed,
+        stop=stop.is_set,
+    )
+    try:
+        with closing(changes):
+            for change in changes:
+                anyio.from_thread.run(items.send, change, token=token)
+    except _HAND_OFF_ENDED:
+        # Specific: the response closed its side (disconnect, timeout, shutdown)
+        # or the loop is gone. This is how a thread blocked in a hand-off stops.
+        pass
+    except tuple(CODE_BY_EXCEPTION) as error:
+        # Specific: the store vanished or changed schema after the 200. The
+        # client gets one error frame; follow() has already closed its store.
+        _hand_off_error(
+            items, StreamError(code_for_exception(error), str(error)), token
+        )
+    except Exception:
+        # The thread's boundary handler: nothing above this catches for it.
+        logger.exception("follow thread for %s failed", request.project_id)
+        _hand_off_error(
+            items, StreamError(ApiErrorCode.INTERNAL_ERROR, "internal error"), token
+        )
+    finally:
+        _close(items, token)
+
+
+def _hand_off_error(
+    items: MemoryObjectSendStream[StreamItem], error: StreamError, token: EventLoopToken
+) -> None:
+    try:
+        anyio.from_thread.run(items.send, error, token=token)
+    except _HAND_OFF_ENDED:
+        # Specific: the client is already gone; there is no one to tell.
+        pass
+
+
+def _close(items: MemoryObjectSendStream[StreamItem], token: EventLoopToken) -> None:
+    try:
+        anyio.from_thread.run_sync(items.close, token=token)
+    except anyio.RunFinishedError:
+        # Specific: the loop is gone, so no one can race the close.
+        items.close()

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,7 +41,7 @@ def follow(
     after: int,
     settings: FeedSettings,
     stop: Callable[[], bool] | None = None,
-) -> Iterator[Change]:
+) -> Generator[Change]:
     """Yield every change after ``after``, then each new one as it commits.
 
     Args:

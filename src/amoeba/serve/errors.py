@@ -116,6 +116,18 @@ CODE_BY_EXCEPTION: Final[Mapping[type[Exception], ApiErrorCode]] = {
 }
 
 
+def code_for_exception(error: Exception) -> ApiErrorCode:
+    """The code for an exception in :data:`CODE_BY_EXCEPTION`, by its class or a base.
+
+    Raises:
+        KeyError: If no class in the exception's MRO is in the table.
+    """
+    for cls in type(error).__mro__:
+        if cls in CODE_BY_EXCEPTION:
+            return CODE_BY_EXCEPTION[cls]
+    raise KeyError(f"{type(error).__name__} is not in CODE_BY_EXCEPTION")
+
+
 class ApiError(Exception):
     """A request the server refuses. Raised by handlers; mapped by the app."""
 
