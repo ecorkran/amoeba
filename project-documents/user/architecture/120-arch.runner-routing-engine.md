@@ -13,7 +13,7 @@ audience: [human, ai]
 description: Architecture for Amoeba's Runner and routing engine — the deterministic lifecycle loop that runs as a tenant of the resident process, dispatches Context Forge and Squadron work, records what comes back, and routes every outcome to advance, Judge, or a persisted blocked-state through a static routing table.
 dateCreated: 20261020
 dateUpdated: 20261020
-status: in_progress
+status: complete
 ---
 
 # Architecture: Runner & Routing Engine
@@ -50,7 +50,7 @@ The Runner is the project's core artifact: a deterministic state machine that dr
 
 - **Observe outcomes from the contract, not the conversation.** What a run did is read from Squadron's machine surfaces (`sq runs wait` exit codes, `--output json`, review artifact frontmatter; never the run-state file, which Squadron calls internal) and CF's (`cf status --json`, `projects.json` snapshots), never from stdout prose, `cf next`'s `recommendation` text, or exit code alone (`sq run` exits 0 for both completed and paused).
 
-- **Unknown escalates.** A missing field, an unparseable artifact, an unrecognized run status, a review with no attributable node: each becomes an explicit unknown routed to a human, never a guessed value. Routing rules may match "unknown"; they may not default it away. This is also how upstream drift is handled: a renamed or removed field is a missing field. The Runner does not gate on upstream version numbers; it depends on shapes, and a shape it cannot read escalates. A few shapes it cannot work without at all: `sq run --run-id`, `--decision` on a plain `sq run --resume`, `sq runs wait`, and `cf status --json`. These are probed once at start from the tools themselves. A missing one refuses to start the Runner tenant with an error naming it, rather than failing on the first run.
+- **Unknown escalates.** A missing field, an unparseable artifact, an unrecognized run status, a review with no attributable node: each becomes an explicit unknown routed to a human, never a guessed value. Routing rules may match "unknown"; they may not default it away. This is also how upstream drift is handled: a renamed or removed field is a missing field. The Runner does not gate on upstream version numbers; it depends on shapes, and a shape it cannot read escalates. A few shapes it cannot work without at all: `sq run --run-id`, `--decision` on a plain `sq run --resume`, `sq runs wait --json`, `cf status --json`, and `cf list slices --json`. These are probed once at start from the tools themselves. A missing one refuses to start the Runner tenant with an error naming it, rather than failing on the first run.
 
 - **The table is static config.** The routing table and every threshold in it are loaded at start and never mutated at runtime. Each table version's full content is kept in the store the first time a decision uses it, so any decision can be recomputed from its record alone. Editing the table means restarting the resident process, which 100's recovery already makes safe, including for runs in flight. Calibration evidence (100's report, later 140's) produces *recommendations* the PM applies by editing the table. This is also Squadron's permanent metrology constraint.
 
@@ -72,7 +72,19 @@ The Runner is the project's core artifact: a deterministic state machine that dr
 
 At completion, the Runner is one tenant, ticking last in the resident process, that drives every project in the supervisor directory.
 
-**The lifecycle model.** For each project, the Runner keeps 100's node tree in step with CF: initiatives and slices as CF reports them (`cf list slices --json`, `cf status --json`; the Runner parses no plan documents of its own; reading a document's YAML frontmatter, as the ungate-hatch checks do, is an observation, not plan parsing), and below each slice a node per lifecycle step (design, tasks, implementation) with a gate node where CF or the routing table requires a review. The Runner is the only creator of nodes; the PM (and later the Translator) steers through `intent` messages (what to drive, how far, and when to stop) and never writes nodes directly. Every lifecycle step maps to exactly one of: a Squadron pipeline the Runner may run, a CF write it may make, or a **human step** that is a `blocked_on_human` node from the moment it becomes current.
+**The lifecycle model.** For each project, the Runner keeps 100's node tree in step with CF: initiatives and slices as CF reports them (`cf list slices --json`, `cf status --json`; the Runner parses no plan documents of its own; reading a document's YAML frontmatter, as the ungate-hatch checks do, is an observation, not plan parsing), and below each slice a node per lifecycle step (design, tasks, implementation) with a gate node where CF or the routing table requires a review. The Runner is the only creator of nodes; the PM (and later the Translator) steers through `intent` messages (what to drive, how far, and when to stop) and never writes nodes directly. Every lifecycle step maps to exactly one of: a Squadron pipeline the Runner may run, a CF write it may make, or a **human step** that is a `blocked_on_human` node from the moment it becomes current. The v1 step map:
+
+| Lifecycle step | Node level | v1 executor |
+| --- | --- | --- |
+| Architecture (P2) | initiative | Human step. P0–P2 are PM-approved phases; Squadron's P2 pipeline is not dispatched in v1. |
+| Slice plan (P3) | initiative | Human step. Squadron has no slice-plan pipeline. |
+| Slice design (P4) | slice | Squadron `P4` |
+| Tasks (P5) | slice | Squadron `P5` |
+| Implementation and code review (P6) | slice | Squadron `P6`, with `merge=false` unless the project's merge policy is auto |
+| Merge | slice | Human step, or inside `P6` under auto-merge |
+| Phase 7, and host cutovers | initiative | Human step (P7 is PM-approved) |
+
+A gate node sits after any step whose CF review gate or routing rule requires a review.
 
 **Who is authoritative for what.** CF owns the plan and the pointers: which slices exist, their order, and which slice and phase are active. The store owns everything CF does not hold: evidence, routing decisions, blocked-states, and attempt counts. The two meet only through reconciliation, which runs whenever a `cf_project_changed` entry arrives. A node's identity is 100's opaque store id. Its link to CF is the slice's index within its project, held in the node's CF reference; the slice's name and file name are display data and never used to match. Reconciliation follows four rules:
 - A slice CF reports and the tree lacks gets nodes.
