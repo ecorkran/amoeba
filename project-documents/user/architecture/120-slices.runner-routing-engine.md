@@ -128,20 +128,20 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    **Risk Level:** Medium. The grammar is hard to change once tables exist.
    **Relative Effort:** 3
 
-8. [ ] **(127) Resolutions and Resumption** — Turns a PM resolution from the inbox into the Runner's next command, from a closed set. A paused run can be retried (`sq run --resume <id> --decision retry`), accepted (`--decision accept`, offered only when `is_loop` is true), marked handled (the Runner observes the run again and routes what it finds) or stopped. Retry and accept pass the resolution's `--instructions` through as data. An escalated completed outcome can be accepted (store only, which advances the node), rerun or stopped. An accepted outcome that CF's gate still fails is recorded on the node as a disagreement and shown to the PM. Resolutions outside the set are rejected explicitly. A resume whose run is missing is a failed command and is never relaunched. An exit 2 from a resume escalates the node with Squadron's message.
+8. [ ] **(127) Resolutions and Resumption** — Turns a PM resolution from the inbox into the Runner's next command, from a closed set. A paused run can be retried (`sq run --resume <id> --decision retry`), accepted (`--decision accept`, offered only when `is_loop` is true), marked handled (the Runner journals an observation of the run and routes what it finds) or stopped. Retry and accept pass the resolution's `--instructions` through as data. An escalated completed outcome can be accepted (store only, which advances the node), rerun or stopped. Any other blocked pipeline step can be rerun or stopped. Stop parks the node as a block (slice 127, D3). The store and CF gate disagreement after an accept is detected by 128's gate read (slice 127, D7). Resolutions outside the set are rejected explicitly. A resume whose run is missing is a failed command and is never relaunched. An exit 2 from a resume escalates the node with Squadron's message.
    **Value:** User value. A PM decision on a stuck node is carried out without the PM running Squadron by hand.
    **Success Criteria:**
    - Each resolution in the set issues the right command, or makes the right store change for store-only accept and stop.
    - Accept is refused at the Amoeba side for a pause that is not at a loop.
    - Instructions reach the resumed run unchanged, and the Runner never writes any of its own.
    - A missing run on resume blocks the node and launches nothing.
-   - A store and CF disagreement after accept is visible on the node.
+   - An accepted outcome is identifiable in the store, for 128's gate comparison (slice 127, D7).
    **Dependencies:** [125, 126]
    **Interfaces:** Provides the resolution vocabulary that 160 and the notification bridge submit. Consumes 103's resolution slot and S12.
    **Risk Level:** Low
    **Relative Effort:** 2
 
-9. [ ] **(128) Gates, Git and Human Steps** — The checks around dispatch. Gate state comes from `cf status --json` (`activeSlice.status` and `gateInfo`), and `pending-decision` is a human step. A CF gate cleared on a `derived` or `imposed` verdict, or on a review whose standing is not trustworthy, is routed on the store's view. The two ungate hatches are Tier-1 checks recorded as 100 check records: either one present escalates, and a vacuous check is never a pass. Before any dispatch the tree must be clean and on the target or the node's slice branch, otherwise the node escalates. The per-project merge policy defaults to human, so P6 runs with `-p merge=false` and the node waits on a human merge, which the Runner observes in git. Under auto policy, P6 merges. Under any policy, the Runner never merges, deletes branches or pushes, and nothing merges to `main` when an integration branch is set.
+9. [ ] **(128) Gates, Git and Human Steps** — The checks around dispatch. Gate state comes from `cf status --json` (`activeSlice.status` and `gateInfo`), and `pending-decision` is a human step. A CF gate cleared on a `derived` or `imposed` verdict, or on a review whose standing is not trustworthy, is routed on the store's view. The two ungate hatches are Tier-1 checks recorded as 100 check records: either one present escalates, and a vacuous check is never a pass. Before any dispatch, including 127's resumes, the tree must be clean and on the target or the node's slice branch, otherwise the node escalates. When CF's gate for a phase the PM accepted in the store still fails, the disagreement is recorded on the slice node as a check record (slice 127, D7). The per-project merge policy defaults to human, so P6 runs with `-p merge=false` and the node waits on a human merge, which the Runner observes in git. Under auto policy, P6 merges. Under any policy, the Runner never merges, deletes branches or pushes, and nothing merges to `main` when an integration branch is set.
    **Value:** User value. The Runner can be pointed at a real repository without surprising the PM.
    **Success Criteria:**
    - A dirty tree, or a checkout on an unrelated branch, escalates instead of dispatching.
@@ -149,6 +149,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - Under human policy, a P6 run ends with the slice branch unmerged, and a merge the PM makes is observed and advances the node.
    - Under auto policy, P6 is dispatched without `merge=false`. The policy used is recorded on the dispatch decision.
    - `pending-decision` produces a human step, and a gate CF clears on an untrusted verdict is not treated as passed.
+   - Required before merge: a store accept that CF's gate still fails is recorded on the slice node and visible to the PM (issue #15). The store side is 127's identifiable accept: an applied `accept` on a completed-outcome step, with the verdict ids it accepted (slice 127, D7).
    **Dependencies:** [125, 126]
    **Interfaces:** Provides Tier-1 predicates to the routing inputs, registering `gate_state` and `check_standing` in 126's input vocabulary (slice 126, D3). Consumes 107's check records, S11 and CF's gate fields.
    **Risk Level:** Medium
@@ -191,6 +192,7 @@ These are in scope for initiative 120. They are built after 129 because the arch
 - **Migration order.** 120 and 121 both change 100's contract, and 121 adds four tables. Slice design assigns migration numbers in build order, as 100's plan did.
 - **Tables before their consumers.** 121 adds the routing, attempt and desired-state tables before 124 and 126 use them, because the arch makes the contract change a slice of its own. If slice design finds a table's shape depends on details settled in 124 or 126, that table moves to its consumer slice. The contract-first rule still holds, because the table lands in 100's contract either way.
 - **Concurrency in v1.** A project with one worktree moves one slice at a time, and a paused run stops that project until the PM acts. Parallel work means separate CF worktrees.
+- **Plan change, 20261020: the gate-disagreement criterion moves from 127 to 128.** Entry 8 required that an accepted outcome CF's gate still fails be recorded on the node. CF's gate depends on per-project thresholds, and `cf status --json` reports it only for the active slice, so only 128's gate read at the successor's dispatch can compare reliably (slice 127, D7). Entry 9 carries the criterion, required before 128 merges. Tracked as issue #15.
 - **No P3 executor.** Slice planning has no Squadron pipeline, so for every initiative the Runner drives, P3 is a human step.
 
 ## Future Work
@@ -207,3 +209,4 @@ Living backlog; entries may be added during slice design, task breakdown, or imp
 8. [ ] **Mark a step done** — From 123's design: a slice already partly done by hand gets all its steps runnable, because the Runner infers no partial progress. Add an intent or resolution that marks a step done, if driving such slices turns out to be common. Dependencies: [123, 124]. Effort: 1/5
 9. [ ] **CF asks: `indexSource` and a no-plan error code** — From 123's design: `cf list slices --json` does not expose `indexSource`, so CF's fallback counters cannot be told from explicit indexes. CF also reports "no slice plan" as `code: UNKNOWN`. Ask CF for both. Dependencies: none. Effort: 1/5
 10. [ ] **Per-project routing tables** — From 126's design: one table serves every project in v1. Let a project override it once the first proof or a second project shows different rules are needed. Each decision already records its table version. Dependencies: [129]. Effort: 2/5
+11. [ ] **Resume a failed run** — From 127's design: Squadron resumes a failed run by re-running its failed step, but v1 offers only rerun or stop for one. A failed run releases its checkout, so another slice may have changed the branch since. Add a `retry` for failed runs once the checkout hold covers them. Dependencies: [127, 128]. Effort: 2/5
