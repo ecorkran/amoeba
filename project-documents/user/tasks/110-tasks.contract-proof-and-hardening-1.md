@@ -287,13 +287,13 @@ revision_number: 2
 **Objective**: No test reaches the real runs or CF directory (LLD "Special Considerations", task-level addition above).
 
 **Steps**:
-- [ ] Add `DEFAULT_SQ_RUNS_DIR` and `DEFAULT_CF_DATA_DIR` to `FORBIDDEN_PATH_NAMES` in `tests/test_store_safety.py`; update its comment
-- [ ] If an existing test now fails the scan, list it and stop for the PM (do not exempt it silently)
+- [x] Add `DEFAULT_SQ_RUNS_DIR` and `DEFAULT_CF_DATA_DIR` to `FORBIDDEN_PATH_NAMES` in `tests/test_store_safety.py`; update its comment
+- [x] If an existing test now fails the scan, list it and stop for the PM (do not exempt it silently)
 - [ ] Note for Task 4.5: the bootstrap lives under `tests/contract/` and is scanned too. It reads `ProcessSettings().sq_runs_dir`, never the forbidden name `DEFAULT_SQ_RUNS_DIR`, so it passes. The `HOME` contract is owned here: the harness (4.5) sets `HOME` for every subprocess and asserts it is under `tmp_path`; the scan forbids the names; nothing else restates it
 
 **Success Criteria**:
-- [ ] Scan passes; `tests/contract/` is covered (it is under `tests/`)
-- [ ] Committed: `test: extend the store-safety scan to the runs and CF directories`
+- [x] Scan passes; `tests/contract/` is covered (it is under `tests/`)
+- [x] Committed: `test: extend the store-safety scan to the runs and CF directories`
 
 ---
 
