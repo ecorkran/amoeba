@@ -127,8 +127,8 @@ Tenants are ticked in registration order. When no tenant reports work, the loop
 waits on the stop event for `idle_interval_seconds` — it does not busy-loop, and
 the wait ends the moment stop is requested.
 
-**`amoeba start` registers three tenants, in this order** (`build_tenants` in
-`cli/lifecycle.py`):
+**`amoeba start` registers three tenants, in this order** (`standard_tenants` in
+`process/tenants.py`):
 
 1. `InboxTenant` (slice 103). It drains the inbox — see
    [`inbox-contract.md`](inbox-contract.md) — at most `inbox_batch_size` files

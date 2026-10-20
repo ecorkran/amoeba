@@ -13,7 +13,7 @@ from detection_harness import (
     DetectionRig,
 )
 
-import amoeba.cli.lifecycle as lifecycle
+import amoeba.process.tenants as tenants_module
 from amoeba.process.inbox_tenant import InboxTenant
 from amoeba.process.review_detection import ReviewDetectionTenant
 from amoeba.process.settings import ProcessSettings
@@ -22,7 +22,7 @@ from amoeba.store import DetectionOutcome
 
 
 def _detection_tenant(supervisor_dir: Path) -> ReviewDetectionTenant:
-    tenants = lifecycle.build_tenants(ProcessSettings(), supervisor_dir)
+    tenants = tenants_module.standard_tenants(ProcessSettings(), supervisor_dir)
     assert isinstance(tenants[0], InboxTenant)
     assert isinstance(tenants[1], ReviewDetectionTenant)
     return tenants[1]
@@ -37,7 +37,7 @@ def test_the_label_is_captured_once_and_reaches_the_tenant(
         calls.append(timeout_seconds)
         return "sq 9.9.9"
 
-    monkeypatch.setattr(lifecycle, "capture_sq_version_label", capture)
+    monkeypatch.setattr(tenants_module, "capture_sq_version_label", capture)
     tenant = _detection_tenant(supervisor_dir)
 
     assert calls == [ProcessSettings().sq_timeout_seconds]

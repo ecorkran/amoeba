@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import amoeba.cli.lifecycle as lifecycle
+import amoeba.process.tenants as tenants_module
 from amoeba.process.cf_watch import CFWatchTenant
 from amoeba.process.inbox_tenant import InboxTenant
 from amoeba.process.review_detection import ReviewDetectionTenant
@@ -15,7 +15,7 @@ from amoeba.process.version_label import VERSION_UNAVAILABLE
 
 
 def _cf_tenant(supervisor_dir: Path, settings: ProcessSettings) -> CFWatchTenant:
-    tenants = lifecycle.build_tenants(settings, supervisor_dir)
+    tenants = tenants_module.standard_tenants(settings, supervisor_dir)
     assert isinstance(tenants[0], InboxTenant)
     assert isinstance(tenants[1], ReviewDetectionTenant)
     assert isinstance(tenants[2], CFWatchTenant)
@@ -32,7 +32,7 @@ def test_the_cf_label_is_captured_once_and_reaches_the_tenant(
         calls.append(timeout_seconds)
         return "cf 9.9.9"
 
-    monkeypatch.setattr(lifecycle, "capture_cf_version_label", capture)
+    monkeypatch.setattr(tenants_module, "capture_cf_version_label", capture)
     tenant = _cf_tenant(supervisor_dir, ProcessSettings())
 
     assert calls == [ProcessSettings().cf_timeout_seconds]

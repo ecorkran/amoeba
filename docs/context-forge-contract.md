@@ -184,7 +184,7 @@ both are ignored.
 
 ## The version label (D9)
 
-`cf --version` is captured **once, at start-up**, in `build_tenants`, with
+`cf --version` is captured **once, at start-up**, in `standard_tenants` (`process/tenants.py`), with
 `cf_timeout_seconds`, and stored on every snapshot as `cf_version_label` — or as
 the explicit `unavailable` marker if capture fails. No tick starts a subprocess.
 A CF upgrade while the process runs is not reflected until restart.

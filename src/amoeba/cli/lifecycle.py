@@ -17,12 +17,9 @@ import os
 import signal
 import sys
 import time
-from pathlib import Path
 
 from amoeba.cli.main import VERSION, ExitCode
-from amoeba.process.cf_watch import CFWatchTenant
-from amoeba.process.host import ResidentProcess, Tenant
-from amoeba.process.inbox_tenant import InboxTenant
+from amoeba.process.host import ResidentProcess
 from amoeba.process.instance_lock import (
     InstanceLock,
     PidFileContents,
@@ -30,14 +27,9 @@ from amoeba.process.instance_lock import (
     pid_file_path,
     read_pid_file,
 )
-from amoeba.process.observers.cf_readback import (
-    capture_version_label as capture_cf_version_label,
-)
-from amoeba.process.review_detection import ReviewDetectionTenant
 from amoeba.process.settings import ProcessSettings
-from amoeba.process.version_label import capture_sq_version_label
+from amoeba.process.tenants import standard_tenants
 from amoeba.store import paths
-from amoeba.upstream.context_forge import PROJECTS_FILE_NAME
 
 #: How often ``stop`` re-checks whether the lock has been released.
 _LOCK_POLL_INTERVAL_SECONDS = 0.05
@@ -61,7 +53,7 @@ def start(settings: ProcessSettings) -> ExitCode:
         settings,
         store_dir=supervisor_dir,
         version=VERSION,
-        tenants=build_tenants(settings, supervisor_dir),
+        tenants=standard_tenants(settings, supervisor_dir),
         grace_expired_exit_status=int(ExitCode.GRACE_EXPIRED),
         # A tenant that never returns must not hold the process forever; the
         # operator's remedy would otherwise be an external kill.
@@ -70,30 +62,6 @@ def start(settings: ProcessSettings) -> ExitCode:
     process.install_signal_handlers()
     process.run()
     return ExitCode.OK
-
-
-def build_tenants(
-    settings: ProcessSettings, supervisor_dir: Path
-) -> tuple[Tenant, ...]:
-    """The tenants ``start`` registers, in tick order.
-
-    ``sq --version`` and ``cf --version`` are captured here, once, before the
-    loop: no tick ever starts a subprocess. Recovery still runs before any
-    tenant ticks, inside ``ResidentProcess.run``.
-    """
-    sq_label = capture_sq_version_label(settings.sq_timeout_seconds)
-    cf_label = capture_cf_version_label(settings.cf_timeout_seconds)
-    # Tenants tick in registration order. The inbox is first, so a backlog of
-    # submissions — ``watch_reviews`` and ``link_cf_project`` included — drains
-    # ahead of detection and the Context Forge watch.
-    return (
-        InboxTenant(supervisor_dir),
-        ReviewDetectionTenant(version_label=sq_label),
-        CFWatchTenant(
-            version_label=cf_label,
-            data_file=settings.cf_data_dir / PROJECTS_FILE_NAME,
-        ),
-    )
 
 
 def stop(settings: ProcessSettings) -> ExitCode:

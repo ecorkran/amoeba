@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-import amoeba.cli.lifecycle as lifecycle
+import amoeba.process.tenants as tenants_module
 from amoeba.process.settings import ProcessSettings
 
 EXPECTED_TENANT_NAMES = ("inbox", "review-detection", "cf-watch")
@@ -26,13 +26,13 @@ def test_the_registered_tenants_and_their_order_are_pinned(
     supervisor_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # No sq/cf subprocess may run while the tuple is built.
-    monkeypatch.setattr(lifecycle, "capture_sq_version_label", _fixed_label)
-    monkeypatch.setattr(lifecycle, "capture_cf_version_label", _fixed_label)
+    monkeypatch.setattr(tenants_module, "capture_sq_version_label", _fixed_label)
+    monkeypatch.setattr(tenants_module, "capture_cf_version_label", _fixed_label)
     settings = ProcessSettings(
         cf_data_dir=tmp_path / "context-forge", sq_runs_dir=tmp_path / "sq-runs"
     )
 
-    tenants = lifecycle.build_tenants(settings, supervisor_dir)
+    tenants = tenants_module.standard_tenants(settings, supervisor_dir)
 
     assert len(tenants) == 3
     assert tuple(tenant.name for tenant in tenants) == EXPECTED_TENANT_NAMES

@@ -72,13 +72,13 @@ revision_number: 2
 **Objective**: Work on the right branch from a clean baseline.
 
 **Steps**:
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Create `110-slice.contract-proof-and-hardening` from the target; if it exists, switch to it
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Create `110-slice.contract-proof-and-hardening` from the target; if it exists, switch to it
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each. If any fails before changes, stop and tell the PM
 
 **Success Criteria**:
-- [ ] On the slice branch; baseline suite, `ruff`, and `pyright` clean
-- [ ] No commit needed
+- [x] On the slice branch; baseline suite, `ruff`, and `pyright` clean
+- [x] No commit needed
 
 ---
 
@@ -89,13 +89,13 @@ revision_number: 2
 **Objective**: A test that fails if the `build_tenants` move changes which tenants `amoeba start` registers or their order (LLD "Migration Plan").
 
 **Steps**:
-- [ ] Add `tests/process/test_tenant_order.py`. Call `lifecycle.build_tenants(ProcessSettings(...), supervisor_dir)` with `cf_data_dir` and `sq_runs_dir` under `tmp_path` (use the `supervisor_dir` fixture from `tests/process/conftest.py`)
-- [ ] Assert the tuple of each tenant's `name`, in order, equals a written-out expected tuple. Read the three names from the tenant classes' `name` attributes once, then write them out literally in the expected tuple, in the order of `build_tenants`'s return statement today (`lifecycle.py:75`), never from sorting or class discovery. Assert the tuple has exactly three entries
-- [ ] Monkeypatch both `capture_*_version_label` functions to return a fixed string so no `sq`/`cf` subprocess runs
+- [x] Add `tests/process/test_tenant_order.py`. Call `lifecycle.build_tenants(ProcessSettings(...), supervisor_dir)` with `cf_data_dir` and `sq_runs_dir` under `tmp_path` (use the `supervisor_dir` fixture from `tests/process/conftest.py`)
+- [x] Assert the tuple of each tenant's `name`, in order, equals a written-out expected tuple. Read the three names from the tenant classes' `name` attributes once, then write them out literally in the expected tuple, in the order of `build_tenants`'s return statement today (`lifecycle.py:75`), never from sorting or class discovery. Assert the tuple has exactly three entries
+- [x] Monkeypatch both `capture_*_version_label` functions to return a fixed string so no `sq`/`cf` subprocess runs
 
 **Success Criteria**:
-- [ ] Test passes against the current code
-- [ ] Committed: `test: pin the order of the tenants amoeba start registers`
+- [x] Test passes against the current code
+- [x] Committed: `test: pin the order of the tenants amoeba start registers`
 
 ---
 
@@ -108,16 +108,17 @@ revision_number: 2
 **Objective**: The one run-file parser exposes the field pruning needs, tested against the shape the live directory holds today (LLD D7 H4).
 
 **Steps**:
-- [ ] Copy one live v5 `paused` run file from `~/.config/squadron/runs/` (read-only; never modify that directory) into `tests/fixtures/sq_runs/`, byte-for-byte
-- [ ] Scan it for secrets (keys, tokens, credentials). Local paths and the `owner` field are acceptable, as in the existing fixtures. If anything must be edited, edit only that, and record the edit in the README row (the `projects.json` entry is the precedent). The LLD's "sanitized" means exactly this
-- [ ] Add a row to `tests/fixtures/README.md`'s `sq_runs/` table: capture date, `status`, `pipeline`, `schema_version` 5, and "carries `updated_at`, which pruning reads"
-- [ ] In `process/observers/sq_runs.py`, add `updated_at: datetime | None = None` to `SquadronRun`. Update its docstring ("six header fields" becomes seven; `updated_at` is optional and read only by pruning). Do not move `SquadronRun` or `parse_run_file`, and do not export them from `amoeba.process`
-- [ ] In `tests/test_observer_sq_runs.py`, add: the v5 fixture parses with all seven fields and a timezone-aware `updated_at` equal to the file's value; a v3/v4 fixture parses with `updated_at is None`
+- [x] Copy one live v5 `paused` run file from `~/.config/squadron/runs/` (read-only; never modify that directory) into `tests/fixtures/sq_runs/`, byte-for-byte
+- [x] Scan it for secrets (keys, tokens, credentials). Local paths and the `owner` field are acceptable, as in the existing fixtures. If anything must be edited, edit only that, and record the edit in the README row (the `projects.json` entry is the precedent). The LLD's "sanitized" means exactly this
+- [x] Add a row to `tests/fixtures/README.md`'s `sq_runs/` table: capture date, `status`, `pipeline`, `schema_version` 5, and "carries `updated_at`, which pruning reads"
+- [x] In `process/observers/sq_runs.py`, add `updated_at: datetime | None = None` to `SquadronRun`. Update its docstring ("six header fields" becomes seven; `updated_at` is optional and read only by pruning). Do not move `SquadronRun` or `parse_run_file`, and do not export them from `amoeba.process`
+- [x] In `tests/test_observer_sq_runs.py`, add: the v5 fixture parses with all seven fields and a timezone-aware `updated_at` equal to the file's value; a v3/v4 fixture parses with `updated_at is None`
+  > Note: v3/v4 fixtures carry their real `updated_at` (they do carry it); the `updated_at is None` case is covered by a derived v5 copy with `updated_at` removed.
 
 **Success Criteria**:
-- [ ] Fixture present, README row added, no secret in the file
-- [ ] New tests pass; the existing observer and recovery tests pass with none edited
-- [ ] Committed: `feat: add updated_at to SquadronRun and a schema-v5 run fixture`
+- [x] Fixture present, README row added, no secret in the file
+- [x] New tests pass; the existing observer and recovery tests pass with none edited
+- [x] Committed: `feat: add updated_at to SquadronRun and a schema-v5 run fixture`
 
 ---
 
