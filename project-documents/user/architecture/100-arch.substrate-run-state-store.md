@@ -12,8 +12,8 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba's foundational layer — the durable project-lifecycle run-state store, the resident process that hosts the Runner, the durable message queue between parts, and the push-based event seam over Context Forge and Squadron.
 dateCreated: 20260913
-dateUpdated: 20260928
-status: not_started
+dateUpdated: 20261020
+status: complete
 ---
 
 # Architecture: Substrate & Run-State Store

@@ -8,8 +8,8 @@ component: substrate-run-state-store
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 100 — decomposes the substrate and run-state store into foundation, feature, and integration slices that each leave the system in a working state.
 dateCreated: 20260913
-dateUpdated: 20261007
-status: not_started
+dateUpdated: 20261020
+status: complete
 ---
 
 # Slice Plan: Substrate and Run-State Store
