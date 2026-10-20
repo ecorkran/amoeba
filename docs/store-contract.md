@@ -611,8 +611,8 @@ conventional:**
    guarantees at most one resident process per supervisor. The kernel releases
    it when the holder dies by any means, so a stale lock cannot exist.
 2. **A guard test** (`tests/test_writer_guard.py`) walks the AST of every module
-   under `src/amoeba/` and fails if any module other than `process/host.py`
-   calls the read-write `Store.open`.
+   under `src/amoeba/` and fails if any module other than
+   `process/project_stores.py` calls the read-write `Store.open`.
 
 Every out-of-process consumer uses [`Store.open_read_only`](#read-only-access)
 instead, which is a genuine SQLite `mode=ro` handle: a write attempted through
