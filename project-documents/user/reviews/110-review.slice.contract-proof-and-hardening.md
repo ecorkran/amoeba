@@ -12,82 +12,62 @@ sourceDocument: project-documents/user/slices/110-slice.contract-proof-and-harde
 aiModel: claude-sonnet-5-5
 aiProfile: sdk
 status: complete
-dateCreated: 20261015
-dateUpdated: 20261015
-reviewedSha: e7957d157e1d5f4209dddfa1712c0c7c1add9676
-revision_number: 2
+dateCreated: 20261019
+dateUpdated: 20261019
+reviewedSha: 5a02aa4b0ae6fd2eb27896b2cbdca61a62912ee2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 3
 turns: 4
-promptTokens: 186046
-cachedTokens: 93512
-cacheWriteTokens: 92528
-completionTokens: 4898
-durationSeconds: 41.3
-costUsd: 0.429124
+promptTokens: 191394
+cachedTokens: 91784
+cacheWriteTokens: 99604
+completionTokens: 8045
+durationSeconds: 67.0
+costUsd: 0.488724
 costBasis: provider
-runId: run-20261015-slices-plan-fa1ba72e
-squadronVersion: 0.22.0
+runId: run-20261020-p4-8ad1873b
+squadronVersion: 0.23.3
 findings:
   - id: F001
-    severity: pass
-    category: architecture-alignment
-    summary: "Writer model and layer boundaries respected"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Architecture"
+    severity: concern
+    category: proportionality
+    summary: "Design is heavier than a Low-risk, effort-3 integration slice"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:403"
   - id: F002
     severity: pass
     category: architecture-alignment
-    summary: "Pruning ownership follows the architecture's stated intent"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8"
+    summary: "Writer model and layer boundaries are preserved"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#State-Management"
   - id: F003
-    severity: concern
-    category: proportionality
-    summary: "Pruning design (D8) is heavier than the requirement needs"
+    severity: pass
+    category: architecture-alignment
+    summary: "Pruning honors the architecture's ownership and \"never touch SQ files\" rules"
     location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D8"
-    resolution: accepted
-    resolvedBy: "Cut KeepReason, UnreadableRun, PruneSelection, the kill-wait-observe timeout path, and PruneSettings (PM, 20261015). Preview lists candidates plus a kept count; unparseable files log WARNING; any candidate still present after sq (including timeout) exits PRUNE_INCOMPLETE; retention and sq timeout are module constants. The post-sq re-read of the runs dir is kept because sq exits 1 for an already-removed run"
   - id: F004
-    severity: concern
-    category: specification-consistency
-    summary: "Export-documentation check is specified two contradictory ways"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:47"
-    resolution: accepted
-    resolvedBy: "Technical Requirements now specify a mechanical test that every __all__ name of each PUBLIC_ROOTS package appears in its contract doc"
-  - id: F005
-    severity: concern
-    category: dependencies
-    summary: "Heavy dependence on names from three unmerged slices"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Dependencies"
-    resolution: no_change_needed
-    resolvedBy: "Risk note only; Development Approach step 1 stops for the PM and reconciles every name taken from 107-109 against merged code"
-  - id: F006
-    severity: concern
-    category: under-specification
-    summary: "Scenario step 12 leaves test-input setup under-specified"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D4"
-    resolution: accepted
-    resolvedBy: "checkpoint sets and blocks the gate node; step 7 also writes a paused run file with an unjournaled run id; stand-in run files carry updated_at 8 days before wall clock; step 12 states the expected candidate, held run, unowned run, and kept count"
-  - id: F007
-    severity: concern
+    severity: pass
     category: error-handling
-    summary: "Failure handling for the proof harness's own processes is not enumerated"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Data-Flow"
-    resolution: accepted
-    resolvedBy: "Patterns and Conventions add harness failure rules: a timed-out wait fails with the step number and all subprocess output; a subscriber-thread exception is re-raised on the main thread; an unplanned SSE drop fails the test"
+    summary: "Harness failure modes are explicit"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#Patterns-and-Conventions"
+  - id: F005
+    severity: note
+    category: scope
+    summary: "Run-file parser placement widens `amoeba.upstream.squadron` beyond the architecture's wording"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:281-283"
+  - id: F006
+    severity: note
+    category: under-specification
+    summary: "Export surface and read interfaces are under-specified for D1 and D9"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:84-95"
+  - id: F007
+    severity: note
+    category: integration
+    summary: "Ownership guarantee is convention-only on the `journal_resolve` path"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:295-299"
   - id: F008
     severity: note
-    category: architecture-alignment
-    summary: "Moving the run-file parser into `amoeba.upstream.squadron`"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#H4"
-    resolution: accepted
-    resolvedBy: "H4 requires process-contract.md and the CHANGELOG to state run_file is a run-state adapter, not part of the review-output contract"
-  - id: F009
-    severity: note
-    category: scope-control
-    summary: "Hardening scope is bounded by an explicit rule"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D7"
-    resolution: no_change_needed
-    resolvedBy: "Positive note; no action"
+    category: completeness
+    summary: "Locality documentation is not mapped to a deliverable"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md#D6"
 ---
 
 # Review: slice — slice 110
@@ -97,87 +77,71 @@ findings:
 
 ## Findings
 
-### [PASS] Writer model and layer boundaries respected
+### [CONCERN] Design is heavier than a Low-risk, effort-3 integration slice
 
-- The Runner (`ProofRunner`) is an in-process tenant that writes directly.
-- The PM and the Judge go through the inbox.
-- The oracle and `amoeba prune` open stores read-only.
-- Pruning deletes only through `sq runs prune`, so no part edits Squadron's run files directly.
-- This matches the architecture's sole-writer model and its state-is-the-interface goal.
-- `amoeba.upstream` never imports `amoeba.process`, and the Layering rules extend the existing import-boundary test.
+The slice plan scopes 110 as a contract proof, a locality check, implemented pruning, and consumer docs. This design also adds:
+- a Store mixin method (H2);
+- a tenant-factory move across packages (H1);
+- a parser move (H4);
+- new `amoeba.process` and `amoeba.store` exports;
+- a new destructive CLI command with its own exit code and stub-`sq` failure matrix;
+- an AST import rule with its own test file;
+- a documentation-coverage test;
+- before/after equivalence tests;
+- two oracles;
+- a network subset with two process kills.
 
-### [PASS] Pruning ownership follows the architecture's stated intent
+Most of this is justified by the plan's pruning, "no internal access", and 109-handoff requirements. The following can be cut or narrowed:
+- **Documentation-coverage test (D9, line 403).** It asserts that every name in `__all__` of every `PUBLIC_ROOTS` package appears in that package's contract doc. That is a retroactive audit of all of 101–109's surface, and nothing in the plan asks for it. Narrow it to the names this slice adds (H1, H2, H3 and the pruning exports). Defer the whole-surface audit to a later cleanup.
+- **Guard test (lines 480, 406).** The new test that no test under `tests/` sets a runs directory outside `tmp_path` extends 101's store-safety scan. Fold it into that scan rather than adding a separate test.
+- **Open-ended gap hunting (D7, "Any further gap").** The design says itself that the effort estimate is uncertain (line 479). Keep the PM stop rule. Also state an upper bound on additive fixes, for example "more than N, or more than one new public name per gap, returns to the PM".
 
-- The architecture says "the store's record of which paused runs it owns serves reconciliation and pruning" and "pruning policy is Amoeba's."
-- D8 derives ownership from journal results and holds a run while any non-`done` node names it.
-- It never prunes escalated-unknown runs, because Amoeba never proved those were its own.
-- The slice plan's criterion "Pruning policy for paused SQ runs is implemented and documented" is met.
-- The store-retention exclusion is explained against the slice plan's later rescoping.
+### [PASS] Writer model and layer boundaries are preserved
 
-### [CONCERN] Pruning design (D8) is heavier than the requirement needs
+- The slice adds no tables, migrations or write paths.
+- `ProofRunner` writes in-process through the store API, which is the Runner's documented position.
+- Out-of-process actors use the inbox.
+- `cli/prune.py` opens stores read-only.
+- The oracle and the pruning selection read only.
 
-The slice plan asks for one thing: "Pruning policy for paused SQ runs is implemented and documented." D8 builds a lot more than that, and several parts can be cut or deferred:
-- **KeepReason enum.** Five members plus an `UnreadableRun` type feed a "kept owned runs" listing. The preview needs to show candidates and why each owned run was kept. It does not need a closed enum plus a separate unowned-count output.
-- **Timeout handling.** The design kills `sq`, waits, observes, and then makes partial-success claims. A single "sq failed or timed out, rerun" result with `PRUNE_INCOMPLETE` meets the requirement.
-- **PruneSettings.** It is a frozen dataclass whose only consumers are the two values the CLI does not expose. Two module constants are enough until something configures them.
-- **Slice size.** The slice carries four parts (proof, hardening, pruning, docs) at effort 3. The pruning part is the likeliest to grow past that.
+This matches the architecture's sole-writer model and its rule that the network layer adds no write path.
 
-Trim the observation and report layers to what the preview and `--yes` output need. Defer the rest to a follow-up.
+### [PASS] Pruning honors the architecture's ownership and "never touch SQ files" rules
 
-### [CONCERN] Export-documentation check is specified two contradictory ways
+- The architecture says "the store's record of which paused runs it owns serves reconciliation and pruning" and that no part edits SQ's run files directly. D8 derives ownership from the journal's recorded `run_id` and deletes only through `sq runs prune`.
+- Escalated (`unknown`) entries are never owned, which follows "unknown is a value".
+- Failure modes are enumerated with explicit handling:
+  - `sq` missing, failing, timing out, or refusing a run;
+  - an unreadable store, which refuses the whole command;
+  - an unparseable run file, or one with no `updated_at`.
+- The outcome is decided by re-reading the runs directory, not by parsing `sq`'s text or exit status. The command converges on re-run.
 
-- Included/Docs (line 47) and D9 say a test checks that every exported name is documented.
-- Technical Requirements say "Checklist, once, at the end of the slice."
-- A test and a one-time checklist are different guarantees, and the Technical Requirements do not say which one is required.
-- The consumer-documentation guarantee (the substrate-guide entry for 120, 140, and 160 authors) depends on this check.
-- Pick one. A mechanical test matches the slice's "executable documentation" framing and the D1 AST rule.
+### [PASS] Harness failure modes are explicit
 
-### [CONCERN] Heavy dependence on names from three unmerged slices
+Every wait is a predicate with a timeout. A timeout fails the test with the step number and the captured output of every subprocess. A follower-thread exception is re-raised on the main thread. An unplanned SSE drop fails the test. The planned process kills, with named crash points, cover the peer-disconnect and mid-send cases for the new network path.
 
-- 107, 108, and 109 are `not_started`.
-- This design fixes many of their names and behaviors:
-  - `judge_invocation_id`, `CFWatchTenant`, `cf_version_label`, and `store/discovery.py`;
-  - `as_of_seq`, the `Last-Event-ID` semantics, and `inspection`;
-  - `ExitCode` 13/14 numbering.
-- The first-task gate handles this: it stops for the PM and reconciles names. That is the right mitigation.
-- The design is still committing in detail to unreviewed surfaces. Keep the stable parts (D1–D3, D5, D8) free of those names where possible, so a late change in 107–109 does not force a rewrite.
-- This is a risk note, not a defect.
+### [NOTE] Run-file parser placement widens `amoeba.upstream.squadron` beyond the architecture's wording
 
-### [CONCERN] Scenario step 12 leaves test-input setup under-specified
+The architecture scopes `amoeba.upstream.squadron` to parsing Squadron **review output**. It assigns parsing of other SQ output to initiative 120. Moving `SquadronRun` and `parse_run_file` there so the observer and the pruning rule share one parser is a reasonable DRY choice, and the design says the move does not widen 105's scope. The architecture itself does not authorize that, so the PM should ratify it explicitly. Only `process-contract.md` and the CHANGELOG carry the note today.
 
-- Step 12 expects step 7's PM-launched run to be counted as unowned and Beta's run to be held. Neither is set up anywhere in the design.
-  - Step 7 writes a review artifact. It does not say a paused run file is written, and an unowned run only counts if one exists in the runs directory.
-  - Step 9 does not say which node (slice or gate) holds `sq.run_id`. Step 11's `finish` marks the slice and gate `done`.
-- Alpha's checkpoint run becomes a candidate only if its holding node is `done`.
-- Beta's run is held only if its node stays not `done`.
-- The design should state the node, and the run file written for step 7, so the expected `KeepReason` and unowned count are derivable from the doc.
-- The "at least 7 days" age condition also needs the fixture `updated_at` values to be explicit, or the test relies on an injected `now`.
+### [NOTE] Export surface and read interfaces are under-specified for D1 and D9
 
-### [CONCERN] Failure handling for the proof harness's own processes is not enumerated
+- D1 and the D9 test depend on each root's `__all__`. The design does not say whether `run_file` and `run_pruning` names (`SquadronRun`, `parse_run_file`, `select_prunable`) are exported from the `amoeba.upstream.squadron` root or stay submodule-only.
+- The pruning data flow uses `nodes_for_project`, `discover_project_ids` and `DEFAULT_SQ_RUNS_DIR`. None of these is listed under "Interfaces Required".
 
-- The design lists readiness and change predicates with timeouts, but it does not say what happens on:
-  - the bootstrap subprocess failing to reach readiness;
-  - the SSE follower's connection dropping outside the planned kills;
-  - the `follow()` subscriber thread dying.
-- The network subset exercises new I/O paths (the HTTP POST and SSE clients). It should say that a timeout fails the test with the step number and captured process output, not a hang or a skip.
-- Pruning's failure modes (sq missing, refusing, timing out, unreadable store) are well covered. The harness side needs the same treatment.
+Neither blocks design approval. Settle both before task breakdown so the documentation-coverage test and the import rule have a defined target.
 
-### [NOTE] Moving the run-file parser into `amoeba.upstream.squadron`
+### [NOTE] Ownership guarantee is convention-only on the `journal_resolve` path
 
-- The architecture's scope says the store-adjacent adapter owns parsing of Squadron review output and "does not own parsing of other SQ output."
-- The run-file parser already exists in 102's observer, so the move is placement only.
-- It is acceptable because it is additive and pure, and 105's no-store-import rule is preserved.
-- Say in `process-contract.md` or the CHANGELOG that `run_file` is an adapter for run state files, not part of the review-output contract. Otherwise a later reader may read the move as widening the scope.
+`record_runner_report` enforces `run_id` on `sq_run` entries, but a direct `journal_resolve(completed)` call does not. Initiative 120 is bound only by a contract line and the D9 citation. The design correctly calls the failure safe: unowned runs are never pruned. It is also a hidden coupling to 120, so the PM may want to confirm that tightening `journal_resolve` is deliberately out of scope. That would be a behavior change under D7.
 
-### [NOTE] Hardening scope is bounded by an explicit rule
+### [NOTE] Locality documentation is not mapped to a deliverable
 
-- D7 limits fixes to additive changes and routes behavior or schema changes to the PM. It also defines xfail closure.
-- The four known gaps (H1–H4) are each additive.
-- This keeps the unknown-gap risk bounded, as the Special Considerations section says.
+The plan's criterion is "Store locality behaves correctly for the chosen model **and is documented**". D6 supplies the test. Documentation exists only if `store-contract.md` already covers it, and H3 suggests it does. Say so in D9, or add a link to that section from the substrate guide, so the criterion is visibly met.
 
 ### Run Digest
 
-- Response length: 7351 chars
+- Response length: 6645 chars
 - Response is newline-free: no
 - Tool calls made: 3
 - Tool calls failed: 0
@@ -188,12 +152,12 @@ Trim the observation and report layers to what the preview and `--yes` output ne
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 4
-- Tokens — prompt / cached / cache write / completion / reasoning: 186046 / 93512 / 92528 / 4898 / not computed
-- Duration: 41.3 s
-- Cost: $0.43 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 191394 / 91784 / 99604 / 8045 / not computed
+- Duration: 67.0 s
+- Cost: $0.49 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8

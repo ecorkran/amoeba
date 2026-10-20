@@ -3,11 +3,29 @@ docType: slice-design
 slice: contract-proof-and-hardening
 project: amoeba
 parent: user/architecture/100-slices.substrate-run-state-store.md
-dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
+dependencies:
+- 101
+- 102
+- 103
+- 104
+- 105
+- 106
+- 107
+- 108
+- 109
 interfaces: []
 dateCreated: 20261015
-dateUpdated: 20261019
+dateUpdated: 20261020
 status: not_started
+turns: 26
+promptTokens: 1062061
+cachedTokens: 1001424
+cacheWriteTokens: 60599
+completionTokens: 10075
+durationSeconds: 134.3
+costUsd: 0.88706
+usageRounds: 1
+pricedRounds: 1
 ---
 
 # Slice Design: contract-proof-and-hardening
