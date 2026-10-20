@@ -157,7 +157,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 
 ## Integration Work
 
-10. [ ] **(129) First Proof** — One project, one PM-chosen unstarted unit, driven end to end by the Runner under intents, through design, tasks and implementation to the human merge. Every stop is recorded. Wrong stops (escalations a human found routable, or routes a human disagreed with) become the next routing rules, or become the trigger for 130 and 131. The slice also closes out the substrate guide's 120 row and the operator documentation for running the Runner.
+10. [ ] **(129) First Proof** — One project, one PM-chosen unstarted unit, driven end to end by the Runner under intents, through design, tasks and implementation to the human merge. Every stop is recorded. Wrong stops (escalations a human found routable, or routes a human disagreed with) become the next routing rules, or become the trigger for 130 and 131. The slice also closes out the substrate guide's 120 row and the operator documentation for running the Runner, and adds `amoeba inspect resolutions` (issue #16) for the write-up.
    **Value:** The Runner is shown to drive real work, and its stops become evidence for the routing table.
    **Success Criteria:**
    - The chosen unit reaches merged with no Squadron or CF command run by hand, except at steps the routing table sent to the PM.
