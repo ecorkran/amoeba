@@ -14,45 +14,45 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261019
 dateUpdated: 20261019
-reviewedSha: 8b2ccb2b65707e57db31ffabb204419e223e230f
-revision_number: 1
+reviewedSha: 301a280096ce818b1e1ccf6cacc282f13fee1999
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 3
-turns: 4
-promptTokens: 220295
-cachedTokens: 136367
-cacheWriteTokens: 83922
-completionTokens: 4295
-durationSeconds: 35.2
-costUsd: 0.392956
+toolCallsMade: 5
+turns: 6
+promptTokens: 306843
+cachedTokens: 264488
+cacheWriteTokens: 42347
+completionTokens: 4795
+durationSeconds: 40.9
+costUsd: 0.244473
 costBasis: provider
 runId: run-20261020-p5-002cb7ae
 squadronVersion: 0.23.3
 findings:
   - id: F001
     severity: concern
-    category: verification
-    summary: "Task 8.1's \"no slice 110 reference\" grep will fail once the substrate guide exists"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:283"
+    category: acceptance-criteria
+    summary: "Task 8.1's grep criterion fails on a legitimate mention"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:284"
   - id: F002
     severity: note
-    category: verification
-    summary: "The walkthrough's `-k prune` will not select scenario step 12"
-    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:425"
+    category: coverage
+    summary: "Step 6's \"node runnable\" outcome has no explicit assertion"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:97"
   - id: F003
-    severity: note
-    category: process
-    summary: "Task 5.6 may end with nothing to commit when no gaps are found"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:136"
+    severity: pass
+    category: uncategorized
+    summary: "Success-criteria coverage for Sections 5–9"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
   - id: F004
     severity: pass
-    category: coverage
-    summary: "Success-criteria coverage and sequencing"
+    category: uncategorized
+    summary: "Sequencing, sizing and commit cadence"
     location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
   - id: F005
     severity: pass
-    category: scope
-    summary: "Proportionality and test placement"
+    category: uncategorized
+    summary: "Proportionality"
     location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
 ---
 
@@ -63,40 +63,44 @@ findings:
 
 ## Findings
 
-### [CONCERN] Task 8.1's "no slice 110 reference" grep will fail once the substrate guide exists
+### [CONCERN] Task 8.1's grep criterion fails on a legitimate mention
 
-Task 8.1 requires `grep -rn "slice 110\|or 110" docs/` to return nothing. Task 8.2 then creates `docs/substrate-guide.md`, which links to "this slice's `CHANGELOG.md` entry". That page will almost certainly say "slice 110", so the same grep fails afterward. Other contract docs may also mention 110 as history. The slice requirement is narrower: the Future-work lines that point at 110 are replaced. Scope the check to Future-work or pending-work references, such as the pruning line in `process-contract.md` and the "or 110, if earlier" text in `evidence-contract.md`. Otherwise Task 9.1 or a later re-run will fail on a criterion that was met.
+The criterion says `grep -n "slice 110\|or 110" docs/*-contract.md` must return nothing. `docs/network-contract.md:14` ("slice 110's end-to-end proof can use the store…") matches `slice 110`. It is a historical statement about the proof, not a Future-work line. The task does not edit that file, so the junior AI cannot meet the criterion without deleting accurate text. The `or 110` half is already handled by file 1's `evidence-contract.md` edit. Narrow the check to Future-work lines. For example: "`docs/process-contract.md` Future-work no longer lists pruning, and `docs/evidence-contract.md` no longer says 'or 110'". Or list `network-contract.md:14` as an accepted remaining match.
 
-### [NOTE] The walkthrough's `-k prune` will not select scenario step 12
+### [NOTE] Step 6's "node runnable" outcome has no explicit assertion
 
-Walkthrough step 2 runs `pytest tests/contract tests/process -k prune` and expects scenario step 12 to be exercised. Task 7.5 puts step 12 at the end of `test_lifecycle_proof.py`, whose test and module names contain no "prune". `-k prune` therefore picks up only `tests/process/test_prune_selection.py` and `test_prune_sq_runs.py`, and step 12 is not run. Task 7.2 handled this for the selection tests but nothing handles it for step 12. Task 9.1 says to correct the walkthrough when it differs, so this will be caught. Fixing it now is cheaper, either by correcting the walkthrough command or by naming step 12's test with "prune".
+The LLD requires that after step 6 the escalated node is runnable. Task 5.4 lists step-level assertions for steps 3, 4 and 5 but none for step 6. The end-state oracle checks only the final state, which step 11 may have changed. Adding one line, "after step 6, `runnable` includes the step-5 node", closes this.
 
-### [NOTE] Task 5.6 may end with nothing to commit when no gaps are found
+### [PASS] Success-criteria coverage for Sections 5–9
 
-Task 5.6 has no commit step of its own. If no gaps are found, the "None found" edit to the Gaps Found log is left uncommitted. Task 8.3 depends on that log. Add a short commit for the log update. It could be folded into Task 6.1's commit if a separate one is unwanted.
+Each LLD success criterion maps to a task:
+- **Scenario, end-state and feed-replay oracles:** Tasks 5.1–5.5, including the `seq` gap check across steps 4, 5 and 10.
+- **Network subset:** Tasks 6.1–6.2, including the 202-while-down case and SSE `seq` equal to local `follow(after=0)`.
+- **Pruning, pure rule and tests:** Tasks 7.1–7.2.
+- **Pruning, CLI and exit code 14:** Tasks 7.3–7.4, covering each failure mode, the unreadable-store refusal, and preview never calling `sq`.
+- **Step 12:** Task 7.5.
+- **Substrate guide, CHANGELOG, walkthrough, `__all__` documentation check:** Tasks 8.1–9.1.
 
-### [PASS] Success-criteria coverage and sequencing
+The remaining criteria sit in file 1: the D1 rule, H1–H4, the store-safety guard extension, and the tenant-order check. I found no scope creep.
 
-Each slice criterion maps to a task:
-- **End state and feed replay:** Tasks 5.2, 5.3, and 5.5.
-- **Network subset:** Tasks 6.1 and 6.2, including the `seq` equality check and the POST made while the resident process is down.
-- **Step 3, 4, and 5 assertions:** Task 5.4, including the ownership guarantee.
-- **D6 locality:** Task 5.2.
-- **Pruning criteria:** Tasks 7.1 to 7.5. This includes each condition failing alone, a missing `updated_at`, a held run, failure modes leaving files in place, an unreadable store refusing before `sq`, and step 12.
-- **Docs:** Tasks 8.1 to 8.3.
-- **Walkthrough:** Task 9.1.
+### [PASS] Sequencing, sizing and commit cadence
 
-Of the supporting items in file 1, the schema-v5 fixture and the contract-doc updates for H1 to H3 are all there. The `tests/test_store_safety.py` extension appears only as a path-name addition (file 1, line 298). It may not cover the slice's "HOME or runs directory outside `tmp_path`" check, but the file 1 tasks were not reviewed here.
+Dependencies are linear with no cycles. The test-with pattern holds throughout:
+- Oracles: 5.2 is tested in 5.3.
+- Selection rule: 7.1 is tested in 7.2.
+- CLI: 7.3 is tested in 7.4.
 
-### [PASS] Proportionality and test placement
+The only forward reference is Task 5.4's note that 5.5 and 7.5 extend `test_lifecycle_proof.py`, which matches their dependency order. Commits land after every task or task pair, and none are batched at the end. Efforts of 1–3 are reasonable. Splitting 5.4 and 5.5 around the crash steps keeps each driver task bounded. The 5.6 gap-resolution task and the "Gaps Found" log handle the LLD's D7 uncertainty without inflating the plan.
 
-Tests follow their implementations in 5.3, 6.x, and 7.2/7.4, with a commit at the end of each section. Task 5.3's oracle self-tests are justified because each oracle must be shown to fail when it should. The stub-`sq` modes in Task 7.4 each map to a slice-required failure case. The slice states no NFRs, so no load-test or CI-gating task is required.
+### [PASS] Proportionality
+
+The two-file split fits a slice of this size, and file 2 contains no test tasks beyond what the success criteria require. `test_oracle.py` is justified because the LLD says each oracle must fail when it should. The LLD names no NFRs, so no load-test or CI-gating task is needed.
 
 ### Run Digest
 
-- Response length: 4066 chars
+- Response length: 3649 chars
 - Response is newline-free: no
-- Tool calls made: 3
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -104,10 +108,10 @@ Tests follow their implementations in 5.3, 6.x, and 7.2/7.4, with a commit at th
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 4
-- Tokens — prompt / cached / cache write / completion / reasoning: 220295 / 136367 / 83922 / 4295 / not computed
-- Duration: 35.2 s
-- Cost: $0.39 (provider)
+- Turns: 6
+- Tokens — prompt / cached / cache write / completion / reasoning: 306843 / 264488 / 42347 / 4795 / not computed
+- Duration: 40.9 s
+- Cost: $0.24 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 5

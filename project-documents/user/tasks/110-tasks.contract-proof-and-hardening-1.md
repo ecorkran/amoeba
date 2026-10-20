@@ -21,7 +21,7 @@ projectState: Slices 101–109 are merged (store schema 8; `amoeba serve`; `amoe
 dateCreated: 20261019
 dateUpdated: 20261020
 status: not_started
-revision_number: 1
+revision_number: 2
 ---
 
 ## Context Summary (File 1 of 2)

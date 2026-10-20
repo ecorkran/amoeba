@@ -14,51 +14,61 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261019
 dateUpdated: 20261019
-reviewedSha: 8b2ccb2b65707e57db31ffabb204419e223e230f
-revision_number: 1
+reviewedSha: 301a280096ce818b1e1ccf6cacc282f13fee1999
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 6
-turns: 7
-promptTokens: 291556
-cachedTokens: 187403
-cacheWriteTokens: 104145
-completionTokens: 9040
-durationSeconds: 70.8
-costUsd: 0.526407
+toolCallsMade: 3
+turns: 4
+promptTokens: 224380
+cachedTokens: 182353
+cacheWriteTokens: 42021
+completionTokens: 3150
+durationSeconds: 28.1
+costUsd: 0.218502
 costBasis: provider
 runId: run-20261020-p5-002cb7ae
 squadronVersion: 0.23.3
 findings:
   - id: F001
-    severity: pass
-    category: coverage
-    summary: "File 1 covers its share of the LLD, in a sound order"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:66-360"
+    severity: concern
+    category: task-sizing
+    summary: "Task 4.4 carries three separable responsibilities and defers its test to 4.6"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:308-324"
   - id: F002
     severity: concern
-    category: specification-gap
-    summary: "Task 3.1 does not say what the retry rule does to the ledger row and the journal resolve"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:207-208"
+    category: clarity
+    summary: "Task 3.1 defers important design decisions as \"stop and ask\" branches"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:205-213"
   - id: F003
     severity: concern
-    category: specification-gap
-    summary: "Task 4.4 gives no path for a public name `ProofRunner` needs that is not exported"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:316-319"
+    category: sequencing
+    summary: "The `HOME`/`DEFAULT_SQ_RUNS_DIR` contract is spread across tasks with no single owner"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:56-59"
   - id: F004
     severity: concern
-    category: specification-gap
-    summary: "Task 4.4 and 4.5 leave it unspecified how the Runner's per-project paths reach the bootstrap subprocess"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:315, 335"
+    category: proportionality
+    summary: "Task 2.5 and Task 3.3 split doc and export updates across tasks beyond what the criteria need"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:162-193"
   - id: F005
-    severity: note
-    category: task-sizing
-    summary: "Tasks 4.4 and 4.5 are large and untested until 4.6"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:307-360"
+    severity: concern
+    category: test-quality
+    summary: "Task 1.2 asks for names to be \"read once, then written out\", which can leave the test circular"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:93"
   - id: F006
     severity: note
-    category: scope
-    summary: "Task 2.3's docstring assertion may add unplanned edits"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:154"
+    category: coverage
+    summary: "Coverage of the LLD success criteria in this file"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:62"
+  - id: F007
+    severity: note
+    category: proportionality
+    summary: "Proportionality of the task set"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:66"
+  - id: F008
+    severity: pass
+    category: sequencing
+    summary: "Sequencing, commit cadence and scope traceability"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:85-362"
 ---
 
 # Review: tasks — slice 110
@@ -68,61 +78,48 @@ findings:
 
 ## Findings
 
-### [PASS] File 1 covers its share of the LLD, in a sound order
+### [CONCERN] Task 4.4 carries three separable responsibilities and defers its test to 4.6
 
-- **Coverage:**
-  - Tenant-order pin (1.2) matches the Migration Plan.
-  - H4 (2.1), H1 (2.2, 2.3, 2.5), H3 (2.4, 2.5), and H2 (3.1–3.3) are each covered.
-  - The D1 import rule (4.1, 4.2) and the store-safety extension (4.3) are covered.
-  - `ProofRunner` and the harness (4.4–4.6) are covered, and the D3 step list and crash points are carried into 4.4.
-  - The 13 H1 names in 2.3 match D7.
-- **Order:** the tenant-order test lands before the move and is reused after it. Exports precede their docs. The store-safety extension precedes the new `tests/contract/` code. There are no cycles.
-- **Commits:** checkpoints are spread across all four sections.
-- **Load tests:** the slice states no NFR, so a load-test task and CI wiring are not required.
-- **Store-safety scan:** no existing test references `DEFAULT_SQ_RUNS_DIR` or `DEFAULT_CF_DATA_DIR`, so the 4.3 stop condition is unlikely to fire.
+Task 4.4 (effort 3) covers the enum definitions and intent-key constants. It also implements four step behaviors and two crash modes, and adds a rule for handling gaps in the public API. That gap rule can create a separate commit with a contract doc and an expected-exports test. The task is "committed with Task 4.6", which is two tasks later. Task 4.5 is also "committed with Task 4.6". Three tasks, 4.4 to 4.6, therefore share one commit. That commit has only a harness smoke test, which exercises `build_tree` and `AFTER_JOURNAL`. The `launch_review` and `checkpoint` bodies are first exercised in Section 5. Splitting 4.4 would give a smaller commit at the `build_tree`/enums point and a second one for the review/checkpoint/crash steps. Alternatively, move the `checkpoint`, `finish` and `AFTER_SIDE_EFFECT` behaviors into Task 5.x, where the scenario first tests them. That keeps the "test-with" pattern honest. The unit is a test-only module, so this is a CONCERN, not a FAIL.
 
-### [CONCERN] Task 3.1 does not say what the retry rule does to the ledger row and the journal resolve
+### [CONCERN] Task 3.1 defers important design decisions as "stop and ask" branches
 
-- Step 2 runs `_record_verdict_within` with its "retry rule, unchanged". Steps 3 and 4 then write the ledger row and resolve the entry.
-- When the verdict id is already recorded, the helper returns the existing record. The task does not say whether steps 3–4 still run in that case.
-- Validation runs first and refuses an already-resolved entry. A retry of a fully committed report therefore raises `InvalidTransitionError` before it reaches the retry branch.
-- A junior implementer cannot tell which behavior is intended.
-- Task 3.2 (line 231) only asks the test to "state which branch it exercises".
-- **Fix:** add one sentence to 3.1 on the intended outcome in the retry branch, citing the evidence contract's "retry rule". Name the reachable case, for example a verdict already recorded while the entry is still unresolved.
+Task 3.1 leaves several branches for the implementer to resolve by stopping and asking the PM:
+- the ledger writer may refuse a row because the same file is already in the ledger;
+- the meaning of "unknown" in the refusal list;
+- whether inner `_within` functions exist for the journal-resolve and record-detection writers.
 
-### [CONCERN] Task 4.4 gives no path for a public name `ProofRunner` needs that is not exported
+For a junior AI these branches are ambiguous. The retry path may also conflict with ledger uniqueness, so the retry rule in the task may not be implementable as written. The LLD lists "unknown" among refusals, and the task reinterprets it. Settle these questions in the task breakdown by checking the current code, instead of leaving them to execution time. The task text says the `_within` writers exist or need extracting, which shows the code has not been inspected for this.
 
-- `ProofRunner` must use `VerdictInput`, `DetectionInput`, `DetectionOutcome`, `REVIEW_PRODUCING_KINDS`, `parse_review_artifact`, `to_verdict_input`, `journal_*`, and the node API. Each must come from a `PUBLIC_ROOTS` `__all__`.
-- Step 6 only says every `amoeba` import "must pass Task 4.2's rule".
-- Slice design D7 says a missing export is a gap. It is fixed here if the fix is additive, and it stops for the PM otherwise. It must also be recorded for the CHANGELOG.
-- The task doesn't say what to do when the rule fails on a name the Runner genuinely needs. The likely outcomes are an improvised internal import, which defeats the proof, or a silent stall.
-- **Fix:** add a step. Run the rule against `runner_tenant.py` early and list any violation. Apply D7: an additive export lands with its contract doc and a CHANGELOG note, and anything else stops for the PM.
+### [CONCERN] The `HOME`/`DEFAULT_SQ_RUNS_DIR` contract is spread across tasks with no single owner
 
-### [CONCERN] Task 4.4 and 4.5 leave it unspecified how the Runner's per-project paths reach the bootstrap subprocess
+The context summary adds three task-level rules about `HOME`. They are that the proof sets `HOME` for every subprocess, that `ProofRunner` and `ProcessSettings()` derive the runs directory the same way, and that `DEFAULT_SQ_RUNS_DIR` is forbidden by name in tests. Task 4.3 forbids `DEFAULT_SQ_RUNS_DIR` in tests. Task 4.5 then has the bootstrap read `ProcessSettings().sq_runs_dir`. The bootstrap lives under `tests/contract/`, so it is covered by the new scan. It reads the setting, not the forbidden name, so the scan should pass. Task 4.3 has no step that confirms this. Task 4.3 should say so explicitly. Without that, a junior who gets a scan failure in 4.5 has no guidance.
 
-- `ProofRunner` takes "a mapping of project id to reviews directory", plus run-file and review fixture paths.
-- `bootstrap.py` runs as a separate `-m` process, started before step 1 creates the projects.
-- The task doesn't say how the mapping and fixture paths cross the process boundary: argv, env, or a JSON file. It also doesn't say how project ids are known before `create_project`.
-- The two tasks as written leave this to the implementer. The risk is a mismatch between the reviews directory `watch_reviews` registers and the one the Runner writes into. That would silently break the step 4 "same record id" and "no double ingest" assertions.
-- **Fix:** state the transport in 4.5 (for example, one JSON config path in argv, written by the harness). State whether project ids are chosen by the harness or read from the store.
+### [CONCERN] Task 2.5 and Task 3.3 split doc and export updates across tasks beyond what the criteria need
 
-### [NOTE] Tasks 4.4 and 4.5 are large and untested until 4.6
+The H3 export (Task 2.4) is not a committed unit. It is "committed with Task 2.5", which is a docs task. The H1 export in Task 2.3 is committed on its own, with its docs deferred to Task 2.5. The "Integration Requirements" section of the LLD says every public name must appear in the contract doc, so the docs belong with the export. A single commit per export plus its doc would match the stated cadence ("a commit never holds untested behavior"). Task 2.3's commit adds 13 public names that have no doc until a later commit. Merge 2.4 and 2.5 into one task, and either move the H1 doc into Task 2.3 or note why it is deferred. This is a bookkeeping issue, and the content is correct.
 
-- 4.4 and 4.5 are each effort 3 and carry no tests of their own. They are committed together with 4.6, which is a deliberate and consistent use of the "no commit holds untested behavior" rule.
-- 4.6 exercises only `build_tree`, the `AFTER_JOURNAL` crash, a readiness timeout, and a subscriber exception. `launch_review`, `checkpoint`, `finish`, and `AFTER_SIDE_EFFECT` first run in Section 5. That is acceptable, since the scenario is their test.
-- A split of 4.5 into "bootstrap" and "harness waits" would give an earlier green checkpoint. It is optional.
+### [CONCERN] Task 1.2 asks for names to be "read once, then written out", which can leave the test circular
 
-### [NOTE] Task 2.3's docstring assertion may add unplanned edits
+The step says to read the three names from the tenant classes' `name` attributes and then write them literally in the expected tuple. That is correct as a one-time capture. The step does not say to assert that the expected tuple has three entries, in the order the LLD says `amoeba start` registers them. It also gives no instruction about where tick order is defined. The test pins the current order. Add a line that the expected tuple is the order `build_tenants` returns today, taken from the code's return statement and not from sorting or from class discovery. This is a small clarification.
 
-- "Every exported callable/class has a docstring" goes beyond the LLD, which asks for a written-out expected set "in the style of `tests/test_public_api.py`".
-- If the existing test has no such check, this assertion may force docstring edits across `host`, `observers` and the errors modules.
-- Keep it only if `test_public_api.py` already does the same. Otherwise drop it, or say that missing docstrings are added in this task.
+### [NOTE] Coverage of the LLD success criteria in this file
+
+This file correctly covers the Technical Requirements it owns. They are the tenant-order check before and after the move, the D1 import rule (Tasks 4.1–4.2) and the `record_runner_report` refusals including the `run_id` requirement (Tasks 3.1–3.2). It also covers the extended store-safety scan (Task 4.3) and the H4 `updated_at` field with a v5 fixture (Task 2.1). The functional criteria about the scenario, oracles, network subset and pruning belong to file 2, whose headings map to them. The "process/run_pruning.py layering AST test" requirement and the NFR and load-test checks do not apply here. The LLD states no NFR.
+
+### [NOTE] Proportionality of the task set
+
+The file has 16 tasks in four sections. That is heavy but fits a slice of effort 3 that spans hardening, a proof harness and pruning. The two-file split is justified by the section count. I found no test task that goes beyond a success criterion. Task 4.6 tests the harness before the scenario depends on it, which the LLD's fail-loudly requirement justifies.
+
+### [PASS] Sequencing, commit cadence and scope traceability
+
+Each task traces to an LLD item (D1, D3, D7 H1–H4, "Migration Plan", "Special Considerations"). Task 1.2 comes before the move in Task 2.2, as the Migration Plan requires. Task 3.1 depends on Task 2.5, which is stricter than needed. H2 needs no H1 or H3 exports, so the ordering is conservative and not wrong. Tests follow their implementations in Sections 3 and 4. Commits occur in Sections 1, 2, 3 and 4, so none are batched at the end.
 
 ### Run Digest
 
-- Response length: 5888 chars
+- Response length: 7285 chars
 - Response is newline-free: no
-- Tool calls made: 6
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -130,13 +127,13 @@ findings:
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 7
-- Tokens — prompt / cached / cache write / completion / reasoning: 291556 / 187403 / 104145 / 9040 / not computed
-- Duration: 70.8 s
-- Cost: $0.53 (provider)
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 224380 / 182353 / 42021 / 3150 / not computed
+- Duration: 28.1 s
+- Cost: $0.22 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8

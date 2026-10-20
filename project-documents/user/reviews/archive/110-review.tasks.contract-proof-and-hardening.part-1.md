@@ -14,16 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261019
 dateUpdated: 20261019
-reviewedSha: e74eeda4975c66b8d1283514649b5f8c54f3ce03
+reviewedSha: 8b2ccb2b65707e57db31ffabb204419e223e230f
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 8
-turns: 9
-promptTokens: 470480
-cachedTokens: 367293
-cacheWriteTokens: 103175
-completionTokens: 6377
-durationSeconds: 50.8
-costUsd: 0.513893
+toolCallsMade: 6
+turns: 7
+promptTokens: 291556
+cachedTokens: 187403
+cacheWriteTokens: 104145
+completionTokens: 9040
+durationSeconds: 70.8
+costUsd: 0.526407
 costBasis: provider
 runId: run-20261020-p5-002cb7ae
 squadronVersion: 0.23.3
@@ -31,33 +32,33 @@ findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage is complete and traceable"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
+    summary: "File 1 covers its share of the LLD, in a sound order"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:66-360"
   - id: F002
     severity: concern
-    category: sequencing
-    summary: "`-k prune` in the walkthrough will not select the `select_prunable` tests"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:177"
+    category: specification-gap
+    summary: "Task 3.1 does not say what the retry rule does to the ledger row and the journal resolve"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:207-208"
   - id: F003
     severity: concern
-    category: scope
-    summary: "Tasks 2.1–2.3 are too granular"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:90-136"
+    category: specification-gap
+    summary: "Task 4.4 gives no path for a public name `ProofRunner` needs that is not exported"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:316-319"
   - id: F004
-    severity: note
-    category: sizing
-    summary: "`test_lifecycle_proof.py` has no size guard across three tasks"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:75-108"
+    severity: concern
+    category: specification-gap
+    summary: "Task 4.4 and 4.5 leave it unspecified how the Runner's per-project paths reach the bootstrap subprocess"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:315, 335"
   - id: F005
     severity: note
-    category: feasibility
-    summary: "Bootstrap subprocess needs a pinned working directory"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:351"
+    category: task-sizing
+    summary: "Tasks 4.4 and 4.5 are large and untested until 4.6"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:307-360"
   - id: F006
     severity: note
-    category: proportionality
-    summary: "Harness self-tests are justified by the design, though close to the limit"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:362-376"
+    category: scope
+    summary: "Task 2.3's docstring assertion may add unplanned edits"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-1.md:154"
 ---
 
 # Review: tasks — slice 110
@@ -67,54 +68,61 @@ findings:
 
 ## Findings
 
-### [PASS] Success-criteria coverage is complete and traceable
+### [PASS] File 1 covers its share of the LLD, in a sound order
 
-Every Functional and Technical requirement in the slice design maps to a task:
-- **Scenario and oracles:** the D4 scenario, the end-state oracle and the feed-replay oracle are in 5.1–5.5.
-- **Locality (D6):** the D6 checks are in 5.2.
-- **Network subset:** 6.1.
-- **`record_runner_report`:** 3.1–3.3 cover the one-commit property, each refusal and the `run_id` guard.
-- **Tenant order:** 1.2 pins it before the move and 2.4 re-runs it after.
-- **Layering and writer guard:** the pruning layering AST rule is 7.1 (rule 9), and the writer guard is 7.3.
-- **Pruning:** the four-condition and failure-mode tests are 7.2 and 7.4, and step 12 is 7.5.
-- **Store safety:** 4.3.
-- **Docs and validation:** 8.1–8.3 and 9.1.
+- **Coverage:**
+  - Tenant-order pin (1.2) matches the Migration Plan.
+  - H4 (2.1), H1 (2.2, 2.3, 2.5), H3 (2.4, 2.5), and H2 (3.1–3.3) are each covered.
+  - The D1 import rule (4.1, 4.2) and the store-safety extension (4.3) are covered.
+  - `ProofRunner` and the harness (4.4–4.6) are covered, and the D3 step list and crash points are carried into 4.4.
+  - The 13 H1 names in 2.3 match D7.
+- **Order:** the tenant-order test lands before the move and is reused after it. Exports precede their docs. The store-safety extension precedes the new `tests/contract/` code. There are no cycles.
+- **Commits:** checkpoints are spread across all four sections.
+- **Load tests:** the slice states no NFR, so a load-test task and CI wiring are not required.
+- **Store-safety scan:** no existing test references `DEFAULT_SQ_RUNS_DIR` or `DEFAULT_CF_DATA_DIR`, so the 4.3 stop condition is unlikely to fire.
 
-Nothing is scope creep. The task-level additions (`prune_sq_runs` split, `ProofRunner` constructor arguments) are declared as such and justified.
+### [CONCERN] Task 3.1 does not say what the retry rule does to the ledger row and the journal resolve
 
-The slice design restates no NFR, so no load test or CI-gating task is required. Commits are spread across all sections, and each implementation task is followed by its test (3.1→3.2, 4.1→4.2, 7.1→7.2, 7.3→7.4).
+- Step 2 runs `_record_verdict_within` with its "retry rule, unchanged". Steps 3 and 4 then write the ledger row and resolve the entry.
+- When the verdict id is already recorded, the helper returns the existing record. The task does not say whether steps 3–4 still run in that case.
+- Validation runs first and refuses an already-resolved entry. A retry of a fully committed report therefore raises `InvalidTransitionError` before it reaches the retry branch.
+- A junior implementer cannot tell which behavior is intended.
+- Task 3.2 (line 231) only asks the test to "state which branch it exercises".
+- **Fix:** add one sentence to 3.1 on the intended outcome in the retry branch, citing the evidence contract's "retry rule". Name the reachable case, for example a verdict already recorded while the entry is still unresolved.
 
-### [CONCERN] `-k prune` in the walkthrough will not select the `select_prunable` tests
+### [CONCERN] Task 4.4 gives no path for a public name `ProofRunner` needs that is not exported
 
-File 1 (line 46) says pruning tests live in `tests/process/` so the walkthrough's `pytest tests/contract tests/process -k prune` selects them. Task 7.2 names its file `tests/process/test_run_pruning.py`. The substring `prune` does not occur in `pruning` or `prunable`, so `-k prune` skips the whole file unless a test name happens to contain `prune`. Walkthrough step 2 and the LLD claim that these tests are covered would then be false, and Task 9.1 would not notice.
+- `ProofRunner` must use `VerdictInput`, `DetectionInput`, `DetectionOutcome`, `REVIEW_PRODUCING_KINDS`, `parse_review_artifact`, `to_verdict_input`, `journal_*`, and the node API. Each must come from a `PUBLIC_ROOTS` `__all__`.
+- Step 6 only says every `amoeba` import "must pass Task 4.2's rule".
+- Slice design D7 says a missing export is a gap. It is fixed here if the fix is additive, and it stops for the PM otherwise. It must also be recorded for the CHANGELOG.
+- The task doesn't say what to do when the rule fails on a name the Runner genuinely needs. The likely outcomes are an improvised internal import, which defeats the proof, or a silent stall.
+- **Fix:** add a step. Run the rule against `runner_tenant.py` early and list any violation. Apply D7: an additive export lands with its contract doc and a CHANGELOG note, and anything else stops for the PM.
 
-Fix: rename the file to `test_prune_selection.py`, or require `prune` in the test names. Alternatively, have 9.1 confirm that the `-k prune` run includes the selection tests.
+### [CONCERN] Task 4.4 and 4.5 leave it unspecified how the Runner's per-project paths reach the bootstrap subprocess
 
-### [CONCERN] Tasks 2.1–2.3 are too granular
+- `ProofRunner` takes "a mapping of project id to reviews directory", plus run-file and review fixture paths.
+- `bootstrap.py` runs as a separate `-m` process, started before step 1 creates the projects.
+- The task doesn't say how the mapping and fixture paths cross the process boundary: argv, env, or a JSON file. It also doesn't say how project ids are known before `create_project`.
+- The two tasks as written leave this to the implementer. The risk is a mismatch between the reviews directory `watch_reviews` registers and the one the Runner writes into. That would silently break the step 4 "same record id" and "no double ingest" assertions.
+- **Fix:** state the transport in 4.5 (for example, one JSON config path in argv, written by the harness). State whether project ids are chosen by the harness or read from the store.
 
-Tasks 2.1, 2.2 and 2.3 are each effort 1 and share one commit. They cover one fixture file, one field and one test, and none can be verified alone. 2.1's criterion can't be checked without 2.2's parser, and 2.2's criteria need 2.1's fixture.
+### [NOTE] Tasks 4.4 and 4.5 are large and untested until 4.6
 
-Merge them into one task, "Add `updated_at` and the v5 fixture, with tests". The 2.6/2.7 and 8.2/8.3 pairs are similar but smaller, and merging them is optional.
+- 4.4 and 4.5 are each effort 3 and carry no tests of their own. They are committed together with 4.6, which is a deliberate and consistent use of the "no commit holds untested behavior" rule.
+- 4.6 exercises only `build_tree`, the `AFTER_JOURNAL` crash, a readiness timeout, and a subscriber exception. `launch_review`, `checkpoint`, `finish`, and `AFTER_SIDE_EFFECT` first run in Section 5. That is acceptable, since the scenario is their test.
+- A split of 4.5 into "bootstrap" and "harness waits" would give an earlier green checkpoint. It is optional.
 
-### [NOTE] `test_lifecycle_proof.py` has no size guard across three tasks
+### [NOTE] Task 2.3's docstring assertion may add unplanned edits
 
-Tasks 5.4, 5.5 and 7.5 all append to `test_lifecycle_proof.py`. That is 12 steps, the step-specific assertions, both oracle calls and the step-12 subprocess. The other files in this slice carry the ~300-line check, such as `scenario.py` and `runner_tenant.py`, but this one does not.
-
-Add a success criterion to 7.5 saying the driver file stays near 300 lines, with per-step helpers split into a sibling module if needed.
-
-### [NOTE] Bootstrap subprocess needs a pinned working directory
-
-Task 4.5 runs `sys.executable -m tests.contract.bootstrap`. `tests/` has no `__init__.py`, so this only works as a namespace package when the subprocess's cwd is the repo root. The harness also changes `HOME`, but that doesn't affect this. Add "set `cwd` to the repo root" to the harness step so a junior doesn't hit an import error and guess at a fix.
-
-### [NOTE] Harness self-tests are justified by the design, though close to the limit
-
-Task 4.6 tests the harness itself: the readiness timeout message and the subscriber-exception re-raise. These trace to the "harness fails loudly" convention in the slice design's Patterns section, so they stay. No further test tasks beyond the design's criteria were found.
+- "Every exported callable/class has a docstring" goes beyond the LLD, which asks for a written-out expected set "in the style of `tests/test_public_api.py`".
+- If the existing test has no such check, this assertion may force docstring edits across `host`, `observers` and the errors modules.
+- Keep it only if `test_public_api.py` already does the same. Otherwise drop it, or say that missing docstrings are added in this task.
 
 ### Run Digest
 
-- Response length: 4490 chars
+- Response length: 5888 chars
 - Response is newline-free: no
-- Tool calls made: 8
+- Tool calls made: 6
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -122,10 +130,10 @@ Task 4.6 tests the harness itself: the readiness timeout message and the subscri
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 9
-- Tokens — prompt / cached / cache write / completion / reasoning: 470480 / 367293 / 103175 / 6377 / not computed
-- Duration: 50.8 s
-- Cost: $0.51 (provider)
+- Turns: 7
+- Tokens — prompt / cached / cache write / completion / reasoning: 291556 / 187403 / 104145 / 9040 / not computed
+- Duration: 70.8 s
+- Cost: $0.53 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 6
