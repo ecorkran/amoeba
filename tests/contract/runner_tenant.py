@@ -166,8 +166,9 @@ class ProofRunner:
         self, store: Store, project_id: str, crash_at: CrashPoint | None
     ) -> None:
         """Journal, do the stand-in side effect, then report in one transaction."""
-        gate = _only_node(store, project_id, NodeKind.GATE)
-        entry = self._journal_run(store, gate)
+        # On the reviewed node: a verdict's journal entry must be on its own node.
+        slice_node = _only_node(store, project_id, NodeKind.SLICE)
+        entry = self._journal_run(store, slice_node)
         if crash_at is CrashPoint.AFTER_JOURNAL:
             _crash()
 
@@ -252,10 +253,10 @@ class ProofRunner:
             node = _only_node(store, project_id, kind)
             store.update_node_status(node.id, NodeStatus.DONE)
 
-    def _journal_run(self, store: Store, gate: Node) -> JournalEntry:
+    def _journal_run(self, store: Store, node: Node) -> JournalEntry:
         """Command-before-result: the entry commits before any side effect."""
         return store.journal_issue(
-            gate.id,
+            node.id,
             kind=CommandKind.SQ_RUN,
             parameters={"pipeline": STANDIN_PIPELINE, "params": self._run_params()},
         )

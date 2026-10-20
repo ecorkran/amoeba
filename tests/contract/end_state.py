@@ -58,10 +58,10 @@ def _alpha() -> ProjectState:
             node_fact(NodeKind.SLICE, NodeStatus.DONE),
             node_fact(NodeKind.GATE, NodeStatus.DONE),
         ),
-        # Step 5's escalation (resolved in step 6) and step 9's checkpoint
-        # (resolved in step 10): both on the gate, both filled.
+        # Step 5's escalation, on the reviewed slice (resolved in step 6), and
+        # step 9's checkpoint, on the gate (resolved in step 10).
         Category.BLOCKED: counted(
-            blocked_fact(NodeKind.GATE, BlockedKind.HUMAN, True),
+            blocked_fact(NodeKind.SLICE, BlockedKind.HUMAN, True),
             blocked_fact(NodeKind.GATE, BlockedKind.SQ_CHECKPOINT, True),
         ),
         Category.JOURNAL: counted(

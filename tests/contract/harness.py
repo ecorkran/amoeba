@@ -44,6 +44,10 @@ PAYLOAD_BODY = "body"
 PAYLOAD_REVIEWS_DIR = "reviews_dir"
 PAYLOAD_ACTIVE = "active"
 
+#: Where Squadron keeps run files, relative to ``HOME``; the process contract
+#: documents it, and ``ProcessSettings`` derives the same place from ``HOME``.
+SQ_RUNS_RELATIVE_DIR = Path(".config") / "squadron" / "runs"
+
 PM_ACTOR = "proof-pm"
 
 
@@ -71,6 +75,7 @@ class ProofHarness:
         self._tmp_path = tmp_path
         self._review_fixture = review_fixture
         self.home = require_under(tmp_path, tmp_path / "home", "HOME")
+        self.runs_dir = self.home / SQ_RUNS_RELATIVE_DIR
         self.supervisor_dir = require_under(tmp_path, tmp_path / "store", "store")
         self.cf_data_dir = require_under(tmp_path, tmp_path / "cf", "CF data")
         self._logs = tmp_path / "logs"
@@ -82,6 +87,7 @@ class ProofHarness:
         }
         for directory in (
             self.home,
+            self.runs_dir,
             self.cf_data_dir,
             self._logs,
             *self.reviews_dirs.values(),

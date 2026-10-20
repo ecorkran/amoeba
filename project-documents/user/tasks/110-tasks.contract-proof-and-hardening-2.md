@@ -39,14 +39,14 @@ revision_number: 2
 **Objective**: `scenario.py` reads as the sequence a consumer follows (LLD D4).
 
 **Steps**:
-- [ ] `tests/contract/scenario.py`: `STANDIN_RUN_AGE = timedelta(days=365)` (its only definition); the project ids `alpha` and `beta` as constants; an actor enum (PM, Runner, Judge, External, Process)
-- [ ] One frozen record per step 1–12 of the D4 table: number, actor, action, project(s), `ProofStep`/`CrashPoint` where relevant (referenced from `runner_tenant.py`, never spelled), and the change kinds expected on each project's feed afterward (`ChangeKind` members, never literals)
-- [ ] `beta` takes part only in steps 1, 2, and 9
-- [ ] Data only: no driver logic, no I/O
+- [x] `tests/contract/scenario.py`: `STANDIN_RUN_AGE = timedelta(days=365)` (its only definition); the project ids `alpha` and `beta` as constants; an actor enum (PM, Runner, Judge, External, Process)
+- [x] One frozen record per step 1–12 of the D4 table: number, actor, action, project(s), `ProofStep`/`CrashPoint` where relevant (referenced from `runner_tenant.py`, never spelled), and the change kinds expected on each project's feed afterward (`ChangeKind` members, never literals)
+- [x] `beta` takes part only in steps 1, 2, and 9
+- [x] Data only: no driver logic, no I/O
 
 **Success Criteria**:
-- [ ] 12 steps match the D4 table one-to-one; file near 300 lines; public-import rule passes
-- [ ] Committed with Task 5.3
+- [x] 12 steps match the D4 table one-to-one; file near 300 lines; public-import rule passes
+- [x] Committed with Task 5.3
 
 ---
 
@@ -56,15 +56,17 @@ revision_number: 2
 **Effort**: 3
 **Objective**: A missing or extra row fails the proof (LLD D5 "End state", D6).
 
+> The end-state declaration lives in `end_state.py`; detection-ledger facts are keyed by outcome and whether the path is inside the project's reviews directory, because the run ids in the file names are generated.
+
 **Steps**:
-- [ ] `tests/contract/oracle.py`: per project, the declared node statuses; blocked states and their resolutions; journal entries by outcome and resolver; verdicts with trust label and `judge_invocation_id`; detection-ledger outcomes by path; messages by channel and acknowledgment; submission outcomes. Values come from the D4 "Proves" column and the LLD "Functional Requirements"
-- [ ] A compare function that reads each project with `Store.open_read_only(project_store_path(...))` through public reads only and returns a readable diff (missing, extra, mismatched)
-- [ ] D6 checks: the supervisor directory holds exactly `alpha.sqlite3` and `beta.sqlite3`; no alpha reviews-directory path appears in beta's ledger; each project's changes carry only its own project id
-- [ ] If the declaration exceeds ~300 lines, move it to `tests/contract/end_state.py` and keep the compare logic in `oracle.py`
+- [x] `tests/contract/oracle.py`: per project, the declared node statuses; blocked states and their resolutions; journal entries by outcome and resolver; verdicts with trust label and `judge_invocation_id`; detection-ledger outcomes by path; messages by channel and acknowledgment; submission outcomes. Values come from the D4 "Proves" column and the LLD "Functional Requirements"
+- [x] A compare function that reads each project with `Store.open_read_only(project_store_path(...))` through public reads only and returns a readable diff (missing, extra, mismatched)
+- [x] D6 checks: the supervisor directory holds exactly `alpha.sqlite3` and `beta.sqlite3`; no alpha reviews-directory path appears in beta's ledger; each project's changes carry only its own project id
+- [x] If the declaration exceeds ~300 lines, move it to `tests/contract/end_state.py` and keep the compare logic in `oracle.py`
 
 **Success Criteria**:
-- [ ] The compare function returns an empty diff only on an exact match
-- [ ] Committed with Task 5.3
+- [x] The compare function returns an empty diff only on an exact match
+- [x] Committed with Task 5.3
 
 ---
 
@@ -75,12 +77,12 @@ revision_number: 2
 **Objective**: The feed alone rebuilds node state, with no gap (LLD D5 "Feed replay").
 
 **Steps**:
-- [ ] In `oracle.py`: replay a list of `Change`s from `seq` 0 (`node_created` sets a status, `node_status_changed` moves it) into a node-id → status map; a check that `seq` is strictly increasing with no gaps
-- [ ] `tests/contract/test_oracle.py`: hand-built change lists (gap, repeat, out-of-order, correct) and a small temporary store with one extra and one missing row, so each oracle is shown to fail when it should
+- [x] In `oracle.py`: replay a list of `Change`s from `seq` 0 (`node_created` sets a status, `node_status_changed` moves it) into a node-id → status map; a check that `seq` is strictly increasing with no gaps
+- [x] `tests/contract/test_oracle.py`: hand-built change lists (gap, repeat, out-of-order, correct) and a small temporary store with one extra and one missing row, so each oracle is shown to fail when it should
 
 **Success Criteria**:
-- [ ] Oracle tests pass
-- [ ] Committed (5.1–5.3): `test: add the contract scenario and its two oracles`
+- [x] Oracle tests pass
+- [x] Committed (5.1–5.3): `test: add the contract scenario and its two oracles`
 
 ---
 
