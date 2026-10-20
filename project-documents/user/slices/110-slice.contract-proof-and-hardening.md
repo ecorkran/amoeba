@@ -16,7 +16,7 @@ dependencies:
 interfaces: []
 dateCreated: 20261015
 dateUpdated: 20261020
-status: not_started
+status: complete
 turns: 50
 promptTokens: 2427334
 cachedTokens: 2336377
@@ -406,7 +406,7 @@ select_prunable(runs: Iterable[SquadronRun], *, owned: Mapping[str, str],
 
 ### Verification Walkthrough
 
-*Draft, to be confirmed at the end of Phase 6.* Run in **bash** from the repository root. Every path is a scratch directory, and `HOME` is overridden only for the commands that need it.
+*Confirmed 20261020 at the end of Phase 6.* Run in **bash** from the repository root. The proof builds its own scratch directories under pytest's `tmp_path` (including a scratch `HOME` and a scratch supervisor directory) and passes each to its subprocesses explicitly, so nothing below touches the real home, the real Squadron runs directory, or the real supervisor directory. The `export` is a belt-and-braces default for any command you add yourself; the tests do not read it.
 
 ```bash
 export AMOEBA_STORE_DIR="$(mktemp -d)"
@@ -416,15 +416,21 @@ export AMOEBA_STORE_DIR="$(mktemp -d)"
    ```bash
    uv run pytest tests/contract -v
    ```
-   `test_lifecycle_proof.py` and `test_network_subset.py` pass, as does `test_public_api_rule.py`. These cover locality (D6), `kill -9` of each process, and `Last-Event-ID` resume, so none of that is repeated by hand. On failure, the test prints the step number and the oracle's diff.
+   Expected: `47 passed` in about 15 seconds. The two long tests are `test_lifecycle_proof.py::test_the_lifecycle_proof` (all twelve steps, both oracles, and step 12's pruning) and `test_network_subset.py::test_the_network_path_survives_a_kill_of_each_process`; the rest are `test_harness.py`, `test_oracle.py`, and `test_public_api_rule.py`. These cover locality (D6), `kill -9` of each process, and `Last-Event-ID` resume, so none of that is repeated by hand. On failure, the test names the step number and prints the oracle's diff, or every subprocess's captured stdout and stderr.
 
 2. **Pruning.**
    ```bash
    uv run pytest tests/contract tests/process -k prune -v
    ```
-   Scenario step 12 passes: the preview selects only alpha's checkpoint run, and `--yes` with the stub `sq` leaves only that run's file gone. The `select_prunable` tests cover each of D8's conditions. The stub-`sq` failure tests (`sq` missing, failing, timing out, or refusing) exit `PRUNE_INCOMPLETE` and delete nothing.
+   Expected: `19 passed, 132 deselected`. Ten are the `select_prunable` tests (`test_prune_selection.py`): each of D8's four conditions failing alone, a missing `updated_at`, a held node, and the retention boundary. Nine are the stub-`sq` tests (`test_prune_sq_runs.py`): preview never calls `sq`; success; an already-gone run counts as removed; `sq` refusing a live run, failing, timing out, or missing each exit `PRUNE_INCOMPLETE` and delete nothing; an unreadable store refuses before `sq` is called; an unparseable run file is never chosen. **Scenario step 12 is not selected by `-k prune`**: it runs inside `test_the_lifecycle_proof`, so step 1 covers it (the preview names exactly alpha's checkpoint run and reports one owned paused run kept; `--yes` with the stub `sq` leaves only that run's file gone).
 
-3. **The guide.** Open `docs/substrate-guide.md`. Each row of the initiative table links to a contract section and a scenario step.
+3. **The guide.** Open `docs/substrate-guide.md`. Each row of the initiative table links to a contract section and a scenario step. All 60 links in the guide, files and heading anchors, were checked by script at the end of Phase 6 and resolved.
+
+4. **The whole suite.**
+   ```bash
+   uv run pytest -q && uv run ruff check . && uv run pyright
+   ```
+   Expected at the end of Phase 6: every test passes, and `ruff` and `pyright` (strict) are clean.
 
 Clean up with `rm -rf "$AMOEBA_STORE_DIR"`.
 

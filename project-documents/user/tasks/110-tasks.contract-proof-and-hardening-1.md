@@ -20,7 +20,7 @@ projectState: Slices 101–109 are merged (store schema 8; `amoeba serve`; `amoe
   no `record_runner_report`, no `tests/contract/`, no pruning command.
 dateCreated: 20261019
 dateUpdated: 20261020
-status: not_started
+status: complete
 revision_number: 2
 ---
 
@@ -289,7 +289,7 @@ revision_number: 2
 **Steps**:
 - [x] Add `DEFAULT_SQ_RUNS_DIR` and `DEFAULT_CF_DATA_DIR` to `FORBIDDEN_PATH_NAMES` in `tests/test_store_safety.py`; update its comment
 - [x] If an existing test now fails the scan, list it and stop for the PM (do not exempt it silently)
-- [ ] Note for Task 4.5: the bootstrap lives under `tests/contract/` and is scanned too. It reads `ProcessSettings().sq_runs_dir`, never the forbidden name `DEFAULT_SQ_RUNS_DIR`, so it passes. The `HOME` contract is owned here: the harness (4.5) sets `HOME` for every subprocess and asserts it is under `tmp_path`; the scan forbids the names; nothing else restates it
+- [x] Note for Task 4.5: the bootstrap lives under `tests/contract/` and is scanned too. It reads `ProcessSettings().sq_runs_dir`, never the forbidden name `DEFAULT_SQ_RUNS_DIR`, so it passes. The `HOME` contract is owned here: the harness (4.5) sets `HOME` for every subprocess and asserts it is under `tmp_path`; the scan forbids the names; nothing else restates it
 
 **Success Criteria**:
 - [x] Scan passes; `tests/contract/` is covered (it is under `tests/`)

@@ -18,7 +18,7 @@ projectState: File 1 complete — H1–H4 landed (`standard_tenants`, `amoeba.pr
   `tests/contract/` has the public-import rule, `ProofRunner`, and the bootstrap harness.
 dateCreated: 20261019
 dateUpdated: 20261020
-status: not_started
+status: complete
 revision_number: 2
 ---
 
@@ -154,15 +154,17 @@ revision_number: 2
 **Effort**: 2
 **Objective**: Remote submission and SSE delivery survive a server crash (LLD D2, "Data Flow" network).
 
+> `amoeba serve` is started with an explicit loopback port picked by binding port 0 first; the `tests/contract/harness` tracks every subprocess so a failure reports serve output too.
+
 **Steps**:
-- [ ] `tests/contract/test_network_subset.py`: start the bootstrap, then `amoeba serve` as `sys.executable -m amoeba.cli.main serve` on loopback with a free port (no token; see `docs/network-contract.md`); follow alpha's SSE feed with httpx. Reuse `tests/serve_harness.py`'s `sse_events` parser
-- [ ] POST an intent, poll `GET …/submissions/{id}` until `applied`, receive `message_posted` over SSE
-- [ ] `kill -9` serve; a POST raises a connection error; restart serve; reconnect with `Last-Event-ID` = last seq received
-- [ ] The follower reconnects only at planned points; any other drop fails the test
+- [x] `tests/contract/test_network_subset.py`: start the bootstrap, then `amoeba serve` as `sys.executable -m amoeba.cli.main serve` on loopback with a free port (no token; see `docs/network-contract.md`); follow alpha's SSE feed with httpx. Reuse `tests/serve_harness.py`'s `sse_events` parser
+- [x] POST an intent, poll `GET …/submissions/{id}` until `applied`, receive `message_posted` over SSE
+- [x] `kill -9` serve; a POST raises a connection error; restart serve; reconnect with `Last-Event-ID` = last seq received
+- [x] The follower reconnects only at planned points; any other drop fails the test
 
 **Success Criteria**:
-- [ ] Test passes in the default suite; public-import rule passes
-- [ ] Committed: `test: prove the network path across a kill of amoeba serve`
+- [x] Test passes in the default suite; public-import rule passes
+- [x] Committed: `test: prove the network path across a kill of amoeba serve`
 
 ---
 
@@ -173,12 +175,12 @@ revision_number: 2
 **Objective**: A POST made while the resident process is down is accepted and delivered (LLD D2).
 
 **Steps**:
-- [ ] In the same test, after Task 6.1's steps: `kill -9` the resident process; POST an intent → 202; restart it; SSE delivers it with no reconnect
-- [ ] End: the SSE `seq` list equals a local `follow(after=0)` list
+- [x] In the same test, after Task 6.1's steps: `kill -9` the resident process; POST an intent → 202; restart it; SSE delivers it with no reconnect
+- [x] End: the SSE `seq` list equals a local `follow(after=0)` list
 
 **Success Criteria**:
-- [ ] Test passes in the default suite; no gap and no repeat in the SSE `seq` list
-- [ ] Committed: `test: prove the network path across a kill of the resident process`
+- [x] Test passes in the default suite; no gap and no repeat in the SSE `seq` list
+- [x] Committed: `test: prove the network path across a kill of the resident process`
 
 ---
 
@@ -191,14 +193,14 @@ revision_number: 2
 **Objective**: The pure selection rule (LLD D8 "Which runs", "API Contracts").
 
 **Steps**:
-- [ ] `src/amoeba/process/run_pruning.py`: `PRUNE_RETENTION = timedelta(days=7)`, `SQ_PRUNE_TIMEOUT_SECONDS = 30.0` (only definitions), and `select_prunable(runs, *, owned, held, now)` returning runs meeting all four D8 conditions
-- [ ] A run with `updated_at is None` is never returned. The paused status is compared through one constant, not a scattered literal
-- [ ] Imports only `process/observers/sq_runs` and the standard library
-- [ ] Add rule 9 to `tests/test_import_boundaries.py`: `run_pruning.py` imports nothing but those (AST)
+- [x] `src/amoeba/process/run_pruning.py`: `PRUNE_RETENTION = timedelta(days=7)`, `SQ_PRUNE_TIMEOUT_SECONDS = 30.0` (only definitions), and `select_prunable(runs, *, owned, held, now)` returning runs meeting all four D8 conditions
+- [x] A run with `updated_at is None` is never returned. The paused status is compared through one constant, not a scattered literal
+- [x] Imports only `process/observers/sq_runs` and the standard library
+- [x] Add rule 9 to `tests/test_import_boundaries.py`: `run_pruning.py` imports nothing but those (AST)
 
 **Success Criteria**:
-- [ ] Pure: no I/O, no clock read (`now` is a parameter)
-- [ ] Committed with Task 7.2
+- [x] Pure: no I/O, no clock read (`now` is a parameter)
+- [x] Committed with Task 7.2
 
 ---
 
@@ -209,11 +211,11 @@ revision_number: 2
 **Objective**: Each condition is proven (LLD "Functional Requirements").
 
 **Steps**:
-- [ ] `tests/process/test_prune_selection.py` (the name must contain `prune` so the walkthrough's `-k prune` selects it; imports `PRUNE_RETENTION` directly): a run meeting all four is selected; each condition failing alone excludes it; missing `updated_at` excludes it; a resumed-but-not-done node (its id in `held`) excludes it; exactly at the retention boundary is selected
+- [x] `tests/process/test_prune_selection.py` (the name must contain `prune` so the walkthrough's `-k prune` selects it; imports `PRUNE_RETENTION` directly): a run meeting all four is selected; each condition failing alone excludes it; missing `updated_at` excludes it; a resumed-but-not-done node (its id in `held`) excludes it; exactly at the retention boundary is selected
 
 **Success Criteria**:
-- [ ] Tests pass; rule 9 passes and fails on a `tmp_path` source importing `amoeba.store`
-- [ ] Committed (7.1–7.2): `feat(process): add the paused-run selection rule`
+- [x] Tests pass; rule 9 passes and fails on a `tmp_path` source importing `amoeba.store`
+- [x] Committed (7.1–7.2): `feat(process): add the paused-run selection rule`
 
 ---
 
@@ -224,15 +226,15 @@ revision_number: 2
 **Objective**: Preview by default, delete through `sq` with `--yes` (LLD D8, "Data Flow" pruning, "API Contracts" CLI).
 
 **Steps**:
-- [ ] Add `ExitCode.PRUNE_INCOMPLETE = 14` in `cli/main.py` with its comment; register `add_prune_parser` there
-- [ ] `src/amoeba/cli/prune.py`: `add_prune_parser`, `run_prune`, and `prune_sq_runs` (task-level addition, file 1). Follow the LLD "Data Flow" pruning block step by step: read-only opens only; any unreadable store refuses before `sq` (existing store-error exit mapping); unparseable run file → WARNING naming it; preview prints candidates (`run_id, pipeline, updated_at, owning project`) and the kept count
-- [ ] `--yes`: select afresh, run `sq runs prune <ids…> --yes` once with `stdin=DEVNULL` and the timeout; catch `FileNotFoundError` (sq missing) and `TimeoutExpired` as incomplete, each with a comment; re-read the runs directory; print any candidate still present with sq's exit status and stderr
-- [ ] Never unlink a file. Exit `OK` if every candidate is gone or none existed, else `PRUNE_INCOMPLETE`
+- [x] Add `ExitCode.PRUNE_INCOMPLETE = 14` in `cli/main.py` with its comment; register `add_prune_parser` there
+- [x] `src/amoeba/cli/prune.py`: `add_prune_parser`, `run_prune`, and `prune_sq_runs` (task-level addition, file 1). Follow the LLD "Data Flow" pruning block step by step: read-only opens only; any unreadable store refuses before `sq` (existing store-error exit mapping); unparseable run file → WARNING naming it; preview prints candidates (`run_id, pipeline, updated_at, owning project`) and the kept count
+- [x] `--yes`: select afresh, run `sq runs prune <ids…> --yes` once with `stdin=DEVNULL` and the timeout; catch `FileNotFoundError` (sq missing) and `TimeoutExpired` as incomplete, each with a comment; re-read the runs directory; print any candidate still present with sq's exit status and stderr
+- [x] Never unlink a file. Exit `OK` if every candidate is gone or none existed, else `PRUNE_INCOMPLETE`
 
 **Success Criteria**:
-- [ ] `cli/prune.py` uses `Store.open_read_only` only; `test_writer_guard.py` passes unchanged
-- [ ] `uv run amoeba prune sq-runs --help` works
-- [ ] Committed with Task 7.4
+- [x] `cli/prune.py` uses `Store.open_read_only` only; `test_writer_guard.py` passes unchanged
+- [x] `uv run amoeba prune sq-runs --help` works
+- [x] Committed with Task 7.4
 
 ---
 
@@ -242,15 +244,17 @@ revision_number: 2
 **Effort**: 2
 **Objective**: Every failure leaves files and exits `PRUNE_INCOMPLETE` (LLD D8, "Functional Requirements").
 
+> The stub has a fifth mode, `delete_then_exit_one`, to model sq removing the files but exiting 1 because one was already gone.
+
 **Steps**:
-- [ ] `tests/sq_stub.py`: one function that writes a stub `sq` script (shebang `sys.executable`) into a given `bin` directory and returns that directory, for tests to put first on `PATH`. Task 7.5 reuses it; it is its only definition. Modes chosen by an env var: delete the named files under `$HOME/.config/squadron/runs`; exit 1 for an already-gone file; refuse one id as live (exit 1, file kept); fail (exit 1, nothing deleted); sleep past the timeout
-- [ ] `tests/process/test_prune_sq_runs.py`, calling `prune_sq_runs` with `tmp_path` dirs and a short timeout: success; already-gone counts as removed; refused live run; failure; timeout; `sq` missing from `PATH` — each failure exits `PRUNE_INCOMPLETE`, prints the remaining candidates, and no file is deleted by Amoeba
-- [ ] An unreadable project store refuses before the stub is called (stub records invocations to a file)
-- [ ] Preview never calls the stub
+- [x] `tests/sq_stub.py`: one function that writes a stub `sq` script (shebang `sys.executable`) into a given `bin` directory and returns that directory, for tests to put first on `PATH`. Task 7.5 reuses it; it is its only definition. Modes chosen by an env var: delete the named files under `$HOME/.config/squadron/runs`; exit 1 for an already-gone file; refuse one id as live (exit 1, file kept); fail (exit 1, nothing deleted); sleep past the timeout
+- [x] `tests/process/test_prune_sq_runs.py`, calling `prune_sq_runs` with `tmp_path` dirs and a short timeout: success; already-gone counts as removed; refused live run; failure; timeout; `sq` missing from `PATH` — each failure exits `PRUNE_INCOMPLETE`, prints the remaining candidates, and no file is deleted by Amoeba
+- [x] An unreadable project store refuses before the stub is called (stub records invocations to a file)
+- [x] Preview never calls the stub
 
 **Success Criteria**:
-- [ ] Tests pass; no test touches the real `HOME`
-- [ ] Committed (7.3–7.4): `feat(cli): add amoeba prune sq-runs`
+- [x] Tests pass; no test touches the real `HOME`
+- [x] Committed (7.3–7.4): `feat(cli): add amoeba prune sq-runs`
 
 ---
 
@@ -261,13 +265,13 @@ revision_number: 2
 **Objective**: Pruning against the proof's real end state (LLD D4 step 12).
 
 **Steps**:
-- [ ] At the end of `test_lifecycle_proof.py`, run `sys.executable -m amoeba.cli.main prune sq-runs` as a subprocess with the harness env and `tests/sq_stub.py`'s stub (delete mode) first on `PATH`
-- [ ] Preview: exactly alpha's checkpoint run is a candidate; the kept count is 1 (beta's)
-- [ ] `--yes`: only alpha's checkpoint run file is gone; beta's and step 7's remain; exit `OK`. Assert on selection, never on the retention value
+- [x] At the end of `test_lifecycle_proof.py`, run `sys.executable -m amoeba.cli.main prune sq-runs` as a subprocess with the harness env and `tests/sq_stub.py`'s stub (delete mode) first on `PATH`
+- [x] Preview: exactly alpha's checkpoint run is a candidate; the kept count is 1 (beta's)
+- [x] `--yes`: only alpha's checkpoint run file is gone; beta's and step 7's remain; exit `OK`. Assert on selection, never on the retention value
 
 **Success Criteria**:
-- [ ] Full proof passes including step 12
-- [ ] Committed: `test: add pruning as contract proof step 12`
+- [x] Full proof passes including step 12
+- [x] Committed: `test: add pruning as contract proof step 12`
 
 ---
 
@@ -279,14 +283,16 @@ revision_number: 2
 **Effort**: 2
 **Objective**: Consumers know what pruning does and what 120 must do (LLD D8, "Integration Requirements").
 
+> One line in `store-contract.md` Future work still contains "102-110" (the PM-recorded storage-engine reversal trigger, a window of slices to judge by). It is not a pointer to slice 110 work, is the PM's text, and was left unchanged; the literal `grep -A8` criterion therefore still prints it.
+
 **Steps**:
-- [ ] `docs/process-contract.md`: replace the Future-work line "Pruning Squadron's paused runs — slice 110" with a "Pruning paused runs" section: the four conditions, preview vs `--yes`, Squadron deletes, the observed-result rule, the two narrow windows and the 120 requirement on a missing-run resume (D8 "`--yes` always selects afresh")
-- [ ] Beside "The two shipped observers", add the ownership guarantee line (D8): an `sq_run` issuer must include `run_id` in `result`
-- [ ] Add `14 PRUNE_INCOMPLETE` to the exit-code table
+- [x] `docs/process-contract.md`: replace the Future-work line "Pruning Squadron's paused runs — slice 110" with a "Pruning paused runs" section: the four conditions, preview vs `--yes`, Squadron deletes, the observed-result rule, the two narrow windows and the 120 requirement on a missing-run resume (D8 "`--yes` always selects afresh")
+- [x] Beside "The two shipped observers", add the ownership guarantee line (D8): an `sq_run` issuer must include `run_id` in `result`
+- [x] Add `14 PRUNE_INCOMPLETE` to the exit-code table
 
 **Success Criteria**:
-- [ ] No Future-work line pointing at slice 110 remains in any contract doc: `grep -n "Future work" -A8 docs/*-contract.md` shows no "110" in those sections, and `grep -n "or 110" docs/*-contract.md` returns nothing. Historical mentions elsewhere (e.g. `docs/network-contract.md:14`, "slice 110's end-to-end proof can use the store…") are accurate and stay; the substrate guide may name the slice
-- [ ] Committed: `docs: document paused-run pruning in the process contract`
+- [x] No Future-work line pointing at slice 110 remains in any contract doc: `grep -n "Future work" -A8 docs/*-contract.md` shows no "110" in those sections, and `grep -n "or 110" docs/*-contract.md` returns nothing. Historical mentions elsewhere (e.g. `docs/network-contract.md:14`, "slice 110's end-to-end proof can use the store…") are accurate and stay; the substrate guide may name the slice
+- [x] Committed: `docs: document paused-run pruning in the process contract`
 
 ---
 
@@ -297,12 +303,12 @@ revision_number: 2
 **Objective**: The entry point for initiatives 120, 140, 160 (LLD D9).
 
 **Steps**:
-- [ ] Frontmatter per `file-naming-conventions.md`
-- [ ] Every D9 bullet: the initiative table (120, 140, 160, notification bridge) with contract-section and scenario-step links, the 120 row citing the ownership line; the D4 sequence as prose linking `tests/contract/scenario.py`; the public import roots; the "Store locality" link; the intent-body note (D3); links to the known limits and to this slice's `CHANGELOG.md` entry, without restating them
+- [x] Frontmatter per `file-naming-conventions.md`
+- [x] Every D9 bullet: the initiative table (120, 140, 160, notification bridge) with contract-section and scenario-step links, the 120 row citing the ownership line; the D4 sequence as prose linking `tests/contract/scenario.py`; the public import roots; the "Store locality" link; the intent-body note (D3); links to the known limits and to this slice's `CHANGELOG.md` entry, without restating them
 
 **Success Criteria**:
-- [ ] Every table row has a contract link and a scenario-step link; every link resolves
-- [ ] Committed with Task 8.3
+- [x] Every table row has a contract link and a scenario-step link; every link resolves
+- [x] Committed with Task 8.3
 
 ---
 
@@ -313,11 +319,11 @@ revision_number: 2
 **Objective**: One entry for the slice, listing every gap once (LLD D7).
 
 **Steps**:
-- [ ] Under `[Unreleased]`, concise "Slice 110" lines: H1–H4, `record_runner_report`, `amoeba prune sq-runs` and exit code 14, the contract proof, the substrate guide, and each gap from "Gaps Found" with how it went
+- [x] Under `[Unreleased]`, concise "Slice 110" lines: H1–H4, `record_runner_report`, `amoeba prune sq-runs` and exit code 14, the contract proof, the substrate guide, and each gap from "Gaps Found" with how it went
 
 **Success Criteria**:
-- [ ] Every gap appears exactly once; the substrate guide's link reaches this entry
-- [ ] Committed (8.2–8.3): `docs: add the substrate guide and slice 110 changelog`
+- [x] Every gap appears exactly once; the substrate guide's link reaches this entry
+- [x] Committed (8.2–8.3): `docs: add the substrate guide and slice 110 changelog`
 
 ---
 
@@ -330,14 +336,14 @@ revision_number: 2
 **Objective**: The slice meets the LLD "Success Criteria".
 
 **Steps**:
-- [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each
-- [ ] Run the LLD "Verification Walkthrough" steps 1–3 as written, in bash, with a scratch `AMOEBA_STORE_DIR`. Record any difference from the draft and correct the walkthrough in the LLD. Known difference: step 12 runs inside `test_lifecycle_proof.py`, so walkthrough step 2's `-k prune` does not select it; reword step 2 to say step 12 is covered by step 1
-- [ ] Check off each LLD "Success Criteria" item against a test or doc; list any not met and stop for the PM
-- [ ] Every name added to a public `__all__` appears in its contract doc (review check)
+- [x] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each
+- [x] Run the LLD "Verification Walkthrough" steps 1–3 as written, in bash, with a scratch `AMOEBA_STORE_DIR`. Record any difference from the draft and correct the walkthrough in the LLD. Known difference: step 12 runs inside `test_lifecycle_proof.py`, so walkthrough step 2's `-k prune` does not select it; reword step 2 to say step 12 is covered by step 1
+- [x] Check off each LLD "Success Criteria" item against a test or doc; list any not met and stop for the PM
+- [x] Every name added to a public `__all__` appears in its contract doc (review check)
 
 **Success Criteria**:
-- [ ] Suite, `ruff`, `pyright` clean; walkthrough confirmed
-- [ ] Committed on the slice branch: `docs: confirm the slice 110 verification walkthrough`
+- [x] Suite, `ruff`, `pyright` clean; walkthrough confirmed
+- [x] Committed on the slice branch: `docs: confirm the slice 110 verification walkthrough`
 
 ---
 
