@@ -94,7 +94,7 @@ At completion, the Runner is one tenant, ticking last in the resident process, t
   - **handled:** the PM dealt with the run themselves (an interactive resume, or work by hand). The Runner re-observes the run and routes whatever it finds.
   - **stop:** the node stops being driven.
 
-  A non-interactive resume can neither accept a paused outcome nor carry a decision or instructions (sq-cf, 20261020). Those wait for dependency S12, so in v1 "accept this and move on" is the PM's interactive step, reported back as handled.
+  A non-interactive resume can neither accept a paused outcome nor carry a decision or instructions. That is a pinned Squadron contract: resuming an exhausted loop is exactly one more round (Squadron ce0ddf55). Those wait for dependency S12, so in v1 "accept this and move on" is the PM's interactive step, reported back as handled.
 - **An escalated completed outcome:**
   - **accept:** advance.
   - **rerun:** a fresh run of the step.
@@ -160,6 +160,6 @@ After the first proof:
 - Initiative plan: `user/project-guides/001-initiative-plan.amoeba.md`: initiative 120 scope; 140, 160, and 180 depend on this component.
 - Foundation: `user/architecture/100-arch.substrate-run-state-store.md` and `100-slices.substrate-run-state-store.md`.
 - Contracts the Runner codes against: `docs/substrate-guide.md` (start here; the 120 row and "Four things a Runner author does"), `docs/process-contract.md` (hosting tenants, the tenant obligation, observers, pruning and the missing-resume rule), `docs/store-contract.md` (node writes, blocked-state writes, the Runner queries, the command journal), `docs/evidence-contract.md` (the attribution rule, D5, standing, checks), `docs/inbox-contract.md` (intent and resolution), `docs/context-forge-contract.md` (snapshots, D8), `docs/feed-contract.md`. The stand-in Runner in `tests/contract/` is the working reference.
-- Upstream ground truth: `user/notes/002-upstream-delta.amoeba.md` (September grounding; the Current State above supersedes it where they differ) and the dependency register `user/notes/001-squadron-dependencies.amoeba.md` (S1 tier, S8 review-completed event, S9 run id, S10 machine-readable run outcome, S11 a `merge` param on code pipelines).
+- Upstream ground truth: `user/notes/002-upstream-delta.amoeba.md` (September grounding; the Current State above supersedes it where they differ) and the dependency register `user/notes/001-squadron-dependencies.amoeba.md` (S1 tier, S8 review-completed event, S9 run id, S10 machine-readable run outcome, S11 a `merge` param on code pipelines, S12 a decision and instructions on a plain resume).
 - Squadron: `data/pipelines/` (P4, P5, P6, `slices-plan`, judge-cycle, findings-addressed-cycle), `pipeline/run_wait.py` (`sq runs wait`, the outcome contract), `pipeline/batch_report.py` (per-item batch outcomes), `pipeline/executor.py` (non-interactive checkpoint).
 - Context Forge: `docs/REVIEW-GATING.md`; `core/src/introspection/types.ts` (`activeSlice.status`, `gateInfo`, `pendingDecisions`).
