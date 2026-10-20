@@ -114,7 +114,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    **Risk Level:** Medium
    **Relative Effort:** 4
 
-7. [ ] **(126) Routing Engine** — The routing table as static config, loaded at start and never mutated. Rules are ordered and conditioned on named closed inputs: run outcome, checkpoint kind and `is_loop`, failure kind, verdict, standing, recurrence, gate state, check standing, attempt count, node kind and step. Unknown values match only rules that name unknown, and the table must end in a catch-all escalate. The routes are advance, rerun (bounded by an attempt limit per node and step, and only for a completed run) and escalate (with a judge-eligible mark for 140). Every application writes a decision record holding the inputs, rule id, table version, Amoeba version and route. Each table version is stored in full the first time a decision uses it. The first table escalates every pause. Outcomes to route come from 125's `unrouted_outcomes`. The table also holds the per-pipeline time bound, moved here from 125 (slice 125, D12).
+7. [ ] **(126) Routing Engine** — The routing table as static config, loaded at start and never mutated. Rules are ordered and conditioned on named closed inputs: run outcome, checkpoint kind and `is_loop`, failure kind, verdict, standing, finding severity, recurrence, attempt count, step and node state. Gate state and check standing join when 128 registers them (slice 126, D1, D3). Unknown values match only rules that name unknown, and the table must end in a catch-all escalate. The routes are advance, rerun (bounded by an attempt limit per node and step, and only for a completed run) and escalate (with a judge-eligible mark for 140). Every application writes a decision record holding the inputs, rule id, table version, Amoeba version and route. Each table version is stored in full the first time a decision uses it. The first table escalates every pause. Outcomes to route come from 125's `unrouted_outcomes`. The table also holds the per-pipeline time bound, moved here from 125 (slice 125, D12).
    **Value:** Developer value. Every outcome gets an explained route, and "build by inducing failure" becomes a table edit.
    **Success Criteria:**
    - Any recorded decision can be recomputed from its record and its stored table version alone.
@@ -124,7 +124,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - No route is chosen in code outside the table. Code defines only inputs and predicates.
    - A run in flight past its pipeline's time bound escalates, without being killed.
    **Dependencies:** [121, 125]
-   **Interfaces:** Provides decision records to 127–129 and the judge-eligible mark to 140. Defines the table file format and whether projects may override it (open for slice design).
+   **Interfaces:** Provides decision records to 127–129 and the judge-eligible mark to 140. Defines the table file format: YAML, one table for every project (slice 126, D2).
    **Risk Level:** Medium. The grammar is hard to change once tables exist.
    **Relative Effort:** 3
 
@@ -150,7 +150,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - Under auto policy, P6 is dispatched without `merge=false`. The policy used is recorded on the dispatch decision.
    - `pending-decision` produces a human step, and a gate CF clears on an untrusted verdict is not treated as passed.
    **Dependencies:** [125, 126]
-   **Interfaces:** Provides Tier-1 predicates to the routing inputs. Consumes 107's check records, S11 and CF's gate fields.
+   **Interfaces:** Provides Tier-1 predicates to the routing inputs, registering `gate_state` and `check_standing` in 126's input vocabulary (slice 126, D3). Consumes 107's check records, S11 and CF's gate fields.
    **Risk Level:** Medium
    **Relative Effort:** 3
 
@@ -206,3 +206,4 @@ Living backlog; entries may be added during slice design, task breakdown, or imp
 7. [ ] **Feed change for project-escalation closure** — From 121's design: a project-scoped escalation's opening reaches the feed as `message_posted`, but its closure is a column update and emits nothing. Add a closure change kind (new `ChangeKind`, trigger, invariant-test step) once a subscriber such as the notification bridge needs to clear a shown fault. Dependencies: [121]. Effort: 1/5
 8. [ ] **Mark a step done** — From 123's design: a slice already partly done by hand gets all its steps runnable, because the Runner infers no partial progress. Add an intent or resolution that marks a step done, if driving such slices turns out to be common. Dependencies: [123, 124]. Effort: 1/5
 9. [ ] **CF asks: `indexSource` and a no-plan error code** — From 123's design: `cf list slices --json` does not expose `indexSource`, so CF's fallback counters cannot be told from explicit indexes. CF also reports "no slice plan" as `code: UNKNOWN`. Ask CF for both. Dependencies: none. Effort: 1/5
+10. [ ] **Per-project routing tables** — From 126's design: one table serves every project in v1. Let a project override it once the first proof or a second project shows different rules are needed. Each decision already records its table version. Dependencies: [129]. Effort: 2/5
