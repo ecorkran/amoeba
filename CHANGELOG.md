@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 110: the contract proof, `tests/contract/` — a 12-step lifecycle across two projects with real processes, `kill -9` crash windows, an end-state oracle and a feed-replay oracle, plus a network subset that survives a `kill -9` of `amoeba serve` and of the resident process. Every import in it is checked to be a public export.
+- Slice 110: `amoeba.process` exports the tenant-hosting contract (`ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, and the four process errors). `build_tenants` moved from `cli/lifecycle` to `process/tenants` as `standard_tenants`, with no behavior change.
+- Slice 110: `Store.record_runner_report`, which records a launched review's verdict, its `runner_issued` ledger row, and the resolved journal entry in one transaction; `store_dir` and `project_store_path` exported from `amoeba.store`; `SquadronRun.updated_at` and a schema-v5 run fixture.
+- Slice 110: `amoeba prune sq-runs [--yes]` previews the paused Squadron runs Amoeba owns that no unfinished node names, and with `--yes` deletes them through `sq runs prune`; exit code 14 `PRUNE_INCOMPLETE`. `process-contract.md` gains "Pruning paused runs" and the ownership guarantee (an `sq_run` issuer records `run_id` in its result).
+- Slice 110: `docs/substrate-guide.md`, the entry point for initiatives 120, 140, 160 and the notification bridge.
+- Slice 110, gap G1 (additive, fixed by documentation): `evidence-contract.md` did not say how a Runner builds the `runner_issued` ledger row's key (the file's path and the sha256 digest of its bytes) or that a verdict's journal entry must be on the verdict's own node. It does now.
+
 - Slice 109: `amoeba serve` (Starlette + uvicorn), a second foreground process: `GET /v1/listings/{name}` over the one listing registry, `POST`/`GET` submissions through `submit()` with a required id, and an SSE feed per project resumable by `Last-Event-ID` or `?after=`; contract in `docs/network-contract.md`.
 - Slice 109: bind policy (loopback, or a bearer token from `AMOEBA_SERVE_TOKEN` plus TLS), Origin/Host/content-type guards, one `ApiErrorCode` vocabulary, stream slots (`max_streams`), heartbeats, and a per-send timeout; exit code 13 `SERVE_REFUSED`.
 - Slice 109: `Store.read_transaction()` and `change_head()`; every project read reports `as_of_seq` from one snapshot ("current state, then follow").
