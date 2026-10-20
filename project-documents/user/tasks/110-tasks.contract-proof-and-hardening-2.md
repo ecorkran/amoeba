@@ -3,11 +3,23 @@ docType: tasks
 slice: contract-proof-and-hardening
 project: amoeba
 lld: user/slices/110-slice.contract-proof-and-hardening.md
-dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
-projectState: File 1 complete — H1–H4 landed (`standard_tenants`, `amoeba.process.__all__`, `store_dir`/`project_store_path` exports, `record_runner_report`, `SquadronRun.updated_at`); `tests/contract/` has the public-import rule, `ProofRunner`, and the bootstrap harness.
+dependencies:
+- 101
+- 102
+- 103
+- 104
+- 105
+- 106
+- 107
+- 108
+- 109
+projectState: File 1 complete — H1–H4 landed (`standard_tenants`, `amoeba.process.__all__`,
+  `store_dir`/`project_store_path` exports, `record_runner_report`, `SquadronRun.updated_at`);
+  `tests/contract/` has the public-import rule, `ProofRunner`, and the bootstrap harness.
 dateCreated: 20261019
-dateUpdated: 20261019
+dateUpdated: 20261020
 status: not_started
+revision_number: 1
 ---
 
 ## Context Summary (File 2 of 2)

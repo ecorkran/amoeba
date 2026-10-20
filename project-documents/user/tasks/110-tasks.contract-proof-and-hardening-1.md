@@ -3,11 +3,25 @@ docType: tasks
 slice: contract-proof-and-hardening
 project: amoeba
 lld: user/slices/110-slice.contract-proof-and-hardening.md
-dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
-projectState: Slices 101–109 are merged (store schema 8; `amoeba serve`; `amoeba.inspection`; `ExitCode` up to 13 `SERVE_REFUSED`). `amoeba.process` has no `__all__`; `build_tenants` lives in `cli/lifecycle.py`; `SquadronRun` has six header fields and no `updated_at`; `store_dir`/`project_store_path` are reachable only through `amoeba.store.paths`; no `record_runner_report`, no `tests/contract/`, no pruning command.
+dependencies:
+- 101
+- 102
+- 103
+- 104
+- 105
+- 106
+- 107
+- 108
+- 109
+projectState: Slices 101–109 are merged (store schema 8; `amoeba serve`; `amoeba.inspection`;
+  `ExitCode` up to 13 `SERVE_REFUSED`). `amoeba.process` has no `__all__`; `build_tenants`
+  lives in `cli/lifecycle.py`; `SquadronRun` has six header fields and no `updated_at`;
+  `store_dir`/`project_store_path` are reachable only through `amoeba.store.paths`;
+  no `record_runner_report`, no `tests/contract/`, no pruning command.
 dateCreated: 20261019
-dateUpdated: 20261019
+dateUpdated: 20261020
 status: not_started
+revision_number: 1
 ---
 
 ## Context Summary (File 1 of 2)

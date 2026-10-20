@@ -14,59 +14,45 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261019
 dateUpdated: 20261019
-reviewedSha: e74eeda4975c66b8d1283514649b5f8c54f3ce03
+reviewedSha: 8b2ccb2b65707e57db31ffabb204419e223e230f
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
-turns: 6
-promptTokens: 183531
-cachedTokens: 93019
-cacheWriteTokens: 90506
-completionTokens: 4877
-durationSeconds: 40.8
-costUsd: 0.420778
+toolCallsMade: 3
+turns: 4
+promptTokens: 220295
+cachedTokens: 136367
+cacheWriteTokens: 83922
+completionTokens: 4295
+durationSeconds: 35.2
+costUsd: 0.392956
 costBasis: provider
 runId: run-20261020-p5-002cb7ae
 squadronVersion: 0.23.3
 findings:
   - id: F001
-    severity: pass
-    category: coverage
-    summary: "Success criteria trace to tasks"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
+    severity: concern
+    category: verification
+    summary: "Task 8.1's \"no slice 110 reference\" grep will fail once the substrate guide exists"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:283"
   - id: F002
-    severity: pass
-    category: sequencing
-    summary: "Sequencing and commit cadence"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
+    severity: note
+    category: verification
+    summary: "The walkthrough's `-k prune` will not select scenario step 12"
+    location: "project-documents/user/slices/110-slice.contract-proof-and-hardening.md:425"
   - id: F003
-    severity: concern
-    category: task-scoping
-    summary: "Step-12 stub `sq` has no shared home"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:204-231"
-  - id: F004
-    severity: concern
-    category: coverage
-    summary: "Ownership guarantee is not asserted for the adopted and checkpoint paths"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:75-108"
-  - id: F005
-    severity: concern
-    category: task-clarity
-    summary: "Task 5.5 does not list steps 9 and 11, or step 7's `finding_changes` check"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:94-108"
-  - id: F006
-    severity: concern
-    category: task-sizing
-    summary: "Task 6.1 is large for a single task"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:131-146"
-  - id: F007
     severity: note
     category: process
-    summary: "Task 5.6 and the Gaps Found log"
-    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:112-127"
-  - id: F008
-    severity: note
-    category: proportionality
-    summary: "Proportionality"
+    summary: "Task 5.6 may end with nothing to commit when no gaps are found"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md:136"
+  - id: F004
+    severity: pass
+    category: coverage
+    summary: "Success-criteria coverage and sequencing"
+    location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
+  - id: F005
+    severity: pass
+    category: scope
+    summary: "Proportionality and test placement"
     location: "project-documents/user/tasks/110-tasks.contract-proof-and-hardening-2.md"
 ---
 
@@ -77,69 +63,40 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria trace to tasks
+### [CONCERN] Task 8.1's "no slice 110 reference" grep will fail once the substrate guide exists
 
-- **Scenario, end-state oracle, feed replay:** Tasks 5.1–5.5 cover the D4 scenario, the D5 oracles, and the "seq strictly increasing across steps 4, 5, 10" criterion.
-- **Network subset:** Task 6.1 covers D2.
-- **Pruning:** Tasks 7.1–7.5 cover the four pruning conditions, the failure modes, the `PRUNE_INCOMPLETE` exit code, and step 12.
-- **Docs and validation:** Section 8 covers the process-contract pruning section, the ownership line, the substrate guide, and the CHANGELOG. Task 9.1 covers the walkthrough.
-- **File 1 items:** The D1 rule, the tenant-order check, `record_runner_report` and its refusals, and the `test_store_safety` extension all sit in file 1. I checked file 1 for these.
-- **No scope creep:** Every task maps to a design decision. No load test or CI task is needed, because the slice states no NFR.
+Task 8.1 requires `grep -rn "slice 110\|or 110" docs/` to return nothing. Task 8.2 then creates `docs/substrate-guide.md`, which links to "this slice's `CHANGELOG.md` entry". That page will almost certainly say "slice 110", so the same grep fails afterward. Other contract docs may also mention 110 as history. The slice requirement is narrower: the Future-work lines that point at 110 are replaced. Scope the check to Future-work or pending-work references, such as the pruning line in `process-contract.md` and the "or 110, if earlier" text in `evidence-contract.md`. Otherwise Task 9.1 or a later re-run will fail on a criterion that was met.
 
-### [PASS] Sequencing and commit cadence
+### [NOTE] The walkthrough's `-k prune` will not select scenario step 12
 
-- Dependencies run strictly forward with no cycles.
-- Tests directly follow implementation: 5.3 with 5.1–5.2, 7.2 after 7.1, and 7.4 after 7.3.
-- Commits are spread across the slice (5.3, 5.4, 5.5, 6.1, 7.2, 7.4, 7.5, 8.1, 8.3, 9.1) rather than batched at the end.
-- The gap-stop rule for non-additive fixes (5.6) appears before Section 6.
+Walkthrough step 2 runs `pytest tests/contract tests/process -k prune` and expects scenario step 12 to be exercised. Task 7.5 puts step 12 at the end of `test_lifecycle_proof.py`, whose test and module names contain no "prune". `-k prune` therefore picks up only `tests/process/test_prune_selection.py` and `test_prune_sq_runs.py`, and step 12 is not run. Task 7.2 handled this for the selection tests but nothing handles it for step 12. Task 9.1 says to correct the walkthrough when it differs, so this will be caught. Fixing it now is cheaper, either by correcting the walkthrough command or by naming step 12's test with "prune".
 
-### [CONCERN] Step-12 stub `sq` has no shared home
+### [NOTE] Task 5.6 may end with nothing to commit when no gaps are found
 
-Task 7.4 builds the stub `sq` inside `tests/process/test_prune_sq_runs.py`. Task 7.5 needs "the stub on `PATH`" from `tests/contract/test_lifecycle_proof.py`. The task never says where the stub lives so both suites can use it. A junior would either duplicate it, which breaks DRY, or import across test packages. Add a step to 7.4 that places the stub builder in a shared helper or `conftest` fixture. Check that the location is allowed under the D1 import rule for `tests/contract/`.
+Task 5.6 has no commit step of its own. If no gaps are found, the "None found" edit to the Gaps Found log is left uncommitted. Task 8.3 depends on that log. Add a short commit for the log update. It could be folded into Task 6.1's commit if a separate one is unwanted.
 
-### [CONCERN] Ownership guarantee is not asserted for the adopted and checkpoint paths
+### [PASS] Success-criteria coverage and sequencing
 
-- **What D8 requires:** D8 says "Step 4 asserts this" (recovery's `adopted` result carries `run_id`) and "Steps 3 and 9 assert this" (the issuer's `completed` result carries `run_id`).
-- **What 5.2, 5.4, and 5.5 assert:** The oracle declares journal entries by outcome and resolver only, not by `result.run_id`. Task 5.4's step-level assertions do not mention it. Task 5.5 does not mention it for step 9 either.
-- **What step 12 covers:** Step 12 covers alpha's checkpoint path only by implication.
-- **The uncovered case:** Nothing checks the `adopted` path. A regression there would silently stop pruning of adopted runs.
-- **Fix:** Add `result.run_id` presence to the oracle's journal declaration, or to the step-level assertions for steps 3, 4, and 9.
+Each slice criterion maps to a task:
+- **End state and feed replay:** Tasks 5.2, 5.3, and 5.5.
+- **Network subset:** Tasks 6.1 and 6.2, including the `seq` equality check and the POST made while the resident process is down.
+- **Step 3, 4, and 5 assertions:** Task 5.4, including the ownership guarantee.
+- **D6 locality:** Task 5.2.
+- **Pruning criteria:** Tasks 7.1 to 7.5. This includes each condition failing alone, a missing `updated_at`, a held run, failure modes leaving files in place, an unreadable store refusing before `sq`, and step 12.
+- **Docs:** Tasks 8.1 to 8.3.
+- **Walkthrough:** Task 9.1.
 
-### [CONCERN] Task 5.5 does not list steps 9 and 11, or step 7's `finding_changes` check
+Of the supporting items in file 1, the schema-v5 fixture and the contract-doc updates for H1 to H3 are all there. The `tests/test_store_safety.py` extension appears only as a path-name addition (file 1, line 298). It may not cover the slice's "HOME or runs directory outside `tmp_path`" check, but the file 1 tasks were not reviewed here.
 
-- **Missing steps:** The task is titled "Drive steps 7–11" but lists work only for steps 7, 8, and 10, plus the oracles.
-- **Steps 9 and 11:** These are Runner `checkpoint` and `finish` intents on alpha and beta. They have no step. Step 9 also has to establish beta's open checkpoint, which step 12's "held" case depends on.
-- **Step 7:** The design says `finding_changes` compares the PM-launched artifact with step 4's round. Task 5.5 never asserts that.
-- **Fix:** Add explicit steps for 9 and 11, and either the `finding_changes` assertion or a note that the oracle covers it.
+### [PASS] Proportionality and test placement
 
-### [CONCERN] Task 6.1 is large for a single task
-
-Task 6.1 rated at effort 3 combines five things:
-- bootstrap and serve process management;
-- SSE parsing and reconnect handling;
-- two kill and restart cycles;
-- the POST-while-down path;
-- a final seq-equality check.
-
-A junior can do this, since it is one test file with one commit. Still, consider splitting it. One task could cover serve kill and `Last-Event-ID` resume. A second could cover the resident-process kill and the final seq-list equality. This would give an intermediate commit before the harder half.
-
-### [NOTE] Task 5.6 and the Gaps Found log
-
-- The "None found" and PM-stop paths are explicit.
-- Task 8.3 (CHANGELOG) reads the log, so a stop at 5.6 correctly blocks everything downstream.
-- The "(none recorded yet)" placeholder is a checkbox item. Mark it checked or replace it at 5.6 so that "every log entry is marked" is verifiable.
-
-### [NOTE] Proportionality
-
-- The split into two task files fits a slice of effort 3 with 9 sections.
-- Test tasks stay proportional. Each is tied to a success criterion, and 7.2 and 7.4 map to the design's listed conditions.
-- The steps do dictate some implementation detail, such as the stub modes in 7.4 and the `FileNotFoundError` and `TimeoutExpired` handling in 7.3. In both cases the detail comes from the design's own decisions (D8) and is not extra.
+Tests follow their implementations in 5.3, 6.x, and 7.2/7.4, with a commit at the end of each section. Task 5.3's oracle self-tests are justified because each oracle must be shown to fail when it should. The stub-`sq` modes in Task 7.4 each map to a slice-required failure case. The slice states no NFRs, so no load-test or CI-gating task is required.
 
 ### Run Digest
 
-- Response length: 5746 chars
+- Response length: 4066 chars
 - Response is newline-free: no
-- Tool calls made: 5
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -147,13 +104,13 @@ A junior can do this, since it is one test file with one commit. Still, consider
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 6
-- Tokens — prompt / cached / cache write / completion / reasoning: 183531 / 93019 / 90506 / 4877 / not computed
-- Duration: 40.8 s
-- Cost: $0.42 (provider)
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 220295 / 136367 / 83922 / 4295 / not computed
+- Duration: 35.2 s
+- Cost: $0.39 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 5
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 5
+- Finding-shaped matches — surviving validation: 5
