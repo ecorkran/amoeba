@@ -132,25 +132,38 @@ class JournalOperations(BlockWriter):
             InvalidTransitionError: If the entry does not exist or is already
                 resolved. A first outcome is never silently overwritten.
         """
-        timestamp = isoformat(now())
-
         with self._connection:
-            cursor = self._execute(
-                sql_journal.RESOLVE_JOURNAL_ENTRY,
-                (
-                    outcome.value,
-                    None if result is None else json.dumps(dict(result)),
-                    timestamp,
-                    resolved_by.value,
-                    entry_id,
-                ),
-            )
-            if cursor.rowcount != 1:
-                raise InvalidTransitionError(
-                    f"journal entry {entry_id!r} does not exist or is already resolved"
-                )
+            self._resolve_entry_within(entry_id, outcome, result, resolved_by)
 
         return self._require_entry(entry_id)
+
+    def _resolve_entry_within(
+        self,
+        entry_id: str,
+        outcome: JournalOutcome,
+        result: Mapping[str, object] | None,
+        resolved_by: JournalResolver,
+    ) -> None:
+        """``journal_resolve``'s write, inside a transaction the caller opened.
+
+        Raises:
+            InvalidTransitionError: If the entry does not exist or is already
+                resolved.
+        """
+        cursor = self._execute(
+            sql_journal.RESOLVE_JOURNAL_ENTRY,
+            (
+                outcome.value,
+                None if result is None else json.dumps(dict(result)),
+                isoformat(now()),
+                resolved_by.value,
+                entry_id,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise InvalidTransitionError(
+                f"journal entry {entry_id!r} does not exist or is already resolved"
+            )
 
     def journal_escalate(self, entry_id: str, *, reason: str) -> JournalEntry:
         """Mark an entry ``unknown`` and block its node on a human.

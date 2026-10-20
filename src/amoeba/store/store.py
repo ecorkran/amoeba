@@ -40,6 +40,7 @@ from amoeba.store.models import (
     StoreSchemaError,
 )
 from amoeba.store.nodes import NodeOperations
+from amoeba.store.runner_report import RunnerReportOperations
 from amoeba.store.verdicts import VerdictOperations
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,9 @@ IN_MEMORY_PATH = Path(":memory:")
 
 
 class Store(
+    # First: it extends JournalOperations and FeedOperations, and a subclass
+    # must precede its bases in the method resolution order.
+    RunnerReportOperations,
     NodeOperations,
     BlockingOperations,
     JournalOperations,

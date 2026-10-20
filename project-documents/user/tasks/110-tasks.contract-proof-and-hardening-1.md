@@ -169,15 +169,15 @@ revision_number: 2
 **Objective**: A read-only consumer resolves store paths without an internal import (LLD D7 H3).
 
 **Steps**:
-- [ ] Re-export both from `amoeba.store.__init__` (`paths.py` stays; existing internal imports may stay)
-- [ ] Add both to `tests/test_public_api.py`'s `EXPECTED_EXPORTS`
-- [ ] Confirm `tests/test_store_safety.py` still passes: it forbids the *name* `store_dir` in tests, so no test may reference it through the new export either
-- [ ] `docs/store-contract.md`: name `store_dir` and `project_store_path` by their public import, replacing the internal path
+- [x] Re-export both from `amoeba.store.__init__` (`paths.py` stays; existing internal imports may stay)
+- [x] Add both to `tests/test_public_api.py`'s `EXPECTED_EXPORTS`
+- [x] Confirm `tests/test_store_safety.py` still passes: it forbids the *name* `store_dir` in tests, so no test may reference it through the new export either
+- [x] `docs/store-contract.md`: name `store_dir` and `project_store_path` by their public import, replacing the internal path
 
 **Success Criteria**:
-- [ ] `from amoeba.store import store_dir, project_store_path` works; public-API and store-safety tests pass
-- [ ] Both names appear in `docs/store-contract.md` by their public import
-- [ ] Committed: `feat(store): export and document store_dir and project_store_path`
+- [x] `from amoeba.store import store_dir, project_store_path` works; public-API and store-safety tests pass
+- [x] Both names appear in `docs/store-contract.md` by their public import
+- [x] Committed: `feat(store): export and document store_dir and project_store_path`
 
 ---
 
