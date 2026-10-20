@@ -135,14 +135,14 @@ revision_number: 2
 **Objective**: Every gap is closed or with the PM (LLD D7).
 
 **Steps**:
-- [ ] For each additive gap in "Gaps Found": fix it, document it in its contract doc, add or extend a test, one commit each (`fix:` or `feat:` as fits)
-- [ ] For each non-additive gap: stop and tell the PM; do not continue past this task until the PM amends the design or defers it
-- [ ] If no gaps were found, write "None found" in the log
+- [x] For each additive gap in "Gaps Found": fix it, document it in its contract doc, add or extend a test, one commit each (`fix:` or `feat:` as fits)
+- [x] For each non-additive gap: stop and tell the PM; do not continue past this task until the PM amends the design or defers it
+- [x] If no gaps were found, write "None found" in the log
 
 **Success Criteria**:
-- [ ] Every log entry is marked fixed (with commit) or PM-decided (with the decision)
-- [ ] Suite green
-- [ ] The log update is committed: `docs: record slice 110 contract-proof gaps`
+- [x] Every log entry is marked fixed (with commit) or PM-decided (with the decision)
+- [x] Suite green
+- [x] The log update is committed: `docs: record slice 110 contract-proof gaps`
 
 ---
 
@@ -345,4 +345,5 @@ revision_number: 2
 
 Filled in during Section 5. One entry per gap: what the consumer lacked, D7 class (additive / needs PM), and outcome (commit, or PM decision).
 
-- [ ] (none recorded yet)
+- [x] G1 - What the consumer lacked: evidence-contract.md point 3 named record_runner_report but did not say how a Runner builds the runner_issued ledger row's path and digest (the rule was only stated in process-contract.md, and a verdict's journal entry having to be on the verdict's own node was only in the record_verdict check list). D7 class: additive (documentation). Outcome: fixed in commit 7fd2c5c "docs: state the ledger key a Runner report must use".
+- [x] Observed, not gaps (no fix needed): the inbox payload key names (body, node_id, reviews_dir, active, blocked_state_id, detail, and the verdict payload fields) are documented in inbox-contract.md and evidence-contract.md but have no exported constants; a consumer spells them from the docs, as the proof does. A consumer starting the process as a subprocess needs a readiness signal; the proof uses a tenant that prints a marker on its first tick (after recovery), and no public readiness API was needed.
