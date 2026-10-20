@@ -62,7 +62,7 @@ Store locality was decided in slice 101 (central, per supervisor, keyed by proje
   - H4: Squadron's run-file header model moves to `amoeba.upstream.squadron.run_file`.
   - Any further gap the proof finds, fixed under D7's rule.
 - **Pruning (D8):** `amoeba.upstream.squadron.run_pruning` (a pure selection rule), `amoeba prune sq-runs` (preview by default, `--yes` to delete), a new `ExitCode` member, and a schema-v5 run-file fixture.
-- **Docs:** `docs/substrate-guide.md` is new. `process-contract.md` gains sections on hosting tenants and on pruning. `evidence-contract.md` and `store-contract.md` add `record_runner_report`. A test checks that every exported name is documented (D9). The Future-work lines that point at 110 are updated, and `CHANGELOG.md` is updated.
+- **Docs:** `docs/substrate-guide.md` is new. `process-contract.md` gains sections on hosting tenants and on pruning. `evidence-contract.md` and `store-contract.md` add `record_runner_report`. A test checks that every name this slice exports is documented (D9). The Future-work lines that point at 110 are updated, and `CHANGELOG.md` is updated.
 
 ### Excluded
 
@@ -91,6 +91,7 @@ Store locality was decided in slice 101 (central, per supervisor, keyed by proje
   - Evidence and feed: `verdicts`, `finding_changes`, `detections`, `changes`, and `calibration`.
 - **Process (102):** `ResidentProcess`, `Tenant`, `ProcessSettings`, recovery with the `sq_run` observer, and the lock-based `amoeba stop` and `amoeba status`.
 - **Feed (106):** `follow()` and `FeedSettings` from `amoeba.feed`; `Change` from `amoeba.store`.
+- **Pruning reads (internal, `cli/prune.py` only):** `Store.nodes_for_project` and `recorded_result_run_ids`; `discover_project_ids` (`store/discovery.py`, 109); `DEFAULT_SQ_RUNS_DIR` (`process/settings.py`, 102).
 - **Network (109):** `POST …/submissions`, `GET …/submissions/{id}`, and `GET …/feed` with `Last-Event-ID`.
 - **Parser (105):** `parse_review_artifact` and `to_verdict_input`. The proof Runner reports its reviews through these (evidence contract, point 5).
 
@@ -258,7 +259,7 @@ The scenario uses `kill -9` (steps 4 and 5) and a graceful stop (step 10). Both 
 
 `HOME` is always a temporary path, so the real home directory is never touched.
 
-**D7 — Hardening: additive fixes only, everything else to the PM.** A gap is any symbol, method, or document a consumer would need that the public surface lacks. A gap is fixed in this slice when the fix is additive: an export, a document section, a new method composed from existing transactions, or a move with no behavior change. A gap whose fix changes existing behavior, a schema, or a recorded value is written up and **stops for the PM**. Every gap, whichever way it went, is listed once, in `CHANGELOG.md`. The substrate guide links to that entry.
+**D7 — Hardening: additive fixes only, everything else to the PM.** A gap is any symbol, method, or document a consumer would need that the public surface lacks. A gap is fixed in this slice when the fix is additive: an export, a document section, a new method composed from existing transactions, or a move with no behavior change. A gap whose fix changes existing behavior, a schema, or a recorded value is written up and **stops for the PM**. Additive fixes are capped as well. A gap whose fix adds more than one public name stops for the PM, and so does a fourth gap beyond H1–H4. Every gap, whichever way it went, is listed once, in `CHANGELOG.md`. The substrate guide links to that entry.
 
 **Closure rule for a stopped gap.** The PM chooses one of two outcomes:
 
@@ -280,7 +281,8 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
 - **H3:** `store_dir` and `project_store_path` are exported from `amoeba.store`. `store-contract.md` already documents them by their internal path. Any consumer that opens a store read-only needs them.
 - **H4:** `SquadronRun` and `parse_run_file` move from `process/observers/sq_runs.py` to `amoeba.upstream.squadron.run_file`, so the observer and the pruning rule share one parser.
   - `SquadronRun` gains `updated_at: datetime | None`. It is optional because the observer never needed it, and a run without it is never a pruning candidate (`age_unknown`).
-  - `process-contract.md` and the CHANGELOG say `run_file` is an adapter for Squadron's run state files, not part of the review-output contract, so the move does not read as widening 105's scope.
+  - The architecture scopes `amoeba.upstream.squadron` to Squadron's review output, so this placement is *pending PM ratification* (Implementation Notes, step 1). `process-contract.md` and the CHANGELOG say `run_file` is an adapter for Squadron's run state files, not part of the review-output contract.
+  - `run_file` and `run_pruning` stay submodule-only. Their names are not added to the `amoeba.upstream.squadron` root's `__all__`, so D1 and D9 do not cover them. Their only importers are the `sq_runs` observer and `cli/prune.py`.
   - The observer's behavior and tests are unchanged. A schema-v5 fixture is added, because the live directory now holds v5 files (*observed 20261015*) and the fixtures stop at v4.
 
 **D8 — Pruning: Amoeba chooses, Squadron deletes, a human confirms.**
@@ -294,7 +296,7 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
   Condition 3 is stricter than "no open checkpoint block". After a human resolves a checkpoint, the node is runnable and the Runner has not yet issued `sq run --resume`. Pruning in that window would delete the run it is about to resume. "Every node that names it is done" is the earliest point at which Amoeba is provably finished with a run. Runs the PM launched fail condition 1 and are never touched.
 - *The ownership guarantee.* This line is added to `process-contract.md` beside the shipped observers. `recorded_result_run_ids` returns every journal entry whose `result` carries the `run_id` key, whatever the entry's outcome or kind (`journal.py`, which reads `RESULT_KEY_RUN_ID`). Two writers put it there:
   - **Recovery**, on `adopted`. The `sq_run` observer records `run_id` in the result (process contract, "Squadron runs"). Step 4 asserts this.
-  - **The issuer**, on `completed`. For an `sq_run` entry the issuer **must** include `run_id` in `result`. `record_runner_report` refuses an `sq_run` entry whose `result` lacks it, writing nothing. Initiative 120's own `journal_resolve` calls are bound by the same contract line. Steps 3 and 9 assert this.
+  - **The issuer**, on `completed`. For an `sq_run` entry the issuer **must** include `run_id` in `result`. `record_runner_report` refuses an `sq_run` entry whose `result` lacks it, writing nothing. Initiative 120's own `journal_resolve` calls are bound by the same contract line. Steps 3 and 9 assert this. Making `journal_resolve` enforce this is deliberately out of scope, because it would change existing behavior (D7). If 120 breaks the rule, its runs are simply never pruned (D9).
 
   An escalated entry (`unknown`) has no result, so the run behind it is never owned. It may exist, or there may be several candidates. A human resolves the escalation, and that run is the PM's to prune with `sq runs prune`. Amoeba never prunes it, because it never proved the run was its own.
 - *Re-linking.* Condition 3 reads every node's **current** `sq.run_id`, not its history. A run linked again to a new or reopened node is held for as long as that node is not `done`. `sq run --resume <id>` keeps the run's id, so a resumed run stays named by its node. A successor launched under a new journal entry gets a new id, and the old paused run becomes a candidate only once no live node names it. History is not consulted, because only a current reference can lead to a resume.
@@ -312,6 +314,7 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
 - one table mapping each initiative (120, 140, 160, and the notification bridge) to the surfaces and contract sections it uses. The 120 row cites D8's ownership line: the issuer of an `sq_run` must record `run_id` in `result`. Initiative 120's slice design must cite it too. If 120 omits it, the failure is safe but costly: none of its runs are owned, so none is ever pruned;
 - the D4 sequence as prose, with links into `tests/contract/scenario.py`;
 - the public import roots;
+- a link to `store-contract.md`'s "Store locality" section, which documents the locality model that D6 proves;
 - the note on intent bodies (D3);
 - links to the known limits each contract already states (S8, S9, retention, issue #3, issue #5) and to this slice's `CHANGELOG.md` entry, without restating them.
 
@@ -400,7 +403,7 @@ select_prunable(runs: Iterable[SquadronRun], *, owned: Mapping[str, str],
 - The D1 import rule passes.
 - The tenant-order and parse-equivalence checks (Migration Plan) pass before and after the moves. The `process/tenants.py` import rule is an AST test.
 - `record_runner_report` refuses an `sq_run` entry whose `result` lacks `run_id`.
-- A test checks that every name in the `__all__` of each `PUBLIC_ROOTS` package appears in that package's contract doc (D9).
+- A test checks that every name this slice adds to a public `__all__` (H1, H2's method, H3) appears in that package's contract doc (D9). Auditing every existing export is deferred to issue #8.
 - The writer guard is unchanged: `cli/prune.py` opens stores read-only only.
 - The `run_pruning.py` layering rule is an AST test.
 - No test touches the real `HOME`, Squadron runs directory, CF data directory, or supervisor directory. 101's store-safety guard covers `tests/contract/`.
@@ -463,7 +466,7 @@ Clean up with `uv run amoeba stop`, kill the server, then `rm -rf "$AMOEBA_STORE
 
 ### Development Approach
 
-1. The PM confirms the 7-day retention default. (The dependency check and name reconciliation were done on 20261019; see Prerequisites.)
+1. The PM confirms the 7-day retention default, and ratifies H4's placement of `run_file` under `amoeba.upstream.squadron`. (The dependency check and name reconciliation were done on 20261019; see Prerequisites.)
 2. Migration commits, with no behavior change. First add the tenant-order and parse-equivalence checks against the current code. Then make H4's move, H1's `standard_tenants` move, and the exports for H1 and H3. Document each export.
 3. H2, `record_runner_report`, with store tests: the one-commit property, each refusal, and the retry rule.
 4. `tests/contract/` foundations: the D1 rule, the bootstrap, and `ProofRunner` with crash points.
@@ -476,6 +479,6 @@ Test each step right after building it, and commit after each.
 
 ### Special Considerations
 
-- **Gaps found in step 5 are the main uncertainty in this slice's effort (3).** D7 bounds them: additive fixes stay in scope, and anything else goes to the PM rather than growing the slice.
-- **Destructive operations.** Pruning deletes only through `sq runs prune`, only named runs, and only with `--yes`. Tests run with `HOME` pointed at `tmp_path`. A guard test asserts that no test under `tests/` sets a runs directory outside `tmp_path`, extending 101's store-safety scan to the new `HOME` override.
+- **Gaps found in step 5 are the main uncertainty in this slice's effort (3).** D7 bounds them: up to three small additive fixes stay in scope, and anything else goes to the PM rather than growing the slice.
+- **Destructive operations.** Pruning deletes only through `sq runs prune`, only named runs, and only with `--yes`. Tests run with `HOME` pointed at `tmp_path`. 101's store-safety scan (`tests/test_store_safety.py`) is extended, not duplicated, to fail on any test that sets a runs directory or `HOME` outside `tmp_path`.
 - **Secrets.** The network run uses a generated token only when it tests auth. The proof's payloads carry no credentials, consistent with 103's rule.
