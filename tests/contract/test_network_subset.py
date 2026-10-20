@@ -10,6 +10,8 @@ local read of the whole feed: no gap, no repeat.
 
 from __future__ import annotations
 
+import signal
+
 import httpx2
 import pytest
 
@@ -19,7 +21,7 @@ from contract.network import HTTP_OK, REQUEST_TIMEOUT_SECONDS, ServeProcess, Sse
 from contract.runner_tenant import INTENT_STEP, ProofStep
 from contract.scenario import ALPHA
 
-SETUP, DELIVERY, SERVE_KILL, SERVE_RESTART, END = range(1, 6)
+SETUP, DELIVERY, SERVE_KILL, SERVE_RESTART, RESIDENT_KILL, END = range(1, 7)
 
 #: The submitter the bridge would be, over HTTP.
 BRIDGE = "proof-bridge"
@@ -109,6 +111,21 @@ def test_the_network_path_survives_a_kill_of_each_process(
         SERVE_RESTART,
         "remote-2's tree over the resumed stream",
         lambda: follower.kinds.count(ChangeKind.NODE_CREATED.value) >= 6,
+    )
+
+    # kill -9 of the resident process: the POST is queued, then delivered.
+    assert h.process.kill_and_wait() == -signal.SIGKILL
+    assert _post(server, _intent_body("remote-3")).status_code == ACCEPTED
+    with h.read(ALPHA) as store:
+        assert store.submission("remote-3") is None, "applied with no process running"
+    h.start(RESIDENT_KILL)
+    h.wait_until(
+        RESIDENT_KILL, "remote-3 to apply", lambda: _is_applied(server, "remote-3")
+    )
+    h.wait_until(
+        RESIDENT_KILL,
+        "remote-3's tree on the stream that never reconnected",
+        lambda: follower.kinds.count(ChangeKind.NODE_CREATED.value) >= 9,
     )
 
     # End: what SSE delivered is exactly the feed, with no gap and no repeat.
