@@ -1,0 +1,52 @@
+"""Regression test pinning the public export surface of ``amoeba.process``.
+
+A tenant author imports only ``amoeba.process``, so a dropped or accidentally
+added export should fail here, not in initiative 120.
+"""
+
+from __future__ import annotations
+
+import amoeba.process as process_package
+
+#: The hosting contract, written out rather than derived from ``__all__``:
+#: deriving it from the thing under test would make the assertion vacuous.
+EXPECTED_EXPORTS = {
+    "ResidentProcess",
+    "Tenant",
+    "ProcessSettings",
+    "Observer",
+    "Observation",
+    "Adopt",
+    "NotApplied",
+    "Unknown",
+    "standard_tenants",
+    "ProcessError",
+    "AlreadyRunningError",
+    "StartupFailedError",
+    "GraceExpiredError",
+}
+
+#: Deliberately not part of the contract: run-file parsing and pruning are
+#: internal to the shipped tenants and the CLI.
+NOT_EXPORTED = {"SquadronRun", "parse_run_file"}
+
+
+def test_declared_exports_match_the_expected_surface() -> None:
+    """``__all__`` is exactly the contract — nothing added, nothing dropped."""
+    assert set(process_package.__all__) == EXPECTED_EXPORTS
+
+
+def test_every_declared_export_is_importable() -> None:
+    """Every name in ``__all__`` actually resolves on the package."""
+    missing = [
+        name for name in process_package.__all__ if not hasattr(process_package, name)
+    ]
+
+    assert missing == []
+
+
+def test_run_file_parsing_and_pruning_are_not_exported() -> None:
+    exported = set(process_package.__all__)
+
+    assert exported & NOT_EXPORTED == set()
+    assert not [name for name in exported if "prune" in name.lower()]

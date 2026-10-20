@@ -183,6 +183,41 @@ interruption, and it is yours to avoid.
 A tenant that launches a long subprocess polls it and checks `stop_requested`;
 it does not block the loop invisibly.
 
+## Hosting tenants
+
+A program that runs its own tenant imports everything it needs from
+`amoeba.process` and nothing deeper. The hosting surface is exactly these 13
+names (pinned by `tests/test_process_public_api.py`):
+
+| Group | Names |
+| --- | --- |
+| The host | `ResidentProcess`, `ProcessSettings` |
+| Tenants | `Tenant`, `standard_tenants` |
+| Recovery observers | `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown` |
+| Errors | `ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError` |
+
+`Observation` is the union `Adopt | NotApplied | Unknown`; see "Recovery" below
+for what each answer means.
+
+`standard_tenants(settings, supervisor_dir)` returns the three shipped tenants
+in the order listed under "The Tenant protocol". `amoeba start` passes exactly
+that tuple to `ResidentProcess`. Initiative 120 adds its Runner by composing in
+`start`:
+
+```python
+tenants = (*standard_tenants(settings, supervisor_dir), runner)
+```
+
+The Runner ticks after the shipped tenants, so inbox submissions and detection
+results from the same pass are visible to it.
+
+`standard_tenants` captures `sq --version` and `cf --version` once, before the
+loop. Capture never raises: a missing or slow tool yields the explicit
+`unavailable` label, and no tick starts a subprocess.
+
+Run-file parsing (`SquadronRun`, `parse_run_file`) and pruning are internal and
+are not part of this surface.
+
 ## Review detection
 
 *Added by slice 106.* `ReviewDetectionTenant` notices Squadron reviews nobody in

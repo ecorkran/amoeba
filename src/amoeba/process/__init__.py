@@ -6,7 +6,41 @@ and reconciles every journaled-but-unresolved command on start.
 
 The full contract is documented in ``docs/process-contract.md``, which is
 written to be sufficient for building a tenant without reading this
-implementation.
+implementation. The names in ``__all__`` are that contract's hosting surface:
+everything a program needs to compose and run its own tenants.
 """
 
 from __future__ import annotations
+
+from amoeba.process.errors import (
+    AlreadyRunningError,
+    GraceExpiredError,
+    ProcessError,
+    StartupFailedError,
+)
+from amoeba.process.host import ResidentProcess, Tenant
+from amoeba.process.recovery import (
+    Adopt,
+    NotApplied,
+    Observation,
+    Observer,
+    Unknown,
+)
+from amoeba.process.settings import ProcessSettings
+from amoeba.process.tenants import standard_tenants
+
+__all__ = [
+    "Adopt",
+    "AlreadyRunningError",
+    "GraceExpiredError",
+    "NotApplied",
+    "Observation",
+    "Observer",
+    "ProcessError",
+    "ProcessSettings",
+    "ResidentProcess",
+    "StartupFailedError",
+    "Tenant",
+    "Unknown",
+    "standard_tenants",
+]

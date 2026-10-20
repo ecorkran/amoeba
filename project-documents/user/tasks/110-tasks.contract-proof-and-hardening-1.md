@@ -129,17 +129,17 @@ revision_number: 2
 **Objective**: The shipped tenants are composable from `amoeba.process` (LLD D7 H1, "Migration Plan").
 
 **Steps**:
-- [ ] Create `src/amoeba/process/tenants.py` with `standard_tenants(settings, supervisor_dir) -> tuple[Tenant, ...]`: the body, imports, comment, and docstring of `build_tenants`, unchanged in behavior
-- [ ] `cli/lifecycle.start` calls `standard_tenants`. Delete `build_tenants` and any import only it used
-- [ ] Update the consumers: `tests/process/test_review_detection_wiring.py`, `tests/process/test_cf_watch_wiring.py`, and Task 1.2's test. Monkeypatches move to the `amoeba.process.tenants` module's `capture_*` names
-- [ ] Update `docs/process-contract.md:130` and `docs/context-forge-contract.md:187` to name `standard_tenants` in `process/tenants.py`
-- [ ] Confirm `amoeba.upstream` still imports nothing from `amoeba.process` (rule unchanged; `test_import_boundaries.py` passes)
+- [x] Create `src/amoeba/process/tenants.py` with `standard_tenants(settings, supervisor_dir) -> tuple[Tenant, ...]`: the body, imports, comment, and docstring of `build_tenants`, unchanged in behavior
+- [x] `cli/lifecycle.start` calls `standard_tenants`. Delete `build_tenants` and any import only it used
+- [x] Update the consumers: `tests/process/test_review_detection_wiring.py`, `tests/process/test_cf_watch_wiring.py`, and Task 1.2's test. Monkeypatches move to the `amoeba.process.tenants` module's `capture_*` names
+- [x] Update `docs/process-contract.md:130` and `docs/context-forge-contract.md:187` to name `standard_tenants` in `process/tenants.py`
+- [x] Confirm `amoeba.upstream` still imports nothing from `amoeba.process` (rule unchanged; `test_import_boundaries.py` passes)
 
 **Success Criteria**:
-- [ ] `grep -rn build_tenants src tests docs` returns nothing
-- [ ] Task 1.2's test passes against `standard_tenants` with the expected tuple unedited
-- [ ] Full suite green
-- [ ] Committed: `refactor(process): move build_tenants to process/tenants as standard_tenants`
+- [x] `grep -rn build_tenants src tests docs` returns nothing
+- [x] Task 1.2's test passes against `standard_tenants` with the expected tuple unedited
+- [x] Full suite green, 1812 passed
+- [x] Committed: `refactor(process): move build_tenants to process/tenants as standard_tenants`
 
 ---
 
