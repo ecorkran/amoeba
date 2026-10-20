@@ -16,84 +16,74 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261020
 dateUpdated: 20261020
-reviewedSha: 26f6e3911bbb48c449a2de616c33d365217754aa
+reviewedSha: 46b4c60a9b4ae7026163c3955a19dfc8530fc857
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 1
 turns: 2
-promptTokens: 84534
+promptTokens: 85759
 cachedTokens: 12780
-cacheWriteTokens: 71750
-completionTokens: 4309
-durationSeconds: 48.7
-costUsd: 0.332046
+cacheWriteTokens: 72975
+completionTokens: 6772
+durationSeconds: 59.3
+costUsd: 0.361576
 costBasis: provider
 squadronVersion: 0.23.3
 findings:
   - id: F001
     severity: concern
-    category: consistency
-    summary: "\"Decide is a pure function with no I/O\" conflicts with in-tick CF/git observation and same-tick successor dispatch"
+    category: feasibility
+    summary: "\"Tick never waits\" is not bounded across projects and runs"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#architectural-principles"
   - id: F002
     severity: concern
-    category: feasibility
-    summary: "Synchronous subprocess observation inside a \"never waits\" tick is unbudgeted"
+    category: consistency
+    summary: "Decide is \"pure\", but the reads it needs depend on Decide's candidates"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#architectural-principles"
   - id: F003
     severity: concern
-    category: antipattern
-    summary: "One `sq runs wait` child process per in-flight run, with unspecified lifecycle"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
+    category: consistency
+    summary: "The \"Act issues only journaled commands\" rule conflicts with Runner-executed checks and with \"parses no plan markdown\""
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
   - id: F004
     severity: concern
-    category: completeness
-    summary: "Concurrency rule (\"one mutating run per checkout\") has no owner, key, or recovery semantics"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
+    category: consistency
+    summary: "Resolution options contradict the stated limit on instructions"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
   - id: F005
     severity: concern
     category: feasibility
-    summary: "Clean-tree precondition vs. Squadron's own writes between phases"
+    summary: "Autonomy goal undercut by pause-reason gap and single-checkout exclusivity"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F006
     severity: concern
     category: completeness
-    summary: "Intent and observation transaction boundaries do not cover the journal–launch gap for non-run commands"
+    summary: "Launch race: `not found` is ambiguous right after detached launch"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F007
     severity: concern
     category: completeness
-    summary: "Reconciliation rules leave the lifecycle node model underspecified for CF-driven pointer moves"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
+    summary: "Intent semantics need persisted desired-state that no table provides"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F008
     severity: concern
-    category: abstraction
-    summary: "Judge route \"escalate-and-label\" and rerun semantics blur the closed route set"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
+    category: completeness
+    summary: "Fault policy: every fault escalates to a human, and fault-with-no-node is deferred"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#architectural-principles"
   - id: F009
     severity: concern
-    category: dependencies
-    summary: "Heavy dependence on unreleased and internal upstream surfaces"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
+    category: feasibility
+    summary: "Amount of upstream-contract change and bundled scope in the first slice"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#anticipated-slices"
   - id: F010
     severity: concern
     category: antipattern
-    summary: "Scope is heavy for a first proof: batch dispatch, tier inference, merge policy, and multi-project are all designed in"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#anticipated-slices"
+    summary: "Scope that can be cut or deferred from v1: merge-policy variant, batch, judge-eligible marks, programs seam"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F011
     severity: concern
-    category: completeness
-    summary: "Intent semantics: \"desired state, idempotent\" combined with ordering and supersession is not fully defined"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
-  - id: F012
-    severity: note
-    category: completeness
-    summary: "Crash-recovery of in-memory tick state and exactly-once ingestion"
+    category: abstraction
+    summary: "Index-based CF identity makes renumbering destructive to evidence continuity"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
-  - id: F013
-    severity: note
-    category: completeness
-    summary: "Per-project fault handler escalates to `blocked_on_human` even for transient faults"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#architectural-principles"
 ---
 
 # Review: arch — initiative 120
@@ -103,86 +93,82 @@ findings:
 
 ## Findings
 
-### [CONCERN] "Decide is a pure function with no I/O" conflicts with in-tick CF/git observation and same-tick successor dispatch
+### [CONCERN] "Tick never waits" is not bounded across projects and runs
 
-The "Observe, decide, act" principle says Decide does no I/O. "The tick never waits" says that after ingestion and routing, the Runner decides for every node "runnable *at that point*" and a successor can be dispatched in the same tick. Several preconditions the document requires are observations, not store state:
-- The clean-tree check and branch check ("Before any branch switch, the Runner observes the tree").
-- The ungate-hatch checks.
-- `cf status --json` gate state.
+The tick is synchronous. Per project, it runs `cf status --json`, `cf list slices --json`, `git status` per candidate checkout, and one `sq runs wait <id> --timeout 0` per in-flight run. Each call has a per-call timeout, but the document sets no per-tick budget. Worst-case tick latency is projects × (runs + reads) × timeout. A few hung `cf` calls make the tick take minutes. That breaks the tenant obligation for the shipped tenants that tick before the Runner. Every fault, including a timeout, also escalates to a human (see the fault-handling finding). The design needs one of these:
+- a per-tick deadline with round-robin resumption;
+- bounded parallel subprocess fan-out for reads;
+- an observation cadence slower than the tick.
 
-A successor dispatched in the same tick therefore needs fresh git and CF reads between Route and Decide. Those reads are either done before Decide (so they are stale for a successor that only became runnable mid-tick) or inside Decide (so it is not pure). The document must say which. Otherwise "any decision can be recomputed from the store" fails, because the clean-tree and hatch observations are not clearly recorded as inputs. These checks are also synchronous subprocess calls. Run for many projects, they conflict with "tick() returns promptly" and need a bound or a deferral model.
+### [CONCERN] Decide is "pure", but the reads it needs depend on Decide's candidates
 
-### [CONCERN] Synchronous subprocess observation inside a "never waits" tick is unbudgeted
+Observe must record the git-clean and branch state, the CF pointer, and the checkout holder before Decide runs. Which checkouts matter depends on which nodes are runnable, and that depends on Decide and routing. The document does not say whether Observe reads everything speculatively or Decide requests reads. The dispatch sequence is also unspecified. It has a journaled `cf_write` of the pointer, a read-back confirmation (`cf set` has no JSON output), and then `sq_run`. That is two journaled actions with a confirmation between them, which cannot happen within one pure Decide→Act pass. The Runner's own pointer write also fires `cf_project_changed`, which triggers reconciliation. The document does not say how self-caused changes are told apart from foreign ones. It matters because "a pointer someone else moves" escalates a node that has a run in flight.
 
-Observation relies on `cf status --json`, `cf list slices --json`, `git status`, launching detached `sq run`, and spawning `sq runs wait <id>` children. Each is a process spawn made from a synchronous `tick()`. With N projects, per-tick latency grows linearly, and a hung `cf` or `git` (a lock file, a network filesystem) stalls every project. This contradicts "a slow run never stalls other nodes or projects." No per-call timeout, no budget, and no policy for a timed-out read is given. The per-project fault handler only catches exceptions, not hangs.
+### [CONCERN] The "Act issues only journaled commands" rule conflicts with Runner-executed checks and with "parses no plan markdown"
 
-### [CONCERN] One `sq runs wait` child process per in-flight run, with unspecified lifecycle
+Outcome ingestion and the Tier-1 predicates say the Runner runs checks itself, such as "the validator examined more than zero files". These are side-effecting, potentially long subprocesses (validators, later baseline-diffed tests). They are neither read-only Observe calls nor one of the two journaled kinds (`sq_run`, `cf_write`). They are also not covered by the short per-call timeout. The ungate-hatch checks (`review: none`, `dateCreated` before the effective date) need slice-document frontmatter. That contradicts "the Runner parses no plan markdown of its own". Define a check execution model (journaled or not, timeout, which tick runs it) and say where the hatch data comes from (CF output or direct file reads).
 
-Observing by running a blocking `sq runs wait <id>` child per run and polling for its exit is a heavy way to read status. It has gaps:
-- It is unclear whether `sq runs wait` blocks until the run finishes (so a child per in-flight run lives for hours) or returns immediately with a status code.
-- The document does not say what the Runner does with those children after a resident-process restart (re-spawn all, per adopted run).
-- It does not say how a `sq runs wait` that is itself stuck is told apart from a stuck run.
-- "A run that never ends hits a per-pipeline time bound" is the only bound, and it applies to the run, not to the wait child.
-Meanwhile "paused" and "completed" are distinguished only by that wait child's exit code. The document should state the `sq runs wait` blocking semantics it depends on, or use a non-blocking status call.
+### [CONCERN] Resolution options contradict the stated limit on instructions
 
-### [CONCERN] Concurrency rule ("one mutating run per checkout") has no owner, key, or recovery semantics
+"Resolution and resumption" lists "rerun with instructions" as a resolution outcome. The routing-engine section says per-phase runs have no path for instructions, since only `--resume <id> --item N --instructions` on a batch item accepts them. The result is a resolution type the Runner cannot execute for v1 per-phase dispatch. The resolution vocabulary needs to be closed against what is executable, and the Runner must reject unsupported resolutions explicitly. The document also never says how a checkpoint "decision" is passed to `sq run --resume`. Detached runs have stdin from `/dev/null`, and 100 requires a non-TTY invariant with no implicit resume. This resume mechanism is load-bearing and under-specified.
 
-The rule is stated as a default but nothing says where it is enforced or what counts as "mutating". It is not stated whether it applies in the Decide step (as a runnability filter) or at Act time. It is also unclear what keys it: CF worktree path, or the checkout resolved after reconciliation. Open questions:
-- Batch runs (`slices-plan`) mutate many slices in one checkout. Do they lock the checkout for the whole batch?
-- A PM-held checkout, or a paused run that holds the tree, blocks everything. A paused `blocked_on_sq_checkpoint` node for days leaves a dirty tree. Because the Runner escalates when the tree is not clean, the checkout then deadlocks until the PM acts.
-- The slice-branch rule ("expected slice branch for this node") conflicts with parallel slice work in one worktree.
-This is load-bearing for "unattended" operation and is deferred without a stated owner.
+### [CONCERN] Autonomy goal undercut by pause-reason gap and single-checkout exclusivity
 
-### [CONCERN] Clean-tree precondition vs. Squadron's own writes between phases
+Goal 2 says the Runner "moves on to other runnable work" while a human decides. Three things limit that:
+- A checkout is held while a run is paused, possibly for days, and the PM's normal case is one worktree per project. One paused run therefore blocks every other node in that checkout.
+- Until S10, pause reasons are not machine-readable, and "an unexplained pause escalates". Every pause is effectively a human stop with no routing.
+- Squadron's `--run-id` is on main but unreleased, and S10 does not exist.
 
-The Runner switches or creates branches only on a clean tree. Per-phase dispatch means each Squadron run writes design, task, or code files and review artifacts, and the Runner or Squadron must commit them before the next phase. The document never says who commits Squadron's output, or whether `sq` does so. If nobody does, the tree is dirty after every successful run. The next branch operation escalates, or "advance" can never happen without a human. Commits are a git side effect that the closed command-kind list does not include (only branch creation, switching and merge). This is a probable first-proof blocker.
+The first proof therefore depends on unreleased upstream behavior. Document the expected throughput honestly. Consider whether a blocked node's checkout can be released, or state that one-node-at-a-time per checkout is the v1 experience.
 
-### [CONCERN] Intent and observation transaction boundaries do not cover the journal–launch gap for non-run commands
+### [CONCERN] Launch race: `not found` is ambiguous right after detached launch
 
-Run identity (`--run-id`) gives exact recovery for `sq run`. The other journaled kinds are `cf_write`, branch create, branch switch, and merge. For them the document claims reconciliation "the same way a CF write is" by reading back state. Idempotency is not addressed. `cf set` has no JSON output and is confirmed by readback. If the observer finds the state unchanged after a crash, is the command safely re-issued? A merge that crashed mid-way, or a branch switch interrupted with a dirty tree, may not be re-runnable. The retry versus escalate rule per command kind should be a required attribute of each command kind. It is currently left implicit in "observer reads the current branch and HEAD back".
+Runs are launched detached with the id minted up front. `run_id=` is printed on stderr only before the first step. The next tick's `sq runs wait <id> --timeout 0` can therefore return `not found` for a run that has not yet written state. A run refused at argument validation, or one that crashed before state existed, returns the same code. "A run that cannot be found" is specified to become `blocked_on_human`, so the Runner will either escalate spuriously or leave a launch failure undetected. The design needs a launch grace period or an explicit launch-failure signal. Reading the per-run log file or the child's exit status would give one. The stderr line the Runner depends on goes to a log file the Runner is never described as reading.
 
-### [CONCERN] Reconciliation rules leave the lifecycle node model underspecified for CF-driven pointer moves
+### [CONCERN] Intent semantics need persisted desired-state that no table provides
 
-Reconciliation runs on `cf_project_changed`. Three rules are stated, but gaps remain:
-- "Moves away from a node with a run in flight → escalate" does not define behavior for a pointer move onto a node whose predecessors are not done.
-- It does not define a rename, or a reorder of slices.
-- Intent targets, attempt counts, and decision records are keyed to nodes, but nothing says how a node is identified stably across CF changes (slice index vs. name). Elsewhere the project rule is "never use user-accessible labels as logical structure". If node identity is derived from slice names or file names, that rule is violated. The document should state the identity key.
+Intents set a desired state on a target node, the "nearest intent on the path" governs, and held-true on an ancestor wins. Intents are acknowledged and consumed in one transaction. The contract-change list adds routing-decision, table-version, and attempt-count tables, but no table for per-node desired state (driven, drive-to step, held). Either the Runner recomputes governing intent by replaying acknowledged messages every tick, which is expensive and depends on "store's message order", or a table is missing. The two-sentence ordering rule also mixes arrival order with tree precedence, and the document does not say what happens when a node is reparented or orphaned. The Runner is also unable to feed back "rejected" until 100's acknowledgment-outcome change lands.
 
-### [CONCERN] Judge route "escalate-and-label" and rerun semantics blur the closed route set
+### [CONCERN] Fault policy: every fault escalates to a human, and fault-with-no-node is deferred
 
-The route set is stated as closed (advance, rerun, judge, escalate), but `judge` is currently an alias for escalate with a label. It is therefore indistinguishable in behavior from `escalate`, and the audit record must carry "would have asked the Judge" as free text or a flag. Making `judge` a distinct route now adds an enum member with no behavior and a dependency on an undefined 140 interface. Either define the judge-request message shape now, so 140 is a drop-in, or drop the route until 140 and record a `would_judge` attribute on escalate. Rerun is also underspecified. "Prior findings carried through Squadron's findings-addressed mechanism" depends on a Squadron interface not named in the dependency list. S1, S8, S9, and S10 are listed, but this one is not, and no note says whether it is public.
+A CF timeout, a transient JSON glitch, or a momentarily missing directory becomes a `blocked_on_human` escalation with the retry class deferred to "after the first proof". With the per-call-timeout design above, transient faults will be common, and each costs a human action. Open points:
+- Faults with no node ("a failed plan read") are left to slice design, which is a load-bearing deferral.
+- A fault escalating a node that has a run in flight is not defined. It is unclear whether ingestion still happens when the run finishes, or whether the checkout is held.
+- A project with a persistent fault produces a new escalation every tick unless deduplicated.
 
-### [CONCERN] Heavy dependence on unreleased and internal upstream surfaces
+At minimum, specify dedup and a consecutive-failure threshold. The cost is small and it avoids notification storms.
 
-`--run-id` is "on main, not yet released". Pause reason (S10) does not exist. Review-completed events (S8) and tier (S1) are absent. The first proof must work with paused runs whose reason is unknown ("an unexplained pause escalates"), so nearly every non-converging run becomes a human block. The first routing table therefore cannot demonstrate its value, and the doc does not say what the first-proof acceptance criterion is if S10 slips. Separately, "move 100's recovery observer and pruning off run-state files" is a change to an already-complete component (100) that is bundled into the first slice, so its scope and ordering risk are not sized. The doc does not state a minimum Squadron version, even though it declines to gate on upstream version numbers. `--run-id` absent from an older `sq` would surface only as an unrecognized-flag failure. That conflicts with "depends on shapes", since a flag is a shape the Runner cannot probe in advance.
+### [CONCERN] Amount of upstream-contract change and bundled scope in the first slice
 
-### [CONCERN] Scope is heavy for a first proof: batch dispatch, tier inference, merge policy, and multi-project are all designed in
+The first slice bundles:
+- the tenant;
+- observe/decide/act;
+- detached launch and run identity;
+- per-project fault isolation;
+- all of the "Contract changes the Runner needs from 100" (`done` terminal enforcement, `REVIEW_PRODUCING_KINDS`, `sq_run` required keys and observer, ack outcomes, recovery and pruning migration off the run-state file, new migrations);
+- a `kill -9` recovery proof.
 
-The document sets the first proof as one project and one unit, then specifies several mechanisms for later:
-- batch dispatch, with per-item resume and mapping `items[]` to nodes;
-- tier inference;
-- baseline-diffed checks;
-- per-project merge policy;
-- a program-aware predecessor function;
-- an intent vocabulary shaped for 160's whitelist;
-- stored table versions with full content per decision.
-The scope text and Technical Considerations describe batch dispatch and the merge policy as supported ("Batch dispatch is also supported"), while the slice list defers batch to after the first proof. The Overview scope list and the Technical Considerations should state which mechanisms exist in v1 and which are only reserved. Batch dispatch, merge-policy config, and the single-function predecessor hook can be cut or reduced to a noted extension point, because nothing in the first proof uses them. Reserving the tier/predecessor hooks is cheap, but these should not be built.
+That is several slices of work, and 100 is described as complete. Splitting out the 100 contract changes as their own slice (or a 100 follow-up) would put the dependency direction right: contract first, then Runner. Otherwise the first proof absorbs a modification of its own foundation.
 
-### [CONCERN] Intent semantics: "desired state, idempotent" combined with ordering and supersession is not fully defined
+### [CONCERN] Scope that can be cut or deferred from v1: merge-policy variant, batch, judge-eligible marks, programs seam
 
-Intents are applied in message order, and a later one supersedes an earlier one "for the same target". "Target" is undefined for overlapping scopes (a plan, a slice within it, and a node within the slice). A "stop driving plan" followed by "drive slice X" has an ambiguous result. "Pause" and "resume a node" read as increments or events, not desired states. They sit awkwardly next to "start or stop driving", which is a desired state. Specify the target hierarchy and the precedence between a broad intent and a narrow one, or this contract will be bent when 160 starts generating intents.
+Several mechanisms serve hypothetical or later needs:
+- The per-project auto-merge policy, and Amoeba's own "P6 without merge" pipeline. This is a forked copy of a Squadron pipeline that the document admits "will drift". It exists to serve human-merge as the default, but human merge could be a plain human step that waits on a git observation, with no pipeline fork until S11.
+- The batch-dispatch design (`items[]` mapping), a "planned" feature detailed before the first proof.
+- The judge-eligible field on escalations for a component (140) that does not exist.
+- The single-function predecessor seam for 180 programs.
 
-### [NOTE] Crash-recovery of in-memory tick state and exactly-once ingestion
+Cut or defer these. Auto-merge and the pipeline fork in particular add a second dispatch path and a recorded policy input to every dispatch decision.
 
-Ingestion marks reviews `runner_issued` in the transaction that resolves the journal entry. That ties evidence to command resolution, which is good. The decision records and "route each ingested outcome" steps are not stated to share that transaction. A crash between ingestion and routing leaves an ingested but unrouted outcome. The doc should say that routing is derived from store state (an "ingested, unrouted" marker), not from the in-tick flow, so it resumes cleanly on restart.
+Separately, the concept locks tier inference inside Amoeba for v1, yet it is deferred past the first proof, with a first table that "escalates everything else". That drops scope the plan assigns to this architecture. Record the deferral explicitly as a change to the plan, with a trigger (which first-proof stops justify it). Otherwise v1 ships as a routing table over run status and verdict only, with little automatic advance.
 
-### [NOTE] Per-project fault handler escalates to `blocked_on_human` even for transient faults
+### [CONCERN] Index-based CF identity makes renumbering destructive to evidence continuity
 
-Every exception is recorded as a human escalation. A transient failure (a `cf` call timing out, a brief filesystem error) will block nodes until the PM resolves them. There is no retry or backoff class, and a persistent fault without a node ("where a fault has no node... slice design decides") has no stated home. This is acceptable for a first proof, but it will generate noise. Once the first stops are known, distinguish transient from structural faults.
+Node identity links to CF by slice index only. A renumbered slice becomes an orphan plus a new node, and the PM "sorts out which is which". The orphan keeps its verdicts, findings, attempt counts, and blocked-states, and the new node starts with none. Round-over-round `finding_changes` and attempt limits then reset silently, which undermines recurrence-based routing. The Runner has no merge or relink operation, and none is defined as an intent. Either add a relink intent to the closed vocabulary, or state that attempt and recurrence history is lost on renumbering.
 
 ### Run Digest
 
-- Response length: 12620 chars
+- Response length: 10976 chars
 - Response is newline-free: no
 - Tool calls made: 1
 - Tool calls failed: 0
@@ -193,12 +179,12 @@ Every exception is recorded as a human escalation. A transient failure (a `cf` c
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 2
-- Tokens — prompt / cached / cache write / completion / reasoning: 84534 / 12780 / 71750 / 4309 / not computed
-- Duration: 48.7 s
-- Cost: $0.33 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 85759 / 12780 / 72975 / 6772 / not computed
+- Duration: 59.3 s
+- Cost: $0.36 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 13
+- Finding-shaped matches — whole response: 11
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 13
-- Finding-shaped matches — surviving validation: 13
+- Finding-shaped matches — in findings section: 11
+- Finding-shaped matches — surviving validation: 11

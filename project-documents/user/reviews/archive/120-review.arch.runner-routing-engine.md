@@ -16,84 +16,84 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261020
 dateUpdated: 20261020
-reviewedSha: eee1a176bb918979573abaa5b4eb2d8dd3199c7a
+reviewedSha: 26f6e3911bbb48c449a2de616c33d365217754aa
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 1
 turns: 2
-promptTokens: 82026
-cachedTokens: 9622
-cacheWriteTokens: 72400
-completionTokens: 5801
-durationSeconds: 52.6
-costUsd: 0.34925
+promptTokens: 84534
+cachedTokens: 12780
+cacheWriteTokens: 71750
+completionTokens: 4309
+durationSeconds: 48.7
+costUsd: 0.332046
 costBasis: provider
 squadronVersion: 0.23.3
 findings:
   - id: F001
     severity: concern
     category: consistency
-    summary: "Journaled-effect rule contradicts the journal's command kinds and the contract-change list"
+    summary: "\"Decide is a pure function with no I/O\" conflicts with in-tick CF/git observation and same-tick successor dispatch"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#architectural-principles"
   - id: F002
     severity: concern
-    category: consistency
-    summary: "\"Pure decision step with no I/O\" is not reconcilable with observation, and tick sequencing contradicts the one-decision rule"
+    category: feasibility
+    summary: "Synchronous subprocess observation inside a \"never waits\" tick is unbudgeted"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#architectural-principles"
   - id: F003
     severity: concern
-    category: completeness
-    summary: "Run identity and crash recovery rest on a deferred choice, yet the first slice's proof depends on them"
+    category: antipattern
+    summary: "One `sq runs wait` child process per in-flight run, with unspecified lifecycle"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F004
     severity: concern
-    category: feasibility
-    summary: "Non-blocking subprocess model is unspecified at the points where it can break"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#observing-a-run-without-blocking-the-tick"
+    category: completeness
+    summary: "Concurrency rule (\"one mutating run per checkout\") has no owner, key, or recovery semantics"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F005
     severity: concern
-    category: completeness
-    summary: "Dispatch granularity, the premise of the whole lifecycle model, is still \"proposed; PM to ratify\""
+    category: feasibility
+    summary: "Clean-tree precondition vs. Squadron's own writes between phases"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F006
     severity: concern
     category: completeness
-    summary: "Two sources of truth for lifecycle state, with no reconciliation or conflict rule"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#the-lifecycle-model"
+    summary: "Intent and observation transaction boundaries do not cover the journal–launch gap for non-run commands"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F007
     severity: concern
-    category: feasibility
-    summary: "Git branch handling in a shared working tree is hand-waved"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
+    category: completeness
+    summary: "Reconciliation rules leave the lifecycle node model underspecified for CF-driven pointer moves"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
   - id: F008
     severity: concern
-    category: completeness
-    summary: "Static routing table: \"recompute any decision\" and \"edit one place\" are not backed by mechanisms"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#design-goals"
+    category: abstraction
+    summary: "Judge route \"escalate-and-label\" and rerun semantics blur the closed route set"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
   - id: F009
     severity: concern
-    category: completeness
-    summary: "Intent handling lacks idempotence and ordering semantics"
+    category: dependencies
+    summary: "Heavy dependence on unreleased and internal upstream surfaces"
     location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F010
     severity: concern
-    category: completeness
-    summary: "Tick-level failure handling and per-project fault isolation are not addressed"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#the-loop-per-tick-per-project"
+    category: antipattern
+    summary: "Scope is heavy for a first proof: batch dispatch, tier inference, merge policy, and multi-project are all designed in"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#anticipated-slices"
   - id: F011
     severity: concern
-    category: antipattern
-    summary: "Overweight v1 scope: tier inference, baseline-diffed checks, scheduling, and multi-project generality ahead of a first vertical proof"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#anticipated-slices"
+    category: completeness
+    summary: "Intent semantics: \"desired state, idempotent\" combined with ordering and supersession is not fully defined"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#technical-considerations"
   - id: F012
     severity: note
-    category: abstraction
-    summary: "\"rerun\" overlaps Squadron's revise loops and checkpoint resume"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#the-routing-engine"
+    category: completeness
+    summary: "Crash-recovery of in-memory tick state and exactly-once ingestion"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#envisioned-state"
   - id: F013
     severity: note
-    category: dependencies
-    summary: "Upstream dependencies on Squadron are tracked but not gated"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#related-work"
+    category: completeness
+    summary: "Per-project fault handler escalates to `blocked_on_human` even for transient faults"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md#architectural-principles"
 ---
 
 # Review: arch — initiative 120
@@ -103,88 +103,86 @@ findings:
 
 ## Findings
 
-### [CONCERN] Journaled-effect rule contradicts the journal's command kinds and the contract-change list
+### [CONCERN] "Decide is a pure function with no I/O" conflicts with in-tick CF/git observation and same-tick successor dispatch
 
-"Decide purely, act through the journal" says every side effect on CF, SQ, or git is a journaled command kind, with no unjournaled path. Current State lists the journal's kinds as `cf_write` and `sq_run` only. The "Contract changes the Runner needs from 100" list adds one review-producing kind and nothing for git. Yet the Runner creates and switches slice branches, and observation commands such as `cf status --json` and `sq runs wait` are also CLI invocations.
+The "Observe, decide, act" principle says Decide does no I/O. "The tick never waits" says that after ingestion and routing, the Runner decides for every node "runnable *at that point*" and a successor can be dispatched in the same tick. Several preconditions the document requires are observations, not store state:
+- The clean-tree check and branch check ("Before any branch switch, the Runner observes the tree").
+- The ungate-hatch checks.
+- `cf status --json` gate state.
 
-Branch creation and switching is the most crash-sensitive effect, because it mutates the working tree. It has no journal kind, no observer, and no recovery story. Either add git command kinds, with their keys and observers, to the 100 contract changes, or say which effects are exempt.
+A successor dispatched in the same tick therefore needs fresh git and CF reads between Route and Decide. Those reads are either done before Decide (so they are stale for a successor that only became runnable mid-tick) or inside Decide (so it is not pure). The document must say which. Otherwise "any decision can be recomputed from the store" fails, because the clean-tree and hatch observations are not clearly recorded as inputs. These checks are also synchronous subprocess calls. Run for many projects, they conflict with "tick() returns promptly" and need a bound or a deferral model.
 
-### [CONCERN] "Pure decision step with no I/O" is not reconcilable with observation, and tick sequencing contradicts the one-decision rule
+### [CONCERN] Synchronous subprocess observation inside a "never waits" tick is unbudgeted
 
-The decision step is "a pure function from store state." The inputs it needs are run-state files, `cf status --json`, `projects.json`, and process exit. Those are I/O, and the document names no stage that reads them into the store before decide runs. There are really three stages: observe/ingest, decide, and effect. Only two are named.
+Observation relies on `cf status --json`, `cf list slices --json`, `git status`, launching detached `sq run`, and spawning `sq runs wait <id>` children. Each is a process spawn made from a synchronous `tick()`. With N projects, per-tick latency grows linearly, and a hung `cf` or `git` (a lock file, a network filesystem) stalls every project. This contradicts "a slow run never stalls other nodes or projects." No per-call timeout, no budget, and no policy for a timed-out read is given. The per-project fault handler only catches exceptions, not hangs.
 
-"The loop, per tick, per project" says to ingest finished outcomes, compute and issue the next action for runnable nodes, and route each ingested outcome. The Architectural Principles say a tick advances each node by at most one decision. It is unclear whether a node whose run finished in a tick can have its outcome routed and its next command issued in that same tick. The order of "route" and "compute next action" in the prose also looks inverted: the routed outcome is what makes the next node runnable.
+### [CONCERN] One `sq runs wait` child process per in-flight run, with unspecified lifecycle
 
-### [CONCERN] Run identity and crash recovery rest on a deferred choice, yet the first slice's proof depends on them
+Observing by running a blocking `sq runs wait <id>` child per run and polling for its exit is a heavy way to read status. It has gaps:
+- It is unclear whether `sq runs wait` blocks until the run finishes (so a child per in-flight run lives for hours) or returns immediately with a status code.
+- The document does not say what the Runner does with those children after a resident-process restart (re-spawn all, per adopted run).
+- It does not say how a `sq runs wait` that is itself stuck is told apart from a stuck run.
+- "A run that never ends hits a per-pipeline time bound" is the only bound, and it applies to the run, not to the wait child.
+Meanwhile "paused" and "completed" are distinguished only by that wait child's exit code. The document should state the `sq runs wait` blocking semantics it depends on, or use a non-blocking status call.
 
-"Run identity and the hidden `--run-id`" defers the decision to slice design. The options are a hidden, non-contract flag with heuristic matching as the fallback, or waiting on Squadron's S9. Heuristic matching by pipeline, params, and time is not exact when two launches of the same pipeline with the same params are close together. That happens for a rerun after a failure, or a resume.
+### [CONCERN] Concurrency rule ("one mutating run per checkout") has no owner, key, or recovery semantics
 
-Ambiguity becomes a human block, so the failure mode is escalation noise rather than corruption. But the first anticipated slice promises a "no-op lifecycle step journaled, run, observed, and recovered across a `kill -9`." That proof can't be designed without the decision. Make the call now, or state which way the first slice goes and what S9 changes later.
+The rule is stated as a default but nothing says where it is enforced or what counts as "mutating". It is not stated whether it applies in the Decide step (as a runnability filter) or at Act time. It is also unclear what keys it: CF worktree path, or the checkout resolved after reconciliation. Open questions:
+- Batch runs (`slices-plan`) mutate many slices in one checkout. Do they lock the checkout for the whole batch?
+- A PM-held checkout, or a paused run that holds the tree, blocks everything. A paused `blocked_on_sq_checkpoint` node for days leaves a dirty tree. Because the Runner escalates when the tree is not clean, the checkout then deadlocks until the PM acts.
+- The slice-branch rule ("expected slice branch for this node") conflicts with parallel slice work in one worktree.
+This is load-bearing for "unattended" operation and is deferred without a stated owner.
 
-### [CONCERN] Non-blocking subprocess model is unspecified at the points where it can break
+### [CONCERN] Clean-tree precondition vs. Squadron's own writes between phases
 
-The document says the Runner launches `sq run` as a child, polls it, and that the run "must survive or be cleanly observable" if the resident process stops. It does not say which of the two it commits to. If the child is attached, parent death can cause SIGPIPE or SIGHUP on its stdout/stderr pipes, or kill it outright. Surviving requires a detached session with output redirected to files, which the Runner then has to reap and tail.
+The Runner switches or creates branches only on a clean tree. Per-phase dispatch means each Squadron run writes design, task, or code files and review artifacts, and the Runner or Squadron must commit them before the next phase. The document never says who commits Squadron's output, or whether `sq` does so. If nobody does, the tree is dirty after every successful run. The next branch operation escalates, or "advance" can never happen without a human. Commits are a git side effect that the closed command-kind list does not include (only branch creation, switching and merge). This is a probable first-proof blocker.
 
-It also doesn't say whether `tick()` is sync or async, or how child exit is detected after a restart. After a restart there is no `Popen` handle, so observation falls back to the pid or the run-state file. A `running` state that nothing is actually executing (a stale file) needs liveness detection. This is the hardest mechanical part of the design, and it is called "needs a design" without a position.
+### [CONCERN] Intent and observation transaction boundaries do not cover the journal–launch gap for non-run commands
 
-### [CONCERN] Dispatch granularity, the premise of the whole lifecycle model, is still "proposed; PM to ratify"
+Run identity (`--run-id`) gives exact recovery for `sq run`. The other journaled kinds are `cf_write`, branch create, branch switch, and merge. For them the document claims reconciliation "the same way a CF write is" by reading back state. Idempotency is not addressed. `cf set` has no JSON output and is confirmed by readback. If the observer finds the state unchanged after a crash, is the command safely re-issued? A merge that crashed mid-way, or a branch switch interrupted with a dirty tree, may not be re-runnable. The retry versus escalate rule per command kind should be a required attribute of each command kind. It is currently left implicit in "observer reads the current branch and HEAD back".
 
-The step map, gate placement, per-node attempt limits, and the "blocked-state per slice" behavior all assume one phase of one slice per run. This is the load-bearing decision of the architecture and it remains unratified. If the PM picks combined pipelines, the node model (a node per lifecycle step) and the routing inputs change. Ratify it before the architecture is accepted, or mark which sections depend on it.
+### [CONCERN] Reconciliation rules leave the lifecycle node model underspecified for CF-driven pointer moves
 
-### [CONCERN] Two sources of truth for lifecycle state, with no reconciliation or conflict rule
+Reconciliation runs on `cf_project_changed`. Three rules are stated, but gaps remain:
+- "Moves away from a node with a run in flight → escalate" does not define behavior for a pointer move onto a node whose predecessors are not done.
+- It does not define a rename, or a reorder of slices.
+- Intent targets, attempt counts, and decision records are keyed to nodes, but nothing says how a node is identified stably across CF changes (slice index vs. name). Elsewhere the project rule is "never use user-accessible labels as logical structure". If node identity is derived from slice names or file names, that rule is violated. The document should state the identity key.
 
-The Runner "keeps 100's node tree in step with CF." The node tree is projected from plan documents and per-worktree CF pointers. Both CF (`activeSlice.status`, `gateInfo`) and the store (verdicts, `standing`) hold gate-relevant state. The document covers the case where CF clears and the store disagrees, and escalates. It doesn't cover:
-- CF pointers moving because the PM ran `cf set` by hand mid-run.
-- Plan documents edited or slices renumbered while nodes exist.
-- Nodes whose source slice disappeared.
+### [CONCERN] Judge route "escalate-and-label" and rerun semantics blur the closed route set
 
-Parsing plan documents to create nodes is also a parser under the project's own rules. It needs real-document fixtures and lenient parsing, and is not mentioned as a risk. Node creation from outside the process is explicitly left open ("inbox kind or only a Runner-applied intent"), which this component depends on.
+The route set is stated as closed (advance, rerun, judge, escalate), but `judge` is currently an alias for escalate with a label. It is therefore indistinguishable in behavior from `escalate`, and the audit record must carry "would have asked the Judge" as free text or a flag. Making `judge` a distinct route now adds an enum member with no behavior and a dependency on an undefined 140 interface. Either define the judge-request message shape now, so 140 is a drop-in, or drop the route until 140 and record a `would_judge` attribute on escalate. Rerun is also underspecified. "Prior findings carried through Squadron's findings-addressed mechanism" depends on a Squadron interface not named in the dependency list. S1, S8, S9, and S10 are listed, but this one is not, and no note says whether it is public.
 
-### [CONCERN] Git branch handling in a shared working tree is hand-waved
+### [CONCERN] Heavy dependence on unreleased and internal upstream surfaces
 
-The Runner creates and switches slice branches. The concurrency rule only protects against Runner-vs-Runner collisions: "at most one mutating run per checkout." A PM working in the same checkout (the document says live pointers are per worktree, and humans use these trees) can have uncommitted work or a different branch checked out. Nothing says the Runner checks for a clean tree, detects a human-held checkout, or refuses to switch. Without that, switching branches under the PM is a data-loss risk. Because project rules say never to start from another unit's branch, the Runner also needs a pre-switch check that it is on the target or the expected slice branch.
+`--run-id` is "on main, not yet released". Pause reason (S10) does not exist. Review-completed events (S8) and tier (S1) are absent. The first proof must work with paused runs whose reason is unknown ("an unexplained pause escalates"), so nearly every non-converging run becomes a human block. The first routing table therefore cannot demonstrate its value, and the doc does not say what the first-proof acceptance criterion is if S10 slips. Separately, "move 100's recovery observer and pruning off run-state files" is a change to an already-complete component (100) that is bundled into the first slice, so its scope and ordering risk are not sized. The doc does not state a minimum Squadron version, even though it declines to gate on upstream version numbers. `--run-id` absent from an older `sq` would surface only as an unrecognized-flag failure. That conflicts with "depends on shapes", since a flag is a shape the Runner cannot probe in advance.
 
-### [CONCERN] Static routing table: "recompute any decision" and "edit one place" are not backed by mechanisms
+### [CONCERN] Scope is heavy for a first proof: batch dispatch, tier inference, merge policy, and multi-project are all designed in
 
-"Given the store's contents and the routing table version, any decision can be recomputed." That requires retaining every table version that has ever fired, and the tier-inference rules and code version that were used. Only a version stamp is mentioned, and its format is deferred. The table is "loaded at start and never mutated," so every PM edit means a tenant restart, with in-flight runs adopted across it. That isn't addressed.
+The document sets the first proof as one project and one unit, then specifies several mechanisms for later:
+- batch dispatch, with per-item resume and mapping `items[]` to nodes;
+- tier inference;
+- baseline-diffed checks;
+- per-project merge policy;
+- a program-aware predecessor function;
+- an intent vocabulary shaped for 160's whitelist;
+- stored table versions with full content per decision.
+The scope text and Technical Considerations describe batch dispatch and the merge policy as supported ("Batch dispatch is also supported"), while the slice list defers batch to after the first proof. The Overview scope list and the Technical Considerations should state which mechanisms exist in v1 and which are only reserved. Batch dispatch, merge-policy config, and the single-function predecessor hook can be cut or reduced to a noted extension point, because nothing in the first proof uses them. Reserving the tier/predecessor hooks is cheap, but these should not be built.
 
-The "one edit point" goal is also weakened because tier inference, the Tier-1 predicates, and the ungate-hatch checks are code, not table data. They are routing behavior defined outside the table.
+### [CONCERN] Intent semantics: "desired state, idempotent" combined with ordering and supersession is not fully defined
 
-### [CONCERN] Intent handling lacks idempotence and ordering semantics
+Intents are applied in message order, and a later one supersedes an earlier one "for the same target". "Target" is undefined for overlapping scopes (a plan, a slice within it, and a node within the slice). A "stop driving plan" followed by "drive slice X" has an ambiguous result. "Pause" and "resume a node" read as increments or events, not desired states. They sit awkwardly next to "start or stop driving", which is a desired state. Specify the target hierarchy and the precedence between a broad intent and a narrow one, or this contract will be bent when 160 starts generating intents.
 
-The loop reads intents, applies them, and acknowledges "what was applied." A crash between apply and acknowledge replays the intent. It isn't stated whether intents are idempotent, or whether apply plus acknowledge happen in one transaction. "Drive up to a lifecycle step" has no defined semantics when the step is already past. Conflicting intents (a pause arriving with a resume) have no ordering rule. The closed vocabulary is meant to be 160's contract, so these need to be pinned before 160 builds on it.
+### [NOTE] Crash-recovery of in-memory tick state and exactly-once ingestion
 
-### [CONCERN] Tick-level failure handling and per-project fault isolation are not addressed
+Ingestion marks reviews `runner_issued` in the transaction that resolves the journal entry. That ties evidence to command resolution, which is good. The decision records and "route each ingested outcome" steps are not stated to share that transaction. A crash between ingestion and routing leaves an ingested but unrouted outcome. The doc should say that routing is derived from store state (an "ingested, unrouted" marker), not from the in-tick flow, so it resumes cleanly on restart.
 
-Failure handling is covered per run (paused, failed, cost cap, missing). It is not covered for the Runner's own operations. For example:
-- A `cf` or `sq` binary that is missing or has changed its JSON.
-- An unparseable run-state file.
-- A project directory that vanishes.
-- A store write that fails mid-ingestion.
+### [NOTE] Per-project fault handler escalates to `blocked_on_human` even for transient faults
 
-"Unknown escalates" covers data, not exceptions. "Many projects, one loop" needs a stated rule that one project's exception can't abort the tick for others. Because the project rules ban swallowed exceptions, the catch point (a top-level handler at the process boundary vs. per-project) should be named.
-
-### [CONCERN] Overweight v1 scope: tier inference, baseline-diffed checks, scheduling, and multi-project generality ahead of a first vertical proof
-
-Six slices cover the tenant, lifecycle projection, intents, dispatch and ingestion, a routing engine with inferred tiers, gate and check machinery, and multi-project scheduling with per-checkout exclusivity and cost limits. Several are speculative relative to the first proof the document itself names (one PM-chosen unstarted unit):
-- **Tier inference.** It stands in for a Squadron field (S1) that is expected to replace it, and "shrink" the rules. Until then, a table over verdict, `standing`, and recurrence that escalates everything else would deliver the audit trail without inventing a classifier.
-- **Baseline-diffed Tier-1 checks.** These are real work (test diff against baseline), and the only consumer is the tier rules above.
-- **Global run and cost limits.** Squadron's `max_cost_usd` already bounds spend per run.
-- **"Do not foreclose programs."** This adds a predecessor abstraction before a second project depends on it. It is cheap, but it is a hypothetical-requirements item.
-
-Defer tier inference and baseline-diffed checks until the first proof shows which wrong stops matter. Drive a single project first and make multi-project fairness a follow-up.
-
-### [NOTE] "rerun" overlaps Squadron's revise loops and checkpoint resume
-
-The route set includes **rerun**, "issue a Squadron loop again, bounded by a per-node attempt limit." A paused run is resumed via `--resume`. A failed run is escalated. A completed run with CONCERNS is rerun. It isn't defined what a rerun carries into the new run (the previous findings? the resolution's instructions?), or how it differs from the "rerun with instructions" resolution of an escalation. The attempt counter's scope (per node, or per node and kind) is also not stated.
-
-### [NOTE] Upstream dependencies on Squadron are tracked but not gated
-
-The design relies on run-state file semantics, `sq runs wait` exit codes, and review frontmatter. These are observed, not contracted. S1, S8, and S9 are open. The document handles this by observing rather than depending, which is reasonable, but nothing says what version-compatibility check the Runner performs at start. An unrecognized run status is treated as an unknown that escalates, which covers one drift case but not field renames.
+Every exception is recorded as a human escalation. A transient failure (a `cf` call timing out, a brief filesystem error) will block nodes until the PM resolves them. There is no retry or backoff class, and a persistent fault without a node ("where a fault has no node... slice design decides") has no stated home. This is acceptable for a first proof, but it will generate noise. Once the first stops are known, distinguish transient from structural faults.
 
 ### Run Digest
 
-- Response length: 11947 chars
+- Response length: 12620 chars
 - Response is newline-free: no
 - Tool calls made: 1
 - Tool calls failed: 0
@@ -195,9 +193,9 @@ The design relies on run-state file semantics, `sq runs wait` exit codes, and re
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 2
-- Tokens — prompt / cached / cache write / completion / reasoning: 82026 / 9622 / 72400 / 5801 / not computed
-- Duration: 52.6 s
-- Cost: $0.35 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 84534 / 12780 / 71750 / 4309 / not computed
+- Duration: 48.7 s
+- Cost: $0.33 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 13
