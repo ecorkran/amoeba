@@ -74,7 +74,7 @@ class ProofHarness:
         *,
         review_fixture: Path = STAMPED_REVIEW_106,
     ) -> None:
-        self._tmp_path = tmp_path
+        self.tmp_path = tmp_path
         self.review_fixture = review_fixture
         self.home = require_under(tmp_path, tmp_path / "home", "HOME")
         self.runs_dir = self.home / SQ_RUNS_RELATIVE_DIR
@@ -158,7 +158,7 @@ class ProofHarness:
                 label,
                 command,
                 environment=self.environment(),
-                working_dir=self._tmp_path,
+                working_dir=self.tmp_path,
                 stderr_path=self.stderr_path_for(label),
             )
         )

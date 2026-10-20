@@ -1,6 +1,6 @@
 """The lifecycle proof: the scenario's steps against real processes.
 
-Slice 110, D4. Step 12 (pruning) extends this test in a later task.
+Slice 110, D4. Step 12 prunes against the end state the oracles just checked.
 """
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from __future__ import annotations
 from contract.harness import ProofHarness
 from contract.steps import STEP_BY_NUMBER
 from contract.steps_late import LateStepsDriver
+from contract.steps_prune import prune_paused_runs
 
 
 def test_the_lifecycle_proof(proof_harness: ProofHarness) -> None:
@@ -38,3 +39,5 @@ def test_the_lifecycle_proof(proof_harness: ProofHarness) -> None:
     driver.check_finished(11)
 
     driver.check_oracles(11)
+
+    prune_paused_runs(proof_harness, STEP_BY_NUMBER[12], driver.external_run_id)

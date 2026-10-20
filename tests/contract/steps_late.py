@@ -66,6 +66,9 @@ def judge_sample_payload(node_id: str) -> dict[str, object]:
 class LateStepsDriver(ScenarioDriver):
     """Steps 7-11, then the oracles, on top of steps 1-6."""
 
+    #: Step 7's run, which no journal entry carries; step 12 must leave it alone.
+    external_run_id: str | None = None
+
     # -- step 7 ---------------------------------------------------------------
 
     def write_external_review(self, step: Step) -> None:
@@ -74,6 +77,7 @@ class LateStepsDriver(ScenarioDriver):
         since = self._positions()
         now = datetime.now(UTC)
         run_id = new_run_id(now)
+        self.external_run_id = run_id
         write_run_file(
             h.runs_dir,
             RUN_FIXTURE,
