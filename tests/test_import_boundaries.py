@@ -12,11 +12,14 @@ Rule 7: only ``cli/serve.py`` imports the server, so no other command loads uvic
 Rule 8: the server takes from ``amoeba.inbox`` only ``submit`` and its two
 errors, takes ``SubmissionKind`` from its defining module, and never calls
 ``Store.open``.
+Rule 9: ``process/run_pruning.py`` is pure: it imports only the standard library
+and the run-file parser it shares with the ``sq_run`` observer.
 """
 
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 
 from amoeba.serve.errors import ApiErrorCode
@@ -239,3 +242,46 @@ def test_rule_8_reports_every_kind_of_violation(tmp_path: Path) -> None:
         "bad.py: import amoeba.inbox.durable",
         "bad.py: Store.open",
     ]
+
+
+#: Rule 9: the only non-standard-library module the selection rule may import.
+_PRUNING_ALLOWED = "amoeba.process.observers.sq_runs"
+_RUN_PRUNING = SRC / "process" / "run_pruning.py"
+
+
+def _pruning_violations(path: Path) -> list[str]:
+    return sorted(
+        name
+        for name in _top_level_imports(path)
+        if name != _PRUNING_ALLOWED
+        and name.split(".")[0] not in sys.stdlib_module_names
+    )
+
+
+def _top_level_imports(path: Path) -> set[str]:
+    """Each imported module, as written: ``import a.b`` and ``from a.b import c``."""
+    modules: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def test_rule_9_run_pruning_imports_only_the_standard_library_and_the_parser() -> None:
+    assert _pruning_violations(_RUN_PRUNING) == []
+
+
+def test_rule_9_reports_the_store_and_any_other_module(tmp_path: Path) -> None:
+    module = tmp_path / "bad.py"
+    module.write_text(
+        "from __future__ import annotations\n"
+        "from datetime import datetime\n"
+        "from amoeba.process.observers.sq_runs import SquadronRun\n"
+        "from amoeba.store import Store\n"
+        "import pydantic\n",
+        encoding="utf-8",
+    )
+
+    assert _pruning_violations(module) == ["amoeba.store", "pydantic"]
