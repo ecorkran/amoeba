@@ -416,9 +416,18 @@ ordering depends on two things the Runner must do:
   `runner_issued` in the detection ledger **no later than it resolves the
   journal entry, in one transaction**: record the verdict, mark the file,
   resolve the entry. Otherwise the next detection tick takes the file as
-  external. The single store method that makes this one call
-  (`record_runner_report`) is deferred to 120 (or 110, if earlier); until it
-  exists, this is a stated requirement.
+  external. The single store method that makes this one call is
+  `record_runner_report(entry_id, verdict, detection, *, result) ->
+  VerdictRecord` (in-process only). One transaction: the checks, then
+  `record_verdict`'s body (its retry rule applies), then the `runner_issued`
+  ledger row carrying the verdict's id and node, then the entry resolved
+  `completed` by `issuer` with `result`. A ledger key already present (detection
+  got there first) keeps the existing row and inserts nothing; the entry still
+  resolves. It refuses, writing nothing: a `detection.outcome` other than
+  `runner_issued` or a `result` without `run_id` (`ValueError`); an entry that
+  does not exist, is already resolved, is not a review-producing kind, or
+  belongs to another project (`InvalidTransitionError`); a verdict already
+  recorded in another project (`StoreIntegrityError`).
 - **Point 5.** The Runner records its reviews **from the artifact through
   slice 105's parser**, so its record id and detection's are the same
   parsed-content digest. Any overlap is then a `record_verdict` retry, a

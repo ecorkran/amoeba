@@ -156,6 +156,8 @@ CONTRACT_METHODS = {
     "observations",
     "findings",
     "finding_changes",
+    # The Runner's one-transaction report, added by slice 110.
+    "record_runner_report",
 }
 
 

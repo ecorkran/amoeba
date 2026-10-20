@@ -189,20 +189,22 @@ revision_number: 2
 **Effort**: 3
 **Objective**: The Runner reports a review it launched in one transaction (LLD D7 H2, "API Contracts").
 
+> RunnerReportOperations is listed first in Store's bases because it extends JournalOperations and FeedOperations (MRO).
+
 **Steps**:
-- [ ] Create `src/amoeba/store/runner_report.py` with a mixin class holding `record_runner_report(entry_id, verdict, detection, *, result) -> VerdictRecord`. Add the mixin to `Store`'s bases
-- [ ] Inside one `with self._connection:` block that starts with `self._execute(sql_inbox.BEGIN_IMMEDIATE, ())` (the shape `record_detected_verdict` uses in `store/feed.py`), in this order:
+- [x] Create `src/amoeba/store/runner_report.py` with a mixin class holding `record_runner_report(entry_id, verdict, detection, *, result) -> VerdictRecord`. Add the mixin to `Store`'s bases
+- [x] Inside one `with self._connection:` block that starts with `self._execute(sql_inbox.BEGIN_IMMEDIATE, ())` (the shape `record_detected_verdict` uses in `store/feed.py`), in this order:
   1. Validate before writing: `detection.outcome` is `RUNNER_ISSUED` (else `ValueError`); the entry exists (`journal_entry` is not `None`), is unresolved, its kind is in `REVIEW_PRODUCING_KINDS`, and its project is the detection's project (else `InvalidTransitionError`). `REVIEW_PRODUCING_KINDS` is `{SQ_RUN}`, so `result` must always contain `RESULT_KEY_RUN_ID` (else `ValueError`)
   2. `_record_verdict_within(verdict, detection.project_id)` — `record_verdict`'s body and retry rule, unchanged. Refuse as `record_detected_verdict` does if the returned record belongs to another project (`StoreIntegrityError`)
   3. The `runner_issued` ledger row, carrying the verdict's id and node, through `_insert_detection` (`store/feed.py:223`, transaction-free; do not duplicate its SQL). Ledger keys are `UNIQUE (project_id, path, digest)`. If that key is already in the ledger (detection got there first), keep the existing row and insert nothing, as `record_detection` does; the entry is still resolved. Decided in the breakdown; the PM may overrule
   4. The journal resolve with `outcome=COMPLETED`, `resolved_by=ISSUER`, `result`. `journal_resolve` (`store/journal.py:111`) has no transaction-free inner function: extract one, `_resolve_entry_within(entry_id, outcome, result, resolved_by)` holding the `RESOLVE_JOURNAL_ENTRY` execute and the `rowcount != 1` check, and have `journal_resolve` call it inside its own `with self._connection:` with no behavior change
-- [ ] Retry rule: when the verdict id is already recorded, step 2 returns the existing record and steps 3 and 4 still run, so the entry is resolved and the ledger row written; the method returns the existing record. (A retry after a successful call never reaches this: the entry is resolved, so step 1 refuses.)
-- [ ] "Unknown" in the LLD's refusal list means an unknown entry id, the case `journal_resolve` words as "does not exist". An entry already resolved, including one resolved `unknown` by `journal_escalate`, is "resolved"
-- [ ] Docstring lists every refusal and "writes nothing" for each
+- [x] Retry rule: when the verdict id is already recorded, step 2 returns the existing record and steps 3 and 4 still run, so the entry is resolved and the ledger row written; the method returns the existing record. (A retry after a successful call never reaches this: the entry is resolved, so step 1 refuses.)
+- [x] "Unknown" in the LLD's refusal list means an unknown entry id, the case `journal_resolve` words as "does not exist". An entry already resolved, including one resolved `unknown` by `journal_escalate`, is "resolved"
+- [x] Docstring lists every refusal and "writes nothing" for each
 
 **Success Criteria**:
-- [ ] `ruff` and `pyright` strict clean; `store/` still imports nothing from `upstream`, `process`, or `feed` (rule 1)
-- [ ] Committed with Task 3.2
+- [x] `ruff` and `pyright` strict clean; `store/` still imports nothing from `upstream`, `process`, or `feed` (rule 1)
+- [x] Committed with Task 3.2
 
 ---
 
@@ -213,7 +215,7 @@ revision_number: 2
 **Objective**: Prove the one-commit property, each refusal, and the retry rule.
 
 **Steps**:
-- [ ] Add `tests/store/test_runner_report.py` using the existing evidence/journal harnesses (`tests/evidence_harness.py`; check before adding helpers)
+- [x] Add `tests/store/test_runner_report.py` using the existing evidence/journal harnesses (`tests/evidence_harness.py`; check before adding helpers)
 - [ ] Happy path: after one call, the verdict exists, one `runner_issued` detection row names its id and node, and the entry is `completed` by `issuer` with `result`; `recorded_result_run_ids` includes the run id for an `sq_run` entry
 - [ ] One commit: monkeypatch `_resolve_entry_within` to raise; assert no verdict, no ledger row, entry unresolved
 - [ ] Ledger key already present (an `ingested` row for the same project, path, and digest): the call inserts no second row, keeps the existing one, writes the verdict, and resolves the entry
