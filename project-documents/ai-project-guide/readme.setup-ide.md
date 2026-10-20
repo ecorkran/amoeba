@@ -2,12 +2,12 @@
 docType: guide
 scope: project-wide
 audience: [human, ai]
-description: setup-ide reference — supported targets, what each writes, and how to run it
+description: cf setup-ide reference — supported targets, what each writes, and how to run it
 ---
 
 # setup-ide
 
-`setup-ide` compiles the rules in `project-guides/rules/` into whatever format
+`cf setup-ide` compiles the rules in `project-guides/rules/` into whatever format
 your AI tool reads. One source of rules, several output formats.
 
 **Path convention:** `ai-project-guide/` below means
@@ -15,25 +15,34 @@ your AI tool reads. One source of rules, several output formats.
 
 ## Install and run
 
-Requires ai-project-guide present at `project-documents/ai-project-guide`
-(normally a git submodule). Run from your project root:
+Requires context-forge (cf) 0.19.6 or later and the guide installed at
+`project-documents/ai-project-guide` (`cf init` does this). Run from your
+project root:
 
 ```bash
-./project-documents/ai-project-guide/scripts/setup-ide <target>
+cf setup-ide <target>
 ```
 
-If you use context-forge, `cf setup-ide <target>` wraps this and adds
-CLAUDE.md backup handling and worktree propagation.
+The guide used to ship a `scripts/setup-ide` bash script for this. cf now does
+the work itself, and the script is gone.
 
 Output paths are always resolved from the **project root** — the directory
 containing `project-documents/` — so running from a subdirectory is safe.
+
+Add `--dry-run` to see what a run would do without writing anything. It lists
+each file that would be added (`+`), changed (`~`) or removed (`-`), plus any
+skip and warning lines:
+
+```bash
+cf setup-ide claude --dry-run
+```
 
 ## Supported targets
 
 | Target | Writes | Use for |
 |---|---|---|
 | `claude` | `CLAUDE.md`, `.claude/rules/`, `.claude/agents/`, `.claude/skills/` | Claude Code |
-| `cursor` | `.cursor/rules/*.mdc`, `.cursor/agents/*.mdc` | Cursor |
+| `cursor` | `AGENTS.md`, `.cursor/rules/*.mdc` | Cursor |
 | `copilot` | `.github/copilot-instructions.md`, `.github/instructions/`, `.agents/skills/`, `AGENTS.md` | VS Code Copilot |
 | `agents` | `AGENTS.md`, `.agents/skills/` | Codex and other AGENTS.md readers |
 
@@ -41,12 +50,12 @@ containing `project-documents/` — so running from a subdirectory is safe.
 format, so the target is named after the format rather than after one vendor.
 
 Any other value exits non-zero with usage. **`windsurf` is no longer
-supported** — it was removed from the script but lingered in this document.
+supported** — it was removed and lingered in this document for a while.
 
 ## What each target does
 
 **`claude`** — splits rules by `alwaysApply`. Rules with `alwaysApply: true`
-(`general`, `git`) are inlined into `CLAUDE.md`; the other eight are copied to
+(`general`, `git`) are inlined into `CLAUDE.md`; the scoped rules are copied to
 `.claude/rules/` retaining their `paths:` frontmatter. Agents are copied
 verbatim. Skills in directory form (`skill-name/SKILL.md`) are copied to
 `.claude/skills/`.
@@ -86,6 +95,46 @@ Installs from before the manifest existed are cleaned up too. Files the guide
 used to ship (the `analyze` skill, `code-review-agent.md`) are deleted when
 their content matches a version the guide shipped.
 
+The manifest also decides what setup-ide may overwrite. If a file it would write
+already exists with different content and the manifest does not list it, the
+file belongs to the project: it is left alone, with a warning. Rename or remove
+it to let setup-ide manage that path. The same holds when there is no manifest
+yet (a first install, or one from before the manifest existed): a differing
+file is never overwritten. On an install that predates the manifest, that
+includes stock files from an older guide version; remove them once to take the
+current versions.
+
+A file setup-ide installed and you edited afterwards is also left alone: the
+run warns that the guide's update was not written and keeps the path in the
+manifest. Delete the file to take the guide's version again.
+
+## Lint configs
+
+Every run, for any target, also checks the linter config the language rules
+require, for each language it detects in the project:
+
+| Language | Detected by | Config checked | Baseline |
+|---|---|---|---|
+| Python | `pyproject.toml`, `setup.py`, `requirements*.txt` | `.ruff.toml`, `ruff.toml`, or `[tool.ruff]` in `pyproject.toml` | `lint/python/ruff.toml` |
+| Dart / Flutter | `pubspec.yaml` | `analysis_options.yaml` | `lint/dart/analysis_options.yaml` |
+| TypeScript | `tsconfig.json` or `tsconfig.base.json` | any ESLint config file | `lint/typescript/eslint.config.mjs` |
+| C# | `*.csproj` or `*.sln` (up to 3 levels deep) | `.editorconfig`, `Directory.Build.props`, `*.csproj` | `lint/csharp/` |
+
+Paths are under `ai-project-guide/project-guides/`. Each language folder has a
+`required` file listing what must appear in the config. A config missing any of
+those is reported, with the missing items.
+
+By default this only reports. With `--write-lint`, setup-ide writes the
+baseline when no config exists. It never edits an existing config, with one
+exception: when `pyproject.toml` has a `[tool.ruff]` section that lacks required
+rules, it adds a `ruff.toml` with `extend = "pyproject.toml"` and
+`extend-select` for the missing rules. The project's own settings stay in
+force, and the required rules apply on top of its `select` and `ignore`.
+
+Written configs belong to the project. They are not recorded in the manifest
+and are never removed. A language whose rules file is in `rules.exclude` is
+not checked.
+
 ## Rules inventory
 
 `project-guides/rules/` — always-on rules apply everywhere; scoped rules attach
@@ -95,18 +144,20 @@ by file pattern.
 |---|---|
 | `general.md` | **always on** — core conventions |
 | `git.md` | **always on** — commits, branches, integration branch |
+| `csharp.md` | `**/*.cs`, `**/*.csproj`, `Directory.Build.props`, `.editorconfig` |
 | `dart.md` | `**/*.dart`, `**/pubspec.yaml` |
 | `electron.md` | `electron/**`, `src/preload/**`, build configs |
 | `flutter.md` | `android/**`, `ios/**` (supplements `dart.md`) |
 | `python.md` | `**/*.py`, `**/pyproject.toml`, `**/requirements*.txt` |
 | `react.md` | React/JSX sources |
+| `shell.md` | `**/*.sh`, `**/*.bash`, GitHub Actions and GitLab CI workflows |
 | `sql.md` | SQL, PostgreSQL, pgvector, TimescaleDB |
 | `testing.md` | test sources |
 | `typescript.md` | TypeScript sources |
 
-Agents: `task-checker.md`, `tester.md`.
+Agents: `task-checker.md`.
 
-Skills: `analyze/`. A skill must be a **directory containing `SKILL.md`** —
+Skills: none ship today. A skill must be a **directory containing `SKILL.md`** —
 Claude Code will not load a flat `.md` file, so `setup-ide claude` warns and
 skips one rather than dropping it silently. The `cursor` target does not install
 skills; Cursor has no equivalent concept.
@@ -138,13 +189,8 @@ recognize them as regenerable. Re-running a target overwrites its own outputs.
 
 ## Troubleshooting
 
-**Permission denied**
-```bash
-chmod +x project-documents/ai-project-guide/scripts/setup-ide
-```
-
 **Rules not loading** — restart the IDE; rules load at startup. For Cursor,
 confirm files are `.mdc` in `.cursor/rules/` with intact frontmatter.
 
-**Wrong output location** — the script walks up for `project-documents/`. If it
+**Wrong output location** — cf walks up for `project-documents/`. If it
 reports an unexpected project root, you are outside the intended tree.

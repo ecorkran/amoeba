@@ -6,7 +6,7 @@ audience: [human, ai]
 description: Master process guide describing roles and the slice-based workflow.
 dependsOn: []
 dateCreated: 20250101
-dateUpdated: 20260914
+dateUpdated: 20261011
 ---
 
 #### Overview
@@ -31,9 +31,11 @@ Each phase has an approval authority that must sign off before proceeding to the
 - **Phases 0–2** (strategic decisions): Normally require human PM approval.
 - **Phases 3–5** (design and planning execution): May be approved by an AI Architect when operating under established patterns and clear architectural direction.
 - **Phase 6** (execution): May self-validate via tests and CI when automation pipelines are in place.
-- **Phase 7** (integration): Normally requires PM approval; may self-validate for routine integrations.
+- **Phase 7** (review and integration): Reviews are started and closed by the PM or the orchestrating pipeline, never by the implementing agent. After review passes, the merge and close-out may self-validate for routine integrations.
 
-**Review gates.** When `cf next` or any workflow check reports that a slice, task, or code review is required before proceeding, that is the approval mechanism above in action. The correct response is to stop and report to the Project Manager, or to run the review through the project's established review process (for example squadron) if that is the workflow. Never edit frontmatter to clear the gate. In particular, `review: none` in a slice-design's frontmatter is a Project Manager declaration that exempts the slice from all slice-scoped reviews; agents must not add it, must not run `cf check --set-review-none`, and must not carry it over from another document used as a template.
+**Review gates.** When `cf next` or any workflow check reports that a slice, task, or code review is required before proceeding, that is the approval mechanism above in action. The correct response is to stop and report to the Project Manager. Do not start the review yourself: the Project Manager or the orchestrating pipeline (for example squadron) runs reviews. Never edit frontmatter to clear the gate. In particular, `review: none` in a slice-design's frontmatter is a Project Manager declaration that exempts the slice from all slice-scoped reviews; agents must not add it, must not run `cf check --set-review-none`, and must not carry it over from another document used as a template. The one exception is the project's standing fixes slice (see Fixes below), which is `review: none` by definition: an agent creating it sets that field.
+
+**Front-load decisions.** A decision is due at the earliest phase that has the information to make it. Architecture owns any decision that crosses slices or touches process, configuration, or external systems. A phase is not complete while it holds a pending decision: take it to the Project Manager before the phase ends, never pass it down to the implementer. Automated pipelines cannot run work with a decision still embedded in it.
 
 When working on project phases, ensure you have all required information first. If in doubt, request and obtain the required information from the Project Manager before proceeding. Do not guess or make assumptions.
 
@@ -50,6 +52,7 @@ Slices are grouped under architectural initiatives, each with its own architectu
    - Include initial tech stack identification and key constraints where known.
    - If the project involves multiple capability areas or components, identify them in the Solution Approach section. These are not yet initiatives — just the named pieces that Phase 1 will formalize.
    - Use `guide.ai-project.000-concept` for detailed guidance.
+   - **Existing codebase with no planning artifacts (brownfield):** use `guide.ai-project.brownfield-adoption` instead of starting from a blank concept. It recovers the concept, architecture, and an existing-state slice plan from what is built.
    - Outcome: _A short doc describing the problem, target users, overall solution approach (including identified capability areas), and initial technology direction._
 
 1. **Phase 1: Initiative Plan**
@@ -115,7 +118,7 @@ Slices are grouped under architectural initiatives, each with its own architectu
    - Identify any cross-slice dependencies or conflicts.
    - Create mockups or detailed specifications for UI components (if applicable).
    - Save as `user/slices/nnn-slice.{slice-name}.md` where `nnn` follows initiative-based indexing per `file-naming-conventions.md`.
-   - Write from `project-guides/templates/slice-design.md` and confirm `scripts/validate-slice-design` prints PASS before the phase is complete.
+   - Write from `project-guides/templates/slice-design.md` and confirm `cf validate design` passes before the phase is complete.
    - Outcome: _Detailed design document for implementing this slice._
 
 5. **Phase 5: Slice Task Breakdown**
@@ -156,23 +159,21 @@ Slices are grouped under architectural initiatives, each with its own architectu
 
 6. **Phase 6: Slice Execution (AI/Human Collaboration)**
    - Tasks are assigned to the Senior AI or human developers. They will delegate tasks to Junior AIs or junior human developers.
-   - The Project Manager or Senior AI (in a reviewer capacity) perform:
-     - Code reviews
-     - Design reviews
-     - Ensuring alignment with the slice design and overall project vision
+   - Work is committed on the slice branch. Phase 6 ends when every task is complete; the implementing agent does not start reviews or merge.
+   - An orchestrating pipeline may run Phases 6 and 7 as a single run, provided the pipeline engine (not the implementing agent) starts each review, decides from defined thresholds when review has passed, and performs the merge only after it has passed.
+   - Outcome: _Working software increment for the slice, tested and committed on the slice branch._
 
-   - Outcome: _Working software increment for the slice, tested and validated._
-
-7. **Phase 7: Slice Integration**
-*Note*: this phase is only run when explicitly needed.  It is omitted in most workflows.
-   - Integrate completed slice with existing codebase.
-   - For single-developer projects, this is typically straightforward.
-   - For team projects or future parallelization, this becomes similar to git merge/PR integration.
-   - Verify that slice dependencies and interfaces work as expected.
-   - Update project documentation and architecture understanding where applicable.
-   - Check off the completed slice in the parent slice and/or slice plan
-   - Ensure that any relevant completed files (task, slice) have status: complete
-   - Outcome: _Integrated functionality ready for the next development cycle._
+7. **Phase 7: Slice Integration (review, revise, merge)**
+   Every slice goes through this phase once its tasks are complete.
+   1. **Review and revise.** The slice gets one or more rounds of code review, each followed by revisions. Reviews may be manual or automated (for example, squadron pipelines).
+      - The Project Manager or the orchestrating pipeline starts each review and decides when review is done. The implementing agent never starts a review on its own, never picks how a review runs, and never decides that one round is enough.
+   2. **Merge.** After the code review has passed, merge the slice branch into the target per the Git Rules. The merge may be done directly or as part of a release step (for example, a `/release` skill). Merging is never a Phase 6 task.
+   3. **Close out.**
+      - Verify that slice dependencies and interfaces work as expected.
+      - Update project documentation and architecture understanding where applicable.
+      - Check off the completed slice in the parent slice plan.
+      - Ensure that any relevant completed files (task, slice) have status: complete.
+   - Outcome: _Reviewed, merged functionality ready for the next development cycle._
 
 ##### DEVLOG
 DEVLOG updates are a standing practice across all phases, not specific to any single phase. At the end of each work session — whether a slice is complete, partially complete, or work was interrupted — write a Session State Summary to `DEVLOG.md` in the project root. Use the Session State Summary prompt in `prompt.ai-project.system` for formatting guidance. DEVLOG entries should record what was accomplished and the current state; they do not determine what to work on next (that is the responsibility of workflow navigation or orchestration).
@@ -192,8 +193,12 @@ Projects use the same phases but differ in scope and entry point:
 **New initiative on existing project**:
 - Phase 1 (Update initiative plan) → Phase 2 (Architecture: component doc) → Phase 3 (Slice Planning) → execute slices
 
-**Small maintenance or ad-hoc work**:
-- Skip directly to Phase 5 (Task Breakdown) using the Ad-Hoc Tasks prompt in `prompt.ai-project.system`.
+**Fixes** (any work committed as `fix:`):
+- Follow `rules/fixes.md`. A small fix is made and committed straight to the target branch, with no slice, task file or review. A fix that needs several steps becomes a task group in the project's standing fixes slice.
+- **Creating the standing fixes slice** (once per project, the first time a fix needs tasks): use index 990 (reserved for standing slices; see `file-naming-conventions`), then add
+  - `user/slices/990-slice.standing-fixes.md`: slice-design frontmatter with `status: in_progress` and `review: none`. Body: it is a permanent container for fixes and is never complete; unrelated fixes belong together; closed items may be reopened.
+  - `user/tasks/990-tasks.standing-fixes.md`: tasks frontmatter, then one `## #{issue} {title}` checklist group per fix.
+  - A line for it in the project's 900 slice plan, if there is one.
 
 ---
 
@@ -203,14 +208,13 @@ The following structure should be present in every project. Assume files are in 
 ```
 {project-root}/
 └── project-documents/
-    ├── ai-project-guide/  # Git submodule (framework guides)
+    ├── ai-project-guide/  # the guide, installed and updated by cf
     │   ├── project-guides/    # process & methodology (start here)
     │   ├── framework-guides/  # app-level platforms (Next.js, Astro …)
     │   ├── tool-guides/       # importable libs (SciChart, Three.js …)
     │   ├── api-guides/        # external data endpoints (USGS, ArcGIS …)
     │   ├── domain-guides/     # cross-cutting subject matter (hydrology …)
     │   ├── snippets/          # copyable code/config examples
-    │   └── scripts/           # setup and utility scripts
     └── user/               # Your project-specific work (parent repo)
 ```
 
@@ -226,7 +230,7 @@ The following structure should be present in every project. Assume files are in 
 ```
 
 > Each folder has its own `README.md` or `introduction.md` with deeper context.
-> Attachments live in `project-documents/z-attachments/`.
+> Images live in an `images/` folder next to the document that uses them, linked by relative path.
 
 ---
 
@@ -282,6 +286,8 @@ These files, shared by all of our projects, are contained in {project-root}/proj
   roles and project phases.  Always start here.
 * guide.ai-project.000-concept (aka: AI Project Concept Guide): details on creating
   Phase 0 Concept documents.
+* guide.ai-project.brownfield-adoption: adopting an existing codebase that has no
+  planning artifacts; recovers the concept, architecture, and an existing-state slice plan.
 * guide.ai-project.001-initiative-plan: guidance on creating the Phase 1 Initiative
   Plan, which decomposes a concept into named initiatives with index assignments.
 * guide.ai-project.003-slice-planning: guidance on breaking architectural components

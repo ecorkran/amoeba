@@ -10,7 +10,7 @@ dependsOn:
   - guide.ai-project.process.md
 npmScriptsAiSupport: "!include ../snippets/npm-scripts.ai-support.json"
 dateCreated: 20250724
-dateUpdated: 20260324
+dateUpdated: 20261011
 ---
 ## Prompts
 This document contains prepared prompts useful in applying the `guide.ai-project.process` and performing additional supplemental tasks.
@@ -30,13 +30,11 @@ context_profiles:
   implementation-phase-6:            [fileSlice, fileTasks]
   slice-integration-phase-7:         [fileArch, fileSlicePlan, fileSlice, fileTasks]
   context-initialization:            []
-  maintenance-task:                  [fileTasks]
-  maintenance-routine:               [fileSlice, fileTasks]
   analysis-processing:               [fileSlice, fileTasks]
   analysis-task-creation:            [fileTasks]
   analysis-to-lld:                   [fileSlice]
   analysis-task-implementation:      [fileSlice, fileTasks]
-  analyze-codebase:                  []
+  brownfield-adoption:               [fileConcept, fileArch, fileSlicePlan, fileComprehension]
   custom-instruction:                []
   _default:                          [fileArch, fileSlicePlan, fileSlice, fileTasks]
 ```
@@ -45,7 +43,7 @@ context_profiles:
 ```markdown
 We're starting work on a new project {project}. We will use our curated AI Project Creation methods in `guide.ai-project.process` (can also be referred to as Project Guide or Process Guide) to assist us in designing and performing the work. Your role as described in the Project Guide is Architect.
 
-Our goal is to collaboratively create the concept document. The Project Manager will describe the project — usually conversationally, though they may also provide a starter document in `user/project-guides/000-concept.{project}.md`. Either approach works; follow the PM's lead.
+Our goal is to collaboratively create the concept document. Start by asking the Project Manager what they want to build. They may answer conversationally, or point you to a starter document in `user/project-guides/000-concept.{project}.md`; either works, follow the PM's lead. If a starter document already exists, read it first and ask only about what it leaves out.
 
 Through conversation, refine the PM's vision into a concept document following the Living Document Pattern and the structure described in `guide.ai-project.000-concept`. The PM's original concept is preserved in the User-Provided Concept section; structured technical analysis goes into the Refined Concept section.
 
@@ -290,7 +288,7 @@ Include:
 - Verification walkthrough: concrete commands, workflows, and step-by-step confirmation that the user can follow to prove the slice delivers what it claims. This is not a restatement of success criteria — it's the "demo script" showing what the user can actually do.  This is the draft walkthrough that will be refined when Phase 6 (Implementation) is complete.
 - Only template sections that are relevant to this slice — omit sections that don't apply
 
-Before finishing, run `./project-documents/ai-project-guide/scripts/validate-slice-design <path-to-design>`. It must print PASS. If it prints FAIL, add the missing sections; do not declare the phase complete on a failing document.
+Before finishing, run `cf validate design <path-to-design>`. It must pass (exit 0). If it fails, add the missing sections it lists; do not declare the phase complete on a failing document.
 
 Avoid:
 - Time estimates in hours/days/etc. You may use a 1-5 relative effort scale.
@@ -360,18 +358,23 @@ Notes:
 ```markdown
 We are working on {slice} in project {project}, phase 6 of `ai-project-guide/project-guides/guide.ai-project.process`. 
 
-Your job is to complete the tasks in the `user/tasks/{sliceindex}-tasks.{slicename}.md` file. Please work through the tasks, following the guidelines in our project guides, and using the relevant provided rules (`rules/`, `CLAUDE.md`, etc).  Your role is "Senior AI". 
+Your job is to complete the tasks in these file(s), in order: {task-files}. Please work through the tasks, following the guidelines in our project guides, and using the relevant provided rules (`rules/`, `CLAUDE.md`, etc).  Your role is "Senior AI". 
 
 Use the following as overview input when needed.  Primary input is the task file referenced above.
 - The slice design at `user/slices/{slice}.md`.
 
 Commit at each checkpoint marked in the task file (look for lines starting with `**Commit**:`). Use the commit message provided. If a task has no explicit commit marker, commit at the end of the task before moving to the next.
 
+Do not merge the slice branch during this phase, even if a task item says to. Merging happens in Phase 7, after code review passes. If the task file contains a merge step, leave it unchecked and tell the Project Manager.
+{{#if targetBranch}}
+Branch target for this checkout: `{{targetBranch}}`. Slice branches fork from it and merge into it, in a worktree as in the primary tree. If it is `main`, no integration branch is configured.
+{{/if}}
+
 Work carefully and sequentially through the tasks, ensuring that each task is verified complete before proceeding to the next.  You should write unit tests for code as you work through the task. Ensure that tests pass and task is complete before moving to the next.
 
 If you encounter a failing test, an ambiguous requirement, or a design decision not covered by the slice design, stop and confer with the Project Manager. Do not make more than three attempts at a failing approach before stopping.
 
-After completing each task, delegate checklist updates to the `task-checker` agent rather than editing task files inline. This keeps your context focused on implementation. If task-checker is unavailable, check off tasks directly.
+After completing each task, delegate checklist updates to the `task-checker` agent rather than editing task files inline. This keeps your context focused on implementation. If task-checker is unavailable, check off tasks directly. Check off only items you have verified as done. Leave unfinished items unchecked, including when work stops to wait for the Project Manager.
 
 ###### Completion
 After completing all tasks, perform the following steps:
@@ -387,7 +390,7 @@ After completing all tasks, perform the following steps:
 - if file does not exist, create it as described in project-guides/templates/changelog-format.md
 
 ###### Notes: 
-- Delegate all checklist updates to the `task-checker` agent. Do not edit task file checkboxes inline.
+- Delegate all checklist updates to the `task-checker` agent rather than editing task file checkboxes inline. If task-checker is unavailable, check off tasks directly; never leave completed tasks unchecked. Check off only items you have verified as done. Leave unfinished items unchecked, including when work stops to wait for the Project Manager.
 - Ignore case sensitivity in all file and directory names.
 - Use the directory-structure and file-naming-conventions guides.
 - If you are missing required information or referenced files, STOP and obtain
@@ -400,10 +403,16 @@ We are completing slice integration (Phase 7) for {slice} in project {project}, 
 
 Your role is Senior AI.
 
+Phase 7 begins with code review and revisions. The Project Manager or the orchestrating pipeline runs those; do not start a review yourself or decide that review is finished. This prompt covers the steps after review has passed. If the merge is handled by a release step (for example, a `/release` skill), skip step 1's merge and continue with verification.
+{{#if targetBranch}}
+Branch target for this checkout: `{{targetBranch}}`. If it is `main`, no integration branch is configured.
+{{/if}}
+
 **Integration Steps:**
 
 1. **Merge and verify**
-   - Ensure the slice branch is merged into the main development branch (if using branches)
+   - Confirm the slice's code review has passed. If it has not, stop and tell the Project Manager.
+   - Merge the slice branch into the target, following the merge steps in the project Git Rules (if using branches)
    - Resolve any merge conflicts, preserving slice intent
    - Run full test suite — not just slice tests, but project-wide regressions
    - Verify build succeeds cleanly
@@ -424,10 +433,49 @@ Your role is Senior AI.
    - Update the task file status to `complete`
 
 **Notes:**
-- If integration reveals issues that require non-trivial fixes, log them to maintenance (`tasks/950-tasks.maintenance.md`) rather than blocking integration
+- If integration reveals issues that require non-trivial fixes, file an issue for each rather than blocking integration; they are worked as fixes (`rules/fixes.md`)
 - This phase does not determine what to work on next — workflow navigation is handled by orchestration
 - If you cannot verify integration (e.g., missing test infrastructure), note what was verified and what was not
 
+
+##### Brownfield Adoption
+*Use this prompt when adopting an existing codebase that has no planning artifacts. Context Forge selects it (profile `brownfield-adoption`) and appends an "Adoption Facts" section after it.*
+```markdown
+We're adopting project {project}, an existing codebase, into the AI Project Creation methods in `guide.ai-project.process`. The code exists; the planning artifacts do not. Your role as described in the Project Guide is Architect. Use `guide.ai-project.brownfield-adoption` for detailed guidance.
+
+The goal is to recover three artifacts from what is already built, in order: a baseline concept, an architecture, and an existing-state slice plan. Work from whichever of these already exist; if an artifact is present, review it with the PM and continue from there. Never overwrite an existing artifact without the PM saying so.
+
+**Never fabricate intent.** Why the project exists, who it is for, and what it was meant to become come only from the repo's own prose (README, docs, comments) or from the PM. If neither says, write "unknown" in that place and ask the PM. Describing what the code does is analysis; describing what it was meant to do is intent, and intent is not inferred.
+
+**Inputs.** The code itself is always available. If a codebase comprehension analysis was provided, use it as evidence for structure and dependencies; verify claims that matter against the code. If none was provided, work from the repo alone.
+
+**Choose the path.** The Adoption Facts section, appended after this prompt, holds the detection facts and squadron's probe output. Do not run the probe yourself. If the section is missing, stop and say: "The Adoption Facts section is missing; cf build should always supply it. Update cf or report the issue." Do not continue on any path.
+- `surfaces` in the facts has one entry per agent surface where the squadron path can run. Find the entry for the surface you are running in. If there is none, take the CF-only path. The set of surfaces is squadron's to extend; do not assume which ones it holds.
+- If the probe output's `probe_version` is not 1, treat squadron as unavailable and say so.
+- Squadron path: the probe output is present, your surface has an entry, and that entry has `analysis_skill_installed` true and `understand_plugin_installed` true. This is the normal path.
+- If your entry has `analysis_skill_installed` true and `understand_plugin_installed` false, ask the PM to choose: install the plugin, or take the CF-only path.
+- CF-only path: any other case. Say why in one line (the section says squadron is absent or unreadable, or this surface is not supported) and continue from the repo alone.
+- A null fact means unknown. Say it is unknown; do not treat it as true or false.
+
+**Squadron path steps.** Run them in order:
+1. Graph. Whether to build one is the only question on this path, and you ask it once:
+   - `graph.commits_behind` is 0: use the graph, no question.
+   - `graph.present` is false: ask "Build the graph? It is a paid multi-agent run."
+   - `graph.commits_behind` is above 0 or null: ask once, offering: rebuild (paid multi-agent run); use it as is (state how many commits behind, or that this is unknown); or take the CF-only path.
+   Do not rebuild without the PM's answer, however few commits behind. To build or rebuild, invoke the `graph_build` value in your surface's entry, read from the facts; never hardcode it. The analysis entry in the next step never builds the graph: if the graph is missing it stops and says so.
+2. Start squadron's analysis with the `entry` value in your surface's entry.
+3. Baseline concept: invoke the `concept` value in your surface's entry, read from the facts; never hardcode it. `entry` alone does not write the concept. Skip this step when a concept already exists, unless the PM confirms an overwrite. The PM confirms or corrects the result.
+4. Re-run `cf build` so the new artifacts are picked up, then do the architecture and slice plan below.
+Offer the adoption baseline (only if `baseline.available` is true) and the initiative candidates as optional extras at the end; do not run them unprompted.
+
+**1. Baseline concept.** If a concept document exists and carries a provenance block or `[INFERRED]` markers, it was machine-derived. Present it to the PM and have them confirm or correct it before building on it. If no concept exists, draft one in `guide.ai-project.000-concept` structure from the repo's prose and the PM's answers, marking unsupported statements unknown.
+
+**2. Architecture, reverse-engineered.** Describe the system as built: components, boundaries, data flow, external dependencies, and the conventions the code actually follows. Where the code contradicts the concept or its own docs, record both and ask the PM which is intended.
+
+**3. Existing-state slice plan.** Group the built work into slices. Each built slice is recorded as a retroactive completed slice, using the retroactive marker defined in the process guide. Retroactive slices were not reviewed. Then ask the PM what comes next and add it as normal, unbuilt slices.
+
+*Ask questions* whenever the repo and the PM leave something unclear. Do not assume or guess.
+```
 
 ##### Context Initialization
 *Use this prompt when you need to switch models or refresh understanding in a project.*
@@ -521,7 +569,7 @@ Your role is Senior AI.
 - What's pending or blocking (open questions, manual verification, deferred items)
 - Key decisions or surprises worth noting for future context
 - If in progress: state needed to resume (current task, file, important context)
-- Issues logged to maintenance (file reference + description)
+- Issues filed (number + one-line description)
 
 **Guidelines:**
 - Keep concise — this is input for next session's context assembly
@@ -530,49 +578,6 @@ Your role is Senior AI.
 **Update DEVLOG.md**
 - if file does not exist, create it as described in project-guides/templates/devlog-format.md
 ```
-
-##### Maintenance Task
-```markdown
-Operate as a Senior AI. Use the issue description provided, and add tasks to the maintenance file to address implementation of the issue.  Use a maintenance task and slice file in the 950-999 range.  Add a concise description in the slist file and add a new task to the task file. Use an existing slice and task file in the maintenance range if present and the item is small enough to represent as a single main task.  Create new files if needed.
-
-Example files:
-`slices/950-slices.maintenance.md`
-`tasks/950-tasks.maintenance.md`
-
-Include:
-1. A new Task {n}
-2. A very brief overview of the task (you may modify if already present).
-3. Granular but concise subtasks following Phase 5 guidelines
-4. Organize so that subtasks can be completed sequentially.
-5. Optimize for early vertical slice testability.
-6. Use checklist format for all tasks.
-
-Avoid:
-- Time estimates for subtasks.  If work is that complex, this is wrong format.
-- Benchmarking tasks unless actually relevant to this effort.
-- Risk items.  Include only if truly relevant.  Be skeptical here.
-
-For each {tool} in use, consult knowledge in `ai-project-guide/tool-guides/{tool}/`. Follow all task creation guidelines from the Process Guide.
-
-Each task must be completable by a junior AI with clear success criteria. If insufficient information is available, stop and request clarifying information.
-
-This is a project planning task, not a coding task.
-```
-
-##### Maintenance Routine
-```markdown
-We are performing routine maintenance by implementing solutions for incomplete tasks in the maintenance task file. Unless otherwise specified, use file `tasks/950-tasks.maintenance.md` and scan for incomplete tasks. If given a particular section heading in the file, consider only that section.
-
-Work through maintenance items one at a time. For each item:
-- Determine if task can reasonably be solved without expansion or creating more detailed tasks.  Keep a list of anything requiring this additional detail and present it to the Project Manager after proceeding through all solvable items.
-- Implement solutions according to our project guidelines.  Ensure that you create unit tests for each solution, and that the tests pass before proceeding to the next item.  Create tests as you work through each item -- do not wait until the end and try to create them all.
-- Run regressions and existing tests to make sure maintenance fixes do not break any existing slices, slice boundaries, dependencies, or interfaces.
-- Delegate checklist updates to the `task-checker` agent as you complete items. Do not edit task file checkboxes inline.
-
-Current project: {project}
-Active slice work: {slice} (if applicable)
-```
-
 
 ##### Custom Instruction
 *Used as a placeholder by context-builder app*

@@ -7,7 +7,7 @@ alwaysApply: true
 ### Git Rules
 
 #### Branch Naming
-A branch corresponds to one unit of work: slice implementation (Phase 6). Planning work (Phases 0–5: concept, initiative plan, architecture, slice plan, slice design, task breakdown, and reviews of those artifacts) does not get its own branch — it commits directly to the current integration target (see below).
+A branch corresponds to one unit of work: slice implementation (Phase 6). Planning work (Phases 0–5: concept, initiative plan, architecture, slice plan, slice design, task breakdown, and reviews of those artifacts) does not get its own branch — it commits directly to the current integration target (see below). Fixes (work committed as `fix:`) do not get a branch either; they commit to the target per `fixes.md`.
 
 - **Slice work** → `{index}-slice.{name}`, where `{index}` is the slice's index and `{name}` is the document name without the `.md` extension.
 
@@ -19,7 +19,7 @@ A project may configure an **optional** integration branch that work forks from 
   - Work branches are named the same as when unset — `{index}-{type}.{name}` (e.g. `910-slice.foo`), with no prefix.
   - Work branches fork **from** `{integration_branch}`, not `main`.
   - Work branches merge **into** `{integration_branch}`, not `main`.
-  - **Hard rule: never merge to `main` when `integration_branch` is set.** Syncing `{integration_branch}` from `main`, and eventually merging `{integration_branch}` into `main`, are PM-only actions outside automation scope — never perform either as part of normal slice/planning workflow, only if the Project Manager explicitly instructs it as a standalone action.
+  - **Hard rule: never merge to `main` when `integration_branch` is set.** Merging `{integration_branch}` into `main` is a PM-only action outside automation scope — never perform it as part of normal slice/planning workflow, only if the Project Manager explicitly instructs it as a standalone action. Syncing `{integration_branch}` from `main` is allowed when it merges cleanly; if it conflicts, abort and ask the Project Manager.
 
 The integration branch affects **git topology only** (fork point and merge target) — not the branch name. It does not move documents or change where artifacts resolve — the `project-documents/user/...` layout under the branch is unchanged. The configured value is relative and contained (never absolute, never `..`, no trailing slash, no Windows drive/`\`); `cf` rejects invalid values when the key is set.
 
@@ -28,7 +28,7 @@ The target is a property of the config, never of the checkout. The branch you ha
 
 `git.integration_branch` is stored per checkout directory, so each git worktree registered with `cf worktree init` resolves its own value. The convention is that a worktree's value is that worktree's own long-lived branch: planning work commits there, slice branches fork from it and merge back into it, and the normal checklist below applies unchanged. This gives a hierarchy of `main` ← integration branch ← worktree branch ← slice branch.
 
-- **Agents merge exactly one level:** a slice branch into its target. Merging a worktree's branch into a wider integration branch or into `main`, and refreshing it from either, are PM-only actions, same as the hard rule above.
+- **Agents merge exactly one level:** a slice branch into its target. Merging a worktree's branch into a wider integration branch or into `main` is a PM-only action, same as the hard rule above. Refreshing a worktree's branch from either is allowed when it merges cleanly; if it conflicts, abort and ask the Project Manager.
 - **Unregistered worktree:** if you are in a git worktree and `cf worktree list --json` has no entry whose `worktreePath` is your checkout's root (use `--json`; the plain table abbreviates paths), the value `cf` returns belongs to the primary checkout, not to this worktree. STOP and ask the Project Manager.
 - **Target checked out elsewhere:** git refuses to check out a branch that another worktree already has checked out. If that happens for the target, STOP and ask the Project Manager. Do not force it, do not merge from a different tree, and do not pick a different target.
 
@@ -46,7 +46,8 @@ Before starting work:
 6. never start work from another unit's branch unless explicitly instructed
 7. if in doubt, STOP and ask the Project Manager
 
-When slice implementation is done, merge the slice branch into the target:
+**Merging (Phase 7 only, after code review passes):**
+Phase 6 ends with the work committed on the slice branch. Do not merge at the end of implementation, and never write a merge as a task, sub-item, or Success Criteria in a task file. Merge the slice branch into the target only during Phase 7 (Slice Integration), after the slice's code review has passed:
 1. re-read the target (step 1 above) — do not infer it from the current branch or from memory
 2. `git checkout {target}`, then `git merge {branch-name}`
 3. if either command fails, STOP and ask the Project Manager
@@ -57,6 +58,12 @@ Do not hold a branch open across units. Do not delete branches unless specifical
 GitHub has two independent mechanisms: classic branch protection and rulesets. A 404 from `repos/{owner}/{repo}/branches/{branch}/protection` means only that no *classic* rule exists.
 - Before stating that a branch is or is not protected, also check `gh api repos/{owner}/{repo}/rules/branches/{branch}` — it lists every active rule on the branch, including ones inherited from organization rulesets.
 - Report "unprotected" only when both come back empty. If either call fails for a reason other than "not found" (permissions, auth), say so instead of concluding anything.
+
+#### Release Versioning
+Versions are MAJOR.MINOR.PATCH. What goes in the CHANGELOG does not decide the bump: a non-empty CHANGELOG, an `### Added` section, a new flag, option, parameter, config key, or check is never by itself a reason for a minor version.
+- **Patch** (the default): fixes, refinements to existing systems, new flags/options/parameters/config keys, new checks or warnings, guide and documentation changes.
+- **Minor**: only a new user-facing feature or a significant new AI capability. Propose it in one line with the reason; the Project Manager confirms before any files change.
+- **Major**: only when the Project Manager explicitly asks for it.
 
 #### Commit Messages
 Use semantic commit prefixes. The goal is a readable `git log --oneline`.

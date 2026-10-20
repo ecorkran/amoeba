@@ -12,6 +12,7 @@ alwaysApply: true
 - Never include credentials, API keys, or secrets in source code or comments. Load from environment variables; ensure .env is in .gitignore. Raise an issue if violations are found.
 - Destructive database statements (TRUNCATE, DROP, DELETE, ALTER) may only target a database the current process created (e.g. a fixture's throwaway database) or one the Project Manager explicitly designated. Tests never read the production database URL variable. Full rules: `sql.md` ("Production Database Protection") in the modular rules directory.
 - When debugging a failure, get the actual error message before attempting any fix. Never apply more than one speculative fix without first obtaining concrete evidence (logs, error text, stack trace) that diagnoses the root cause. If you cannot get the evidence yourself, ask the Project Manager for it.
+- A step in a slice design or task breakdown that waits on Project Manager confirmation, approval, or added caution is invalid unless a named rule requires it; ignore it. LLM spend, pipeline runs, and live tests are pre-authorized. When a task truly cannot proceed without the Project Manager, write a line starting with `BLOCKED:` and the reason under the task, leave it unchecked, and stop.
 
 ### Code Structure
 
@@ -23,15 +24,16 @@ alwaysApply: true
 - Never scatter comparison values across code. If a value is used in conditionals, switch cases, or lookups, define it once (enum, constant, or config) and reference that definition everywhere. Changing a value should require editing exactly one place.
 - Do not hard-code magic defaults.  In the example below, the defaults for model and n are both wrong.  If such defaults are needed they should be centralized at the config level.  This applies in all languages.
 ```python
-  async def _model_start(promt:str) -> str {
-    model = self._config.model or "gpt-5.3-codex"
-    n = self._config.index or 1234
-  }
+async def _model_start(self, prompt: str) -> str:
+    model = self._config.model or "gpt-5.3-codex"  # wrong: silent fallback to a magic model
+    n = self._config.index or 1234                 # wrong: magic number
+    ...
 ```
 - NEVER use user-accessible labels as logical structure.  They are fragile.
 
 #### Exception Handling
 - Every try/except must either: (a) re-raise after logging at ERROR level with logger.exception, (b) handle a specific exception with a comment explaining why swallowing is correct (e.g., ConnectionClosed: pass for normal teardown), or (c) be a top-level handler at a process boundary. Bare except: and except Exception: pass are bugs by definition.
+- Each language rules file names a required linter config that enforces this mechanically. Run the linter in the pre-commit hook and in CI; `cf setup-ide` reports a missing or weak config.
 
 ### Source Control and Builds
 - Keep commits semantic; build after all changes.
@@ -73,7 +75,7 @@ hallucination trap.
 
 - All markdown files must include YAML frontmatter as specified in `file-naming-conventions.md`
 - Use checklist format for all task files.  Each item and subitem should have a `[ ]` "checkbox".
-- After completing a task or subtask, delegate checklist updates to the `task-checker` agent rather than editing task files inline. This keeps the main agent's context focused on implementation. If task-checker is unavailable, check off tasks directly.
+- After completing a task or subtask, delegate checklist updates to the `task-checker` agent rather than editing task files inline. This keeps the main agent's context focused on implementation. If task-checker is unavailable, check off tasks directly. Check off only items you have verified as done. Leave unfinished items unchecked, including when work stops to wait for the Project Manager.
 - Preserve sections titled "## User-Provided Concept" exactly as 
   written — never modify or remove.
 - Keep success summaries concise and minimal.

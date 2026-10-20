@@ -12,6 +12,269 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-20
+
+### Changed
+- Brownfield Adoption prompt: the concept step now invokes the `concept` value from the surface's entry in the Adoption Facts (squadron probe `surfaces.<s>.concept`) instead of an unnamed "concept step". It skips the step when a concept exists unless the PM confirms an overwrite.
+
+## [0.22.0] - 2026-10-20
+
+### Added
+- Brownfield adoption for context-forge initiative 260: `guide.ai-project.brownfield-adoption`, a Brownfield Adoption prompt in `prompt.ai-project.system`, and the `brownfield-adoption` context profile (`fileConcept`, `fileArch`, `fileSlicePlan`, `fileComprehension`). The prompt recovers a baseline concept, a reverse-engineered architecture, and an existing-state slice plan from an existing codebase, never fabricates intent, and reads squadron's capability probe from the "Adoption Facts" section that `cf build` appends. The retroactive-slice marker format is not yet specified.
+
+### Changed
+- The concept prompt now opens by asking the Project Manager what they want to build. `guide.ai-project.000-concept` and the process guide point brownfield projects to the adoption guide.
+
+### Removed
+- Stale `analyze-codebase` entry from `context_profiles`.
+
+## [0.21.9] - 2026-10-19
+
+### Added
+- `rules/permissiveness/cautious.md` and `rules/permissiveness/autonomous.md`: fragments context-forge appends to its build output for the `workflow.permissiveness` setting (#46). `standard` is the baseline in `rules/general.md` and has no file. `cautious` states that it overrides the baseline's "invented confirmation gates are invalid" rule. The subdirectory keeps setup-ide from installing them as scoped rules.
+
+## [0.21.8] - 2026-10-19
+
+### Changed
+- `rules/git.md` (and the CLAUDE.md block): syncing the integration branch from `main`, and refreshing a worktree's branch from its parent, are no longer PM-only. They are allowed when the merge is clean; on conflict, abort and ask the PM. Merging upward into the integration branch or `main` stays PM-only.
+
+## [0.21.7] - 2026-10-18
+
+### Changed
+- `rules/general.md`: slice designs and task breakdowns may not wait on Project Manager confirmation, approval, or added caution unless a named rule requires it. When a task truly needs the PM, write a `BLOCKED:` line and reason under it, leave it unchecked, and stop. Unattended pipelines (squadron) parse the marker.
+
+## [0.21.6] - 2026-10-17
+
+### Fixed
+- `agents/task-checker.md` and `skills/setup-ci/SKILL.md`: quoted the `description:` line. Unquoted colons made the frontmatter invalid, so task-checker lost its model and color settings and setup-ci would not load.
+- `rules/fixes.md`: quoted the `description:` line so "Fixes #n" is not read as a YAML comment.
+
+## [0.21.5] - 2026-10-17
+
+### Changed
+- `skills/setup-ci`: with no `pyproject.toml` or `package.json`, offers a minimal uv Python skeleton (TypeScript not yet covered). Offers a standard `.gitignore` when it is missing or weak.
+- `skills/setup-ci`: always asks for the publish target instead of inferring PyPI or npm from the manifest. When `requires-python` has no upper bound, offers the installed interpreters as choices.
+- `lint/python/ruff.toml`: excludes `*.md`, so ruff no longer formats or lints Python examples in markdown.
+
+## [0.21.4] - 2026-10-17
+
+### Changed
+- `file-naming-conventions.md`: 900-999 splits into 900-989 (sequential, numbered in order, never continuing into 990-999) and 990-999 (standing slices, assigned by hand). 990 is the standing fixes slice.
+- Process guide, Fixes: a new standing fixes slice uses index 990.
+
+## [0.21.3] - 2026-10-17
+
+### Changed
+- Process guide, Phase Approval: front-load decisions. A decision is due at the earliest phase that can make it; no phase completes with a pending decision (#44).
+- `templates/slice-design.md`: each Technical Decision gets a `Status:` line (`decided` or `pending-pm`) under its heading; a design with any `pending-pm` cannot move to Phase 5.
+- Task breakdown guide: no task may wait on a PM decision or PM-supplied artifact; resolve it first or record it as a slice precondition.
+
+## [0.21.2] - 2026-10-16
+
+### Changed
+- `skills/setup-ci`: the release skill uses only the root `DEVLOG.md` and skips the devlog step when there is none, instead of falling back to another devlog or asking.
+
+## [0.21.1] - 2026-10-16
+
+### Fixed
+- `skills/setup-ci`: decides each OPTIONAL ci.yml block by probing the project (tests that use `main` enable the fetch; guide projects enable the frontmatter block), reads the Python and Node test versions from the project instead of guessing, skips the changelog and devlog when finding version files, and defines every slot the release template uses.
+- `skills/setup-ci`: the version search skips `project-documents/`, the devlog row says which DEVLOG.md to use when there are several, and the fetch-main probe ignores temporary test repos.
+- CI baselines: the frontmatter block runs `cf init --lite --no-ide` before `cf validate frontmatter`, and the TypeScript baseline now has the block too. The header comment no longer looks like an unfilled slot.
+
+## [0.21.0] - 2026-10-16
+
+### Added
+- `ci/python/ci.yml` and `ci/typescript/ci.yml`: CI baselines (lint, typecheck, tests, tag-triggered publish) with slots to fill.
+- `skills/setup-ci`: detects the stack, writes the project's `ci.yml` from the baseline and generates its own `release` skill (patch by default, done only when the registry shows the version, integration branch read at release time).
+
+## [0.20.12] - 2026-10-14
+
+### Changed
+- The Phase 6 and Phase 7 prompts state the branch target for the current checkout using the `targetBranch` template variable, so agents in a worktree no longer have to remember to run `cf config get git.integration_branch` (#15, context-forge #70). Older cf leaves the line out, and the `rules/git.md` checklist step remains the fallback. **The variable needs cf 0.19.9 or later.**
+
+## [0.20.11] - 2026-10-13
+
+### Added
+- `lint/typescript/required-rules.mjs`: the required ESLint rules as a block to spread into an existing flat config (e.g. Next.js), so a project with its own config can meet the requirement without replacing it. The TypeScript `required` list accepts the import (context-forge #115)
+
+### Removed
+- `scripts/setup-ide-lint.sh` and `scripts/validate-slice-design`, and the body of `scripts/setup-ide`. context-forge 0.19.6 does this work itself: `cf setup-ide` installs IDE files and lint configs, and `cf validate design` checks slice designs. **Requires cf 0.19.6 or later.** `scripts/setup-ide` is now a stub that tells older cf to run `cf update`; it will be removed in a later release
+- The dev-only setup-ide behavior tests (`tests/`), `ruff.toml` and `.githooks/`. The test suite now lives in context-forge as the spec for its port
+
+### Changed
+- Docs, guides, the system prompt and the npm-scripts snippet use `cf setup-ide` and `cf validate design` instead of the script paths
+
+## [0.20.10] - 2026-10-11
+
+### Added
+- Dev-only behavior test suite for `scripts/setup-ide` (`tests/setup_ide/`, pytest, snapshot-based) plus a ruff config and pre-commit hook; none of it ships in release archives
+
+### Removed
+- Standalone install and migration scripts: `scripts/bootstrap.sh`, `scripts/template-stubs/`, `scripts/migrate-private-to-user.sh` and `scripts/rename-private-to-user-in-repo.sh`. The guide is installed, updated and set up through cf (`cf init`, `cf guides update`, `cf setup-ide`). v0.20.9 is the last version with these scripts
+
+### Changed
+- Language rules (`general`, `python`, `typescript`, `dart`, `csharp`) and lint `required` files name `cf setup-ide` instead of the bare script
+
+### Fixed
+- README no longer says `setup-ide cursor` writes `.cursor/agents/` (#37)
+
+## [0.20.9] - 2026-10-11
+
+### Added
+- `rules/fixes.md` (always-on): a fix is any work committed as `fix:`. A small fix is made and committed straight to the target with `Fixes #n`, with no slice, task file, branch or review. A fix that needs several steps becomes a task group in the project's standing fixes slice. A new option, a changed file or state format, or a new component is a feature and gets its own slice
+- Process guide: a Fixes entry, including how to create the standing fixes slice the first time. That slice is `review: none` by definition, an exception to the review-gate rule
+
+### Changed
+- File naming: 900-999 is one operational range with no sub-ranges. Only slices claim an index. Analysis files use their initiative's base index, or are numbered in order within `user/analysis/` from 900; standalone reviews are numbered in order within `user/reviews/` from 900. Files named under the old 900-939, 940-949 and 950-999 sub-ranges keep their names
+- `git.md`: fixes commit directly to the target, with no branch
+- Phase 7 prompt: issues found during integration are filed as issues and worked as fixes, instead of logged to `950-tasks.maintenance.md`
+
+### Removed
+- Maintenance Task and Maintenance Routine prompts, and their context profiles
+- Process guide reference to a nonexistent Ad-Hoc Tasks prompt
+
+## [0.20.8] - 2026-10-11
+
+### Changed
+- Checklist rules (Phase 6 prompt, maintenance routine, `general.md` rules): check off only items verified as done, and leave unfinished items unchecked, including when work stops to wait for the Project Manager
+
+## [0.20.7] - 2026-10-11
+
+### Fixed
+- `setup-ide`: migrating a `CLAUDE.md` with the legacy marker no longer replaces project content that follows a hand-added `[//]: # (context-forge:managed end)` line; that content is kept (#33)
+- `setup-ide`: without an install manifest, a rule, agent or skill file that differs from the guide's version is left alone with a warning instead of being backed up and replaced, so customized files survive the first manifest run. Installs that predate the manifest keep older stock files until they are removed once (#34)
+
+## [0.20.6] - 2026-10-11
+
+### Added
+- `file-naming-conventions.md`: registered the optional `revision_number` frontmatter field (integer written only by tooling, for `slice-design`, `tasks`, and `review` docs) (#14)
+
+### Changed
+- Images now live in an `images/` folder next to the document that uses them. The two UI mockups moved from `z-attachments/` to `project-guides/images/`, and the Obsidian attachment guidance in `directory-structure.md` and the process guide was replaced
+- Stopped tracking `.obsidian/` (left over from editing the guide in Obsidian)
+- Added `.understand-anything/.understandignore` so the analyzer skips `.obsidian/` and `DEVLOG.md`; untracked the analyzer's `intermediate/` scratch output
+
+### Fixed
+- `rules/general.md`, `CLAUDE.md`: the magic-defaults example is now valid Python, with the two bad lines marked (#27)
+
+## [0.20.5] - 2026-10-10
+
+### Fixed
+
+- Prompts no longer contradict each other on task checkboxes: all places now say
+  delegate to `task-checker`, and check off directly if it is unavailable
+  (squadron#189).
+
+## [0.20.4] - 2026-10-10
+
+### Changed
+
+- Phase 6 prompt names its task files with the `{task-files}` variable (context-forge
+  0.19.4 or later) instead of a hard-coded `{sliceindex}-tasks.{slicename}.md`,
+  so split task files (`-1.md`, `-2.md`, ...) are found (context-forge#114).
+- Process guide, Phase 6: an orchestrating pipeline may run Phases 6 and 7 as
+  one run, provided the pipeline engine (not the implementing agent) starts
+  each review, decides from defined thresholds when review has passed, and
+  merges only after it has passed. Replaces "does not include reviews or a
+  merge" with a rule about who acts.
+
+## [0.20.3] - 2026-10-06
+
+### Fixed
+
+- `setup-ide --dry-run` no longer prints `comm: ... not in sorted order`
+  warnings on Linux when changes are pending; the file lists are now compared
+  in the C locale so the +/~/- report is correct (#36).
+
+## [0.20.2] - 2026-10-05
+
+### Added
+
+- `rules/shell.md`: shell script rules for bash and CI pipeline code
+  (`set -euo pipefail`, quoting, shellcheck, `jq`/`yq` for YAML and JSON,
+  Python past ~50 lines of logic, guarded `cd`, `mktemp` + `trap`, CI `run:`
+  blocks). Applies to `*.sh`, `*.bash`, GitHub Actions and GitLab CI files.
+
+## [0.20.1] - 2026-10-05
+
+### Added
+
+- `setup-ide --root <dir>` installs into another checkout, such as a git
+  worktree, using the script's own guide (#31).
+- `setup-ide --capabilities` prints the supported features as one line, so
+  callers like cf no longer search the script's text for flags (#31).
+
+### Changed
+
+- Git rules now define release versioning: patch is the default, including new
+  flags, options and config keys. Minor is only for a new user-facing feature
+  or significant AI capability, confirmed by the Project Manager. A non-empty
+  CHANGELOG or an `### Added` section never decides the bump on its own.
+- `setup-ide` reads `rules.exclude` with `cf config get --value` when cf
+  supports it, and stops with an error when cf fails instead of silently
+  installing every rule. Older cf versions still work (#31).
+
+### Fixed
+
+- `setup-ide --dry-run` no longer copies `.claude/worktrees/` (whole git
+  checkouts) into its sandbox or lists them as changes.
+
+## [0.20.0] - 2026-10-05
+
+### Added
+
+- `setup-ide --dry-run` lists the files a run would add, change or remove,
+  plus any skip and warning lines, without writing anything.
+- `setup-ide` checks the linter config required by each language it detects
+  (Python, Dart/Flutter, TypeScript, C#) and reports a missing config or
+  missing required rules. `--write-lint` writes the baseline when no config
+  exists; for a `[tool.ruff]` section in `pyproject.toml` it adds a `ruff.toml`
+  that extends it. Baselines live in `project-guides/lint/` (#30).
+- `rules/csharp.md`, with an analyzer baseline that makes catching general
+  exceptions (CA1031) an error.
+
+### Changed
+
+- `setup-ide` no longer overwrites a file it did not install. When an existing
+  file differs and the manifest does not list it, the file is left alone with a
+  warning. With no manifest yet, the existing file is backed up to
+  `<name>.pre-context-forge` before it is replaced.
+- `setup-ide` no longer overwrites a file it installed that has been edited
+  since. It warns and keeps the edit; deleting the file takes the guide's
+  version again.
+- Phase 7 (Slice Integration) is now review, revise, then merge, and runs for
+  every slice. Phase 6 ends at the last commit on the slice branch. The Project
+  Manager or the orchestrating pipeline starts reviews; agents no longer start
+  them on their own when a review gate blocks.
+
+### Removed
+
+- The `tester` agent. Nothing in the guide used it, and `rules/testing.md`
+  covers testing. `setup-ide` removes unedited installed copies on its next run.
+
+### Fixed
+
+- Merging a slice is now tied to Phase 7, after code review passes. The git
+  rules, the task-breakdown guide, and the Phase 6 and Phase 7 prompts no longer
+  lead agents to write merge steps into task files or merge at the end of
+  implementation (#29).
+
+## [0.19.4] - 2026-10-03
+
+### Changed
+
+- Compressed the two `z-attachments/` UI mockup images from 3.5 MB to
+  325 KB total (downscaled to 1200px wide, quantized). Filenames and
+  format unchanged (#28).
+
+## [0.19.3] - 2026-10-02
+
+### Changed
+
+- Release tarballs no longer include `.context-forge/`, which holds this
+  repo's own `setup-ide` install manifest rather than anything consumers use.
+- Removed two unreferenced images from `z-attachments/`.
+
 ## [0.19.2] - 2026-09-26
 
 ### Fixed
