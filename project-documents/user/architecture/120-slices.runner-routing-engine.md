@@ -37,7 +37,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    **Success Criteria:**
    - An `sq_run` entry journaled with a run id is recovered by that id. Recovery adopts the run when its state exists and marks the entry `not_applied` when no state exists after the launch grace period.
    - Entries without an id still recover through the existing matching rule.
-   - Recovery and pruning make no reads of Squadron's run-state files. A test proves this.
+   - Recovery of entries journaled with a run id, and all pruning, make no reads of Squadron's run-state files. A test proves this. Only entries journaled without an id, which predate this slice, are still matched against those files.
    - Pruning decides from the outcome document's `status`, `paused_at` and `updated_at`.
    - 100's contract suite passes, extended for each change.
    **Dependencies:** None (100 complete).
@@ -199,3 +199,4 @@ Living backlog; entries may be added during slice design, task breakdown, or imp
 3. [ ] **Relink intent for renumbered slices** — A renumber currently orphans the node and resets its history. Add an intent that links an orphan to its new index, if renumbering turns out to be common. Dependencies: [123, 124]. Effort: 2/5
 4. [ ] **Judge route** — Initiative 140 adds the judge route, and rules marked judge-eligible switch to it. Listed here so the mark's consumer is recorded. Dependencies: [126], initiative 140.
 5. [ ] **Squadron review-completed event (S8)** — If Squadron adds the event, it can replace per-tick polling for completion. Dependencies: [122].
+6. [ ] **Skip held runs when pruning** — From 120's design: `amoeba prune sq-runs` polls `sq runs wait` once per owned run id. If the owned set grows enough to make pruning slow, skip ids held by unfinished nodes, which can never be candidates. Dependencies: [120]. Effort: 1/5
