@@ -87,7 +87,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    **Risk Level:** Medium. Identity across plan edits is the subtle part.
    **Relative Effort:** 3
 
-5. [ ] **(124) Intent Vocabulary** — How the PM steers the Runner. Targets are a project, an initiative or a slice. Each target carries a drive setting (advance work, up to a lifecycle step) and a hold setting, and clear removes a target's own settings. Drive resolves from the nearest target that sets it, and hold applies if any ancestor holds. An intent is applied and acknowledged in one transaction, writing the desired-state table. An already-satisfied intent is acknowledged as a no-op, and one the Runner cannot apply is rejected with a reason.
+5. [ ] **(124) Intent Vocabulary** — How the PM steers the Runner. Targets are a project, an initiative or a slice. Each target carries a drive setting (advance work, up to a lifecycle step) and a hold setting, and clear removes a target's own settings. Drive resolves from the nearest target that sets it, and hold applies if any ancestor holds. An intent is applied and acknowledged in one transaction, writing the desired-state table. An intent that would not change the target's settings is acknowledged as a no-op (slice 124, D5), and one the Runner cannot apply is rejected with a reason.
    **Value:** User value. The PM can tell Amoeba what to work on and stop it, without touching the store.
    **Success Criteria:**
    - Applying the same intent twice leaves the same state as applying it once. The later intent for a target replaces the earlier one.
