@@ -151,7 +151,7 @@ revision_number: 1
 **Steps**:
 - [ ] In `process/__init__.py`, import and list in `__all__` exactly: `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, `ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError`. Find each name's defining module with grep; if any name does not exist, stop and tell the PM
 - [ ] Check for an import cycle: `python -c "import amoeba.process"` and `python -c "import amoeba.cli.main"` both succeed
-- [ ] Add `tests/test_process_public_api.py`, in the style of `tests/test_public_api.py`: a written-out `EXPECTED_EXPORTS` set equal to `__all__`; every name importable; every exported callable/class has a docstring
+- [ ] Add `tests/test_process_public_api.py`, in the style of `tests/test_public_api.py`: a written-out `EXPECTED_EXPORTS` set equal to `__all__`; every name importable
 
 **Success Criteria**:
 - [ ] `set(amoeba.process.__all__) == EXPECTED_EXPORTS`; `SquadronRun`, `parse_run_file`, and no pruning name in it
@@ -207,6 +207,7 @@ revision_number: 1
   2. `_record_verdict_within(verdict, project_id)` — `record_verdict`'s body and retry rule, unchanged
   3. The `runner_issued` ledger row, carrying the verdict's id and node, through the same internal writer `record_detection` uses (reuse; do not duplicate its SQL)
   4. The journal resolve with `outcome=COMPLETED`, `resolved_by=ISSUER`, `result`, through the same internal writer `journal_resolve` uses
+- [ ] Retry rule: when the verdict id is already recorded, step 2 returns the existing record and steps 3 and 4 still run, so the entry is resolved and the ledger row written; the method returns the existing record. (A retry after a successful call never reaches this: the entry is resolved, so step 1 refuses.) If the ledger writer refuses the row because the same file is already in the ledger, stop and ask the PM
 - [ ] If `journal_resolve` or `record_detection` has no transaction-free inner function, extract one (`_..._within`, like `_record_verdict_within`) with no behavior change to the public method
 - [ ] "Unknown" in the LLD's refusal list means an entry resolved with outcome `unknown`; that is covered by "already resolved". If you read it differently, stop and ask the PM
 - [ ] Docstring lists every refusal and "writes nothing" for each
@@ -228,7 +229,7 @@ revision_number: 1
 - [ ] Happy path: after one call, the verdict exists, one `runner_issued` detection row names its id and node, and the entry is `completed` by `issuer` with `result`; `recorded_result_run_ids` includes the run id for an `sq_run` entry
 - [ ] One commit: monkeypatch the journal-resolve inner writer to raise; assert no verdict, no ledger row, entry unresolved
 - [ ] Each refusal writes nothing: wrong detection outcome; resolved entry; entry of a non-review kind; entry in another project; `sq_run` entry whose `result` lacks `run_id`
-- [ ] Retry rule: a verdict id already recorded returns the existing record (per evidence contract "The retry rule"); the test states which branch it exercises
+- [ ] Retry rule: with the verdict id already recorded through `record_verdict` and the entry unresolved, the call returns the existing record, writes one `runner_issued` row, and resolves the entry; the verdict count is unchanged
 
 **Success Criteria**:
 - [ ] All tests pass; each refusal test asserts the row counts are unchanged
@@ -316,7 +317,7 @@ revision_number: 1
 - [ ] Each tick: read `pending_intents`, perform one step through the public store API, acknowledge it. Implement each step exactly as D3 describes, including `cf.slice_name` on the slice, `sq.run_id` on the **gate**, and `record_runner_report` parsing the artifact with `parse_review_artifact`/`to_verdict_input`
 - [ ] Run files are written from a fixture with `run_id`, `pipeline`, `params`, `started_at` set to match the journal entry; paused ones get `updated_at = now - standin_run_age`
 - [ ] At a crash point: `os.kill(os.getpid(), signal.SIGKILL)`, nothing caught or flushed
-- [ ] Any `amoeba` import must pass Task 4.2's rule
+- [ ] Any `amoeba` import must pass Task 4.2's rule. If `ProofRunner` needs a name its root does not export, never import it from a submodule: that is a gap (LLD D7). Record it in file 2's "Gaps Found"; if adding it to the root's `__all__` (with its contract doc and expected-exports test) is enough, do that in its own commit, otherwise stop for the PM
 
 **Success Criteria**:
 - [ ] File near 300 lines (split step bodies into a sibling module if not); public-import rule passes
@@ -333,6 +334,7 @@ revision_number: 1
 **Steps**:
 - [ ] Read `tests/host_harness.py` first. Reuse its subprocess, readiness, and wait helpers; do not copy them. If one needs a change to be reused, extract it with no behavior change and keep its tests green
 - [ ] `tests/contract/bootstrap.py`: a `__main__` entry run as `sys.executable -m tests.contract.bootstrap` (never `uv run`), with `cwd` set to the repo root derived from `Path(__file__)` (never the caller's cwd) so `tests.contract` resolves, that builds `ResidentProcess(tenants=(*standard_tenants(ProcessSettings(cf_data_dir=…), supervisor_dir), ProofRunner(…)))` and runs it. `ProcessSettings` keeps its default `sq_runs_dir` (task-level addition above)
+- [ ] The harness passes everything per-run to the bootstrap as argparse arguments: `--supervisor-dir`, `--cf-data-dir`, a repeatable `--reviews-dir PROJECT=PATH`, `--run-fixture`, and `--review-fixture`. The bootstrap passes `ProcessSettings().sq_runs_dir` and `scenario.STANDIN_RUN_AGE` to `ProofRunner` itself. A missing or malformed argument exits non-zero with argparse's error
 - [ ] A harness object in `bootstrap.py` (or a sibling module) that: builds the env (`HOME`, `AMOEBA_STORE_DIR`, CF data dir, all under `tmp_path`, asserting each is under `tmp_path`); starts the process and waits for readiness; waits for exit after a crash; stops via `amoeba stop` as a subprocess; restarts
 - [ ] Every wait is a predicate with a timeout. On timeout, fail with the step number and every subprocess's captured stdout and stderr
 - [ ] A `follow()` subscriber on a thread that records each `Change`, stores any exception, and re-raises it on the main thread at the next wait

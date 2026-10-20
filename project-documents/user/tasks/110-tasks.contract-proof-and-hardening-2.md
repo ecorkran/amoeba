@@ -138,6 +138,7 @@ revision_number: 1
 **Success Criteria**:
 - [ ] Every log entry is marked fixed (with commit) or PM-decided (with the decision)
 - [ ] Suite green
+- [ ] The log update is committed: `docs: record slice 110 contract-proof gaps`
 
 ---
 
@@ -280,7 +281,7 @@ revision_number: 1
 - [ ] Add `14 PRUNE_INCOMPLETE` to the exit-code table
 
 **Success Criteria**:
-- [ ] No Future-work line pointing at slice 110 remains in any contract doc (`grep -rn "slice 110\|or 110" docs/` returns nothing)
+- [ ] No Future-work line pointing at slice 110 remains in any contract doc (`grep -n "slice 110\|or 110" docs/*-contract.md` returns nothing; the substrate guide is not a contract doc and may name the slice)
 - [ ] Committed: `docs: document paused-run pruning in the process contract`
 
 ---
@@ -326,7 +327,7 @@ revision_number: 1
 
 **Steps**:
 - [ ] Run `uv run pytest`, `uv run ruff check .`, `uv run pyright` once each
-- [ ] Run the LLD "Verification Walkthrough" steps 1–3 as written, in bash, with a scratch `AMOEBA_STORE_DIR`. Record any difference from the draft and correct the walkthrough in the LLD
+- [ ] Run the LLD "Verification Walkthrough" steps 1–3 as written, in bash, with a scratch `AMOEBA_STORE_DIR`. Record any difference from the draft and correct the walkthrough in the LLD. Known difference: step 12 runs inside `test_lifecycle_proof.py`, so walkthrough step 2's `-k prune` does not select it; reword step 2 to say step 12 is covered by step 1
 - [ ] Check off each LLD "Success Criteria" item against a test or doc; list any not met and stop for the PM
 - [ ] Every name added to a public `__all__` appears in its contract doc (review check)
 
