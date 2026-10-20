@@ -167,7 +167,7 @@ class ProofRunner:
     ) -> None:
         """Journal, do the stand-in side effect, then report in one transaction."""
         # On the reviewed node: a verdict's journal entry must be on its own node.
-        slice_node = _only_node(store, project_id, NodeKind.SLICE)
+        slice_node = only_node(store, project_id, NodeKind.SLICE)
         entry = self._journal_run(store, slice_node)
         if crash_at is CrashPoint.AFTER_JOURNAL:
             _crash()
@@ -204,7 +204,7 @@ class ProofRunner:
         content = review_path.read_bytes()
         parsed = parse_review_artifact(content.decode("utf-8"))
         record_id = review_record_id(parsed)
-        slice_node = _only_node(store, project_id, NodeKind.SLICE)
+        slice_node = only_node(store, project_id, NodeKind.SLICE)
         verdict = to_verdict_input(
             parsed,
             node_id=slice_node.id,
@@ -225,7 +225,7 @@ class ProofRunner:
 
     def _checkpoint(self, store: Store, project_id: str) -> None:
         """A paused run, owned by the journal, holding the gate at a checkpoint."""
-        gate = _only_node(store, project_id, NodeKind.GATE)
+        gate = only_node(store, project_id, NodeKind.GATE)
         entry = self._journal_run(store, gate)
         now = datetime.now(UTC)
         run_id = new_run_id(now)
@@ -250,7 +250,7 @@ class ProofRunner:
 
     def _finish(self, store: Store, project_id: str) -> None:
         for kind in (NodeKind.SLICE, NodeKind.GATE):
-            node = _only_node(store, project_id, kind)
+            node = only_node(store, project_id, kind)
             store.update_node_status(node.id, NodeStatus.DONE)
 
     def _journal_run(self, store: Store, node: Node) -> JournalEntry:
@@ -276,7 +276,7 @@ def _read_intent(message: Message) -> tuple[ProofStep, CrashPoint | None]:
     )
 
 
-def _only_node(store: Store, project_id: str, kind: NodeKind) -> Node:
+def only_node(store: Store, project_id: str, kind: NodeKind) -> Node:
     """The project's one node of this kind; the proof's tree has exactly one."""
     matching = [
         node for node in store.nodes_for_project(project_id) if node.kind is kind

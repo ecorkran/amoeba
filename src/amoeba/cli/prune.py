@@ -24,11 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from amoeba.process.observers.sq_runs import SquadronRun, parse_run_file
-from amoeba.process.run_pruning import (
-    PAUSED_STATUS,
-    SQ_PRUNE_TIMEOUT_SECONDS,
-    select_prunable,
-)
+from amoeba.process.run_pruning import PAUSED_STATUS, select_prunable
 from amoeba.process.settings import DEFAULT_SQ_RUNS_DIR
 from amoeba.store import NodeStatus, Store, paths
 from amoeba.store.discovery import discover_project_ids
@@ -40,6 +36,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 SQ_EXECUTABLE = "sq"
 SQ_PRUNE_ARGUMENTS = ("runs", "prune")
 SQ_CONFIRM_FLAG = "--yes"
+
+#: How long ``sq runs prune`` may take before Amoeba treats it as failed.
+SQ_PRUNE_TIMEOUT_SECONDS = 30.0
 
 #: The one prune target this slice adds.
 TARGET_SQ_RUNS = "sq-runs"

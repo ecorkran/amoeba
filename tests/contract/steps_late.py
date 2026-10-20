@@ -22,6 +22,7 @@ from amoeba.store import (
 from contract.end_state import declared_state
 from contract.harness import RUN_FIXTURE
 from contract.oracle import diff_state, locality_problems, read_state, replay_problems
+from contract.runner_tenant import only_node
 from contract.scenario import ALPHA, BETA, STANDIN_RUN_AGE, Step
 from contract.standin import (
     STATUS_PAUSED,
@@ -34,7 +35,6 @@ from contract.steps import (
     PAYLOAD_DETAIL,
     ScenarioDriver,
     expect,
-    only_node,
 )
 
 #: What the Judge's two samples share (107: one invocation, several samples).

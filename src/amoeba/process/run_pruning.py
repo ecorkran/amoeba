@@ -26,9 +26,6 @@ from amoeba.process.observers.sq_runs import SquadronRun
 #: exposes no flag for it; it becomes a setting when something needs to.
 PRUNE_RETENTION = timedelta(days=7)
 
-#: How long ``sq runs prune`` may take before Amoeba treats it as failed.
-SQ_PRUNE_TIMEOUT_SECONDS = 30.0
-
 #: The one spelling of the status pruning looks for.
 PAUSED_STATUS = "paused"
 
@@ -59,5 +56,8 @@ def _is_prunable(
     if run.run_id not in owned or run.run_id in held:
         return False
     if run.status != PAUSED_STATUS or run.updated_at is None:
+        return False
+    if run.updated_at.tzinfo is None:
+        # A naive timestamp has no offset to compare against ``now``: unknown.
         return False
     return now - run.updated_at >= PRUNE_RETENTION

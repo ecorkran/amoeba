@@ -19,13 +19,13 @@ from amoeba.store import (
     Node,
     NodeKind,
     NodeStatus,
-    Store,
     SubmissionKind,
     SubmissionOutcome,
     project_store_path,
 )
 from amoeba.upstream.squadron import parse_review_artifact, review_record_id
 from contract.harness import HarnessFailure, ProofHarness
+from contract.runner_tenant import only_node
 from contract.scenario import ALPHA, STEPS, Step
 from contract.subscriber import Subscriber
 
@@ -40,11 +40,6 @@ def expect(step: int, condition: bool, message: str) -> None:
     """Fail naming the step; the oracle cannot say which step broke."""
     if not condition:
         raise HarnessFailure(f"step {step}: {message}")
-
-
-def only_node(store: Store, project_id: str, kind: NodeKind) -> Node:
-    [node] = [n for n in store.nodes_for_project(project_id) if n.kind is kind]
-    return node
 
 
 class ScenarioDriver:

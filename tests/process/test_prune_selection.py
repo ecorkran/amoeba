@@ -86,6 +86,13 @@ def test_a_run_with_no_updated_at_is_never_selected() -> None:
     assert _select([_run(updated_at=None)]) == ()
 
 
+def test_a_run_with_a_naive_updated_at_is_never_selected() -> None:
+    """No offset means no safe comparison with ``now``: unknown, not a crash."""
+    naive = OLD_ENOUGH.replace(tzinfo=None)
+
+    assert _select([_run(updated_at=naive)]) == ()
+
+
 def test_only_the_runs_meeting_every_condition_are_returned_in_run_id_order() -> None:
     later, earlier = _run("run-b"), _run("run-a")
     skipped = _run("run-c")

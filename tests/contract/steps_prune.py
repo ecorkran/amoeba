@@ -15,8 +15,9 @@ from sq_stub import MODE_ENV, StubMode, write_sq_stub
 
 from amoeba.store import NodeKind
 from contract.harness import ProofHarness
+from contract.runner_tenant import only_node
 from contract.scenario import ALPHA, BETA, Step
-from contract.steps import expect, only_node
+from contract.steps import expect
 
 #: Exit status 0, as the process contract's table documents it.
 EXIT_OK = 0

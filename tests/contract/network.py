@@ -140,9 +140,10 @@ class SseFollower:
                     self._record(event)
             if not self._planned_drop.is_set():
                 raise HarnessFailure("the stream ended without being asked to")
-        except (httpx2.HTTPError, HarnessFailure) as failure:
-            # Thread boundary: an unplanned end is stored and re-raised on the
-            # main thread at the next wait; a planned one is the point of the test.
+        except Exception as failure:  # noqa: BLE001
+            # Thread boundary: any unplanned end (transport, a malformed frame,
+            # a bad id) is stored and re-raised on the main thread at the next
+            # wait; a planned one is the point of the test.
             if not self._planned_drop.is_set():
                 self.error = failure
 
