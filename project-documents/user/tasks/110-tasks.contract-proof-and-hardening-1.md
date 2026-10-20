@@ -304,16 +304,16 @@ revision_number: 2
 **Objective**: A real tenant driven by `intent` messages, with named crash points (LLD D3).
 
 **Steps**:
-- [ ] `tests/contract/runner_tenant.py`: a `ProofStep` enum (`build_tree`, `launch_review`, `checkpoint`, `finish`) and a `CrashPoint` enum (`AFTER_JOURNAL`, `AFTER_SIDE_EFFECT`); these are their only definitions. Define the intent body's keys once as constants here
-- [ ] `ProofRunner` implements `Tenant` only (import from `amoeba.process`). Constructor takes: the fake-`HOME` runs directory, a mapping of project id to reviews directory, the run-file and review fixture paths, and `standin_run_age: timedelta`
-- [ ] Each tick: read `pending_intents`, perform one step through the public store API, acknowledge it. Implement each step exactly as D3 describes, including `cf.slice_name` on the slice, `sq.run_id` on the **gate**, and `record_runner_report` parsing the artifact with `parse_review_artifact`/`to_verdict_input`
-- [ ] Run files are written from a fixture with `run_id`, `pipeline`, `params`, `started_at` set to match the journal entry; paused ones get `updated_at = now - standin_run_age`
-- [ ] At a crash point: `os.kill(os.getpid(), signal.SIGKILL)`, nothing caught or flushed
-- [ ] Any `amoeba` import must pass Task 4.2's rule. If `ProofRunner` needs a name its root does not export, never import it from a submodule: that is a gap (LLD D7). Record it in file 2's "Gaps Found"; if adding it to the root's `__all__` (with its contract doc and expected-exports test) is enough, do that in its own commit, otherwise stop for the PM
+- [x] `tests/contract/runner_tenant.py`: a `ProofStep` enum (`build_tree`, `launch_review`, `checkpoint`, `finish`) and a `CrashPoint` enum (`AFTER_JOURNAL`, `AFTER_SIDE_EFFECT`); these are their only definitions. Define the intent body's keys once as constants here
+- [x] `ProofRunner` implements `Tenant` only (import from `amoeba.process`). Constructor takes: the fake-`HOME` runs directory, a mapping of project id to reviews directory, the run-file and review fixture paths, and `standin_run_age: timedelta`
+- [x] Each tick: read `pending_intents`, perform one step through the public store API, acknowledge it. Implement each step exactly as D3 describes, including `cf.slice_name` on the slice, `sq.run_id` on the **gate**, and `record_runner_report` parsing the artifact with `parse_review_artifact`/`to_verdict_input`
+- [x] Run files are written from a fixture with `run_id`, `pipeline`, `params`, `started_at` set to match the journal entry; paused ones get `updated_at = now - standin_run_age`
+- [x] At a crash point: `os.kill(os.getpid(), signal.SIGKILL)`, nothing caught or flushed
+- [x] Any `amoeba` import must pass Task 4.2's rule. If `ProofRunner` needs a name its root does not export, never import it from a submodule: that is a gap (LLD D7). Record it in file 2's "Gaps Found"; if adding it to the root's `__all__` (with its contract doc and expected-exports test) is enough, do that in its own commit, otherwise stop for the PM
 
 **Success Criteria**:
-- [ ] File near 300 lines (split step bodies into a sibling module if not); public-import rule passes
-- [ ] Committed with Task 4.6
+- [x] File near 300 lines (split step bodies into a sibling module if not); public-import rule passes
+- [x] Committed with Task 4.6
 
 ---
 
@@ -323,17 +323,19 @@ revision_number: 2
 **Effort**: 3
 **Objective**: Start, crash, stop, and restart the resident process from tests, failing loudly (LLD "Data Flow", "Patterns and Conventions").
 
+> Deviation: the bootstrap runs as `python -m contract.bootstrap` with PYTHONPATH set to tests/ (not `-m tests.contract.bootstrap` with cwd at the repo root), so `contract.*` and `host_harness` resolve identically in pytest and in the subprocess.
+
 **Steps**:
-- [ ] Read `tests/host_harness.py` first. Reuse its subprocess, readiness, and wait helpers; do not copy them. If one needs a change to be reused, extract it with no behavior change and keep its tests green
-- [ ] `tests/contract/bootstrap.py`: a `__main__` entry run as `sys.executable -m tests.contract.bootstrap` (never `uv run`), with `cwd` set to the repo root derived from `Path(__file__)` (never the caller's cwd) so `tests.contract` resolves, that builds `ResidentProcess(tenants=(*standard_tenants(ProcessSettings(cf_data_dir=…), supervisor_dir), ProofRunner(…)))` and runs it. `ProcessSettings` keeps its default `sq_runs_dir` (task-level addition above)
-- [ ] The harness passes everything per-run to the bootstrap as argparse arguments: `--supervisor-dir`, `--cf-data-dir`, a repeatable `--reviews-dir PROJECT=PATH`, `--run-fixture`, and `--review-fixture`. The bootstrap passes `ProcessSettings().sq_runs_dir` and `scenario.STANDIN_RUN_AGE` to `ProofRunner` itself. A missing or malformed argument exits non-zero with argparse's error
-- [ ] A harness object in `bootstrap.py` (or a sibling module) that: builds the env (`HOME`, `AMOEBA_STORE_DIR`, CF data dir, all under `tmp_path`, asserting each is under `tmp_path`); starts the process and waits for readiness; waits for exit after a crash; stops via `amoeba stop` as a subprocess; restarts
-- [ ] Every wait is a predicate with a timeout. On timeout, fail with the step number and every subprocess's captured stdout and stderr
-- [ ] A `follow()` subscriber on a thread that records each `Change`, stores any exception, and re-raises it on the main thread at the next wait
+- [x] Read `tests/host_harness.py` first. Reuse its subprocess, readiness, and wait helpers; do not copy them. If one needs a change to be reused, extract it with no behavior change and keep its tests green
+- [x] `tests/contract/bootstrap.py`: a `__main__` entry run as `sys.executable -m tests.contract.bootstrap` (never `uv run`), with `cwd` set to the repo root derived from `Path(__file__)` (never the caller's cwd) so `tests.contract` resolves, that builds `ResidentProcess(tenants=(*standard_tenants(ProcessSettings(cf_data_dir=…), supervisor_dir), ProofRunner(…)))` and runs it. `ProcessSettings` keeps its default `sq_runs_dir` (task-level addition above)
+- [x] The harness passes everything per-run to the bootstrap as argparse arguments: `--supervisor-dir`, `--cf-data-dir`, a repeatable `--reviews-dir PROJECT=PATH`, `--run-fixture`, and `--review-fixture`. The bootstrap passes `ProcessSettings().sq_runs_dir` and `scenario.STANDIN_RUN_AGE` to `ProofRunner` itself. A missing or malformed argument exits non-zero with argparse's error
+- [x] A harness object in `bootstrap.py` (or a sibling module) that: builds the env (`HOME`, `AMOEBA_STORE_DIR`, CF data dir, all under `tmp_path`, asserting each is under `tmp_path`); starts the process and waits for readiness; waits for exit after a crash; stops via `amoeba stop` as a subprocess; restarts
+- [x] Every wait is a predicate with a timeout. On timeout, fail with the step number and every subprocess's captured stdout and stderr
+- [x] A `follow()` subscriber on a thread that records each `Change`, stores any exception, and re-raises it on the main thread at the next wait
 
 **Success Criteria**:
-- [ ] No bare `sleep`; no `uv run`; public-import rule passes
-- [ ] Committed with Task 4.6
+- [x] No bare `sleep`; no `uv run`; public-import rule passes
+- [x] Committed with Task 4.6
 
 ---
 
@@ -344,11 +346,11 @@ revision_number: 2
 **Objective**: Prove the harness before the scenario depends on it.
 
 **Steps**:
-- [ ] In `tests/contract/test_harness.py`: start, `create_project` through `inbox.submit`, an intent for `build_tree`, wait until the subscriber sees `node_created`; stop cleanly
-- [ ] After `watch_reviews` and `build_tree`, a `launch_review` intent with `crash_at=AFTER_JOURNAL`: the process exits by `SIGKILL`, restarts, and recovery runs (the entry is no longer unresolved)
-- [ ] A forced readiness timeout fails with captured stderr in the message (use `pytest.raises` on the harness's failure)
-- [ ] A subscriber-thread exception is re-raised at the next wait
+- [x] In `tests/contract/test_harness.py`: start, `create_project` through `inbox.submit`, an intent for `build_tree`, wait until the subscriber sees `node_created`; stop cleanly
+- [x] After `watch_reviews` and `build_tree`, a `launch_review` intent with `crash_at=AFTER_JOURNAL`: the process exits by `SIGKILL`, restarts, and recovery runs (the entry is no longer unresolved)
+- [x] A forced readiness timeout fails with captured stderr in the message (use `pytest.raises` on the harness's failure)
+- [x] A subscriber-thread exception is re-raised at the next wait
 
 **Success Criteria**:
-- [ ] Tests pass in the default suite; real `HOME` untouched
-- [ ] Committed (4.4–4.6): `test: add the proof runner tenant and contract harness`
+- [x] Tests pass in the default suite; real `HOME` untouched
+- [x] Committed (4.4–4.6): `test: add the proof runner tenant and contract harness`
