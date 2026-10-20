@@ -17,15 +17,16 @@ interfaces: []
 dateCreated: 20261015
 dateUpdated: 20261020
 status: not_started
-turns: 26
-promptTokens: 1062061
-cachedTokens: 1001424
-cacheWriteTokens: 60599
-completionTokens: 10075
-durationSeconds: 134.3
-costUsd: 0.88706
-usageRounds: 1
-pricedRounds: 1
+turns: 44
+promptTokens: 1857733
+cachedTokens: 1782782
+cacheWriteTokens: 74893
+completionTokens: 15858
+durationSeconds: 189.8
+costUsd: 1.273424
+usageRounds: 2
+pricedRounds: 2
+revision_number: 1
 ---
 
 # Slice Design: contract-proof-and-hardening
