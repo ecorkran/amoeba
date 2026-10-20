@@ -20,13 +20,18 @@ from amoeba.store import paths
 
 TESTS_DIR = Path(__file__).parent
 
-#: Names defined in ``amoeba.store.paths`` that resolve the central store. A
-#: test referencing any of them is reaching outside its throwaway store.
+#: Names that resolve the central store (``amoeba.store.paths``), Squadron's
+#: runs directory, or Context Forge's data directory. A test referencing any of
+#: them is reaching outside its throwaway directories. The last two are fixed at
+#: import from the real home directory, so a test points a subprocess at a
+#: scratch location by setting ``HOME``, never by naming them.
 FORBIDDEN_PATH_NAMES = frozenset(
     {
         paths.store_dir.__name__,
         paths.store_path.__name__,
         "DEFAULT_STORE_DIR",
+        "DEFAULT_SQ_RUNS_DIR",
+        "DEFAULT_CF_DATA_DIR",
     }
 )
 
@@ -70,6 +75,14 @@ def test_scan_finds_a_wrapped_reference() -> None:
     )
 
     assert _referenced_forbidden_names(wrapped) == {"store_path"}
+
+
+@pytest.mark.parametrize("name", ["DEFAULT_SQ_RUNS_DIR", "DEFAULT_CF_DATA_DIR"])
+def test_scan_finds_the_runs_and_cf_directory_constants(name: str) -> None:
+    """The real Squadron runs and Context Forge directories are off limits too."""
+    source = f"from amoeba.process.settings import {name}\n\nprint({name})\n"
+
+    assert _referenced_forbidden_names(source) == {name}
 
 
 def test_scan_ignores_unrelated_source() -> None:

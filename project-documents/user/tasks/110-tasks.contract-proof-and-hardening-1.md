@@ -254,13 +254,13 @@ revision_number: 2
 **Objective**: Imports in `tests/contract/` are mechanically limited to public names (LLD D1).
 
 **Steps**:
-- [ ] Create `tests/contract/__init__.py` and `tests/contract/public_api.py` with `PUBLIC_ROOTS` (exactly the seven roots in D1) and a function returning violations for one source file, walking the AST for `import` and `from … import`
-- [ ] A violation is: a submodule of a root (`amoeba.store.paths`); a name not in the root's `__all__`; any `amoeba…` module outside `PUBLIC_ROOTS`. Non-`amoeba` imports (stdlib, pytest, httpx, `tests.*`) are allowed
-- [ ] Read `__all__` by importing the root at test time, not by a copied list
+- [x] Create `tests/contract/__init__.py` and `tests/contract/public_api.py` with `PUBLIC_ROOTS` (exactly the seven roots in D1) and a function returning violations for one source file, walking the AST for `import` and `from … import`
+- [x] A violation is: a submodule of a root (`amoeba.store.paths`); a name not in the root's `__all__`; any `amoeba…` module outside `PUBLIC_ROOTS`. Non-`amoeba` imports (stdlib, pytest, httpx, `tests.*`) are allowed
+- [x] Read `__all__` by importing the root at test time, not by a copied list
 
 **Success Criteria**:
-- [ ] Function is pure (path in, violations out); no import of internals in `public_api.py` itself
-- [ ] Committed with Task 4.2
+- [x] Function is pure (path in, violations out); no import of internals in `public_api.py` itself
+- [x] Committed with Task 4.2
 
 ---
 
@@ -271,12 +271,12 @@ revision_number: 2
 **Objective**: The rule catches each violation and passes on the directory.
 
 **Steps**:
-- [ ] `tests/contract/test_public_api_rule.py`: one `tmp_path` source per violation kind (submodule, unexported name, non-root module) is reported; an allowed source is not
-- [ ] One test applies the rule to every `.py` file in `tests/contract/` and asserts no violations
+- [x] `tests/contract/test_public_api_rule.py`: one `tmp_path` source per violation kind (submodule, unexported name, non-root module) is reported; an allowed source is not
+- [x] One test applies the rule to every `.py` file in `tests/contract/` and asserts no violations
 
 **Success Criteria**:
-- [ ] Tests pass
-- [ ] Committed (4.1–4.2): `test: add the contract proof's public-import rule`
+- [x] Tests pass
+- [x] Committed (4.1–4.2): `test: add the contract proof's public-import rule`
 
 ---
 
