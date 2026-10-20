@@ -216,15 +216,15 @@ revision_number: 2
 
 **Steps**:
 - [x] Add `tests/store/test_runner_report.py` using the existing evidence/journal harnesses (`tests/evidence_harness.py`; check before adding helpers)
-- [ ] Happy path: after one call, the verdict exists, one `runner_issued` detection row names its id and node, and the entry is `completed` by `issuer` with `result`; `recorded_result_run_ids` includes the run id for an `sq_run` entry
-- [ ] One commit: monkeypatch `_resolve_entry_within` to raise; assert no verdict, no ledger row, entry unresolved
-- [ ] Ledger key already present (an `ingested` row for the same project, path, and digest): the call inserts no second row, keeps the existing one, writes the verdict, and resolves the entry
-- [ ] Each refusal writes nothing: wrong detection outcome; resolved entry; entry of a non-review kind; entry in another project; `sq_run` entry whose `result` lacks `run_id`
-- [ ] Retry rule: with the verdict id already recorded through `record_verdict` and the entry unresolved, the call returns the existing record, writes one `runner_issued` row, and resolves the entry; the verdict count is unchanged
+- [x] Happy path: after one call, the verdict exists, one `runner_issued` detection row names its id and node, and the entry is `completed` by `issuer` with `result`; `recorded_result_run_ids` includes the run id for an `sq_run` entry
+- [x] One commit: monkeypatch `_resolve_entry_within` to raise; assert no verdict, no ledger row, entry unresolved
+- [x] Ledger key already present (an `ingested` row for the same project, path, and digest): the call inserts no second row, keeps the existing one, writes the verdict, and resolves the entry
+- [x] Each refusal writes nothing: wrong detection outcome; resolved entry; entry of a non-review kind; entry in another project; `sq_run` entry whose `result` lacks `run_id`
+- [x] Retry rule: with the verdict id already recorded through `record_verdict` and the entry unresolved, the call returns the existing record, writes one `runner_issued` row, and resolves the entry; the verdict count is unchanged
 
 **Success Criteria**:
-- [ ] All tests pass; each refusal test asserts the row counts are unchanged
-- [ ] Committed (3.1–3.2): `feat(store): add record_runner_report`
+- [x] All tests pass; each refusal test asserts the row counts are unchanged
+- [x] Committed (3.1–3.2): `feat(store): add record_runner_report`
 
 ---
 
@@ -235,13 +235,13 @@ revision_number: 2
 **Objective**: The evidence and store contracts name the method (LLD "Technical Scope" Docs).
 
 **Steps**:
-- [ ] `docs/evidence-contract.md` point 3 (around line 420): replace "deferred to 120 (or 110, if earlier)" with the method, its signature, the one-transaction effect, and its refusals
-- [ ] `docs/store-contract.md`: add the method to the method list
-- [ ] Add `record_runner_report` to `tests/test_public_api.py`'s contract-methods check if that test lists methods
+- [x] `docs/evidence-contract.md` point 3 (around line 420): replace "deferred to 120 (or 110, if earlier)" with the method, its signature, the one-transaction effect, and its refusals
+- [x] `docs/store-contract.md`: add the method to the method list
+- [x] Add `record_runner_report` to `tests/test_public_api.py`'s contract-methods check if that test lists methods
 
 **Success Criteria**:
-- [ ] Both docs name the method; no remaining "deferred to 120 (or 110" text for it
-- [ ] Committed: `docs: document record_runner_report in the evidence and store contracts`
+- [x] Both docs name the method; no remaining "deferred to 120 (or 110" text for it
+- [x] Committed: `docs: document record_runner_report in the evidence and store contracts`
 
 ---
 
