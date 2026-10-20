@@ -497,9 +497,10 @@ verdict_id, record_id, detail`); `BaselineEntry` (`path, digest`);
 `attribute_review(slice_nodes, slice_name) -> Attribution` is a pure function,
 not a method: the one node with `kind == slice` and `cf.slice_name ==
 slice_name`, or `None` with every match in `candidates`. The rule is in the
-evidence contract. `amoeba.store.paths.project_store_path(directory,
-project_id)` is the one definition of a project's store file inside a
-supervisor directory, shared by the process and out-of-process followers.
+evidence contract. `from amoeba.store import project_store_path` gives
+`project_store_path(directory, project_id)`, the one definition of a project's
+store file inside a supervisor directory, shared by the process and
+out-of-process followers.
 
 ### Retention
 
@@ -681,7 +682,9 @@ Notes on specific modes:
 One store per **supervisor**, at a central path, **keyed by project** —
 following the architecture's "resident process per supervisor, not per project".
 
-Resolution precedence, highest first:
+`from amoeba.store import store_dir` resolves the directory
+(`store_dir(env=None) -> Path`; `env` defaults to `os.environ`, and the result
+is not created). Resolution precedence, highest first:
 
 1. `AMOEBA_STORE_DIR` — used verbatim
 2. `XDG_CONFIG_HOME` — yields `$XDG_CONFIG_HOME/amoeba`

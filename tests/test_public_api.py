@@ -81,6 +81,9 @@ EXPECTED_EXPORTS = {
     "DetectionInput",
     "DetectionOutcome",
     "ReviewWatch",
+    # Locating stores (read-only consumers), added by slice 110
+    "project_store_path",
+    "store_dir",
     # The store
     "Store",
     # Exceptions

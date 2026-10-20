@@ -10,8 +10,9 @@ The full contract is documented in ``docs/store-contract.md``, which is written
 to be sufficient for designing a consumer without reading this implementation.
 
 Exported here is the contract and only the contract: SQL statements, column
-constants, row mapping, path resolution, and migration machinery are internal
-and deliberately not re-exported.
+constants, row mapping, and migration machinery are internal and deliberately
+not re-exported. The one exception in path resolution is ``store_dir`` and
+``project_store_path``, which a read-only consumer needs to find a store.
 """
 
 from __future__ import annotations
@@ -101,6 +102,7 @@ from amoeba.store.models import (
     UnknownVocabularyValueError,
     VerdictNotFoundError,
 )
+from amoeba.store.paths import project_store_path, store_dir
 from amoeba.store.store import Store
 
 __all__ = [
@@ -169,6 +171,9 @@ __all__ = [
     "DetectedReview",
     "DetectionInput",
     "ReviewWatch",
+    # Locating stores (read-only consumers)
+    "project_store_path",
+    "store_dir",
     # The store
     "Store",
     # Exceptions

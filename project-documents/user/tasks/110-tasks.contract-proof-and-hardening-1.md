@@ -150,15 +150,15 @@ revision_number: 2
 **Objective**: A tenant author imports only `amoeba.process` (LLD D7 H1, "API Contracts").
 
 **Steps**:
-- [ ] In `process/__init__.py`, import and list in `__all__` exactly: `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, `ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError`. Find each name's defining module with grep; if any name does not exist, stop and tell the PM
-- [ ] Check for an import cycle: `python -c "import amoeba.process"` and `python -c "import amoeba.cli.main"` both succeed
-- [ ] Add `tests/test_process_public_api.py`, in the style of `tests/test_public_api.py`: a written-out `EXPECTED_EXPORTS` set equal to `__all__`; every name importable
-- [ ] `docs/process-contract.md`: add a "Hosting tenants" section listing the H1 exports, how `amoeba start` composes `standard_tenants`, and how initiative 120 adds its Runner as `(*standard_tenants(…), runner)` in `start`. State that version-label capture never raises (`unavailable` label)
+- [x] In `process/__init__.py`, import and list in `__all__` exactly: `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, `ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError`. Find each name's defining module with grep; if any name does not exist, stop and tell the PM
+- [x] Check for an import cycle: `python -c "import amoeba.process"` and `python -c "import amoeba.cli.main"` both succeed
+- [x] Add `tests/test_process_public_api.py`, in the style of `tests/test_public_api.py`: a written-out `EXPECTED_EXPORTS` set equal to `__all__`; every name importable
+- [x] `docs/process-contract.md`: add a "Hosting tenants" section listing the H1 exports, how `amoeba start` composes `standard_tenants`, and how initiative 120 adds its Runner as `(*standard_tenants(…), runner)` in `start`. State that version-label capture never raises (`unavailable` label)
 
 **Success Criteria**:
-- [ ] `set(amoeba.process.__all__) == EXPECTED_EXPORTS`; `SquadronRun`, `parse_run_file`, and no pruning name in it
-- [ ] Each of the 13 H1 names appears in `docs/process-contract.md` (LLD "Integration Requirements")
-- [ ] Committed: `feat(process): export and document the tenant-hosting contract`
+- [x] `set(amoeba.process.__all__) == EXPECTED_EXPORTS`; `SquadronRun`, `parse_run_file`, and no pruning name in it
+- [x] Each of the 13 H1 names appears in `docs/process-contract.md` (LLD "Integration Requirements")
+- [x] Committed: `feat(process): export and document the tenant-hosting contract`
 
 ---
 
