@@ -74,14 +74,14 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    **Risk Level:** High. Detached launch, launch confirmation and crash adoption are where the Runner can lose or duplicate a run.
    **Relative Effort:** 4
 
-4. [ ] **(123) Lifecycle Model and Reconciliation** — Projects CF's plan into 100's node tree. Initiative nodes come from `cf list initiatives --json`, slice nodes from `cf list slices --json`, and pointers and gates from `cf status --json`. Below each slice is a node per lifecycle step, and the v1 step map assigns each step a Squadron pipeline, a CF write, or a human step. Reconciliation runs on list diffs and on successful changed `cf_project_changed` snapshots. Nodes link to CF by slice index: a renamed slice keeps its node, and an index CF no longer reports becomes an orphan that escalates. The Runner is the only creator of nodes. Predecessor lookup goes through one function so 180 can add cross-project edges later.
+4. [ ] **(123) Lifecycle Model and Reconciliation** — Projects CF's plan into 100's node tree. Initiative nodes come from `cf list initiatives --json`, and slice nodes from `cf list slices <index> --json`. Pointers and gates are read from `cf status --json` by 125 and 128, which use them (slice 123, D7). Below each slice is a node per lifecycle step, and the v1 step map assigns each step a Squadron pipeline or a human step. No v1 step is a CF write: a pointer write is part of dispatching a pipeline step (slice 123, D3). Reconciliation runs on list diffs and on successful changed `cf_project_changed` snapshots. Nodes link to CF by slice index: a renamed slice keeps its node, and an index CF no longer reports becomes an orphan that escalates, unless it is already done or already blocked (slice 123, D5). The Runner is the only creator of nodes. Predecessor lookup goes through one function so 180 can add cross-project edges later.
    **Value:** Developer value. Amoeba's tree mirrors the project's real plan and stays in step as the plan changes.
    **Success Criteria:**
    - A project's initiatives and slices appear as nodes with step children that match the step map.
    - A slice added to a plan document appears on the next tick, even though `projects.json` did not change.
    - A rename keeps the node. A renumber produces one orphan escalation and one new node.
-   - A failed snapshot, or a recovery that found nothing changed, triggers no reconciliation.
-   - Human steps (P2, P3, P7, host cutover) are `blocked_on_human` from the moment they become current.
+   - A failed snapshot, or a recovery that found nothing changed, triggers no early plan read. The plan is still read on its interval (slice 123, D7).
+   - Human steps (P2, P3, P7, host cutover) are `blocked_on_human` from the moment they become current. This is proven under a test planner. The planner joins production in 124, because "current" needs drive (slice 123, D9).
    **Dependencies:** [122]
    **Interfaces:** Provides the node tree, the step map and the predecessor function to 124–129. Consumes CF's `--json` surfaces and 108's snapshots.
    **Risk Level:** Medium. Identity across plan edits is the subtle part.
@@ -95,6 +95,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - Finding the governing settings for a node is a lookup up its path, not a replay of messages.
    - Each intent is acknowledged exactly once, with outcome applied, no-op or rejected.
    - A held target issues nothing new, and its in-flight runs are still observed and ingested.
+   - 123's `HumanStepPlanner` is registered in production together with the drive filter, so a human step blocks only once it is current and driven, and linking a project alone escalates nothing.
    **Dependencies:** [121, 123]
    **Interfaces:** Provides the intent body format that 160 translates into. Its whitelist (OQ5) is a subset of this vocabulary. Consumes 121's acknowledgment outcomes and desired-state table.
    **Risk Level:** Low
@@ -202,3 +203,5 @@ Living backlog; entries may be added during slice design, task breakdown, or imp
 5. [ ] **Squadron review-completed event (S8)** — If Squadron adds the event, it can replace per-tick polling for completion. Dependencies: [122].
 6. [ ] **Skip held runs when pruning** — From 120's design: `amoeba prune sq-runs` polls `sq runs wait` once per owned run id. If the owned set grows enough to make pruning slow, skip ids held by unfinished nodes, which can never be candidates. Dependencies: [120]. Effort: 1/5
 7. [ ] **Feed change for project-escalation closure** — From 121's design: a project-scoped escalation's opening reaches the feed as `message_posted`, but its closure is a column update and emits nothing. Add a closure change kind (new `ChangeKind`, trigger, invariant-test step) once a subscriber such as the notification bridge needs to clear a shown fault. Dependencies: [121]. Effort: 1/5
+8. [ ] **Mark a step done** — From 123's design: a slice already partly done by hand gets all its steps runnable, because the Runner infers no partial progress. Add an intent or resolution that marks a step done, if driving such slices turns out to be common. Dependencies: [123, 124]. Effort: 1/5
+9. [ ] **CF asks: `indexSource` and a no-plan error code** — From 123's design: `cf list slices --json` does not expose `indexSource`, so CF's fallback counters cannot be told from explicit indexes. CF also reports "no slice plan" as `code: UNKNOWN`. Ask CF for both. Dependencies: none. Effort: 1/5
