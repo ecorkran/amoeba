@@ -115,16 +115,16 @@ revision_number: 2
 **Objective**: External work, the Judge path, checkpoints, down-time submissions, finish (LLD D4 steps 7–11, D5).
 
 **Steps**:
-- [ ] Step 7: the driver writes a PM-launched review artifact into alpha's reviews directory and a paused run file (unowned id, `updated_at = now - STANDIN_RUN_AGE`) into the runs directory. Assert `finding_changes` for the new verdict compares it with step 4's round
-- [ ] Step 8: two `verdict` submissions sharing one `judge_invocation_id` (payload shape per `docs/inbox-contract.md` and the 107 fixture)
-- [ ] Step 9: a `checkpoint` intent on alpha and on beta; each gate is `blocked_on_sq_checkpoint` with `sq.run_id` set, and each run id is in its project's `recorded_result_run_ids` (ownership guarantee, checkpoint path)
-- [ ] Step 10: stop with `amoeba stop`; `inbox.submit` a `resolution` for alpha's checkpoint while down; start; wait until it is applied
-- [ ] Step 11: a `finish` intent on alpha; alpha's slice and gate are `done`, beta's gate stays blocked
-- [ ] After step 11: run the end-state oracle and the feed-replay oracle; fail with their diffs
+- [x] Step 7: the driver writes a PM-launched review artifact into alpha's reviews directory and a paused run file (unowned id, `updated_at = now - STANDIN_RUN_AGE`) into the runs directory. Assert `finding_changes` for the new verdict compares it with step 4's round
+- [x] Step 8: two `verdict` submissions sharing one `judge_invocation_id` (payload shape per `docs/inbox-contract.md` and the 107 fixture)
+- [x] Step 9: a `checkpoint` intent on alpha and on beta; each gate is `blocked_on_sq_checkpoint` with `sq.run_id` set, and each run id is in its project's `recorded_result_run_ids` (ownership guarantee, checkpoint path)
+- [x] Step 10: stop with `amoeba stop`; `inbox.submit` a `resolution` for alpha's checkpoint while down; start; wait until it is applied
+- [x] Step 11: a `finish` intent on alpha; alpha's slice and gate are `done`, beta's gate stays blocked
+- [x] After step 11: run the end-state oracle and the feed-replay oracle; fail with their diffs
 
 **Success Criteria**:
-- [ ] Steps 1–11 pass; both oracles report no diff; `seq` has no gap across steps 4, 5, and 10
-- [ ] Committed: `test: drive contract proof steps 7-11 and check both oracles`
+- [x] Steps 1–11 pass; both oracles report no diff; `seq` has no gap across steps 4, 5, and 10
+- [x] Committed: `test: drive contract proof steps 7-11 and check both oracles`
 
 ---
 

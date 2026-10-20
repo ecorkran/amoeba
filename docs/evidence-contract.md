@@ -428,6 +428,14 @@ ordering depends on two things the Runner must do:
   does not exist, is already resolved, is not a review-producing kind, or
   belongs to another project (`InvalidTransitionError`); a verdict already
   recorded in another project (`StoreIntegrityError`).
+
+  The detection row's key must match the one detection would compute, or the
+  next scan takes the file as new. `path` is the review file's path as
+  detection records it (the registered reviews directory joined with the file
+  name), and `digest` is the sha256 hex digest of the bytes of that file (see
+  "Review detection" in [`process-contract.md`](process-contract.md)). The
+  verdict's `journal_entry_id` must be an entry on the verdict's own node, so a
+  Runner journals a review command on the node the review is of.
 - **Point 5.** The Runner records its reviews **from the artifact through
   slice 105's parser**, so its record id and detection's are the same
   parsed-content digest. Any overlap is then a `record_verdict` retry, a
