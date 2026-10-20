@@ -92,17 +92,19 @@ revision_number: 2
 **Effort**: 3
 **Objective**: Project creation, tree building, reporting, and both crash windows (LLD D4 steps 1–6).
 
+> Finding (not a gap): a verdict's journal_entry_id must be on the verdict's own node (documented as check 3 of record_verdict in evidence-contract.md), so the proof Runner journals launch_review on the slice node and a lost command blocks the slice, not the gate. Also: the harness creates HOME/.config/squadron/runs, since ProcessSettings derives the runs directory from HOME.
+
 **Steps**:
-- [ ] `tests/contract/test_lifecycle_proof.py`: one test that drives `scenario.py`'s steps in order using Task 4.5's harness. After each step, wait until the subscriber has that step's expected change kinds. Tasks 5.5 and 7.5 extend this file; keep it near 300 lines by moving per-step driver helpers into `tests/contract/steps.py` once it nears that size
-- [ ] Step 1 starts the alpha subscriber once alpha's store exists; beta's changes are read at the end with `follow(after=0)` for the D6 check
-- [ ] Steps 4 and 5: wait for the `SIGKILL` exit, restart, wait for recovery's outcome
-- [ ] Step-level assertions the oracle cannot make: step 3's verdict, ledger row, and entry share one commit (no change for the verdict precedes the entry's resolution on the feed); step 4 has one verdict for the round and the detection row's `record_id` equals the parsed artifact's id; step 5 has exactly one escalation message; after step 6 (the PM's `resolution` message) the step-5 node is runnable, read through the same public node read the end-state oracle uses, since step 11 may change it before the final state
-- [ ] Ownership guarantee (LLD D8): after step 3 (`completed` by the issuer) and after step 4 (`adopted` by recovery), `recorded_result_run_ids("alpha")` contains that step's run id
+- [x] `tests/contract/test_lifecycle_proof.py`: one test that drives `scenario.py`'s steps in order using Task 4.5's harness. After each step, wait until the subscriber has that step's expected change kinds. Tasks 5.5 and 7.5 extend this file; keep it near 300 lines by moving per-step driver helpers into `tests/contract/steps.py` once it nears that size
+- [x] Step 1 starts the alpha subscriber once alpha's store exists; beta's changes are read at the end with `follow(after=0)` for the D6 check
+- [x] Steps 4 and 5: wait for the `SIGKILL` exit, restart, wait for recovery's outcome
+- [x] Step-level assertions the oracle cannot make: step 3's verdict, ledger row, and entry share one commit (no change for the verdict precedes the entry's resolution on the feed); step 4 has one verdict for the round and the detection row's `record_id` equals the parsed artifact's id; step 5 has exactly one escalation message; after step 6 (the PM's `resolution` message) the step-5 node is runnable, read through the same public node read the end-state oracle uses, since step 11 may change it before the final state
+- [x] Ownership guarantee (LLD D8): after step 3 (`completed` by the issuer) and after step 4 (`adopted` by recovery), `recorded_result_run_ids("alpha")` contains that step's run id
 
 **Success Criteria**:
-- [ ] Steps 1–6 pass; on failure the message names the step number
-- [ ] Any gap found is in "Gaps Found" with its D7 classification
-- [ ] Committed: `test: drive contract proof steps 1-6`
+- [x] Steps 1–6 pass; on failure the message names the step number
+- [x] Any gap found is in "Gaps Found" with its D7 classification
+- [x] Committed: `test: drive contract proof steps 1-6`
 
 ---
 

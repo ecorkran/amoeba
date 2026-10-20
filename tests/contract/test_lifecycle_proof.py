@@ -1,16 +1,17 @@
-"""The lifecycle proof: the scenario's twelve steps against real processes.
+"""The lifecycle proof: the scenario's steps against real processes.
 
-Slice 110, D4. Steps 7-12 and the oracles extend this test in later tasks.
+Slice 110, D4. Step 12 (pruning) extends this test in a later task.
 """
 
 from __future__ import annotations
 
 from contract.harness import ProofHarness
-from contract.steps import STEP_BY_NUMBER, ScenarioDriver
+from contract.steps import STEP_BY_NUMBER
+from contract.steps_late import LateStepsDriver
 
 
 def test_the_lifecycle_proof(proof_harness: ProofHarness) -> None:
-    driver = ScenarioDriver(proof_harness)
+    driver = LateStepsDriver(proof_harness)
 
     driver.create_and_watch_projects(STEP_BY_NUMBER[1])
     driver.run_intent_step(STEP_BY_NUMBER[2])
@@ -25,3 +26,15 @@ def test_the_lifecycle_proof(proof_harness: ProofHarness) -> None:
     blocked = driver.check_escalation(5)
 
     driver.resolve_blocked_node(STEP_BY_NUMBER[6], blocked)
+    driver.write_external_review(STEP_BY_NUMBER[7])
+    driver.submit_judge_samples(STEP_BY_NUMBER[8])
+
+    driver.run_intent_step(STEP_BY_NUMBER[9])
+    driver.check_checkpoints(9)
+
+    driver.stop_submit_and_start(STEP_BY_NUMBER[10])
+
+    driver.run_intent_step(STEP_BY_NUMBER[11])
+    driver.check_finished(11)
+
+    driver.check_oracles(11)

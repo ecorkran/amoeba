@@ -73,7 +73,7 @@ class ProofHarness:
         review_fixture: Path = STAMPED_REVIEW_106,
     ) -> None:
         self._tmp_path = tmp_path
-        self._review_fixture = review_fixture
+        self.review_fixture = review_fixture
         self.home = require_under(tmp_path, tmp_path / "home", "HOME")
         self.runs_dir = self.home / SQ_RUNS_RELATIVE_DIR
         self.supervisor_dir = require_under(tmp_path, tmp_path / "store", "store")
@@ -126,7 +126,7 @@ class ProofHarness:
             "--run-fixture",
             str(RUN_FIXTURE),
             "--review-fixture",
-            str(self._review_fixture),
+            str(self.review_fixture),
         ]
         for project_id, directory in self.reviews_dirs.items():
             command += ["--reviews-dir", f"{project_id}={directory}"]
