@@ -79,10 +79,11 @@ status: not_started
 **Objective**: Project creation, tree building, reporting, and both crash windows (LLD D4 steps 1–6).
 
 **Steps**:
-- [ ] `tests/contract/test_lifecycle_proof.py`: one test that drives `scenario.py`'s steps in order using Task 4.5's harness. After each step, wait until the subscriber has that step's expected change kinds
+- [ ] `tests/contract/test_lifecycle_proof.py`: one test that drives `scenario.py`'s steps in order using Task 4.5's harness. After each step, wait until the subscriber has that step's expected change kinds. Tasks 5.5 and 7.5 extend this file; keep it near 300 lines by moving per-step driver helpers into `tests/contract/steps.py` once it nears that size
 - [ ] Step 1 starts the alpha subscriber once alpha's store exists; beta's changes are read at the end with `follow(after=0)` for the D6 check
 - [ ] Steps 4 and 5: wait for the `SIGKILL` exit, restart, wait for recovery's outcome
 - [ ] Step-level assertions the oracle cannot make: step 3's verdict, ledger row, and entry share one commit (no change for the verdict precedes the entry's resolution on the feed); step 4 has one verdict for the round and the detection row's `record_id` equals the parsed artifact's id; step 5 has exactly one escalation message
+- [ ] Ownership guarantee (LLD D8): after step 3 (`completed` by the issuer) and after step 4 (`adopted` by recovery), `recorded_result_run_ids("alpha")` contains that step's run id
 
 **Success Criteria**:
 - [ ] Steps 1–6 pass; on failure the message names the step number
@@ -98,9 +99,11 @@ status: not_started
 **Objective**: External work, the Judge path, checkpoints, down-time submissions, finish (LLD D4 steps 7–11, D5).
 
 **Steps**:
-- [ ] Step 7: the driver writes a PM-launched review artifact into alpha's reviews directory and a paused run file (unowned id, `updated_at = now - STANDIN_RUN_AGE`) into the runs directory
+- [ ] Step 7: the driver writes a PM-launched review artifact into alpha's reviews directory and a paused run file (unowned id, `updated_at = now - STANDIN_RUN_AGE`) into the runs directory. Assert `finding_changes` for the new verdict compares it with step 4's round
 - [ ] Step 8: two `verdict` submissions sharing one `judge_invocation_id` (payload shape per `docs/inbox-contract.md` and the 107 fixture)
+- [ ] Step 9: a `checkpoint` intent on alpha and on beta; each gate is `blocked_on_sq_checkpoint` with `sq.run_id` set, and each run id is in its project's `recorded_result_run_ids` (ownership guarantee, checkpoint path)
 - [ ] Step 10: stop with `amoeba stop`; `inbox.submit` a `resolution` for alpha's checkpoint while down; start; wait until it is applied
+- [ ] Step 11: a `finish` intent on alpha; alpha's slice and gate are `done`, beta's gate stays blocked
 - [ ] After step 11: run the end-state oracle and the feed-replay oracle; fail with their diffs
 
 **Success Criteria**:
@@ -128,22 +131,37 @@ status: not_started
 
 ## Section 6: Network Subset
 
-### Task 6.1: Implement and pass the network subset
+### Task 6.1: Network subset — delivery and a `kill -9` of `amoeba serve`
 **Owner**: Junior AI
 **Dependencies**: Task 5.6
-**Effort**: 3
-**Objective**: The remote path survives a `kill -9` of each process (LLD D2, "Data Flow" network).
+**Effort**: 2
+**Objective**: Remote submission and SSE delivery survive a server crash (LLD D2, "Data Flow" network).
 
 **Steps**:
 - [ ] `tests/contract/test_network_subset.py`: start the bootstrap, then `amoeba serve` as `sys.executable -m amoeba.cli.main serve` on loopback with a free port (no token; see `docs/network-contract.md`); follow alpha's SSE feed with httpx. Reuse `tests/serve_harness.py`'s `sse_events` parser
 - [ ] POST an intent, poll `GET …/submissions/{id}` until `applied`, receive `message_posted` over SSE
 - [ ] `kill -9` serve; a POST raises a connection error; restart serve; reconnect with `Last-Event-ID` = last seq received
-- [ ] `kill -9` the resident process; POST an intent → 202; restart; SSE delivers it
-- [ ] End: the SSE `seq` list equals a local `follow(after=0)` list. The follower reconnects only at the two planned points; any other drop fails the test
+- [ ] The follower reconnects only at planned points; any other drop fails the test
 
 **Success Criteria**:
 - [ ] Test passes in the default suite; public-import rule passes
-- [ ] Committed: `test: prove the network path across a kill of each process`
+- [ ] Committed: `test: prove the network path across a kill of amoeba serve`
+
+---
+
+### Task 6.2: Network subset — a `kill -9` of the resident process
+**Owner**: Junior AI
+**Dependencies**: Task 6.1
+**Effort**: 2
+**Objective**: A POST made while the resident process is down is accepted and delivered (LLD D2).
+
+**Steps**:
+- [ ] In the same test, after Task 6.1's steps: `kill -9` the resident process; POST an intent → 202; restart it; SSE delivers it with no reconnect
+- [ ] End: the SSE `seq` list equals a local `follow(after=0)` list
+
+**Success Criteria**:
+- [ ] Test passes in the default suite; no gap and no repeat in the SSE `seq` list
+- [ ] Committed: `test: prove the network path across a kill of the resident process`
 
 ---
 
@@ -151,7 +169,7 @@ status: not_started
 
 ### Task 7.1: Implement `select_prunable`
 **Owner**: Junior AI
-**Dependencies**: Task 6.1
+**Dependencies**: Task 6.2
 **Effort**: 2
 **Objective**: The pure selection rule (LLD D8 "Which runs", "API Contracts").
 
@@ -174,7 +192,7 @@ status: not_started
 **Objective**: Each condition is proven (LLD "Functional Requirements").
 
 **Steps**:
-- [ ] `tests/process/test_run_pruning.py` (imports `PRUNE_RETENTION` directly): a run meeting all four is selected; each condition failing alone excludes it; missing `updated_at` excludes it; a resumed-but-not-done node (its id in `held`) excludes it; exactly at the retention boundary is selected
+- [ ] `tests/process/test_prune_selection.py` (the name must contain `prune` so the walkthrough's `-k prune` selects it; imports `PRUNE_RETENTION` directly): a run meeting all four is selected; each condition failing alone excludes it; missing `updated_at` excludes it; a resumed-but-not-done node (its id in `held`) excludes it; exactly at the retention boundary is selected
 
 **Success Criteria**:
 - [ ] Tests pass; rule 9 passes and fails on a `tmp_path` source importing `amoeba.store`
@@ -208,7 +226,7 @@ status: not_started
 **Objective**: Every failure leaves files and exits `PRUNE_INCOMPLETE` (LLD D8, "Functional Requirements").
 
 **Steps**:
-- [ ] A stub `sq` script (shebang `sys.executable`) written into `tmp_path/bin` and put first on `PATH` by monkeypatch. Modes chosen by an env var: delete the named files under `$HOME/.config/squadron/runs`; exit 1 for an already-gone file; refuse one id as live (exit 1, file kept); fail (exit 1, nothing deleted); sleep past the timeout
+- [ ] `tests/sq_stub.py`: one function that writes a stub `sq` script (shebang `sys.executable`) into a given `bin` directory and returns that directory, for tests to put first on `PATH`. Task 7.5 reuses it; it is its only definition. Modes chosen by an env var: delete the named files under `$HOME/.config/squadron/runs`; exit 1 for an already-gone file; refuse one id as live (exit 1, file kept); fail (exit 1, nothing deleted); sleep past the timeout
 - [ ] `tests/process/test_prune_sq_runs.py`, calling `prune_sq_runs` with `tmp_path` dirs and a short timeout: success; already-gone counts as removed; refused live run; failure; timeout; `sq` missing from `PATH` — each failure exits `PRUNE_INCOMPLETE`, prints the remaining candidates, and no file is deleted by Amoeba
 - [ ] An unreadable project store refuses before the stub is called (stub records invocations to a file)
 - [ ] Preview never calls the stub
@@ -226,7 +244,7 @@ status: not_started
 **Objective**: Pruning against the proof's real end state (LLD D4 step 12).
 
 **Steps**:
-- [ ] At the end of `test_lifecycle_proof.py`, run `sys.executable -m amoeba.cli.main prune sq-runs` as a subprocess with the harness env and the stub on `PATH`
+- [ ] At the end of `test_lifecycle_proof.py`, run `sys.executable -m amoeba.cli.main prune sq-runs` as a subprocess with the harness env and `tests/sq_stub.py`'s stub (delete mode) first on `PATH`
 - [ ] Preview: exactly alpha's checkpoint run is a candidate; the kept count is 1 (beta's)
 - [ ] `--yes`: only alpha's checkpoint run file is gone; beta's and step 7's remain; exit `OK`. Assert on selection, never on the retention value
 

@@ -87,59 +87,29 @@ status: not_started
 
 ## Section 2: Migrations (no behavior change)
 
-### Task 2.1: Add the schema-v5 paused run fixture
+### Task 2.1: Add `updated_at` to `SquadronRun`, with a schema-v5 fixture
 **Owner**: Junior AI
 **Dependencies**: Task 1.2
-**Effort**: 1
-**Objective**: The fixtures include the run-file shape the live directory holds today (LLD D7 H4).
+**Effort**: 2
+**Objective**: The one run-file parser exposes the field pruning needs, tested against the shape the live directory holds today (LLD D7 H4).
 
 **Steps**:
 - [ ] Copy one live v5 `paused` run file from `~/.config/squadron/runs/` (read-only; never modify that directory) into `tests/fixtures/sq_runs/`, byte-for-byte
 - [ ] Scan it for secrets (keys, tokens, credentials). Local paths and the `owner` field are acceptable, as in the existing fixtures. If anything must be edited, edit only that, and record the edit in the README row (the `projects.json` entry is the precedent). The LLD's "sanitized" means exactly this
 - [ ] Add a row to `tests/fixtures/README.md`'s `sq_runs/` table: capture date, `status`, `pipeline`, `schema_version` 5, and "carries `updated_at`, which pruning reads"
+- [ ] In `process/observers/sq_runs.py`, add `updated_at: datetime | None = None` to `SquadronRun`. Update its docstring ("six header fields" becomes seven; `updated_at` is optional and read only by pruning). Do not move `SquadronRun` or `parse_run_file`, and do not export them from `amoeba.process`
+- [ ] In `tests/test_observer_sq_runs.py`, add: the v5 fixture parses with all seven fields and a timezone-aware `updated_at` equal to the file's value; a v3/v4 fixture parses with `updated_at is None`
 
 **Success Criteria**:
 - [ ] Fixture present, README row added, no secret in the file
-- [ ] Committed with Task 2.3
+- [ ] New tests pass; the existing observer and recovery tests pass with none edited
+- [ ] Committed: `feat: add updated_at to SquadronRun and a schema-v5 run fixture`
 
 ---
 
-### Task 2.2: Add `updated_at` to `SquadronRun`
+### Task 2.2: Move `build_tenants` to `process/tenants.py` as `standard_tenants`
 **Owner**: Junior AI
 **Dependencies**: Task 2.1
-**Effort**: 1
-**Objective**: The one run-file parser exposes the field pruning needs (LLD D7 H4).
-
-**Steps**:
-- [ ] In `process/observers/sq_runs.py`, add `updated_at: datetime | None = None` to `SquadronRun`. Update its docstring ("six header fields" becomes seven; say `updated_at` is optional and read only by pruning)
-- [ ] Do not move `SquadronRun` or `parse_run_file`, and do not export them from `amoeba.process`
-
-**Success Criteria**:
-- [ ] `parse_run_file` on the v5 fixture returns a run whose `updated_at` equals the file's value (timezone-aware)
-- [ ] Every existing fixture parses with `updated_at is None` when the file lacks it
-- [ ] Committed with Task 2.3
-
----
-
-### Task 2.3: Test the v5 fixture and the unchanged observer
-**Owner**: Junior AI
-**Dependencies**: Task 2.2
-**Effort**: 1
-**Objective**: Prove H4 is additive.
-
-**Steps**:
-- [ ] In `tests/test_observer_sq_runs.py`, add: the v5 fixture parses with all seven fields; a v3/v4 fixture parses with `updated_at is None`; the observer's existing match tests are untouched
-- [ ] Run the existing observer and recovery suites; they pass unchanged
-
-**Success Criteria**:
-- [ ] New tests pass; no existing test edited
-- [ ] Committed (2.1–2.3): `feat: add updated_at to SquadronRun and a schema-v5 run fixture`
-
----
-
-### Task 2.4: Move `build_tenants` to `process/tenants.py` as `standard_tenants`
-**Owner**: Junior AI
-**Dependencies**: Task 2.3
 **Effort**: 2
 **Objective**: The shipped tenants are composable from `amoeba.process` (LLD D7 H1, "Migration Plan").
 
@@ -158,9 +128,9 @@ status: not_started
 
 ---
 
-### Task 2.5: Export the hosting contract from `amoeba.process`
+### Task 2.3: Export the hosting contract from `amoeba.process`
 **Owner**: Junior AI
-**Dependencies**: Task 2.4
+**Dependencies**: Task 2.2
 **Effort**: 2
 **Objective**: A tenant author imports only `amoeba.process` (LLD D7 H1, "API Contracts").
 
@@ -175,9 +145,9 @@ status: not_started
 
 ---
 
-### Task 2.6: Export `store_dir` and `project_store_path` from `amoeba.store`
+### Task 2.4: Export `store_dir` and `project_store_path` from `amoeba.store`
 **Owner**: Junior AI
-**Dependencies**: Task 2.5
+**Dependencies**: Task 2.3
 **Effort**: 1
 **Objective**: A read-only consumer resolves store paths without an internal import (LLD D7 H3).
 
@@ -188,13 +158,13 @@ status: not_started
 
 **Success Criteria**:
 - [ ] `from amoeba.store import store_dir, project_store_path` works; public-API and store-safety tests pass
-- [ ] Committed with Task 2.7
+- [ ] Committed with Task 2.5
 
 ---
 
-### Task 2.7: Document the new exports
+### Task 2.5: Document the new exports
 **Owner**: Junior AI
-**Dependencies**: Task 2.6
+**Dependencies**: Task 2.4
 **Effort**: 2
 **Objective**: Every name added to a public `__all__` appears in its contract doc (LLD "Integration Requirements").
 
@@ -204,7 +174,7 @@ status: not_started
 
 **Success Criteria**:
 - [ ] Each of the 13 H1 names and both H3 names appears in its contract doc
-- [ ] Committed (2.6–2.7): `feat(store): export store_dir and project_store_path; document hosting`
+- [ ] Committed (2.4–2.5): `feat(store): export store_dir and project_store_path; document hosting`
 
 ---
 
@@ -212,7 +182,7 @@ status: not_started
 
 ### Task 3.1: Implement `record_runner_report`
 **Owner**: Junior AI
-**Dependencies**: Task 2.7
+**Dependencies**: Task 2.5
 **Effort**: 3
 **Objective**: The Runner reports a review it launched in one transaction (LLD D7 H2, "API Contracts").
 
@@ -348,7 +318,7 @@ status: not_started
 
 **Steps**:
 - [ ] Read `tests/host_harness.py` first. Reuse its subprocess, readiness, and wait helpers; do not copy them. If one needs a change to be reused, extract it with no behavior change and keep its tests green
-- [ ] `tests/contract/bootstrap.py`: a `__main__` entry run as `sys.executable -m tests.contract.bootstrap` (never `uv run`) that builds `ResidentProcess(tenants=(*standard_tenants(ProcessSettings(cf_data_dir=…), supervisor_dir), ProofRunner(…)))` and runs it. `ProcessSettings` keeps its default `sq_runs_dir` (task-level addition above)
+- [ ] `tests/contract/bootstrap.py`: a `__main__` entry run as `sys.executable -m tests.contract.bootstrap` (never `uv run`), with `cwd` set to the repo root derived from `Path(__file__)` (never the caller's cwd) so `tests.contract` resolves, that builds `ResidentProcess(tenants=(*standard_tenants(ProcessSettings(cf_data_dir=…), supervisor_dir), ProofRunner(…)))` and runs it. `ProcessSettings` keeps its default `sq_runs_dir` (task-level addition above)
 - [ ] A harness object in `bootstrap.py` (or a sibling module) that: builds the env (`HOME`, `AMOEBA_STORE_DIR`, CF data dir, all under `tmp_path`, asserting each is under `tmp_path`); starts the process and waits for readiness; waits for exit after a crash; stops via `amoeba stop` as a subprocess; restarts
 - [ ] Every wait is a predicate with a timeout. On timeout, fail with the step number and every subprocess's captured stdout and stderr
 - [ ] A `follow()` subscriber on a thread that records each `Change`, stores any exception, and re-raises it on the main thread at the next wait
