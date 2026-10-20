@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
+from typing import Protocol
 
 from host_harness import EXIT_TIMEOUT_SECONDS
 
@@ -14,6 +15,18 @@ from amoeba.store import Change
 logger = logging.getLogger(__name__)
 
 FOLLOW_INTERVAL_SECONDS = 0.05
+
+
+class BackgroundReader(Protocol):
+    """A thread reading in the background, whose failure must reach the test."""
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def error(self) -> BaseException | None: ...
+
+    def close(self) -> None: ...
 
 
 class Subscriber:
@@ -31,6 +44,10 @@ class Subscriber:
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    @property
+    def name(self) -> str:
+        return f"{self.project_id} feed subscriber"
 
     def _run(self) -> None:
         settings = FeedSettings(follow_interval_seconds=FOLLOW_INTERVAL_SECONDS)

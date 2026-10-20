@@ -29,7 +29,7 @@ from amoeba.inbox import submit
 from amoeba.store import ChangeKind, Store, SubmissionKind, project_store_path
 from contract.launched import LaunchedProcess
 from contract.runner_tenant import INTENT_CRASH_AT, INTENT_STEP, CrashPoint, ProofStep
-from contract.subscriber import Subscriber
+from contract.subscriber import BackgroundReader, Subscriber
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
 RUN_FIXTURE = TESTS_DIR / "fixtures" / "sq_runs" / "run-20261015-p5-8a59ee89.json"
@@ -47,6 +47,8 @@ PAYLOAD_ACTIVE = "active"
 #: Where Squadron keeps run files, relative to ``HOME``; the process contract
 #: documents it, and ``ProcessSettings`` derives the same place from ``HOME``.
 SQ_RUNS_RELATIVE_DIR = Path(".config") / "squadron" / "runs"
+
+BOOTSTRAP_PREFIX = "bootstrap"
 
 PM_ACTOR = "proof-pm"
 
@@ -94,7 +96,9 @@ class ProofHarness:
         ):
             directory.mkdir(parents=True)
         self._launched: list[LaunchedProcess] = []
+        self._resident: LaunchedProcess | None = None
         self._subscribers: dict[str, Subscriber] = {}
+        self._readers: list[BackgroundReader] = []
 
     # -- environment and processes ------------------------------------------
 
@@ -110,11 +114,30 @@ class ProofHarness:
 
     @property
     def process(self) -> HostProcess:
-        return self._launched[-1].host
+        """The most recently started resident process."""
+        assert self._resident is not None, "no resident process has been started"
+        return self._resident.host
+
+    def track(self, launched: LaunchedProcess) -> LaunchedProcess:
+        """Register a subprocess: failures report its output; teardown kills it."""
+        self._launched.append(launched)
+        return launched
+
+    def _count_of(self, prefix: str) -> int:
+        return sum(
+            1 for launched in self._launched if launched.label.startswith(prefix)
+        )
+
+    def next_label(self, prefix: str) -> str:
+        """``prefix-N``, numbering each kind of subprocess separately."""
+        return f"{prefix}-{self._count_of(prefix) + 1}"
+
+    def stderr_path_for(self, label: str) -> Path:
+        return self._logs / f"{label}.stderr.log"
 
     def start(self, step: int) -> None:
         """Launch the resident process and wait until it reports ready."""
-        label = f"bootstrap-{len(self._launched) + 1}"
+        label = self.next_label(BOOTSTRAP_PREFIX)
         command = [
             sys.executable,
             "-m",
@@ -130,19 +153,20 @@ class ProofHarness:
         ]
         for project_id, directory in self.reviews_dirs.items():
             command += ["--reviews-dir", f"{project_id}={directory}"]
-        self._launched.append(
+        self._resident = self.track(
             LaunchedProcess(
                 label,
                 command,
                 environment=self.environment(),
                 working_dir=self._tmp_path,
-                stderr_path=self._logs / f"{label}.stderr.log",
+                stderr_path=self.stderr_path_for(label),
             )
         )
         self.wait_until(step, "the process to report ready", self._ready_or_dead)
 
     def _ready_or_dead(self) -> bool:
-        launched = self._launched[-1]
+        launched = self._resident
+        assert launched is not None
         if launched.is_ready:
             return True
         if not launched.host.is_running():
@@ -228,7 +252,12 @@ class ProofHarness:
     def add_subscriber(self, subscriber: Subscriber) -> Subscriber:
         """Register a subscriber, so its failure surfaces at the next wait."""
         self._subscribers[subscriber.project_id] = subscriber
+        self.add_reader(subscriber)
         return subscriber
+
+    def add_reader(self, reader: BackgroundReader) -> None:
+        """Watch a background reader: its failure is re-raised at the next wait."""
+        self._readers.append(reader)
 
     def wait_for_changes(
         self,
@@ -253,11 +282,9 @@ class ProofHarness:
         return len(subscriber.changes)
 
     def _raise_subscriber_errors(self) -> None:
-        for subscriber in self._subscribers.values():
-            if subscriber.error is not None:
-                raise RuntimeError(
-                    f"the {subscriber.project_id} feed subscriber failed"
-                ) from subscriber.error
+        for reader in self._readers:
+            if reader.error is not None:
+                raise RuntimeError(f"the {reader.name} failed") from reader.error
 
     # -- submissions and reads -----------------------------------------------------
 
@@ -309,7 +336,8 @@ class ProofHarness:
             yield store
 
     def close(self) -> None:
-        for subscriber in self._subscribers.values():
-            subscriber.close()
+        # Processes first: a stream reader only ends once its server is gone.
         for launched in self._launched:
             launched.close()
+        for reader in self._readers:
+            reader.close()
