@@ -90,7 +90,7 @@ revision_number: 2
 
 **Steps**:
 - [ ] Add `tests/process/test_tenant_order.py`. Call `lifecycle.build_tenants(ProcessSettings(...), supervisor_dir)` with `cf_data_dir` and `sq_runs_dir` under `tmp_path` (use the `supervisor_dir` fixture from `tests/process/conftest.py`)
-- [ ] Assert the tuple of each tenant's `name`, in order, equals a written-out expected tuple. Read the three names from the tenant classes' `name` attributes once, then write them out literally in the expected tuple
+- [ ] Assert the tuple of each tenant's `name`, in order, equals a written-out expected tuple. Read the three names from the tenant classes' `name` attributes once, then write them out literally in the expected tuple, in the order of `build_tenants`'s return statement today (`lifecycle.py:75`), never from sorting or class discovery. Assert the tuple has exactly three entries
 - [ ] Monkeypatch both `capture_*_version_label` functions to return a fixed string so no `sq`/`cf` subprocess runs
 
 **Success Criteria**:
@@ -152,10 +152,12 @@ revision_number: 2
 - [ ] In `process/__init__.py`, import and list in `__all__` exactly: `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, `ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError`. Find each name's defining module with grep; if any name does not exist, stop and tell the PM
 - [ ] Check for an import cycle: `python -c "import amoeba.process"` and `python -c "import amoeba.cli.main"` both succeed
 - [ ] Add `tests/test_process_public_api.py`, in the style of `tests/test_public_api.py`: a written-out `EXPECTED_EXPORTS` set equal to `__all__`; every name importable
+- [ ] `docs/process-contract.md`: add a "Hosting tenants" section listing the H1 exports, how `amoeba start` composes `standard_tenants`, and how initiative 120 adds its Runner as `(*standard_tenants(…), runner)` in `start`. State that version-label capture never raises (`unavailable` label)
 
 **Success Criteria**:
 - [ ] `set(amoeba.process.__all__) == EXPECTED_EXPORTS`; `SquadronRun`, `parse_run_file`, and no pruning name in it
-- [ ] Committed: `feat(process): export the tenant-hosting contract`
+- [ ] Each of the 13 H1 names appears in `docs/process-contract.md` (LLD "Integration Requirements")
+- [ ] Committed: `feat(process): export and document the tenant-hosting contract`
 
 ---
 
@@ -169,26 +171,12 @@ revision_number: 2
 - [ ] Re-export both from `amoeba.store.__init__` (`paths.py` stays; existing internal imports may stay)
 - [ ] Add both to `tests/test_public_api.py`'s `EXPECTED_EXPORTS`
 - [ ] Confirm `tests/test_store_safety.py` still passes: it forbids the *name* `store_dir` in tests, so no test may reference it through the new export either
-
-**Success Criteria**:
-- [ ] `from amoeba.store import store_dir, project_store_path` works; public-API and store-safety tests pass
-- [ ] Committed with Task 2.5
-
----
-
-### Task 2.5: Document the new exports
-**Owner**: Junior AI
-**Dependencies**: Task 2.4
-**Effort**: 2
-**Objective**: Every name added to a public `__all__` appears in its contract doc (LLD "Integration Requirements").
-
-**Steps**:
-- [ ] `docs/process-contract.md`: add a "Hosting tenants" section listing the H1 exports, how `amoeba start` composes `standard_tenants`, and how initiative 120 adds its Runner as `(*standard_tenants(…), runner)` in `start`. State that version-label capture never raises (`unavailable` label)
 - [ ] `docs/store-contract.md`: name `store_dir` and `project_store_path` by their public import, replacing the internal path
 
 **Success Criteria**:
-- [ ] Each of the 13 H1 names and both H3 names appears in its contract doc
-- [ ] Committed (2.4–2.5): `feat(store): export store_dir and project_store_path; document hosting`
+- [ ] `from amoeba.store import store_dir, project_store_path` works; public-API and store-safety tests pass
+- [ ] Both names appear in `docs/store-contract.md` by their public import
+- [ ] Committed: `feat(store): export and document store_dir and project_store_path`
 
 ---
 
@@ -196,20 +184,19 @@ revision_number: 2
 
 ### Task 3.1: Implement `record_runner_report`
 **Owner**: Junior AI
-**Dependencies**: Task 2.5
+**Dependencies**: Task 2.4
 **Effort**: 3
 **Objective**: The Runner reports a review it launched in one transaction (LLD D7 H2, "API Contracts").
 
 **Steps**:
 - [ ] Create `src/amoeba/store/runner_report.py` with a mixin class holding `record_runner_report(entry_id, verdict, detection, *, result) -> VerdictRecord`. Add the mixin to `Store`'s bases
-- [ ] Inside one `BEGIN IMMEDIATE` transaction, in this order:
-  1. Validate before writing: `detection.outcome` is `RUNNER_ISSUED` (else `ValueError`); the entry exists, is unresolved, its kind is in `REVIEW_PRODUCING_KINDS`, and its project is the detection's project (else `InvalidTransitionError`); if the entry is an `sq_run`, `result` contains `RESULT_KEY_RUN_ID` (else `ValueError`)
-  2. `_record_verdict_within(verdict, project_id)` — `record_verdict`'s body and retry rule, unchanged
-  3. The `runner_issued` ledger row, carrying the verdict's id and node, through the same internal writer `record_detection` uses (reuse; do not duplicate its SQL)
-  4. The journal resolve with `outcome=COMPLETED`, `resolved_by=ISSUER`, `result`, through the same internal writer `journal_resolve` uses
-- [ ] Retry rule: when the verdict id is already recorded, step 2 returns the existing record and steps 3 and 4 still run, so the entry is resolved and the ledger row written; the method returns the existing record. (A retry after a successful call never reaches this: the entry is resolved, so step 1 refuses.) If the ledger writer refuses the row because the same file is already in the ledger, stop and ask the PM
-- [ ] If `journal_resolve` or `record_detection` has no transaction-free inner function, extract one (`_..._within`, like `_record_verdict_within`) with no behavior change to the public method
-- [ ] "Unknown" in the LLD's refusal list means an entry resolved with outcome `unknown`; that is covered by "already resolved". If you read it differently, stop and ask the PM
+- [ ] Inside one `with self._connection:` block that starts with `self._execute(sql_inbox.BEGIN_IMMEDIATE, ())` (the shape `record_detected_verdict` uses in `store/feed.py`), in this order:
+  1. Validate before writing: `detection.outcome` is `RUNNER_ISSUED` (else `ValueError`); the entry exists (`journal_entry` is not `None`), is unresolved, its kind is in `REVIEW_PRODUCING_KINDS`, and its project is the detection's project (else `InvalidTransitionError`). `REVIEW_PRODUCING_KINDS` is `{SQ_RUN}`, so `result` must always contain `RESULT_KEY_RUN_ID` (else `ValueError`)
+  2. `_record_verdict_within(verdict, detection.project_id)` — `record_verdict`'s body and retry rule, unchanged. Refuse as `record_detected_verdict` does if the returned record belongs to another project (`StoreIntegrityError`)
+  3. The `runner_issued` ledger row, carrying the verdict's id and node, through `_insert_detection` (`store/feed.py:223`, transaction-free; do not duplicate its SQL). Ledger keys are `UNIQUE (project_id, path, digest)`. If that key is already in the ledger (detection got there first), keep the existing row and insert nothing, as `record_detection` does; the entry is still resolved. Decided in the breakdown; the PM may overrule
+  4. The journal resolve with `outcome=COMPLETED`, `resolved_by=ISSUER`, `result`. `journal_resolve` (`store/journal.py:111`) has no transaction-free inner function: extract one, `_resolve_entry_within(entry_id, outcome, result, resolved_by)` holding the `RESOLVE_JOURNAL_ENTRY` execute and the `rowcount != 1` check, and have `journal_resolve` call it inside its own `with self._connection:` with no behavior change
+- [ ] Retry rule: when the verdict id is already recorded, step 2 returns the existing record and steps 3 and 4 still run, so the entry is resolved and the ledger row written; the method returns the existing record. (A retry after a successful call never reaches this: the entry is resolved, so step 1 refuses.)
+- [ ] "Unknown" in the LLD's refusal list means an unknown entry id, the case `journal_resolve` words as "does not exist". An entry already resolved, including one resolved `unknown` by `journal_escalate`, is "resolved"
 - [ ] Docstring lists every refusal and "writes nothing" for each
 
 **Success Criteria**:
@@ -227,7 +214,8 @@ revision_number: 2
 **Steps**:
 - [ ] Add `tests/store/test_runner_report.py` using the existing evidence/journal harnesses (`tests/evidence_harness.py`; check before adding helpers)
 - [ ] Happy path: after one call, the verdict exists, one `runner_issued` detection row names its id and node, and the entry is `completed` by `issuer` with `result`; `recorded_result_run_ids` includes the run id for an `sq_run` entry
-- [ ] One commit: monkeypatch the journal-resolve inner writer to raise; assert no verdict, no ledger row, entry unresolved
+- [ ] One commit: monkeypatch `_resolve_entry_within` to raise; assert no verdict, no ledger row, entry unresolved
+- [ ] Ledger key already present (an `ingested` row for the same project, path, and digest): the call inserts no second row, keeps the existing one, writes the verdict, and resolves the entry
 - [ ] Each refusal writes nothing: wrong detection outcome; resolved entry; entry of a non-review kind; entry in another project; `sq_run` entry whose `result` lacks `run_id`
 - [ ] Retry rule: with the verdict id already recorded through `record_verdict` and the entry unresolved, the call returns the existing record, writes one `runner_issued` row, and resolves the entry; the verdict count is unchanged
 
@@ -298,6 +286,7 @@ revision_number: 2
 **Steps**:
 - [ ] Add `DEFAULT_SQ_RUNS_DIR` and `DEFAULT_CF_DATA_DIR` to `FORBIDDEN_PATH_NAMES` in `tests/test_store_safety.py`; update its comment
 - [ ] If an existing test now fails the scan, list it and stop for the PM (do not exempt it silently)
+- [ ] Note for Task 4.5: the bootstrap lives under `tests/contract/` and is scanned too. It reads `ProcessSettings().sq_runs_dir`, never the forbidden name `DEFAULT_SQ_RUNS_DIR`, so it passes. The `HOME` contract is owned here: the harness (4.5) sets `HOME` for every subprocess and asserts it is under `tmp_path`; the scan forbids the names; nothing else restates it
 
 **Success Criteria**:
 - [ ] Scan passes; `tests/contract/` is covered (it is under `tests/`)

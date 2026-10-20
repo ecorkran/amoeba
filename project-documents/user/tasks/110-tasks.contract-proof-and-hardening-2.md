@@ -94,7 +94,7 @@ revision_number: 2
 - [ ] `tests/contract/test_lifecycle_proof.py`: one test that drives `scenario.py`'s steps in order using Task 4.5's harness. After each step, wait until the subscriber has that step's expected change kinds. Tasks 5.5 and 7.5 extend this file; keep it near 300 lines by moving per-step driver helpers into `tests/contract/steps.py` once it nears that size
 - [ ] Step 1 starts the alpha subscriber once alpha's store exists; beta's changes are read at the end with `follow(after=0)` for the D6 check
 - [ ] Steps 4 and 5: wait for the `SIGKILL` exit, restart, wait for recovery's outcome
-- [ ] Step-level assertions the oracle cannot make: step 3's verdict, ledger row, and entry share one commit (no change for the verdict precedes the entry's resolution on the feed); step 4 has one verdict for the round and the detection row's `record_id` equals the parsed artifact's id; step 5 has exactly one escalation message
+- [ ] Step-level assertions the oracle cannot make: step 3's verdict, ledger row, and entry share one commit (no change for the verdict precedes the entry's resolution on the feed); step 4 has one verdict for the round and the detection row's `record_id` equals the parsed artifact's id; step 5 has exactly one escalation message; after step 6 (the PM's `resolution` message) the step-5 node is runnable, read through the same public node read the end-state oracle uses, since step 11 may change it before the final state
 - [ ] Ownership guarantee (LLD D8): after step 3 (`completed` by the issuer) and after step 4 (`adopted` by recovery), `recorded_result_run_ids("alpha")` contains that step's run id
 
 **Success Criteria**:
@@ -281,7 +281,7 @@ revision_number: 2
 - [ ] Add `14 PRUNE_INCOMPLETE` to the exit-code table
 
 **Success Criteria**:
-- [ ] No Future-work line pointing at slice 110 remains in any contract doc (`grep -n "slice 110\|or 110" docs/*-contract.md` returns nothing; the substrate guide is not a contract doc and may name the slice)
+- [ ] No Future-work line pointing at slice 110 remains in any contract doc: `grep -n "Future work" -A8 docs/*-contract.md` shows no "110" in those sections, and `grep -n "or 110" docs/*-contract.md` returns nothing. Historical mentions elsewhere (e.g. `docs/network-contract.md:14`, "slice 110's end-to-end proof can use the store…") are accurate and stay; the substrate guide may name the slice
 - [ ] Committed: `docs: document paused-run pruning in the process contract`
 
 ---
