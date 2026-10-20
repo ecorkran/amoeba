@@ -41,7 +41,8 @@ def run_listing(name: str, args: argparse.Namespace, *, use_json: bool) -> ExitC
     from amoeba.cli.main import ExitCode
 
     listing = LISTINGS_BY_NAME[name]
-    result = read_listing(name, listing_request(listing, args), paths.store_dir())
+    request = listing_request(listing, args, compact=not use_json)
+    result = read_listing(name, request, paths.store_dir())
 
     if use_json:
         print(json.dumps(result.rows, indent=2, default=str))
@@ -51,18 +52,19 @@ def run_listing(name: str, args: argparse.Namespace, *, use_json: bool) -> ExitC
     return ExitCode.OK
 
 
-def listing_request(listing: Listing, args: argparse.Namespace) -> ListingRequest:
+def listing_request(
+    listing: Listing, args: argparse.Namespace, *, compact: bool
+) -> ListingRequest:
     """The request one listing's parsed arguments describe.
 
     Each option's value is read by its ``name``, which is the ``dest`` the
     parser stores it under. ``compact`` is the table form.
     """
     options: dict[str, OptionValue] = {
-        option.name: getattr(args, option.name)
-        for option in (*listing.flags, *listing.choice_options, *listing.value_options)
+        option.name: getattr(args, option.name) for option in listing.options
     }
     project_id = args.project if listing.scope is ListingScope.PROJECT else None
-    return ListingRequest(project_id=project_id, options=options, compact=not args.json)
+    return ListingRequest(project_id=project_id, options=options, compact=compact)
 
 
 def _print_table(columns: Sequence[str], rows: Sequence[Row]) -> None:

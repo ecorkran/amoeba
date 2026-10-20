@@ -17,6 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from amoeba.serve.settings import TOKEN_ENV_VAR
+
 #: How long to wait for a CLI invocation that is expected to return promptly.
 COMMAND_TIMEOUT_SECONDS = 30.0
 
@@ -40,9 +42,12 @@ def cli_environment(supervisor_dir: Path) -> dict[str, str]:
     so the child inherits PATH and the virtualenv but can never resolve the
     real supervisor location. ``AMOEBA_STORE_DIR`` is the only variable set —
     the runs directory travels as ``--sq-runs-dir``, because the project adds
-    no new environment reads (D3).
+    no new environment reads (D3). The serve token is dropped too: a real one in
+    the developer's shell must never reach a child; a test that needs one sets
+    it itself.
     """
     environment = dict(os.environ)
+    environment.pop(TOKEN_ENV_VAR, None)
     environment["AMOEBA_STORE_DIR"] = str(supervisor_dir)
     return environment
 

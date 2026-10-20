@@ -8,7 +8,6 @@ No store or filesystem call runs on the event loop.
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from collections.abc import Sequence
 from functools import partial
@@ -34,6 +33,7 @@ from amoeba.inspection import (
     read_listing,
 )
 from amoeba.serve.errors import ApiError, ApiErrorCode
+from amoeba.serve.responses import json_response
 from amoeba.store import paths
 
 #: The query parameter naming the project, for a project-scoped listing.
@@ -41,9 +41,6 @@ PROJECT_PARAMETER: Final = "project"
 
 #: The values a flag option accepts in a query string.
 FLAG_VALUES: Final = {"true": True, "false": False}
-
-#: The media type of every JSON body, sent or accepted.
-JSON_MEDIA_TYPE: Final = "application/json"
 
 
 def validated_project_id(value: str) -> str:
@@ -83,10 +80,7 @@ def listing_request(
         raise ApiError(ApiErrorCode.INVALID_OPTION, f"repeated parameters: {repeated}")
     values = dict(query)
     project_id = _project_id(listing, values.pop(PROJECT_PARAMETER, None))
-    declared = {
-        option.name: option
-        for option in (*listing.flags, *listing.choice_options, *listing.value_options)
-    }
+    declared = {option.name: option for option in listing.options}
     undeclared = sorted(set(values) - set(declared))
     if undeclared:
         raise ApiError(
@@ -148,15 +142,6 @@ def _read(store_dir: Path, name: str, request: ListingRequest) -> ListingResult:
     if request.project_id is not None:
         existing_store_path(store_dir, request.project_id)
     return read_listing(name, request, store_dir)
-
-
-def json_response(body: object, status_code: int) -> Response:
-    """A JSON response serialized as the CLI does (``default=str``)."""
-    return Response(
-        json.dumps(body, default=str),
-        status_code=status_code,
-        media_type=JSON_MEDIA_TYPE,
-    )
 
 
 def routes(store_dir: Path) -> list[Route]:

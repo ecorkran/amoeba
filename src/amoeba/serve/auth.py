@@ -13,7 +13,7 @@ from typing import Final
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from amoeba.serve.errors import ApiErrorCode, error_response
-from amoeba.serve.reads import JSON_MEDIA_TYPE
+from amoeba.serve.responses import JSON_MEDIA_TYPE
 
 #: The ``Host`` names a loopback bind accepts, with any port.
 LOOPBACK_HOST_NAMES: Final = frozenset({"localhost", "127.0.0.1", "::1"})

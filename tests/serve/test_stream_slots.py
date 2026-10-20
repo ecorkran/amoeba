@@ -15,7 +15,7 @@ from serve_harness import running_server
 from starlette.types import Receive, Scope, Send
 
 from amoeba.feed import FeedSettings
-from amoeba.serve import stream
+from amoeba.serve import feed_route, stream
 from amoeba.serve.app import build_app
 from amoeba.serve.settings import ServeSettings
 from amoeba.serve.stream import FOLLOW_THREAD_PREFIX
@@ -166,6 +166,24 @@ def test_a_clean_close_frees_the_slot_without_waiting_for_a_send(
         assert _stream_status(url) == 200
         freed_in = _wait_until(lambda: _follow_threads() == [])
         assert freed_in < 2.0
+        assert _stream_status(url) == 200
+
+
+def test_a_failed_thread_start_frees_the_slot(
+    scratch_dir: Path, seeded: SeededStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Thread exhaustion is what ``max_streams`` guards; it must not leak a slot."""
+
+    def exhausted(*_: object) -> None:
+        raise RuntimeError("can't start new thread")
+
+    app = build_app(_settings(max_streams=1), None, scratch_dir)
+    with running_server(app) as url:
+        with monkeypatch.context() as patched:
+            patched.setattr(feed_route, "start_follow_thread", exhausted)
+            with httpx2.Client(base_url=url, timeout=5.0) as client:
+                failed = client.get(_FEED)
+        assert failed.status_code == 500
         assert _stream_status(url) == 200
 
 

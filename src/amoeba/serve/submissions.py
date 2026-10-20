@@ -8,38 +8,27 @@ is safe under 103's first-wins rule, which is why the id is required here.
 
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping
-from dataclasses import dataclass
 from functools import partial
 from http import HTTPStatus
 from pathlib import Path
-from typing import Final, cast
+from typing import Final
 
 import anyio.to_thread
+from pydantic import BaseModel, ConfigDict, ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
 
 from amoeba.inbox import submit
 from amoeba.serve.errors import ApiError, ApiErrorCode
-from amoeba.serve.reads import json_response, validated_project_id
+from amoeba.serve.reads import validated_project_id
+from amoeba.serve.responses import json_response
 from amoeba.serve.settings import ServeSettings
 from amoeba.store import Store, SubmissionRecord, paths
 from amoeba.store.inbox_models import SubmissionKind
 
-_KIND: Final = "kind"
+#: The one missing field that has its own error code.
 _SUBMISSION_ID: Final = "submission_id"
-_SUBMITTED_BY: Final = "submitted_by"
-_PAYLOAD: Final = "payload"
-
-#: The body's keys, each with the JSON type it must have.
-_BODY_TYPES: Final[Mapping[str, type]] = {
-    _KIND: str,
-    _SUBMISSION_ID: str,
-    _SUBMITTED_BY: str,
-    _PAYLOAD: dict,
-}
 
 
 async def read_capped_body(request: Request, max_bytes: int) -> bytes:
@@ -68,9 +57,10 @@ async def read_capped_body(request: Request, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-@dataclass(frozen=True)
-class SubmissionBody:
+class SubmissionBody(BaseModel):
     """A POST body whose outer shape passed; ``payload`` is not yet checked."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     kind: SubmissionKind
     submission_id: str
@@ -85,46 +75,24 @@ def parse_body(raw: bytes) -> SubmissionBody:
         ApiError: ``invalid_body`` or ``submission_id_required``.
     """
     try:
-        body: object = json.loads(raw)
-    except ValueError as error:
-        # Specific: malformed JSON (or bytes that are not UTF-8) is the
-        # client's error.
-        raise ApiError(ApiErrorCode.INVALID_BODY, f"not JSON: {error}") from error
-    if not isinstance(body, dict):
-        raise ApiError(ApiErrorCode.INVALID_BODY, "the body must be a JSON object")
-    # A JSON object's keys are always strings.
-    fields = cast(dict[str, object], body)
-    unknown = sorted(set(fields) - set(_BODY_TYPES))
-    if unknown:
-        raise ApiError(ApiErrorCode.INVALID_BODY, f"unknown keys: {unknown}")
-    if _SUBMISSION_ID not in fields:
-        raise ApiError(
-            ApiErrorCode.SUBMISSION_ID_REQUIRED,
-            "a network submission must carry its own submission_id",
-        )
-    for key, expected in _BODY_TYPES.items():
-        if key not in fields:
-            raise ApiError(ApiErrorCode.INVALID_BODY, f"missing key {key!r}")
-        if not isinstance(fields[key], expected):
+        return SubmissionBody.model_validate_json(raw)
+    except ValidationError as error:
+        problems = error.errors(include_url=False, include_input=False)
+        if any(
+            problem["loc"] == (_SUBMISSION_ID,) and problem["type"] == "missing"
+            for problem in problems
+        ):
             raise ApiError(
-                ApiErrorCode.INVALID_BODY, f"{key!r} must be a {expected.__name__}"
-            )
-    # Checked to be a dict above; it came from a JSON object, so its keys are str.
-    payload = cast(dict[str, object], fields[_PAYLOAD])
-    return SubmissionBody(
-        kind=_kind(fields[_KIND]),
-        submission_id=str(fields[_SUBMISSION_ID]),
-        submitted_by=str(fields[_SUBMITTED_BY]),
-        payload=payload,
-    )
-
-
-def _kind(value: object) -> SubmissionKind:
-    try:
-        return SubmissionKind(value)
-    except ValueError as error:
-        # Specific: an unknown kind is a malformed body, not a server fault.
-        raise ApiError(ApiErrorCode.INVALID_BODY, f"unknown kind {value!r}") from error
+                ApiErrorCode.SUBMISSION_ID_REQUIRED,
+                "a network submission must carry its own submission_id",
+            ) from error
+        # The input is left out of the detail: it is the client's payload.
+        detail = "; ".join(
+            f"{'.'.join(str(part) for part in problem['loc']) or 'body'}: "
+            f"{problem['msg']}"
+            for problem in problems
+        )
+        raise ApiError(ApiErrorCode.INVALID_BODY, detail) from error
 
 
 def record_body(record: SubmissionRecord) -> dict[str, object]:

@@ -80,10 +80,13 @@ class FeedEndpoint:
             await anyio.to_thread.run_sync(
                 partial(_preflight, self._store_dir, project_id)
             )
+            # Building the response starts the follow thread, which can fail
+            # (thread exhaustion). Once the response runs, its on_close frees
+            # the slot; release is one-shot, so a second call here is harmless.
+            await self._stream(project_id, cursor, release)(scope, receive, send)
         except BaseException:
             release()
             raise
-        await self._stream(project_id, cursor, release)(scope, receive, send)
 
     def _acquire_slot(self) -> _Release:
         """Take a slot without waiting; return the one-shot release."""

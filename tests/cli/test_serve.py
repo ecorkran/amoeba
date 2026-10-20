@@ -25,7 +25,6 @@ from serve_harness import TEST_TOKEN, TlsFiles
 from amoeba.cli.main import ExitCode
 from amoeba.serve.settings import MIN_TOKEN_LENGTH, TOKEN_ENV_VAR, ServeSettings
 from amoeba.store import Store
-from amoeba.store.paths import STORE_DIR_ENV_VAR
 
 #: How far past the shutdown grace a SIGTERM'd server may take to exit.
 _EXIT_MARGIN_SECONDS = 3.0
@@ -39,11 +38,44 @@ def supervisor(tmp_path: Path) -> Path:
 
 
 def _environment(supervisor: Path, token: str | None) -> dict[str, str]:
-    environment = cli_environment(supervisor)
-    environment.pop(TOKEN_ENV_VAR, None)
+    environment = cli_environment(supervisor)  # never carries a token
     if token is not None:
         environment[TOKEN_ENV_VAR] = token
     return environment
+
+
+_OFF_LOOPBACK = ["--host", "0.0.0.0"]
+
+#: (extra arguments, token, expected rule). ``{name}`` in an argument is a file
+#: the test provides: cert, key, other_key, unreadable_key, missing.
+_REFUSALS = [
+    pytest.param(_OFF_LOOPBACK, None, "token_required", id="no-token"),
+    pytest.param(_OFF_LOOPBACK, TEST_TOKEN, "tls_required", id="no-tls"),
+    pytest.param(
+        _OFF_LOOPBACK,
+        "s" * (MIN_TOKEN_LENGTH - 1),
+        "token_too_short",
+        id="short-token",
+    ),
+    pytest.param(
+        [*_OFF_LOOPBACK, "--tls-cert", "{missing}", "--tls-key", "{key}"],
+        TEST_TOKEN,
+        "tls_unusable",
+        id="missing-cert",
+    ),
+    pytest.param(
+        [*_OFF_LOOPBACK, "--tls-cert", "{cert}", "--tls-key", "{unreadable_key}"],
+        TEST_TOKEN,
+        "tls_unusable",
+        id="unreadable-key",
+    ),
+    pytest.param(
+        [*_OFF_LOOPBACK, "--tls-cert", "{cert}", "--tls-key", "{other_key}"],
+        TEST_TOKEN,
+        "tls_unusable",
+        id="mismatched-key",
+    ),
+]
 
 
 def _unreadable_copy(source: Path, tmp_path: Path) -> Path:
@@ -53,67 +85,26 @@ def _unreadable_copy(source: Path, tmp_path: Path) -> Path:
     return copy
 
 
-def _refusal_cases(
-    tls: TlsFiles, tmp_path: Path
-) -> list[tuple[str, list[str], str | None, str]]:
-    """(case id, extra arguments, token, expected rule)."""
-    off_loopback = ["--host", "0.0.0.0"]
-    cert = ["--tls-cert", str(tls.certfile)]
-    return [
-        ("no-token", off_loopback, None, "token_required"),
-        ("no-tls", off_loopback, TEST_TOKEN, "tls_required"),
-        ("short-token", off_loopback, "s" * (MIN_TOKEN_LENGTH - 1), "token_too_short"),
-        (
-            "missing-cert",
-            [
-                *off_loopback,
-                "--tls-cert",
-                str(tmp_path / "nope.pem"),
-                "--tls-key",
-                str(tls.keyfile),
-            ],
-            TEST_TOKEN,
-            "tls_unusable",
-        ),
-        (
-            "unreadable-key",
-            [
-                *off_loopback,
-                *cert,
-                "--tls-key",
-                str(_unreadable_copy(tls.keyfile, tmp_path)),
-            ],
-            TEST_TOKEN,
-            "tls_unusable",
-        ),
-        (
-            "mismatched-key",
-            [*off_loopback, *cert, "--tls-key", str(tls.other_keyfile)],
-            TEST_TOKEN,
-            "tls_unusable",
-        ),
-    ]
-
-
-@pytest.mark.parametrize(
-    "case",
-    range(6),
-    ids=[
-        "no-token",
-        "no-tls",
-        "short-token",
-        "missing-cert",
-        "unreadable-key",
-        "mismatched-key",
-    ],
-)
+@pytest.mark.parametrize(("arguments", "token", "rule"), _REFUSALS)
 def test_an_unsafe_bind_exits_13_naming_the_rule(
-    supervisor: Path, tls_files: TlsFiles, tmp_path: Path, case: int
+    supervisor: Path,
+    tls_files: TlsFiles,
+    tmp_path: Path,
+    arguments: list[str],
+    token: str | None,
+    rule: str,
 ) -> None:
-    _, arguments, token, rule = _refusal_cases(tls_files, tmp_path)[case]
+    files = {
+        "cert": tls_files.certfile,
+        "key": tls_files.keyfile,
+        "other_key": tls_files.other_keyfile,
+        "unreadable_key": _unreadable_copy(tls_files.keyfile, tmp_path),
+        "missing": tmp_path / "nope.pem",
+    }
+    resolved = [argument.format(**files) for argument in arguments]
 
     result = run_cli(
-        ["serve", *arguments], supervisor, environment=_environment(supervisor, token)
+        ["serve", *resolved], supervisor, environment=_environment(supervisor, token)
     )
 
     assert result.returncode == ExitCode.SERVE_REFUSED
@@ -219,7 +210,7 @@ def test_other_commands_never_load_uvicorn(supervisor: Path) -> None:
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        env={**os.environ, STORE_DIR_ENV_VAR: str(supervisor)},
+        env=cli_environment(supervisor),
         timeout=30,
         check=True,
     )

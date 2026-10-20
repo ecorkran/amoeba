@@ -167,6 +167,11 @@ class Listing:
             )
 
     @property
+    def options(self) -> tuple[ListingOption, ...]:
+        """Every option, in the order the CLI adds them."""
+        return (*self.flags, *self.choice_options, *self.value_options)
+
+    @property
     def scope(self) -> ListingScope:
         """Project-scoped when ``rows`` is set, supervisor-level otherwise."""
         if self.supervisor_rows is None:

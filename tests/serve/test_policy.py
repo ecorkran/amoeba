@@ -89,25 +89,34 @@ def test_d3_table(
     assert expected.value in str(refused.value)
 
 
-def _unusable(tls: TlsFiles, tmp_path: Path) -> list[tuple[Path, Path, Path]]:
-    """(cert, key, the path the detail must name)."""
-    missing = tmp_path / "missing.pem"
-    return [
-        (missing, tls.keyfile, missing),
-        (tls.certfile, missing, missing),
-        (tmp_path, tls.keyfile, tmp_path),
-        (tls.certfile, tls.other_keyfile, tls.other_keyfile),
-    ]
+#: (cert, key, the path the detail must name), each as a name for a file the
+#: test provides: cert, key, other_key, missing, directory.
+_UNUSABLE = [
+    pytest.param("missing", "key", "missing", id="no-cert"),
+    pytest.param("cert", "missing", "missing", id="no-key"),
+    pytest.param("directory", "key", "directory", id="dir-cert"),
+    pytest.param("cert", "other_key", "other_key", id="mismatch"),
+]
 
 
-@pytest.mark.parametrize(
-    "case", range(4), ids=["no-cert", "no-key", "dir-cert", "mismatch"]
-)
+@pytest.mark.parametrize(("cert_name", "key_name", "named_name"), _UNUSABLE)
 @pytest.mark.parametrize("host", [LOOPBACK, OTHER])
 def test_tls_unusable(
-    tls_files: TlsFiles, tmp_path: Path, case: int, host: str
+    tls_files: TlsFiles,
+    tmp_path: Path,
+    cert_name: str,
+    key_name: str,
+    named_name: str,
+    host: str,
 ) -> None:
-    certfile, keyfile, named = _unusable(tls_files, tmp_path)[case]
+    files = {
+        "cert": tls_files.certfile,
+        "key": tls_files.keyfile,
+        "other_key": tls_files.other_keyfile,
+        "missing": tmp_path / "missing.pem",
+        "directory": tmp_path,
+    }
+    certfile, keyfile, named = files[cert_name], files[key_name], files[named_name]
     settings = ServeSettings(host=host, tls_certfile=certfile, tls_keyfile=keyfile)
 
     with pytest.raises(ServeRefusedError) as refused:
