@@ -48,7 +48,10 @@ RESULT_STATUS = "status"
 
 
 class SquadronRun(BaseModel):
-    """The six header fields of a Squadron run-state file.
+    """The seven header fields of a Squadron run-state file.
+
+    Six are required and drive recovery matching. ``updated_at`` is optional
+    and read only by pruning; recovery never looks at it.
 
     Unknown fields are **ignored**, so an upstream that adds fields does not
     break recovery. A missing required field is a validation error, which the
@@ -64,6 +67,7 @@ class SquadronRun(BaseModel):
     params: Mapping[str, object]
     started_at: datetime
     status: str
+    updated_at: datetime | None = None
 
 
 def parse_run_file(path: Path) -> SquadronRun | None:

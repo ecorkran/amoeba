@@ -35,11 +35,14 @@ Captured **20260921** from `~/.config/squadron/runs/`.
 | `run-20260411-test-review-a50207b1.json` | `failed` | `test-review` | 3 | The `failed` status the LLD requires |
 | `run-20260505-review-a697ad3d.json` | `paused` | `review` | 4 | The `paused` status the LLD requires; paused runs are never pruned |
 | `run-20260801-loop-smoke-b095fb0d.json` | `completed` | `loop-smoke` | 4 | Empty `params`, which the subset matcher must handle |
+| `run-20261015-p5-8a59ee89.json` | `paused` | `p5` | 5 | Captured **20261019**; the current schema. Carries `updated_at`, which pruning reads |
 
-The spread is deliberate: two schema versions, both required statuses, and a run
+The spread is deliberate: three schema versions, both required statuses, and a run
 whose `params` are empty. The observer reads only the six header fields
-(`schema_version`, `run_id`, `pipeline`, `params`, `started_at`, `status`) and
-ignores everything else these files carry, which is most of their bulk.
+(`schema_version`, `run_id`, `pipeline`, `params`, `started_at`, `status`), plus
+`updated_at` for pruning, and ignores everything else these files carry, which
+is most of their bulk. The v5 file is byte-for-byte as captured; a scan found no
+credentials in it, so nothing was edited.
 
 ## `cf/` — Context Forge project records
 

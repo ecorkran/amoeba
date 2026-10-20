@@ -37,6 +37,7 @@ COMPLETED_P5 = "run-20260411-p5-93bf1c90.json"
 FAILED_TEST_REVIEW = "run-20260411-test-review-a50207b1.json"
 PAUSED_REVIEW = "run-20260505-review-a697ad3d.json"
 COMPLETED_EMPTY_PARAMS = "run-20260801-loop-smoke-b095fb0d.json"
+PAUSED_SCHEMA_V5 = "run-20261015-p5-8a59ee89.json"
 
 CLOCK_TOLERANCE_SECONDS = 5.0
 
@@ -124,7 +125,13 @@ def _observer(
 
 @pytest.mark.parametrize(
     "name",
-    [COMPLETED_P5, FAILED_TEST_REVIEW, PAUSED_REVIEW, COMPLETED_EMPTY_PARAMS],
+    [
+        COMPLETED_P5,
+        FAILED_TEST_REVIEW,
+        PAUSED_REVIEW,
+        COMPLETED_EMPTY_PARAMS,
+        PAUSED_SCHEMA_V5,
+    ],
 )
 def test_every_real_fixture_parses(name: str) -> None:
     """Including the paused and failed runs the LLD requires."""
@@ -157,6 +164,43 @@ def test_an_added_unknown_field_still_parses(tmp_path: Path) -> None:
 
     assert run is not None
     assert run.run_id == payload["run_id"]
+
+
+def test_the_schema_v5_fixture_parses_all_seven_fields() -> None:
+    """``updated_at`` is timezone-aware and equals the file's own value."""
+    payload = _load(PAUSED_SCHEMA_V5)
+
+    run = parse_run_file(FIXTURES / PAUSED_SCHEMA_V5)
+
+    assert run is not None
+    assert run.schema_version == 5
+    assert run.status == "paused"
+    assert run.updated_at == datetime.fromisoformat(str(payload["updated_at"]))
+    assert run.updated_at is not None
+    assert run.updated_at.tzinfo is not None
+
+
+@pytest.mark.parametrize("name", [COMPLETED_P5, PAUSED_REVIEW])
+def test_older_schema_fixtures_carry_updated_at_too(name: str) -> None:
+    """Schema 3 and 4 files already record ``updated_at``; it is not a v5 trait."""
+    payload = _load(name)
+
+    run = parse_run_file(FIXTURES / name)
+
+    assert run is not None
+    assert run.updated_at == datetime.fromisoformat(str(payload["updated_at"]))
+
+
+def test_a_run_file_without_updated_at_parses_with_none(tmp_path: Path) -> None:
+    """The field is optional: recovery must never fail on its absence."""
+    payload = _load(PAUSED_SCHEMA_V5)
+    del payload["updated_at"]
+    runs_dir = _runs_dir(tmp_path, {PAUSED_SCHEMA_V5: payload})
+
+    run = parse_run_file(runs_dir / PAUSED_SCHEMA_V5)
+
+    assert run is not None
+    assert run.updated_at is None
 
 
 @pytest.mark.parametrize(
