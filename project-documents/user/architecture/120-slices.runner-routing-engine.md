@@ -63,8 +63,9 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 3. [ ] **(122) Runner Tenant and Control Surface** — The Runner's loop, with no lifecycle in it yet. The tenant is composed after `standard_tenants` and has observe, decide and act stages: Decide is pure, and Act issues journaled commands only. Runs launch detached in their own session, with stdin from `/dev/null` and logs written to per-run files under the supervisor directory. A launch is confirmed by the exact `run_id=<id>` line, and a late launch is adopted by polling again. Each in-flight run is polled once per tick. The slice also adds the start-up shape probes, an exit-2 check on first use of a launch, per-project fault isolation with the one process-boundary catch, and the tick deadline checked before every subprocess call. Settings hold the tick deadline, the per-call timeout and the launch grace period.
    **Value:** Developer value. A command goes out, is watched without blocking, and survives a crash. Every later slice adds behaviour to this loop rather than building its own.
    **Success Criteria:**
-   - A no-op step is journaled, launched, observed to completion and recorded. It is recovered correctly across a `kill -9` of the resident process.
-   - A failed probe stops the tenant from starting, with an error naming the missing shape.
+   - A no-op step is journaled, launched, observed to completion and recorded. It is recovered correctly across a `kill -9` of the resident process. Recovery leaves an entry whose run exists in flight for the Runner to finish, rather than adopting it.
+   - A failed `sq` probe stops `amoeba start`, with an error naming the missing shape. A CF link that fails its probe escalates for its project, and other projects continue.
+   - An in-flight run is polled at most once per tick, and no more often than the run poll interval.
    - A launch whose child exits before the `run_id=` line, or that passes the grace period without one, resolves failed.
    - A fault in one project is logged at ERROR and escalated, and the tick continues for the other projects. A store write failure exits the process.
    - A tick stops issuing subprocess calls at its deadline. Work it did not reach goes first on the next tick.
