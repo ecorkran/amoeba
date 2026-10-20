@@ -110,6 +110,10 @@ class ExitCode(IntEnum):
     #: TLS file). Nothing was bound.
     SERVE_REFUSED = 13
 
+    #: ``prune sq-runs --yes``: a candidate is still present after ``sq`` ran,
+    #: or ``sq`` is missing, failed, or timed out. Amoeba deleted no file.
+    PRUNE_INCOMPLETE = 14
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every subcommand."""
@@ -159,6 +163,10 @@ def build_parser() -> argparse.ArgumentParser:
     from amoeba.cli.feed import add_feed_parser
 
     add_feed_parser(subparsers)
+
+    from amoeba.cli.prune import add_prune_parser
+
+    add_prune_parser(subparsers)
 
     from amoeba.cli.serve import add_serve_parser
 
@@ -225,6 +233,7 @@ def _dispatch(args: argparse.Namespace) -> ExitCode:
     from amoeba.cli import ingest as ingest_module
     from amoeba.cli import inspect as inspect_module
     from amoeba.cli import lifecycle
+    from amoeba.cli import prune as prune_module
     from amoeba.cli import serve as serve_module
     from amoeba.cli import submit as submit_module
 
@@ -243,6 +252,8 @@ def _dispatch(args: argparse.Namespace) -> ExitCode:
             return ingest_module.run_ingest(args)
         case "feed":
             return feed_module.run_feed(args)
+        case "prune":
+            return prune_module.run_prune(args)
         case "serve":
             return serve_module.run_serve(args)
         case _:
