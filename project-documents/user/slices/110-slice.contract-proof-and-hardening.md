@@ -6,7 +6,7 @@ parent: user/architecture/100-slices.substrate-run-state-store.md
 dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109]
 interfaces: []
 dateCreated: 20261015
-dateUpdated: 20261015
+dateUpdated: 20261019
 status: not_started
 ---
 
@@ -60,7 +60,7 @@ Store locality was decided in slice 101 (central, per supervisor, keyed by proje
 ### Prerequisites
 
 - **101–106:** merged. Their contracts are in `docs/`.
-- **107, 108, and 109:** designed (all `not_started` on 20261015). This slice depends on them as their designs specify: judge samples (107); `CFWatchTenant` and `cf_version_label` capture, which move with `build_tenants` (108); and `amoeba serve`, `amoeba.inspection`, `as_of_seq`, the SSE feed, and `store/discovery.py` (109). **The first task confirms all three are merged and stops for the PM if any is not.** It then checks the names this design takes from them against the merged code, and updates this design where the code differs.
+- **107, 108, and 109:** merged (*confirmed 20261019*). This slice uses judge samples (107); `CFWatchTenant` and the `cf` version-label capture, which move with `build_tenants` (108); and `amoeba serve`, `amoeba.inspection`, the SSE feed, and `store/discovery.py` (109). The names this design takes from them were checked against the merged code on 20261019, and the design was amended where the code differed.
 - **Squadron:** `sq runs prune [run_ids…] --yes` (*observed 20261015, Squadron 0.22.0*). D8 states the behavior this design relies on. The design depends on that shape, not on the version.
 
 ### Interfaces Required
@@ -72,7 +72,7 @@ Store locality was decided in slice 101 (central, per supervisor, keyed by proje
   - Messages: `pending_intents` and `acknowledge_message`.
   - Evidence and feed: `verdicts`, `finding_changes`, `detections`, `changes`, and `calibration`.
 - **Process (102):** `ResidentProcess`, `Tenant`, `ProcessSettings`, recovery with the `sq_run` observer, and the lock-based `amoeba stop` and `amoeba status`.
-- **Feed (106):** `follow()`, `FeedSettings`, and `Change`.
+- **Feed (106):** `follow()` and `FeedSettings` from `amoeba.feed`; `Change` from `amoeba.store`.
 - **Network (109):** `POST …/submissions`, `GET …/submissions/{id}`, and `GET …/feed` with `Last-Event-ID`.
 - **Parser (105):** `parse_review_artifact` and `to_verdict_input`. The proof Runner reports its reviews through these (evidence contract, point 5).
 
@@ -109,7 +109,7 @@ docs/substrate-guide.md
 - `run_pruning.py` and `run_file.py` import nothing from `amoeba.store`, `amoeba.inbox`, or `amoeba.process`, which keeps 105's rule for this package.
 - `cli/prune.py` is the only module that knows both the selection rule and the store.
 - `amoeba.process` may import `amoeba.upstream.squadron.run_file`. The process already imports the review parser in 106's detection tenant.
-- `process/tenants.py` imports only tenant modules of `amoeba.process` and `process/version_label.py`, and nothing from `amoeba.upstream`, `amoeba.cli`, or `amoeba.store` internals. The process → upstream edges stay where they already are: 106's detection tenant and 108's `CFWatchTenant`. Moving `build_tenants` adds no new edge, and this rule keeps it that way. `amoeba.upstream` never imports `amoeba.process` (105's existing rule, unchanged).
+- `process/tenants.py` may import `amoeba.process` modules: the tenants, `settings`, `version_label`, and `observers/cf_readback` (the `cf` version-label capture). From outside `amoeba.process` it may import only `amoeba.upstream.context_forge`'s root, for `PROJECTS_FILE_NAME`, which `build_tenants` already reads and `cf_watch.py` already imports. It imports nothing from `amoeba.cli` or from `amoeba.store` internals. Moving `build_tenants` therefore adds no new package edge, and this rule keeps it that way. `amoeba.upstream` never imports `amoeba.process` (105's existing rule, unchanged).
 - Nothing under `tests/contract/` may import outside `PUBLIC_ROOTS` (D1).
 
 ### Data Flow
@@ -165,7 +165,7 @@ This slice adds no store state, no table, and no migration. `record_runner_repor
 
 ### Technology Choices
 
-No new dependency. The proof uses `httpx`, which slice 109 adds as a dev dependency, and the subprocess and signal machinery the existing harnesses already use. Nothing in it is mocked: signals, locks, SQLite, the inbox directory, and the HTTP server are all real. The only stand-in is the Squadron side effect, explained in D3.
+No new dependency. The proof uses `httpx2`, which slice 109 added as a dev dependency, and the subprocess and signal machinery the existing harnesses already use. Nothing in it is mocked: signals, locks, SQLite, the inbox directory, and the HTTP server are all real. The only stand-in is the Squadron side effect, explained in D3.
 
 ### Decisions
 
@@ -250,7 +250,7 @@ The scenario uses `kill -9` (steps 4 and 5) and a graceful stop (step 10). Both 
 Only the PM can choose; the implementer never marks an assertion `xfail` on their own. The four known gaps:
 
 - **H1: `amoeba.process` exports nothing.** The process contract says it is "sufficient for building a tenant". Building one today means importing `amoeba.process.host`, and composing with the shipped tenants means importing `amoeba.cli.lifecycle.build_tenants`. The fix:
-  - `__all__` gains `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, and the process errors that `start` maps to exit codes.
+  - `__all__` gains `ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, and the process errors that `start` maps to exit codes (`ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError`).
   - `build_tenants` moves to `process/tenants.py` as `standard_tenants(settings, supervisor_dir)`, which captures the `sq` and `cf` version labels as before.
   - `amoeba start` calls it. Initiative 120 adds its Runner as `(*standard_tenants(…), runner)` in `start`.
 - **H2: `record_runner_report(entry_id, verdict, detection, *, result)`.** One transaction does three things:
@@ -287,7 +287,7 @@ Only the PM can choose; the implementer never marks an assertion `xfail` on thei
 - *No runs-directory flag.* Squadron's runs directory is always under `Path.home()`, and Amoeba's `DEFAULT_SQ_RUNS_DIR` uses the same derivation. A `--sq-runs-dir` here would let Amoeba select from one directory while Squadron deletes from another. Tests and the walkthrough point both at a scratch directory by setting `HOME`.
 - *No journal entry.* Pruning is not issued by the resident process, writes nothing to the store, and converges: every run recomputes the candidates from what is on disk, and a run that is already gone is simply absent. Command-before-result exists so that recovery can learn the outcome of a command the store depends on. No store state depends on whether a paused run's file still exists, and the store's `sq.run_id` references stay as history.
 - *Preview by default.* Deleting another tool's files is not reversible, so the command mirrors `sq runs prune`: it previews unless `--yes` is given. It is never a tenant (Excluded).
-- *Exit status.* `ExitCode.PRUNE_INCOMPLETE` is the next free member: 14 if 109 takes 13 as designed, confirmed after 109 merges. It means that a candidate remained, or that `sq` failed or timed out. A store that cannot be read uses the existing store-error exit mapping.
+- *Exit status.* `ExitCode.PRUNE_INCOMPLETE` is the next free member, 14. 109 took 13 for `SERVE_REFUSED` (*confirmed 20261019*). It means that a candidate remained, or that `sq` failed or timed out. A store that cannot be read uses the existing store-error exit mapping.
 
 **D9 — The consumer guide.** `docs/substrate-guide.md` contains:
 
@@ -315,7 +315,7 @@ These moves change no behavior. Each is its own commit with the suite green.
 | --- | --- | --- |
 | `cli/lifecycle.build_tenants` | `process/tenants.standard_tenants` | `cli/lifecycle.start`, tests that build tenants |
 | `process/observers/sq_runs.py`: `SquadronRun`, `parse_run_file` | `upstream/squadron/run_file.py` | `observers/sq_runs.py`, `tests/test_observer_sq_runs.py` |
-| `amoeba.store.paths.store_dir` and `project_store_path` (internal path) | re-exported from `amoeba.store` (the module stays) | `store-contract.md`. Existing internal callers may keep their imports |
+| `amoeba.store.paths.store_dir` and `project_store_path` (internal path) | re-exported from `amoeba.store` (the module stays) | `store-contract.md`, and `tests/test_public_api.py`'s `EXPECTED_EXPORTS`. Existing internal callers may keep their imports |
 
 `amoeba start` output, `amoeba status`, and recovery behavior must be identical before and after. The existing process, observer, and CLI lifecycle suites cover behavior. They do not pin what the moves could silently change, so two checks are added **before** the moves and must pass unchanged after them:
 
@@ -332,7 +332,7 @@ The import edge the move could add is closed by Layering's `process/tenants.py` 
 | --- | --- |
 | `record_runner_report(entry_id, verdict: VerdictInput, detection: DetectionInput, *, result: Mapping[str, object])` | One transaction: the verdict (with the retry rule), a `runner_issued` ledger row, and the entry resolved `completed` by `issuer` with `result`. Returns the `VerdictRecord`. Refusals write nothing (D7). |
 
-**Process (H1):** `amoeba.process.__all__` exactly as D7 lists it. `standard_tenants(settings, supervisor_dir) -> tuple[Tenant, ...]` returns the tenants `amoeba start` registers, in tick order.
+**Process (H1):** `amoeba.process.__all__` exactly as D7 lists it, pinned by a written-out expected set in the style of `tests/test_public_api.py`. `standard_tenants(settings, supervisor_dir) -> tuple[Tenant, ...]` returns the tenants `amoeba start` registers, in tick order.
 
 **Pruning (D8):**
 
@@ -362,7 +362,6 @@ select_prunable(runs: Iterable[SquadronRun], *, owned: Mapping[str, str],
 ### Consumes from Other Slices
 
 - Every surface of 101–109, through their contracts only (D1).
-- **If 107, 108, or 109 is not merged,** the first task stops. Proving a partial contract would not prove what the slice plan asks, so the slice does not degrade to that.
 - **If `sq` is absent,** pruning exits `PRUNE_INCOMPLETE` and deletes nothing. The suite uses a stub `sq` on `PATH` that reproduces the observed interface (D3); no test runs the real `sq`.
 
 ## Success Criteria
@@ -446,7 +445,7 @@ Clean up with `uv run amoeba stop`, kill the server, then `rm -rf "$AMOEBA_STORE
 
 ### Development Approach
 
-1. Confirm that 107, 108, and 109 are merged. Stop for the PM if any is not. Reconcile every name this design takes from them against the merged code, and update this design if they differ. At the same gate, the PM settles the two open values: the 7-day retention default, and `PRUNE_INCOMPLETE`'s number.
+1. The PM confirms the 7-day retention default. (The dependency check and name reconciliation were done on 20261019; see Prerequisites.)
 2. Migration commits, with no behavior change. First add the tenant-order and parse-equivalence checks against the current code. Then make H4's move, H1's `standard_tenants` move, and the exports for H1 and H3. Document each export.
 3. H2, `record_runner_report`, with store tests: the one-commit property, each refusal, and the retry rule.
 4. `tests/contract/` foundations: the D1 rule, the bootstrap, and `ProofRunner` with crash points.
