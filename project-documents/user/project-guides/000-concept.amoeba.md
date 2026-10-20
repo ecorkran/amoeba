@@ -8,7 +8,7 @@ audience: [human, ai]
 description: Concept for Amoeba — an orchestration runner with deterministic control flow and bounded nondeterminism that drives Context Forge and Squadron through a project's full lifecycle, escalating to a human (or first to an ephemeral Judge) only where judgment is the actual work.
 dependsOn: [000-pre-concept.amoeba.md]
 dateCreated: 20260618
-dateUpdated: 20260913
+dateUpdated: 20261020
 status: in_progress
 ---
 
@@ -164,6 +164,15 @@ Re-grounded against Squadron, Context Forge, and ai-project-guide HEAD after thr
 - **New G — derived verdicts.** Squadron's JSON exposes `fallback_used` (verdict derived after a summary-parse failure); `verdict == PASS && fallback_used` is the Runner's false-negative predicate. It is absent from frontmatter, so a derived PASS clears CF's gate. The Runner gates on SQ JSON, not on CF's gate alone. A failure artifact (`verdict: UNKNOWN` + provider-failure body) now occupies the live slot on provider failure — artifact presence ≠ review happened.
 - **First proof unanchored.** Kalshi ingestion (trading-data initiative 260) shipped manually and is in production. **PM decision 2026-09-13:** do not pre-select a replacement slice — sibling projects keep moving, so the PM picks an unstarted unit when Amoeba is ready to run a proof (selection criteria in `notes/002-upstream-delta.amoeba.md` §7). OQ7 (Kalshi discovery) no longer applies.
 - **Process.** Planning branches removed (guide 0.17.x; planning commits directly to the integration target); review gates are hard stops ("stop and report to the PM, or run the review"); `review: none` is PM-only and must never be written by automation.
+
+#### Multi-project programs — 2026-10-20 (PM)
+
+The "forest of runnable / blocked / done nodes" is not only several unrelated projects. The PM's real case is a **program**: `trading-data`, `trading-engine`, `trading-ui` (more coming) are separate repos that combine into one product, `trading`. Today only the PM holds the combined concept; amoeba's store is project-keyed and flat, so nothing records how the parts fit, and there are no cross-project dependencies or unified blocked-on-me view. Two needs follow:
+
+1. **Program record.** A level above projects that owns a combined-concept document, the member-project list, and cross-project dependency edges (e.g. an engine slice blocked on a data slice). This is a quantity change in the store (one new table, a nullable program key on projects), not a rewrite, and agents in a member project can read the program concept to know what their part is for. Planned as initiative 180.
+2. **Multi-agent chat.** One channel in which each project's resident agent is a participant, so the PM can work across projects without Claude Desktop projects or named agents (which only cover Claude projects). It is the original orchestration idea that became Squadron; with Squadron dropping comms, it lands here as a client over the slice 109 network API. Planned as initiative 200, after 180 (the chat needs the program context to anchor to).
+
+Open: whether and how an agent in one project may read another project's state (cross-project visibility). The PM half-remembered a further item; none is recorded. Neither need is built before initiative 120; 100 and 120 only avoid foreclosing a program key or cross-project edges.
 
 #### Decisions locked at concept
 
