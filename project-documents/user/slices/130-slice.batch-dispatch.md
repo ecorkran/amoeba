@@ -61,7 +61,7 @@ Developer value:
   - `RUN_RESULT_KINDS`, the one definition of "a step's latest run entry".
 - Extensions to earlier Runner code:
   - 125: `dispatch_state` and the checkout hold read `RUN_RESULT_KINDS` and batch coverage. The pointer-move check skips batch entries.
-  - 126: routing inputs `outcome` (four new values) and `flag_kind`, and a per-item time bound.
+  - 126: routing input `outcome` (three new values), and a per-item time bound.
   - 127: the `flagged_item` situation and its decisions.
   - 120: pruning keeps a batch run while any of its items is not done.
 - Stub `sq` support for `slices-plan`, its report file and `--item` resume, using fixtures captured from squadron-ai 0.23.5.
@@ -115,7 +115,7 @@ amoeba/runner/
   dispatch/planner.py CHANGED skips steps BatchPlanner claimed this tick
   dispatch/pointer_watch.py CHANGED  skips entries with batch_items
   finish.py        CHANGED  an entry with batch_items goes to batch ingestion
-  routing/inputs.py CHANGED outcome += flagged, not_run, not_selected, not_reached; flag_kind (D7)
+  routing/inputs.py CHANGED outcome += flagged, not_run, no_record (D7)
   resolutions/classify.py CHANGED  flagged_item situation (D8)
   tenant.py        CHANGED  production planners = (HumanStepPlanner, BatchPlanner, DispatchPlanner,
                                                    ContinuationPlanner)
@@ -195,7 +195,7 @@ Status: decided
 - **Ineligible** is not an error. `BatchPlanner` emits nothing, and 125's `DispatchPlanner` handles the current steps one by one. So a held slice in an otherwise driven initiative turns the batch off for that initiative, and the driven slices are designed by `P4`. A held slice is never designed by a batch.
 - `BatchPlanner` runs before `DispatchPlanner`. The steps it claims in a tick are passed on, and `DispatchPlanner` skips them, so the two planners never act on one step.
 - **The prediction can still be wrong.** CF can change between the plan read and Squadron's own read. That difference is caught at ingestion (D6) and reported, never guessed.
-- **The prediction copies an undocumented Squadron predicate.** `undesigned_slices` is Squadron source, not a published shape, so it can change without notice. `design_dispatch: batch` is therefore experimental until S15 (D11) removes the prediction. The operator guide says so, and names the squadron-ai version the excluded statuses were observed in. A drift is caught after the fact by `batch_selection_mismatch`, and the work it paid for is still recorded.
+- **The prediction copies an undocumented Squadron predicate.** `undesigned_slices` is Squadron source, not a published shape, so it can change without notice. `design_dispatch: batch` is therefore experimental until S15 (D11) removes the prediction. The operator guide says so, and names the squadron-ai version the excluded statuses were observed in. A drift is caught after the fact by `batch_selection_mismatch`, which is checked at every fan-out, not only the first. The Runner cannot inspect Squadron's predicate before launch, so a drift costs at most one batch's unwanted items before the PM sees it. **Closing condition:** when S15 ships, the batch passes the driven set as its item filter, the prediction becomes a check only, held slices stop turning batching off, and the experimental label is removed. That change is a Future Work entry tied to S15.
 - Rejected: launching whenever any driven slice is undesigned. Squadron would design the plan's undriven and held slices too, which breaks the arch's rule that hold stops anything new.
 
 ### D4 — A batch is one `sq_run` entry on the initiative node, with no pointer write
@@ -209,7 +209,7 @@ Status: decided
 - **No pointer write.** Squadron's `each` step sets CF's arch, slice and phase for every item. 125 D2 writes a pointer for two reasons, and neither applies here:
   - `slice_name` for attribution: batch ingestion begins with a plan read instead (D6);
   - 128's gate read: D3 point 6 excludes any check that needs the pointer.
-- **The checkout is still confirmed.** Act runs `cf get --json -p <cf project id>` in the checkout before journaling, and applies 125 D1's path and worktree comparison, the same function, without the index check. A mismatch blocks every item step with `checkout_unresolved`. It is a read, so it is not journaled.
+- **The checkout is still confirmed.** Act runs `cf get --json -p <cf project id>` in the checkout before journaling, and applies 125 D1's path and worktree comparison, the same function, without the index check. A mismatch blocks every item step with `checkout_unresolved`. It is a read, so it is not journaled. This is the arch's precondition check in Act (127 D4's pre-poll is the first): a read made immediately before a command, so the command never acts on state that moved since Observe. It can withhold the command and record what it read, as D9's `resume_skipped` and 127's observed run do. It never issues a different command.
 - **Batch coverage.** For each step named in the `batch_items` of a batch run's latest entry, while that entry is unresolved or resolved `paused` (D6), `dispatch_state` returns `IN_FLIGHT`. 125 D4's first hold rule (an unresolved `sq_run` with that checkout) already holds the checkout.
 - **What batch entries do not do:**
   - **The pointer-move check (125, D11) is narrowed, not skipped.** The batch moves CF's slice pointer itself, item by item, so a move to a slice in the entry's `batch_items` is expected. A move to any other slice, or off the initiative, is someone else's and raises `pointer_moved` as it does for one run.
@@ -234,18 +234,17 @@ Status: decided
 ### D6 — Ingestion fans a batch out to its item steps
 Status: decided
 - **Only an ended batch fans out.** A batch whose outcome is `paused` is not fanned out. It is ingested as 125 ingests a paused run: its entry resolves with outcome `paused`, and the initiative node blocks on `SQ_CHECKPOINT` with the run id and checkout. Batch coverage (D4) counts the latest entry on a batch's run id when it is unresolved or resolved `paused`, so its items stay `IN_FLIGHT`. A continuation of a batch (127, D4) copies its `batch_items`, so the coverage carries over, and when the continued run ends with any other outcome, it is that entry that fans out (D8).
+  - **If the initiative node is already blocked** (the store allows one open block per node), no second block is written, as for any node already blocked (125, D6; 121's `effect=None`). The pause is still recorded on the entry, and 127 classifies by the latest run entry's outcome, not by block kind. So the standing block's resolution is offered the paused-run decisions, and the pause shows in `inspect journal` and `sq runs list`. Item coverage reads the entry, not the initiative's status, so the items stay `IN_FLIGHT` either way, and the run keeps being polled, as any run in flight under a blocked node is (arch, "Faults stay in their project").
 - **Before recording,** batch ingestion runs one plan read of the initiative, 123's read and reconcile, under `TickBudget`. Each designed slice then has a `designFile`, so its node has the `slice_name` that attribution needs. If the read fails, the batch entry stays unresolved and the next tick tries again, as 125 D2 does for a failed read-back. After `launch_grace_seconds` has passed since the run's finish was first observed, the entry goes through `journal_escalate`.
 - **Matching items to steps.** By CF slice index, through `batch_items`:
 
   | Case | Effect |
   | --- | --- |
   | Predicted, with a record | An item entry from the record |
-  | Predicted, no record, batch outcome `completed` | An item entry with outcome `not_selected`: Squadron did not select it |
-  | Predicted, no record, any other batch outcome | An item entry with outcome `not_reached`: the batch stopped first |
-  | Record not predicted, index linked to a slice node | Its review is recorded on that slice node, with its `runner_issued` ledger row, so detection does not take the file as external. No item entry, block or routing is written, because no one drove that step. The mismatch escalation is raised too. |
-  | Record not predicted, index `#N` or not linked | The mismatch escalation only |
+  | Predicted, no record | An item entry with outcome `no_record`. Its `no_record_reason` is `not_selected` when the batch completed (Squadron did not select it), or `not_reached` otherwise (the batch stopped first). The reason is payload, not a routing input. |
+  | Record not predicted | The mismatch escalation only. No item entry, review, block or routing is written, because no one drove that step. A review the batch saved for that slice is left to detection (106), which records it as external. |
 
-  - **The mismatch escalation** is one project-scoped `batch_selection_mismatch`, raised once per batch. Its payload holds the run id, the unpredicted indexes and the predicted indexes Squadron did not select. The work was real, so it is recorded wherever it has a node. The escalation tells the PM that a slice may have been designed without a drive. It follows 121's rules for project-scoped escalations. It is raised at fan-out, and it closes on the first complete tick where the fault does not recur, which is the next one. Its message stays in the store as the record.
+  - **The mismatch escalation** is one project-scoped `batch_selection_mismatch`, raised once per batch. Its payload holds the run id, the unpredicted indexes and the predicted indexes Squadron did not select. The escalation tells the PM that a slice may have been designed without a drive. It follows 121's rules for project-scoped escalations. It is raised at fan-out, and it closes on the first complete tick where the fault does not recur, which is the next one. Its message stays in the store as the record.
   - **A `ReportUnknown`** makes every predicted item an entry with outcome `unknown` and `review_fault: batch_report_unknown`, holding the reason. Nothing is recorded from the report.
 - **The item entry.** Kind `sq_batch_item`, on the step node, issued and resolved in one write (D10). Its result:
   - `run_id`: the batch's;
@@ -257,7 +256,7 @@ Status: decided
   It carries no `outcome_document`. The batch entry's result holds it once, with `report_path`.
 - **Ingestion blocks,** as 125 D6 does:
   - `completed`: no block.
-  - Every other outcome: `HUMAN`, payload `{reason: item_<outcome>, run_id, item, flag_kind, failed_step}`. `reason` text is carried in the context for people.
+  - Every other outcome: `HUMAN`, payload `{reason: item_<outcome>, run_id, item, flag_kind, failed_step, no_record_reason}`. `reason` text is carried in the context for people.
 
   A flagged item is a person's decision by Squadron's contract, so it posts an escalation. That differs from a paused `P4`, whose `SQ_CHECKPOINT` block posts no message.
 - **One transaction for the whole batch.** `record_batch_report` writes every item entry with its verdicts, ledger rows and block, then resolves the batch entry `completed`, or `failed` for orphaned and vanished runs, as 125 D6 does. A crash leaves the batch entry unresolved and nothing written. The next tick polls, finds the same outcome, and repeats. Verdict ids are content digests, so a repeat is a retry.
@@ -270,22 +269,22 @@ Status: decided
   - `reviewFile` is set and no `reviews` entry matches, the file is missing or unparseable, or attribution gives a node other than the item's slice: `review_unknown`, as in 125 D7.
   - A non-empty `unsavedParts` is `review_unknown` for that item, because the split review is incomplete.
 - **Routing inputs** (126, D3: the vocabulary grows by code):
-  - `outcome` gains four values. `completed` keeps its meaning, so 126's advance rules apply unchanged to a passed item.
+  - `outcome` gains three values. `completed` keeps its meaning, so 126's advance rules apply unchanged to a passed item.
 
     | Item | `outcome` |
     | --- | --- |
     | `passed`, `accepted` | `completed` |
     | `flagged` | `flagged` |
     | `not_run` | `not_run` |
-    | no record (D6) | `not_selected` or `not_reached` |
+    | no record (D6) | `no_record` |
     | report unknown | `unknown` |
 
-  - `flag_kind`, a new input with Squadron's six values plus `none`, reduced from `item_record.flagKind`. An unrecognized value is `unknown`.
+  - Squadron's `flagKind` is not a routing input in this slice. No shipped rule would use it, and it is already in the block payload and the item record. It becomes an input when the first table edit needs one (126, D3: the vocabulary grows by code).
   - `checkpoint_kind`, `at_loop` and `failure_kind` are `none` for item entries. Squadron reports no per-item checkpoint or failure document.
   - `verdict`, `standing`, `severity` and `recurrence` come from `verdict_ids`, as 126 reduces them.
 - **An `accepted` item is a completed outcome with its loop's last verdict,** usually CONCERNS. That is what `P4` gives when `accept_if` is met, so the table treats both the same way. The shipped table already escalates CONCERNS, so nothing advances that the per-phase path would hold.
-- **The shipped table gains no rules.** 126 D4 requires advance and rerun rules to name `outcome: completed`. The catch-all escalates every new value, which is the arch's "before 140, every such point routes to a human". Rules routing `flag_kind` are table edits, made when evidence asks for them.
-- **Time bound** (126, D7). The table's bound for `slices-plan` is per item: its entry is marked `per_item: true`, and a batch's bound is that value times its number of predicted items. An item resume is bounded by the per-item value. The multiplication is in 126's bound function, the one place bounds are computed. The per-item value starts at `P4`'s bound in the shipped table (126, D7: 240 minutes), because an item is one design with its review loop. If 129's write-up changes `P4`'s bound, the per-item value follows it. If it has no usable `P4` timing, the value stays at 240.
+- **The shipped table gains no rules.** 126 D4 requires advance and rerun rules to name `outcome: completed`. The catch-all escalates every new value, which is the arch's "before 140, every such point routes to a human". Routing on the flag kind waits for evidence, and then needs the input added (above) and a table edit.
+- **Time bound** (126, D7). The table's bound for `slices-plan` is per item: its entry is marked `per_item: true`, and a batch's bound is that value times its number of predicted items. An item resume is bounded by the per-item value. The multiplication is in 126's bound function, the one place bounds are computed. The per-item value starts at `P4`'s bound in the shipped table (126, D7: 240 minutes), because an item is one design with its review loop. If 129's write-up changes `P4`'s bound, the per-item value follows it. If it has no usable `P4` timing, the value stays at 240. Rejected: one fixed bound for a whole batch. A batch's length scales with its item count, so any fixed value is either too short for a large plan, escalating a healthy run, or too long for a small one, hiding a stall. The per-item flag is one key in the table entry and one multiplication in 126's bound function.
 
 ### D8 — Resolutions on items: per-item resume, never a whole-run resume
 Status: decided
@@ -297,7 +296,7 @@ Status: decided
 
   - `accept` requires `item_record.flagKind` to be `review_unresolved`, otherwise `not_review_unresolved`. This is Squadron's own rule, and it is checked first so Squadron's exit 2 is never the first signal.
   - `not_run` takes no `accept` (`decision_not_applicable`).
-  - Item outcomes `completed` reach 127's `completed_outcome` unchanged (`accept`, `rerun`, `stop`). `not_selected`, `not_reached`, `unknown` and an `sq_item_resume` resolved `failed` or `unknown` reach `ended_run` (`rerun`, `stop`), and also allow `handled`, because a record may have changed since.
+  - Item outcomes `completed` reach 127's `completed_outcome` unchanged (`accept`, `rerun`, `stop`). `no_record`, `unknown` and an `sq_item_resume` resolved `failed` or `unknown` reach `ended_run` (`rerun`, `stop`), and also allow `handled`, because a record may have changed since.
 - **What each decision does:**
   - `retry` and `accept` lead to `ResumeItem`.
   - `handled` leads to `ObserveItem`: read the item's current record and route it.
@@ -352,8 +351,7 @@ Status: decided
 - **`record_batch_report(batch_entry_id, items, *, outcome, result)`**, where each item is `(node_id, item_result, reviews, block | None)`. It runs as one transaction:
   1. 125's per-review checks, for every review;
   2. per item: insert the resolved `sq_batch_item` entry, record its verdicts and ledger rows, write its block, and set `awaits_routing`;
-  3. for unpredicted slices (D6): record the verdicts and ledger rows only, with `journal_entry_id` null, as 125 D7 records every Runner verdict;
-  4. resolve the batch entry.
+  3. resolve the batch entry.
 
   Any failed check writes nothing. A verdict or ledger key already present is the existing retry rule.
 - **`RUN_RESULT_KINDS = {sq_run, sq_batch_item, sq_item_resume}`**, defined once in `journal_models.py`. It is "a step's latest run entry" everywhere: 125's `dispatch_state` and hold, 126's gather, and 127's `classify`. Each of those swaps a kind comparison for membership, with a test per consumer.
@@ -414,7 +412,7 @@ sq run --resume <run id> --item <slice index> --decision retry|accept [--instruc
 
 ### Provides to Other Slices
 
-- **140:** flagged items reach the routing table as `outcome: flagged` with `flag_kind`. Judge-eligible marks on those rules work as they do for any escalation.
+- **140:** flagged items reach the routing table as `outcome: flagged`, with the flag kind in the block payload, ready to become an input (D7). Judge-eligible marks on those rules work as they do for any escalation.
 - **131:** item entries carry verdicts like any run, so tier inference needs no batch-specific input.
 - **Future Work (`tasks-plan`):** `BATCH_PIPELINES`, `fan_out` and `sq_item_resume` are generic over a single-`each` pipeline. A second entry needs its own selection predicate and item-to-step mapping.
 
@@ -441,10 +439,10 @@ sq run --resume <run id> --item <slice index> --decision retry|accept [--instruc
 - **In flight:** the covered steps are `IN_FLIGHT`, and no other slice dispatches in the checkout. A pointer moving between items raises no `pointer_moved`. A pointer moved to a slice outside `batch_items` raises it.
 - **Fan-out:**
   - Passed, accepted, flagged and `not_run` records each produce an `sq_batch_item` entry on the right step, with the outcome mapping of D7.
-  - A passed item with a PASS review advances under the shipped table. Every other outcome escalates, with `flag_kind` in the decision's inputs.
+  - A passed item with a PASS review advances under the shipped table. Every other outcome escalates, with the flag kind in the block payload.
   - Each item's review is recorded on its slice node, `runner_issued`, including every part of a split review. A later detection scan records nothing new.
   - A null `reviewFile` with a verdict, an unmatched path, or unsaved parts each give `review_unknown` on that item only.
-  - A predicted item with no record is `not_selected` or `not_reached`. A record for an unpredicted slice has its review recorded on its node, gets no item entry or decision, and raises one `batch_selection_mismatch`.
+  - A predicted item with no record is `no_record`, with its reason. A record for an unpredicted slice gets no item entry, review or decision, and raises one `batch_selection_mismatch`.
   - A missing report, `schemaVersion` 2, or a `runId` mismatch makes every item `unknown`, with `batch_report_unknown`.
 - **Crash:** killed between the batch's finish and `record_batch_report`, the next tick fans out once. Each item has one entry and each verdict is recorded once.
 - **Item resume:**
@@ -506,7 +504,7 @@ Steps 1–2 use the stub `sq` and `cf`. Step 3 runs one real `slices-plan` batch
    - `sq runs list` shows the run under its `amoeba-…` id.
    - When it ends, the journal shows one `sq_batch_item` per slice, and `amoeba inspect routing-decisions --project scratch` shows one decision for each.
    - `amoeba inspect verdicts` shows each design review on its own slice node.
-   - Compare `jq '.items[] | {index, outcome, flagKind}' ~/.config/squadron/runs/<run id>.slices.report.json` with `amoeba inspect blocked --project scratch`. Every flagged item is blocked, with its `flag_kind`, and nothing else is.
+   - Compare `jq '.items[] | {index, outcome, flagKind}' ~/.config/squadron/runs/<run id>.slices.report.json` with `amoeba inspect blocked --project scratch`. Every flagged item is blocked, with its flag kind in the payload, and nothing else is.
    - If an item is flagged `review_unresolved`, answer it:
      ```bash
      amoeba submit resolution --project scratch --by operator --blocked-state-id <id> \

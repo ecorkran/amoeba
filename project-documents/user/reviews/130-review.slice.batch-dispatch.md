@@ -3,6 +3,8 @@ docType: review
 layer: project
 reviewType: slice
 slice: batch-dispatch
+targetKind: slice
+rulesSource: project
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
@@ -12,68 +14,56 @@ sourceDocument: project-documents/user/slices/130-slice.batch-dispatch.md
 aiModel: claude-sonnet-5-5
 aiProfile: sdk
 status: complete
-dateCreated: 20261020
-dateUpdated: 20261020
-reviewedSha: 44f1f1d056ee1f3a82bbe1a0ac09a79e1db05fda
-revision_number: 1
+dateCreated: 20261021
+dateUpdated: 20261021
+reviewedSha: 2d4f5f8d86baf1569865dbb6585974c75d8feaf6
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 3
-turns: 4
-promptTokens: 211048
-cachedTokens: 106396
-cacheWriteTokens: 104646
-completionTokens: 3796
-durationSeconds: 34.6
-costUsd: 0.330687
+toolCallsMade: 6
+turns: 7
+promptTokens: 460244
+cachedTokens: 357347
+cacheWriteTokens: 102887
+completionTokens: 8431
+durationSeconds: 78.1
+costUsd: 0.532418
 costBasis: provider
-runId: run-20261020-slices-plan-31ea04a8
-squadronVersion: 0.23.5
+squadronVersion: 0.23.6
 findings:
   - id: F001
     severity: concern
-    category: proportionality
-    summary: "Overweight design: per-item resume machinery that the design itself says can be cut"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D9 — The item resume: journaled, observed and recovered by its record"
+    category: architecture-boundaries
+    summary: "Reads and a decision inside Act break observe/decide/act"
+    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D4 (The checkout is still confirmed) and #D9 (Act, step 1)"
   - id: F002
     severity: concern
-    category: nfr
-    summary: "Per-item time bound has no specified value, and the NFR path is left open"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D7 — Time bound (126, D7)"
+    category: architecture-boundaries
+    summary: "`sq_batch_item` is a result record placed in the command journal"
+    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D10"
   - id: F003
     severity: concern
-    category: architecture-alignment
-    summary: "Arch edits are required, and the design departs from three arch rules"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#Special Considerations"
+    category: proportionality
+    summary: "The design carries several mechanisms that can be cut or merged"
+    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D6, #D7, #D11"
   - id: F004
     severity: concern
-    category: failure-modes
-    summary: "Checkout hold during a paused batch can strand the project indefinitely"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D4 — What batch entries do not do"
+    category: error-handling
+    summary: "Blocking the initiative node on a paused batch is under-specified"
+    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D6 (Only an ended batch fans out) and #D8 (A paused batch)"
   - id: F005
     severity: concern
-    category: error-handling
-    summary: "Failure modes for the new I/O paths are partly implicit"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D6 — Ingestion fans a batch out to its item steps"
+    category: dependency-risk
+    summary: "Selection drift is caught only after the money is spent"
+    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D3"
   - id: F006
-    severity: concern
-    category: dependencies
-    summary: "Selection prediction duplicates Squadron's predicate, with a known drift path"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D3 — A batch is issued only when its selection is exactly the driven set"
+    severity: note
+    category: documentation
+    summary: "Arch edits are present"
+    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md:100, 158"
   - id: F007
-    severity: concern
-    category: proportionality
-    summary: "Sections restate other documents"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#Interfaces Required"
-  - id: F008
     severity: pass
-    category: architecture-alignment
-    summary: "Layer boundaries and dependency direction"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#Architecture"
-  - id: F009
-    severity: pass
-    category: scope
-    summary: "Plan scope is covered, and the deferral is recorded"
-    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D1 — Only `slice_design` is batched, with `slices-plan`"
+    category: error-handling
+    summary: "Failure modes and NFRs for the new I/O paths are enumerated"
+    location: "project-documents/user/slices/130-slice.batch-dispatch.md#D9 (Failure modes table)"
 ---
 
 # Review: slice — slice 130
@@ -83,65 +73,61 @@ findings:
 
 ## Findings
 
-### [CONCERN] Overweight design: per-item resume machinery that the design itself says can be cut
+### [CONCERN] Reads and a decision inside Act break observe/decide/act
 
-The slice plan entry sizes this at 3/5. The design raises it to 4/5 and says the plan "did not count the store kinds and the item-resume observer". D9 adds a whole lifecycle: the `sq_item_resume` kind, an exit-code/record observation table, tracked and untracked child handling, a recovery observer, a `record_before` comparison, and an `ObserveItem` action. The "If the slice overruns" note says steps 1–4 are a complete, safe slice. Without step 5, `rerun` and `stop` already work through 127's `ended_run`. The plan entry does name per-item resume, so cutting it outright would drop assigned scope. The cut that fits the plan entry is a lighter version of it:
-- Launch the resume, observe it only through the report record changing, and escalate on any ambiguity.
-- Drop the tracked-child exit-code table, which has four rows and a stderr-tail path.
-- Drop the separate recovery observer.
-- Drop `ObserveItem`'s "record changed" skip logic as a separate action.
+The arch says Decide is pure and does no I/O. Act "issues each action as a journaled command … and nothing else." Observe reads the checkout state and CF status. The design puts two things in Act:
+- **D4:** `cf get --json` runs inside Act's `LaunchBatch`, before journaling. Its mismatch result blocks every item step with `checkout_unresolved`.
+- **D9:** `ResumeItem` reads the report in Act. If the record differs from the routed entry's `item_record`, it swaps the action for an `ObserveItem` result with `resume_skipped: record_changed`. That is a branch on the action chosen, taken outside Decide, and the arch forbids it.
 
-If the full mechanism stays, the design should say why a lighter one does not meet the requirement. The effort estimate should also be reconciled with the plan entry through a plan edit, not only in prose.
+D9's check is a reasonable guard against acting on stale state. Both reads belong in Observe, with the result recorded where Decide can see it, and D4 can reuse the checkout state Observe already reads each tick. The design should do one of two things:
+- Move both reads into Observe.
+- Name 127 D4's pre-poll pattern as the precedent, and state the exception the arch makes for it.
 
-### [CONCERN] Per-item time bound has no specified value, and the NFR path is left open
+### [CONCERN] `sq_batch_item` is a result record placed in the command journal
 
-The arch requires a per-pipeline time bound in the routing table, and an overrun always raises a project-scoped escalation. D7 sets `per_item: true` for `slices-plan`, multiplies by the number of predicted items, and says the value is "set at implementation from 129's observed `P4` durations". It also relies on `slices-plan` using different models than `P4` (D2), so `P4` durations are a weak proxy. No target is stated, so a batch of N undesigned slices has an unbounded detection delay until implementation. The design should state the derivation rule, or the interim value, in the slice document. It should also say what bound applies if 129 has no usable `P4` timing. The same applies to an item resume's bound ("the per-item value"), which is used for a different workload (one item).
+The arch defines journal kinds as commands with side effects, each with required keys, an observer and a re-issue rule. In v1 they are `sq_run` and `cf_write`. `sq_item_resume` is a real command, and a new kind for it is justified. `sq_batch_item` is never issued, never unresolved and never recovered. Its observer exists only to answer "a store defect".
 
-### [CONCERN] Arch edits are required, and the design departs from three arch rules
+The design uses the journal to make "a step's latest run entry" uniform through `RUN_RESULT_KINDS`. That is a coherent goal. But it widens the journal's meaning, and the design never says so, and the arch's list of kinds is not updated. Either:
+- Record the widening, by stating in the contract text and the arch that the journal also holds store-written outcome entries; or
+- Show why the existing run-result surface, with a per-item result stored on the step, can't carry the outcome.
 
-The design departs from the arch's explicit dispatch rules in three places, and the arch edits are deferred to "before merge":
-- **Pointer rule.** The arch says the Runner sets CF's pointers itself with a journaled `cf_write` before dispatching a node. D4 writes no pointer.
-- **Pointer-move rule.** The arch says a pointer moving away from a node with a run in flight raises a project-scoped escalation. D4 skips batch entries, and the design accepts that a person moving the pointer mid-batch goes undetected.
-- **Per-project config.** The arch lists only the merge policy there. D2 adds `design_dispatch`.
+### [CONCERN] The design carries several mechanisms that can be cut or merged
 
-The arch's Technical Considerations paragraph says "Which lifecycle steps may be dispatched as a batch, and the mapping from report items to nodes, are slice design's." That gives license for the step choice and the item mapping, but not for dropping the pointer and pointer-move guards. The design should make the arch edits a named task in the breakdown, not a note. It should also consider keeping the pointer-move check running for batches. The check could compare against Squadron's own movement, but the design does not show why that is infeasible, only that the batch moves the pointer itself.
+The design is large: a five-module subpackage, two store kinds, a new store transaction, a new observer, a new classify situation and two upstream asks. Some of it serves cases the shipped table doesn't use yet:
+- **`not_selected` and `not_reached`.** These are two of the four new outcome values. They route the same way (catch-all escalate) and allow the same decisions (`ended_run`: `rerun`, `stop`, and `handled`). One `no_record` outcome plus a reason in the payload meets every stated requirement.
+- **`flag_kind` as a routing input.** It adds seven values to the closed vocabulary, and D7 says no rule uses it: "table edits, made when evidence asks." The flag kind is already in the block payload and the item record. Add the input when a rule needs it.
+- **The unpredicted-but-linked-slice path.** D6 records a review and a ledger row for a slice nobody drove. That path is reached only after the selection prediction has failed. The mismatch escalation alone covers the PM's need. Detection would later record the review as an external one.
+- **A per-item time bound.** `per_item: true` and the multiplier change 126's bound function and table schema. Ten items give a 40-hour bound. A single configured batch bound would do until timing evidence exists.
 
-### [CONCERN] Checkout hold during a paused batch can strand the project indefinitely
+The design already says step 5 (item resume) can move to a follow-on. The arch requires per-item resume, so that step stays in scope. The four cuts above should happen first.
 
-A paused batch holds its checkout until a poll shows the run is no longer `paused`. The Runner never issues a whole-run resume (D8), so only the PM resuming by hand or removing the run releases it. This matches the arch's "a paused run stops that project until the PM handles it". But a batch pause is also the case where later items have no record. D8 then offers those items only `rerun` and `stop`, and `rerun` needs `NEEDS_POINTER` in the very checkout that is held. As written, `rerun` for an unreached item is offered but cannot run until the PM acts on the run outside the Runner. The design should say whether `rerun` is hidden or deferred while the checkout is held, and what the PM sees. As it stands, the hold and the offered decisions conflict.
+### [CONCERN] Blocking the initiative node on a paused batch is under-specified
 
-### [CONCERN] Failure modes for the new I/O paths are partly implicit
+A paused batch blocks the initiative node on `SQ_CHECKPOINT`, which the arch's "paused run becomes a blocked node" requires. The store allows one open blocked state per node, and the initiative node may already be blocked (for example by an orphan escalation or an initiative-level human step). The design doesn't say what happens to the pause block in that case, or how the item steps stay `IN_FLIGHT` while their parent is blocked. The failure mode needs an explicit rule. Either way, the design should state that a runnable step under a blocked initiative still dispatches and is observed.
 
-Several paths are enumerated well: report unknown, plan read failure with grace, and exit codes 0–3 for the resume. These gaps remain:
-- **Report read.** A report file that exists but is mid-write is unlikely, since the write is atomic. But a report read that exceeds the tick budget, or a very large `items[]`, has no stated handling. D6 says the plan read runs "under `TickBudget`" and says nothing about the report load or `record_batch_report`'s single transaction size. The transaction covers every item's verdicts and ledger rows.
-- **Resume child that hangs.** The tracked-child table has a row for "still running", but the bound is only "the per-item value" from D7, which is unset (see above). A resume that never exits has no stated end except the time-bound escalation.
-- **Host death during the report read between `record_batch_report` and acknowledgment.** This is covered by the crash test. It is named only in the success criteria.
+### [CONCERN] Selection drift is caught only after the money is spent
 
-Put an explicit failure table beside D6 and D9 (path, failure, handling) so none of these is implicit.
+D3 copies `undesigned_slices` from Squadron source, which isn't a published surface. The arch says the Runner depends on shapes, and that an unreadable shape escalates. This design is open about the risk: opt-in, labelled experimental, and `batch_selection_mismatch` plus S15. The mitigation is acceptable for a first release. But the arch's rule that hold stops anything new is only enforced after a paid, unattended run. The design should record a closing condition: remove the prediction, or make the batch default off, once S15 lands. It should also say that a drifted predicate (an extra or missing excluded status) is checked at every launch and not just at the first one.
 
-### [CONCERN] Selection prediction duplicates Squadron's predicate, with a known drift path
+### [NOTE] Arch edits are present
 
-`predicted_selection` re-implements Squadron's `undesigned_slices` from the status exclusions (`complete`, `deferred`, `deprecated`) and `designFile`. The arch says "The Runner does not gate on upstream version numbers; it depends on shapes". Here the Runner depends on Squadron's internal selection logic, which is not a documented public shape. D3 and D6 catch a mismatch after the fact (`batch_selection_mismatch`), and the work was already done, unattended and paid. This is a hidden dependency. Two ways to keep it in bounds without more mechanism:
-- State the pinned squadron-ai version in the opt-in documentation and make the contract test fail on a change to Squadron's status set.
-- Treat S15 (the item filter) as the proper fix and say that `design_dispatch: batch` should stay experimental until it lands.
+The `design_dispatch` entry under "Where each value lives" and the batch pointer rule are both in the arch. The arch's `dateUpdated` still reads 20261020, while the design says the edits were made on 20261021.
 
-### [CONCERN] Sections restate other documents
+### [PASS] Failure modes and NFRs for the new I/O paths are enumerated
 
-"Interfaces Required" reproduces Squadron's report schema, exit codes, run-shape rules and item-resume semantics at length, and "Consumes from Other Slices" lists nearly every function from 122–128. Squadron's `docs/PIPELINES.md` already documents the report and its handoff contract. Cite it and keep only the fields the Runner routes on (`index`, `outcome`, `flagKind`, `reviewFile`, `finalVerdict`, `unsavedParts`). The "Provides to Other Slices" and "Technology Choices" sections are also mostly restatement. This shortens the design and leaves less to keep in sync.
+The table covers:
+- the report read: missing, malformed, or slow;
+- the pre-fan-out plan read: failure or timeout;
+- a host crash mid-transaction;
+- an item-resume child that hangs, is refused, or is left unobserved after a restart.
 
-### [PASS] Layer boundaries and dependency direction
-
-The design keeps observe/decide/act intact: `selection.py` and `fan_out` are pure, `BatchPlanner` only emits actions, and Act journals before it launches. The batch is one `sq_run` entry observed by run id through 122's rules. Squadron is read only through its documented report and `sq runs wait`, and the internal run-state file stays unread. Routing still goes through the single table: the shipped table gains no rules, and the catch-all escalates every new outcome, which matches the arch's "before 140, every such point routes to a human". Store changes land first, as the arch requires of contract changes. The dependencies point from this slice to 122–129, and nothing upstream depends on it.
-
-### [PASS] Plan scope is covered, and the deferral is recorded
-
-The plan entry assigns `slices-plan` first, per-item mapping onto nodes, acting only at flagged items, and per-item resume with the decision. All four are present. The `tasks-plan` and `implement-plan` exclusions are justified (`implement-plan` is excluded because of 123 D4's sequential merge gate), and `tasks-plan` is added to the slice plan's Future Work as item 12, which the plan file confirms.
+Each has an explicit handling strategy. The arch's tick-deadline NFR is applied before the report read and the plan read. The `P4`-derived 240-minute time bound is restated with its source. Launch, confirmation and recovery of the batch run stay with 122 and 120, unchanged, and the dependency direction (batch code consuming 122–129) is correct.
 
 ### Run Digest
 
-- Response length: 9801 chars
+- Response length: 7041 chars
 - Response is newline-free: no
-- Tool calls made: 3
+- Tool calls made: 6
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -149,13 +135,13 @@ The plan entry assigns `slices-plan` first, per-item mapping onto nodes, acting 
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 4
-- Tokens — prompt / cached / cache write / completion / reasoning: 211048 / 106396 / 104646 / 3796 / not computed
-- Duration: 34.6 s
-- Cost: $0.33 (provider)
+- Turns: 7
+- Tokens — prompt / cached / cache write / completion / reasoning: 460244 / 357347 / 102887 / 8431 / not computed
+- Duration: 78.1 s
+- Cost: $0.53 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
