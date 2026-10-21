@@ -207,7 +207,7 @@ Status: decided
   1. A decision outside `ResolutionDecision` is `unknown_decision`.
   2. `no_decision` with a decision present is `decision_not_applicable`. Any other situation with no decision is `decision_required`. A bare resolution of a pipeline step would otherwise mean whatever the journal happened to imply.
   3. A decision outside the situation's set is `decision_not_applicable`.
-  4. `accept` on `paused_run` requires `checkpoint.is_loop` to be `true`. `false` or null is `not_at_loop`. This is the arch's rule: accept is offered only when the outcome document says the pause is at a loop.
+  4. `accept` on `paused_run` requires `checkpoint.is_loop` to be `true`. `false` or null is `not_at_loop`. This is the arch's rule: accept is offered only when the outcome document says the pause is at a loop. A pause whose `checkpoint.kind` is `usage_limit` (squadron#248) refuses `accept` with `usage_limit_pause` even at a loop, because the paused round never ran. Its answer is `retry` after `checkpoint.resets_at`.
   5. `retry` and `accept` require the checkpoint's `kind` and `paused_at` to be present. Without them the resume cannot be confirmed (D6), so either one null is `checkpoint_unknown`.
   6. `retry` at an `interactive_checkpoint` is `interactive_checkpoint`. A non-TTY resume takes exit there and pauses again, so the Runner cannot carry it out. The PM resumes it interactively, then submits `handled`.
   7. `instructions` with any decision other than `retry` or `accept` is `instructions_not_applicable`. A fresh run takes no instructions (arch, "The routing engine").
@@ -393,7 +393,7 @@ class ResolutionDecision(StrEnum): RETRY; ACCEPT; HANDLED; RERUN; STOP
 class Situation(StrEnum): NO_DECISION; PAUSED_RUN; COMPLETED_OUTCOME; ENDED_RUN; BEFORE_RUN
                           UNRESOLVABLE
 class ResolutionRejection(StrEnum): UNKNOWN_DECISION; DECISION_REQUIRED; DECISION_NOT_APPLICABLE
-                                    NOT_AT_LOOP; CHECKPOINT_UNKNOWN; INTERACTIVE_CHECKPOINT
+                                    NOT_AT_LOOP; USAGE_LIMIT_PAUSE; CHECKPOINT_UNKNOWN; INTERACTIVE_CHECKPOINT
                                     INSTRUCTIONS_NOT_APPLICABLE; UNRESOLVABLE
 class Continuation(StrEnum): RETRY; ACCEPT; OBSERVE
 class ResumeFailure(StrEnum): REFUSED; EXITED_BEFORE_CLAIM; NO_CLAIM_WITHIN_GRACE; SPAWN_ERROR
