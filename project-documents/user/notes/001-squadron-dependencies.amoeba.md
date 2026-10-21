@@ -155,5 +155,12 @@ None of these block Amoeba from starting initiative 100 (Substrate) or 120 (Runn
     - **Interactive review checkpoints** (`checkpoint:` on a step): with stdin not a TTY they take EXIT and pause again, so a non-TTY resume cannot get past them.
   - **S9:** delivered on Squadron main (ca9608b0, #243); released in squadron-ai 0.23.5 on 2026-10-20. S10 (#244), S11 (#245), S12 (#246) and S13 shipped in the same release.
   - New since September and relevant to 120: batch pipelines (`slices-plan`, `tasks-plan`, `implement-plan`) write a per-item report beside the run; one flagged item resumes with `sq run --resume <id> --item N --decision retry|accept`. A task marked `BLOCKED` pauses a run for a person (`awaits_human`). Runs can fail with `cost_cap` (`pipeline.max_cost_usd`).
+- **Status as of 2026-10-21** (sq-cf; squadron#248, on Squadron main, not yet released):
+  - New `checkpoint.kind` value `usage_limit`. When the Claude account's usage limit (session, weekly or overage) is used up, the run pauses at the failed step. Before this change, the step failed, and in a batch the item was flagged and every later item failed the same way (observed in run-20261020-slices-plan-31ea04a8: items 130 and 131).
+  - New `checkpoint.resets_at`: UTC ISO 8601 for `usage_limit`. It is null when the CLI gave no reset time, and null for every other kind.
+  - Recovery: after `resets_at`, a plain `sq run --resume <id>` reruns the paused step, or a loop at its round. A batch keeps its passed and accepted items.
+  - `sq run --resume <id> --flagged` retries every flagged and not_run item of a completed batch run, in order. It stops on the first item that is rejected, halts or pauses, and exits with the worst code, as `--item` does.
+  - Item resume now commits uncommitted edits to the batch's own item documents on the target, instead of refusing the dirty tree.
+  - Route on `kind`, never on `reason`. Arch 120 escalates an unknown kind, so nothing breaks before the Runner learns this one. A routing rule can later wait until `resets_at` and resume.
 - This register is a living document. As Amoeba's initiatives reach architecture (P2) and induce real failures (P6), new Squadron asks may appear — they get appended here with the same priority/blocking/gates treatment.
 - Correction logged: the concept and initiative plan assume tier can be *inferred* in v1; source shows `category` is free-form, so v1 inference relies on `severity`+heuristics and is lossier than implied. S1 is the clean fix. (Concept finding C should be read with this caveat.)
