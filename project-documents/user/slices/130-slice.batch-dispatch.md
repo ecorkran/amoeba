@@ -70,7 +70,7 @@ Developer value:
 **Excluded**
 
 - **`tasks-plan` and `implement-plan`** (D1). The `tasks-plan` case is added to the slice plan's Future Work.
-- **Plain `--resume` of a batch.** The Runner never issues it (D8).
+- **Resuming an ended batch whole** (plain `--resume` or `--flagged`). After fan-out, each item is decided on its own (D8). A paused batch is resumed whole, by 127's `retry`.
 - **Writing CF pointers for a batch.** Squadron's `each` step sets arch, slice and phase for every item (D4).
 - **Changing Squadron's pipeline params or models.** Squadron's `slices-plan` defaults apply, as 125 D5 does for `P4`.
 
@@ -195,6 +195,7 @@ Status: decided
 - **Ineligible** is not an error. `BatchPlanner` emits nothing, and 125's `DispatchPlanner` handles the current steps one by one. So a held slice in an otherwise driven initiative turns the batch off for that initiative, and the driven slices are designed by `P4`. A held slice is never designed by a batch.
 - `BatchPlanner` runs before `DispatchPlanner`. The steps it claims in a tick are passed on, and `DispatchPlanner` skips them, so the two planners never act on one step.
 - **The prediction can still be wrong.** CF can change between the plan read and Squadron's own read. That difference is caught at ingestion (D6) and reported, never guessed.
+- **The prediction copies an undocumented Squadron predicate.** `undesigned_slices` is Squadron source, not a published shape, so it can change without notice. `design_dispatch: batch` is therefore experimental until S15 (D11) removes the prediction. The operator guide says so, and names the squadron-ai version the excluded statuses were observed in. A drift is caught after the fact by `batch_selection_mismatch`, and the work it paid for is still recorded.
 - Rejected: launching whenever any driven slice is undesigned. Squadron would design the plan's undriven and held slices too, which breaks the arch's rule that hold stops anything new.
 
 ### D4 — A batch is one `sq_run` entry on the initiative node, with no pointer write
@@ -209,10 +210,10 @@ Status: decided
   - `slice_name` for attribution: batch ingestion begins with a plan read instead (D6);
   - 128's gate read: D3 point 6 excludes any check that needs the pointer.
 - **The checkout is still confirmed.** Act runs `cf get --json -p <cf project id>` in the checkout before journaling, and applies 125 D1's path and worktree comparison, the same function, without the index check. A mismatch blocks every item step with `checkout_unresolved`. It is a read, so it is not journaled.
-- **Batch coverage.** For each step named in an unresolved batch entry's `batch_items`, `dispatch_state` returns `IN_FLIGHT`. 125 D4's first hold rule (an unresolved `sq_run` with that checkout) already holds the checkout.
+- **Batch coverage.** For each step named in the `batch_items` of a batch run's latest entry, while that entry is unresolved or resolved `paused` (D6), `dispatch_state` returns `IN_FLIGHT`. 125 D4's first hold rule (an unresolved `sq_run` with that checkout) already holds the checkout.
 - **What batch entries do not do:**
-  - The pointer-move check (125, D11) skips them, because the batch moves the pointer itself, item by item.
-  - **The checkout hold is the arch's, unchanged.** A batch run that ended paused holds its checkout while the run is still paused, because nothing Squadron publishes says what state a paused batch leaves the tree in. The Runner never resumes the whole run (D8). So the run's state is polled under 122's pacing, as for a run in flight, and the hold is released on the first poll whose outcome is not `paused`. That happens when the PM resumes the run by hand, or removes it. Until then, as the arch says, a paused run stops that checkout until the PM handles it.
+  - **The pointer-move check (125, D11) is narrowed, not skipped.** The batch moves CF's slice pointer itself, item by item, so a move to a slice in the entry's `batch_items` is expected. A move to any other slice, or off the initiative, is someone else's and raises `pointer_moved` as it does for one run.
+  - **The checkout hold is the arch's, unchanged.** A paused batch is a paused run (D8), so it holds its checkout until a poll shows it is no longer `paused`, as any paused run does.
 - **The guard.** `LaunchBatch` names every item's step. 124's current-step guard checks each one, and refuses the action if any is not current.
 - Rejected: one `sq_run` entry per item step, all with the batch's run id. That means n entries in flight for one process, n polls of one run per tick, and n recoveries of one launch.
 
@@ -232,6 +233,7 @@ Status: decided
 
 ### D6 — Ingestion fans a batch out to its item steps
 Status: decided
+- **Only an ended batch fans out.** A batch whose outcome is `paused` is not fanned out. It is ingested as 125 ingests a paused run: its entry resolves with outcome `paused`, and the initiative node blocks on `SQ_CHECKPOINT` with the run id and checkout. Batch coverage (D4) counts the latest entry on a batch's run id when it is unresolved or resolved `paused`, so its items stay `IN_FLIGHT`. A continuation of a batch (127, D4) copies its `batch_items`, so the coverage carries over, and when the continued run ends with any other outcome, it is that entry that fans out (D8).
 - **Before recording,** batch ingestion runs one plan read of the initiative, 123's read and reconcile, under `TickBudget`. Each designed slice then has a `designFile`, so its node has the `slice_name` that attribution needs. If the read fails, the batch entry stays unresolved and the next tick tries again, as 125 D2 does for a failed read-back. After `launch_grace_seconds` has passed since the run's finish was first observed, the entry goes through `journal_escalate`.
 - **Matching items to steps.** By CF slice index, through `batch_items`:
 
@@ -283,7 +285,7 @@ Status: decided
   - `verdict`, `standing`, `severity` and `recurrence` come from `verdict_ids`, as 126 reduces them.
 - **An `accepted` item is a completed outcome with its loop's last verdict,** usually CONCERNS. That is what `P4` gives when `accept_if` is met, so the table treats both the same way. The shipped table already escalates CONCERNS, so nothing advances that the per-phase path would hold.
 - **The shipped table gains no rules.** 126 D4 requires advance and rerun rules to name `outcome: completed`. The catch-all escalates every new value, which is the arch's "before 140, every such point routes to a human". Rules routing `flag_kind` are table edits, made when evidence asks for them.
-- **Time bound** (126, D7). The table's bound for `slices-plan` is per item: its entry is marked `per_item: true`, and a batch's bound is that value times its number of predicted items. An item resume is bounded by the per-item value. The multiplication is in 126's bound function, the one place bounds are computed. The value is set at implementation from 129's observed `P4` durations.
+- **Time bound** (126, D7). The table's bound for `slices-plan` is per item: its entry is marked `per_item: true`, and a batch's bound is that value times its number of predicted items. An item resume is bounded by the per-item value. The multiplication is in 126's bound function, the one place bounds are computed. The per-item value starts at `P4`'s bound in the shipped table (126, D7: 240 minutes), because an item is one design with its review loop. If 129's write-up changes `P4`'s bound, the per-item value follows it. If it has no usable `P4` timing, the value stays at 240.
 
 ### D8 — Resolutions on items: per-item resume, never a whole-run resume
 Status: decided
@@ -301,8 +303,11 @@ Status: decided
   - `handled` leads to `ObserveItem`: read the item's current record and route it.
   - `rerun` is 125's fresh `P4` of that one slice, through `NEEDS_POINTER`. `P4` runs with `existing: keep`, so it revises the design the batch wrote. `slices-plan` would not reselect that slice, because a design file now exists.
   - `stop` is 127's.
-- **No whole-run resume.** A plain `sq run --resume` of a batch reruns every flagged, unrun and unreached item at once. That would carry out one decision across items the PM decided separately. A paused batch (rare in `slices-plan`) fans out its records (D6), and each item is answered on its own. Items with no record block on a human like any other item. Their allowed decisions are `rerun` and `stop` (`ended_run`), and the Runner never picks one itself.
-- **A `paused` item takes no `retry` or `accept`.** 127 D2 refuses `retry` at an interactive checkpoint, because a non-TTY resume takes the exit there and pauses again. An item record does not say which checkpoint paused it, so both decisions are refused with `item_paused`. The allowed decisions are `handled`, after the PM resumes the run by hand, and `rerun` and `stop`.
+- **A paused batch is a paused run, answered whole.** It is not fanned out (D6), so no item has been decided yet. The initiative node takes 127's `paused_run` situation unchanged, except that `accept` is refused with `decision_not_applicable`, because accepting one item's loop is an item decision.
+  - `retry` is 127's continuation: `sq run --resume <run_id> --decision retry`. Squadron continues the batch, keeping its passed and accepted items. This is the normal answer to a `usage_limit` pause (squadron#248: the batch pauses when the account's usage limit runs out, instead of flagging every later item). The PM answers after the checkpoint's `resets_at`. 127 D2's refusal at an interactive checkpoint still applies.
+  - `handled` and `stop` are 127's.
+- **An ended batch is never resumed whole.** After fan-out, each item has its own block and its own decision. A plain resume, or Squadron's `--resume --flagged`, would rerun every flagged item under one decision, across items the PM decided separately. Items with no record block on a human like any other item. Their allowed decisions are `rerun` and `stop` (`ended_run`), and the Runner never picks one itself.
+- **An item record with `flagKind: paused`** appears only in a paused run, which is not fanned out. If one reaches fan-out anyway, `retry` and `accept` are refused with `item_paused`, because a record does not say which checkpoint paused it.
 - **Instructions** pass through to `--instructions` as data, as in 127.
 
 ### D9 — The item resume: journaled, observed and recovered by its record
@@ -312,18 +317,12 @@ Status: decided
   1. Check the budget, then read the report. A report that is now `ReportUnknown` blocks the step on `HUMAN` with `batch_report_unknown`, and nothing is launched. If the record differs from the routed entry's `item_record`, the item has moved on since the PM decided, for example through a hand resume. An `ObserveItem` result is recorded instead, with `resume_skipped: record_changed`. A decision is carried out only on the record it was made for.
   2. Check the budget again, then journal.
   3. Launch detached, with 122's `launch()`, in the checkout: `[sq, run, --resume, <run_id>, --item, <index>, --decision, <d>]`, plus `--instructions <text>` when given. Item resume prints no `run_id=` line, so 122's line confirmation is not used. The entry is in flight from launch.
-- **Observation** each tick, at most once per `run_poll_interval_seconds`:
-  - **Child tracked** (launched in this lifetime):
+- **Observation** each tick, at most once per `run_poll_interval_seconds`, is by the item's record, with the exit code used only to fail fast:
+  - **The record differs from `record_before`:** finished. The new record is the outcome, whatever the exit code. A halted or re-flagged item routes on its new record like any other.
+  - **The record is unchanged and the tracked child has exited:** failed, with the exit code and the stderr tail. Squadron's codes are kept as data, never matched.
+  - **Otherwise:** in flight. After a restart there is no tracked child, so an unchanged record stays in flight until recovery decides it (below) or the time bound escalates it.
 
-    | Exit | Record | Result |
-    | --- | --- | --- |
-    | 0 or 1 | changed | finished. The new record is the outcome. |
-    | 0 or 1 | unchanged | failed, `resume_failure: record_unchanged` |
-    | 2 | unchanged | failed, `refused`, with the stderr tail |
-    | 3 | any | failed, `halted`, with the stderr tail. The record is kept in the result. |
-    | still running | — | in flight |
-
-  - **Child not tracked** (after a restart): a changed record is finished. Otherwise the entry stays in flight until recovery decides it (below).
+  A lighter design, observing only the record, was rejected: a refused resume (exit 2) never changes the record, so it would sit until the time bound, hours later, instead of failing on the next tick.
 - **Finished.** The entry resolves `completed` with the item entry result shape (D6), from the new record, with the same review selection (D7). The review list is the run's `reviews`, read with one `poll_run`, because the resumed item's reviews are appended there. The entry awaits routing.
 - **Failed.** The step blocks on `HUMAN` with `{reason: resume_failed, resume_failure, run_id, item, exit_code, stderr_tail}`, and the entry resolves `failed`. 127's rule holds: the result keeps the item's real record, so the situation is still `flagged_item`, and the PM can retry again.
 - **Recovery observer** (100's protocol, at start):
@@ -331,6 +330,18 @@ Status: decided
   - Otherwise: `Unknown`. The resume may still be running, or may have died with the host. Nothing Squadron publishes tells them apart, so the entry escalates, and the PM answers `handled` once the record shows the outcome, or answers `rerun` or `stop`.
 - **`review-producing`.** `sq_item_resume` joins `REVIEW_PRODUCING_KINDS`, so detection defers while it is unresolved. `sq_batch_item` is never unresolved and does not join.
 - **Squadron asks** (dependency register, D11): S14 asks for a supported sign that an item resume is in progress, for example a `resumeStartedAt` written when the resume claims the item. With it, the `Unknown` recovery case becomes exact.
+
+**Failure modes of the new I/O paths** (D5, D6, D9):
+
+| Path | Failure | Handling |
+| --- | --- | --- |
+| Report read | Missing, unreadable, wrong shape | `ReportUnknown`. Every item is `unknown` (D6), or the resume blocks before launch (D9). |
+| Report read | Slow or large | It is one local file read, not a subprocess, so the per-call timeout does not apply. A plan's `items[]` is one entry per slice in one plan, tens at most, and `record_batch_report` writes them in one transaction. The tick deadline is checked before the read. |
+| Plan read before fan-out | Fails or times out | The batch entry stays unresolved and the next tick retries. After `launch_grace_seconds`, `journal_escalate` (D6). |
+| `record_batch_report` | Host dies mid-transaction | Nothing is written. The next tick polls the same outcome and fans out once. Proven by the crash test. |
+| Item resume child | Hangs | It stays in flight until the per-item time bound escalates it (D7). The Runner never kills it. |
+| Item resume child | Refused or halted with no record change | Failed on the next tick, with the exit code and stderr tail. |
+| Item resume after restart | Record unchanged | Recovery answers `Unknown`, and the step escalates. |
 
 ### D10 — Store contract changes, landed before Runner code
 Status: decided
@@ -427,7 +438,7 @@ sq run --resume <run id> --item <slice index> --decision retry|accept [--instruc
   - With one of the three held, or undriven, or with `per_phase`, no batch is issued, and the driven slices are dispatched as `P4`.
   - A single undesigned slice is dispatched as `P4`.
   - Slices resolving to two checkouts, or a checkout not on the target, get no batch.
-- **In flight:** the covered steps are `IN_FLIGHT`, and no other slice dispatches in the checkout. A pointer moving between items raises no `pointer_moved`.
+- **In flight:** the covered steps are `IN_FLIGHT`, and no other slice dispatches in the checkout. A pointer moving between items raises no `pointer_moved`. A pointer moved to a slice outside `batch_items` raises it.
 - **Fan-out:**
   - Passed, accepted, flagged and `not_run` records each produce an `sq_batch_item` entry on the right step, with the outcome mapping of D7.
   - A passed item with a PASS review advances under the shipped table. Every other outcome escalates, with `flag_kind` in the decision's inputs.
@@ -438,14 +449,16 @@ sq run --resume <run id> --item <slice index> --decision retry|accept [--instruc
 - **Crash:** killed between the batch's finish and `record_batch_report`, the next tick fans out once. Each item has one entry and each verdict is recorded once.
 - **Item resume:**
   - `retry` on a flagged item issues exactly the Squadron command of the API Contracts, in the checkout, with `--instructions` when given.
-  - Exit 0 with a passed record routes `completed`. Exit 1 routes `flagged` again. Exit 2 or 3 blocks with `resume_failed`.
+  - A changed record routes on its new outcome, whatever the exit code: a passed record routes `completed`, and a re-flagged one routes `flagged`. An exit with the record unchanged blocks with `resume_failed` on the next tick.
   - `accept` on a `step_failed` item is rejected `not_review_unresolved`, and nothing launches.
   - A record changed by hand before the act is observed, not resumed.
   - After a `SIGKILL` of the resident process mid-resume:
     - a changed record is finished;
     - an unchanged record escalates as `Unknown`, and `handled` then routes the record.
 - **Paused batch:**
-  - `retry` and `accept` on a `paused` item are rejected with `item_paused`.
+  - A batch that pauses (for example `usage_limit`) is not fanned out. The initiative node blocks on `SQ_CHECKPOINT`, and its items stay `IN_FLIGHT`.
+  - `retry` on it issues `sq run --resume <run_id> --decision retry`. When the continued run ends, its entry fans out once, and the paused entry writes no items.
+  - `accept` on it is rejected `decision_not_applicable`.
   - The checkout stays held until a poll shows the run is not `paused`.
 - **Rerun** of a flagged item launches `P4` for that one slice.
 - **Pruning** keeps a batch run while any item step is not done.
@@ -523,7 +536,7 @@ Steps 1–2 use the stub `sq` and `cf`. Step 3 runs one real `slices-plan` batch
 
 ### Development Approach
 
-Relative effort: 4/5. This is one above the plan's 3, because the plan entry did not count the store kinds and the item-resume observer. Each step leaves the suite green:
+Relative effort: 4/5, as the plan entry now says. Each step leaves the suite green:
 
 1. Store changes (D10): the kinds, `batch_items`, `record_batch_report`, `RUN_RESULT_KINDS` with every consumer switched, and pruning.
 2. The report model and loader (D5), with captured fixtures and the stub `sq` `slices-plan` mode.
@@ -537,10 +550,10 @@ Relative effort: 4/5. This is one above the plan's 3, because the plan entry did
 ### Special Considerations
 
 - **Slice plan Future Work** gains "Batch `tasks` with `tasks-plan`" (D1), with this design.
-- **Arch edits, required before merge.** These record where batches depart from the arch's dispatch rules (D2, D4):
+- **Arch edits, made with this design** (20261021). They record where batches differ from the arch's dispatch rules (D2, D4):
   - "Where each value lives" lists `design_dispatch` under per-project config, beside the merge policy.
   - The pointer rule says a batch writes no pointer, because Squadron's `each` step sets it for every item.
-  - The pointer-move rule says it does not apply to a batch. Accepted cost: a person moving CF's pointer during a batch goes undetected.
+  - The pointer-move rule says that during a batch, a move among the batch's items is expected, and any other move still escalates.
 - **Operator guide.** The "Batch design" section says that `slices-plan`'s params cannot be probed at start. A launch exit 2 from an upstream param change therefore stops the resident process on the first batch, by 122 D6's rule, and the fix is to turn batching off for that project.
 - **Spend.** A batch is a paid, unattended run across a plan. It needs the project's opt-in and a PM drive, and pause stops new batches at once. Squadron's `max_cost_usd` stops a batch that crosses it, and its items then fan out as `not_reached`.
 - **Security.** Report files are parsed as data, and `reason` and `--instructions` text are never interpreted. The instructions are one argv element, never passed through a shell.

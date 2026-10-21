@@ -18,7 +18,7 @@ interfaces:
 - 131
 - 140
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 37
 promptTokens: 2779161
@@ -166,7 +166,7 @@ Status: decided
   - After restart, recovery leaves its entry unresolved, the Runner observes it, and ingests its outcome.
   - The step has exactly one `sq_run` entry for that attempt.
   - The unit still reaches `done`.
-- If P6 finishes before the kill, the PM repeats the SIGKILL during the unit's next in-flight run, such as a P6 rerun. If no run remains, the write-up records the miss.
+- If P6 finishes before the kill, the PM repeats the SIGKILL during the unit's next in-flight run, such as a P6 rerun. A miss is not a pass. If no run remains in flight, the crash criterion is unmet and the slice is not done: the PM drives a second unit chosen by D1 and lands the SIGKILL during its P6. The PM can make a miss unlikely by sending the kill soon after P6's launch is confirmed.
 - A restart made to apply a fix (D9) also counts, and is recorded the same way. The SIGKILL is still required, because a clean stop does not test recovery.
 - Rejected: restarting at a random point. A crash between launch and confirmation is 122's crash proof. Repeating it against a real run adds cost and no new coverage.
 
@@ -192,7 +192,7 @@ Status: decided
   - the decision's rule id, inputs and `judge_eligible`, or the fault kind for a block with no decision;
   - what the PM did: the resolution and its decision, or a by-hand action, from the D4 log;
   - classification: `right`, `wrong: routable` (an escalation the table could have routed), or `wrong: misrouted` (a route the PM disagreed with);
-  - for a wrong stop, one proposal: a table edit (the rule as YAML), a follow-on slice (130, 131, or a new Future Work entry), or a code issue.
+  - for a wrong stop, one proposal: a table edit (the rule as YAML), a follow-on slice (130, 131, or a new Future Work entry), or a code issue. A stop with no decision record (a fault) cannot be fixed by a table edit, because faults escalate before the table is consulted and there are no recorded inputs to fixture. Its proposal is a follow-on slice (a retry class is Future Work 2) or a code issue.
 - **Further sections:**
   - **Answers to deferred questions:** issues #12 and #13, Future Work 2, and whether 126's time bounds (P4/P5 240 min, P6 720) fit the observed run lengths.
   - **Evidence appendix:** the `--json` exports the rows were built from, the Squadron, CF and Amoeba versions observed, and every Amoeba commit the process ran on.
