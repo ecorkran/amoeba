@@ -11,7 +11,7 @@ interfaces:
 - 129
 - 160
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 48
 promptTokens: 6280494
@@ -74,7 +74,7 @@ User value. A PM decision on a stuck node is carried out without the PM running 
 - **The store and CF gate disagreement after an accept.** It needs a CF gate read, which is 128's. This slice makes an accepted outcome identifiable, and 128 compares it with CF's gate (D7).
 - **Batch item resumes (`--item`)** belong to 130.
 - **Pruning's held set.** Pruning holds runs by node `sq.run_id`, which the Runner never sets, so a run paused under the Runner can be pruned while its resolution is pending. That is a defect in the existing 100/125 integration, tracked as issue #14. Until it is fixed, a pruned run surfaces here as `run_missing` (D6), which blocks the node and launches nothing. Issue #14 must be fixed before the Runner is pointed at a real project (129).
-- **`amoeba inspect resolutions`,** a listing of resolved blocks. Submitters read the outcome through `blocked_state(id)`, and `inspect blocked` gains `blocked_state_id`. Deferred to issue #16, for 128's or 129's use.
+- **`amoeba inspect resolutions`,** a listing of resolved blocks. Submitters read the outcome through `blocked_state(id)`, and `inspect blocked` gains `blocked_state_id`. Deferred to issue #16, which plan entry 10 (129) adds.
 - **Resuming a failed run.** Squadron can resume a failed run, but a failed run releases its checkout (125, D4), so another slice may have changed the branch since. Listed under Future Work.
 - **Judge results (140).** They will land through the same resolution slot later.
 - **Killing a run**, under any condition.
@@ -130,7 +130,7 @@ amoeba/store/
   schema/012_resolution_decisions.sql   NEW
   _block_writer.py / blocking.py / inbox.py / models.py   CHANGED
 amoeba/inbox/   CHANGED  resolution payload gains decision and instructions
-amoeba/inspection/   CHANGED  resolutions listing; blocked gains blocked_state_id
+amoeba/inspection/   CHANGED  blocked gains blocked_state_id
 ```
 
 ### Data Flow
@@ -250,7 +250,7 @@ Status: decided
      - **The budget is spent:** nothing is called or written. The step stays `RESUME` or `REOBSERVE`, and the action is decided again next tick, as 122 does for any unissued action.
      - **The poll fails or times out** (`PollFailure`): nothing is written. It is recorded as 122's project-scoped `run_observation_failed`, and the step stays `RESUME` or `REOBSERVE` for the next tick.
      - **`not_found`:** the run is missing. The entry is journaled and resolved `failed` at once, with `resume_failure: run_missing`, and the step blocks on `HUMAN`. Nothing is launched and nothing is relaunched, as the process contract requires.
-     - **For `retry` and `accept`,** the run must still be paused with the `paused_at` the continued entry recorded. Anything else means the run has left the pause the PM decided on, for example because the PM resumed it by hand. The entry is journaled as an observation, with `resume_skipped: run_not_at_pause`, and nothing is launched. A decision is carried out only on the pause it was made for.
+     - **For `retry` and `accept`,** the run must still be paused with the `paused_at` the continued entry recorded. Anything else means the run has left the pause the PM decided on, for example because the PM resumed it by hand. The resume is withheld, and the entry is journaled as an observation, with continuation `observe` and `resume_skipped: run_not_at_pause`. Nothing is launched. A decision is carried out only on the pause it was made for. This is the arch's precondition check: Act withholds the command and records what it read ("Observe, decide, act"). The entry takes the `observe` path below, so it needs no new dispatch state and no new confirmation rule.
      - **For `observe`,** the entry is journaled and confirmed. Its next poll is its outcome, whatever it shows, including the same pause.
   2. **Check the budget again, then journal the entry.** The run id is the continued one, never minted. If the budget is spent, nothing is written and the action waits for the next tick. This check is the launch's check: only the journal write, a store call, runs between it and `Popen`.
   3. **Launch** with 122's detached launch: argv `[SQ_EXECUTABLE, "run", "--resume", <run_id>, "--decision", <retry|accept>]`, plus `"--instructions", <text>` when the resolution has instructions. It runs in the checkout, with stdin from `/dev/null` and logs named by the entry's id. The text is one argv element, never passed through a shell.
@@ -460,7 +460,7 @@ type Action = LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | Obser
 - Migration `012` is tested on a populated v11 store, and `pending_resolutions` uses its partial index, which an `EXPLAIN QUERY PLAN` test asserts.
 - `classify`, `judge_resolution`, `dispatch_state` and the confirmation rule have table-driven tests over every row of D2, D3, D5 and D6.
 - Every `sq` call in the continuation path goes through `TickBudget`.
-- The contract documents under Provides are updated, and the CHANGELOG has an entry.
+- The contract documents under Provides are updated, and the CHANGELOG has an entry. Both state the change for existing submitters: a resolution of a pipeline step with no decision is now rejected `decision_required` (D2, check 2).
 
 ### Integration Requirements
 
@@ -538,24 +538,7 @@ Relative effort: 3/5. The plan said 2. The resume confirmation and the recovery 
 
 ### Special Considerations
 
-- **Plan and arch edits,** made with this design:
-  - **Plan entry 8 (127):**
-    - Stop parks the node as a block (D3).
-    - `handled` journals an observation (D4).
-    - Dispatch faults resolve with `rerun` or `stop` (D2).
-    - The gate-disagreement criterion moves to entry 9 (D7).
-  - **Plan entry 9 (128):**
-    - It records the store and CF gate disagreement after an accept, as a criterion required before 128 merges (issue #15). This is a dated plan change (20261020), recorded in the plan's Notes.
-    - Its pre-dispatch checks apply to resumes (D7, Provides).
-  - **Plan Future Work:** resuming a failed run (Technical Scope).
-  - **Arch, "Resolution and resumption":**
-    - Stop is held as a block.
-    - The gate disagreement is detected by 128's gate read.
-    - A resume is confirmed by state, because Squadron prints no line for it (D3, D6, D7).
-    - `retry` is refused at an interactive checkpoint, because a non-TTY resume cannot pass it (D2, rule 6).
-    - Any other blocked pipeline step can be rerun or stopped (D2).
-  - **Arch, "Observe, decide, act":** a continuation that only observes is journaled, because it owns the run while observed (D4).
-  - **Arch, tick order** in "The tick never waits" and "The loop, per tick, per project": resolutions are acknowledged after intents and before Observe (D3).
+- **Plan and arch edits.** None are pending. The plan (entries 8 and 9, the 20261020 Notes entry, Future Work 11) and the arch already carry this design's decisions.
 - **Abandoning a paused run.** The run's checkout stays held while the run is paused, including after `stop`. To free it, the PM removes or finishes the run in Squadron and submits `handled`. A missing run resolves `run_missing`, which releases the checkout, and `rerun` or `stop` is then allowed. A pause whose work the PM finished by hand loops back to the PM through `handled`, until "mark a step done" (Future Work 8) exists.
 - **Spend.** `retry` on an exhausted loop is one paid review round, and only a PM decision issues it. No route in the table resumes a run in v1.
 - **Security.** Instructions are passed as one argv element, with no shell. They are visible in the process list and stored verbatim in the store, so the inbox contract repeats the no-secrets rule for them. Journal parameters hold ids and paths only.

@@ -195,6 +195,7 @@ Status: decided
   - for a wrong stop, one proposal: a table edit (the rule as YAML), a follow-on slice (130, 131, or a new Future Work entry), or a code issue. A stop with no decision record (a fault) cannot be fixed by a table edit, because faults escalate before the table is consulted and there are no recorded inputs to fixture. Its proposal is a follow-on slice (a retry class is Future Work 2) or a code issue.
 - **Further sections:**
   - **Answers to deferred questions:** issues #12 and #13, Future Work 2, and whether 126's time bounds (P4/P5 240 min, P6 720) fit the observed run lengths.
+  - **Gate disagreements:** every `cf_gate_accept_disagreement` check record on the unit (`amoeba inspect checks --node <slice>`), so the PM sees each case where the store accepted what CF's gate still fails (128, D7).
   - **Evidence appendix:** the `--json` exports the rows were built from, the Squadron, CF and Amoeba versions observed, and every Amoeba commit the process ran on.
 - The classification is the PM's judgment. The Architect drafts each row from the evidence, and the PM confirms or changes the classification. This is the slice plan's definition of a wrong stop ("a human found routable", "a human disagreed with"), not an added approval step.
 - Rejected: storing classifications in the store. They are one-off analysis with no consumer. The routing table and the slice plan are where they take effect.

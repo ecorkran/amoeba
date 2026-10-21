@@ -12,7 +12,7 @@ interfaces:
 - 129
 - 140
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 25
 promptTokens: 2398881
@@ -187,7 +187,7 @@ Status: decided
   - `node_kind` is not an input. Every routed outcome is on a step node (125, D7), so it would be constant, and `step` already tells the levels apart.
   - Finding severity is one input (the highest), and recurrence counts only `concern` and `fail` findings. A note recurring is not a reason to route differently.
   - `recurrence` uses `recurring`, `new`, `clear` and `none`, not the arch's `new` / `recurring` / `gone`. Those are per-finding tags in 104's `finding_changes`. A routing input needs one value per outcome, so the tags are folded over `concern` and `fail` findings as above. `gone` findings (previous ones now absent) do not change the route, and an outcome where every finding is gone reduces to `clear`.
-  - Attempt count is recorded with every decision but is not a matchable input. The arch's grammar already makes the attempt limit a route parameter, which D4's eligibility applies.
+  - Attempt count is not a matchable input (see "Attempts" above).
   - Gate state and check standing are added by 128 (D3).
 
 ### D2 — The table file: one YAML file for every project, versioned by digest
@@ -454,7 +454,7 @@ Relative effort: 3/5. Suggested order. Each step leaves the suite green.
 - **Plan and arch edits,** made with this design:
   - Plan entry 9 (128): it registers the `gate_state` and `check_standing` inputs (D3).
   - Plan Future Work: per-project routing tables (D2).
-  - Arch, "What the routing table matches on": node kind is not an input, gate state and check standing arrive with 128, and recurrence is `new` / `recurring` / `clear` (D1, D3). The table format is YAML, one table for every project (D2).
+  - Arch, "What the routing table matches on": node kind and attempt count are not inputs (the attempt limit is a route parameter), gate state and check standing arrive with 128, and recurrence is `new` / `recurring` / `clear` (D1, D3). The table format is YAML, one table for every project (D2).
   - Arch, "One edit point for routing" and the time-bound sentence: an overrun raises a project-scoped escalation, the one fixed response outside the table, and writes no decision record, because the entry's one decision belongs to its outcome. The payload carries the bound and the table version as evidence (D7).
 - **Spend.** Rerun is the only route that launches a paid run without a PM, and it is bounded by `max_attempts`. The shipped table reruns at most once per step.
 - **Security.** Decision inputs and escalation payloads hold vocabulary values, ids and paths only. Table content is stored verbatim, so the process contract repeats the rule that no secrets go in it.

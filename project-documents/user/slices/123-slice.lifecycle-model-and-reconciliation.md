@@ -13,7 +13,7 @@ interfaces:
 - 128
 - 129
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 35
 promptTokens: 3530572
@@ -70,7 +70,7 @@ Developer value. Amoeba's tree mirrors the project's real plan and stays in step
   - `CFReference.index` (`nodes.cf_index`), with a partial unique index;
   - `amoeba inspect nodes` shows the index.
 - A new setting, `plan_read_interval_seconds`, with the flag `--plan-read-interval`.
-- New fault kinds `plan_read_failed` and `lifecycle_orphan`. The new Action `BlockHumanStep`.
+- New fault kinds `plan_read_failed`, `lifecycle_orphan` and `plan_status_unknown`. The new Action `BlockHumanStep`.
 - A change to 122's `cf` probe set (D11).
 - A guard test that only `amoeba.runner.lifecycle.reconcile` calls `create_node` in `src/amoeba`.
 - Contract text in `docs/store-contract.md`, `docs/context-forge-contract.md`, `docs/process-contract.md` and `docs/substrate-guide.md`.
@@ -132,7 +132,7 @@ amoeba/runner/
   tick.py          CHANGED  plan read and reconcile after in-flight polling; tree in view
   decide.py        CHANGED  ProjectView.tree; Action += BlockHumanStep
   act.py / tick    CHANGED  BlockHumanStep applied as one store.block (D9)
-  faults.py        CHANGED  FaultKind += plan_read_failed, lifecycle_orphan
+  faults.py        CHANGED  FaultKind += plan_read_failed, lifecycle_orphan, plan_status_unknown
   probes.py        CHANGED  full models; slices probe dropped (D11)
 amoeba/store/
   schema/010_node_cf_index.sql   NEW
@@ -191,7 +191,7 @@ Status: decided
 Status: decided
 - The attribution rule (evidence contract) attaches a review to the one slice node whose `cf.slice_name` equals the review's frontmatter `slice`. So 123 keeps `slice_name` equal to CF's slug for that slice, taken only from CF:
   - **`designFile` present.** Use the file-name stem between `{index}-slice.` and `.md`. The `nnn-slice.{name}.md` form is CF's file-naming convention. A `designFile` without that form leaves `slice_name` null, logs a WARNING naming the file, and raises nothing.
-  - **No `designFile`:** `slice_name` is null, and no review can be attributed to the node yet. A slice gets a design file only through P4, which 125 dispatches after writing CF's pointer. 125 reads that pointer back from `cf status`, and sets `slice_name` from CF's `activeSlice.name` before it launches, through `update_cf_reference`.
+  - **No `designFile`:** `slice_name` is null, and no review can be attributed to the node yet. A slice gets a design file only through P4, which 125 dispatches after writing CF's pointer. 125 reads that pointer back with `cf get --json` in the checkout, and sets `slice_name` from the `fileSlice` stem before it launches (125, D2), through `update_cf_reference`.
   - Amoeba never builds a slug from a slice name itself. Doing so would duplicate CF's `slugify` and drift from it.
 - **On a rename,** `slice_name` and `artifact_path` are updated, and the node is unchanged. Later reviews attribute to it under the new slug. Earlier reviews were already recorded against its node id.
 - **On orphaning** (D5), `slice_name` and `index` are cleared together. That stops a renumbered slice's new node and its orphan from both matching one review, which would leave the review unattributed. The former values are kept in the orphan escalation's payload.
@@ -211,6 +211,12 @@ Status: decided
   | `integration` | P7 and host cutover | initiative | human | the initiative is checked (`isChecked`) |
 
   "CF reports the slice complete" means `status == complete` or `isChecked`, and it is defined once as a predicate.
+- **`merge` and CF's checkbox.** The arch says git, not CF's checkboxes, shows a merge. In 123 the only completion for `merge` is CF's, so a PM who checks slice n in CF without merging makes slice n+1's `implementation` ready (D4). This window is accepted, for three reasons:
+  - Checking the slice in CF is the PM's own statement that it is finished.
+  - 128 adds the git observation, and keeps CF's completion as a second path, which also covers a squash merge git cannot observe (128, D9).
+  - 128's pre-dispatch branch check is the backstop. An unmerged `P6` leaves slice n's branch checked out, which is neither the target nor slice n+1's branch, so slice n+1's `P6` blocks instead of launching (128, D6).
+
+  Until 128 lands, nothing checks the tree. 129, the first proof, runs with 128 in place.
 - **Executors.** `Executor` has two members, `pipeline` and `human`. The arch also names "a CF write", but in v1 a pointer write is part of dispatching a pipeline step (125) and is not a step of its own, so no step has that executor. An executor nothing used would be dead vocabulary. **This departs from the arch's step-map sentence and plan entry 4**, and both are updated to say so.
 - **Host cutover** is folded into `integration`. The arch groups them in one row ("Phase 7, and host cutovers"), and not every initiative has a cutover. A separate step would put a human step in front of every initiative.
 - **No gate nodes in v1.** P4, P5 and P6 each review inside their own run. CF's gate (`pending-review`, `review-failed`, `pending-decision`) is a dispatch check and a routing input in 128, not a step. **This departs from the arch's "a gate node where CF or the routing table requires a review"**, which the arch is updated to say. If 128 finds that it needs a gate step, it adds a row to this map, which is the one place steps are defined.
@@ -298,23 +304,26 @@ Status: decided
   - The PM can avoid that by driving only from where the slice actually stands. A way to mark a step done is listed under Future Work.
   - The first proof uses an unstarted unit (129), so this does not affect it.
 - **Slices without steps.** A slice whose CF status is `deferred` or `deprecated` gets a slice node and no step children. Steps are added on the first read that reports any other status. A slice that already has steps keeps them when CF later reports it deferred. The PM stops it with a hold (124).
-- **An unknown status:** `degraded`, or a value outside the vocabulary. The slice node gets its four steps, all `runnable` because "reported complete" is false, and is blocked on `HUMAN` with payload `{fault_kind: plan_read_failed, index, status}`. Following "unknown escalates", the value is never read as a default. While the slice is blocked, its steps are not ready (D4). Its `merge` is not done, so later slices' `implementation` waits. Nothing is skipped. If the PM resolves the block while the status is still unknown, it is blocked again on the next read.
+- **An unknown status:** `degraded`, or a value outside the vocabulary. The slice node gets its four steps, all `runnable` because "reported complete" is false, and is blocked on `HUMAN` with payload `{fault_kind: plan_status_unknown, index, status}`. Following "unknown escalates", the value is never read as a default. This is a node fault (D8), not `plan_read_failed`: the read succeeded, and the fault belongs to one slice. While the slice is blocked, its steps are not ready (D4). Its `merge` is not done, so later slices' `implementation` waits. Nothing is skipped. If the PM resolves the block while the status is still unknown, it is blocked again on the next read.
+- Rejected: only logging an unknown status and leaving the slice without steps. A slice without steps is not eligible (D4), so later slices' `implementation` would silently skip past it.
 
 ### D7 — When the plan is read
 Status: decided
 - Plan documents can change without `projects.json` changing, so the feed alone cannot show a new slice. Each link is therefore read on an interval, and also early on a pointer change:
-  - **Interval.** A link is due when `plan_read_interval_seconds` (default 30.0, defined in `settings.py`) has passed since its last complete read. Every link is due on the first tick of a lifetime.
+  - **Interval.** A link is due when `plan_read_interval_seconds` (default 30.0, defined in `settings.py`) has passed since its last complete read. Every link is due on the first tick of a lifetime. A plan edit does not change `projects.json`, so a new slice appears on the next plan read, not the next tick. **The plan's "appears on the next tick" is reworded to "appears on the next plan read".**
   - **Early read on a pointer change.** At the start of observe, the Runner reads `latest_cf_snapshots(project, link)`, which is a store read and not a subprocess. If the latest observed snapshot's id differs from the one last seen and its `changed` list is non-empty, the link is due now. A failed snapshot (`changed` null) does not move the latest observed row. A recovery with `changed: []` is seen but triggers nothing. **The plan's "triggers no reconciliation" is reworded to "triggers no early plan read"**, because the interval read still runs.
 - **Polling comes first.** The plan read runs after in-flight runs are polled, so a run's poll is never cut off by a plan read. A plan read only uses budget that polling left. Its cost is bounded too: each call is about 0.1 s, against a 5 s deadline.
-- **A read that never fits.** A cut-off read applies nothing and starts again on the next tick. If a link's due read has not completed within `plan_read_interval_seconds` of becoming due, it raises `plan_read_failed`, naming the link and how many calls the read needs. That escalation follows D8's closure rule. Plan edits are then not reflected until a read completes, and the PM sees why.
+- **A cut-off read** applies nothing, logs a WARNING naming the link, and starts again on the next tick. It raises no fault.
+  - Rejected: a separate "starved read" escalation with its own timer. Runs are polled at most once per run poll interval (122, D10), so most ticks leave the read the whole budget, and a read needs well under a second. The timer, its message and its closure are state for a case not yet observed. If the first proof shows reads starving, it is added then.
 - **Which projects are read: every project with a CF link that passed its probe.** The arch's fixed set reads only projects that are driven or have a run in flight. But 124's intents target initiative and slice nodes, so those nodes must exist before anything is driven. Reads cost about 0.1 s each (measured 20261020), so a project with six initiatives costs under a second every 30 s. **This is a departure from the arch's Observe sentence**, which the arch is updated to say.
-- **No `cf status` read.** Nothing in 123 uses pointers or gates. 125 reads `cf status --worktree <id>` when it dispatches, and 128 reads the gate fields. The plan's entry 4 is edited to match. `cf status -p` without `--worktree` reports only project-level pointers, which are empty on a worktree-scoped project, and `--worktree` accepts the worktree id (both observed 20261020). These are recorded in the context-forge contract for 125.
+- **No `cf status` read.** Nothing in 123 uses pointers or gates. 125 reads no `cf status`: its pointer read-back is `cf get --json` run in the checkout, and checkouts come from the CF snapshot (125, D1, D2). 128 reads the gate fields. The plan's entry 4 is edited to match. `cf status -p` without `--worktree` reports only project-level pointers, which are empty on a worktree-scoped project, and `--worktree` accepts the worktree id (both observed 20261020). These are recorded in the context-forge contract for 125.
 
 ### D8 — Plan-read faults
 Status: decided
-- `FaultKind` gains two members:
-  - `plan_read_failed`: a CF read timed out, exited non-zero without a CF error document, did not parse into the models, or broke a D5 safety rule. It is also raised when a due read did not complete within `plan_read_interval_seconds` (D7).
+- `FaultKind` gains three members:
+  - `plan_read_failed`: a CF read timed out, exited non-zero without a CF error document, did not parse into the models, or broke a D5 safety rule.
   - `lifecycle_orphan`: the payload kind of an orphan block (D5). Defined in the same vocabulary, so payloads use one set of names.
+  - `plan_status_unknown`: the payload kind of an unknown-status block (D6). It is node-scoped: it is closed only by resolving the block, and it is not deduplicated per project. `plan_read_failed` stays project-scoped only.
 - **An error document from `cf list slices <i>`** (exit 1, `error: true`) means the initiative's slices are unavailable:
   - **If the initiative has no linked slices,** this is the normal no-plan state: `slice_plan` is not complete, and no fault is raised.
   - **If it has linked slices,** a plan that was readable no longer is, and this raises `plan_read_failed`.
@@ -327,7 +336,8 @@ Status: decided
 - A human step is `blocked_on_human` from the moment it becomes current, where current means ready and, from 124, driven. `HumanStepPlanner` emits `BlockHumanStep(node_id)` for each ready step whose executor is human. Act applies it as one `store.block(node_id, kind=HUMAN, context="<step> is a human step", payload={step, cf_project_id, index})`. Here `index` is the initiative's or slice's CF index.
 - **Not journaled.** The arch says Act issues each action as a journaled command. Journaling exists to recover an external side effect across a crash. A single store transaction has none, so it needs no recovery. **This is recorded in the arch** as "store-only actions are applied in one transaction and not journaled".
 - **Why a planner, not reconcile.** Reconcile only projects what CF says. Choosing to put a person on a step is a decision about the next action, and drive (124) has to filter it like any dispatch.
-- **Not in the production planners until 124.** Without drive, every current human step on every linked project would escalate as soon as the project is linked, for example `architecture` on each unstarted initiative. 124 adds the planner to the production tuple together with the drive filter. In 123 it runs only under tests, as 122's test planner does. The plan records this: entry 4's human-step criterion is proven under a test planner, and entry 5 (124) gains the registration and a criterion for it.
+- **Reconcile's own blocks are faults, not decisions.** An orphan (D5, `lifecycle_orphan`) and an unknown status (D6, `plan_status_unknown`) are cases where CF reported something the Runner cannot project. The arch's fault rule records such a fault against the affected node as a `blocked_on_human` escalation, including one found while observing, such as "a `cf` that returns unexpected JSON". Neither chooses a next action, and neither depends on drive. Like any fault block, each is one store write in Observe and is not journaled.
+- **Not in the production planners until 124.** Without drive, every current human step on every linked project would escalate as soon as the project is linked, for example `architecture` on each unstarted initiative. 124 adds the planner to the production tuple together with the drive filter. In 123 it runs only under tests, as 122's test planner does. It stays one small planner with no abstraction around it. 124 registers it and 128 extends it for the merge step (128, D9). The plan records this: entry 4's human-step criterion is proven under a test planner, and entry 5 (124) gains the registration and a criterion for it.
 - **When a person resolves a human step without doing the work,** the node becomes runnable. If the step is still current and driven, it is blocked again on the next tick. That is the intended "still waiting on you". When the work is done, D5's complete step resolves the block and marks the step done.
 
 ### D10 — Only the Runner creates nodes
@@ -432,7 +442,7 @@ class BlockHumanStep: node_id: str               # Action union += BlockHumanSte
 - **180:** `predecessors` as the single function to widen.
 - **Contract documents:**
   - `store-contract.md`: `CFReference.index`, migration `010`, and the `create_node` guard.
-  - `context-forge-contract.md`: the two plan reads, D8's error-document rule, and the `cf status --worktree` observations (D7).
+  - `context-forge-contract.md`: the two plan reads, D8's error-document rule, and the `cf status --worktree` observations (D7), which 128's gate read relies on.
   - `process-contract.md`: the plan-read setting and flag.
   - `substrate-guide.md`: the 120 row.
 
@@ -464,7 +474,7 @@ class BlockHumanStep: node_id: str               # Action union += BlockHumanSte
 
   Each raises one `plan_read_failed`, which stays open until a read of that link succeeds.
 - **An initiative with no slice plan** reads as the no-plan state (`slice_plan` not complete, no fault).
-- **Starved reads:** a link whose read is cut off on every tick raises one `plan_read_failed` once `plan_read_interval_seconds` has passed since it became due. A run's poll is never cut off by a plan read in the same tick.
+- **Cut-off reads:** a read cut off partway applies nothing, raises no fault, and is read again on the next tick. A run's poll is never cut off by a plan read in the same tick.
 - **Early reads:**
   - a changed observed snapshot makes the link's read due on the next tick;
   - a failed snapshot, or one with `changed: []`, makes no early read.
@@ -475,7 +485,7 @@ class BlockHumanStep: node_id: str               # Action union += BlockHumanSte
   - nothing under an orphan is ready.
 - **Deferred, deprecated or unknown status:**
   - a `deferred` or `deprecated` slice has no steps, and gains them on a later read that reports an active status;
-  - a `degraded` slice has steps, is blocked with `plan_read_failed`, and holds the next slice's `implementation` until its own `merge` is done.
+  - a `degraded` slice has steps, is blocked with `plan_status_unknown`, raises no `plan_read_failed`, and holds the next slice's `implementation` until its own `merge` is done.
 - **Crash or fault during reconcile:** a reconcile killed partway, or stopped by an exception injected after its k-th write, is completed by the next read, with no duplicate nodes. The injected exception raises one `unexpected_fault`, and the link is read again on the next tick.
 
 ### Technical Requirements
@@ -484,7 +494,7 @@ class BlockHumanStep: node_id: str               # Action union += BlockHumanSte
 - Migration `010` is tested on a populated v9 store, and the partial unique index refuses a duplicate link.
 - Parser tests use the captured CF 0.19.16 outputs, including the slice-list error document.
 - The `create_node` guard test passes, and adding a call elsewhere in `src/amoeba` fails it.
-- Every CF call in the plan read goes through `TickBudget` (122's injected-runner test pattern). A read cut off partway writes nothing for its link.
+- Every CF call in the plan read goes through `TickBudget`, which checks 122's `tick_deadline_seconds` before the call, and runs under `tick_call_timeout_seconds` (122's injected-runner test pattern). A read cut off partway writes nothing for its link.
 - The contract documents under Provides are updated, and the CHANGELOG has an entry.
 
 ### Integration Requirements
@@ -566,7 +576,7 @@ Relative effort: 3/5. Suggested order. Each step leaves the suite green.
 
 - **Arch and slice plan edits.** These follow the departures above:
   - In the arch: no gate nodes in v1 (D3); no v1 step has a CF-write executor (D3); Observe reads every linked project's plan on an interval (D7); store-only actions are not journaled (D9); the slice list is not a start-up probe (D11); a done or already-blocked orphan does not get its own escalation (D5).
-  - In plan entry 4: the failed-snapshot criterion is reworded to "triggers no early plan read" (D7); the step map assigns a pipeline or a human step, with no CF-write step in v1 (D3); `cf status` is left to 125 and 128 (D7); the human-step criterion is proven under a test planner (D9); a done or already-blocked orphan does not get its own escalation (D5).
+  - In plan entry 4: the new-slice criterion is reworded to "appears on the next plan read" (D7); the failed-snapshot criterion is reworded to "triggers no early plan read" (D7); the step map assigns a pipeline or a human step, with no CF-write step in v1 (D3); `cf status` is left to 125 and 128 (D7); the human-step criterion is proven under a test planner (D9); a done or already-blocked orphan does not get its own escalation (D5).
   - In plan entry 5 (124): registering `HumanStepPlanner` with the drive filter, and a criterion for it (D9).
   - The plan's Future Work gains the two items below.
 - **Future Work (slice plan):**

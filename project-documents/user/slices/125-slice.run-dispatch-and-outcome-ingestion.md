@@ -15,7 +15,7 @@ interfaces:
 - 128
 - 129
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 49
 promptTokens: 6628271
@@ -235,6 +235,7 @@ Status: decided
   - **A read that fails** (timeout, non-zero exit, non-JSON): this is transient. The entry stays unresolved, and the next tick's Observe reads back again. Once `launch_grace_seconds` has passed since the entry's `issued_at` and the read still fails, the entry goes through `journal_escalate` with the last failure as its reason. The bound reuses the existing confirmation setting, so no new setting is needed. Until then the unresolved entry holds the checkout (D4), and the bound is what stops that hold from lasting forever.
 - **`cf set` exits non-zero** (for example `ARTIFACT_NOT_FOUND`): the entry resolves `failed`, and the step blocks on `HUMAN` with `pointer_write_failed` and the head of CF's stderr, bounded like 122's tail. Nothing is retried within the tick.
 - **A cut-off between `cf set` and the read-back** leaves the entry unresolved. The next tick reads back. The write is idempotent, so recovery after a crash works the same way, through the same function (D10).
+- **`cf set` exceeds `tick_call_timeout_seconds`.** The write may or may not have landed, so this is handled as a cut-off: the entry stays unresolved, and the next tick reads back under the rules above. A write that landed resolves `completed`. A write that did not land reads back another index, so the step blocks with `pointer_write_failed` and the entry resolves `failed`. It is not retried, because v1 escalates every fault. Resolving the block makes the step `NEEDS_POINTER`, which writes the pointer again (D3).
 
 ### D3 — A step's dispatch state is derived from its own journal entries
 Status: decided
@@ -305,7 +306,7 @@ Status: decided
 - **Selection.** The last entry of `reviews`. If its `paths` is non-null, every listed part file is recorded, in order. Otherwise its `path` is recorded. An empty list records nothing. This is the plan's rule.
 - **Each file:**
   - A relative path is resolved against the run's `checkout`.
-  - The file is read once. The digest is sha256 of the bytes read.
+  - The file is read once, whole. The digest is sha256 of the bytes read. No size bound is applied, as in detection, because a truncated read would digest differently from detection's key.
   - The file is parsed with 105's `parse_review_artifact`. `to_verdict_input` adds `sq_run_id` (the run id), `journal_entry_id=None`, and provenance `{upstream: squadron, source: artifact_frontmatter, source_path}`. The version label is the file's `squadronVersion` stamp, or the `sq --version` label the factory captured once at start, or the explicit `unavailable` marker. This is detection's rule.
 - **Attribution.** `attribute_review(slice nodes, review.slice)` must return exactly the slice node that is the run's step's parent. This applies the rule the evidence contract makes binding on 120, and checks it against the node the Runner knows.
 - **`ReviewUnknown`.** Any of these makes the whole run's review unknown, and nothing is recorded:
@@ -333,7 +334,7 @@ Status: decided
 Status: decided
 - A step is `REISSUE` when its latest entry is an `sq_run` that recovery resolved `not_applied`, meaning there was no run state after the launch grace period (120, D4). The planner emits `LaunchRun(…, run_id=<old id>, reissue_of=<old entry>)`. It goes through the current-step guard and the checkout filter like any launch.
 - **Act, in order:**
-  1. **Launch-log check,** on the old entry's `<entry_id>.stderr.log` (122, D4). This is a local read, with no subprocess.
+  1. **Launch-log check,** on the old entry's `<entry_id>.stderr.log` (122, D4). This is a local read, with no subprocess. It is 122's exact-line check, bounded by its 64 KiB head limit, because Squadron prints the line before its first step.
      - An exact `run_id=<id>` line: the run started and its state was later removed, for example by pruning. The step blocks on `HUMAN` with `{reason: started_before_crash, run_id}`. Nothing is launched.
      - A log that exists and cannot be read: the step blocks on `HUMAN`, naming the error. Nothing is launched.
      - No log, or a readable log without the line: Squadron prints the line before its first step, so no work ran. Continue.
@@ -362,7 +363,7 @@ Status: decided
   - Rejected: a second method beside the single-review one. Two methods would do one job.
 - **Migration `011`**, `unrouted_outcomes`, and the flag clearing in `record_routing_decision` (D8).
 - **`detection_key(watches, file)`**, exported from `amoeba.process.review_scan` next to `content_digest`. It is the one place detection's ledger key is formed (D7). Detection's directory source is changed to call it, and behaviour is unchanged. An agreement test runs detection and ingest over the same file.
-- **Order.** These land as this slice's first code tasks, with their contract tests and the contract suite updated, before any dispatch code. This follows 122 D3's precedent and the arch's "the contract changes first".
+- **Order.** These land as this slice's first code tasks, with their contract tests, the contract suite and their contract text updated, before any dispatch code. D7's change to the evidence contract's journal-node sentence lands with them. This follows 122 D3's precedent and the arch's "the contract changes first".
 
 ### D11 — Pointer moves during a run escalate at project scope, while they last
 Status: decided
@@ -382,9 +383,9 @@ Status: decided
 ### D12 — The per-pipeline time bound moves to 126
 Status: decided
 - The arch puts per-pipeline time bounds in the routing table. That table, its file format and its loading are 126's. If this slice enforced a bound, it would need a value source with no home before 126, which would be a second place routing values live. A run in flight also cannot block its node mid-run (D11). How an overrun is surfaced is therefore a routing choice too.
-- 125 records `started_at` from the outcome document, so 126 can compute a run's age from store state.
-- **Consequence until 126 lands:** a hung run holds its checkout indefinitely. It is visible as an unresolved entry and is never killed (Risk Assessment).
-- **The plan edit is a prerequisite, already met.** Plan entries 6 and 7 were edited together with this design: the time bound moved from 125's text to 126's, and 126 has a success criterion for it (Prerequisites).
+- 126 computes a run's age from the `sq_run` entry's `issued_at`, so this slice records nothing extra for it (126, D7).
+- **Consequence until 126 lands:** a hung run holds its checkout indefinitely. It is visible as an unresolved entry and is never killed. Nothing launches without a PM drive, so the gap costs at most the runs the PM drives before 126 merges, and the pause intent stops new launches at once (Risk Assessment).
+- **The plan edit is a prerequisite, already met.** Plan entries 6 and 7 were edited together with this design: the time bound moved from 125's text to 126's, and 126 has a success criterion for it (Prerequisites). 129 depends on 126, so no proof runs without the bound.
 
 ### Technology Choices
 
@@ -470,7 +471,7 @@ type Action = LaunchRun | BlockHumanStep | WriteSlicePointer
   - Each outcome's entry result: the outcome document, the verdict ids and the review fault.
   - The blocked state ingestion already wrote.
   - `CheckpointKind` and `FailureKind` as routing inputs.
-  - `started_at` for the time bound (D12).
+  - The unresolved `sq_run` entry and its `issued_at`, for the time bound (D12).
   - A completed run leaves its step `runnable`, with the outcome awaiting routing. Advance marks the step done, and rerun records its decision, which makes the step `NEEDS_POINTER` again.
   - **The interface 126 must handle:** a paused run's node is already `blocked_on_sq_checkpoint`, and a failed run's node is already blocked on `HUMAN`. An escalate decision on such a node needs no second block (121's `effect=None`).
 - **127:**
@@ -604,8 +605,12 @@ Run in bash from the repository root. Steps 1–2 are automated and use the stub
 - Each pointer write runs in the resolved checkout, and its read-back checks the index, the path and the worktree id. Any mismatch blocks the step (D1, D2).
 - A checkout runs one pipeline at a time, and its hold lasts until the run is neither running nor paused (D4). No later run can rewrite a review file before its run is ingested, because ingestion happens on the first poll that sees the outcome, before the checkout is released.
 - `P6` always runs with `merge=false`, and nothing dispatches unless the PM drives it (124). The walkthrough runs on a scratch copy.
-- **There is no clean-tree check until 128.** Until 128 lands, the Runner is driven only on scratch copies or checkouts the PM is not working in, and 129's first proof runs only after 128. Squadron commits its own output, so a run leaves a committed tree, but a PM edit left in the same checkout would be swept into the run's commits.
-- **There is no time bound until 126 (D12).** A hung run holds its checkout until it ends. It is visible in `amoeba inspect journal --unresolved`, and it is never killed.
+- **There is no clean-tree check until 128.** Squadron commits its own output, so a run leaves a committed tree, but a PM edit left in the same checkout would be swept into the run's commits. What limits the exposure until 128:
+  - Nothing launches unless the PM drives it (124). Linking a project dispatches nothing, and a PM drive is the only trigger.
+  - The pause intent stops new launches at once.
+  - 128 is a hard prerequisite of 129, so no real-repository use is planned before the check exists. Until then the Runner is driven only on scratch copies, as this slice's walkthrough is.
+  - Rejected: a minimal clean-tree check here. It would be a second copy of 128's check (D5, D6 there), with its own git parser and fixtures, for one slice's interval.
+- **There is no time bound until 126 (D12).** A hung run holds its checkout until it ends. It is visible in `amoeba inspect journal --unresolved`, and it is never killed. The same limits apply: only a PM drive launches a run, and the pause intent stops further launches. 129 depends on 126.
 
 ## Implementation Notes
 
@@ -617,32 +622,25 @@ Relative effort: 4/5. Suggested order. Each step leaves the suite green.
    - the `cf_write` keys and the observer change, with recovery tests;
    - migration `011`, the flag in `journal_resolve`, and `unrouted_outcomes`;
    - `record_runner_report`'s new signature, and the flag cleared in `record_routing_decision`;
-   - the stand-in Runner and the contract suite.
+   - the stand-in Runner and the contract suite;
+   - the contract text for these changes: `store-contract.md`, the read-back's working directory and index check in `process-contract.md`, and the Runner's journal and verdict nodes and multi-part recording in `evidence-contract.md` (D7). The evidence rule binds the Runner, so it changes before ingestion code relies on it.
 2. The outcome document fields, `CheckpointKind` and `FailureKind` (D6), with the stub `sq`'s review files and `reviews` list.
 3. `ingest/`: the outcome-to-block mapping, review selection and attribution, and `record` replacing 122's body, with the crash-repeat test (D6, D7).
 4. `dispatch/`: `resolve_checkout`, `dispatch_state`, `DispatchPlanner` and the held-checkout set (D1, D3, D4, D5).
 5. `WriteSlicePointer` in Act, with the stub `cf`'s `set` and `get` routing (D2).
 6. The reissue path (D9) and the pointer-move check (D11).
-7. `DispatchPlanner` in the production tuple, the contract documents and the CHANGELOG.
+7. `DispatchPlanner` in the production tuple, the remaining contract text (the dispatch and ingest stages and the checkout hold in `process-contract.md`, `context-forge-contract.md`, `substrate-guide.md`) and the CHANGELOG.
 
 **If the slice overruns.** Steps 1–5 are the plan's core: contract changes, ingestion, and two-tick dispatch with the checkout hold. The reissue path (D9) and the pointer-move check (D11) are independent of each other and of the core, which works without them. Without D9, a `REISSUE` step is blocked on `HUMAN`, so a new run id is never launched over a run that may have started. Without D11, a moved pointer goes unescalated. Either can be split into a follow-on slice through a plan edit, as D12 did, without changing steps 1–5.
+
+- Rejected: deferring D9 and D11 now. 122 (D7) deferred the reissue to this slice as the first that launches in production, and 128 checks a 125 reissue like any launch. The arch's pointer rule and 126's D7 both cite D11. Both stay in scope, with the split above as the fallback.
+- Rejected: cutting the Interfaces Required catalogs. They are the dated upstream observations the design rests on, and the contract documents hold them only once this slice lands.
 
 **Testing approach.** The pure functions get most of the cases. Tick-level tests use `Store.open_temporary()`, the stub `sq` and `cf` on `PATH` under a temporary `HOME`, and hand-written snapshot rows for the worktree layouts. The crash tests extend 122's `SIGKILL` proof with two kill points: between the block and the report, and between ingestion and a test router's decision.
 
 ### Special Considerations
 
-- **Arch and slice plan edits,** made with this design:
-  - **Plan entry 6 (125):**
-    - The time bound is removed (D12).
-    - "Recognizes its own writes by D8 `cf_updated_at`" becomes "reads only snapshots recorded after its pointer write" (D11).
-    - "Escalates that node" for a moved pointer becomes "raises a project-scoped escalation naming the node while the move lasts" (D11).
-    - `P6` always runs with `merge=false` until 128 (D5).
-  - **Plan entry 7 (126):** gains the per-pipeline time bound and a criterion for it (D12). It also notes that it reads `unrouted_outcomes` (D8).
-  - **Arch:**
-    - In the "Who is authoritative" pointer rule: the write lands by working directory, and a move during a run is a project-scoped escalation (D2, D11).
-    - In "Concurrency is bounded by the working tree": a checkout is held from the pointer write, not from launch (D4).
-    - In the paragraph on time bounds: they are enforced by 126 (D12).
-    - In outcome ingestion: the verdict sits on the slice node, linked to the run by id (D7).
-  - **123's D7 note** that 125 reads `cf status --worktree` is superseded. 125 needs no `cf status` read, because the read-back and the snapshot cover it. 128 reads `cf status` for gates.
+- **Arch and slice plan edits** for D4, D5, D7, D8, D11 and D12 are committed in plan entries 6 and 7 and in the arch (Prerequisites).
+- **123's D7 note** that 125 reads `cf status --worktree` is superseded. 125 needs no `cf status` read, because the read-back and the snapshot cover it. 128 reads `cf status` for gates.
 - **Spend.** Every launch is a paid Squadron run. Nothing launches without a PM drive, and the pause intent stops new launches at once. A run in flight is never killed (Squadron's `max_cost_usd` bounds each run).
 - **Security.** Review files are read as data and parsed by 105's pure parser. CF and Squadron output stored in payloads is bounded like 122's tail. Journal parameters hold paths, ids and indexes only, and the inherited environment is never recorded.

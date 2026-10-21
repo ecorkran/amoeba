@@ -6,11 +6,13 @@ parent: user/architecture/120-slices.runner-routing-engine.md
 dependencies: []
 interfaces:
 - 122
+- 123
 - 124
+- 125
 - 126
 - 127
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 29
 promptTokens: 1979312
@@ -60,7 +62,7 @@ Architectural enablement. Slices 122–127 code against a store that already hol
 - A feed change for decision records, closures or desired-state writes. The arch says "nothing new on the wire" (D9).
 - Resetting attempt counts. No consumer needs it in v1.
 - Recording merge policy on each dispatch decision. That belongs to 128 (see Integration Points).
-- The unrouted-outcome query (resolved entries with no decision record). It is deferred to 125/126, which decide which entries need routing, and is tracked in issue #10.
+- The unrouted-outcome query (resolved entries with no decision record). 125 owns it (125, D8: the `awaits_routing` flag and `unrouted_outcomes`), tracked in issue #10.
 - Node creation from outside the process. It stays out, as the arch says.
 
 ## Dependencies
@@ -88,17 +90,18 @@ New and changed store modules. They are mixed into `Store` as the existing opera
 | `store/nodes.py` (changed) | `update_node_status` calls the terminal check and the unresolved-command check. |
 | `store/journal.py` (changed) | `journal_issue` refuses a done node. |
 | `store/_block_writer.py` (changed) | Adds `_refuse_done(node_id)`, the one terminal check (D1), and calls it in `_write_block`. |
+| `store/inbox_models.py` (changed) | Adds `AcknowledgmentOutcome`. `Message` gains the five new fields. |
 | `store/messages.py` (changed) | `acknowledge_message` with outcome and desired state. Adds `intent_for_submission`. |
 | `store/project_escalations.py` (new) | `raise_project_escalation`, `open_project_escalations`, `close_project_escalation`. |
 | `store/routing_decisions.py` (new) | `record_routing_decision`, decision and table-version reads, attempt reads. |
 | `store/desired_states.py` (new) | Desired-state reads, plus the internal `_write_desired_state_change` that `acknowledge_message` calls inside its transaction. |
-| `store/runner_models.py` (new) | `Route`, `AcknowledgmentOutcome`, `RoutingDecision`, `RoutingDecisionInput`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState`, `ClearDesiredState`. |
+| `store/runner_models.py` (new) | `Route`, `RoutingDecision`, `RoutingDecisionInput`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState`, `ClearDesiredState`. |
 | `store/sql_runner.py` (new) | Every statement and column name for the four tables and the new message columns. |
 | `store/mapping_runner.py` (new) | Row-to-type mapping for the new types. |
 | `store/schema/009_runner_contract.sql` (new) | The migration. |
 | `inspection/inbox.py` (changed) | Message rows gain the new columns. |
 
-`AcknowledgmentOutcome` lives in `runner_models.py` and `Message` (in `inbox_models.py`) imports it. That way the vocabulary is defined once.
+`AcknowledgmentOutcome` is inbox vocabulary, so it lives in `inbox_models.py` beside `Message` and 103's other inbox enums (`store/inbox_models.py` is changed). The inbox then imports nothing Runner-named, and the vocabulary is still defined once.
 
 ### Data Flow
 
@@ -148,6 +151,9 @@ Status: decided
   A test asserts that `sql.UPDATE_NODE_STATUS` is referenced only from these modules, so a new writer cannot slip past the check unnoticed.
 - `_refuse_done` raises `InvalidTransitionError` naming the node. `update_node_status` calls it for **any** target status, including `done`. A done node takes no status writes at all, which is stricter than "to any other status" and needs no same-status special case. `create_node(status=DONE)` stays allowed, because creating a node as done moves nothing.
 - **Recovery never meets a done node.** Two rules guarantee it. `journal_issue` refuses a done node with `InvalidTransitionError`. Moving a node to `done`, through `update_node_status` or a `StatusEffect`, is refused while the node has an unresolved journal entry. So no unresolved entry can point at a done node, and `journal_escalate` needs no new branch or escalation shape. If a store from before `009` already holds such an entry, `_write_block` raises when recovery reaches it. The process then fails at start with an error naming the node, which is an explicit failure rather than a silent move out of `done`. No real store holds one. No shipped code before this slice marks a node done: `src/` has no caller of `update_node_status`, and only tests and the stand-in Runner do.
+- **A done node cannot be blocked, so escalations against one go elsewhere.** This is a rule for every caller that escalates against a node. An orphaned done node is not escalated at all (arch, "Who is authoritative"; 123, D5). A fault whose node in context is done raises a project-scoped escalation (D4) naming the node, as a fault with no node does. 122's fault handler applies that rule (see Provides).
+- **Why the checks go past the plan's `update_node_status` wording.** The plan names only that guard. The `journal_issue` refusal and the unresolved-entry refusal are what make "no unresolved entry sits on a done node" true, and sibling designs rely on it: 122 (fault isolation and recovery), 123 (D5's complete step), 126 (an escalate on a done node takes no effect) and 127 (store-only accept). Each caller that marks a node done resolves the node's entry first. The failure-modes table lists both refusals.
+- Rejected: narrowing D1 to `update_node_status` and dropping the `_write_block` refusal. A block would then move a done node to a blocked status, which is the leak D1 exists to close.
 
 ### D2 — Acknowledgment outcome columns on `messages`
 Status: decided
@@ -196,7 +202,7 @@ Status: decided
 - Reads: `routing_decision(decision_id)`, `routing_decision_for_entry(journal_entry_id)` and `routing_decisions(node_id)` (oldest first). Missing returns `None` or an empty list.
 - The query for unrouted outcomes ("an ingested outcome with no decision record is unrouted") is not part of this slice. It runs every tick, and its bound depends on which entries need routing, which 125 and 126 decide. Issue #10 tracks it. The arch's crash-safety claim needs two things:
   - **A decision record that lands atomically with its effect.** This slice provides it.
-  - **A query that finds outcomes without one.** Nothing routes before 126, so that query must land in 125 or 126, before the first route is taken. Issue #10 records that it blocks 126.
+  - **A query that finds outcomes without one.** 125 builds it as a flag set at resolution, read by `unrouted_outcomes` and cleared by `record_routing_decision` in its own transaction (125, D8). Issue #10 records that it blocks 126.
 - **Shapes ahead of consumers.** This shape, and D7's, are the minimum the arch names: inputs, rule id, table version, Amoeba version and route. If 125's or 126's design needs a different shape, the plan's "Tables before their consumers" note applies. The change goes into 100's contract in that slice, through a new migration, as D8 says for desired states.
 
 ### D6 — Table versions are write-once, keyed by version
@@ -304,11 +310,12 @@ Summary of the public store surface added or changed. These methods are added to
 
 ### Provides to Other Slices
 
-- **122:** project-scoped escalation (raise, list open, close) for faults that have no node.
+- **122:** project-scoped escalation (raise, list open, close) for faults that have no node. The done rule (D1): no unresolved entry sits on a done node, and a done node cannot be blocked, so a fault on a done node raises a project-scoped escalation instead of a block (122, D8).
+- **123:** the done rule (D1). Reconciliation's orphan step skips a done node, and its complete step marks done only a node with no unresolved entry (123, D5).
 - **124:** `acknowledge_message` with an outcome and an atomic desired-state write, plus the desired-state reads that its path lookup walks.
-- **125 / 126:** `record_routing_decision` with its node effect and attempt increment, `Route`, the table-version store, and `attempt_count`.
+- **125 / 126:** `record_routing_decision` with its node effect and attempt increment, `Route`, the table-version store, and `attempt_count`. A `StatusEffect(done)` is refused while the node has an unresolved entry (D1), so ingestion resolves the entry before routing advances it.
 - **126 / 129:** the decision and table-version reads that make any decision recomputable.
-- **127:** the done-terminal guarantee, and decision reads for the node it acts on. Store-only accept can use `record_routing_decision` with `route=advance` and a `StatusEffect(done)`. Whether it does is 127's choice.
+- **127:** the done-terminal guarantee, including the refusal of `done` while an entry is unresolved (D1), and decision reads for the node it acts on. Store-only accept can use `record_routing_decision` with `route=advance` and a `StatusEffect(done)`. Whether it does is 127's choice.
 - **128:** nothing dispatch-specific. The arch says the merge policy "is recorded on each dispatch decision". 128's design decides where that record lives: a routing decision record's `inputs` or `route_parameters`, or the `sq_run` journal parameters. Both are JSON and need no new field from this slice.
 - **160 / notification bridge (later):** acknowledgment outcomes and open project escalations through `amoeba inspect messages` and `/v1/listings/messages`.
 

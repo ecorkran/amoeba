@@ -125,7 +125,7 @@ amoeba/runner/gates/                 NEW
   outcome.py       OutcomeObservation; observe_outcome() (I/O under TickBudget);
                    gate_state_at_exit(step, slice) (pure)
   hatches.py       hatch_checks(design, effective_date) → (CheckInput, CheckInput) (pure)
-  predispatch.py   DispatchCheck = Ok | Wait | Block; entry_gate(step, slice, accepted);
+  predispatch.py   DispatchCheck = Ok | Block; entry_gate(step, slice, accepted);
                    branch_rule(...); read_dispatch_facts() (I/O)
   accepted.py      accepted_by_pm(entries, resolution) (pure)
   merge.py         MergeObservation; merge_state(...) (pure); observe_merges() (I/O)
@@ -135,7 +135,7 @@ amoeba/runner/
   decide.py        CHANGED  Action += BlockDispatch; ProjectView += dispatch_checks,
                             merge_observations; guard: launch and resume need Ok
   tick.py / observe.py  CHANGED  outcome observation, merge observation, pre-dispatch reads
-  faults.py        CHANGED  FaultKind += seven members (D11)
+  faults.py        CHANGED  FaultKind += five members (D11)
   factory.py       CHANGED  loads the project config once at start
 amoeba/runner/dispatch/params.py, planner.py   CHANGED  merge policy; launch only on Ok
 amoeba/runner/resolutions/planner.py           CHANGED  resume only on Ok
@@ -171,7 +171,8 @@ close     + checkout_read_failed
 
 - **Outcome observation comes right after polling,** because an ingestion waits on it. Merge observation and pre-dispatch reads come last, because they only enable new work. A cut-off defers them to the next tick, which is safe because they only read.
 - **Candidates** come from one pure function, `launch_candidates(tree, desired, entries, held)`, called once in Observe after this tick's read-backs. A candidate is a step that would launch or resume this tick: `POINTED`, `REISSUE` or `RESUME`, in a free checkout, or one held only by itself for `RESUME`. Observe reads only for those steps, and the planners launch or resume only steps that have an `Ok` in `dispatch_checks` (D5). So the planners never recompute the set, and a step Observe did not check cannot launch.
-- **Per-tick reads are shared per checkout.** One `git status` and one `git.integration_branch` read serve every candidate and merge observation in that checkout. They are never kept across ticks.
+- **Reads are per candidate and per merge observation,** and never kept across ticks. `TickBudget` and the per-call timeout bound their cost. Sharing reads per checkout is added only if a measured tick overruns.
+- Rejected: dropping `launch_candidates` and reading for every step. The function is not an optimisation. It is the one definition of which steps Observe checks, and the `decide()` guard (D5) relies on that set.
 
 **A slice from tasks to merge, human policy:**
 
@@ -305,20 +306,19 @@ Status: decided
 - **Matching CF.** `review` is compared more leniently than CF's exact `none`. A value CF would not honour, such as `None`, still escalates. A false escalation is the safe direction.
 - **Identity and provenance.** The id is `chk-<entry id>-<check name>`, so one outcome gets one record per check, and a repeat is `record_check`'s retry. Provenance is upstream `amoeba`, Amoeba's version label (126, D5), source `document`, and `source_path` the design path.
 - **Both hatches escalate through the table** (D3), not through code. The arch's "if either is present, the node escalates" holds because no advance or rerun rule matches a `check_standing` that is not `passed`.
-- **The Runner never writes `review: none`** or any frontmatter. A test asserts that nothing under `amoeba.runner` opens a design file for writing.
+- **The Runner never writes `review: none`** or any frontmatter. No code path in this slice opens a design file except to read it, so no source test is added for it.
 
 ### D5 — Pre-dispatch checks: git first, then the entry gate
 Status: decided
 - **Which actions.** `LaunchRun`, whether fresh or a 125 reissue, and 127's `ResumeRun`. These are the actions that start Squadron work in a checkout. A pointer write (`cf_write`) and 127's `ObserveRun` change no files and are not checked.
-- **Reads, per candidate,** under `TickBudget`, shared per checkout within the tick:
+- **Reads, per candidate,** under `TickBudget`:
   1. `git status` (D10): branch, head and dirty paths;
   2. `cf config get git.integration_branch --json`: the target. Empty means `main`, which is `DEFAULT_TARGET_BRANCH`, defined once and citing the key's description;
   3. for a fresh or reissued `tasks` or `implementation` launch only, the gate read (D1).
 - **Result:** `DispatchCheck`, one of:
   - `Ok(evidence)`. `evidence` is `{branch, head, target, gate_status, gate_review_type}`. It is written into the launch's journal parameters as `dispatch_check`, so the dispatch decision records what it was based on.
-  - `Wait(reason)`. Nothing is issued and nothing is written.
   - `Block(fault_kind, context, payload)`. The planner emits `BlockDispatch`, which Act applies as one `store.block(node, kind=HUMAN, …)`. This is store-only, like 123's `BlockHumanStep`.
-  - No result: the reads were cut off or failed. Nothing is issued. A failed read raises `checkout_read_failed` (D11).
+  - No result: the reads were cut off or failed, or the gate read is about another slice. Nothing is issued and nothing is written. A failed read raises `checkout_read_failed` (D11).
 - **Git, in order.** The first rule that applies decides:
   1. Detached HEAD: `Block(checkout_branch)`.
   2. Not on an allowed branch (D6): `Block(checkout_branch)`, naming the branch, the target and the allowed set.
@@ -328,7 +328,7 @@ Status: decided
 
   | Gate read | Check |
   | --- | --- |
-  | `activeSlice.index` is not the slice's | `Wait(pointer_moved)`. The next tick's read-back makes the step `NEEDS_POINTER` (125, D3). |
+  | `activeSlice.index` is not the slice's | no result, and no fault. The next tick's read-back makes the step `NEEDS_POINTER` (125, D3). |
   | `PENDING_DECISION` | `Block(pending_decision)`, payload `{decisions: [{heading, line}]}` |
   | at the entry gate, and the predecessor was accepted by the PM (D7) | disagreement check recorded, then `Ok` |
   | at the entry gate, otherwise; before it; or `UNKNOWN` | `Block(cf_gate_blocks)`, payload `{position, status, review_type, rationale}` |
@@ -371,7 +371,6 @@ Status: decided
 - **Format** (documented in `docs/process-contract.md`):
 
   ```yaml
-  format: 1
   projects:
     amoeba:
       merge_policy: human
@@ -383,8 +382,9 @@ Status: decided
 - **`MergePolicy`** is a `StrEnum` with `human` and `auto`. `PROJECT_DEFAULTS` in `project_config.py` is the one place the default lives: `merge_policy: human`, as the arch requires. A project the file does not name, or a key a project entry omits, takes the default.
 - **Location.** The setting is `project_config_path: Path | None`, with the start flag `--project-config PATH`. Its default is `None`, defined in `settings.py`.
   - With no file, every project uses `PROJECT_DEFAULTS`. Start logs that at INFO, naming the defaults.
-  - A given path that is missing or unreadable, YAML that does not parse, an unsupported `format`, an unknown key or an unknown value each raise `StartupFailedError`, listing every problem. `amoeba start` exits `STARTUP_FAILED`, as 126 (D4) does for the table.
-  - A project id the store does not hold at start logs a WARNING and is kept, because projects can be created while the process runs.
+  - A given path that is missing or unreadable, YAML that does not parse, an unknown key or an unknown value each raise `StartupFailedError`, listing every problem. `amoeba start` exits `STARTUP_FAILED`, as 126 (D4) does for the table.
+  - A project id the store does not hold is not checked. Its entry applies if that project is created later.
+  - No format version key. `extra="forbid"` already refuses keys the model does not know, and a version is added when a second format exists.
 - **Static, like the table.** It is loaded once in `runner_tenant()` and never mutated. A change needs a restart.
 - **Recorded on each dispatch.** A `P6` launch's journal parameters gain `merge_policy` and `target`. A reissue copies its old entry's parameters (125, D9), and a resume reuses the run's own params in Squadron (127). So a run keeps the policy it was launched under, and its entry says which policy that was.
 - **`dispatch_params(step, slice_index, merge_policy)`** stays the one place the `merge` param is built (125, D5). Under `human`, `P6` gets `{"merge": "false"}`. Under `auto`, it gets no `merge` key, so `P6`'s declared `true` applies. 125's import test still holds.
@@ -422,7 +422,8 @@ Status: decided
   - `git --no-optional-locks status --porcelain=v2 --branch --untracked-files=normal`. `--no-optional-locks` stops `status` from refreshing and rewriting the index, so even the read writes nothing.
   - `git merge-base --is-ancestor <head> <target>`.
 - **The parser** reads `# branch.head` (`(detached)` is detached) and `# branch.oid`, and treats every other non-empty line as a dirty entry. It takes the path from the line's last field. Header lines it does not know are ignored. The test fixture is real output captured from git on clean, modified, untracked, staged, renamed, unmerged and detached checkouts, as the parsing rule requires.
-- **Never, under any policy:** merge, commit, checkout, branch deletion, reset, stash or push. A source test asserts that `git` appears as an executable only in `git_read.py`, and that every call site passes an allowlisted subcommand.
+- **Never, under any policy:** merge, commit, checkout, branch deletion, reset, stash or push. A source test asserts that `git` appears as an executable only in `git_read.py`.
+- Rejected: dropping that source test because the allowlist enforces the rule at runtime. The allowlist sees only calls made through `git_read`. The source test is what makes `git_read` the only path, as 125's and 126's source tests do for their one-place rules.
 
 ### D11 — Faults
 Status: decided
@@ -438,7 +439,7 @@ Status: decided
 
 ### Patterns and Conventions
 
-- Defined once: `GatePosition` and its mapping, the exit and entry gate of each step, `RunnerCheck`, the check id format, the standing order, `MergePolicy`, `PROJECT_DEFAULTS`, `DEFAULT_TARGET_BRANCH`, `GIT_SUBCOMMANDS`, the CF config key names, the journal keys `merge_policy`, `target` and `dispatch_check`, the result keys `outcome_observation` and `check_ids`, the `Wait` reasons and the new `FaultKind` members.
+- Defined once: `GatePosition` and its mapping, the exit and entry gate of each step, `RunnerCheck`, the check id format, the standing order, `MergePolicy`, `PROJECT_DEFAULTS`, `DEFAULT_TARGET_BRANCH`, `GIT_SUBCOMMANDS`, the CF config key names, the journal keys `merge_policy`, `target` and `dispatch_check`, the result keys `outcome_observation` and `check_ids`, and the new `FaultKind` members.
 - Expected external states are answers (`DispatchCheck`, `MergeObservation`, a recorded read failure), never exceptions.
 - Modules stay under about 300 lines, and functions under about 50.
 
@@ -456,10 +457,8 @@ class RunnerCheck(StrEnum): UNGATE_REVIEW_NONE; UNGATE_EFFECTIVE_DATE; CF_GATE_A
 @dataclass(frozen=True)
 class Ok: evidence: Mapping[str, str | None]
 @dataclass(frozen=True)
-class Wait: reason: WaitReason            # pointer_moved
-@dataclass(frozen=True)
 class Block: fault_kind: FaultKind; context: str; payload: Mapping[str, object]
-type DispatchCheck = Ok | Wait | Block
+type DispatchCheck = Ok | Block              # absent from dispatch_checks: no result
 @dataclass(frozen=True)
 class BlockDispatch: node_id: str; block: Block
 type Action = (LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | ObserveRun
@@ -492,10 +491,13 @@ type Action = (LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | Obse
   - **An item outcome has no outcome observation.** D2 reads the gate with CF pointed at the slice, which a batch does not set. Under this slice's table, an item whose `gate_state` is `unknown` escalates. 130 decides how its items get both inputs. The hatch checks need no pointer and can run per item. The gate needs either a pointer or another CF surface.
 - **131:** `check_standing` and the check-record pattern (`RunnerCheck`, ids, provenance) for its Tier-1 checks, and the gate position for its tier inputs.
 - **Contract documents:**
-  - `process-contract.md`: the outcome observation, the pre-dispatch checks, the merge observation, the per-project config format and setting, and the git allowlist.
-  - `evidence-contract.md`: the Runner's checks, their ids and provenance.
-  - `context-forge-contract.md`: the `cf status` fields and positions, and the two config keys.
-  - `substrate-guide.md`: the 120 row, and issue #15 closed.
+  Only what other slices consume:
+  - `process-contract.md`: the per-project config format and setting (130), and the pre-dispatch checks (130).
+  - `evidence-contract.md`: the Runner's checks, their ids and provenance (131).
+  - `context-forge-contract.md`: the `cf status` fields and positions, and the two config keys (130, 131).
+  - `substrate-guide.md`: the 120 row, and issue #15 closed (plan entry 9).
+
+  The outcome observation, the merge observation and the git allowlist are described in this design and the code, not in the contracts.
 
 ### Consumes from Other Slices
 
@@ -548,7 +550,7 @@ type Action = (LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | Obse
 - `position_of`, `gate_state_at_exit`, the entry-gate rule, `branch_rule`, `hatch_checks`, `accepted_by_pm` and `merge_state` have table-driven tests over every row of D1, D3, D4, D5, D6 and D9.
 - The porcelain parser is tested on real captured output. The CF status model is tested on captured CF 0.19.16 output for every status.
 - Every `git` and `cf` call in this slice goes through `TickBudget`, which 122's injected-runner test asserts. The worst-case tick stays 122's bound: the tick deadline plus one `tick_call_timeout_seconds`.
-- Source tests: git only in `git_read.py` with allowlisted subcommands, no frontmatter writes under `amoeba.runner`, and `LaunchRun` and `ResumeRun` refused by the guard without `Ok`.
+- Two tests guard the invariants: a source test that git runs only in `git_read.py` (D10), and a test that the `decide()` guard refuses `LaunchRun` and `ResumeRun` without `Ok` (D5).
 - The shipped table passes `parse_table`, and the contract documents and the CHANGELOG are updated. Issue #15 is closed by the commit that implements D7.
 
 ### Integration Requirements
@@ -576,7 +578,7 @@ Run in bash from the repository root. Steps 1–3 use the stub `sq` and `cf` wit
 
 3. **An invalid per-project config refuses to start:**
    ```bash
-   printf 'format: 1\nprojects:\n  scratch:\n    merge_policy: sometimes\n' > /tmp/projects.yaml
+   printf 'projects:\n  scratch:\n    merge_policy: sometimes\n' > /tmp/projects.yaml
    AMOEBA_STORE_DIR=$(mktemp -d) uv run amoeba start --project-config /tmp/projects.yaml; echo "exit $?"
    ```
    Expected: exit 7 (`STARTUP_FAILED`), naming `merge_policy` and the value `sometimes`. With `merge_policy: auto`, start succeeds. Stop it with `amoeba stop`.

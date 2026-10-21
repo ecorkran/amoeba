@@ -8,7 +8,7 @@ interfaces:
 - 122
 - 125
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 32
 promptTokens: 2415436
@@ -59,7 +59,7 @@ Architectural enablement.
 
 **Excluded**
 
-- Minting run ids, launching runs, launch logs and the `run_id=<id>` line check, and per-tick polling. These belong to 122. Checking the launch log before reissuing a `not_applied` entry is deferred to 122 as issue #9 (D4).
+- Minting run ids, launching runs, launch logs and the `run_id=<id>` line check, and per-tick polling. These belong to 122. Reissuing a `not_applied` entry, with its launch-log check, belongs to 125 (125, D9, issue #9). This slice records the rule in the contract (D4).
 - Ingesting reviews, checkpoints or failures from the outcome document. This belongs to 125. The reader models only the fields this slice uses, and 125 extends it (D2).
 - Every other 100 contract change (`done` terminal, acknowledgment outcomes, project-scoped escalation, new tables). These belong to 121.
 - Schema migrations. Journal parameters are stored as JSON, so the new key needs none.
@@ -88,9 +88,9 @@ amoeba/process/
   sq_outcome.py       NEW   RunOutcome enum + exit-code map, RunOutcomeDocument,
                             poll_run() → RunPoll = RunOutcomeDocument | PollFailure
   observers/
-    sq_run_id.py      NEW   SquadronRunIdObserver (by id, launch grace)
+    sq_run_id.py      NEW   SquadronRunIdObserver (by id, launch grace);
+                            SquadronRunObserver: id present → by-id, absent → matcher
     sq_runs.py        KEPT  attribute matcher, now legacy-only; lazy scan
-    sq_run_dispatch.py NEW  SquadronRunObserver: id present → by-id, absent → matcher
   run_pruning.py      CHANGED  select_prunable over RunOutcomeDocument
   supervisor.py       CHANGED  registry builds the dispatcher; no eager scan
   settings.py         CHANGED  + launch_grace_seconds
@@ -178,12 +178,13 @@ Status: decided
 - If `issued_at` is null, return `Unknown`: there is nothing to measure the grace period from.
 - If `now < issued_at + launch_grace_seconds`, the launch may still be in progress, because launches are detached and can outlive the crashed process. Sleep until that deadline, but never longer than `launch_grace_seconds`, so an `issued_at` ahead of the local clock cannot stretch the wait. Then poll once more. If a state now exists, adopt. If the poll fails, return `Unknown`. If there is still no state, return `NotApplied`.
 - Otherwise, return `NotApplied("no run state for <id> after the launch grace period")`.
-- The architecture says only that recovery marks the entry `not_applied` once the grace period has passed. Waiting at start-up for a grace period still running is this design's choice, made over the alternatives rejected below.
+- **This extends the architecture.** The arch says only that recovery marks the entry `not_applied` once the grace period has passed. Its "still launching" handling is the Runner's launch confirmation, which watches a launch child of the current process (122, D6). After a restart there is no such child, so recovery must answer the in-grace case itself.
+- The cost is a start-up stall of at most the grace period still remaining, once per pass, and only after a crash within one grace period of a launch. Start-up after a crash is rare and no tenant is waiting yet, so the stall is accepted over the alternatives rejected below.
 - **Startup bound.** Each id-bearing entry makes at most two polls, each bounded by `sq_timeout_seconds`. Deadlines are absolute, so the sleeps across all of a pass's entries add up to at most one `launch_grace_seconds`. A pass with N id-bearing entries therefore delays startup by at most `launch_grace_seconds + 2 × N × sq_timeout_seconds`, and the grace term applies only after a crash within a grace period of a launch. A missing or hanging `sq` costs each entry one failed poll, which escalates it (D3); there is no retry. The clock and sleep are injected for tests, and the bound is asserted in the load tier.
-- A run that started and whose state was later removed (for example by `sq runs prune`, whose default categories include completed and failed runs) also returns not_found. Recovery cannot tell it from a launch that never happened without the launch log, which is 122's. Checking that log before reissuing a `not_applied` entry is deferred to 122 as issue #9. In this slice no Runner reissues anything, so nothing is launched twice.
+- A run that started and whose state was later removed (for example by `sq runs prune`, whose default categories include completed and failed runs) also returns not_found. Recovery cannot tell it from a launch that never happened without the launch log, which is 122's (122, D4). The guard is the reissue rule: check the launch log, then poll once more, before relaunching (125, D9, issue #9). This slice records that rule as a contract, not only as a note to other slices: the `not_applied` definition for `sq_run` in `docs/process-contract.md` says that it means no run state after the grace period, not proof that the run never started, and that an issuer reissues only after the launch-log check and one more poll. In this slice no Runner reissues anything, so nothing is launched twice.
 - Rejected:
-  - Escalating every not_found entry. That is 100's behaviour, and it would turn the ordinary crash-before-launch case into PM work.
-  - Leaving an in-grace entry unresolved for 122 to finish. That would add a fourth observation kind to recovery's exhaustive union.
+  - Escalating every not_found entry, or returning `Unknown` while the grace period runs. That is 100's behaviour, and it would turn the ordinary crash-before-launch case into PM work. 122's crash proof expects `not_applied` for that case.
+  - Leaving an in-grace entry unresolved for 122 to finish. Recovery's gate allows an unresolved entry only when it is tied to a run Squadron reports (122, D3), and an in-grace not_found entry has no run. 122 would also need a grace path for a launch with no child.
 
 ### D5 — Legacy matching stays, behind a dispatcher, with a lazy scan
 Status: decided
@@ -247,9 +248,9 @@ Status: decided
 - `src/amoeba/process/supervisor.py`: the registry builds `SquadronRunObserver`.
 - `src/amoeba/process/run_pruning.py` and its tests in `tests/process/test_prune_selection.py`.
 - `src/amoeba/cli/prune.py` and `tests/process/test_prune_sq_runs.py`.
-- `tests/sq_stub.py`: adds `runs wait <id> --timeout 0 --json`. The stub plays Squadron and keeps its own state, one file per id containing the outcome document to print. It exits with the code for that document's `outcome`. For a missing id it prints `{"run_id": id, "outcome": "not_found"}` and exits 5. The existing prune modes delete those same files, so a pruned id then returns not_found. A `SQ_STUB_WAIT_MODE` override can force an exit-code and outcome mismatch, exit 2, a hang, or a non-JSON output.
+- `tests/sq_stub.py`: adds `runs wait <id> --timeout 0 --json`. The stub plays Squadron and keeps its own state, one file per id containing the outcome document to print. It exits with the code for that document's `outcome`. For a missing id it prints `{"run_id": id, "outcome": "not_found"}` and exits 5. The existing prune modes delete those same files, so a pruned id then returns not_found. Failure cases (mismatch, exit 2, hang, non-JSON) are added to the stub only where a `poll_run` integration test needs the real subprocess path. Unit tests cover them by patching the subprocess call.
 - `tests/contract/standin.py` and `runner_tenant.py`: the run id is minted before `journal_issue` and passed in `parameters`, and the stub-state outcome document is written instead of an internal-shaped run file. `steps_prune.py` checks presence through the stub's state directory.
-- Every test that journals `sq_run` gains a `run_id` through one shared helper, `sq_run_parameters(...)` in a tests support module. Today that is `test_journal.py`, `test_journal_models.py`, `test_recovery.py`, `test_host.py`, `test_cli_lifecycle.py`, `test_read_only_open.py`, `inspection_harness.py`, `inspection/test_feed.py`, `load/load_harness.py`, `load/test_recovery_scale.py`, `store/test_runner_report.py`, `store/test_messages.py`, `process/test_review_detection_ownership.py`, `contract/harness.py` and `contract/end_state.py`. The task breakdown re-greps for `CommandKind.SQ_RUN` instead of trusting this list.
+- Every test that journals `sq_run` gains a `run_id` through one shared helper, `sq_run_parameters(...)` in a tests support module. Today that is `test_journal.py`, `test_journal_models.py`, `test_recovery.py`, `test_host.py`, `test_cli_lifecycle.py`, `test_read_only_open.py`, `inspection_harness.py`, `inspection/test_feed.py`, `load/load_harness.py`, `load/test_recovery_scale.py`, `store/test_runner_report.py`, `store/test_messages.py`, `process/test_review_detection_ownership.py`, `contract/harness.py` and `contract/end_state.py`. The task breakdown re-greps for `CommandKind.SQ_RUN` instead of trusting this list. The helper only adds a `run_id` to the parameters a caller passes, and does nothing more. This churn is the cost of D1 and is not cut: an optional key was rejected there.
 - `tests/test_observer_sq_runs.py` keeps its matcher tests. A legacy entry is built as a `JournalEntry` value, and at store level as a row written through a raw `sqlite3` test helper that represents a pre-120 row.
 - `tests/load/test_recovery_scale.py`: the scan-count assertions become zero scans for id-bearing entries, one for a pass with legacy entries, and one poll per id-bearing entry.
 - `scripts/demo_journal.py` is deleted, along with its entry in `tests/test_writer_guard.py`'s `PERMITTED_SCRIPTS`. It demonstrated 101's attribute matching with id-less entries, which `journal_issue` now refuses, and the recovery tests cover both paths.
@@ -288,12 +289,12 @@ CLI: `amoeba start --launch-grace SECONDS` (new). `amoeba prune sq-runs [--yes]`
 - **122 Runner tenant:**
   - It must journal `run_id` in every `sq_run`.
   - It polls in-flight runs with `poll_run`, mapping `TIMED_OUT` to still running.
-  - Before reissuing a `not_applied` entry, it checks the entry's launch log (issue #9).
   - It reads `launch_grace_seconds`.
-  - It can rely on recovery having resolved every id-bearing entry as `adopted`, `not_applied` (no run state after the grace period; not proof the run never started, so reissue only after one more poll and the launch-log check of issue #9), or `unknown` (escalated).
+  - It can rely on recovery having resolved every id-bearing entry as `adopted`, `not_applied` (no run state after the grace period; not proof the run never started), or `unknown` (escalated). 122 changes the answer for a run that exists from `adopted` to in flight (122, D3).
+- **125 Dispatch and reissue:** a `not_applied` entry is reissued only under the contract rule D4 records: the launch-log check, then one more poll (125, D9, issue #9).
 - **125 Dispatch and ingestion:** `RunOutcomeDocument` is the one model of the outcome document. 125 extends it with `checkpoint` fields, `failure` and `reviews`.
 - **Contract documents:**
-  - `docs/process-contract.md`: Recovery properties, the shipped observers, the supervisor directory table (`runs/`), the start flags, and pruning.
+  - `docs/process-contract.md`: Recovery properties, the `not_applied` definition for `sq_run` and its reissue rule (D4), the shipped observers, the supervisor directory table (`runs/`), the start flags, and pruning.
   - `docs/store-contract.md`: required parameter keys.
   - `docs/substrate-guide.md`: the 120 row, which now says the issuer must put `run_id` in both `parameters` and `result`.
 
@@ -359,7 +360,7 @@ Run in bash from the repository root. Steps 1–2 are automated. Step 3 uses the
 
 ### Mitigation Strategies
 
-- Escalation stays the default for every ambiguous answer. `NotApplied` needs a not_found answer after the grace period and a known `issued_at`. Before reissuing, 122 polls once more (arch, "Observing a run without blocking the tick") and checks the launch log (issue #9).
+- Escalation stays the default for every ambiguous answer. `NotApplied` needs a not_found answer after the grace period and a known `issued_at`. Before reissuing, the issuer checks the launch log and polls once more (arch, "Observing a run without blocking the tick"; 125, D9). This slice writes that rule into the `not_applied` definition in `docs/process-contract.md` (D4).
 - The legacy matcher and its tests are unchanged, so existing recovery behaviour is a regression baseline.
 - The load tier asserts poll counts and the D4 startup bound.
 

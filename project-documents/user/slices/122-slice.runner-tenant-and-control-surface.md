@@ -15,7 +15,7 @@ interfaces:
 - 128
 - 129
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261021
 status: not_started
 turns: 35
 promptTokens: 3530573
@@ -84,7 +84,7 @@ Developer value, and the slice the plan rates highest-risk.
 - **120, merged.** It provides `poll_run`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `SQ_EXECUTABLE`, the `run_id` required key (`PARAM_RUN_ID`), the by-id recovery observer and `launch_grace_seconds`. This slice changes the by-id observer's answer for a run that exists (D3).
 - **121, merged.** It provides `raise_project_escalation`, `open_project_escalations` and `close_project_escalation`, and the guarantee that a node with an unresolved entry cannot be marked `done`.
 - **squadron-ai 0.23.5 or later** as `sq`. The slice depends on its shapes, not its version: `sq run --run-id`, the `run_id=<id>` stderr line, and `sq runs wait <id> --timeout 0 --json`.
-- **Context Forge** as `cf`, for the per-link probes: `cf status --json -p <id>`, `cf list initiatives --json -p <id>` and `cf list slices --json -p <id>`. All three take `-p` (observed on CF 0.19.16, 20261020).
+- **Context Forge** as `cf`, for the per-link probes: `cf status --json -p <id>` and `cf list initiatives --json -p <id>`. Both take `-p` (observed on CF 0.19.16, 20261020).
 
 ### Interfaces Required
 
@@ -116,7 +116,8 @@ amoeba/runner/                 NEW package; imported only by amoeba.cli
   observe.py       observe in-flight runs: confirmation, poll cadence, classification
   finish.py        record a finished run (minimal; 125 replaces the body)
   faults.py        FaultKind, LaunchFailure, NodeFault, STORE_FAILURES, escalation writes
-  probes.py        sq probe at start; per-link cf probes; the CF JSON top-level checks
+  probes.py        sq probe at start; per-link cf probes: CF_EXECUTABLE, the two
+                   commands, the cf call, the CF JSON top-level checks (D9)
   factory.py       runner_tenant(settings, supervisor_dir): validate settings, probe, build
 amoeba/process/
   observers/sq_run_id.py   CHANGED  a run that exists → InFlight (D3)
@@ -172,7 +173,8 @@ tick n    act:      run_id ← mint_run_id(); entry ← journal_issue(sq_run, {p
                     Popen([sq, run, pipeline, --run-id, id, -p k=v …], detached)
 tick n+k  observe:  stderr has exact "run_id=<id>"         → confirmed, in flight
                     child exited, no line, no run state    → launch failed (D6)
-                    grace passed, no line: poll once       → state: in flight; none: failed
+                    grace passed, no line: poll once       → state: in flight; none and
+                                                             child alive: overdue (D6)
 tick m    observe:  due for a poll: poll_run(id)
                     timed_out (still running)              → in flight
                     completed | failed | paused | orphaned → finished → record
@@ -251,16 +253,19 @@ Status: decided
 ### D6 — Launch confirmation
 Status: decided
 - **Confirmed** when the stderr log has a line exactly equal to `run_id=<id>`, or when a poll returns any outcome other than `not_found`. "Exactly" means a whole line, compared after removing only the line terminator. It is never a substring match inside another line. This line is the one exception to "never read stdout prose" that the arch allows, because S9 documents its format. The check reads at most the first 64 KiB of the file, because Squadron prints the line before its first step.
-- **An unreadable log.** If reading the stderr log raises `OSError` (the file was removed, or permissions changed), the check answers "no line" for this tick and raises `run_observation_failed` for the project, naming the entry and the error. The run state still decides: a poll that finds a state confirms the launch, and at child exit or grace expiry the failure rules below apply, with the error in place of the log tail. Nothing is guessed from the missing file.
+- **An unreadable log.** If reading the stderr log raises `OSError` (the file was removed, or permissions changed), the check answers "no line" for this tick and raises `run_observation_failed` for the project, naming the entry and the error. The run state still decides: a poll that finds a state confirms the launch, and at grace expiry or child exit the overdue and failure rules below apply, with the error in place of the log tail. Nothing is guessed from the missing file.
 - **Still launching**, while unconfirmed: `not_found` from a poll, or no line yet with the child alive and the grace period not passed. An unconfirmed launch is not polled on the interval. It is polled once when the child exits without the line, and once when the grace period passes.
+- **Overdue.** The grace period (`launch_grace_seconds` from `issued_at`) passed with no line, one poll finds no state, and the child is still alive. A live child can still create the run, so the launch is not failed and the entry stays unresolved. The tick raises `launch_overdue` for the project, naming the entry, the run id and the log tail. From then on the launch is polled on the run poll interval, like a confirmed run, and the line is still checked. A state or the line confirms it. The fault recurs on every tick while the launch stays overdue, so D8's closure rule closes the escalation only after the launch is confirmed or failed. When the child exits, the exit rule below applies. The child is not killed.
+  - This keeps a late run adoptable. A resolved entry could not receive its review through `record_runner_report`, and its checkout would look free.
+  - After a restart the child handle is gone. Recovery marks a stateless entry past the grace period `not_applied` (120, D4), and 125's reissue polls again before reissuing and adopts a run that exists (issue #9).
+  - Rejected: failing the launch at grace expiry while the child lives. A late run would then be unobserved.
 - **Failed**:
-  - The child exited before printing the line, and one poll finds no state.
-  - The grace period (`launch_grace_seconds` from `issued_at`) passed with no line, and one poll finds no state. The child may still be alive. It is not killed. The escalation says that a late run may still appear under this id. The entry's parameters already carry the id, so a late run is traceable.
+  - The child exited before printing the line, and one poll finds no state. This applies to an overdue launch too.
   - The `OSError` case of D4.
 
   On failure, the node blocks on `HUMAN` with a `LaunchFailure` reason, the child's exit code if known, and the last 4 KiB of the stderr log. The entry then resolves `failed`, with `result={run_id, launch_failure}`.
 - **Exit 2** from a launch child that left no run state is a usage error, which means a shape is missing (`--run-id` or the param flags). The launch fails as above, then the tick raises `UpstreamShapeError` naming the command. The process exits with `ExitCode.UPSTREAM_SHAPE` (D8).
-  - This departs from the arch's "stops the Runner tenant". The whole process exits, for the same reason as D9's `sq` probe: a process that ran on with its Runner stopped would be a silent fallback. The departure is recorded in the arch (Special Considerations). The decision rests on the observed state (no run) and the exit code, never on the message text.
+  - The whole process exits, not only the Runner tenant, for the same reason as D9's `sq` probe: a process that ran on with its Runner stopped would be a silent fallback. The arch already says this. The decision rests on the observed state (no run) and the exit code, never on the message text.
 - A child that exits with any code after its run is confirmed is not the Runner's concern. The run's outcome comes from polling.
 
 ### D7 — Reissuing a `not_applied` launch is deferred to 125
@@ -278,30 +283,32 @@ Status: decided
 
   An escalation write that itself fails is not caught again, so a broken store always exits.
 - **Every other exception** is logged with `logger.exception` and escalated.
-  - **The node in context has no run in flight.** The node blocks on `HUMAN`, with the context naming the fault and a payload of `{fault_kind, error}`. If the node is already blocked, nothing more is written, so escalations cannot storm.
-  - **The node has a run in flight, or no node is in context.** The fault raises a project-scoped escalation instead, with the node and run ids in the payload. A node with a run in flight blocks only when its run ends (D2), as the arch requires.
+  - **The node in context has no run in flight and is not done.** The node blocks on `HUMAN`, with the context naming the fault and a payload of `{fault_kind, error}`. If the node is already blocked, nothing more is written, so escalations cannot storm.
+  - **The node has a run in flight, is done, or no node is in context.** The fault raises a project-scoped escalation instead, with the node and run ids in the payload. A node with a run in flight blocks only when its run ends (D2), as the arch requires. A done node cannot be blocked (121, D1), so its fault takes the project-scoped path, with the node id in the payload.
 - **Node context.** Each node-scoped step sets the tick's current node before it runs, the same pattern the host uses to name the current tenant. The catch reads it.
 - **Expected faults are answers, not exceptions.** A `PollFailure`, an `unreadable` or `unknown_status` outcome, or a failed cf probe is recorded in the tick's fault set and raised as a project-scoped escalation. The tick continues.
 - **`FaultKind`**, the vocabulary 121 left to this slice (a `StrEnum` in `faults.py`):
   - `run_observation_failed`: a poll of an in-flight run gave no usable answer.
+  - `launch_overdue`: a launch child is alive past the grace period with no run state (D6).
   - `cf_probe_failed`: a CF link failed its probe (D9).
   - `unexpected_fault`: an exception with no node in context, or on a node with a run in flight.
 
-  `LaunchFailure` (`spawn_error`, `exited_before_line`, `no_line_within_grace`, `usage_error`) and the run-end reasons (`orphaned`, `vanished`, and the Squadron outcomes) name node blocks. 126 can match on them later.
+  `LaunchFailure` (`spawn_error`, `exited_before_line`, `usage_error`) and the run-end reasons (`orphaned`, `vanished`, and the Squadron outcomes) name node blocks. 126 can match on them later.
 - **Closure.** At the end of a complete project tick, every open project-scoped escalation whose kind did not recur in that tick is closed with `closed_by="runner"`. A tick that was cut off or faulted closes nothing, because its evidence is incomplete.
 
 ### D9 — Shape probes: `sq` at start, `cf` once per link
 Status: decided
 - **`sq`.** `runner_tenant()` runs `poll_run(<freshly minted id>, timeout_seconds=sq_timeout_seconds)` before the loop. It must return a document with outcome `not_found` and the same `run_id`. Anything else raises `StartupFailedError`, naming the shape `sq runs wait <id> --timeout 0 --json` and the answer (`PollFailure` reason, or the unexpected outcome). `amoeba start` then exits `STARTUP_FAILED`.
-  - This departs from the plan's "stops the tenant from starting". The process does not start at all. A process that ran with its Runner silently disabled would be a silent fallback, and there is no project to escalate a global shape failure to.
+  - The process does not start at all. A process that ran with its Runner silently disabled would be a silent fallback, and there is no project to escalate a global shape failure to. The arch and the plan already say this.
 - **`cf`.** A probe needs a CF project id, and a link names one. Each CF link is probed once per lifetime, on the first observation of its project. That makes the probe "first use" for links made while the process runs.
-  - The three commands are `cf status --json -p <id>`, `cf list initiatives --json -p <id>` and `cf list slices --json -p <id>`, each under `tick_call_timeout_seconds`.
-  - Each of the three is a separate subprocess call and checks `TickBudget` before it starts, like every other call (D10). So the probe keeps the bound of the deadline plus one call timeout. A probe cut off partway records nothing, and the link is probed again from its first command on the next tick.
-  - Each output must parse as JSON with the expected top-level form: an object for status, an array for initiatives, and an object with an `entries` array for slices.
+  - The two commands are `cf status --json -p <id>` and `cf list initiatives --json -p <id>`, each under `tick_call_timeout_seconds`. `cf list slices --json` is not probed: with no index it reads a project-level pointer that is empty on worktree-scoped projects, so a healthy link would fail. 123 checks the slice-list shape on each plan read (arch "Unknown escalates"; 123, D11).
+  - Each is a separate subprocess call and checks `TickBudget` before it starts, like every other call (D10). So the probe keeps the bound of the deadline plus one call timeout. A probe cut off partway records nothing, and the link is probed again from its first command on the next tick.
+  - Each output must parse as JSON with the expected top-level form: an object for status and an array for initiatives.
   - A failure raises `cf_probe_failed` for that project, naming the command, the exit code and the output head. It also marks the link failed for this lifetime, and 123 reads that flag before any `cf` read.
   - A link marked failed counts as a recurrence of `cf_probe_failed` on every later tick of its project. The raise is deduplicated, so it writes nothing, and D8's closure rule keeps the escalation open for the rest of the lifetime. It closes on the first complete tick of a later lifetime whose probe of every link passes.
   - A failed link does not stop the Runner. A deleted CF project returns empty output that looks just like a missing shape (observed 20261020). Refusing to start over one dead link, which cannot yet be unlinked (issue #7), would stop every project for one project's fault.
-- **Seam for 123.** `probes.py` calls three parser functions in `amoeba.upstream.context_forge`. In this slice they check only the top-level form. 123 replaces them with its full models, and the probe then checks what the reads actually use.
+- **Who owns the `cf` call.** `probes.py` does. It defines `CF_EXECUTABLE` and the two probe commands, and runs each through the subprocess runner the tenant is given (`runner_tenant()` passes `subprocess.run`; tests pass a fake). Each call uses `stdin=DEVNULL`, captured output, `timeout=tick_call_timeout_seconds` and `check=False`. A `TimeoutExpired` is a probe failure.
+- **Seam for 123.** The two top-level checks are private functions in `probes.py`. This slice adds and changes nothing in `amoeba.upstream`. 123 adds `amoeba.upstream.context_forge.plan` with its full models, swaps them into the probe, and moves the commands to its `plan_read.py` (123, D11). The probe then checks what the reads actually use.
 - No probe reads help text. `--run-id` and `--decision` cannot be probed without a real run, so they are checked on first use (D6). `--decision` belongs to 127.
 
 ### D10 — Settings and the tick budget
@@ -413,7 +420,9 @@ The supervisor directory table gains `launch-logs/`: one stdout and one stderr l
   - **Killed while the run is running.** The entry is left in flight by recovery, then observed and recorded.
   - **Killed after the run finished, before it was recorded.** The entry is left in flight, then recorded on the first tick.
   - **Killed between a node block and the resolve.** The next tick finishes the sequence, and the node has one blocked state.
-- A launch whose child exits before the line, or that passes the grace period with no line, resolves `failed`, and its node blocks with the reason and the log tail. If a poll at that moment finds a run state, the run is observed instead. An unreadable launch log raises `run_observation_failed` and leaves the decision to the run state.
+- A launch whose child exits before the line resolves `failed`, and its node blocks with the reason and the log tail. If a poll at that moment finds a run state, the run is observed instead.
+- A launch past the grace period with no line, no run state and a live child stays unresolved and raises one `launch_overdue` escalation. A run that appears later (the stub's late-line mode) is confirmed and recorded, and the escalation closes.
+- An unreadable launch log raises `run_observation_failed` and leaves the decision to the run state.
 - A launch child that exits 2 with no run state blocks its node, resolves its entry `failed`, and exits the process with `UPSTREAM_SHAPE`.
 - With an `sq` whose `runs wait --json` does not return the not-found document, `amoeba start` exits `STARTUP_FAILED`, naming the shape. A CF link whose probe fails raises one `cf_probe_failed` escalation for that project, and other projects continue. A probe cut off by the deadline starts no call after it.
 - An unexpected exception in one project is logged at ERROR and escalates the node in context, or raises a project-scoped escalation. The same tick continues with the other projects. A store failure exits the process.
@@ -472,7 +481,7 @@ Run in bash from the repository root. Steps 1–3 are automated and use the stub
      --cf-project-id "$(cf list projects --json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')"
    amoeba inspect messages --project demo --json
    ```
-   Expected: the process log shows the link's three `cf` probes passing, and no `cf_probe_failed` row appears. Repeat with `--cf-project-id does-not-exist` on a second project. That project gets one open `escalation` row with `fault_kind` `cf_probe_failed`, and `demo` is unaffected.
+   Expected: the process log shows the link's two `cf` probes passing, and no `cf_probe_failed` row appears. Repeat with `--cf-project-id does-not-exist` on a second project. That project gets one open `escalation` row with `fault_kind` `cf_probe_failed`, and `demo` is unaffected.
 
 5. **A refused start.** Put a script named `sq` that exits 2 first on `PATH`:
    ```bash
@@ -526,10 +535,12 @@ Relative effort: 4/5. Suggested order. Each step leaves the suite green.
   - Launch logs and the stderr tail stored in a block payload may contain whatever Squadron prints. Squadron does not print credentials. The tail is bounded at 4 KiB, and the contract text repeats the rule that a payload must not hold secrets.
   - The inherited environment is passed to `sq` and never recorded.
   - Journal parameters hold paths and ids only.
-- **Retention.** Launch logs are never deleted in this slice. A pruning companion for `launch-logs/`, removing logs of resolved entries past retention, can join `amoeba prune` when volume calls for it.
+- **Retention.** Launch logs are never deleted in this slice. A pruning companion for `launch-logs/`, removing logs of resolved entries past retention, can join `amoeba prune` when volume calls for it. A long run's logs also have no size bound. This is accepted in v1, and the same companion can add a bound if a log grows large.
 - **No kill, anywhere.** Neither a launch child past its grace period nor a run past any bound is killed. Time bounds per pipeline are 126's routing input.
-- **Slice plan and architecture.** These changes follow this design. They are recorded in entry 3's criteria, as 120 reworded its own entry, and in the sentences of `120-arch.runner-routing-engine.md` they depart from ("Unknown escalates" and "Observing a run without blocking the tick"), each citing its decision here. The arch sentences also cover D6's one poll before a launch is failed.
+- **Slice plan and architecture.** The arch ("Unknown escalates" and "Observing a run without blocking the tick") and entry 3's criteria already record these decisions, so no task edits them again:
   - Probe failure: `sq` stops start, and `cf` escalates per link (D9).
   - Polling: at most once per tick, under the poll interval (D10).
   - Recovery leaves existing runs in flight (D3).
   - A launch that exits 2 exits the process, rather than stopping only the Runner tenant (D6).
+
+  Two edits remain. The arch's launch sentence and entry 3's grace criterion still fail a launch at grace expiry, and need D6's overdue rule. Entry 3's description still says "polled once per tick" (D10).
