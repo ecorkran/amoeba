@@ -1,0 +1,300 @@
+"""Recovery of an ``sq_run`` entry by its run id, and the dispatcher (slice 120).
+
+``poll_run`` is replaced by a fake that returns queued answers, the clock is
+fixed, and ``sleep`` only records, so each test states exactly what Squadron
+said and when.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from sq_run_fixtures import sq_run_parameters
+
+import amoeba.process.observers.sq_run_id as sq_run_id
+from amoeba.process.observers.sq_run_id import (
+    STATE_BEARING_OUTCOMES,
+    SquadronRunIdObserver,
+)
+from amoeba.process.recovery import Adopt, NotApplied, Observation, Unknown
+from amoeba.process.sq_outcome import PollFailure, RunOutcome, RunOutcomeDocument
+from amoeba.store.journal_models import PARAM_RUN_ID, CommandKind, JournalEntry
+
+RUN_ID = "run-20261022-p5-aaaa1111"
+NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
+GRACE_SECONDS = 60.0
+POLL_TIMEOUT_SECONDS = 7.0
+ENTRY_ID = "entry-1"
+
+
+class FakePoll:
+    """Stands in for ``poll_run``: answers from a queue and records the calls."""
+
+    def __init__(self, *answers: RunOutcomeDocument | PollFailure) -> None:
+        self._answers = list(answers)
+        self.calls: list[tuple[str, float]] = []
+
+    def __call__(
+        self, run_id: str, *, timeout_seconds: float
+    ) -> RunOutcomeDocument | PollFailure:
+        self.calls.append((run_id, timeout_seconds))
+        assert self._answers, "poll_run was called more often than the test queued"
+        return self._answers.pop(0)
+
+
+def _document(outcome: RunOutcome, status: str | None = None) -> RunOutcomeDocument:
+    return RunOutcomeDocument(run_id=RUN_ID, outcome=outcome, status=status)
+
+
+def _entry(
+    *,
+    issued_at: datetime | None = NOW - timedelta(seconds=600),
+    parameters: dict[str, object] | None = None,
+) -> JournalEntry:
+    return JournalEntry(
+        id=ENTRY_ID,
+        project_id="demo",
+        node_id="node-1",
+        kind=CommandKind.SQ_RUN,
+        parameters=(
+            parameters
+            if parameters is not None
+            else sq_run_parameters({"pipeline": "p5", "params": {}}, run_id=RUN_ID)
+        ),
+        issued_at=issued_at,
+    )
+
+
+class Rig:
+    def __init__(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *answers: RunOutcomeDocument | PollFailure,
+        claimed: dict[str, str] | None = None,
+    ) -> None:
+        self.poll = FakePoll(*answers)
+        self.sleeps: list[float] = []
+        monkeypatch.setattr(sq_run_id, "poll_run", self.poll)
+        self.observer = SquadronRunIdObserver(
+            launch_grace_seconds=GRACE_SECONDS,
+            poll_timeout_seconds=POLL_TIMEOUT_SECONDS,
+            claimed_run_ids=claimed,
+            now=lambda: NOW,
+            sleep=self.sleeps.append,
+        )
+
+    def observe(self, entry: JournalEntry) -> Observation:
+        return self.observer.observe(entry)
+
+
+# 1. State-bearing outcomes adopt ------------------------------------------
+
+
+def test_six_outcomes_are_state_bearing() -> None:
+    assert STATE_BEARING_OUTCOMES == {
+        RunOutcome.COMPLETED,
+        RunOutcome.FAILED,
+        RunOutcome.PAUSED,
+        RunOutcome.TIMED_OUT,
+        RunOutcome.UNKNOWN_STATUS,
+        RunOutcome.ORPHANED,
+    }
+
+
+@pytest.mark.parametrize("outcome", sorted(STATE_BEARING_OUTCOMES))
+def test_every_state_bearing_outcome_adopts_with_run_id_outcome_and_status(
+    monkeypatch: pytest.MonkeyPatch, outcome: RunOutcome
+) -> None:
+    rig = Rig(monkeypatch, _document(outcome, status="some-status"))
+
+    observation = rig.observe(_entry())
+
+    assert observation == Adopt(
+        result={"run_id": RUN_ID, "outcome": outcome.value, "status": "some-status"}
+    )
+    assert rig.poll.calls == [(RUN_ID, POLL_TIMEOUT_SECONDS)]
+    assert rig.sleeps == []
+
+
+def test_an_adoption_does_not_record_a_schema_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.COMPLETED, status="completed"))
+
+    observation = rig.observe(_entry())
+
+    assert isinstance(observation, Adopt)
+    assert "schema_version" not in observation.result
+
+
+# 2. Unreadable and poll failures escalate ---------------------------------
+
+
+def test_unreadable_escalates(monkeypatch: pytest.MonkeyPatch) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.UNREADABLE))
+
+    observation = rig.observe(_entry())
+
+    assert isinstance(observation, Unknown)
+    assert RUN_ID in observation.reason
+    assert "unreadable" in observation.reason
+
+
+def test_a_poll_failure_escalates_with_its_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, PollFailure("`sq` was not found on PATH (run x)"))
+
+    observation = rig.observe(_entry())
+
+    assert observation == Unknown(reason="`sq` was not found on PATH (run x)")
+    assert rig.sleeps == []
+
+
+# 3. Unusable run ids escalate ---------------------------------------------
+
+
+@pytest.mark.parametrize("bad_value", [42, "", None, ["run-x"]])
+def test_a_run_id_that_is_not_a_non_empty_string_escalates_naming_it(
+    monkeypatch: pytest.MonkeyPatch, bad_value: object
+) -> None:
+    rig = Rig(monkeypatch)
+    entry = _entry(parameters={"pipeline": "p5", "params": {}, PARAM_RUN_ID: bad_value})
+
+    observation = rig.observe(entry)
+
+    assert isinstance(observation, Unknown)
+    assert repr(bad_value) in observation.reason
+    assert rig.poll.calls == []
+
+
+# 4. A claimed id is never adopted twice -----------------------------------
+
+
+def test_a_run_claimed_by_another_entry_escalates_without_polling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, claimed={RUN_ID: "some-other-entry"})
+
+    observation = rig.observe(_entry())
+
+    assert isinstance(observation, Unknown)
+    assert "some-other-entry" in observation.reason
+    assert rig.poll.calls == []
+
+
+# 5. not_found past grace, and without issued_at ---------------------------
+
+
+def test_not_found_past_the_grace_period_is_not_applied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.NOT_FOUND))
+
+    observation = rig.observe(_entry(issued_at=NOW - timedelta(seconds=61)))
+
+    assert observation == NotApplied(
+        f"no run state for {RUN_ID} after the launch grace period"
+    )
+    assert rig.sleeps == []
+    assert len(rig.poll.calls) == 1
+
+
+def test_not_found_exactly_at_the_end_of_grace_is_not_applied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.NOT_FOUND))
+
+    observation = rig.observe(_entry(issued_at=NOW - timedelta(seconds=60)))
+
+    assert isinstance(observation, NotApplied)
+    assert rig.sleeps == []
+
+
+def test_not_found_with_no_issued_at_escalates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.NOT_FOUND))
+
+    observation = rig.observe(_entry(issued_at=None))
+
+    assert isinstance(observation, Unknown)
+    assert "issued_at" in observation.reason
+    assert rig.sleeps == []
+
+
+# 6. not_found inside grace: wait out the remainder, ask once more ---------
+
+
+def test_in_grace_it_sleeps_the_remainder_then_adopts_a_run_that_appeared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch,
+        _document(RunOutcome.NOT_FOUND),
+        _document(RunOutcome.TIMED_OUT, status="running"),
+    )
+
+    observation = rig.observe(_entry(issued_at=NOW - timedelta(seconds=45)))
+
+    assert observation == Adopt(
+        result={"run_id": RUN_ID, "outcome": "timed_out", "status": "running"}
+    )
+    assert rig.sleeps == [15.0]
+    assert len(rig.poll.calls) == 2
+
+
+def test_in_grace_it_is_not_applied_when_the_second_poll_still_finds_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch, _document(RunOutcome.NOT_FOUND), _document(RunOutcome.NOT_FOUND)
+    )
+
+    observation = rig.observe(_entry(issued_at=NOW - timedelta(seconds=45)))
+
+    assert isinstance(observation, NotApplied)
+    assert rig.sleeps == [15.0]
+    assert len(rig.poll.calls) == 2
+
+
+def test_in_grace_it_escalates_when_the_second_poll_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch, _document(RunOutcome.NOT_FOUND), PollFailure("sq hung (run x)")
+    )
+
+    observation = rig.observe(_entry(issued_at=NOW - timedelta(seconds=45)))
+
+    assert observation == Unknown(reason="sq hung (run x)")
+    assert len(rig.poll.calls) == 2
+
+
+def test_in_grace_it_never_polls_a_third_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch, _document(RunOutcome.NOT_FOUND), _document(RunOutcome.NOT_FOUND)
+    )
+
+    rig.observe(_entry(issued_at=NOW))
+
+    assert len(rig.poll.calls) == 2
+    assert len(rig.sleeps) == 1
+
+
+# 7. issued_at ahead of the clock ------------------------------------------
+
+
+def test_an_issued_at_ahead_of_the_clock_cannot_stretch_the_sleep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch, _document(RunOutcome.NOT_FOUND), _document(RunOutcome.NOT_FOUND)
+    )
+
+    rig.observe(_entry(issued_at=NOW + timedelta(hours=2)))
+
+    assert rig.sleeps == [GRACE_SECONDS]
