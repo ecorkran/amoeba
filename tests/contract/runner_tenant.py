@@ -52,7 +52,6 @@ from contract.standin import (
     new_run_id,
     render_review,
     write_outcome,
-    write_run_file,
 )
 
 #: The tenant's name in logs.
@@ -95,15 +94,11 @@ class ProofRunner:
 
     def __init__(
         self,
-        runs_dir: Path,
         reviews_dirs: Mapping[str, Path],
-        run_fixture: Path,
         review_fixture: Path,
         standin_run_age: timedelta,
     ) -> None:
-        self._runs_dir = runs_dir
         self._reviews_dirs = dict(reviews_dirs)
-        self._run_fixture = run_fixture
         self._review_template = review_fixture.read_text(encoding="utf-8")
         self._standin_run_age = standin_run_age
         slice_name = parse_review_artifact(self._review_template).slice
@@ -177,15 +172,6 @@ class ProofRunner:
         if crash_at is CrashPoint.AFTER_JOURNAL:
             _crash()
 
-        write_run_file(
-            self._runs_dir,
-            self._run_fixture,
-            run_id=run_id,
-            params=self._run_params(),
-            started_at=now,
-            updated_at=now,
-            status=STATUS_COMPLETED,
-        )
         write_outcome(
             Path.home(),
             run_id=run_id,
@@ -239,15 +225,6 @@ class ProofRunner:
         now = datetime.now(UTC)
         run_id = new_run_id(now)
         entry = self._journal_run(store, gate, run_id)
-        write_run_file(
-            self._runs_dir,
-            self._run_fixture,
-            run_id=run_id,
-            params=self._run_params(),
-            started_at=now,
-            updated_at=now - self._standin_run_age,
-            status=STATUS_PAUSED,
-        )
         write_outcome(
             Path.home(),
             run_id=run_id,

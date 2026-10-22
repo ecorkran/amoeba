@@ -33,7 +33,6 @@ from contract.runner_tenant import INTENT_CRASH_AT, INTENT_STEP, CrashPoint, Pro
 from contract.subscriber import BackgroundReader, Subscriber
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
-RUN_FIXTURE = TESTS_DIR / "fixtures" / "sq_runs" / "run-20261015-p5-8a59ee89.json"
 
 WAIT_TIMEOUT_SECONDS = 30.0
 POLL_INTERVAL_SECONDS = 0.05
@@ -44,10 +43,6 @@ COMMAND_TIMEOUT_SECONDS = 30.0
 PAYLOAD_BODY = "body"
 PAYLOAD_REVIEWS_DIR = "reviews_dir"
 PAYLOAD_ACTIVE = "active"
-
-#: Where Squadron keeps run files, relative to ``HOME``; the process contract
-#: documents it, and ``ProcessSettings`` derives the same place from ``HOME``.
-SQ_RUNS_RELATIVE_DIR = Path(".config") / "squadron" / "runs"
 
 BOOTSTRAP_PREFIX = "bootstrap"
 
@@ -78,7 +73,6 @@ class ProofHarness:
         self.tmp_path = tmp_path
         self.review_fixture = review_fixture
         self.home = require_under(tmp_path, tmp_path / "home", "HOME")
-        self.runs_dir = self.home / SQ_RUNS_RELATIVE_DIR
         self.supervisor_dir = require_under(tmp_path, tmp_path / "store", "store")
         self.cf_data_dir = require_under(tmp_path, tmp_path / "cf", "CF data")
         self._logs = tmp_path / "logs"
@@ -90,7 +84,6 @@ class ProofHarness:
         }
         for directory in (
             self.home,
-            self.runs_dir,
             self.cf_data_dir,
             self._logs,
             *self.reviews_dirs.values(),
@@ -153,8 +146,6 @@ class ProofHarness:
             str(self.supervisor_dir),
             "--cf-data-dir",
             str(self.cf_data_dir),
-            "--run-fixture",
-            str(RUN_FIXTURE),
             "--review-fixture",
             str(self.review_fixture),
         ]

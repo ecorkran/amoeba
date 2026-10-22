@@ -1,9 +1,12 @@
 """The stand-in for Squadron's side effects (slice 110, D3).
 
 The proof is about Amoeba's contract, not Squadron: a real ``sq review`` needs a
-model provider, costs money, and is not deterministic. What the observers and
-detection read is a run file and a review file, so those are what is written
-here, derived from captured fixtures so the formats stay the real ones.
+model provider, costs money, and is not deterministic. What recovery and
+pruning read is the outcome document ``sq runs wait`` prints, and what detection
+reads is a review file, so those are what is written here (the outcome through
+the stub ``sq``, the review derived from a captured fixture so its format stays
+the real one). ``write_run_file`` writes Squadron's own run-state file, which
+nothing in Amoeba reads since slice 120; the pruning tests use it to prove that.
 
 Shared by the proof Runner (which launches work) and the scenario driver (which
 plays the PM launching a review of its own in step 7).

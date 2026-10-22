@@ -2,9 +2,8 @@
 
 Run as ``python -m contract.bootstrap`` with ``PYTHONPATH`` at ``tests/``, never
 through ``uv run`` (a temporary ``HOME`` would move uv's cache). Everything
-per-run arrives as an argument. ``ProcessSettings`` keeps its default
-``sq_runs_dir``, which derives from ``HOME``, so this process and
-``amoeba prune`` agree on the runs directory by construction.
+per-run arrives as an argument. The stub ``sq`` on ``PATH`` and ``HOME`` come
+from the harness, so this process and ``amoeba prune`` ask the same stub state.
 """
 
 from __future__ import annotations
@@ -77,7 +76,6 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--reviews-dir", type=_reviews_dir, action="append", required=True
     )
-    parser.add_argument("--run-fixture", type=Path, required=True)
     parser.add_argument("--review-fixture", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -94,9 +92,7 @@ def main(argv: Sequence[str]) -> None:
         launch_grace_seconds=LAUNCH_GRACE_SECONDS,
     )
     runner = ProofRunner(
-        settings.sq_runs_dir,
         dict(arguments.reviews_dir),
-        arguments.run_fixture,
         arguments.review_fixture,
         STANDIN_RUN_AGE,
     )
