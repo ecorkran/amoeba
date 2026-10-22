@@ -40,6 +40,7 @@ from pathlib import Path
 
 import pytest
 from load_harness import PROJECT, seed_project, synthesize_runs
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.process.observers import sq_runs
 from amoeba.process.recovery import reconcile
@@ -65,10 +66,10 @@ def _issue_entries(store: Store, node_id: str, count: int) -> list[str]:
         store.journal_issue(
             node_id,
             kind=CommandKind.SQ_RUN,
-            parameters={
-                "pipeline": "loadtest",
-                "params": {"index": str(index)},
-            },
+            parameters=sq_run_parameters(
+                {"pipeline": "loadtest", "params": {"index": str(index)}},
+                run_id=f"run-load-{index}",
+            ),
         ).id
         for index in range(count)
     ]

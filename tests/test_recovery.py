@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import pytest
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.process.recovery import (
     Adopt,
@@ -37,7 +38,9 @@ from amoeba.store import (
 
 PROJECT = "demo"
 
-SQ_PARAMETERS: dict[str, object] = {"pipeline": "p6", "params": {"slice": "102"}}
+SQ_PARAMETERS: dict[str, object] = sq_run_parameters(
+    {"pipeline": "p6", "params": {"slice": "102"}}
+)
 CF_PARAMETERS: dict[str, object] = {"project": "amoeba", "expected": {"phase": "6"}}
 
 

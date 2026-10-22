@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 from evidence_harness import PROJECT, seed_node, verdict_input
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.store import (
     CommandKind,
@@ -29,12 +30,10 @@ def _issue(
     kind: CommandKind = CommandKind.SQ_RUN,
 ) -> JournalEntry:
     # Carries the required keys of both kinds; extra keys are stored verbatim.
-    parameters: dict[str, object] = {
-        "pipeline": "review",
-        "params": {},
-        "project": "p",
-        "expected": "x",
-    }
+    parameters = sq_run_parameters(
+        {"pipeline": "review", "params": {}, "project": "p", "expected": "x"},
+        run_id=RUN_RESULT["run_id"],
+    )
     return store.journal_issue(node_id, kind=kind, parameters=parameters)
 
 

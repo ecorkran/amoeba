@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from contract.standin import STATUS_PAUSED, write_run_file
+from sq_run_fixtures import sq_run_parameters
 from sq_stub import LOG_ENV, MODE_ENV, REFUSE_ENV, StubMode, write_sq_stub
 
 from amoeba.cli.main import ExitCode
@@ -68,7 +69,7 @@ class Rig:
                 entry = store.journal_issue(
                     gate.id,
                     kind=CommandKind.SQ_RUN,
-                    parameters={"pipeline": "review", "params": {}},
+                    parameters=sq_run_parameters({"pipeline": "review", "params": {}}),
                 )
                 store.journal_resolve(
                     entry.id,

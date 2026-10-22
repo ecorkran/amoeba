@@ -26,6 +26,7 @@ from host_harness import (
     TenantSpec,
     start_host,
 )
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.process.errors import GraceExpiredError, StartupFailedError
 from amoeba.process.host import ResidentProcess
@@ -391,7 +392,9 @@ def test_no_tenant_ticks_before_recovery_completes(
         store.journal_issue(
             node.id,
             kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": "p6", "params": {"slice": "102"}},
+            parameters=sq_run_parameters(
+                {"pipeline": "p6", "params": {"slice": "102"}}
+            ),
         )
 
     first_tick_tenant = TenantSpec(
@@ -445,7 +448,9 @@ def test_recovery_escalates_an_unresolved_entry_before_the_loop(
         entry = store.journal_issue(
             node.id,
             kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": "p6", "params": {"slice": "102"}},
+            parameters=sq_run_parameters(
+                {"pipeline": "p6", "params": {"slice": "102"}}
+            ),
         )
 
     host = _running_host(tmp_path, supervisor_dir, runs_dir=runs_dir)

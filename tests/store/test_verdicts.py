@@ -13,6 +13,7 @@ from evidence_harness import (
     seed_node,
     verdict_input,
 )
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.store import (
     CommandKind,
@@ -63,7 +64,9 @@ def test_records_a_verdict_with_its_findings_in_order(store: Store) -> None:
 
 def _journal_entry_on(store: Store, node_id: str) -> str:
     return store.journal_issue(
-        node_id, kind=CommandKind.SQ_RUN, parameters={"pipeline": "p", "params": {}}
+        node_id,
+        kind=CommandKind.SQ_RUN,
+        parameters=sq_run_parameters({"pipeline": "p", "params": {}}),
     ).id
 
 

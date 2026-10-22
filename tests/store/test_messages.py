@@ -12,6 +12,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.store import sql_inbox
 from amoeba.store.inbox_models import Channel
@@ -217,7 +218,7 @@ def _issue(store: Store, node_id: str) -> str:
     return store.journal_issue(
         node_id,
         kind=CommandKind.SQ_RUN,
-        parameters={"pipeline": "review", "params": {}},
+        parameters=sq_run_parameters({"pipeline": "review", "params": {}}),
     ).id
 
 

@@ -21,6 +21,7 @@ from cli_harness import (
     run_cli,
     start_background,
 )
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.cli.main import ExitCode
 from amoeba.store import BlockedKind, CommandKind, NodeKind, Store
@@ -346,7 +347,9 @@ def test_start_escalates_an_unresolved_entry_then_inspect_shows_it(
         entry = store.journal_issue(
             node.id,
             kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": "p6", "params": {"slice": "102"}},
+            parameters=sq_run_parameters(
+                {"pipeline": "p6", "params": {"slice": "102"}}
+            ),
         )
 
     process = start_background(supervisor_dir, _start_arguments(runs_dir))
