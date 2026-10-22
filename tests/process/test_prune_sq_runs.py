@@ -1,7 +1,8 @@
-"""``prune_sq_runs`` against a stub ``sq``: every failure leaves files and exits 14.
+"""``prune_sq_runs`` against a stub ``sq``: every failure leaves runs and exits 14.
 
-The stores and runs directory are under ``tmp_path``; ``HOME`` points at a scratch
-directory for the stub only. Amoeba itself is handed its directories as arguments.
+Each run is an outcome document in the stub's state directory, which is what
+``sq runs wait`` prints; Amoeba reads nothing else (slice 120, D6/D8). The stores
+are under ``tmp_path``; ``HOME`` points at a scratch directory for the stub only.
 """
 
 from __future__ import annotations
@@ -11,9 +12,21 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from contract.standin import STATUS_PAUSED, write_run_file
+from contract.standin import (
+    STATUS_COMPLETED,
+    STATUS_PAUSED,
+    write_outcome,
+    write_run_file,
+)
 from sq_run_fixtures import sq_run_parameters
-from sq_stub import LOG_ENV, MODE_ENV, REFUSE_ENV, StubMode, write_sq_stub
+from sq_stub import (
+    LOG_ENV,
+    MODE_ENV,
+    REFUSE_ENV,
+    STUB_STATE_RELATIVE,
+    StubMode,
+    write_sq_stub,
+)
 
 from amoeba.cli.main import ExitCode
 from amoeba.cli.prune import prune_sq_runs
@@ -44,17 +57,20 @@ LONG_TIMEOUT_SECONDS = 30.0
 
 
 class Rig:
-    """Stores, runs, and a stub ``sq``, all under ``tmp_path``."""
+    """Stores, outcome documents, and a stub ``sq``, all under ``tmp_path``."""
 
     def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         self.supervisor = tmp_path / "supervisor"
         self.supervisor.mkdir()
-        home = tmp_path / "home"
-        self.runs_dir = home / ".config" / "squadron" / "runs"
+        self.home = tmp_path / "home"
+        self.state_dir = self.home / STUB_STATE_RELATIVE
+        # Squadron's own run-state files. Nothing reads them any more; they are
+        # left saying the opposite of the stub so a read would show.
+        self.runs_dir = self.home / ".config" / "squadron" / "runs"
         self.runs_dir.mkdir(parents=True)
         self.bin_dir = write_sq_stub(tmp_path / "bin")
         self.log = tmp_path / "sq-calls.log"
-        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("HOME", str(self.home))
         monkeypatch.setenv("PATH", f"{self.bin_dir}{os.pathsep}{os.environ['PATH']}")
         monkeypatch.setenv(LOG_ENV, str(self.log))
         self.monkeypatch = monkeypatch
@@ -83,6 +99,13 @@ class Rig:
                 sq=SQReference(run_id=HELD),
             )
         for run_id in (CANDIDATE_A, CANDIDATE_B, HELD, UNOWNED):
+            write_outcome(
+                self.home,
+                run_id=run_id,
+                started_at=OLD,
+                updated_at=OLD,
+                status=STATUS_PAUSED,
+            )
             write_run_file(
                 self.runs_dir,
                 RUN_FIXTURE,
@@ -90,7 +113,7 @@ class Rig:
                 params={},
                 started_at=OLD,
                 updated_at=OLD,
-                status=STATUS_PAUSED,
+                status=STATUS_COMPLETED,
             )
 
     def mode(self, mode: StubMode, *, refuse: str | None = None) -> None:
@@ -103,17 +126,19 @@ class Rig:
     ) -> ExitCode:
         return prune_sq_runs(
             store_dir=self.supervisor,
-            runs_dir=self.runs_dir,
             confirm=confirm,
             timeout_seconds=timeout_seconds,
+            poll_timeout_seconds=LONG_TIMEOUT_SECONDS,
             now=NOW,
         )
 
     def present(self) -> set[str]:
-        return {path.stem for path in self.runs_dir.glob("*.json")}
+        return {path.stem for path in self.state_dir.glob("*.json")}
 
     def stub_calls(self) -> list[str]:
-        return self.log.read_text().splitlines() if self.log.exists() else []
+        """The ``runs prune`` calls only: ``runs wait`` polls are not deletions."""
+        lines = self.log.read_text().splitlines() if self.log.exists() else []
+        return [line for line in lines if line.startswith("runs prune")]
 
 
 @pytest.fixture
@@ -196,17 +221,22 @@ def test_a_sq_that_times_out_is_incomplete(
     assert "did not finish" in capsys.readouterr().err
 
 
-def test_a_missing_sq_is_incomplete_and_amoeba_deletes_nothing(
+def test_a_missing_sq_checks_nothing_and_amoeba_deletes_nothing(
     rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """No run can be checked, so none is chosen; every owned run is named."""
     empty = tmp_path / "empty-bin"
     empty.mkdir()
     rig.monkeypatch.setenv("PATH", str(empty))
 
-    assert rig.prune(confirm=True) is ExitCode.PRUNE_INCOMPLETE
+    assert rig.prune(confirm=True) is ExitCode.OK
 
     assert rig.present() == ALL_RUNS
-    assert "not found" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    for owned_run in (CANDIDATE_A, CANDIDATE_B, HELD):
+        assert f"could not check: {owned_run}" in err
+    assert "not found on PATH" in err
+    assert UNOWNED not in err
 
 
 def test_an_unreadable_project_store_refuses_before_sq_is_called(rig: Rig) -> None:
@@ -220,10 +250,33 @@ def test_an_unreadable_project_store_refuses_before_sq_is_called(rig: Rig) -> No
     assert rig.present() == ALL_RUNS
 
 
-def test_an_unparseable_run_file_is_never_a_candidate(rig: Rig) -> None:
-    (rig.runs_dir / "garbled.json").write_text("{not json", encoding="utf-8")
+def test_a_poll_failure_is_named_on_stderr_and_never_chosen(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (rig.state_dir / f"{CANDIDATE_A}.json").write_text("{not json", encoding="utf-8")
     rig.mode(StubMode.DELETE)
 
     assert rig.prune(confirm=True) is ExitCode.OK
 
-    assert "garbled" in rig.present()
+    assert capsys.readouterr().err.count(f"could not check: {CANDIDATE_A}") == 1
+    assert CANDIDATE_A in rig.present()
+    assert CANDIDATE_B not in rig.present()
+    [call] = rig.stub_calls()
+    assert call.startswith("runs prune ") and CANDIDATE_A not in call
+
+
+def test_prune_reads_no_run_state_file(rig: Rig) -> None:
+    """D8: the runs directory says the opposite (completed), the stub says paused.
+
+    A run-file read would find nothing to prune; the result follows the stub's
+    outcome documents.
+    """
+    assert all(
+        '"status": "completed"' in path.read_text(encoding="utf-8")
+        for path in rig.runs_dir.glob("*.json")
+    )
+    rig.mode(StubMode.DELETE)
+
+    assert rig.prune(confirm=True) is ExitCode.OK
+
+    assert rig.present() == {HELD, UNOWNED}

@@ -4,9 +4,10 @@ No test runs the real ``sq``: it needs a provider's credentials and is not part
 of what these tests prove. The stub plays Squadron for two commands.
 
 ``sq runs prune`` (observed on Squadron 0.23.3, 20261019, slice 110, D3/D8): it
-takes run ids and ``--yes``, deletes ``$HOME/.config/squadron/runs/{id}.json``
-for each, exits 1 when a named file is already gone (that is still the goal
-state), and refuses a live run with exit 1, leaving its file.
+takes run ids and ``--yes``, deletes the named run for each, exits 1 when a
+named run is already gone (that is still the goal state), and refuses a live
+run with exit 1, leaving it. Since slice 120 "the run" is the outcome document
+below, so a pruned id then answers ``not_found`` to ``runs wait``.
 
 ``sq runs wait <id> --timeout 0 --json`` (slice 120, D2): it prints the outcome
 document kept in the stub's own state directory, ``STUB_STATE_RELATIVE`` under
@@ -111,7 +112,7 @@ _SCRIPT = textwrap.dedent(
         print("stub sq: unexpected arguments", arguments, file=sys.stderr)
         sys.exit(2)
     ids = [argument for argument in arguments[2:] if not argument.startswith("--")]
-    runs_dir = Path.home() / ".config" / "squadron" / "runs"
+    runs_dir = Path.home().joinpath(*{state_parts!r})
 
     if mode == {fail!r}:
         print("stub sq: prune failed", file=sys.stderr)
