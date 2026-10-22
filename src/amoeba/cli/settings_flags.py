@@ -54,7 +54,10 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=defaults.clock_tolerance_seconds,
         metavar="SECONDS",
-        help="Clock skew allowed when matching a Squadron run's start time.",
+        help=(
+            "Legacy matching only: clock skew allowed when matching a Squadron "
+            "run's start time."
+        ),
     )
     parser.add_argument(
         "--cf-timeout",
@@ -68,7 +71,20 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         type=Path,
         default=DEFAULT_SQ_RUNS_DIR,
         metavar="PATH",
-        help="The Squadron runs directory the observer scans.",
+        help=(
+            "Legacy matching only: the Squadron runs directory scanned for "
+            "sq_run entries journaled before they carried a run id."
+        ),
+    )
+    parser.add_argument(
+        "--launch-grace",
+        type=float,
+        default=defaults.launch_grace_seconds,
+        metavar="SECONDS",
+        help=(
+            "How long after a launch Squadron may still be creating the run "
+            "before 'no run state' means the launch did not happen."
+        ),
     )
     parser.add_argument(
         "--inbox-batch-size",
@@ -138,6 +154,7 @@ def start_settings(args: argparse.Namespace) -> ProcessSettings:
         review_scan_interval_seconds=args.review_scan_interval,
         sq_timeout_seconds=args.sq_timeout,
         cf_data_dir=args.cf_data_dir,
+        launch_grace_seconds=args.launch_grace,
     )
 
 

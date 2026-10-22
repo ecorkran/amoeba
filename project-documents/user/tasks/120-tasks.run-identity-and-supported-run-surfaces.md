@@ -85,51 +85,51 @@ pricedRounds: 1
 ### Task 2.1: Add the `runs wait` mode to the `sq` stub (test infrastructure)
 **Owner**: Junior AI | **Dependencies**: Task 1.1 | **Effort**: 2
 
-- [ ] In `tests/sq_stub.py`, define the stub's state directory once (a constant relative to `$HOME`, separate from `.config/squadron/runs`) and an exit-code table for the eight outcomes. The table must match the LLD "Interfaces Required" exit codes; it is the stub's copy of Squadron's rule and is not imported from `amoeba`
-- [ ] Dispatch on arguments before reading `MODE_ENV`, so `runs wait` works without a mode set. `runs wait <id> --timeout 0 --json`: if `{state_dir}/{id}.json` exists, print it and exit with the code for its `outcome`; otherwise print `{"run_id": id, "outcome": "not_found"}` and exit 5 (LLD "Migration Plan")
-- [ ] Add a test-side helper in `tests/sq_stub.py` that writes one outcome document into the state directory for a given `HOME`. Callers pass every field; the helper adds nothing
-- [ ] Leave the `runs prune` modes unchanged (Task 6.3 moves them)
+- [x] In `tests/sq_stub.py`, define the stub's state directory once (a constant relative to `$HOME`, separate from `.config/squadron/runs`) and an exit-code table for the eight outcomes. The table must match the LLD "Interfaces Required" exit codes; it is the stub's copy of Squadron's rule and is not imported from `amoeba`
+- [x] Dispatch on arguments before reading `MODE_ENV`, so `runs wait` works without a mode set. `runs wait <id> --timeout 0 --json`: if `{state_dir}/{id}.json` exists, print it and exit with the code for its `outcome`; otherwise print `{"run_id": id, "outcome": "not_found"}` and exit 5 (LLD "Migration Plan")
+- [x] Add a test-side helper in `tests/sq_stub.py` that writes one outcome document into the state directory for a given `HOME`. Callers pass every field; the helper adds nothing
+- [x] Leave the `runs prune` modes unchanged (Task 6.3 moves them)
 - **Success Criteria**:
-  - [ ] Existing prune tests still pass: `uv run pytest tests/process/test_prune_sq_runs.py tests/contract -q`
-  - [ ] Committed with Task 2.4
+  - [x] Existing prune tests still pass: `uv run pytest tests/process/test_prune_sq_runs.py tests/contract -q`
+  - [x] Committed with Task 2.4
 
 ### Task 2.2: Add `RunOutcome`, `OUTCOME_EXIT_CODES`, and the document models
 **Owner**: Junior AI | **Dependencies**: Task 2.1 | **Effort**: 2
 
-- [ ] Create `src/amoeba/process/sq_outcome.py` with a module docstring saying it is the only module that runs `sq runs wait` or parses its output
-- [ ] Add `SQ_EXECUTABLE` here. Change `cli/prune.py` and `process/version_label.py` to import it; remove both local definitions
-- [ ] Add `RunOutcome` (`StrEnum`, eight members) and `OUTCOME_EXIT_CODES` per D2 and "API Contracts"
-- [ ] Add `RunCheckpoint` and `RunOutcomeDocument` as frozen pydantic models with `extra="ignore"`, fields exactly as D2 lists. No default other than `None`
-- [ ] Add `PollFailure` (frozen dataclass, `reason: str`) and `type RunPoll = RunOutcomeDocument | PollFailure`
+- [x] Create `src/amoeba/process/sq_outcome.py` with a module docstring saying it is the only module that runs `sq runs wait` or parses its output
+- [x] Add `SQ_EXECUTABLE` here. Change `cli/prune.py` and `process/version_label.py` to import it; remove both local definitions
+- [x] Add `RunOutcome` (`StrEnum`, eight members) and `OUTCOME_EXIT_CODES` per D2 and "API Contracts"
+- [x] Add `RunCheckpoint` and `RunOutcomeDocument` as frozen pydantic models with `extra="ignore"`, fields exactly as D2 lists. No default other than `None`
+- [x] Add `PollFailure` (frozen dataclass, `reason: str`) and `type RunPoll = RunOutcomeDocument | PollFailure`
 - **Success Criteria**:
-  - [ ] `grep -rn 'SQ_EXECUTABLE.*=' src/` finds exactly one definition
-  - [ ] `uv run pyright` clean. Committed with Task 2.4
+  - [x] `grep -rn 'SQ_EXECUTABLE.*=' src/` finds exactly one definition
+  - [x] `uv run pyright` clean. Committed with Task 2.4
 
 ### Task 2.3: Implement `poll_run`
 **Owner**: Junior AI | **Dependencies**: Task 2.2 | **Effort**: 3
 
-- [ ] Implement `poll_run(run_id, *, timeout_seconds) -> RunPoll` with the exact argv and `subprocess.run` options in D2
-- [ ] Return `PollFailure` for each case in D2's list, catching only the named exceptions (`FileNotFoundError`, `subprocess.TimeoutExpired`, `OSError`, `pydantic.ValidationError`, `json.JSONDecodeError` as needed). Each `except` carries a comment saying why the failure is an answer (the `cf_readback.py` convention)
-- [ ] Map the exit code back to an outcome through `OUTCOME_EXIT_CODES` (one inverse lookup, built from the table, not a second table). Exit 2 or an unmapped code is a failure whose reason includes the stderr tail
-- [ ] Check the parsed `outcome` against the exit code, and `run_id` against the requested id
-- [ ] Every reason names the run id and what happened
+- [x] Implement `poll_run(run_id, *, timeout_seconds) -> RunPoll` with the exact argv and `subprocess.run` options in D2
+- [x] Return `PollFailure` for each case in D2's list, catching only the named exceptions (`FileNotFoundError`, `subprocess.TimeoutExpired`, `OSError`, `pydantic.ValidationError`, `json.JSONDecodeError` as needed). Each `except` carries a comment saying why the failure is an answer (the `cf_readback.py` convention)
+- [x] Map the exit code back to an outcome through `OUTCOME_EXIT_CODES` (one inverse lookup, built from the table, not a second table). Exit 2 or an unmapped code is a failure whose reason includes the stderr tail
+- [x] Check the parsed `outcome` against the exit code, and `run_id` against the requested id
+- [x] Every reason names the run id and what happened
 - **Success Criteria**:
-  - [ ] Module stays near 150 lines; `uv run ruff check .` and `uv run pyright` clean
-  - [ ] Committed with Task 2.4
+  - [x] Module stays near 150 lines; `uv run ruff check .` and `uv run pyright` clean
+  - [x] Committed with Task 2.4
 
 ### Task 2.4: Test the outcome reader
 **Owner**: Junior AI | **Dependencies**: Task 2.3 | **Effort**: 3
 
-- [ ] Create `tests/test_observer_sq_outcome.py`. Unit tests patch `subprocess.run`:
-  1. One test per outcome: the right exit code and document give a `RunOutcomeDocument` with that outcome
-  2. not_found and unreadable documents with only `run_id` and `outcome` parse, other fields `None`
-  3. Unknown extra keys are ignored; a null `checkpoint.paused_at` stays `None`
-  4. One test per `PollFailure` case in D2: missing `sq`, timeout, other `OSError`, exit 2, unmapped exit, non-JSON, validation failure, outcome/exit mismatch, `run_id` mismatch. Each asserts the reason names the cause
-  5. `OUTCOME_EXIT_CODES` covers every `RunOutcome` member with distinct codes
-- [ ] Integration tests run the stub on `PATH` under a temporary `HOME`: a written paused document round-trips; a missing id gives `NOT_FOUND`
+- [x] Create `tests/test_observer_sq_outcome.py`. Unit tests patch `subprocess.run`:
+  1. [x] One test per outcome: the right exit code and document give a `RunOutcomeDocument` with that outcome
+  2. [x] not_found and unreadable documents with only `run_id` and `outcome` parse, other fields `None`
+  3. [x] Unknown extra keys are ignored; a null `checkpoint.paused_at` stays `None`
+  4. [x] One test per `PollFailure` case in D2: missing `sq`, timeout, other `OSError`, exit 2, unmapped exit, non-JSON, validation failure, outcome/exit mismatch, `run_id` mismatch. Each asserts the reason names the cause
+  5. [x] `OUTCOME_EXIT_CODES` covers every `RunOutcome` member with distinct codes
+- [x] Integration tests run the stub on `PATH` under a temporary `HOME`: a written paused document round-trips; a missing id gives `NOT_FOUND`
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/test_observer_sq_outcome.py -v` passes; full suite green
-  - [ ] Commit, e.g. `feat: add sq runs wait outcome reader`
+  - [x] `uv run pytest tests/test_observer_sq_outcome.py -v` passes; full suite green
+  - [x] Commit, e.g. `feat: add sq runs wait outcome reader`
 
 ### Task 2.5: Export the reader from `amoeba.process`
 **Owner**: Junior AI | **Dependencies**: Task 2.4 | **Effort**: 1
