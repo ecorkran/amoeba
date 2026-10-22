@@ -64,13 +64,19 @@ pricedRounds: 1
 ### Task 1.1: Create the branch and record the starting state
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Create `120-slice.run-identity-and-supported-run-surfaces` from the target; if it exists, switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each
-- [ ] Re-grep `CommandKind.SQ_RUN` and `"sq_run"` across `src/`, `tests/`, `scripts/`. Record in this task, as a sub-list, every file that journals an `sq_run` through `journal_issue`. Section 4 works from that list, not from the LLD's
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Create `120-slice.run-identity-and-supported-run-surfaces` from the target; if it exists, switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Baseline: 1928 passed; `ruff` and `pyright` clean
+- [x] Re-grep `CommandKind.SQ_RUN` and `"sq_run"` across `src/`, `tests/`, `scripts/`. Record in this task, as a sub-list, every file that journals an `sq_run` through `journal_issue`. Section 4 works from that list, not from the LLD's
+  - [x] Files that journal an `sq_run` through `journal_issue` (found 2026-10-22 by grep of `journal_issue` and `CommandKind.SQ_RUN`/"sq_run" across `src/`, `tests/`, `scripts/`):
+    - [x] `scripts/demo_journal.py` (retired in Task 4.5)
+    - [x] `src/amoeba/process/observers/sq_runs.py` (reads only; no change)
+    - [x] `tests/contract/runner_tenant.py`, `tests/feed_harness.py` (takes kind as parameter), `tests/inspection/test_feed.py`, `tests/inspection_harness.py`, `tests/load/load_harness.py`, `tests/load/test_recovery_scale.py`, `tests/process/test_prune_sq_runs.py`, `tests/process/test_review_detection_ownership.py`, `tests/store/test_attribution.py`, `tests/store/test_messages.py`, `tests/store/test_runner_report.py`, `tests/store/test_verdicts.py`, `tests/test_cli_lifecycle.py`, `tests/test_host.py`, `tests/test_journal.py`, `tests/test_public_api.py`, `tests/test_read_only_open.py`, `tests/test_recovery.py`
+  - [x] Also reference `SQ_RUN` without `journal_issue`: `tests/test_journal_models.py`, `tests/test_observer_sq_runs.py`, `tests/contract/end_state.py`, `tests/contract/harness.py`
+  - [x] Unchanged raw pre-120 rows: `tests/store/test_migration_004/005/006.py`
 - **Success Criteria**:
-  - [ ] On the slice branch; baseline suite, `ruff`, and `pyright` clean. If not, write `BLOCKED:` with the failure and stop
-  - [ ] Caller list recorded. No commit needed
+  - [x] On the slice branch; baseline suite, `ruff`, and `pyright` clean. If not, write `BLOCKED:` with the failure and stop
+  - [x] Caller list recorded. No commit needed
 
 ---
 

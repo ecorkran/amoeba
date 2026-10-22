@@ -12,6 +12,8 @@ import subprocess
 from collections.abc import Sequence
 from typing import Final
 
+from amoeba.process.sq_outcome import SQ_EXECUTABLE
+
 logger = logging.getLogger(__name__)
 
 #: Recorded in place of a version label when the executable cannot report one.
@@ -21,9 +23,6 @@ VERSION_UNAVAILABLE: Final = "unavailable"
 
 #: The argument every upstream executable takes to print its version.
 VERSION_ARGS: Final = ("--version",)
-
-#: The Squadron executable, defined once.
-SQ_EXECUTABLE: Final = "sq"
 
 
 def capture_version_label(
