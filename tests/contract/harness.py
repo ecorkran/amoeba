@@ -24,6 +24,7 @@ from pathlib import Path
 
 from host_harness import HostProcess
 from review_fixtures import STAMPED_REVIEW_106
+from sq_stub import MODE_ENV, StubMode, write_sq_stub
 
 from amoeba.inbox import submit
 from amoeba.store import ChangeKind, Store, SubmissionKind, project_store_path
@@ -95,6 +96,7 @@ class ProofHarness:
             *self.reviews_dirs.values(),
         ):
             directory.mkdir(parents=True)
+        self.stub_dir = write_sq_stub(tmp_path / "stub-bin")
         self._launched: list[LaunchedProcess] = []
         self._resident: LaunchedProcess | None = None
         self._subscribers: dict[str, Subscriber] = {}
@@ -103,9 +105,14 @@ class ProofHarness:
     # -- environment and processes ------------------------------------------
 
     def environment(self) -> dict[str, str]:
-        """An explicit environment: nothing is inherited but ``PATH``."""
+        """An explicit environment: nothing is inherited but ``PATH``.
+
+        The stub ``sq`` is first on ``PATH``, so recovery and pruning poll the
+        stub's outcome documents and never the real Squadron.
+        """
         return {
-            "PATH": os.environ["PATH"],
+            "PATH": f"{self.stub_dir}{os.pathsep}{os.environ['PATH']}",
+            MODE_ENV: StubMode.DELETE.value,
             "HOME": str(self.home),
             "AMOEBA_STORE_DIR": str(self.supervisor_dir),
             "PYTHONPATH": str(TESTS_DIR),

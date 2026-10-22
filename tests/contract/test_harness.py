@@ -53,8 +53,9 @@ def test_a_crash_after_the_journal_is_recovered_on_restart(
     )
     with proof_harness.read(ALPHA) as store:
         [entry] = store.journal_entries(ALPHA)
-    # No run file was written, so recovery finds no match and escalates.
-    assert entry.outcome is JournalOutcome.UNKNOWN
+    # Squadron holds no state for the entry's run id, and the launch grace has
+    # passed (the proof sets none), so the command is known not to have run.
+    assert entry.outcome is JournalOutcome.NOT_APPLIED
 
 
 def test_a_bootstrap_that_never_becomes_ready_fails_with_its_stderr(

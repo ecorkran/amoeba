@@ -51,6 +51,7 @@ from contract.standin import (
     STATUS_PAUSED,
     new_run_id,
     render_review,
+    write_outcome,
     write_run_file,
 )
 
@@ -185,6 +186,13 @@ class ProofRunner:
             updated_at=now,
             status=STATUS_COMPLETED,
         )
+        write_outcome(
+            Path.home(),
+            run_id=run_id,
+            started_at=now,
+            updated_at=now,
+            status=STATUS_COMPLETED,
+        )
         review_path = self._reviews_dirs[project_id] / f"{run_id}.md"
         review_path.write_text(
             render_review(self._review_template, run_id), encoding="utf-8"
@@ -236,6 +244,13 @@ class ProofRunner:
             self._run_fixture,
             run_id=run_id,
             params=self._run_params(),
+            started_at=now,
+            updated_at=now - self._standin_run_age,
+            status=STATUS_PAUSED,
+        )
+        write_outcome(
+            Path.home(),
+            run_id=run_id,
             started_at=now,
             updated_at=now - self._standin_run_age,
             status=STATUS_PAUSED,

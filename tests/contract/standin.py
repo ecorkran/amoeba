@@ -18,6 +18,8 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sq_stub import write_outcome_document
+
 #: The pipeline every stand-in run claims to be.
 STANDIN_PIPELINE = "review"
 
@@ -70,6 +72,35 @@ def write_run_file(
     path = runs_dir / f"{run_id}.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def write_outcome(
+    home: Path,
+    *,
+    run_id: str,
+    started_at: datetime,
+    updated_at: datetime,
+    status: str,
+) -> Path:
+    """Write the stub ``sq``'s outcome document for a stand-in run.
+
+    This is what ``sq runs wait`` prints for the run: recovery and pruning read
+    it through the stub, never the run file. A paused run carries the checkpoint
+    time pruning requires.
+    """
+    paused = status == STATUS_PAUSED
+    return write_outcome_document(
+        home,
+        {
+            "run_id": run_id,
+            "outcome": status,
+            "status": status,
+            "pipeline": STANDIN_PIPELINE,
+            "started_at": _timestamp(started_at),
+            "updated_at": _timestamp(updated_at),
+            "checkpoint": {"paused_at": _timestamp(updated_at)} if paused else None,
+        },
+    )
 
 
 def render_review(template: str, run_id: str) -> str:

@@ -31,6 +31,11 @@ IDLE_INTERVAL_SECONDS = 0.05
 REVIEW_SCAN_INTERVAL_SECONDS = 0.2
 SHUTDOWN_GRACE_SECONDS = 5.0
 
+#: The proof restarts straight after a crash, so a real launch grace would stall
+#: every restart step for up to a minute. The stand-in's side effects are
+#: instantaneous, so none is needed: no run state at restart means not launched.
+LAUNCH_GRACE_SECONDS = 0.0
+
 #: Recorded in the PID file. Informational.
 PROCESS_VERSION = "contract-proof"
 
@@ -86,6 +91,7 @@ def main(argv: Sequence[str]) -> None:
         review_scan_interval_seconds=REVIEW_SCAN_INTERVAL_SECONDS,
         shutdown_grace_seconds=SHUTDOWN_GRACE_SECONDS,
         cf_data_dir=arguments.cf_data_dir,
+        launch_grace_seconds=LAUNCH_GRACE_SECONDS,
     )
     runner = ProofRunner(
         settings.sq_runs_dir,

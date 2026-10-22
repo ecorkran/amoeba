@@ -14,10 +14,13 @@ from collections.abc import Mapping
 from typing import Final
 
 from amoeba.store import sql_journal
-from amoeba.store.journal_models import PARAM_RUN_ID
+from amoeba.store.journal_models import PARAM_RUN_ID, JournalEntry
 
 #: The run id a test uses when it does not care which run it is.
 TEST_RUN_ID: Final = "run-20261022-test-00000001"
+
+#: The id of the one pre-120 row a test inserts with the helper below.
+LEGACY_ENTRY_ID: Final = "legacy-entry-1"
 
 
 def sq_run_parameters(
@@ -25,6 +28,13 @@ def sq_run_parameters(
 ) -> dict[str, object]:
     """Return ``parameters`` with the run id added. Nothing else changes."""
     return {**parameters, PARAM_RUN_ID: run_id}
+
+
+def run_id_of(entry: JournalEntry) -> str:
+    """The run id an ``sq_run`` entry was journaled with."""
+    run_id = entry.parameters[PARAM_RUN_ID]
+    assert isinstance(run_id, str), f"entry {entry.id} has run_id {run_id!r}"
+    return run_id
 
 
 def insert_legacy_sq_run_entry(

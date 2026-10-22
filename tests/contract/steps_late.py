@@ -28,6 +28,7 @@ from contract.standin import (
     STATUS_PAUSED,
     new_run_id,
     render_review,
+    write_outcome,
     write_run_file,
 )
 from contract.steps import (
@@ -83,6 +84,13 @@ class LateStepsDriver(ScenarioDriver):
             RUN_FIXTURE,
             run_id=run_id,
             params={},
+            started_at=now,
+            updated_at=now - STANDIN_RUN_AGE,
+            status=STATUS_PAUSED,
+        )
+        write_outcome(
+            h.home,
+            run_id=run_id,
             started_at=now,
             updated_at=now - STANDIN_RUN_AGE,
             status=STATUS_PAUSED,

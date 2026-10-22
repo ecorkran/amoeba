@@ -76,7 +76,7 @@ def _alpha() -> ProjectState:
             journal_fact(
                 CommandKind.SQ_RUN, JournalOutcome.ADOPTED, JournalResolver.RECOVERY
             ),
-            # Step 5: recovery found no run and escalated.
+            # Step 5: the run's state was unreadable, so recovery escalated.
             journal_fact(
                 CommandKind.SQ_RUN, JournalOutcome.UNKNOWN, JournalResolver.RECOVERY
             ),

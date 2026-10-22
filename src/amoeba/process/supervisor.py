@@ -10,12 +10,18 @@ module permitted to do that. Recovery receives stores already open.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Iterable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 
 from amoeba.process.errors import StartupFailedError
 from amoeba.process.observers.cf_readback import CFReadbackObserver
-from amoeba.process.observers.sq_runs import SquadronRunsObserver, scan_runs_directory
+from amoeba.process.observers.sq_run_id import (
+    SquadronRunIdObserver,
+    SquadronRunObserver,
+)
+from amoeba.process.observers.sq_runs import SquadronRunsObserver
 from amoeba.process.recovery import ObserverRegistry, reconcile
 from amoeba.process.settings import ProcessSettings
 from amoeba.store import Store
@@ -35,22 +41,33 @@ def build_observer_registry(
 ) -> ObserverRegistry:
     """Assemble the observers for **one** recovery pass.
 
-    The runs directory is scanned once here rather than once per entry, and the
-    ``cf --version`` label is captured at most once, so reconciling many
-    entries costs one directory read and one version call. The load tier
-    asserts the scan count exactly.
+    An ``sq_run`` entry that carries a run id is answered by ``sq runs wait``
+    and reads no run-state file. The legacy attribute matcher, for entries
+    journaled before slice 120, scans the runs directory lazily: at most once
+    per pass, and only if a legacy entry exists. The ``cf --version`` label is
+    captured at most once. The load tier asserts the scan and poll counts.
 
     Args:
-        settings: Supplies the runs directory, clock tolerance, and cf timeout.
+        settings: Supplies the launch grace, the ``sq`` timeout, the legacy
+            runs directory and clock tolerance, and the cf timeout.
         claimed_run_ids: Run ids already recorded in another entry's result,
             which are therefore not candidates for any further entry.
     """
     return {
-        CommandKind.SQ_RUN: SquadronRunsObserver(
-            settings.sq_runs_dir,
-            clock_tolerance_seconds=settings.clock_tolerance_seconds,
-            claimed_run_ids=claimed_run_ids,
-            scan=scan_runs_directory(settings.sq_runs_dir),
+        CommandKind.SQ_RUN: SquadronRunObserver(
+            by_id=SquadronRunIdObserver(
+                launch_grace_seconds=settings.launch_grace_seconds,
+                poll_timeout_seconds=settings.sq_timeout_seconds,
+                claimed_run_ids=claimed_run_ids,
+                now=lambda: datetime.now(UTC),
+                sleep=time.sleep,
+            ),
+            legacy=SquadronRunsObserver(
+                settings.sq_runs_dir,
+                clock_tolerance_seconds=settings.clock_tolerance_seconds,
+                claimed_run_ids=claimed_run_ids,
+                scan=None,
+            ),
         ),
         CommandKind.CF_WRITE: CFReadbackObserver(
             timeout_seconds=settings.cf_timeout_seconds

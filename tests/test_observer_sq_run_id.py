@@ -8,6 +8,7 @@ said and when.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sq_run_fixtures import sq_run_parameters
@@ -16,7 +17,9 @@ import amoeba.process.observers.sq_run_id as sq_run_id
 from amoeba.process.observers.sq_run_id import (
     STATE_BEARING_OUTCOMES,
     SquadronRunIdObserver,
+    SquadronRunObserver,
 )
+from amoeba.process.observers.sq_runs import RunsDirectoryScan, SquadronRunsObserver
 from amoeba.process.recovery import Adopt, NotApplied, Observation, Unknown
 from amoeba.process.sq_outcome import PollFailure, RunOutcome, RunOutcomeDocument
 from amoeba.store.journal_models import PARAM_RUN_ID, CommandKind, JournalEntry
@@ -298,3 +301,60 @@ def test_an_issued_at_ahead_of_the_clock_cannot_stretch_the_sleep(
     rig.observe(_entry(issued_at=NOW + timedelta(hours=2)))
 
     assert rig.sleeps == [GRACE_SECONDS]
+
+
+# The dispatcher ------------------------------------------------------------
+
+
+class RecordingObserver:
+    def __init__(self, answer: Observation) -> None:
+        self._answer = answer
+        self.seen: list[str] = []
+
+    def observe(self, entry: JournalEntry) -> Observation:
+        self.seen.append(entry.id)
+        return self._answer
+
+
+class ScanTrap(SquadronRunsObserver):
+    """A legacy matcher that records use and fails if its scan is touched."""
+
+    def __init__(self, answer: Observation) -> None:
+        super().__init__(Path("/nonexistent"), clock_tolerance_seconds=0.0)
+        self._answer = answer
+        self.seen: list[str] = []
+
+    @property
+    def scan(self) -> RunsDirectoryScan:
+        raise AssertionError("the legacy scan was touched")
+
+    def observe(self, entry: JournalEntry) -> Observation:
+        self.seen.append(entry.id)
+        return self._answer
+
+
+def test_the_dispatcher_routes_by_the_presence_of_the_run_id_key() -> None:
+    by_id = RecordingObserver(Adopt(result={"via": "id"}))
+    legacy = ScanTrap(Unknown(reason="legacy"))
+    dispatcher = SquadronRunObserver(by_id=by_id, legacy=legacy)
+
+    with_id = dispatcher.observe(_entry())
+    without_id = dispatcher.observe(_entry(parameters={"pipeline": "p5", "params": {}}))
+
+    assert with_id == Adopt(result={"via": "id"})
+    assert without_id == Unknown(reason="legacy")
+    assert by_id.seen == [ENTRY_ID]
+    assert legacy.seen == [ENTRY_ID]
+
+
+def test_an_id_bearing_entry_never_touches_the_legacy_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.COMPLETED, status="completed"))
+    legacy = ScanTrap(Unknown(reason="legacy"))
+    dispatcher = SquadronRunObserver(by_id=rig.observer, legacy=legacy)
+
+    observation = dispatcher.observe(_entry())
+
+    assert isinstance(observation, Adopt)
+    assert legacy.seen == []
