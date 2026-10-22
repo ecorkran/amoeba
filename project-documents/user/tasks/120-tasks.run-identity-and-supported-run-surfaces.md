@@ -3,11 +3,36 @@ docType: tasks
 slice: run-identity-and-supported-run-surfaces
 project: amoeba
 lld: user/slices/120-slice.run-identity-and-supported-run-surfaces.md
-dependencies: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
-projectState: Initiative 100 (101–110) is merged. Recovery's `sq_run` observer (`process/observers/sq_runs.py`, 297 lines) and `amoeba prune sq-runs` (`cli/prune.py`, `process/run_pruning.py`) both read Squadron's run-state files under `~/.config/squadron/runs/`. `REQUIRED_PARAMETER_KEYS[SQ_RUN]` is `{"pipeline", "params"}`. `SQ_EXECUTABLE` is defined twice (`cli/prune.py`, `process/version_label.py`). `tests/sq_stub.py` answers only `runs prune`. This slice adds `process/sq_outcome.py` and `process/observers/sq_run_id.py`, makes `run_id` a required key, and moves recovery of id-bearing entries and all of pruning onto `sq runs wait <id> --timeout 0 --json`.
+dependencies:
+- 101
+- 102
+- 103
+- 104
+- 105
+- 106
+- 107
+- 108
+- 109
+- 110
+projectState: Initiative 100 (101–110) is merged. Recovery's `sq_run` observer (`process/observers/sq_runs.py`,
+  297 lines) and `amoeba prune sq-runs` (`cli/prune.py`, `process/run_pruning.py`)
+  both read Squadron's run-state files under `~/.config/squadron/runs/`. `REQUIRED_PARAMETER_KEYS[SQ_RUN]`
+  is `{"pipeline", "params"}`. `SQ_EXECUTABLE` is defined twice (`cli/prune.py`, `process/version_label.py`).
+  `tests/sq_stub.py` answers only `runs prune`. This slice adds `process/sq_outcome.py`
+  and `process/observers/sq_run_id.py`, makes `run_id` a required key, and moves recovery
+  of id-bearing entries and all of pruning onto `sq runs wait <id> --timeout 0 --json`.
 dateCreated: 20261021
-dateUpdated: 20261021
+dateUpdated: 20261022
 status: not_started
+turns: 19
+promptTokens: 1017085
+cachedTokens: 944122
+cacheWriteTokens: 72929
+completionTokens: 21523
+durationSeconds: 235.5
+costUsd: 1.20314
+usageRounds: 1
+pricedRounds: 1
 ---
 
 ## Context Summary
