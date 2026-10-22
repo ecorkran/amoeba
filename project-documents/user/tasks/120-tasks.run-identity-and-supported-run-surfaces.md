@@ -134,11 +134,11 @@ pricedRounds: 1
 ### Task 2.5: Export the reader from `amoeba.process`
 **Owner**: Junior AI | **Dependencies**: Task 2.4 | **Effort**: 1
 
-- [ ] Add `RunOutcome`, `OUTCOME_EXIT_CODES`, `RunCheckpoint`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, and `poll_run` to `amoeba/process/__init__.py` and `__all__` (LLD "API Contracts")
-- [ ] Update `EXPECTED_EXPORTS` in `tests/test_process_public_api.py`
+- [x] Add `RunOutcome`, `OUTCOME_EXIT_CODES`, `RunCheckpoint`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, and `poll_run` to `amoeba/process/__init__.py` and `__all__` (LLD "API Contracts")
+- [x] Update `EXPECTED_EXPORTS` in `tests/test_process_public_api.py`
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/test_process_public_api.py tests/contract/test_public_api_rule.py -q` passes
-  - [ ] Commit, e.g. `feat: export the outcome reader from amoeba.process`
+  - [x] `uv run pytest tests/test_process_public_api.py tests/contract/test_public_api_rule.py -q` passes
+  - [x] Commit, e.g. `feat: export the outcome reader from amoeba.process`
 
 ---
 
@@ -147,19 +147,19 @@ pricedRounds: 1
 ### Task 3.1: Add `launch_grace_seconds` and `--launch-grace`
 **Owner**: Junior AI | **Dependencies**: Task 2.5 | **Effort**: 1
 
-- [ ] Add `ProcessSettings.launch_grace_seconds: float = 60.0` with a docstring entry per D7 (read by recovery here and by 122)
-- [ ] Add `--launch-grace SECONDS` in `cli/settings_flags.py`, defaulting from `ProcessSettings()` like its neighbours, and pass it through
-- [ ] Reword the docstrings of `sq_runs_dir` and `clock_tolerance_seconds`, and the `--sq-runs-dir` help text, to say they are used only by legacy matching (D5, D7)
+- [x] Add `ProcessSettings.launch_grace_seconds: float = 60.0` with a docstring entry per D7 (read by recovery here and by 122)
+- [x] Add `--launch-grace SECONDS` in `cli/settings_flags.py`, defaulting from `ProcessSettings()` like its neighbours, and pass it through
+- [x] Reword the docstrings of `sq_runs_dir` and `clock_tolerance_seconds`, and the `--sq-runs-dir` help text, to say they are used only by legacy matching (D5, D7)
 - **Success Criteria**:
-  - [ ] Committed with Task 3.2
+  - [x] Committed with Task 3.2
 
 ### Task 3.2: Test the setting
 **Owner**: Junior AI | **Dependencies**: Task 3.1 | **Effort**: 1
 
-- [ ] In `tests/test_settings_flags.py`: the default reaches `ProcessSettings`; `--launch-grace 5` sets 5.0; the help text for `--sq-runs-dir` says legacy
+- [x] In `tests/test_settings_flags.py`: the default reaches `ProcessSettings`; `--launch-grace 5` sets 5.0; the help text for `--sq-runs-dir` says legacy
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/test_settings_flags.py -q` passes; full suite green
-  - [ ] Commit, e.g. `feat: add launch_grace_seconds setting and --launch-grace flag`
+  - [x] `uv run pytest tests/test_settings_flags.py -q` passes; full suite green
+  - [x] Commit, e.g. `feat: add launch_grace_seconds setting and --launch-grace flag`
 
 ---
 
@@ -168,41 +168,41 @@ pricedRounds: 1
 ### Task 4.1: Add the shared `sq_run_parameters` test helper
 **Owner**: Junior AI | **Dependencies**: Task 3.2 | **Effort**: 1
 
-- [ ] Create `tests/sq_run_fixtures.py` with `sq_run_parameters(...)`: it takes the parameters a caller would pass and a run id, and returns them with `run_id` added. Nothing else (LLD "Migration Plan")
-- [ ] Add a raw `sqlite3` helper in the same module that writes one pre-120 `sq_run` journal row without `run_id`, for store-level legacy tests (LLD "Migration Plan", `test_observer_sq_runs.py`)
+- [x] Create `tests/sq_run_fixtures.py` with `sq_run_parameters(...)`: it takes the parameters a caller would pass and a run id, and returns them with `run_id` added. Nothing else (LLD "Migration Plan")
+- [x] Add a raw `sqlite3` helper in the same module that writes one pre-120 `sq_run` journal row without `run_id`, for store-level legacy tests (LLD "Migration Plan", `test_observer_sq_runs.py`)
 - **Success Criteria**:
-  - [ ] Helper imports cleanly; committed with Task 4.3
+  - [x] Helper imports cleanly; committed with Task 4.3
 
 ### Task 4.2: Make `run_id` required
 **Owner**: Junior AI | **Dependencies**: Task 4.1 | **Effort**: 1
 
-- [ ] In `store/journal_models.py`, define `PARAM_RUN_ID: Final = "run_id"` and add it to `REQUIRED_PARAMETER_KEYS[CommandKind.SQ_RUN]` (D1). Reference the constant, never the literal
+- [x] In `store/journal_models.py`, define `PARAM_RUN_ID: Final = "run_id"` and add it to `REQUIRED_PARAMETER_KEYS[CommandKind.SQ_RUN]` (D1). Reference the constant, never the literal
 - **Success Criteria**:
-  - [ ] The suite now fails at every id-less `journal_issue` call; Task 4.3 fixes them. Committed with Task 4.3
+  - [x] The suite now fails at every id-less `journal_issue` call; Task 4.3 fixes them. Committed with Task 4.3
 
 ### Task 4.3: Update every journaling caller
 **Owner**: Junior AI | **Dependencies**: Task 4.2 | **Effort**: 3
 
 Work from the list recorded in Task 1.1. One sub-item per group:
-- [ ] Store tests: `test_journal.py`, `test_journal_models.py`, `test_read_only_open.py`, `store/test_runner_report.py`, `store/test_messages.py`, `store/test_attribution.py`, `store/test_verdicts.py`
-- [ ] Process and CLI tests: `test_recovery.py`, `test_host.py`, `test_cli_lifecycle.py`, `process/test_review_detection_ownership.py`, `process/test_prune_sq_runs.py`
-- [ ] Harnesses and tiers: `inspection_harness.py`, `inspection/test_feed.py`, `load/load_harness.py`, `load/test_recovery_scale.py`
-- [ ] Contract suite: `contract/runner_tenant.py` mints the id with `new_run_id` before `journal_issue` and passes it in `parameters`; `contract/end_state.py` and `contract/harness.py` as the grep requires
-- [ ] `tests/test_observer_sq_runs.py`: matcher cases keep id-less `JournalEntry` values; any store-level legacy case uses the raw-row helper from Task 4.1
-- [ ] Leave `store/test_migration_00{4,5,6}.py` unchanged (raw pre-120 rows)
-- [ ] Use `sq_run_parameters` everywhere; never spell `"run_id"` in a test's parameters
+- [x] Store tests: `test_journal.py`, `test_journal_models.py`, `test_read_only_open.py`, `store/test_runner_report.py`, `store/test_messages.py`, `store/test_attribution.py`, `store/test_verdicts.py`
+- [x] Process and CLI tests: `test_recovery.py`, `test_host.py`, `test_cli_lifecycle.py`, `process/test_review_detection_ownership.py`, `process/test_prune_sq_runs.py`
+- [x] Harnesses and tiers: `inspection_harness.py`, `inspection/test_feed.py`, `load/load_harness.py`, `load/test_recovery_scale.py`
+- [x] Contract suite: `contract/runner_tenant.py` mints the id with `new_run_id` before `journal_issue` and passes it in `parameters`; `contract/end_state.py` and `contract/harness.py` as the grep requires
+- [x] `tests/test_observer_sq_runs.py`: matcher cases keep id-less `JournalEntry` values; any store-level legacy case uses the raw-row helper from Task 4.1
+- [x] Leave `store/test_migration_00{4,5,6}.py` unchanged (raw pre-120 rows)
+- [x] Use `sq_run_parameters` everywhere; never spell `"run_id"` in a test's parameters
 - **Success Criteria**:
-  - [ ] Full suite green, matcher tests unchanged in outcome
-  - [ ] Committed with Task 4.4
+  - [x] Full suite green, matcher tests unchanged in outcome
+  - [x] Committed with Task 4.4
 
 ### Task 4.4: Test the required key
 **Owner**: Junior AI | **Dependencies**: Task 4.3 | **Effort**: 1
 
-- [ ] In `tests/test_journal.py`: `journal_issue` refuses an `sq_run` without `run_id`, and the error names the key; it accepts one with it
-- [ ] In `tests/test_journal_models.py`: `PARAM_RUN_ID` is in `REQUIRED_PARAMETER_KEYS[CommandKind.SQ_RUN]`
+- [x] In `tests/test_journal.py`: `journal_issue` refuses an `sq_run` without `run_id`, and the error names the key; it accepts one with it
+- [x] In `tests/test_journal_models.py`: `PARAM_RUN_ID` is in `REQUIRED_PARAMETER_KEYS[CommandKind.SQ_RUN]`
 - **Success Criteria**:
-  - [ ] Full suite green
-  - [ ] Commit, e.g. `feat: require run_id in sq_run journal parameters`
+  - [x] Full suite green
+  - [x] Commit, e.g. `feat: require run_id in sq_run journal parameters`
 
 ### Task 4.5: Retire `scripts/demo_journal.py`
 **Owner**: Junior AI | **Dependencies**: Task 4.4 | **Effort**: 1
