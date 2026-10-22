@@ -27,20 +27,36 @@ from amoeba.process.recovery import (
     Unknown,
 )
 from amoeba.process.settings import ProcessSettings
+from amoeba.process.sq_outcome import (
+    OUTCOME_EXIT_CODES,
+    PollFailure,
+    RunCheckpoint,
+    RunOutcome,
+    RunOutcomeDocument,
+    RunPoll,
+    poll_run,
+)
 from amoeba.process.tenants import standard_tenants
 
 __all__ = [
+    "OUTCOME_EXIT_CODES",
     "Adopt",
     "AlreadyRunningError",
     "GraceExpiredError",
     "NotApplied",
     "Observation",
     "Observer",
+    "PollFailure",
     "ProcessError",
     "ProcessSettings",
     "ResidentProcess",
+    "RunCheckpoint",
+    "RunOutcome",
+    "RunOutcomeDocument",
+    "RunPoll",
     "StartupFailedError",
     "Tenant",
     "Unknown",
+    "poll_run",
     "standard_tenants",
 ]
