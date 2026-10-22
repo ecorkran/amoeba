@@ -36,12 +36,15 @@ stay visible and a bound that stops matching reality is obvious.
 
 from __future__ import annotations
 
+import os
 import random
 import time
 from pathlib import Path
 
+import pytest
 from host_harness import start_host
 from load_harness import JOURNALING_TENANT, PROJECT, seed_project
+from sq_stub import write_sq_stub
 
 from amoeba.store import JournalOutcome, Store
 
@@ -57,6 +60,21 @@ START_TO_READY_BOUND_SECONDS = 2.0
 #: process is killed at genuinely varying points rather than always at the
 #: same instant in its work.
 KILL_WINDOW_SECONDS = (0.02, 0.30)
+
+
+@pytest.fixture(autouse=True)
+def stub_sq(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stub ``sq`` first on ``PATH`` under a scratch ``HOME``.
+
+    The journaling tenant's entries carry run ids, so every restart polls
+    ``sq runs wait``. The stub answers ``not_found`` for each, and the real
+    Squadron is never asked.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    bin_dir = write_sq_stub(tmp_path / "stub-bin")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
 
 
 def _committed_state(store_file: Path) -> tuple[set[str], set[str]]:
