@@ -32,7 +32,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 
 ## Foundation Work
 
-1. [ ] **(120) Run Identity and Supported Run Surfaces** — Moves 100's Squadron handling onto the surfaces Squadron supports. The minted run id joins `sq_run`'s parameter keys, and the journal's observer finds a run by that id. 100's recovery observer and paused-run pruning stop reading Squadron's internal run-state files and use `sq runs wait <id> --timeout 0 --json` (S10) instead. Matching by attributes stays only for entries journaled without an id.
+1. [x] **(120) Run Identity and Supported Run Surfaces** — Moves 100's Squadron handling onto the surfaces Squadron supports. The minted run id joins `sq_run`'s parameter keys, and the journal's observer finds a run by that id. 100's recovery observer and paused-run pruning stop reading Squadron's internal run-state files and use `sq runs wait <id> --timeout 0 --json` (S10) instead. Matching by attributes stays only for entries journaled without an id.
    **Value:** Architectural enablement. Recovery becomes exact, and Amoeba no longer reads a file Squadron calls internal.
    **Success Criteria:**
    - An `sq_run` entry journaled with a run id is recovered by that id. Recovery adopts the run when its state exists and marks the entry `not_applied` when no state exists after the launch grace period.

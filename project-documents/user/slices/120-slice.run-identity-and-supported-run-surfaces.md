@@ -8,8 +8,8 @@ interfaces:
 - 122
 - 125
 dateCreated: 20261020
-dateUpdated: 20261021
-status: not_started
+dateUpdated: 20261022
+status: complete
 turns: 32
 promptTokens: 2415436
 cachedTokens: 2292294
@@ -336,12 +336,13 @@ Run in bash from the repository root. Steps 1–2 are automated. Step 3 uses the
      tests/test_observer_sq_runs.py tests/test_recovery.py tests/process -k "sq or prune or recovery" -v
    uv run pytest tests/contract -v
    ```
-   Expected: everything passes. The D8 no-reads tests are named `test_recovery_by_id_reads_no_run_state_file` and `test_prune_reads_no_run_state_file`.
+   Expected (verified 20261022): `152 passed, 82 deselected` for the first command and `47 passed` for the second. The D8 no-reads tests are named `test_recovery_by_id_reads_no_run_state_file` (in `tests/test_recovery.py`) and `test_prune_reads_no_run_state_file` (in `tests/process/test_prune_sq_runs.py`); both appear as `PASSED` with `-v`. The tests run the stub `sq` (`tests/sq_stub.py`) and never the real one.
 
 2. **Full gate:**
    ```bash
    uv run pytest -q && uv run ruff check . && uv run pyright
    ```
+   Expected (verified 20261022): `2016 passed`, `All checks passed!`, `0 errors, 0 warnings, 0 informations`. The load tier is not in this command; the slice's load tests are `uv run pytest tests/load/test_recovery_scale.py tests/load/test_crash_loop.py -q` (pass). `tests/load/test_inbox_concurrent.py` and `test_verdict_concurrent.py` fail the same way on `main` (drain bound, "creation never applied") and are not caused by this slice.
 
 3. **See the surface recovery now reads.** Pick any id from your real runs, then ask for one that does not exist:
    ```bash
@@ -349,7 +350,9 @@ Run in bash from the repository root. Steps 1–2 are automated. Step 3 uses the
    sq runs wait <an-id-from-the-list> --timeout 0 --json; echo "exit $?"
    sq runs wait amoeba-unused-0001 --timeout 0 --json; echo "exit $?"
    ```
-   Expected: a document with `outcome`, `status` and `updated_at`, and an exit code matching the outcome. Then `{"run_id": "amoeba-unused-0001", "outcome": "not_found"}` with exit 5.
+   Expected (verified 20261022 against the installed `sq`): for a finished run, a JSON document with `run_id`, `outcome` (`completed`), `status`, `pipeline`, `started_at`, `updated_at`, `checkpoint` (`null`), `failure` and `reviews`, and `exit 0`. For the unused id, a one-line `wait on run amoeba-unused-0001 ended: not_found` on stderr, then `{"run_id": "amoeba-unused-0001", "outcome": "not_found"}` on stdout and `exit 5` (a second stderr line `sq runs wait: run amoeba-unused-0001 not_found` follows). Amoeba reads only stdout and the exit code.
+
+4. **Caveats found while implementing.** A crash before launch now recovers as `not_applied`, not `unknown`, once `--launch-grace` has passed (the contract proof's step 5 therefore damages the lost run's state, an `unreadable` outcome document, to keep driving the escalation). A start-up within `--launch-grace` of a crash waits out the remainder of the grace period, so tests that restart a process straight after a kill pass a launch grace of 0.
 
 ## Risk Assessment
 

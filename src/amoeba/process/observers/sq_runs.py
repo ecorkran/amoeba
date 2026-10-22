@@ -4,8 +4,7 @@ Answers, for a journaled ``sq_run`` command that carries no run id (an entry
 journaled before slice 120): did Squadron actually start this run? The question
 is answered by scanning the runs directory and matching run files against the
 entry — never by launching anything. Entries with a run id are answered by
-``sq_run_id.py`` and never reach this module; the scan here is lazy, so a pass
-with no legacy entry reads no run-state file.
+``sq_run_id.py``; the scan here is lazy, so a pass with no legacy entry reads none.
 
 The matching rule (D5) is biased entirely toward escalation. A run is a
 candidate only when **all four** conditions hold, and the only path to
