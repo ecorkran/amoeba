@@ -273,7 +273,7 @@ and is distinct from an unmappable stored string, which raises
 
 | Kind | Required keys |
 | --- | --- |
-| `sq_run` | `pipeline`, `params` |
+| `sq_run` | `pipeline`, `params`, `run_id` |
 | `cf_write` | `project`, `expected` (a mapping of CF field name to the value the write should leave behind) |
 
 Additional keys are stored and returned unchanged.

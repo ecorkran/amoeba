@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 120: `run_id` is a required `sq_run` journal parameter. Recovery and `amoeba prune sq-runs` ask Squadron through `sq runs wait --json` (new `amoeba.process.poll_run`, `RunOutcome` and friends) instead of reading its run-state files; an id-bearing entry with no run state past `--launch-grace` (default 60 s) is `not_applied`. Entries journaled before 120 still recover through the attribute matcher. `scripts/demo_journal.py` is retired.
+
 - Slice 110: the contract proof, `tests/contract/` — a 12-step lifecycle across two projects with real processes, `kill -9` crash windows, an end-state oracle and a feed-replay oracle, plus a network subset that survives a `kill -9` of `amoeba serve` and of the resident process. Every import in it is checked to be a public export.
 - Slice 110: `amoeba.process` exports the tenant-hosting contract (`ResidentProcess`, `Tenant`, `ProcessSettings`, `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown`, `standard_tenants`, and the four process errors). `build_tenants` moved from `cli/lifecycle` to `process/tenants` as `standard_tenants`, with no behavior change.
 - Slice 110: `Store.record_runner_report`, which records a launched review's verdict, its `runner_issued` ledger row, and the resolved journal entry in one transaction; `store_dir` and `project_store_path` exported from `amoeba.store`; `SquadronRun.updated_at` and a schema-v5 run fixture.
