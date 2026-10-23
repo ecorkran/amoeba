@@ -37,7 +37,8 @@ from amoeba.runner.launch import (
     launch,
     mint_run_id,
 )
-from amoeba.runner.observe import LaunchFailed, ObservedRun, RunObserver
+from amoeba.runner.observe import RunObserver
+from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
 from amoeba.store import (
     PARAM_CHECKOUT,

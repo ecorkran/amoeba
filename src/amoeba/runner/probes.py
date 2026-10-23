@@ -9,6 +9,7 @@ others carry on. Every ``cf`` call checks the :class:`TickBudget` first.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from amoeba.process import (
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.runner.launch import mint_run_id
+
+logger = logging.getLogger(__name__)
 
 CF_EXECUTABLE: Final = "cf"
 CF_PROJECT_FLAG: Final = "-p"
@@ -175,8 +178,10 @@ class LinkProbes:
                     return TickResult.CUT_OFF
                 if isinstance(result, ProbePassed):
                     self._passed.add(link)
+                    logger.info("CF link %s passed its two shape probes", link)
                     continue
                 self._failed[link] = result.detail
+                logger.warning("CF link %s failed its probe: %s", link, result.detail)
             faults.add(
                 Fault(
                     FaultKind.CF_PROBE_FAILED,

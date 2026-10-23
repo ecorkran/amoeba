@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Final
 
 from amoeba.process import RunOutcome
-from amoeba.runner.observe import Finished, LaunchFailed, RunEnded, RunVanished
+from amoeba.runner.observed import Finished, LaunchFailed, RunEnded, RunVanished
 from amoeba.store import (
     PARAM_RUN_ID,
     BlockedKind,

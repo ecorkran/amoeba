@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -14,6 +15,8 @@ from amoeba.runner.decide import Planner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
 from amoeba.runner.tenant import RunnerTenant
+
+logger = logging.getLogger(__name__)
 
 #: The planners production runs. Empty in slice 122: nothing launches yet.
 #: Slice 125 adds the dispatch planner here.
@@ -68,6 +71,7 @@ def runner_tenant(
     validate_settings(settings)
     (supervisor_dir / LAUNCH_LOGS_DIRNAME).mkdir(parents=True, exist_ok=True)
     probe_sq(settings, _now(), poll_run)
+    logger.info("sq probe passed: `sq runs wait` has the shape the Runner needs")
     return RunnerTenant(
         settings=settings,
         supervisor_dir=supervisor_dir,

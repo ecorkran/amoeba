@@ -15,8 +15,8 @@ interfaces:
 - 128
 - 129
 dateCreated: 20261020
-dateUpdated: 20261021
-status: not_started
+dateUpdated: 20261023
+status: complete
 turns: 35
 promptTokens: 3530573
 cachedTokens: 3346441
@@ -223,7 +223,7 @@ Status: decided
 Status: decided
 - **This changes 120's D3.** 120 adopts an id-bearing entry whenever Squadron holds a state for its id. Adoption resolves the entry. After a crash, that would end detection's deferral while the run may still be writing reviews, and 125 could no longer record the run's review with `record_runner_report`. A run that finished while Amoeba was down has the same problem, so the change cannot be limited to runs that are still running.
 - The by-id observer returns a fourth answer, `InFlight(run_id, outcome)`, for every outcome that carries a state: completed, failed, paused, timed_out (still running), unknown_status and orphaned. Recovery logs it and leaves the entry unresolved. The Runner's first tick polls the run and finishes it (D2). `NotApplied` (no state after the grace period) and `Unknown` (unreadable, poll failure, claimed id, bad parameter) are unchanged. The legacy attribute matcher still adopts.
-- **Recovery property** added to `docs/process-contract.md`: "An id-bearing `sq_run` entry whose run exists is left unresolved, in flight, for its issuer to finish." The gate still holds. Before any tenant ticks, every entry is either resolved or tied to a run Squadron reports. `InFlight` joins the `amoeba.process` hosting surface, which goes from 13 names to 14.
+- **Recovery property** added to `docs/process-contract.md`: "An id-bearing `sq_run` entry whose run exists is left unresolved, in flight, for its issuer to finish." The gate still holds. Before any tenant ticks, every entry is either resolved or tied to a run Squadron reports. `InFlight` joins the `amoeba.process` hosting surface, which goes from 13 names (20 with slice 120's outcome reader) to 23 with `UpstreamShapeError` and `SQ_EXECUTABLE`.
 - **Consequence.** A host that runs without the Runner leaves such entries unresolved, and detection stays deferred for that project. `amoeba start` always composes the Runner, so this arises only in a custom host. The contract suite's stand-in Runner finishes its own in-flight entries after a restart (Implementation Notes).
 - Rejected:
   - Adopting, then having the Runner re-journal a watching entry. The claimed-id guard would turn the second entry into `Unknown` after the next crash, and two entries would describe one run.
@@ -442,7 +442,7 @@ The supervisor directory table gains `launch-logs/`: one stdout and one stderr l
 ### Integration Requirements
 
 - 100's contract suite passes. The stand-in Runner finishes its in-flight entries after restart, and the oracle expects `completed` by `issuer` where it expected `adopted` by `recovery` for id-bearing entries.
-- `tests/test_process_public_api.py` pins 14 names, with `InFlight` added.
+- `tests/test_process_public_api.py` pins 23 names (`UpstreamShapeError`, `InFlight` and `SQ_EXECUTABLE` added to the 20 from slice 120).
 - 123 and 125 can add their reads and planner without changing `tenant.py` or `launch.py`.
 
 ### Verification Walkthrough
@@ -467,28 +467,36 @@ Run in bash from the repository root. Steps 1–3 are automated and use the stub
    uv run pytest tests/contract -v
    ```
 
-4. **Start with the real tools in a throwaway supervisor directory:**
+4. **Start with the real tools in a throwaway supervisor directory** (verified 20261023 against `sq` on `PATH` and Context Forge 0.19.17):
    ```bash
    export AMOEBA_STORE_DIR=$(mktemp -d)
    amoeba start            # in one terminal; leave it running
    ```
-   Expected on stderr: the recovery summary, then the Runner's INFO line saying the `sq` probe passed. With no projects, no tick makes a subprocess call. Stop it with `amoeba stop` from a second terminal, or with Ctrl-C.
-
-   Then link a project and watch its `cf` probe. With the process running:
-   ```bash
-   amoeba submit create-project --project demo --by operator
-   amoeba submit link-cf-project --project demo --by operator \
-     --cf-project-id "$(cf list projects --json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')"
-   amoeba inspect messages --project demo --json
+   Expected on stderr, in this order:
    ```
-   Expected: the process log shows the link's two `cf` probes passing, and no `cf_probe_failed` row appears. Repeat with `--cf-project-id does-not-exist` on a second project. That project gets one open `escalation` row with `fault_kind` `cf_probe_failed`, and `demo` is unaffected.
+   INFO amoeba.runner.factory: sq probe passed: `sq runs wait` has the shape the Runner needs
+   INFO amoeba.process.cf_watch: watching Context Forge projects at <cf data dir>/projects.json
+   ```
+   With no projects, no tick makes a subprocess call. In a second terminal, `amoeba status` prints `running  pid=<pid>  since=<time>  version=<version>`. Stop it with `amoeba stop` (prints `amoeba: stopped (pid <pid>)`) or Ctrl-C.
+
+   Then link projects and watch their `cf` probes. Use a CF project that has a `projectPath` (check with `cf list projects --json`): `cf list initiatives` exits 1 for one without a path, which is a real probe failure. With the process running:
+   ```bash
+   amoeba submit create-project --project healthy --by operator
+   amoeba submit create-project --project ghost --by operator
+   amoeba submit link-cf-project --project healthy --by operator --cf-project-id <id of a CF project with a projectPath>
+   amoeba submit link-cf-project --project ghost --by operator --cf-project-id does-not-exist
+   sleep 8
+   amoeba inspect messages --project healthy --json
+   amoeba inspect messages --project ghost --json
+   ```
+   Expected: `healthy` prints `[]` and the process log shows `CF link <id> passed its two shape probes`. `ghost` has exactly one `escalation` row with `"fault_kind": "cf_probe_failed"` and a payload `detail` naming the failing `cf` command (`project ghost, CF link does-not-exist: ...`), and the log shows a WARNING with the same text. The two projects do not affect each other. Caveat: `cf` output depends on the directory it runs in. Started from inside a git worktree, `cf` may print a worktree notice for an unknown project (exit 0, no JSON); the probe still fails it, with that text as the detail.
 
 5. **A refused start.** Put a script named `sq` that exits 2 first on `PATH`:
    ```bash
    d=$(mktemp -d); printf '#!/bin/sh\nexit 2\n' > "$d/sq"; chmod +x "$d/sq"
    PATH="$d:$PATH" amoeba start; echo "exit $?"
    ```
-   Expected: an error naming `sq runs wait <id> --timeout 0 --json`, then `exit 7`.
+   Expected (observed): a WARNING that `sq --version` exited 2, then `amoeba: sq probe failed: \`sq runs wait amoeba-<timestamp>-<12 hex> --timeout 0 --json\`: ... exited 2`, then `exit 7`.
 
 ## Risk Assessment
 

@@ -14,7 +14,7 @@ projectState: Initiative 100 (101–110) is merged, and slices 120 and 121 are m
   entry whose run has a state, and `tests/sq_stub.py` has no `run` mode.
 dateCreated: 20261023
 dateUpdated: 20261023
-status: in_progress
+status: complete
 turns: 29
 promptTokens: 2323064
 cachedTokens: 2214829
@@ -335,33 +335,39 @@ Note: tests/cli_harness.cli_environment now puts the stub sq first on PATH (the 
 
 Create `tests/runner/crash_entry.py` and `tests/runner/crash_harness.py`. Read `tests/contract/launched.py` and `tests/contract/harness.py` first and follow their pattern for starting the resident process as a subprocess.
 
-- [ ] The entry point composes `(*standard_tenants(...), runner_tenant(..., planners=(proof_planner,)))`. The proof planner launches the stub's no-op pipeline once for each test node with no journal entry; the test names nodes by the ids it created, never by title
-- [ ] Kill points reachable by environment variable or marker file: after journaling and before launch; while the run runs; after the run finished and before it is recorded; between a node block and the resolve
-- [ ] The harness starts the process, waits for a named point, sends `SIGKILL`, restarts, waits for quiescence, and reads the stub's `SQ_STUB_LOG` to count `sq run` calls per run id
+- [x] The entry point composes `(*standard_tenants(...), runner_tenant(..., planners=(proof_planner,)))`. The proof planner launches the stub's no-op pipeline once for each test node with no journal entry; the test names nodes by the ids it created, never by title
+- [x] Kill points reachable by environment variable or marker file: after journaling and before launch; while the run runs; after the run finished and before it is recorded; between a node block and the resolve
+- [x] The harness starts the process, waits for a named point, sends `SIGKILL`, restarts, waits for quiescence, and reads the stub's `SQ_STUB_LOG` to count `sq run` calls per run id
 - **Success Criteria**:
-  - [ ] The harness runs a no-kill scenario end to end under `tmp_path`, using the stub `sq` first on `PATH` and a temporary `HOME`. Commit: `test: add crash proof harness for the runner`
+  - [x] The harness runs a no-kill scenario end to end under `tmp_path`, using the stub `sq` first on `PATH` and a temporary `HOME`. Commit: `test: add crash proof harness for the runner`
+
+Note: the entry builds RunnerTenant directly (not via runner_tenant()) so it can hook Popen, poll and Store.journal_resolve; it still runs probe_sq. Kill points are armed by PROOF_KILL_AT.
 
 ### Task 12.2: One test per kill point
 **Owner**: Junior AI | **Dependencies**: 12.1 | **Effort**: 4
 
 Create `tests/runner/test_crash_recovery.py`. Each test asserts the entry's final outcome, its result, the node's blocked state, and the `sq run` count for the id. Per the LLD, Verification Walkthrough step 2.
 
-- [ ] `test_kill_before_launch_is_not_applied_and_not_relaunched`: entry `not_applied`, zero `sq run` calls for the id, no relaunch
-- [ ] `test_kill_while_running_is_recorded_after_restart`: left in flight by recovery, then recorded `completed`; one call
-- [ ] `test_kill_after_finish_before_record_is_recorded_on_first_tick`: same, with the run already completed while down; one call
-- [ ] `test_kill_between_block_and_resolve_finishes_the_sequence`: use a `failed` run outcome; the node has one blocked state and the entry is resolved
+- [x] `test_kill_before_launch_is_not_applied_and_not_relaunched`: entry `not_applied`, zero `sq run` calls for the id, no relaunch
+- [x] `test_kill_while_running_is_recorded_after_restart`: left in flight by recovery, then recorded `completed`; one call
+- [x] `test_kill_after_finish_before_record_is_recorded_on_first_tick`: same, with the run already completed while down; one call
+- [x] `test_kill_between_block_and_resolve_finishes_the_sequence`: use a `failed` run outcome; the node has one blocked state and the entry is resolved
 - **Success Criteria**:
-  - [ ] All four pass, repeated three times without flakiness (no fixed sleeps; wait on conditions). Commit: `test: add runner crash recovery proof`
+  - [x] All four pass, repeated three times without flakiness (no fixed sleeps; wait on conditions). Commit: `test: add runner crash recovery proof`
+
+Note: all four pass, repeated three times (8.3-8.8 s per run), no fixed sleeps beyond the 0.05 s polling interval.
 
 ### Task 12.3: End-to-end launch and fault scenarios
 **Owner**: Junior AI | **Dependencies**: 12.2 | **Effort**: 3
 
 Create `tests/runner/test_end_to_end.py` using the stub `sq` and a real store in-process (no kill).
 
-- [ ] Normal path: journaled, launched detached, confirmed by its `run_id=` line, polled to `completed`, recorded with `run_id`, `outcome`, `status`
-- [ ] `exit_before_line`: entry `failed`, node blocked with reason and log tail. `no_line` with a live child: one `launch_overdue` escalation, entry unresolved; `late_line`: confirmed, recorded, escalation closed. `usage_error`: node blocked, entry `failed`, process path raises `UpstreamShapeError` (exit 15 when run through `amoeba start`)
+- [x] Normal path: journaled, launched detached, confirmed by its `run_id=` line, polled to `completed`, recorded with `run_id`, `outcome`, `status`
+- [x] `exit_before_line`: entry `failed`, node blocked with reason and log tail. `no_line` with a live child: one `launch_overdue` escalation, entry unresolved; `late_line`: confirmed, recorded, escalation closed. `usage_error`: node blocked, entry `failed`, process path raises `UpstreamShapeError` (exit 15 when run through `amoeba start`)
 - **Success Criteria**:
-  - [ ] All pass with no fixed sleeps. Commit: `test: add runner end-to-end launch scenarios`
+  - [x] All pass with no fixed sleeps. Commit: `test: add runner end-to-end launch scenarios`
+
+Deviation: stub no_line creates the run state (per Task 4.1), so the poll confirms the launch and it is never overdue; the overdue path is covered with late_line (delay longer than the grace period). A real amoeba start cannot reach exit 15 because the production planner tuple is empty; the last test drives the same UpstreamShapeError through the CLI boundary handler.
 
 ---
 

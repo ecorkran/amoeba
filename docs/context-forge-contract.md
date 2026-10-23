@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: context-forge-event-seam
 dateCreated: 20261016
-dateUpdated: 20261016
+dateUpdated: 20261023
 status: complete
 ---
 
@@ -186,7 +186,8 @@ both are ignored.
 
 `cf --version` is captured **once, at start-up**, in `standard_tenants` (`process/tenants.py`), with
 `cf_timeout_seconds`, and stored on every snapshot as `cf_version_label` — or as
-the explicit `unavailable` marker if capture fails. No tick starts a subprocess.
+the explicit `unavailable` marker if capture fails. This tenant's tick starts no
+subprocess; the Runner's `cf` link probes (slice 122) do, under `TickBudget`.
 A CF upgrade while the process runs is not reflected until restart.
 
 ## The Runner's own writes (D8)
