@@ -14,57 +14,77 @@ aiProfile: openrouter
 status: complete
 dateCreated: 20261023
 dateUpdated: 20261023
-reviewedSha: 8736ea5419144762394302dea321fb1469358033
-revision_number: 1
+reviewedSha: 9672d165dca7a42c79fa2f84a51ac3e13f6e13af
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 46
+toolCallsMade: 27
 diffTruncated: false
 turns: 20
-promptTokens: 2867753
-cachedTokens: 2497770
-completionTokens: 125854
-reasoningTokens: 117718
-durationSeconds: 602.9
-costUsd: 0.129786
+promptTokens: 2562226
+cachedTokens: 2237488
+completionTokens: 94187
+reasoningTokens: 86754
+durationSeconds: 454.9
+costUsd: 0.106553
 costBasis: alias_pricing
 runId: run-20261023-p56-63bf9ff6
 squadronVersion: 0.23.7
 findings:
   - id: F001
-    severity: pass
-    category: uncategorized
-    summary: "Crash-safe ordering, budget discipline and the single process boundary are implemented as designed"
-    location: "src/amoeba/runner/tick.py#ProjectTick.run"
+    severity: concern
+    category: design
+    summary: "Recovery's `InFlight` couples the upstream-agnostic protocol to Squadron"
+    location: "src/amoeba/process/recovery.py:27"
   - id: F002
     severity: concern
-    category: uncategorized
-    summary: "The same malformed run id is an answer in recovery and an exception in the Runner"
-    location: "src/amoeba/runner/observe.py#RunObserver._observe_one"
+    category: error-handling
+    summary: "An unexpected fault on a node blocked on a non-human kind is recorded nowhere"
+    location: "src/amoeba/runner/faults.py#escalate"
   - id: F003
     severity: concern
-    category: uncategorized
-    summary: "A settings invariant is stated as a property but is never enforced"
-    location: "src/amoeba/runner/factory.py#validate_settings"
+    category: error-handling
+    summary: "A malformed `issued_at` aborts the whole project tick instead of faulting one entry"
+    location: "src/amoeba/runner/observe.py#_within_grace"
   - id: F004
     severity: concern
-    category: uncategorized
-    summary: "Tests import value types from a module that only re-exports them"
-    location: "tests/runner/test_finish.py:12"
+    category: test-infrastructure
+    summary: "`cli_environment` now writes to `supervisor_dir.parent`, an unenforced precondition"
+    location: "tests/cli_harness.py:40-62"
   - id: F005
     severity: note
-    category: uncategorized
-    summary: "Stale module docstring in `faults.py`"
-    location: "src/amoeba/runner/faults.py:4"
+    category: error-handling
+    summary: "Store failures re-raise without a log line"
+    location: "src/amoeba/runner/tenant.py#_tick_project"
   - id: F006
     severity: note
-    category: uncategorized
-    summary: "A test asserts a private attribute rather than observable behaviour"
-    location: "tests/runner/test_factory.py#test_passed_planners_are_used_as_given"
+    category: consistency
+    summary: "`cf` and `sq` executable constants live in different places"
+    location: "src/amoeba/runner/probes.py:38"
   - id: F007
     severity: note
-    category: uncategorized
-    summary: "`cli_environment` gained a filesystem side effect on every call"
-    location: "tests/cli_harness.py:40"
+    category: style
+    summary: "Exit-code and head-size literals lack `Final`, and one duplicates knowledge held elsewhere"
+    location: "src/amoeba/runner/observe.py:45"
+  - id: F008
+    severity: note
+    category: test-structure
+    summary: "New tests import a private helper across modules"
+    location: "tests/runner/test_budget_coverage.py:16"
+  - id: F009
+    severity: note
+    category: consistency
+    summary: "Shared result/parameter key names are re-typed as literals in the new tests"
+    location: "tests/contract/runner_tenant.py"
+  - id: F010
+    severity: pass
+    category: correctness
+    summary: "The tick budget is enforced before every call site and mechanically pinned"
+    location: "src/amoeba/runner/budget.py"
+  - id: F011
+    severity: pass
+    category: correctness
+    summary: "Crash safety and idempotent recording are proven, not asserted"
+    location: "src/amoeba/runner/finish.py"
 ---
 
 # Review: code — slice 122
@@ -74,53 +94,69 @@ findings:
 
 ## Findings
 
-### [PASS] Crash-safe ordering, budget discipline and the single process boundary are implemented as designed
+### [CONCERN] Recovery's `InFlight` couples the upstream-agnostic protocol to Squadron
 
-The tick sequence matches D1/D2/D10: `journal_issue` commits before `launch()` is called (`_launch`), `_record_finished` runs block-then-resolve through `finish.record`, and `_close_recovered` is reached only on a `COMPLETE` tick, so a cut-off or faulted tick closes nothing. `_act` and `_after_launch_poll`/`_confirmed` each consult `TickBudget.allows_call()` immediately before the call they guard, and `observe.observe` sorts least-recently-polled first so a deadline cannot starve the same runs. `tenant._tick_project` re-raises `(*STORE_FAILURES, UpstreamShapeError)` and escalates everything else, and `tests/runner/test_tenant.py::test_the_runner_package_has_exactly_one_broad_except` pins the single `except Exception` by AST, so a second one cannot appear unnoticed.
+`recovery.py` imports `RunOutcome` from `amoeba.process.sq_outcome` and `InFlight.outcome: RunOutcome` makes the shared observation vocabulary carry a Squadron-specific enum. The module docstring still says "This module knows nothing about Squadron or Context Forge… That separation is the point: adding a command kind means adding an enum member, its required parameter keys, and an observer, with no change here." That claim is now false, and the Observer protocol documented in `docs/process-contract.md` ("The Observer protocol" section, `Observation = Adopt | InFlight | NotApplied | Unknown`) no longer holds for a non-Squadron observer: any observer for a future command kind that wants to report "reached the system, not finished" must supply a Squadron `RunOutcome`. Either the field should be an upstream-neutral value (e.g. an opaque status string plus the run id, with the Runner classifying), or the docstring and the contract section should be amended to say recovery now knows one upstream's outcome vocabulary.
 
-### [CONCERN] The same malformed run id is an answer in recovery and an exception in the Runner
+### [CONCERN] An unexpected fault on a node blocked on a non-human kind is recorded nowhere
 
-`RunObserver._observe_one` raises `ValueError` when `entry.parameters[PARAM_RUN_ID]` is not a non-empty string, and `finish._run_id` raises on the same condition (with a weaker check: it accepts the empty string that `observe` rejects). Recovery answers the identical data condition with a handled `Unknown(reason=...)` in `src/amoeba/process/observers/sq_run_id.py`, so the two paths that read the same journal row disagree about whether it is an expected answer or a bug. The consequence in the Runner is larger than a different label: the raise propagates out of `observe()` before the remaining entries are visited, so one malformed entry stops the other in-flight runs in that project from being observed or recorded on that tick, and the operator sees `unexpected_fault` rather than a run-observation fault. Both paths do end in an escalation, so this is not a correctness failure, but the divergence is worth reconciling — either answer the condition as a `Fault` and continue the pass, or make recovery raise too.
+In `escalate()`, `blocked_state_for(node.id) is not None` causes an early `return` with no write at all. The docstring justifies this as "a node already blocked gets nothing more, so a fault repeating cannot storm", and `tests/runner/test_faults.py::test_an_already_blocked_node_gets_nothing_more` pins it — but that test only exercises a `HUMAN` block. For a node blocked on `SQ_CHECKPOINT` or `JUDGE`, the fault is dropped entirely: no second block (correct) *and* no project-scoped escalation, so the only trace is the `logger.exception` line in `RunnerTenant._tick_project`. Compare `Store.journal_escalate`, which has an explicit already-blocked branch (`_escalate_existing_block`) that writes an escalation against the existing block precisely because "whatever it is blocked on … a human must now also hear that a command's outcome is unknown". The Runner should take the same path: when the existing block is not `HUMAN`, fall through to `raise_project_escalation` rather than returning.
 
-### [CONCERN] A settings invariant is stated as a property but is never enforced
+### [CONCERN] A malformed `issued_at` aborts the whole project tick instead of faulting one entry
 
-`ProcessSettings`'s docstring for `tick_call_timeout_seconds` asserts it is "Larger than `tick_deadline_seconds` so one call that starts just inside the deadline still has room to finish", but `validate_settings` checks only that each bound is positive and that `tick_call_timeout_seconds < shutdown_grace_seconds`. Both values are reachable through documented flags (`--tick-deadline`, `--tick-call-timeout` in `src/amoeba/cli/settings_flags.py`), so `--tick-deadline 60 --tick-call-timeout 8` is accepted and silently violates the stated relationship. Either enforce it alongside the existing grace check, or reword the docstring so it describes the defaults rather than a required property — as written, a reader designing against `settings.py` would rely on something the code does not guarantee.
+`_within_grace` raises `ValueError` for an entry with no `issued_at` or a naive one. That exception propagates out of `observe()` → `ProjectTick.run()` → `RunnerTenant._tick_project`'s broad handler, which escalates it as `unexpected_fault` and returns — so for that tick the project's finished runs are never recorded, its expected faults are never raised, nothing is decided or acted on, and `_close_recovered` never runs. The same module states the opposite principle one method above: "As in recovery, a malformed run id is an answer, not a bug: it faults this entry and the others are still observed" (`_observe_one`). The two malformed-row cases should be handled alike — a `Fault(kind=RUN_OBSERVATION_FAILED, …)` on that entry and carry on. The path is nearly unreachable today (the store always writes an aware timestamp), which is exactly why the inconsistency is easy to keep.
 
-### [CONCERN] Tests import value types from a module that only re-exports them
+### [CONCERN] `cli_environment` now writes to `supervisor_dir.parent`, an unenforced precondition
 
-`LaunchFailed`, `RunEnded` and `RunVanished` are defined in `src/amoeba/runner/observed.py`; `tests/runner/test_finish.py:12`, `tests/runner/test_observe_launch.py:12` and `tests/runner/test_observe_poll.py:13` all import them from `src/amoeba/runner/observe.py`, which merely re-imports them. This mirrors the convention the project already enforces for production code — `tests/test_import_boundaries.py` Rule 8 explicitly requires `SubmissionKind` to be taken "from its defining module" — and here it means a future refactor that stops `observe.py` importing a name it does not use would break three test modules for a reason unrelated to behaviour. Import them from `amoeba.runner.observed` instead.
+`cli_environment` was a pure environment builder; it now calls `write_sq_stub(supervisor_dir.parent / "stub-sq-bin")` on every invocation — including the default path inside `run_cli` and `start_background`, so a test that only reads a listing still writes a stub `sq` to disk. The docstring asserts the parent "must therefore be a throwaway directory", but nothing enforces it and no fixture guarantees the name: every current caller happens to pass `tmp_path / "supervisor"` (or a `tmp_path_factory.mktemp(...) / "supervisor"`), so the parent is `tmp_path` today. A future test that passes `tmp_path` itself as the supervisor directory would place the stub in pytest's session root, and one that passed a shared directory would make every test in the session silently depend on the same stub. Passing the stub directory in explicitly (or writing it under `supervisor_dir` and adding it to `PATH` from there) would make the precondition structural rather than documentary.
 
-### [NOTE] Stale module docstring in `faults.py`
+### [NOTE] Store failures re-raise without a log line
 
-The docstring says "Escalation writes join this module in a later task", but `raise_expected_faults` and `escalate` — the escalation writes — are both defined in this module already. The line reads as a leftover from the task ordering in the slice design and now misdescribes the file.
+The `except (*STORE_FAILURES, UpstreamShapeError): raise` branch re-raises with no logging, while the branch below it follows the project's stated pattern (`logger.exception` then handle). The operator does see a message, because `amoeba.cli.main` prints `amoeba: {error}` for `StoreError` — so nothing is silent — but the convention used elsewhere in this package (`recovery._observe`) is to log at ERROR before re-raising. Worth a one-line `logger.exception` for consistency, or a comment naming the boundary that will report it.
 
-### [NOTE] A test asserts a private attribute rather than observable behaviour
+### [NOTE] `cf` and `sq` executable constants live in different places
 
-The test asserts `tenant._planners == (planner,)`, reaching into a private field with a `pyright: ignore[reportPrivateUsage]`, and the planner it passes does not satisfy the `Planner` protocol (hence `# type: ignore[arg-type]`). It proves the constructor stored the tuple but not that the planner is consulted, which is the behaviour `runner_tenant`'s `planners` argument exists for. Driving one tick and asserting the planner's `plan` was called would test the same decision through the public surface.
+`SQ_EXECUTABLE` is defined once in `amoeba.process.sq_outcome` and re-exported; `CF_EXECUTABLE` is defined locally in `runner/probes.py`. Two placement rules for the same kind of value invite drift if a second caller ever needs the `cf` name. Not a correctness issue — no second definition exists today.
 
-### [NOTE] `cli_environment` gained a filesystem side effect on every call
+### [NOTE] Exit-code and head-size literals lack `Final`, and one duplicates knowledge held elsewhere
 
-`cli_environment` previously built and returned an environment mapping; it now also calls `write_sq_stub(supervisor_dir.parent / "stub-sq-bin")` and rewrites `PATH` on every invocation. `write_sq_stub` is idempotent, so repeated calls are harmless, but the helper is used by unrelated suites (`tests/load/load_harness.py`, `tests/ingest_e2e_harness.py`, `tests/detection_e2e_harness.py`) and now silently makes a stub `sq` visible to all of them, and it assumes a `supervisor_dir.parent` layout. `tests/test_cli_lifecycle.py::test_a_failing_sq_probe_fails_the_start_naming_the_shape` already has to discard the whole `PATH` to get the opposite behaviour, which is the shape of the coupling to watch.
+`USAGE_ERROR_EXIT_CODE = 2`, `probes.OUTPUT_HEAD_CHARS = 200` and `tick.CLOSED_BY: str = "runner"` are unannotated or `str`-annotated, where the rest of the package (including the adjacent `budget.py`, `launch.py`, `faults.py`) uses `Final`. The `2` in particular encodes Squadron's usage-error exit code, which `sq_outcome.OUTCOME_EXIT_CODES` documents in a comment but does not export; deriving it from that module would keep the one-place-per-value rule.
+
+### [NOTE] New tests import a private helper across modules
+
+`from runner.test_probes import _link  # pyright: ignore[reportPrivateUsage]` reaches into another test module's private helper, and `tests/runner/test_tenant.py` uses `rig.tenant._tracker.confirm(...)` with the same suppression. `_link` is a four-line fixture builder; moving it to `tests/runner/tick_support.py` (where `PROJECT` and `Rig` already live) would remove the suppression and the cross-module private import.
+
+### [NOTE] Shared result/parameter key names are re-typed as literals in the new tests
+
+`_finish_in_flight` writes `result={"run_id": run_id_of(entry)}` with a bare literal, and `tests/runner/test_observer_*`/`test_tick.py` build parameter dicts with bare `"pipeline"`, `"params"`, `"checkout"` alongside the imported `PARAM_RUN_ID`. `tests/runner/test_launch.py` already imports `PARAM_CHECKOUT`, and `finish.py` defines `RESULT_RUN_ID`, so the constants exist; the literals are a small step away from the "define the value once" rule and would silently diverge if a key were renamed. Also note `tests/runner/test_launch_ids.py` asserts `len(STORE_FAILURES) == 5`, which fails on any legitimate addition to the store-failure set rather than on a behavior change — the other vocabulary assertions in that test (enum value sets) are the ones worth keeping.
+
+### [PASS] The tick budget is enforced before every call site and mechanically pinned
+
+`TickBudget.allows_call()` is consulted before the poll (`observe._confirmed`, `_unconfirmed`), before each `cf` probe command (`probes.probe_link`, per command, so a cut-off between the two commands starts no second call), and before `Popen` (`tick._act`). `tests/runner/test_budget_coverage.py` wraps all three call kinds so a new call site that skips the check fails the suite, and `tests/load/test_runner_tick_load.py` bounds a tick to `deadline + one call` under a realistic 10×10 configuration with real per-poll cost. The tenant obligation in `docs/process-contract.md` is honored, including the "no new call after a stop request" clause via `StopSignal`.
+
+### [PASS] Crash safety and idempotent recording are proven, not asserted
+
+`record` always blocks before it resolves, and `_block_once` returns early when a block already exists, so a crash between the two writes leaves a state the next tick finishes — `tests/runner/test_finish.py::test_reentry_after_a_crash_between_block_and_resolve_finishes_the_sequence` and `tests/runner/test_crash_recovery.py` (real `SIGKILL` at four points, real restart, real stub `sq`) exercise this end to end. The recovery change that leaves an id-bearing run in flight (`InFlight`) is covered on both sides: `tests/test_recovery.py` pins that the entry stays unresolved and is counted, and `tests/contract/runner_tenant.py` + `steps.check_finished_review` pin that the issuer finishes it with the run id in `result`, which keeps the ownership guarantee for pruning intact.
 
 ### Run Digest
 
-- Response length: 6400 chars
+- Response length: 10090 chars
 - Response is newline-free: no
-- Tool calls made: 46
+- Tool calls made: 27
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 384000 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 454719
+- Reasoning characters: 336870
 - Effort: backend default
 - Turns: 20
-- Tokens — prompt / cached / cache write / completion / reasoning: 2867753 / 2497770 / not computed / 125854 / 117718
-- Duration: 602.9 s
-- Cost: $0.13 (alias_pricing)
+- Tokens — prompt / cached / cache write / completion / reasoning: 2562226 / 2237488 / not computed / 94187 / 86754
+- Duration: 454.9 s
+- Cost: $0.11 (alias_pricing)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 11
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 11
+- Finding-shaped matches — surviving validation: 11
