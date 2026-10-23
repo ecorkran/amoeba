@@ -59,6 +59,9 @@ class JournalResolver(StrEnum):
     RECOVERY = "recovery"
 
 
+#: The parameter key that carries an ``sq_run``'s Squadron run id (slice 120).
+PARAM_RUN_ID: Final = "run_id"
+
 #: The parameter keys each command kind must carry at issue time.
 #:
 #: Validated by ``journal_issue`` *before* anything is written, because the
@@ -70,7 +73,7 @@ class JournalResolver(StrEnum):
 #: Additional keys beyond these are stored and returned unchanged.
 REQUIRED_PARAMETER_KEYS: Final[Mapping[CommandKind, frozenset[str]]] = {
     CommandKind.CF_WRITE: frozenset({"project", "expected"}),
-    CommandKind.SQ_RUN: frozenset({"pipeline", "params"}),
+    CommandKind.SQ_RUN: frozenset({"pipeline", "params", PARAM_RUN_ID}),
 }
 
 

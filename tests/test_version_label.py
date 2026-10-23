@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from amoeba.process.sq_outcome import SQ_EXECUTABLE
 from amoeba.process.version_label import (
-    SQ_EXECUTABLE,
     VERSION_UNAVAILABLE,
     capture_sq_version_label,
 )

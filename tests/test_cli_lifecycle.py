@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -21,9 +23,13 @@ from cli_harness import (
     run_cli,
     start_background,
 )
+from sq_run_fixtures import (
+    LEGACY_ENTRY_ID,
+    insert_legacy_sq_run_entry,
+)
 
 from amoeba.cli.main import ExitCode
-from amoeba.store import BlockedKind, CommandKind, NodeKind, Store
+from amoeba.store import BlockedKind, NodeKind, Store
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
@@ -337,16 +343,24 @@ def test_start_logs_a_recovery_summary_per_project(
 def test_start_escalates_an_unresolved_entry_then_inspect_shows_it(
     supervisor_dir: Path, runs_dir: Path
 ) -> None:
-    """Recovery runs on start, and its results are visible through inspect."""
+    """Recovery runs on start, and its results are visible through inspect.
+
+    The entry is a pre-120 row (no run id), so it reaches the legacy matcher
+    and, with an empty runs directory, finds no candidate and escalates.
+    """
     project_store_file = supervisor_dir / f"{PROJECT}.sqlite3"
     with Store.open(project_store_file) as store:
         node = store.create_node(
             project_id=PROJECT, kind=NodeKind.SLICE, title="in-flight"
         )
-        entry = store.journal_issue(
-            node.id,
-            kind=CommandKind.SQ_RUN,
+    with closing(sqlite3.connect(project_store_file)) as connection:
+        insert_legacy_sq_run_entry(
+            connection,
+            entry_id=LEGACY_ENTRY_ID,
+            project_id=PROJECT,
+            node_id=node.id,
             parameters={"pipeline": "p6", "params": {"slice": "102"}},
+            issued_at=datetime.now(UTC).isoformat(),
         )
 
     process = start_background(supervisor_dir, _start_arguments(runs_dir))
@@ -360,7 +374,7 @@ def test_start_escalates_an_unresolved_entry_then_inspect_shows_it(
 
         assert len(rows) == 1
         assert rows[0]["node_id"] == node.id
-        assert entry.id in rows[0]["context"]
+        assert LEGACY_ENTRY_ID in rows[0]["context"]
 
         run_cli(["stop"], supervisor_dir)
         process.wait()

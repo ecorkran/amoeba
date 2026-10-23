@@ -2,9 +2,8 @@
 
 Run as ``python -m contract.bootstrap`` with ``PYTHONPATH`` at ``tests/``, never
 through ``uv run`` (a temporary ``HOME`` would move uv's cache). Everything
-per-run arrives as an argument. ``ProcessSettings`` keeps its default
-``sq_runs_dir``, which derives from ``HOME``, so this process and
-``amoeba prune`` agree on the runs directory by construction.
+per-run arrives as an argument. The stub ``sq`` on ``PATH`` and ``HOME`` come
+from the harness, so this process and ``amoeba prune`` ask the same stub state.
 """
 
 from __future__ import annotations
@@ -30,6 +29,11 @@ from contract.scenario import STANDIN_RUN_AGE
 IDLE_INTERVAL_SECONDS = 0.05
 REVIEW_SCAN_INTERVAL_SECONDS = 0.2
 SHUTDOWN_GRACE_SECONDS = 5.0
+
+#: The proof restarts straight after a crash, so a real launch grace would stall
+#: every restart step for up to a minute. The stand-in's side effects are
+#: instantaneous, so none is needed: no run state at restart means not launched.
+LAUNCH_GRACE_SECONDS = 0.0
 
 #: Recorded in the PID file. Informational.
 PROCESS_VERSION = "contract-proof"
@@ -72,7 +76,6 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--reviews-dir", type=_reviews_dir, action="append", required=True
     )
-    parser.add_argument("--run-fixture", type=Path, required=True)
     parser.add_argument("--review-fixture", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -86,11 +89,10 @@ def main(argv: Sequence[str]) -> None:
         review_scan_interval_seconds=REVIEW_SCAN_INTERVAL_SECONDS,
         shutdown_grace_seconds=SHUTDOWN_GRACE_SECONDS,
         cf_data_dir=arguments.cf_data_dir,
+        launch_grace_seconds=LAUNCH_GRACE_SECONDS,
     )
     runner = ProofRunner(
-        settings.sq_runs_dir,
         dict(arguments.reviews_dir),
-        arguments.run_fixture,
         arguments.review_fixture,
         STANDIN_RUN_AGE,
     )

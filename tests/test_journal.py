@@ -10,6 +10,7 @@ answer at 3 a.m. after a crash.
 from __future__ import annotations
 
 import pytest
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.store import (
     BlockedKind,
@@ -24,13 +25,13 @@ from amoeba.store import (
     Store,
     sql_journal,
 )
+from amoeba.store.journal_models import PARAM_RUN_ID
 
 PROJECT = "demo"
 
-SQ_PARAMETERS: dict[str, object] = {
-    "pipeline": "p6",
-    "params": {"slice": "102", "model": "opus"},
-}
+SQ_PARAMETERS: dict[str, object] = sq_run_parameters(
+    {"pipeline": "p6", "params": {"slice": "102", "model": "opus"}}
+)
 CF_PARAMETERS: dict[str, object] = {
     "project": "amoeba",
     "expected": {"developmentPhase": "Phase 6: Implementation"},
@@ -116,6 +117,26 @@ def test_issue_with_a_missing_required_parameter_raises_and_writes_nothing(
         store.journal_issue(node.id, kind=kind, parameters=parameters)
 
     assert _journal_row_count(store) == 0
+
+
+def test_an_sq_run_without_a_run_id_is_refused_and_names_the_key(
+    store: Store, node: Node
+) -> None:
+    """Slice 120, D1: a new id-less ``sq_run`` cannot be journaled."""
+    without_run_id = {k: v for k, v in SQ_PARAMETERS.items() if k != PARAM_RUN_ID}
+
+    with pytest.raises(ValueError, match=PARAM_RUN_ID):
+        store.journal_issue(node.id, kind=CommandKind.SQ_RUN, parameters=without_run_id)
+
+    assert _journal_row_count(store) == 0
+
+
+def test_an_sq_run_with_a_run_id_is_accepted(store: Store, node: Node) -> None:
+    entry = store.journal_issue(
+        node.id, kind=CommandKind.SQ_RUN, parameters=SQ_PARAMETERS
+    )
+
+    assert entry.parameters[PARAM_RUN_ID] == SQ_PARAMETERS[PARAM_RUN_ID]
 
 
 def test_issue_against_an_unknown_node_raises(store: Store) -> None:

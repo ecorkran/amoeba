@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sq_run_fixtures import sq_run_parameters
+
 from amoeba.store import (
     CFReference,
     CommandKind,
@@ -60,7 +62,7 @@ def test_a_slice_node_with_no_cf_reference_does_not_match() -> None:
 # has_unresolved_review_entry
 # --------------------------------------------------------------------------
 
-SQ_PARAMETERS: dict[str, object] = {"pipeline": "p6", "params": {}}
+SQ_PARAMETERS: dict[str, object] = sq_run_parameters({"pipeline": "p6", "params": {}})
 CF_PARAMETERS: dict[str, object] = {"project": "p", "expected": {}}
 
 

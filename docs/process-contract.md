@@ -359,8 +359,9 @@ Four properties you may rely on:
    a crash immediately afterward leaves a durable unresolved entry.
 2. **Observe, never re-issue.** Recovery calls observers and the store, and
    nothing else. There is no code path that re-runs a command.
-3. **Exactly one adopted.** The only route to `adopted` is exactly one candidate
-   passing every matching condition.
+3. **Exactly one adopted.** The only route to `adopted` is a run state found by
+   the entry's own run id, or, for a legacy entry (journaled before slice 120,
+   with no run id), exactly one matching candidate.
 4. **Everything else escalates.** Zero candidates, several candidates, an
    unregistered kind, an unreadable upstream, a parse failure, a missing
    required field — all become outcome `unknown` plus a `blocked_on_human` node
@@ -394,14 +395,46 @@ failure is reported as `Unknown`, not raised — those are answers, not bugs.
 an observer that can genuinely distinguish "did not happen" from "cannot tell".
 `Unknown` carries a human-readable `reason` and any `candidates`.
 
+**`not_applied` for an `sq_run` means "no run state after the launch grace
+period", not proof that the run never started.** A run whose state was later
+removed (for example by `sq runs prune`) answers the same way. An issuer that
+would reissue after a `not_applied` `sq_run` must first check its launch log and
+poll once more; recovery never reissues anything.
+
 Initiative 120 may register observers for command kinds it adds. Adding a kind
 means three things, all of them: an enum member, its required parameter keys,
 and an observer. A kind with no observer escalates rather than being skipped.
 
 ### The two shipped observers
 
-**Squadron runs** (`sq_run`) matches journaled commands against
-`~/.config/squadron/runs/*.json`. A run is a candidate when **all four** hold:
+**Squadron runs** (`sq_run`) are recovered by a dispatcher on whether the entry's
+parameters carry a `run_id` key. `run_id` is a required `sq_run` parameter key,
+so every entry journaled since slice 120 has one.
+
+*By id.* The by-id observer asks Squadron for that one run:
+`sq runs wait <id> --timeout 0 --json`, bounded by `--sq-timeout`. It never reads
+a run-state file. Any of the six outcomes that mean Squadron holds a state
+(`completed`, `failed`, `paused`, `timed_out` — still running — `unknown_status`,
+`orphaned`) adopts, recording `run_id`, `outcome` and `status` in the result.
+What an orphaned or unknown-status run means is the Runner's decision, not
+recovery's. `unreadable`, a missing `sq`, a timeout, exit 2, output that is not
+JSON, an outcome that disagrees with the exit code, a document for another run,
+a run id already recorded on another entry, and a `run_id` that is not a
+non-empty string each escalate (`unknown`) with a reason naming the cause.
+
+*Launch grace.* On `not_found`: with no `issued_at` the entry escalates. Inside
+`issued_at + --launch-grace` (default 60 s) the launch may still be creating its
+run, so recovery waits out the remainder (never more than one grace period),
+polls once more, and then adopts, escalates, or marks the entry `not_applied`.
+Past the grace period the entry is `not_applied` at once. A start-up after a
+crash within one grace period of a launch therefore stalls by at most the grace
+still remaining; each id-bearing entry makes at most two polls.
+
+*Legacy.* An entry without a `run_id` key (a row from before slice 120) goes to
+the attribute matcher below, unchanged. It reads
+`~/.config/squadron/runs/*.json`, lazily: a pass with no legacy entry reads no
+run-state file, and a pass with legacy entries scans the directory once. A run
+is a candidate when **all four** hold:
 the pipeline is equal compared lower-cased; every journaled `params` key is
 present in the run's params with an equal value (**subset**, because Squadron
 persists definition defaults merged with the caller's overrides); `started_at`
@@ -410,8 +443,8 @@ already recorded in another entry's result. Exactly one candidate adopts,
 recording the `run_id` and the run file's own `schema_version` as provenance.
 Anything else escalates.
 
-Squadron cannot distinguish a never-issued run from a pruned one — both present
-as zero matches, and both escalate.
+The matcher cannot distinguish a never-issued run from a pruned one — both
+present as zero matches, and both escalate.
 
 **The ownership guarantee.** A run is Amoeba's, for pruning, when some journal
 entry's `result` carries its `run_id` (`recorded_result_run_ids`), whatever the
@@ -451,8 +484,11 @@ provenance and never parsed, ordered, or branched on.
 `start` exposes every loop-governing `ProcessSettings` tunable as a flag:
 `--idle-interval`, `--shutdown-grace`, `--clock-tolerance`, `--cf-timeout`,
 `--sq-runs-dir`, `--inbox-batch-size`, `--inbox-max-attempts`,
-`--review-scan-interval`, `--sq-timeout`, `--cf-data-dir`. `stop` exposes the
-one tunable it consumes: `--stop-timeout`.
+`--review-scan-interval`, `--sq-timeout`, `--cf-data-dir`, `--launch-grace`.
+`--clock-tolerance` and `--sq-runs-dir` are used only by legacy matching.
+`--launch-grace SECONDS` (slice 120) is how long after a launch Squadron may still
+be creating the run; recovery reads it, and the Runner reads the same value to
+confirm launches. `stop` exposes the one tunable it consumes: `--stop-timeout`.
 
 ### Exit codes
 
@@ -483,19 +519,23 @@ Every status, and the condition that produces it. Defined once in
 **Amoeba chooses, Squadron deletes, a human confirms.** It opens every store
 read-only, so it works with the resident process running or stopped.
 
-**Which runs.** A run is a candidate only if **all four** hold:
+**Which runs.** Amoeba asks Squadron about each owned run with
+`sq runs wait <id> --timeout 0 --json` and decides from the outcome document it
+gets back, never from a run-state file. A run is a candidate only if **all
+five** hold, and a null in any of them makes it a non-candidate:
 
 1. Amoeba owns it: its id is in some project's `recorded_result_run_ids` (see
    "The ownership guarantee").
-2. Its run file parses, with `status` `paused`.
+2. Its `outcome` and its `status` both say `paused`, and `checkpoint.paused_at`
+   is present and timezone-aware.
 3. No node in any project that is not `done` names it in `sq.run_id`. This is
    stricter than "no open checkpoint": after a human resolves a checkpoint the
    node is runnable and the Runner has not yet issued `sq run --resume`, and
    pruning then would delete the run it is about to resume. "Every node that
    names it is done" is the earliest point at which Amoeba is provably finished
    with a run. The rule reads each node's *current* `sq.run_id`, never history.
-4. Its `updated_at` is at least `PRUNE_RETENTION` (7 days, in
-   `process/run_pruning.py`, with no flag) before now.
+4. Its `updated_at` is present, timezone-aware, and at least `PRUNE_RETENTION`
+   (7 days, in `process/run_pruning.py`, with no flag) before now.
 
 Runs the PM launched fail condition 1 and are never touched.
 
@@ -503,24 +543,27 @@ Runs the PM launched fail condition 1 and are never touched.
 pipeline, `updated_at`, owning project) and how many owned paused runs were
 kept. Deleting another tool's files is not reversible, so `--yes` is required,
 and it mirrors `sq runs prune`. Nothing from a preview is saved: `--yes` re-reads
-every store and the runs directory and selects again immediately before it calls
+every store, polls every owned run, and selects again immediately before it calls
 `sq runs prune <ids…> --yes` once, with non-TTY stdin and a 30 s timeout. Amoeba
-never unlinks a file itself, even when `sq` is missing or too old to have the
+never deletes a run itself, even when `sq` is missing or too old to have the
 command; the candidates then stay, and the command reports `PRUNE_INCOMPLETE`.
 
 **The outcome is observed, not parsed.** `sq runs prune` has no JSON output and
 its text is not a contract. Its exit status is printed but never decides the
 result: it exits 1 for a file someone else already removed, which is still the
-goal state. After `sq` exits or times out, Amoeba reads the runs directory again.
-Every candidate gone is success. Any candidate still present, including one `sq`
-refused as live, is printed with `sq`'s exit status and stderr, and the command
+goal state. After `sq` exits or times out, Amoeba polls each candidate again:
+`not_found` means removed, and anything else, including a failed poll, means still
+present. Every candidate gone is success. Any candidate still present, including
+one `sq` refused as live, is printed with `sq`'s exit status and stderr, and the command
 exits `PRUNE_INCOMPLETE` (14). Running it again converges, because it selects
 afresh.
 
 **Unknown is a value, never a guess.** A store that cannot be read refuses the
 whole command before `sq` is called, because the held set would be incomplete. A
-run file that cannot be parsed is logged at WARNING with its path and is never a
-candidate. A run with no `updated_at` is never a candidate.
+run whose outcome cannot be read (`sq` missing, a timeout, an unexpected exit, a
+document that does not parse) is printed on stderr as
+`could not check: <id> (<reason>)` and is never a candidate; the preview still
+exits `OK`. A run with no `paused_at` or no `updated_at` is never a candidate.
 
 **Two narrow windows, and what initiative 120 must do.** The stores are read one
 project at a time, not as one snapshot, and a run linked again to a node between
@@ -531,11 +574,10 @@ failure is explicit: a later `sq run --resume <id>` fails on the missing run.
 is missing is a failed command. The journal entry resolves with that outcome, the
 node blocks on a human, and the run is never relaunched automatically.
 
-**No runs-directory flag.** Squadron's runs directory is always under
-`Path.home()`, and Amoeba's `ProcessSettings.sq_runs_dir` uses the same
-derivation. A flag here would let Amoeba select from one directory while
-Squadron deletes from another. Tests point both at a scratch directory by
-setting `HOME`.
+**No runs-directory flag, and no runs directory.** Pruning reads no run-state
+file, so there is no directory to point it at: it selects from what Squadron
+reports and Squadron deletes the same runs. Tests put a stub `sq` first on `PATH`
+instead (`tests/sq_stub.py`).
 
 **No journal entry.** Pruning is not issued by the resident process, writes
 nothing to the store, and converges. Command-before-result exists so recovery can
@@ -597,8 +639,10 @@ slice 101. No new exposure is introduced.
 
 - Point `AMOEBA_STORE_DIR` at a `tmp_path` directory. Never at the real
   supervisor directory.
-- Pass `--sq-runs-dir` at a throwaway directory. Never at the real Squadron runs
-  directory.
+- Put a stub `sq` first on `PATH` (`tests/sq_stub.py`), with `HOME` at a scratch
+  directory: recovery and pruning ask `sq runs wait`, and the real Squadron is
+  never asked. Pass `--sq-runs-dir` at a throwaway directory only for legacy
+  matching, never at the real Squadron runs directory.
 - Nothing about locking or signal handling is mocked anywhere in this project's
   tests, deliberately: mocks cannot validate `flock` or POSIX signals. Tests
   drive real subprocesses and send real signals.
@@ -611,9 +655,10 @@ slice 101. No new exposure is introduced.
 
 Named here so a downstream design knows what is *not* coming for free:
 
-- **Caller-supplied Squadron run ids** (dependency S9) would remove the
-  journaled-but-never-issued ambiguity entirely. Until then, that narrow crash
-  window costs a human interruption.
+- **Reissue after `not_applied`.** Squadron now takes a caller-supplied run id,
+  so a launch is found by id; recovery marks a launch with no state after the
+  grace period `not_applied`. Deciding whether to reissue it is the Runner's
+  (launch-log check, then one more poll; see "The Observer protocol").
 - **Journal retention.** Entries are never deleted in this slice.
 - **A per-tick budget**, should a real tenant prove unable to honor the tenant
   obligation. Revisit then, not speculatively.

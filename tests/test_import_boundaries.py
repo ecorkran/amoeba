@@ -13,7 +13,7 @@ Rule 8: the server takes from ``amoeba.inbox`` only ``submit`` and its two
 errors, takes ``SubmissionKind`` from its defining module, and never calls
 ``Store.open``.
 Rule 9: ``process/run_pruning.py`` is pure: it imports only the standard library
-and the run-file parser it shares with the ``sq_run`` observer.
+and the outcome-document model it shares with the ``sq_run`` observer.
 """
 
 from __future__ import annotations
@@ -245,7 +245,7 @@ def test_rule_8_reports_every_kind_of_violation(tmp_path: Path) -> None:
 
 
 #: Rule 9: the only non-standard-library module the selection rule may import.
-_PRUNING_ALLOWED = "amoeba.process.observers.sq_runs"
+_PRUNING_ALLOWED = "amoeba.process.sq_outcome"
 _RUN_PRUNING = SRC / "process" / "run_pruning.py"
 
 
@@ -269,7 +269,7 @@ def _top_level_imports(path: Path) -> set[str]:
     return modules
 
 
-def test_rule_9_run_pruning_imports_only_the_standard_library_and_the_parser() -> None:
+def test_rule_9_run_pruning_imports_only_the_standard_library_and_the_outcome() -> None:
     assert _pruning_violations(_RUN_PRUNING) == []
 
 
@@ -278,10 +278,48 @@ def test_rule_9_reports_the_store_and_any_other_module(tmp_path: Path) -> None:
     module.write_text(
         "from __future__ import annotations\n"
         "from datetime import datetime\n"
-        "from amoeba.process.observers.sq_runs import SquadronRun\n"
+        "from amoeba.process.sq_outcome import RunOutcomeDocument\n"
         "from amoeba.store import Store\n"
         "import pydantic\n",
         encoding="utf-8",
     )
 
     assert _pruning_violations(module) == ["amoeba.store", "pydantic"]
+
+
+#: Slice 120, D8: pruning asks Squadron through ``sq runs wait`` and never reads a
+#: run-state file, so these modules may not reach the run-file parser or the
+#: runs-directory default.
+_PRUNING_MODULES = (SRC / "cli" / "prune.py", SRC / "process" / "run_pruning.py")
+_RUN_FILE_READERS = ("amoeba.process.observers.sq_runs", "DEFAULT_SQ_RUNS_DIR")
+
+
+def _run_file_reads(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            found.add(node.module)
+            found.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.Import):
+            found.update(alias.name for alias in node.names)
+    return sorted(found & set(_RUN_FILE_READERS))
+
+
+def test_pruning_does_not_import_the_run_file_parser_or_the_runs_directory() -> None:
+    for module in _PRUNING_MODULES:
+        assert _run_file_reads(module) == [], module.name
+
+
+def test_the_run_file_read_check_reports_both_imports(tmp_path: Path) -> None:
+    module = tmp_path / "bad.py"
+    module.write_text(
+        "from amoeba.process.observers.sq_runs import parse_run_file\n"
+        "from amoeba.process.settings import DEFAULT_SQ_RUNS_DIR\n",
+        encoding="utf-8",
+    )
+
+    assert _run_file_reads(module) == [
+        "DEFAULT_SQ_RUNS_DIR",
+        "amoeba.process.observers.sq_runs",
+    ]

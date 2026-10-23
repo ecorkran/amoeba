@@ -11,7 +11,7 @@ import os
 import subprocess
 import sys
 
-from sq_stub import MODE_ENV, StubMode, write_sq_stub
+from sq_stub import MODE_ENV, STUB_STATE_RELATIVE, StubMode, write_sq_stub
 
 from amoeba.store import NodeKind
 from contract.harness import ProofHarness
@@ -44,7 +44,8 @@ def _prune(
 
 
 def _runs_present(harness: ProofHarness) -> set[str]:
-    return {path.stem for path in harness.runs_dir.glob("*.json")}
+    state_dir = harness.home / STUB_STATE_RELATIVE
+    return {path.stem for path in state_dir.glob("*.json")}
 
 
 def prune_paused_runs(

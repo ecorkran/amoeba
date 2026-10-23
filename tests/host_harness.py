@@ -96,6 +96,7 @@ def _bootstrap_source(
     *,
     idle_interval_seconds: float,
     shutdown_grace_seconds: float,
+    launch_grace_seconds: float,
 ) -> str:
     """Render the program the subprocess runs."""
     tenant_class = ""
@@ -135,6 +136,7 @@ def _bootstrap_source(
         settings = ProcessSettings(
             idle_interval_seconds={idle_interval_seconds!r},
             shutdown_grace_seconds={shutdown_grace_seconds!r},
+            launch_grace_seconds={launch_grace_seconds!r},
             sq_runs_dir=Path({runs_dir!r}),
         )
         process = ResidentProcess(
@@ -169,6 +171,7 @@ def _bootstrap_source(
         """.format(  # noqa: UP032 - see the comment above; f-string breaks dedent
             idle_interval_seconds=idle_interval_seconds,
             shutdown_grace_seconds=shutdown_grace_seconds,
+            launch_grace_seconds=launch_grace_seconds,
             runs_dir=str(runs_dir),
             supervisor_dir=str(supervisor_dir),
             ready=READY_MARKER,
@@ -269,6 +272,7 @@ def start_host(
     runs_dir: Path | None = None,
     idle_interval_seconds: float = 0.05,
     shutdown_grace_seconds: float = 2.0,
+    launch_grace_seconds: float = 0.0,
     script_name: str = "bootstrap.py",
 ) -> HostProcess:
     """Launch a real resident process in a subprocess.
@@ -284,6 +288,9 @@ def start_host(
         idle_interval_seconds: Short by default, so tests are quick.
         shutdown_grace_seconds: Short by default, so the grace-expiry test does
             not stall the suite.
+        launch_grace_seconds: Zero by default: a test restarts straight after a
+            kill, and the real default (a minute) would stall every restart that
+            finds an in-flight ``sq_run``.
         script_name: Lets one test launch several distinct processes.
 
     Returns:
@@ -301,6 +308,7 @@ def start_host(
             tenant,
             idle_interval_seconds=idle_interval_seconds,
             shutdown_grace_seconds=shutdown_grace_seconds,
+            launch_grace_seconds=launch_grace_seconds,
         ),
         encoding="utf-8",
     )

@@ -48,3 +48,26 @@ def test_the_environment_variable_is_not_read(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("CONTEXT_FORGE_DATA_DIR", "/from/the/environment")
     settings = start_settings(build_parser().parse_args(["start"]))
     assert settings.cf_data_dir == ProcessSettings().cf_data_dir
+
+
+def test_launch_grace_defaults_from_process_settings_and_the_flag_overrides_it() -> (
+    None
+):
+    default = start_settings(build_parser().parse_args(["start"]))
+    assert default.launch_grace_seconds == ProcessSettings().launch_grace_seconds
+
+    args = build_parser().parse_args(["start", "--launch-grace", "5"])
+    assert start_settings(args).launch_grace_seconds == 5.0
+
+
+def test_the_sq_runs_dir_help_says_it_is_legacy_only(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["start", "--help"])
+    help_text = " ".join(capsys.readouterr().out.split())
+    # The option block (not the usage line) lists each flag with its help.
+    legacy_note = help_text.index(
+        "Legacy matching only", help_text.index("--sq-runs-dir PATH")
+    )
+    assert legacy_note < help_text.rindex("--launch-grace")

@@ -41,12 +41,15 @@ class ProcessSettings:
         stop_timeout_seconds: How long ``amoeba stop`` waits for the lock to be
             released after signalling, before reporting a stop timeout. Never
             followed by an escalation to ``SIGKILL``.
-        clock_tolerance_seconds: How much earlier than a journal entry's
-            ``issued_at`` a Squadron run may have started and still be a
-            candidate, absorbing clock skew between the two writers.
+        clock_tolerance_seconds: Used only by legacy matching (entries journaled
+            before slice 120, which carry no run id). How much earlier than a
+            journal entry's ``issued_at`` a Squadron run may have started and
+            still be a candidate, absorbing clock skew between the two writers.
         cf_timeout_seconds: How long to wait for a ``cf`` invocation before
             treating it as unobservable.
-        sq_runs_dir: The Squadron runs directory the observer scans.
+        sq_runs_dir: Used only by legacy matching: the Squadron runs directory
+            scanned for entries journaled before slice 120. Entries with a run
+            id, and pruning, never read it.
         inbox_batch_size: The most inbox files one ``InboxTenant`` tick
             handles. Each is one short transaction and ``stop_requested`` is
             checked between them, so this bounds a tick, not shutdown latency.
@@ -65,6 +68,11 @@ class ProcessSettings:
         cf_scan_interval_seconds: How often the Context Forge watch takes one
             ``stat`` of ``projects.json``. A pointer move is a human-paced
             event, so this bounds how stale the Runner's view can be. No flag.
+        launch_grace_seconds: How long after a launch was issued Squadron may
+            still be creating the run, so that "no run state yet" is not proof
+            the launch never happened. Recovery reads it to decide ``not_applied``
+            for an ``sq_run`` entry that carries a run id; the Runner (slice 122)
+            reads the same field to confirm launches.
     """
 
     idle_interval_seconds: float = 1.0
@@ -79,3 +87,4 @@ class ProcessSettings:
     sq_timeout_seconds: float = 10.0
     cf_data_dir: Path = DEFAULT_CF_DATA_DIR
     cf_scan_interval_seconds: float = 1.0
+    launch_grace_seconds: float = 60.0

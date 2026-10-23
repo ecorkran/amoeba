@@ -57,13 +57,14 @@ PERMITTED_MODULES = frozenset({"process/project_stores.py"})
 
 #: The **only** scripts under ``scripts/`` permitted to open a store
 #: read-write. All are operator-run demos, not part of the resident process:
-#: ``demo_journal.py`` requires ``AMOEBA_STORE_DIR`` pointed at a scratch
-#: directory, and ``demo_inbox.py`` (slice 103) and ``demo_evidence.py``
-#: (slice 104) take the instance lock and refuse while the process runs, as
-#: does ``demo_detection.py`` (slice 106), which also requires
-#: ``AMOEBA_STORE_DIR`` — see each one's module docstring.
+#: ``demo_inbox.py`` (slice 103) and ``demo_evidence.py`` (slice 104) take the
+#: instance lock and refuse while the process runs, as does
+#: ``demo_detection.py`` (slice 106), which also requires ``AMOEBA_STORE_DIR``
+#: pointed at a scratch directory — see each one's module docstring.
+#: ``demo_journal.py`` was retired in slice 120: it journaled id-less ``sq_run``
+#: entries, which ``journal_issue`` now refuses.
 PERMITTED_SCRIPTS = frozenset(
-    {"demo_journal.py", "demo_inbox.py", "demo_evidence.py", "demo_detection.py"}
+    {"demo_inbox.py", "demo_evidence.py", "demo_detection.py"}
 )
 
 #: Constructors that are not the read-write open and are therefore ignored.
@@ -290,5 +291,5 @@ def test_the_permitted_scripts_exist_and_actually_open_a_store() -> None:
 def test_the_permitted_scripts_set_is_exactly_the_demos() -> None:
     """Widening this exemption is a deliberate, visible change too."""
     assert PERMITTED_SCRIPTS == frozenset(
-        {"demo_journal.py", "demo_inbox.py", "demo_evidence.py", "demo_detection.py"}
+        {"demo_inbox.py", "demo_evidence.py", "demo_detection.py"}
     )

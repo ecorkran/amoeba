@@ -33,6 +33,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.store import (
     BlockedKind,
@@ -49,7 +50,9 @@ from amoeba.store.migrations import (
 
 PROJECT = "demo"
 
-SQ_PARAMETERS: dict[str, object] = {"pipeline": "p6", "params": {"slice": "102"}}
+SQ_PARAMETERS: dict[str, object] = sq_run_parameters(
+    {"pipeline": "p6", "params": {"slice": "102"}}
+)
 
 
 def _populate(store: Store) -> tuple[str, str]:

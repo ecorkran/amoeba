@@ -38,6 +38,7 @@ JOURNALING_TENANT = TenantSpec(
     body=textwrap.dedent(
         """
         from amoeba.store import CommandKind, JournalOutcome
+        from amoeba.store.journal_models import PARAM_RUN_ID
 
         for project_id in host.project_ids:
             store = host.store_for(project_id)
@@ -52,6 +53,7 @@ JOURNALING_TENANT = TenantSpec(
                 parameters={
                     "pipeline": "loadtest",
                     "params": {"tick": str(self.ticks)},
+                    PARAM_RUN_ID: f"run-load-{self.ticks}",
                 },
             )
             # Resolve the PREVIOUS entry, so one is always left in flight.

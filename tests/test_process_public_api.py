@@ -24,6 +24,14 @@ EXPECTED_EXPORTS = {
     "AlreadyRunningError",
     "StartupFailedError",
     "GraceExpiredError",
+    # Slice 120: the outcome reader, consumed by the Runner in 122 and 125.
+    "RunOutcome",
+    "OUTCOME_EXIT_CODES",
+    "RunCheckpoint",
+    "RunOutcomeDocument",
+    "PollFailure",
+    "RunPoll",
+    "poll_run",
 }
 
 #: Deliberately not part of the contract: run-file parsing and pruning are

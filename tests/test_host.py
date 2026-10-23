@@ -13,8 +13,11 @@ observes ``stop_requested``, and the process exits cleanly.
 from __future__ import annotations
 
 import signal
+import sqlite3
 import textwrap
 import time
+from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -25,6 +28,11 @@ from host_harness import (
     HostProcess,
     TenantSpec,
     start_host,
+)
+from sq_run_fixtures import (
+    LEGACY_ENTRY_ID,
+    insert_legacy_sq_run_entry,
+    sq_run_parameters,
 )
 
 from amoeba.process.errors import GraceExpiredError, StartupFailedError
@@ -391,7 +399,9 @@ def test_no_tenant_ticks_before_recovery_completes(
         store.journal_issue(
             node.id,
             kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": "p6", "params": {"slice": "102"}},
+            parameters=sq_run_parameters(
+                {"pipeline": "p6", "params": {"slice": "102"}}
+            ),
         )
 
     first_tick_tenant = TenantSpec(
@@ -434,6 +444,7 @@ def test_recovery_escalates_an_unresolved_entry_before_the_loop(
 ) -> None:
     """The startup recovery pass really reconciles, against an empty runs dir.
 
+    The entry is a pre-120 row (no run id), so it reaches the legacy matcher.
     Zero candidate runs means the entry escalates and the node blocks — the
     honest answer, not a guess.
     """
@@ -442,10 +453,14 @@ def test_recovery_escalates_an_unresolved_entry_before_the_loop(
         node = store.create_node(
             project_id=PROJECT, kind=NodeKind.SLICE, title="in-flight"
         )
-        entry = store.journal_issue(
-            node.id,
-            kind=CommandKind.SQ_RUN,
+    with closing(sqlite3.connect(project_store_file)) as connection:
+        insert_legacy_sq_run_entry(
+            connection,
+            entry_id=LEGACY_ENTRY_ID,
+            project_id=PROJECT,
+            node_id=node.id,
             parameters={"pipeline": "p6", "params": {"slice": "102"}},
+            issued_at=datetime.now(UTC).isoformat(),
         )
 
     host = _running_host(tmp_path, supervisor_dir, runs_dir=runs_dir)
@@ -455,7 +470,7 @@ def test_recovery_escalates_an_unresolved_entry_before_the_loop(
         host.cleanup()
 
     with Store.open_read_only(project_store_file) as store:
-        reloaded = store.journal_entry(entry.id)
+        reloaded = store.journal_entry(LEGACY_ENTRY_ID)
         blocked_node = store.get_node(node.id)
         blocked_state = store.blocked_state_for(node.id)
 
@@ -463,7 +478,7 @@ def test_recovery_escalates_an_unresolved_entry_before_the_loop(
     assert blocked_node is not None
     assert blocked_node.status is NodeStatus.BLOCKED_ON_HUMAN
     assert blocked_state is not None
-    assert entry.id in blocked_state.context
+    assert LEGACY_ENTRY_ID in blocked_state.context
 
 
 def test_a_recovery_summary_is_logged_for_each_project(

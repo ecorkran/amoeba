@@ -20,7 +20,6 @@ from amoeba.store import (
     VerdictStanding,
 )
 from contract.end_state import declared_state
-from contract.harness import RUN_FIXTURE
 from contract.oracle import diff_state, locality_problems, read_state, replay_problems
 from contract.runner_tenant import only_node
 from contract.scenario import ALPHA, BETA, STANDIN_RUN_AGE, Step
@@ -28,7 +27,7 @@ from contract.standin import (
     STATUS_PAUSED,
     new_run_id,
     render_review,
-    write_run_file,
+    write_outcome,
 )
 from contract.steps import (
     PAYLOAD_BLOCKED_STATE_ID,
@@ -78,11 +77,9 @@ class LateStepsDriver(ScenarioDriver):
         now = datetime.now(UTC)
         run_id = new_run_id(now)
         self.external_run_id = run_id
-        write_run_file(
-            h.runs_dir,
-            RUN_FIXTURE,
+        write_outcome(
+            h.home,
             run_id=run_id,
-            params={},
             started_at=now,
             updated_at=now - STANDIN_RUN_AGE,
             status=STATUS_PAUSED,

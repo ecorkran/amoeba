@@ -12,6 +12,7 @@ from pathlib import Path
 
 from cf_harness import observed
 from evidence_harness import check_input, finding, verdict_input
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.inbox import submit
 from amoeba.store import (
@@ -67,7 +68,9 @@ def seed_every_listing(supervisor_dir: Path) -> SeededStore:
         resolved = store.journal_issue(
             runnable.id,
             kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": "p6", "params": {"slice": "102"}},
+            parameters=sq_run_parameters(
+                {"pipeline": "p6", "params": {"slice": "102"}}
+            ),
         )
         store.journal_resolve(
             resolved.id,

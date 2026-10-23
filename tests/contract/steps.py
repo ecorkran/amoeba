@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sq_run_fixtures import run_id_of
+from sq_stub import write_outcome_document
+
+from amoeba.process import RunOutcome
 from amoeba.store import (
     BlockedKind,
     Channel,
@@ -25,7 +29,7 @@ from amoeba.store import (
 )
 from amoeba.upstream.squadron import parse_review_artifact, review_record_id
 from contract.harness import HarnessFailure, ProofHarness
-from contract.runner_tenant import only_node
+from contract.runner_tenant import CrashPoint, only_node
 from contract.scenario import ALPHA, STEPS, Step
 from contract.subscriber import Subscriber
 
@@ -101,8 +105,31 @@ class ScenarioDriver:
             h.intent(project, step.proof_step, step.crash_at)
         if step.crash_at is not None:
             h.wait_for_sigkill(step.number)
+            if step.crash_at is CrashPoint.AFTER_JOURNAL:
+                self._damage_lost_run_state(step)
             h.start(step.number)
         self.wait_expected(step, since)
+
+    def _damage_lost_run_state(self, step: Step) -> None:
+        """Make Squadron's state for each lost command unreadable (step 5).
+
+        A command lost before its launch has no run state, and recovery rightly
+        calls that ``not_applied`` (slice 120). The proof needs an entry recovery
+        cannot resolve, to drive the escalation and the PM's reply (step 6), so
+        the lost run's state is present but damaged: ``unreadable``.
+        """
+        h = self.harness
+        for project in step.projects:
+            with h.read(project) as store:
+                lost = store.unresolved_journal_entries(project)
+            expect(step.number, len(lost) == 1, f"{len(lost)} lost entries")
+            write_outcome_document(
+                h.home,
+                {
+                    "run_id": run_id_of(lost[0]),
+                    "outcome": RunOutcome.UNREADABLE.value,
+                },
+            )
 
     def wait_expected(self, step: Step, since: dict[str, int]) -> None:
         for project, kinds in step.expected.items():
@@ -159,7 +186,7 @@ class ScenarioDriver:
         expect(step, self._owns(owned, adopted), "the adopted run is not owned")
 
     def check_escalation(self, step: int) -> Node:
-        """Step 5: no run found, so one ``unknown`` entry and one escalation.
+        """Step 5: an unreadable run state, so one ``unknown`` entry and one escalation.
 
         Returns the blocked node: the one the lost command was journaled on.
         """

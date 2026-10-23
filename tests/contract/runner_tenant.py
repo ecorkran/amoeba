@@ -22,6 +22,8 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 
+from sq_run_fixtures import sq_run_parameters
+
 from amoeba.process import ResidentProcess
 from amoeba.store import (
     BlockedKind,
@@ -49,7 +51,7 @@ from contract.standin import (
     STATUS_PAUSED,
     new_run_id,
     render_review,
-    write_run_file,
+    write_outcome,
 )
 
 #: The tenant's name in logs.
@@ -92,15 +94,11 @@ class ProofRunner:
 
     def __init__(
         self,
-        runs_dir: Path,
         reviews_dirs: Mapping[str, Path],
-        run_fixture: Path,
         review_fixture: Path,
         standin_run_age: timedelta,
     ) -> None:
-        self._runs_dir = runs_dir
         self._reviews_dirs = dict(reviews_dirs)
-        self._run_fixture = run_fixture
         self._review_template = review_fixture.read_text(encoding="utf-8")
         self._standin_run_age = standin_run_age
         slice_name = parse_review_artifact(self._review_template).slice
@@ -168,17 +166,15 @@ class ProofRunner:
         """Journal, do the stand-in side effect, then report in one transaction."""
         # On the reviewed node: a verdict's journal entry must be on its own node.
         slice_node = only_node(store, project_id, NodeKind.SLICE)
-        entry = self._journal_run(store, slice_node)
+        now = datetime.now(UTC)
+        run_id = new_run_id(now)
+        entry = self._journal_run(store, slice_node, run_id)
         if crash_at is CrashPoint.AFTER_JOURNAL:
             _crash()
 
-        now = datetime.now(UTC)
-        run_id = new_run_id(now)
-        write_run_file(
-            self._runs_dir,
-            self._run_fixture,
+        write_outcome(
+            Path.home(),
             run_id=run_id,
-            params=self._run_params(),
             started_at=now,
             updated_at=now,
             status=STATUS_COMPLETED,
@@ -226,14 +222,12 @@ class ProofRunner:
     def _checkpoint(self, store: Store, project_id: str) -> None:
         """A paused run, owned by the journal, holding the gate at a checkpoint."""
         gate = only_node(store, project_id, NodeKind.GATE)
-        entry = self._journal_run(store, gate)
         now = datetime.now(UTC)
         run_id = new_run_id(now)
-        write_run_file(
-            self._runs_dir,
-            self._run_fixture,
+        entry = self._journal_run(store, gate, run_id)
+        write_outcome(
+            Path.home(),
             run_id=run_id,
-            params=self._run_params(),
             started_at=now,
             updated_at=now - self._standin_run_age,
             status=STATUS_PAUSED,
@@ -253,12 +247,19 @@ class ProofRunner:
             node = only_node(store, project_id, kind)
             store.update_node_status(node.id, NodeStatus.DONE)
 
-    def _journal_run(self, store: Store, node: Node) -> JournalEntry:
-        """Command-before-result: the entry commits before any side effect."""
+    def _journal_run(self, store: Store, node: Node, run_id: str) -> JournalEntry:
+        """Command-before-result: the entry commits before any side effect.
+
+        The run id is minted first and journaled with the command, as the
+        Runner will do (slice 122), so recovery can find the run by id.
+        """
         return store.journal_issue(
             node.id,
             kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": STANDIN_PIPELINE, "params": self._run_params()},
+            parameters=sq_run_parameters(
+                {"pipeline": STANDIN_PIPELINE, "params": self._run_params()},
+                run_id=run_id,
+            ),
         )
 
     def _run_params(self) -> dict[str, object]:

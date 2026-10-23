@@ -9,10 +9,23 @@ recovery re-run reconciles each entry exactly once.
 
 from __future__ import annotations
 
+import os
+import shutil
+import sqlite3
 from collections.abc import Mapping
+from contextlib import closing
+from pathlib import Path
+from typing import NoReturn
 
 import pytest
+from sq_run_fixtures import (
+    LEGACY_ENTRY_ID,
+    insert_legacy_sq_run_entry,
+    sq_run_parameters,
+)
+from sq_stub import write_outcome_document, write_sq_stub
 
+from amoeba.process.observers import sq_runs
 from amoeba.process.recovery import (
     Adopt,
     NotApplied,
@@ -23,6 +36,9 @@ from amoeba.process.recovery import (
     Unknown,
     reconcile,
 )
+from amoeba.process.settings import ProcessSettings
+from amoeba.process.sq_outcome import RunOutcome
+from amoeba.process.supervisor import build_observer_registry, recover_every_project
 from amoeba.store import (
     BlockedKind,
     CommandKind,
@@ -37,7 +53,9 @@ from amoeba.store import (
 
 PROJECT = "demo"
 
-SQ_PARAMETERS: dict[str, object] = {"pipeline": "p6", "params": {"slice": "102"}}
+SQ_PARAMETERS: dict[str, object] = sq_run_parameters(
+    {"pipeline": "p6", "params": {"slice": "102"}}
+)
 CF_PARAMETERS: dict[str, object] = {"project": "amoeba", "expected": {"phase": "6"}}
 
 
@@ -499,3 +517,137 @@ def test_recovery_calls_nothing_but_the_observer_and_the_store(
     reloaded = store.get_node(node.id)
     assert reloaded is not None
     assert reloaded.status is NodeStatus.RUNNABLE
+
+
+# --------------------------------------------------------------------------
+# The shipped registry, against the stub `sq` (slice 120)
+# --------------------------------------------------------------------------
+
+LEGACY_RUN_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "sq_runs" / "run-20261015-p5-8a59ee89.json"
+)
+LEGACY_RUN_ID = "run-20261015-p5-8a59ee89"
+
+
+def _stub_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runs_dir: Path
+) -> tuple[Path, ProcessSettings]:
+    """The stub ``sq`` first on ``PATH`` under a scratch ``HOME``; no launch grace."""
+    home = tmp_path / "home"
+    home.mkdir()
+    bin_dir = write_sq_stub(tmp_path / "bin")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    settings = ProcessSettings(sq_runs_dir=runs_dir, launch_grace_seconds=0.0)
+    return home, settings
+
+
+def _run_document(run_id: str, outcome: RunOutcome) -> dict[str, object]:
+    return {"run_id": run_id, "outcome": outcome.value, "status": outcome.value}
+
+
+def _issue_by_id(store: Store, node_id: str, run_id: str) -> str:
+    return store.journal_issue(
+        node_id,
+        kind=CommandKind.SQ_RUN,
+        parameters=sq_run_parameters({"pipeline": "p6", "params": {}}, run_id=run_id),
+    ).id
+
+
+def test_an_id_bearing_entry_with_a_stub_document_is_adopted(
+    store: Store, node: Node, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home, settings = _stub_settings(tmp_path, monkeypatch, tmp_path / "runs")
+    write_outcome_document(home, _run_document("run-by-id-1", RunOutcome.PAUSED))
+    entry_id = _issue_by_id(store, node.id, "run-by-id-1")
+
+    summary = reconcile(store, PROJECT, build_observer_registry(settings))
+
+    reloaded = store.journal_entry(entry_id)
+    assert reloaded is not None
+    assert reloaded.outcome is JournalOutcome.ADOPTED
+    assert reloaded.result == {
+        "run_id": "run-by-id-1",
+        "outcome": "paused",
+        "status": "paused",
+    }
+    assert summary == RecoverySummary(adopted=1)
+
+
+def test_an_id_bearing_entry_with_no_run_state_past_grace_is_not_applied(
+    store: Store, node: Node, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, settings = _stub_settings(tmp_path, monkeypatch, tmp_path / "runs")
+    entry_id = _issue_by_id(store, node.id, "run-never-launched")
+
+    summary = reconcile(store, PROJECT, build_observer_registry(settings))
+
+    reloaded = store.journal_entry(entry_id)
+    assert reloaded is not None
+    assert reloaded.outcome is JournalOutcome.NOT_APPLIED
+    assert summary == RecoverySummary(not_applied=1)
+
+
+def test_a_legacy_row_still_recovers_through_the_matcher(
+    store: Store, node: Node, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pre-120 row has no run id, so the unchanged matcher reads the runs dir."""
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    shutil.copy(LEGACY_RUN_FIXTURE, runs_dir)
+    _, settings = _stub_settings(tmp_path, monkeypatch, runs_dir)
+    with closing(sqlite3.connect(store.path)) as connection:
+        insert_legacy_sq_run_entry(
+            connection,
+            entry_id=LEGACY_ENTRY_ID,
+            project_id=PROJECT,
+            node_id=node.id,
+            parameters={"pipeline": "p5", "params": {"slice": "176"}},
+            issued_at="2026-10-15T22:00:00+00:00",
+        )
+
+    summary = reconcile(store, PROJECT, build_observer_registry(settings))
+
+    reloaded = store.journal_entry(LEGACY_ENTRY_ID)
+    assert reloaded is not None
+    assert reloaded.outcome is JournalOutcome.ADOPTED
+    assert reloaded.result is not None
+    assert reloaded.result["run_id"] == LEGACY_RUN_ID
+    assert summary == RecoverySummary(adopted=1)
+
+
+def test_recovery_by_id_reads_no_run_state_file(
+    store: Store, node: Node, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D8: adopted, not_applied and unknown answers, none from a run file.
+
+    The runs directory holds a file that would match the entries, and the
+    scanner and parser fail the test if they are called at all.
+    """
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    shutil.copy(LEGACY_RUN_FIXTURE, runs_dir)
+    home, settings = _stub_settings(tmp_path, monkeypatch, runs_dir)
+
+    def _must_not_be_called(*_: object, **__: object) -> NoReturn:
+        raise AssertionError("recovery by id read a run-state file")
+
+    monkeypatch.setattr(sq_runs, "scan_runs_directory", _must_not_be_called)
+    monkeypatch.setattr(sq_runs, "parse_run_file", _must_not_be_called)
+    write_outcome_document(home, _run_document("run-adopt", RunOutcome.COMPLETED))
+    write_outcome_document(home, _run_document("run-unreadable", RunOutcome.UNREADABLE))
+    adopted = _issue_by_id(store, node.id, "run-adopt")
+    not_applied = _issue_by_id(store, node.id, "run-absent")
+    unknown = _issue_by_id(store, node.id, "run-unreadable")
+
+    recover_every_project([(PROJECT, store)], settings)
+
+    outcomes = {
+        entry_id: (entry.outcome if (entry := store.journal_entry(entry_id)) else None)
+        for entry_id in (adopted, not_applied, unknown)
+    }
+    assert outcomes == {
+        adopted: JournalOutcome.ADOPTED,
+        not_applied: JournalOutcome.NOT_APPLIED,
+        unknown: JournalOutcome.UNKNOWN,
+    }

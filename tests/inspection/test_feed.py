@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from cli_harness import run_cli
 from evidence_harness import verdict_input
+from sq_run_fixtures import sq_run_parameters
 
 from amoeba.cli.main import ExitCode
 from amoeba.inspection.feed import DETECTION_COLUMNS, WATCH_COLUMNS, WatchState
@@ -74,7 +75,9 @@ def staged(supervisor_dir: Path, tmp_path: Path) -> Iterator[dict[str, Path]]:
         store.baseline_watch(PROJECT, str(present["busy"]), ())
         node = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="s")
         store.journal_issue(
-            node.id, kind=CommandKind.SQ_RUN, parameters={"pipeline": "p", "params": {}}
+            node.id,
+            kind=CommandKind.SQ_RUN,
+            parameters=sq_run_parameters({"pipeline": "p", "params": {}}),
         )
     with _open(supervisor_dir, CALM) as store:
         _watch(store, CALM, present["ok"], active=True)
