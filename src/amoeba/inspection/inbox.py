@@ -64,6 +64,14 @@ def message_rows(store: Store, request: ListingRequest) -> list[Row]:
             "acknowledged_at": (
                 message.acknowledged_at.isoformat() if message.acknowledged_at else ""
             ),
+            "acknowledgment_outcome": (
+                message.acknowledgment_outcome.value
+                if message.acknowledgment_outcome
+                else ""
+            ),
+            "acknowledgment_reason": message.acknowledgment_reason or "",
+            "fault_kind": message.fault_kind or "",
+            "closed_at": message.closed_at.isoformat() if message.closed_at else "",
             "payload": dict(message.payload) if message.payload is not None else {},
         }
         for message in messages

@@ -25,6 +25,7 @@ from amoeba.store.blocking import BlockingOperations
 from amoeba.store.calibration import CalibrationOperations
 from amoeba.store.cf_snapshots import CFOperations
 from amoeba.store.checks import CheckOperations
+from amoeba.store.desired_states import DesiredStateOperations
 from amoeba.store.feed import FeedOperations
 from amoeba.store.inbox import InboxOperations
 from amoeba.store.journal import JournalOperations
@@ -40,6 +41,8 @@ from amoeba.store.models import (
     StoreSchemaError,
 )
 from amoeba.store.nodes import NodeOperations
+from amoeba.store.project_escalations import ProjectEscalationOperations
+from amoeba.store.routing_decisions import RoutingDecisionOperations
 from amoeba.store.runner_report import RunnerReportOperations
 from amoeba.store.verdicts import VerdictOperations
 
@@ -58,6 +61,9 @@ class Store(
     BlockingOperations,
     JournalOperations,
     MessageOperations,
+    DesiredStateOperations,
+    ProjectEscalationOperations,
+    RoutingDecisionOperations,
     InboxOperations,
     VerdictOperations,
     CheckOperations,

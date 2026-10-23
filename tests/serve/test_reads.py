@@ -20,7 +20,14 @@ from amoeba.inspection import (
     ValueOption,
 )
 from amoeba.serve import reads
-from amoeba.store import Channel, DetectionOutcome, Store, StoreBusyError, sql
+from amoeba.store import (
+    AcknowledgmentOutcome,
+    Channel,
+    DetectionOutcome,
+    Store,
+    StoreBusyError,
+    sql,
+)
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 
 #: (case id, listing name, CLI arguments after the listing name, query string)
@@ -110,6 +117,35 @@ def test_rows_equal_inspect_json_for_every_listing_and_option(
         assert response.status_code == 200, (case_id, response.text)
         assert response.json()["rows"] == expected, case_id
         assert expected, f"{case_id} returned no rows; parity would be vacuous"
+
+
+def test_messages_listing_serves_the_outcome_fault_and_closure_columns(
+    seeded: SeededStore, make_client: ClientFactory
+) -> None:
+    with Store.open(seeded.store_file) as store:
+        [intent] = store.messages(PROJECT, channel=Channel.INTENT)
+        store.acknowledge_message(
+            intent.id,
+            acknowledged_by="runner",
+            outcome=AcknowledgmentOutcome.REJECTED,
+            reason="not a target",
+        )
+        opened = store.raise_project_escalation(
+            PROJECT, fault_kind="plan_read_failed", payload={"error": "boom"}
+        )
+        store.close_project_escalation(opened.id, closed_by="runner")
+
+    rows = (
+        make_client()
+        .get("/v1/listings/messages", params={"project": PROJECT})
+        .json()["rows"]
+    )
+
+    by_id = {row["id"]: row for row in rows}
+    assert by_id[intent.id]["acknowledgment_outcome"] == "rejected"
+    assert by_id[intent.id]["acknowledgment_reason"] == "not a target"
+    assert by_id[opened.id]["fault_kind"] == "plan_read_failed"
+    assert by_id[opened.id]["closed_at"] != ""
 
 
 def test_project_listings_report_the_feed_head(

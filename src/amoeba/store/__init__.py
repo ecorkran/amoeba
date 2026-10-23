@@ -64,6 +64,7 @@ from amoeba.store.feed_models import (
     ReviewWatch,
 )
 from amoeba.store.inbox_models import (
+    AcknowledgmentOutcome,
     Channel,
     Message,
     QuarantineReason,
@@ -103,6 +104,17 @@ from amoeba.store.models import (
     VerdictNotFoundError,
 )
 from amoeba.store.paths import project_store_path, store_dir
+from amoeba.store.runner_models import (
+    BlockEffect,
+    ClearDesiredState,
+    DesiredState,
+    Route,
+    RoutingDecision,
+    RoutingDecisionInput,
+    RoutingTableVersion,
+    SetDesiredState,
+    StatusEffect,
+)
 from amoeba.store.store import Store
 
 __all__ = [
@@ -111,6 +123,7 @@ __all__ = [
     "BLOCKED_STATUSES",
     "REQUIRED_PARAMETER_KEYS",
     "REVIEW_PRODUCING_KINDS",
+    "AcknowledgmentOutcome",
     "BlockedKind",
     "Channel",
     "CommandKind",
@@ -119,6 +132,7 @@ __all__ = [
     "NodeKind",
     "NodeStatus",
     "QuarantineReason",
+    "Route",
     "SubmissionKind",
     "SubmissionOutcome",
     "COMPARABLE_STANDINGS",
@@ -171,6 +185,15 @@ __all__ = [
     "DetectedReview",
     "DetectionInput",
     "ReviewWatch",
+    # Runner contract types, added by slice 121
+    "BlockEffect",
+    "ClearDesiredState",
+    "DesiredState",
+    "RoutingDecision",
+    "RoutingDecisionInput",
+    "RoutingTableVersion",
+    "SetDesiredState",
+    "StatusEffect",
     # Locating stores (read-only consumers)
     "project_store_path",
     "store_dir",

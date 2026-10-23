@@ -20,6 +20,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from amoeba.store import (
+    AcknowledgmentOutcome,
     BlockedKind,
     Change,
     ChangeKind,
@@ -80,8 +81,14 @@ def detection_fact(outcome: DetectionOutcome, in_reviews_dir: bool) -> str:
     return fact(outcome, "in-reviews-dir" if in_reviews_dir else "elsewhere")
 
 
-def message_fact(channel: Channel, acknowledged: bool) -> str:
-    return fact(channel, "acknowledged" if acknowledged else "pending")
+def message_fact(
+    channel: Channel, acknowledged: bool, outcome: AcknowledgmentOutcome | None
+) -> str:
+    """``pending``, or ``acknowledged:<outcome>`` (an acknowledged row with no
+    outcome predates migration 009 and reads ``acknowledged:unrecorded``)."""
+    if not acknowledged:
+        return fact(channel, "pending")
+    return fact(channel, f"acknowledged:{outcome.value if outcome else 'unrecorded'}")
 
 
 def submission_fact(kind: SubmissionKind, outcome: SubmissionOutcome) -> str:
@@ -119,7 +126,9 @@ def read_state(store: Store, project_id: str, reviews_dir: Path) -> ProjectState
     for channel in Channel:
         for message in store.messages(project_id, channel=channel):
             state[Category.MESSAGES][
-                message_fact(channel, message.is_acknowledged)
+                message_fact(
+                    channel, message.is_acknowledged, message.acknowledgment_outcome
+                )
             ] += 1
     for submission in store.submissions(project_id):
         state[Category.SUBMISSIONS][

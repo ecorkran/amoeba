@@ -7,6 +7,7 @@ count: alpha records six intents because six of its steps are Runner intents.
 from __future__ import annotations
 
 from amoeba.store import (
+    AcknowledgmentOutcome,
     BlockedKind,
     Channel,
     CommandKind,
@@ -92,8 +93,9 @@ def _alpha() -> ProjectState:
             *[detection_fact(DetectionOutcome.INGESTED, True)] * 2,
         ),
         Category.MESSAGES: counted(
-            *[message_fact(Channel.INTENT, True)] * _ALPHA_INTENTS,
-            message_fact(Channel.ESCALATION, False),
+            *[message_fact(Channel.INTENT, True, AcknowledgmentOutcome.APPLIED)]
+            * _ALPHA_INTENTS,
+            message_fact(Channel.ESCALATION, False, None),
         ),
         Category.SUBMISSIONS: counted(
             submission_fact(SubmissionKind.CREATE_PROJECT, _APPLIED),
@@ -124,7 +126,8 @@ def _beta() -> ProjectState:
         Category.VERDICTS: counted(),
         Category.DETECTIONS: counted(),
         Category.MESSAGES: counted(
-            *[message_fact(Channel.INTENT, True)] * _BETA_INTENTS
+            *[message_fact(Channel.INTENT, True, AcknowledgmentOutcome.APPLIED)]
+            * _BETA_INTENTS
         ),
         Category.SUBMISSIONS: counted(
             submission_fact(SubmissionKind.CREATE_PROJECT, _APPLIED),

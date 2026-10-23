@@ -116,6 +116,18 @@ ORDER BY {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ISSUED_AT},
          {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ID}
 """
 
+#: Whether a node has an entry still in flight (D1's refusal to mark it done).
+#: Served by the partial index ``idx_command_journal_unresolved`` on
+#: ``(project_id, issued_at) WHERE outcome IS NULL``; the WHERE repeats it.
+SELECT_UNRESOLVED_ENTRY_FOR_NODE: Final = f"""
+SELECT {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ID}
+FROM {TABLE_COMMAND_JOURNAL}
+WHERE {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_PROJECT_ID} = ?
+  AND {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_OUTCOME} IS NULL
+  AND {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_NODE_ID} = ?
+LIMIT 1
+"""
+
 #: What inspection consumes. The node and resolved filters are applied by
 #: selecting the matching template below, never by concatenating caller data.
 SELECT_JOURNAL_ENTRIES_TEMPLATE: Final = f"""

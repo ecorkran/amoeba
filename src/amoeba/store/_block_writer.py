@@ -15,12 +15,15 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 
-from amoeba.store import sql, sql_inbox
+from amoeba.store import sql, sql_inbox, sql_journal
 from amoeba.store._base import StoreBase, new_id
 from amoeba.store.inbox_models import Channel
 from amoeba.store.models import (
     BLOCKED_KIND_TO_STATUS,
+    BLOCKED_STATUSES,
     BlockedKind,
+    InvalidTransitionError,
+    Node,
     NodeStatus,
     StoreIntegrityError,
 )
@@ -31,8 +34,86 @@ from amoeba.store.models import (
 ESCALATING_KINDS: frozenset[BlockedKind] = frozenset({BlockedKind.HUMAN})
 
 
+def refuse_blocked_status(status: NodeStatus, action: str) -> None:
+    """Reject a node write that would touch the blocked half on its own.
+
+    Blocked statuses are owned by ``block()`` and ``resolve()``, which write
+    status and blocked state in one transaction. Refusing them here is what
+    makes "no public path writes one half" structural rather than advisory.
+    """
+    if status in BLOCKED_STATUSES:
+        raise InvalidTransitionError(
+            f"cannot {action} {status.value!r} directly: "
+            "use block() and resolve() so status and blocked state agree"
+        )
+
+
 class BlockWriter(StoreBase):
     """Writes a block, its node status, and its escalation. Never commits."""
+
+    def _refuse_done(self, node_id: str) -> None:
+        """Refuse any status write on a ``done`` node. The one terminal check.
+
+        ``done`` is terminal (D1), so every writer of ``nodes.status`` that can
+        reach a done node calls this before writing.
+
+        Raises:
+            NodeNotFoundError: If the node does not exist.
+            InvalidTransitionError: If the node is ``done``.
+        """
+        self._refuse_if_done(self._require_node(node_id))
+
+    def _refuse_if_done(self, node: Node) -> None:
+        """:meth:`_refuse_done` for a caller that already holds the node."""
+        if node.status is NodeStatus.DONE:
+            raise InvalidTransitionError(
+                f"node {node.id!r} is done, and done is terminal"
+            )
+
+    def _refuse_if_blocked(self, node: Node) -> None:
+        """Refuse to block a node that is already blocked.
+
+        The check ``block()`` makes before its transaction, and a routing
+        decision's ``BlockEffect`` makes before its own. ``_write_block``
+        assumes its caller has made it.
+
+        Raises:
+            InvalidTransitionError: If the node is already blocked. Existing
+                blocks are never silently overwritten.
+        """
+        if node.status in BLOCKED_STATUSES:
+            raise InvalidTransitionError(
+                f"node {node.id!r} is already blocked ({node.status.value})"
+            )
+
+    def _write_status(self, node_id: str, status: NodeStatus, timestamp: str) -> None:
+        """Set a node's status through the rules every status write follows.
+
+        Runs inside the caller's transaction and never commits. It is the one
+        status write ``update_node_status`` and a routing decision's
+        ``StatusEffect`` share, so neither can skip a rule.
+
+        Raises:
+            NodeNotFoundError: If the node does not exist.
+            InvalidTransitionError: If the node is done (any target status), is
+                blocked, the target is a blocked status, or the target is
+                ``done`` while the node has an unresolved journal entry.
+        """
+        current = self._require_node(node_id)
+        self._refuse_if_done(current)
+        refuse_blocked_status(current.status, "move a node out of")
+        refuse_blocked_status(status, "move a node into")
+        if status is NodeStatus.DONE:
+            entry = self._execute(
+                sql_journal.SELECT_UNRESOLVED_ENTRY_FOR_NODE,
+                (current.project_id, node_id),
+            ).fetchone()
+            if entry is not None:
+                raise InvalidTransitionError(
+                    f"cannot mark node {node_id!r} done: journal entry "
+                    f"{entry[0]!r} is unresolved"
+                )
+        self._execute(sql.UPDATE_NODE_STATUS, (status.value, timestamp, node_id))
 
     def _write_block(
         self,
@@ -49,7 +130,8 @@ class BlockWriter(StoreBase):
 
         Must be called **inside** the caller's transaction, so the block, the
         status, and the escalation land together or not at all. The caller has
-        already checked that the node exists and is not blocked.
+        already checked that the node exists and is not blocked; this method
+        refuses a done node itself, before any write.
 
         Args:
             node_id: The node to block.
@@ -64,6 +146,7 @@ class BlockWriter(StoreBase):
         Returns:
             The new blocked state's id.
         """
+        self._refuse_done(node_id)
         blocked_state_id = new_id()
         self._execute(
             sql.INSERT_BLOCKED_STATE,
@@ -91,7 +174,8 @@ class BlockWriter(StoreBase):
 
         Inside the caller's transaction, like :meth:`_write_block`, so that
         ``resolve()`` and ``apply_submission`` both write a resolution through
-        one place without opening a second transaction.
+        one place without opening a second transaction. It needs no done check:
+        it acts only on a blocked node, and a done node is never blocked.
 
         Returns:
             Whether an open slot was filled. ``False`` means the node had no

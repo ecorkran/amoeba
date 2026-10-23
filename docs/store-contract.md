@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20261018
+dateUpdated: 20261022
 status: complete
 ---
 
@@ -70,7 +70,7 @@ fallback; there is none.
 | `blocked_on_human` | Waiting on a person. Returned by `blocked()`. |
 | `blocked_on_judge` | Waiting on a Judge pseudopod. Returned by `blocked()`. |
 | `blocked_on_sq_checkpoint` | Waiting on a Squadron checkpoint. Returned by `blocked()`. |
-| `done` | Finished. Terminal. |
+| `done` | Finished. Terminal, and enforced: no store write moves a done node (see [The Runner contract](#the-runner-contract)). |
 
 `BLOCKED_STATUSES` is the frozenset of the three `blocked_on_*` values. Use it
 rather than string-prefix tests or a hand-kept list of your own.
@@ -357,7 +357,9 @@ what the store offers.
 - **`Message`** — `seq`, `id`, `project_id`, `channel`, `node_id`,
   `blocked_state_id`, `journal_entry_id`, `submission_id`, `payload`,
   `created_at`, `acknowledged_at`, `acknowledged_by`, plus an `is_acknowledged`
-  property.
+  property. Slice 121 adds `acknowledgment_outcome`, `acknowledgment_reason`,
+  `fault_kind`, `closed_at` and `closed_by` (see
+  [The Runner contract](#the-runner-contract)).
 
 `applied_seq` and `seq` are assigned by the store at write time — the
 authoritative order (D4). They are never reassigned, even after a delete.
@@ -372,7 +374,7 @@ authoritative order (D4). They are never reassigned, even after a delete.
 | `submissions(project_id, *, outcome=None)` | Records in `applied_seq` order. |
 | `messages(project_id, *, channel, after_seq=0)` | Rows with `seq > after_seq`, ascending. The replay primitive; stable across calls. |
 | `pending_intents(project_id)` | Unacknowledged `intent` rows, ascending. What the Runner consumes. |
-| `acknowledge_message(message_id, *, acknowledged_by)` | Marks an `intent` consumed. Raises `InvalidTransitionError` if it does not exist, is not an intent, or is already acknowledged. |
+| `acknowledge_message(message_id, *, acknowledged_by, outcome, reason=None, desired_state=None)` | Marks an `intent` consumed and records its outcome (and any desired state, in the same transaction). Raises `InvalidTransitionError` if it does not exist, is not an intent, or is already acknowledged. See [The Runner contract](#the-runner-contract). |
 
 All reads work through a **read-only** handle, so a consumer following a channel
 needs no write access. `apply_submission` takes plain, already-validated values:
@@ -627,6 +629,129 @@ accident inside Amoeba*, which is the realistic failure.
 The full process-side contract is in
 [`process-contract.md`](process-contract.md).
 
+## The Runner contract
+
+*Added by slice 121. Schema version 9 (migration `009`).* The store's side of
+the contract the Runner (initiative 120) builds on. What an intent body means,
+which faults exist, and how a routing table is read are the Runner's. The store
+holds and guards the values below and interprets none of them.
+
+### `done` is terminal
+
+No store write moves a `done` node, and none can leave a done node with work in
+flight. Every refusal raises `InvalidTransitionError` naming the node.
+
+| Write | Refused when |
+| --- | --- |
+| `update_node_status(node_id, status)` | The node is `done`, **for any target status, `done` included**. Also refused: moving *to* `done` while the node has an unresolved journal entry. |
+| `block(...)` and any other block (`journal_escalate`'s not-blocked branch, a routing decision's `BlockEffect`) | The node is `done`. |
+| `journal_issue(...)` | The node is `done`. |
+
+`create_node(status=DONE)` stays allowed: creating a node as done moves nothing.
+
+Two consequences callers rely on:
+
+- **No unresolved journal entry sits on a done node.** Resolve the node's entry
+  first, then mark it done.
+- **A done node cannot be blocked.** A fault whose node is done is not escalated
+  against the node. Raise a project-scoped escalation naming the node instead.
+
+A store from before `009` that already holds an unresolved entry on a done node
+fails explicitly when recovery reaches it: `journal_escalate` raises, naming the
+node. Nothing moves the node out of `done`.
+
+### Acknowledgment outcomes and desired state
+
+| Vocabulary | Members |
+| --- | --- |
+| `AcknowledgmentOutcome` | `applied`, `no_op`, `rejected` |
+
+`Message` gains `acknowledgment_outcome` and `acknowledgment_reason`. A row
+acknowledged before `009` reads back with outcome `None`: it was acknowledged
+before outcomes were recorded, and the migration does not guess.
+
+| Method | Effect |
+| --- | --- |
+| `acknowledge_message(message_id, *, acknowledged_by, outcome, reason=None, desired_state=None)` | **One transaction:** the acknowledgment and its outcome, plus the desired-state write if one is given. `outcome` is required; there is no default. `rejected` needs a non-blank `reason`; for the others `reason` is optional but never empty. A `desired_state` is accepted only with `applied`. Raises `ValueError` (before any write), `NodeNotFoundError`, and `InvalidTransitionError` as before (missing, not an intent, or already acknowledged; the first outcome is kept). A failure in the desired-state write leaves the intent unacknowledged. |
+| `intent_for_submission(submission_id)` | The intent row a submission created, or `None`. Before the Runner consumes it the row is unacknowledged; afterwards it carries the outcome. Works through a read-only handle. It scans, because `submission_id` has no index (GitHub issue #19). |
+| `desired_state(project_id, *, node_id=None)` | The desired state at one target, or `None`. `node_id=None` is the project target. |
+| `desired_states(project_id)` | Every desired state in the project: the project target first, then by node id. |
+
+**Desired-state types** (frozen): `SetDesiredState(node_id, drive,
+drive_until_step, hold)` replaces the target's whole row; `ClearDesiredState(node_id)`
+deletes it, and clearing a target with no row writes nothing. `DesiredState`
+holds `id, project_id, node_id, drive, drive_until_step, hold, message_id,
+updated_at`, where `message_id` is the intent that last set the row. `drive` and
+`hold` are nullable booleans; `None` means "not set at this target". Shape
+rules, each a `ValueError`: `drive` and `hold` cannot both be `None` (use clear);
+`drive_until_step` needs `drive is True` and non-empty text. A non-null
+`node_id` must name a node in the intent's project, else `NodeNotFoundError`.
+Merging a new intent with a target's earlier settings is the Runner's job; the
+store stores what it is given. A row on an orphaned node is still returned.
+
+### Project-scoped escalation
+
+An `escalation` message for a fault that has no node. It has `fault_kind` set,
+`node_id` and `blocked_state_id` null, and `closed_at` / `closed_by` once the
+Runner closes it. Node escalations leave `fault_kind`, `closed_at` and
+`closed_by` null; their closure is their block's resolution. At most one row is
+open per `(project_id, fault_kind)`, enforced by a partial unique index.
+
+| Method | Effect |
+| --- | --- |
+| `raise_project_escalation(project_id, *, fault_kind, payload)` | Returns the open row for the pair, unchanged and with nothing written, or inserts a new one. `fault_kind` must be non-empty text and `payload` a JSON-serializable mapping (`ValueError` otherwise). The existing `message_posted` trigger puts the insert on the change feed. |
+| `open_project_escalations(project_id)` | Open project-scoped rows, in `seq` order. |
+| `close_project_escalation(message_id, *, closed_by)` | Records `closed_at` and `closed_by`, and returns the row. Raises `InvalidTransitionError` if the row is missing, is not a project-scoped escalation, or is already closed; `ValueError` for an empty `closed_by`. A later fault of the same kind opens a new row. Only the Runner closes one. |
+
+### Routing decisions, table versions and attempt counts
+
+| Vocabulary | Members |
+| --- | --- |
+| `Route` | `advance`, `rerun`, `escalate` |
+
+**Types** (frozen): `RoutingDecisionInput` (`project_id, node_id, inputs,
+rule_id, table_version, amoeba_version, route, route_parameters,
+journal_entry_id`), `RoutingDecision` (the same plus `id, attempt_step,
+attempt_count, decided_at`), `RoutingTableVersion` (`version, content,
+first_used_at`), and the two effects `StatusEffect(status)` and
+`BlockEffect(context, payload)`.
+
+| Method | Effect |
+| --- | --- |
+| `record_routing_decision(decision, *, table, effect, attempt_step)` | **One transaction:** store `table` if its version is new; insert the decision; if `attempt_step` is given, increment the `(node, step)` counter and record the new count on the decision; apply `effect`. A failure at any step leaves none of them. Returns the stored `RoutingDecision`. |
+| `routing_decision(decision_id)` | One decision, or `None`. |
+| `routing_decision_for_entry(journal_entry_id)` | The decision that routed a journal entry, or `None`. |
+| `routing_decisions(node_id)` | A node's decisions, oldest first; empty when none. |
+| `routing_table_version(version)` | The stored table, or `None`. A decision plus this read is everything needed to recompute it. |
+| `attempt_count(node_id, step)` | The count. A pair with no row returns `0`, which is the true count. |
+
+`StatusEffect` follows `update_node_status`'s rules, including the done-is-terminal
+and unresolved-entry refusals, and refuses a blocked target status. `BlockEffect`
+writes a `HUMAN` block and its escalation row (with the decision's
+`journal_entry_id`) in the same transaction, and is refused on an already-blocked
+node, as `block()` refuses it. Failures: `ValueError` for an empty text field,
+`inputs` or `route_parameters` that are not JSON-serializable, an empty
+`attempt_step`, a `table.version` that differs from the decision's, or an unknown
+route; `NodeNotFoundError` if the node is not in the project;
+`InvalidTransitionError` if `journal_entry_id` is missing or in another project,
+or the effect is refused; `StoreIntegrityError` for a second decision on one
+entry, or a table version stored again with different content (compared byte for
+byte). Table versions are write-once, and a version that no decision used is
+never stored. The only writer of attempt counts is `record_routing_decision`;
+nothing resets them.
+
+### The feed and secrets
+
+This adds no `ChangeKind` and no trigger. A project-scoped escalation's raise
+reaches the feed through `message_posted`; its closure, acknowledgments,
+decisions and desired-state writes do not. A feed follower learns that a
+project-scoped escalation opened but not that it closed, and reads the closure
+from `amoeba inspect messages` or `open_project_escalations`.
+
+Decision `inputs` and `route_parameters`, project-escalation payloads, and
+routing-table content are stored verbatim and shown by inspection. **Callers
+must not place secrets in them.** Nothing here is deleted.
+
 ## Read-only access
 
 ```python
@@ -663,6 +788,11 @@ against a throwaway store it did not ask for is the worst available outcome.
 | Node id does not exist | `NodeNotFoundError` |
 | Verdict id does not exist, for `observations` or `finding_changes` | `VerdictNotFoundError` |
 | Block or resolve against a node in the wrong state, or a blocked status written through `create_node` / `update_node_status` | `InvalidTransitionError` |
+| A status write or block on a done node; issuing a journal entry against a done node; marking a node done while it has an unresolved entry | `InvalidTransitionError` |
+| Acknowledging a missing, non-intent or already acknowledged row; closing a missing, non-project-scoped or already closed escalation; a routing decision on an entry that is missing or in another project | `InvalidTransitionError` |
+| A malformed outcome, reason, desired state, routing-decision field or fault kind | `ValueError` |
+| A desired state or routing decision naming a node not in the project | `NodeNotFoundError` |
+| A second routing decision for one entry; a table version stored with different content; a second open project escalation for one fault kind inserted directly (`raise_project_escalation` returns the open row instead) | `StoreIntegrityError` |
 | Schema-level invariant (foreign key, one open blocked state per node) violated by a write | `StoreIntegrityError` |
 
 All inherit from `StoreError`, so `except StoreError` catches the family.
@@ -714,6 +844,12 @@ adding a table onto working machinery, not debugging both at once.
 **A store stamped newer than the code raises `StoreSchemaError`.** It is never
 silently downgraded.
 
+The latest migration is `009` (slice 121, schema version 9: the five new
+`messages` columns, the open-project-escalation index, and the
+`routing_table_versions`, `routing_decisions`, `attempt_counts` and
+`desired_states` tables). A read-only open of a store stamped older than the
+code raises `StoreSchemaError`; only a read-write open migrates.
+
 ## Testing against the store
 
 Open a throwaway store; never the central one. `tests/conftest.py` provides
@@ -724,6 +860,10 @@ mechanically rather than assumed. The scan is AST-based and therefore
 multiline-aware.
 
 ## Future work
+
+**A closure change kind (slice 121, D9).** A project-scoped escalation's closure
+adds no `ChangeKind`, so a feed follower cannot see it close. Add one when a
+subscriber needs it.
 
 **Storage engine reversal trigger (PM).** The decision to use raw stdlib
 `sqlite3` rather than SQLAlchemy Core + Alembic should be revisited if *either*:

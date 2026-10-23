@@ -12,15 +12,17 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from routing_helpers import submit_intent
 from sq_run_fixtures import sq_run_parameters
 
-from amoeba.store import sql_inbox
+from amoeba.store import AcknowledgmentOutcome, sql_inbox
 from amoeba.store.inbox_models import Channel
 from amoeba.store.journal_models import CommandKind
 from amoeba.store.models import BlockedKind, InvalidTransitionError, NodeKind
 from amoeba.store.store import Store
 
 PROJECT = "demo"
+APPLIED = AcknowledgmentOutcome.APPLIED
 STAGED_AT = "2026-09-23T00:00:00+00:00"
 
 
@@ -171,7 +173,9 @@ def test_pending_intents_excludes_acknowledged_rows(store_file: Path) -> None:
     _stage_intent(store_file, "i-2")
 
     with Store.open(store_file) as store:
-        acknowledged = store.acknowledge_message("i-1", acknowledged_by="runner")
+        acknowledged = store.acknowledge_message(
+            "i-1", acknowledged_by="runner", outcome=APPLIED
+        )
         pending = store.pending_intents(PROJECT)
 
     assert acknowledged.is_acknowledged
@@ -185,10 +189,12 @@ def test_second_acknowledge_raises(store_file: Path) -> None:
     _stage_intent(store_file, "i-1")
 
     with Store.open(store_file) as store:
-        store.acknowledge_message("i-1", acknowledged_by="runner")
+        store.acknowledge_message("i-1", acknowledged_by="runner", outcome=APPLIED)
 
         with pytest.raises(InvalidTransitionError):
-            store.acknowledge_message("i-1", acknowledged_by="someone-else")
+            store.acknowledge_message(
+                "i-1", acknowledged_by="someone-else", outcome=APPLIED
+            )
 
         [row] = store.messages(PROJECT, channel=Channel.INTENT)
         assert row.acknowledged_by == "runner"
@@ -200,13 +206,176 @@ def test_acknowledging_an_escalation_raises(store_file: Path) -> None:
         [escalation] = store.messages(PROJECT, channel=Channel.ESCALATION)
 
         with pytest.raises(InvalidTransitionError):
-            store.acknowledge_message(escalation.id, acknowledged_by="runner")
+            store.acknowledge_message(
+                escalation.id, acknowledged_by="runner", outcome=APPLIED
+            )
 
 
 def test_acknowledging_an_unknown_message_raises(store_file: Path) -> None:
     with Store.open(store_file) as store:
         with pytest.raises(InvalidTransitionError):
-            store.acknowledge_message("no-such-message", acknowledged_by="runner")
+            store.acknowledge_message(
+                "no-such-message", acknowledged_by="runner", outcome=APPLIED
+            )
+
+
+# --------------------------------------------------------------------------
+# D2: acknowledgment outcomes
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("outcome", list(AcknowledgmentOutcome))
+def test_each_outcome_round_trips(
+    store_file: Path, outcome: AcknowledgmentOutcome
+) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+
+    with Store.open(store_file) as store:
+        returned = store.acknowledge_message(
+            "i-1", acknowledged_by="runner", outcome=outcome, reason="because"
+        )
+        [stored] = store.messages(PROJECT, channel=Channel.INTENT)
+
+    assert returned == stored
+    assert stored.acknowledgment_outcome is outcome
+    assert stored.acknowledgment_reason == "because"
+
+
+@pytest.mark.parametrize(
+    "outcome", [AcknowledgmentOutcome.APPLIED, AcknowledgmentOutcome.NO_OP]
+)
+def test_applied_and_no_op_need_no_reason(
+    store_file: Path, outcome: AcknowledgmentOutcome
+) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+
+    with Store.open(store_file) as store:
+        message = store.acknowledge_message("i-1", acknowledged_by="r", outcome=outcome)
+
+    assert message.acknowledgment_reason is None
+
+
+@pytest.mark.parametrize("reason", [None, "", "   "])
+def test_rejected_without_a_usable_reason_raises_and_writes_nothing(
+    store_file: Path, reason: str | None
+) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+
+    with Store.open(store_file) as store:
+        with pytest.raises(ValueError, match="reason"):
+            store.acknowledge_message(
+                "i-1",
+                acknowledged_by="r",
+                outcome=AcknowledgmentOutcome.REJECTED,
+                reason=reason,
+            )
+        assert [m.id for m in store.pending_intents(PROJECT)] == ["i-1"]
+
+
+def test_an_empty_reason_is_refused_for_any_outcome(store_file: Path) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+
+    with Store.open(store_file) as store:
+        with pytest.raises(ValueError, match="reason"):
+            store.acknowledge_message(
+                "i-1", acknowledged_by="r", outcome=APPLIED, reason=""
+            )
+        assert [m.id for m in store.pending_intents(PROJECT)] == ["i-1"]
+
+
+def test_an_unknown_outcome_raises_and_writes_nothing(store_file: Path) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+
+    with Store.open(store_file) as store:
+        with pytest.raises(ValueError):
+            store.acknowledge_message(
+                "i-1",
+                acknowledged_by="r",
+                outcome="maybe",  # pyright: ignore[reportArgumentType]
+            )
+        assert [m.id for m in store.pending_intents(PROJECT)] == ["i-1"]
+
+
+def test_outcome_is_required(store_file: Path) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+
+    with Store.open(store_file) as store:
+        with pytest.raises(TypeError):
+            store.acknowledge_message("i-1", acknowledged_by="r")  # pyright: ignore[reportCallIssue]
+
+
+def test_second_acknowledgment_keeps_the_first_outcome(store_file: Path) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+
+    with Store.open(store_file) as store:
+        store.acknowledge_message(
+            "i-1", acknowledged_by="a", outcome=AcknowledgmentOutcome.NO_OP
+        )
+        with pytest.raises(InvalidTransitionError):
+            store.acknowledge_message("i-1", acknowledged_by="b", outcome=APPLIED)
+        [row] = store.messages(PROJECT, channel=Channel.INTENT)
+
+    assert row.acknowledgment_outcome is AcknowledgmentOutcome.NO_OP
+
+
+def test_a_row_acknowledged_before_outcomes_reads_back_with_none(
+    store_file: Path,
+) -> None:
+    with Store.open(store_file):
+        pass
+    _stage_intent(store_file, "i-1")
+    with sqlite3.connect(store_file) as connection:
+        connection.execute(
+            "UPDATE messages SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ?",
+            (STAGED_AT, "old-runner", "i-1"),
+        )
+
+    with Store.open(store_file) as store:
+        [row] = store.messages(PROJECT, channel=Channel.INTENT)
+
+    assert row.is_acknowledged
+    assert row.acknowledgment_outcome is None
+
+
+def test_intent_for_submission_before_and_after_acknowledgment(
+    store_file: Path,
+) -> None:
+    with Store.open(store_file) as store:
+        submit_intent(store, "sub-1")
+        before = store.intent_for_submission("sub-1")
+        assert before is not None and not before.is_acknowledged
+        store.acknowledge_message(
+            before.id,
+            acknowledged_by="runner",
+            outcome=AcknowledgmentOutcome.NO_OP,
+            reason="already held",
+        )
+        after = store.intent_for_submission("sub-1")
+
+    assert after is not None
+    assert after.id == before.id
+    assert after.acknowledgment_outcome is AcknowledgmentOutcome.NO_OP
+    assert store_file.exists()
+    with Store.open_read_only(store_file) as reader:
+        assert reader.intent_for_submission("sub-1") == after
+
+
+def test_intent_for_an_unknown_submission_is_none(store: Store) -> None:
+    assert store.intent_for_submission("never-submitted") is None
 
 
 # --------------------------------------------------------------------------

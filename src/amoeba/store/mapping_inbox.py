@@ -13,6 +13,7 @@ from datetime import datetime
 
 from amoeba.store import sql_inbox
 from amoeba.store.inbox_models import (
+    AcknowledgmentOutcome,
     Channel,
     Message,
     SubmissionKind,
@@ -40,9 +41,9 @@ def _required_timestamp(value: object, column: str) -> datetime:
     return decoded
 
 
-def _vocabulary[VocabularyT: (Channel, SubmissionKind, SubmissionOutcome)](
-    value: object, vocabulary: type[VocabularyT], column: str
-) -> VocabularyT:
+def _vocabulary[
+    VocabularyT: (AcknowledgmentOutcome, Channel, SubmissionKind, SubmissionOutcome)
+](value: object, vocabulary: type[VocabularyT], column: str) -> VocabularyT:
     """Coerce a stored value into a closed inbox vocabulary, or raise."""
     if not isinstance(value, str):
         raise UnknownVocabularyValueError(f"{column} is not a string: {value!r}")
@@ -114,4 +115,17 @@ def map_message(row: Sequence[object]) -> Message:
             row[10], sql_inbox.COL_MESSAGE_ACKNOWLEDGED_AT
         ),
         acknowledged_by=_optional_text(row[11]),
+        acknowledgment_outcome=(
+            None
+            if row[12] is None
+            else _vocabulary(
+                row[12],
+                AcknowledgmentOutcome,
+                sql_inbox.COL_MESSAGE_ACKNOWLEDGMENT_OUTCOME,
+            )
+        ),
+        acknowledgment_reason=_optional_text(row[13]),
+        fault_kind=_optional_text(row[14]),
+        closed_at=decode_timestamp(row[15], sql_inbox.COL_MESSAGE_CLOSED_AT),
+        closed_by=_optional_text(row[16]),
     )

@@ -59,10 +59,7 @@ class BlockingOperations(BlockWriter):
                 blocks are never silently overwritten.
         """
         node = self._require_node(node_id)
-        if node.status in BLOCKED_STATUSES:
-            raise InvalidTransitionError(
-                f"node {node_id!r} is already blocked ({node.status.value})"
-            )
+        self._refuse_if_blocked(node)
 
         created = now()
 
