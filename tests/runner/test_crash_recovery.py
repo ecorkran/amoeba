@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 from contract.launched import LaunchedProcess
 
-from amoeba.store import JournalOutcome, JournalResolver
+from amoeba.runner.finish import RESULT_RUN_ID
+from amoeba.store import PARAM_RUN_ID, JournalOutcome, JournalResolver
 from runner.crash_entry import KillPoint
 from runner.crash_harness import CrashHarness, RunSettings
 
@@ -34,7 +35,7 @@ def _crash_and_restart(
     [journaled] = harness.entries()
     assert not journaled.is_resolved, "the crash left the entry open"
     second = harness.start(run)
-    return str(journaled.parameters["run_id"]), second
+    return str(journaled.parameters[PARAM_RUN_ID]), second
 
 
 def test_kill_before_launch_is_not_applied_and_not_relaunched(
@@ -69,7 +70,9 @@ def test_kill_while_running_is_recorded_after_restart(harness: CrashHarness) -> 
         JournalResolver.ISSUER,
     )
     assert entry.result is not None
-    assert entry.result["run_id"] == run_id and entry.result["outcome"] == "completed"
+    assert (
+        entry.result[RESULT_RUN_ID] == run_id and entry.result["outcome"] == "completed"
+    )
     assert harness.sq_run_calls(run_id) == 1
     assert harness.open_blocks(entry.node_id) == []
     harness.stop(process)

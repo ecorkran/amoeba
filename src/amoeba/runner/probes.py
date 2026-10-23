@@ -39,7 +39,7 @@ CF_STATUS_COMMAND: Final = ("status", CF_JSON_FLAG)
 CF_INITIATIVES_COMMAND: Final = ("list", "initiatives", CF_JSON_FLAG)
 
 #: How much of a command's output a failure message quotes.
-OUTPUT_HEAD_CHARS: Final = 200
+OUTPUT_HEAD_CHARS: Final = 200  # keeps a failing probe's detail one line long
 
 #: Runs ``cf``: ``subprocess.run`` in production, a fake in unit tests.
 type CfRun = Callable[..., subprocess.CompletedProcess[str]]

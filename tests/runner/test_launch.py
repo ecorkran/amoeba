@@ -15,6 +15,8 @@ from sq_stub import RUN_SECONDS_ENV, write_sq_stub
 from amoeba.runner.faults import LaunchFailure
 from amoeba.runner.launch import (
     LAUNCH_LOGS_DIRNAME,
+    PARAM_PARAMS,
+    PARAM_PIPELINE,
     LaunchError,
     LaunchTracker,
     build_argv,
@@ -37,8 +39,10 @@ def _entry(
         node_id="node-1",
         kind=CommandKind.SQ_RUN,
         parameters={
-            "pipeline": "noop",
-            "params": {"slice": "122", "mode": "fast"} if params is None else params,
+            PARAM_PIPELINE: "noop",
+            PARAM_PARAMS: {"slice": "122", "mode": "fast"}
+            if params is None
+            else params,
             PARAM_RUN_ID: RUN_ID,
             PARAM_CHECKOUT: checkout,
         },

@@ -17,6 +17,8 @@ from amoeba.runner.budget import TickBudget
 from amoeba.runner.faults import NodeContext, TickFaults
 from amoeba.runner.launch import (
     LAUNCH_LOGS_DIRNAME,
+    PARAM_PARAMS,
+    PARAM_PIPELINE,
     LaunchTracker,
     log_paths,
 )
@@ -107,7 +109,11 @@ def entry(index: int = 1, issued_ago: float = 0.0) -> JournalEntry:
         project_id="demo",
         node_id=f"node-{index}",
         kind=CommandKind.SQ_RUN,
-        parameters={"pipeline": "noop", "params": {}, PARAM_RUN_ID: f"run-{index}"},
+        parameters={
+            PARAM_PIPELINE: "noop",
+            PARAM_PARAMS: {},
+            PARAM_RUN_ID: f"run-{index}",
+        },
         issued_at=NOW - timedelta(seconds=issued_ago),
     )
 

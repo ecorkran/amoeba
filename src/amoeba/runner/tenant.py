@@ -70,10 +70,10 @@ class RunnerTenant:
         self._popen = popen
         self._now = now
         self._monotonic = monotonic
-        self._tracker = LaunchTracker()
+        self.tracker = LaunchTracker()
         self._observer = RunObserver(
             supervisor_dir=supervisor_dir,
-            tracker=self._tracker,
+            tracker=self.tracker,
             poll=poll,
             now=now,
             monotonic=monotonic,
@@ -98,7 +98,7 @@ class RunnerTenant:
             A tick that only polled a running run returns False, so the loop
             idles between ticks instead of spinning.
         """
-        self._tracker.reap()
+        self.tracker.reap()
         deadline = self._monotonic() + self._settings.tick_deadline_seconds
         budget = TickBudget(deadline, host, self._monotonic)
         order = self._order(host.project_ids)
@@ -132,7 +132,7 @@ class RunnerTenant:
             planners=self._planners,
             observer=self._observer,
             probes=self._probes,
-            tracker=self._tracker,
+            tracker=self.tracker,
             popen=self._popen,
             now=self._now,
             context=context,
@@ -141,6 +141,9 @@ class RunnerTenant:
             return tick.run(budget), tick.wrote
         except (*STORE_FAILURES, UpstreamShapeError):
             # The process exits; recovery on restart reconciles what is open.
+            logger.exception(
+                "runner tick hit a store failure for project %s", project_id
+            )
             raise
         except Exception as error:  # noqa: BLE001 - the Runner's one process boundary (D8)
             logger.exception("runner tick failed for project %s", project_id)

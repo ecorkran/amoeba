@@ -13,10 +13,10 @@ import pytest
 
 from amoeba.process import RunOutcome
 from amoeba.runner.budget import TickResult
-from amoeba.store import CommandKind, NodeKind, Store
+from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
+from amoeba.store import PARAM_RUN_ID, CommandKind, NodeKind, Store
 from runner.observe_support import Child, document
-from runner.test_probes import _link  # pyright: ignore[reportPrivateUsage]
-from runner.tick_support import PROJECT, Rig
+from runner.tick_support import PROJECT, Rig, link
 
 DEADLINE = 5.0
 CALL_COST = 2.0
@@ -33,11 +33,15 @@ def busy_rig(tmp_path: Path, store: Store) -> Rig:
         entry = store.journal_issue(
             node.id,
             kind=CommandKind.SQ_RUN,
-            parameters={"pipeline": "p", "params": {}, "run_id": f"run-{index}"},
+            parameters={
+                PARAM_PIPELINE: "p",
+                PARAM_PARAMS: {},
+                PARAM_RUN_ID: f"run-{index}",
+            },
         )
         rig.tracker.track(entry.id, Child(None))
         rig.tracker.confirm(entry.id)
-    _link(store, "s-1", "cf-1", PROJECT)
+    link(store, "s-1", "cf-1", PROJECT)
     for index in range(2):
         store.create_node(
             project_id=PROJECT, kind=NodeKind.SLICE, title=f"free-{index}"

@@ -15,7 +15,7 @@ from amoeba.process import ProcessSettings, RunOutcome, UpstreamShapeError
 from amoeba.runner.decide import Action, LaunchRun, ProjectView
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.tenant import RunnerTenant
-from amoeba.store import NodeKind, Store, StoreBusyError
+from amoeba.store import PARAM_RUN_ID, NodeKind, Store, StoreBusyError
 from runner.observe_support import Child, Clock, FakeCf, ScriptedPoll, document
 
 SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
@@ -178,9 +178,9 @@ def test_a_tick_that_only_polled_a_running_run_returns_false(make_rig: Any) -> N
     assert rig.tenant.tick(rig.host) is True
     [entry] = rig.stores["a"].unresolved_journal_entries("a")
     rig.planner.raise_for.clear()
-    rig.tenant._tracker.confirm(entry.id)  # pyright: ignore[reportPrivateUsage]
+    rig.tenant.tracker.confirm(entry.id)
     rig.poll.answers.append(
-        document(str(entry.parameters["run_id"]), RunOutcome.TIMED_OUT)
+        document(str(entry.parameters[PARAM_RUN_ID]), RunOutcome.TIMED_OUT)
     )
     rig.clock.seconds = 20.0
 

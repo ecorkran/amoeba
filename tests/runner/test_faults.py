@@ -9,7 +9,9 @@ import pytest
 from sq_run_fixtures import LEGACY_ENTRY_ID, insert_legacy_sq_run_entry
 
 from amoeba.runner.faults import FaultKind, NodeContext, escalate
+from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.store import (
+    PARAM_RUN_ID,
     BlockedKind,
     CommandKind,
     Node,
@@ -82,7 +84,7 @@ def test_a_node_with_a_run_in_flight_takes_the_project_path(
     entry = store.journal_issue(
         node.id,
         kind=CommandKind.SQ_RUN,
-        parameters={"pipeline": "p", "params": {}, "run_id": "run-1"},
+        parameters={PARAM_PIPELINE: "p", PARAM_PARAMS: {}, PARAM_RUN_ID: "run-1"},
     )
 
     _escalate(store, _in(node.id))
@@ -129,7 +131,7 @@ def test_a_legacy_entry_without_a_run_id_still_counts_as_in_flight(
             entry_id=LEGACY_ENTRY_ID,
             project_id=PROJECT,
             node_id=node.id,
-            parameters={"pipeline": "p5", "params": {}},
+            parameters={PARAM_PIPELINE: "p5", PARAM_PARAMS: {}},
             issued_at="2026-10-15T22:00:00+00:00",
         )
 

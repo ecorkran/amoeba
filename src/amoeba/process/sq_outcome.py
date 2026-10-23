@@ -48,7 +48,10 @@ class RunOutcome(StrEnum):
     ORPHANED = "orphaned"
 
 
-#: Squadron's exit code for each outcome. Usage errors exit 2 and are not here.
+#: Squadron's exit code for a rejected command line. It is not a run outcome.
+SQ_USAGE_ERROR_EXIT_CODE: Final = 2
+
+#: Squadron's exit code for each outcome. Usage errors are not here.
 OUTCOME_EXIT_CODES: Final[Mapping[RunOutcome, int]] = MappingProxyType(
     {
         RunOutcome.COMPLETED: 0,

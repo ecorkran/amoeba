@@ -19,8 +19,10 @@ from sq_stub import (
 from amoeba.process import ProcessSettings, UpstreamShapeError
 from amoeba.runner import RunnerTenant, runner_tenant
 from amoeba.runner.decide import Action, LaunchRun, ProjectView
+from amoeba.runner.finish import RESULT_RUN_ID
 from amoeba.runner.launch import log_paths
 from amoeba.store import (
+    PARAM_RUN_ID,
     JournalEntry,
     JournalOutcome,
     Node,
@@ -128,10 +130,10 @@ def test_the_normal_path_records_run_id_outcome_and_status(scenario: Scenario) -
     scenario.tick_until("the entry to be resolved", scenario.resolved)
 
     entry = scenario.entry()
-    run_id = str(entry.parameters["run_id"])
+    run_id = str(entry.parameters[PARAM_RUN_ID])
     assert entry.outcome is JournalOutcome.COMPLETED
     assert entry.result == {
-        "run_id": run_id,
+        RESULT_RUN_ID: run_id,
         "outcome": "completed",
         "status": "completed",
     }

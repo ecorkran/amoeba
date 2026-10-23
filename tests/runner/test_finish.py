@@ -8,9 +8,11 @@ import pytest
 
 from amoeba.process import RunCheckpoint, RunOutcome, RunOutcomeDocument
 from amoeba.runner.faults import LaunchFailure
-from amoeba.runner.finish import record
+from amoeba.runner.finish import RESULT_RUN_ID, record
+from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.observed import LaunchFailed, RunEnded, RunVanished
 from amoeba.store import (
+    PARAM_RUN_ID,
     BlockedKind,
     CommandKind,
     JournalEntry,
@@ -37,7 +39,7 @@ def entry(store: Store, node: Node) -> JournalEntry:
     return store.journal_issue(
         node.id,
         kind=CommandKind.SQ_RUN,
-        parameters={"pipeline": "noop", "params": {}, "run_id": RUN_ID},
+        parameters={PARAM_PIPELINE: "noop", PARAM_PARAMS: {}, PARAM_RUN_ID: RUN_ID},
     )
 
 
@@ -62,7 +64,7 @@ def test_completed_resolves_completed_and_blocks_nothing(
         JournalResolver.ISSUER,
     )
     assert done.result == {
-        "run_id": RUN_ID,
+        RESULT_RUN_ID: RUN_ID,
         "outcome": "completed",
         "status": "completed",
     }
@@ -119,7 +121,7 @@ def test_a_vanished_run_blocks_and_resolves_failed(
 
     done = _resolved(store, entry)
     assert done.outcome is JournalOutcome.FAILED
-    assert done.result == {"run_id": RUN_ID, "outcome": "vanished"}
+    assert done.result == {RESULT_RUN_ID: RUN_ID, "outcome": "vanished"}
     assert _open_blocks(store, node) == [BlockedKind.HUMAN]
 
 
@@ -132,7 +134,10 @@ def test_a_failed_launch_blocks_with_the_reason_code_and_tail(
 
     done = _resolved(store, entry)
     assert done.outcome is JournalOutcome.FAILED
-    assert done.result == {"run_id": RUN_ID, "launch_failure": "exited_before_line"}
+    assert done.result == {
+        RESULT_RUN_ID: RUN_ID,
+        "launch_failure": "exited_before_line",
+    }
     blocked = store.blocked_state_for(node.id)
     assert blocked is not None
     assert "exited_before_line" in blocked.context

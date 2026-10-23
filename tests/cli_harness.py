@@ -16,6 +16,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from sq_stub import write_sq_stub
 
@@ -37,6 +38,10 @@ class CommandResult:
     stderr: str
 
 
+#: The name every harness caller gives its throwaway supervisor directory.
+SUPERVISOR_DIRNAME: Final = "supervisor"
+
+
 def cli_environment(supervisor_dir: Path) -> dict[str, str]:
     """An environment pointing the CLI at a throwaway supervisor directory.
 
@@ -50,10 +55,19 @@ def cli_environment(supervisor_dir: Path) -> dict[str, str]:
 
     ``start`` probes ``sq`` before its loop (slice 122, D9), and no test runs
     the real ``sq``. So the stub is written to disk by this call (idempotently),
-    in ``supervisor_dir.parent``, which must therefore be a throwaway
-    directory. Every suite that starts a process gets it; a test that wants no
-    ``sq`` replaces ``PATH`` afterwards.
+    in ``supervisor_dir.parent`` (the supervisor directory must stay empty: a
+    test asserts inspection creates nothing in it). The parent is therefore
+    required to be a throwaway directory, and the supervisor directory to be
+    named :data:`SUPERVISOR_DIRNAME` inside it, so a caller that passes a shared
+    directory fails here instead of leaving a stub in it. Every suite that
+    starts a process gets the stub; a test that wants no ``sq`` replaces
+    ``PATH`` afterwards.
     """
+    if supervisor_dir.name != SUPERVISOR_DIRNAME:
+        raise ValueError(
+            f"supervisor_dir must be named {SUPERVISOR_DIRNAME!r} inside a "
+            f"throwaway directory, got {supervisor_dir}"
+        )
     environment = dict(os.environ)
     environment.pop(TOKEN_ENV_VAR, None)
     environment["AMOEBA_STORE_DIR"] = str(supervisor_dir)

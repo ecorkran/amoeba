@@ -14,6 +14,7 @@ from amoeba.runner.launch import (
     log_paths,
 )
 from amoeba.store import (
+    PARAM_RUN_ID,
     CommandKind,
     JournalOutcome,
     Node,
@@ -46,7 +47,7 @@ def test_the_entry_is_journaled_before_the_launch_call(
     assert entry.parameters["pipeline"] == "noop"
     assert entry.parameters["params"] == {"k": "v"}
     assert entry.parameters["checkout"] == str(tmp_path)
-    assert str(entry.parameters["run_id"]).startswith("amoeba-")
+    assert str(entry.parameters[PARAM_RUN_ID]).startswith("amoeba-")
     assert rig.tracker.get(entry.id) is not None
 
 
@@ -88,7 +89,7 @@ def test_a_finished_run_is_recorded_and_its_handle_forgotten(
     rig = Rig(tmp_path, store)
     rig.tick()
     [entry] = store.unresolved_journal_entries(PROJECT)
-    run_id = str(entry.parameters["run_id"])
+    run_id = str(entry.parameters[PARAM_RUN_ID])
     log_paths(rig.supervisor_dir, entry.id).stderr.write_text(f"run_id={run_id}\n")
     rig.poll.answers.append(document(run_id, RunOutcome.COMPLETED))
     rig.clock.seconds = 1.0
@@ -109,7 +110,7 @@ def test_a_tick_that_only_polled_a_running_run_wrote_nothing(
     rig = Rig(tmp_path, store)
     rig.tick()
     [entry] = store.unresolved_journal_entries(PROJECT)
-    run_id = str(entry.parameters["run_id"])
+    run_id = str(entry.parameters[PARAM_RUN_ID])
     rig.tracker.confirm(entry.id)
     rig.poll.answers.append(document(run_id, RunOutcome.TIMED_OUT))
 
@@ -128,7 +129,7 @@ def test_exit_two_with_no_state_records_the_failure_then_raises_upstream_shape(
     [entry] = store.unresolved_journal_entries(PROJECT)
     rig.tracker.track(entry.id, Child(2))  # replaces the live child
     rig.poll.answers.append(
-        document(str(entry.parameters["run_id"]), RunOutcome.NOT_FOUND)
+        document(str(entry.parameters[PARAM_RUN_ID]), RunOutcome.NOT_FOUND)
     )
 
     with pytest.raises(UpstreamShapeError, match="--run-id"):

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.store import JournalOutcome
+from amoeba.store import PARAM_RUN_ID, JournalOutcome
 from runner.crash_harness import CrashHarness, RunSettings
 
 
@@ -28,7 +28,7 @@ def test_a_run_with_no_kill_is_launched_confirmed_and_recorded(
     assert entry.outcome is JournalOutcome.COMPLETED
     assert entry.node_id == harness.node_ids[0]
     assert entry.result is not None and entry.result["outcome"] == "completed"
-    run_id = str(entry.parameters["run_id"])
+    run_id = str(entry.parameters[PARAM_RUN_ID])
     assert harness.sq_run_calls(run_id) == 1
     assert harness.open_blocks(entry.node_id) == []
     harness.stop(process)

@@ -13,7 +13,12 @@ from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from amoeba.process import PollFailure, RunOutcome, RunPoll
+from amoeba.process import (
+    SQ_USAGE_ERROR_EXIT_CODE,
+    PollFailure,
+    RunOutcome,
+    RunPoll,
+)
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import InFlightRun, RunState
 from amoeba.runner.faults import (
@@ -39,9 +44,6 @@ from amoeba.runner.observed import (
     RunVanished,
 )
 from amoeba.store import PARAM_RUN_ID, JournalEntry
-
-#: The exit code of a child that rejected its command line.
-USAGE_ERROR_EXIT_CODE = 2
 
 #: Outcomes of a poll that end the run.
 _ENDED = frozenset(
@@ -245,7 +247,7 @@ class RunObserver:
             return self._still_overdue(entry, run_id, stderr_path, log_error, faults)
         failure = (
             LaunchFailure.USAGE_ERROR
-            if exit_code == USAGE_ERROR_EXIT_CODE
+            if exit_code == SQ_USAGE_ERROR_EXIT_CODE
             else LaunchFailure.EXITED_BEFORE_LINE
         )
         tail = log_error or _tail_or_error(stderr_path)

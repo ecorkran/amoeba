@@ -10,7 +10,9 @@ from amoeba.process import RunOutcome
 from amoeba.runner.budget import TickResult
 from amoeba.runner.decide import RunState
 from amoeba.runner.faults import FaultKind
+from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.observed import RunEnded, RunVanished
+from amoeba.store import PARAM_RUN_ID
 from runner.observe_support import (
     INTERVAL,
     Child,
@@ -203,7 +205,7 @@ def test_a_malformed_run_id_faults_that_entry_and_the_others_are_still_observed(
         project_id=bad.project_id,
         node_id=bad.node_id,
         kind=bad.kind,
-        parameters={"pipeline": "p", "params": {}, "run_id": ""},
+        parameters={PARAM_PIPELINE: "p", PARAM_PARAMS: {}, PARAM_RUN_ID: ""},
         issued_at=bad.issued_at,
     )
 

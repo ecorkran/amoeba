@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from feed_harness import apply
+
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import Action, LaunchRun, ProjectView
 from amoeba.runner.faults import NodeContext
@@ -16,9 +18,8 @@ from amoeba.runner.launch import (
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.tick import ProjectTick
-from amoeba.store import (
-    Store,
-)
+from amoeba.store import Store, SubmissionKind
+from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
 from runner.observe_support import (
     GRACE,
     Child,
@@ -105,3 +106,14 @@ class Rig:
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
         return tick.run(budget), tick
+
+
+def link(store: Store, submission_id: str, cf_id: str, project: str) -> None:
+    """Apply a link-CF-project submission, linking ``project`` to ``cf_id``."""
+    apply(
+        store,
+        submission_id,
+        SubmissionKind.LINK_CF_PROJECT,
+        {LINK_CF_PROJECT_ID: cf_id},
+        project,
+    )

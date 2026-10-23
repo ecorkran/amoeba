@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 from cf_stub import LOG_ENV, MODE_ENV, CfMode, write_cf_stub
-from feed_harness import apply
 
 from amoeba.process import (
     PollFailure,
@@ -29,10 +28,9 @@ from amoeba.runner.probes import (
     probe_link,
     probe_sq,
 )
-from amoeba.store import NodeKind, Store, SubmissionKind
-from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
+from amoeba.store import NodeKind, Store
 from runner.observe_support import Clock, FakeCf, Host, document
-from runner.tick_support import PROJECT, Rig
+from runner.tick_support import PROJECT, Rig, link
 
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
 TIMEOUT = 8.0
@@ -237,16 +235,6 @@ def test_the_stub_cf_in_each_mode(
 # -- links in a tick -----------------------------------------------------------------
 
 
-def _link(store: Store, submission_id: str, cf_id: str, project: str) -> None:
-    apply(
-        store,
-        submission_id,
-        SubmissionKind.LINK_CF_PROJECT,
-        {LINK_CF_PROJECT_ID: cf_id},
-        project,
-    )
-
-
 def test_a_link_is_probed_once_per_lifetime() -> None:
     cf = FakeCf()
     probes = LinkProbes(run=cf, timeout_seconds=TIMEOUT)
@@ -295,7 +283,7 @@ def test_a_failed_link_raises_one_escalation_and_the_tick_carries_on(
     tmp_path: Path, store: Store
 ) -> None:
     store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="n")
-    _link(store, "s-1", "cf-dead", PROJECT)
+    link(store, "s-1", "cf-dead", PROJECT)
     rig = Rig(tmp_path, store)
     rig.cf.stdout["status"] = ""
 
@@ -312,7 +300,7 @@ def test_a_failed_link_raises_one_escalation_and_the_tick_carries_on(
 def test_a_failed_link_stays_open_until_a_later_lifetime_passes(
     tmp_path: Path, store: Store
 ) -> None:
-    _link(store, "s-1", "cf-dead", PROJECT)
+    link(store, "s-1", "cf-dead", PROJECT)
     rig = Rig(tmp_path, store)
     rig.cf.stdout["status"] = ""
     rig.tick()
@@ -329,7 +317,7 @@ def test_a_failed_link_stays_open_until_a_later_lifetime_passes(
 def test_a_probe_cut_off_by_the_deadline_makes_the_tick_cut_off(
     tmp_path: Path, store: Store
 ) -> None:
-    _link(store, "s-1", "cf-1", PROJECT)
+    link(store, "s-1", "cf-1", PROJECT)
     rig = Rig(tmp_path, store)
     rig.deadline = 0.0
 

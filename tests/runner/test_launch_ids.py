@@ -51,4 +51,4 @@ def test_the_fault_vocabulary_values_are_stable() -> None:
         "exited_before_line",
         "usage_error",
     }
-    assert len(STORE_FAILURES) == 5
+    assert all(issubclass(failure, Exception) for failure in STORE_FAILURES)

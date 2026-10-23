@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import Final
 
 from amoeba.process import UpstreamShapeError
 from amoeba.runner import finish
@@ -48,7 +49,7 @@ from amoeba.store import (
 )
 
 #: Who closes a project escalation that stopped recurring.
-CLOSED_BY: str = "runner"
+CLOSED_BY: Final = "runner"
 
 
 class ProjectTick:
