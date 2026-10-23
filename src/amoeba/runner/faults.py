@@ -17,6 +17,10 @@ from enum import StrEnum
 from typing import Final
 
 from amoeba.store import (
+    PARAM_RUN_ID,
+    BlockedKind,
+    CommandKind,
+    NodeStatus,
     Store,
     StoreBusyError,
     StoreCorruptError,
@@ -137,3 +141,59 @@ def raise_expected_faults(store: Store, project_id: str, faults: TickFaults) -> 
         wrote = wrote or fault.kind.value not in already_open
         already_open.add(fault.kind.value)
     return wrote
+
+
+#: Keys of a node block's payload for an unexpected fault.
+PAYLOAD_FAULT_KIND: Final = "fault_kind"
+PAYLOAD_ERROR: Final = "error"
+PAYLOAD_RUN_IDS: Final = "run_ids"
+
+
+def escalate(
+    store: Store,
+    project_id: str,
+    context: NodeContext,
+    fault_kind: FaultKind,
+    error: BaseException,
+) -> None:
+    """Escalate an unexpected fault: block the node in context, else the project.
+
+    A node with no run in flight, not done and not already blocked is blocked on
+    a human, with the fault named in the context and payload. A node already
+    blocked gets nothing more, so a fault repeating cannot storm. A node with a
+    run in flight (it blocks only when its run ends, D2), a done node (121, D1:
+    it cannot be blocked) and no node at all take the project-scoped path, which
+    the store deduplicates on ``(project, kind)``.
+    """
+    node_id = context.node_id
+    node = None if node_id is None else store.get_node(node_id)
+    run_ids = [] if node is None else _in_flight_run_ids(store, project_id, node.id)
+    if node is not None and not run_ids and node.status is not NodeStatus.DONE:
+        if store.blocked_state_for(node.id) is None:
+            store.block(
+                node.id,
+                kind=BlockedKind.HUMAN,
+                context=f"{fault_kind.value}: {error}",
+                payload={
+                    PAYLOAD_FAULT_KIND: fault_kind.value,
+                    PAYLOAD_ERROR: str(error),
+                },
+            )
+        return
+    store.raise_project_escalation(
+        project_id,
+        fault_kind=fault_kind.value,
+        payload={
+            PAYLOAD_DETAIL: str(error),
+            PAYLOAD_NODE_ID: node_id,
+            PAYLOAD_RUN_IDS: run_ids,
+        },
+    )
+
+
+def _in_flight_run_ids(store: Store, project_id: str, node_id: str) -> list[str]:
+    return [
+        str(entry.parameters[PARAM_RUN_ID])
+        for entry in store.unresolved_journal_entries(project_id)
+        if entry.node_id == node_id and entry.kind is CommandKind.SQ_RUN
+    ]

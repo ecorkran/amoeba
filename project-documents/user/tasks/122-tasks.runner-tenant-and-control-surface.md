@@ -188,14 +188,16 @@ Deviation: SQ_EXECUTABLE (amoeba.process) and PARAM_RUN_ID/PARAM_CHECKOUT (amoeb
 
 Create `runner/decide.py` and `runner/tick.py` (holding `TickBudget` for now); tests `tests/runner/test_decide.py` and `tests/runner/test_budget.py`. Per the LLD, D1, D10 and API Contracts.
 
-- [ ] `RunState` `StrEnum` (launching, running, finished, fault). Frozen dataclasses `InFlightRun(entry, run_id, state)`, `LaunchRun(node_id, pipeline, params, checkout)`, and `ProjectView(project_id, now, runnable_nodes, in_flight, link_probes)`. `type Action = LaunchRun`
-- [ ] `Planner` Protocol with `plan(view) -> Sequence[Action]`
-- [ ] `decide(view, planners)` runs planners in order. Two actions for one node raise `ValueError` naming the node; it never drops one silently. Pure: no I/O, no clock read
-- [ ] Tests: empty planner tuple gives no actions; two planners concatenate in order; a duplicate node raises `ValueError`; `decide` is deterministic for the same view; `ProjectView` is immutable
-- [ ] `TickBudget(deadline, host, clock)` made from a monotonic clock. `allows_call()` is false once the deadline passed or `host.stop_requested` is set. Provide a result `StrEnum` `TickResult` with `COMPLETE` and `CUT_OFF`
-- [ ] Budget tests with an injected clock and a fake host: allowed before the deadline; refused at and after it; refused after a stop request even before the deadline
+- [x] `RunState` `StrEnum` (launching, running, finished, fault). Frozen dataclasses `InFlightRun(entry, run_id, state)`, `LaunchRun(node_id, pipeline, params, checkout)`, and `ProjectView(project_id, now, runnable_nodes, in_flight, link_probes)`. `type Action = LaunchRun`
+- [x] `Planner` Protocol with `plan(view) -> Sequence[Action]`
+- [x] `decide(view, planners)` runs planners in order. Two actions for one node raise `ValueError` naming the node; it never drops one silently. Pure: no I/O, no clock read
+- [x] Tests: empty planner tuple gives no actions; two planners concatenate in order; a duplicate node raises `ValueError`; `decide` is deterministic for the same view; `ProjectView` is immutable
+- [x] `TickBudget(deadline, host, clock)` made from a monotonic clock. `allows_call()` is false once the deadline passed or `host.stop_requested` is set. Provide a result `StrEnum` `TickResult` with `COMPLETE` and `CUT_OFF`
+- [x] Budget tests with an injected clock and a fake host: allowed before the deadline; refused at and after it; refused after a stop request even before the deadline
 - **Success Criteria**:
-  - [ ] Tests pass. Commit: `feat: add runner decide stage, planner seam and tick budget`
+  - [x] Tests pass. Commit: `feat: add runner decide stage, planner seam and tick budget`
+
+Deviation: TickBudget and TickResult live in runner/budget.py (not tick.py), because tick.py (ProjectTick) imports observe.py, which needs the budget.
 
 ---
 
@@ -206,15 +208,17 @@ Create `runner/decide.py` and `runner/tick.py` (holding `TickBudget` for now); t
 
 Create `runner/observe.py`; tests `tests/runner/test_observe.py` (split into `test_observe_launch.py` and `test_observe_poll.py` if past ~300 lines). Per the LLD, "A launch, end to end" and D6, D10. Inject the clock, `poll_run`, the tracker and the budget.
 
-- [ ] Confirmed run: poll only when `run_poll_interval_seconds` has passed since its last poll (in-memory last-poll times) and the budget allows a call. Classify: `timed_out` → running; `completed`/`failed`/`paused`/`orphaned` → finished; `not_found` after confirmation → finished (vanished); `unreadable`, `unknown_status` or `PollFailure` → fault (project-scoped `run_observation_failed`, polling continues)
-- [ ] Unconfirmed launch (tracked handle): confirmed by the exact stderr line or by a poll with any outcome other than `not_found`. Not polled on the interval; polled once when the child exits without the line and once when the grace period passes
-- [ ] Overdue (grace passed, no line, one poll finds no state, child alive): entry stays unresolved, `launch_overdue` recorded for the project, then polled on the run interval with the line still checked; the child is never killed
-- [ ] Child exited without the line and one poll finds no state: launch failed (`exited_before_line`, with exit code and stderr tail). If that poll finds a state, the run is observed instead. Exit code 2 with no state is `usage_error` and marks the tick for `UpstreamShapeError`
-- [ ] Unreadable stderr log: answer "no line" for this tick, record `run_observation_failed` naming the entry and error, let the run state decide; the tail in a failure is replaced by the error
-- [ ] Entries with no tracked handle (left by a crash) are treated as confirmed and only polled
-- [ ] Runs are observed least-recently-polled first
+- [x] Confirmed run: poll only when `run_poll_interval_seconds` has passed since its last poll (in-memory last-poll times) and the budget allows a call. Classify: `timed_out` → running; `completed`/`failed`/`paused`/`orphaned` → finished; `not_found` after confirmation → finished (vanished); `unreadable`, `unknown_status` or `PollFailure` → fault (project-scoped `run_observation_failed`, polling continues)
+- [x] Unconfirmed launch (tracked handle): confirmed by the exact stderr line or by a poll with any outcome other than `not_found`. Not polled on the interval; polled once when the child exits without the line and once when the grace period passes
+- [x] Overdue (grace passed, no line, one poll finds no state, child alive): entry stays unresolved, `launch_overdue` recorded for the project, then polled on the run interval with the line still checked; the child is never killed
+- [x] Child exited without the line and one poll finds no state: launch failed (`exited_before_line`, with exit code and stderr tail). If that poll finds a state, the run is observed instead. Exit code 2 with no state is `usage_error` and marks the tick for `UpstreamShapeError`
+- [x] Unreadable stderr log: answer "no line" for this tick, record `run_observation_failed` naming the entry and error, let the run state decide; the tail in a failure is replaced by the error
+- [x] Entries with no tracked handle (left by a crash) are treated as confirmed and only polled
+- [x] Runs are observed least-recently-polled first
 - **Success Criteria**:
-  - [ ] One test per rule above, each named for its rule, all passing with no sleeping. Poll count assertions: a confirmed run is polled at most once per call and not before the interval. Commit: `feat: add in-flight run observation`
+  - [x] One test per rule above, each named for its rule, all passing with no sleeping. Poll count assertions: a confirmed run is polled at most once per call and not before the interval. Commit: `feat: add in-flight run observation`
+
+Note: Fault, TickFaults and NodeContext were added to runner/faults.py here (observe needs them); a standing poll fault is replayed between polls so its escalation does not close and reopen. observe.py is 341 lines.
 
 ---
 
@@ -225,10 +229,12 @@ Create `runner/observe.py`; tests `tests/runner/test_observe.py` (split into `te
 
 Create `runner/finish.py`; tests `tests/runner/test_finish.py`. Per the LLD, D2 and D6. The body is minimal; 125 replaces it.
 
-- [ ] `record(store, entry, finished)`: `completed` → `journal_resolve(completed, result={run_id, outcome, status})`. `failed`/`paused` → block the node on `HUMAN` first, then resolve `completed` with `failure` or `checkpoint` added to the result as reported. `orphaned` or vanished → block on `HUMAN`, resolve `failed`. A failed launch → block on `HUMAN` with the `LaunchFailure` reason, exit code and tail, resolve `failed` with `result={run_id, launch_failure}`
-- [ ] Order is always block, then resolve. A node already blocked is not blocked again, so re-entry after a crash between the two writes finishes the sequence and leaves one blocked state
+- [x] `record(store, entry, finished)`: `completed` → `journal_resolve(completed, result={run_id, outcome, status})`. `failed`/`paused` → block the node on `HUMAN` first, then resolve `completed` with `failure` or `checkpoint` added to the result as reported. `orphaned` or vanished → block on `HUMAN`, resolve `failed`. A failed launch → block on `HUMAN` with the `LaunchFailure` reason, exit code and tail, resolve `failed` with `result={run_id, launch_failure}`
+- [x] Order is always block, then resolve. A node already blocked is not blocked again, so re-entry after a crash between the two writes finishes the sequence and leaves one blocked state
 - **Success Criteria**:
-  - [ ] Tests against a real temporary store cover each outcome's entry result, the node's blocked state, and re-entry after a simulated crash between block and resolve (one blocked state, entry resolved). Commit: `feat: add minimal finished-run recording`
+  - [x] Tests against a real temporary store cover each outcome's entry result, the node's blocked state, and re-entry after a simulated crash between block and resolve (one blocked state, entry resolved). Commit: `feat: add minimal finished-run recording`
+
+Note: the outcome document has no failure field, so a failed run records outcome and status only; paused records checkpoint.paused_at. BlockedState exposes no payload, so tests assert on context.
 
 ---
 
@@ -239,13 +245,15 @@ Create `runner/finish.py`; tests `tests/runner/test_finish.py`. Per the LLD, D2 
 
 Complete `runner/tick.py`; tests `tests/runner/test_tick.py`. Per the LLD, "One project's tick", D1, D5, D10.
 
-- [ ] `ProjectTick(...).run(budget) -> TickResult`: observe → record finished → decide → act → close. Slots for 123/124/126 are comments only
-- [ ] Act: for each `LaunchRun`, while the budget allows, mint the run id, `journal_issue(sq_run, {pipeline, params, run_id, checkout})`, then launch. A failed launch is recorded through `finish.record`. Nothing else is issued
-- [ ] `ProjectView` is built from `runnable`, excluding any node with an unresolved entry, plus the in-flight runs
-- [ ] Close: only on a `COMPLETE` tick, close each open project escalation whose kind did not recur this tick, `closed_by="runner"`. A tick that was cut off closes nothing
-- [ ] The tick sets the current node before each node-scoped step (read by the catch in Task 10.2)
+- [x] `ProjectTick(...).run(budget) -> TickResult`: observe → record finished → decide → act → close. Slots for 123/124/126 are comments only
+- [x] Act: for each `LaunchRun`, while the budget allows, mint the run id, `journal_issue(sq_run, {pipeline, params, run_id, checkout})`, then launch. A failed launch is recorded through `finish.record`. Nothing else is issued
+- [x] `ProjectView` is built from `runnable`, excluding any node with an unresolved entry, plus the in-flight runs
+- [x] Close: only on a `COMPLETE` tick, close each open project escalation whose kind did not recur this tick, `closed_by="runner"`. A tick that was cut off closes nothing
+- [x] The tick sets the current node before each node-scoped step (read by the catch in Task 10.2)
 - **Success Criteria**:
-  - [ ] Tests with a test planner and a fake `Popen`: journal entry exists before the launch call; a node with an unresolved entry is not offered to Decide; `COMPLETE` closes a non-recurring escalation; `CUT_OFF` closes nothing; the budget is checked before `Popen` and before every poll. Commit: `feat: add runner project tick`
+  - [x] Tests with a test planner and a fake `Popen`: journal entry exists before the launch call; a node with an unresolved entry is not offered to Decide; `COMPLETE` closes a non-recurring escalation; `CUT_OFF` closes nothing; the budget is checked before `Popen` and before every poll. Commit: `feat: add runner project tick`
+
+Note: expected faults are raised by faults.raise_expected_faults (Task 10.1 adds the exception escalation path). ProjectTick, not the tenant, raises UpstreamShapeError after recording the failed launch; the tenant re-raises it (Task 10.2).
 
 ---
 
