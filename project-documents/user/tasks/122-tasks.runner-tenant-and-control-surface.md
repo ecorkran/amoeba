@@ -14,7 +14,7 @@ projectState: Initiative 100 (101–110) is merged, and slices 120 and 121 are m
   entry whose run has a state, and `tests/sq_stub.py` has no `run` mode.
 dateCreated: 20261023
 dateUpdated: 20261023
-status: not_started
+status: in_progress
 turns: 29
 promptTokens: 2323064
 cachedTokens: 2214829
@@ -56,11 +56,11 @@ revision_number: 2
 ### Task 1.1: Create the branch and record the starting state
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Create `122-slice.runner-tenant-and-control-surface` from the target. If it exists, switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Create `122-slice.runner-tenant-and-control-surface` from the target. If it exists, switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task. Note: baseline: 2158 passed
 - **Success Criteria**:
-  - [ ] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
+  - [x] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
 
 ---
 
@@ -71,32 +71,32 @@ revision_number: 2
 
 Per the LLD, D10 table. Edit `process/settings.py`.
 
-- [ ] Add `tick_deadline_seconds` (5.0), `tick_call_timeout_seconds` (8.0) and `run_poll_interval_seconds` (15.0) to `ProcessSettings`, with attribute docs
-- [ ] Reword the `sq_timeout_seconds` doc: it bounds start-up calls, which here includes the `sq` probe. Remove "no tick starts a subprocess"
-- [ ] Update the `launch_grace_seconds` doc only if it still says the Runner "will" read it
+- [x] Add `tick_deadline_seconds` (5.0), `tick_call_timeout_seconds` (8.0) and `run_poll_interval_seconds` (15.0) to `ProcessSettings`, with attribute docs
+- [x] Reword the `sq_timeout_seconds` doc: it bounds start-up calls, which here includes the `sq` probe. Remove "no tick starts a subprocess"
+- [x] Update the `launch_grace_seconds` doc only if it still says the Runner "will" read it
 - **Success Criteria**:
-  - [ ] Defaults appear nowhere outside `settings.py`. `uv run pyright` clean
+  - [x] Defaults appear nowhere outside `settings.py`. `uv run pyright` clean
 
 ### Task 2.2: Add the start flags, with tests
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 2
 
 Edit `cli/settings_flags.py`. Follow how an existing float flag (for example `--sq-timeout`) is declared and applied, and extend `tests/test_settings_flags.py` the same way.
 
-- [ ] Add `--tick-deadline`, `--tick-call-timeout` and `--run-poll-interval` to `amoeba start`, each overriding the matching field
-- [ ] Tests: each flag overrides its field; absent flags leave the `ProcessSettings` defaults; a non-numeric value is a usage error as for the existing flags
+- [x] Add `--tick-deadline`, `--tick-call-timeout` and `--run-poll-interval` to `amoeba start`, each overriding the matching field
+- [x] Tests: each flag overrides its field; absent flags leave the `ProcessSettings` defaults; a non-numeric value is a usage error as for the existing flags
 - **Success Criteria**:
-  - [ ] New tests pass with the existing flag tests. `--help` lists the three flags. Commit: `feat: add tick deadline, call timeout and run poll settings`
+  - [x] New tests pass with the existing flag tests. `--help` lists the three flags. Commit: `feat: add tick deadline, call timeout and run poll settings`
 
 ### Task 2.3: Add `UpstreamShapeError` and `ExitCode.UPSTREAM_SHAPE`, with tests
 **Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 2
 
 Edit `process/errors.py` and `cli/main.py`.
 
-- [ ] Add `UpstreamShapeError(ProcessError)` next to `StartupFailedError`, with a docstring: an upstream tool lacks a shape the Runner needs. It is exported from `amoeba.process`, because `amoeba.runner` may import only public names; update `__all__` and `EXPECTED_EXPORTS` in `tests/test_process_public_api.py` from 20 to 21 names in this task (Task 3.1 then adds `InFlight`)
-- [ ] Add `ExitCode.UPSTREAM_SHAPE = 15` (the LLD says 8, but 8 is `NOT_RUNNING_STATUS`; 15 is the next free value) with the condition in its comment. Map `UpstreamShapeError` to it in the boundary handler, as `StartupFailedError` maps to `STARTUP_FAILED`
-- [ ] Tests, following how the existing exit-code mappings are tested in `tests/test_cli_lifecycle.py`: raising `UpstreamShapeError` from a tenant exits 15 and prints the message; the exit code values are unchanged for all existing members
+- [x] Add `UpstreamShapeError(ProcessError)` next to `StartupFailedError`, with a docstring: an upstream tool lacks a shape the Runner needs. It is exported from `amoeba.process`, because `amoeba.runner` may import only public names; update `__all__` and `EXPECTED_EXPORTS` in `tests/test_process_public_api.py` from 20 to 21 names in this task (Task 3.1 then adds `InFlight`)
+- [x] Add `ExitCode.UPSTREAM_SHAPE = 15` (the LLD says 8, but 8 is `NOT_RUNNING_STATUS`; 15 is the next free value) with the condition in its comment. Map `UpstreamShapeError` to it in the boundary handler, as `StartupFailedError` maps to `STARTUP_FAILED`
+- [x] Tests, following how the existing exit-code mappings are tested in `tests/test_cli_lifecycle.py`: raising `UpstreamShapeError` from a tenant exits 15 and prints the message; the exit code values are unchanged for all existing members
 - **Success Criteria**:
-  - [ ] Tests pass. Exit code 15 is not used by any other member. Commit: `feat: add UPSTREAM_SHAPE exit code and UpstreamShapeError`
+  - [x] Tests pass. Exit code 15 is not used by any other member. Commit: `feat: add UPSTREAM_SHAPE exit code and UpstreamShapeError`
 
 ---
 
@@ -109,14 +109,14 @@ This is the slice's first behavior change. It lands, with every dependent test, 
 
 Edit `process/recovery.py`, `process/observers/sq_run_id.py`, `process/__init__.py`, `tests/test_recovery.py`, `tests/test_observer_sq_run_id.py`, `tests/test_process_public_api.py` and the contract suite. Per the LLD, D3. This is one task and one commit because the observer change breaks the contract suite until its stand-in and oracle are updated.
 
-- [ ] Add frozen dataclass `InFlight(run_id: str, outcome: RunOutcome)` and add it to `Observation`. Docstring: the command reached its system and is not finished, so the entry is left unresolved for its issuer
-- [ ] `reconcile` handles `InFlight` with a `match` case: log at INFO naming the entry, run id and outcome, resolve nothing. Add `in_flight: int` to `RecoverySummary`, include it in `total` and in `describe()`
-- [ ] Export `InFlight` from `amoeba.process`; update `__all__` and the pinned list in `tests/test_process_public_api.py` (Task 2.3 already added `UpstreamShapeError`, so the pin goes to 22 names)
-- [ ] By-id observer: in `_classify`, return `InFlight(run_id, outcome)` for every outcome in `STATE_BEARING_OUTCOMES` (completed, failed, paused, timed_out, unknown_status, orphaned). Remove the `Adopt` import and the `RESULT_*` result building if now unused. `NotApplied`, `Unknown` and the claimed-id guard stay. Rewrite the module docstring bullet "Any run state … adopt" to the in-flight rule. The legacy matcher (`SquadronRunsObserver`) keeps adopting
-- [ ] Contract suite (`tests/contract/runner_tenant.py`, `steps.py`, `end_state.py`, the oracle; run `grep -n "adopted\|ADOPTED" tests/contract/*.py` first): after a restart the stand-in Runner finishes each unresolved id-bearing `sq_run` entry of its project, resolving it `completed` by `issuer` with the run id in the result. The oracle and `check_adopted_review` expect that where they expected `adopted` by recovery for id-bearing entries; rename the check if its name now misleads. Weaken no other assertion
-- [ ] Tests: in `test_recovery.py`, an observer returning `InFlight` leaves the entry unresolved, the summary counts and names it, and the existing cases are unchanged. In `test_observer_sq_run_id.py`, expect `InFlight` for each state-bearing outcome; a state on the second poll after the grace wait gives `InFlight`; a claimed run id is still `Unknown`; a legacy entry still adopts
+- [x] Add frozen dataclass `InFlight(run_id: str, outcome: RunOutcome)` and add it to `Observation`. Docstring: the command reached its system and is not finished, so the entry is left unresolved for its issuer
+- [x] `reconcile` handles `InFlight` with a `match` case: log at INFO naming the entry, run id and outcome, resolve nothing. Add `in_flight: int` to `RecoverySummary`, include it in `total` and in `describe()`
+- [x] Export `InFlight` from `amoeba.process`; update `__all__` and the pinned list in `tests/test_process_public_api.py` (Task 2.3 already added `UpstreamShapeError`, so the pin goes to 22 names)
+- [x] By-id observer: in `_classify`, return `InFlight(run_id, outcome)` for every outcome in `STATE_BEARING_OUTCOMES` (completed, failed, paused, timed_out, unknown_status, orphaned). Remove the `Adopt` import and the `RESULT_*` result building if now unused. `NotApplied`, `Unknown` and the claimed-id guard stay. Rewrite the module docstring bullet "Any run state … adopt" to the in-flight rule. The legacy matcher (`SquadronRunsObserver`) keeps adopting
+- [x] Contract suite (`tests/contract/runner_tenant.py`, `steps.py`, `end_state.py`, the oracle; run `grep -n "adopted\|ADOPTED" tests/contract/*.py` first): after a restart the stand-in Runner finishes each unresolved id-bearing `sq_run` entry of its project, resolving it `completed` by `issuer` with the run id in the result. The oracle and `check_adopted_review` expect that where they expected `adopted` by recovery for id-bearing entries; rename the check if its name now misleads. Weaken no other assertion
+- [x] Tests: in `test_recovery.py`, an observer returning `InFlight` leaves the entry unresolved, the summary counts and names it, and the existing cases are unchanged. In `test_observer_sq_run_id.py`, expect `InFlight` for each state-bearing outcome; a state on the second poll after the grace wait gives `InFlight`; a claimed run id is still `Unknown`; a legacy entry still adopts
 - **Success Criteria**:
-  - [ ] pyright strict accepts the exhaustive `match`. `uv run pytest tests/contract -q`, the recovery, observer and public-API tests, full `uv run pytest -q`, `ruff` and `pyright` are clean. Commit: `refactor: recovery leaves an existing run in flight`
+  - [x] pyright strict accepts the exhaustive `match`. `uv run pytest tests/contract -q`, the recovery, observer and public-API tests, full `uv run pytest -q`, `ruff` and `pyright` are clean. Commit: `refactor: recovery leaves an existing run in flight`
 
 ---
 
