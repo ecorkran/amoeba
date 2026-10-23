@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from typing import Final
 
+from amoeba.store import sql_inbox
+from amoeba.store.inbox_models import Channel
+
 # --------------------------------------------------------------------------
 # routing_table_versions
 # --------------------------------------------------------------------------
@@ -164,4 +167,49 @@ WHERE {COL_DESIRED_NODE_ID} IS NOT NULL
 INSERT_DESIRED_STATE: Final = f"""
 INSERT INTO {TABLE_DESIRED_STATES} ({_DESIRED_SELECT_LIST})
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+# --------------------------------------------------------------------------
+# Project-scoped escalations (messages rows with a fault kind)
+# --------------------------------------------------------------------------
+
+_MESSAGE_SELECT_LIST = ", ".join(sql_inbox.MESSAGE_COLUMNS)
+
+#: ``fault_kind`` is the one column a project-scoped escalation adds to a plain
+#: message insert.
+INSERT_PROJECT_ESCALATION: Final = sql_inbox.insert_message_statement(
+    (*sql_inbox.MESSAGE_INSERT_COLUMNS, sql_inbox.COL_MESSAGE_FAULT_KIND)
+)
+
+#: The open-row predicate repeats the partial unique index
+#: ``idx_messages_open_project_escalation`` literally, so SQLite uses it. The
+#: channel is a module constant, never caller data.
+_OPEN_PROJECT_ESCALATION: Final = f"""
+  {sql_inbox.COL_MESSAGE_CHANNEL} = '{Channel.ESCALATION.value}'
+  AND {sql_inbox.COL_MESSAGE_FAULT_KIND} IS NOT NULL
+  AND {sql_inbox.COL_MESSAGE_CLOSED_AT} IS NULL"""
+
+SELECT_OPEN_PROJECT_ESCALATION: Final = f"""
+SELECT {_MESSAGE_SELECT_LIST}
+FROM {sql_inbox.TABLE_MESSAGES}
+WHERE {sql_inbox.COL_MESSAGE_PROJECT_ID} = ?
+  AND {sql_inbox.COL_MESSAGE_FAULT_KIND} = ?
+  AND{_OPEN_PROJECT_ESCALATION}
+"""
+
+SELECT_OPEN_PROJECT_ESCALATIONS: Final = f"""
+SELECT {_MESSAGE_SELECT_LIST}
+FROM {sql_inbox.TABLE_MESSAGES}
+WHERE {sql_inbox.COL_MESSAGE_PROJECT_ID} = ?
+  AND{_OPEN_PROJECT_ESCALATION}
+ORDER BY {sql_inbox.COL_MESSAGE_SEQ}
+"""
+
+#: Zero rows changed means missing, not project-scoped, or already closed.
+CLOSE_PROJECT_ESCALATION: Final = f"""
+UPDATE {sql_inbox.TABLE_MESSAGES}
+SET {sql_inbox.COL_MESSAGE_CLOSED_AT} = ?,
+    {sql_inbox.COL_MESSAGE_CLOSED_BY} = ?
+WHERE {sql_inbox.COL_MESSAGE_ID} = ?
+  AND{_OPEN_PROJECT_ESCALATION}
 """

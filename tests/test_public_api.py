@@ -164,6 +164,9 @@ CONTRACT_METHODS = {
     # Desired state, added by slice 121.
     "desired_state",
     "desired_states",
+    "raise_project_escalation",
+    "open_project_escalations",
+    "close_project_escalation",
     # Verdicts and findings, added by slice 104.
     "record_verdict",
     "verdict",

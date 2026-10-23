@@ -41,6 +41,7 @@ from amoeba.store.models import (
     StoreSchemaError,
 )
 from amoeba.store.nodes import NodeOperations
+from amoeba.store.project_escalations import ProjectEscalationOperations
 from amoeba.store.runner_report import RunnerReportOperations
 from amoeba.store.verdicts import VerdictOperations
 
@@ -60,6 +61,7 @@ class Store(
     JournalOperations,
     MessageOperations,
     DesiredStateOperations,
+    ProjectEscalationOperations,
     InboxOperations,
     VerdictOperations,
     CheckOperations,

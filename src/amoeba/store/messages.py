@@ -121,12 +121,6 @@ class MessageOperations(DesiredStateOperations):
 
         return self._require_message(message_id)
 
-    def _require_message(self, message_id: str) -> Message:
-        row = self._execute(sql_inbox.SELECT_MESSAGE_BY_ID, (message_id,)).fetchone()
-        if row is None:
-            raise InvalidTransitionError(f"message {message_id!r} vanished")
-        return map_message(row)
-
     def intent_for_submission(self, submission_id: str) -> Message | None:
         """The intent row a submission created, or ``None`` if there is none.
 

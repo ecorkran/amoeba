@@ -158,21 +158,33 @@ ORDER BY {COL_SUBMISSION_APPLIED_SEQ}
 # messages statements
 # --------------------------------------------------------------------------
 
-#: ``seq`` is omitted so SQLite assigns it — the replay cursor.
-INSERT_MESSAGE: Final = f"""
-INSERT INTO {TABLE_MESSAGES} (
-    {COL_MESSAGE_ID},
-    {COL_MESSAGE_PROJECT_ID},
-    {COL_MESSAGE_CHANNEL},
-    {COL_MESSAGE_NODE_ID},
-    {COL_MESSAGE_BLOCKED_STATE_ID},
-    {COL_MESSAGE_JOURNAL_ENTRY_ID},
-    {COL_MESSAGE_SUBMISSION_ID},
-    {COL_MESSAGE_PAYLOAD},
-    {COL_MESSAGE_CREATED_AT}
+#: The columns an insert supplies; ``seq`` is omitted so SQLite assigns it (the
+#: replay cursor), and the acknowledgment columns start NULL. Defined once so
+#: ``sql_runner`` can extend it with ``fault_kind`` without repeating it.
+MESSAGE_INSERT_COLUMNS: Final = (
+    COL_MESSAGE_ID,
+    COL_MESSAGE_PROJECT_ID,
+    COL_MESSAGE_CHANNEL,
+    COL_MESSAGE_NODE_ID,
+    COL_MESSAGE_BLOCKED_STATE_ID,
+    COL_MESSAGE_JOURNAL_ENTRY_ID,
+    COL_MESSAGE_SUBMISSION_ID,
+    COL_MESSAGE_PAYLOAD,
+    COL_MESSAGE_CREATED_AT,
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-"""
+
+
+def insert_message_statement(columns: tuple[str, ...]) -> str:
+    """Render an ``INSERT`` into ``messages`` for these columns."""
+    placeholders = ", ".join("?" for _ in columns)
+    return (
+        f"\nINSERT INTO {TABLE_MESSAGES} (\n    "
+        + ",\n    ".join(columns)
+        + f"\n)\nVALUES ({placeholders})\n"
+    )
+
+
+INSERT_MESSAGE: Final = insert_message_statement(MESSAGE_INSERT_COLUMNS)
 
 SELECT_MESSAGE_BY_ID: Final = f"""
 SELECT {_MESSAGE_SELECT_LIST}
