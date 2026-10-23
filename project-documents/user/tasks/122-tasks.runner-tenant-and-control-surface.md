@@ -91,11 +91,11 @@ Edit `cli/settings_flags.py`. Follow how an existing float flag (for example `--
 
 Edit `process/errors.py` and `cli/main.py`.
 
-- [ ] Add `UpstreamShapeError(ProcessError)` next to `StartupFailedError`, with a docstring: an upstream tool lacks a shape the Runner needs. It is not exported from `amoeba.process` (the pin stays 14 names after Task 3.1)
-- [ ] Add `ExitCode.UPSTREAM_SHAPE = 8` with the condition in its comment. Map `UpstreamShapeError` to it in the boundary handler, as `StartupFailedError` maps to `STARTUP_FAILED`
+- [ ] Add `UpstreamShapeError(ProcessError)` next to `StartupFailedError`, with a docstring: an upstream tool lacks a shape the Runner needs. It is not exported from `amoeba.process` (the pin stays 21 names after Task 3.1)
+- [ ] Add `ExitCode.UPSTREAM_SHAPE = 15` (the LLD says 8, but 8 is `NOT_RUNNING_STATUS`; 15 is the next free value) with the condition in its comment. Map `UpstreamShapeError` to it in the boundary handler, as `StartupFailedError` maps to `STARTUP_FAILED`
 - [ ] Tests, following how the existing exit-code mappings are tested in `tests/test_cli_lifecycle.py`: raising `UpstreamShapeError` from a tenant exits 8 and prints the message; the exit code values are unchanged for all existing members
 - **Success Criteria**:
-  - [ ] Tests pass. Exit code 8 is not used by any other member. Commit: `feat: add UPSTREAM_SHAPE exit code and UpstreamShapeError`
+  - [ ] Tests pass. Exit code 15 is not used by any other member. Commit: `feat: add UPSTREAM_SHAPE exit code and UpstreamShapeError`
 
 ---
 
@@ -110,7 +110,7 @@ Edit `process/recovery.py`, `process/__init__.py`, `tests/test_recovery.py`, `te
 
 - [ ] Add frozen dataclass `InFlight(run_id: str, outcome: RunOutcome)` and add it to `Observation`. Docstring: the command reached its system and is not finished, so the entry is left unresolved for its issuer
 - [ ] `reconcile` handles `InFlight` with a `match` case: log at INFO naming the entry, run id and outcome, resolve nothing. Add `in_flight: int` to `RecoverySummary`, include it in `total` and in `describe()`
-- [ ] Export `InFlight` from `amoeba.process`; update `__all__` and the pinned list in `tests/test_process_public_api.py` from 13 names to 14
+- [ ] Export `InFlight` from `amoeba.process`; update `__all__` and the pinned list in `tests/test_process_public_api.py` from 20 names to 21
 - [ ] Tests in `tests/test_recovery.py`: an observer returning `InFlight` leaves the entry unresolved; the summary counts it and `describe()` names it; `total` includes it; the existing `Adopt`/`NotApplied`/`Unknown` cases are unchanged
 - **Success Criteria**:
   - [ ] pyright strict accepts the exhaustive `match`. Recovery and public-API tests pass. The commit may break the observer and contract tests that Tasks 3.2 and 3.3 repair, so commit 3.1–3.3 together at the end of 3.3
@@ -169,11 +169,12 @@ New `tests/test_sq_stub_run.py`. Run the stub as a subprocess under a temporary 
 ### Task 5.1: Create the package and run-id minting, with tests
 **Owner**: Junior AI | **Dependencies**: 4.2 | **Effort**: 2
 
-Create `src/amoeba/runner/__init__.py` (empty exports for now) and `runner/launch.py`; tests `tests/runner/test_launch_ids.py`. Per the LLD, D5.
+Create `src/amoeba/runner/__init__.py` (empty exports for now), `runner/faults.py` and `runner/launch.py`; tests `tests/runner/test_launch_ids.py`. Per the LLD, D5 and D8.
 
+- [ ] `faults.py` holds the shared vocabulary so later tasks import it: `FaultKind` `StrEnum` (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`, `unexpected_fault`), `LaunchFailure` `StrEnum` (`spawn_error`, `exited_before_line`, `usage_error`) and the `STORE_FAILURES` tuple (`StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, `sqlite3.Error`). Escalation writes are added in Task 10.1
 - [ ] `SQUADRON_RUN_ID_PATTERN` defined once in `launch.py`
 - [ ] `mint_run_id(now: datetime) -> str` returns `amoeba-<UTC yyyymmddTHHMMSSZ>-<12 hex of uuid4>`. It asserts nothing at runtime
-- [ ] Tests: a fixed `now` gives the expected prefix and 38 characters; a property-style loop of many mints all match the pattern and are unique; a non-UTC aware `now` is converted to UTC
+- [ ] Tests: a fixed `now` gives the expected prefix and 36 characters (`amoeba-` 7 + timestamp 16 + `-` 1 + hex 12); a property-style loop of many mints all match the pattern and are unique; a non-UTC aware `now` is converted to UTC
 - **Success Criteria**:
   - [ ] Tests pass. Commit: `feat: add runner package and run-id minting`
 
@@ -197,7 +198,7 @@ Edit `runner/launch.py`; tests `tests/runner/test_launch.py`. Per the LLD, D2 (p
 
 - [ ] `build_argv(pipeline, run_id, params)`: `[SQ_EXECUTABLE, "run", pipeline, "--run-id", run_id, "-p", "k=v", …]`. Raises `ValueError` for a value containing `,`, or a key containing `,` or `=` (called before journaling)
 - [ ] `launch(entry, supervisor_dir, popen)` opens both logs for exclusive creation, calls the injected `Popen` with `cwd=checkout`, `stdin=DEVNULL`, the two files, `start_new_session=True`, `close_fds=True`, the inherited environment, then closes the parent's handles. Returns the child handle or a `LaunchFailure.SPAWN_ERROR` answer on `OSError` from either log open or `Popen` (`FileExistsError` included). The environment is never logged
-- [ ] `LaunchFailure` `StrEnum` (`spawn_error`, `exited_before_line`, `usage_error`) defined here or in `faults.py` (Task 10.1 moves it if needed; define it once)
+- [ ] Import `LaunchFailure` from `runner/faults.py` (defined in Task 5.1); do not redefine it
 - [ ] `LaunchTracker`: keeps the handle and confirmation flag per entry id; `reap()` calls `poll()` on each handle and drops exited, settled ones
 - [ ] Tests with a fake `Popen` recording its kwargs: exact argv and flags; params with `,`/`=` rejected; log open failure and `Popen` `OSError` each give `spawn_error` and no `Popen` call after a log failure; an existing log file gives `spawn_error`; `reap` drops exited settled handles and keeps live ones
 - **Success Criteria**:
@@ -286,9 +287,9 @@ Complete `runner/tick.py`; tests `tests/runner/test_tick.py`. Per the LLD, "One 
 ### Task 10.1: Fault vocabulary and escalation writes, with tests
 **Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 3
 
-Create `runner/faults.py`; tests `tests/runner/test_faults.py`. Per the LLD, D8.
+Extend `runner/faults.py` (created in Task 5.1); tests `tests/runner/test_faults.py`. Per the LLD, D8.
 
-- [ ] `FaultKind` `StrEnum` (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`, `unexpected_fault`); `STORE_FAILURES` tuple (`StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, `sqlite3.Error`); move `LaunchFailure` here if Task 5.3 defined it elsewhere
+- [ ] Import `FaultKind` and `STORE_FAILURES` from `runner/faults.py` (Task 5.1)
 - [ ] A tick fault set that collects expected faults. `escalate(store, project_id, node_context, fault_kind, error)`: a node in context with no run in flight and not done blocks on `HUMAN` with payload `{fault_kind, error}` (nothing more if already blocked); otherwise raise a project-scoped escalation with node and run ids in the payload
 - **Success Criteria**:
   - [ ] Tests on a real store: node block; already-blocked node writes nothing; in-flight node, done node and no node each take the project path; a repeated fault adds no rows. Commit: `feat: add runner fault vocabulary and escalation`
@@ -335,6 +336,7 @@ Create `runner/factory.py`; export `runner_tenant` and `RunnerTenant` from `runn
 Edit `cli/lifecycle.py`; tests in `tests/test_cli_lifecycle.py`, `tests/test_import_boundaries.py`.
 
 - [ ] Compose `(*standard_tenants(settings, supervisor_dir), runner_tenant(settings, supervisor_dir))`
+- [ ] Fix the now-false statements that no tick starts a subprocess: the `standard_tenants` docstring in `process/tenants.py` and the module docstring in `process/cf_watch.py`. Say instead that those tenants start none; the Runner does, under `TickBudget`
 - [ ] Import-boundary test: only `amoeba.cli` imports `amoeba.runner`, and `amoeba.runner` imports `amoeba.store`, `amoeba.process`, `amoeba.upstream` only through public names
 - [ ] Tests: `start` with a failing `sq` probe exits `STARTUP_FAILED` (7) naming the shape; `tests/test_writer_guard.py` passes unchanged
 - **Success Criteria**:
@@ -373,7 +375,7 @@ Create `tests/runner/test_crash_recovery.py`. Each test asserts the entry's fina
 Create `tests/runner/test_end_to_end.py` using the stub `sq` and a real store in-process (no kill).
 
 - [ ] Normal path: journaled, launched detached, confirmed by its `run_id=` line, polled to `completed`, recorded with `run_id`, `outcome`, `status`
-- [ ] `exit_before_line`: entry `failed`, node blocked with reason and log tail. `no_line` with a live child: one `launch_overdue` escalation, entry unresolved; `late_line`: confirmed, recorded, escalation closed. `usage_error`: node blocked, entry `failed`, process path raises `UpstreamShapeError` (exit 8 when run through `amoeba start`)
+- [ ] `exit_before_line`: entry `failed`, node blocked with reason and log tail. `no_line` with a live child: one `launch_overdue` escalation, entry unresolved; `late_line`: confirmed, recorded, escalation closed. `usage_error`: node blocked, entry `failed`, process path raises `UpstreamShapeError` (exit 15 when run through `amoeba start`)
 - **Success Criteria**:
   - [ ] All pass with no fixed sleeps. Commit: `test: add runner end-to-end launch scenarios`
 
@@ -386,7 +388,7 @@ Create `tests/runner/test_end_to_end.py` using the stub `sq` and a real store in
 
 Per the LLD, "Contract documents". Edit the docs only; keep their front matter. Follow each document's existing heading structure.
 
-- [ ] `process-contract.md`: four tenants in `amoeba start`; the tenant obligation's tick-time subprocess rule (a deadline and stop check before every call, bounded by `tick_call_timeout_seconds`), replacing "no tick starts a subprocess"; the recovery property "An id-bearing `sq_run` entry whose run exists is left unresolved, in flight, for its issuer to finish" and the `InFlight` answer; the supervisor directory table gains `launch-logs/`; the three start flags and settings; exit code 8 and `STARTUP_FAILED`'s new cases; a note that a block payload must not hold secrets; hosting surface 14 names
+- [ ] `process-contract.md`: four tenants in `amoeba start`; the tenant obligation's tick-time subprocess rule (a deadline and stop check before every call, bounded by `tick_call_timeout_seconds`), replacing "no tick starts a subprocess"; also reword the same sentence in `docs/context-forge-contract.md` (line ~189) and `docs/process-contract.md` (line ~216), which describe the version-label capture and stay true only for those tenants; the recovery property "An id-bearing `sq_run` entry whose run exists is left unresolved, in flight, for its issuer to finish" and the `InFlight` answer; the supervisor directory table gains `launch-logs/`; the three start flags and settings; exit code 15 and `STARTUP_FAILED`'s new cases; a note that a block payload must not hold secrets; hosting surface 21 names
 - [ ] `substrate-guide.md`: update the 120 row for the in-flight change and add the 122 row
 - **Success Criteria**:
   - [ ] Every item above is present and consistent with the code (names, flags, exit codes). Commit: `docs: update process contract for the Runner tenant`
@@ -395,7 +397,7 @@ Per the LLD, "Contract documents". Edit the docs only; keep their front matter. 
 **Owner**: Junior AI | **Dependencies**: 13.1 | **Effort**: 2
 
 - [ ] In `user/architecture/120-slices.runner-routing-engine.md`, change the launch sentence that fails a launch at grace expiry to the overdue rule (LLD D6). In the slice plan's entry for slice 122, change the grace criterion the same way and change "polled once per tick" to "polled at most once per tick and no more often than the run poll interval" (D10). Locate both with `grep -n "grace\|once per tick" <file>`
-- [ ] Add a CHANGELOG entry under the unreleased heading: the Runner tenant and `sq_run` control surface, the three new flags, exit code 8, and the recovery change for id-bearing entries
+- [ ] Add a CHANGELOG entry under the unreleased heading: the Runner tenant and `sq_run` control surface, the three new flags, exit code 15, and the recovery change for id-bearing entries
 - **Success Criteria**:
   - [ ] No other text in those documents changes. Commit: `docs: record slice 122 plan and changelog updates`
 
@@ -403,7 +405,8 @@ Per the LLD, "Contract documents". Edit the docs only; keep their front matter. 
 **Owner**: Junior AI | **Dependencies**: 13.2 | **Effort**: 2
 
 - [ ] Run once each: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`, and `uv run pytest tests/contract -v`. Fix any failure at its cause
-- [ ] Verify the technical requirements: exactly one `except Exception` in `src/amoeba/runner`; no module over ~300 lines (`wc -l src/amoeba/runner/*.py`); public API pins 14 names; the budget test fails if a call starts after the budget is spent
+- [ ] Verify "123 and 125 can add their reads and planner without changing `tenant.py` or `launch.py`": `grep -n "Planner\|cf_probe\|dispatch" src/amoeba/runner/tenant.py src/amoeba/runner/launch.py` finds no reference to a concrete planner; the end-to-end and crash tests inject their planner only through `planners=`
+- [ ] Verify the technical requirements: exactly one `except Exception` in `src/amoeba/runner`; no module over ~300 lines (`wc -l src/amoeba/runner/*.py`); public API pins 21 names; the budget test fails if a call starts after the budget is spent
 - [ ] Walkthrough steps 1–3 and 5 of the LLD (automated tests and the refused start with a fake `sq` that exits 2, expecting exit 7). Run step 4 against the real `sq` and `cf` in a throwaway supervisor directory (`AMOEBA_STORE_DIR=$(mktemp -d)`): read-only, no run is launched. Record the observed output in the DEVLOG entry convention used by earlier slices
 - **Success Criteria**:
   - [ ] All gates clean, walkthrough output matches the LLD's expected results, working tree committed on the slice branch. The last task ends at a commit; no merge happens here
