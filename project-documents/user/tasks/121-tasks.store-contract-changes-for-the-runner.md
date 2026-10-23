@@ -23,15 +23,16 @@ projectState: Initiative 100 (101–110) is merged, and slice 120 is merged. The
 dateCreated: 20261022
 dateUpdated: 20261023
 status: not_started
-turns: 17
-promptTokens: 805640
-cachedTokens: 721011
-cacheWriteTokens: 84605
-completionTokens: 20555
-durationSeconds: 139.7
-costUsd: 0.616402
-usageRounds: 1
-pricedRounds: 1
+turns: 33
+promptTokens: 1827964
+cachedTokens: 1717689
+cacheWriteTokens: 110233
+completionTokens: 30277
+durationSeconds: 207.6
+costUsd: 0.915838
+usageRounds: 2
+pricedRounds: 2
+revision_number: 1
 ---
 
 ## Context Summary
@@ -66,10 +67,8 @@ pricedRounds: 1
 - [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
 - [ ] Create `121-slice.store-contract-changes-for-the-runner` from the target. If it exists, switch to it
 - [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task
-- [ ] Record, as a sub-list in this task, every file that calls `acknowledge_message` or references `sql.UPDATE_NODE_STATUS` (grep `src/`, `tests/`, `scripts/`, `docs/`). Expected from the LLD: `store/messages.py`, `tests/store/test_messages.py`, `tests/contract/runner_tenant.py`, `tests/test_public_api.py` (names the method), `tests/test_failure_modes.py` (raw `UPDATE_NODE_STATUS` tamper, line ~263), and the three production writers in `_block_writer.py` and `nodes.py`
 - **Success Criteria**:
-  - [ ] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop
-  - [ ] Caller list recorded. No commit needed
+  - [ ] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
 
 ---
 
@@ -82,7 +81,6 @@ Create `src/amoeba/store/schema/009_runner_contract.sql`. Follow the comment-hea
 
 - [ ] `messages`: five `ALTER TABLE ... ADD COLUMN` statements: `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind`, `closed_at`, `closed_by`. All nullable text, no default
 - [ ] Partial unique index `idx_messages_open_project_escalation` on `(project_id, fault_kind)` with the D4 `WHERE` clause
-- [ ] Partial index `idx_messages_submission` on `messages (submission_id) WHERE submission_id IS NOT NULL`, which serves `intent_for_submission` (Task 4.2). This is an addition to the LLD's sketch. Its name goes in `sql_runner.py` with the other index names
 - [ ] `routing_table_versions`: `version TEXT PRIMARY KEY`, `content TEXT NOT NULL`, `first_used_at TEXT NOT NULL`
 - [ ] `routing_decisions`: every D5 field with `NOT NULL` except `journal_entry_id`, `attempt_step` and `attempt_count`. Foreign keys to `nodes`, `command_journal` and `routing_table_versions`. JSON columns are `TEXT NOT NULL`, stored verbatim, as migration 004 does for payloads. Unique index on `(journal_entry_id)` where not null. Index on `(node_id, decided_at)`
 - [ ] `attempt_counts`: `node_id` (FK to `nodes`), `step`, `count INTEGER NOT NULL`, `updated_at`, primary key `(node_id, step)`
@@ -136,44 +134,38 @@ New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_
 - [ ] `store/_block_writer.py`: add `_refuse_done(node_id)`. It reads the node's status and raises `InvalidTransitionError` naming the node when it is `done`. It is the one terminal check. Reuse an existing node-status read from `sql.py` if one exists. Otherwise add a statement
 - [ ] Call it at the top of `_write_block`, before any write. Update the docstring ("The caller has already checked that the node exists and is not blocked", plus "and is not done")
 - [ ] Do not add it to `_write_resolution`. D1 explains why none is needed. Note that in that method's docstring in one line
+- [ ] Tests in new `tests/store/test_terminal_done.py`: `block()` of each `BlockedKind` on a done node raises and leaves the node, blocked states and messages unchanged. `journal_escalate` on an unresolved entry of a done node (staged with raw SQL, as a pre-009 store would hold it) raises `InvalidTransitionError` naming the node and does not change the node (D1's explicit failure)
 - **Success Criteria**:
-  - [ ] `block()` on a done node raises `InvalidTransitionError` and the node, blocked states and messages are unchanged
-  - [ ] `journal_escalate` on a done node's entry reaches the same refusal (recovery's not-blocked branch)
+  - [ ] The tests above pass. `uv run pytest tests/store/test_terminal_done.py tests/test_journal.py tests/test_recovery.py -q` passes
+  - [ ] Committed as `feat: refuse blocking a done node`
 
 ### Task 3.2: Guard `update_node_status`, including the unresolved-command refusal
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3
 
-- [ ] `store/nodes.py` `update_node_status`: after `_require_node`, call `_refuse_done` for **any** target status, including `done`. `NodeOperations` must be able to reach the method. If it does not inherit `BlockWriter`, move the check to a shared base the way `BlockingOperations` and `JournalOperations` reach `_write_block`, and do not duplicate it
-- [ ] When the target is `NodeStatus.DONE`, refuse with `InvalidTransitionError` while the node has an unresolved journal entry. Use the existing statement for unresolved entries by node if `sql_journal.py` has one. If it has none, add one there that uses the existing partial index on unresolved entries, and name the index in a comment
+- [ ] `store/_block_writer.py`: add `_write_status(node_id, status, timestamp)`, which runs inside the caller's transaction and never commits. It calls `_refuse_done` for **any** target status, including `done`. When the target is `NodeStatus.DONE` it also refuses with `InvalidTransitionError` while the node has an unresolved journal entry. Then it runs `sql.UPDATE_NODE_STATUS`. Use the existing statement for unresolved entries by node if `sql_journal.py` has one. If it has none, add one there that uses the existing partial index on unresolved entries, and name the index in a comment. This is the one status write that Task 7.3's `StatusEffect` reuses
+- [ ] `store/nodes.py` `update_node_status`: keep the blocked-status checks, then call `_write_status` inside its existing transaction in place of the direct `sql.UPDATE_NODE_STATUS` execute. `NodeOperations` must be able to reach the helper. If it does not inherit `BlockWriter`, move the helper to a shared base the way `BlockingOperations` and `JournalOperations` reach `_write_block`, and do not duplicate it
 - [ ] Update the method docstring's `Raises`. `create_node(status=DONE)` stays allowed
+- [ ] Tests in `tests/store/test_terminal_done.py`: parametrize over every `NodeStatus` so `update_node_status` on a done node raises, naming the node, and leaves it unchanged. A node with an unresolved entry refuses `done`, and after `journal_resolve` `done` is accepted. `create_node(status=DONE)` still works
 - **Success Criteria**:
-  - [ ] A done node refuses every `NodeStatus`, including `done` again, naming the node. Status is unchanged after
-  - [ ] A node with an unresolved entry refuses `done`. After `journal_resolve`, `done` is accepted
+  - [ ] The tests above pass. Full `uv run pytest -q` passes. Fix any existing test that marked a node done and then moved it, since D1 makes that illegal. Do not weaken the guard
+  - [ ] Committed as `feat: refuse status writes on a done node`
 
 ### Task 3.3: Guard `journal_issue`
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 1
 
 - [ ] `store/journal.py` `journal_issue`: call `_refuse_done` after the parameter-key check and `_require_node`, before the transaction. Add one `Raises` line. No other change to this 334-line file
+- [ ] Test in `tests/store/test_terminal_done.py`: `journal_issue` on a done node raises `InvalidTransitionError` and the journal is empty
 - **Success Criteria**:
-  - [ ] `journal_issue` against a done node raises `InvalidTransitionError` and writes no journal row
+  - [ ] The test passes. Committed as `feat: refuse journaling against a done node`
 
-### Task 3.4: Terminal `done` tests and the writer-inventory test
-**Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 3
+### Task 3.4: Writer-inventory test
+**Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 2
 
-New `tests/store/test_terminal_done.py`.
-
-- [ ] Parametrize over every `NodeStatus`: `update_node_status` on a done node raises and leaves the node unchanged
-- [ ] `block()` of each `BlockedKind` on a done node raises. No escalation row lands
-- [ ] `journal_issue` on a done node raises and the journal is empty
-- [ ] Marking done with an unresolved entry raises. Resolving the entry first allows it (D1: each caller resolves first)
-- [ ] `create_node(status=DONE)` still works
-- [ ] A pre-009 store holding an unresolved entry on a done node (stage it with raw SQL): `journal_escalate` on it raises `InvalidTransitionError` naming the node and does not change the node (D1's explicit failure)
-- [ ] **Writer inventory:** parse every module under `src/amoeba/` with `ast`, as `tests/test_writer_guard.py` does, and assert `UPDATE_NODE_STATUS` is referenced only from `store/_block_writer.py`, `store/nodes.py` and `store/sql.py`. Exempt nothing else. Have the failure message name D1's table
+- [ ] In `tests/store/test_terminal_done.py`, parse every module under `src/amoeba/` with `ast`, as `tests/test_writer_guard.py` does, and assert `UPDATE_NODE_STATUS` is referenced only from `store/_block_writer.py`, `store/nodes.py` and `store/sql.py`. Have the failure message name D1's table
 - [ ] Update `tests/test_failure_modes.py` only if its raw tamper (line ~263, direct SQL on a separate connection) now trips a guard. It should not
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/store/test_terminal_done.py tests/test_failure_modes.py tests/test_journal.py tests/test_recovery.py -q` passes
-  - [ ] Full `uv run pytest -q` passes. Fix any existing test that marked a node done and then moved it. D1 makes that illegal. Do not weaken the guard
-  - [ ] Tasks 3.1–3.4 committed as `feat: enforce done as terminal in every store write path`
+  - [ ] `uv run pytest tests/store/test_terminal_done.py tests/test_failure_modes.py -q` passes. Full suite, `ruff` and `pyright` clean
+  - [ ] Committed as `test: guard the node-status writer inventory`
 
 ---
 
@@ -194,7 +186,7 @@ New `tests/store/test_terminal_done.py`.
 ### Task 4.2: Add `intent_for_submission`
 **Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
 
-- [ ] `store/sql_inbox.py`: add a select by `submission_id` restricted to the intent channel. Migration 004 has no index on `messages.submission_id`, so Task 2.1 adds a partial one (`WHERE submission_id IS NOT NULL`). The select must repeat that `WHERE` literally to use it
+- [ ] `store/sql_inbox.py`: add a select by `submission_id` restricted to the intent channel. `messages.submission_id` has no index and the design adds none, so the lookup scans the project's messages. That is accepted for now. Issue #19 tracks adding the index
 - [ ] `store/messages.py`: `intent_for_submission(submission_id) -> Message | None`. Add it to `amoeba.store`'s `CONTRACT_METHODS` pin
 - **Success Criteria**:
   - [ ] Returns the intent row a submission created, `None` for an unknown id, and works on a handle from `Store.open_read_only`
@@ -294,9 +286,10 @@ New `tests/store/test_project_escalation.py`.
 - [ ] `store/sql_runner.py`: insert and select statements for `routing_table_versions`, `routing_decisions` (by id, by journal entry, by node oldest first), and `attempt_counts` (select, upsert-increment returning the new count; use SQLite upsert and read back inside the transaction)
 - [ ] `store/routing_decisions.py` (new, mixed into `Store`): the reads `routing_decision`, `routing_decision_for_entry`, `routing_decisions(node_id)`, `routing_table_version` and `attempt_count`. Missing returns `None` or an empty list. `attempt_count` returns `0` for a pair with no row, and its docstring says that is the true count
 - [ ] Export `Route`, `RoutingDecision`, `RoutingDecisionInput`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`. Pin the five read methods
+- [ ] Tests in new `tests/store/test_routing_reads.py`: on a fresh store each read returns `None`, an empty list or `0`. With rows inserted by the `sql_runner.py` statements, each read returns the mapped row, `routing_decisions` is oldest first, and every read works through `Store.open_read_only`
 - **Success Criteria**:
-  - [ ] Reads work on a fresh store and through a read-only handle
-  - [ ] Committed with Task 7.3
+  - [ ] The tests pass. Full suite, `ruff` and `pyright` clean
+  - [ ] Committed as `feat: add routing decision and attempt-count reads`
 
 ### Task 7.2: `record_routing_decision` validation
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 3
@@ -305,21 +298,23 @@ Keep this in `store/routing_decisions.py`. If the module nears 300 lines, move t
 
 - [ ] Validate before opening the transaction. `ValueError`: any text field in `RoutingDecisionInput` empty (project, rule id, table version, Amoeba version), `inputs` or `route_parameters` not JSON-serializable, `attempt_step` given but empty, `table.version` not equal to `decision.table_version`. `NodeNotFoundError`: the node is not in the project. `InvalidTransitionError`: `journal_entry_id` names an entry that is missing or in another project
 - [ ] Coerce `route` through `Route`. A `StatusEffect` whose status is a blocked status is refused as `update_node_status` refuses it
+- [ ] Put the validation in a function that `record_routing_decision` calls first, and test it through that method in new `tests/store/test_routing_validation.py`. The method does not write yet, so assert each failure raises its exception and that a valid input passes validation. Task 7.4 asserts that nothing is written
 - **Success Criteria**:
-  - [ ] Each failure raises its exception before anything is written
-  - [ ] Committed with Task 7.3
+  - [ ] The tests pass. Full suite, `ruff` and `pyright` clean
+  - [ ] Committed as `feat: validate routing decisions`
 
 ### Task 7.3: The one-transaction write
 **Owner**: Junior AI | **Dependencies**: 7.2 | **Effort**: 4
 
 - [ ] In one `with self._connection:` block, in D5's order: insert the table version if new (same version with different content raises `StoreIntegrityError`, compared byte for byte); insert the decision row; if `attempt_step` is given, increment the counter and store the new count on the decision; apply `effect`
-- [ ] `StatusEffect(status)` goes through the same checks as `update_node_status` (done is terminal, `done` refused while an entry is unresolved). Share the check with Task 3.2 rather than copying it
+- [ ] `StatusEffect(status)` calls Task 3.2's `_write_status(node_id, status, timestamp)` inside the transaction. That gives it the done-is-terminal and unresolved-entry refusals without copying them. It cannot call `update_node_status`, which opens its own transaction
 - [ ] `BlockEffect(context, payload)` writes a `HUMAN` block through `_write_block`, with `journal_entry_id` from the decision, so the escalation row lands in the same transaction
 - [ ] A duplicate decision for one `journal_entry_id` surfaces as `StoreIntegrityError`, converted from the unique-index violation the way other store writes convert `sqlite3.IntegrityError`. Find the existing conversion with `grep -rn "IntegrityError" src/amoeba/store`
 - [ ] Return the stored `RoutingDecision`, read back inside the transaction
 - **Success Criteria**:
   - [ ] All four effects of D5 land together. An injected failure at any step leaves none of them
   - [ ] Module sizes stay near 300 lines
+  - [ ] Committed with Task 7.4, its immediate test task
 
 ### Task 7.4: Routing decision tests
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 4
@@ -337,7 +332,7 @@ New `tests/store/test_routing_decisions.py`. If it nears 300 lines, split the ro
 - [ ] Each Task 7.2 validation failure writes nothing
 - **Success Criteria**:
   - [ ] `uv run pytest tests/store/test_routing_decisions.py -q` passes. Full suite, `ruff` and `pyright` clean
-  - [ ] Tasks 7.1–7.4 committed as `feat: add routing decisions, table versions and attempt counts`
+  - [ ] Tasks 7.3–7.4 committed as `feat: record routing decisions with their effects`
 
 ---
 
@@ -378,6 +373,7 @@ The file is 738 lines. Add a new `## The Runner contract` section after the Cont
 - **Success Criteria**:
   - [ ] Every public method and type in the LLD's "API Contracts" table appears in the file. Check with a grep for each name
   - [ ] Frontmatter `dateUpdated` is current
+  - [ ] Committed as `docs: document the Runner contract in the store contract`
 
 ### Task 9.2: Update `docs/inbox-contract.md` and verify the public API pin
 **Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 2
@@ -389,6 +385,7 @@ The file is 738 lines. Add a new `## The Runner contract` section after the Cont
 - **Success Criteria**:
   - [ ] The three documented places are updated and cross-link to `store-contract.md`
   - [ ] `uv run pytest tests/test_public_api.py tests/test_process_public_api.py -q` passes
+  - [ ] Committed as `docs: document acknowledgment outcomes and project escalations in the inbox contract`
 
 ### Task 9.3: Final validation
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
