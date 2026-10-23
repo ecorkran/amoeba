@@ -62,6 +62,20 @@ def test_an_already_blocked_node_gets_nothing_more(store: Store, node: Node) -> 
     assert store.open_project_escalations(PROJECT) == []
 
 
+@pytest.mark.parametrize("kind", [BlockedKind.SQ_CHECKPOINT, BlockedKind.JUDGE])
+def test_a_node_blocked_on_a_non_human_kind_still_escalates_to_the_project(
+    store: Store, node: Node, kind: BlockedKind
+) -> None:
+    store.block(node.id, kind=kind, context="earlier")
+    before = len(list(store.all_blocked_states(node.id)))
+
+    _escalate(store, _in(node.id))
+
+    assert len(list(store.all_blocked_states(node.id))) == before
+    [row] = store.open_project_escalations(PROJECT)
+    assert row.fault_kind == "unexpected_fault"
+
+
 def test_a_node_with_a_run_in_flight_takes_the_project_path(
     store: Store, node: Node
 ) -> None:

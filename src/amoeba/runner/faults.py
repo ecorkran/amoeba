@@ -160,7 +160,9 @@ def escalate(
 
     A node with no run in flight, not done and not already blocked is blocked on
     a human, with the fault named in the context and payload. A node already
-    blocked gets nothing more, so a fault repeating cannot storm. A node with a
+    blocked on a human gets nothing more, so a fault repeating cannot storm; one
+    blocked on anything else (a checkpoint, the judge) is not waiting on a human,
+    so the fault takes the project-scoped path. A node with a
     run in flight (it blocks only when its run ends, D2), a done node (121, D1:
     it cannot be blocked) and no node at all take the project-scoped path, which
     the store deduplicates on ``(project, kind)``.
@@ -169,7 +171,8 @@ def escalate(
     node = None if node_id is None else store.get_node(node_id)
     run_ids = [] if node is None else _in_flight_run_ids(store, project_id, node.id)
     if node is not None and not run_ids and node.status is not NodeStatus.DONE:
-        if store.blocked_state_for(node.id) is None:
+        existing = store.blocked_state_for(node.id)
+        if existing is None:
             store.block(
                 node.id,
                 kind=BlockedKind.HUMAN,
@@ -179,7 +182,9 @@ def escalate(
                     PAYLOAD_ERROR: str(error),
                 },
             )
-        return
+            return
+        if existing.kind is BlockedKind.HUMAN:
+            return
     store.raise_project_escalation(
         project_id,
         fault_kind=fault_kind.value,
