@@ -2,7 +2,9 @@
 
 Sibling of ``sql.py`` and ``sql_journal.py``, under the same rule: a column name
 or statement for ``inbox_submissions`` or ``messages`` appears here and in
-migration ``004`` and nowhere else.
+migrations ``004`` and ``009`` and nowhere else. The Runner tables' names live
+in ``sql_runner``; the five ``messages`` columns migration ``009`` added are
+defined here, once, and ``sql_runner`` imports them.
 
 The one vocabulary value interpolated is ``Channel.INTENT``, into the
 pending-intents query: SQLite only uses a partial index when the query repeats
@@ -69,6 +71,13 @@ COL_MESSAGE_PAYLOAD: Final = "payload"
 COL_MESSAGE_CREATED_AT: Final = "created_at"
 COL_MESSAGE_ACKNOWLEDGED_AT: Final = "acknowledged_at"
 COL_MESSAGE_ACKNOWLEDGED_BY: Final = "acknowledged_by"
+# Added by migration 009. Defined here, with the rest of the messages columns,
+# so ``sql_runner`` can import this module without a cycle.
+COL_MESSAGE_ACKNOWLEDGMENT_OUTCOME: Final = "acknowledgment_outcome"
+COL_MESSAGE_ACKNOWLEDGMENT_REASON: Final = "acknowledgment_reason"
+COL_MESSAGE_FAULT_KIND: Final = "fault_kind"
+COL_MESSAGE_CLOSED_AT: Final = "closed_at"
+COL_MESSAGE_CLOSED_BY: Final = "closed_by"
 
 #: Column order for every message SELECT and for row mapping.
 MESSAGE_COLUMNS: Final = (
@@ -84,9 +93,15 @@ MESSAGE_COLUMNS: Final = (
     COL_MESSAGE_CREATED_AT,
     COL_MESSAGE_ACKNOWLEDGED_AT,
     COL_MESSAGE_ACKNOWLEDGED_BY,
+    COL_MESSAGE_ACKNOWLEDGMENT_OUTCOME,
+    COL_MESSAGE_ACKNOWLEDGMENT_REASON,
+    COL_MESSAGE_FAULT_KIND,
+    COL_MESSAGE_CLOSED_AT,
+    COL_MESSAGE_CLOSED_BY,
 )
 
 #: Index names, so the migration test asserts against constants.
+INDEX_MESSAGES_OPEN_PROJECT_ESCALATION: Final = "idx_messages_open_project_escalation"
 INDEX_MESSAGES_PROJECT_CHANNEL_SEQ: Final = "idx_messages_project_channel_seq"
 INDEX_MESSAGES_UNACKNOWLEDGED_INTENTS: Final = "idx_messages_unacknowledged_intents"
 

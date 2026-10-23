@@ -60,6 +60,19 @@ class Channel(StrEnum):
     ESCALATION = "escalation"
 
 
+class AcknowledgmentOutcome(StrEnum):
+    """How an intent's acknowledgment ended.
+
+    Recorded once, with the acknowledgment. ``rejected`` always carries a
+    reason; the other two may. A row acknowledged before outcomes were recorded
+    reads back with ``None`` instead.
+    """
+
+    APPLIED = "applied"
+    NO_OP = "no_op"
+    REJECTED = "rejected"
+
+
 class QuarantineReason(StrEnum):
     """Why a submission file could not be attributed to an open project store.
 
@@ -103,6 +116,12 @@ class Message:
     ``seq`` is the replay cursor. An escalation carries ``blocked_state_id``,
     and ``journal_entry_id`` when recovery raised it; an intent carries
     ``submission_id`` as provenance. ``payload`` is opaque to the store.
+
+    ``acknowledgment_outcome`` and ``acknowledgment_reason`` are set when an
+    intent is acknowledged (``None`` outcome on an acknowledged row means it was
+    acknowledged before outcomes were recorded). ``fault_kind`` marks a
+    project-scoped escalation, which has no node and no blocked state;
+    ``closed_at`` and ``closed_by`` record the Runner closing it.
     """
 
     seq: int
@@ -117,6 +136,11 @@ class Message:
     created_at: datetime | None = None
     acknowledged_at: datetime | None = None
     acknowledged_by: str | None = None
+    acknowledgment_outcome: AcknowledgmentOutcome | None = None
+    acknowledgment_reason: str | None = None
+    fault_kind: str | None = None
+    closed_at: datetime | None = None
+    closed_by: str | None = None
 
     @property
     def is_acknowledged(self) -> bool:

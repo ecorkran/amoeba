@@ -96,8 +96,8 @@ def _upgrade(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def test_version_eight_is_the_expected_version() -> None:
-    assert EXPECTED_SCHEMA_VERSION == CF_SCHEMA_VERSION
+def test_the_expected_version_includes_migration_eight() -> None:
+    assert EXPECTED_SCHEMA_VERSION >= CF_SCHEMA_VERSION
 
 
 def test_upgrade_keeps_every_prior_row(store_file: Path) -> None:
