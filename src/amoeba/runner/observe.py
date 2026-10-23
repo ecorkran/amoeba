@@ -178,8 +178,13 @@ class RunObserver:
         log_error = self._check_line(entry, run_id, stderr_path, tracked, faults)
         if tracked.confirmed:
             return self._running(entry, run_id)
+        issued_at = entry.issued_at
+        if issued_at is None or issued_at.tzinfo is None:
+            # Like a malformed run id: it faults this entry, not the whole tick.
+            reason = "has no timezone-aware issued_at"
+            return self._fault(entry, run_id, reason, faults)
         exit_code = tracked.child.poll()
-        if exit_code is None and self._within_grace(entry):
+        if exit_code is None and self._within_grace(issued_at):
             return self._launching(entry, run_id)
         if not self._poll_due(entry.id):
             return self._still_overdue(entry, run_id, stderr_path, log_error, faults)
@@ -282,10 +287,7 @@ class RunObserver:
         self._last_poll[entry_id] = self._monotonic()
         return self._poll(run_id)
 
-    def _within_grace(self, entry: JournalEntry) -> bool:
-        issued_at = entry.issued_at
-        if issued_at is None or issued_at.tzinfo is None:
-            raise ValueError(f"entry {entry.id} has no timezone-aware issued_at")
+    def _within_grace(self, issued_at: datetime) -> bool:
         return self._now() < issued_at + self._grace
 
     def _launching(self, entry: JournalEntry, run_id: str) -> ObservedRun:

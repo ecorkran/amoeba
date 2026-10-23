@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 from amoeba.process import RunOutcome
@@ -207,3 +209,22 @@ def test_the_budget_is_checked_before_the_launch_poll(tmp_path: Path) -> None:
 
     assert observed.result is TickResult.CUT_OFF
     assert rig.poll.asked == []
+
+
+def test_a_naive_issued_at_faults_that_entry_and_the_others_are_still_observed(
+    tmp_path: Path,
+) -> None:
+    rig = Rig(tmp_path, document("run-2", RunOutcome.TIMED_OUT))
+    bad = replace(entry(1), issued_at=datetime(2026, 10, 23))  # noqa: DTZ001
+    rig.tracker.track(bad.id, Child(None))
+
+    observed = rig.observe(bad, entry(2))
+
+    assert [r.run.state for r in observed.runs] == [RunState.FAULT, RunState.RUNNING]
+    assert observed.result is TickResult.COMPLETE
+    # The absent log is also reported; the clock fault is the one under test.
+    assert any(
+        f.kind is FaultKind.RUN_OBSERVATION_FAILED
+        and "timezone-aware issued_at" in f.detail
+        for f in rig.faults
+    )
