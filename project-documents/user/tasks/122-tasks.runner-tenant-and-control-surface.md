@@ -127,13 +127,13 @@ Edit `process/recovery.py`, `process/observers/sq_run_id.py`, `process/__init__.
 
 Edit `tests/sq_stub.py` (171 lines now; if it passes ~300, move the run mode to `tests/sq_stub_run.py` and import it); tests in new `tests/test_sq_stub_run.py`, running the stub as a subprocess under a temporary runs directory. Read the existing `runs wait` mode and `tests/sq_run_fixtures.py` first: the run mode writes the same per-id state documents. Per the LLD, "Stub `sq` run mode".
 
-- [ ] `sq run <pipeline> --run-id <id> -p k=v …`: validate the id against Squadron's rule (restate the pattern in the stub, since the stub is a separate program) and exit 1 if the id already has state; exit 2 on an unknown flag
-- [ ] Otherwise write the id's document as still running, print exactly `run_id=<id>` to stderr, sleep `SQ_STUB_RUN_SECONDS`, write the final document (`SQ_STUB_RUN_OUTCOME`, default `completed`) and exit 0
-- [ ] `SQ_STUB_RUN_MODE` selects: `exit_before_line` (exit 1 with no line and no state), `no_line` (create the state but never print the line), `late_line` (sleep, then create the state and print the line), `usage_error` (exit 2, no state)
-- [ ] Append every invocation (argv) to the file named by `SQ_STUB_LOG`
-- [ ] Tests, one per behavior above: normal run writes running then completed; duplicate id exits 1; unknown flag exits 2; each `SQ_STUB_RUN_MODE`; the log records each call
+- [x] `sq run <pipeline> --run-id <id> -p k=v …`: validate the id against Squadron's rule (restate the pattern in the stub, since the stub is a separate program) and exit 1 if the id already has state; exit 2 on an unknown flag
+- [x] Otherwise write the id's document as still running, print exactly `run_id=<id>` to stderr, sleep `SQ_STUB_RUN_SECONDS`, write the final document (`SQ_STUB_RUN_OUTCOME`, default `completed`) and exit 0
+- [x] `SQ_STUB_RUN_MODE` selects: `exit_before_line` (exit 1 with no line and no state), `no_line` (create the state but never print the line), `late_line` (sleep, then create the state and print the line), `usage_error` (exit 2, no state)
+- [x] Append every invocation (argv) to the file named by `SQ_STUB_LOG`
+- [x] Tests, one per behavior above: normal run writes running then completed; duplicate id exits 1; unknown flag exits 2; each `SQ_STUB_RUN_MODE`; the log records each call
 - **Success Criteria**:
-  - [ ] Existing stub users still pass. New tests pass in a few seconds at most (short `SQ_STUB_RUN_SECONDS`). Commit: `test: add detached run mode to the stub sq`
+  - [x] Existing stub users still pass. New tests pass in a few seconds at most (short `SQ_STUB_RUN_SECONDS`). Commit: `test: add detached run mode to the stub sq`
 
 ---
 
