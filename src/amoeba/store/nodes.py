@@ -108,7 +108,6 @@ class NodeOperations(BlockWriter):
                 ``block()`` and ``resolve()``), or ``status`` is ``done`` while
                 the node has an unresolved journal entry.
         """
-        self._require_node(node_id)
         validated = NodeStatus(status)
 
         with self._connection:

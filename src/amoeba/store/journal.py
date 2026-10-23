@@ -83,7 +83,7 @@ class JournalOperations(BlockWriter):
             )
 
         node = self._require_node(node_id)
-        self._refuse_done(node_id)
+        self._refuse_if_done(node)
 
         issued = now()
         entry = JournalEntry(

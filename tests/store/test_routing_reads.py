@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from routing_helpers import make_node
+
 from amoeba.store import (
     REQUIRED_PARAMETER_KEYS,
     CommandKind,
-    NodeKind,
     Route,
     RoutingDecision,
     RoutingTableVersion,
@@ -18,10 +19,6 @@ from amoeba.store import (
 
 PROJECT = "demo"
 STAGED = ("2026-10-22T00:00:00+00:00", "2026-10-22T01:00:00+00:00")
-
-
-def _node(store: Store) -> str:
-    return store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="n").id
 
 
 def _stage_version(store: Store, version: str = "v1") -> None:
@@ -49,7 +46,7 @@ def _stage_decision(
 
 
 def test_every_read_is_empty_on_a_fresh_store(store: Store) -> None:
-    node_id = _node(store)
+    node_id = make_node(store)
 
     assert store.routing_decision("d") is None
     assert store.routing_decision_for_entry("j") is None
@@ -59,7 +56,7 @@ def test_every_read_is_empty_on_a_fresh_store(store: Store) -> None:
 
 
 def test_reads_return_the_mapped_rows(store: Store) -> None:
-    node_id = _node(store)
+    node_id = make_node(store)
     _stage_version(store)
     _stage_decision(store, "d-late", node_id, STAGED[1])
     _stage_decision(store, "d-early", node_id, STAGED[0], attempt=("P5", 1))
@@ -81,7 +78,7 @@ def test_reads_return_the_mapped_rows(store: Store) -> None:
 
 
 def test_a_decision_is_found_by_its_entry(store: Store) -> None:
-    node_id = _node(store)
+    node_id = make_node(store)
     _stage_version(store)
     entry_id = store.journal_issue(
         node_id,
@@ -98,7 +95,7 @@ def test_a_decision_is_found_by_its_entry(store: Store) -> None:
 
 def test_every_read_works_through_a_read_only_handle(store_file: Path) -> None:
     with Store.open(store_file) as store:
-        node_id = _node(store)
+        node_id = make_node(store)
         _stage_version(store)
         _stage_decision(store, "d-1", node_id, STAGED[0])
         store._connection.commit()  # pyright: ignore[reportPrivateUsage]

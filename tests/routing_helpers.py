@@ -1,8 +1,10 @@
-"""Shared staging for the routing-decision tests."""
+"""Shared staging for the Runner-contract store tests."""
 
 from __future__ import annotations
 
 import dataclasses
+from datetime import UTC, datetime
+from typing import Any
 
 from amoeba.store import (
     REQUIRED_PARAMETER_KEYS,
@@ -13,6 +15,7 @@ from amoeba.store import (
     RoutingDecisionInput,
     RoutingTableVersion,
     Store,
+    SubmissionKind,
 )
 
 PROJECT = "demo"
@@ -36,7 +39,7 @@ def issue_entry(store: Store, node_id: str, *, resolved: bool = True) -> str:
 
 
 def decision_input(
-    node_id: str, entry_id: str | None = None, **changes: object
+    node_id: str, entry_id: str | None = None, **changes: Any
 ) -> RoutingDecisionInput:
     base = RoutingDecisionInput(
         project_id=PROJECT,
@@ -49,4 +52,21 @@ def decision_input(
         route=Route.ADVANCE,
         route_parameters={"limit": 3},
     )
-    return dataclasses.replace(base, **changes)  # type: ignore[arg-type]
+    return dataclasses.replace(base, **changes)
+
+
+def submit_intent(
+    store: Store, submission_id: str = "sub-1", project_id: str = PROJECT
+) -> str:
+    """Apply an intent submission and return the message id it created."""
+    store.apply_submission(
+        submission_id=submission_id,
+        project_id=project_id,
+        kind=SubmissionKind.INTENT,
+        submitted_by="pm",
+        submitted_at=datetime(2026, 10, 22, tzinfo=UTC),
+        payload={"node_id": None, "body": {"hold": True}},
+    )
+    intent = store.intent_for_submission(submission_id)
+    assert intent is not None
+    return intent.id

@@ -140,6 +140,7 @@ SELECT {_DESIRED_SELECT_LIST}
 FROM {TABLE_DESIRED_STATES}
 WHERE {COL_DESIRED_NODE_ID} IS NOT NULL
   AND {COL_DESIRED_NODE_ID} = ?
+  AND {COL_DESIRED_PROJECT_ID} = ?
 """
 
 #: Project target first (its node id is NULL), then by node id.

@@ -12,28 +12,14 @@ callers must not place secrets in them.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 
-from amoeba.store import sql_runner
+from amoeba.store import sql_inbox, sql_runner
 from amoeba.store._base import StoreBase, isoformat, new_id, now
 from amoeba.store.inbox_models import Channel, Message
 from amoeba.store.mapping_inbox import map_message
 from amoeba.store.models import InvalidTransitionError
-
-
-def _require_text(value: str, name: str) -> None:
-    if not value.strip():
-        raise ValueError(f"{name} must be non-empty text")
-
-
-def _encode_payload(payload: Mapping[str, object]) -> str:
-    try:
-        return json.dumps(dict(payload))
-    except TypeError as error:
-        # Specific: a payload that is not JSON-serializable is a caller error,
-        # reported as the ValueError every malformed write raises.
-        raise ValueError(f"payload is not JSON-serializable: {error}") from error
+from amoeba.store.write_values import encode_object, require_text
 
 
 class ProjectEscalationOperations(StoreBase):
@@ -58,17 +44,19 @@ class ProjectEscalationOperations(StoreBase):
             ValueError: If ``fault_kind`` is empty or ``payload`` is not
                 JSON-serializable. Nothing is written.
         """
-        _require_text(fault_kind, "fault_kind")
-        encoded = _encode_payload(payload)
-
-        existing = self._execute(
-            sql_runner.SELECT_OPEN_PROJECT_ESCALATION, (project_id, fault_kind)
-        ).fetchone()
-        if existing is not None:
-            return map_message(existing)
+        require_text(fault_kind, "fault_kind")
+        encoded = encode_object(payload, "payload")
 
         message_id = new_id()
         with self._connection:
+            # The write lock is taken before the open-row check, so two raisers
+            # cannot both see "none open" and race to insert.
+            self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
+            existing = self._execute(
+                sql_runner.SELECT_OPEN_PROJECT_ESCALATION, (project_id, fault_kind)
+            ).fetchone()
+            if existing is not None:
+                return map_message(existing)
             self._execute(
                 sql_runner.INSERT_PROJECT_ESCALATION,
                 (
@@ -103,7 +91,7 @@ class ProjectEscalationOperations(StoreBase):
             InvalidTransitionError: If the row does not exist, is not a
                 project-scoped escalation, or is already closed.
         """
-        _require_text(closed_by, "closed_by")
+        require_text(closed_by, "closed_by")
 
         with self._connection:
             cursor = self._execute(

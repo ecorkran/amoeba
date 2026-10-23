@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from routing_helpers import submit_intent
 
 from amoeba.inspection import LISTINGS_BY_NAME, ListingRequest
 from amoeba.inspection.inbox import CHANNEL_OPTION, message_rows
-from amoeba.store import AcknowledgmentOutcome, Store, SubmissionKind
+from amoeba.store import AcknowledgmentOutcome, Store
 
 PROJECT = "demo"
 NEW_COLUMNS = (
@@ -24,22 +24,8 @@ def _rows(store: Store) -> list[dict[str, object]]:
     return [dict(row) for row in message_rows(store, request)]
 
 
-def _submit_intent(store: Store, submission_id: str) -> str:
-    store.apply_submission(
-        submission_id=submission_id,
-        project_id=PROJECT,
-        kind=SubmissionKind.INTENT,
-        submitted_by="pm",
-        submitted_at=datetime(2026, 10, 22, tzinfo=UTC),
-        payload={"node_id": None, "body": {"hold": True}},
-    )
-    intent = store.intent_for_submission(submission_id)
-    assert intent is not None
-    return intent.id
-
-
 def test_an_acknowledged_intent_shows_its_outcome_and_reason(store: Store) -> None:
-    intent_id = _submit_intent(store, "s-1")
+    intent_id = submit_intent(store, "s-1")
     store.acknowledge_message(
         intent_id,
         acknowledged_by="runner",
@@ -55,7 +41,7 @@ def test_an_acknowledged_intent_shows_its_outcome_and_reason(store: Store) -> No
 
 
 def test_an_unacknowledged_intent_shows_empty_strings(store: Store) -> None:
-    _submit_intent(store, "s-1")
+    submit_intent(store, "s-1")
 
     [row] = _rows(store)
 

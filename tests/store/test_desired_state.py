@@ -2,44 +2,24 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fault_injection import InjectedFailureError, fail_on_statement
+from routing_helpers import make_node, submit_intent
 
 from amoeba.store import (
     AcknowledgmentOutcome,
     ClearDesiredState,
     InvalidTransitionError,
-    NodeKind,
     NodeNotFoundError,
     SetDesiredState,
     Store,
-    SubmissionKind,
     sql_runner,
 )
 
 PROJECT = "demo"
 APPLIED = AcknowledgmentOutcome.APPLIED
-
-
-def _intent(store: Store, submission_id: str = "sub-1") -> str:
-    store.apply_submission(
-        submission_id=submission_id,
-        project_id=PROJECT,
-        kind=SubmissionKind.INTENT,
-        submitted_by="pm",
-        submitted_at=datetime(2026, 10, 22, tzinfo=UTC),
-        payload={"node_id": None, "body": {"drive": True}},
-    )
-    intent = store.intent_for_submission(submission_id)
-    assert intent is not None
-    return intent.id
-
-
-def _node(store: Store, project_id: str = PROJECT) -> str:
-    return store.create_node(project_id=project_id, kind=NodeKind.SLICE, title="n").id
 
 
 def _ack(
@@ -64,9 +44,9 @@ def test_reads_are_empty_on_a_fresh_store(store: Store) -> None:
 
 
 def test_set_at_the_project_target_and_a_node_target(store: Store) -> None:
-    node_id = _node(store)
-    first = _intent(store, "sub-1")
-    second = _intent(store, "sub-2")
+    node_id = make_node(store)
+    first = submit_intent(store, "sub-1")
+    second = submit_intent(store, "sub-2")
 
     _ack(store, first, SetDesiredState(drive=True, drive_until_step="P5"))
     _ack(store, second, SetDesiredState(node_id=node_id, hold=True))
@@ -85,8 +65,8 @@ def test_set_at_the_project_target_and_a_node_target(store: Store) -> None:
 
 
 def test_setting_a_target_again_replaces_the_whole_row(store: Store) -> None:
-    first = _intent(store, "sub-1")
-    second = _intent(store, "sub-2")
+    first = submit_intent(store, "sub-1")
+    second = submit_intent(store, "sub-2")
     _ack(store, first, SetDesiredState(hold=True))
     _ack(store, second, SetDesiredState(drive=True))
 
@@ -97,9 +77,9 @@ def test_setting_a_target_again_replaces_the_whole_row(store: Store) -> None:
 
 
 def test_clear_deletes_the_row(store: Store) -> None:
-    node_id = _node(store)
-    _ack(store, _intent(store, "s1"), SetDesiredState(node_id=node_id, hold=True))
-    _ack(store, _intent(store, "s2"), ClearDesiredState(node_id=node_id))
+    node_id = make_node(store)
+    _ack(store, submit_intent(store, "s1"), SetDesiredState(node_id=node_id, hold=True))
+    _ack(store, submit_intent(store, "s2"), ClearDesiredState(node_id=node_id))
 
     assert store.desired_state(PROJECT, node_id=node_id) is None
 
@@ -107,7 +87,7 @@ def test_clear_deletes_the_row(store: Store) -> None:
 def test_clearing_a_target_with_no_row_acknowledges_and_writes_nothing(
     store: Store,
 ) -> None:
-    intent_id = _intent(store)
+    intent_id = submit_intent(store)
     _ack(store, intent_id, ClearDesiredState())
 
     assert store.pending_intents(PROJECT) == []
@@ -128,7 +108,7 @@ def test_clearing_a_target_with_no_row_acknowledges_and_writes_nothing(
 def test_a_shape_violation_raises_and_leaves_the_intent_pending(
     store: Store, change: SetDesiredState
 ) -> None:
-    intent_id = _intent(store)
+    intent_id = submit_intent(store)
 
     with pytest.raises(ValueError):
         _ack(store, intent_id, change)
@@ -138,8 +118,8 @@ def test_a_shape_violation_raises_and_leaves_the_intent_pending(
 
 
 def test_a_node_in_another_project_or_missing_is_refused(store: Store) -> None:
-    other = _node(store, "other")
-    intent_id = _intent(store)
+    other = make_node(store, "other")
+    intent_id = submit_intent(store)
 
     for node_id in (other, "no-such-node"):
         with pytest.raises(NodeNotFoundError):
@@ -157,7 +137,7 @@ def test_a_node_in_another_project_or_missing_is_refused(store: Store) -> None:
 def test_a_desired_state_needs_the_applied_outcome(
     store: Store, outcome: AcknowledgmentOutcome
 ) -> None:
-    intent_id = _intent(store)
+    intent_id = submit_intent(store)
 
     with pytest.raises(ValueError, match="applied"):
         _ack(store, intent_id, SetDesiredState(hold=True), outcome)
@@ -168,7 +148,7 @@ def test_a_desired_state_needs_the_applied_outcome(
 def test_a_failed_desired_state_write_rolls_the_acknowledgment_back(
     store: Store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    intent_id = _intent(store)
+    intent_id = submit_intent(store)
     fail_on_statement(monkeypatch, store, sql_runner.INSERT_DESIRED_STATE)
 
     with pytest.raises(InjectedFailureError):
@@ -181,7 +161,7 @@ def test_a_failed_desired_state_write_rolls_the_acknowledgment_back(
 def test_a_desired_state_on_an_acknowledged_intent_changes_nothing(
     store: Store,
 ) -> None:
-    first = _intent(store)
+    first = submit_intent(store)
     _ack(store, first, SetDesiredState(hold=True))
     before = store.desired_state(PROJECT)
 
@@ -191,9 +171,17 @@ def test_a_desired_state_on_an_acknowledged_intent_changes_nothing(
     assert store.desired_state(PROJECT) == before
 
 
+def test_a_node_target_is_not_read_through_another_project(store: Store) -> None:
+    node_id = make_node(store)
+    _ack(store, submit_intent(store, "s1"), SetDesiredState(node_id=node_id, hold=True))
+
+    assert store.desired_state(PROJECT, node_id=node_id) is not None
+    assert store.desired_state("other", node_id=node_id) is None
+
+
 def test_reads_work_through_a_read_only_handle(store_file: Path) -> None:
     with Store.open(store_file) as store:
-        _ack(store, _intent(store), SetDesiredState(hold=True))
+        _ack(store, submit_intent(store), SetDesiredState(hold=True))
         expected = store.desired_states(PROJECT)
 
     with Store.open_read_only(store_file) as reader:

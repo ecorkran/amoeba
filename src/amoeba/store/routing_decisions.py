@@ -1,17 +1,16 @@
-"""Routing decision, table-version and attempt-count reads.
+"""Routing decisions, table versions and attempt counts: the write and the reads.
 
 Mixed into ``Store``; see ``store.py`` for the assembled public class.
 
-Every read works through a read-only handle. Decisions, table versions and
-counters are written only by ``record_routing_decision`` (D5). ``inputs``,
+``record_routing_decision`` (D5) is the only writer of decisions, table versions
+and counters; it validates, then writes them and the node effect in one
+transaction. Every read works through a read-only handle. ``inputs``,
 ``route_parameters`` and table content are stored verbatim and shown by
 inspection, so callers must not place secrets in them.
 """
 
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 from amoeba.store import sql_inbox, sql_journal, sql_runner
@@ -36,6 +35,7 @@ from amoeba.store.runner_models import (
     RoutingTableVersion,
     StatusEffect,
 )
+from amoeba.store.write_values import encode_object, require_text
 
 
 @dataclass(frozen=True)
@@ -47,20 +47,6 @@ class _ValidatedDecision:
     route_parameters_json: str
 
 
-def _require_text(value: str, name: str) -> None:
-    if not value.strip():
-        raise ValueError(f"{name} must be non-empty text")
-
-
-def _encode(value: Mapping[str, object], name: str) -> str:
-    try:
-        return json.dumps(dict(value))
-    except TypeError as error:
-        # Specific: a value that is not JSON-serializable is a caller error,
-        # reported as the ValueError every malformed write raises.
-        raise ValueError(f"{name} is not JSON-serializable: {error}") from error
-
-
 def _check_values(
     decision: RoutingDecisionInput,
     table: RoutingTableVersion,
@@ -68,12 +54,12 @@ def _check_values(
     attempt_step: str | None,
 ) -> _ValidatedDecision:
     """The checks that need no store: field shape, encoding, vocabulary."""
-    _require_text(decision.project_id, "project_id")
-    _require_text(decision.rule_id, "rule_id")
-    _require_text(decision.table_version, "table_version")
-    _require_text(decision.amoeba_version, "amoeba_version")
+    require_text(decision.project_id, "project_id")
+    require_text(decision.rule_id, "rule_id")
+    require_text(decision.table_version, "table_version")
+    require_text(decision.amoeba_version, "amoeba_version")
     if attempt_step is not None:
-        _require_text(attempt_step, "attempt_step")
+        require_text(attempt_step, "attempt_step")
     if table.version != decision.table_version:
         raise ValueError(
             f"table version {table.version!r} does not match the decision's "
@@ -85,13 +71,15 @@ def _check_values(
         )
     return _ValidatedDecision(
         route=Route(decision.route),
-        inputs_json=_encode(decision.inputs, "inputs"),
-        route_parameters_json=_encode(decision.route_parameters, "route_parameters"),
+        inputs_json=encode_object(decision.inputs, "inputs"),
+        route_parameters_json=encode_object(
+            decision.route_parameters, "route_parameters"
+        ),
     )
 
 
 class RoutingDecisionOperations(BlockWriter):
-    """Reads over ``routing_decisions``, ``routing_table_versions`` and counters."""
+    """Records routing decisions, and reads them, table versions and counters."""
 
     def routing_decision(self, decision_id: str) -> RoutingDecision | None:
         """One decision by id, or ``None``."""
@@ -234,6 +222,8 @@ class RoutingDecisionOperations(BlockWriter):
         if isinstance(effect, StatusEffect):
             self._write_status(decision.node_id, NodeStatus(effect.status), timestamp)
         elif isinstance(effect, BlockEffect):
+            # The refusal block() makes, checked here under the write lock.
+            self._refuse_if_blocked(self._require_node(decision.node_id))
             self._write_block(
                 decision.node_id,
                 project_id=decision.project_id,
@@ -261,9 +251,9 @@ class RoutingDecisionOperations(BlockWriter):
                 ``table.version`` differs from the decision's.
             NodeNotFoundError: The node is not in the project.
             InvalidTransitionError: ``journal_entry_id`` names an entry that is
-                missing or in another project, a ``StatusEffect`` targets a
-                blocked status, or a ``BlockEffect`` meets an already-blocked
-                node.
+                missing or in another project, or a ``StatusEffect`` targets a
+                blocked status. (An effect the node's state refuses is raised
+                later, inside the transaction.)
         """
         validated = _check_values(decision, table, effect, attempt_step)
         node = self.get_node(decision.node_id)
@@ -271,9 +261,6 @@ class RoutingDecisionOperations(BlockWriter):
             raise NodeNotFoundError(
                 f"no node {decision.node_id!r} in project {decision.project_id!r}"
             )
-        if isinstance(effect, BlockEffect):
-            # The same refusal block() makes, before anything is written.
-            self._refuse_if_blocked(node)
         if decision.journal_entry_id is not None:
             self._require_entry_in_project(
                 decision.journal_entry_id, decision.project_id

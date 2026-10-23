@@ -54,7 +54,7 @@ class DesiredStateOperations(StoreBase):
             ).fetchone()
         else:
             row = self._execute(
-                sql_runner.SELECT_DESIRED_NODE_TARGET, (node_id,)
+                sql_runner.SELECT_DESIRED_NODE_TARGET, (node_id, project_id)
             ).fetchone()
         return None if row is None else map_desired_state(row)
 

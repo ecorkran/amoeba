@@ -61,9 +61,13 @@ class BlockWriter(StoreBase):
             NodeNotFoundError: If the node does not exist.
             InvalidTransitionError: If the node is ``done``.
         """
-        if self._require_node(node_id).status is NodeStatus.DONE:
+        self._refuse_if_done(self._require_node(node_id))
+
+    def _refuse_if_done(self, node: Node) -> None:
+        """:meth:`_refuse_done` for a caller that already holds the node."""
+        if node.status is NodeStatus.DONE:
             raise InvalidTransitionError(
-                f"node {node_id!r} is done, and done is terminal"
+                f"node {node.id!r} is done, and done is terminal"
             )
 
     def _refuse_if_blocked(self, node: Node) -> None:
@@ -96,7 +100,7 @@ class BlockWriter(StoreBase):
                 ``done`` while the node has an unresolved journal entry.
         """
         current = self._require_node(node_id)
-        self._refuse_done(node_id)
+        self._refuse_if_done(current)
         refuse_blocked_status(current.status, "move a node out of")
         refuse_blocked_status(status, "move a node into")
         if status is NodeStatus.DONE:
