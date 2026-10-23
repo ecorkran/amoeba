@@ -8,6 +8,7 @@ import pytest
 
 from amoeba.store import (
     REQUIRED_PARAMETER_KEYS,
+    BlockedKind,
     BlockEffect,
     CommandKind,
     InvalidTransitionError,
@@ -130,3 +131,12 @@ def test_a_blocked_status_effect_is_refused(
 ) -> None:
     with pytest.raises(InvalidTransitionError):
         _check(store, _decision(node_id), effect=StatusEffect(status))
+
+
+def test_a_block_effect_on_a_blocked_node_is_refused(
+    store: Store, node_id: str
+) -> None:
+    store.block(node_id, kind=BlockedKind.HUMAN, context="first")
+
+    with pytest.raises(InvalidTransitionError, match="already blocked"):
+        _check(store, _decision(node_id), effect=BlockEffect("second"))

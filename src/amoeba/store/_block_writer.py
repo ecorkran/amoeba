@@ -23,6 +23,7 @@ from amoeba.store.models import (
     BLOCKED_STATUSES,
     BlockedKind,
     InvalidTransitionError,
+    Node,
     NodeStatus,
     StoreIntegrityError,
 )
@@ -63,6 +64,22 @@ class BlockWriter(StoreBase):
         if self._require_node(node_id).status is NodeStatus.DONE:
             raise InvalidTransitionError(
                 f"node {node_id!r} is done, and done is terminal"
+            )
+
+    def _refuse_if_blocked(self, node: Node) -> None:
+        """Refuse to block a node that is already blocked.
+
+        The check ``block()`` makes before its transaction, and a routing
+        decision's ``BlockEffect`` makes before its own. ``_write_block``
+        assumes its caller has made it.
+
+        Raises:
+            InvalidTransitionError: If the node is already blocked. Existing
+                blocks are never silently overwritten.
+        """
+        if node.status in BLOCKED_STATUSES:
+            raise InvalidTransitionError(
+                f"node {node.id!r} is already blocked ({node.status.value})"
             )
 
     def _write_status(self, node_id: str, status: NodeStatus, timestamp: str) -> None:

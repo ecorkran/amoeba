@@ -14,12 +14,19 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from amoeba.store import sql_journal, sql_runner
+from amoeba.store import sql_inbox, sql_journal, sql_runner
+from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter, refuse_blocked_status
 from amoeba.store.journal_models import JournalEntry
 from amoeba.store.mapping_journal import map_journal_entry
 from amoeba.store.mapping_runner import map_routing_decision, map_table_version
-from amoeba.store.models import InvalidTransitionError, NodeNotFoundError, NodeStatus
+from amoeba.store.models import (
+    BlockedKind,
+    InvalidTransitionError,
+    NodeNotFoundError,
+    NodeStatus,
+    StoreIntegrityError,
+)
 from amoeba.store.row_values import integer
 from amoeba.store.runner_models import (
     BlockEffect,
@@ -122,6 +129,121 @@ class RoutingDecisionOperations(BlockWriter):
         row = self._execute(sql_runner.SELECT_ATTEMPT_COUNT, (node_id, step)).fetchone()
         return 0 if row is None else integer(row[0], sql_runner.COL_ATTEMPT_COUNT)
 
+    def record_routing_decision(
+        self,
+        decision: RoutingDecisionInput,
+        *,
+        table: RoutingTableVersion,
+        effect: StatusEffect | BlockEffect | None,
+        attempt_step: str | None,
+    ) -> RoutingDecision:
+        """Record a routing decision and its effect in one transaction.
+
+        In order: store ``table`` if its version is new; insert the decision;
+        when ``attempt_step`` is given, increment the ``(node, step)`` counter
+        and record the new count on the decision; apply ``effect``. A failure at
+        any step leaves none of them. Which route takes which effect, and when
+        an attempt counts, is the Runner's; the store checks none of it.
+
+        Args:
+            decision: The decision. ``inputs``, ``route_parameters`` and the
+                table content are stored verbatim and shown by inspection, so
+                callers must not place secrets in them.
+            table: The routing table version the decision used.
+            effect: ``StatusEffect`` follows ``update_node_status``'s rules;
+                ``BlockEffect`` writes a ``HUMAN`` block and its escalation.
+            attempt_step: The step to count an attempt against, or ``None``.
+
+        Returns:
+            The stored decision.
+
+        Raises:
+            ValueError: A field is malformed (see the validation).
+            NodeNotFoundError: The node is not in the project.
+            InvalidTransitionError: The journal entry is missing or in another
+                project; or the effect is refused (a done or blocked node, a
+                blocked target status, or ``done`` with an unresolved entry).
+            StoreIntegrityError: The entry already has a decision, or the
+                version exists with different content.
+        """
+        validated = self._validate_routing_decision(
+            decision, table=table, effect=effect, attempt_step=attempt_step
+        )
+        decision_id = new_id()
+        timestamp = isoformat(now())
+
+        with self._connection:
+            # Takes the write lock before the counter is read, so the count the
+            # decision records is the count the increment produces.
+            self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
+            self._store_table_version(table, timestamp)
+            count = None
+            if attempt_step is not None:
+                count = self.attempt_count(decision.node_id, attempt_step) + 1
+            self._execute(
+                sql_runner.INSERT_DECISION,
+                (
+                    decision_id,
+                    decision.project_id,
+                    decision.node_id,
+                    decision.journal_entry_id,
+                    validated.inputs_json,
+                    decision.rule_id,
+                    decision.table_version,
+                    decision.amoeba_version,
+                    validated.route.value,
+                    validated.route_parameters_json,
+                    attempt_step,
+                    count,
+                    timestamp,
+                ),
+            )
+            if attempt_step is not None:
+                self._execute(
+                    sql_runner.UPSERT_ATTEMPT_COUNT,
+                    (decision.node_id, attempt_step, timestamp),
+                )
+            self._apply_effect(decision, effect, timestamp)
+            stored = self.routing_decision(decision_id)
+
+        if stored is None:
+            raise StoreIntegrityError(f"routing decision {decision_id!r} vanished")
+        return stored
+
+    def _store_table_version(self, table: RoutingTableVersion, timestamp: str) -> None:
+        """Insert a table version on first use; refuse changed content."""
+        existing = self.routing_table_version(table.version)
+        if existing is None:
+            self._execute(
+                sql_runner.INSERT_TABLE_VERSION,
+                (table.version, table.content, timestamp),
+            )
+        elif existing.content != table.content:
+            raise StoreIntegrityError(
+                f"routing table version {table.version!r} is already stored with "
+                "different content; change the version label with the content"
+            )
+
+    def _apply_effect(
+        self,
+        decision: RoutingDecisionInput,
+        effect: StatusEffect | BlockEffect | None,
+        timestamp: str,
+    ) -> None:
+        """Apply a decision's effect inside the caller's transaction."""
+        if isinstance(effect, StatusEffect):
+            self._write_status(decision.node_id, NodeStatus(effect.status), timestamp)
+        elif isinstance(effect, BlockEffect):
+            self._write_block(
+                decision.node_id,
+                project_id=decision.project_id,
+                kind=BlockedKind.HUMAN,
+                context=effect.context,
+                timestamp=timestamp,
+                payload=effect.payload,
+                journal_entry_id=decision.journal_entry_id,
+            )
+
     def _validate_routing_decision(
         self,
         decision: RoutingDecisionInput,
@@ -139,8 +261,9 @@ class RoutingDecisionOperations(BlockWriter):
                 ``table.version`` differs from the decision's.
             NodeNotFoundError: The node is not in the project.
             InvalidTransitionError: ``journal_entry_id`` names an entry that is
-                missing or in another project, or a ``StatusEffect`` targets a
-                blocked status.
+                missing or in another project, a ``StatusEffect`` targets a
+                blocked status, or a ``BlockEffect`` meets an already-blocked
+                node.
         """
         validated = _check_values(decision, table, effect, attempt_step)
         node = self.get_node(decision.node_id)
@@ -148,6 +271,9 @@ class RoutingDecisionOperations(BlockWriter):
             raise NodeNotFoundError(
                 f"no node {decision.node_id!r} in project {decision.project_id!r}"
             )
+        if isinstance(effect, BlockEffect):
+            # The same refusal block() makes, before anything is written.
+            self._refuse_if_blocked(node)
         if decision.journal_entry_id is not None:
             self._require_entry_in_project(
                 decision.journal_entry_id, decision.project_id
