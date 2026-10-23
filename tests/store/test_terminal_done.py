@@ -10,6 +10,7 @@ from amoeba.store import (
     Channel,
     CommandKind,
     InvalidTransitionError,
+    JournalOutcome,
     NodeKind,
     NodeStatus,
     Store,
@@ -80,3 +81,57 @@ def test_journal_escalate_on_a_done_node_raises_and_changes_nothing(
     assert entry is not None and not entry.is_resolved
     assert store.blocked_state_for(node_id, include_resolved=True) is None
     assert store.messages(PROJECT, channel=Channel.ESCALATION) == []
+
+
+# --------------------------------------------------------------------------
+# Task 3.2: update_node_status
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("status", list(NodeStatus))
+def test_a_done_node_takes_no_status_write(store: Store, status: NodeStatus) -> None:
+    node_id = _done_node(store)
+    before = store.get_node(node_id)
+
+    with pytest.raises(InvalidTransitionError, match=node_id):
+        store.update_node_status(node_id, status)
+
+    assert store.get_node(node_id) == before
+
+
+def test_a_node_with_an_unresolved_entry_refuses_done(store: Store) -> None:
+    node_id = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="x").id
+    entry_id = _issue(store, node_id)
+
+    with pytest.raises(InvalidTransitionError, match=entry_id):
+        store.update_node_status(node_id, NodeStatus.DONE)
+
+    node = store.get_node(node_id)
+    assert node is not None and node.status is NodeStatus.RUNNABLE
+
+
+def test_done_is_accepted_once_the_entry_is_resolved(store: Store) -> None:
+    node_id = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="x").id
+    entry_id = _issue(store, node_id)
+    store.journal_resolve(entry_id, outcome=JournalOutcome.COMPLETED)
+
+    node = store.update_node_status(node_id, NodeStatus.DONE)
+
+    assert node.status is NodeStatus.DONE
+
+
+def test_an_unresolved_entry_on_another_node_does_not_block_done(
+    store: Store,
+) -> None:
+    busy = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="a").id
+    idle = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="b").id
+    _issue(store, busy)
+
+    assert store.update_node_status(idle, NodeStatus.DONE).status is NodeStatus.DONE
+
+
+def test_create_node_as_done_still_works(store: Store) -> None:
+    node_id = _done_node(store)
+
+    node = store.get_node(node_id)
+    assert node is not None and node.status is NodeStatus.DONE

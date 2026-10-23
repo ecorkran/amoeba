@@ -15,11 +15,12 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 
-from amoeba.store import sql, sql_inbox
+from amoeba.store import sql, sql_inbox, sql_journal
 from amoeba.store._base import StoreBase, new_id
 from amoeba.store.inbox_models import Channel
 from amoeba.store.models import (
     BLOCKED_KIND_TO_STATUS,
+    BLOCKED_STATUSES,
     BlockedKind,
     InvalidTransitionError,
     NodeStatus,
@@ -30,6 +31,20 @@ from amoeba.store.models import (
 #: channel; a judge or a Squadron checkpoint is resolved by the machinery that
 #: blocked on it.
 ESCALATING_KINDS: frozenset[BlockedKind] = frozenset({BlockedKind.HUMAN})
+
+
+def refuse_blocked_status(status: NodeStatus, action: str) -> None:
+    """Reject a node write that would touch the blocked half on its own.
+
+    Blocked statuses are owned by ``block()`` and ``resolve()``, which write
+    status and blocked state in one transaction. Refusing them here is what
+    makes "no public path writes one half" structural rather than advisory.
+    """
+    if status in BLOCKED_STATUSES:
+        raise InvalidTransitionError(
+            f"cannot {action} {status.value!r} directly: "
+            "use block() and resolve() so status and blocked state agree"
+        )
 
 
 class BlockWriter(StoreBase):
@@ -49,6 +64,35 @@ class BlockWriter(StoreBase):
             raise InvalidTransitionError(
                 f"node {node_id!r} is done, and done is terminal"
             )
+
+    def _write_status(self, node_id: str, status: NodeStatus, timestamp: str) -> None:
+        """Set a node's status through the rules every status write follows.
+
+        Runs inside the caller's transaction and never commits. It is the one
+        status write ``update_node_status`` and a routing decision's
+        ``StatusEffect`` share, so neither can skip a rule.
+
+        Raises:
+            NodeNotFoundError: If the node does not exist.
+            InvalidTransitionError: If the node is done (any target status), is
+                blocked, the target is a blocked status, or the target is
+                ``done`` while the node has an unresolved journal entry.
+        """
+        current = self._require_node(node_id)
+        self._refuse_done(node_id)
+        refuse_blocked_status(current.status, "move a node out of")
+        refuse_blocked_status(status, "move a node into")
+        if status is NodeStatus.DONE:
+            entry = self._execute(
+                sql_journal.SELECT_UNRESOLVED_ENTRY_FOR_NODE,
+                (current.project_id, node_id),
+            ).fetchone()
+            if entry is not None:
+                raise InvalidTransitionError(
+                    f"cannot mark node {node_id!r} done: journal entry "
+                    f"{entry[0]!r} is unresolved"
+                )
+        self._execute(sql.UPDATE_NODE_STATUS, (status.value, timestamp, node_id))
 
     def _write_block(
         self,
