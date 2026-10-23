@@ -21,6 +21,7 @@ from amoeba.runner.decide import Planner
 from amoeba.runner.faults import STORE_FAILURES, FaultKind, NodeContext, escalate
 from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.observe import RunObserver
+from amoeba.runner.probes import CfRun, LinkProbes
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import Store
 
@@ -58,6 +59,7 @@ class RunnerTenant:
         supervisor_dir: Path,
         planners: Sequence[Planner],
         popen: PopenFactory,
+        cf_run: CfRun,
         poll: Callable[[str], RunPoll],
         now: Callable[[], datetime],
         monotonic: Callable[[], float],
@@ -78,6 +80,9 @@ class RunnerTenant:
             monotonic=monotonic,
             launch_grace_seconds=settings.launch_grace_seconds,
             run_poll_interval_seconds=settings.run_poll_interval_seconds,
+        )
+        self._probes = LinkProbes(
+            run=cf_run, timeout_seconds=settings.tick_call_timeout_seconds
         )
         self._carried_over: tuple[str, ...] = ()
 
@@ -127,6 +132,7 @@ class RunnerTenant:
             supervisor_dir=self._supervisor_dir,
             planners=self._planners,
             observer=self._observer,
+            probes=self._probes,
             tracker=self._tracker,
             popen=self._popen,
             now=self._now,

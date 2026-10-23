@@ -15,7 +15,7 @@ from amoeba.runner.decide import Action, LaunchRun, ProjectView
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import NodeKind, Store, StoreBusyError
-from runner.observe_support import Child, Clock, ScriptedPoll, document
+from runner.observe_support import Child, Clock, FakeCf, ScriptedPoll, document
 
 SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
 
@@ -59,6 +59,7 @@ class Rig:
         self.clock = Clock()
         self.planner = Planner(tmp_path)
         self.poll = ScriptedPoll()
+        self.cf = FakeCf()
         self.launches = 0
         self.launch_cost = 0.0
         self.tenant = RunnerTenant(
@@ -66,6 +67,7 @@ class Rig:
             supervisor_dir=supervisor_dir,
             planners=(self.planner,),
             popen=self._popen,
+            cf_run=self.cf,
             poll=self.poll,
             now=self.clock.wall,
             monotonic=self.clock.monotonic,

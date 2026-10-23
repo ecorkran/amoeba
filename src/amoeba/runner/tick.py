@@ -8,7 +8,7 @@ body of ``finish.record`` (125), routing (126) after record.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -38,6 +38,7 @@ from amoeba.runner.launch import (
     mint_run_id,
 )
 from amoeba.runner.observe import LaunchFailed, ObservedRun, RunObserver
+from amoeba.runner.probes import LinkProbes
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -63,6 +64,7 @@ class ProjectTick:
         supervisor_dir: Path,
         planners: Sequence[Planner],
         observer: RunObserver,
+        probes: LinkProbes,
         tracker: LaunchTracker,
         popen: PopenFactory,
         now: Callable[[], datetime],
@@ -73,6 +75,7 @@ class ProjectTick:
         self._supervisor_dir = supervisor_dir
         self._planners = planners
         self._observer = observer
+        self._probes = probes
         self._tracker = tracker
         self._popen = popen
         self._now = now
@@ -87,17 +90,22 @@ class ProjectTick:
         observed = self._observer.observe(
             self._run_entries(), budget, faults, self._context
         )
-        # [reconciliation reads and cf probes - slices 123, task 11.1]
+        # [reconciliation reads - slice 123]
+        links = [link.cf_project_id for link in self._store.cf_links(self._project_id)]
+        probed = observed.result
+        if probed is TickResult.COMPLETE:
+            probed = self._probes.check(links, budget, faults, self._project_id)
         shape_error = self._record_finished(observed.runs)
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )
         if shape_error is not None:
             raise UpstreamShapeError(shape_error)
-        if observed.result is TickResult.CUT_OFF:
+        if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         # [route - slice 126]
-        if self._act(self._decide(observed.runs), budget) is TickResult.CUT_OFF:
+        decided = self._decide(observed.runs, self._probes.results(links))
+        if self._act(decided, budget) is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE
@@ -131,7 +139,9 @@ class ProjectTick:
                 )
         return shape_error
 
-    def _decide(self, runs: Sequence[ObservedRun]) -> list[LaunchRun]:
+    def _decide(
+        self, runs: Sequence[ObservedRun], link_probes: Mapping[str, bool]
+    ) -> list[LaunchRun]:
         self._context.clear()
         busy = {
             e.node_id for e in self._store.unresolved_journal_entries(self._project_id)
@@ -143,7 +153,7 @@ class ProjectTick:
                 n for n in self._store.runnable(self._project_id) if n.id not in busy
             ),
             in_flight=tuple(o.run for o in runs if o.finished is None),
-            link_probes={},
+            link_probes=link_probes,
         )
         return list(decide(view, self._planners))
 

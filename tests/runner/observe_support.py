@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from amoeba.process import (
     PollFailure,
@@ -61,6 +63,31 @@ class ScriptedPoll:
     def __call__(self, run_id: str) -> RunPoll:
         self.asked.append(run_id)
         return self.answers.pop(0)
+
+
+class FakeCf:
+    """A ``cf`` runner answering the probe commands, or whatever it is told."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+        self.stdout: dict[str, str] = {}
+        self.returncode = 0
+        self.error: BaseException | None = None
+        self.on_call: Any = None
+
+    def __call__(
+        self, argv: list[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        self.calls.append(argv)
+        if self.on_call is not None:
+            self.on_call()
+        if self.error is not None:
+            raise self.error
+        command = argv[1]
+        default = '{"project": "stub"}' if command == "status" else "[]"
+        return subprocess.CompletedProcess(
+            argv, self.returncode, self.stdout.get(command, default), ""
+        )
 
 
 def document(run_id: str, outcome: RunOutcome) -> RunOutcomeDocument:
