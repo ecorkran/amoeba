@@ -21,6 +21,7 @@ from amoeba.store.inbox_models import Channel
 from amoeba.store.models import (
     BLOCKED_KIND_TO_STATUS,
     BlockedKind,
+    InvalidTransitionError,
     NodeStatus,
     StoreIntegrityError,
 )
@@ -33,6 +34,21 @@ ESCALATING_KINDS: frozenset[BlockedKind] = frozenset({BlockedKind.HUMAN})
 
 class BlockWriter(StoreBase):
     """Writes a block, its node status, and its escalation. Never commits."""
+
+    def _refuse_done(self, node_id: str) -> None:
+        """Refuse any status write on a ``done`` node. The one terminal check.
+
+        ``done`` is terminal (D1), so every writer of ``nodes.status`` that can
+        reach a done node calls this before writing.
+
+        Raises:
+            NodeNotFoundError: If the node does not exist.
+            InvalidTransitionError: If the node is ``done``.
+        """
+        if self._require_node(node_id).status is NodeStatus.DONE:
+            raise InvalidTransitionError(
+                f"node {node_id!r} is done, and done is terminal"
+            )
 
     def _write_block(
         self,
@@ -49,7 +65,8 @@ class BlockWriter(StoreBase):
 
         Must be called **inside** the caller's transaction, so the block, the
         status, and the escalation land together or not at all. The caller has
-        already checked that the node exists and is not blocked.
+        already checked that the node exists and is not blocked; this method
+        refuses a done node itself, before any write.
 
         Args:
             node_id: The node to block.
@@ -64,6 +81,7 @@ class BlockWriter(StoreBase):
         Returns:
             The new blocked state's id.
         """
+        self._refuse_done(node_id)
         blocked_state_id = new_id()
         self._execute(
             sql.INSERT_BLOCKED_STATE,
@@ -91,7 +109,8 @@ class BlockWriter(StoreBase):
 
         Inside the caller's transaction, like :meth:`_write_block`, so that
         ``resolve()`` and ``apply_submission`` both write a resolution through
-        one place without opening a second transaction.
+        one place without opening a second transaction. It needs no done check:
+        it acts only on a blocked node, and a done node is never blocked.
 
         Returns:
             Whether an open slot was filled. ``False`` means the node had no

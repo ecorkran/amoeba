@@ -22,7 +22,7 @@ projectState: Initiative 100 (101–110) is merged, and slice 120 is merged. The
   in the store, and contract text.
 dateCreated: 20261022
 dateUpdated: 20261023
-status: not_started
+status: in_progress
 turns: 46
 promptTokens: 2332931
 cachedTokens: 2214290
@@ -64,11 +64,11 @@ revision_number: 2
 ### Task 1.1: Create the branch and record the starting state
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Create `121-slice.store-contract-changes-for-the-runner` from the target. If it exists, switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Create `121-slice.store-contract-changes-for-the-runner` from the target. If it exists, switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task. Baseline: 2017 passed
 - **Success Criteria**:
-  - [ ] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
+  - [x] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
 
 ---
 
@@ -79,51 +79,51 @@ revision_number: 2
 
 Create `src/amoeba/store/schema/009_runner_contract.sql`. Follow the comment-header style of `004_inbox_and_messages.sql`: the file states that column names must match `sql_runner.py`. The LLD's "Database / Storage Schema" is a shape sketch. Write the real DDL from D2, D4–D8.
 
-- [ ] `messages`: five `ALTER TABLE ... ADD COLUMN` statements: `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind`, `closed_at`, `closed_by`. All nullable text, no default
-- [ ] Partial unique index `idx_messages_open_project_escalation` on `(project_id, fault_kind)` with the D4 `WHERE` clause
-- [ ] `routing_table_versions`: `version TEXT PRIMARY KEY`, `content TEXT NOT NULL`, `first_used_at TEXT NOT NULL`
-- [ ] `routing_decisions`: every D5 field with `NOT NULL` except `journal_entry_id`, `attempt_step` and `attempt_count`. Foreign keys to `nodes`, `command_journal` and `routing_table_versions`. JSON columns are `TEXT NOT NULL`, stored verbatim, as migration 004 does for payloads. Unique index on `(journal_entry_id)` where not null. Index on `(node_id, decided_at)`
-- [ ] `attempt_counts`: `node_id` (FK to `nodes`), `step`, `count INTEGER NOT NULL`, `updated_at`, primary key `(node_id, step)`
-- [ ] `desired_states`: D8 columns, `drive` and `hold` as nullable `INTEGER`, `message_id` as `NOT NULL` FK to `messages(id)`. Two partial unique indexes, one on `(project_id) WHERE node_id IS NULL` and one on `(node_id) WHERE node_id IS NOT NULL`. Check how migration 004 refers to `messages(id)` and match it
-- [ ] Set `EXPECTED_SCHEMA_VERSION` to 9 in `store/migrations.py`. Update its module docstring only if it names version 8
+- [x] `messages`: five `ALTER TABLE ... ADD COLUMN` statements: `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind`, `closed_at`, `closed_by`. All nullable text, no default
+- [x] Partial unique index `idx_messages_open_project_escalation` on `(project_id, fault_kind)` with the D4 `WHERE` clause
+- [x] `routing_table_versions`: `version TEXT PRIMARY KEY`, `content TEXT NOT NULL`, `first_used_at TEXT NOT NULL`
+- [x] `routing_decisions`: every D5 field with `NOT NULL` except `journal_entry_id`, `attempt_step` and `attempt_count`. Foreign keys to `nodes`, `command_journal` and `routing_table_versions`. JSON columns are `TEXT NOT NULL`, stored verbatim, as migration 004 does for payloads. Unique index on `(journal_entry_id)` where not null. Index on `(node_id, decided_at)`
+- [x] `attempt_counts`: `node_id` (FK to `nodes`), `step`, `count INTEGER NOT NULL`, `updated_at`, primary key `(node_id, step)`
+- [x] `desired_states`: D8 columns, `drive` and `hold` as nullable `INTEGER`, `message_id` as `NOT NULL` FK to `messages(id)`. Two partial unique indexes, one on `(project_id) WHERE node_id IS NULL` and one on `(node_id) WHERE node_id IS NOT NULL`. Check how migration 004 refers to `messages(id)` and match it
+- [x] Set `EXPECTED_SCHEMA_VERSION` to 9 in `store/migrations.py`. Update its module docstring only if it names version 8
 - **Success Criteria**:
-  - [ ] `Store.open_temporary()` succeeds and `read_schema_version` returns 9
-  - [ ] The migration file contains every column and index in D2, D4–D8 and no statement the LLD does not call for
-  - [ ] Committed with Task 2.3 (the tests below are what makes it safe)
+  - [x] `Store.open_temporary()` succeeds and `read_schema_version` returns 9
+  - [x] The migration file contains every column and index in D2, D4–D8 and no statement the LLD does not call for
+  - [x] Committed with Task 2.3 (the tests below are what makes it safe)
 
 ### Task 2.2: Create `sql_runner.py`, `runner_models.py` and the mapping, and widen `Message`
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 4
 
-- [ ] `store/inbox_models.py`: add `AcknowledgmentOutcome` (`StrEnum`: `applied`, `no_op`, `rejected`). Add five fields to `Message` after `acknowledged_by`: `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind`, `closed_at`, `closed_by`, all defaulting to `None`. Update the docstring
-- [ ] `store/sql_runner.py` (new): table names, column names and index names for the four tables and the five message columns, each defined once. Define the column-order tuples used for SELECTs. Statements are added by the tasks that need them, in this module
-- [ ] `store/sql_inbox.py`: append the five new message column constants to `MESSAGE_COLUMNS` in the same order as the `Message` fields. They may be imported from, or defined in, `sql_runner.py`. Pick one site and note it in the module docstring so each name is defined once
-- [ ] `store/mapping_inbox.py`: `map_message` reads the five new columns. `acknowledgment_outcome` goes through the closed-vocabulary coercion and raises `UnknownVocabularyValueError` for an unknown stored value. `closed_at` uses `decode_timestamp`. Add `AcknowledgmentOutcome` to the `_vocabulary` type constraint
-- [ ] `store/runner_models.py` (new): `Route` (`StrEnum`: `advance`, `rerun`, `escalate`), `RoutingDecisionInput`, `RoutingDecision`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState`, `ClearDesiredState`. Frozen dataclasses with the fields in D3, D5, D6 and D8. `RoutingDecision` adds `id`, `attempt_step`, `attempt_count` and `decided_at` to the input's fields
-- [ ] `store/mapping_runner.py` (new): row-to-type mapping for `DesiredState`, `RoutingDecision` and `RoutingTableVersion`, in the style of `mapping_inbox.py`. Include a width check and vocabulary coercion for `Route`. JSON columns decode with `decode_mapping`
-- [ ] Export `AcknowledgmentOutcome`, `Route`, `RoutingDecision`, `RoutingDecisionInput`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState` and `ClearDesiredState` from `amoeba/store/__init__.py`, and add them to `EXPECTED_EXPORTS` in `tests/test_public_api.py`. Later tasks add methods to `CONTRACT_METHODS` only
+- [x] `store/inbox_models.py`: add `AcknowledgmentOutcome` (`StrEnum`: `applied`, `no_op`, `rejected`). Add five fields to `Message` after `acknowledged_by`: `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind`, `closed_at`, `closed_by`, all defaulting to `None`. Update the docstring
+- [x] `store/sql_runner.py` (new): table names, column names and index names for the four tables and the five message columns, each defined once. Define the column-order tuples used for SELECTs. Statements are added by the tasks that need them, in this module. Note: the five messages column constants are defined in sql_inbox.py (to avoid an import cycle); sql_runner imports nothing from them yet.
+- [x] `store/sql_inbox.py`: append the five new message column constants to `MESSAGE_COLUMNS` in the same order as the `Message` fields. They may be imported from, or defined in, `sql_runner.py`. Pick one site and note it in the module docstring so each name is defined once
+- [x] `store/mapping_inbox.py`: `map_message` reads the five new columns. `acknowledgment_outcome` goes through the closed-vocabulary coercion and raises `UnknownVocabularyValueError` for an unknown stored value. `closed_at` uses `decode_timestamp`. Add `AcknowledgmentOutcome` to the `_vocabulary` type constraint
+- [x] `store/runner_models.py` (new): `Route` (`StrEnum`: `advance`, `rerun`, `escalate`), `RoutingDecisionInput`, `RoutingDecision`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState`, `ClearDesiredState`. Frozen dataclasses with the fields in D3, D5, D6 and D8. `RoutingDecision` adds `id`, `attempt_step`, `attempt_count` and `decided_at` to the input's fields
+- [x] `store/mapping_runner.py` (new): row-to-type mapping for `DesiredState`, `RoutingDecision` and `RoutingTableVersion`, in the style of `mapping_inbox.py`. Include a width check and vocabulary coercion for `Route`. JSON columns decode with `decode_mapping`
+- [x] Export `AcknowledgmentOutcome`, `Route`, `RoutingDecision`, `RoutingDecisionInput`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState` and `ClearDesiredState` from `amoeba/store/__init__.py`, and add them to `EXPECTED_EXPORTS` in `tests/test_public_api.py`. Later tasks add methods to `CONTRACT_METHODS` only
 - **Success Criteria**:
-  - [ ] `uv run pyright` and `uv run ruff check .` are clean
-  - [ ] The existing message tests still pass (`uv run pytest tests/store tests/test_public_api.py -q`), with `tests/store/test_inbox_models.py` updated only if it constructs `Message` positionally
-  - [ ] No SQL string or column name literal appears outside `sql*.py` and the migration
-  - [ ] Committed with Task 2.3
+  - [x] `uv run pyright` and `uv run ruff check .` are clean
+  - [x] The existing message tests still pass (`uv run pytest tests/store tests/test_public_api.py -q`), with `tests/store/test_inbox_models.py` updated only if it constructs `Message` positionally
+  - [x] No SQL string or column name literal appears outside `sql*.py` and the migration
+  - [x] Committed with Task 2.3
 
 ### Task 2.3: Migration 009 and mapping tests
 **Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 3
 
 New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_008.py` (stage a version-8 store by `migrate(connection, expected_version=8)`, insert rows through the store's own statements, then upgrade).
 
-- [ ] Fixture: a version-8 store holding a node, an acknowledged intent, an unacknowledged intent and a node escalation (use `sql_inbox.INSERT_MESSAGE` and the existing acknowledge statement)
-- [ ] After `migrate`, the stamp reads 9. Existing rows read back unchanged through `Store.open`. The five new columns read `None`. The four new tables exist and are empty
-- [ ] The partial unique index refuses a second open row with the same `(project_id, fault_kind)`, inserted by direct SQL. It allows a second row once the first has `closed_at` set. It ignores rows whose `fault_kind` is null
-- [ ] The `desired_states` indexes allow one project-target row and one row per node, and refuse a second of either
-- [ ] `routing_decisions` refuses a second row with the same `journal_entry_id`, and allows many rows with a null `journal_entry_id`
-- [ ] A read-only open of the version-8 file raises `StoreSchemaError`
-- [ ] `map_message` raises `UnknownVocabularyValueError` for a stored outcome outside `AcknowledgmentOutcome`, and for a row of the wrong width
-- [ ] Update `tests/store/test_migration_008.py` as the task-level addition above says
+- [x] Fixture: a version-8 store holding a node, an acknowledged intent, an unacknowledged intent and a node escalation (use `sql_inbox.INSERT_MESSAGE` and the existing acknowledge statement)
+- [x] After `migrate`, the stamp reads 9. Existing rows read back unchanged through `Store.open`. The five new columns read `None`. The four new tables exist and are empty
+- [x] The partial unique index refuses a second open row with the same `(project_id, fault_kind)`, inserted by direct SQL. It allows a second row once the first has `closed_at` set. It ignores rows whose `fault_kind` is null
+- [x] The `desired_states` indexes allow one project-target row and one row per node, and refuse a second of either
+- [x] `routing_decisions` refuses a second row with the same `journal_entry_id`, and allows many rows with a null `journal_entry_id`
+- [x] A read-only open of the version-8 file raises `StoreSchemaError`
+- [x] `map_message` raises `UnknownVocabularyValueError` for a stored outcome outside `AcknowledgmentOutcome`, and for a row of the wrong width
+- [x] Update `tests/store/test_migration_008.py` as the task-level addition above says
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/store tests/test_migrations.py tests/test_cli_inspect.py -q` passes
-  - [ ] Full `uv run pytest -q`, `ruff` and `pyright` are clean
-  - [ ] Tasks 2.1–2.3 committed as `feat: add migration 009 and runner contract types`
+  - [x] `uv run pytest tests/store tests/test_migrations.py tests/test_cli_inspect.py -q` passes
+  - [x] Full `uv run pytest -q`, `ruff` and `pyright` are clean
+  - [x] Tasks 2.1–2.3 committed as `feat: add migration 009 and runner contract types`
 
 ---
 
