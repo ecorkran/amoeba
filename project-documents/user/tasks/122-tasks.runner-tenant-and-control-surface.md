@@ -144,38 +144,40 @@ Edit `tests/sq_stub.py` (171 lines now; if it passes ~300, move the run mode to 
 
 Create `tests/runner/__init__.py`, `src/amoeba/runner/__init__.py` (empty exports for now), `runner/faults.py` and `runner/launch.py`; tests `tests/runner/test_launch_ids.py`. Per the LLD, D5 and D8.
 
-- [ ] `faults.py` holds the shared vocabulary so later tasks import it: `FaultKind` `StrEnum` (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`, `unexpected_fault`), `LaunchFailure` `StrEnum` (`spawn_error`, `exited_before_line`, `usage_error`) and the `STORE_FAILURES` tuple (`StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, `sqlite3.Error`). Escalation writes are added in Task 10.1
-- [ ] `SQUADRON_RUN_ID_PATTERN` defined once in `launch.py`
-- [ ] `mint_run_id(now: datetime) -> str` returns `amoeba-<UTC yyyymmddTHHMMSSZ>-<12 hex of uuid4>`. It asserts nothing at runtime
-- [ ] Tests: a fixed `now` gives the expected prefix and 36 characters (`amoeba-` 7 + timestamp 16 + `-` 1 + hex 12); a property-style loop of many mints all match the pattern and are unique; a non-UTC aware `now` is converted to UTC
+- [x] `faults.py` holds the shared vocabulary so later tasks import it: `FaultKind` `StrEnum` (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`, `unexpected_fault`), `LaunchFailure` `StrEnum` (`spawn_error`, `exited_before_line`, `usage_error`) and the `STORE_FAILURES` tuple (`StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, `sqlite3.Error`). Escalation writes are added in Task 10.1
+- [x] `SQUADRON_RUN_ID_PATTERN` defined once in `launch.py`
+- [x] `mint_run_id(now: datetime) -> str` returns `amoeba-<UTC yyyymmddTHHMMSSZ>-<12 hex of uuid4>`. It asserts nothing at runtime
+- [x] Tests: a fixed `now` gives the expected prefix and 36 characters (`amoeba-` 7 + timestamp 16 + `-` 1 + hex 12); a property-style loop of many mints all match the pattern and are unique; a non-UTC aware `now` is converted to UTC
 - **Success Criteria**:
-  - [ ] Tests pass. Commit: `feat: add runner package and run-id minting`
+  - [x] Tests pass. Commit: `feat: add runner package and run-id minting`
 
 ### Task 5.2: Launch log paths, exact-line check and tail, with tests
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 3
 
 Edit `runner/launch.py` (or add `runner/launch_logs.py` if it nears 300 lines). Per the LLD, D4 and D6.
 
-- [ ] Constants defined once: `launch-logs` directory name, `.stdout.log`/`.stderr.log` suffixes, the `run_id=` line prefix (share 120's constant if one exists; `grep -rn "run_id=" src/amoeba`), the 64 KiB head limit and 4 KiB tail limit
-- [ ] `log_paths(supervisor_dir, entry_id)` names logs by entry id
-- [ ] `stderr_confirms(path, run_id) -> bool`: reads at most the head limit, true only when a whole line equals `run_id=<id>` after removing only the line terminator. Lets `OSError` propagate to the caller
-- [ ] `stderr_tail(path) -> str`: the last 4 KiB, decoded with replacement, empty string for an empty file; `OSError` propagates
-- [ ] Tests: exact line confirms; the id inside another line does not; `run_id=<id>x` and a different id do not; `\r\n` terminator confirms; a line past 64 KiB is not seen; tail is bounded; a missing file raises `OSError`
+- [x] Constants defined once: `launch-logs` directory name, `.stdout.log`/`.stderr.log` suffixes, the `run_id=` line prefix (share 120's constant if one exists; `grep -rn "run_id=" src/amoeba`), the 64 KiB head limit and 4 KiB tail limit
+- [x] `log_paths(supervisor_dir, entry_id)` names logs by entry id
+- [x] `stderr_confirms(path, run_id) -> bool`: reads at most the head limit, true only when a whole line equals `run_id=<id>` after removing only the line terminator. Lets `OSError` propagate to the caller
+- [x] `stderr_tail(path) -> str`: the last 4 KiB, decoded with replacement, empty string for an empty file; `OSError` propagates
+- [x] Tests: exact line confirms; the id inside another line does not; `run_id=<id>x` and a different id do not; `\r\n` terminator confirms; a line past 64 KiB is not seen; tail is bounded; a missing file raises `OSError`
 - **Success Criteria**:
-  - [ ] Tests pass. Commit: `feat: add launch log paths and confirmation line check`
+  - [x] Tests pass. Commit: `feat: add launch log paths and confirmation line check`
 
 ### Task 5.3: The detached launch, with tests
 **Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 3
 
 Edit `runner/launch.py`; tests `tests/runner/test_launch.py`. Per the LLD, D2 (parameters), D4 and the `LaunchTracker` note in State Management. `PARAM_CHECKOUT` joins `PARAM_RUN_ID` in `store/journal_models.py` only if that module is where `PARAM_RUN_ID` lives; otherwise define it once beside the other launch constants.
 
-- [ ] `build_argv(pipeline, run_id, params)`: `[SQ_EXECUTABLE, "run", pipeline, "--run-id", run_id, "-p", "k=v", …]`. Raises `ValueError` for a value containing `,`, or a key containing `,` or `=` (called before journaling)
-- [ ] `launch(entry, supervisor_dir, popen)` opens both logs for exclusive creation, calls the injected `Popen` with `cwd=checkout`, `stdin=DEVNULL`, the two files, `start_new_session=True`, `close_fds=True`, the inherited environment, then closes the parent's handles. Returns the child handle or a `LaunchFailure.SPAWN_ERROR` answer on `OSError` from either log open or `Popen` (`FileExistsError` included). The environment is never logged
-- [ ] Import `LaunchFailure` from `runner/faults.py` (defined in Task 5.1); do not redefine it
-- [ ] `LaunchTracker`: keeps the handle and confirmation flag per entry id; `reap()` calls `poll()` on each handle and drops exited, settled ones
-- [ ] Tests with a fake `Popen` recording its kwargs: exact argv and flags; params with `,`/`=` rejected; log open failure and `Popen` `OSError` each give `spawn_error` and no `Popen` call after a log failure; an existing log file gives `spawn_error`; `reap` drops exited settled handles and keeps live ones
+- [x] `build_argv(pipeline, run_id, params)`: `[SQ_EXECUTABLE, "run", pipeline, "--run-id", run_id, "-p", "k=v", …]`. Raises `ValueError` for a value containing `,`, or a key containing `,` or `=` (called before journaling)
+- [x] `launch(entry, supervisor_dir, popen)` opens both logs for exclusive creation, calls the injected `Popen` with `cwd=checkout`, `stdin=DEVNULL`, the two files, `start_new_session=True`, `close_fds=True`, the inherited environment, then closes the parent's handles. Returns the child handle or a `LaunchFailure.SPAWN_ERROR` answer on `OSError` from either log open or `Popen` (`FileExistsError` included). The environment is never logged
+- [x] Import `LaunchFailure` from `runner/faults.py` (defined in Task 5.1); do not redefine it
+- [x] `LaunchTracker`: keeps the handle and confirmation flag per entry id; `reap()` calls `poll()` on each handle and drops exited, settled ones
+- [x] Tests with a fake `Popen` recording its kwargs: exact argv and flags; params with `,`/`=` rejected; log open failure and `Popen` `OSError` each give `spawn_error` and no `Popen` call after a log failure; an existing log file gives `spawn_error`; `reap` drops exited settled handles and keeps live ones
 - **Success Criteria**:
-  - [ ] Tests pass. One integration test launches the stub `sq` for real under `tmp_path`, reaps it and finds `run_id=<id>` in the stderr log. Commit: `feat: add detached launch and launch tracker`
+  - [x] Tests pass. One integration test launches the stub `sq` for real under `tmp_path`, reaps it and finds `run_id=<id>` in the stderr log. Commit: `feat: add detached launch and launch tracker`
+
+Deviation: SQ_EXECUTABLE (amoeba.process) and PARAM_RUN_ID/PARAM_CHECKOUT (amoeba.store) were not public; exported them and updated both public-API pins (process now 23 names; store +2). launch() returns LaunchError(failure, detail) rather than a bare LaunchFailure so the error text reaches the escalation.
 
 ---
 
