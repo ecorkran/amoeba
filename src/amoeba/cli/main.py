@@ -29,6 +29,7 @@ from amoeba.process.errors import (
     GraceExpiredError,
     ProcessError,
     StartupFailedError,
+    UpstreamShapeError,
 )
 from amoeba.store.models import StoreError, VerdictNotFoundError
 
@@ -113,6 +114,10 @@ class ExitCode(IntEnum):
     #: ``prune sq-runs --yes``: a candidate is still present after ``sq`` ran,
     #: or ``sq`` is missing, failed, or timed out. Amoeba deleted no file.
     PRUNE_INCOMPLETE = 14
+
+    #: ``start``: an upstream tool (``sq`` or ``cf``) lacks a shape the Runner
+    #: needs. 8 is already ``NOT_RUNNING_STATUS``, so this is the next free value.
+    UPSTREAM_SHAPE = 15
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -287,6 +292,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except StartupFailedError as error:
         print(f"amoeba: {error}", file=sys.stderr)
         return int(ExitCode.STARTUP_FAILED)
+    except UpstreamShapeError as error:
+        print(f"amoeba: {error}", file=sys.stderr)
+        return int(ExitCode.UPSTREAM_SHAPE)
     except VerdictNotFoundError as error:
         print(f"amoeba: {error}", file=sys.stderr)
         return int(ExitCode.NOT_FOUND)

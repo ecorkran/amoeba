@@ -4,8 +4,10 @@ Since slice 120 an ``sq_run`` is journaled with its Squadron run id, so recovery
 asks Squadron about that one run through :func:`~amoeba.process.sq_outcome.poll_run`
 instead of matching attributes against Squadron's internal run files.
 
-* Any run state (D3) means the command reached Squadron: adopt. What an
-  orphaned or unknown-status run *means* is the Runner's job (122, 125).
+* Any run state (D3) means the command reached Squadron and is not finished
+  from recovery's point of view: the entry is left in flight for its issuer,
+  the Runner, to finish by polling. What an orphaned or unknown-status run
+  *means* is the Runner's job (122, 125).
 * ``not_found`` is the launch grace rule (D4): a launch is detached and may
   still be creating its run, so inside the grace period the observer waits out
   the remainder once and asks again before it concludes ``NotApplied``.
@@ -21,12 +23,14 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from typing import Final
 
-from amoeba.process.observers.sq_runs import (
-    RESULT_RUN_ID,
-    RESULT_STATUS,
-    SquadronRunsObserver,
+from amoeba.process.observers.sq_runs import SquadronRunsObserver
+from amoeba.process.recovery import (
+    InFlight,
+    NotApplied,
+    Observation,
+    Observer,
+    Unknown,
 )
-from amoeba.process.recovery import Adopt, NotApplied, Observation, Observer, Unknown
 from amoeba.process.sq_outcome import (
     PollFailure,
     RunOutcome,
@@ -34,9 +38,6 @@ from amoeba.process.sq_outcome import (
     poll_run,
 )
 from amoeba.store.journal_models import PARAM_RUN_ID, JournalEntry
-
-#: The key under which an adoption records the outcome ``sq runs wait`` reported.
-RESULT_OUTCOME: Final = "outcome"
 
 #: Outcomes that mean Squadron holds a state for the run, so the command reached
 #: it. Defined once, from :class:`RunOutcome`: the two that mean "no usable
@@ -126,17 +127,11 @@ class SquadronRunIdObserver:
 def _classify(
     run_id: str, poll: RunOutcomeDocument | PollFailure
 ) -> Observation | None:
-    """Adopt or escalate on a poll; ``None`` means Squadron has no such run."""
+    """Leave in flight or escalate on a poll; ``None`` means no such run."""
     if isinstance(poll, PollFailure):
         return Unknown(reason=poll.reason)
     if poll.outcome in STATE_BEARING_OUTCOMES:
-        return Adopt(
-            result={
-                RESULT_RUN_ID: run_id,
-                RESULT_OUTCOME: poll.outcome.value,
-                RESULT_STATUS: poll.status,
-            }
-        )
+        return InFlight(run_id=run_id, outcome=poll.outcome)
     if poll.outcome is RunOutcome.UNREADABLE:
         return Unknown(reason=f"the run state for {run_id} is unreadable")
     return None

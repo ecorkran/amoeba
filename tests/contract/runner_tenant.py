@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 
-from sq_run_fixtures import sq_run_parameters
+from sq_run_fixtures import run_id_of, sq_run_parameters
 
 from amoeba.process import ResidentProcess
 from amoeba.store import (
@@ -112,7 +112,9 @@ class ProofRunner:
         return RUNNER_NAME
 
     def tick(self, host: ResidentProcess) -> bool:
-        """Perform one pending intent, if any project has one."""
+        """Finish any run left in flight, else perform one pending intent."""
+        if self._finish_in_flight(host):
+            return True
         for project_id in host.project_ids:
             store = host.store_for(project_id)
             pending = store.pending_intents(project_id)
@@ -128,6 +130,27 @@ class ProofRunner:
             self._perform(store, project_id, step, crash_at)
             return True
         return False
+
+    def _finish_in_flight(self, host: ResidentProcess) -> bool:
+        """Resolve each entry recovery left in flight, as the real Runner will.
+
+        Recovery leaves an existing run to its issuer (slice 122, D3). A tick
+        never starts with an entry of its own open, so any open ``sq_run``
+        entry here was left by an earlier process and carries a run id.
+        """
+        finished = False
+        for project_id in host.project_ids:
+            store = host.store_for(project_id)
+            for entry in store.unresolved_journal_entries(project_id):
+                if entry.kind is not CommandKind.SQ_RUN:
+                    continue
+                store.journal_resolve(
+                    entry.id,
+                    outcome=JournalOutcome.COMPLETED,
+                    result={"run_id": run_id_of(entry)},
+                )
+                finished = True
+        return finished
 
     def _perform(
         self,

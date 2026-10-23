@@ -27,8 +27,9 @@ def standard_tenants(
     """The tenants ``start`` registers, in tick order.
 
     ``sq --version`` and ``cf --version`` are captured here, once, before the
-    loop: no tick ever starts a subprocess. Recovery still runs before any
-    tenant ticks, inside ``ResidentProcess.run``.
+    loop: none of these tenants starts a subprocess in a tick. The Runner, which
+    ``amoeba start`` composes after them, does, under ``TickBudget``. Recovery
+    still runs before any tenant ticks, inside ``ResidentProcess.run``.
     """
     sq_label = capture_sq_version_label(settings.sq_timeout_seconds)
     cf_label = capture_cf_version_label(settings.cf_timeout_seconds)

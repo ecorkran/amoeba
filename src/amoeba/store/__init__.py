@@ -73,6 +73,8 @@ from amoeba.store.inbox_models import (
     SubmissionRecord,
 )
 from amoeba.store.journal_models import (
+    PARAM_CHECKOUT,
+    PARAM_RUN_ID,
     REQUIRED_PARAMETER_KEYS,
     REVIEW_PRODUCING_KINDS,
     CommandKind,
@@ -121,6 +123,8 @@ __all__ = [
     # Vocabularies
     "BLOCKED_KIND_TO_STATUS",
     "BLOCKED_STATUSES",
+    "PARAM_CHECKOUT",
+    "PARAM_RUN_ID",
     "REQUIRED_PARAMETER_KEYS",
     "REVIEW_PRODUCING_KINDS",
     "AcknowledgmentOutcome",

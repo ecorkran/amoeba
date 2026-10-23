@@ -166,15 +166,26 @@ class ScenarioDriver:
         )
         expect(step, self._owns(owned, entry), "the run id is not recorded as owned")
 
-    def check_adopted_review(self, step: int) -> None:
-        """Step 4: one verdict for the round, ingested under the Runner's id."""
+    def check_finished_review(self, step: int) -> None:
+        """Step 4: one verdict for the round, ingested under the Runner's id.
+
+        Recovery leaves the crashed run in flight; the restarted Runner finishes
+        its entry, so it ends ``completed`` by the issuer with its run id.
+        """
         with self.harness.read(ALPHA) as store:
             entries = store.journal_entries(ALPHA)
             verdicts = store.verdicts(ALPHA)
             ingested = store.detections(ALPHA, outcome=DetectionOutcome.INGESTED)
             owned = store.recorded_result_run_ids(ALPHA)
-        [adopted] = [e for e in entries if e.outcome is JournalOutcome.ADOPTED]
-        expect(step, adopted.resolved_by is JournalResolver.RECOVERY, "not recovery")
+        expect(step, len(entries) == 2, f"{len(entries)} entries, expected 2")
+        finished = entries[-1]
+        expect(
+            step,
+            (finished.outcome, finished.resolved_by)
+            == (JournalOutcome.COMPLETED, JournalResolver.ISSUER),
+            f"entry resolved {finished.outcome}/{finished.resolved_by}, "
+            "not completed/issuer",
+        )
         expect(step, len(verdicts) == 2, f"{len(verdicts)} verdicts, expected 2")
         [row] = ingested
         parsed = parse_review_artifact(Path(row.path).read_text(encoding="utf-8"))
@@ -183,7 +194,7 @@ class ScenarioDriver:
             row.record_id == review_record_id(parsed),
             "detection's record id differs from the parsed artifact's",
         )
-        expect(step, self._owns(owned, adopted), "the adopted run is not owned")
+        expect(step, self._owns(owned, finished), "the finished run is not owned")
 
     def check_escalation(self, step: int) -> Node:
         """Step 5: an unreadable run state, so one ``unknown`` entry and one escalation.

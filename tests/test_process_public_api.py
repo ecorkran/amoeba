@@ -17,6 +17,7 @@ EXPECTED_EXPORTS = {
     "Observer",
     "Observation",
     "Adopt",
+    "InFlight",
     "NotApplied",
     "Unknown",
     "standard_tenants",
@@ -32,6 +33,9 @@ EXPECTED_EXPORTS = {
     "PollFailure",
     "RunPoll",
     "poll_run",
+    "SQ_EXECUTABLE",
+    # Slice 122: raised by the Runner's probes, mapped to an exit code by the CLI.
+    "UpstreamShapeError",
 }
 
 #: Deliberately not part of the contract: run-file parsing and pruning are

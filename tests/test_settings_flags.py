@@ -71,3 +71,46 @@ def test_the_sq_runs_dir_help_says_it_is_legacy_only(
         "Legacy matching only", help_text.index("--sq-runs-dir PATH")
     )
     assert legacy_note < help_text.rindex("--launch-grace")
+
+
+def test_runner_flags_default_from_process_settings() -> None:
+    settings = start_settings(build_parser().parse_args(["start"]))
+    defaults = ProcessSettings()
+    assert settings.tick_deadline_seconds == defaults.tick_deadline_seconds
+    assert settings.tick_call_timeout_seconds == defaults.tick_call_timeout_seconds
+    assert settings.run_poll_interval_seconds == defaults.run_poll_interval_seconds
+
+
+def test_each_runner_flag_overrides_its_setting() -> None:
+    args = build_parser().parse_args(
+        [
+            "start",
+            "--tick-deadline",
+            "2",
+            "--tick-call-timeout",
+            "3.5",
+            "--run-poll-interval",
+            "9",
+        ]
+    )
+    settings = start_settings(args)
+    assert settings.tick_deadline_seconds == 2.0
+    assert settings.tick_call_timeout_seconds == 3.5
+    assert settings.run_poll_interval_seconds == 9.0
+
+
+@pytest.mark.parametrize(
+    "flag", ["--tick-deadline", "--tick-call-timeout", "--run-poll-interval"]
+)
+def test_a_non_numeric_runner_flag_is_a_usage_error(flag: str) -> None:
+    with pytest.raises(SystemExit) as raised:
+        build_parser().parse_args(["start", flag, "soon"])
+    assert raised.value.code == 2
+
+
+def test_help_lists_the_runner_flags(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["start", "--help"])
+    out = capsys.readouterr().out
+    for flag in ("--tick-deadline", "--tick-call-timeout", "--run-poll-interval"):
+        assert flag in out

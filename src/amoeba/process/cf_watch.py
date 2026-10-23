@@ -12,7 +12,8 @@ baseline is always the stored snapshot.
 A file Amoeba cannot read, or no longer recognizes, is recorded as an outcome
 once per transition and logged once going bad and once recovering; the process
 keeps running. A store that cannot record a snapshot does stop it: the error is
-logged and re-raised. No tick starts a subprocess.
+logged and re-raised. This tenant's tick starts no subprocess (the Runner's do,
+under ``TickBudget``).
 """
 
 from __future__ import annotations

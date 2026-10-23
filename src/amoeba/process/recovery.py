@@ -24,6 +24,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from amoeba.process.sq_outcome import RunOutcome
 from amoeba.store import Store
 from amoeba.store.journal_models import (
     CommandKind,
@@ -46,6 +47,19 @@ class Adopt:
     """
 
     result: Mapping[str, object]
+
+
+@dataclass(frozen=True)
+class InFlight:
+    """The command reached its system and is not finished.
+
+    The entry is left unresolved for its issuer (the Runner) to finish by
+    polling ``run_id``. Recovery resolves nothing and records nothing.
+    ``outcome`` is what the system reported when recovery looked.
+    """
+
+    run_id: str
+    outcome: RunOutcome
 
 
 @dataclass(frozen=True)
@@ -74,10 +88,10 @@ class Unknown:
     candidates: tuple[str, ...] = field(default_factory=tuple)
 
 
-#: The three possible observations. Exhaustive under ``pyright`` strict: a
-#: ``match`` over this union needs no fallback case, which is what makes adding
-#: a fourth kind of answer a type error rather than a silent fall-through.
-type Observation = Adopt | NotApplied | Unknown
+#: The possible observations. Exhaustive under ``pyright`` strict: a ``match``
+#: over this union needs no fallback case, which is what makes adding another
+#: kind of answer a type error rather than a silent fall-through.
+type Observation = Adopt | InFlight | NotApplied | Unknown
 
 
 class Observer(Protocol):
@@ -104,13 +118,14 @@ class RecoverySummary:
     """Counts by outcome, for the startup log line."""
 
     adopted: int = 0
+    in_flight: int = 0
     not_applied: int = 0
     unknown: int = 0
 
     @property
     def total(self) -> int:
-        """How many entries were reconciled."""
-        return self.adopted + self.not_applied + self.unknown
+        """How many entries were looked at."""
+        return self.adopted + self.in_flight + self.not_applied + self.unknown
 
     def describe(self) -> str:
         """Render the summary the way the startup log states it."""
@@ -118,6 +133,7 @@ class RecoverySummary:
             return "nothing to reconcile"
         return (
             f"{self.adopted} adopted, "
+            f"{self.in_flight} in_flight, "
             f"{self.not_applied} not_applied, "
             f"{self.unknown} unknown"
         )
@@ -147,6 +163,7 @@ def reconcile(
             unreconciled state.
     """
     adopted = 0
+    in_flight = 0
     not_applied = 0
     unknown = 0
 
@@ -162,6 +179,15 @@ def reconcile(
                     resolved_by=JournalResolver.RECOVERY,
                 )
                 adopted += 1
+            case InFlight(run_id=run_id, outcome=outcome):
+                # Left unresolved on purpose: its issuer finishes it by polling.
+                logger.info(
+                    "journal entry %s: run %s is in flight (%s); left unresolved",
+                    entry.id,
+                    run_id,
+                    outcome.value,
+                )
+                in_flight += 1
             case NotApplied(reason=reason):
                 store.journal_resolve(
                     entry.id,
@@ -176,7 +202,12 @@ def reconcile(
                 )
                 unknown += 1
 
-    return RecoverySummary(adopted=adopted, not_applied=not_applied, unknown=unknown)
+    return RecoverySummary(
+        adopted=adopted,
+        in_flight=in_flight,
+        not_applied=not_applied,
+        unknown=unknown,
+    )
 
 
 def _observe(entry: JournalEntry, registry: ObserverRegistry) -> Observation:

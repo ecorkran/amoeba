@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: resident-process-and-recovery
 dateCreated: 20260921
-dateUpdated: 20261018
+dateUpdated: 20261023
 status: complete
 ---
 
@@ -69,6 +69,7 @@ The directory holds:
 | `<project>.sqlite3` | One store per project. |
 | `amoeba.lock` | The instance lock. **The truth about liveness.** |
 | `amoeba.pid` | JSON: pid, started-at, version. **Informational only.** |
+| `launch-logs/` | One stdout and one stderr log per launched `sq_run` entry, named `<entry id>.stdout.log` and `<entry id>.stderr.log`, written by the Runner's detached launch. Created at start; never deleted by Amoeba. They may hold whatever Squadron prints. *(Slice 122.)* |
 | `inbox/` | Submissions from outside the process: `tmp/`, `new/`, `quarantine/`, `failed/`. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
 | `amoeba ingest review --project ID --node NODE_ID --by NAME (--artifact PATH \| --stdout-json PATH) [--upstream-version LABEL] [--id ID]` | Read a Squadron review file, or the captured stdout of `sq review … --output json`, and submit it as a `verdict`. Prints the submission id on stdout and the node, parsed slice (`-` if none), and review type on stderr. Submits and does not wait: read the outcome with `inspect submissions` and `inspect inbox`. Refuses a project with no store file (`SUBMISSION_REFUSED`, nothing written) and opens no store. Works whether or not the process runs. See [`evidence-contract.md`](evidence-contract.md), "Parsing Squadron output". *(Slice 105.)* |
 
@@ -127,8 +128,9 @@ Tenants are ticked in registration order. When no tenant reports work, the loop
 waits on the stop event for `idle_interval_seconds` — it does not busy-loop, and
 the wait ends the moment stop is requested.
 
-**`amoeba start` registers three tenants, in this order** (`standard_tenants` in
-`process/tenants.py`):
+**`amoeba start` registers four tenants, in this order** (the first three are
+`standard_tenants` in `process/tenants.py`; the fourth is `runner_tenant` in
+`amoeba.runner`):
 
 1. `InboxTenant` (slice 103). It drains the inbox — see
    [`inbox-contract.md`](inbox-contract.md) — at most `inbox_batch_size` files
@@ -138,6 +140,10 @@ the wait ends the moment stop is requested.
 2. `ReviewDetectionTenant` (slice 106). See "Review detection" below.
 3. `CFWatchTenant` (slice 108). See "Context Forge watch" below. After the inbox,
    so a `link_cf_project` submission is applied before the tenant looks.
+4. `RunnerTenant` (slice 122). Observes the project's in-flight `sq_run` entries,
+   records the finished ones, and launches what its planners ask for. It is the
+   only tenant that starts a subprocess in a tick. No production planner exists
+   yet, so nothing launches until slice 125. See "The Runner tenant" below.
 
 What a tenant may use on `host`:
 
@@ -183,29 +189,41 @@ interruption, and it is yours to avoid.
 A tenant that launches a long subprocess polls it and checks `stop_requested`;
 it does not block the loop invisibly.
 
+*Tick-time subprocess calls (slice 122).* The shipped inbox, detection and
+Context Forge tenants start no subprocess in a tick. A tenant that does (the
+Runner) checks a deadline and `host.stop_requested` before **every** call, and
+bounds each call by `tick_call_timeout_seconds`. The deadline is
+`tick_deadline_seconds` from the start of the tick; it bounds when a call may
+begin, so a tick lasts at most the deadline plus one call timeout, and after a
+stop request no new call starts. `--tick-call-timeout` must be below
+`--shutdown-grace`, so a stop waits for at most one call.
+
 ## Hosting tenants
 
 A program that runs its own tenant imports everything it needs from
-`amoeba.process` and nothing deeper. The hosting surface is exactly these 13
+`amoeba.process` and nothing deeper. The hosting surface is exactly these 23
 names (pinned by `tests/test_process_public_api.py`):
 
 | Group | Names |
 | --- | --- |
 | The host | `ResidentProcess`, `ProcessSettings` |
 | Tenants | `Tenant`, `standard_tenants` |
-| Recovery observers | `Observer`, `Observation`, `Adopt`, `NotApplied`, `Unknown` |
-| Errors | `ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError` |
+| Recovery observers | `Observer`, `Observation`, `Adopt`, `InFlight`, `NotApplied`, `Unknown` |
+| Errors | `ProcessError`, `AlreadyRunningError`, `StartupFailedError`, `GraceExpiredError`, `UpstreamShapeError` |
+| Squadron outcomes *(slice 120)* | `SQ_EXECUTABLE`, `RunOutcome`, `OUTCOME_EXIT_CODES`, `RunCheckpoint`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run` |
 
-`Observation` is the union `Adopt | NotApplied | Unknown`; see "Recovery" below
+`Observation` is the union `Adopt | InFlight | NotApplied | Unknown`; see "Recovery" below
 for what each answer means.
 
 `standard_tenants(settings, supervisor_dir)` returns the three shipped tenants
-in the order listed under "The Tenant protocol". `amoeba start` passes exactly
-that tuple to `ResidentProcess`. Initiative 120 adds its Runner by composing in
-`start`:
+in the order listed under "The Tenant protocol". `amoeba start` composes the
+Runner after them (slice 122):
 
 ```python
-tenants = (*standard_tenants(settings, supervisor_dir), runner)
+tenants = (
+    *standard_tenants(settings, supervisor_dir),
+    runner_tenant(settings, supervisor_dir),
+)
 ```
 
 The Runner ticks after the shipped tenants, so inbox submissions and detection
@@ -213,7 +231,7 @@ results from the same pass are visible to it.
 
 `standard_tenants` captures `sq --version` and `cf --version` once, before the
 loop. Capture never raises: a missing or slow tool yields the explicit
-`unavailable` label, and no tick starts a subprocess.
+`unavailable` label. None of these tenants starts a subprocess in a tick.
 
 Run-file parsing (`SquadronRun`, `parse_run_file`) and pruning are internal and
 are not part of this surface.
@@ -309,6 +327,52 @@ subprocess. `cf --version` is captured once at start-up with `cf_timeout_seconds
 `amoeba inspect cf-links --project P` and `amoeba inspect cf-snapshots --project
 P` show the links and the recorded snapshots.
 
+## The Runner tenant
+
+*Slice 122.* `RunnerTenant` (`amoeba.runner`, imported only by `amoeba.cli`) is
+composed by `amoeba start` after the shipped tenants. Each tick, for every
+project, it runs: **observe** the unresolved `sq_run` entries, **record** each
+finished run, **decide** (pure: a `Planner` sees a frozen `ProjectView` and
+returns actions), **act** (journal a command, then launch it), and **close** any
+project escalation whose fault did not recur. The production planner tuple is
+empty, so nothing launches until slice 125; tests supply their own planner.
+
+- **The only control command is `sq_run`.** The entry is journaled with
+  `pipeline`, `params`, a minted `run_id` and the `checkout` directory before
+  anything is launched, and stays unresolved until the run is finished.
+- **Launch.** `sq run <pipeline> --run-id <id> -p k=v …` starts detached: its own
+  session, stdin from `/dev/null`, stdout and stderr to
+  `launch-logs/<entry id>.{stdout,stderr}.log`. It is confirmed by a stderr line
+  exactly equal to `run_id=<id>`, or by Squadron reporting a state for the id. A
+  child that exits before the line, with no state, fails the launch (the node
+  blocks on a human, the entry resolves `failed`). A child still alive past
+  `--launch-grace` with no state is *overdue*: the entry stays unresolved, a
+  `launch_overdue` project escalation is raised, and the launch keeps being
+  polled. A child that exits 2 with no state exits the process with
+  `UPSTREAM_SHAPE` (15).
+- **Resolution.** An entry resolves `completed` when the command ran and
+  reported an outcome, including a `failed` or `paused` run (the node blocks on a
+  human, and the run's outcome is in the entry's `result`). It resolves `failed`
+  when the command could not finish: an `orphaned` or vanished run, or a launch
+  that failed.
+- **Observation** is by run id with `poll_run`, at most once per tick per run and
+  no more often than `--run-poll-interval`, least recently polled first.
+- **Faults.** One `except Exception` per project, in `tenant.py`. A store failure
+  or an `UpstreamShapeError` re-raises and the process exits. Anything else is
+  logged and escalated: the node in context blocks on a human when it has no run
+  in flight and is not done; otherwise a project-scoped escalation is raised.
+  Expected faults (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`)
+  are project-scoped escalations; one open row exists per project and kind.
+- **Probes.** `sq runs wait <fresh id> --timeout 0 --json` must answer
+  `not_found` before the loop starts, or `start` exits `STARTUP_FAILED`. Each
+  Context Forge link is probed once per lifetime (`cf status --json -p <id>` and
+  `cf list initiatives --json -p <id>`); a failing link raises `cf_probe_failed`
+  for its project and the others carry on.
+- **Crash safety.** Recovery leaves an existing run in flight; the Runner's first
+  tick polls it and records it. A kill before `Popen` leaves an entry with no run,
+  which recovery marks `not_applied` once the launch grace period has passed. The
+  Runner does not relaunch it; the reissue is slice 125's (issue #9).
+
 ## Lifecycle failure modes
 
 Three cases where the process must decide rather than converge. Each is
@@ -349,20 +413,26 @@ On start, per project store, per unresolved journal entry, oldest first:
 observer = registry[entry.kind]        # absent → Unknown
 observation = observer.observe(entry)
   Adopt(result)      → journal_resolve(outcome=adopted,     resolved_by=recovery)
+  InFlight(run, …)   → nothing resolved; logged; left for its issuer to finish
   NotApplied(reason) → journal_resolve(outcome=not_applied, resolved_by=recovery)
   Unknown(reason, …) → journal_escalate(entry, reason)
 ```
 
-Four properties you may rely on:
+Five properties you may rely on:
 
 1. **Journal before side effect.** `journal_issue` commits before returning, so
    a crash immediately afterward leaves a durable unresolved entry.
 2. **Observe, never re-issue.** Recovery calls observers and the store, and
    nothing else. There is no code path that re-runs a command.
-3. **Exactly one adopted.** The only route to `adopted` is a run state found by
-   the entry's own run id, or, for a legacy entry (journaled before slice 120,
-   with no run id), exactly one matching candidate.
-4. **Everything else escalates.** Zero candidates, several candidates, an
+3. **Exactly one adopted.** The only route to `adopted` is, for a legacy entry
+   (journaled before slice 120, with no run id), exactly one matching candidate.
+4. **An existing run is left in flight.** An id-bearing `sq_run` entry whose run
+   exists is left unresolved, in flight, for its issuer to finish. Recovery
+   neither resolves it nor records anything on it (slice 122). The gate still
+   holds: before any tenant ticks, every entry is resolved or tied to a run
+   Squadron reports. A host without the Runner leaves such entries open, and
+   detection stays deferred for that project.
+5. **Everything else escalates.** Zero candidates, several candidates, an
    unregistered kind, an unreadable upstream, a parse failure, a missing
    required field — all become outcome `unknown` plus a `blocked_on_human` node
    whose blocked-state context names the journal entry.
@@ -385,13 +455,15 @@ class Observer(Protocol):
     def observe(self, entry: JournalEntry) -> Observation: ...
 
 
-Observation = Adopt | NotApplied | Unknown  # frozen dataclasses
+Observation = Adopt | InFlight | NotApplied | Unknown  # frozen dataclasses
 ```
 
 An observer **never** issues, retries, or repairs anything. Expected external
 failure is reported as `Unknown`, not raised — those are answers, not bugs.
 
-`Adopt` carries the `result` mapping to record. `NotApplied` is returned only by
+`Adopt` carries the `result` mapping to record. `InFlight(run_id, outcome)`
+means the command reached its system and is not finished: recovery resolves
+nothing and leaves the entry for its issuer. `NotApplied` is returned only by
 an observer that can genuinely distinguish "did not happen" from "cannot tell".
 `Unknown` carries a human-readable `reason` and any `candidates`.
 
@@ -415,9 +487,9 @@ so every entry journaled since slice 120 has one.
 `sq runs wait <id> --timeout 0 --json`, bounded by `--sq-timeout`. It never reads
 a run-state file. Any of the six outcomes that mean Squadron holds a state
 (`completed`, `failed`, `paused`, `timed_out` — still running — `unknown_status`,
-`orphaned`) adopts, recording `run_id`, `outcome` and `status` in the result.
-What an orphaned or unknown-status run means is the Runner's decision, not
-recovery's. `unreadable`, a missing `sq`, a timeout, exit 2, output that is not
+`orphaned`) answers `InFlight(run_id, outcome)`: the entry stays unresolved and
+the summary counts it as `in_flight`. What an orphaned or unknown-status run
+means is the Runner's decision, not recovery's. `unreadable`, a missing `sq`, a timeout, exit 2, output that is not
 JSON, an outcome that disagrees with the exit code, a document for another run,
 a run id already recorded on another entry, and a `run_id` that is not a
 non-empty string each escalate (`unknown`) with a reason naming the cause.
@@ -425,7 +497,7 @@ non-empty string each escalate (`unknown`) with a reason naming the cause.
 *Launch grace.* On `not_found`: with no `issued_at` the entry escalates. Inside
 `issued_at + --launch-grace` (default 60 s) the launch may still be creating its
 run, so recovery waits out the remainder (never more than one grace period),
-polls once more, and then adopts, escalates, or marks the entry `not_applied`.
+polls once more, and then leaves it in flight, escalates, or marks the entry `not_applied`.
 Past the grace period the entry is `not_applied` at once. A start-up after a
 crash within one grace period of a launch therefore stalls by at most the grace
 still remaining; each id-bearing entry makes at most two polls.
@@ -484,11 +556,17 @@ provenance and never parsed, ordered, or branched on.
 `start` exposes every loop-governing `ProcessSettings` tunable as a flag:
 `--idle-interval`, `--shutdown-grace`, `--clock-tolerance`, `--cf-timeout`,
 `--sq-runs-dir`, `--inbox-batch-size`, `--inbox-max-attempts`,
-`--review-scan-interval`, `--sq-timeout`, `--cf-data-dir`, `--launch-grace`.
+`--review-scan-interval`, `--sq-timeout`, `--cf-data-dir`, `--launch-grace`,
+`--tick-deadline`, `--tick-call-timeout`, `--run-poll-interval`.
 `--clock-tolerance` and `--sq-runs-dir` are used only by legacy matching.
 `--launch-grace SECONDS` (slice 120) is how long after a launch Squadron may still
 be creating the run; recovery reads it, and the Runner reads the same value to
-confirm launches. `stop` exposes the one tunable it consumes: `--stop-timeout`.
+confirm launches. *(Slice 122.)* `--tick-deadline SECONDS` (default 5) is how long
+after a tick starts the Runner may still begin a subprocess call;
+`--tick-call-timeout SECONDS` (default 8) bounds each call and must be below
+`--shutdown-grace`; `--run-poll-interval SECONDS` (default 15) is the least time
+between two polls of one run. All three must be positive, or `start` exits
+`STARTUP_FAILED`. `--sq-timeout` also bounds the `sq` probe at start. `stop` exposes the one tunable it consumes: `--stop-timeout`.
 
 ### Exit codes
 
@@ -504,7 +582,7 @@ Every status, and the condition that produces it. Defined once in
 | 4 | `STOP_TIMEOUT` | `stop`: the process did not release the lock before `--stop-timeout`. No `SIGKILL` follows. |
 | 5 | `NO_STOP_TARGET` | `stop`: the lock is held but the PID file is absent or unreadable. **Nothing was signalled.** |
 | 6 | `GRACE_EXPIRED` | `start`: a tenant did not return within `--shutdown-grace`. |
-| 7 | `STARTUP_FAILED` | `start`: a store could not be opened, or recovery could not complete, for any project. **Also** any store error that stops a running process — including an inbox apply that fails below its attempt limit — since the boundary maps every `StoreError` here, except `VerdictNotFoundError` (`NOT_FOUND`). |
+| 7 | `STARTUP_FAILED` | `start`: a store could not be opened, or recovery could not complete, for any project; **or** the Runner's `sq` probe failed (`sq runs wait <id> --timeout 0 --json` did not answer `not_found` for a fresh id); **or** a tick bound was not positive or `--tick-call-timeout` was not below `--shutdown-grace`. **Also** any store error that stops a running process — including an inbox apply that fails below its attempt limit — since the boundary maps every `StoreError` here, except `VerdictNotFoundError` (`NOT_FOUND`). |
 | 8 | `NOT_RUNNING_STATUS` | `status`: the supervisor is not running. Not a failure — it distinguishes running from stopped by exit status alone. |
 | 9 | `SUBMISSION_REFUSED` | `submit` and `ingest review`: the submission was invalid or could not be written, or (`ingest review`) the project has no store. Nothing was left in the inbox. *(Slice 103.)* |
 | 10 | `NOT_FOUND` | `inspect`: a record named on the command line (e.g. `changes --verdict ID`) does not exist. *(Slice 104.)* |
@@ -512,6 +590,7 @@ Every status, and the condition that produces it. Defined once in
 | 12 | `REVIEW_UNREADABLE` | `ingest review`: the file could not be read or parsed, or the review has no version label (or one that disagrees with its stamp). Nothing was left in the inbox. *(Slice 105.)* |
 | 13 | `SERVE_REFUSED` | `serve`: the bind policy refused the configuration (`token_required`, `tls_required`, `token_too_short`, `tls_unusable`). Nothing was bound. A bind failure at start-up (a port in use) is `FAILURE` (1), not uvicorn's own status. On `SIGTERM` the server exits by the signal after its shutdown grace. *(Slice 109.)* |
 | 14 | `PRUNE_INCOMPLETE` | `prune sq-runs --yes`: a candidate is still present after `sq` ran, or `sq` is missing, failed, or timed out. Every remaining candidate is printed. Amoeba deleted no file. *(Slice 110.)* |
+| 15 | `UPSTREAM_SHAPE` | `start`: a launch child exited 2 and left no run, so a Squadron shape the Runner needs (`sq run … --run-id`) is missing. The launch is recorded failed first. *(Slice 122; 8 was already `NOT_RUNNING_STATUS`.)* |
 
 ## Pruning paused runs
 
@@ -630,7 +709,10 @@ tickets.
 
 This applies to every caller that issues a journaled command, including the
 Runner in initiative 120. Store a reference — a path, an id, a key name — not
-the secret itself.
+the secret itself. A blocked-state payload is covered too: the Runner stores the
+last 4 KiB of a failed launch's stderr there, and Squadron prints no credentials.
+Launch logs under `launch-logs/` hold whatever Squadron prints; the inherited
+environment is passed to `sq` and is never logged or journaled.
 
 The supervisor directory is created with the user's default permissions, as in
 slice 101. No new exposure is introduced.

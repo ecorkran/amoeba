@@ -14,6 +14,9 @@ errors, takes ``SubmissionKind`` from its defining module, and never calls
 ``Store.open``.
 Rule 9: ``process/run_pruning.py`` is pure: it imports only the standard library
 and the outcome-document model it shares with the ``sq_run`` observer.
+Rule 10: only ``amoeba.cli`` imports ``amoeba.runner``.
+Rule 11: ``amoeba.runner`` takes from ``amoeba.store``, ``amoeba.process`` and
+``amoeba.upstream`` only names those packages export.
 """
 
 from __future__ import annotations
@@ -323,3 +326,39 @@ def test_the_run_file_read_check_reports_both_imports(tmp_path: Path) -> None:
         "DEFAULT_SQ_RUNS_DIR",
         "amoeba.process.observers.sq_runs",
     ]
+
+
+def test_rule_10_only_the_cli_imports_the_runner() -> None:
+    offenders = [
+        str(path.relative_to(SRC))
+        for path in sorted(SRC.rglob("*.py"))
+        if path.relative_to(SRC).parts[0] not in {"cli", "runner"}
+        and _mentions(_imported_names(path), "amoeba.runner")
+    ]
+    assert offenders == []
+    assert any(
+        _mentions(_imported_names(path), "amoeba.runner")
+        for path in (SRC / "cli").rglob("*.py")
+    ), "the CLI composes the Runner"
+
+
+def test_rule_11_the_runner_imports_only_public_names() -> None:
+    import importlib
+
+    roots = ("amoeba.store", "amoeba.process", "amoeba.upstream")
+    problems: list[str] = []
+    for path in sorted((SRC / "runner").glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            for root in roots:
+                if node.module.startswith(root + "."):
+                    problems.append(f"{path.name} imports from {node.module}")
+                elif node.module == root:
+                    exported = set(importlib.import_module(root).__all__)
+                    problems.extend(
+                        f"{path.name} imports {alias.name} from {root}"
+                        for alias in node.names
+                        if alias.name not in exported
+                    )
+    assert problems == []

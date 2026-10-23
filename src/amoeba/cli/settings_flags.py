@@ -112,7 +112,28 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=defaults.sq_timeout_seconds,
         metavar="SECONDS",
-        help="How long to wait for 'sq --version' at start-up.",
+        help="How long to wait for a start-up 'sq' call, including the Runner's probe.",
+    )
+    parser.add_argument(
+        "--tick-deadline",
+        type=float,
+        default=defaults.tick_deadline_seconds,
+        metavar="SECONDS",
+        help="How long one Runner tick may spend before starting no new calls.",
+    )
+    parser.add_argument(
+        "--tick-call-timeout",
+        type=float,
+        default=defaults.tick_call_timeout_seconds,
+        metavar="SECONDS",
+        help="The longest one Runner subprocess call may run.",
+    )
+    parser.add_argument(
+        "--run-poll-interval",
+        type=float,
+        default=defaults.run_poll_interval_seconds,
+        metavar="SECONDS",
+        help="The least time between two polls of the same launched run.",
     )
     parser.add_argument(
         "--cf-data-dir",
@@ -155,6 +176,9 @@ def start_settings(args: argparse.Namespace) -> ProcessSettings:
         sq_timeout_seconds=args.sq_timeout,
         cf_data_dir=args.cf_data_dir,
         launch_grace_seconds=args.launch_grace,
+        tick_deadline_seconds=args.tick_deadline,
+        tick_call_timeout_seconds=args.tick_call_timeout,
+        run_poll_interval_seconds=args.run_poll_interval,
     )
 
 

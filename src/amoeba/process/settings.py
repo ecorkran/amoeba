@@ -60,8 +60,9 @@ class ProcessSettings:
         review_scan_interval_seconds: How often the review-detection tenant
             scans watched directories. A file settles across two scans, so
             detection latency is about two intervals.
-        sq_timeout_seconds: How long to wait for ``sq --version`` at start-up.
-            Bounds start-up only: no tick starts a subprocess.
+        sq_timeout_seconds: How long to wait for a start-up ``sq`` call, which
+            includes the Runner's ``sq`` probe. Tick-time calls are bounded by
+            ``tick_call_timeout_seconds`` instead.
         cf_data_dir: The directory holding Context Forge's ``projects.json``,
             which the Context Forge watch reads. Resolved once at start-up and
             logged by the watch.
@@ -71,8 +72,17 @@ class ProcessSettings:
         launch_grace_seconds: How long after a launch was issued Squadron may
             still be creating the run, so that "no run state yet" is not proof
             the launch never happened. Recovery reads it to decide ``not_applied``
-            for an ``sq_run`` entry that carries a run id; the Runner (slice 122)
-            reads the same field to confirm launches.
+            for an ``sq_run`` entry that carries a run id; the Runner reads the
+            same field to confirm launches.
+        tick_deadline_seconds: How long one Runner tick may spend before it
+            stops starting new calls. Checked before every subprocess call; it
+            bounds when a call may begin, not how long a started call runs.
+        tick_call_timeout_seconds: The longest a single Runner subprocess call
+            may run. The default is larger than ``tick_deadline_seconds``, so a
+            call that starts just inside the deadline has room to finish; only
+            ``tick_call_timeout_seconds < shutdown_grace_seconds`` is enforced.
+        run_poll_interval_seconds: The least time between two polls of the same
+            launched run by the Runner.
     """
 
     idle_interval_seconds: float = 1.0
@@ -88,3 +98,6 @@ class ProcessSettings:
     cf_data_dir: Path = DEFAULT_CF_DATA_DIR
     cf_scan_interval_seconds: float = 1.0
     launch_grace_seconds: float = 60.0
+    tick_deadline_seconds: float = 5.0
+    tick_call_timeout_seconds: float = 8.0
+    run_poll_interval_seconds: float = 15.0

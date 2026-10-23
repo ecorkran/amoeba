@@ -17,10 +17,12 @@ from amoeba.process.errors import (
     GraceExpiredError,
     ProcessError,
     StartupFailedError,
+    UpstreamShapeError,
 )
 from amoeba.process.host import ResidentProcess, Tenant
 from amoeba.process.recovery import (
     Adopt,
+    InFlight,
     NotApplied,
     Observation,
     Observer,
@@ -29,6 +31,7 @@ from amoeba.process.recovery import (
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.sq_outcome import (
     OUTCOME_EXIT_CODES,
+    SQ_EXECUTABLE,
     PollFailure,
     RunCheckpoint,
     RunOutcome,
@@ -40,9 +43,11 @@ from amoeba.process.tenants import standard_tenants
 
 __all__ = [
     "OUTCOME_EXIT_CODES",
+    "SQ_EXECUTABLE",
     "Adopt",
     "AlreadyRunningError",
     "GraceExpiredError",
+    "InFlight",
     "NotApplied",
     "Observation",
     "Observer",
@@ -57,6 +62,7 @@ __all__ = [
     "StartupFailedError",
     "Tenant",
     "Unknown",
+    "UpstreamShapeError",
     "poll_run",
     "standard_tenants",
 ]

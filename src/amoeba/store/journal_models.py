@@ -62,6 +62,11 @@ class JournalResolver(StrEnum):
 #: The parameter key that carries an ``sq_run``'s Squadron run id (slice 120).
 PARAM_RUN_ID: Final = "run_id"
 
+#: The parameter key that carries an ``sq_run``'s working directory (slice 122):
+#: the absolute path the launch runs in. Stored and returned unchanged; recovery
+#: does not need it, so it is not a required key.
+PARAM_CHECKOUT: Final = "checkout"
+
 #: The parameter keys each command kind must carry at issue time.
 #:
 #: Validated by ``journal_issue`` *before* anything is written, because the

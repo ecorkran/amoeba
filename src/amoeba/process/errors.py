@@ -33,6 +33,15 @@ class StartupFailedError(ProcessError):
     """
 
 
+class UpstreamShapeError(ProcessError):
+    """An upstream tool lacks a shape the Runner needs.
+
+    Raised when a probe finds that ``sq`` or ``cf`` is missing a command or
+    option the Runner depends on. The tool is present but unusable, so the
+    process stops rather than running with a launch surface it cannot trust.
+    """
+
+
 class GraceExpiredError(ProcessError):
     """A tenant did not return within the shutdown grace period.
 

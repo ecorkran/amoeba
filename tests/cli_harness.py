@@ -17,6 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from sq_stub import write_sq_stub
+
 from amoeba.serve.settings import TOKEN_ENV_VAR
 
 #: How long to wait for a CLI invocation that is expected to return promptly.
@@ -38,17 +40,25 @@ class CommandResult:
 def cli_environment(supervisor_dir: Path) -> dict[str, str]:
     """An environment pointing the CLI at a throwaway supervisor directory.
 
-    Built by copying the real environment and *overriding* the store directory,
-    so the child inherits PATH and the virtualenv but can never resolve the
-    real supervisor location. ``AMOEBA_STORE_DIR`` is the only variable set —
-    the runs directory travels as ``--sq-runs-dir``, because the project adds
-    no new environment reads (D3). The serve token is dropped too: a real one in
-    the developer's shell must never reach a child; a test that needs one sets
-    it itself.
+    Built by copying the real environment and overriding two variables.
+    ``AMOEBA_STORE_DIR`` is set so the child can never resolve the real
+    supervisor location; the runs directory travels as ``--sq-runs-dir``,
+    because the project adds no new environment reads (D3). ``PATH`` gets a stub
+    ``sq`` first (below). The serve token is dropped: a real one in the
+    developer's shell must never reach a child; a test that needs one sets it
+    itself.
+
+    ``start`` probes ``sq`` before its loop (slice 122, D9), and no test runs
+    the real ``sq``. So the stub is written to disk by this call (idempotently),
+    in ``supervisor_dir.parent``, which must therefore be a throwaway
+    directory. Every suite that starts a process gets it; a test that wants no
+    ``sq`` replaces ``PATH`` afterwards.
     """
     environment = dict(os.environ)
     environment.pop(TOKEN_ENV_VAR, None)
     environment["AMOEBA_STORE_DIR"] = str(supervisor_dir)
+    stub_dir = write_sq_stub(supervisor_dir.parent / "stub-sq-bin")
+    environment["PATH"] = f"{stub_dir}{os.pathsep}{environment['PATH']}"
     return environment
 
 

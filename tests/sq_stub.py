@@ -16,6 +16,13 @@ id prints ``{"run_id": id, "outcome": "not_found"}`` and exits 5. That directory
 is deliberately not ``.config/squadron/runs``, so a test can put contrary files
 in the runs directory and show that nothing reads them.
 
+``sq run <pipeline> --run-id <id> -p k=v`` (slice 122): the detached launch. It
+refuses an id that is malformed (exit 2) or already has state (exit 1), and an
+unknown flag (exit 2). Otherwise it writes the id's document as still running
+(``timed_out``), prints ``run_id=<id>`` on stderr, sleeps ``RUN_SECONDS_ENV``,
+writes the final document (``RUN_OUTCOME_ENV``, ``completed`` unless set) and
+exits 0. ``RUN_MODE_ENV`` forces a failure case; see :class:`RunMode`.
+
 ``write_sq_stub`` is the only definition. A test puts the returned directory
 first on ``PATH`` and picks a behavior with the environment variables below.
 """
@@ -37,7 +44,17 @@ LOG_ENV = "SQ_STUB_LOG"
 #: The one run id the ``refuse`` mode keeps, as a live run would be.
 REFUSE_ENV = "SQ_STUB_REFUSE"
 
+#: ``sq run`` settings: how long the run lasts, how it ends, how it misbehaves.
+RUN_SECONDS_ENV = "SQ_STUB_RUN_SECONDS"
+RUN_OUTCOME_ENV = "SQ_STUB_RUN_OUTCOME"
+RUN_MODE_ENV = "SQ_STUB_RUN_MODE"
+#: How long ``late_line`` waits before it creates the state and prints the line.
+RUN_LATE_SECONDS_ENV = "SQ_STUB_RUN_LATE_SECONDS"
+
 STUB_NAME = "sq"
+
+#: Squadron's run id rule, restated because the stub is a separate program.
+STUB_RUN_ID_PATTERN: Final = r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}"
 
 #: Where the stub keeps one outcome document per run id, relative to ``$HOME``.
 STUB_STATE_RELATIVE: Final = Path(".sq-stub") / "runs"
@@ -72,11 +89,25 @@ class StubMode(StrEnum):
     SLEEP = "sleep"
 
 
+class RunMode(StrEnum):
+    """How ``sq run`` misbehaves; absent means a normal run."""
+
+    #: Exit 1 before any line and before any state.
+    EXIT_BEFORE_LINE = "exit_before_line"
+    #: Create the state, never print the line.
+    NO_LINE = "no_line"
+    #: Sleep ``RUN_LATE_SECONDS_ENV``, then create the state and print the line.
+    LATE_LINE = "late_line"
+    #: Exit 2 with no state.
+    USAGE_ERROR = "usage_error"
+
+
 _SCRIPT = textwrap.dedent(
     """\
     #!{python}
     import json
     import os
+    import re
     import sys
     import time
     from pathlib import Path
@@ -106,6 +137,53 @@ _SCRIPT = textwrap.dedent(
             sys.exit(2)
         print(text)
         sys.exit(exit_codes[outcome])
+
+    state_dir = Path.home().joinpath(*{state_parts!r})
+
+    if arguments[:1] == ["run"]:
+        run_mode = os.environ.get({run_mode_env!r})
+        if run_mode == {usage_error!r}:
+            print("stub sq: usage error", file=sys.stderr)
+            sys.exit(2)
+        pipelines = []
+        run_id = None
+        rest = iter(arguments[1:])
+        for argument in rest:
+            if argument == "--run-id":
+                run_id = next(rest, None)
+            elif argument == "-p":
+                next(rest, None)
+            elif argument.startswith("-"):
+                print("stub sq: unknown flag", argument, file=sys.stderr)
+                sys.exit(2)
+            else:
+                pipelines.append(argument)
+        if len(pipelines) != 1 or run_id is None:
+            print("stub sq: need a pipeline and --run-id", file=sys.stderr)
+            sys.exit(2)
+        if not re.fullmatch({run_id_pattern!r}, run_id):
+            print("stub sq: invalid run id", repr(run_id), file=sys.stderr)
+            sys.exit(2)
+        if run_mode == {exit_before_line!r}:
+            sys.exit(1)
+        if run_mode == {late_line!r}:
+            time.sleep(float(os.environ[{run_late_env!r}]))
+        state_file = state_dir / (run_id + ".json")
+        if state_file.exists():
+            print("stub sq: run already exists", run_id, file=sys.stderr)
+            sys.exit(1)
+
+        def write_state(outcome):
+            state_dir.mkdir(parents=True, exist_ok=True)
+            document = dict(run_id=run_id, outcome=outcome, status=outcome)
+            state_file.write_text(json.dumps(document), encoding="utf-8")
+
+        write_state("timed_out")
+        if run_mode != {no_line!r}:
+            print("run_id=" + run_id, file=sys.stderr, flush=True)
+        time.sleep(float(os.environ[{run_seconds_env!r}]))
+        write_state(os.environ.get({run_outcome_env!r}, "completed"))
+        sys.exit(0)
 
     mode = os.environ[{mode_env!r}]
     if arguments[:2] != ["runs", "prune"]:
@@ -150,6 +228,15 @@ def write_sq_stub(bin_dir: Path) -> Path:
             fail=StubMode.FAIL.value,
             sleep=StubMode.SLEEP.value,
             refuse_one=StubMode.REFUSE_ONE.value,
+            run_mode_env=RUN_MODE_ENV,
+            run_seconds_env=RUN_SECONDS_ENV,
+            run_outcome_env=RUN_OUTCOME_ENV,
+            run_late_env=RUN_LATE_SECONDS_ENV,
+            run_id_pattern=STUB_RUN_ID_PATTERN,
+            usage_error=RunMode.USAGE_ERROR.value,
+            exit_before_line=RunMode.EXIT_BEFORE_LINE.value,
+            no_line=RunMode.NO_LINE.value,
+            late_line=RunMode.LATE_LINE.value,
             delete_then_exit_one=StubMode.DELETE_THEN_EXIT_ONE.value,
         ),
         encoding="utf-8",
