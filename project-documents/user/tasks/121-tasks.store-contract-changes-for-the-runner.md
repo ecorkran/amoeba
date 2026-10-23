@@ -252,30 +252,30 @@ New `tests/store/test_desired_state.py`.
 ### Task 6.1: Raise, list and close
 **Owner**: Junior AI | **Dependencies**: 5.3 | **Effort**: 3
 
-- [ ] `store/sql_runner.py`: statements to select the open row for `(project_id, fault_kind)`, select open project-scoped rows by `seq`, insert a project-scoped escalation (reuse `INSERT_MESSAGE` if it can carry `fault_kind`. If it cannot, add a statement that does and do not duplicate the base column list), and close by id (guarded by `closed_at IS NULL`, the escalation channel and `fault_kind IS NOT NULL`)
-- [ ] `store/project_escalations.py` (new, mixed into `Store`): `raise_project_escalation(project_id, *, fault_kind, payload) -> Message`, `open_project_escalations(project_id) -> list[Message]`, `close_project_escalation(message_id, *, closed_by) -> Message`
-- [ ] Raise: `fault_kind` must be non-empty text (`ValueError`). `payload` is required and JSON-encoded like a block's payload. An open row for the pair is returned unchanged with nothing written. Otherwise insert with `node_id`, `blocked_state_id` and `journal_entry_id` null, inside one transaction. The existing trigger emits `message_posted`
-- [ ] Close: zero rows changed raises `InvalidTransitionError` (missing, not project-scoped, or already closed). `closed_by` must be non-empty (`ValueError`). Return the closed row
-- [ ] Export no new names (the methods are on `Store`). Pin the three methods in `CONTRACT_METHODS`
+- [x] `store/sql_runner.py`: statements to select the open row for `(project_id, fault_kind)`, select open project-scoped rows by `seq`, insert a project-scoped escalation (reuse `INSERT_MESSAGE` if it can carry `fault_kind`. If it cannot, add a statement that does and do not duplicate the base column list), and close by id (guarded by `closed_at IS NULL`, the escalation channel and `fault_kind IS NOT NULL`). Note: INSERT_MESSAGE is now built by sql_inbox.insert_message_statement from MESSAGE_INSERT_COLUMNS; the project-escalation insert extends it with fault_kind. _require_message moved to StoreBase.
+- [x] `store/project_escalations.py` (new, mixed into `Store`): `raise_project_escalation(project_id, *, fault_kind, payload) -> Message`, `open_project_escalations(project_id) -> list[Message]`, `close_project_escalation(message_id, *, closed_by) -> Message`
+- [x] Raise: `fault_kind` must be non-empty text (`ValueError`). `payload` is required and JSON-encoded like a block's payload. An open row for the pair is returned unchanged with nothing written. Otherwise insert with `node_id`, `blocked_state_id` and `journal_entry_id` null, inside one transaction. The existing trigger emits `message_posted`
+- [x] Close: zero rows changed raises `InvalidTransitionError` (missing, not project-scoped, or already closed). `closed_by` must be non-empty (`ValueError`). Return the closed row
+- [x] Export no new names (the methods are on `Store`). Pin the three methods in `CONTRACT_METHODS`
 - **Success Criteria**:
-  - [ ] `pyright` clean. Open-row reads use the partial index (the select repeats the index's `WHERE` literally, as `SELECT_PENDING_INTENTS` does. Note this in a comment)
-  - [ ] Committed with Task 6.2
+  - [x] `pyright` clean. Open-row reads use the partial index (the select repeats the index's `WHERE` literally, as `SELECT_PENDING_INTENTS` does. Note this in a comment)
+  - [x] Committed with Task 6.2
 
 ### Task 6.2: Project-scoped escalation tests
 **Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 3
 
 New `tests/store/test_project_escalation.py`.
 
-- [ ] Raising twice for one `(project, kind)` returns the same id and leaves one row. A second kind yields a second row. A second project with the same kind yields a separate row
-- [ ] After close, raising again yields a new row and `open_project_escalations` shows only it
-- [ ] `open_project_escalations` returns rows in `seq` order and excludes closed rows and node escalations
-- [ ] Close raises `InvalidTransitionError` for a missing id, a node escalation, an intent row and an already closed row. Closing records `closed_at` and `closed_by`
-- [ ] Empty `fault_kind` and empty `closed_by` raise `ValueError`. Nothing is written
-- [ ] The feed carries a `message_posted` change for the raise (use the feed read the existing trigger tests use, `tests/store/test_feed_triggers.py`). Closing adds no change (D9)
-- [ ] A node escalation's `pending_intents` and `messages(channel=ESCALATION)` behavior is unchanged
+- [x] Raising twice for one `(project, kind)` returns the same id and leaves one row. A second kind yields a second row. A second project with the same kind yields a separate row
+- [x] After close, raising again yields a new row and `open_project_escalations` shows only it
+- [x] `open_project_escalations` returns rows in `seq` order and excludes closed rows and node escalations
+- [x] Close raises `InvalidTransitionError` for a missing id, a node escalation, an intent row and an already closed row. Closing records `closed_at` and `closed_by`
+- [x] Empty `fault_kind` and empty `closed_by` raise `ValueError`. Nothing is written
+- [x] The feed carries a `message_posted` change for the raise (use the feed read the existing trigger tests use, `tests/store/test_feed_triggers.py`). Closing adds no change (D9)
+- [x] A node escalation's `pending_intents` and `messages(channel=ESCALATION)` behavior is unchanged
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/store/test_project_escalation.py tests/store/test_feed_triggers.py -q` passes. Full suite, `ruff` and `pyright` clean
-  - [ ] Tasks 6.1–6.2 committed as `feat: add project-scoped escalation`
+  - [x] `uv run pytest tests/store/test_project_escalation.py tests/store/test_feed_triggers.py -q` passes. Full suite, `ruff` and `pyright` clean
+  - [x] Tasks 6.1–6.2 committed as `feat: add project-scoped escalation`
 
 ---
 
