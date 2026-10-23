@@ -119,3 +119,49 @@ DESIRED_STATE_COLUMNS: Final = (
 
 INDEX_DESIRED_PROJECT_TARGET: Final = "idx_desired_states_project_target"
 INDEX_DESIRED_NODE_TARGET: Final = "idx_desired_states_node_target"
+
+# A target is one project or one node. SQLite cannot bind ``node_id IS NULL``,
+# so the project target and a node target are separate statements. Each repeats
+# its partial unique index's WHERE literally, so the lookup uses the index.
+_DESIRED_SELECT_LIST = ", ".join(DESIRED_STATE_COLUMNS)
+
+SELECT_DESIRED_PROJECT_TARGET: Final = f"""
+SELECT {_DESIRED_SELECT_LIST}
+FROM {TABLE_DESIRED_STATES}
+WHERE {COL_DESIRED_PROJECT_ID} = ?
+  AND {COL_DESIRED_NODE_ID} IS NULL
+"""
+
+SELECT_DESIRED_NODE_TARGET: Final = f"""
+SELECT {_DESIRED_SELECT_LIST}
+FROM {TABLE_DESIRED_STATES}
+WHERE {COL_DESIRED_NODE_ID} IS NOT NULL
+  AND {COL_DESIRED_NODE_ID} = ?
+"""
+
+#: Project target first (its node id is NULL), then by node id.
+SELECT_DESIRED_FOR_PROJECT: Final = f"""
+SELECT {_DESIRED_SELECT_LIST}
+FROM {TABLE_DESIRED_STATES}
+WHERE {COL_DESIRED_PROJECT_ID} = ?
+ORDER BY {COL_DESIRED_NODE_ID} IS NOT NULL, {COL_DESIRED_NODE_ID}
+"""
+
+#: Replacing a target's row is delete-then-insert in one transaction, because an
+#: ``ON CONFLICT`` target cannot name a partial index's predicate portably.
+DELETE_DESIRED_PROJECT_TARGET: Final = f"""
+DELETE FROM {TABLE_DESIRED_STATES}
+WHERE {COL_DESIRED_PROJECT_ID} = ?
+  AND {COL_DESIRED_NODE_ID} IS NULL
+"""
+
+DELETE_DESIRED_NODE_TARGET: Final = f"""
+DELETE FROM {TABLE_DESIRED_STATES}
+WHERE {COL_DESIRED_NODE_ID} IS NOT NULL
+  AND {COL_DESIRED_NODE_ID} = ?
+"""
+
+INSERT_DESIRED_STATE: Final = f"""
+INSERT INTO {TABLE_DESIRED_STATES} ({_DESIRED_SELECT_LIST})
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""

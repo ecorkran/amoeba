@@ -161,6 +161,9 @@ CONTRACT_METHODS = {
     "pending_intents",
     "acknowledge_message",
     "intent_for_submission",
+    # Desired state, added by slice 121.
+    "desired_state",
+    "desired_states",
     # Verdicts and findings, added by slice 104.
     "record_verdict",
     "verdict",

@@ -25,6 +25,7 @@ from amoeba.store.blocking import BlockingOperations
 from amoeba.store.calibration import CalibrationOperations
 from amoeba.store.cf_snapshots import CFOperations
 from amoeba.store.checks import CheckOperations
+from amoeba.store.desired_states import DesiredStateOperations
 from amoeba.store.feed import FeedOperations
 from amoeba.store.inbox import InboxOperations
 from amoeba.store.journal import JournalOperations
@@ -58,6 +59,7 @@ class Store(
     BlockingOperations,
     JournalOperations,
     MessageOperations,
+    DesiredStateOperations,
     InboxOperations,
     VerdictOperations,
     CheckOperations,

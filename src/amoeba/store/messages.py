@@ -11,10 +11,12 @@ consumer needs no write access to follow a channel.
 from __future__ import annotations
 
 from amoeba.store import sql_inbox
-from amoeba.store._base import StoreBase, isoformat, now
+from amoeba.store._base import isoformat, now
+from amoeba.store.desired_states import DesiredStateOperations
 from amoeba.store.inbox_models import AcknowledgmentOutcome, Channel, Message
 from amoeba.store.mapping_inbox import map_message
 from amoeba.store.models import InvalidTransitionError
+from amoeba.store.runner_models import ClearDesiredState, SetDesiredState
 
 
 def _validated_outcome(
@@ -29,7 +31,7 @@ def _validated_outcome(
     return validated
 
 
-class MessageOperations(StoreBase):
+class MessageOperations(DesiredStateOperations):
     """The replay primitive, the Runner's intent queue, and acknowledgement."""
 
     def messages(
@@ -57,6 +59,7 @@ class MessageOperations(StoreBase):
         acknowledged_by: str,
         outcome: AcknowledgmentOutcome,
         reason: str | None = None,
+        desired_state: SetDesiredState | ClearDesiredState | None = None,
     ) -> Message:
         """Mark an ``intent`` row consumed, and record how it ended.
 
@@ -70,24 +73,35 @@ class MessageOperations(StoreBase):
             outcome: How it ended. Required; there is no default.
             reason: Why. Required, and non-blank, for ``rejected``; optional
                 for the other outcomes, and non-empty when given.
+            desired_state: A desired-state change, written in the same
+                transaction as the acknowledgment (D3). Only with ``applied``.
 
         Returns:
             The acknowledged message.
 
         Raises:
             ValueError: If ``outcome`` is outside the vocabulary, ``rejected``
-                has no reason, or a given reason is empty. Nothing is written.
+                has no reason, a given reason is empty, a desired state comes
+                with any outcome but ``applied``, or a set breaks a shape rule.
+                Nothing is written.
+            NodeNotFoundError: If the desired state names a node that is not in
+                the intent's project. Nothing is written.
             InvalidTransitionError: If the row does not exist, is not an intent,
                 or is already acknowledged. A first acknowledgement is never
                 silently overwritten.
         """
         validated = _validated_outcome(outcome, reason)
+        if desired_state is not None and validated is not AcknowledgmentOutcome.APPLIED:
+            raise ValueError(
+                f"a desired state needs outcome 'applied', not {validated.value!r}"
+            )
+        timestamp = isoformat(now())
 
         with self._connection:
             cursor = self._execute(
                 sql_inbox.ACKNOWLEDGE_MESSAGE,
                 (
-                    isoformat(now()),
+                    timestamp,
                     acknowledged_by,
                     validated.value,
                     reason,
@@ -100,7 +114,14 @@ class MessageOperations(StoreBase):
                     f"message {message_id!r} does not exist, is not an intent, "
                     "or is already acknowledged"
                 )
+            if desired_state is not None:
+                self._write_desired_state_change(
+                    self._require_message(message_id), desired_state, timestamp
+                )
 
+        return self._require_message(message_id)
+
+    def _require_message(self, message_id: str) -> Message:
         row = self._execute(sql_inbox.SELECT_MESSAGE_BY_ID, (message_id,)).fetchone()
         if row is None:
             raise InvalidTransitionError(f"message {message_id!r} vanished")
