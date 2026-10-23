@@ -39,10 +39,10 @@ revision_number: 1
 
 **Reading note:** this file does not restate the LLD. "Per the LLD" means open `user/slices/122-slice.runner-tenant-and-control-surface.md` at the named decision (D1–D10), "Architecture", or "API Contracts". Keep every new or changed source file near 300 lines and each function near 50.
 
-**Commit cadence:** one commit per task unless the task says otherwise. A commit never holds untested behavior. Run `uv run ruff format .` before each commit. Commit type is `feat:` for new behavior, `refactor:` for the D3 change, `test:` for test-only work, `docs:` for contract text.
+**Commit cadence:** one commit per task. A commit never holds untested behavior. Run `uv run ruff format .` before each commit. Commit type is `feat:` for new behavior, `refactor:` for the D3 change, `test:` for test-only work, `docs:` for contract text.
 
 **Task-level additions to the LLD:**
-- **Package layout.** Create `src/amoeba/runner/` with `__init__.py` exporting only `runner_tenant` and `RunnerTenant`. Tests live in `tests/runner/` (with `__init__.py`), sharing helpers in `tests/runner/conftest.py` and `tests/runner/harness.py`.
+- **Package layout.** Create `src/amoeba/runner/` with `__init__.py` exporting only `runner_tenant` and `RunnerTenant`. Tests live in `tests/runner/` (with `__init__.py`, created by Task 5.1).
 - **Exception rule.** `amoeba.runner` has exactly one `except Exception` (the per-project catch in `tenant.py`, Task 10.2). Every other `except` names a specific exception with a comment saying why swallowing or handling is correct, or re-raises after `logger.exception`.
 - **No magic values.** Every comparison value in the LLD's "Patterns and Conventions" list is defined once and imported. Defaults for the new settings live only in `settings.py`.
 - **Test doubles.** The clock, the subprocess runner and `Popen` are injected, so unit tests never sleep and never run the real `sq` or `cf`.
@@ -92,9 +92,9 @@ Edit `cli/settings_flags.py`. Follow how an existing float flag (for example `--
 
 Edit `process/errors.py` and `cli/main.py`.
 
-- [ ] Add `UpstreamShapeError(ProcessError)` next to `StartupFailedError`, with a docstring: an upstream tool lacks a shape the Runner needs. It is not exported from `amoeba.process` (the pin stays 21 names after Task 3.1)
+- [ ] Add `UpstreamShapeError(ProcessError)` next to `StartupFailedError`, with a docstring: an upstream tool lacks a shape the Runner needs. It is exported from `amoeba.process`, because `amoeba.runner` may import only public names; update `__all__` and `EXPECTED_EXPORTS` in `tests/test_process_public_api.py` from 20 to 21 names in this task (Task 3.1 then adds `InFlight`)
 - [ ] Add `ExitCode.UPSTREAM_SHAPE = 15` (the LLD says 8, but 8 is `NOT_RUNNING_STATUS`; 15 is the next free value) with the condition in its comment. Map `UpstreamShapeError` to it in the boundary handler, as `StartupFailedError` maps to `STARTUP_FAILED`
-- [ ] Tests, following how the existing exit-code mappings are tested in `tests/test_cli_lifecycle.py`: raising `UpstreamShapeError` from a tenant exits 8 and prints the message; the exit code values are unchanged for all existing members
+- [ ] Tests, following how the existing exit-code mappings are tested in `tests/test_cli_lifecycle.py`: raising `UpstreamShapeError` from a tenant exits 15 and prints the message; the exit code values are unchanged for all existing members
 - **Success Criteria**:
   - [ ] Tests pass. Exit code 15 is not used by any other member. Commit: `feat: add UPSTREAM_SHAPE exit code and UpstreamShapeError`
 
@@ -104,73 +104,45 @@ Edit `process/errors.py` and `cli/main.py`.
 
 This is the slice's first behavior change. It lands, with every dependent test, before any Runner code.
 
-### Task 3.1: Add `InFlight` to recovery, with tests
-**Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 3
+### Task 3.1: Recovery leaves an existing run in flight, with tests
+**Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 4
 
-Edit `process/recovery.py`, `process/__init__.py`, `tests/test_recovery.py`, `tests/test_process_public_api.py`.
+Edit `process/recovery.py`, `process/observers/sq_run_id.py`, `process/__init__.py`, `tests/test_recovery.py`, `tests/test_observer_sq_run_id.py`, `tests/test_process_public_api.py` and the contract suite. Per the LLD, D3. This is one task and one commit because the observer change breaks the contract suite until its stand-in and oracle are updated.
 
 - [ ] Add frozen dataclass `InFlight(run_id: str, outcome: RunOutcome)` and add it to `Observation`. Docstring: the command reached its system and is not finished, so the entry is left unresolved for its issuer
 - [ ] `reconcile` handles `InFlight` with a `match` case: log at INFO naming the entry, run id and outcome, resolve nothing. Add `in_flight: int` to `RecoverySummary`, include it in `total` and in `describe()`
-- [ ] Export `InFlight` from `amoeba.process`; update `__all__` and the pinned list in `tests/test_process_public_api.py` from 20 names to 21
-- [ ] Tests in `tests/test_recovery.py`: an observer returning `InFlight` leaves the entry unresolved; the summary counts it and `describe()` names it; `total` includes it; the existing `Adopt`/`NotApplied`/`Unknown` cases are unchanged
+- [ ] Export `InFlight` from `amoeba.process`; update `__all__` and the pinned list in `tests/test_process_public_api.py` (Task 2.3 already added `UpstreamShapeError`, so the pin goes to 22 names)
+- [ ] By-id observer: in `_classify`, return `InFlight(run_id, outcome)` for every outcome in `STATE_BEARING_OUTCOMES` (completed, failed, paused, timed_out, unknown_status, orphaned). Remove the `Adopt` import and the `RESULT_*` result building if now unused. `NotApplied`, `Unknown` and the claimed-id guard stay. Rewrite the module docstring bullet "Any run state … adopt" to the in-flight rule. The legacy matcher (`SquadronRunsObserver`) keeps adopting
+- [ ] Contract suite (`tests/contract/runner_tenant.py`, `steps.py`, `end_state.py`, the oracle; run `grep -n "adopted\|ADOPTED" tests/contract/*.py` first): after a restart the stand-in Runner finishes each unresolved id-bearing `sq_run` entry of its project, resolving it `completed` by `issuer` with the run id in the result. The oracle and `check_adopted_review` expect that where they expected `adopted` by recovery for id-bearing entries; rename the check if its name now misleads. Weaken no other assertion
+- [ ] Tests: in `test_recovery.py`, an observer returning `InFlight` leaves the entry unresolved, the summary counts and names it, and the existing cases are unchanged. In `test_observer_sq_run_id.py`, expect `InFlight` for each state-bearing outcome; a state on the second poll after the grace wait gives `InFlight`; a claimed run id is still `Unknown`; a legacy entry still adopts
 - **Success Criteria**:
-  - [ ] pyright strict accepts the exhaustive `match`. Recovery and public-API tests pass. The commit may break the observer and contract tests that Tasks 3.2 and 3.3 repair, so commit 3.1–3.3 together at the end of 3.3
-
-### Task 3.2: By-id observer returns `InFlight`, with tests
-**Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3
-
-Edit `process/observers/sq_run_id.py` and `tests/test_observer_sq_run_id.py`. Per the LLD, D3.
-
-- [ ] In `_classify`, return `InFlight(run_id, outcome)` for every outcome in `STATE_BEARING_OUTCOMES` (completed, failed, paused, timed_out, unknown_status, orphaned). Remove the `Adopt` import and the `RESULT_*` result building if now unused. `NotApplied` and `Unknown` paths and the claimed-id guard stay as they are
-- [ ] Rewrite the module docstring bullet "Any run state … adopt" to the in-flight rule. Leave the legacy matcher (`SquadronRunsObserver`) adopting
-- [ ] Update the existing tests that expect `Adopt` for a state-bearing outcome to expect `InFlight`, one case per outcome. Add: the second poll after the grace wait returning a state gives `InFlight`; a claimed run id is still `Unknown`; a legacy entry (no run id) still adopts
-- **Success Criteria**:
-  - [ ] `tests/test_observer_sq_run_id.py` and `tests/test_observer_sq_runs.py` pass
-
-### Task 3.3: Update the contract suite's stand-in and oracle; commit D3
-**Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 3
-
-Edit `tests/contract/runner_tenant.py`, `tests/contract/steps.py`, `tests/contract/end_state.py` and the oracle as needed. Run `grep -n "adopted\|ADOPTED" tests/contract/*.py` first.
-
-- [ ] After a restart the stand-in Runner finishes each unresolved id-bearing `sq_run` entry of its project: it polls nothing new, reads the run through the same public surface it already uses, and resolves the entry `completed` by `issuer` with the run id in the result
-- [ ] The oracle and `check_adopted_review` expect `completed` resolved by the issuer where they expected `adopted` by recovery for id-bearing entries; rename the check if its name now misleads
-- [ ] Do not weaken any other oracle assertion
-- **Success Criteria**:
-  - [ ] `uv run pytest tests/contract -q` passes. Full `uv run pytest -q`, `ruff`, `pyright` clean. One commit for 3.1–3.3: `refactor: recovery leaves an existing run in flight`
+  - [ ] pyright strict accepts the exhaustive `match`. `uv run pytest tests/contract -q`, the recovery, observer and public-API tests, full `uv run pytest -q`, `ruff` and `pyright` are clean. Commit: `refactor: recovery leaves an existing run in flight`
 
 ---
 
 ## Section 4: Stub `sq` run mode
 
-### Task 4.1: Add `run --run-id` to the stub `sq`
-**Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 3
+### Task 4.1: Add `run --run-id` to the stub `sq`, with tests
+**Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 4
 
-Edit `tests/sq_stub.py` (171 lines now; if it passes ~300, move the run mode to `tests/sq_stub_run.py` and import it). Read the existing `runs wait` mode and `tests/sq_run_fixtures.py` first: the run mode writes the same per-id state documents. Per the LLD, "Stub `sq` run mode".
+Edit `tests/sq_stub.py` (171 lines now; if it passes ~300, move the run mode to `tests/sq_stub_run.py` and import it); tests in new `tests/test_sq_stub_run.py`, running the stub as a subprocess under a temporary runs directory. Read the existing `runs wait` mode and `tests/sq_run_fixtures.py` first: the run mode writes the same per-id state documents. Per the LLD, "Stub `sq` run mode".
 
-- [ ] `sq run <pipeline> --run-id <id> -p k=v …`: validate the id against Squadron's rule (import the pattern from the test side only if `amoeba.runner.launch` exists yet; otherwise restate it in the stub, since the stub is a separate program) and exit 1 if the id already has state; exit 2 on an unknown flag
+- [ ] `sq run <pipeline> --run-id <id> -p k=v …`: validate the id against Squadron's rule (restate the pattern in the stub, since the stub is a separate program) and exit 1 if the id already has state; exit 2 on an unknown flag
 - [ ] Otherwise write the id's document as still running, print exactly `run_id=<id>` to stderr, sleep `SQ_STUB_RUN_SECONDS`, write the final document (`SQ_STUB_RUN_OUTCOME`, default `completed`) and exit 0
 - [ ] `SQ_STUB_RUN_MODE` selects: `exit_before_line` (exit 1 with no line and no state), `no_line` (create the state but never print the line), `late_line` (sleep, then create the state and print the line), `usage_error` (exit 2, no state)
 - [ ] Append every invocation (argv) to the file named by `SQ_STUB_LOG`
+- [ ] Tests, one per behavior above: normal run writes running then completed; duplicate id exits 1; unknown flag exits 2; each `SQ_STUB_RUN_MODE`; the log records each call
 - **Success Criteria**:
-  - [ ] Existing stub users still pass. No test yet; Task 4.2 tests it
-
-### Task 4.2: Test the stub run mode
-**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
-
-New `tests/test_sq_stub_run.py`. Run the stub as a subprocess under a temporary runs directory.
-
-- [ ] One test per behavior in 4.1: normal run writes running then completed; duplicate id exits 1; unknown flag exits 2; each `SQ_STUB_RUN_MODE`; the log records each call
-- **Success Criteria**:
-  - [ ] Tests pass and take a few seconds at most (short `SQ_STUB_RUN_SECONDS`). Commit 4.1–4.2: `test: add detached run mode to the stub sq`
+  - [ ] Existing stub users still pass. New tests pass in a few seconds at most (short `SQ_STUB_RUN_SECONDS`). Commit: `test: add detached run mode to the stub sq`
 
 ---
 
 ## Section 5: Launch
 
 ### Task 5.1: Create the package and run-id minting, with tests
-**Owner**: Junior AI | **Dependencies**: 4.2 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
 
-Create `src/amoeba/runner/__init__.py` (empty exports for now), `runner/faults.py` and `runner/launch.py`; tests `tests/runner/test_launch_ids.py`. Per the LLD, D5 and D8.
+Create `tests/runner/__init__.py`, `src/amoeba/runner/__init__.py` (empty exports for now), `runner/faults.py` and `runner/launch.py`; tests `tests/runner/test_launch_ids.py`. Per the LLD, D5 and D8.
 
 - [ ] `faults.py` holds the shared vocabulary so later tasks import it: `FaultKind` `StrEnum` (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`, `unexpected_fault`), `LaunchFailure` `StrEnum` (`spawn_error`, `exited_before_line`, `usage_error`) and the `STORE_FAILURES` tuple (`StoreBusyError`, `StoreCorruptError`, `StorePermissionError`, `StoreSchemaError`, `sqlite3.Error`). Escalation writes are added in Task 10.1
 - [ ] `SQUADRON_RUN_ID_PATTERN` defined once in `launch.py`
@@ -209,34 +181,26 @@ Edit `runner/launch.py`; tests `tests/runner/test_launch.py`. Per the LLD, D2 (p
 
 ## Section 6: Decide and the tick budget
 
-### Task 6.1: `decide.py`, with tests
+### Task 6.1: `decide.py` and `TickBudget`, with tests
 **Owner**: Junior AI | **Dependencies**: 5.3 | **Effort**: 3
 
-Create `runner/decide.py`; tests `tests/runner/test_decide.py`. Per the LLD, D1 and API Contracts.
+Create `runner/decide.py` and `runner/tick.py` (holding `TickBudget` for now); tests `tests/runner/test_decide.py` and `tests/runner/test_budget.py`. Per the LLD, D1, D10 and API Contracts.
 
 - [ ] `RunState` `StrEnum` (launching, running, finished, fault). Frozen dataclasses `InFlightRun(entry, run_id, state)`, `LaunchRun(node_id, pipeline, params, checkout)`, and `ProjectView(project_id, now, runnable_nodes, in_flight, link_probes)`. `type Action = LaunchRun`
 - [ ] `Planner` Protocol with `plan(view) -> Sequence[Action]`
 - [ ] `decide(view, planners)` runs planners in order. Two actions for one node raise `ValueError` naming the node; it never drops one silently. Pure: no I/O, no clock read
 - [ ] Tests: empty planner tuple gives no actions; two planners concatenate in order; a duplicate node raises `ValueError`; `decide` is deterministic for the same view; `ProjectView` is immutable
-- **Success Criteria**:
-  - [ ] Tests pass. Commit: `feat: add runner decide stage and planner seam`
-
-### Task 6.2: `TickBudget`, with tests
-**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 2
-
-Add `TickBudget` to `runner/tick.py` (create the file); tests `tests/runner/test_budget.py`. Per the LLD, D10.
-
 - [ ] `TickBudget(deadline, host, clock)` made from a monotonic clock. `allows_call()` is false once the deadline passed or `host.stop_requested` is set. Provide a result `StrEnum` `TickResult` with `COMPLETE` and `CUT_OFF`
-- [ ] Tests with an injected clock and a fake host: allowed before the deadline; refused at and after it; refused after a stop request even before the deadline
+- [ ] Budget tests with an injected clock and a fake host: allowed before the deadline; refused at and after it; refused after a stop request even before the deadline
 - **Success Criteria**:
-  - [ ] Tests pass. Commit: `feat: add tick budget`
+  - [ ] Tests pass. Commit: `feat: add runner decide stage, planner seam and tick budget`
 
 ---
 
 ## Section 7: Observe
 
 ### Task 7.1: Observation of one in-flight run, with tests
-**Owner**: Junior AI | **Dependencies**: 6.2 | **Effort**: 5
+**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 5
 
 Create `runner/observe.py`; tests `tests/runner/test_observe.py` (split into `test_observe_launch.py` and `test_observe_poll.py` if past ~300 lines). Per the LLD, "A launch, end to end" and D6, D10. Inject the clock, `poll_run`, the tracker and the budget.
 
@@ -339,6 +303,7 @@ Edit `cli/lifecycle.py`; tests in `tests/test_cli_lifecycle.py`, `tests/test_imp
 - [ ] Compose `(*standard_tenants(settings, supervisor_dir), runner_tenant(settings, supervisor_dir))`
 - [ ] Fix the now-false statements that no tick starts a subprocess: the `standard_tenants` docstring in `process/tenants.py` and the module docstring in `process/cf_watch.py`. Say instead that those tenants start none; the Runner does, under `TickBudget`
 - [ ] Import-boundary test: only `amoeba.cli` imports `amoeba.runner`, and `amoeba.runner` imports `amoeba.store`, `amoeba.process`, `amoeba.upstream` only through public names
+- [ ] Author `tests/runner/test_budget_coverage.py` (LLD Technical Requirements): it injects a subprocess runner and `Popen` that fail the test when called after the budget is spent, drives a tick through observe, act and the `cf` probes with the budget exhausted, and asserts no call was made
 - [ ] Tests: `start` with a failing `sq` probe exits `STARTUP_FAILED` (7) naming the shape; `tests/test_writer_guard.py` passes unchanged
 - **Success Criteria**:
   - [ ] Full `uv run pytest -q` clean (run once). Commit: `feat: compose the Runner tenant in amoeba start`
@@ -384,30 +349,18 @@ Create `tests/runner/test_end_to_end.py` using the stub `sq` and a real store in
 
 ## Section 13: Contract text and final validation
 
-### Task 13.1: Update `docs/process-contract.md` and `docs/substrate-guide.md`
+### Task 13.1: Contract text, plan edits, CHANGELOG and final validation
 **Owner**: Junior AI | **Dependencies**: 12.3 | **Effort**: 3
 
-Per the LLD, "Contract documents". Edit the docs only; keep their front matter. Follow each document's existing heading structure.
+Per the LLD, "Contract documents". Edit the docs, keeping their front matter. Follow each document's existing heading structure.
 
-- [ ] `process-contract.md`: four tenants in `amoeba start`; the tenant obligation's tick-time subprocess rule (a deadline and stop check before every call, bounded by `tick_call_timeout_seconds`), replacing "no tick starts a subprocess"; also reword the same sentence in `docs/context-forge-contract.md` (line ~189) and `docs/process-contract.md` (line ~216), which describe the version-label capture and stay true only for those tenants; the recovery property "An id-bearing `sq_run` entry whose run exists is left unresolved, in flight, for its issuer to finish" and the `InFlight` answer; the supervisor directory table gains `launch-logs/`; the three start flags and settings; exit code 15 and `STARTUP_FAILED`'s new cases; a note that a block payload must not hold secrets; hosting surface 21 names
+- [ ] `process-contract.md`: four tenants in `amoeba start`; the tenant obligation's tick-time subprocess rule (a deadline and stop check before every call, bounded by `tick_call_timeout_seconds`), replacing "no tick starts a subprocess"; also reword the same sentence in `docs/context-forge-contract.md` (line ~189) and `docs/process-contract.md` (line ~216), which describe the version-label capture and stay true only for those tenants; the recovery property "An id-bearing `sq_run` entry whose run exists is left unresolved, in flight, for its issuer to finish" and the `InFlight` answer; the supervisor directory table gains `launch-logs/`; the three start flags and settings; exit code 15 and `STARTUP_FAILED`'s new cases; a note that a block payload must not hold secrets; hosting surface 22 names
 - [ ] `substrate-guide.md`: update the 120 row for the in-flight change and add the 122 row
-- **Success Criteria**:
-  - [ ] Every item above is present and consistent with the code (names, flags, exit codes). Commit: `docs: update process contract for the Runner tenant`
-
-### Task 13.2: Slice plan, architecture and CHANGELOG
-**Owner**: Junior AI | **Dependencies**: 13.1 | **Effort**: 2
-
 - [ ] In `user/architecture/120-slices.runner-routing-engine.md`, change the launch sentence that fails a launch at grace expiry to the overdue rule (LLD D6). In the slice plan's entry for slice 122, change the grace criterion the same way and change "polled once per tick" to "polled at most once per tick and no more often than the run poll interval" (D10). Locate both with `grep -n "grace\|once per tick" <file>`
 - [ ] Add a CHANGELOG entry under the unreleased heading: the Runner tenant and `sq_run` control surface, the three new flags, exit code 15, and the recovery change for id-bearing entries
-- **Success Criteria**:
-  - [ ] No other text in those documents changes. Commit: `docs: record slice 122 plan and changelog updates`
-
-### Task 13.3: Final validation and walkthrough
-**Owner**: Junior AI | **Dependencies**: 13.2 | **Effort**: 2
-
 - [ ] Run once each: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`, and `uv run pytest tests/contract -v`. Fix any failure at its cause
 - [ ] Verify "123 and 125 can add their reads and planner without changing `tenant.py` or `launch.py`": `grep -n "Planner\|cf_probe\|dispatch" src/amoeba/runner/tenant.py src/amoeba/runner/launch.py` finds no reference to a concrete planner; the end-to-end and crash tests inject their planner only through `planners=`
-- [ ] Verify the technical requirements: exactly one `except Exception` in `src/amoeba/runner`; no module over ~300 lines (`wc -l src/amoeba/runner/*.py`); public API pins 21 names; the budget test fails if a call starts after the budget is spent
+- [ ] Verify the technical requirements: exactly one `except Exception` in `src/amoeba/runner`; no module over ~300 lines (`wc -l src/amoeba/runner/*.py`); public API pins 22 names; `tests/runner/test_budget_coverage.py` exists and fails if a call starts after the budget is spent
 - [ ] Walkthrough steps 1–3 and 5 of the LLD (automated tests and the refused start with a fake `sq` that exits 2, expecting exit 7). Run step 4 against the real `sq` and `cf` in a throwaway supervisor directory (`AMOEBA_STORE_DIR=$(mktemp -d)`): read-only, no run is launched. Record the observed output in the DEVLOG entry convention used by earlier slices
 - **Success Criteria**:
-  - [ ] All gates clean, walkthrough output matches the LLD's expected results, working tree committed on the slice branch. The last task ends at a commit; no merge happens here
+  - [ ] Contract text, plan and architecture edits are present, no other text in those documents changed, all gates are clean, and the walkthrough output matches the LLD's expected results. The last task ends at a commit (`docs: update process contract and record slice 122 plan changes`); no merge happens here
