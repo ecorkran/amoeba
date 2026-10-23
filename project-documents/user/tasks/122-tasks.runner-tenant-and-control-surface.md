@@ -264,21 +264,25 @@ Note: expected faults are raised by faults.raise_expected_faults (Task 10.1 adds
 
 Extend `runner/faults.py` (created in Task 5.1); tests `tests/runner/test_faults.py`. Per the LLD, D8.
 
-- [ ] Import `FaultKind` and `STORE_FAILURES` from `runner/faults.py` (Task 5.1)
-- [ ] A tick fault set that collects expected faults. `escalate(store, project_id, node_context, fault_kind, error)`: a node in context with no run in flight and not done blocks on `HUMAN` with payload `{fault_kind, error}` (nothing more if already blocked); otherwise raise a project-scoped escalation with node and run ids in the payload
+- [x] Import `FaultKind` and `STORE_FAILURES` from `runner/faults.py` (Task 5.1)
+- [x] A tick fault set that collects expected faults. `escalate(store, project_id, node_context, fault_kind, error)`: a node in context with no run in flight and not done blocks on `HUMAN` with payload `{fault_kind, error}` (nothing more if already blocked); otherwise raise a project-scoped escalation with node and run ids in the payload
 - **Success Criteria**:
-  - [ ] Tests on a real store: node block; already-blocked node writes nothing; in-flight node, done node and no node each take the project path; a repeated fault adds no rows. Commit: `feat: add runner fault vocabulary and escalation`
+  - [x] Tests on a real store: node block; already-blocked node writes nothing; in-flight node, done node and no node each take the project path; a repeated fault adds no rows. Commit: `feat: add runner fault vocabulary and escalation`
+
+Note: raise_expected_faults and TickFaults were added earlier (Tasks 7.1/9.1); this task added escalate() and NodeContext use.
 
 ### Task 10.2: `RunnerTenant` and the one catch, with tests
 **Owner**: Junior AI | **Dependencies**: 10.1 | **Effort**: 4
 
 Create `runner/tenant.py`; tests `tests/runner/test_tenant.py`. Per the LLD, D8 and "One tick".
 
-- [ ] `RunnerTenant(name="runner", planners, ...)` implements the `Tenant` protocol. `tick(host)`: build the `TickBudget`, order carried-over projects first then the rest of `host.project_ids` (read every tick), run each `ProjectTick`, carry over `CUT_OFF` projects and stop when the budget is spent. Returns true only if something was written or issued
-- [ ] The single `except Exception` around each project tick: re-raise `STORE_FAILURES` and `UpstreamShapeError` first; log everything else with `logger.exception` and escalate via Task 10.1. An escalation write that fails is not caught again
-- [ ] A launch child that exited 2 with no run state: the entry is already finished as failed by Task 8.1; the tenant then raises `UpstreamShapeError` naming `sq run … --run-id`
+- [x] `RunnerTenant(name="runner", planners, ...)` implements the `Tenant` protocol. `tick(host)`: build the `TickBudget`, order carried-over projects first then the rest of `host.project_ids` (read every tick), run each `ProjectTick`, carry over `CUT_OFF` projects and stop when the budget is spent. Returns true only if something was written or issued
+- [x] The single `except Exception` around each project tick: re-raise `STORE_FAILURES` and `UpstreamShapeError` first; log everything else with `logger.exception` and escalate via Task 10.1. An escalation write that fails is not caught again
+- [x] A launch child that exited 2 with no run state: the entry is already finished as failed by Task 8.1; the tenant then raises `UpstreamShapeError` naming `sq run … --run-id`
 - **Success Criteria**:
-  - [ ] Tests: an unexpected exception in project A is logged at ERROR and project B still ticks the same call; a store failure and `UpstreamShapeError` propagate; a cut-off project goes first next tick and its runs are polled first; a tick that only polled a running run returns false; `grep -c "except Exception" src/amoeba/runner` is 1. Commit: `feat: add RunnerTenant with per-project fault isolation`
+  - [x] Tests: an unexpected exception in project A is logged at ERROR and project B still ticks the same call; a store failure and `UpstreamShapeError` propagate; a cut-off project goes first next tick and its runs are polled first; a tick that only polled a running run returns false; `grep -c "except Exception" src/amoeba/runner` is 1. Commit: `feat: add RunnerTenant with per-project fault isolation`
+
+Note: the tenant takes cf_run (subprocess.run) for the link probes; project ticks that raise return COMPLETE and are not carried over.
 
 ---
 
@@ -289,34 +293,38 @@ Create `runner/tenant.py`; tests `tests/runner/test_tenant.py`. Per the LLD, D8 
 
 Create `runner/probes.py`, a stub `cf` (follow the stub `sq` pattern; put it in `tests/cf_stub.py`), and `tests/runner/test_probes.py`. Per the LLD, D9. Run `cf status --help` and `cf list initiatives --help` once to confirm both take `-p` (observed on CF 0.19.16).
 
-- [ ] `probe_sq(settings, now)`: `poll_run(<freshly minted id>, timeout_seconds=sq_timeout_seconds)` must give outcome `not_found` and the same `run_id`; anything else raises `StartupFailedError` naming `sq runs wait <id> --timeout 0 --json` and the answer
-- [ ] `CF_EXECUTABLE` and the two commands defined once. `probe_link(cf_project_id, run, budget)`: each command is a separate call, checks `TickBudget` first, uses `stdin=DEVNULL`, captured output, `timeout=tick_call_timeout_seconds`, `check=False`. Status output must be a JSON object, initiatives a JSON array; the two top-level checks are private functions. `TimeoutExpired`, non-zero exit or the wrong shape is a failure naming command, exit code and output head
-- [ ] A link is probed once per lifetime on first observation of its project; a failure marks the link failed for the lifetime and counts as a recurrence of `cf_probe_failed` on every later tick (deduplicated raise). A probe cut off partway records nothing and restarts from its first command
-- [ ] Wire the probe into the project tick's observe step
+- [x] `probe_sq(settings, now)`: `poll_run(<freshly minted id>, timeout_seconds=sq_timeout_seconds)` must give outcome `not_found` and the same `run_id`; anything else raises `StartupFailedError` naming `sq runs wait <id> --timeout 0 --json` and the answer
+- [x] `CF_EXECUTABLE` and the two commands defined once. `probe_link(cf_project_id, run, budget)`: each command is a separate call, checks `TickBudget` first, uses `stdin=DEVNULL`, captured output, `timeout=tick_call_timeout_seconds`, `check=False`. Status output must be a JSON object, initiatives a JSON array; the two top-level checks are private functions. `TimeoutExpired`, non-zero exit or the wrong shape is a failure naming command, exit code and output head
+- [x] A link is probed once per lifetime on first observation of its project; a failure marks the link failed for the lifetime and counts as a recurrence of `cf_probe_failed` on every later tick (deduplicated raise). A probe cut off partway records nothing and restarts from its first command
+- [x] Wire the probe into the project tick's observe step
 - **Success Criteria**:
-  - [ ] Tests: good stub passes; empty output, a wrong top-level form and a timeout each fail; a failed link raises one escalation and other projects continue; a cut-off probe starts no call after the deadline; a failed link keeps its escalation open until a later lifetime's complete tick passes. Commit: `feat: add sq start probe and cf link probes`
+  - [x] Tests: good stub passes; empty output, a wrong top-level form and a timeout each fail; a failed link raises one escalation and other projects continue; a cut-off probe starts no call after the deadline; a failed link keeps its escalation open until a later lifetime's complete tick passes. Commit: `feat: add sq start probe and cf link probes`
+
+Note: confirmed on CF 0.19.17 that cf status and cf list initiatives both take -p. Probe wired into ProjectTick via LinkProbes; the tick-level link tests are in tests/runner/test_probes.py.
 
 ### Task 11.2: `runner_tenant()` factory with bounds check, with tests
 **Owner**: Junior AI | **Dependencies**: 11.1 | **Effort**: 3
 
 Create `runner/factory.py`; export `runner_tenant` and `RunnerTenant` from `runner/__init__.py`; tests `tests/runner/test_factory.py`. Per the LLD, D9, D10, API Contracts.
 
-- [ ] `runner_tenant(settings, supervisor_dir, *, planners=None)`: validate every new setting is positive and `tick_call_timeout_seconds < shutdown_grace_seconds`, else `StartupFailedError` naming the field; create `<supervisor>/launch-logs/`; run the `sq` probe; build the tenant with `subprocess.run` and `subprocess.Popen`. `planners=None` selects the production tuple, which is empty; a passed value is used as given
+- [x] `runner_tenant(settings, supervisor_dir, *, planners=None)`: validate every new setting is positive and `tick_call_timeout_seconds < shutdown_grace_seconds`, else `StartupFailedError` naming the field; create `<supervisor>/launch-logs/`; run the `sq` probe; build the tenant with `subprocess.run` and `subprocess.Popen`. `planners=None` selects the production tuple, which is empty; a passed value is used as given
 - **Success Criteria**:
-  - [ ] Tests: each bound violation fails with the field named; the probe failure surfaces as `StartupFailedError`; `launch-logs/` exists after build; production tuple is empty. Commit: `feat: add runner_tenant factory with start-up validation`
+  - [x] Tests: each bound violation fails with the field named; the probe failure surfaces as `StartupFailedError`; `launch-logs/` exists after build; production tuple is empty. Commit: `feat: add runner_tenant factory with start-up validation`
 
 ### Task 11.3: Compose the Runner in `amoeba start`, with boundary tests
 **Owner**: Junior AI | **Dependencies**: 11.2 | **Effort**: 2
 
 Edit `cli/lifecycle.py`; tests in `tests/test_cli_lifecycle.py`, `tests/test_import_boundaries.py`.
 
-- [ ] Compose `(*standard_tenants(settings, supervisor_dir), runner_tenant(settings, supervisor_dir))`
-- [ ] Fix the now-false statements that no tick starts a subprocess: the `standard_tenants` docstring in `process/tenants.py` and the module docstring in `process/cf_watch.py`. Say instead that those tenants start none; the Runner does, under `TickBudget`
-- [ ] Import-boundary test: only `amoeba.cli` imports `amoeba.runner`, and `amoeba.runner` imports `amoeba.store`, `amoeba.process`, `amoeba.upstream` only through public names
-- [ ] Author `tests/runner/test_budget_coverage.py` (LLD Technical Requirements): it injects a subprocess runner and `Popen` that fail the test when called after the budget is spent, drives a tick through observe, act and the `cf` probes with the budget exhausted, and asserts no call was made
-- [ ] Tests: `start` with a failing `sq` probe exits `STARTUP_FAILED` (7) naming the shape; `tests/test_writer_guard.py` passes unchanged
+- [x] Compose `(*standard_tenants(settings, supervisor_dir), runner_tenant(settings, supervisor_dir))`
+- [x] Fix the now-false statements that no tick starts a subprocess: the `standard_tenants` docstring in `process/tenants.py` and the module docstring in `process/cf_watch.py`. Say instead that those tenants start none; the Runner does, under `TickBudget`
+- [x] Import-boundary test: only `amoeba.cli` imports `amoeba.runner`, and `amoeba.runner` imports `amoeba.store`, `amoeba.process`, `amoeba.upstream` only through public names
+- [x] Author `tests/runner/test_budget_coverage.py` (LLD Technical Requirements): it injects a subprocess runner and `Popen` that fail the test when called after the budget is spent, drives a tick through observe, act and the `cf` probes with the budget exhausted, and asserts no call was made
+- [x] Tests: `start` with a failing `sq` probe exits `STARTUP_FAILED` (7) naming the shape; `tests/test_writer_guard.py` passes unchanged
 - **Success Criteria**:
-  - [ ] Full `uv run pytest -q` clean (run once). Commit: `feat: compose the Runner tenant in amoeba start`
+  - [x] Full `uv run pytest -q` clean (run once). Commit: `feat: compose the Runner tenant in amoeba start`
+
+Note: tests/cli_harness.cli_environment now puts the stub sq first on PATH (the start probe would otherwise run the real sq), and the detection e2e harness fake sq answers runs wait with not_found. Boundary rules 10 and 11 added to tests/test_import_boundaries.py. Full suite: 2359 passed.
 
 ---
 
