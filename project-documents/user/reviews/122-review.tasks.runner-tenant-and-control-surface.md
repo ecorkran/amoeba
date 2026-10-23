@@ -14,17 +14,17 @@ aiProfile: openrouter
 status: complete
 dateCreated: 20261023
 dateUpdated: 20261023
-reviewedSha: 018be9e1d4c230698c4889558454058e95de2152
-revision_number: 1
+reviewedSha: e2aad877702bb3778b9a1d586ecc20a3c7f19dc8
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 41
+toolCallsMade: 37
 turns: 20
-promptTokens: 923151
-cachedTokens: 698368
-completionTokens: 53757
-reasoningTokens: 50082
-durationSeconds: 213.4
-costUsd: 0.059761
+promptTokens: 901904
+cachedTokens: 687104
+completionTokens: 59422
+reasoningTokens: 55824
+durationSeconds: 231.5
+costUsd: 0.06117
 costBasis: alias_pricing
 runId: run-20261023-p56-63bf9ff6
 squadronVersion: 0.23.7
@@ -32,33 +32,33 @@ findings:
   - id: F001
     severity: concern
     category: error-handling
-    summary: "`UpstreamShapeError` cannot be both unexported and importable by `amoeba.runner`"
-    location: "project-documents/user/tasks/122-tasks.runner-and-control-surface.md"
+    summary: "Param validation is specified before journaling but sequenced after it"
+    location: "project-documents/user/tasks/122-tasks.runner-tenant-and-control-surface.md:241"
   - id: F002
     severity: concern
-    category: error-handling
-    summary: "Exit code number for `UPSTREAM_SHAPE` contradicts itself inside Task 2.3"
-    location: "src/amoeba/cli/main.py:58-92"
+    category: data-flow
+    summary: "`finish.record` is never given the poll result, and nothing wires Observe to Finish"
+    location: "project-documents/user/tasks/122-tasks.runner-tenant-and-control-surface.md:226"
   - id: F003
     severity: concern
-    category: test-structure
-    summary: "Two helper modules named in the header have no creating task"
-    location: "project-documents/user/tasks/122-tasks.runner-tenant-and-control-surface.md"
+    category: test-correctness
+    summary: "Task 3.1's public-API pin arithmetic is off by one"
+    location: "project-documents/user/tasks/122-tasks.runner-tenant-and-control-surface.md:114"
   - id: F004
     severity: concern
-    category: proportionality
-    summary: "Over-granular splits: 6.2, 13.2, 13.3 do not earn their own task files"
-    location: "project-documents/user/tasks/122-tasks.runner-and-control-surface.md"
+    category: documentation-accuracy
+    summary: "The contract document's hosting-surface count is not the test pin's count"
+    location: "project-documents/user/tasks/122-tasks.runner-tenant-and-control-surface.md:357"
   - id: F005
     severity: note
-    category: process
-    summary: "Commit cadence departs from the standing \"one commit per task\" rule"
-    location: "AGENTS.md"
+    category: consistency
+    summary: "The LLD's character count for a minted id is wrong; the task's is right and nothing reconciles them"
+    location: "project-documents/user/tasks/122-tasks.runner-tenant-and-control-surface.md:150"
   - id: F006
     severity: note
-    category: error-handling
-    summary: "The slice's `TickBudget`-coverage test is verified but never authored"
-    location: "project-documents/user/tasks/122-tasks.runner-and-control-surface.md"
+    category: task-granularity
+    summary: "Task 3.1 is a large single unit, but the grouping is justified and correctly held together"
+    location: "project-documents/user/tasks/122-tasks.runner-tenant-and-control-surface.md:107"
 ---
 
 # Review: tasks — slice 122
@@ -68,45 +68,45 @@ findings:
 
 ## Findings
 
-### [CONCERN] `UpstreamShapeError` cannot be both unexported and importable by `amoeba.runner`
+### [CONCERN] Param validation is specified before journaling but sequenced after it
 
-Task 2.3 states `UpstreamShapeError` "is not exported from `amoeba.process` (the pin stays 21 names after Task 3.1)"; Task 11.3 then requires a boundary test asserting "`amoeba.runner` imports `amoeba.store`, `amoeba.process`, `amoeba.upstream` only through public names". `tenant.py` (Task 10.2) must catch and re-raise `UpstreamShapeError`, so it either imports `amoeba.process.errors` — violating 11.3's rule — or requires the name exported, changing the 21-name pin that 2.3 and 13.3 both assert. The slice's API Contracts section is silent. One of the two tasks must change; today a junior AI will implement 2.3, then have 11.3 or 13.3 fail, with no instruction which to relax.
+LLD D2 says a value containing `,` (or a key containing `,`/`=`) "raises `ValueError` before journaling". Task 5.3 (line 167) faithfully says `build_argv` raises it and annotates "(called before journaling)". But Task 9.1's Act specifies the order as "mint the run id, `journal_issue(sq_run, …)`, then launch", and `build_argv` is inside `launch()` per Task 5.3. Executed as written, the `ValueError` fires after `journal_issue` has committed, leaving an unresolved `sq_run` entry with a bogus param set — exactly the state detection defers on and the Runner must then escalate. Either Task 9.1 must call `build_argv` (or a validator) before `journal_issue`, or Task 5.3 must expose it as a separate pre-journal step. No test currently asserts the "no entry written" property.
 
-### [CONCERN] Exit code number for `UPSTREAM_SHAPE` contradicts itself inside Task 2.3
+### [CONCERN] `finish.record` is never given the poll result, and nothing wires Observe to Finish
 
-The step adds `ExitCode.UPSTREAM_SHAPE = 15` and explains "the LLD says 8, but 8 is `NOT_RUNNING_STATUS`; 15 is the next free value" — a correction I verified against `ExitCode` (0–14 are all taken, and `NOT_RUNNING_STATUS = 8`). But the very next step says "raising `UpstreamShapeError` from a tenant exits 8 and prints the message", and Task 12.3 says "exit 15 when run through `amoeba start`". The test bullet as written asserts the value the same task just declared wrong, so the implementer writes a test that must fail. Say 15 consistently (and note only that the LLD's 8 is stale).
+Task 8.1's signature is `record(store, entry, finished)`, but the penultimate step says a `completed` run resolves with `result={run_id, outcome, status}` — data that lives on the `RunOutcomeDocument` from `poll_run`, not on `InFlightRun` (`entry`, `run_id`, `state`, per Task 6.1 line 189). The `finished` parameter, and where it carries `outcome`/`status`, is never defined. Task 9.1's step list ("observe → record finished → decide → act → close") also never says how the finished set produced by Task 7.1 reaches `finish.record`. This matters beyond typing: the process contract requires `run_id` in the entry's `result` for Amoeba's run ownership (`record_runner_report` refuses an entry whose result lacks it, and pruning selects on it), so a result without it is a silent ownership loss. The only adequate assertion is the end-to-end test in Task 12.3, five tasks later — by then the defect is buried. Give Task 8.1 the polled document in its signature and have Task 9.1 name the observe→record hand-off explicitly.
 
-### [CONCERN] Two helper modules named in the header have no creating task
+### [CONCERN] Task 3.1's public-API pin arithmetic is off by one
 
-The task-level additions say tests "live in `tests/runner/` (with `__init__.py`), sharing helpers in `tests/runner/conftest.py` and `tests/runner/harness.py`". No task creates `tests/runner/__init__.py`, `conftest.py` or `harness.py`; Task 5.1 creates `test_launch_ids.py` and Task 12.1 creates `crash_entry.py`/`crash_harness.py` (a different file). Either fold their creation into Task 5.1 ("create the package, `conftest.py` and `harness.py` with the shared fake clock/`Popen`/host fixtures the later tasks use") or drop the mention, so the shared fixtures the rest of the file leans on have an owner.
+`tests/test_process_public_api.py:13` pins 20 names today (verified). Task 2.3 adds `UpstreamShapeError` → 21; Task 3.1 adds `InFlight`. Task 3.1 says the pin "goes to 22 names", and Task 13.1 (lines 357, 363) repeats "22 names". 20 + 2 = 22 only if both count as separate additions on top of today's 20 — but line 114 explicitly says 2.3 already moved the pin. The correct final value is 22 only if 2.3 wrote 21 and 3.1 writes 22; as written, Task 3.1's own arithmetic (21 → 22) contradicts the numbers in the same clause. State the final expected count once (22) in Task 2.3 and have 3.1 and 13.1 reference it, rather than each restating a different intermediate.
 
-### [CONCERN] Over-granular splits: 6.2, 13.2, 13.3 do not earn their own task files
+### [CONCERN] The contract document's hosting-surface count is not the test pin's count
 
-The file is 40 tasks across 13 sections for a 4/5-effort slice, which is defensible for a high-risk slice; three splits are not. Task 6.2 (`TickBudget`, two steps, effort 2) is a constructor plus `allows_call()` that Task 6.1's `decide` and Task 9.1's tick both depend on — merge into 6.1. Task 13.2 and 13.3 are two documentation/cherry-pick-and-verify steps each; both could be one task with two commits, or 13.3's validation folded into 13.2's success criteria. Cutting these saves three task headers and the associated reading without losing a checkpoint.
+Task 13.1 instructs editing `docs/process-contract.md` so it says "hosting surface 22 names". The document's own sentence (`docs/process-contract.md:196`, "exactly these 13 names") and its four-group table enumerate the *hosting contract*, not the test pin — and the two numbers already diverge (the test pins 20, the table lists 13, a gap slice 120 left behind). Adding `UpstreamShapeError` and `InFlight` makes the table-derived figure 15, not 22. As written the task produces a document stating a number its own table does not support. Either say "update the hosting-surface paragraph and its table to include `UpstreamShapeError` and `InFlight`, and state its new count", or drop the number from the task and let the table speak.
 
-### [NOTE] Commit cadence departs from the standing "one commit per task" rule
+### [NOTE] The LLD's character count for a minted id is wrong; the task's is right and nothing reconciles them
 
-Task 1.1 explicitly needs no commit, Task 3.1–3.3 is one commit at 3.3, and Task 4.1–4.2 is one commit at 4.2. Each is justified in place (a broken intermediate state, an untestable stub mode), and 3.1's grouping is the honest way to keep the suite green after changing `Observation`. Worth noting only so the reviewer does not treat the grouped commits as missed work.
+Task 5.1 asserts "36 characters (`amoeba-` 7 + timestamp 16 + `-` 1 + hex 12)", which is arithmetically correct. Slice D5 says "38 characters" and gives an example id that is itself 36 characters. An implementer reading both will resolve the conflict by picking one, and a test asserting 38 would be wrong. Task 13.1 updates contract text but no task corrects D5, and the tasks file's "Task-level additions to the LLD" list does not mention it. Add one line confirming 36, and note the D5 correction in Task 13.1.
 
-### [NOTE] The slice's `TickBudget`-coverage test is verified but never authored
+### [NOTE] Task 3.1 is a large single unit, but the grouping is justified and correctly held together
 
-The slice's Technical Requirements demand "a test asserts that every tick-time subprocess call goes through `TickBudget` … by injecting a runner that fails the test when it is called after the budget is spent". Task 9.1 covers "the budget is checked before `Popen` and before every poll" and Task 11.1 covers the probe's deadline check, but no task names the injected-runner test itself; Task 13.3 only "verifies" it. If the per-site tests in 9.1 and 11.1 are meant to satisfy it, say so; otherwise add the injection to 9.1's test list.
+Eight files plus the contract oracle in one effort-4 task is at the upper end. It is defensible: the task explains that the observer change breaks `tests/contract` until the stand-in and oracle are updated in the same commit, and a commit may not hold untested behavior. Splitting it would produce a red suite between commits. Recording it only so the size is a considered choice rather than an oversight — and so that, if the CONCERN about the pin arithmetic above is fixed by shrinking this task, the contract-suite coupling is the reason it cannot be shrunk much.
 
 ### Run Digest
 
-- Response length: 5016 chars
+- Response length: 6174 chars
 - Response is newline-free: no
-- Tool calls made: 41
-- Tool calls failed: 1
+- Tool calls made: 37
+- Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 384000 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 184281
+- Reasoning characters: 203274
 - Effort: backend default
 - Turns: 20
-- Tokens — prompt / cached / cache write / completion / reasoning: 923151 / 698368 / not computed / 53757 / 50082
-- Duration: 213.4 s
+- Tokens — prompt / cached / cache write / completion / reasoning: 901904 / 687104 / not computed / 59422 / 55824
+- Duration: 231.5 s
 - Cost: $0.06 (alias_pricing)
 - `## Summary` located: yes
 - `## Findings` located: yes

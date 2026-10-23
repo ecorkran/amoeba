@@ -15,16 +15,16 @@ projectState: Initiative 100 (101–110) is merged, and slices 120 and 121 are m
 dateCreated: 20261023
 dateUpdated: 20261023
 status: not_started
-turns: 20
-promptTokens: 1314110
-cachedTokens: 1225943
-cacheWriteTokens: 88133
-completionTokens: 24285
-durationSeconds: 162.9
-costUsd: 0.718328
-usageRounds: 2
-pricedRounds: 2
-revision_number: 1
+turns: 29
+promptTokens: 2323064
+cachedTokens: 2214829
+cacheWriteTokens: 108183
+completionTokens: 32976
+durationSeconds: 222.3
+costUsd: 0.984363
+usageRounds: 3
+pricedRounds: 3
+revision_number: 2
 ---
 
 ## Context Summary
