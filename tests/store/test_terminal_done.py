@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 
 from amoeba.store import (
@@ -152,3 +155,51 @@ def test_journal_issue_against_a_done_node_raises_and_writes_nothing(
 
     assert store.unresolved_journal_entries(PROJECT) == []
     assert store.journal_entries(PROJECT, include_resolved=True) == []
+
+
+# --------------------------------------------------------------------------
+# Task 3.4: the writer inventory
+# --------------------------------------------------------------------------
+
+SOURCE_DIR = Path(__file__).parent.parent.parent / "src" / "amoeba"
+
+#: Modules that may name ``UPDATE_NODE_STATUS``: the statement's definition and
+#: the one block writer (D1's table). ``update_node_status`` in ``nodes.py`` and
+#: a routing decision's ``StatusEffect`` both reach it through the writer's
+#: ``_write_status``, so neither names the statement itself.
+STATUS_WRITER_MODULES = frozenset({"store/_block_writer.py", "store/sql.py"})
+
+
+def _referenced_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _modules_naming_status_statement() -> set[str]:
+    found: set[str] = set()
+    for path in sorted(SOURCE_DIR.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        if any(
+            _referenced_name(node) == "UPDATE_NODE_STATUS" for node in ast.walk(tree)
+        ):
+            found.add(path.relative_to(SOURCE_DIR).as_posix())
+    return found
+
+
+def test_only_the_inventoried_modules_write_node_status() -> None:
+    unexpected = _modules_naming_status_statement() - STATUS_WRITER_MODULES
+
+    assert not unexpected, (
+        f"{sorted(unexpected)} reference sql.UPDATE_NODE_STATUS. Every writer of "
+        "nodes.status must go through BlockWriter._write_status or _write_block "
+        "so the done-is-terminal check applies. See D1's writer-inventory table "
+        "in the slice 121 design; add the module there and here only if it "
+        "calls _refuse_done."
+    )
+
+
+def test_the_inventory_still_finds_the_known_writers() -> None:
+    assert _modules_naming_status_statement() == STATUS_WRITER_MODULES
