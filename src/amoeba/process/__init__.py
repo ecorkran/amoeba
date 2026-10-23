@@ -31,6 +31,7 @@ from amoeba.process.recovery import (
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.sq_outcome import (
     OUTCOME_EXIT_CODES,
+    SQ_EXECUTABLE,
     PollFailure,
     RunCheckpoint,
     RunOutcome,
@@ -42,6 +43,7 @@ from amoeba.process.tenants import standard_tenants
 
 __all__ = [
     "OUTCOME_EXIT_CODES",
+    "SQ_EXECUTABLE",
     "Adopt",
     "AlreadyRunningError",
     "GraceExpiredError",

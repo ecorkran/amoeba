@@ -19,6 +19,8 @@ EXPECTED_EXPORTS = {
     "BLOCKED_KIND_TO_STATUS",
     "BLOCKED_STATUSES",
     "REQUIRED_PARAMETER_KEYS",
+    "PARAM_CHECKOUT",
+    "PARAM_RUN_ID",
     "AcknowledgmentOutcome",
     "BlockedKind",
     "Channel",
