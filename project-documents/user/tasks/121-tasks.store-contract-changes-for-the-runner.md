@@ -21,8 +21,8 @@ projectState: Initiative 100 (101–110) is merged, and slice 120 is merged. The
   columns. No Runner tables exist. This slice adds migration 009, the Runner contract
   in the store, and contract text.
 dateCreated: 20261022
-dateUpdated: 20261023
-status: in_progress
+dateUpdated: 20261022
+status: complete
 turns: 46
 promptTokens: 2332931
 cachedTokens: 2214290
@@ -284,59 +284,61 @@ New `tests/store/test_project_escalation.py`.
 ### Task 7.1: Statements and reads
 **Owner**: Junior AI | **Dependencies**: 6.2 | **Effort**: 3
 
-- [ ] `store/sql_runner.py`: insert and select statements for `routing_table_versions`, `routing_decisions` (by id, by journal entry, by node oldest first), and `attempt_counts` (select, upsert-increment returning the new count; use SQLite upsert and read back inside the transaction)
-- [ ] `store/routing_decisions.py` (new, mixed into `Store`): the reads `routing_decision`, `routing_decision_for_entry`, `routing_decisions(node_id)`, `routing_table_version` and `attempt_count`. Missing returns `None` or an empty list. `attempt_count` returns `0` for a pair with no row, and its docstring says that is the true count
-- [ ] Pin the five read methods in `CONTRACT_METHODS`
-- [ ] Tests in new `tests/store/test_routing_reads.py`: on a fresh store each read returns `None`, an empty list or `0`. With rows inserted by the `sql_runner.py` statements, each read returns the mapped row, `routing_decisions` is oldest first, and every read works through `Store.open_read_only`
+- [x] `store/sql_runner.py`: insert and select statements for `routing_table_versions`, `routing_decisions` (by id, by journal entry, by node oldest first), and `attempt_counts` (select, upsert-increment returning the new count; use SQLite upsert and read back inside the transaction)
+- [x] `store/routing_decisions.py` (new, mixed into `Store`): the reads `routing_decision`, `routing_decision_for_entry`, `routing_decisions(node_id)`, `routing_table_version` and `attempt_count`. Missing returns `None` or an empty list. `attempt_count` returns `0` for a pair with no row, and its docstring says that is the true count
+- [x] Pin the five read methods in `CONTRACT_METHODS`
+- [x] Tests in new `tests/store/test_routing_reads.py`: on a fresh store each read returns `None`, an empty list or `0`. With rows inserted by the `sql_runner.py` statements, each read returns the mapped row, `routing_decisions` is oldest first, and every read works through `Store.open_read_only`
 - **Success Criteria**:
-  - [ ] The tests pass. Full suite, `ruff` and `pyright` clean
-  - [ ] Committed as `feat: add routing decision and attempt-count reads`
+  - [x] The tests pass. Full suite, `ruff` and `pyright` clean
+  - [x] Committed as `feat: add routing decision and attempt-count reads`
 
 ### Task 7.2: `record_routing_decision` validation
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 3
 
 Keep this in `store/routing_decisions.py`. If the module nears 300 lines, move the validation into `store/_routing_validation.py`.
 
-- [ ] Validate before opening the transaction. `ValueError`: any text field in `RoutingDecisionInput` empty (project, rule id, table version, Amoeba version), `inputs` or `route_parameters` not JSON-serializable, `attempt_step` given but empty, `table.version` not equal to `decision.table_version`. `NodeNotFoundError`: the node is not in the project. `InvalidTransitionError`: `journal_entry_id` names an entry that is missing or in another project
-- [ ] Coerce `route` through `Route`. A `StatusEffect` whose status is a blocked status is refused as `update_node_status` refuses it
-- [ ] Write the validation as a private function with no public method yet (`record_routing_decision` is introduced in Task 7.3, so no public method ships that validates but does not write). Test it directly in new `tests/store/test_routing_validation.py`: each failure raises its exception, and a valid input passes. Task 7.4 asserts that the public method writes nothing on failure
+- [x] Validate before opening the transaction. `ValueError`: any text field in `RoutingDecisionInput` empty (project, rule id, table version, Amoeba version), `inputs` or `route_parameters` not JSON-serializable, `attempt_step` given but empty, `table.version` not equal to `decision.table_version`. `NodeNotFoundError`: the node is not in the project. `InvalidTransitionError`: `journal_entry_id` names an entry that is missing or in another project
+- [x] Coerce `route` through `Route`. A `StatusEffect` whose status is a blocked status is refused as `update_node_status` refuses it
+- [x] Write the validation as a private function with no public method yet (`record_routing_decision` is introduced in Task 7.3, so no public method ships that validates but does not write). Test it directly in new `tests/store/test_routing_validation.py`: each failure raises its exception, and a valid input passes. Task 7.4 asserts that the public method writes nothing on failure
 - **Success Criteria**:
-  - [ ] The tests pass. Full suite, `ruff` and `pyright` clean
-  - [ ] Committed as `feat: validate routing decisions`
+  - [x] The tests pass. Full suite, `ruff` and `pyright` clean
+  - [x] Committed as `feat: validate routing decisions`
 
 ### Task 7.3: The one-transaction write
 **Owner**: Junior AI | **Dependencies**: 7.2 | **Effort**: 4
 
-- [ ] In one `with self._connection:` block, in D5's order: insert the table version if new (same version with different content raises `StoreIntegrityError`, compared byte for byte); insert the decision row; if `attempt_step` is given, increment the counter and store the new count on the decision; apply `effect`
-- [ ] `StatusEffect(status)` calls Task 3.2's `_write_status(node_id, status, timestamp)` inside the transaction. That gives it the done-is-terminal and unresolved-entry refusals without copying them. It cannot call `update_node_status`, which opens its own transaction
-- [ ] Pin `record_routing_decision` in `CONTRACT_METHODS` in `tests/test_public_api.py`
-- [ ] A `BlockEffect` on a node that is already blocked raises the same exception `block()` raises for an already-blocked node, before anything is written. Read `store/blocking.py` for that check and reuse it rather than copying it. `_write_block` assumes its caller has made this check
-- [ ] `BlockEffect(context, payload)` writes a `HUMAN` block through `_write_block`, with `journal_entry_id` from the decision, so the escalation row lands in the same transaction
-- [ ] A duplicate decision for one `journal_entry_id` surfaces as `StoreIntegrityError`, converted from the unique-index violation the way other store writes convert `sqlite3.IntegrityError`. Find the existing conversion with `grep -rn "IntegrityError" src/amoeba/store`
-- [ ] Return the stored `RoutingDecision`, read back inside the transaction
+- [x] In one `with self._connection:` block, in D5's order: insert the table version if new (same version with different content raises `StoreIntegrityError`, compared byte for byte); insert the decision row; if `attempt_step` is given, increment the counter and store the new count on the decision; apply `effect`. Note: the counter is read (then incremented) after BEGIN IMMEDIATE so the recorded count equals the increment; the already-blocked check is BlockWriter._refuse_if_blocked, extracted from block() and shared.
+- [x] `StatusEffect(status)` calls Task 3.2's `_write_status(node_id, status, timestamp)` inside the transaction. That gives it the done-is-terminal and unresolved-entry refusals without copying them. It cannot call `update_node_status`, which opens its own transaction
+- [x] Pin `record_routing_decision` in `CONTRACT_METHODS` in `tests/test_public_api.py`
+- [x] A `BlockEffect` on a node that is already blocked raises the same exception `block()` raises for an already-blocked node, before anything is written. Read `store/blocking.py` for that check and reuse it rather than copying it. `_write_block` assumes its caller has made this check
+- [x] `BlockEffect(context, payload)` writes a `HUMAN` block through `_write_block`, with `journal_entry_id` from the decision, so the escalation row lands in the same transaction
+- [x] A duplicate decision for one `journal_entry_id` surfaces as `StoreIntegrityError`, converted from the unique-index violation the way other store writes convert `sqlite3.IntegrityError`. Find the existing conversion with `grep -rn "IntegrityError" src/amoeba/store`
+- [x] Return the stored `RoutingDecision`, read back inside the transaction
 - **Success Criteria**:
-  - [ ] All four effects of D5 land together. An injected failure at any step leaves none of them
-  - [ ] Module sizes stay near 300 lines
-  - [ ] Committed with Task 7.4, its immediate test task
+  - [x] All four effects of D5 land together. An injected failure at any step leaves none of them
+  - [x] Module sizes stay near 300 lines
+  - [x] Committed with Task 7.4, its immediate test task
 
 ### Task 7.4: Routing decision tests
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 4
 
+Note: rollback cases are in tests/store/test_routing_decisions_atomic.py; shared staging in tests/routing_helpers.py.
+
 New `tests/store/test_routing_decisions.py`. If it nears 300 lines, split the rollback cases into `test_routing_decisions_atomic.py`.
 
-- [ ] Happy path: a decision with a new table version, an attempt step and a `StatusEffect`. Assert the version, decision, count and node status, and that `routing_decision_for_entry` and `routing_table_version` return what was written (the LLD walkthrough step 5)
-- [ ] A second decision with the same table version and same content stores one version row. Same version with different content raises `StoreIntegrityError` and writes nothing, including no decision
-- [ ] `attempt_count` is `0` before, `1` after, `2` after a second decision on another entry with the same `(node, step)`. A decision without `attempt_step` leaves counts alone and stores a null `attempt_count`. Two steps on one node count separately
-- [ ] A second decision for one entry raises `StoreIntegrityError`. Decisions with no entry may repeat
-- [ ] `BlockEffect` writes a HUMAN block and its escalation row. `StatusEffect(done)` on a done node raises and nothing is recorded. `StatusEffect(done)` with an unresolved entry raises and nothing is recorded
-- [ ] `BlockEffect` on an already-blocked node raises and nothing is recorded. `StatusEffect` on a blocked node, and with a blocked target status, raises and nothing is recorded
-- [ ] `effect=None` records the decision and counter only
-- [ ] `routing_decisions(node_id)` returns oldest first, and an empty list for a node with none
-- [ ] **Rollback:** inject a failure at each of the four steps in turn (patch `_execute` for the matching statement, per the task-level note). After each, assert no version row, no decision, no count change and the node unchanged
-- [ ] Each Task 7.2 validation failure writes nothing
+- [x] Happy path: a decision with a new table version, an attempt step and a `StatusEffect`. Assert the version, decision, count and node status, and that `routing_decision_for_entry` and `routing_table_version` return what was written (the LLD walkthrough step 5)
+- [x] A second decision with the same table version and same content stores one version row. Same version with different content raises `StoreIntegrityError` and writes nothing, including no decision
+- [x] `attempt_count` is `0` before, `1` after, `2` after a second decision on another entry with the same `(node, step)`. A decision without `attempt_step` leaves counts alone and stores a null `attempt_count`. Two steps on one node count separately
+- [x] A second decision for one entry raises `StoreIntegrityError`. Decisions with no entry may repeat
+- [x] `BlockEffect` writes a HUMAN block and its escalation row. `StatusEffect(done)` on a done node raises and nothing is recorded. `StatusEffect(done)` with an unresolved entry raises and nothing is recorded
+- [x] `BlockEffect` on an already-blocked node raises and nothing is recorded. `StatusEffect` on a blocked node, and with a blocked target status, raises and nothing is recorded
+- [x] `effect=None` records the decision and counter only
+- [x] `routing_decisions(node_id)` returns oldest first, and an empty list for a node with none
+- [x] **Rollback:** inject a failure at each of the four steps in turn (patch `_execute` for the matching statement, per the task-level note). After each, assert no version row, no decision, no count change and the node unchanged
+- [x] Each Task 7.2 validation failure writes nothing
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/store/test_routing_decisions.py -q` passes. Full suite, `ruff` and `pyright` clean
-  - [ ] Tasks 7.3–7.4 committed as `feat: record routing decisions with their effects`
+  - [x] `uv run pytest tests/store/test_routing_decisions.py -q` passes. Full suite, `ruff` and `pyright` clean
+  - [x] Tasks 7.3–7.4 committed as `feat: record routing decisions with their effects`
 
 ---
 
@@ -345,19 +347,19 @@ New `tests/store/test_routing_decisions.py`. If it nears 300 lines, split the ro
 ### Task 8.1: Add the columns to `amoeba inspect messages`
 **Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 2
 
-- [ ] `inspection/inbox.py` `message_rows`: add `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind` and `closed_at`, each an empty string when unset and the outcome rendered as its `.value`. `closed_at` is isoformat, as `acknowledged_at` is. The network serves the same rows through the listings registry, so no network code changes
-- [ ] Find the existing tests that pin the messages row shape: `grep -rn "acknowledged_at" tests/inspection tests/test_cli_inspect.py tests/serve tests/cli`. Update any that compare the whole key set
+- [x] `inspection/inbox.py` `message_rows`: add `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind` and `closed_at`, each an empty string when unset and the outcome rendered as its `.value`. `closed_at` is isoformat, as `acknowledged_at` is. The network serves the same rows through the listings registry, so no network code changes
+- [x] Find the existing tests that pin the messages row shape: `grep -rn "acknowledged_at" tests/inspection tests/test_cli_inspect.py tests/serve tests/cli`. Update any that compare the whole key set. Note: no existing test pinned the whole key set; the column tuple is in inspection/__init__.py.
 - **Success Criteria**:
-  - [ ] Existing inspection and serve tests pass after updating exact-shape expectations
+  - [x] Existing inspection and serve tests pass after updating exact-shape expectations
 
 ### Task 8.2: Inspection tests
 **Owner**: Junior AI | **Dependencies**: 8.1 | **Effort**: 2
 
-- [ ] In the test module that covers the messages listing (found in 8.1), add: an acknowledged intent row shows its outcome and reason; an unacknowledged intent shows empty strings; an open project-scoped escalation shows its `fault_kind` and empty `closed_at`; after close, `closed_at` is set
-- [ ] One test through the network read (`tests/serve/test_reads.py` pattern) shows the same four keys on `/v1/listings/messages`
+- [x] In the test module that covers the messages listing (found in 8.1), add: an acknowledged intent row shows its outcome and reason; an unacknowledged intent shows empty strings; an open project-scoped escalation shows its `fault_kind` and empty `closed_at`; after close, `closed_at` is set
+- [x] One test through the network read (`tests/serve/test_reads.py` pattern) shows the same four keys on `/v1/listings/messages`
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/inspection tests/serve tests/test_cli_inspect.py -q` passes. Full suite, `ruff` and `pyright` clean
-  - [ ] Tasks 8.1–8.2 committed as `feat: show outcome, fault and closure columns in message listings`
+  - [x] `uv run pytest tests/inspection tests/serve tests/test_cli_inspect.py -q` passes. Full suite, `ruff` and `pyright` clean
+  - [x] Tasks 8.1–8.2 committed as `feat: show outcome, fault and closure columns in message listings`
 
 ---
 
@@ -368,37 +370,39 @@ New `tests/store/test_routing_decisions.py`. If it nears 300 lines, split the ro
 
 The file is 738 lines. Add a new `## The Runner contract` section after the Context Forge section (before "Read-only access"), and edit the existing sections named below. Do not restate the LLD. Document the behavior.
 
-- [ ] `NodeStatus` table: the "Terminal" entry states that terminal status is now enforced, and which writes refuse a done node
-- [ ] `## The Runner contract`: subsections for the done rule (D1, including the two extra refusals and what a caller does instead of blocking a done node), acknowledgment outcomes and desired state (D2, D3, D8), project-scoped escalation (D4), routing decisions, table versions and attempt counts (D5–D7), and the feed note (D9)
-- [ ] Each subsection lists its vocabularies, types and methods in the form the file already uses, and repeats the "callers must not place secrets in them" rule for decision `inputs`, `route_parameters`, escalation payloads and table content
-- [ ] "Failure modes" table: add the five rows from the LLD's "Patterns and Conventions" table
-- [ ] "Migrations": add `009` to the list, and update any sentence that names version 8
-- [ ] "Future work": add the closure change kind from D9
+- [x] `NodeStatus` table: the "Terminal" entry states that terminal status is now enforced, and which writes refuse a done node
+- [x] `## The Runner contract`: subsections for the done rule (D1, including the two extra refusals and what a caller does instead of blocking a done node), acknowledgment outcomes and desired state (D2, D3, D8), project-scoped escalation (D4), routing decisions, table versions and attempt counts (D5–D7), and the feed note (D9)
+- [x] Each subsection lists its vocabularies, types and methods in the form the file already uses, and repeats the "callers must not place secrets in them" rule for decision `inputs`, `route_parameters`, escalation payloads and table content
+- [x] "Failure modes" table: add the five rows from the LLD's "Patterns and Conventions" table
+- [x] "Migrations": add `009` to the list, and update any sentence that names version 8
+- [x] "Future work": add the closure change kind from D9
 - **Success Criteria**:
-  - [ ] Every public method and type in the LLD's "API Contracts" table appears in the file. Check with a grep for each name
-  - [ ] Frontmatter `dateUpdated` is current
-  - [ ] Committed as `docs: document the Runner contract in the store contract`
+  - [x] Every public method and type in the LLD's "API Contracts" table appears in the file. Check with a grep for each name
+  - [x] Frontmatter `dateUpdated` is current
+  - [x] Committed as `docs: document the Runner contract in the store contract`
 
 ### Task 9.2: Update `docs/inbox-contract.md` and verify the public API pin
 **Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 2
 
-- [ ] "Learning the outcome": add `intent_for_submission` and what the row's `acknowledgment_outcome` means, including `None` for rows acknowledged before outcomes existed
-- [ ] "Reading messages": add the project-scoped escalation row shape and note `blocked_state_id` is null on it. Add the four new inspection columns
-- [ ] The acknowledgment paragraph: add the outcome and the desired-state transaction
-- [ ] Check `tests/test_public_api.py` against the LLD's "API Contracts" table. Every new public name and method is pinned and none are missing
+- [x] "Learning the outcome": add `intent_for_submission` and what the row's `acknowledgment_outcome` means, including `None` for rows acknowledged before outcomes existed
+- [x] "Reading messages": add the project-scoped escalation row shape and note `blocked_state_id` is null on it. Add the four new inspection columns
+- [x] The acknowledgment paragraph: add the outcome and the desired-state transaction
+- [x] Check `tests/test_public_api.py` against the LLD's "API Contracts" table. Every new public name and method is pinned and none are missing
 - **Success Criteria**:
-  - [ ] The three documented places are updated and cross-link to `store-contract.md`
-  - [ ] `uv run pytest tests/test_public_api.py tests/test_process_public_api.py -q` passes
-  - [ ] Committed as `docs: document acknowledgment outcomes and project escalations in the inbox contract`
+  - [x] The three documented places are updated and cross-link to `store-contract.md`
+  - [x] `uv run pytest tests/test_public_api.py tests/test_process_public_api.py -q` passes
+  - [x] Committed as `docs: document acknowledgment outcomes and project escalations in the inbox contract`
 
 ### Task 9.3: Final validation
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
 
-- [ ] Run `uv run pytest`, `uv run ruff check`, `uv run ruff format --check`, `uv run pyright` once each
-- [ ] Check file sizes: `wc -l` on every new or changed source file under `src/amoeba/store/` and `inspection/inbox.py`. Anything above about 330 lines must be split or justified in a comment on this task. `journal.py` was already over, so it must have grown by no more than the Task 3.3 lines
-- [ ] Confirm every new SQL statement and column name appears only in `sql*.py` and the migration: grep the new column names across `src/amoeba/` outside those files
-- [ ] Walk the LLD's "Verification Walkthrough" steps 1, 2, 4, 5 and 6. Step 3 uses the contract suite, which Task 4.3 covered. Record any difference between the walkthrough text and actual behaviour in this task, and correct the LLD example if it is wrong
-- [ ] Re-read the LLD's "Success Criteria" and tick each against a passing test
+- [x] Run `uv run pytest`, `uv run ruff check`, `uv run ruff format --check`, `uv run pyright` once each
+- [x] Check file sizes: `wc -l` on every new or changed source file under `src/amoeba/store/` and `inspection/inbox.py`. Anything above about 330 lines must be split or justified in a comment on this task. `journal.py` was already over, so it must have grown by no more than the Task 3.3 lines
+  Result: largest new/changed files are routing_decisions.py 292, sql_runner.py 277, _block_writer.py 252; journal.py 336 (grew by 2 lines, the Task 3.3 guard and its Raises line).
+- [x] Confirm every new SQL statement and column name appears only in `sql*.py` and the migration: grep the new column names across `src/amoeba/` outside those files
+- [x] Walk the LLD's "Verification Walkthrough" steps 1, 2, 4, 5 and 6. Step 3 uses the contract suite, which Task 4.3 covered. Record any difference between the walkthrough text and actual behaviour in this task, and correct the LLD example if it is wrong
+  Result: steps 1, 2, 4, 5, 6 ran as written after three corrections to the LLD text: step 2 error text, step 3 (-k acknowledg selects nothing; run tests/contract), step 5 (rollback cases are in test_routing_decisions_atomic.py), step 6 (read-write open must precede inspect; read-only open refuses a v8 file). LLD corrected.
+- [x] Re-read the LLD's "Success Criteria" and tick each against a passing test
 - **Success Criteria**:
-  - [ ] All checks pass and the walkthrough runs as written
-  - [ ] Work is committed on the slice branch. No merge is performed here
+  - [x] All checks pass and the walkthrough runs as written
+  - [x] Work is committed on the slice branch. No merge is performed here

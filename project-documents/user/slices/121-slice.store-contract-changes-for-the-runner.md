@@ -12,8 +12,8 @@ interfaces:
 - 126
 - 127
 dateCreated: 20261020
-dateUpdated: 20261021
-status: not_started
+dateUpdated: 20261022
+status: complete
 turns: 29
 promptTokens: 1979312
 cachedTokens: 1874456
@@ -364,10 +364,11 @@ The Runner does not exist yet, so the demo exercises the store directly and thro
    s = Store.open_temporary()
    n = s.create_node(project_id="demo", kind=NodeKind.SLICE, title="x")
    s.update_node_status(n.id, NodeStatus.DONE)
-   s.update_node_status(n.id, NodeStatus.RUNNABLE)  # InvalidTransitionError naming the node
+   s.update_node_status(n.id, NodeStatus.RUNNABLE)
+   # InvalidTransitionError: node '<id>' is done, and done is terminal
    ```
 
-3. **Acknowledgment outcome, end to end through the inbox.** With a throwaway supervisor directory (`export AMOEBA_STORE_DIR=$(mktemp -d)`), start the process (`amoeba start`), then run `amoeba submit create-project --project demo --by operator` and `amoeba submit intent --project demo --by operator --body '{"hold": true}'`. Nothing in the shipped process acknowledges intents until 124, so the acknowledgment step is shown by the contract suite's stand-in Runner. Run `uv run pytest tests/contract -k acknowledg`. Then `amoeba inspect messages --project demo --json` against the temporary store shows the intent row with `acknowledgment_outcome` empty, which means not yet consumed.
+3. **Acknowledgment outcome, end to end through the inbox.** With a throwaway supervisor directory (`export AMOEBA_STORE_DIR=$(mktemp -d)`), start the process (`amoeba start`), then run `amoeba submit create-project --project demo --by operator` and `amoeba submit intent --project demo --by operator --body '{"hold": true}'`. Nothing in the shipped process acknowledges intents until 124, so the acknowledgment step is shown by the contract suite's stand-in Runner. Run `uv run pytest tests/contract` (47 tests; the stand-in acknowledges with `outcome=APPLIED` and the oracle asserts `acknowledged:applied`; `-k acknowledg` selects nothing, because no test name contains it). Then `amoeba inspect messages --project demo --json` against the temporary store shows the intent row with `acknowledgment_outcome` empty, which means not yet consumed.
 
 4. **Project-scoped escalation dedup, in a REPL:**
    ```python
@@ -378,9 +379,9 @@ The Runner does not exist yet, so the demo exercises the store directly and thro
    assert s.open_project_escalations("demo") == []
    ```
 
-5. **Recomputable decision:** `uv run pytest tests/store/test_routing_decisions.py -v`. This shows a decision recorded with its table version, read back by `routing_decision_for_entry`, and its table content retrieved by `routing_table_version`. It also shows the rollback cases.
+5. **Recomputable decision:** `uv run pytest tests/store/test_routing_decisions.py tests/store/test_routing_decisions_atomic.py -v`. The first file shows a decision recorded with its table version, read back by `routing_decision_for_entry`, and its table content retrieved by `routing_table_version`. The second shows the rollback cases: an injected failure at each step leaves nothing.
 
-6. **Migration on a real store:** copy an existing version-8 store file into a temporary directory and open it read-write with `Store.open(path=...)`. `amoeba inspect messages --project <id> --json` then shows the new columns empty on old rows, and the schema version reads 9. Do not point this at the central store.
+6. **Migration on a real store:** copy an existing version-8 store file into a temporary directory as `<project>.sqlite3` and open it read-write once with `Store.open(path=...)`, which migrates it. A read-only open (which `amoeba inspect` uses) refuses a version-8 file with `StoreSchemaError`, so the read-write open must come first. Then `AMOEBA_STORE_DIR=<that directory> amoeba inspect messages --project <project> --json` shows `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind` and `closed_at` empty on old rows, and `SELECT version FROM schema_meta` reads 9. Do not point this at the central store. (Verified 2026-10-22 on a version-8 file staged with `migrate(connection, expected_version=8)`.)
 
 ## Implementation Notes
 

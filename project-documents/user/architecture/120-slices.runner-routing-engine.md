@@ -45,7 +45,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    **Risk Level:** Medium. It changes recovery, the most sensitive code in 100.
    **Relative Effort:** 3
 
-2. [ ] **(121) Store Contract Changes for the Runner** — The rest of the 100 changes the arch lists. `update_node_status` enforces `done` as terminal. An intent's acknowledgment carries an outcome (applied, no-op, or rejected with a reason), and a second acknowledgment still raises. A project-scoped escalation covers faults that have no node: it is deduplicated on project and fault kind, and the Runner closes it on the first clean tick. Migrations add the routing-decision, table-version, attempt-count and desired-state tables.
+2. [x] **(121) Store Contract Changes for the Runner** — The rest of the 100 changes the arch lists. `update_node_status` enforces `done` as terminal. An intent's acknowledgment carries an outcome (applied, no-op, or rejected with a reason), and a second acknowledgment still raises. A project-scoped escalation covers faults that have no node: it is deduplicated on project and fault kind, and the Runner closes it on the first clean tick. Migrations add the routing-decision, table-version, attempt-count and desired-state tables.
    **Value:** Architectural enablement. The Runner codes against a contract that already holds what it needs.
    **Success Criteria:**
    - Moving a `done` node to any other status raises.

@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 121: store contract changes for the Runner (schema version 9, migration `009`). `done` is terminal: no store write moves a done node, `journal_issue` refuses one, and `done` is refused while the node has an unresolved journal entry. `acknowledge_message` takes a required `outcome` (`AcknowledgmentOutcome`: `applied`, `no_op`, `rejected`) and optional `reason` and `desired_state`, written in one transaction; `intent_for_submission` reads the outcome back.
+- Slice 121: project-scoped escalation (`raise_project_escalation`, `open_project_escalations`, `close_project_escalation`), one open row per project and fault kind. `record_routing_decision` writes a routing decision, its table version, its attempt count and its node effect in one transaction, with reads `routing_decision`, `routing_decision_for_entry`, `routing_decisions`, `routing_table_version` and `attempt_count`. Desired-state reads `desired_state` and `desired_states`.
+- Slice 121: `amoeba inspect messages` (and `/v1/listings/messages`) show `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind` and `closed_at`. Contract text in `docs/store-contract.md` and `docs/inbox-contract.md`.
+- Slice 121: **breaking** change to an existing method: `acknowledge_message` now requires `outcome`; the stand-in Runner in `tests/contract/` passes `AcknowledgmentOutcome.APPLIED`.
+
 - Slice 120: `run_id` is a required `sq_run` journal parameter. Recovery and `amoeba prune sq-runs` ask Squadron through `sq runs wait --json` (new `amoeba.process.poll_run`, `RunOutcome` and friends) instead of reading its run-state files; an id-bearing entry with no run state past `--launch-grace` (default 60 s) is `not_applied`. Entries journaled before 120 still recover through the attribute matcher. `scripts/demo_journal.py` is retired.
 
 - Slice 110: the contract proof, `tests/contract/` — a 12-step lifecycle across two projects with real processes, `kill -9` crash windows, an end-state oracle and a feed-replay oracle, plus a network subset that survives a `kill -9` of `amoeba serve` and of the resident process. Every import in it is checked to be a public export.
