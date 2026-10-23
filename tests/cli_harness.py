@@ -17,6 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from sq_stub import write_sq_stub
+
 from amoeba.serve.settings import TOKEN_ENV_VAR
 
 #: How long to wait for a CLI invocation that is expected to return promptly.
@@ -45,10 +47,16 @@ def cli_environment(supervisor_dir: Path) -> dict[str, str]:
     no new environment reads (D3). The serve token is dropped too: a real one in
     the developer's shell must never reach a child; a test that needs one sets
     it itself.
+
+    ``start`` probes ``sq`` before its loop (slice 122, D9), and no test runs
+    the real ``sq``. So a stub ``sq`` goes first on PATH; it lives beside the
+    supervisor directory, under the same throwaway parent.
     """
     environment = dict(os.environ)
     environment.pop(TOKEN_ENV_VAR, None)
     environment["AMOEBA_STORE_DIR"] = str(supervisor_dir)
+    stub_dir = write_sq_stub(supervisor_dir.parent / "stub-sq-bin")
+    environment["PATH"] = f"{stub_dir}{os.pathsep}{environment['PATH']}"
     return environment
 
 

@@ -59,9 +59,12 @@ class ScriptedPoll:
     def __init__(self, *answers: RunPoll) -> None:
         self.answers = list(answers)
         self.asked: list[str] = []
+        self.on_call: Any = None
 
     def __call__(self, run_id: str) -> RunPoll:
         self.asked.append(run_id)
+        if self.on_call is not None:
+            self.on_call()
         return self.answers.pop(0)
 
 

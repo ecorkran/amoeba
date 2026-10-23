@@ -99,7 +99,16 @@ class DetectionE2E:
         fake_bin = work_dir / "fake-bin"
         fake_bin.mkdir()
         sq = fake_bin / "sq"
-        sq.write_text(f'#!/bin/sh\necho "{FAKE_SQ_LABEL}"\n')
+        # ``runs wait`` is the Runner's start-up probe (slice 122): a fresh run id
+        # has no run. Anything else prints the version label.
+        sq.write_text(
+            "#!/bin/sh\n"
+            'if [ "$1" = "runs" ] && [ "$2" = "wait" ]; then\n'
+            '  echo "{\\"run_id\\": \\"$3\\", \\"outcome\\": \\"not_found\\"}"\n'
+            "  exit 5\n"
+            "fi\n"
+            f'echo "{FAKE_SQ_LABEL}"\n'
+        )
         sq.chmod(0o755)
         self.environment = cli_environment(supervisor_dir)
         self.environment["PATH"] = f"{fake_bin}:{self.environment['PATH']}"

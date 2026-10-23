@@ -29,6 +29,7 @@ from amoeba.process.instance_lock import (
 )
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.tenants import standard_tenants
+from amoeba.runner import runner_tenant
 from amoeba.store import paths
 
 #: How often ``stop`` re-checks whether the lock has been released.
@@ -53,7 +54,10 @@ def start(settings: ProcessSettings) -> ExitCode:
         settings,
         store_dir=supervisor_dir,
         version=VERSION,
-        tenants=standard_tenants(settings, supervisor_dir),
+        tenants=(
+            *standard_tenants(settings, supervisor_dir),
+            runner_tenant(settings, supervisor_dir),
+        ),
         grace_expired_exit_status=int(ExitCode.GRACE_EXPIRED),
         # A tenant that never returns must not hold the process forever; the
         # operator's remedy would otherwise be an external kill.

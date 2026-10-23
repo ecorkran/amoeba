@@ -20,6 +20,7 @@ import pytest
 from cli_harness import (
     await_running,
     await_stopped,
+    cli_environment,
     run_cli,
     start_background,
 )
@@ -477,3 +478,21 @@ def test_exit_code_values_are_unchanged_and_distinct() -> None:
         "PRUNE_INCOMPLETE": 14,
         "UPSTREAM_SHAPE": 15,
     }
+
+
+def test_a_failing_sq_probe_fails_the_start_naming_the_shape(
+    supervisor_dir: Path, runs_dir: Path, tmp_path: Path
+) -> None:
+    """The Runner's start-up probe finds no usable ``sq``: the process never runs."""
+    empty_bin = tmp_path / "no-sq"
+    empty_bin.mkdir()
+    environment = {**cli_environment(supervisor_dir), "PATH": str(empty_bin)}
+
+    result = run_cli(
+        ["start", *_start_arguments(runs_dir)],
+        supervisor_dir,
+        environment=environment,
+    )
+
+    assert result.returncode == ExitCode.STARTUP_FAILED == 7
+    assert "runs wait" in result.stderr and "--timeout 0 --json" in result.stderr

@@ -52,9 +52,12 @@ class Popen:
         self.error = error
         self.calls = 0
         self.open_entries_at_call: list[int] = []
+        self.on_call: Any = None
 
     def __call__(self, argv: list[str], **kwargs: Any) -> Child:
         self.calls += 1
+        if self.on_call is not None:
+            self.on_call()
         self.open_entries_at_call.append(
             len(self.store.unresolved_journal_entries(PROJECT))
         )

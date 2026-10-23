@@ -14,8 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from amoeba.process import RunOutcome, RunOutcomeDocument, RunPoll
-from amoeba.process.sq_outcome import PollFailure
+from amoeba.process import PollFailure, RunOutcome, RunOutcomeDocument, RunPoll
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import InFlightRun, RunState
 from amoeba.runner.faults import (

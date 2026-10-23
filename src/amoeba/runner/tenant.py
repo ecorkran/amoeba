@@ -14,8 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Final, Protocol
 
-from amoeba.process import ProcessSettings, UpstreamShapeError
-from amoeba.process.sq_outcome import RunPoll
+from amoeba.process import ProcessSettings, RunPoll, UpstreamShapeError
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import Planner
 from amoeba.runner.faults import STORE_FAILURES, FaultKind, NodeContext, escalate
