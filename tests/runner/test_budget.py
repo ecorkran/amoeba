@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from amoeba.runner.tick import TickBudget, TickResult
+from amoeba.runner.budget import TickBudget, TickResult
 
 
 class FakeHost:

@@ -16,8 +16,15 @@ from pathlib import Path
 
 from amoeba.process import RunOutcome, RunOutcomeDocument, RunPoll
 from amoeba.process.sq_outcome import PollFailure
+from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import InFlightRun, RunState
-from amoeba.runner.faults import Fault, FaultKind, LaunchFailure, TickFaults
+from amoeba.runner.faults import (
+    Fault,
+    FaultKind,
+    LaunchFailure,
+    NodeContext,
+    TickFaults,
+)
 from amoeba.runner.launch import (
     LaunchTracker,
     TrackedLaunch,
@@ -25,7 +32,6 @@ from amoeba.runner.launch import (
     stderr_confirms,
     stderr_tail,
 )
-from amoeba.runner.tick import TickBudget, TickResult
 from amoeba.store import PARAM_RUN_ID, JournalEntry
 
 #: The exit code of a child that rejected its command line.
@@ -117,25 +123,32 @@ class RunObserver:
         self._interval = run_poll_interval_seconds
         self._last_poll: dict[str, float] = {}
         self._overdue: set[str] = set()
+        # The last poll-fault per entry, replayed on ticks between polls so a
+        # fault that stands does not look recovered (and its escalation close).
+        self._faulted: dict[str, Fault] = {}
 
     def observe(
         self,
         entries: Sequence[JournalEntry],
         budget: TickBudget,
         faults: TickFaults,
+        context: NodeContext,
     ) -> Observed:
         """Observe each entry, least recently polled first.
 
-        Stops with ``CUT_OFF`` as soon as a poll is due but the budget refuses.
+        Sets ``context`` to each entry's node before observing it. Stops with
+        ``CUT_OFF`` as soon as a poll is due but the budget refuses.
         """
         live = {entry.id for entry in entries}
         self._last_poll = {k: v for k, v in self._last_poll.items() if k in live}
         self._overdue &= live
+        self._faulted = {k: v for k, v in self._faulted.items() if k in live}
         ordered = sorted(
             entries, key=lambda e: self._last_poll.get(e.id, float("-inf"))
         )
         runs: list[ObservedRun] = []
         for entry in ordered:
+            context.set(entry.node_id)
             observed = self._observe_one(entry, budget, faults)
             if observed is None:
                 return Observed(tuple(runs), TickResult.CUT_OFF)
@@ -159,7 +172,11 @@ class RunObserver:
         self, entry: JournalEntry, run_id: str, budget: TickBudget, faults: TickFaults
     ) -> ObservedRun | None:
         if not self._poll_due(entry.id):
-            return self._running(entry, run_id)
+            standing = self._faulted.get(entry.id)
+            if standing is None:
+                return self._running(entry, run_id)
+            faults.add(standing)
+            return ObservedRun(InFlightRun(entry, run_id, RunState.FAULT))
         if not budget.allows_call():
             return None
         return self._classify(entry, run_id, self._poll_now(entry.id, run_id), faults)
@@ -311,25 +328,27 @@ class RunObserver:
         return ObservedRun(InFlightRun(entry, run_id, RunState.LAUNCHING))
 
     def _running(self, entry: JournalEntry, run_id: str) -> ObservedRun:
+        self._faulted.pop(entry.id, None)
         return ObservedRun(InFlightRun(entry, run_id, RunState.RUNNING))
 
     def _ended(
         self, entry: JournalEntry, run_id: str, finished: Finished
     ) -> ObservedRun:
         self._overdue.discard(entry.id)
+        self._faulted.pop(entry.id, None)
         return ObservedRun(InFlightRun(entry, run_id, RunState.FINISHED), finished)
 
     def _fault(
         self, entry: JournalEntry, run_id: str, reason: str, faults: TickFaults
     ) -> ObservedRun:
-        faults.add(
-            Fault(
-                FaultKind.RUN_OBSERVATION_FAILED,
-                f"entry {entry.id}: {reason}",
-                node_id=entry.node_id,
-                run_id=run_id,
-            )
+        fault = Fault(
+            FaultKind.RUN_OBSERVATION_FAILED,
+            f"entry {entry.id}: {reason}",
+            node_id=entry.node_id,
+            run_id=run_id,
         )
+        faults.add(fault)
+        self._faulted[entry.id] = fault
         return ObservedRun(InFlightRun(entry, run_id, RunState.FAULT))
 
 

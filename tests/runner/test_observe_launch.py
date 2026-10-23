@@ -5,11 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from amoeba.process import RunOutcome
+from amoeba.runner.budget import TickResult
 from amoeba.runner.decide import RunState
 from amoeba.runner.faults import FaultKind, LaunchFailure
 from amoeba.runner.launch import log_paths
 from amoeba.runner.observe import LaunchFailed, RunEnded
-from amoeba.runner.tick import TickResult
 from runner.observe_support import (
     GRACE,
     INTERVAL,

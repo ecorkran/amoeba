@@ -11,14 +11,14 @@ from amoeba.process import (
     RunOutcomeDocument,
     RunPoll,
 )
-from amoeba.runner.faults import TickFaults
+from amoeba.runner.budget import TickBudget
+from amoeba.runner.faults import NodeContext, TickFaults
 from amoeba.runner.launch import (
     LAUNCH_LOGS_DIRNAME,
     LaunchTracker,
     log_paths,
 )
 from amoeba.runner.observe import RunObserver
-from amoeba.runner.tick import TickBudget
 from amoeba.store import PARAM_RUN_ID, CommandKind, JournalEntry
 
 NOW = datetime(2026, 10, 23, 12, 0, 0, tzinfo=UTC)
@@ -92,6 +92,7 @@ class Rig:
         self.poll = ScriptedPoll(*answers)
         self.tracker = LaunchTracker()
         self.faults = TickFaults()
+        self.context = NodeContext()
         self.deadline = 1_000_000.0
         self.observer = RunObserver(
             supervisor_dir=tmp_path,
@@ -115,4 +116,4 @@ class Rig:
             log_paths(self.supervisor_dir, e.id).stderr.touch()
 
     def observe(self, *entries: JournalEntry):  # noqa: ANN201
-        return self.observer.observe(entries, self.budget(), self.faults)
+        return self.observer.observe(entries, self.budget(), self.faults, self.context)

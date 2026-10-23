@@ -17,6 +17,7 @@ from enum import StrEnum
 from typing import Final
 
 from amoeba.store import (
+    Store,
     StoreBusyError,
     StoreCorruptError,
     StorePermissionError,
@@ -85,3 +86,54 @@ class TickFaults:
 
     def __len__(self) -> int:
         return len(self._faults)
+
+
+class NodeContext:
+    """The node a tick is working on, so the process-boundary catch can name it.
+
+    Each node-scoped step sets it before it runs, as the host does for the
+    current tenant. ``None`` means no node is in context.
+    """
+
+    def __init__(self) -> None:
+        self.node_id: str | None = None
+
+    def set(self, node_id: str) -> None:
+        """Name the node the next step concerns."""
+        self.node_id = node_id
+
+    def clear(self) -> None:
+        """Leave no node in context."""
+        self.node_id = None
+
+
+#: Keys of a project-scoped escalation's payload.
+PAYLOAD_DETAIL: Final = "detail"
+PAYLOAD_NODE_ID: Final = "node_id"
+PAYLOAD_RUN_ID: Final = "run_id"
+
+
+def raise_expected_faults(store: Store, project_id: str, faults: TickFaults) -> bool:
+    """Raise each expected fault as a project-scoped escalation.
+
+    Deduplicated by the store on ``(project, kind)``: a kind already open
+    writes nothing, so a fault that recurs every tick adds no rows.
+
+    Returns:
+        Whether any escalation row was written.
+    """
+    already_open = {m.fault_kind for m in store.open_project_escalations(project_id)}
+    wrote = False
+    for fault in faults:
+        store.raise_project_escalation(
+            project_id,
+            fault_kind=fault.kind.value,
+            payload={
+                PAYLOAD_DETAIL: fault.detail,
+                PAYLOAD_NODE_ID: fault.node_id,
+                PAYLOAD_RUN_ID: fault.run_id,
+            },
+        )
+        wrote = wrote or fault.kind.value not in already_open
+        already_open.add(fault.kind.value)
+    return wrote

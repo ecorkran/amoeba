@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 
 from amoeba.process import RunOutcome
+from amoeba.runner.budget import TickResult
 from amoeba.runner.decide import RunState
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.observe import RunEnded, RunVanished
-from amoeba.runner.tick import TickResult
 from runner.observe_support import (
     INTERVAL,
     Child,
@@ -136,7 +136,7 @@ def test_the_budget_is_checked_before_every_poll(tmp_path: Path) -> None:
         def allows_call(self) -> bool:
             return next(budgets)
 
-    observed = rig.observer.observe((first, second), OneCall(), rig.faults)  # type: ignore[arg-type]
+    observed = rig.observer.observe((first, second), OneCall(), rig.faults, rig.context)  # type: ignore[arg-type]
 
     assert rig.poll.asked == ["run-1"]
     assert observed.result is TickResult.CUT_OFF
@@ -152,3 +152,24 @@ def test_a_confirmed_tracked_child_is_polled_like_any_run(tmp_path: Path) -> Non
     [observed] = rig.observe(e).runs
 
     assert observed.run.state is RunState.FINISHED
+
+
+def test_the_node_in_context_is_the_entry_being_observed(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, document("run-1", RunOutcome.TIMED_OUT))
+
+    rig.observe(entry(1))
+
+    assert rig.context.node_id == "node-1"
+
+
+def test_a_standing_poll_fault_recurs_between_polls(tmp_path: Path) -> None:
+    rig = Rig(tmp_path, failure("sq timed out"))
+    e = entry()
+    rig.observe(e)
+
+    rig.clock.seconds = 1.0
+    [between] = rig.observe(e).runs
+
+    assert rig.poll.asked == ["run-1"], "no extra poll"
+    assert between.run.state is RunState.FAULT
+    assert [f.kind for f in rig.faults] == [FaultKind.RUN_OBSERVATION_FAILED] * 2
