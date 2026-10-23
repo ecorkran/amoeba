@@ -73,6 +73,7 @@ class JournalOperations(BlockWriter):
             NodeNotFoundError: If the node does not exist. Nothing is written.
             ValueError: If a required parameter key for ``kind`` is missing.
                 Raised before any write, so the table is left untouched.
+            InvalidTransitionError: If the node is done (D1). Nothing is written.
         """
         missing = REQUIRED_PARAMETER_KEYS[kind] - set(parameters)
         if missing:
@@ -82,6 +83,7 @@ class JournalOperations(BlockWriter):
             )
 
         node = self._require_node(node_id)
+        self._refuse_done(node_id)
 
         issued = now()
         entry = JournalEntry(

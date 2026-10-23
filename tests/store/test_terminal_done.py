@@ -135,3 +135,20 @@ def test_create_node_as_done_still_works(store: Store) -> None:
 
     node = store.get_node(node_id)
     assert node is not None and node.status is NodeStatus.DONE
+
+
+# --------------------------------------------------------------------------
+# Task 3.3: journal_issue
+# --------------------------------------------------------------------------
+
+
+def test_journal_issue_against_a_done_node_raises_and_writes_nothing(
+    store: Store,
+) -> None:
+    node_id = _done_node(store)
+
+    with pytest.raises(InvalidTransitionError, match=node_id):
+        _issue(store, node_id)
+
+    assert store.unresolved_journal_entries(PROJECT) == []
+    assert store.journal_entries(PROJECT, include_resolved=True) == []
