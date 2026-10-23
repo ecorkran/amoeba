@@ -28,6 +28,7 @@ from sq_stub import write_outcome_document, write_sq_stub
 from amoeba.process.observers import sq_runs
 from amoeba.process.recovery import (
     Adopt,
+    InFlight,
     NotApplied,
     Observation,
     Observer,
@@ -314,7 +315,7 @@ def test_summary_counts_match_what_was_written(store: Store, node: Node) -> None
 
     assert summary == RecoverySummary(adopted=1, not_applied=1, unknown=1)
     assert summary.total == 3
-    assert summary.describe() == "1 adopted, 1 not_applied, 1 unknown"
+    assert summary.describe() == "1 adopted, 0 in_flight, 1 not_applied, 1 unknown"
 
     counted = {
         JournalOutcome.ADOPTED: 0,
@@ -329,6 +330,27 @@ def test_summary_counts_match_what_was_written(store: Store, node: Node) -> None
         JournalOutcome.NOT_APPLIED: 1,
         JournalOutcome.UNKNOWN: 1,
     }
+
+
+def test_in_flight_leaves_the_entry_unresolved_and_is_counted(
+    store: Store, node: Node, caplog: pytest.LogCaptureFixture
+) -> None:
+    entry_id = _issue(store, node.id)
+    answer = InFlight(run_id="run-9", outcome=RunOutcome.PAUSED)
+
+    with caplog.at_level("INFO"):
+        summary = reconcile(store, PROJECT, _registry(FixedObserver(answer)))
+
+    reloaded = store.journal_entry(entry_id)
+    assert reloaded is not None
+    assert not reloaded.is_resolved
+    assert [e.id for e in store.unresolved_journal_entries(PROJECT)] == [entry_id]
+    assert summary == RecoverySummary(in_flight=1)
+    assert summary.total == 1
+    assert summary.describe() == "0 adopted, 1 in_flight, 0 not_applied, 0 unknown"
+    assert entry_id in caplog.text
+    assert "run-9" in caplog.text
+    assert "paused" in caplog.text
 
 
 def test_nothing_to_reconcile_is_an_empty_summary(store: Store) -> None:
@@ -554,7 +576,7 @@ def _issue_by_id(store: Store, node_id: str, run_id: str) -> str:
     ).id
 
 
-def test_an_id_bearing_entry_with_a_stub_document_is_adopted(
+def test_an_id_bearing_entry_with_a_stub_document_is_left_in_flight(
     store: Store, node: Node, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     home, settings = _stub_settings(tmp_path, monkeypatch, tmp_path / "runs")
@@ -565,13 +587,8 @@ def test_an_id_bearing_entry_with_a_stub_document_is_adopted(
 
     reloaded = store.journal_entry(entry_id)
     assert reloaded is not None
-    assert reloaded.outcome is JournalOutcome.ADOPTED
-    assert reloaded.result == {
-        "run_id": "run-by-id-1",
-        "outcome": "paused",
-        "status": "paused",
-    }
-    assert summary == RecoverySummary(adopted=1)
+    assert not reloaded.is_resolved
+    assert summary == RecoverySummary(in_flight=1)
 
 
 def test_an_id_bearing_entry_with_no_run_state_past_grace_is_not_applied(
@@ -619,7 +636,7 @@ def test_a_legacy_row_still_recovers_through_the_matcher(
 def test_recovery_by_id_reads_no_run_state_file(
     store: Store, node: Node, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """D8: adopted, not_applied and unknown answers, none from a run file.
+    """D8: in-flight, not_applied and unknown answers, none from a run file.
 
     The runs directory holds a file that would match the entries, and the
     scanner and parser fail the test if they are called at all.
@@ -636,7 +653,7 @@ def test_recovery_by_id_reads_no_run_state_file(
     monkeypatch.setattr(sq_runs, "parse_run_file", _must_not_be_called)
     write_outcome_document(home, _run_document("run-adopt", RunOutcome.COMPLETED))
     write_outcome_document(home, _run_document("run-unreadable", RunOutcome.UNREADABLE))
-    adopted = _issue_by_id(store, node.id, "run-adopt")
+    in_flight = _issue_by_id(store, node.id, "run-adopt")
     not_applied = _issue_by_id(store, node.id, "run-absent")
     unknown = _issue_by_id(store, node.id, "run-unreadable")
 
@@ -644,10 +661,10 @@ def test_recovery_by_id_reads_no_run_state_file(
 
     outcomes = {
         entry_id: (entry.outcome if (entry := store.journal_entry(entry_id)) else None)
-        for entry_id in (adopted, not_applied, unknown)
+        for entry_id in (in_flight, not_applied, unknown)
     }
     assert outcomes == {
-        adopted: JournalOutcome.ADOPTED,
+        in_flight: None,
         not_applied: JournalOutcome.NOT_APPLIED,
         unknown: JournalOutcome.UNKNOWN,
     }

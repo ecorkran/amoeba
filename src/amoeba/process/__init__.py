@@ -22,6 +22,7 @@ from amoeba.process.errors import (
 from amoeba.process.host import ResidentProcess, Tenant
 from amoeba.process.recovery import (
     Adopt,
+    InFlight,
     NotApplied,
     Observation,
     Observer,
@@ -44,6 +45,7 @@ __all__ = [
     "Adopt",
     "AlreadyRunningError",
     "GraceExpiredError",
+    "InFlight",
     "NotApplied",
     "Observation",
     "Observer",

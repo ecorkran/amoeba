@@ -66,17 +66,14 @@ def _alpha() -> ProjectState:
             blocked_fact(NodeKind.GATE, BlockedKind.SQ_CHECKPOINT, True),
         ),
         Category.JOURNAL: counted(
-            # Steps 3 and 9: the issuer reported its own result.
+            # Steps 3 and 9: the issuer reported its own result. Step 4: recovery
+            # left the run in flight and the restarted issuer finished it.
             *[
                 journal_fact(
                     CommandKind.SQ_RUN, JournalOutcome.COMPLETED, JournalResolver.ISSUER
                 )
             ]
-            * 2,
-            # Step 4: recovery found the run and adopted it.
-            journal_fact(
-                CommandKind.SQ_RUN, JournalOutcome.ADOPTED, JournalResolver.RECOVERY
-            ),
+            * 3,
             # Step 5: the run's state was unreadable, so recovery escalated.
             journal_fact(
                 CommandKind.SQ_RUN, JournalOutcome.UNKNOWN, JournalResolver.RECOVERY

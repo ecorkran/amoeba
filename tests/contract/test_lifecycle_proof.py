@@ -21,7 +21,7 @@ def test_the_lifecycle_proof(proof_harness: ProofHarness) -> None:
     driver.check_reported_review(3)
 
     driver.run_intent_step(STEP_BY_NUMBER[4])
-    driver.check_adopted_review(4)
+    driver.check_finished_review(4)
 
     driver.run_intent_step(STEP_BY_NUMBER[5])
     blocked = driver.check_escalation(5)

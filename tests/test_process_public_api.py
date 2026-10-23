@@ -17,6 +17,7 @@ EXPECTED_EXPORTS = {
     "Observer",
     "Observation",
     "Adopt",
+    "InFlight",
     "NotApplied",
     "Unknown",
     "standard_tenants",

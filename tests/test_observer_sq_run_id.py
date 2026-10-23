@@ -20,7 +20,7 @@ from amoeba.process.observers.sq_run_id import (
     SquadronRunObserver,
 )
 from amoeba.process.observers.sq_runs import RunsDirectoryScan, SquadronRunsObserver
-from amoeba.process.recovery import Adopt, NotApplied, Observation, Unknown
+from amoeba.process.recovery import Adopt, InFlight, NotApplied, Observation, Unknown
 from amoeba.process.sq_outcome import PollFailure, RunOutcome, RunOutcomeDocument
 from amoeba.store.journal_models import PARAM_RUN_ID, CommandKind, JournalEntry
 
@@ -91,7 +91,7 @@ class Rig:
         return self.observer.observe(entry)
 
 
-# 1. State-bearing outcomes adopt ------------------------------------------
+# 1. State-bearing outcomes are left in flight ----
 
 
 def test_six_outcomes_are_state_bearing() -> None:
@@ -106,29 +106,16 @@ def test_six_outcomes_are_state_bearing() -> None:
 
 
 @pytest.mark.parametrize("outcome", sorted(STATE_BEARING_OUTCOMES))
-def test_every_state_bearing_outcome_adopts_with_run_id_outcome_and_status(
+def test_every_state_bearing_outcome_is_left_in_flight(
     monkeypatch: pytest.MonkeyPatch, outcome: RunOutcome
 ) -> None:
     rig = Rig(monkeypatch, _document(outcome, status="some-status"))
 
     observation = rig.observe(_entry())
 
-    assert observation == Adopt(
-        result={"run_id": RUN_ID, "outcome": outcome.value, "status": "some-status"}
-    )
+    assert observation == InFlight(run_id=RUN_ID, outcome=outcome)
     assert rig.poll.calls == [(RUN_ID, POLL_TIMEOUT_SECONDS)]
     assert rig.sleeps == []
-
-
-def test_an_adoption_does_not_record_a_schema_version(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    rig = Rig(monkeypatch, _document(RunOutcome.COMPLETED, status="completed"))
-
-    observation = rig.observe(_entry())
-
-    assert isinstance(observation, Adopt)
-    assert "schema_version" not in observation.result
 
 
 # 2. Unreadable and poll failures escalate ---------------------------------
@@ -242,7 +229,7 @@ def test_not_found_with_no_issued_at_escalates(
 # 6. not_found inside grace: wait out the remainder, ask once more ---------
 
 
-def test_in_grace_it_sleeps_the_remainder_then_adopts_a_run_that_appeared(
+def test_in_grace_it_sleeps_the_remainder_then_leaves_a_run_that_appeared_in_flight(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     rig = Rig(
@@ -253,9 +240,7 @@ def test_in_grace_it_sleeps_the_remainder_then_adopts_a_run_that_appeared(
 
     observation = rig.observe(_entry(issued_at=NOW - timedelta(seconds=45)))
 
-    assert observation == Adopt(
-        result={"run_id": RUN_ID, "outcome": "timed_out", "status": "running"}
-    )
+    assert observation == InFlight(run_id=RUN_ID, outcome=RunOutcome.TIMED_OUT)
     assert rig.sleeps == [15.0]
     assert len(rig.poll.calls) == 2
 
@@ -368,5 +353,5 @@ def test_an_id_bearing_entry_never_touches_the_legacy_scan(
 
     observation = dispatcher.observe(_entry())
 
-    assert isinstance(observation, Adopt)
+    assert isinstance(observation, InFlight)
     assert legacy.seen == []
