@@ -167,6 +167,11 @@ CONTRACT_METHODS = {
     "raise_project_escalation",
     "open_project_escalations",
     "close_project_escalation",
+    "routing_decision",
+    "routing_decision_for_entry",
+    "routing_decisions",
+    "routing_table_version",
+    "attempt_count",
     # Verdicts and findings, added by slice 104.
     "record_verdict",
     "verdict",

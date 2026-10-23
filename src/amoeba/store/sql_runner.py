@@ -213,3 +213,65 @@ SET {sql_inbox.COL_MESSAGE_CLOSED_AT} = ?,
 WHERE {sql_inbox.COL_MESSAGE_ID} = ?
   AND{_OPEN_PROJECT_ESCALATION}
 """
+
+# --------------------------------------------------------------------------
+# routing_table_versions, routing_decisions, attempt_counts
+# --------------------------------------------------------------------------
+
+_TABLE_VERSION_SELECT_LIST = ", ".join(TABLE_VERSION_COLUMNS)
+_DECISION_SELECT_LIST = ", ".join(DECISION_COLUMNS)
+
+INSERT_TABLE_VERSION: Final = f"""
+INSERT INTO {TABLE_ROUTING_TABLE_VERSIONS} ({_TABLE_VERSION_SELECT_LIST})
+VALUES (?, ?, ?)
+"""
+
+SELECT_TABLE_VERSION: Final = f"""
+SELECT {_TABLE_VERSION_SELECT_LIST}
+FROM {TABLE_ROUTING_TABLE_VERSIONS}
+WHERE {COL_TABLE_VERSION} = ?
+"""
+
+INSERT_DECISION: Final = f"""
+INSERT INTO {TABLE_ROUTING_DECISIONS} ({_DECISION_SELECT_LIST})
+VALUES ({", ".join("?" for _ in DECISION_COLUMNS)})
+"""
+
+SELECT_DECISION_BY_ID: Final = f"""
+SELECT {_DECISION_SELECT_LIST}
+FROM {TABLE_ROUTING_DECISIONS}
+WHERE {COL_DECISION_ID} = ?
+"""
+
+#: Served by ``idx_routing_decisions_entry``.
+SELECT_DECISION_BY_ENTRY: Final = f"""
+SELECT {_DECISION_SELECT_LIST}
+FROM {TABLE_ROUTING_DECISIONS}
+WHERE {COL_DECISION_JOURNAL_ENTRY_ID} = ?
+"""
+
+#: Oldest first. Served by ``idx_routing_decisions_node``; ``rowid`` breaks a
+#: tie between decisions with the same instant.
+SELECT_DECISIONS_BY_NODE: Final = f"""
+SELECT {_DECISION_SELECT_LIST}
+FROM {TABLE_ROUTING_DECISIONS}
+WHERE {COL_DECISION_NODE_ID} = ?
+ORDER BY {COL_DECISION_DECIDED_AT}, rowid
+"""
+
+SELECT_ATTEMPT_COUNT: Final = f"""
+SELECT {COL_ATTEMPT_COUNT}
+FROM {TABLE_ATTEMPT_COUNTS}
+WHERE {COL_ATTEMPT_NODE_ID} = ?
+  AND {COL_ATTEMPT_STEP} = ?
+"""
+
+#: Starts a pair at 1 or adds 1 to it. The caller reads the new value back with
+#: ``SELECT_ATTEMPT_COUNT`` inside the same transaction.
+UPSERT_ATTEMPT_COUNT: Final = f"""
+INSERT INTO {TABLE_ATTEMPT_COUNTS} ({", ".join(ATTEMPT_COLUMNS)})
+VALUES (?, ?, 1, ?)
+ON CONFLICT ({COL_ATTEMPT_NODE_ID}, {COL_ATTEMPT_STEP}) DO UPDATE
+SET {COL_ATTEMPT_COUNT} = {COL_ATTEMPT_COUNT} + 1,
+    {COL_ATTEMPT_UPDATED_AT} = excluded.{COL_ATTEMPT_UPDATED_AT}
+"""

@@ -175,33 +175,33 @@ New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_
 ### Task 4.1: Validate and record the outcome in `acknowledge_message`
 **Owner**: Junior AI | **Dependencies**: 3.4 | **Effort**: 3
 
-- [ ] `store/messages.py`: change the signature to `acknowledge_message(message_id, *, acknowledged_by, outcome, reason=None)`. `outcome` is required, with no default. Leave `desired_state` for Task 5.2
-- [ ] Validate before opening the transaction, each raising `ValueError`: `rejected` needs a non-empty, non-whitespace `reason`. `reason`, when given for any outcome, must be a non-empty string. Coerce `outcome` through `AcknowledgmentOutcome(outcome)`
-- [ ] `store/sql_inbox.py` or `sql_runner.py`: extend `ACKNOWLEDGE_MESSAGE` to set the two new columns. Keep the `IS NULL` and channel guards, so a second acknowledgment still raises `InvalidTransitionError`
-- [ ] Update the docstring: Args, Raises, and the pre-009 note ("a `None` outcome means acknowledged before outcomes were recorded")
+- [x] `store/messages.py`: change the signature to `acknowledge_message(message_id, *, acknowledged_by, outcome, reason=None)`. `outcome` is required, with no default. Leave `desired_state` for Task 5.2
+- [x] Validate before opening the transaction, each raising `ValueError`: `rejected` needs a non-empty, non-whitespace `reason`. `reason`, when given for any outcome, must be a non-empty string. Coerce `outcome` through `AcknowledgmentOutcome(outcome)`
+- [x] `store/sql_inbox.py` or `sql_runner.py`: extend `ACKNOWLEDGE_MESSAGE` to set the two new columns. Keep the `IS NULL` and channel guards, so a second acknowledgment still raises `InvalidTransitionError`
+- [x] Update the docstring: Args, Raises, and the pre-009 note ("a `None` outcome means acknowledged before outcomes were recorded")
 - **Success Criteria**:
-  - [ ] Each of the three outcomes is stored and read back on the returned `Message`
-  - [ ] `rejected` without a reason raises `ValueError` and the row stays unacknowledged
-  - [ ] A second acknowledgment still raises `InvalidTransitionError` and the first outcome is kept
+  - [x] Each of the three outcomes is stored and read back on the returned `Message`
+  - [x] `rejected` without a reason raises `ValueError` and the row stays unacknowledged
+  - [x] A second acknowledgment still raises `InvalidTransitionError` and the first outcome is kept
 
 ### Task 4.2: Add `intent_for_submission`
 **Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
 
-- [ ] `store/sql_inbox.py`: add a select by `submission_id` restricted to the intent channel. `messages.submission_id` has no index and the design adds none, so the lookup scans the project's messages. That is accepted for now. Issue #19 tracks adding the index
-- [ ] `store/messages.py`: `intent_for_submission(submission_id) -> Message | None`. Add it to `amoeba.store`'s `CONTRACT_METHODS` pin
+- [x] `store/sql_inbox.py`: add a select by `submission_id` restricted to the intent channel. `messages.submission_id` has no index and the design adds none, so the lookup scans the project's messages. That is accepted for now. Issue #19 tracks adding the index
+- [x] `store/messages.py`: `intent_for_submission(submission_id) -> Message | None`. Add it to `amoeba.store`'s `CONTRACT_METHODS` pin
 - **Success Criteria**:
-  - [ ] Returns the intent row a submission created, `None` for an unknown id, and works on a handle from `Store.open_read_only`
+  - [x] Returns the intent row a submission created, `None` for an unknown id, and works on a handle from `Store.open_read_only`
 
 ### Task 4.3: Update callers and test the acknowledgment
 **Owner**: Junior AI | **Dependencies**: 4.2 | **Effort**: 3
 
-- [ ] `tests/store/test_messages.py`: every `acknowledge_message` call passes an `outcome`. Add: the three outcomes round-trip; `rejected` with no reason and with a blank reason raises `ValueError` and writes nothing; `applied` and `no_op` accept a reason; `outcome` omitted is a `TypeError`; a pre-009-style row (raw SQL, outcome null) reads back with `acknowledgment_outcome` `None`; `intent_for_submission` after `apply_submission` of an intent returns the row both before and after acknowledgment, and through a read-only handle
-- [ ] `tests/contract/runner_tenant.py` (line ~122): the stand-in acknowledges with `outcome=AcknowledgmentOutcome.APPLIED`. Import it from `amoeba.store` (contract-suite imports must be public exports, per `tests/contract/test_public_api_rule.py`). (Task 2.2 exported it)
-- [ ] `tests/contract/oracle.py`: make `message_fact` distinguish outcomes (for example `acknowledged:applied`), update `read_state`, and update the expected fact in every scenario that declares an acknowledged intent. Find them with `grep -rn "acknowledged" tests/contract`
+- [x] `tests/store/test_messages.py`: every `acknowledge_message` call passes an `outcome`. Add: the three outcomes round-trip; `rejected` with no reason and with a blank reason raises `ValueError` and writes nothing; `applied` and `no_op` accept a reason; `outcome` omitted is a `TypeError`; a pre-009-style row (raw SQL, outcome null) reads back with `acknowledgment_outcome` `None`; `intent_for_submission` after `apply_submission` of an intent returns the row both before and after acknowledgment, and through a read-only handle
+- [x] `tests/contract/runner_tenant.py` (line ~122): the stand-in acknowledges with `outcome=AcknowledgmentOutcome.APPLIED`. Import it from `amoeba.store` (contract-suite imports must be public exports, per `tests/contract/test_public_api_rule.py`). (Task 2.2 exported it)
+- [x] `tests/contract/oracle.py`: make `message_fact` distinguish outcomes (for example `acknowledged:applied`), update `read_state`, and update the expected fact in every scenario that declares an acknowledged intent. Find them with `grep -rn "acknowledged" tests/contract`
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/store/test_messages.py tests/contract tests/test_public_api.py -q` passes
-  - [ ] Full suite, `ruff` and `pyright` are clean
-  - [ ] Tasks 4.1–4.3 committed as `feat: record acknowledgment outcomes and add intent_for_submission`
+  - [x] `uv run pytest tests/store/test_messages.py tests/contract tests/test_public_api.py -q` passes
+  - [x] Full suite, `ruff` and `pyright` are clean
+  - [x] Tasks 4.1–4.3 committed as `feat: record acknowledgment outcomes and add intent_for_submission`
 
 ---
 
@@ -210,40 +210,40 @@ New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_
 ### Task 5.1: Desired-state statements and reads
 **Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 3
 
-- [ ] `store/sql_runner.py`: statements to select one target's row (project target and node target are two statements, because `node_id IS NULL` cannot be bound), select all for a project, upsert (replace the whole row), and delete by target
-- [ ] `store/desired_states.py` (new, mixed into `Store` after `MessageOperations`): `desired_state(project_id, *, node_id=None) -> DesiredState | None` and `desired_states(project_id) -> list[DesiredState]`. Both work through a read-only handle. Order `desired_states` deterministically (project target first, then by node id)
-- [ ] The same module holds the internal `_write_desired_state_change(intent, change, timestamp)`. It runs inside the caller's transaction and never commits. For `SetDesiredState` it applies the D3 shape checks, then upserts. For `ClearDesiredState` it deletes, and a missing row writes nothing. Shape checks, each `ValueError`: `drive` and `hold` both `None`; `drive_until_step` with `drive` not `True`; a step value that is empty text. A non-null `node_id` must name a node in the intent's project, else `NodeNotFoundError`
-- [ ] Register `DesiredStateOperations` in the `Store` bases. Pin the two read methods in `CONTRACT_METHODS`
+- [x] `store/sql_runner.py`: statements to select one target's row (project target and node target are two statements, because `node_id IS NULL` cannot be bound), select all for a project, upsert (replace the whole row), and delete by target. Note: replace is delete-then-insert in one transaction (ON CONFLICT cannot name a partial index predicate portably). MessageOperations now inherits DesiredStateOperations so acknowledge_message reaches the write.
+- [x] `store/desired_states.py` (new, mixed into `Store` after `MessageOperations`): `desired_state(project_id, *, node_id=None) -> DesiredState | None` and `desired_states(project_id) -> list[DesiredState]`. Both work through a read-only handle. Order `desired_states` deterministically (project target first, then by node id)
+- [x] The same module holds the internal `_write_desired_state_change(intent, change, timestamp)`. It runs inside the caller's transaction and never commits. For `SetDesiredState` it applies the D3 shape checks, then upserts. For `ClearDesiredState` it deletes, and a missing row writes nothing. Shape checks, each `ValueError`: `drive` and `hold` both `None`; `drive_until_step` with `drive` not `True`; a step value that is empty text. A non-null `node_id` must name a node in the intent's project, else `NodeNotFoundError`
+- [x] Register `DesiredStateOperations` in the `Store` bases. Pin the two read methods in `CONTRACT_METHODS`
 - **Success Criteria**:
-  - [ ] Reads return `None` or an empty list on a fresh store
-  - [ ] `pyright` is clean. The module is under about 300 lines
-  - [ ] Committed with Task 5.2
+  - [x] Reads return `None` or an empty list on a fresh store
+  - [x] `pyright` is clean. The module is under about 300 lines
+  - [x] Committed with Task 5.2
 
 ### Task 5.2: Atomic desired state in `acknowledge_message`
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 3
 
-- [ ] `store/messages.py`: add `desired_state: SetDesiredState | ClearDesiredState | None = None` to `acknowledge_message`. Reject a desired state with any outcome other than `applied` (`ValueError`), before opening the transaction
-- [ ] Inside the one transaction, acknowledge the row first (so a non-intent or already acknowledged row raises before any desired-state write), then call `_write_desired_state_change`. If it raises, the `with self._connection:` block rolls the acknowledgment back
-- [ ] Load the intent's `project_id` for the node-in-project check from the row being acknowledged. The row's `id` is the `message_id` provenance
+- [x] `store/messages.py`: add `desired_state: SetDesiredState | ClearDesiredState | None = None` to `acknowledge_message`. Reject a desired state with any outcome other than `applied` (`ValueError`), before opening the transaction
+- [x] Inside the one transaction, acknowledge the row first (so a non-intent or already acknowledged row raises before any desired-state write), then call `_write_desired_state_change`. If it raises, the `with self._connection:` block rolls the acknowledgment back
+- [x] Load the intent's `project_id` for the node-in-project check from the row being acknowledged. The row's `id` is the `message_id` provenance
 - **Success Criteria**:
-  - [ ] An `applied` acknowledgment with `SetDesiredState` writes the row and the acknowledgment together
-  - [ ] Replacing a target's row replaces all of it (drive-only after hold-only leaves hold `None`)
+  - [x] An `applied` acknowledgment with `SetDesiredState` writes the row and the acknowledgment together
+  - [x] Replacing a target's row replaces all of it (drive-only after hold-only leaves hold `None`)
 
 ### Task 5.3: Desired-state tests
 **Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 3
 
 New `tests/store/test_desired_state.py`.
 
-- [ ] Set at the project target and at a node target. Both reads return the row with `message_id` equal to the intent
-- [ ] Replace semantics; `ClearDesiredState` deletes; clearing a target with no row acknowledges and writes nothing
-- [ ] Each shape rule raises `ValueError`, the intent stays unacknowledged, and no row exists afterwards
-- [ ] A node outside the project, and a missing node, raise `NodeNotFoundError` and leave the intent unacknowledged
-- [ ] A desired state with `no_op` or `rejected` raises `ValueError`
-- [ ] **Rollback:** patch `_write_desired_state_change` (or `_execute` for the upsert statement) to raise after the acknowledgment statement ran. Assert the intent is still unacknowledged and still in `pending_intents`
-- [ ] A desired state on an already-acknowledged intent raises `InvalidTransitionError` and does not change the existing row
+- [x] Set at the project target and at a node target. Both reads return the row with `message_id` equal to the intent
+- [x] Replace semantics; `ClearDesiredState` deletes; clearing a target with no row acknowledges and writes nothing
+- [x] Each shape rule raises `ValueError`, the intent stays unacknowledged, and no row exists afterwards
+- [x] A node outside the project, and a missing node, raise `NodeNotFoundError` and leave the intent unacknowledged
+- [x] A desired state with `no_op` or `rejected` raises `ValueError`
+- [x] **Rollback:** patch `_write_desired_state_change` (or `_execute` for the upsert statement) to raise after the acknowledgment statement ran. Assert the intent is still unacknowledged and still in `pending_intents`. Note: failure injected by tests/fault_injection.py (fail_on_statement), since no existing test patched _execute.
+- [x] A desired state on an already-acknowledged intent raises `InvalidTransitionError` and does not change the existing row
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/store/test_desired_state.py tests/store/test_messages.py -q` passes. Full suite, `ruff` and `pyright` clean
-  - [ ] Tasks 5.1–5.3 committed as `feat: write desired state inside the intent acknowledgment`
+  - [x] `uv run pytest tests/store/test_desired_state.py tests/store/test_messages.py -q` passes. Full suite, `ruff` and `pyright` clean
+  - [x] Tasks 5.1–5.3 committed as `feat: write desired state inside the intent acknowledgment`
 
 ---
 
