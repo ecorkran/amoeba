@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from routing_helpers import submit_intent
 from sq_run_fixtures import sq_run_parameters
 
-from amoeba.store import AcknowledgmentOutcome, SubmissionKind, sql_inbox
+from amoeba.store import AcknowledgmentOutcome, sql_inbox
 from amoeba.store.inbox_models import Channel
 from amoeba.store.journal_models import CommandKind
 from amoeba.store.models import BlockedKind, InvalidTransitionError, NodeKind
@@ -351,22 +351,11 @@ def test_a_row_acknowledged_before_outcomes_reads_back_with_none(
     assert row.acknowledgment_outcome is None
 
 
-def _submit_intent(store: Store, submission_id: str) -> None:
-    store.apply_submission(
-        submission_id=submission_id,
-        project_id=PROJECT,
-        kind=SubmissionKind.INTENT,
-        submitted_by="pm",
-        submitted_at=datetime(2026, 10, 22, tzinfo=UTC),
-        payload={"node_id": None, "body": {"hold": True}},
-    )
-
-
 def test_intent_for_submission_before_and_after_acknowledgment(
     store_file: Path,
 ) -> None:
     with Store.open(store_file) as store:
-        _submit_intent(store, "sub-1")
+        submit_intent(store, "sub-1")
         before = store.intent_for_submission("sub-1")
         assert before is not None and not before.is_acknowledged
         store.acknowledge_message(

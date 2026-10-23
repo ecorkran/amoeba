@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from amoeba.store import sql_inbox, sql_journal, sql_runner
 from amoeba.store._base import isoformat, new_id, now
-from amoeba.store._block_writer import BlockWriter, refuse_blocked_status
+from amoeba.store._block_writer import BlockWriter
 from amoeba.store.journal_models import JournalEntry
 from amoeba.store.mapping_journal import map_journal_entry
 from amoeba.store.mapping_runner import map_routing_decision, map_table_version
@@ -64,10 +64,6 @@ def _check_values(
         raise ValueError(
             f"table version {table.version!r} does not match the decision's "
             f"{decision.table_version!r}"
-        )
-    if isinstance(effect, StatusEffect):
-        refuse_blocked_status(
-            NodeStatus(effect.status), "record a decision moving a node into"
         )
     return _ValidatedDecision(
         route=Route(decision.route),
@@ -154,6 +150,10 @@ class RoutingDecisionOperations(BlockWriter):
             StoreIntegrityError: The entry already has a decision, or the
                 version exists with different content.
         """
+        # Validation reads the node and entry before the lock is taken. That is
+        # safe: nothing deletes either, so they cannot vanish in between, and
+        # every check that depends on mutable state (a done or blocked node,
+        # an unresolved entry) is repeated by the effect under the lock.
         validated = self._validate_routing_decision(
             decision, table=table, effect=effect, attempt_step=attempt_step
         )

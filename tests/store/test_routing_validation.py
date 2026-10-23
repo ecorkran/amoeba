@@ -1,4 +1,4 @@
-"""D5: the checks a routing decision passes before any transaction opens."""
+"""D5: the checks a routing decision passes, through the public method."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from amoeba.store import (
     BlockEffect,
     CommandKind,
     InvalidTransitionError,
+    JournalOutcome,
     NodeKind,
     NodeNotFoundError,
     NodeStatus,
@@ -48,7 +49,7 @@ def _check(
     effect: StatusEffect | BlockEffect | None = None,
     attempt_step: str | None = None,
 ) -> None:
-    store._validate_routing_decision(  # pyright: ignore[reportPrivateUsage]
+    store.record_routing_decision(
         decision, table=table, effect=effect, attempt_step=attempt_step
     )
 
@@ -64,6 +65,7 @@ def test_a_valid_decision_passes(store: Store, node_id: str) -> None:
         kind=CommandKind.SQ_RUN,
         parameters=dict.fromkeys(REQUIRED_PARAMETER_KEYS[CommandKind.SQ_RUN], "v"),
     )
+    store.journal_resolve(entry.id, outcome=JournalOutcome.COMPLETED)
     _check(
         store,
         _decision(node_id, journal_entry_id=entry.id),

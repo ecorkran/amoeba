@@ -15,6 +15,7 @@ from amoeba.store import (
     Message,
     NodeKind,
     Store,
+    StoreBusyError,
 )
 
 PROJECT = "demo"
@@ -150,3 +151,21 @@ def test_reads_work_through_a_read_only_handle(store_file: Path) -> None:
         row = _raise(store)
     with Store.open_read_only(store_file) as reader:
         assert [m.id for m in reader.open_project_escalations(PROJECT)] == [row.id]
+
+
+def test_raise_takes_the_write_lock_before_it_looks_for_an_open_row(
+    store_file: Path,
+) -> None:
+    """A second writer waits for the first; it cannot check-then-insert beside it."""
+    with (
+        Store.open(store_file) as first,
+        Store.open(store_file, busy_timeout_seconds=0.05) as second,
+    ):
+        first._connection.execute(  # pyright: ignore[reportPrivateUsage]
+            "BEGIN IMMEDIATE"
+        )
+        with pytest.raises(StoreBusyError):
+            _raise(second)
+
+        first._connection.rollback()  # pyright: ignore[reportPrivateUsage]
+        assert _raise(second).fault_kind == KIND
