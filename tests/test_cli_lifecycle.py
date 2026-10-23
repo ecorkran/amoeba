@@ -28,7 +28,9 @@ from sq_run_fixtures import (
     insert_legacy_sq_run_entry,
 )
 
+from amoeba.cli import main as cli_main
 from amoeba.cli.main import ExitCode
+from amoeba.process import UpstreamShapeError
 from amoeba.store import BlockedKind, NodeKind, Store
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
@@ -440,3 +442,38 @@ def test_blocked_listing_reflects_a_real_block(
     assert len(rows) == 1
     assert rows[0]["blocked_on"] == "judge"
     assert rows[0]["context"] == "needs a verdict"
+
+
+def test_an_upstream_shape_error_exits_fifteen_with_its_message(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A tenant's ``UpstreamShapeError`` reaches the one boundary handler."""
+
+    def raise_shape(_args: object) -> ExitCode:
+        raise UpstreamShapeError("sq lacks 'run --run-id'")
+
+    monkeypatch.setattr(cli_main, "_dispatch", raise_shape)
+
+    assert cli_main.main(["status"]) == ExitCode.UPSTREAM_SHAPE == 15
+    assert "sq lacks 'run --run-id'" in capsys.readouterr().err
+
+
+def test_exit_code_values_are_unchanged_and_distinct() -> None:
+    assert {code.name: code.value for code in ExitCode} == {
+        "OK": 0,
+        "FAILURE": 1,
+        "ALREADY_RUNNING": 2,
+        "NOT_RUNNING": 3,
+        "STOP_TIMEOUT": 4,
+        "NO_STOP_TARGET": 5,
+        "GRACE_EXPIRED": 6,
+        "STARTUP_FAILED": 7,
+        "NOT_RUNNING_STATUS": 8,
+        "SUBMISSION_REFUSED": 9,
+        "NOT_FOUND": 10,
+        "NOT_COMPARABLE": 11,
+        "REVIEW_UNREADABLE": 12,
+        "SERVE_REFUSED": 13,
+        "PRUNE_INCOMPLETE": 14,
+        "UPSTREAM_SHAPE": 15,
+    }

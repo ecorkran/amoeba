@@ -17,6 +17,7 @@ from amoeba.process.errors import (
     GraceExpiredError,
     ProcessError,
     StartupFailedError,
+    UpstreamShapeError,
 )
 from amoeba.process.host import ResidentProcess, Tenant
 from amoeba.process.recovery import (
@@ -57,6 +58,7 @@ __all__ = [
     "StartupFailedError",
     "Tenant",
     "Unknown",
+    "UpstreamShapeError",
     "poll_run",
     "standard_tenants",
 ]
