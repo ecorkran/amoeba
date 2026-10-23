@@ -14,61 +14,61 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261022
 dateUpdated: 20261022
-reviewedSha: fdb01df5231472b1f17a178b0a7a3fdd28c82198
-revision_number: 1
+reviewedSha: 8a13ec54ca3f6d756cada9886c8124414d0e4616
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 4
 turns: 5
-promptTokens: 202016
-cachedTokens: 101330
-cacheWriteTokens: 100680
-completionTokens: 5050
-durationSeconds: 41.7
-costUsd: 0.46417
+promptTokens: 203552
+cachedTokens: 101796
+cacheWriteTokens: 101750
+completionTokens: 5976
+durationSeconds: 47.4
+costUsd: 0.477756
 costBasis: provider
 runId: run-20261023-p56-87870251
 squadronVersion: 0.23.7
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "StatusEffect would skip update_node_status's \"node is currently blocked\" refusal"
-    location: "src/amoeba/store/nodes.py:124-127"
+    severity: pass
+    category: coverage
+    summary: "Success criteria trace to tasks"
+    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md"
   - id: F002
     severity: concern
-    category: completeness
-    summary: "`record_routing_decision` is never pinned in `CONTRACT_METHODS`"
-    location: "tests/test_public_api.py:120"
+    category: proportionality
+    summary: "Section 7 is over-split and over-tested for the size of the slice"
+    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md:284-339"
   - id: F003
     severity: concern
-    category: task-scoping
-    summary: "Task 7.2 commits a public method that validates but does not write"
-    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md (Task 7.2 / 7.3)"
+    category: sequencing
+    summary: "Tasks 4.1–4.2 leave the tree failing until 4.3"
+    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md:175-204"
   - id: F004
     severity: concern
-    category: sequencing
-    summary: "Task 2.2 adds public vocabulary and types without exporting them, against the task-level rule"
-    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md (Task 2.2, 4.3, 7.1)"
+    category: test-with
+    summary: "Test-with gap: 5.1 and 5.2 are untested until 5.3"
+    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md:210-246"
   - id: F005
     severity: concern
-    category: edge-cases
-    summary: "BlockEffect on an already-blocked node is unspecified"
-    location: "src/amoeba/store/_block_writer.py#_write_block"
+    category: missing-verification
+    summary: "New operation modules may trip the writer-guard and store-safety tests, and no task checks"
+    location: "tests/test_writer_guard.py"
   - id: F006
-    severity: note
-    category: process
-    summary: "Test tasks follow their implementation, and commits are spread out"
-    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md"
+    severity: concern
+    category: accuracy
+    summary: "Unverifiable issue reference and fabricated rationale in Task 4.2"
+    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md:190"
   - id: F007
     severity: note
-    category: coverage
-    summary: "Success criteria trace to tasks; no scope creep found"
-    location: "project-documents/user/slices/121-slice.store-contract-changes-for-the-runner.md:327-348"
+    category: scope
+    summary: "Small additions beyond the slice text"
+    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md:258"
   - id: F008
     severity: note
-    category: proportionality
-    summary: "Proportionality is acceptable for a 3/5 slice"
-    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md"
+    category: code-structure
+    summary: "Module-size risk for `sql_runner.py` and the new test files"
+    location: "project-documents/user/tasks/121-tasks.store-contract-changes-for-the-runner.md:98"
 ---
 
 # Review: tasks — slice 121
@@ -78,67 +78,66 @@ findings:
 
 ## Findings
 
-### [CONCERN] StatusEffect would skip update_node_status's "node is currently blocked" refusal
+### [PASS] Success criteria trace to tasks
 
-`update_node_status` does two blocked checks: `_refuse_blocked_status(current.status, ...)` for a node that is already blocked, and the same check for the target status. Task 3.2 keeps both in `nodes.py` and moves only the done checks and the status write into `_write_status`.
+- **Terminal done.** Covered by 3.1–3.4 and 7.4: the `block()`, `update_node_status` and `StatusEffect` refusals, the `journal_issue` refusal, the unresolved-entry refusal, and the writer-inventory test.
+- **Acknowledgment.** Covered by 4.1–4.3 and 5.1–5.3: outcomes, `intent_for_submission` through a read-only handle, atomic desired state with rollback, and the stand-in Runner and oracle updates.
+- **Project-scoped escalation.** Covered by 6.1–6.2: dedup, close and reopen, the feed `message_posted` change, and direct-SQL index refusal in 2.3.
+- **Routing decisions.** Covered by 7.1–7.4: the four-step rollback, duplicate-entry refusal, and same-version/different-content refusal.
+- **Migration, inspection, docs and public API pin.** Covered by 2.x, 8.x and 9.x.
+- **Scope creep.** I found none worth flagging.
 
-Task 7.3 then says `StatusEffect` calls `_write_status` and so gets "the done-is-terminal and unresolved-entry refusals". Task 7.2 adds only the blocked-target check. Nothing refuses a `StatusEffect` on a node that is currently blocked.
+### [CONCERN] Section 7 is over-split and over-tested for the size of the slice
 
-That contradicts D5, which says `StatusEffect` "follows `update_node_status`'s rules". It would let a routing decision silently move a node out of a blocked state, and no test in 7.4 would catch it.
+- **Four tasks and three test modules.** Tasks 7.1–7.4 produce `test_routing_reads.py`, `test_routing_validation.py` and `test_routing_decisions.py`.
+- **7.2 is a private function with no public caller.** It ships a standalone validator with its own test module. Task 7.4 then re-asserts "Each Task 7.2 validation failure writes nothing" through the public method, so the validation is tested twice.
+- **7.1's tests are indirect.** They insert rows through raw `sql_runner.py` statements to exercise the reads. 7.4 already exercises every read through the real write path.
+- **What to cut:**
+  - Merge 7.2 into 7.3 and drop `test_routing_validation.py`. Keep the validation assertions in 7.4.
+  - Fold the 7.1 read tests into 7.4. Keep one fresh-store and read-only-handle test for the empty and `0` cases.
+  - The split-file contingencies ("if it nears 300 lines") can become a single note in 9.3.
 
-Fix: have 3.2 put the current-status blocked check in the shared helper, or have 7.2 or 7.3 call it explicitly. Add a 7.4 case for a `StatusEffect` on a blocked node.
+### [CONCERN] Tasks 4.1–4.2 leave the tree failing until 4.3
 
-### [CONCERN] `record_routing_decision` is never pinned in `CONTRACT_METHODS`
+- **Why the tree breaks.** Task 4.1 makes `outcome` required. That breaks every existing `acknowledge_message` caller: `tests/store/test_messages.py`, `tests/contract/runner_tenant.py` and the oracle. They are fixed only in 4.3.
+- **What is missing from 4.1 and 4.2.** Neither task has a test or its own success check beyond a prose assertion, and the three tasks share one commit. That is acceptable for the commit rule, but it breaks the test-with pattern.
+- **Suggested fix.** Move the caller updates (`test_messages.py` and the stand-in Runner) into 4.1, and fold 4.2 into 4.1 or 4.3. The commit then lands with a green suite after the first task, and 4.2 isn't a separate task for a single method.
 
-The task-level addition says each task that adds a public method updates `CONTRACT_METHODS` in the same commit. Task 7.1 pins the five reads. Neither 7.2 nor 7.3, which introduce and complete `record_routing_decision`, pins it. The slice design lists it in its API Contracts table.
+### [CONCERN] Test-with gap: 5.1 and 5.2 are untested until 5.3
 
-Task 9.2's check would eventually catch the omission. By then it breaks the stated per-task rule, and 9.2 is not a place to add code. Add the pin to 7.2 (where the method first appears) or 7.3.
+- **The gap.** Tasks 5.1 and 5.2 ship the reads, the shape checks and the atomic write with no tests. All of them arrive in 5.3.
+- **Why it matters.** The grouped commit makes this survivable, but a junior AI working 5.1 has no verification beyond "reads return None".
+- **Suggested fix.** Move the read-path and shape-rule tests into 5.1, and keep the rollback and atomicity tests in 5.2/5.3.
 
-### [CONCERN] Task 7.2 commits a public method that validates but does not write
+### [CONCERN] New operation modules may trip the writer-guard and store-safety tests, and no task checks
 
-Task 7.2 is committed as `feat: validate routing decisions` with a public `record_routing_decision` that "does not write yet". This breaks the rule that "a commit never holds untested behavior" and leaves a public contract method that does nothing for one commit.
+- **The criterion.** The slice requires "the writer guard and store-safety tests pass unchanged".
+- **What the tasks do.** No task explicitly runs `tests/test_writer_guard.py` or `tests/test_store_safety*` when `desired_states.py`, `project_escalations.py` and `routing_decisions.py` are added. 3.4 and 9.3 run the full suite, but only 9.3 would catch a drift.
+- **Suggested fix.** Add `tests/test_writer_guard.py` to the 5.3, 6.2 and 7.4 test runs, so a violation is caught in the task that causes it.
 
-The 7.2 tests also assert only that exceptions are raised. Task 7.4 then re-asserts the same failures with "writes nothing".
+### [CONCERN] Unverifiable issue reference and fabricated rationale in Task 4.2
 
-Merge 7.2 into 7.3 and put all the tests in 7.4. If you want the validation kept as its own unit, make it a private `_validate_decision` function in 7.2, with no public method yet. That also settles where the pin belongs.
+- **The claim.** Task 4.2 says "Issue #19 tracks adding the index" for `messages.submission_id`.
+- **Why it can't be checked.** The slice design never mentions this issue or index. It cites only #10, for the unrouted-outcomes query.
+- **Why it matters.** If #19 does not exist, a junior AI may cite a phantom tracking item or go looking for it.
+- **Suggested fix.** Confirm #19 with the Project Manager, or reword to say the scan is accepted and no index is added in this slice.
 
-### [CONCERN] Task 2.2 adds public vocabulary and types without exporting them, against the task-level rule
+### [NOTE] Small additions beyond the slice text
 
-Task 2.2 creates `AcknowledgmentOutcome`, `Route`, `RoutingDecisionInput`, `RoutingDecision`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState` and `ClearDesiredState`. Exports are deferred to 4.3, 5.1 and 7.1. The "Public API pin" rule says that "any task that adds a public name" updates `__all__` and `EXPECTED_EXPORTS` in the same commit.
+- **`closed_by`.** Task 6.1 requires a non-empty `closed_by` (`ValueError`). The slice's D4 says nothing about this.
+- **`BlockEffect`.** Task 7.3 adds a refusal for `BlockEffect` on an already-blocked node. D5 does not list it.
+- **Verdict.** Both are reasonable and consistent with the store's no-silent-defaults rule, so I don't count them as scope creep. The slice's failure-modes table in `docs/store-contract.md` (9.1) should list them, so the documented contract matches behaviour.
 
-Either state in the rule that types defined in 2.2 are exported by the task that first uses them, or move the type definitions into the tasks that use them. Moving them would also shrink Task 2.2, which at effort 4 covers five new or changed modules and is the largest non-compound task.
+### [NOTE] Module-size risk for `sql_runner.py` and the new test files
 
-### [CONCERN] BlockEffect on an already-blocked node is unspecified
-
-The docstring of `_write_block` says the caller has already checked that the node exists and is not blocked. Task 7.3 routes `BlockEffect` straight through `_write_block`. It names no precondition check and no failure mode for a node that is already blocked, and Task 7.4's list has no such case.
-
-An unguarded call could write a second blocked state or fail with a raw integrity error mid-transaction. Specify the check, using whatever `block()` does today, and add a 7.4 case that asserts nothing is recorded.
-
-### [NOTE] Test tasks follow their implementation, and commits are spread out
-
-Each implementation group is followed by its test task and committed together, so every Section 2–8 group ends in a commit. Section 3 commits per task. Task 5.2 inserts a rollback test (the `_execute`-patching pattern), and 5.3 and 7.4 cover the rollback criteria. Dependencies are linear with no cycles.
-
-### [NOTE] Success criteria trace to tasks; no scope creep found
-
-- **Terminal `done`, `journal_issue` refusal, unresolved-entry refusal and the writer-inventory test:** Tasks 3.1–3.4.
-- **Acknowledgment outcomes, `intent_for_submission` and the contract suite:** 4.1–4.3.
-- **Atomic desired state and rollback:** 5.1–5.3.
-- **Project escalation dedup and the direct-SQL index test:** 6.2 and 2.3.
-- **Decision transaction, rollback, duplicate entry and table content mismatch:** 7.3–7.4.
-- **Migration on a populated v8 store and read-only open at v8:** 2.3.
-- **Inspection columns:** 8.1–8.2.
-- **Both contract documents:** 9.1–9.2.
-- **Verification walkthrough:** 9.3.
-
-No task lacks a traceable criterion. The slice states no NFR, so no load-test or CI-gating task is needed.
-
-### [NOTE] Proportionality is acceptable for a 3/5 slice
-
-Twenty-six tasks in one file for nine decisions, four tables and two documents is heavy but defensible. The split into several files is not needed. Two places are mildly over-specified for a junior reader: the "may be imported from, or defined in" choice in 2.2, and the two-way file split hints in 7.2 and 7.4. Both are low-risk. Task 9.3's step 5 ("tick each criterion") duplicates what 9.3's earlier validation steps already show and could be dropped.
+- **`sql_runner.py`.** It accumulates statements for four tables plus the message columns across Tasks 2.2, 5.1, 6.1 and 7.1. It could pass 300 lines.
+- **`test_terminal_done.py`.** It collects tests from four tasks (3.1–3.4).
+- **Existing handling.** Task 9.3 catches size problems, but only at the end, with a 330-line threshold that is looser than the project's ~300.
+- **Suggested fix.** Add a "split by table" note in 2.2 and use the same ~300 figure in 9.3.
 
 ### Run Digest
 
-- Response length: 6364 chars
+- Response length: 6513 chars
 - Response is newline-free: no
 - Tool calls made: 4
 - Tool calls failed: 0
@@ -149,9 +148,9 @@ Twenty-six tasks in one file for nine decisions, four tables and two documents i
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 5
-- Tokens — prompt / cached / cache write / completion / reasoning: 202016 / 101330 / 100680 / 5050 / not computed
-- Duration: 41.7 s
-- Cost: $0.46 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 203552 / 101796 / 101750 / 5976 / not computed
+- Duration: 47.4 s
+- Cost: $0.48 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 8

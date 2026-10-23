@@ -23,16 +23,16 @@ projectState: Initiative 100 (101–110) is merged, and slice 120 is merged. The
 dateCreated: 20261022
 dateUpdated: 20261023
 status: not_started
-turns: 33
-promptTokens: 1827964
-cachedTokens: 1717689
-cacheWriteTokens: 110233
-completionTokens: 30277
-durationSeconds: 207.6
-costUsd: 0.915838
-usageRounds: 2
-pricedRounds: 2
-revision_number: 1
+turns: 46
+promptTokens: 2332931
+cachedTokens: 2214290
+cacheWriteTokens: 118591
+completionTokens: 34933
+durationSeconds: 238.7
+costUsd: 1.045506
+usageRounds: 3
+pricedRounds: 3
+revision_number: 2
 ---
 
 ## Context Summary
@@ -100,6 +100,7 @@ Create `src/amoeba/store/schema/009_runner_contract.sql`. Follow the comment-hea
 - [ ] `store/mapping_inbox.py`: `map_message` reads the five new columns. `acknowledgment_outcome` goes through the closed-vocabulary coercion and raises `UnknownVocabularyValueError` for an unknown stored value. `closed_at` uses `decode_timestamp`. Add `AcknowledgmentOutcome` to the `_vocabulary` type constraint
 - [ ] `store/runner_models.py` (new): `Route` (`StrEnum`: `advance`, `rerun`, `escalate`), `RoutingDecisionInput`, `RoutingDecision`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState`, `ClearDesiredState`. Frozen dataclasses with the fields in D3, D5, D6 and D8. `RoutingDecision` adds `id`, `attempt_step`, `attempt_count` and `decided_at` to the input's fields
 - [ ] `store/mapping_runner.py` (new): row-to-type mapping for `DesiredState`, `RoutingDecision` and `RoutingTableVersion`, in the style of `mapping_inbox.py`. Include a width check and vocabulary coercion for `Route`. JSON columns decode with `decode_mapping`
+- [ ] Export `AcknowledgmentOutcome`, `Route`, `RoutingDecision`, `RoutingDecisionInput`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`, `DesiredState`, `SetDesiredState` and `ClearDesiredState` from `amoeba/store/__init__.py`, and add them to `EXPECTED_EXPORTS` in `tests/test_public_api.py`. Later tasks add methods to `CONTRACT_METHODS` only
 - **Success Criteria**:
   - [ ] `uv run pyright` and `uv run ruff check .` are clean
   - [ ] The existing message tests still pass (`uv run pytest tests/store tests/test_public_api.py -q`), with `tests/store/test_inbox_models.py` updated only if it constructs `Message` positionally
@@ -142,8 +143,8 @@ New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_
 ### Task 3.2: Guard `update_node_status`, including the unresolved-command refusal
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3
 
-- [ ] `store/_block_writer.py`: add `_write_status(node_id, status, timestamp)`, which runs inside the caller's transaction and never commits. It calls `_refuse_done` for **any** target status, including `done`. When the target is `NodeStatus.DONE` it also refuses with `InvalidTransitionError` while the node has an unresolved journal entry. Then it runs `sql.UPDATE_NODE_STATUS`. Use the existing statement for unresolved entries by node if `sql_journal.py` has one. If it has none, add one there that uses the existing partial index on unresolved entries, and name the index in a comment. This is the one status write that Task 7.3's `StatusEffect` reuses
-- [ ] `store/nodes.py` `update_node_status`: keep the blocked-status checks, then call `_write_status` inside its existing transaction in place of the direct `sql.UPDATE_NODE_STATUS` execute. `NodeOperations` must be able to reach the helper. If it does not inherit `BlockWriter`, move the helper to a shared base the way `BlockingOperations` and `JournalOperations` reach `_write_block`, and do not duplicate it
+- [ ] `store/_block_writer.py`: add `_write_status(node_id, status, timestamp)`, which runs inside the caller's transaction and never commits. It reads the node's current status and applies the blocked-status refusals `update_node_status` has today (a blocked node cannot be moved, and a blocked status cannot be a target). Move `_refuse_blocked_status` from `nodes.py` into `_block_writer.py` for this, and import it back. It calls `_refuse_done` for **any** target status, including `done`. When the target is `NodeStatus.DONE` it also refuses with `InvalidTransitionError` while the node has an unresolved journal entry. Then it runs `sql.UPDATE_NODE_STATUS`. Use the existing statement for unresolved entries by node if `sql_journal.py` has one. If it has none, add one there that uses the existing partial index on unresolved entries, and name the index in a comment. This is the one status write that Task 7.3's `StatusEffect` reuses
+- [ ] `store/nodes.py` `update_node_status`: still raise `NodeNotFoundError` for a missing node, and call `_write_status` inside its existing transaction, with the blocked-status checks now living in the helper, in place of the direct `sql.UPDATE_NODE_STATUS` execute. `NodeOperations` must be able to reach the helper. If it does not inherit `BlockWriter`, move the helper to a shared base the way `BlockingOperations` and `JournalOperations` reach `_write_block`, and do not duplicate it
 - [ ] Update the method docstring's `Raises`. `create_node(status=DONE)` stays allowed
 - [ ] Tests in `tests/store/test_terminal_done.py`: parametrize over every `NodeStatus` so `update_node_status` on a done node raises, naming the node, and leaves it unchanged. A node with an unresolved entry refuses `done`, and after `journal_resolve` `done` is accepted. `create_node(status=DONE)` still works
 - **Success Criteria**:
@@ -195,7 +196,7 @@ New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_
 **Owner**: Junior AI | **Dependencies**: 4.2 | **Effort**: 3
 
 - [ ] `tests/store/test_messages.py`: every `acknowledge_message` call passes an `outcome`. Add: the three outcomes round-trip; `rejected` with no reason and with a blank reason raises `ValueError` and writes nothing; `applied` and `no_op` accept a reason; `outcome` omitted is a `TypeError`; a pre-009-style row (raw SQL, outcome null) reads back with `acknowledgment_outcome` `None`; `intent_for_submission` after `apply_submission` of an intent returns the row both before and after acknowledgment, and through a read-only handle
-- [ ] `tests/contract/runner_tenant.py` (line ~122): the stand-in acknowledges with `outcome=AcknowledgmentOutcome.APPLIED`. Import it from `amoeba.store` (contract-suite imports must be public exports, per `tests/contract/test_public_api_rule.py`). Export `AcknowledgmentOutcome` and add it to `EXPECTED_EXPORTS`
+- [ ] `tests/contract/runner_tenant.py` (line ~122): the stand-in acknowledges with `outcome=AcknowledgmentOutcome.APPLIED`. Import it from `amoeba.store` (contract-suite imports must be public exports, per `tests/contract/test_public_api_rule.py`). (Task 2.2 exported it)
 - [ ] `tests/contract/oracle.py`: make `message_fact` distinguish outcomes (for example `acknowledged:applied`), update `read_state`, and update the expected fact in every scenario that declares an acknowledged intent. Find them with `grep -rn "acknowledged" tests/contract`
 - **Success Criteria**:
   - [ ] `uv run pytest tests/store/test_messages.py tests/contract tests/test_public_api.py -q` passes
@@ -212,7 +213,7 @@ New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_
 - [ ] `store/sql_runner.py`: statements to select one target's row (project target and node target are two statements, because `node_id IS NULL` cannot be bound), select all for a project, upsert (replace the whole row), and delete by target
 - [ ] `store/desired_states.py` (new, mixed into `Store` after `MessageOperations`): `desired_state(project_id, *, node_id=None) -> DesiredState | None` and `desired_states(project_id) -> list[DesiredState]`. Both work through a read-only handle. Order `desired_states` deterministically (project target first, then by node id)
 - [ ] The same module holds the internal `_write_desired_state_change(intent, change, timestamp)`. It runs inside the caller's transaction and never commits. For `SetDesiredState` it applies the D3 shape checks, then upserts. For `ClearDesiredState` it deletes, and a missing row writes nothing. Shape checks, each `ValueError`: `drive` and `hold` both `None`; `drive_until_step` with `drive` not `True`; a step value that is empty text. A non-null `node_id` must name a node in the intent's project, else `NodeNotFoundError`
-- [ ] Register `DesiredStateOperations` in the `Store` bases. Export `DesiredState`, `SetDesiredState`, `ClearDesiredState`. Pin the two read methods
+- [ ] Register `DesiredStateOperations` in the `Store` bases. Pin the two read methods in `CONTRACT_METHODS`
 - **Success Criteria**:
   - [ ] Reads return `None` or an empty list on a fresh store
   - [ ] `pyright` is clean. The module is under about 300 lines
@@ -285,7 +286,7 @@ New `tests/store/test_project_escalation.py`.
 
 - [ ] `store/sql_runner.py`: insert and select statements for `routing_table_versions`, `routing_decisions` (by id, by journal entry, by node oldest first), and `attempt_counts` (select, upsert-increment returning the new count; use SQLite upsert and read back inside the transaction)
 - [ ] `store/routing_decisions.py` (new, mixed into `Store`): the reads `routing_decision`, `routing_decision_for_entry`, `routing_decisions(node_id)`, `routing_table_version` and `attempt_count`. Missing returns `None` or an empty list. `attempt_count` returns `0` for a pair with no row, and its docstring says that is the true count
-- [ ] Export `Route`, `RoutingDecision`, `RoutingDecisionInput`, `RoutingTableVersion`, `StatusEffect`, `BlockEffect`. Pin the five read methods
+- [ ] Pin the five read methods in `CONTRACT_METHODS`
 - [ ] Tests in new `tests/store/test_routing_reads.py`: on a fresh store each read returns `None`, an empty list or `0`. With rows inserted by the `sql_runner.py` statements, each read returns the mapped row, `routing_decisions` is oldest first, and every read works through `Store.open_read_only`
 - **Success Criteria**:
   - [ ] The tests pass. Full suite, `ruff` and `pyright` clean
@@ -298,7 +299,7 @@ Keep this in `store/routing_decisions.py`. If the module nears 300 lines, move t
 
 - [ ] Validate before opening the transaction. `ValueError`: any text field in `RoutingDecisionInput` empty (project, rule id, table version, Amoeba version), `inputs` or `route_parameters` not JSON-serializable, `attempt_step` given but empty, `table.version` not equal to `decision.table_version`. `NodeNotFoundError`: the node is not in the project. `InvalidTransitionError`: `journal_entry_id` names an entry that is missing or in another project
 - [ ] Coerce `route` through `Route`. A `StatusEffect` whose status is a blocked status is refused as `update_node_status` refuses it
-- [ ] Put the validation in a function that `record_routing_decision` calls first, and test it through that method in new `tests/store/test_routing_validation.py`. The method does not write yet, so assert each failure raises its exception and that a valid input passes validation. Task 7.4 asserts that nothing is written
+- [ ] Write the validation as a private function with no public method yet (`record_routing_decision` is introduced in Task 7.3, so no public method ships that validates but does not write). Test it directly in new `tests/store/test_routing_validation.py`: each failure raises its exception, and a valid input passes. Task 7.4 asserts that the public method writes nothing on failure
 - **Success Criteria**:
   - [ ] The tests pass. Full suite, `ruff` and `pyright` clean
   - [ ] Committed as `feat: validate routing decisions`
@@ -308,6 +309,8 @@ Keep this in `store/routing_decisions.py`. If the module nears 300 lines, move t
 
 - [ ] In one `with self._connection:` block, in D5's order: insert the table version if new (same version with different content raises `StoreIntegrityError`, compared byte for byte); insert the decision row; if `attempt_step` is given, increment the counter and store the new count on the decision; apply `effect`
 - [ ] `StatusEffect(status)` calls Task 3.2's `_write_status(node_id, status, timestamp)` inside the transaction. That gives it the done-is-terminal and unresolved-entry refusals without copying them. It cannot call `update_node_status`, which opens its own transaction
+- [ ] Pin `record_routing_decision` in `CONTRACT_METHODS` in `tests/test_public_api.py`
+- [ ] A `BlockEffect` on a node that is already blocked raises the same exception `block()` raises for an already-blocked node, before anything is written. Read `store/blocking.py` for that check and reuse it rather than copying it. `_write_block` assumes its caller has made this check
 - [ ] `BlockEffect(context, payload)` writes a `HUMAN` block through `_write_block`, with `journal_entry_id` from the decision, so the escalation row lands in the same transaction
 - [ ] A duplicate decision for one `journal_entry_id` surfaces as `StoreIntegrityError`, converted from the unique-index violation the way other store writes convert `sqlite3.IntegrityError`. Find the existing conversion with `grep -rn "IntegrityError" src/amoeba/store`
 - [ ] Return the stored `RoutingDecision`, read back inside the transaction
@@ -326,6 +329,7 @@ New `tests/store/test_routing_decisions.py`. If it nears 300 lines, split the ro
 - [ ] `attempt_count` is `0` before, `1` after, `2` after a second decision on another entry with the same `(node, step)`. A decision without `attempt_step` leaves counts alone and stores a null `attempt_count`. Two steps on one node count separately
 - [ ] A second decision for one entry raises `StoreIntegrityError`. Decisions with no entry may repeat
 - [ ] `BlockEffect` writes a HUMAN block and its escalation row. `StatusEffect(done)` on a done node raises and nothing is recorded. `StatusEffect(done)` with an unresolved entry raises and nothing is recorded
+- [ ] `BlockEffect` on an already-blocked node raises and nothing is recorded. `StatusEffect` on a blocked node, and with a blocked target status, raises and nothing is recorded
 - [ ] `effect=None` records the decision and counter only
 - [ ] `routing_decisions(node_id)` returns oldest first, and an empty list for a node with none
 - [ ] **Rollback:** inject a failure at each of the four steps in turn (patch `_execute` for the matching statement, per the task-level note). After each, assert no version row, no decision, no count change and the node unchanged
