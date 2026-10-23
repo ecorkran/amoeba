@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import dataclasses
-from typing import Any
-
 import pytest
+from routing_helpers import PROJECT, TABLE
+from routing_helpers import decision_input as _decision
 
 from amoeba.store import (
     REQUIRED_PARAMETER_KEYS,
@@ -16,29 +15,11 @@ from amoeba.store import (
     NodeKind,
     NodeNotFoundError,
     NodeStatus,
-    Route,
     RoutingDecisionInput,
     RoutingTableVersion,
     StatusEffect,
     Store,
 )
-
-PROJECT = "demo"
-TABLE = RoutingTableVersion(version="v1", content="rules")
-
-
-def _decision(node_id: str, **changes: Any) -> RoutingDecisionInput:
-    base = RoutingDecisionInput(
-        project_id=PROJECT,
-        node_id=node_id,
-        inputs={"outcome": "completed"},
-        rule_id="rule-1",
-        table_version="v1",
-        amoeba_version="0.1",
-        route=Route.ADVANCE,
-        route_parameters={"limit": 3},
-    )
-    return dataclasses.replace(base, **changes)
 
 
 def _check(

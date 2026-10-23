@@ -20,7 +20,6 @@ from amoeba.store.inbox_models import Message
 from amoeba.store.mapping import map_node
 from amoeba.store.mapping_inbox import map_message
 from amoeba.store.models import (
-    InvalidTransitionError,
     Node,
     NodeNotFoundError,
     StoreBusyError,
@@ -110,5 +109,5 @@ class StoreBase:
         """Return a message row, raising when it does not exist."""
         row = self._execute(sql_inbox.SELECT_MESSAGE_BY_ID, (message_id,)).fetchone()
         if row is None:
-            raise InvalidTransitionError(f"message {message_id!r} vanished")
+            raise StoreIntegrityError(f"message {message_id!r} vanished")
         return map_message(row)
