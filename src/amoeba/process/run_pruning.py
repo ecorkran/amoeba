@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Set
 from datetime import datetime, timedelta
+from typing import Final
 
 from amoeba.process.sq_outcome import RunOutcome, RunOutcomeDocument
 
@@ -32,8 +33,10 @@ from amoeba.process.sq_outcome import RunOutcome, RunOutcomeDocument
 #: exposes no flag for it; it becomes a setting when something needs to.
 PRUNE_RETENTION = timedelta(days=7)
 
-#: The one spelling of the status pruning looks for.
-PAUSED_STATUS = "paused"
+#: The one spelling of the status pruning looks for, derived from the outcome
+#: enum so the two cannot drift: Squadron's paused status and paused outcome are
+#: the same word, and a run whose document disagrees is not a candidate.
+PAUSED_STATUS: Final = RunOutcome.PAUSED.value
 
 
 def select_prunable(

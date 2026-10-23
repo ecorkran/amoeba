@@ -23,12 +23,14 @@ from pathlib import Path
 
 from sq_stub import write_outcome_document
 
+from amoeba.process import RunOutcome
+
 #: The pipeline every stand-in run claims to be.
 STANDIN_PIPELINE = "review"
 
 #: Run-file statuses the stand-in writes.
-STATUS_COMPLETED = "completed"
-STATUS_PAUSED = "paused"
+STATUS_COMPLETED = RunOutcome.COMPLETED.value
+STATUS_PAUSED = RunOutcome.PAUSED.value
 
 _RUN_ID_FIELD = re.compile(r"^runId:.*$", re.MULTILINE)
 

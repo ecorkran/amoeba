@@ -110,6 +110,9 @@ class SquadronRunIdObserver:
                 reason=f"entry {entry.id} has no issued_at to measure the "
                 f"launch grace period from"
             )
+        if entry.issued_at.tzinfo is None:
+            # A naive timestamp has no offset to compare with the clock: unknown.
+            return Unknown(reason=f"entry {entry.id} has a naive issued_at")
         deadline = entry.issued_at + timedelta(seconds=self._grace_seconds)
         remaining = (deadline - self._now()).total_seconds()
         if remaining <= 0:

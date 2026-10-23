@@ -66,4 +66,8 @@ def test_the_sq_runs_dir_help_says_it_is_legacy_only(
     with pytest.raises(SystemExit):
         build_parser().parse_args(["start", "--help"])
     help_text = " ".join(capsys.readouterr().out.split())
-    assert "--sq-runs-dir PATH Legacy matching only" in help_text
+    # The option block (not the usage line) lists each flag with its help.
+    legacy_note = help_text.index(
+        "Legacy matching only", help_text.index("--sq-runs-dir PATH")
+    )
+    assert legacy_note < help_text.rindex("--launch-grace")

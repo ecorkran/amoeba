@@ -215,6 +215,18 @@ def test_not_found_exactly_at_the_end_of_grace_is_not_applied(
     assert rig.sleeps == []
 
 
+def test_not_found_with_a_naive_issued_at_escalates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.NOT_FOUND))
+
+    observation = rig.observe(_entry(issued_at=NOW.replace(tzinfo=None)))
+
+    assert isinstance(observation, Unknown)
+    assert "naive" in observation.reason
+    assert rig.sleeps == []
+
+
 def test_not_found_with_no_issued_at_escalates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
