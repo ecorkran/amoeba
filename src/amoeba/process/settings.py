@@ -78,8 +78,9 @@ class ProcessSettings:
             stops starting new calls. Checked before every subprocess call; it
             bounds when a call may begin, not how long a started call runs.
         tick_call_timeout_seconds: The longest a single Runner subprocess call
-            may run. Larger than ``tick_deadline_seconds`` so one call that
-            starts just inside the deadline still has room to finish.
+            may run. The default is larger than ``tick_deadline_seconds``, so a
+            call that starts just inside the deadline has room to finish; only
+            ``tick_call_timeout_seconds < shutdown_grace_seconds`` is enforced.
         run_poll_interval_seconds: The least time between two polls of the same
             launched run by the Runner.
     """

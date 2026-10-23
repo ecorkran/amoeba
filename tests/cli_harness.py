@@ -49,8 +49,10 @@ def cli_environment(supervisor_dir: Path) -> dict[str, str]:
     itself.
 
     ``start`` probes ``sq`` before its loop (slice 122, D9), and no test runs
-    the real ``sq``. So the stub is written to disk by this call, beside the
-    supervisor directory under the same throwaway parent.
+    the real ``sq``. So the stub is written to disk by this call (idempotently),
+    in ``supervisor_dir.parent``, which must therefore be a throwaway
+    directory. Every suite that starts a process gets it; a test that wants no
+    ``sq`` replaces ``PATH`` afterwards.
     """
     environment = dict(os.environ)
     environment.pop(TOKEN_ENV_VAR, None)

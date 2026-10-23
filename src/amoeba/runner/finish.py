@@ -140,6 +140,6 @@ def _block_once(
 
 def _run_id(entry: JournalEntry) -> str:
     run_id = entry.parameters.get(PARAM_RUN_ID)
-    if not isinstance(run_id, str):
+    if not isinstance(run_id, str) or not run_id:
         raise ValueError(f"entry {entry.id} has an unusable run id: {run_id!r}")
     return run_id

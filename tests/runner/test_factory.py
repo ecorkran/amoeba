@@ -11,7 +11,9 @@ from sq_stub import write_sq_stub
 
 from amoeba.process import ProcessSettings, StartupFailedError
 from amoeba.runner import RunnerTenant, runner_tenant
+from amoeba.runner.decide import Action, ProjectView
 from amoeba.runner.factory import PRODUCTION_PLANNERS
+from amoeba.store import Store
 
 
 @pytest.fixture
@@ -77,12 +79,27 @@ def test_a_failed_sq_probe_surfaces_as_startup_failed(
         runner_tenant(ProcessSettings(), tmp_path / "supervisor")
 
 
-def test_passed_planners_are_used_as_given(healthy_sq: Path) -> None:
-    class Nothing:
-        def plan(self, view: object) -> list[object]:
+def test_passed_planners_are_consulted_by_a_tick(
+    healthy_sq: Path, store: Store
+) -> None:
+    class Recording:
+        def __init__(self) -> None:
+            self.seen: list[str] = []
+
+        def plan(self, view: ProjectView) -> list[Action]:
+            self.seen.append(view.project_id)
             return []
 
-    planner = Nothing()
-    tenant = runner_tenant(ProcessSettings(), healthy_sq, planners=(planner,))  # type: ignore[arg-type]
+    class Host:
+        stop_requested = False
+        project_ids = ("demo",)
 
-    assert tenant._planners == (planner,)  # pyright: ignore[reportPrivateUsage]
+        def store_for(self, project_id: str) -> Store:
+            return store
+
+    planner = Recording()
+    tenant = runner_tenant(ProcessSettings(), healthy_sq, planners=(planner,))
+
+    tenant.tick(Host())
+
+    assert planner.seen == ["demo"]

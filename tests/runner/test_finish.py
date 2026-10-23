@@ -9,7 +9,7 @@ import pytest
 from amoeba.process import RunCheckpoint, RunOutcome, RunOutcomeDocument
 from amoeba.runner.faults import LaunchFailure
 from amoeba.runner.finish import record
-from amoeba.runner.observe import LaunchFailed, RunEnded, RunVanished
+from amoeba.runner.observed import LaunchFailed, RunEnded, RunVanished
 from amoeba.store import (
     BlockedKind,
     CommandKind,

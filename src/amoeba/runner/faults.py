@@ -1,7 +1,7 @@
 """The fault vocabulary the Runner's modules share.
 
-Defined once so the observe, act and tenant modules import the same values.
-Escalation writes join this module in a later task.
+Defined once so the observe, act and tenant modules import the same values,
+along with the escalation writes for expected and unexpected faults.
 
 An *expected* fault (a poll that gave no usable answer, an overdue launch) is an
 answer, not an exception: a stage adds it to the tick's :class:`TickFaults` and

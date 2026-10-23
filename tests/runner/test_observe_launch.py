@@ -9,7 +9,7 @@ from amoeba.runner.budget import TickResult
 from amoeba.runner.decide import RunState
 from amoeba.runner.faults import FaultKind, LaunchFailure
 from amoeba.runner.launch import log_paths
-from amoeba.runner.observe import LaunchFailed, RunEnded
+from amoeba.runner.observed import LaunchFailed, RunEnded
 from runner.observe_support import (
     GRACE,
     INTERVAL,

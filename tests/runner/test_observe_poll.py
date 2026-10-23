@@ -10,7 +10,7 @@ from amoeba.process import RunOutcome
 from amoeba.runner.budget import TickResult
 from amoeba.runner.decide import RunState
 from amoeba.runner.faults import FaultKind
-from amoeba.runner.observe import RunEnded, RunVanished
+from amoeba.runner.observed import RunEnded, RunVanished
 from runner.observe_support import (
     INTERVAL,
     Child,
@@ -191,3 +191,25 @@ def test_observing_one_projects_runs_keeps_anothers_poll_times(tmp_path: Path) -
     rig.observe(project_b)
 
     assert rig.poll.asked == ["run-1", "run-2"], "nothing was polled twice"
+
+
+def test_a_malformed_run_id_faults_that_entry_and_the_others_are_still_observed(
+    tmp_path: Path,
+) -> None:
+    rig = Rig(tmp_path, document("run-2", RunOutcome.TIMED_OUT))
+    bad = entry(1)
+    bad = type(bad)(
+        id=bad.id,
+        project_id=bad.project_id,
+        node_id=bad.node_id,
+        kind=bad.kind,
+        parameters={"pipeline": "p", "params": {}, "run_id": ""},
+        issued_at=bad.issued_at,
+    )
+
+    observed = rig.observe(bad, entry(2))
+
+    assert [r.run.state for r in observed.runs] == [RunState.FAULT, RunState.RUNNING]
+    assert observed.result is TickResult.COMPLETE
+    [fault] = list(rig.faults)
+    assert fault.kind is FaultKind.RUN_OBSERVATION_FAILED and "unusable" in fault.detail

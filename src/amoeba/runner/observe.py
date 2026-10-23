@@ -122,7 +122,9 @@ class RunObserver:
     ) -> ObservedRun | None:
         run_id = entry.parameters.get(PARAM_RUN_ID)
         if not isinstance(run_id, str) or not run_id:
-            raise ValueError(f"entry {entry.id} has an unusable run id: {run_id!r}")
+            # As in recovery, a malformed run id is an answer, not a bug: it
+            # faults this entry and the others are still observed.
+            return self._fault(entry, "", f"has an unusable run id: {run_id!r}", faults)
         tracked = self._tracker.get(entry.id)
         if tracked is None or tracked.confirmed:
             return self._confirmed(entry, run_id, budget, faults)
