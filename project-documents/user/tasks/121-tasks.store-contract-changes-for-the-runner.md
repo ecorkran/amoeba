@@ -132,41 +132,41 @@ New `tests/store/test_migration_009.py`, modeled on `tests/store/test_migration_
 ### Task 3.1: Add `_refuse_done` and guard `_write_block`
 **Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 2
 
-- [ ] `store/_block_writer.py`: add `_refuse_done(node_id)`. It reads the node's status and raises `InvalidTransitionError` naming the node when it is `done`. It is the one terminal check. Reuse an existing node-status read from `sql.py` if one exists. Otherwise add a statement
-- [ ] Call it at the top of `_write_block`, before any write. Update the docstring ("The caller has already checked that the node exists and is not blocked", plus "and is not done")
-- [ ] Do not add it to `_write_resolution`. D1 explains why none is needed. Note that in that method's docstring in one line
-- [ ] Tests in new `tests/store/test_terminal_done.py`: `block()` of each `BlockedKind` on a done node raises and leaves the node, blocked states and messages unchanged. `journal_escalate` on an unresolved entry of a done node (staged with raw SQL, as a pre-009 store would hold it) raises `InvalidTransitionError` naming the node and does not change the node (D1's explicit failure)
+- [x] `store/_block_writer.py`: add `_refuse_done(node_id)`. It reads the node's status and raises `InvalidTransitionError` naming the node when it is `done`. It is the one terminal check. Reuse an existing node-status read from `sql.py` if one exists. Otherwise add a statement
+- [x] Call it at the top of `_write_block`, before any write. Update the docstring ("The caller has already checked that the node exists and is not blocked", plus "and is not done")
+- [x] Do not add it to `_write_resolution`. D1 explains why none is needed. Note that in that method's docstring in one line
+- [x] Tests in new `tests/store/test_terminal_done.py`: `block()` of each `BlockedKind` on a done node raises and leaves the node, blocked states and messages unchanged. `journal_escalate` on an unresolved entry of a done node (staged with raw SQL, as a pre-009 store would hold it) raises `InvalidTransitionError` naming the node and does not change the node (D1's explicit failure)
 - **Success Criteria**:
-  - [ ] The tests above pass. `uv run pytest tests/store/test_terminal_done.py tests/test_journal.py tests/test_recovery.py -q` passes
-  - [ ] Committed as `feat: refuse blocking a done node`
+  - [x] The tests above pass. `uv run pytest tests/store/test_terminal_done.py tests/test_journal.py tests/test_recovery.py -q` passes
+  - [x] Committed as `feat: refuse blocking a done node`
 
 ### Task 3.2: Guard `update_node_status`, including the unresolved-command refusal
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3
 
-- [ ] `store/_block_writer.py`: add `_write_status(node_id, status, timestamp)`, which runs inside the caller's transaction and never commits. It reads the node's current status and applies the blocked-status refusals `update_node_status` has today (a blocked node cannot be moved, and a blocked status cannot be a target). Move `_refuse_blocked_status` from `nodes.py` into `_block_writer.py` for this, and import it back. It calls `_refuse_done` for **any** target status, including `done`. When the target is `NodeStatus.DONE` it also refuses with `InvalidTransitionError` while the node has an unresolved journal entry. Then it runs `sql.UPDATE_NODE_STATUS`. Use the existing statement for unresolved entries by node if `sql_journal.py` has one. If it has none, add one there that uses the existing partial index on unresolved entries, and name the index in a comment. This is the one status write that Task 7.3's `StatusEffect` reuses
-- [ ] `store/nodes.py` `update_node_status`: still raise `NodeNotFoundError` for a missing node, and call `_write_status` inside its existing transaction, with the blocked-status checks now living in the helper, in place of the direct `sql.UPDATE_NODE_STATUS` execute. `NodeOperations` must be able to reach the helper. If it does not inherit `BlockWriter`, move the helper to a shared base the way `BlockingOperations` and `JournalOperations` reach `_write_block`, and do not duplicate it
-- [ ] Update the method docstring's `Raises`. `create_node(status=DONE)` stays allowed
-- [ ] Tests in `tests/store/test_terminal_done.py`: parametrize over every `NodeStatus` so `update_node_status` on a done node raises, naming the node, and leaves it unchanged. A node with an unresolved entry refuses `done`, and after `journal_resolve` `done` is accepted. `create_node(status=DONE)` still works
+- [x] `store/_block_writer.py`: add `_write_status(node_id, status, timestamp)`, which runs inside the caller's transaction and never commits. It reads the node's current status and applies the blocked-status refusals `update_node_status` has today (a blocked node cannot be moved, and a blocked status cannot be a target). Move `_refuse_blocked_status` from `nodes.py` into `_block_writer.py` for this, and import it back. It calls `_refuse_done` for **any** target status, including `done`. When the target is `NodeStatus.DONE` it also refuses with `InvalidTransitionError` while the node has an unresolved journal entry. Then it runs `sql.UPDATE_NODE_STATUS`. Use the existing statement for unresolved entries by node if `sql_journal.py` has one. If it has none, add one there that uses the existing partial index on unresolved entries, and name the index in a comment. This is the one status write that Task 7.3's `StatusEffect` reuses
+- [x] `store/nodes.py` `update_node_status`: still raise `NodeNotFoundError` for a missing node, and call `_write_status` inside its existing transaction, with the blocked-status checks now living in the helper, in place of the direct `sql.UPDATE_NODE_STATUS` execute. `NodeOperations` must be able to reach the helper. If it does not inherit `BlockWriter`, move the helper to a shared base the way `BlockingOperations` and `JournalOperations` reach `_write_block`, and do not duplicate it. Note: NodeOperations now inherits BlockWriter; refuse_blocked_status (renamed from _refuse_blocked_status to avoid a private cross-module import) lives in _block_writer.py.
+- [x] Update the method docstring's `Raises`. `create_node(status=DONE)` stays allowed
+- [x] Tests in `tests/store/test_terminal_done.py`: parametrize over every `NodeStatus` so `update_node_status` on a done node raises, naming the node, and leaves it unchanged. A node with an unresolved entry refuses `done`, and after `journal_resolve` `done` is accepted. `create_node(status=DONE)` still works
 - **Success Criteria**:
-  - [ ] The tests above pass. Full `uv run pytest -q` passes. Fix any existing test that marked a node done and then moved it, since D1 makes that illegal. Do not weaken the guard
-  - [ ] Committed as `feat: refuse status writes on a done node`
+  - [x] The tests above pass. Full `uv run pytest -q` passes. Fix any existing test that marked a node done and then moved it, since D1 makes that illegal. Do not weaken the guard
+  - [x] Committed as `feat: refuse status writes on a done node`
 
 ### Task 3.3: Guard `journal_issue`
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 1
 
-- [ ] `store/journal.py` `journal_issue`: call `_refuse_done` after the parameter-key check and `_require_node`, before the transaction. Add one `Raises` line. No other change to this 334-line file
-- [ ] Test in `tests/store/test_terminal_done.py`: `journal_issue` on a done node raises `InvalidTransitionError` and the journal is empty
+- [x] `store/journal.py` `journal_issue`: call `_refuse_done` after the parameter-key check and `_require_node`, before the transaction. Add one `Raises` line. No other change to this 334-line file
+- [x] Test in `tests/store/test_terminal_done.py`: `journal_issue` on a done node raises `InvalidTransitionError` and the journal is empty
 - **Success Criteria**:
-  - [ ] The test passes. Committed as `feat: refuse journaling against a done node`
+  - [x] The test passes. Committed as `feat: refuse journaling against a done node`
 
 ### Task 3.4: Writer-inventory test
 **Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 2
 
-- [ ] In `tests/store/test_terminal_done.py`, parse every module under `src/amoeba/` with `ast`, as `tests/test_writer_guard.py` does, and assert `UPDATE_NODE_STATUS` is referenced only from `store/_block_writer.py`, `store/nodes.py` and `store/sql.py`. Have the failure message name D1's table
-- [ ] Update `tests/test_failure_modes.py` only if its raw tamper (line ~263, direct SQL on a separate connection) now trips a guard. It should not
+- [x] In `tests/store/test_terminal_done.py`, parse every module under `src/amoeba/` with `ast`, as `tests/test_writer_guard.py` does, and assert `UPDATE_NODE_STATUS` is referenced only from `store/_block_writer.py`, `store/nodes.py` and `store/sql.py`. Have the failure message name D1's table. Note: nodes.py no longer names UPDATE_NODE_STATUS (it goes through BlockWriter._write_status), so the allowed set is _block_writer.py and sql.py only.
+- [x] Update `tests/test_failure_modes.py` only if its raw tamper (line ~263, direct SQL on a separate connection) now trips a guard. It should not
 - **Success Criteria**:
-  - [ ] `uv run pytest tests/store/test_terminal_done.py tests/test_failure_modes.py -q` passes. Full suite, `ruff` and `pyright` clean
-  - [ ] Committed as `test: guard the node-status writer inventory`
+  - [x] `uv run pytest tests/store/test_terminal_done.py tests/test_failure_modes.py -q` passes. Full suite, `ruff` and `pyright` clean
+  - [x] Committed as `test: guard the node-status writer inventory`
 
 ---
 

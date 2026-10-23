@@ -160,6 +160,7 @@ CONTRACT_METHODS = {
     "messages",
     "pending_intents",
     "acknowledge_message",
+    "intent_for_submission",
     # Verdicts and findings, added by slice 104.
     "record_verdict",
     "verdict",

@@ -26,6 +26,7 @@ from sq_run_fixtures import sq_run_parameters
 
 from amoeba.process import ResidentProcess
 from amoeba.store import (
+    AcknowledgmentOutcome,
     BlockedKind,
     CFReference,
     CommandKind,
@@ -119,7 +120,11 @@ class ProofRunner:
                 continue
             message = pending[0]
             step, crash_at = _read_intent(message)
-            store.acknowledge_message(message.id, acknowledged_by=RUNNER_NAME)
+            store.acknowledge_message(
+                message.id,
+                acknowledged_by=RUNNER_NAME,
+                outcome=AcknowledgmentOutcome.APPLIED,
+            )
             self._perform(store, project_id, step, crash_at)
             return True
         return False

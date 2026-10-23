@@ -200,14 +200,25 @@ WHERE {COL_MESSAGE_PROJECT_ID} = ?
 ORDER BY {COL_MESSAGE_SEQ}
 """
 
-#: Marks an intent consumed. The channel and ``IS NULL`` guards make an
-#: already-acknowledged or non-intent row a zero-rowcount result, so the caller
-#: raises instead of overwriting.
+#: Marks an intent consumed and records how. The channel and ``IS NULL``
+#: guards make an already-acknowledged or non-intent row a zero-rowcount
+#: result, so the caller raises instead of overwriting.
 ACKNOWLEDGE_MESSAGE: Final = f"""
 UPDATE {TABLE_MESSAGES}
 SET {COL_MESSAGE_ACKNOWLEDGED_AT} = ?,
-    {COL_MESSAGE_ACKNOWLEDGED_BY} = ?
+    {COL_MESSAGE_ACKNOWLEDGED_BY} = ?,
+    {COL_MESSAGE_ACKNOWLEDGMENT_OUTCOME} = ?,
+    {COL_MESSAGE_ACKNOWLEDGMENT_REASON} = ?
 WHERE {COL_MESSAGE_ID} = ?
   AND {COL_MESSAGE_CHANNEL} = ?
   AND {COL_MESSAGE_ACKNOWLEDGED_AT} IS NULL
+"""
+
+#: The intent a submission created. ``submission_id`` has no index (issue #19),
+#: so this scans; the channel restriction keeps it to intent rows.
+SELECT_INTENT_BY_SUBMISSION: Final = f"""
+SELECT {_MESSAGE_SELECT_LIST}
+FROM {TABLE_MESSAGES}
+WHERE {COL_MESSAGE_SUBMISSION_ID} = ?
+  AND {COL_MESSAGE_CHANNEL} = ?
 """
