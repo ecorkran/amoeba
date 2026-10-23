@@ -24,7 +24,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from amoeba.process.sq_outcome import RunOutcome
 from amoeba.store import Store
 from amoeba.store.journal_models import (
     CommandKind,
@@ -55,11 +54,12 @@ class InFlight:
 
     The entry is left unresolved for its issuer (the Runner) to finish by
     polling ``run_id``. Recovery resolves nothing and records nothing.
-    ``outcome`` is what the system reported when recovery looked.
+    ``status`` is the system's own word for the run's state when recovery looked:
+    opaque here, logged and never interpreted.
     """
 
     run_id: str
-    outcome: RunOutcome
+    status: str
 
 
 @dataclass(frozen=True)
@@ -179,13 +179,13 @@ def reconcile(
                     resolved_by=JournalResolver.RECOVERY,
                 )
                 adopted += 1
-            case InFlight(run_id=run_id, outcome=outcome):
+            case InFlight(run_id=run_id, status=status):
                 # Left unresolved on purpose: its issuer finishes it by polling.
                 logger.info(
                     "journal entry %s: run %s is in flight (%s); left unresolved",
                     entry.id,
                     run_id,
-                    outcome.value,
+                    status,
                 )
                 in_flight += 1
             case NotApplied(reason=reason):

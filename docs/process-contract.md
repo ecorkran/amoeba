@@ -461,8 +461,9 @@ Observation = Adopt | InFlight | NotApplied | Unknown  # frozen dataclasses
 An observer **never** issues, retries, or repairs anything. Expected external
 failure is reported as `Unknown`, not raised — those are answers, not bugs.
 
-`Adopt` carries the `result` mapping to record. `InFlight(run_id, outcome)`
-means the command reached its system and is not finished: recovery resolves
+`Adopt` carries the `result` mapping to record. `InFlight(run_id, status)`
+means the command reached its system and is not finished (`status` is the
+upstream's own word for the run's state, opaque to recovery): recovery resolves
 nothing and leaves the entry for its issuer. `NotApplied` is returned only by
 an observer that can genuinely distinguish "did not happen" from "cannot tell".
 `Unknown` carries a human-readable `reason` and any `candidates`.
@@ -487,7 +488,7 @@ so every entry journaled since slice 120 has one.
 `sq runs wait <id> --timeout 0 --json`, bounded by `--sq-timeout`. It never reads
 a run-state file. Any of the six outcomes that mean Squadron holds a state
 (`completed`, `failed`, `paused`, `timed_out` — still running — `unknown_status`,
-`orphaned`) answers `InFlight(run_id, outcome)`: the entry stays unresolved and
+`orphaned`) answers `InFlight(run_id, status)` (`status` is the outcome's value): the entry stays unresolved and
 the summary counts it as `in_flight`. What an orphaned or unknown-status run
 means is the Runner's decision, not recovery's. `unreadable`, a missing `sq`, a timeout, exit 2, output that is not
 JSON, an outcome that disagrees with the exit code, a document for another run,

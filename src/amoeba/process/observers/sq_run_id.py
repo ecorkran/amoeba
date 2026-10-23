@@ -131,7 +131,7 @@ def _classify(
     if isinstance(poll, PollFailure):
         return Unknown(reason=poll.reason)
     if poll.outcome in STATE_BEARING_OUTCOMES:
-        return InFlight(run_id=run_id, outcome=poll.outcome)
+        return InFlight(run_id=run_id, status=poll.outcome.value)
     if poll.outcome is RunOutcome.UNREADABLE:
         return Unknown(reason=f"the run state for {run_id} is unreadable")
     return None

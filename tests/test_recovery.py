@@ -336,7 +336,7 @@ def test_in_flight_leaves_the_entry_unresolved_and_is_counted(
     store: Store, node: Node, caplog: pytest.LogCaptureFixture
 ) -> None:
     entry_id = _issue(store, node.id)
-    answer = InFlight(run_id="run-9", outcome=RunOutcome.PAUSED)
+    answer = InFlight(run_id="run-9", status=RunOutcome.PAUSED.value)
 
     with caplog.at_level("INFO"):
         summary = reconcile(store, PROJECT, _registry(FixedObserver(answer)))

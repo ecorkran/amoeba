@@ -113,7 +113,7 @@ def test_every_state_bearing_outcome_is_left_in_flight(
 
     observation = rig.observe(_entry())
 
-    assert observation == InFlight(run_id=RUN_ID, outcome=outcome)
+    assert observation == InFlight(run_id=RUN_ID, status=outcome.value)
     assert rig.poll.calls == [(RUN_ID, POLL_TIMEOUT_SECONDS)]
     assert rig.sleeps == []
 
@@ -240,7 +240,7 @@ def test_in_grace_it_sleeps_the_remainder_then_leaves_a_run_that_appeared_in_fli
 
     observation = rig.observe(_entry(issued_at=NOW - timedelta(seconds=45)))
 
-    assert observation == InFlight(run_id=RUN_ID, outcome=RunOutcome.TIMED_OUT)
+    assert observation == InFlight(run_id=RUN_ID, status=RunOutcome.TIMED_OUT.value)
     assert rig.sleeps == [15.0]
     assert len(rig.poll.calls) == 2
 
