@@ -105,10 +105,6 @@ class RunObserver:
         Sets ``context`` to each entry's node before observing it. Stops with
         ``CUT_OFF`` as soon as a poll is due but the budget refuses.
         """
-        live = {entry.id for entry in entries}
-        self._last_poll = {k: v for k, v in self._last_poll.items() if k in live}
-        self._overdue &= live
-        self._faulted = {k: v for k, v in self._faulted.items() if k in live}
         ordered = sorted(
             entries, key=lambda e: self._last_poll.get(e.id, float("-inf"))
         )
@@ -300,6 +296,9 @@ class RunObserver:
     def _ended(
         self, entry: JournalEntry, run_id: str, finished: Finished
     ) -> ObservedRun:
+        # The observer is shared by every project, so per-entry state is dropped
+        # here, when the entry's run ends, and never by pruning to one project.
+        self._last_poll.pop(entry.id, None)
         self._overdue.discard(entry.id)
         self._faulted.pop(entry.id, None)
         return ObservedRun(InFlightRun(entry, run_id, RunState.FINISHED), finished)

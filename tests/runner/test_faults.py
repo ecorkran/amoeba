@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
+
 import pytest
+from sq_run_fixtures import LEGACY_ENTRY_ID, insert_legacy_sq_run_entry
 
 from amoeba.runner.faults import FaultKind, NodeContext, escalate
 from amoeba.store import (
@@ -100,3 +104,23 @@ def test_a_repeated_fault_adds_no_rows(store: Store) -> None:
     _escalate(store, _in(None))
 
     assert len(store.open_project_escalations(PROJECT)) == 1
+
+
+def test_a_legacy_entry_without_a_run_id_still_counts_as_in_flight(
+    store: Store, node: Node
+) -> None:
+    with closing(sqlite3.connect(store.path)) as connection:
+        insert_legacy_sq_run_entry(
+            connection,
+            entry_id=LEGACY_ENTRY_ID,
+            project_id=PROJECT,
+            node_id=node.id,
+            parameters={"pipeline": "p5", "params": {}},
+            issued_at="2026-10-15T22:00:00+00:00",
+        )
+
+    _escalate(store, _in(node.id))  # must not raise KeyError
+
+    assert store.blocked_state_for(node.id) is None
+    [row] = store.open_project_escalations(PROJECT)
+    assert row.payload is not None and row.payload["run_ids"] == [LEGACY_ENTRY_ID]

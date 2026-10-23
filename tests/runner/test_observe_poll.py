@@ -173,3 +173,21 @@ def test_a_standing_poll_fault_recurs_between_polls(tmp_path: Path) -> None:
     assert rig.poll.asked == ["run-1"], "no extra poll"
     assert between.run.state is RunState.FAULT
     assert [f.kind for f in rig.faults] == [FaultKind.RUN_OBSERVATION_FAILED] * 2
+
+
+def test_observing_one_projects_runs_keeps_anothers_poll_times(tmp_path: Path) -> None:
+    """The observer is shared by every project: it must not prune by one list."""
+    rig = Rig(
+        tmp_path,
+        document("run-1", RunOutcome.TIMED_OUT),
+        document("run-2", RunOutcome.TIMED_OUT),
+    )
+    project_a, project_b = entry(1), entry(2)
+    rig.observe(project_a)
+    rig.observe(project_b)
+
+    rig.clock.seconds = 1.0
+    rig.observe(project_a)  # a tick of A only
+    rig.observe(project_b)
+
+    assert rig.poll.asked == ["run-1", "run-2"], "nothing was polled twice"

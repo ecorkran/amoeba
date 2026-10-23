@@ -112,7 +112,7 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=defaults.sq_timeout_seconds,
         metavar="SECONDS",
-        help="How long to wait for 'sq --version' at start-up.",
+        help="How long to wait for a start-up 'sq' call, including the Runner's probe.",
     )
     parser.add_argument(
         "--tick-deadline",

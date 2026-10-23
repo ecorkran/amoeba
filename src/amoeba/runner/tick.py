@@ -7,7 +7,6 @@ body of ``finish.record`` (125), routing (126) after record.
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -47,8 +46,6 @@ from amoeba.store import (
     JournalEntry,
     Store,
 )
-
-logger = logging.getLogger(__name__)
 
 #: Who closes a project escalation that stopped recurring.
 CLOSED_BY: str = "runner"

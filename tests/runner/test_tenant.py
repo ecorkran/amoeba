@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import logging
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -189,8 +190,18 @@ def test_a_tick_that_only_polled_a_running_run_returns_false(make_rig: Any) -> N
 
 def test_the_runner_package_has_exactly_one_broad_except() -> None:
     package = Path(amoeba.runner.__file__).parent
-    count = sum(
-        path.read_text(encoding="utf-8").count("except Exception")
-        for path in package.glob("*.py")
-    )
-    assert count == 1
+    broad = [
+        f"{path.name}:{node.lineno}"
+        for path in sorted(package.glob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ExceptHandler)
+        and (
+            node.type is None
+            or (
+                isinstance(node.type, ast.Name)
+                and node.type.id in {"Exception", "BaseException"}
+            )
+        )
+    ]
+    assert len(broad) == 1, broad
+    assert broad[0].startswith("tenant.py")

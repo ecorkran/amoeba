@@ -192,8 +192,10 @@ def escalate(
 
 
 def _in_flight_run_ids(store: Store, project_id: str, node_id: str) -> list[str]:
+    # A legacy entry (journaled before slice 120) carries no run id: it is still
+    # a run in flight for this node, so it is named by its entry id instead.
     return [
-        str(entry.parameters[PARAM_RUN_ID])
+        str(entry.parameters.get(PARAM_RUN_ID, entry.id))
         for entry in store.unresolved_journal_entries(project_id)
         if entry.node_id == node_id and entry.kind is CommandKind.SQ_RUN
     ]

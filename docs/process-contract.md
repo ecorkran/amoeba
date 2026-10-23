@@ -350,6 +350,11 @@ empty, so nothing launches until slice 125; tests supply their own planner.
   `launch_overdue` project escalation is raised, and the launch keeps being
   polled. A child that exits 2 with no state exits the process with
   `UPSTREAM_SHAPE` (15).
+- **Resolution.** An entry resolves `completed` when the command ran and
+  reported an outcome, including a `failed` or `paused` run (the node blocks on a
+  human, and the run's outcome is in the entry's `result`). It resolves `failed`
+  when the command could not finish: an `orphaned` or vanished run, or a launch
+  that failed.
 - **Observation** is by run id with `poll_run`, at most once per tick per run and
   no more often than `--run-poll-interval`, least recently polled first.
 - **Faults.** One `except Exception` per project, in `tenant.py`. A store failure
@@ -450,13 +455,15 @@ class Observer(Protocol):
     def observe(self, entry: JournalEntry) -> Observation: ...
 
 
-Observation = Adopt | NotApplied | Unknown  # frozen dataclasses
+Observation = Adopt | InFlight | NotApplied | Unknown  # frozen dataclasses
 ```
 
 An observer **never** issues, retries, or repairs anything. Expected external
 failure is reported as `Unknown`, not raised — those are answers, not bugs.
 
-`Adopt` carries the `result` mapping to record. `NotApplied` is returned only by
+`Adopt` carries the `result` mapping to record. `InFlight(run_id, outcome)`
+means the command reached its system and is not finished: recovery resolves
+nothing and leaves the entry for its issuer. `NotApplied` is returned only by
 an observer that can genuinely distinguish "did not happen" from "cannot tell".
 `Unknown` carries a human-readable `reason` and any `candidates`.
 

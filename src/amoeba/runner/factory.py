@@ -35,12 +35,12 @@ def validate_settings(settings: ProcessSettings) -> None:
             call timeout when it is not below the shutdown grace period (so a
             stop waits for at most one call).
     """
-    for name in (
-        "tick_deadline_seconds",
-        "tick_call_timeout_seconds",
-        "run_poll_interval_seconds",
-    ):
-        value: float = getattr(settings, name)
+    bounds = (
+        ("tick_deadline_seconds", settings.tick_deadline_seconds),
+        ("tick_call_timeout_seconds", settings.tick_call_timeout_seconds),
+        ("run_poll_interval_seconds", settings.run_poll_interval_seconds),
+    )
+    for name, value in bounds:
         if value <= 0:
             raise StartupFailedError(f"{name} must be positive, got {value}")
     if settings.tick_call_timeout_seconds >= settings.shutdown_grace_seconds:
