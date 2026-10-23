@@ -10,11 +10,20 @@ projectState: Initiative 100 (101–110) is merged, and slices 120 and 121 are m
   `poll_run`, `RunOutcomeDocument`, `PollFailure`, `SQ_EXECUTABLE`, `PARAM_RUN_ID`,
   `launch_grace_seconds` and the by-id recovery observer exist (120). Project-scoped
   escalation and the done-terminal rule exist (121). `amoeba start` composes only
-  `standard_tenants`. There is no `amoeba.runner` package, recovery adopts every
-  id-bearing entry whose run has a state, and `tests/sq_stub.py` has no `run` mode.
+  `standard_tenants`. There is no `amoeba.runner` package, recovery adopts every id-bearing
+  entry whose run has a state, and `tests/sq_stub.py` has no `run` mode.
 dateCreated: 20261023
 dateUpdated: 20261023
 status: not_started
+turns: 12
+promptTokens: 557613
+cachedTokens: 483318
+cacheWriteTokens: 74277
+completionTokens: 18320
+durationSeconds: 118.9
+costUsd: 0.52896
+usageRounds: 1
+pricedRounds: 1
 ---
 
 ## Context Summary
