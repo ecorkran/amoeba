@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: durable-inbox-and-message-queue
 dateCreated: 20260923
-dateUpdated: 20261018
+dateUpdated: 20261022
 status: complete
 ---
 
@@ -151,6 +151,21 @@ migrated, so a store that exists is always complete.
 A submission that reaches the process before its project exists is quarantined
 as `no_store_for_project`, not held.
 
+**An intent's own outcome.** `submission(id)` reports only whether the inbox
+applied the submission. For an `intent`, the Runner's later verdict is on the
+message row: once `submission(id)` is `applied`, read it with
+
+```python
+with Store.open_read_only(project_id="demo") as store:
+    intent = store.intent_for_submission(submission_id)  # None if no such row
+```
+
+The row is either unacknowledged (the Runner has not consumed it yet) or carries
+`acknowledgment_outcome` (`applied`, `no_op` or `rejected`) and, when given, an
+`acknowledgment_reason`; a `rejected` outcome always has one. An acknowledged
+row whose outcome is `None` was acknowledged before outcomes were recorded
+(schema version 9). See [`store-contract.md`](store-contract.md#acknowledgment-outcomes-and-desired-state).
+
 ## What happens to a file
 
 Every submission reaches exactly one terminal, inspectable place. None is
@@ -226,6 +241,7 @@ so a consumer needs no write access.
 | --- | --- | --- |
 | `escalation` | The store's block writer, in the same transaction as every `HUMAN` block; and recovery, when it escalates a journal entry | `node_id`, `blocked_state_id`, `journal_entry_id` when recovery raised it, and the block's optional `payload` |
 | `intent` | An applied `intent` submission | `submission_id` (provenance), optional `node_id`, and the submission's `body` as `payload` |
+| `escalation`, project-scoped | The Runner, through `raise_project_escalation`, for a fault that has no node | `fault_kind` and the fault's `payload`; `closed_at` and `closed_by` once the Runner closes it. **`node_id` and `blocked_state_id` are null.** At most one is open per project and fault kind |
 
 ```python
 with Store.open_read_only(project_id="demo") as store:
@@ -238,9 +254,15 @@ with Store.open_read_only(project_id="demo") as store:
 came after; every row is delivered exactly once by advancing it. The store keeps
 no per-consumer state.
 
-`pending_intents(project)` and `acknowledge_message(id, acknowledged_by=…)` are
-the **Runner's** side of the `intent` channel (initiative 120): acknowledging
-marks an intent consumed, and a second acknowledgement raises.
+`pending_intents(project)` and `acknowledge_message(id, acknowledged_by=…,
+outcome=…, reason=…, desired_state=…)` are the **Runner's** side of the `intent`
+channel (initiative 120): acknowledging marks an intent consumed and records
+its outcome, and a second acknowledgement raises. When the intent sets or clears
+a desired state, that write happens in the **same transaction** as the
+acknowledgment, so an intent cannot be acknowledged without its effect or the
+reverse. A consumer that follows the `escalation` channel must expect rows with
+no `node_id` or `blocked_state_id`. Details are in
+[`store-contract.md`](store-contract.md#the-runner-contract).
 
 ## Inspection
 
@@ -248,7 +270,7 @@ marks an intent consumed, and a second acknowledgement raises.
 | --- | --- |
 | `amoeba inspect inbox` | Every file pending in `new/`, quarantined, or failed, with attempts, reason, or last error. Opens no store. |
 | `amoeba inspect submissions --project P` | Applied and rejected records, in `applied_seq` order. |
-| `amoeba inspect messages --project P [--channel intent\|escalation]` | Messages in `seq` order. |
+| `amoeba inspect messages --project P [--channel intent\|escalation]` | Messages in `seq` order, with `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind` and `closed_at` (each empty when unset). |
 
 All accept `--json`, and all work with the process running or stopped. The same
 listings are in Python as `amoeba.inbox.pending()`, `quarantined()`, and
