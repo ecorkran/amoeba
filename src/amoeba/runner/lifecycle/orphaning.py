@@ -67,10 +67,8 @@ def orphan_unlisted(
 
     orphans = [
         node
-        for node in tree.nodes
-        if node.cf.project == cf_project_id
-        and node.cf.index is not None
-        and _is_unlisted(tree, node, listed_initiatives, listed_slices)
+        for node in tree.linked_nodes(cf_project_id)
+        if _is_unlisted(tree, node, listed_initiatives, listed_slices)
     ]
     for node in orphans:
         _orphan(store, node, cf_project_id)

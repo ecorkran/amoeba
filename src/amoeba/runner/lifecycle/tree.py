@@ -52,6 +52,30 @@ class LifecycleTree:
         """The linked node of this kind, CF project and CF index, if any."""
         return self._by_link.get((kind, cf_project, index))
 
+    def linked_nodes(self, cf_project: str) -> tuple[Node, ...]:
+        """Every node of this CF project that carries a CF index, in store order."""
+        return tuple(
+            node
+            for node in self._nodes
+            if node.cf.project == cf_project and node.cf.index is not None
+        )
+
+    def linked_initiatives(self, cf_project: str) -> tuple[Node, ...]:
+        """This CF project's initiatives that carry a CF index."""
+        return tuple(
+            node
+            for node in self.linked_nodes(cf_project)
+            if node.kind is NodeKind.INITIATIVE
+        )
+
+    def linked_slices(self, initiative: Node) -> tuple[Node, ...]:
+        """The initiative's direct slice children that carry a CF index."""
+        return tuple(
+            child
+            for child in self.children(initiative)
+            if child.kind is NodeKind.SLICE and child.cf.index is not None
+        )
+
     def step_of(self, node: Node) -> LifecycleStep | None:
         """The node's step; ``None`` for a node that is not a step.
 

@@ -29,7 +29,7 @@ from amoeba.runner.lifecycle.plan_read import (
 )
 from amoeba.runner.lifecycle.steps import PlanObservation
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Node, NodeKind
+from amoeba.store import NodeKind
 from amoeba.upstream.context_forge import CFSliceList
 
 
@@ -82,26 +82,6 @@ def _refused(detail: str) -> ReadScope:
     return ReadScope(False, frozenset(), (_fault(detail),))
 
 
-def _linked_initiatives(tree: LifecycleTree, cf_project_id: str) -> list[Node]:
-    return [
-        node
-        for node in tree.nodes
-        if node.kind is NodeKind.INITIATIVE
-        and node.cf.project == cf_project_id
-        and node.cf.index is not None
-    ]
-
-
-def _linked_slices(tree: LifecycleTree, initiative: Node | None) -> list[Node]:
-    if initiative is None:
-        return []
-    return [
-        child
-        for child in tree.children(initiative)
-        if child.kind is NodeKind.SLICE and child.cf.index is not None
-    ]
-
-
 def _initiatives_problem(
     tree: LifecycleTree, cf_project_id: str, read: PlanRead
 ) -> str | None:
@@ -110,7 +90,7 @@ def _initiatives_problem(
     repeated = sorted(i for i, count in Counter(indexes).items() if count > 1)
     if repeated:
         return f"initiative index {repeated[0]} is listed more than once"
-    linked = _linked_initiatives(tree, cf_project_id)
+    linked = tree.linked_initiatives(cf_project_id)
     if not indexes and linked:
         return f"initiatives list is empty but {len(linked)} initiatives are linked"
     return None
@@ -134,7 +114,7 @@ def _slice_list_problems(
             )
             continue
         node = tree.find_linked(NodeKind.INITIATIVE, cf_project_id, initiative_index)
-        linked = _linked_slices(tree, node)
+        linked = () if node is None else tree.linked_slices(node)
         if not indexes and linked:
             problems[initiative_index] = (
                 f"initiative {initiative_index}'s slice list is empty but "

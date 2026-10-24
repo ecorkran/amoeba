@@ -32,14 +32,16 @@ from amoeba.runner.lifecycle.plan_read import (
 )
 from amoeba.runner.lifecycle.reconcile import reconcile
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import NodeKind, Store
+from amoeba.store import Store
 
 logger = logging.getLogger(__name__)
 
 
 class PlanStage:
-    """Reads and reconciles the plans of a project's CF links, once per lifetime
-    state: the schedule and the failures to replay live here."""
+    """Reads and reconciles the plans of a project's CF links.
+
+    Holds the read schedule and the failures to replay on later ticks.
+    """
 
     def __init__(
         self, *, schedule: PlanReadSchedule, run: CfRun, timeout_seconds: float
@@ -133,16 +135,8 @@ def _fault(project_id: str, link: str, detail: str) -> Fault:
 
 def _initiatives_with_linked_slices(tree: LifecycleTree, link: str) -> set[int]:
     """Indexes of this link's linked initiatives that have linked slice children."""
-    found: set[int] = set()
-    for node in tree.nodes:
-        if (
-            node.kind is NodeKind.INITIATIVE
-            and node.cf.project == link
-            and node.cf.index is not None
-            and any(
-                child.kind is NodeKind.SLICE and child.cf.index is not None
-                for child in tree.children(node)
-            )
-        ):
-            found.add(node.cf.index)
-    return found
+    return {
+        initiative.cf.index
+        for initiative in tree.linked_initiatives(link)
+        if initiative.cf.index is not None and tree.linked_slices(initiative)
+    }
