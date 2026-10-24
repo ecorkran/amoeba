@@ -12,8 +12,8 @@ interfaces:
 - 128
 - 129
 dateCreated: 20261020
-dateUpdated: 20261020
-status: not_started
+dateUpdated: 20261023
+status: in_progress
 turns: 23
 promptTokens: 1406863
 cachedTokens: 1301928
@@ -353,7 +353,7 @@ def apply_pending_intents(store: Store, project_id: str) -> int: ...   # intents
 
 ### Verification Walkthrough
 
-Run in bash from the repository root. Step 1 is automated. Steps 2–4 use the real `cf` on this repository, read-only. Nothing launches a run, because no production planner launches until 125. Human-step blocks are store writes only.
+Run in bash from the repository root. Step 1 is automated. Steps 2–4 use the real `cf` on this repository, read-only. Nothing launches a run, because no production planner launches until 125. Human-step blocks are store writes only. Verified 20261023 on `cf` 0.19.17. `amoeba` is not on `PATH` in a development checkout, so each command is `uv run amoeba …`. Intents are delivered through the inbox asynchronously, so after each `submit` wait until `amoeba inspect messages --project amoeba --channel intent` shows the new row acknowledged (a few seconds) before the next step.
 
 1. **Tests:**
    ```bash
@@ -361,30 +361,33 @@ Run in bash from the repository root. Step 1 is automated. Steps 2–4 use the r
    uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright
    uv run pytest tests/contract -v
    ```
-   Expected: all pass. The intent tests are named for their rules, for example `test_project_pause_wins_over_slice_resume` and `test_same_intent_twice_is_no_op`.
+   Expected (20261023): 138 passed in the first command; 2936 passed in the full suite; `ruff` and `pyright` clean; the contract suite 47 passed. The intent tests are named for their rules, for example `test_project_pause_wins_over_slice_resume` and `test_same_intent_twice_is_no_op`.
 
-2. **Link and see that nothing escalates.** As in 123's walkthrough step 3, start a throwaway process and link this repository:
+2. **Link and see that nothing escalates.** Start a throwaway process and link this repository:
    ```bash
    export AMOEBA_STORE_DIR=$(mktemp -d)
-   amoeba start &
-   amoeba submit create-project --project amoeba --by operator
-   amoeba submit link-cf-project --project amoeba --by operator --cf-project-id <id>
-   sleep 5; amoeba inspect messages --project amoeba --channel escalation
+   uv run amoeba start > /tmp/amoeba.log 2>&1 &
+   uv run amoeba submit create-project --project amoeba --by operator
+   uv run amoeba submit link-cf-project --project amoeba --by operator \
+     --cf-project-id "$(cf list projects --json | python3 -c 'import json,os,sys; print(next(p["id"] for p in json.load(sys.stdin) if p.get("projectPath") == os.getcwd()))')"
+   # wait until `uv run amoeba inspect nodes --project amoeba` lists the plan (134 nodes), then:
+   uv run amoeba inspect messages --project amoeba --channel escalation --json
    ```
-   Expected: no rows. `HumanStepPlanner` is in production, but nothing is driven.
+   Expected: `[]`. `HumanStepPlanner` is in production, but nothing is driven.
 
-3. **Drive, repeat, pause and clear.** Find initiative 140's node id in `amoeba inspect nodes --project amoeba` (the initiative row with `cf_index` 140), then:
+3. **Drive, repeat, pause and resume.** This repository's plan has initiatives 100, 120, 140, 160, 180 and 200. Find the node ids of 140 and 160 in `uv run amoeba inspect nodes --project amoeba` (initiative rows with `cf_index` 140 and 160), then:
    ```bash
-   amoeba submit intent --project amoeba --by operator --node-id <i140> --body '{"intent": "drive"}'
-   sleep 3; amoeba inspect messages --project amoeba
+   uv run amoeba submit intent --project amoeba --by operator --node-id <i140> --body '{"intent": "drive"}'
+   uv run amoeba inspect messages --project amoeba
+   uv run amoeba inspect blocked --project amoeba
    ```
-   Expected: the intent row has `acknowledgment_outcome` `applied`, and one escalation row names `architecture is a human step` for initiative 140. Then:
+   Expected: the intent row is `applied`, and one escalation row appears. `inspect blocked` shows one `architecture` step, `blocked_on` human, context `architecture is a human step`. Then:
    - Submit the same intent again. Its row shows `no_op`.
-   - Submit `{"intent": "pause"}` with no node id, then drive initiative 150 the same way. 150's intent is `applied`, but no escalation appears for 150, because the project is paused.
-   - `amoeba inspect desired-states --project amoeba` shows three rows: the project (`hold` true), 140 and 150 (`drive` true).
-   - Submit `{"intent": "resume"}` with no node id. On the next tick, an escalation for 150's `architecture` appears, and the project's row is gone from `inspect desired-states`.
+   - Submit `{"intent": "pause"}` with no node id (`applied`), then drive initiative 160 the same way (`applied`). No new escalation appears, because the project is paused: `inspect blocked` still shows one row.
+   - `uv run amoeba inspect desired-states --project amoeba` shows three rows: `project` (`hold` true), 140 and 160 (`drive` true).
+   - Submit `{"intent": "resume"}` with no node id (`applied`). On the next tick a second `architecture` block appears (160's), and `inspect desired-states` shows only the two initiative rows.
 
-4. **Rejections.** Submit `{"intent": "drive", "untill": "tasks"}` for the project, and `{"intent": "drive"}` with the node id of 140's `architecture` step. `amoeba inspect messages --project amoeba --channel intent` shows both `rejected`, with reasons starting `malformed_body:` and `target_not_initiative_or_slice:`. Stop the process with `amoeba stop`.
+4. **Rejections.** Submit `{"intent": "drive", "untill": "tasks"}` for the project, and `{"intent": "drive"}` with the node id of 140's `architecture` step (the `blocked` listing shows it). `uv run amoeba inspect messages --project amoeba --channel intent --json` shows both `rejected`, with reasons `malformed_body: untill: Extra inputs are not permitted` and `target_not_initiative_or_slice: node <id> is not an initiative or slice`. Stop the process with `uv run amoeba stop`, and delete the throwaway store directory.
 
 ## Implementation Notes
 

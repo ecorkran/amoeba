@@ -17,7 +17,7 @@ projectState: Slices 120–123 are merged. `amoeba.runner` has the tick (`Projec
   `ClearDesiredState` and `DesiredState`. `amoeba.runner.intent` and `STEP_SEQUENCE`
   do not exist.
 dateCreated: 20261023
-dateUpdated: 20261024
+dateUpdated: 20261023
 status: in_progress
 turns: 52
 promptTokens: 4177544
@@ -301,28 +301,30 @@ Per the LLD, D10. Create `inspection/desired_states.py`; register in `inspection
 
 Per the LLD, "Provides to Other Slices" (Contract documents) and "API Contracts". Follow the style of the 123 additions in each file.
 
-- [ ] `docs/inbox-contract.md`: a new "Intent bodies" section replacing the `{"want": "a review"}` example. Give the six body forms, the target rules, the four rejection codes with the `"<code>: <detail>"` reason form, the no-op rule (the target's settings would not change) and how to read the answer (`amoeba inspect messages --project P --channel intent`, `intent_for_submission`). Use the two CLI examples from the LLD
-- [ ] `docs/process-contract.md`: the apply stage (store-only, before observe, ignores link state, failure handling), the per-tick index, the current-step guard, what hold does not stop, and that `HumanStepPlanner` is in production
-- [ ] `docs/substrate-guide.md`: extend the 120 row with a "Since slice 124" sentence and links to the new sections, in the style of the slice-123 sentence. Update the contract scenario or link-check test if one pins these anchors (`grep -rn "substrate-guide" tests`)
-- [ ] Check the architecture document and slice plan already carry the edits the LLD lists under "Special Considerations" (resume removes the hold; no-op means the settings would not change; plan entry 5 wording). Edit them only if they do not
+- [x] `docs/inbox-contract.md`: a new "Intent bodies" section replacing the `{"want": "a review"}` example. Give the six body forms, the target rules, the four rejection codes with the `"<code>: <detail>"` reason form, the no-op rule (the target's settings would not change) and how to read the answer (`amoeba inspect messages --project P --channel intent`, `intent_for_submission`). Use the two CLI examples from the LLD
+- [x] `docs/process-contract.md`: the apply stage (store-only, before observe, ignores link state, failure handling), the per-tick index, the current-step guard, what hold does not stop, and that `HumanStepPlanner` is in production
+- [x] `docs/substrate-guide.md`: extend the 120 row with a "Since slice 124" sentence and links to the new sections, in the style of the slice-123 sentence. Update the contract scenario or link-check test if one pins these anchors (`grep -rn "substrate-guide" tests`)
+- [x] Check the architecture document and slice plan already carry the edits the LLD lists under "Special Considerations" (resume removes the hold; no-op means the settings would not change; plan entry 5 wording). Edit them only if they do not
 - **Success Criteria**:
-  - [ ] Docs link-check tests (if any) pass. Each LLD rule appears once, in one document. Commit: `docs: document intent bodies, the apply stage and the current-step guard`
+  - [x] Docs link-check tests (if any) pass. Each LLD rule appears once, in one document. Commit: `docs: document intent bodies, the apply stage and the current-step guard`
+  - Note: no docs link-check test exists; grep of tests found none pinning these anchors. The architecture document (120-arch, lines ~168 and ~174) and slice plan entry 5 already carried the slice 124 edits, so no change was made to them.
 
 ### Task 9.2: CHANGELOG
 **Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 1
 
-- [ ] Add entries under `## [Unreleased]` in `CHANGELOG.md`: Added (the intent vocabulary and rejection codes, the apply stage, drive/hold governance and the current-step guard, `amoeba inspect desired-states`, `HumanStepPlanner` in production); Changed (`ProjectView` fields, `decide()` refuses non-current actions, planners see current steps). Match the existing entries' style. Do not bump the version
+- [x] Add entries under `## [Unreleased]` in `CHANGELOG.md`: Added (the intent vocabulary and rejection codes, the apply stage, drive/hold governance and the current-step guard, `amoeba inspect desired-states`, `HumanStepPlanner` in production); Changed (`ProjectView` fields, `decide()` refuses non-current actions, planners see current steps). Match the existing entries' style. Do not bump the version
 - **Success Criteria**:
-  - [ ] Entry present. Commit: `docs: add CHANGELOG entry for slice 124`
+  - [x] Entry present. Commit: `docs: add CHANGELOG entry for slice 124`
 
 ### Task 9.3: Full validation
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
 
 Per the LLD, "Verification Walkthrough" steps 1–4.
 
-- [ ] Run `uv run pytest tests/runner/intent tests/runner/test_decide.py -v`, then `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`, and `uv run pytest tests/contract -v`. Each once
-- [ ] Walkthrough steps 2–4 against a throwaway store (`AMOEBA_STORE_DIR=$(mktemp -d)`), with the real `cf` read-only on this repository: link and see no escalation; drive initiative 140 (`applied`, one escalation for `architecture`); repeat (`no_op`); project `pause`, then drive 150 (`applied`, no escalation); `inspect desired-states` shows three rows; project `resume` (escalation for 150, project row gone); the two rejection submissions show `malformed_body:` and `target_not_initiative_or_slice:`. Stop with `amoeba stop`. Nothing launches a run
-- [ ] Confirm file sizes: `wc -l` on each new or changed source file; split any over ~300 lines (note the split in the commit)
-- [ ] Confirm `git status` is clean and every task's work is committed on the slice branch
+- [x] Run `uv run pytest tests/runner/intent tests/runner/test_decide.py -v`, then `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`, and `uv run pytest tests/contract -v`. Each once
+- [x] Walkthrough steps 2–4 against a throwaway store (`AMOEBA_STORE_DIR=$(mktemp -d)`), with the real `cf` read-only on this repository: link and see no escalation; drive initiative 140 (`applied`, one escalation for `architecture`); repeat (`no_op`); project `pause`, then drive 150 (`applied`, no escalation); `inspect desired-states` shows three rows; project `resume` (escalation for 150, project row gone); the two rejection submissions show `malformed_body:` and `target_not_initiative_or_slice:`. Stop with `amoeba stop`. Nothing launches a run
+  - Note: initiative 160 replaced 150 throughout, because this repo's CF plan has no initiative 150.
+- [x] Confirm file sizes: `wc -l` on each new or changed source file; split any over ~300 lines (note the split in the commit)
+- [x] Confirm `git status` is clean and every task's work is committed on the slice branch
 - **Success Criteria**:
-  - [ ] All checks clean and the walkthrough matches the LLD's expected results. If a check fails, fix it in the task that owns the code and commit there, or write `BLOCKED:` with the output. Final commit if any fix was needed: `fix: address validation findings for slice 124`. The slice stays on its branch for code review
+  - [x] All checks clean and the walkthrough matches the LLD's expected results. If a check fails, fix it in the task that owns the code and commit there, or write `BLOCKED:` with the output. Final commit if any fix was needed: `fix: address validation findings for slice 124`. The slice stays on its branch for code review
