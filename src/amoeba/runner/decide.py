@@ -47,8 +47,15 @@ class LaunchRun:
     checkout: Path
 
 
+@dataclass(frozen=True)
+class BlockHumanStep:
+    """Block a ready human step on a person (D9). Store-only: no journal entry."""
+
+    node_id: str
+
+
 #: The closed set of things a planner may ask for. 125 adds ``WriteCFPointer``.
-type Action = LaunchRun
+type Action = LaunchRun | BlockHumanStep
 
 
 @dataclass(frozen=True)

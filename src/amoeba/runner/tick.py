@@ -16,6 +16,8 @@ from amoeba.process import UpstreamShapeError
 from amoeba.runner import finish
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import (
+    Action,
+    BlockHumanStep,
     LaunchRun,
     Planner,
     ProjectView,
@@ -37,6 +39,7 @@ from amoeba.runner.launch import (
     launch,
     mint_run_id,
 )
+from amoeba.runner.lifecycle.human_steps import block_human_step
 from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
@@ -167,7 +170,7 @@ class ProjectTick:
 
     def _decide(
         self, runs: Sequence[ObservedRun], link_probes: Mapping[str, bool]
-    ) -> list[LaunchRun]:
+    ) -> list[Action]:
         self._context.clear()
         view = ProjectView(
             project_id=self._project_id,
@@ -178,12 +181,19 @@ class ProjectTick:
         )
         return list(decide(view, self._planners))
 
-    def _act(self, actions: Sequence[LaunchRun], budget: TickBudget) -> TickResult:
+    def _act(self, actions: Sequence[Action], budget: TickBudget) -> TickResult:
         for action in actions:
-            if not budget.allows_call():
-                return TickResult.CUT_OFF
             self._context.set(action.node_id)
-            self._launch(action)
+            match action:
+                case BlockHumanStep():
+                    # Store-only actions are applied in one transaction and not
+                    # journaled: there is no external side effect to recover (D9).
+                    block_human_step(self._store, action)
+                    self.wrote = True
+                case LaunchRun():
+                    if not budget.allows_call():
+                        return TickResult.CUT_OFF
+                    self._launch(action)
         self._context.clear()
         return TickResult.COMPLETE
 
