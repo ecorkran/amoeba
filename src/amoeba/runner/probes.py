@@ -28,10 +28,9 @@ from amoeba.runner.cf_call import OUTPUT_HEAD_CHARS, CfCallFailed, CfRun, run_cf
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.runner.launch import mint_run_id
 from amoeba.runner.lifecycle.plan_read import (
-    CF_EXECUTABLE,
     CF_INITIATIVES_COMMAND,
-    CF_PROJECT_FLAG,
     CF_STATUS_COMMAND,
+    cf_argv,
 )
 from amoeba.upstream.context_forge import PlanParseError, parse_initiatives
 
@@ -120,7 +119,7 @@ def probe_link(
     for command, problem_with in _PROBES:
         if not budget.allows_call():
             return ProbeCutOff()
-        argv = [CF_EXECUTABLE, *command, CF_PROJECT_FLAG, cf_project_id]
+        argv = cf_argv(command, cf_project_id)
         shown = " ".join(argv)
         completed = run_cf(argv, run, timeout_seconds)
         if isinstance(completed, CfCallFailed):
