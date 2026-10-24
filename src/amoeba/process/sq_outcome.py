@@ -71,15 +71,102 @@ _OUTCOME_BY_EXIT_CODE: Final[Mapping[int, RunOutcome]] = MappingProxyType(
 )
 
 
-class RunCheckpoint(BaseModel):
-    """The part of a run's checkpoint that is read today.
+class CheckpointKind(StrEnum):
+    """Why a run paused, as Squadron names it (observed squadron-ai 0.23.5)."""
 
-    A null ``paused_at`` means unknown.
+    LOOP_EXHAUSTED = "loop_exhausted"
+    INTERACTIVE_CHECKPOINT = "interactive_checkpoint"
+    AWAITS_HUMAN = "awaits_human"
+    OTHER = "other"
+
+
+class FailureKind(StrEnum):
+    """Why a run failed, as Squadron names it (observed squadron-ai 0.23.5)."""
+
+    PROVIDER_ERROR = "provider_error"
+    STALL = "stall"
+    ARTIFACT_MISSING = "artifact_missing"
+    COST_CAP = "cost_cap"
+
+
+@dataclass(frozen=True)
+class UnknownKind:
+    """A kind Squadron reported that this code has no member for, text unchanged.
+
+    An unrecognized kind never fails a poll and is never mapped to a near match;
+    the caller sees the raw text and decides.
+    """
+
+    raw: str
+
+
+def parse_checkpoint_kind(raw: str | None) -> CheckpointKind | UnknownKind | None:
+    """A checkpoint's kind: a member, ``UnknownKind(raw)``, or ``None`` if unset."""
+    return _parse_kind(CheckpointKind, raw)
+
+
+def parse_failure_kind(raw: str | None) -> FailureKind | UnknownKind | None:
+    """A failure's kind: a member, ``UnknownKind(raw)``, or ``None`` if unset."""
+    return _parse_kind(FailureKind, raw)
+
+
+def _parse_kind[KindT: StrEnum](
+    members: type[KindT], raw: str | None
+) -> KindT | UnknownKind | None:
+    if raw is None:
+        return None
+    try:
+        return members(raw)
+    except ValueError:
+        # Specific: Squadron named a kind newer than this code. An answer, kept
+        # verbatim, not a failure.
+        return UnknownKind(raw)
+
+
+class RunCheckpoint(BaseModel):
+    """A paused run's checkpoint. Every field is optional; ``None`` means unknown.
+
+    The kind stays raw text here; :func:`parse_checkpoint_kind` reads it.
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
+    kind: str | None = None
+    step: str | None = None
+    step_type: str | None = None
+    is_loop: bool | None = None
+    round: int | None = None
+    max_rounds: int | None = None
+    verdict: str | None = None
+    review_file: str | None = None
+    reason: str | None = None
     paused_at: datetime | None = None
+
+
+class RunFailure(BaseModel):
+    """A failed run's failure. The kind stays raw; :func:`parse_failure_kind` reads it.
+
+    ``message`` is Squadron's text, so anything that quotes it bounds it first.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    kind: str | None = None
+    step: str | None = None
+    message: str | None = None
+
+
+class RunReview(BaseModel):
+    """One review file a run wrote. ``paths`` lists the parts of a split review."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    path: str | None = None
+    paths: list[str] | None = None
+    template: str | None = None
+    verdict: str | None = None
+    step: str | None = None
+    round: int | None = None
 
 
 class RunOutcomeDocument(BaseModel):
@@ -98,6 +185,8 @@ class RunOutcomeDocument(BaseModel):
     started_at: datetime | None = None
     updated_at: datetime | None = None
     checkpoint: RunCheckpoint | None = None
+    failure: RunFailure | None = None
+    reviews: list[RunReview] | None = None
 
 
 @dataclass(frozen=True)

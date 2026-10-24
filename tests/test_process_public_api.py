@@ -39,6 +39,14 @@ EXPECTED_EXPORTS = {
     "UpstreamShapeError",
     # Slice 125: the one place detection's ledger key is formed, called by ingest.
     "detection_key",
+    # Slice 125: the outcome document's checkpoint, failure and reviews.
+    "RunFailure",
+    "RunReview",
+    "CheckpointKind",
+    "FailureKind",
+    "UnknownKind",
+    "parse_checkpoint_kind",
+    "parse_failure_kind",
 }
 
 #: Deliberately not part of the contract: run-file parsing and pruning are

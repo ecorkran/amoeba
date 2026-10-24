@@ -1,0 +1,54 @@
+{
+  "run_id": "run-20261016-p56-6f6dfbbb",
+  "outcome": "paused",
+  "status": "paused",
+  "pipeline": "p56",
+  "started_at": "2026-10-16T01:25:09.158262+00:00",
+  "updated_at": "2026-10-16T02:20:27.563338+00:00",
+  "checkpoint": {
+    "kind": "awaits_human",
+    "step": "branch-10",
+    "step_type": "branch",
+    "is_loop": false,
+    "round": null,
+    "max_rounds": null,
+    "verdict": null,
+    "review_file": null,
+    "reason": "checkpoint",
+    "paused_at": "2026-10-16T02:20:27.561691+00:00",
+    "resets_at": null
+  },
+  "failure": null,
+  "reviews": [
+    {
+      "path": "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "tasks-0",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "revise-tasks",
+      "round": 2
+    },
+    {
+      "path": "project-documents/user/reviews/107-review.code.judge-samples-checks-and-calibration.md",
+      "paths": null,
+      "template": "code",
+      "verdict": "PASS",
+      "step": "implement-6",
+      "round": null
+    }
+  ]
+}

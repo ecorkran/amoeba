@@ -89,6 +89,22 @@ not stdout. The slice 123 design says only "exits 1 with `{"error": true, …}`"
 `list_slices_error.json` holds that stderr text. Initiative 120 reports
 `status: complete` with `isChecked: false` in `list_initiatives_a.json`.
 
+## `sq_outcomes/` — `sq runs wait --json` documents
+
+Captured **2026-10-24** with `sq runs wait --timeout 0 --json <run id>` (read-only)
+on local runs, each file byte-for-byte as printed (stdout only). Squadron 0.23.7, a
+dated observation, not a pin. The run ids were chosen by inspecting the documents,
+not by name. Nothing was edited; the documents hold repository-relative paths and
+run text, no credentials. The exit code is the outcome's (`completed` 0, `failed` 1,
+`paused` 3).
+
+| File | Run | What it shows |
+| --- | --- | --- |
+| `completed_reviews.json` | `run-20261017-slices-plan-eec52e1e` | A completed run with ten `reviews`; the last has a `path` and `paths: null` |
+| `completed_split_review.json` | `run-20261007-tasks-plan-25f0a00a` | A completed run whose last review has `paths` with two part files |
+| `failed_artifact_missing.json` | `run-20261017-p4-256e7396` | A failed run with `failure` (`artifact_missing`, step `design-0`, a long `message`) and an empty `reviews` list |
+| `paused_awaits_human.json` | `run-20261016-p56-6f6dfbbb` | A paused run with `checkpoint` (`awaits_human`, step `branch-10`, null `round` and `review_file`) and three `reviews` |
+
 ## `sq_reviews/` — Squadron review output
 
 ### Review files

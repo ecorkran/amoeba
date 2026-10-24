@@ -1,0 +1,15 @@
+{
+  "run_id": "run-20261017-p4-256e7396",
+  "outcome": "failed",
+  "status": "failed",
+  "pipeline": "p4",
+  "started_at": "2026-10-17T03:20:49.518974+00:00",
+  "updated_at": "2026-10-17T03:21:04.961724+00:00",
+  "checkpoint": null,
+  "failure": {
+    "kind": "artifact_missing",
+    "step": "design-0",
+    "message": "phase dispatch completed but no design artifact was written for slice 140 (expected one of: project-documents/user/slices/140-slice.command-surface-parity.md); agent's final text: \"\u2026rface-parity`, even though recent work (slices 175\u2013177) moved well past it. That points to a stale or reset slice field in cf, not real work to do on 140. The next unchecked entries in the plan are **178 (Artifact Usage Stamping)** and **179 (Staged Effort Estimates and Accuracy)**. Neither has a design yet. Which slice should I design? If it's 178, I'll set the cf slice field to 178 and go ahead.\""
+  },
+  "reviews": []
+}

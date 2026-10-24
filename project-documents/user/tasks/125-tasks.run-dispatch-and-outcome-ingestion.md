@@ -197,13 +197,13 @@ Per the LLD, D10 "Order" and "Provides to Other Slices" (Contract documents). Te
 
 Per the LLD, D7 (Technical Scope), "API Contracts" (Outcome document) and "Patterns and Conventions". Edit `process/sq_outcome.py` and `tests/test_observer_sq_outcome.py`.
 
-- [ ] Capture real fixtures into a new `tests/fixtures/sq_outcomes/` with `sq runs wait --timeout 0 --json <run id>` (read-only) on local runs (`~/.config/squadron/runs/`): a completed run with a non-empty `reviews` list; a completed run whose last review has non-null `paths`; a failed run with `failure`; a paused run with `checkpoint`. Choose run ids by inspecting the output, not by name. Paused candidates are the run-state files containing `"status": "paused"`; their documents carry `checkpoint`. If no local run yields one of the four kinds, write `BLOCKED:` under this task naming the missing kind and stop. Never compose a fixture by hand. Record each file in the README with the date
-- [ ] `RunCheckpoint` gains every field in the LLD (all optional; `None` means unknown). Add `RunFailure` and `RunReview`. `RunOutcomeDocument` gains `checkpoint`, `failure`, `reviews`
-- [ ] `CheckpointKind` and `FailureKind` (`StrEnum`, values from the LLD). The model keeps raw `str | None`. Parse functions return a member, or an explicit unknown value that carries the raw text (for example `UnknownKind(raw)`); `None` stays `None`. Never map to a near match
-- [ ] Export the new names from `amoeba.process`
-- [ ] Tests: each real fixture parses with the expected field values; `paths` is a list on the split one and `None` otherwise; an unrecognized checkpoint or failure kind parses to the unknown carrying its text; a document with no `reviews` key reads `None`; 120's existing fixtures still parse; `tests/process` pruning tests pass (Rule 9 shares this model)
+- [x] Capture real fixtures into a new `tests/fixtures/sq_outcomes/` with `sq runs wait --timeout 0 --json <run id>` (read-only) on local runs (`~/.config/squadron/runs/`): a completed run with a non-empty `reviews` list; a completed run whose last review has non-null `paths`; a failed run with `failure`; a paused run with `checkpoint`. Choose run ids by inspecting the output, not by name. Paused candidates are the run-state files containing `"status": "paused"`; their documents carry `checkpoint`. If no local run yields one of the four kinds, write `BLOCKED:` under this task naming the missing kind and stop. Never compose a fixture by hand. Record each file in the README with the date
+- [x] `RunCheckpoint` gains every field in the LLD (all optional; `None` means unknown). Add `RunFailure` and `RunReview`. `RunOutcomeDocument` gains `checkpoint`, `failure`, `reviews`
+- [x] `CheckpointKind` and `FailureKind` (`StrEnum`, values from the LLD). The model keeps raw `str | None`. Parse functions return a member, or an explicit unknown value that carries the raw text (for example `UnknownKind(raw)`); `None` stays `None`. Never map to a near match
+- [x] Export the new names from `amoeba.process`
+- [x] Tests: each real fixture parses with the expected field values; `paths` is a list on the split one and `None` otherwise; an unrecognized checkpoint or failure kind parses to the unknown carrying its text; a document with no `reviews` key reads `None`; 120's existing fixtures still parse; `tests/process` pruning tests pass (Rule 9 shares this model)
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: read checkpoint, failure and reviews from the run outcome document`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: read checkpoint, failure and reviews from the run outcome document`
 
 ### Task 3.2: The stub `sq` writes review files and a `reviews` list, with tests
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3

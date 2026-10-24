@@ -1,0 +1,102 @@
+{
+  "run_id": "run-20261007-tasks-plan-25f0a00a",
+  "outcome": "completed",
+  "status": "completed",
+  "pipeline": "tasks-plan",
+  "started_at": "2026-10-07T23:41:41.086097+00:00",
+  "updated_at": "2026-10-08T00:48:04.751871+00:00",
+  "checkpoint": null,
+  "failure": null,
+  "reviews": [
+    {
+      "path": "project-documents/user/reviews/105-review.tasks.squadron-review-parser-and-ingest.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/105-review.tasks.squadron-review-parser-and-ingest.part-1.md",
+        "project-documents/user/reviews/105-review.tasks.squadron-review-parser-and-ingest.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/105-review.tasks.squadron-review-parser-and-ingest.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/105-review.tasks.squadron-review-parser-and-ingest.part-1.md",
+        "project-documents/user/reviews/105-review.tasks.squadron-review-parser-and-ingest.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-2.md",
+      "paths": [
+        "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-1.md",
+        "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-2.md",
+        "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-3.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-1.md",
+        "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-2.md",
+        "project-documents/user/reviews/106-review.tasks.outbound-change-feed-and-detection-of-external-work.part-3.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "FAIL",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-1.md",
+        "project-documents/user/reviews/107-review.tasks.judge-samples-checks-and-calibration.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/108-review.tasks.context-forge-event-seam.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/108-review.tasks.context-forge-event-seam.part-1.md",
+        "project-documents/user/reviews/108-review.tasks.context-forge-event-seam.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/108-review.tasks.context-forge-event-seam.part-1.md",
+      "paths": [
+        "project-documents/user/reviews/108-review.tasks.context-forge-event-seam.part-1.md",
+        "project-documents/user/reviews/108-review.tasks.context-forge-event-seam.part-2.md"
+      ],
+      "template": "tasks",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    }
+  ]
+}

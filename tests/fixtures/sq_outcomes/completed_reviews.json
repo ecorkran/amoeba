@@ -1,0 +1,92 @@
+{
+  "run_id": "run-20261017-slices-plan-eec52e1e",
+  "outcome": "completed",
+  "status": "completed",
+  "pipeline": "slices-plan",
+  "started_at": "2026-10-17T03:23:54.784874+00:00",
+  "updated_at": "2026-10-17T04:14:23.424401+00:00",
+  "checkpoint": null,
+  "failure": null,
+  "reviews": [
+    {
+      "path": "project-documents/user/reviews/141-review.slice.band-layers-and-vertical-extent.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/141-review.slice.band-layers-and-vertical-extent.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "PASS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/142-review.slice.overlay-rendering-and-sub-panes.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/142-review.slice.overlay-rendering-and-sub-panes.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/143-review.slice.indicator-management.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/143-review.slice.indicator-management.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/145-review.slice.regime-bands.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/145-review.slice.regime-bands.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/146-review.slice.strategy-signals-markers-and-brackets.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    },
+    {
+      "path": "project-documents/user/reviews/146-review.slice.strategy-signals-markers-and-brackets.md",
+      "paths": null,
+      "template": "slice",
+      "verdict": "CONCERNS",
+      "step": "slices",
+      "round": null
+    }
+  ]
+}
