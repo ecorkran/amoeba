@@ -57,7 +57,11 @@ class CfWorld:
                 self.worktree_entry("wt_a", self.root, 100, 199),
                 self.worktree_entry("wt_b", self.second, 200, 299),
             ],
-            slices={125: STEM, 225: "225-slice.second"},
+            slices={
+                125: STEM,
+                126: "126-slice.next-in-root",
+                225: "225-slice.second",
+            },
         )
 
     @staticmethod

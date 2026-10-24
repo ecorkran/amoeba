@@ -419,12 +419,12 @@ Per the LLD, Data Flow ("One step, end to end"). Edit `_act` in `runner/tick.py`
 
 Per the LLD, Success Criteria "Checkout concurrency", "Each non-completed outcome", "Left for routing". Add `tests/runner/dispatch/test_tick_concurrency.py` and `tests/runner/ingest/test_tick_ingest.py`.
 
-- [ ] `test_second_slice_waits_for_checkout`: no pointer write while the first is `POINTED`, in flight or paused; dispatched on the first tick after the first run completes or fails; a slice in another worktree is dispatched meanwhile
-- [ ] A paused run with an unknown review (blocked `HUMAN`) still holds its checkout
-- [ ] A `POINTED` step overwritten while not current writes its pointer again before launching
-- [ ] Ingestion end to end with the stub `sq`, three scenarios only (Task 4.1 tests every outcome as a table and 4.3 the store path): a paused run (`SQ_CHECKPOINT`, checkpoint in the result), a failed run, a completed run with an unknown review. After a completed or failed ingestion `unrouted_outcomes` lists the entry and the step gets no further action; a routing decision (Task 4.4 helper) removes it
+- [x] `test_second_slice_waits_for_checkout`: no pointer write while the first is `POINTED`, in flight or paused; dispatched on the first tick after the first run completes or fails; a slice in another worktree is dispatched meanwhile
+- [x] A paused run with an unknown review (blocked `HUMAN`) still holds its checkout
+- [x] A `POINTED` step overwritten while not current writes its pointer again before launching
+- [x] Ingestion end to end with the stub `sq`, three scenarios only (Task 4.1 tests every outcome as a table and 4.3 the store path): a paused run (`SQ_CHECKPOINT`, checkpoint in the result), a failed run, a completed run with an unknown review. After a completed or failed ingestion `unrouted_outcomes` lists the entry and the step gets no further action; a routing decision (Task 4.4 helper) removes it
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `test: prove checkout concurrency and tick-level ingestion`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `test: prove checkout concurrency and tick-level ingestion`
 
 ---
 

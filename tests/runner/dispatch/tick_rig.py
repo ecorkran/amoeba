@@ -12,15 +12,24 @@ from typing import Any
 
 from cf_harness import observed
 
+from amoeba.process import RunOutcome, RunOutcomeDocument
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
+from amoeba.runner.launch import log_paths
 from amoeba.runner.lifecycle.steps import (
     STEP_MAP,
     STEP_SEQUENCE,
     LifecycleStep,
     StepLevel,
 )
-from amoeba.store import CommandKind, JournalEntry, Node, NodeStatus, Store
+from amoeba.store import (
+    PARAM_RUN_ID,
+    CommandKind,
+    JournalEntry,
+    Node,
+    NodeStatus,
+    Store,
+)
 from amoeba.upstream.context_forge import (
     FIELD_PROJECT_PATH,
     STATE_PROJECT_KEY,
@@ -123,6 +132,41 @@ class DispatchRig:
 
     def tick(self) -> None:
         self.tick_rig.tick()
+
+    def run_of(self, node: Node) -> JournalEntry:
+        """The one unresolved ``sq_run`` entry of ``node``."""
+        [entry] = [
+            e for e in self.entries(CommandKind.SQ_RUN, node) if not e.is_resolved
+        ]
+        return entry
+
+    def end_run(
+        self, node: Node, outcome: RunOutcome = RunOutcome.COMPLETED, **fields: object
+    ) -> None:
+        """Confirm ``node``'s run, make it end as ``outcome``, and tick once.
+
+        ``fields`` are extra outcome-document fields (``reviews``, ``checkpoint``,
+        ``failure``). The launch is confirmed directly, so this is one tick: the
+        one that polls the run, records it, and then decides.
+        """
+        entry = self.run_of(node)
+        run_id = str(entry.parameters[PARAM_RUN_ID])
+        self.tick_rig.tracker.confirm(entry.id)
+        log_paths(self.tick_rig.supervisor_dir, entry.id).stderr.write_text(
+            f"run_id={run_id}\n"
+        )
+        self.tick_rig.poll.answers.append(
+            RunOutcomeDocument.model_validate(
+                {
+                    "run_id": run_id,
+                    "outcome": outcome.value,
+                    "status": outcome.value,
+                    **fields,
+                }
+            )
+        )
+        self.tick_rig.clock.seconds += 20.0
+        self.tick()
 
     def entries(self, kind: CommandKind, node: Node) -> list[JournalEntry]:
         found = self.store.journal_entries(PROJECT, node_id=node.id)
