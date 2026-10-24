@@ -17,12 +17,13 @@ what each rule may touch, so a failed or partial read never orphans or creates.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from amoeba.runner.faults import TickFaults
 from amoeba.runner.lifecycle.completion import complete_observed_steps
 from amoeba.runner.lifecycle.orphaning import orphan_unlisted
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
-from amoeba.runner.lifecycle.read_checks import ReadScope, checked_scope
+from amoeba.runner.lifecycle.read_checks import ReadScope, checked_scope, observations
 from amoeba.runner.lifecycle.references import update_references
 from amoeba.runner.lifecycle.slugs import slice_name_from_design_file
 from amoeba.runner.lifecycle.status_block import block_unknown_status
@@ -74,18 +75,24 @@ def reconcile(
         faults.add(fault)
 
     wrote = orphan_unlisted(store, tree, cf_project_id, read, scope)
-    if isinstance(read, PlanRead) and scope.initiatives:
-        if wrote:
+    if not (isinstance(read, PlanRead) and scope.initiatives):
+        return wrote
+    # Each later rule sees the tree as the earlier ones left it; a read that
+    # changes nothing builds the tree once.
+    rules: tuple[Callable[[LifecycleTree], bool], ...] = (
+        lambda t: _Creator(store, project_id, cf_project_id, t, read, scope).run(),
+        lambda t: block_unknown_status(store, t, cf_project_id, read, scope),
+        lambda t: update_references(store, t, cf_project_id, read, scope),
+        lambda t: complete_observed_steps(
+            store, t, project_id, cf_project_id, read, scope
+        ),
+    )
+    stale = wrote
+    for rule in rules:
+        if stale:
             tree = _tree(store, project_id)
-        created = _Creator(store, project_id, cf_project_id, tree, read, scope).run()
-        if created:
-            tree = _tree(store, project_id)
-        blocked = block_unknown_status(store, tree, cf_project_id, read, scope)
-        updated = update_references(store, tree, cf_project_id, read, scope)
-        completed = complete_observed_steps(
-            store, _tree(store, project_id), project_id, cf_project_id, read, scope
-        )
-        wrote = created or blocked or updated or completed or wrote
+        stale = rule(tree)
+        wrote = wrote or stale
     return wrote
 
 
@@ -111,6 +118,7 @@ class _Creator:
         self._tree = tree
         self._read = read
         self._scope = scope
+        self._observations = observations(read, scope)
         self._wrote = False
 
     def run(self) -> bool:
@@ -143,12 +151,7 @@ class _Creator:
         )
 
     def _ensure_initiative_steps(self, node: Node, initiative: CFInitiative) -> None:
-        observation = PlanObservation(
-            is_checked=initiative.is_checked,
-            status=initiative.status,
-            arch_file=initiative.arch_file,
-            slice_list_read=initiative.index in self._scope.slice_initiatives,
-        )
+        observation = self._observations[(NodeKind.INITIATIVE, initiative.index)]
         self._ensure_steps(node, StepLevel.INITIATIVE, observation)
 
     # -- slices ----------------------------------------------------------------
@@ -159,7 +162,7 @@ class _Creator:
         ) or self._create_slice(initiative_node, entry)
         if entry.status in _STEPLESS_STATUSES:
             return
-        observation = PlanObservation(entry.is_checked, entry.status)
+        observation = self._observations[(NodeKind.SLICE, entry.index)]
         self._ensure_steps(node, StepLevel.SLICE, observation)
 
     def _create_slice(self, initiative_node: Node, entry: CFSliceEntry) -> Node:

@@ -24,6 +24,7 @@ from amoeba.runner.decide import (
     decide,
 )
 from amoeba.runner.faults import (
+    RUNNER_ACTOR,
     LaunchFailure,
     NodeContext,
     TickFaults,
@@ -54,7 +55,7 @@ from amoeba.store import (
 )
 
 #: Who closes a project escalation that stopped recurring.
-CLOSED_BY: Final = "runner"
+CLOSED_BY: Final = RUNNER_ACTOR
 
 
 class ProjectTick:
@@ -176,6 +177,8 @@ class ProjectTick:
             project_id=self._project_id,
             now=self._now(),
             tree=LifecycleTree(self._store.nodes_for_project(self._project_id)),
+            # Unresolved sq_run entries the tick did not finish: what ``ready_unbusy``
+            # excludes (finished ones were resolved by ``finish.record`` above).
             in_flight=tuple(o.run for o in runs if o.finished is None),
             link_probes=link_probes,
         )

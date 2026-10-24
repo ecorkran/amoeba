@@ -12,6 +12,7 @@ import sqlite3
 from pathlib import Path
 
 from evidence_harness import finding, pre_judge_verdict_insert, verdict_input
+from legacy_nodes import LEGACY_INSERT_NODE
 
 from amoeba.store import sql, sql_evidence, sql_feed, sql_inbox, sql_journal
 from amoeba.store.mapping_evidence import observation_parameters
@@ -42,7 +43,7 @@ _NEW_TABLES = (
 
 def _insert_node(connection: sqlite3.Connection, node_id: str) -> None:
     connection.execute(
-        sql.INSERT_NODE,
+        LEGACY_INSERT_NODE,
         (node_id, PROJECT, None, "slice", NodeStatus.RUNNABLE.value, node_id)
         + (None,) * 7
         + (STAGED_AT, STAGED_AT),

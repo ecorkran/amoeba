@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Protocol
 
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import JournalEntry
+from amoeba.store import JournalEntry, Node
 
 
 class RunState(StrEnum):
@@ -63,7 +63,7 @@ class ProjectView:
     """Everything a planner may look at for one project, frozen.
 
     ``tree`` is the project's lifecycle tree, built after reconcile; it holds every
-    node, so a planner narrows by status, ``ready_steps`` and ``in_flight`` itself.
+    node. Planners start work from :meth:`ready_unbusy`.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
     this process lifetime.
     """
@@ -73,6 +73,16 @@ class ProjectView:
     tree: LifecycleTree
     in_flight: tuple[InFlightRun, ...]
     link_probes: Mapping[str, bool]
+
+    def ready_unbusy(self) -> list[Node]:
+        """Ready steps (``tree.ready_steps()``) with no run in flight.
+
+        What a planner may start. "In flight" is an unresolved ``sq_run`` entry:
+        ``in_flight`` holds every such entry the tick has not finished and
+        resolved, which is the only kind of unresolved entry the Runner issues.
+        """
+        busy = {run.entry.node_id for run in self.in_flight}
+        return [node for node in self.tree.ready_steps() if node.id not in busy]
 
 
 class Planner(Protocol):

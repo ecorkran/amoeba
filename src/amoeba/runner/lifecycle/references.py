@@ -42,7 +42,15 @@ def update_references(
     for initiative in read.initiatives:
         node = tree.find_linked(NodeKind.INITIATIVE, cf_project_id, initiative.index)
         if node and initiative.arch_file:
-            wrote = _set(store, node, artifact_path=initiative.arch_file) or wrote
+            wrote = (
+                _set(
+                    store,
+                    node,
+                    artifact_path=initiative.arch_file,
+                    slice_name=node.cf.slice_name,
+                )
+                or wrote
+            )
 
     for initiative_index in sorted(scope.slice_initiatives):
         slices = read.slices[initiative_index]
@@ -78,16 +86,15 @@ def _set(
     node: Node,
     *,
     artifact_path: str,
-    slice_name: str | None = None,
+    slice_name: str | None,
 ) -> bool:
     """Write the new references if they differ; replace only those two fields."""
-    desired_name = slice_name if slice_name is not None else node.cf.slice_name
-    if node.cf.artifact_path == artifact_path and node.cf.slice_name == desired_name:
+    if node.cf.artifact_path == artifact_path and node.cf.slice_name == slice_name:
         return False
     store.update_cf_reference(
         node.id,
         dataclasses.replace(
-            node.cf, artifact_path=artifact_path, slice_name=desired_name
+            node.cf, artifact_path=artifact_path, slice_name=slice_name
         ),
     )
     return True

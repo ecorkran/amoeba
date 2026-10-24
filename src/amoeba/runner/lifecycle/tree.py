@@ -16,7 +16,7 @@ from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import BLOCKED_STATUSES, Node, NodeKind, NodeStatus
 
 #: A linked node's identity within a project: its kind, CF project and CF index.
-type LinkKey = tuple[NodeKind, str, int]
+type NodeLinkKey = tuple[NodeKind, str, int]
 
 
 class LifecycleTree:
@@ -25,7 +25,7 @@ class LifecycleTree:
     def __init__(self, nodes: Iterable[Node]) -> None:
         self._nodes: tuple[Node, ...] = tuple(nodes)
         self._by_id = {node.id: node for node in self._nodes}
-        self._by_link: dict[LinkKey, Node] = {}
+        self._by_link: dict[NodeLinkKey, Node] = {}
         children: dict[str, list[Node]] = {}
         for node in self._nodes:
             key = link_key(node)
@@ -108,7 +108,7 @@ class LifecycleTree:
         return False
 
 
-def link_key(node: Node) -> LinkKey | None:
+def link_key(node: Node) -> NodeLinkKey | None:
     """The node's link key, or ``None`` if it has no CF project or no index."""
     if node.cf.project is None or node.cf.index is None:
         return None

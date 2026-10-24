@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import pytest
+from ast_strings import string_constants
 
 from amoeba.runner.lifecycle import steps
 from amoeba.runner.lifecycle.steps import (
@@ -123,24 +123,6 @@ def test_integration_follows_is_checked_and_not_status() -> None:
 # -- spelled once --------------------------------------------------------------
 
 
-def _string_constants(path: Path) -> list[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    docstrings = {
-        id(node.body[0].value)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef)
-        and node.body
-        and isinstance(node.body[0], ast.Expr)
-    }
-    return [
-        node.value
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and id(node) not in docstrings
-    ]
-
-
 def test_no_other_runner_module_spells_a_step_value() -> None:
     values = {step.value for step in LifecycleStep}
     others = [
@@ -148,5 +130,5 @@ def test_no_other_runner_module_spells_a_step_value() -> None:
     ]
     assert others
     for path in others:
-        clashes = values.intersection(_string_constants(path))
+        clashes = values.intersection(string_constants(path))
         assert not clashes, f"{path.name} spells {sorted(clashes)}"

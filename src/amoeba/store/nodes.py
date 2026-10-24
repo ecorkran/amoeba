@@ -91,11 +91,9 @@ class NodeOperations(BlockWriter):
                     node.sq.reviewed_sha,
                     timestamp,
                     timestamp,
+                    node.cf.index,
                 ),
             )
-            if node.cf.index is not None:
-                # Same transaction as the insert: a duplicate link rolls both back.
-                self._execute(sql.UPDATE_NODE_CF_INDEX, (node.cf.index, node.id))
 
         return node
 
@@ -120,6 +118,10 @@ class NodeOperations(BlockWriter):
 
     def update_cf_reference(self, node_id: str, cf: CFReference) -> Node:
         """Replace a node's CF reference fields. The node's id is unchanged.
+
+        Every field is replaced, ``index`` included: a ``cf`` that leaves ``index``
+        unset **clears the link**. To change one field, start from the node's own
+        reference (``dataclasses.replace(node.cf, ...)``).
 
         Values are stored opaquely: the store never parses CF coordinates.
         """

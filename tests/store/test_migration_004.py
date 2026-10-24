@@ -11,6 +11,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from legacy_nodes import LEGACY_INSERT_NODE
+
 from amoeba.store import sql, sql_inbox, sql_journal
 from amoeba.store.inbox_models import Channel
 from amoeba.store.migrations import migrate
@@ -29,7 +31,7 @@ def _insert_node(
     connection: sqlite3.Connection, node_id: str, status: NodeStatus
 ) -> None:
     connection.execute(
-        sql.INSERT_NODE,
+        LEGACY_INSERT_NODE,
         (node_id, PROJECT, None, "slice", status.value, node_id)
         + (None,) * 7
         + (STAGED_AT, STAGED_AT),

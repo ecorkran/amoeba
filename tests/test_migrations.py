@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from legacy_nodes import LEGACY_INSERT_NODE
 
 from amoeba.store import sql, sql_journal
 from amoeba.store.migrations import (
@@ -73,7 +74,7 @@ def test_migrating_an_already_migrated_store_is_a_no_op(store_file: Path) -> Non
     with _connect(store_file) as connection:
         migrate(connection)
         connection.execute(
-            sql.INSERT_NODE,
+            LEGACY_INSERT_NODE,
             (
                 "n1",
                 "demo",
@@ -157,7 +158,7 @@ def test_migration_advances_the_stamp_and_data_survives(store_file: Path) -> Non
         assert read_schema_version(connection) == 1
 
         connection.execute(
-            sql.INSERT_NODE,
+            LEGACY_INSERT_NODE,
             (
                 "n1",
                 "demo",
@@ -207,7 +208,7 @@ def test_fresh_store_arrives_at_the_latest_version(store_file: Path) -> None:
 def _insert_node(connection: sqlite3.Connection, node_id: str, title: str) -> None:
     """Insert a node directly, for staging a store at an older version."""
     connection.execute(
-        sql.INSERT_NODE,
+        LEGACY_INSERT_NODE,
         (
             node_id,
             "demo",

@@ -15,8 +15,13 @@ first case finishes on the next read, so the rule needs no extra repair.
 
 from __future__ import annotations
 
+from amoeba.runner.faults import RUNNER_ACTOR
 from amoeba.runner.lifecycle.plan_read import PlanRead
-from amoeba.runner.lifecycle.read_checks import ReadScope
+from amoeba.runner.lifecycle.read_checks import (
+    ObservationKey,
+    ReadScope,
+    observations,
+)
 from amoeba.runner.lifecycle.steps import (
     STEP_MAP,
     Executor,
@@ -25,13 +30,7 @@ from amoeba.runner.lifecycle.steps import (
     step_complete,
 )
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Node, NodeKind, NodeStatus, Store
-from amoeba.upstream.context_forge import CFSliceList
-
-#: Who resolves a human step's block when CF shows the step complete.
-RESOLVED_BY: str = "runner"
-
-type ObservationKey = tuple[NodeKind, int]
+from amoeba.store import Node, NodeStatus, Store
 
 
 def complete_observed_steps(
@@ -47,7 +46,7 @@ def complete_observed_steps(
     Returns:
         Whether anything was written.
     """
-    observations = _observations(read, scope)
+    found = observations(read, scope)
     has_open_entry = {
         entry.node_id for entry in store.unresolved_journal_entries(project_id)
     }
@@ -57,34 +56,12 @@ def complete_observed_steps(
         owner = tree.parent(node)
         if step is None or owner is None or owner.cf.project != cf_project_id:
             continue
-        observation = _observation_for(observations, owner)
+        observation = _observation_for(found, owner)
         if observation is None or not tree.is_linked(node):
             continue
         if step_complete(step, observation):
             wrote = _complete(store, node, step, has_open_entry) or wrote
     return wrote
-
-
-def _observations(
-    read: PlanRead, scope: ReadScope
-) -> dict[ObservationKey, PlanObservation]:
-    """What the read says about each initiative and in-scope slice."""
-    found: dict[ObservationKey, PlanObservation] = {}
-    for initiative in read.initiatives:
-        found[(NodeKind.INITIATIVE, initiative.index)] = PlanObservation(
-            is_checked=initiative.is_checked,
-            status=initiative.status,
-            arch_file=initiative.arch_file,
-            slice_list_read=initiative.index in scope.slice_initiatives,
-        )
-    for initiative_index in scope.slice_initiatives:
-        slices = read.slices[initiative_index]
-        if isinstance(slices, CFSliceList):
-            for entry in slices.entries:
-                found[(NodeKind.SLICE, entry.index)] = PlanObservation(
-                    entry.is_checked, entry.status
-                )
-    return found
 
 
 def _observation_for(
@@ -98,17 +75,17 @@ def _observation_for(
 def _complete(
     store: Store, node: Node, step: LifecycleStep, has_open_entry: set[str]
 ) -> bool:
-    if node.status is NodeStatus.RUNNABLE and node.id not in has_open_entry:
+    if node.id in has_open_entry:
+        return False
+    if node.status is NodeStatus.RUNNABLE:
         store.update_node_status(node.id, NodeStatus.DONE)
         return True
-    if (
-        node.status is NodeStatus.BLOCKED_ON_HUMAN
-        and STEP_MAP[step].executor is Executor.HUMAN
-        and node.id not in has_open_entry
+    if node.status is NodeStatus.BLOCKED_ON_HUMAN and (
+        STEP_MAP[step].executor is Executor.HUMAN
     ):
         store.resolve(
             node.id,
-            resolved_by=RESOLVED_BY,
+            resolved_by=RUNNER_ACTOR,
             detail=f"observed: {step} is complete in the CF plan",
         )
         store.update_node_status(node.id, NodeStatus.DONE)

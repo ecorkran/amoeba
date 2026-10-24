@@ -11,6 +11,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from legacy_nodes import LEGACY_INSERT_NODE
 
 from amoeba.store import Store, sql
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, migrate
@@ -34,7 +35,7 @@ def _stage_version_nine_store(path: Path) -> None:
     with sqlite3.connect(path) as connection:
         migrate(connection, expected_version=PRIOR_SCHEMA_VERSION)
         connection.execute(
-            sql.INSERT_NODE,
+            LEGACY_INSERT_NODE,
             ("n-1", PROJECT, None, "slice", NodeStatus.RUNNABLE.value, "n-1")
             + ("cf-old", None, "old-slice", None)
             + (None,) * 3

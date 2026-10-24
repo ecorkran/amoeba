@@ -28,6 +28,14 @@ class CfCallFailed:
     detail: str
 
 
+def output_head(completed: subprocess.CompletedProcess[str]) -> str:
+    """The start of whichever stream carried output, for a failure detail.
+
+    CF prints some errors on stderr with an empty stdout, so both are tried.
+    """
+    return (completed.stdout or completed.stderr)[:OUTPUT_HEAD_CHARS]
+
+
 def run_cf(
     argv: Sequence[str], run: CfRun, timeout_seconds: float
 ) -> subprocess.CompletedProcess[str] | CfCallFailed:

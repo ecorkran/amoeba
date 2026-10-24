@@ -174,18 +174,10 @@ INSERT INTO {TABLE_NODES} (
     {COL_NODE_SQ_REVIEW_ARTIFACT_PATH},
     {COL_NODE_SQ_REVIEWED_SHA},
     {COL_NODE_CREATED_AT},
-    {COL_NODE_UPDATED_AT}
+    {COL_NODE_UPDATED_AT},
+    {COL_NODE_CF_INDEX}
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-"""
-
-#: Writes ``cf_index`` on a just-inserted node. ``INSERT_NODE`` stays the
-#: version-1 column set so tests can stage old-version stores with it; the
-#: unique link index is enforced when this runs, in the insert's transaction.
-UPDATE_NODE_CF_INDEX: Final = f"""
-UPDATE {TABLE_NODES}
-SET {COL_NODE_CF_INDEX} = ?
-WHERE {COL_NODE_ID} = ?
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 UPDATE_NODE_STATUS: Final = f"""

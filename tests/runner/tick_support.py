@@ -36,10 +36,10 @@ PLAN_READ_INTERVAL = 30.0
 
 
 def runnable_unbusy(view: ProjectView) -> list[Node]:
-    """Nodes of the view's tree that are runnable and have no run in flight.
+    """Runnable nodes of any kind with no run in flight.
 
-    What 122's flat ``runnable_nodes`` list held, so the test planners launch each
-    node once.
+    For the 122-era fixtures, whose nodes are plain slices and not lifecycle steps
+    (``ProjectView.ready_unbusy`` offers only ready steps).
     """
     busy = {run.entry.node_id for run in view.in_flight}
     return [

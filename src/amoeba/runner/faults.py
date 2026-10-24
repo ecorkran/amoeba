@@ -28,6 +28,10 @@ from amoeba.store import (
     StoreSchemaError,
 )
 
+#: Who the Runner signs its own store writes as (closing an escalation, resolving a
+#: human step's block).
+RUNNER_ACTOR: Final = "runner"
+
 
 class FaultKind(StrEnum):
     """Why the Runner raised an escalation or blocked a node.

@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
-from amoeba.runner.lifecycle.cadence import PlanReadSchedule
+from amoeba.runner.lifecycle.cadence import PlanReadSchedule, ProjectLink
 from amoeba.runner.lifecycle.plan_read import (
     PlanRead,
     PlanReadCutOff,
@@ -36,8 +36,6 @@ from amoeba.store import NodeKind, Store
 
 logger = logging.getLogger(__name__)
 
-type LinkKey = tuple[str, str]
-
 
 class PlanStage:
     """Reads and reconciles the plans of a project's CF links, once per lifetime
@@ -49,7 +47,7 @@ class PlanStage:
         self._schedule = schedule
         self._run = run
         self._timeout_seconds = timeout_seconds
-        self._failures: dict[LinkKey, tuple[Fault, ...]] = {}
+        self._failures: dict[ProjectLink, tuple[Fault, ...]] = {}
 
     def run(
         self,

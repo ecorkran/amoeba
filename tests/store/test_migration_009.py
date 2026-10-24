@@ -14,8 +14,9 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from legacy_nodes import LEGACY_INSERT_NODE
 
-from amoeba.store import Store, sql, sql_inbox, sql_runner
+from amoeba.store import Store, sql_inbox, sql_runner
 from amoeba.store.inbox_models import Channel
 from amoeba.store.mapping_inbox import map_message
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, migrate
@@ -87,7 +88,7 @@ def _stage_version_eight_store(path: Path) -> None:
     with sqlite3.connect(path) as connection:
         migrate(connection, expected_version=PRIOR_SCHEMA_VERSION)
         connection.execute(
-            sql.INSERT_NODE,
+            LEGACY_INSERT_NODE,
             ("n-1", PROJECT, None, "slice", NodeStatus.RUNNABLE.value, "n-1")
             + (None,) * 7
             + (STAGED_AT, STAGED_AT),
@@ -237,7 +238,7 @@ _INSERT_DESIRED = (
 
 def _stage_node_and_intent(connection: sqlite3.Connection) -> None:
     connection.execute(
-        sql.INSERT_NODE,
+        LEGACY_INSERT_NODE,
         ("n-1", PROJECT, None, "slice", NodeStatus.RUNNABLE.value, "n-1")
         + (None,) * 7
         + (STAGED_AT, STAGED_AT),

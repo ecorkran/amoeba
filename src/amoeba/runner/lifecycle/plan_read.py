@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from amoeba.runner.budget import TickBudget
-from amoeba.runner.cf_call import OUTPUT_HEAD_CHARS, CfCallFailed, CfRun, run_cf
+from amoeba.runner.cf_call import CfCallFailed, CfRun, output_head, run_cf
 from amoeba.upstream.context_forge import (
     CFErrorDocument,
     CFInitiative,
@@ -127,11 +127,6 @@ def read_plan(
     return PlanRead(tuple(initiatives), slices)
 
 
-def _head(completed: subprocess.CompletedProcess[str]) -> str:
-    """The start of whichever stream carried output, for a failure detail."""
-    return (completed.stdout or completed.stderr)[:OUTPUT_HEAD_CHARS]
-
-
 def _read_initiatives(
     cf_project_id: str, run: CfRun, timeout_seconds: float
 ) -> list[CFInitiative] | PlanReadFailed:
@@ -142,13 +137,15 @@ def _read_initiatives(
         return PlanReadFailed(completed.detail)
     if completed.returncode != 0:
         return PlanReadFailed(
-            f"`{shown}` exited {completed.returncode}: {_head(completed)}"
+            f"`{shown}` exited {completed.returncode}: {output_head(completed)}"
         )
     try:
         return parse_initiatives(completed.stdout)
     except PlanParseError as error:
         # Specific: CF printed something the plan model rejects. Answered, not raised.
-        return PlanReadFailed(f"`{shown}` {_one_line(error)}: {_head(completed)!r}")
+        return PlanReadFailed(
+            f"`{shown}` {_one_line(error)}: {output_head(completed)!r}"
+        )
 
 
 def _read_slice_list(
@@ -173,11 +170,11 @@ def _read_slice_list(
         return NoSlicePlan()
     if completed.returncode != 0:
         return SliceReadFailed(
-            f"`{shown}` exited {completed.returncode}: {_head(completed)}"
+            f"`{shown}` exited {completed.returncode}: {output_head(completed)}"
         )
     if parsed is None:
         return SliceReadFailed(
-            f"`{shown}` printed no usable slice list: {_head(completed)!r}"
+            f"`{shown}` printed no usable slice list: {output_head(completed)!r}"
         )
     return parsed
 

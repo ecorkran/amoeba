@@ -152,27 +152,19 @@ def test_a_cut_off_first_read_stays_due() -> None:
     assert schedule.due(PROJECT, LINK, NO_SNAPSHOTS)
 
 
-def test_last_failed_is_set_by_a_failure_and_cleared_by_a_complete_read() -> None:
-    schedule, _ = _schedule()
-    assert not schedule.last_failed(PROJECT, LINK)
-
+def test_a_failed_link_is_due_on_every_call_until_a_read_completes() -> None:
+    schedule, clock = _schedule()
     schedule.due(PROJECT, LINK, NO_SNAPSHOTS)
-    schedule.record_failed(PROJECT, LINK)
-    assert schedule.last_failed(PROJECT, LINK)
-    assert schedule.due(PROJECT, LINK, NO_SNAPSHOTS), "a failed link is retried"
-
     _read_completes(schedule)
-    assert not schedule.last_failed(PROJECT, LINK)
+    clock.seconds = 1.0
+    changed = _observed(_snapshot(1, changed=CHANGE))
+    assert schedule.due(PROJECT, LINK, changed)
 
-
-def test_a_cut_off_does_not_clear_a_failure() -> None:
-    schedule, _ = _schedule()
-    schedule.due(PROJECT, LINK, NO_SNAPSHOTS)
     schedule.record_failed(PROJECT, LINK)
 
-    schedule.record_cut_off(PROJECT, LINK)
-
-    assert schedule.last_failed(PROJECT, LINK)
+    assert schedule.due(PROJECT, LINK, changed), "not waiting out the interval"
+    _read_completes(schedule)
+    assert not schedule.due(PROJECT, LINK, changed)
 
 
 def test_two_links_are_independent() -> None:
@@ -184,8 +176,6 @@ def test_two_links_are_independent() -> None:
     clock.seconds = 1.0
     assert not schedule.due(PROJECT, LINK, NO_SNAPSHOTS)
     assert schedule.due(PROJECT, OTHER_LINK, NO_SNAPSHOTS)
-    assert not schedule.last_failed(PROJECT, LINK)
-    assert schedule.last_failed(PROJECT, OTHER_LINK)
 
 
 def test_the_same_link_in_two_projects_is_independent() -> None:

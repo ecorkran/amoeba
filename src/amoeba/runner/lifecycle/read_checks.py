@@ -27,6 +27,7 @@ from amoeba.runner.lifecycle.plan_read import (
     PlanReadFailed,
     SliceReadFailed,
 )
+from amoeba.runner.lifecycle.steps import PlanObservation
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import Node, NodeKind
 from amoeba.upstream.context_forge import CFSliceList
@@ -149,3 +150,32 @@ def _slice_list_problems(
                     f"{sorted(initiatives)}",
                 )
     return problems
+
+
+type ObservationKey = tuple[NodeKind, int]
+
+
+def observations(
+    read: PlanRead, scope: ReadScope
+) -> dict[ObservationKey, PlanObservation]:
+    """What the read says about each initiative and in-scope slice.
+
+    The one place plan entries become :class:`PlanObservation` values; both the
+    create and the complete rules read them.
+    """
+    found: dict[ObservationKey, PlanObservation] = {}
+    for initiative in read.initiatives:
+        found[(NodeKind.INITIATIVE, initiative.index)] = PlanObservation(
+            is_checked=initiative.is_checked,
+            status=initiative.status,
+            arch_file=initiative.arch_file,
+            slice_list_read=initiative.index in scope.slice_initiatives,
+        )
+    for initiative_index in scope.slice_initiatives:
+        slices = read.slices[initiative_index]
+        if isinstance(slices, CFSliceList):
+            for entry in slices.entries:
+                found[(NodeKind.SLICE, entry.index)] = PlanObservation(
+                    entry.is_checked, entry.status
+                )
+    return found

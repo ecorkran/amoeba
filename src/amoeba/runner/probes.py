@@ -24,7 +24,7 @@ from amoeba.process import (
     StartupFailedError,
 )
 from amoeba.runner.budget import TickBudget, TickResult
-from amoeba.runner.cf_call import OUTPUT_HEAD_CHARS, CfCallFailed, CfRun, run_cf
+from amoeba.runner.cf_call import CfCallFailed, CfRun, output_head, run_cf
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.runner.launch import mint_run_id
 from amoeba.runner.lifecycle.plan_read import (
@@ -124,7 +124,7 @@ def probe_link(
         completed = run_cf(argv, run, timeout_seconds)
         if isinstance(completed, CfCallFailed):
             return ProbeFailed(completed.detail)
-        head = completed.stdout[:OUTPUT_HEAD_CHARS]
+        head = output_head(completed)
         if completed.returncode != 0:
             return ProbeFailed(f"`{shown}` exited {completed.returncode}: {head}")
         if (problem := problem_with(completed.stdout)) is not None:
