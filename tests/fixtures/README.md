@@ -65,6 +65,24 @@ Note what this fixture does **not** contain: any version field. That absence is
 why the CF observer captures an opaque `cf --version` label separately, once per
 recovery pass, rather than reading a version out of this output.
 
+### `cf/list_*.json` — plan reads (slice 123)
+
+Captured **20261023** from `cf` 0.19.17 (a dated observation, not a pin) against
+this repository's CF project, unedited. Each is the output of one command with
+`-p <this repository's CF project id>`:
+
+| File | Command | Stream |
+| --- | --- | --- |
+| `list_initiatives_a.json` | `cf list initiatives --json -a` | stdout, exit 0 |
+| `list_slices_120.json` | `cf list slices 120 --json` | stdout, exit 0 |
+| `list_slices_100.json` | `cf list slices 100 --json` | stdout, exit 0 |
+| `list_slices_error.json` | `cf list slices 140 --json` | **stderr**, exit 1; stdout is empty |
+
+The error document for an initiative with no slice plan is written to **stderr**,
+not stdout. The slice 123 design says only "exits 1 with `{"error": true, …}`".
+`list_slices_error.json` holds that stderr text. Initiative 120 reports
+`status: complete` with `isChecked: false` in `list_initiatives_a.json`.
+
 ## `sq_reviews/` — Squadron review output
 
 ### Review files
