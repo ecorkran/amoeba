@@ -16,11 +16,12 @@ from typing import Final, Protocol
 
 from amoeba.process import ProcessSettings, RunPoll, UpstreamShapeError
 from amoeba.runner.budget import TickBudget, TickResult
+from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Planner
 from amoeba.runner.faults import STORE_FAILURES, FaultKind, NodeContext, escalate
 from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.observe import RunObserver
-from amoeba.runner.probes import CfRun, LinkProbes
+from amoeba.runner.probes import LinkProbes
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import Store
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,6 +24,7 @@ from amoeba.process import (
     StartupFailedError,
 )
 from amoeba.runner.budget import TickBudget, TickResult
+from amoeba.runner.cf_call import OUTPUT_HEAD_CHARS, CfCallFailed, CfRun, run_cf
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.runner.launch import mint_run_id
 
@@ -37,12 +37,6 @@ CF_JSON_FLAG: Final = "--json"
 #: The two commands probed, without the executable or the ``-p <id>`` suffix.
 CF_STATUS_COMMAND: Final = ("status", CF_JSON_FLAG)
 CF_INITIATIVES_COMMAND: Final = ("list", "initiatives", CF_JSON_FLAG)
-
-#: How much of a command's output a failure message quotes.
-OUTPUT_HEAD_CHARS: Final = 200  # keeps a failing probe's detail one line long
-
-#: Runs ``cf``: ``subprocess.run`` in production, a fake in unit tests.
-type CfRun = Callable[..., subprocess.CompletedProcess[str]]
 
 
 def probe_sq(
@@ -114,20 +108,9 @@ def probe_link(
             return ProbeCutOff()
         argv = [CF_EXECUTABLE, *command, CF_PROJECT_FLAG, cf_project_id]
         shown = " ".join(argv)
-        try:
-            completed = run(
-                argv,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return ProbeFailed(f"`{shown}` timed out after {timeout_seconds}s")
-        except OSError as error:
-            # An expected external failure: cf missing or not runnable.
-            return ProbeFailed(f"`{shown}` could not run: {error}")
+        completed = run_cf(argv, run, timeout_seconds)
+        if isinstance(completed, CfCallFailed):
+            return ProbeFailed(completed.detail)
         head = completed.stdout[:OUTPUT_HEAD_CHARS]
         if completed.returncode != 0:
             return ProbeFailed(f"`{shown}` exited {completed.returncode}: {head}")
