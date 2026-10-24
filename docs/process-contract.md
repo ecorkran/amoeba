@@ -335,7 +335,8 @@ project, it runs: **observe** the unresolved `sq_run` entries, **record** each
 finished run, **decide** (pure: a `Planner` sees a frozen `ProjectView` and
 returns actions), **act** (journal a command, then launch it), and **close** any
 project escalation whose fault did not recur. The production planner tuple is
-empty, so nothing launches until slice 125; tests supply their own planner.
+`HumanStepPlanner` then `DispatchPlanner` (slice 125); tests supply their own
+planner.
 
 - **The only control command is `sq_run`.** The entry is journaled with
   `pipeline`, `params`, a minted `run_id` and the `checkout` directory before
@@ -351,10 +352,11 @@ empty, so nothing launches until slice 125; tests supply their own planner.
   polled. A child that exits 2 with no state exits the process with
   `UPSTREAM_SHAPE` (15).
 - **Resolution.** An entry resolves `completed` when the command ran and
-  reported an outcome, including a `failed` or `paused` run (the node blocks on a
-  human, and the run's outcome is in the entry's `result`). It resolves `failed`
-  when the command could not finish: an `orphaned` or vanished run, or a launch
-  that failed.
+  reported an outcome, including a `failed` or `paused` run (see
+  [Dispatch and ingestion](#dispatch-and-ingestion) for the block each outcome
+  writes). It resolves `failed` when the command could not finish: an `orphaned`
+  or vanished run, or a launch that failed. An `issuer` resolution of an `sq_run`
+  entry marks it as awaiting routing.
 - **Observation** is by run id with `poll_run`, at most once per tick per run and
   no more often than `--run-poll-interval`, least recently polled first.
 - **Faults.** One `except Exception` per project, in `tenant.py`. A store failure
@@ -375,7 +377,8 @@ empty, so nothing launches until slice 125; tests supply their own planner.
 - **Crash safety.** Recovery leaves an existing run in flight; the Runner's first
   tick polls it and records it. A kill before `Popen` leaves an entry with no run,
   which recovery marks `not_applied` once the launch grace period has passed. The
-  Runner does not relaunch it; the reissue is slice 125's (issue #9).
+  step is then reissued (slice 125, issue #9): see
+  [Dispatch and ingestion](#dispatch-and-ingestion).
 
 ### The plan read
 
@@ -445,6 +448,84 @@ rejection codes are in the [inbox contract](inbox-contract.md#intent-bodies)).
   reconcile do not read desired state: a held target's runs are still polled and
   recorded, and a block written before the hold stays.
 - **Inspection.** `amoeba inspect desired-states --project P` lists the stored rows.
+
+### Dispatch and ingestion
+
+*Slice 125.* `DispatchPlanner` points a checkout at a slice, then launches the
+pipeline for the step. Both halves are plain `Action`s the tick performs; nothing
+is stored beyond the journal.
+
+- **Two ticks per step.** A current pipeline step (`slice_design` runs `P4`,
+  `tasks` `P5`, `implementation` `P6`) is `NEEDS_POINTER` until its pointer is
+  written. On the first tick Act journals a `cf_write` (the CF project, the
+  `checkout`, `expected` `{}`, `expected_slice_index`, the expected worktree),
+  runs `cf set -p <id> slice <index>` in the checkout, and reads it back. On a
+  later tick the step is `POINTED` and launches `sq run <pipeline> --run-id <id>
+  -p slice=<index>` in that checkout; `P6` also gets `-p merge=false`, always, in
+  this slice. There is **no `started` status**: a step stays `runnable` while its
+  run is in flight, and "in flight" is an unresolved entry.
+- **Where it runs.** The checkout comes from the link's latest *observed*
+  snapshot: the worktree whose `indexRange` contains the slice index, or the
+  project's `projectPath` when it has none. No snapshot, no range, several ranges,
+  a missing path or a path that is not a directory blocks the step on a human with
+  `{fault_kind: checkout_unresolved, index, reason}`; no checkout is guessed. The
+  read-back must answer for that same path and worktree, so a stale snapshot cannot
+  send a run to the wrong tree.
+- **The pointer's read-back** runs in the checkout (`cf get --json`, same
+  working directory). Observe finishes every open pointer write, and reads once
+  more each current step whose journal says `POINTED`: it counts as pointed only
+  while CF still points at its slice. A confirmed write resolves `completed`
+  and sets the slice node's `slice_name` from CF's own stem. Another index, path or
+  worktree, or a failed `cf set`, blocks the step with `pointer_write_failed` and
+  resolves the entry `failed`. A record that cannot be judged escalates the entry
+  at once. A read that fails stays open, and escalates once `--launch-grace` has
+  passed since the write was issued. A `cf set` that times out is a cut-off: the
+  write may have landed, so the next tick reads back.
+- **One pipeline per checkout.** A checkout is held by an unresolved `sq_run`, by a
+  node that is not done whose latest run's recorded outcome is `paused` (the
+  recorded outcome, not the block kind), and from the pointer write by a current
+  step that is `POINTED` or has a pointer write in flight. The planner emits at most
+  one action per checkout per tick, launches before pointer writes, then by
+  `(initiative index, slice index, step rank)`. A pointer claim lapses when its step
+  stops being current.
+- **Ingestion** replaces the minimal body of `finish.record`. For a run that ended it
+  blocks the node (skipped if already blocked), then records the run's reviews and
+  resolves the entry in one transaction (`record_runner_report`):
+
+  | Outcome | Block | Entry |
+  | --- | --- | --- |
+  | `completed` | none | `completed` |
+  | `paused` | `SQ_CHECKPOINT` (no payload; the checkpoint is in the entry's result) | `completed` |
+  | `failed` | `HUMAN` `{reason: failed, run_id, failure}` | `completed` |
+  | `orphaned`, vanished | `HUMAN` `{reason: orphaned or vanished, run_id}` | `failed` |
+
+  The entry's `result` is `{run_id, outcome, status, outcome_document, verdict_ids,
+  review_fault}`. The run's *last* `reviews` entry is recorded: its `paths` in order
+  if split, else its `path`; each file is read once, parsed, and attributed to the
+  step's parent slice node, keyed in the detection ledger by `detection_key` so
+  detection skips it. A review that cannot be read, parsed or attributed makes the
+  whole run's review unknown: nothing is recorded, the step blocks on a human with
+  `review_unknown` (on a paused run a `HUMAN` block, not `SQ_CHECKPOINT`, because a
+  checkpoint block posts no message), and the entry still resolves. Squadron text
+  that reaches a block is cut to the 4 KiB tail bound.
+- **Awaiting routing.** The resolution marks the entry (`awaits_routing`); routing
+  (slice 126) reads `unrouted_outcomes` and its decision clears the mark. A step
+  with an unrouted outcome gets no further action.
+- **Reissue (issue #9).** A step whose latest entry is an `sq_run` recovery
+  resolved `not_applied` launches again under the same run id: the old launch log
+  is checked first (an exact `run_id=<id>` line means the run began, so the step
+  blocks `started_before_crash`; an unreadable log blocks too), a new entry is
+  journaled with `reissue_of`, the id is polled once (a state that appeared is
+  adopted, nothing launched), and otherwise it is launched. The pointer is not
+  written again.
+- **Pointer moved.** While a run is in flight, a snapshot observed after its pointer
+  write resolved that reads another slice at the run's worktree raises one
+  project-scoped `pointer_moved` escalation (every moved run in its payload),
+  which stays open while the condition holds and closes on the first complete tick
+  without it. The run is observed and ingested as usual.
+- **Fault kinds** added: `review_unknown`, `pointer_write_failed` and
+  `checkout_unresolved` (node-scoped: the `fault_kind` of a block's payload) and
+  `pointer_moved` (project-scoped).
 
 ## Lifecycle failure modes
 
@@ -605,8 +686,15 @@ with `sq runs prune`.
 **Context Forge read-back** (`cf_write`) compares `cf get --json` output against
 the entry's `expected` mapping. All present and equal adopts; any present and
 differing is `not_applied`; any **absent** field is `Unknown`, because a field
-CF does not carry cannot be compared. Adoption records the project record's own
-`updatedAt` and an opaque `cf --version` label captured once per recovery pass.
+CF does not carry cannot be compared. Since slice 125 an entry carries the
+`checkout` it wrote in, and `cf get` runs there (an entry from before has none and
+runs with no working directory); an `expected_slice_index` is checked against the
+index parsed from `fileSlice`, and a `fileSlice` that is absent or does not parse
+is `Unknown`. An entry that expects nothing at all is `Unknown`: comparing nothing
+would adopt vacuously. Adoption records the project record's own `updatedAt`, the
+`file_slice`, `worktree_id` and `project_path` it read, and an opaque `cf --version`
+label captured once per recovery pass. The Runner's tick reads back through the same
+function, so the two cannot disagree about what "written" means.
 If that capture fails, the label is recorded as unavailable and the adoption
 still succeeds — provenance capture never turns a clean adoption into an
 escalation.

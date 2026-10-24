@@ -230,6 +230,40 @@ what the Runner relies on.
   worktree-scoped project, and `--worktree` accepts the worktree id. Slice 125's
   pointer read-back is `cf get --json` run in the checkout.
 
+## Where a write lands, and the pointer-move rule (slice 125)
+
+*Observed on CF 0.19.17 on 2026-10-24; a dated observation, not a version
+dependency. The capture is `tests/fixtures/cf/cf_get_worktree.json`.*
+
+- **CF chooses a worktree by working directory alone.** A project with worktrees
+  has no flag that names one for `cf set` or `cf get`; the command acts on the
+  worktree whose directory contains the process's working directory. So the Runner
+  runs every pointer command with `cwd` set to the step's checkout, which it resolves
+  from the link's latest *observed* snapshot: the worktree whose `indexRange` contains
+  the slice index (exactly one), or the project's `projectPath` when it has none.
+- **`cf set -p <id> slice <index>`** points that worktree (or the project) at the
+  slice. The Runner writes only the slice; Squadron's phase step sets the phase when
+  a run starts.
+- **`cf get --json -p <id>`** run in a worktree reports that worktree's active
+  slice as `fileSlice` and adds a `worktree` object with its `id` (observed in this
+  repository's default worktree, where `projectPath` is also the worktree's path).
+  The Runner's read-back requires the index parsed from `fileSlice` to be the
+  one it wrote, `projectPath` to be the checkout it ran in, and `worktree.id` to be
+  the resolved worktree's (absent when the project has none). A mismatch is a
+  failed pointer write, so a stale snapshot cannot send a run to the wrong tree.
+- **Slice names come from CF.** The read-back's `fileSlice` is `NNN-slice.{name}`;
+  the Runner sets the slice node's `slice_name` from that stem and never builds a
+  slug itself.
+- **The pointer-move rule (D11).** For each run in flight, a snapshot observed after
+  the run's pointer write resolved that reads another slice index at the run's
+  worktree (`activeSlice`, or the project's `fileSlice` when it has no worktrees) means
+  someone else moved the pointer. It raises one project-scoped `pointer_moved`
+  escalation listing every moved run, which stays open while the condition holds and
+  closes on the first complete tick without it. The Runner never matches its own
+  writes by `cf_updated_at`: it writes a pointer only into a free checkout, so its
+  own writes never move a pointer away from a run, and Squadron's `cf set slice`
+  during the run writes the same index.
+
 ## The Runner's own writes (D8)
 
 A CF write the Runner issues (102's `cf_write` journal kind) also changes the

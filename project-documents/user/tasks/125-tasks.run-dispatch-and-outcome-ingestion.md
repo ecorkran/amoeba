@@ -486,12 +486,12 @@ Per the LLD, D11 bullets on escalation. Wire into observe; add `FaultKind.POINTE
 
 Per the LLD, "Provides to Other Slices" (Contract documents) and Implementation Notes step 7.
 
-- [ ] `docs/process-contract.md` (the only task that edits it): the read-back's working directory and index check, and `Unknown` for an empty comparison (Task 2.3); the dispatch and ingest stages, the two-tick dispatch, the checkout hold, no `started` status
-- [ ] `docs/context-forge-contract.md`: a write lands where its working directory says; the pointer-move rule (D11)
-- [ ] `docs/substrate-guide.md`: the 120 row; issues #9 and #10 closed
-- [ ] `CHANGELOG.md`: an entry under the unreleased section (patch-level per the Release Versioning rule)
+- [x] `docs/process-contract.md` (the only task that edits it): the read-back's working directory and index check, and `Unknown` for an empty comparison (Task 2.3); the dispatch and ingest stages, the two-tick dispatch, the checkout hold, no `started` status
+- [x] `docs/context-forge-contract.md`: a write lands where its working directory says; the pointer-move rule (D11)
+- [x] `docs/substrate-guide.md`: the 120 row; issues #9 and #10 closed
+- [x] `CHANGELOG.md`: an entry under the unreleased section (patch-level per the Release Versioning rule)
 - **Success Criteria**:
-  - [ ] Every statement matches the code. Commit: `docs: add dispatch and ingestion contract text and changelog`
+  - [x] Every statement matches the code. Commit: `docs: add dispatch and ingestion contract text and changelog`
 
 ### Task 10.3: Full validation and the live walkthrough
 **Owner**: Junior AI | **Dependencies**: 10.2 | **Effort**: 3
