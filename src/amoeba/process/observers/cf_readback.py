@@ -9,6 +9,18 @@ project record either holds the expected values or it does not. So this observer
 is the one that returns :class:`NotApplied`, when every expected field is
 readable and at least one differs.
 
+**Where it reads.** ``cf get`` answers for the checkout it runs in, so an entry
+carrying ``checkout`` is read with that directory as the working directory. An
+entry from before slice 125 has no ``checkout`` and is read without one. A pointer
+write names the slice it sets with ``expected_slice_index``; the check is by index,
+parsed from ``fileSlice`` by the shared stem rule, because Amoeba never builds
+CF's slug. An entry that expects nothing at all is ``Unknown``: comparing nothing
+would adopt vacuously.
+
+**One read-back.** :func:`read_back_cf_write` is the whole comparison. The
+recovery observer calls it with ``subprocess.run``; the Runner's tick calls the
+same function, so the two can never disagree about what "written" means.
+
 **Provenance.** ``cf get --json`` exposes no version field (verified 20260921:
 its keys are project metadata only). The observer therefore records two things
 on adoption: the project record's own ``updatedAt``, which is what actually
@@ -22,66 +34,39 @@ escalation.
 
 from __future__ import annotations
 
-import json
-import logging
 import subprocess
-from collections.abc import Mapping, Sequence
-from typing import Final
-
-from pydantic import BaseModel, ConfigDict, ValidationError
+from collections.abc import Callable, Mapping, Sequence
 
 from amoeba.process import version_label
+from amoeba.process.observers.cf_get import (
+    CF_EXECUTABLE,
+    CF_FIELD_FILE_SLICE,
+    CF_FIELD_PROJECT_PATH,
+    CF_FIELD_UPDATED_AT,
+    CFProjectRecord,
+    CFRun,
+    read_project,
+)
 from amoeba.process.recovery import Adopt, NotApplied, Observation, Unknown
 from amoeba.process.version_label import VERSION_UNAVAILABLE
-from amoeba.store.journal_models import JournalEntry
+from amoeba.store.journal_models import (
+    PARAM_CHECKOUT,
+    PARAM_EXPECTED_SLICE_INDEX,
+    JournalEntry,
+)
+from amoeba.upstream.context_forge import parse_slice_stem
 
-logger = logging.getLogger(__name__)
-
-#: Journal parameter keys this observer reads. Both are required at issue time.
+#: Journal parameter keys this observer reads. ``project`` and ``expected`` are
+#: required at issue time, as is ``checkout`` for entries written since slice 125.
 PARAM_PROJECT = "project"
 PARAM_EXPECTED = "expected"
 
 #: Result keys recorded on adoption.
 RESULT_UPDATED_AT = "cf_updated_at"
 RESULT_VERSION_LABEL = "cf_version_label"
-
-#: The CF field carrying the record's own last-modified timestamp.
-CF_FIELD_UPDATED_AT = "updatedAt"
-
-#: The executable, and the argument vectors used. Defined once so no call site
-#: assembles a command line of its own.
-CF_EXECUTABLE: Final = "cf"
-
-
-def _cf_get_args(project: str) -> tuple[str, ...]:
-    """The argument vector reading one project's record as JSON."""
-    return (CF_EXECUTABLE, "get", "--json", "-p", project)
-
-
-class CFProjectRecord(BaseModel):
-    """A ``cf get --json`` project record.
-
-    Every field is optional and unknown fields are ignored: the observer reads
-    whichever fields the entry's ``expected`` mapping names, and CF's record
-    shape is not this project's to fix. ``updatedAt`` is read separately as
-    provenance.
-    """
-
-    model_config = ConfigDict(extra="allow", frozen=True)
-
-    def field_value(self, name: str) -> object | None:
-        """Return a field's value, or ``None`` when the record has no such key."""
-        extra = self.model_extra or {}
-        return extra.get(name)
-
-    def has_field(self, name: str) -> bool:
-        """Whether the record carries this key at all.
-
-        Distinguished from a field whose value is ``None``: an absent field
-        means the observation is incomplete and must escalate, while a present
-        null is a value that can be compared.
-        """
-        return name in (self.model_extra or {})
+RESULT_FILE_SLICE = "file_slice"
+RESULT_WORKTREE_ID = "worktree_id"
+RESULT_PROJECT_PATH = "project_path"
 
 
 def capture_version_label(timeout_seconds: float) -> str:
@@ -91,6 +76,95 @@ def capture_version_label(timeout_seconds: float) -> str:
     :data:`VERSION_UNAVAILABLE`.
     """
     return version_label.capture_version_label(CF_EXECUTABLE, timeout_seconds)
+
+
+def read_back_cf_write(
+    entry: JournalEntry,
+    run: CFRun,
+    timeout_seconds: float,
+    label: Callable[[], str] | None = None,
+) -> Observation:
+    """Report whether CF holds the values this ``cf_write`` entry intended.
+
+    ``label``, when given, supplies the provenance label recorded on adoption
+    and is called only then; the tick passes none.
+    """
+    parameters = entry.parameters
+    project = parameters.get(PARAM_PROJECT)
+    expected = parameters.get(PARAM_EXPECTED)
+    checkout = parameters.get(PARAM_CHECKOUT)
+    raw_index = parameters.get(PARAM_EXPECTED_SLICE_INDEX)
+    slice_index = _as_index(raw_index)
+
+    if not isinstance(project, str) or not isinstance(expected, Mapping):
+        return Unknown(
+            reason="journal entry does not carry a project and expected mapping"
+        )
+    if checkout is not None and not isinstance(checkout, str):
+        return Unknown(reason="journal entry's checkout is not a path")
+    if raw_index is not None and slice_index is None:
+        return Unknown(reason="journal entry's expected slice index is not an integer")
+    if not expected and slice_index is None:
+        return Unknown(reason="journal entry expects nothing, so nothing can be read")
+
+    record = read_project(project, checkout, run, timeout_seconds)
+    if isinstance(record, Unknown):
+        return record
+
+    narrowed_expected: dict[str, object] = dict(expected)  # pyright: ignore[reportUnknownArgumentType]
+    mismatch = _mismatch(record, narrowed_expected, slice_index)
+    if mismatch is not None:
+        return mismatch
+
+    result: dict[str, object] = {
+        RESULT_UPDATED_AT: record.field_value(CF_FIELD_UPDATED_AT),
+        RESULT_FILE_SLICE: record.field_value(CF_FIELD_FILE_SLICE),
+        RESULT_WORKTREE_ID: record.worktree_id(),
+        RESULT_PROJECT_PATH: record.field_value(CF_FIELD_PROJECT_PATH),
+    }
+    if label is not None:
+        result[RESULT_VERSION_LABEL] = label()
+    return Adopt(result=result)
+
+
+def _as_index(value: object) -> int | None:
+    """The value if it is an integer; ``bool`` is not one, though Python says so."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _mismatch(
+    record: CFProjectRecord, expected: Mapping[str, object], slice_index: int | None
+) -> Unknown | NotApplied | None:
+    """Why the record does not hold what was written, or ``None`` if it does.
+
+    Any *absent* field -> unknown, because a field the record does not carry is
+    an incomplete observation rather than a mismatch. Then any present and
+    differing -> not applied. ``slice_index`` is compared with the index parsed
+    from ``fileSlice``; a ``fileSlice`` that does not parse is unknown.
+    """
+    missing = {name for name in expected if not record.has_field(name)}
+    file_slice = record.field_value(CF_FIELD_FILE_SLICE)
+    stem = parse_slice_stem(file_slice if isinstance(file_slice, str) else None)
+    if slice_index is not None and stem is None:
+        missing.add(CF_FIELD_FILE_SLICE)
+    if missing:
+        return Unknown(
+            reason=(
+                "cf get output does not carry the expected field(s): "
+                f"{', '.join(sorted(missing))}"
+            )
+        )
+
+    differing = {
+        name for name, value in expected.items() if record.field_value(name) != value
+    }
+    if slice_index is not None and stem is not None and stem.index != slice_index:
+        differing.add(CF_FIELD_FILE_SLICE)
+    if differing:
+        return NotApplied(
+            reason=f"cf holds a different value for: {', '.join(sorted(differing))}"
+        )
+    return None
 
 
 class CFReadbackObserver:
@@ -122,123 +196,30 @@ class CFReadbackObserver:
 
     def observe(self, entry: JournalEntry) -> Observation:
         """Report whether CF holds the values this entry's write intended."""
-        project = entry.parameters.get(PARAM_PROJECT)
-        expected = entry.parameters.get(PARAM_EXPECTED)
-
-        if not isinstance(project, str) or not isinstance(expected, Mapping):
-            return Unknown(
-                reason="journal entry does not carry a project and expected mapping"
-            )
-
-        record = self._read_project(project)
-        if isinstance(record, Unknown):
-            return record
-
-        narrowed_expected: dict[str, object] = dict(expected)  # pyright: ignore[reportUnknownArgumentType]
-        return self._compare(record, narrowed_expected)
-
-    def _read_project(self, project: str) -> CFProjectRecord | Unknown:
-        """Run ``cf get --json``, returning the record or why it is unobservable.
-
-        Each external failure mode gets a distinguishable reason, so the human
-        reading the blocked state knows whether ``cf`` is missing, hung,
-        failing, or emitting something unparseable.
-        """
-        try:
-            completed = subprocess.run(
-                _cf_get_args(project),
-                capture_output=True,
-                text=True,
-                timeout=self._timeout_seconds,
-                stdin=subprocess.DEVNULL,
-                check=False,
-            )
-        except FileNotFoundError:
-            # Specific: cf is not on PATH. An answer, not a bug.
-            logger.warning("cf is not on PATH")
-            return Unknown(reason="cf is not available on PATH")
-        except subprocess.TimeoutExpired:
-            # Specific: cf hung. Never retried here; recovery escalates.
-            logger.warning("cf get timed out after %ss", self._timeout_seconds)
-            return Unknown(reason=f"cf get timed out after {self._timeout_seconds}s")
-        except OSError:
-            # Specific: the process could not be launched at all.
-            logger.warning("cannot invoke cf", exc_info=True)
-            return Unknown(reason="cf could not be invoked")
-
-        if completed.returncode != 0:
-            logger.warning("cf get exited %d", completed.returncode)
-            return Unknown(
-                reason=(
-                    f"cf get exited {completed.returncode}: "
-                    f"{completed.stderr.strip() or 'no stderr'}"
-                )
-            )
-
-        return self._parse(completed.stdout)
-
-    def _parse(self, output: str) -> CFProjectRecord | Unknown:
-        """Parse ``cf get --json`` output, or say why it could not be read."""
-        try:
-            payload = json.loads(output)
-        except json.JSONDecodeError:
-            # Specific: cf emitted something that is not JSON.
-            logger.warning("cf get emitted unparseable output")
-            return Unknown(reason="cf get emitted unparseable output")
-
-        try:
-            return CFProjectRecord.model_validate(payload)
-        except ValidationError:
-            # Specific: the output is JSON but not a project record object.
-            logger.warning("cf get output is not a project record")
-            return Unknown(reason="cf get output is not a project record")
-
-    def _compare(
-        self, record: CFProjectRecord, expected: Mapping[str, object]
-    ) -> Observation:
-        """Compare the record against the expected values.
-
-        All present and equal -> adopt. Any present and differing ->
-        not applied. Any *absent* -> unknown, because a field the record does
-        not carry is an incomplete observation rather than a mismatch.
-        """
-        missing = [name for name in expected if not record.has_field(name)]
-        if missing:
-            return Unknown(
-                reason=(
-                    "cf get output does not carry the expected field(s): "
-                    f"{', '.join(sorted(missing))}"
-                )
-            )
-
-        differing = [
-            name
-            for name, value in expected.items()
-            if record.field_value(name) != value
-        ]
-        if differing:
-            return NotApplied(
-                reason=(
-                    f"cf holds a different value for: {', '.join(sorted(differing))}"
-                )
-            )
-
-        return Adopt(
-            result={
-                RESULT_UPDATED_AT: record.field_value(CF_FIELD_UPDATED_AT),
-                RESULT_VERSION_LABEL: self.version_label,
-            }
+        # ``subprocess.run`` is looked up here, at call time, never bound earlier.
+        return read_back_cf_write(
+            entry,
+            subprocess.run,
+            self._timeout_seconds,
+            lambda: self.version_label,
         )
 
 
 __all__: Sequence[str] = [
+    "CF_FIELD_FILE_SLICE",
+    "CF_FIELD_PROJECT_PATH",
     "CF_FIELD_UPDATED_AT",
     "PARAM_EXPECTED",
     "PARAM_PROJECT",
+    "RESULT_FILE_SLICE",
+    "RESULT_PROJECT_PATH",
     "RESULT_UPDATED_AT",
     "RESULT_VERSION_LABEL",
+    "RESULT_WORKTREE_ID",
     "VERSION_UNAVAILABLE",
     "CFProjectRecord",
     "CFReadbackObserver",
+    "CFRun",
     "capture_version_label",
+    "read_back_cf_write",
 ]

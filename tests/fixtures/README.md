@@ -52,6 +52,12 @@ Captured **20260921** from `cf get --json` run against this repository.
 | --- | --- |
 | `cf_get_amoeba.json` | A real project record, carrying `updatedAt` — the field the CF observer records as provenance |
 | `projects.json` | A real CF data file reduced to three entries, for the `projects.json` parser (slice 108) |
+| `cf_get_worktree.json` | A real worktree-form record: `fileSlice`, `projectPath` and a `worktree` object with `id`, for the checkout-aware read-back (slice 125) |
+
+`cf_get_worktree.json` was captured 2026-10-24 (CF 0.19.17, a dated observation, not a pin) with
+`cf get --json -p <id>` run from the repository root, where `<id>` is the top-level `id` of
+`cf_get_amoeba.json`. It is byte-for-byte as captured; its `fileSlice` is whatever slice was active
+that day, so tests parse the index from it and never retype it.
 
 `projects.json` was captured 2026-10-16 from `~/.config/context-forge/projects.json`
 (observed on CF 0.19.13, a dated observation, not a pin). Reduction: the 29 entries

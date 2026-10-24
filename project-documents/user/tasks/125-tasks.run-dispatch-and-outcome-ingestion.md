@@ -117,16 +117,16 @@ Per the LLD, D10 "`cf_write`". Edit `store/journal_models.py` and its tests (`te
 
 Per the LLD, D10 bullets on the observer, D2 "Read-back". Edit `process/observers/cf_readback.py` and `tests/test_observer_cf_readback.py`.
 
-- [ ] Capture one real fixture (Task 1.1 confirmed the registered worktree): from the repo root, run `cf get --json -p <id>` (read-only), where `<id>` is the top-level `id` field of `tests/fixtures/cf/cf_get_amoeba.json`. Save the bytes as `tests/fixtures/cf/cf_get_worktree.json`. Confirm it carries `fileSlice`, `projectPath` and a `worktree` object with `id`. Add a README entry with the date
-- [ ] `CFProjectRecord` reads `worktree.id` and `projectPath` in addition to the fields it reads today
-- [ ] When the entry has `checkout`, run `cf get` with `cwd=checkout`. Without it (entries before this slice), run with no working directory
-- [ ] When `expected_slice_index` is present: `fileSlice` parsed by `parse_slice_stem` to that index is a match; another index is `NotApplied`; an absent field or a `fileSlice` that does not parse is `Unknown`
-- [ ] An empty `expected` with no `expected_slice_index` is `Unknown` (no vacuous adoption)
-- [ ] Adoption records `file_slice`, `worktree_id` and `project_path` in its result. Define the result keys once (they are reused by Tasks 6.2–6.3)
-- [ ] Expose the comparison as one function the in-tick read-back can call (LLD, D10 "There is one read-back"). Name it in this task, for example `read_back_cf_write(entry, run, timeout)`; Task 6.2 calls it, never a copy
-- [ ] Tests: the worktree fixture with a matching index adopts with the three fields; another index is `NotApplied`; a fixture with `fileSlice` removed is `Unknown`; empty `expected` and no index is `Unknown`; the subprocess is called with `cwd` equal to `checkout` (injected runner) and with no `cwd` for an old entry; existing tests pass. Run `tests/test_recovery.py`
+- [x] Capture one real fixture (Task 1.1 confirmed the registered worktree): from the repo root, run `cf get --json -p <id>` (read-only), where `<id>` is the top-level `id` field of `tests/fixtures/cf/cf_get_amoeba.json`. Save the bytes as `tests/fixtures/cf/cf_get_worktree.json`. Confirm it carries `fileSlice`, `projectPath` and a `worktree` object with `id`. Add a README entry with the date
+- [x] `CFProjectRecord` reads `worktree.id` and `projectPath` in addition to the fields it reads today
+- [x] When the entry has `checkout`, run `cf get` with `cwd=checkout`. Without it (entries before this slice), run with no working directory
+- [x] When `expected_slice_index` is present: `fileSlice` parsed by `parse_slice_stem` to that index is a match; another index is `NotApplied`; an absent field or a `fileSlice` that does not parse is `Unknown`
+- [x] An empty `expected` with no `expected_slice_index` is `Unknown` (no vacuous adoption)
+- [x] Adoption records `file_slice`, `worktree_id` and `project_path` in its result. Define the result keys once (they are reused by Tasks 6.2–6.3)
+- [x] Expose the comparison as one function the in-tick read-back can call (LLD, D10 "There is one read-back"). Name it in this task, for example `read_back_cf_write(entry, run, timeout)`; Task 6.2 calls it, never a copy
+- [x] Tests: the worktree fixture with a matching index adopts with the three fields; another index is `NotApplied`; a fixture with `fileSlice` removed is `Unknown`; empty `expected` and no index is `Unknown`; the subprocess is called with `cwd` equal to `checkout` (injected runner) and with no `cwd` for an old entry; existing tests pass. Run `tests/test_recovery.py`
 - **Success Criteria**:
-  - [ ] Observer and recovery tests, `ruff` and `pyright` pass. Commit: `feat: read back CF writes in their checkout and check the slice index`
+  - [x] Observer and recovery tests, `ruff` and `pyright` pass. Commit: `feat: read back CF writes in their checkout and check the slice index`
 
 ### Task 2.4: Migration `011` and `JournalEntry.awaits_routing`, with tests
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
