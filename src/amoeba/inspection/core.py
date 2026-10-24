@@ -25,7 +25,7 @@ def node_rows(store: Store, request: ListingRequest) -> list[Row]:
             "kind": node.kind.value,
             "status": node.status.value,
             "title": node.title,
-            "parent_id": node.parent_id or "",
+            "parent_id": node.parent_id,
             "cf_index": node.cf.index,
         }
         for node in store.nodes_for_project(request.require_project_id())

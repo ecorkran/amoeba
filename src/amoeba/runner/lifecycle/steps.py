@@ -60,11 +60,12 @@ class StepSpec:
     pipeline: str | None = None
 
     def __post_init__(self) -> None:
-        if (self.executor is Executor.PIPELINE) != (self.pipeline is not None):
+        if self.executor is Executor.PIPELINE and self.pipeline is None:
+            raise ValueError("a pipeline step needs a pipeline (got None)")
+        if self.executor is not Executor.PIPELINE and self.pipeline is not None:
             raise ValueError(
-                f"a {self.executor.value} step "
-                f"{'needs' if self.executor is Executor.PIPELINE else 'cannot have'}"
-                f" a pipeline (got {self.pipeline!r})"
+                f"a {self.executor.value} step cannot have a pipeline "
+                f"(got {self.pipeline!r})"
             )
 
 
