@@ -20,7 +20,7 @@ projectState: Slices 120–124 are merged. `amoeba.runner` has the tick (`runner
   do not exist.
 dateCreated: 20261024
 dateUpdated: 20261024
-status: not_started
+status: in_progress
 turns: 48
 promptTokens: 4568605
 cachedTokens: 4415865
@@ -71,17 +71,17 @@ revision_number: 2
 ### Task 1.1: Create the branch and record the starting state
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Run `git status --short`. The tree must be clean before the branch is created. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or its tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
-- [ ] Check the two external preconditions now, so the slice fails before any contract work. Both are read-only:
-  - `cf worktree list --json` has an entry whose `worktreePath` is the repo root (Task 2.3 needs it for the worktree-form fixture). Do not register a worktree yourself
-  - `sq runs list` shows local completed, failed and paused runs (Task 3.1 captures fixtures from them). Paused runs are those whose run-state file in `~/.config/squadron/runs/` contains `"status": "paused"`
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Run `git status --short`. The tree must be clean before the branch is created. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or its tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
+- [x] Check the two external preconditions now, so the slice fails before any contract work. Both are read-only:
+  - [x] `cf worktree list --json` has an entry whose `worktreePath` is the repo root (Task 2.3 needs it for the worktree-form fixture). Do not register a worktree yourself
+  - [x] `sq runs list` shows local completed, failed and paused runs (Task 3.1 captures fixtures from them). Paused runs are those whose run-state file in `~/.config/squadron/runs/` contains `"status": "paused"`
   - If either is missing, write `BLOCKED:` naming the missing item and stop
-- [ ] Confirm the D7 correction to the arch "Run identity" sentence (`user/architecture/120-arch.runner-routing-engine.md`) is present per the LLD. If it is not, make that edit and commit it as `docs:`
-- [ ] Create `125-slice.run-dispatch-and-outcome-ingestion` from the target. If it exists, switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each
+- [x] Confirm the D7 correction to the arch "Run identity" sentence (`user/architecture/120-arch.runner-routing-engine.md`) is present per the LLD. If it is not, make that edit and commit it as `docs:`
+- [x] Create `125-slice.run-dispatch-and-outcome-ingestion` from the target. If it exists, switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each
 - **Success Criteria**:
-  - [ ] On the slice branch with a clean tree. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. This task adds no commit of its own
+  - [x] On the slice branch with a clean tree. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. This task adds no commit of its own
 
 ---
 
@@ -94,11 +94,11 @@ These land before the new Runner modules (`ingest`, `dispatch`) and the tick wir
 
 See "Task-level additions". Create a module in `upstream/context_forge/` (for example `slice_stem.py`) and export it from the package's `__init__.py`.
 
-- [ ] `parse_slice_stem(text: str | None) -> SliceStem | None`, where `SliceStem` is a frozen dataclass `(index: int, name: str)`. Accept `NNN-slice.{name}` (CF's `fileSlice`/`activeSlice` form) and `NNN-slice.{name}.md` (a design file), with or without a directory. Lenient on digit count; `None` for empty input or any other shape
-- [ ] Change `runner/lifecycle/slugs.py` so `slice_name_from_design_file` delegates to it. Behavior for design file paths is unchanged. The regex exists only in the new module
-- [ ] Tests (table-driven): the real `fileSlice` value from `tests/fixtures/cf/cf_get_amoeba.json`; the real `activeSlice` form (`125-slice.run-dispatch-and-outcome-ingestion`); a `.md` path with directories; a name containing dots; empty, `None`, `slice.foo`, `125-tasks.foo` give `None`. Existing `slugs` tests pass unchanged
+- [x] `parse_slice_stem(text: str | None) -> SliceStem | None`, where `SliceStem` is a frozen dataclass `(index: int, name: str)`. Accept `NNN-slice.{name}` (CF's `fileSlice`/`activeSlice` form) and `NNN-slice.{name}.md` (a design file), with or without a directory. Lenient on digit count; `None` for empty input or any other shape
+- [x] Change `runner/lifecycle/slugs.py` so `slice_name_from_design_file` delegates to it. Behavior for design file paths is unchanged. The regex exists only in the new module
+- [x] Tests (table-driven): the real `fileSlice` value from `tests/fixtures/cf/cf_get_amoeba.json`; the real `activeSlice` form (`125-slice.run-dispatch-and-outcome-ingestion`); a `.md` path with directories; a name containing dots; empty, `None`, `slice.foo`, `125-tasks.foo` give `None`. Existing `slugs` tests pass unchanged
 - **Success Criteria**:
-  - [ ] Tests, `tests/test_import_boundaries.py`, `ruff` and `pyright` pass. Commit: `refactor: define the slice stem rule once in the CF upstream package`
+  - [x] Tests, `tests/test_import_boundaries.py`, `ruff` and `pyright` pass. Commit: `refactor: define the slice stem rule once in the CF upstream package`
 
 ### Task 2.2: `cf_write` gains `checkout` and `expected_slice_index`, with tests
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2

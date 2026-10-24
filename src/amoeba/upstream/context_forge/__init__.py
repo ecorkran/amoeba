@@ -27,6 +27,7 @@ from amoeba.upstream.context_forge.projects_file import (
     CFReadOutcome,
     parse,
 )
+from amoeba.upstream.context_forge.slice_stem import SliceStem, parse_slice_stem
 
 __all__ = [
     "ABSENT",
@@ -45,10 +46,12 @@ __all__ = [
     "PlanEntryStatus",
     "PlanParseError",
     "PlanStatus",
+    "SliceStem",
     "UnknownPlanStatus",
     "diff_states",
     "parse",
     "parse_initiatives",
     "parse_slice_list",
+    "parse_slice_stem",
     "reported_complete",
 ]
