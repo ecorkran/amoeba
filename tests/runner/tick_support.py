@@ -3,25 +3,41 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from itertools import count
 from pathlib import Path
 from typing import Any
 
 from feed_harness import apply
 
+from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
-from amoeba.runner.decide import Action, LaunchRun, ProjectView
+from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
 from amoeba.runner.faults import NodeContext
+from amoeba.runner.intent.apply import apply_pending_intents
+from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
 from amoeba.runner.launch import (
     LAUNCH_LOGS_DIRNAME,
     LaunchTracker,
 )
 from amoeba.runner.lifecycle.cadence import PlanReadSchedule
 from amoeba.runner.lifecycle.plan_stage import PlanStage
+from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.tenant import RunnerTenant
 from amoeba.runner.tick import ProjectTick
-from amoeba.store import Node, NodeStatus, Store, SubmissionKind
+from amoeba.store import (
+    CFReference,
+    DesiredState,
+    Node,
+    NodeKind,
+    Store,
+    SubmissionKind,
+)
 from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
+from runner.intent.intent_support import submit
 from runner.observe_support import (
     GRACE,
     Child,
@@ -33,20 +49,64 @@ from runner.observe_support import (
 
 PROJECT = "demo"
 PLAN_READ_INTERVAL = 30.0
+VIEW_NOW = datetime(2026, 10, 23, tzinfo=UTC)
+
+
+def view_for(
+    tree: LifecycleTree,
+    rows: Sequence[DesiredState] = (),
+    in_flight: tuple[InFlightRun, ...] = (),
+) -> ProjectView:
+    """A view over ``tree`` and hand-built desired-state rows, with current steps."""
+    index = DesiredStateIndex(rows)
+    return ProjectView(
+        project_id=PROJECT,
+        now=VIEW_NOW,
+        tree=tree,
+        in_flight=in_flight,
+        link_probes={},
+        desired=index,
+        current_steps=current_steps(tree, index),
+    )
+
+
+_INITIATIVE_INDEXES = count(100)
+
+
+def ready_step(store: Store, project_id: str = PROJECT) -> Node:
+    """A ready lifecycle step: the architecture step of a new linked initiative.
+
+    Launch-path tests need a node a planner may act on, and only a ready step
+    can be a current step. Each call makes a new initiative.
+    """
+    initiative = store.create_node(
+        project_id=project_id,
+        kind=NodeKind.INITIATIVE,
+        title="initiative",
+        cf=CFReference(project="cf-a", index=next(_INITIATIVE_INDEXES)),
+    )
+    return store.create_node(
+        project_id=project_id,
+        kind=NodeKind.PHASE_OR_ARTIFACT,
+        title="architecture",
+        parent_id=initiative.id,
+        cf=CFReference(project="cf-a", phase=LifecycleStep.ARCHITECTURE.value),
+    )
+
+
+def drive_project(store: Store, project_id: str = PROJECT) -> None:
+    """Drive the whole project now: submit a drive intent and apply it directly.
+
+    Does not rely on the tick's apply stage, so tests can use it before that exists.
+    """
+    submit(store, {"intent": "drive"}, project_id=project_id)
+    apply_pending_intents(store, project_id)
 
 
 def runnable_unbusy(view: ProjectView) -> list[Node]:
-    """Runnable nodes of any kind with no run in flight.
-
-    For the 122-era fixtures, whose nodes are plain slices and not lifecycle steps
-    (``ProjectView.ready_unbusy`` offers only ready steps).
-    """
+    """Current steps with no run in flight: what a launch-path test planner acts on."""
     busy = {run.entry.node_id for run in view.in_flight}
-    return [
-        node
-        for node in view.tree.nodes
-        if node.status is NodeStatus.RUNNABLE and node.id not in busy
-    ]
+    return [node for node in view.current_steps if node.id not in busy]
 
 
 class Planner:
@@ -130,6 +190,38 @@ class Rig:
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
         return tick.run(budget), tick
+
+
+TENANT_SETTINGS = ProcessSettings(
+    tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0
+)
+
+
+class StoreHost:
+    """A tenant host over one project's store."""
+
+    stop_requested = False
+    project_ids = (PROJECT,)
+
+    def __init__(self, store: Store) -> None:
+        self._store = store
+
+    def store_for(self, project_id: str) -> Store:
+        return self._store
+
+
+def tenant_for(rig: Rig) -> RunnerTenant:
+    """A tenant built from the rig's parts, so its fault boundary is in play."""
+    return RunnerTenant(
+        settings=TENANT_SETTINGS,
+        supervisor_dir=rig.supervisor_dir,
+        planners=rig.planners,
+        popen=rig.popen,
+        cf_run=rig.cf,
+        poll=rig.poll,
+        now=rig.clock.wall,
+        monotonic=rig.clock.monotonic,
+    )
 
 
 def link(store: Store, submission_id: str, cf_id: str, project: str) -> None:

@@ -86,6 +86,24 @@ STEP_MAP: Final[Mapping[LifecycleStep, StepSpec]] = MappingProxyType(
 )
 
 
+#: The steps in process order, written out. ``drive until <step>`` compares by
+#: position here, so the order is stated, not derived from enum declaration (D4).
+STEP_SEQUENCE: Final[tuple[LifecycleStep, ...]] = (
+    LifecycleStep.ARCHITECTURE,
+    LifecycleStep.SLICE_PLAN,
+    LifecycleStep.SLICE_DESIGN,
+    LifecycleStep.TASKS,
+    LifecycleStep.IMPLEMENTATION,
+    LifecycleStep.MERGE,
+    LifecycleStep.INTEGRATION,
+)
+
+
+def step_rank(step: LifecycleStep) -> int:
+    """The position of ``step`` in ``STEP_SEQUENCE``."""
+    return STEP_SEQUENCE.index(step)
+
+
 def steps_at(level: StepLevel) -> tuple[LifecycleStep, ...]:
     """The steps of one level, in map order."""
     return tuple(step for step, spec in STEP_MAP.items() if spec.level is level)

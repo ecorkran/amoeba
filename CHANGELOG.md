@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 124: the intent vocabulary (`amoeba.runner.intent`). An `intent` body is one of `drive` (optionally `until <step>`), `exclude`, `pause`, `resume` or `clear`, validated by `IntentBody` (unknown keys are errors); a target is the project, or a linked initiative or slice. Every intent gets one acknowledgment: `applied`, `no_op` (the target's settings would not change) or `rejected` with `malformed_body`, `target_not_initiative_or_slice`, `target_unlinked` or `until_not_applicable`.
+- Slice 124: the apply stage runs first in each project tick (store-only, ignores link state) and the tick reads a `DesiredStateIndex` once. Drive resolves from the nearest row on a step's path, hold from any row; nothing is driven by default, so linking a project escalates nothing. `STEP_SEQUENCE` and `step_rank` order the steps for `until`. `HumanStepPlanner` is now in the production planner tuple.
+- Slice 124: `amoeba inspect desired-states --project P` (and `/v1/listings/desired-states`) lists the stored rows. Contract text in `docs/inbox-contract.md` ("Intent bodies"), `docs/process-contract.md` and `docs/substrate-guide.md`.
+
 - Slice 123: the lifecycle model and reconciliation (`amoeba.runner.lifecycle`). The Runner reads each linked Context Forge project's plan (`cf list initiatives --json -a`, then `cf list slices <index> --json`) and keeps the node tree in step: initiative and slice nodes linked by CF index, each with its step nodes (`architecture`, `slice_plan`, `slice_design`, `tasks`, `implementation`, `merge`, `integration`). Reconcile orphans nodes CF stops reporting (never on a failed or partial read), creates what is missing, blocks slices with an unknown status, follows renames, and marks steps CF shows complete as `done`. It runs after in-flight runs are polled, on the interval or early when a CF snapshot changes, under the tick budget.
 - Slice 123: migration `010` and `CFReference.index` (`nodes.cf_index`) with a partial unique link index; `amoeba inspect nodes` shows `cf_index`. New setting `plan_read_interval_seconds` (default 30) and start flag `--plan-read-interval`. New fault kinds `plan_read_failed`, `lifecycle_orphan` and `plan_status_unknown`, and a store-only `BlockHumanStep` action with `HumanStepPlanner` (registered by slice 124, not yet in production). Only `reconcile` may call `create_node` (guard test). `ProjectView` now carries a `LifecycleTree` (`tree`) instead of `runnable_nodes`.
 - Slice 123: the `cf` link probe now runs `cf list initiatives --json -a` and requires output the plan model accepts. Contract text in `docs/store-contract.md`, `docs/context-forge-contract.md`, `docs/process-contract.md` and `docs/substrate-guide.md`. Finding recorded there: CF 0.19.17 prints the "no slice plan" error document on stderr.
@@ -103,6 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Slice 101: contract documentation at `docs/store-contract.md`, sufficient to design a consumer without reading the implementation.
 
 ### Changed
+
+- Slice 124: `ProjectView` gains `desired` and `current_steps`; `decide()` raises `ValueError` for an action on a step that is not current (ready, driven, not held); planners see `current_steps`. `LifecycleTree.node(id)` added. Test planners that launched on plain slice nodes now use `ready_step` and `drive_project` in `tests/runner/tick_support.py`.
 
 - Slice 109: the `inspect` listings moved from `amoeba.cli` to `amoeba.inspection` (typed `ListingRequest`, `read_listing`); `discover_project_ids` to `amoeba.store.discovery`; `review_sources` to `amoeba.store`; `change_record` to `amoeba.feed.wire`. `inspect` output and `--help` are byte-identical.
 

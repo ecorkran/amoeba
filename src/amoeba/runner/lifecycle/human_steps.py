@@ -6,9 +6,8 @@ that; :func:`block_human_step` applies it as one store write.
 
 Why a planner and not reconcile: reconcile only projects what CF says. Putting a
 person on a step is a decision about the next action, and drive (124) has to filter
-it like any dispatch. The planner is not in the production tuple until 124 adds it
-with that filter; without drive, every current human step on every linked project
-would escalate the moment the project is linked.
+it like any dispatch. The planner is in the production tuple and plans only over
+current steps, so linking a project blocks nothing until the PM drives it.
 
 If a person resolves the block without doing the work, the step is runnable again,
 and while it is still current it is blocked again on the next tick: the intended
@@ -31,11 +30,15 @@ from amoeba.store import BlockedKind, Store
 
 
 class HumanStepPlanner:
-    """Blocks each ready step whose executor is a person."""
+    """Blocks each current step whose executor is a person.
+
+    Current means ready, driven and not held (124): a project the PM has not driven
+    is never blocked on.
+    """
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
         actions: list[Action] = []
-        for node in view.tree.ready_steps():
+        for node in view.current_steps:
             step = view.tree.step_of(node)
             if step is not None and STEP_MAP[step].executor is Executor.HUMAN:
                 actions.append(BlockHumanStep(node.id))

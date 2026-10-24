@@ -358,6 +358,8 @@ def test_the_registered_listings_are_pinned() -> None:
         # Slice 108.
         "cf-links",
         "cf-snapshots",
+        # Slice 124.
+        "desired-states",
     }
 
 
@@ -381,6 +383,8 @@ def test_only_project_listings_require_a_project(supervisor_dir: Path) -> None:
         # Slice 108.
         "cf-links",
         "cf-snapshots",
+        # Slice 124.
+        "desired-states",
     }
 
     missing_project = run_cli(["inspect", "nodes"], supervisor_dir)

@@ -93,12 +93,12 @@ def test_a_commit_between_two_queries_does_not_split_the_read(
     monkeypatch.undo()
 
     assert calls == [Channel.INTENT, Channel.ESCALATION]
-    assert [row["channel"] for row in during.rows] == [Channel.INTENT.value]
+    assert [row["channel"] for row in during.rows] == [Channel.INTENT.value] * 2
     assert during.as_of_seq == head_before
 
     after = read_listing(_MESSAGES, _every_channel(), supervisor_dir)
     assert [row["channel"] for row in after.rows] == [
-        Channel.INTENT.value,
+        *[Channel.INTENT.value] * 2,
         Channel.ESCALATION.value,
     ]
     assert after.as_of_seq is not None and after.as_of_seq > head_before

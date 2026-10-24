@@ -15,6 +15,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import JournalEntry, Node
 
@@ -63,7 +64,10 @@ class ProjectView:
     """Everything a planner may look at for one project, frozen.
 
     ``tree`` is the project's lifecycle tree, built after reconcile; it holds every
-    node. Planners start work from :meth:`ready_unbusy`.
+    node. ``desired`` is the project's desired-state rows, read once for the tick.
+    ``current_steps`` are the ready steps the PM drives and has not held (D6);
+    :func:`decide` refuses an action on any other node. ``ready_unbusy`` is the
+    wider ready set, kept for slice 125 to narrow.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
     this process lifetime.
     """
@@ -73,6 +77,8 @@ class ProjectView:
     tree: LifecycleTree
     in_flight: tuple[InFlightRun, ...]
     link_probes: Mapping[str, bool]
+    desired: DesiredStateIndex
+    current_steps: Sequence[Node]
 
     def ready_unbusy(self) -> list[Node]:
         """Ready steps (``tree.ready_steps()``) with no run in flight.
@@ -97,14 +103,22 @@ def decide(view: ProjectView, planners: Sequence[Planner]) -> list[Action]:
     """Run the planners in order and return all their actions.
 
     Raises:
-        ValueError: If two actions name the same node. A node gets at most one
-            action per tick; a second is a programming error and is never
-            silently dropped.
+        ValueError: If an action names a node that is not one of
+            ``view.current_steps`` (not driven, held, not ready, or unknown): the
+            guard that makes drive and hold bind every planner (D7). Or if two
+            actions name the same node: a node gets at most one action per tick.
+            Neither is ever silently dropped; both are programming errors.
     """
     actions: list[Action] = []
     claimed: set[str] = set()
+    current = {node.id for node in view.current_steps}
     for planner in planners:
         for action in planner.plan(view):
+            if action.node_id not in current:
+                raise ValueError(
+                    f"action for node {action.node_id} in project "
+                    f"{view.project_id} is not a current step"
+                )
             if action.node_id in claimed:
                 raise ValueError(
                     f"more than one action for node {action.node_id} in project "

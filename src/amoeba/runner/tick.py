@@ -1,8 +1,8 @@
 """One project's tick: observe, record finished runs, decide, act, close.
 
-The sequence is fixed code (D1). Slots later slices fill are marked in comments
-only: intents (124) before observe, reconciliation reads (123) in observe, the
-body of ``finish.record`` (125), routing (126) after record.
+The sequence is fixed code (D1): intents are applied first (124), then the rest.
+Slots later slices fill are marked in comments only: the body of
+``finish.record`` (125), routing (126) after record.
 """
 
 from __future__ import annotations
@@ -30,6 +30,8 @@ from amoeba.runner.faults import (
     TickFaults,
     raise_expected_faults,
 )
+from amoeba.runner.intent.apply import apply_pending_intents
+from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
 from amoeba.runner.launch import (
     PARAM_PARAMS,
     PARAM_PIPELINE,
@@ -93,7 +95,9 @@ class ProjectTick:
     def run(self, budget: TickBudget) -> TickResult:
         """Run the stages in order; ``CUT_OFF`` when the budget ran out."""
         faults = TickFaults()
-        # [apply intents - slice 124]
+        desired = self._apply_intents()
+        # Observe is not filtered by hold or drive. Slices 125 and 128 read
+        # ``desired.drives_anything()`` to scope their Observe work.
         observed = self._observer.observe(
             self._run_entries(), budget, faults, self._context
         )
@@ -113,11 +117,23 @@ class ProjectTick:
         if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         # [route - slice 126]
-        decided = self._decide(observed.runs, self._probes.results(links))
+        decided = self._decide(observed.runs, self._probes.results(links), desired)
         if self._act(decided, budget) is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE
+
+    def _apply_intents(self) -> DesiredStateIndex:
+        """Apply pending intents, then read the desired state once for this tick.
+
+        Store-only and independent of link state, so a PM's pause lands even when
+        CF is down. The context is cleared: an exception here is about the project,
+        not a node. The index is never cached across ticks.
+        """
+        self._context.clear()
+        applied = apply_pending_intents(self._store, self._project_id)
+        self.wrote = applied > 0 or self.wrote
+        return DesiredStateIndex(self._store.desired_states(self._project_id))
 
     def _plan_reads(
         self, links: Sequence[str], budget: TickBudget, faults: TickFaults
@@ -170,17 +186,23 @@ class ProjectTick:
         return shape_error
 
     def _decide(
-        self, runs: Sequence[ObservedRun], link_probes: Mapping[str, bool]
+        self,
+        runs: Sequence[ObservedRun],
+        link_probes: Mapping[str, bool],
+        desired: DesiredStateIndex,
     ) -> list[Action]:
         self._context.clear()
+        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
         view = ProjectView(
             project_id=self._project_id,
             now=self._now(),
-            tree=LifecycleTree(self._store.nodes_for_project(self._project_id)),
+            tree=tree,
             # Unresolved sq_run entries the tick did not finish: what ``ready_unbusy``
             # excludes (finished ones were resolved by ``finish.record`` above).
             in_flight=tuple(o.run for o in runs if o.finished is None),
             link_probes=link_probes,
+            desired=desired,
+            current_steps=current_steps(tree, desired),
         )
         return list(decide(view, self._planners))
 

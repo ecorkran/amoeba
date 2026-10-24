@@ -40,6 +40,10 @@ class LifecycleTree:
         """Every node, in the order the store returned them."""
         return self._nodes
 
+    def node(self, node_id: str) -> Node | None:
+        """The node with this id, or ``None`` when it is not in the tree."""
+        return self._by_id.get(node_id)
+
     def children(self, node: Node) -> tuple[Node, ...]:
         """The node's direct children, in store order."""
         return self._children.get(node.id, ())

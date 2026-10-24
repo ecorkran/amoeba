@@ -23,11 +23,11 @@ from amoeba.store import (
     BlockedState,
     JournalEntry,
     Node,
-    NodeKind,
     Store,
     project_store_path,
 )
 from runner.crash_entry import KILL_AT_ENV, KillPoint
+from runner.tick_support import drive_project, ready_step
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
 PROJECT = "crash-proof"
@@ -73,12 +73,9 @@ class CrashHarness:
     def _create_nodes(self, count: int) -> list[str]:
         """Create the project and its test nodes before any process starts."""
         with Store.open(project_store_path(self.supervisor_dir, PROJECT)) as store:
-            return [
-                store.create_node(
-                    project_id=PROJECT, kind=NodeKind.SLICE, title=f"node-{index}"
-                ).id
-                for index in range(count)
-            ]
+            node_ids = [ready_step(store, PROJECT).id for _ in range(count)]
+            drive_project(store, PROJECT)
+            return node_ids
 
     # -- processes ------------------------------------------------------------
 

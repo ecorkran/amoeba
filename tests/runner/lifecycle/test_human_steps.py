@@ -8,9 +8,11 @@ from datetime import UTC, datetime
 import pytest
 
 from amoeba.runner.decide import BlockHumanStep, ProjectView, decide
-from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.store import DesiredState
+from runner.intent.rows_support import row
+from runner.tick_support import view_for
 
 from .tree_support import TreeBuilder
 
@@ -24,8 +26,11 @@ def builder() -> Iterator[TreeBuilder]:
     built.close()
 
 
-def _plan(builder: TreeBuilder) -> list[str]:
-    view = ProjectView("demo", NOW, builder.tree(), (), {})
+DRIVEN = (row(drive=True),)
+
+
+def _plan(builder: TreeBuilder, rows: tuple[DesiredState, ...] = DRIVEN) -> list[str]:
+    view = view_for(builder.tree(), rows)
     return [
         a.node_id
         for a in HumanStepPlanner().plan(view)
@@ -76,15 +81,31 @@ def test_a_step_under_an_orphan_or_already_blocked_gets_no_action(
 
 
 def test_two_actions_for_one_node_are_still_refused(builder: TreeBuilder) -> None:
-    view = ProjectView("demo", NOW, builder.tree(), (), {})
+    initiative = builder.initiative(100)
+    node_id = builder.step_node(initiative, LifecycleStep.ARCHITECTURE).id
+    view = view_for(builder.tree(), DRIVEN)
 
     class Twice:
         def plan(self, view: ProjectView) -> list[BlockHumanStep]:
-            return [BlockHumanStep("n-1")]
+            return [BlockHumanStep(node_id)]
 
     with pytest.raises(ValueError, match="more than one action"):
         decide(view, [Twice(), Twice()])
 
 
-def test_the_production_planner_tuple_is_empty() -> None:
-    assert PRODUCTION_PLANNERS == ()
+def test_nothing_is_planned_when_nothing_is_driven(builder: TreeBuilder) -> None:
+    builder.initiative(100)
+    assert _plan(builder, ()) == []
+
+
+def test_nothing_is_planned_when_the_project_is_paused(builder: TreeBuilder) -> None:
+    builder.initiative(100)
+    assert _plan(builder, (row(drive=True, hold=True),)) == []
+
+
+def test_a_step_already_blocked_on_a_human_is_not_blocked_again(
+    builder: TreeBuilder,
+) -> None:
+    initiative = builder.initiative(100)
+    builder.block(builder.step_node(initiative, LifecycleStep.ARCHITECTURE))
+    assert _plan(builder) == []

@@ -10,12 +10,14 @@ from ast_strings import string_constants
 from amoeba.runner.lifecycle import steps
 from amoeba.runner.lifecycle.steps import (
     STEP_MAP,
+    STEP_SEQUENCE,
     Executor,
     LifecycleStep,
     PlanObservation,
     StepLevel,
     StepSpec,
     step_complete,
+    step_rank,
     steps_at,
 )
 from amoeba.upstream.context_forge import PlanEntryStatus, UnknownPlanStatus
@@ -26,6 +28,28 @@ SRC = Path(steps.__file__).parents[2]
 def test_every_step_has_a_spec() -> None:
     assert set(STEP_MAP) == set(LifecycleStep)
     assert len(LifecycleStep) == 7
+
+
+def test_step_sequence_holds_every_step_exactly_once() -> None:
+    assert set(STEP_SEQUENCE) == set(LifecycleStep)
+    assert len(STEP_SEQUENCE) == len(LifecycleStep)
+
+
+def test_step_sequence_is_the_process_order() -> None:
+    assert [step.value for step in STEP_SEQUENCE] == [
+        "architecture",
+        "slice_plan",
+        "slice_design",
+        "tasks",
+        "implementation",
+        "merge",
+        "integration",
+    ]
+
+
+def test_step_rank_increases_along_the_sequence() -> None:
+    ranks = [step_rank(step) for step in STEP_SEQUENCE]
+    assert ranks == list(range(len(STEP_SEQUENCE)))
 
 
 def test_the_pipeline_is_set_exactly_for_the_three_pipeline_steps() -> None:
