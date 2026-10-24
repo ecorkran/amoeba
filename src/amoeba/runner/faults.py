@@ -30,12 +30,22 @@ from amoeba.store import (
 
 
 class FaultKind(StrEnum):
-    """Why the Runner raised an escalation or blocked a node."""
+    """Why the Runner raised an escalation or blocked a node.
+
+    ``PLAN_READ_FAILED`` is project-scoped only: a CF plan read that failed, or one
+    that broke a reconcile safety rule. ``LIFECYCLE_ORPHAN`` and
+    ``PLAN_STATUS_UNKNOWN`` are node-scoped: they name the ``fault_kind`` payload
+    of a block on the node CF stopped reporting, or whose status the Runner cannot
+    project. They are closed by resolving the block, not by the project rule.
+    """
 
     RUN_OBSERVATION_FAILED = "run_observation_failed"
     LAUNCH_OVERDUE = "launch_overdue"
     CF_PROBE_FAILED = "cf_probe_failed"
     UNEXPECTED_FAULT = "unexpected_fault"
+    PLAN_READ_FAILED = "plan_read_failed"
+    LIFECYCLE_ORPHAN = "lifecycle_orphan"
+    PLAN_STATUS_UNKNOWN = "plan_status_unknown"
 
 
 class LaunchFailure(StrEnum):
@@ -147,6 +157,14 @@ def raise_expected_faults(store: Store, project_id: str, faults: TickFaults) -> 
 PAYLOAD_FAULT_KIND: Final = "fault_kind"
 PAYLOAD_ERROR: Final = "error"
 PAYLOAD_RUN_IDS: Final = "run_ids"
+
+#: Keys of a lifecycle block's payload (orphan, unknown status, human step).
+PAYLOAD_CF_PROJECT_ID: Final = "cf_project_id"
+PAYLOAD_INDEX: Final = "index"
+PAYLOAD_FORMER_INDEX: Final = "former_index"
+PAYLOAD_FORMER_SLICE_NAME: Final = "former_slice_name"
+PAYLOAD_STATUS: Final = "status"
+PAYLOAD_STEP: Final = "step"
 
 
 def escalate(
