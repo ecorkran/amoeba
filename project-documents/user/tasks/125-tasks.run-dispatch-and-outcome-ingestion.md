@@ -299,12 +299,12 @@ Per the LLD, D1. Create `runner/dispatch/__init__.py`, `runner/dispatch/checkout
 
 Per the LLD, D3. Create `runner/dispatch/state.py` and `tests/runner/dispatch/test_state.py`.
 
-- [ ] `DispatchState(StrEnum)`: `in_flight`, `awaiting_routing`, `reissue`, `pointed`, `needs_pointer`
-- [ ] `dispatch_state(entries, *, pointer_confirmed: bool) -> DispatchState`. `entries` are the step's own, oldest first. `pointer_confirmed` is this tick's read-back answer (Task 7.1); the journal alone saying `POINTED` with `pointer_confirmed=False` gives `NEEDS_POINTER`
-- [ ] Rows evaluated in the D3 table's order: any unresolved entry; latest `sq_run` with `awaits_routing`; latest entry an `sq_run` resolved `not_applied` by recovery; latest entry a `cf_write` resolved `completed` or `adopted`; else `NEEDS_POINTER`
-- [ ] Tests (every row, plus): no entries; failed pointer write; routed `sq_run` (flag cleared); recovery `unknown` and `adopted` `sq_run`; a completed `cf_write` followed by a routed `sq_run` is `NEEDS_POINTER`; `pointer_confirmed=False` on a completed `cf_write`
+- [x] `DispatchState(StrEnum)`: `in_flight`, `awaiting_routing`, `reissue`, `pointed`, `needs_pointer`
+- [x] `dispatch_state(entries, *, pointer_confirmed: bool) -> DispatchState`. `entries` are the step's own, oldest first. `pointer_confirmed` is this tick's read-back answer (Task 7.1); the journal alone saying `POINTED` with `pointer_confirmed=False` gives `NEEDS_POINTER`
+- [x] Rows evaluated in the D3 table's order: any unresolved entry; latest `sq_run` with `awaits_routing`; latest entry an `sq_run` resolved `not_applied` by recovery; latest entry a `cf_write` resolved `completed` or `adopted`; else `NEEDS_POINTER`
+- [x] Tests (every row, plus): no entries; failed pointer write; routed `sq_run` (flag cleared); recovery `unknown` and `adopted` `sq_run`; a completed `cf_write` followed by a routed `sq_run` is `NEEDS_POINTER`; `pointer_confirmed=False` on a completed `cf_write`
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: derive a step's dispatch state from its journal`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: derive a step's dispatch state from its journal`
 
 ### Task 5.3: `dispatch_params`; actions and view gain the dispatch facts, with tests
 **Owner**: Junior AI | **Dependencies**: 5.1, 5.2 | **Effort**: 2
