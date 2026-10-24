@@ -10,13 +10,19 @@ from itertools import count
 from pathlib import Path
 from typing import Any, cast
 
+from cf_harness import observed
 from cf_stub import STATE_ENV, write_cf_state, write_cf_stub
 
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import WriteSlicePointer
 from amoeba.runner.dispatch.checkout import Checkout
-from amoeba.store import CFReference, NodeKind, Store
+from amoeba.store import CFReference, CFSnapshotInput, NodeKind, Store
+from amoeba.upstream.context_forge import (
+    FIELD_PROJECT_PATH,
+    STATE_PROJECT_KEY,
+    STATE_WORKTREES_KEY,
+)
 
 PROJECT = "demo"
 CF_ID = "project_1_abc"
@@ -63,6 +69,24 @@ class CfWorld:
                 225: "225-slice.second",
             },
         )
+
+    def snapshot_input(
+        self,
+        project_id: str,
+        cf_project_id: str,
+        worktrees: dict[str, dict[str, object]] | None = None,
+        project_path: str | None = None,
+    ) -> CFSnapshotInput:
+        """An observed snapshot of this world: what dispatch resolves checkouts from."""
+        default = {
+            "wt_a": self.worktree_entry("wt_a", self.root, 100, 199),
+            "wt_b": self.worktree_entry("wt_b", self.second, 200, 299),
+        }
+        state = {
+            STATE_PROJECT_KEY: {FIELD_PROJECT_PATH: project_path or str(self.root)},
+            STATE_WORKTREES_KEY: default if worktrees is None else worktrees,
+        }
+        return observed(project_id, cf_project_id, state=state, changed=[])
 
     @staticmethod
     def worktree_entry(

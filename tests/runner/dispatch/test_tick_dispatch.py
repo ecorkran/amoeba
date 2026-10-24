@@ -26,7 +26,6 @@ from amoeba.store import (
     Channel,
     CommandKind,
     JournalOutcome,
-    JournalResolver,
     NodeStatus,
     Store,
 )
@@ -175,32 +174,3 @@ def test_another_index_blocks_and_resolves_failed(rig: DispatchRig) -> None:
     [pointer] = rig.entries(CommandKind.CF_WRITE, node)
     assert pointer.outcome is JournalOutcome.FAILED
     assert rig.status(node) is NodeStatus.BLOCKED_ON_HUMAN
-
-
-def test_a_step_to_be_reissued_is_blocked_not_launched(rig: DispatchRig) -> None:
-    """Until the reissue path lands, a never-started launch is a person's call."""
-    node = rig.step("reissue", 125)
-    rig.tick()  # pointed
-    stale = rig.store.journal_issue(
-        node.id,
-        kind=CommandKind.SQ_RUN,
-        parameters={
-            "pipeline": "P4",
-            "params": {"slice": "125"},
-            PARAM_RUN_ID: "run-never-started",
-            PARAM_CHECKOUT: str(rig.world.root),
-        },
-    )
-    rig.store.journal_resolve(
-        stale.id,
-        outcome=JournalOutcome.NOT_APPLIED,
-        result={"reason": "no run"},
-        resolved_by=JournalResolver.RECOVERY,
-    )
-
-    rig.tick()
-
-    assert rig.popen.argvs == [], "nothing is launched over a run that may have started"
-    assert rig.status(node) is NodeStatus.BLOCKED_ON_HUMAN
-    [message] = rig.store.messages(PROJECT, channel=Channel.ESCALATION)
-    assert dict(message.payload or {})["reissue_of"] == stale.id

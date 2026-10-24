@@ -435,12 +435,12 @@ Per the LLD, Success Criteria "Checkout concurrency", "Each non-completed outcom
 
 Per the LLD, D9. Edit `runner/launch.py` (keep it near 300 lines; move the reissue into `runner/dispatch/reissue.py` if needed) and `_act`; add `tests/runner/dispatch/test_reissue.py`.
 
-- [ ] For `LaunchRun` with `reissue_of`: (1) check the old entry's `<entry_id>.stderr.log` with 122's `log_paths` and `stderr_confirms` (64 KiB head); an exact `run_id=<id>` line blocks `HUMAN` with `{reason: started_before_crash, run_id}`; an existing unreadable log blocks `HUMAN` naming the error; no log or no line continues. (2) Journal a new `sq_run` with the same `pipeline`, `params`, `checkout`, `run_id`, plus `reissue_of`. (3) Poll once; a found run is adopted (entry confirmed, nothing launched). (4) Not found: 122's `launch()`
-- [ ] Define the `reissue_of` parameter key once
-- [ ] The pointer is not re-written
-- [ ] Tests: `test_reissue_with_run_id_line_escalates` (nothing launched); unreadable log blocks; no log relaunches once under the same run id in a new entry with `reissue_of`, and the stub `sq` saw one `sq run` for that id; a state appearing before the relaunch is adopted without a launch; a crash-proof variant (`tests/runner/test_crash_recovery.py`): kill before launch, recovery resolves `not_applied`, restart relaunches once
+- [x] For `LaunchRun` with `reissue_of`: (1) check the old entry's `<entry_id>.stderr.log` with 122's `log_paths` and `stderr_confirms` (64 KiB head); an exact `run_id=<id>` line blocks `HUMAN` with `{reason: started_before_crash, run_id}`; an existing unreadable log blocks `HUMAN` naming the error; no log or no line continues. (2) Journal a new `sq_run` with the same `pipeline`, `params`, `checkout`, `run_id`, plus `reissue_of`. (3) Poll once; a found run is adopted (entry confirmed, nothing launched). (4) Not found: 122's `launch()`
+- [x] Define the `reissue_of` parameter key once
+- [x] The pointer is not re-written
+- [x] Tests: `test_reissue_with_run_id_line_escalates` (nothing launched); unreadable log blocks; no log relaunches once under the same run id in a new entry with `reissue_of`, and the stub `sq` saw one `sq run` for that id; a state appearing before the relaunch is adopted without a launch; a crash-proof variant (`tests/runner/test_crash_recovery.py`): kill before launch, recovery resolves `not_applied`, restart relaunches once
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: reissue a not_applied launch under its own run id` with `Fixes #9` in the body
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: reissue a not_applied launch under its own run id` with `Fixes #9` in the body
 
 ---
 

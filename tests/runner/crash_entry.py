@@ -33,7 +33,8 @@ from amoeba.process import (
     poll_run,
     standard_tenants,
 )
-from amoeba.runner.decide import Action, LaunchRun, ProjectView
+from amoeba.runner.decide import Action, LaunchRun, Planner, ProjectView
+from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
 from amoeba.runner.tenant import RunnerTenant
@@ -160,6 +161,7 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--checkout", type=Path, required=True)
     parser.add_argument("--markers-dir", type=Path, required=True)
     parser.add_argument("--node-id", action="append", default=[])
+    parser.add_argument("--dispatch", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -184,15 +186,20 @@ def main(argv: Sequence[str]) -> None:
         _arm_report_kill(after=False)
     if kill_at is KillPoint.AFTER_INGEST:
         _arm_report_kill(after=True)
+    planners: tuple[Planner, ...] = (
+        (DispatchPlanner(),)
+        if arguments.dispatch
+        else (
+            ProofPlanner(
+                frozenset(arguments.node_id), arguments.checkout, arguments.markers_dir
+            ),
+        )
+    )
     popen, poll = _hooked(kill_at)
     runner = RunnerTenant(
         settings=settings,
         supervisor_dir=supervisor_dir,
-        planners=(
-            ProofPlanner(
-                frozenset(arguments.node_id), arguments.checkout, arguments.markers_dir
-            ),
-        ),
+        planners=planners,
         popen=popen,  # type: ignore[arg-type]
         cf_run=subprocess.run,
         poll=poll,  # type: ignore[arg-type]

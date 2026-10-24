@@ -31,7 +31,7 @@ from amoeba.runner.dispatch.build_view import (
 )
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
-from amoeba.runner.dispatch.reissue import block_unsupported_reissue
+from amoeba.runner.dispatch.reissue import ReissueLaunch, begin_reissue
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
     LaunchFailure,
@@ -264,9 +264,9 @@ class ProjectTick:
                     block_human_step(self._store, action)
                     self.wrote = True
                 case LaunchRun(reissue_of=str()):
-                    # Reissuing lands in Section 8; until then it is a person's call.
-                    block_unsupported_reissue(self._store, action)
-                    self.wrote = True
+                    if not budget.allows_call():
+                        return TickResult.CUT_OFF
+                    self._reissue(action)
                 case LaunchRun():
                     if not budget.allows_call():
                         return TickResult.CUT_OFF
@@ -296,6 +296,19 @@ class ProjectTick:
             },
         )
         self.wrote = True
+        self._start(entry)
+
+    def _reissue(self, action: LaunchRun) -> None:
+        """Repeat a launch recovery found never started, under its own id (D9)."""
+        decision = begin_reissue(
+            self._store, action, self._supervisor_dir, self._observer.poll_run
+        )
+        self.wrote = True
+        if isinstance(decision, ReissueLaunch):
+            self._start(decision.entry)
+
+    def _start(self, entry: JournalEntry) -> None:
+        """Launch a journaled entry. A launch that cannot start is recorded."""
         started = launch(entry, self._supervisor_dir, self._popen)
         if isinstance(started, LaunchError):
             failed = LaunchFailed(started.failure, None, started.detail)

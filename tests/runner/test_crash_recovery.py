@@ -16,7 +16,14 @@ from sq_stub import write_run_script
 from sq_stub_scripts import RunScript, single_review, split_review
 
 from amoeba.runner.finish import RESULT_RUN_ID
-from amoeba.store import PARAM_RUN_ID, JournalOutcome, JournalResolver
+from amoeba.runner.launch import PARAM_REISSUE_OF
+from amoeba.store import (
+    PARAM_RUN_ID,
+    CommandKind,
+    JournalEntry,
+    JournalOutcome,
+    JournalResolver,
+)
 from runner.crash_entry import KillPoint
 from runner.crash_harness import CrashHarness, RunSettings
 
@@ -186,3 +193,47 @@ def test_kill_between_ingest_and_route_keeps_outcome_unrouted(
     assert len(review_harness.verdict_ids()) == 1, "recorded once, not again"
     review_harness.route(entry)
     assert review_harness.unrouted() == []
+
+
+# --------------------------------------------------------------------------
+# Reissue (slice 125, D9): a launch that never started is launched once
+# --------------------------------------------------------------------------
+
+
+def test_kill_before_launch_is_reissued_once_under_the_same_run_id(
+    tmp_path: Path,
+) -> None:
+    harness = CrashHarness(tmp_path, dispatch=True)
+    try:
+        run = RunSettings(run_seconds=0.2)
+        first = harness.start(run, KillPoint.BEFORE_LAUNCH)
+        harness.wait_for_sigkill(first)
+        runs = [e for e in harness.entries() if e.kind is CommandKind.SQ_RUN]
+        [journaled] = runs
+        run_id = str(journaled.parameters[PARAM_RUN_ID])
+        assert not journaled.is_resolved, "the crash left the launch open"
+        assert harness.sq_run_calls(run_id) == 0
+
+        second = harness.start(run)
+        harness.wait_until(
+            "the reissued run to be recorded",
+            lambda: len(_sq_runs(harness)) == 2 and _sq_runs(harness)[1].is_resolved,
+        )
+
+        old, new = _sq_runs(harness)
+        assert (old.outcome, old.resolved_by) == (
+            JournalOutcome.NOT_APPLIED,
+            JournalResolver.RECOVERY,
+        )
+        assert new.parameters[PARAM_RUN_ID] == run_id, "the same run id"
+        assert new.parameters[PARAM_REISSUE_OF] == old.id
+        assert new.outcome is JournalOutcome.COMPLETED
+        assert harness.sq_run_calls(run_id) == 1, "one `sq run` for that id"
+        harness.stop(second)
+        assert harness.sq_run_calls(run_id) == 1
+    finally:
+        harness.close()
+
+
+def _sq_runs(harness: CrashHarness) -> list[JournalEntry]:
+    return [e for e in harness.entries() if e.kind is CommandKind.SQ_RUN]

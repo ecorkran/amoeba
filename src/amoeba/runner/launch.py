@@ -120,6 +120,9 @@ SQ_PARAM_FLAG: Final = "-p"
 #: Journal parameter keys besides the run id and checkout.
 PARAM_PIPELINE: Final = "pipeline"
 PARAM_PARAMS: Final = "params"
+#: Set on the entry that reissues a launch recovery found never started (D9): the
+#: id of the ``not_applied`` entry it repeats.
+PARAM_REISSUE_OF: Final = "reissue_of"
 
 #: Characters Squadron splits or parses on in a ``-p key=value`` argument.
 PARAM_VALUE_SEPARATOR: Final = ","

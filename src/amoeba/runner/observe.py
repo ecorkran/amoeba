@@ -95,6 +95,10 @@ class RunObserver:
         # fault that stands does not look recovered (and its escalation close).
         self._faulted: dict[str, Fault] = {}
 
+    def poll_run(self, run_id: str) -> RunPoll:
+        """One bounded poll of a run id, for the caller to act on (the reissue)."""
+        return self._poll(run_id)
+
     def observe(
         self,
         entries: Sequence[JournalEntry],

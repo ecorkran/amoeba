@@ -16,6 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from cf_stub import STATE_ENV
 from contract.launched import LaunchedProcess
 from sq_stub import (
     LOG_ENV,
@@ -33,6 +34,7 @@ from amoeba.store import (
     project_store_path,
 )
 from runner.crash_entry import KILL_AT_ENV, KillPoint
+from runner.dispatch.pointer_support import CfWorld
 from runner.ingest.routing_support import route_outcome
 from runner.tick_support import drive_project, ready_slice_step, ready_step
 
@@ -60,12 +62,20 @@ class CrashHarness:
     """One scenario's directories, node ids and process lifecycle."""
 
     def __init__(
-        self, tmp_path: Path, node_count: int = 1, slice_name: str | None = None
+        self,
+        tmp_path: Path,
+        node_count: int = 1,
+        slice_name: str | None = None,
+        *,
+        dispatch: bool = False,
     ) -> None:
         """``slice_name`` puts the one step under a slice of that name, so a review
-        the run writes can be attributed to it."""
+        the run writes can be attributed to it. ``dispatch`` runs the real dispatch
+        planner over a stub ``cf`` world instead of the proof planner."""
         self.tmp_path = tmp_path
         self.slice_name = slice_name
+        self.dispatch = dispatch
+        self.world = CfWorld(tmp_path / "world") if dispatch else None
         self.home = tmp_path / "home"
         self.supervisor_dir = tmp_path / "supervisor"
         self.checkout = tmp_path / "checkout"
@@ -80,6 +90,8 @@ class CrashHarness:
             self.logs_dir,
         ):
             directory.mkdir()
+        if self.world is not None:
+            self.checkout = self.world.root
         self.stub_dir = write_sq_stub(tmp_path / "stub-bin")
         self._launched: list[LaunchedProcess] = []
         self.node_ids = self._create_nodes(node_count)
@@ -87,7 +99,13 @@ class CrashHarness:
     def _create_nodes(self, count: int) -> list[str]:
         """Create the project and its test nodes before any process starts."""
         with Store.open(project_store_path(self.supervisor_dir, PROJECT)) as store:
-            if self.slice_name is not None:
+            if self.world is not None:
+                step = ready_slice_step(
+                    store, "dispatch-slice", PROJECT, slice_index=125
+                )
+                node_ids = [step[1].id]
+                store.record_cf_snapshot(self.world.snapshot_input(PROJECT, "cf-a"))
+            elif self.slice_name is not None:
                 node_ids = [ready_slice_step(store, self.slice_name, PROJECT)[1].id]
             else:
                 node_ids = [ready_step(store, PROJECT).id for _ in range(count)]
@@ -111,6 +129,11 @@ class CrashHarness:
         }
         if run.script is not None:
             environment[RUN_SCRIPT_ENV] = str(run.script)
+        if self.world is not None:
+            environment["PATH"] = (
+                f"{self.world.bin_dir}{os.pathsep}{environment['PATH']}"
+            )
+            environment[STATE_ENV] = str(self.world.state_path)
         if kill_at is not None:
             environment[KILL_AT_ENV] = kill_at.value
         return environment
@@ -133,6 +156,8 @@ class CrashHarness:
         ]
         for node_id in self.node_ids:
             command += ["--node-id", node_id]
+        if self.dispatch:
+            command.append("--dispatch")
         launched = LaunchedProcess(
             label,
             command,

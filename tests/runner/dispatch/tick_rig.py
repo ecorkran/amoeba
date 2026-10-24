@@ -10,8 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from cf_harness import observed
-
 from amoeba.process import RunOutcome, RunOutcomeDocument
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
@@ -29,11 +27,6 @@ from amoeba.store import (
     Node,
     NodeStatus,
     Store,
-)
-from amoeba.upstream.context_forge import (
-    FIELD_PROJECT_PATH,
-    STATE_PROJECT_KEY,
-    STATE_WORKTREES_KEY,
 )
 from runner.dispatch.pointer_support import CfWorld
 from runner.observe_support import Child
@@ -92,17 +85,8 @@ class DispatchRig:
         project_path: str | None = None,
     ) -> None:
         """Record the observed CF snapshot dispatch resolves checkouts from."""
-        world = self.world
-        default = {
-            "wt_a": world.worktree_entry("wt_a", world.root, 100, 199),
-            "wt_b": world.worktree_entry("wt_b", world.second, 200, 299),
-        }
-        state = {
-            STATE_PROJECT_KEY: {FIELD_PROJECT_PATH: project_path or str(world.root)},
-            STATE_WORKTREES_KEY: default if worktrees is None else worktrees,
-        }
         self.store.record_cf_snapshot(
-            observed(PROJECT, CF_PROJECT, state=state, changed=[])
+            self.world.snapshot_input(PROJECT, CF_PROJECT, worktrees, project_path)
         )
 
     def step(
