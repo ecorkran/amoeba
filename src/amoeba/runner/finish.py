@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Final
 
 from amoeba.process import RunOutcome
+from amoeba.runner.ingest.outcome import PAYLOAD_REASON, REASON_VANISHED
 from amoeba.runner.observed import Finished, LaunchFailed, RunEnded, RunVanished
 from amoeba.store import (
     PARAM_RUN_ID,
@@ -29,12 +30,8 @@ RESULT_STATUS: Final = "status"
 RESULT_CHECKPOINT: Final = "checkpoint"
 RESULT_PAUSED_AT: Final = "paused_at"
 RESULT_LAUNCH_FAILURE: Final = "launch_failure"
-PAYLOAD_REASON: Final = "reason"
 PAYLOAD_EXIT_CODE: Final = "exit_code"
 PAYLOAD_STDERR_TAIL: Final = "stderr_tail"
-
-#: The block reason for a confirmed run that Squadron no longer knows.
-REASON_VANISHED: Final = "vanished"
 
 
 def record(store: Store, entry: JournalEntry, finished: Finished) -> None:

@@ -226,13 +226,13 @@ Per the LLD, "Technology Choices". Edit `tests/sq_stub.py` and `tests/test_sq_st
 
 Per the LLD, D6 "The block, by outcome". Create `runner/ingest/__init__.py`, `runner/ingest/outcome.py` and `tests/runner/ingest/test_outcome.py`.
 
-- [ ] A pure function from a finished run (122's `Finished`: `RunEnded`, `RunVanished`; `LaunchFailed` stays with 122's path) to `BlockPlan(kind, context, payload) | None` and the entry outcome, following every row of the D6 table
-- [ ] Define the block reasons `failed`, `orphaned`, `vanished` once here (reuse 122's `REASON_VANISHED` by moving it, not copying). `started_before_crash` is added here too, for Task 8.1
-- [ ] `SQ_CHECKPOINT` blocks carry no payload; context is `paused: <kind> at <step>, run <run_id>`, with `unknown` for a null kind or step
-- [ ] Squadron text copied into a block's context or payload (checkpoint kind and step, `failure.message`) is cut to 122's `STDERR_TAIL_LIMIT_BYTES` bound (LLD, Special Considerations "Security"). Reuse that constant; do not define another
-- [ ] Tests (table-driven, every D6 row): completed gives no block and `completed`; paused gives `SQ_CHECKPOINT`; failed with each `FailureKind`, an unknown kind and a null failure gives `HUMAN` with `{reason: failed, run_id, failure}`; orphaned and vanished give `HUMAN` and `failed`; an oversized `failure.message` is cut to the bound
+- [x] A pure function from a finished run (122's `Finished`: `RunEnded`, `RunVanished`; `LaunchFailed` stays with 122's path) to `BlockPlan(kind, context, payload) | None` and the entry outcome, following every row of the D6 table
+- [x] Define the block reasons `failed`, `orphaned`, `vanished` once here (reuse 122's `REASON_VANISHED` by moving it, not copying). `started_before_crash` is added here too, for Task 8.1
+- [x] `SQ_CHECKPOINT` blocks carry no payload; context is `paused: <kind> at <step>, run <run_id>`, with `unknown` for a null kind or step
+- [x] Squadron text copied into a block's context or payload (checkpoint kind and step, `failure.message`) is cut to 122's `STDERR_TAIL_LIMIT_BYTES` bound (LLD, Special Considerations "Security"). Reuse that constant; do not define another
+- [x] Tests (table-driven, every D6 row): completed gives no block and `completed`; paused gives `SQ_CHECKPOINT`; failed with each `FailureKind`, an unknown kind and a null failure gives `HUMAN` with `{reason: failed, run_id, failure}`; orphaned and vanished give `HUMAN` and `failed`; an oversized `failure.message` is cut to the bound
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: map finished run outcomes to blocked states`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: map finished run outcomes to blocked states`
 
 ### Task 4.2: Review selection, reading, parsing and attribution, with tests
 **Owner**: Junior AI | **Dependencies**: 2.7, 3.1 | **Effort**: 3
