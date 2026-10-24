@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from amoeba.runner.faults import RUNNER_ACTOR
 from amoeba.runner.intent.merge import merge_intent
 from amoeba.runner.intent.vocabulary import (
     REASON_DETAIL_LIMIT,
@@ -29,6 +30,7 @@ from amoeba.store import (
     Node,
     NodeKind,
     SetDesiredState,
+    Store,
 )
 
 
@@ -99,3 +101,29 @@ def interpret(
     if change is None:
         return Interpretation(AcknowledgmentOutcome.NO_OP)
     return Interpretation(AcknowledgmentOutcome.APPLIED, desired_state=change)
+
+
+def apply_pending_intents(store: Store, project_id: str) -> int:
+    """Acknowledge every pending intent in ``seq`` order; return how many (D9).
+
+    Store-only: it reads no link state and checks no budget. Each intent is
+    acknowledged once, in its own transaction, together with its row change, so a
+    crash leaves it pending and the next call applies it exactly once. Store
+    failures propagate to the tenant (122, D8).
+    """
+    pending = store.pending_intents(project_id)
+    if not pending:
+        return 0
+    tree = LifecycleTree(store.nodes_for_project(project_id))
+    for intent in pending:
+        # Read after the previous intent's write, so same-target intents compose.
+        row = store.desired_state(project_id, node_id=intent.node_id)
+        result = interpret(intent, tree, row)
+        store.acknowledge_message(
+            intent.id,
+            acknowledged_by=RUNNER_ACTOR,
+            outcome=result.outcome,
+            reason=result.reason,
+            desired_state=result.desired_state,
+        )
+    return len(pending)
