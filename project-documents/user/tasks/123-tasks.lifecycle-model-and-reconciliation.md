@@ -17,16 +17,16 @@ projectState: Slices 120, 121 and 122 are merged. `amoeba.runner` has the tick s
 dateCreated: 20261023
 dateUpdated: 20261024
 status: not_started
-turns: 33
-promptTokens: 1938080
-cachedTokens: 1802314
-cacheWriteTokens: 135728
-completionTokens: 39123
-durationSeconds: 268.2
-costUsd: 1.114739
-usageRounds: 2
-pricedRounds: 2
-revision_number: 1
+turns: 41
+promptTokens: 3211960
+cachedTokens: 3057189
+cacheWriteTokens: 154717
+completionTokens: 48609
+durationSeconds: 336.1
+costUsd: 1.411075
+usageRounds: 3
+pricedRounds: 3
+revision_number: 2
 ---
 
 ## Context Summary
@@ -125,25 +125,32 @@ Per the LLD, D12 and Component Structure. Create `upstream/context_forge/plan.py
 
 ## Section 4: The probe set (D11)
 
-### Task 4.1: Probe `cf list initiatives -a` with the full model and share the `cf` call, with tests
-**Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 3
+### Task 4.1: Extract the shared `cf` call, with tests
+**Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 2
 
-Per the LLD, D11. 122 already dropped the slices probe, so this swaps in the full model and shares the command constants and the call code that Task 6.3's plan read reuses. Both changes are to `probes.py`, and neither adds behavior beyond the stricter initiatives check. Edit `runner/probes.py`; create `runner/lifecycle/__init__.py` (empty exports for now), `runner/lifecycle/commands.py` and `runner/cf_call.py`; edit `tests/runner/test_probes.py`.
+Behavior-preserving, so a separate commit from Task 4.2. Edit `runner/probes.py`; create `runner/cf_call.py`; tests in `tests/runner/test_probes.py` stay unchanged.
 
-- [ ] `cf_call.py` holds one function, `run_cf(argv, run, timeout_seconds)`, returning the completed process or a failure detail (timeout, `OSError`), extracted from `probe_link`'s call code. `probe_link` uses it. Existing probe tests pass unchanged
+- [ ] `cf_call.py` holds `run_cf(argv, run, timeout_seconds)`, returning the completed process or a failure detail (timeout, `OSError`), extracted from `probe_link`'s call code, and `OUTPUT_HEAD_CHARS` moved from `probes.py` so later modules can import both without a cycle. `probe_link` uses them
+- **Success Criteria**:
+  - [ ] Existing probe tests pass with no edits. Commit: `refactor: extract the shared cf call`
 
-- [ ] `commands.py` defines once: `CF_EXECUTABLE`, `CF_PROJECT_FLAG`, `CF_JSON_FLAG`, the status command, the initiatives command with `-a`, and a function building the slice-list command for an index. `probes.py` imports them and no longer defines them
+### Task 4.2: Probe `cf list initiatives -a` with the full model, with tests
+**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
+
+Per the LLD, D11 ("the commands are defined once in `plan_read.py`, and `probes.py` uses the same constants"). 122 already dropped the slices probe. Create `runner/lifecycle/__init__.py` (empty exports for now) and `runner/lifecycle/plan_read.py` holding only the command constants for now (Task 6.3 adds the read); edit `runner/probes.py`, `tests/cf_stub.py`, `tests/runner/test_probes.py`.
+
+- [ ] `plan_read.py` defines once: `CF_EXECUTABLE`, `CF_PROJECT_FLAG`, `CF_JSON_FLAG`, the status command, the initiatives command with `-a`, and a function building the slice-list command for an index. `probes.py` imports them and no longer defines them
 - [ ] The initiatives probe now fails unless `parse_initiatives` accepts the output. `cf status` keeps 122's top-level object check
 - [ ] Tests: the probe passes on the captured initiatives fixture and fails on a document missing `index`; the probe invokes `list initiatives --json -a -p <id>`; existing probe tests still pass; the stub `cf` in `tests/cf_stub.py` answers `-a` (update its argument check and its good initiatives output to the captured shape)
 - **Success Criteria**:
-  - [ ] Probe and stub tests pass; no CF command string is defined outside `commands.py`. Commit: `refactor: probe initiatives with the plan model`
+  - [ ] Probe and stub tests pass; no CF command string is defined outside `plan_read.py`. Commit: `feat: probe initiatives with the plan model`
 
 ---
 
 ## Section 5: The lifecycle model
 
 ### Task 5.1: `LifecycleStep` and the step map, with tests
-**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 4.2 | **Effort**: 3
 
 Per the LLD, D3. Create `runner/lifecycle/steps.py` and `tests/runner/lifecycle/__init__.py`, `tests/runner/lifecycle/test_steps.py`.
 
@@ -172,7 +179,7 @@ Per the LLD, D1, D4 and "API Contracts". Create `runner/lifecycle/tree.py` and `
 Per the LLD, D4 (table, eligible slice, "previous means by ascending index"). Create `runner/lifecycle/predecessors.py` and `tests/runner/lifecycle/test_predecessors.py`.
 
 - [ ] `predecessors(tree, node) -> tuple[Node, ...]` implements the D4 table, one rule per step. This is the only place that says what a step waits for. Module direction is fixed to avoid a circular import: `predecessors.py` imports `LifecycleTree` from `tree.py` only under `TYPE_CHECKING` and uses the tree through its methods; `tree.py` imports `predecessors.py` at module level (Task 5.4 uses it)
-- [ ] Eligible slice: linked, has step children, CF status not `deferred` or `deprecated` is expressed by "has step children" (D6 gives those slices none). Orphans are excluded. "Previous" is the eligible slice with the next lower `cf.index` in the same initiative
+- [ ] Eligible slice: a linked slice that has step children. A `deferred` or `deprecated` slice has none (D6), so it is skipped; orphans are excluded too. "Previous" is the eligible slice with the next lower `cf.index` in the same initiative
 - [ ] `integration` waits on `slice_plan` and on `merge` of every eligible slice in its initiative
 - [ ] `predecessors_done(tree, node)`: true when every predecessor is `done`
 - [ ] Tests, one per table row: `architecture` has none; `slice_plan` waits for architecture; `slice_design` waits for `slice_plan` of the initiative; `tasks` waits for `slice_design`; `implementation` waits for `tasks` and for the previous slice's `merge`, and the first slice waits only for `tasks`; `merge` waits for `implementation`; `integration` waits for all eligible merges. Also: slice n+1's `slice_design` does not wait for slice n; an orphaned slice and a stepless slice are skipped as "previous"; ordering follows `cf.index` not creation order; an unknown-status slice (steps present) holds the next slice's `implementation`
@@ -220,12 +227,12 @@ Per the LLD, "Technology Choices". Edit `tests/cf_stub.py` (if it passes ~300 li
 ### Task 6.3: One link's plan read under the budget, with tests
 **Owner**: Junior AI | **Dependencies**: 6.2 | **Effort**: 5
 
-Per the LLD, D5 (read scoping), D7 (cut-off), D8 (error document). Create `runner/lifecycle/plan_read.py` and `tests/runner/lifecycle/test_plan_read.py`. Make every call through `run_cf` from `runner/cf_call.py` (Task 4.1).
+Per the LLD, D5 (read scoping), D7 (cut-off), D8 (error document). Add the read to `runner/lifecycle/plan_read.py` (Task 4.2) and create `tests/runner/lifecycle/test_plan_read.py`. Make every call through `run_cf` from `runner/cf_call.py` (Task 4.1).
 
 - [ ] Result types, frozen: `PlanRead` (a complete read: the initiatives, and for each initiative a `SliceList`, `NoSlicePlan` or `SliceReadFailed(detail)`), `PlanReadFailed(detail)` (the initiatives read failed, or a slice error needed escalation), `PlanReadCutOff`. `type PlanReadResult` is their union
 - [ ] `read_plan(cf_project_id, linked_slice_initiatives, run, budget, timeout_seconds)`: initiatives first, then each initiative's slice list, each a separate call that checks `budget.allows_call()` first. Any refusal returns `PlanReadCutOff` and nothing else. `linked_slice_initiatives` is the set of initiative indexes that already have linked slice nodes
 - [ ] An error document (exit 1, `error: true`) from a slice read means: no linked slices under that initiative gives `NoSlicePlan`; linked slices give `SliceReadFailed` naming the initiative. The decision never reads the error's `message`
-- [ ] Timeout, non-zero exit without an error document, and parse failure of a slice read give `SliceReadFailed`; the same on the initiatives read gives `PlanReadFailed`. Detail names the command and the head of the output (`OUTPUT_HEAD_CHARS` from `probes.py`). Never retried in the tick
+- [ ] Timeout, non-zero exit without an error document, and parse failure of a slice read give `SliceReadFailed`; the same on the initiatives read gives `PlanReadFailed`. Detail names the command and the head of the output (`OUTPUT_HEAD_CHARS` from `cf_call.py`). Never retried in the tick
 - [ ] Tests with an injected runner returning canned `CompletedProcess` values from the captured fixtures: complete read; no-plan initiative without linked slices; the same with linked slices is `SliceReadFailed`; each failure kind for both read levels; cut-off before the first call, between initiatives and mid-way, each returning `PlanReadCutOff` with no result for earlier calls; a read that would pass the deadline starts no further call
 - **Success Criteria**:
   - [ ] Tests pass. Every call is preceded by a budget check. Commit: `feat: add budgeted plan read for one CF link`
@@ -261,7 +268,7 @@ Per the LLD, D8. Edit `runner/faults.py` and `tests/runner/test_faults.py`.
 
 ## Section 8: Reconcile
 
-All tests in this section run against `Store.open_temporary()` with hand-built `PlanRead` values and a helper `tests/runner/lifecycle/reconcile_support.py` that builds a plan (initiatives, slice lists). Per the LLD, D5 and D6. `reconcile(store, project_id, cf_project_id, read, faults) -> bool` (whether anything was written) is the entry point; it runs the rules in the fixed order orphan → create → update → complete. It is first created in Task 8.3, so the tests of 8.1 and 8.2 call their rule functions directly (`checked_scope`, then the orphan function), and later tasks call `reconcile`.
+All tests in this section run against `Store.open_temporary()` with hand-built `PlanRead` values and a helper `tests/runner/lifecycle/reconcile_support.py` that builds a plan (initiatives, slice lists). Per the LLD, D5 and D6. `reconcile(store, project_id, cf_project_id, read, faults) -> bool` (whether anything was written), where `faults` is the tick's `TickFaults` (`runner/faults.py`): reconcile adds the `plan_read_failed` faults found by the read checks to it, while orphan and unknown-status blocks are direct store writes, not faults in it. It is the entry point; runs the rules in the fixed order orphan → create → update → complete. It is first created in Task 8.3, so the tests of 8.1 and 8.2 call their rule functions directly (`checked_scope`, then the orphan function), and later tasks call `reconcile`.
 
 ### Task 8.1: Read checks (safety rules), with tests
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 4
@@ -287,23 +294,32 @@ Per the LLD, D5 step 1 and D2 (orphaning). Create `runner/lifecycle/orphaning.py
 - **Success Criteria**:
   - [ ] Tests pass. Nothing is deleted. Commit: `feat: orphan nodes CF no longer reports`
 
-### Task 8.3: Create rule and statuses at creation, with tests
-**Owner**: Junior AI | **Dependencies**: 8.2 | **Effort**: 5
+### Task 8.3: Create rule, with tests
+**Owner**: Junior AI | **Dependencies**: 8.2 | **Effort**: 4
 
-Per the LLD, D1 (display data), D2 (`slice_name` stem rule), D6. Create `runner/lifecycle/reconcile.py` (the only `create_node` caller) with the `reconcile` entry point calling orphan then create; tests in `tests/runner/lifecycle/test_reconcile_create.py`.
+Per the LLD, D1 (display data), D2 (`slice_name` stem rule), D6 (statuses at creation). Create `runner/lifecycle/reconcile.py` (the only `create_node` caller) with the `reconcile` entry point calling orphan then create; tests in `tests/runner/lifecycle/test_reconcile_create.py`.
 
 - [ ] An initiative with no linked node gets an initiative node (title from `name`, `cf.project`, `cf.index`, `cf.artifact_path` from `archFile`) and then its `architecture`, `slice_plan`, `integration` steps. A slice listed under a read initiative with no linked node gets a slice node under that initiative, then its four steps. A linked node missing a step child gets only that step. Step nodes carry `cf.project`, a null index and `cf.phase` set to the step value; titles are the step value
 - [ ] `slice_name` comes from the `{index}-slice.` stem of `designFile` (the stem rule is defined once in `runner/lifecycle/slugs.py`). A `designFile` of another form leaves it null and logs a WARNING naming the file. No `designFile` leaves it null. Amoeba never builds a slug
 - [ ] Statuses (D6): a step is created `done` if its completion predicate (Task 5.1) holds, else `runnable`; a container node is `runnable`. A slice reported `deferred` or `deprecated` gets a node and no steps, and gains steps on a later read with another status
-- [ ] An unknown status (`degraded` or out of vocabulary): the slice gets four `runnable` steps and is blocked on `HUMAN` with payload `{fault_kind: plan_status_unknown, index, status}`; `plan_read_failed` is not raised
 - [ ] Each check-before-write: a rerun of the same read writes nothing
-- [ ] Tests: linking a project whose fixture plan has initiative 100 (checked) and 120 with slices: node counts, step sets per level, every step in 100's subtree `done`, every node carrying its index; initiative with no `archFile` gets a runnable `architecture`; `in_progress` slice gets four runnable steps; `slice_name` for the stem, an odd file name (WARNING, null), and no file; deferred slice has no steps and gains them later, a slice with steps keeps them when later deferred; `degraded` slice blocked once with the payload, still blocked after a second identical read, no `plan_read_failed`; `test_renumber_yields_one_orphan_and_one_new_node` (one orphan escalation, one new linked node, the orphan's index and `slice_name` cleared); rerunning writes nothing; a slice listed under the other initiative is orphaned and recreated
+- [ ] Tests: linking a project whose fixture plan has initiative 100 (checked) and 120 with slices: node counts, step sets per level, every step in 100's subtree `done`, every node carrying its index; initiative with no `archFile` gets a runnable `architecture`; `in_progress` slice gets four runnable steps; `slice_name` for the stem, an odd file name (WARNING, null), and no file; deferred slice has no steps and gains them later, a slice with steps keeps them when later deferred; `test_renumber_yields_one_orphan_and_one_new_node` (one orphan escalation, one new linked node, the orphan's index and `slice_name` cleared); rerunning writes nothing; a slice listed under the other initiative is orphaned and recreated
 - [ ] Guard test in `tests/test_create_node_guard.py` (follow `tests/test_writer_guard.py`: walk the AST of `src/amoeba`, not a text search): fails if any module other than `runner/lifecycle/reconcile.py` calls `create_node`. A self-test shows a synthetic module calling it (source string parsed with `ast`) is detected
 - **Success Criteria**:
   - [ ] Tests pass. Adding a `create_node` call elsewhere in `src/amoeba` fails the guard. Commit: `feat: create initiative, slice and step nodes from the plan`
 
-### Task 8.4: Update rule, with tests
-**Owner**: Junior AI | **Dependencies**: 8.3 | **Effort**: 2
+### Task 8.4: Unknown-status block, with tests
+**Owner**: Junior AI | **Dependencies**: 8.3 | **Effort**: 3
+
+Per the LLD, D6 ("An unknown status") and D8 (`plan_status_unknown` is node-scoped). A rule run on every read, not only at creation, so a block the PM resolved is restored. Create `runner/lifecycle/status_block.py`, called by `reconcile` after the create rule; tests in `tests/runner/lifecycle/test_status_block.py`.
+
+- [ ] A linked slice whose CF status is unknown (`degraded` or outside the vocabulary) gets four `runnable` steps if it has none (the create rule does this), and the slice node is blocked on `HUMAN` with payload `{fault_kind: plan_status_unknown, index, status}` when it is neither blocked nor done. `plan_read_failed` is not raised
+- [ ] Tests: a new `degraded` slice is created with four steps and blocked once; a second identical read writes nothing; the PM resolves the block while the status is still unknown and the next read blocks it again; once CF reports a known status the node is not blocked again; a `done` slice is not blocked; an out-of-vocabulary value blocks with its raw text in the payload; the next slice's `implementation` is not ready while the unknown slice's `merge` is not done
+- **Success Criteria**:
+  - [ ] Tests pass. Commit: `feat: block slices with an unknown plan status`
+
+### Task 8.5: Update rule, with tests
+**Owner**: Junior AI | **Dependencies**: 8.4 | **Effort**: 2
 
 Per the LLD, D2 (rename) and D5 step 3. Edit `reconcile.py`; tests in `tests/runner/lifecycle/test_reconcile_update.py`.
 
@@ -312,8 +328,8 @@ Per the LLD, D2 (rename) and D5 step 3. Edit `reconcile.py`; tests in `tests/run
 - **Success Criteria**:
   - [ ] Tests pass. Commit: `feat: update node CF references on plan edits`
 
-### Task 8.5: Complete rule, with tests
-**Owner**: Junior AI | **Dependencies**: 8.4 | **Effort**: 4
+### Task 8.6: Complete rule, with tests
+**Owner**: Junior AI | **Dependencies**: 8.5 | **Effort**: 4
 
 Per the LLD, D5 step 4 and D3. Create `runner/lifecycle/completion.py`; tests in `tests/runner/lifecycle/test_completion.py`.
 
@@ -321,7 +337,7 @@ Per the LLD, D5 step 4 and D3. Create `runner/lifecycle/completion.py`; tests in
 - [ ] Steps already `done` are untouched. A crash between the resolve and the status write is repaired by the next pass (the block is already resolved, the step runnable)
 - [ ] Tests, no-slice-plan state: an initiative whose slice read is `NoSlicePlan` keeps `slice_plan` runnable and raises no fault; a later read that returns a slice list completes `slice_plan`; `architecture` completes when an `archFile` appears
 - [ ] Tests: runnable step with a true predicate is done; a step with an unresolved journal entry is not; a blocked human step is resolved by `runner` then done; a blocked pipeline step is left; `merge` completes from the slice being reported complete; `integration` completes from `isChecked` and not from status; the crash-between-writes case, simulated by resolving first and then running the rule, finishes with one resolved block and a done step; a done step is untouched
-- [ ] Crash repair (D5 "Failures during reconcile"), in `tests/runner/lifecycle/test_reconcile_crash.py`, now that all four rules exist: wrap the store so the k-th write raises, for every k across a first-link reconcile; a fresh `reconcile` on the same store afterwards completes the tree with no duplicate linked nodes and the same final tree as an uninterrupted run
+- [ ] Crash repair (D5 "Failures during reconcile"), in `tests/runner/lifecycle/test_reconcile_crash.py`, now that every rule exists: wrap the store so the k-th write raises, for every k across a first-link reconcile; a fresh `reconcile` on the same store afterwards completes the tree with no duplicate linked nodes and the same final tree as an uninterrupted run
 - **Success Criteria**:
   - [ ] Tests pass; `reconcile` runs orphan → create → update → complete. Commit: `feat: complete observed lifecycle steps`
 
@@ -330,7 +346,7 @@ Per the LLD, D5 step 4 and D3. Create `runner/lifecycle/completion.py`; tests in
 ## Section 9: Tick wiring
 
 ### Task 9.1: Put the lifecycle tree in `ProjectView`, with tests
-**Owner**: Junior AI | **Dependencies**: 8.5 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 8.6 | **Effort**: 3
 
 Per the LLD, "API Contracts" (`ProjectView` gains `tree`, which replaces the flat runnable list). Behavior-preserving: no plan read yet. Edit `runner/decide.py`, `runner/tick.py`, `tests/runner/tick_support.py` and the four test planners that read `view.runnable_nodes` (`grep -rn runnable_nodes tests src`).
 
@@ -342,28 +358,27 @@ Per the LLD, "API Contracts" (`ProjectView` gains `tree`, which replaces the fla
   - [ ] Full runner tests, `ruff` and `pyright` pass. Commit: `refactor: give ProjectView the lifecycle tree`
 
 ### Task 9.2: Plan read and reconcile in the project tick, with tests
-**Owner**: Junior AI | **Dependencies**: 9.1, 8.5, 6.4 | **Effort**: 4
+**Owner**: Junior AI | **Dependencies**: 9.1, 8.6, 6.4 | **Effort**: 5
 
-Per the LLD, "Data Flow", D5, D7 (polling first, which links), D11. Edit `runner/tick.py`, `runner/factory.py`/`runner/tenant.py` (pass the schedule and settings through), `tests/runner/tick_support.py`; tests in `tests/runner/test_tick_plan.py` and `tests/runner/test_budget_coverage.py`.
+Per the LLD, "Data Flow", D5, D7 (polling first, which links), D8 (closure), D11. Edit `runner/tick.py`, `runner/factory.py`/`runner/tenant.py` (pass the schedule and settings through), `tests/runner/tick_support.py`; tests in `tests/runner/test_tick_plan.py`, `tests/runner/test_tick_plan_faults.py` and `tests/runner/test_budget_coverage.py`.
 
 - [ ] In `ProjectTick.run`, after in-flight polling and the probe check (the `[reconciliation reads - slice 123]` slot): for each link whose probe passed and for which the schedule says due, run `read_plan` with the remaining budget. `PlanReadCutOff` applies nothing, logs a WARNING naming the link, records nothing, and returns the link to due. `PlanReadFailed` calls `record_failed` and adds a `plan_read_failed` fault. A complete read goes through `reconcile`, then `record_complete` (a read with any slice-level failure counts as failed). The tree in `ProjectView` is built after reconcile
+- [ ] Closure (D8): a link whose last plan read failed counts as a `plan_read_failed` recurrence on every tick until a read of that link succeeds, as `LinkProbes` does for a failed probe. A failure for a link the project no longer has is not replayed
 - [ ] A plan read never runs for a link that failed its probe. Polling and its budget come first, so a cut-off poll leaves no plan read
-- [ ] Tests (injected clock, runner and stub): first tick reads and reconciles and `ProjectView.tree` shows the new nodes; the next tick before the interval reads nothing; after the interval a new slice in the plan's next answer gets a node while `projects.json` is unchanged; a changed snapshot triggers an early read; a cut-off read applies nothing, raises no fault and is read again on the next tick; a run's poll is never cut off by the plan read in the same tick; a probe-failed link is not read; a tick with the (empty) production planner tuple creates nodes, launches nothing, blocks no human step and raises no fault
+- [ ] Tests (injected clock, runner and stub): first tick reads and reconciles and `ProjectView.tree` shows the new nodes; the next tick before the interval reads nothing; after the interval a new slice in the plan's next answer gets a node while `projects.json` is unchanged; a changed snapshot triggers an early read; a cut-off read applies nothing, raises no fault and is read again on the next tick; a run's poll is never cut off by the plan read in the same tick; a probe-failed link is not read; a failed initiatives read raises one `plan_read_failed`, which stays open on later ticks that do not read and closes on the tick of the next successful read of that link; an empty-list-with-linked-nodes read, a duplicate index and a slice read error with linked slices each raise one `plan_read_failed` and orphan nothing; a failed slice read for one initiative leaves another initiative's slices applied; two links in one project keep independent state; a repeating fault adds no rows; a tick with the (empty) production planner tuple creates nodes, launches nothing, blocks no human step and raises no fault
 - [ ] Budget coverage: extend `test_budget_coverage.py` so its failing runner and `Popen` also drive a tick through the plan read with the budget exhausted before the initiatives read and between slice reads. Neither is called after the deadline and nothing is written for the link
 - **Success Criteria**:
   - [ ] Tests pass, and 122's tick, probe, tenant and end-to-end tests pass. Commit: `feat: read and reconcile the plan in the project tick`
 
-### Task 9.3: Reconcile faults and `plan_read_failed` closure, with tests
-**Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 3
+### Task 9.3: Reconcile exceptions, with tests
+**Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
 
-Per the LLD, D5 (failures during reconcile) and D8 (closure). Edit `runner/tick.py`; tests in `tests/runner/test_tick_plan_faults.py`.
+Per the LLD, D5 (failures during reconcile). Edit `runner/tick.py`; tests in `tests/runner/test_tick_plan_faults.py`.
 
-- [ ] Store failures (`STORE_FAILURES`) mid-reconcile re-raise. Any other exception stops this link's reconcile, leaves the link due, and reaches 122's one catch (a project-scoped `unexpected_fault`, no node in context). Decide does not run for that project that tick
-- [ ] A link whose last plan read failed counts as a `plan_read_failed` recurrence on every tick until a read of that link succeeds, as `LinkProbes` does for a failed probe. A failure for a link the project no longer has is not replayed
-- [ ] Tests: an exception injected into reconcile after the k-th write raises one `unexpected_fault`, leaves the link due, and the next tick completes the tree with no duplicates; a store failure propagates; a failed initiatives read raises one `plan_read_failed`; on later ticks that do not read it stays open; the next successful read of that link closes it on that tick; an empty-list-with-linked-nodes read, a duplicate index and a slice read error with linked slices each raise one `plan_read_failed` and orphan nothing; a failed slice read for one initiative leaves another initiative's slices applied; two links in one project keep independent state; a repeating fault adds no rows
+- [ ] Store failures (`STORE_FAILURES`) mid-reconcile re-raise. Any other exception stops this link's reconcile, leaves the link due (it is not recorded complete), and reaches 122's one catch (a project-scoped `unexpected_fault`, no node in context). Decide does not run for that project that tick
+- [ ] Tests: an exception injected into reconcile after the k-th write raises one `unexpected_fault`, leaves the link due, and the next tick completes the tree with no duplicates; the same exception every tick adds no rows; a store failure propagates
 - **Success Criteria**:
-  - [ ] Tests pass. Commit: `feat: keep plan_read_failed open until a read succeeds`
-
+  - [ ] Tests pass. Commit: `feat: leave a link due after a reconcile exception`
 
 ---
 
@@ -401,7 +416,7 @@ Per the LLD, "Provides to Other Slices" (Contract documents). Edit under `docs/`
 ### Task 11.2: CHANGELOG, architecture and slice-plan edits
 **Owner**: Junior AI | **Dependencies**: 11.1 | **Effort**: 2
 
-Per the LLD, "Special Considerations". Edit `CHANGELOG.md`, `project-documents/user/architecture/120-arch.runner-routing-engine.md`, `project-documents/user/slices/120-slices.runner-routing-engine.md`. Preserve any "User-Provided Concept" section.
+Per the LLD, "Special Considerations". Edit `CHANGELOG.md`, `project-documents/user/architecture/120-arch.runner-routing-engine.md`, `project-documents/user/architecture/120-slices.runner-routing-engine.md`. Preserve any "User-Provided Concept" section.
 
 - [ ] CHANGELOG `[Unreleased]` entry in the style of slice 122's: the lifecycle model and reconciliation, `plan_read_interval_seconds` and `--plan-read-interval`, migration `010`
 - [ ] Arch edits: no gate nodes in v1 (D3); no v1 step with a CF-write executor (D3); Observe reads every linked project's plan on an interval (D7); store-only actions are not journaled (D9); the slice list is not a start-up probe (D11); a done or already-blocked orphan does not get its own escalation (D5)
@@ -416,5 +431,6 @@ Per the LLD, "Verification Walkthrough". Run each command once and read its outp
 
 - [ ] `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright`; then `uv run pytest tests/contract -v` and `uv run pytest tests/runner/lifecycle tests/upstream/test_cf_plan.py tests/store/test_migration_010.py -v`
 - [ ] Walkthrough step 3 with the real `cf` and a temporary `AMOEBA_STORE_DIR`: start, create the project, link this repository's CF project, then `amoeba inspect nodes` and `amoeba inspect messages --json`. Check against the LLD's expected output (initiative rows with indexes; steps under initiative 100 and slices 101–110 `done`; initiative 120's slices with four `runnable` steps each; later initiatives with a `runnable` `architecture`; no `plan_read_failed`, orphan or human-step blocks). Then `amoeba stop`
+- [ ] Walkthrough step 4 (LLD): copy this repository to a temporary directory, register it with `cf init`, link it as in step 3 and wait for the first read. Edit the name of slice 131 in the copy's `120-slices.runner-routing-engine.md`; after `plan_read_interval_seconds` check that `amoeba inspect nodes` shows the same node id still linked to index 131 and `inspect messages` has no orphan escalation. Change `(131)` to `(132)`; after the next read check for one `lifecycle_orphan` escalation naming former index 131, a new slice node 132 and the old node unlinked. Then `amoeba stop`. If `cf init` cannot run non-interactively, write `BLOCKED:` with its error under this task and stop
 - **Success Criteria**:
   - [ ] All gates clean. The walkthrough matches the expected output or the deviation is written in this task. Commit any fixes as `fix:` or `refactor:` and any notes as `docs:`
