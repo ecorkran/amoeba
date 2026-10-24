@@ -25,12 +25,20 @@ from runner.observe_support import (
     Child,
     document,
 )
-from runner.tick_support import PROJECT, Rig, runnable_unbusy
+from runner.tick_support import (
+    PROJECT,
+    Rig,
+    drive_project,
+    ready_step,
+    runnable_unbusy,
+)
 
 
 @pytest.fixture
 def node(store: Store) -> Node:
-    return store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="n")
+    step = ready_step(store)
+    drive_project(store)
+    return step
 
 
 def test_the_entry_is_journaled_before_the_launch_call(
@@ -226,9 +234,11 @@ def test_the_view_tree_holds_every_node_of_the_project(
 ) -> None:
     other = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="m")
     store.create_node(project_id="elsewhere", kind=NodeKind.SLICE, title="x")
+    parent_id = node.parent_id
     rig = Rig(tmp_path, store)
 
     rig.tick()
 
     [view] = rig.planner.views
-    assert {n.id for n in view.tree.nodes} == {node.id, other.id}
+    assert parent_id is not None
+    assert {n.id for n in view.tree.nodes} == {parent_id, node.id, other.id}

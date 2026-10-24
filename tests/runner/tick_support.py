@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from itertools import count
 from pathlib import Path
 from typing import Any
 
@@ -20,11 +21,19 @@ from amoeba.runner.launch import (
 )
 from amoeba.runner.lifecycle.cadence import PlanReadSchedule
 from amoeba.runner.lifecycle.plan_stage import PlanStage
+from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.tick import ProjectTick
-from amoeba.store import DesiredState, Node, NodeStatus, Store, SubmissionKind
+from amoeba.store import (
+    CFReference,
+    DesiredState,
+    Node,
+    NodeKind,
+    Store,
+    SubmissionKind,
+)
 from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
 from runner.intent.intent_support import submit
 from runner.observe_support import (
@@ -59,6 +68,30 @@ def view_for(
     )
 
 
+_INITIATIVE_INDEXES = count(100)
+
+
+def ready_step(store: Store, project_id: str = PROJECT) -> Node:
+    """A ready lifecycle step: the architecture step of a new linked initiative.
+
+    Launch-path tests need a node a planner may act on, and only a ready step
+    can be a current step. Each call makes a new initiative.
+    """
+    initiative = store.create_node(
+        project_id=project_id,
+        kind=NodeKind.INITIATIVE,
+        title="initiative",
+        cf=CFReference(project="cf-a", index=next(_INITIATIVE_INDEXES)),
+    )
+    return store.create_node(
+        project_id=project_id,
+        kind=NodeKind.PHASE_OR_ARTIFACT,
+        title="architecture",
+        parent_id=initiative.id,
+        cf=CFReference(project="cf-a", phase=LifecycleStep.ARCHITECTURE.value),
+    )
+
+
 def drive_project(store: Store, project_id: str = PROJECT) -> None:
     """Drive the whole project now: submit a drive intent and apply it directly.
 
@@ -69,17 +102,9 @@ def drive_project(store: Store, project_id: str = PROJECT) -> None:
 
 
 def runnable_unbusy(view: ProjectView) -> list[Node]:
-    """Runnable nodes of any kind with no run in flight.
-
-    For the 122-era fixtures, whose nodes are plain slices and not lifecycle steps
-    (``ProjectView.ready_unbusy`` offers only ready steps).
-    """
+    """Current steps with no run in flight: what a launch-path test planner acts on."""
     busy = {run.entry.node_id for run in view.in_flight}
-    return [
-        node
-        for node in view.tree.nodes
-        if node.status is NodeStatus.RUNNABLE and node.id not in busy
-    ]
+    return [node for node in view.current_steps if node.id not in busy]
 
 
 class Planner:

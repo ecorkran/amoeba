@@ -31,11 +31,15 @@ from amoeba.store import BlockedKind, Store
 
 
 class HumanStepPlanner:
-    """Blocks each ready step whose executor is a person."""
+    """Blocks each current step whose executor is a person.
+
+    Current means ready, driven and not held (124): a project the PM has not driven
+    is never blocked on.
+    """
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
         actions: list[Action] = []
-        for node in view.tree.ready_steps():
+        for node in view.current_steps:
             step = view.tree.step_of(node)
             if step is not None and STEP_MAP[step].executor is Executor.HUMAN:
                 actions.append(BlockHumanStep(node.id))

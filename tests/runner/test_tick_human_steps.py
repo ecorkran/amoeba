@@ -17,7 +17,7 @@ from runner.plan_tick_support import (
     serve_plan,
     slices_key,
 )
-from runner.tick_support import PLAN_READ_INTERVAL, PROJECT, Rig, link
+from runner.tick_support import PLAN_READ_INTERVAL, PROJECT, Rig, drive_project, link
 
 LINK = "cf-1"
 
@@ -27,6 +27,7 @@ def rig(tmp_path: Path, store: Store) -> Rig:
     built = Rig(tmp_path, store)
     built.planners = (HumanStepPlanner(),)
     link(store, "s-1", LINK, PROJECT)
+    drive_project(store)
     return built
 
 

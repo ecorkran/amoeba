@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
-from dataclasses import replace
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,6 +20,7 @@ from amoeba.runner.decide import (
 )
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.store import DesiredState, Node
 from runner.intent.rows_support import row
 from runner.lifecycle.tree_support import TreeBuilder
 from runner.observe_support import entry
@@ -46,34 +47,109 @@ class Fixed:
         return self._actions
 
 
+@dataclass
+class Steps:
+    """Two initiatives' ready architecture steps, with the project driven."""
+
+    builder: TreeBuilder
+    first: Node
+    second: Node
+    first_owner: Node
+    second_owner: Node
+
+    def view(self, *rows: DesiredState) -> ProjectView:
+        return view_for(self.builder.tree(), rows or (row(drive=True),))
+
+
+@pytest.fixture
+def steps() -> Iterator[Steps]:
+    builder = TreeBuilder()
+    first = builder.initiative(100)
+    second = builder.initiative(101)
+    yield Steps(
+        builder,
+        builder.step_node(first, LifecycleStep.ARCHITECTURE),
+        builder.step_node(second, LifecycleStep.ARCHITECTURE),
+        first,
+        second,
+    )
+    builder.close()
+
+
 def test_no_planners_gives_no_actions() -> None:
     assert decide(_view(), ()) == []
 
 
-def test_planners_concatenate_in_order() -> None:
-    first, second = _launch("a"), _launch("b")
+def test_planners_concatenate_in_order(steps: Steps) -> None:
+    first, second = _launch(steps.first.id), _launch(steps.second.id)
 
-    actions = decide(_view(), (Fixed(first), Fixed(second)))
+    actions = decide(steps.view(), (Fixed(first), Fixed(second)))
 
     assert actions == [first, second]
 
 
-def test_two_actions_for_one_node_raise_and_name_it() -> None:
-    with pytest.raises(ValueError, match="node a"):
-        decide(_view(), (Fixed(_launch("a")), Fixed(_launch("a"))))
+def test_two_actions_for_one_node_raise_and_name_it(steps: Steps) -> None:
+    node_id = steps.first.id
+    with pytest.raises(ValueError, match=f"node {node_id}"):
+        decide(steps.view(), (Fixed(_launch(node_id)), Fixed(_launch(node_id))))
 
 
-def test_two_actions_for_one_node_from_one_planner_raise() -> None:
-    with pytest.raises(ValueError, match="node a"):
-        decide(_view(), (Fixed(_launch("a"), _launch("a")),))
+def test_two_actions_for_one_node_from_one_planner_raise(steps: Steps) -> None:
+    node_id = steps.first.id
+    with pytest.raises(ValueError, match=f"node {node_id}"):
+        decide(steps.view(), (Fixed(_launch(node_id), _launch(node_id)),))
 
 
-def test_decide_is_deterministic_and_hands_each_planner_the_same_view() -> None:
-    planner = Fixed(_launch("a"))
-    view = _view()
+def test_decide_is_deterministic_and_hands_each_planner_the_same_view(
+    steps: Steps,
+) -> None:
+    planner = Fixed(_launch(steps.first.id))
+    view = steps.view()
 
     assert decide(view, (planner,)) == decide(view, (planner,))
     assert all(seen is view for seen in planner.views)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        pytest.param((), id="nothing-driven"),
+        pytest.param((row(drive=True, hold=True),), id="project-held"),
+    ],
+)
+def test_an_action_on_a_ready_step_that_is_not_current_raises(
+    steps: Steps, rows: tuple[DesiredState, ...]
+) -> None:
+    view = view_for(steps.builder.tree(), rows)
+    everything = Fixed(*(_launch(n.id) for n in view.tree.ready_steps()))
+
+    with pytest.raises(ValueError, match="not a current step"):
+        decide(view, (everything,))
+
+
+def test_an_action_on_an_excluded_step_raises(steps: Steps) -> None:
+    excluded = steps.view(row(drive=True), row(steps.first_owner, drive=False))
+    with pytest.raises(ValueError, match=f"node {steps.first.id}"):
+        decide(excluded, (Fixed(_launch(steps.first.id)),))
+
+
+def test_a_planner_acting_only_on_current_steps_passes(steps: Steps) -> None:
+    view = steps.view(row(drive=True), row(steps.second_owner, hold=True))
+    action = _launch(steps.first.id)
+
+    assert decide(view, (Fixed(action),)) == [action]
+    with pytest.raises(ValueError, match=f"node {steps.second.id}"):
+        decide(view, (Fixed(_launch(steps.second.id)),))
+
+
+def test_an_action_naming_an_unknown_node_raises(steps: Steps) -> None:
+    with pytest.raises(ValueError, match="node ghost"):
+        decide(steps.view(), (Fixed(_launch("ghost")),))
+
+
+def test_the_message_names_the_node_and_the_project(steps: Steps) -> None:
+    with pytest.raises(ValueError, match="project demo"):
+        decide(steps.view(), (Fixed(_launch("ghost")),))
 
 
 def test_the_view_is_immutable() -> None:

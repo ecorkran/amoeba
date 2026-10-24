@@ -29,9 +29,9 @@ from amoeba.runner.probes import (
     probe_link,
     probe_sq,
 )
-from amoeba.store import NodeKind, Store
+from amoeba.store import Store
 from runner.observe_support import Clock, FakeCf, Host, document
-from runner.tick_support import PROJECT, Rig, link
+from runner.tick_support import PROJECT, Rig, drive_project, link, ready_step
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "cf"
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
@@ -301,7 +301,8 @@ def test_a_cut_off_probe_records_nothing_and_restarts_from_the_first_command() -
 def test_a_failed_link_raises_one_escalation_and_the_tick_carries_on(
     tmp_path: Path, store: Store
 ) -> None:
-    store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="n")
+    ready_step(store)
+    drive_project(store)
     link(store, "s-1", "cf-dead", PROJECT)
     rig = Rig(tmp_path, store)
     rig.cf.stdout["status"] = ""

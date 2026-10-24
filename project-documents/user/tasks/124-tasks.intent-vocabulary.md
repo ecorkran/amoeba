@@ -159,26 +159,28 @@ Per the LLD, D9 and "Data Flow". Edit `apply.py`; create `tests/runner/intent/te
 
 Per the LLD, D4 ("within drive") and D6. Create `runner/intent/governance.py` (no store import; it may import the `DesiredState` model type), `tests/runner/intent/test_governance_index.py` and `tests/runner/intent/test_governing.py`.
 
-- [ ] `DesiredStateIndex` is built from a sequence of `DesiredState` rows. It maps a target (`None` for the project, else a node id) to its row. Provide a lookup `row_for(target) -> DesiredState | None`
-- [ ] `drives_anything() -> bool`: true when any row has `drive is True`
-- [ ] Index tests: lookup of the project row, of a node row, of a missing target; `drives_anything` is false for no rows, for `drive=false` only and for hold-only rows, and true when any row drives
-- [ ] `Governance` frozen dataclass: `driven: bool`, `held: bool`
-- [ ] `governing(tree, index, step) -> Governance`. The path is the step's container (slice or initiative), the slice's initiative if any, then the project (key `None`). Use `LifecycleTree` accessors (`step_of`, parent lookups); add a small accessor to `tree.py` only if the path cannot be walked with what exists, and say so in the commit
-- [ ] Drive: the nearest row on the path whose `drive` is set decides `driven` with that row's value. The step must also be within that row's `until`: `until` unset, or `step_rank(step) <= step_rank(until)`. No row sets drive: not driven (the default)
-- [ ] Held: true if any row on the path has `hold` set
-- [ ] Tests (table-driven, hand-built tree and rows, no store), asserting `driven` and `held` per step: nothing driven by default; project drive drives every step; initiative `exclude` under a driven project leaves that initiative's steps undriven and a slice `drive` under it restores that slice's; project `pause` with a slice `resume` leaves the slice's steps held; no project pause leaves them not held; `drive until slice_design` on an initiative drives the initiative's `architecture` and `slice_plan` and every slice's `slice_design`, and never `tasks` or `integration`; `drive until tasks` on a slice leaves `implementation` undriven; a pause on a slice does not hold its sibling
+- [x] `DesiredStateIndex` is built from a sequence of `DesiredState` rows. It maps a target (`None` for the project, else a node id) to its row. Provide a lookup `row_for(target) -> DesiredState | None`
+- [x] `drives_anything() -> bool`: true when any row has `drive is True`
+- [x] Index tests: lookup of the project row, of a node row, of a missing target; `drives_anything` is false for no rows, for `drive=false` only and for hold-only rows, and true when any row drives
+- [x] `Governance` frozen dataclass: `driven: bool`, `held: bool`
+- [x] `governing(tree, index, step) -> Governance`. The path is the step's container (slice or initiative), the slice's initiative if any, then the project (key `None`). Use `LifecycleTree` accessors (`step_of`, parent lookups); add a small accessor to `tree.py` only if the path cannot be walked with what exists, and say so in the commit
+- [x] Drive: the nearest row on the path whose `drive` is set decides `driven` with that row's value. The step must also be within that row's `until`: `until` unset, or `step_rank(step) <= step_rank(until)`. No row sets drive: not driven (the default)
+- [x] Held: true if any row on the path has `hold` set
+- [x] Tests (table-driven, hand-built tree and rows, no store), asserting `driven` and `held` per step: nothing driven by default; project drive drives every step; initiative `exclude` under a driven project leaves that initiative's steps undriven and a slice `drive` under it restores that slice's; project `pause` with a slice `resume` leaves the slice's steps held; no project pause leaves them not held; `drive until slice_design` on an initiative drives the initiative's `architecture` and `slice_plan` and every slice's `slice_design`, and never `tasks` or `integration`; `drive until tasks` on a slice leaves `implementation` undriven; a pause on a slice does not hold its sibling
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. `governance.py` imports nothing from `amoeba.store` except model types. Commit: `feat: add the desired-state index and resolve drive and hold`
+  - [x] Tests, `ruff` and `pyright` pass. `governance.py` imports nothing from `amoeba.store` except model types. Commit: `feat: add the desired-state index and resolve drive and hold`
+  - Note: no tree accessor was added. `LifecycleTree.node` (added in 3.1) was sufficient for the path walk.
 
 ### Task 4.2: `current_steps`, with tests
 **Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
 
 Per the LLD, D6. Edit `governance.py`; extend `tests/runner/intent/test_governing.py`.
 
-- [ ] `current_steps(tree, index) -> Sequence[Node]`: `tree.ready_steps()` filtered to steps that are driven and not held, in `ready_steps` order
-- [ ] Tests (hand-built tree and rows): only ready steps can be current; a driven, unheld ready step is current; a held ready step and an undriven ready step are not; an orphan's row never affects a current step; the result keeps `ready_steps` order
+- [x] `current_steps(tree, index) -> Sequence[Node]`: `tree.ready_steps()` filtered to steps that are driven and not held, in `ready_steps` order
+- [x] Tests (hand-built tree and rows): only ready steps can be current; a driven, unheld ready step is current; a held ready step and an undriven ready step are not; an orphan's row never affects a current step; the result keeps `ready_steps` order
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: derive the current steps from governance`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: derive the current steps from governance`
+  - Note: `current_steps` lives in `runner/intent/governance.py`.
 
 ---
 
@@ -189,12 +191,13 @@ Per the LLD, D6. Edit `governance.py`; extend `tests/runner/intent/test_governin
 
 Per the LLD, D7. Edit `runner/decide.py`; update every place that builds a `ProjectView` (`grep -rn "ProjectView(" src tests`), including `runner/tick.py`'s `_decide` for now (pass an index from `desired_states` there; Task 6.1 moves the read). Edit `tests/runner/tick_support.py` and `tests/runner/test_decide.py`.
 
-- [ ] Add `desired: DesiredStateIndex` and `current_steps: Sequence[Node]` to `ProjectView`. The tick computes `current_steps` with `current_steps(tree, index)` when it builds the view
-- [ ] Test helpers in `tests/runner/tick_support.py`: `view_for(tree, rows=(), in_flight=())` builds a `ProjectView` from hand-built `DesiredState` rows and computes `current_steps`; `drive_project(store, project_id)` submits a project-level `{"intent": "drive"}` through the inbox (as `plan_tick_support.py` submits other messages) and then calls `apply_pending_intents(store, project_id)` itself, so the row exists before the next tick. It must not depend on the tick's apply stage, which Task 6.1 adds. Update existing view construction to use `view_for`
-- [ ] Leave `ready_unbusy()` and its test unchanged. Slice 125 owns the dispatch planner and decides how it excludes busy nodes from `current_steps`
-- [ ] Tests: a view built from a driven project exposes the expected `current_steps`, and one built with no rows exposes none
+- [x] Add `desired: DesiredStateIndex` and `current_steps: Sequence[Node]` to `ProjectView`. The tick computes `current_steps` with `current_steps(tree, index)` when it builds the view
+- [x] Test helpers in `tests/runner/tick_support.py`: `view_for(tree, rows=(), in_flight=())` builds a `ProjectView` from hand-built `DesiredState` rows and computes `current_steps`; `drive_project(store, project_id)` submits a project-level `{"intent": "drive"}` through the inbox (as `plan_tick_support.py` submits other messages) and then calls `apply_pending_intents(store, project_id)` itself, so the row exists before the next tick. It must not depend on the tick's apply stage, which Task 6.1 adds. Update existing view construction to use `view_for`
+- [x] Leave `ready_unbusy()` and its test unchanged. Slice 125 owns the dispatch planner and decides how it excludes busy nodes from `current_steps`
+- [x] Tests: a view built from a driven project exposes the expected `current_steps`, and one built with no rows exposes none
 - **Success Criteria**:
-  - [ ] Existing 122 and 123 runner tests pass unchanged apart from how they build the view. No behavior changes yet: planners and `decide()` still ignore `current_steps` until Tasks 5.2 and 5.3. `ruff` and `pyright` pass. Commit: `refactor: give ProjectView the desired-state index and current steps`
+  - [x] Existing 122 and 123 runner tests pass unchanged apart from how they build the view. No behavior changes yet: planners and `decide()` still ignore `current_steps` until Tasks 5.2 and 5.3. `ruff` and `pyright` pass. Commit: `refactor: give ProjectView the desired-state index and current steps`
+  - Note: `view_for` and `drive_project` were added to `tests/runner/tick_support.py`. `drive_project` uses `tests/runner/intent/intent_support.submit`. The interim desired-state read is in `tick.py` `_decide`, to be removed in Task 6.1.
 
 ### Task 5.2: The current-step guard in `decide()`, with tests
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 2

@@ -15,12 +15,12 @@ from amoeba.process import ProcessSettings, RunOutcome, UpstreamShapeError
 from amoeba.runner.decide import Action, LaunchRun, ProjectView
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.tenant import RunnerTenant
-from amoeba.store import PARAM_RUN_ID, NodeKind, Store, StoreBusyError
+from amoeba.store import PARAM_RUN_ID, Store, StoreBusyError
 from amoeba.store.inbox_models import Channel
 from runner.lifecycle.crash_support import fail_nth_write, restore_writes
 from runner.observe_support import Child, Clock, FakeCf, ScriptedPoll, document
 from runner.plan_tick_support import serve_plan
-from runner.tick_support import link, runnable_unbusy
+from runner.tick_support import drive_project, link, ready_step, runnable_unbusy
 
 SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
 
@@ -61,7 +61,8 @@ class Rig:
         (supervisor_dir / LAUNCH_LOGS_DIRNAME).mkdir(parents=True)
         self.stores = {p: Store.open(tmp_path / f"{p}.sqlite3") for p in project_ids}
         for project_id, store in self.stores.items():
-            store.create_node(project_id=project_id, kind=NodeKind.SLICE, title="n")
+            ready_step(store, project_id)
+            drive_project(store, project_id)
         self.host = Host(self.stores)
         self.clock = Clock()
         self.planner = Planner(tmp_path)
@@ -158,9 +159,7 @@ def test_a_project_the_budget_did_not_reach_goes_first_next_tick(
 def test_a_cut_off_project_is_ticked_first_next_time(make_rig: Any) -> None:
     rig: Rig = make_rig("a", "b")
     rig.launch_cost = 10.0
-    second = rig.stores["a"].create_node(
-        project_id="a", kind=NodeKind.SLICE, title="second"
-    )
+    second = ready_step(rig.stores["a"], "a")
 
     rig.tenant.tick(rig.host)  # a launches one node, the budget is spent, a is cut off
     assert rig.launches == 1 and second.id
@@ -261,7 +260,7 @@ def _linked_indexes(rig: Rig, project_id: str) -> list[int]:
     return sorted(
         n.cf.index
         for n in rig.stores[project_id].nodes_for_project(project_id)
-        if n.cf.index is not None
+        if n.cf.index is not None and n.cf.project == "cf-1"
     )
 
 
