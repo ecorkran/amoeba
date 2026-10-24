@@ -7,6 +7,7 @@ records the command and working directory and starts nothing. Clocks do not slee
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -83,10 +84,13 @@ class DispatchRig:
         self,
         worktrees: dict[str, dict[str, object]] | None = None,
         project_path: str | None = None,
+        observed_at: datetime | None = None,
     ) -> None:
         """Record the observed CF snapshot dispatch resolves checkouts from."""
         self.store.record_cf_snapshot(
-            self.world.snapshot_input(PROJECT, CF_PROJECT, worktrees, project_path)
+            self.world.snapshot_input(
+                PROJECT, CF_PROJECT, worktrees, project_path, observed_at
+            )
         )
 
     def step(

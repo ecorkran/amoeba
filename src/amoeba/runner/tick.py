@@ -31,6 +31,7 @@ from amoeba.runner.dispatch.build_view import (
 )
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
+from amoeba.runner.dispatch.pointer_watch import watch_pointers
 from amoeba.runner.dispatch.reissue import ReissueLaunch, begin_reissue
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
@@ -125,6 +126,12 @@ class ProjectTick:
         if probed is TickResult.COMPLETE:
             probed = self._plan_reads(links, budget, faults)
         shape_error = self._record_finished(observed.runs)
+        watch_pointers(
+            self._store,
+            self._project_id,
+            [o.run.entry for o in observed.runs if o.finished is None],
+            faults,
+        )
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )

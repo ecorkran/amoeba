@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 from collections.abc import Mapping
+from datetime import datetime
 from functools import partial
 from itertools import count
 from pathlib import Path
@@ -76,6 +77,7 @@ class CfWorld:
         cf_project_id: str,
         worktrees: dict[str, dict[str, object]] | None = None,
         project_path: str | None = None,
+        observed_at: datetime | None = None,
     ) -> CFSnapshotInput:
         """An observed snapshot of this world: what dispatch resolves checkouts from."""
         default = {
@@ -86,7 +88,8 @@ class CfWorld:
             STATE_PROJECT_KEY: {FIELD_PROJECT_PATH: project_path or str(self.root)},
             STATE_WORKTREES_KEY: default if worktrees is None else worktrees,
         }
-        return observed(project_id, cf_project_id, state=state, changed=[])
+        when = {} if observed_at is None else {"observed_at": observed_at}
+        return observed(project_id, cf_project_id, state=state, changed=[], **when)
 
     @staticmethod
     def worktree_entry(
