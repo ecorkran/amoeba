@@ -34,7 +34,7 @@ pricedRounds: 1
 
 This slice takes a pipeline step node through one phase run, from the PM's drive to evidence in the store. It is the first slice whose production planner launches anything.
 
-- **Dispatch takes two ticks.** On the first, a journaled `cf_write` points the step's checkout at the slice (`cf set slice <index>`, run in that checkout) and reads the result back. On a later tick, once the read-back is recorded, an `sq_run` launches the step's pipeline (`P4`, `P5` or `P6`) with `-p slice=<index>`. `P6` always gets `-p merge=false` in this slice.
+- **Dispatch takes two ticks.** On the first, a journaled `cf_write` points the step's checkout at the slice (`cf set slice <index>`, run in that checkout) and reads the result back. On a later tick, once the read-back is recorded, an `sq_run` launches the step's pipeline (`P4`, `P5` or `P6`) with the slice index as its target (`sq run P4 <index>`). `P6` always gets `-p merge=false` in this slice.
 - **One pipeline per checkout.** The checkout is found from CF's worktree index ranges. It is held from the pointer write until the run is neither running nor paused.
 - **Ingestion.** When a run finishes, ingestion records the review behind its final verdict, the last entry of the outcome document's `reviews` list, including every part file of a split review. It uses 105's parser and the attribution rule, and marks each file `runner_issued` in the same transaction that resolves the journal entry. A paused run becomes `blocked_on_sq_checkpoint`. A failed, orphaned or vanished run becomes `blocked_on_human` with the reason.
 - **Left for routing.** Every finished outcome is marked as awaiting routing, in the same transaction that resolves its entry. Nothing routes it until 126. A crash between ingestion and routing loses nothing (issue #10).
@@ -93,7 +93,7 @@ Developer value. A slice step runs end to end under Amoeba for the first time:
 - **123, merged.** It provides step nodes, `STEP_MAP` with the pipeline names, `CFReference.index`, the `{index}-slice.` stem rule, and migration `010`, so this slice's migration is `011`.
 - **124, merged.** It provides `view.current_steps`, the current-step guard and `drives_anything()`.
 - **Slice plan and arch edits for D4, D5, D11 and D12, committed before merge.** They were made together with this design, in `120-slices.runner-routing-engine.md` entries 6 and 7 and in `120-arch.runner-routing-engine.md`.
-- **squadron-ai 0.23.5 or later.** This slice uses its shapes, not its version number: `sq run --run-id`, `-p slice=…`, `-p merge=false`, and `sq runs wait --json` with `checkpoint`, `failure` and `reviews`.
+- **squadron-ai 0.23.5 or later.** This slice uses its shapes, not its version number: `sq run --run-id`, the slice as the positional target (`sq run P4 131`; Squadron rejects `-p slice=131`, found by the live walkthrough, 20261024), `-p merge=false`, and `sq runs wait --json` with `checkpoint`, `failure` and `reviews`.
 - **Context Forge** as `cf`, with the worktree routing observed on CF 0.19.16 on 20261020 (Interfaces Required).
 
 ### Interfaces Required
@@ -278,7 +278,7 @@ Status: decided
 ### D5 — Pipelines and params are defined once
 Status: decided
 - The pipeline comes from 123's `STEP_MAP`. The params are built by one function, `dispatch_params(step, slice_index)`:
-  - every pipeline step: `{"slice": "<index>"}`;
+  - every pipeline step: `{"slice": "<index>"}`, which `build_argv` passes as the positional target (Squadron rejects it as `-p slice=<index>`);
   - `implementation` (`P6`): also `{"merge": "false"}`.
 - **`merge=false` always, in this slice.** `P6` declares `merge: "true"`. Without the param, the first production `P6` would merge, which breaks "merging is a human step by default". 128 replaces the fixed value with the per-project merge policy. The param key and value are defined once, beside `dispatch_params`.
 - Other params (models, revision limits) are not passed. Squadron's pipeline defaults apply. Choosing them is configuration for a later slice, not dispatch.
@@ -510,7 +510,7 @@ type Action = LaunchRun | BlockHumanStep | WriteSlicePointer
 ### Functional Requirements
 
 - **Two-tick dispatch:**
-  - A driven `slice_design` step gets a `cf_write` on one tick, with `checkout` and `expected_slice_index`, and an `sq_run` of `P4` with `-p slice=<index>` on a later tick, in that checkout.
+  - A driven `slice_design` step gets a `cf_write` on one tick, with `checkout` and `expected_slice_index`, and an `sq_run` of `P4` with the slice index as its target (`sq run P4 <index>`) on a later tick, in that checkout.
   - With the step held or not driven, neither is issued.
   - A `P6` launch always carries `-p merge=false`.
 - **The pointer lands in the right worktree.** With a stub CF holding two worktrees, the write runs in the worktree whose range holds the index. The read-back confirms its index, path and worktree id, and the slice node's `slice_name` is set from the stem.
@@ -588,7 +588,7 @@ Run in bash from the repository root. Steps 1–2 are automated and use the stub
    `cf init` is interactive if the copy has no CF config. If it asks, use the same template as this repository. If the copy's slice 126 is already designed, choose the first slice whose step `slice_design` is `runnable` instead.
 
    Expected:
-   - Within two ticks, `amoeba inspect journal --project scratch` shows a `cf_write` resolved `completed`, with `expected_slice_index` 126 and `checkout` the scratch path. Then it shows an `sq_run` for `P4` with `-p slice=126`, unresolved.
+   - Within two ticks, `amoeba inspect journal --project scratch` shows a `cf_write` resolved `completed`, with `expected_slice_index` 126 and `checkout` the scratch path. Then it shows an `sq_run` for `P4` with params `{slice: 126}` (launched as `sq run P4 126`), unresolved.
    - `(cd "$scratch" && cf status --json)` shows `activeSlice.index` 126.
    - `amoeba inspect nodes` shows the slice node's `slice_name` filled in.
    - `sq runs list` shows the run under its `amoeba-…` id, and `amoeba inspect journal` shows nothing new while it runs.
