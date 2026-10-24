@@ -20,6 +20,16 @@ from amoeba.process.errors import (
     UpstreamShapeError,
 )
 from amoeba.process.host import ResidentProcess, Tenant
+from amoeba.process.observers.cf_readback import (
+    RESULT_FILE_SLICE,
+    RESULT_PROJECT_PATH,
+    RESULT_UPDATED_AT,
+    RESULT_WORKTREE_ID,
+    CFRun,
+    ReadBackAnswer,
+    ReadFailed,
+    read_back_answer,
+)
 from amoeba.process.recovery import (
     Adopt,
     InFlight,
@@ -52,10 +62,17 @@ from amoeba.process.tenants import standard_tenants
 from amoeba.process.version_label import capture_sq_version_label
 
 __all__ = [
+    "RESULT_FILE_SLICE",
+    "RESULT_PROJECT_PATH",
+    "RESULT_UPDATED_AT",
+    "RESULT_WORKTREE_ID",
     "OUTCOME_EXIT_CODES",
     "SQ_EXECUTABLE",
     "SQ_USAGE_ERROR_EXIT_CODE",
     "Adopt",
+    "CFRun",
+    "ReadBackAnswer",
+    "ReadFailed",
     "AlreadyRunningError",
     "CheckpointKind",
     "FailureKind",
@@ -84,6 +101,7 @@ __all__ = [
     "ledger_key",
     "parse_checkpoint_kind",
     "parse_failure_kind",
+    "read_back_answer",
     "poll_run",
     "standard_tenants",
 ]

@@ -21,6 +21,7 @@ COMMAND_WORDS: Final = frozenset(
         plan_read.CF_ALL_FLAG,
         "initiatives",
         "slices",
+        plan_read.CF_SET_COMMAND,
     }
 )
 

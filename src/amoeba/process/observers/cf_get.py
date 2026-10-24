@@ -1,6 +1,6 @@
 """``cf get --json``: the one command that reads a project's record, and its parse.
 
-Each external failure mode gets a distinguishable :class:`Unknown` reason, so the
+Each external failure mode gets a distinguishable :class:`ReadFailed` reason, so the
 human reading a blocked state knows whether ``cf`` is missing, hung, failing, or
 emitting something unparseable. Nothing here compares anything: the read-back
 observer (``cf_readback``) does that.
@@ -12,11 +12,11 @@ import json
 import logging
 import subprocess
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from amoeba.process.recovery import Unknown
 from amoeba.upstream.context_forge import FIELD_PROJECT_PATH
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,17 @@ CF_FIELD_FILE_SLICE: Final = "fileSlice"
 CF_FIELD_PROJECT_PATH: Final = FIELD_PROJECT_PATH
 CF_FIELD_WORKTREE: Final = "worktree"
 CF_FIELD_WORKTREE_ID: Final = "id"
+
+
+@dataclass(frozen=True)
+class ReadFailed:
+    """``cf get`` could not be read at all: missing, hung, failing or unparseable.
+
+    Distinct from a record that was read and is incomplete. A caller may retry a
+    failed read; recovery treats it as an unknown.
+    """
+
+    reason: str
 
 
 def _cf_get_args(project: str) -> tuple[str, ...]:
@@ -78,7 +89,7 @@ class CFProjectRecord(BaseModel):
 
 def read_project(
     project: str, checkout: str | None, run: CFRun, timeout_seconds: float
-) -> CFProjectRecord | Unknown:
+) -> CFProjectRecord | ReadFailed:
     """Run ``cf get --json``, returning the record or why it is unobservable.
 
     Runs in ``checkout`` when one is given, and with no working directory
@@ -98,19 +109,19 @@ def read_project(
     except FileNotFoundError:
         # Specific: cf is not on PATH. An answer, not a bug.
         logger.warning("cf is not on PATH")
-        return Unknown(reason="cf is not available on PATH")
+        return ReadFailed(reason="cf is not available on PATH")
     except subprocess.TimeoutExpired:
         # Specific: cf hung. Never retried here; recovery escalates.
         logger.warning("cf get timed out after %ss", timeout_seconds)
-        return Unknown(reason=f"cf get timed out after {timeout_seconds}s")
+        return ReadFailed(reason=f"cf get timed out after {timeout_seconds}s")
     except OSError:
         # Specific: the process could not be launched at all.
         logger.warning("cannot invoke cf", exc_info=True)
-        return Unknown(reason="cf could not be invoked")
+        return ReadFailed(reason="cf could not be invoked")
 
     if completed.returncode != 0:
         logger.warning("cf get exited %d", completed.returncode)
-        return Unknown(
+        return ReadFailed(
             reason=(
                 f"cf get exited {completed.returncode}: "
                 f"{completed.stderr.strip() or 'no stderr'}"
@@ -120,18 +131,18 @@ def read_project(
     return _parse(completed.stdout)
 
 
-def _parse(output: str) -> CFProjectRecord | Unknown:
+def _parse(output: str) -> CFProjectRecord | ReadFailed:
     """Parse ``cf get --json`` output, or say why it could not be read."""
     try:
         payload = json.loads(output)
     except json.JSONDecodeError:
         # Specific: cf emitted something that is not JSON.
         logger.warning("cf get emitted unparseable output")
-        return Unknown(reason="cf get emitted unparseable output")
+        return ReadFailed(reason="cf get emitted unparseable output")
 
     try:
         return CFProjectRecord.model_validate(payload)
     except ValidationError:
         # Specific: the output is JSON but not a project record object.
         logger.warning("cf get output is not a project record")
-        return Unknown(reason="cf get output is not a project record")
+        return ReadFailed(reason="cf get output is not a project record")

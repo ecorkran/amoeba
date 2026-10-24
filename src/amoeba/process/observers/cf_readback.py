@@ -17,9 +17,11 @@ parsed from ``fileSlice`` by the shared stem rule, because Amoeba never builds
 CF's slug. An entry that expects nothing at all is ``Unknown``: comparing nothing
 would adopt vacuously.
 
-**One read-back.** :func:`read_back_cf_write` is the whole comparison. The
-recovery observer calls it with ``subprocess.run``; the Runner's tick calls the
-same function, so the two can never disagree about what "written" means.
+**One read-back.** :func:`read_back_answer` is the whole comparison. The recovery
+observer calls it (through :func:`read_back_cf_write`, which folds a failed read into
+``Unknown``) with ``subprocess.run``; the Runner's tick calls it directly, because it
+retries a failed read where recovery escalates. So the two can never disagree about
+what "written" means.
 
 **Provenance.** ``cf get --json`` exposes no version field (verified 20260921:
 its keys are project metadata only). The observer therefore records two things
@@ -45,6 +47,7 @@ from amoeba.process.observers.cf_get import (
     CF_FIELD_UPDATED_AT,
     CFProjectRecord,
     CFRun,
+    ReadFailed,
     read_project,
 )
 from amoeba.process.recovery import Adopt, NotApplied, Observation, Unknown
@@ -78,6 +81,9 @@ def capture_version_label(timeout_seconds: float) -> str:
     return version_label.capture_version_label(CF_EXECUTABLE, timeout_seconds)
 
 
+type ReadBackAnswer = Adopt | NotApplied | Unknown | ReadFailed
+
+
 def read_back_cf_write(
     entry: JournalEntry,
     run: CFRun,
@@ -86,8 +92,27 @@ def read_back_cf_write(
 ) -> Observation:
     """Report whether CF holds the values this ``cf_write`` entry intended.
 
-    ``label``, when given, supplies the provenance label recorded on adoption
-    and is called only then; the tick passes none.
+    The recovery view of :func:`read_back_answer`: a read that failed is an
+    ``Unknown``, because recovery escalates what it cannot tell.
+    """
+    answer = read_back_answer(entry, run, timeout_seconds, label)
+    if isinstance(answer, ReadFailed):
+        return Unknown(reason=answer.reason)
+    return answer
+
+
+def read_back_answer(
+    entry: JournalEntry,
+    run: CFRun,
+    timeout_seconds: float,
+    label: Callable[[], str] | None = None,
+) -> ReadBackAnswer:
+    """Whether CF holds the values this ``cf_write`` entry intended.
+
+    ``ReadFailed`` means ``cf get`` could not be read, which a caller may try again;
+    ``Unknown`` means it was read and is incomplete or the entry cannot be judged.
+    ``label``, when given, supplies the provenance label recorded on adoption and is
+    called only then; the tick passes none.
     """
     parameters = entry.parameters
     project = parameters.get(PARAM_PROJECT)
@@ -108,7 +133,7 @@ def read_back_cf_write(
         return Unknown(reason="journal entry expects nothing, so nothing can be read")
 
     record = read_project(project, checkout, run, timeout_seconds)
-    if isinstance(record, Unknown):
+    if isinstance(record, ReadFailed):
         return record
 
     narrowed_expected: dict[str, object] = dict(expected)  # pyright: ignore[reportUnknownArgumentType]
@@ -220,6 +245,9 @@ __all__: Sequence[str] = [
     "CFProjectRecord",
     "CFReadbackObserver",
     "CFRun",
+    "ReadBackAnswer",
+    "ReadFailed",
     "capture_version_label",
+    "read_back_answer",
     "read_back_cf_write",
 ]

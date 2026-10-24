@@ -41,6 +41,15 @@ EXPECTED_EXPORTS = {
     "detection_key",
     "ledger_key",
     "capture_sq_version_label",
+    # Slice 125: the one CF read-back, and the keys its adoption records.
+    "read_back_answer",
+    "ReadBackAnswer",
+    "ReadFailed",
+    "CFRun",
+    "RESULT_FILE_SLICE",
+    "RESULT_PROJECT_PATH",
+    "RESULT_UPDATED_AT",
+    "RESULT_WORKTREE_ID",
     # Slice 125: the outcome document's checkpoint, failure and reviews.
     "RunFailure",
     "RunReview",

@@ -355,11 +355,11 @@ Per the LLD, Interfaces Required (Context Forge) and "Technology Choices". Edit 
 
 Per the LLD, D2 and D1 "The read-back confirms it". Create `runner/dispatch/pointer.py` and `tests/runner/dispatch/test_pointer.py`.
 
-- [ ] `issue_pointer_write(store, action, budget, ...)`: journal a `cf_write` with `project`, `checkout` (absolute), `expected={}`, `expected_slice_index`; run `cf set -p <id> slice <index>` with `cwd=checkout` through `TickBudget` and `tick_call_timeout_seconds` (122's injected runner and `runner/cf_call.py`); then `read_back`. It returns the `cf set` result and the read-back answer; it writes nothing else (Task 6.3 applies them)
-- [ ] `read_back(store, entry, expected_checkout, budget, ...)` calls the observer function from Task 2.3, then checks `project_path == checkout.path` and `worktree_id` equal (absent when no worktrees). Returns an answer: `Confirmed(stem)`, `Mismatch(reason)`, `Unknown(reason)`, or `ReadFailed(reason)`
-- [ ] Tests (stub `cf`): each answer from the matching stub knob (Task 6.1); the journaled parameters; every subprocess goes through `TickBudget` (122's injected-runner assertion pattern)
+- [x] `issue_pointer_write(store, action, budget, ...)`: journal a `cf_write` with `project`, `checkout` (absolute), `expected={}`, `expected_slice_index`; run `cf set -p <id> slice <index>` with `cwd=checkout` through `TickBudget` and `tick_call_timeout_seconds` (122's injected runner and `runner/cf_call.py`); then `read_back`. It returns the `cf set` result and the read-back answer; it writes nothing else (Task 6.3 applies them)
+- [x] `read_back(store, entry, expected_checkout, budget, ...)` calls the observer function from Task 2.3, then checks `project_path == checkout.path` and `worktree_id` equal (absent when no worktrees). Returns an answer: `Confirmed(stem)`, `Mismatch(reason)`, `Unknown(reason)`, or `ReadFailed(reason)`
+- [x] Tests (stub `cf`): each answer from the matching stub knob (Task 6.1); the journaled parameters; every subprocess goes through `TickBudget` (122's injected-runner assertion pattern)
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: write and read back the CF slice pointer in the checkout`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: write and read back the CF slice pointer in the checkout`
 
 ### Task 6.3: Apply pointer-write outcomes, with tests
 **Owner**: Junior AI | **Dependencies**: 6.2 | **Effort**: 2
