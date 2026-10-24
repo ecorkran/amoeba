@@ -274,7 +274,12 @@ and is distinct from an unmappable stored string, which raises
 | Kind | Required keys |
 | --- | --- |
 | `sq_run` | `pipeline`, `params`, `run_id` |
-| `cf_write` | `project`, `expected` (a mapping of CF field name to the value the write should leave behind) |
+| `cf_write` | `project`, `expected` (a mapping of CF field name to the value the write should leave behind), `checkout` (the absolute path the write and every read-back of it run in; slice 125) |
+
+`cf_write` also takes an optional `expected_slice_index` (an integer, exported as
+`PARAM_EXPECTED_SLICE_INDEX`): the slice index a pointer write sets. The read-back
+compares it with the index parsed from CF's `fileSlice`. Entries written before
+slice 125 carry no `checkout` and are read back without a working directory.
 
 Additional keys are stored and returned unchanged.
 
@@ -287,19 +292,21 @@ field was never recorded is the failure this prevents.
 | Method | Effect |
 | --- | --- |
 | `journal_issue(node_id, *, kind, parameters)` | Validates the parameters for the kind, writes an unresolved entry, **commits**, returns it. Call before the side effect. Raises `NodeNotFoundError` for an unknown node and `ValueError` for a missing required key — in both cases writing nothing. |
-| `journal_resolve(entry_id, *, outcome, result=None, resolved_by=ISSUER)` | Closes the entry. Raises `InvalidTransitionError` if it does not exist or is already resolved; a first outcome is never silently overwritten. |
+| `journal_resolve(entry_id, *, outcome, result=None, resolved_by=ISSUER)` | Closes the entry. Raises `InvalidTransitionError` if it does not exist or is already resolved; a first outcome is never silently overwritten. An `issuer` resolution of an `sq_run` entry also sets `awaits_routing`, in the same statement (slice 125). A `recovery` resolution, `journal_escalate`, and any other kind leave it null. |
 | `journal_escalate(entry_id, *, reason)` | **One transaction:** sets outcome `unknown`, blocks the node on `HUMAN` with a context naming the entry, and writes an escalation row carrying the entry id. If the node is already blocked, marks the entry, writes no second blocked state, and writes one escalation row pointing at the existing open block. |
 | `journal_entry(entry_id)` | One entry, or `None`. |
 | `unresolved_journal_entries(project_id)` | Entries still in flight, oldest first. What recovery consumes. |
+| `unrouted_outcomes(project_id)` | Entries with `awaits_routing` set, oldest `issued_at` first (slice 125). What the routing engine consumes. Served by the partial index `idx_journal_awaits_routing`, so its cost follows unrouted work, not history. |
 | `journal_entries(project_id, *, node_id=None, include_resolved=True)` | What inspection consumes. |
 | `recorded_result_run_ids(project_id)` | Run ids already recorded in some entry's result, mapped to that entry's id. The Squadron matcher's fourth candidate condition reads this. |
 
 ### `JournalEntry`
 
 A frozen dataclass: `id`, `project_id`, `node_id`, `kind`, `parameters`,
-`issued_at`, `outcome`, `result`, `resolved_at`, `resolved_by`, plus an
-`is_resolved` property derived from `outcome` — not a separate stored flag, so
-the two cannot disagree.
+`issued_at`, `outcome`, `result`, `resolved_at`, `resolved_by`, `awaits_routing`
+(`bool`, slice 125; see "Unrouted outcomes" below), plus an `is_resolved`
+property derived from `outcome` — not a separate stored flag, so the two cannot
+disagree.
 
 ### The already-blocked branch
 
@@ -493,7 +500,7 @@ verdict_id, record_id, detail`); `BaselineEntry` (`path, digest`);
 | `record_detection(DetectionInput)` | In-process only. One transaction. Idempotent on `(project_id, path, digest)`: a known key returns the existing row and writes nothing. |
 | `baseline_watch(project_id, reviews_dir, entries)` | In-process only. **One transaction:** a `baseline` row per `BaselineEntry` (known keys skipped), then `baselined_at`. An unregistered or already baselined watch raises `StoreIntegrityError` and writes nothing. |
 | `record_detected_verdict(verdict, detection)` | In-process only. **One transaction:** `record_verdict`'s body (its retry rule applies), then an `ingested` ledger row carrying the verdict's id and node. A non-`ingested` outcome raises `ValueError`; an existing ledger key raises `StoreIntegrityError`. A new key whose verdict id already exists (a hand-edited file) records one new row pointing at the existing verdict. |
-| `record_runner_report(entry_id, verdict, detection, *, result)` | In-process only. **One transaction:** the checks, `record_verdict`'s body (its retry rule applies), a `runner_issued` ledger row carrying the verdict's id and node, and the journal entry resolved `completed` by `issuer` with `result` (which must carry `run_id`). An existing ledger key is kept and the entry still resolves. Refuses, writing nothing: a non-`runner_issued` outcome or a `result` without `run_id` (`ValueError`); an entry that is missing, already resolved, not a review-producing kind, or in another project (`InvalidTransitionError`). Returns the verdict record. The evidence contract's "Point 3" is the rule it serves. |
+| `record_runner_report(entry_id, reviews, *, outcome, result)` | In-process only. `reviews` is a sequence of `RunnerReview(verdict, detection)` and may be empty; `outcome` is `completed` or `failed`. **One transaction:** every check, then for each review in order `record_verdict`'s body (its retry rule applies) and a `runner_issued` ledger row carrying the verdict's id and node, then the journal entry resolved with `outcome` by `issuer` with `result` (which must carry `run_id`), which sets `awaits_routing`. An existing ledger key is kept and the entry still resolves. Refuses, writing nothing, even for reviews already processed in the call: any other `outcome`, a non-`runner_issued` detection outcome or a `result` without `run_id` (`ValueError`); an entry that is missing, already resolved, not a review-producing kind, or in another project than any review's detection (`InvalidTransitionError`). Returns the verdict records, in order. The evidence contract's "Point 3" is the rule it serves. |
 | `recorded_since(project_id, record_id)` | Whether a verdict with id `record_id` exists in the project, however it got there. A verdict recorded under an overridden id (`amoeba ingest review --id`) is not seen. |
 | `has_unresolved_review_entry(project_id)` | Whether an unresolved journal entry of a review-producing kind exists. |
 
@@ -718,7 +725,7 @@ first_used_at`), and the two effects `StatusEffect(status)` and
 
 | Method | Effect |
 | --- | --- |
-| `record_routing_decision(decision, *, table, effect, attempt_step)` | **One transaction:** store `table` if its version is new; insert the decision; if `attempt_step` is given, increment the `(node, step)` counter and record the new count on the decision; apply `effect`. A failure at any step leaves none of them. Returns the stored `RoutingDecision`. |
+| `record_routing_decision(decision, *, table, effect, attempt_step)` | **One transaction:** store `table` if its version is new; insert the decision; if `attempt_step` is given, increment the `(node, step)` counter and record the new count on the decision; apply `effect`. When the decision names a `journal_entry_id`, the same transaction clears that entry's `awaits_routing` (slice 125). A failure at any step leaves none of them. Returns the stored `RoutingDecision`. |
 | `routing_decision(decision_id)` | One decision, or `None`. |
 | `routing_decision_for_entry(journal_entry_id)` | The decision that routed a journal entry, or `None`. |
 | `routing_decisions(node_id)` | A node's decisions, oldest first; empty when none. |
@@ -783,6 +790,29 @@ the rules that project CF's plan into nodes are the Runner's
   any module other than `runner/lifecycle/reconcile.py` calls `create_node`.
 - **Inspection.** `amoeba inspect nodes` has a `cf_index` column (empty when
   unset); `--json` carries `cf_index` as a number or `null`.
+
+### Unrouted outcomes
+
+*Added by slice 125. Schema version 11 (migration `011`).* A run the Runner
+observed to its end leaves evidence that the routing engine must decide on. The
+store records that as a flag on the journal entry rather than as a query over
+decisions, so finding the work costs what the work costs, not what the history
+costs.
+
+- **`command_journal.awaits_routing`** (`INTEGER`, null or `1`; `JournalEntry.awaits_routing`
+  reads null and `0` as `False`, `1` as `True`). Rows from before `011` read as
+  `False`. A partial index `idx_journal_awaits_routing` on
+  `(project_id, issued_at) WHERE awaits_routing = 1` serves `unrouted_outcomes`.
+- **Set by the store, never by a caller.** An `issuer` resolution of an `sq_run`
+  entry, through `journal_resolve` or `record_runner_report`, sets it in the same
+  statement. That includes launch failures the Runner resolves `failed`. A
+  `recovery` resolution (`adopted`, `not_applied`, `unknown`) and `journal_escalate`
+  leave it null, because the Runner did not observe an outcome. No other kind sets it.
+- **Cleared by the decision.** `record_routing_decision` clears it on its
+  `journal_entry_id` in its own transaction, so "unrouted" and "has no decision"
+  cannot disagree, and a crash between ingestion and routing leaves it set.
+- **Inspection.** `amoeba inspect journal` has an `awaits_routing` column
+  (`true` or `false`); `--json` carries a boolean.
 
 ## Read-only access
 

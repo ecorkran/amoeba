@@ -417,29 +417,41 @@ ordering depends on two things the Runner must do:
   journal entry, in one transaction**: record the verdict, mark the file,
   resolve the entry. Otherwise the next detection tick takes the file as
   external. The single store method that makes this one call is
-  `record_runner_report(entry_id, verdict, detection, *, result) ->
-  VerdictRecord` (in-process only). One transaction: the checks, then
-  `record_verdict`'s body (its retry rule applies), then the `runner_issued`
-  ledger row carrying the verdict's id and node, then the entry resolved
-  `completed` by `issuer` with `result`. A ledger key already present (detection
-  got there first) keeps the existing row and inserts nothing; the entry still
-  resolves. It refuses, writing nothing: a `detection.outcome` other than
-  `runner_issued` or a `result` without `run_id` (`ValueError`); an entry that
-  does not exist, is already resolved, is not a review-producing kind, or
-  belongs to another project (`InvalidTransitionError`); a verdict already
-  recorded in another project (`StoreIntegrityError`).
+  `record_runner_report(entry_id, reviews, *, outcome, result) ->
+  list[VerdictRecord]` (in-process only). A run may write several review files
+  (the parts of a multi-part review), so `reviews` is a sequence of
+  `RunnerReview(verdict, detection)`; it may be empty (a failed run, or one that
+  wrote no review), and `outcome` is `completed` or `failed`. One transaction:
+  every check, then for each review in order `record_verdict`'s body (its retry
+  rule applies) and the `runner_issued` ledger row carrying the verdict's id and
+  node, then the entry resolved with `outcome` by `issuer` with `result`. A
+  ledger key already present (detection got there first) keeps the existing row
+  and inserts nothing; the entry still resolves. It refuses, writing nothing
+  even for reviews already processed in the call: any other `outcome`, a
+  `detection.outcome` other than `runner_issued` or a `result` without `run_id`
+  (`ValueError`); an entry that does not exist, is already resolved, is not a
+  review-producing kind, or belongs to another project than a review's detection
+  (`InvalidTransitionError`); a verdict already recorded in another project
+  (`StoreIntegrityError`).
 
   The detection row's key must match the one detection would compute, or the
   next scan takes the file as new. `path` is the review file's path as
   detection records it (the registered reviews directory joined with the file
   name), and `digest` is the sha256 hex digest of the bytes of that file (see
-  "Review detection" in [`process-contract.md`](process-contract.md)). The
-  verdict's `journal_entry_id` must be an entry on the verdict's own node, so a
-  Runner journals a review command on the node the review is of.
+  "Review detection" in [`process-contract.md`](process-contract.md)); the
+  Runner forms that pair with `amoeba.process.detection_key`, the same function
+  detection's files go through. A supplied `journal_entry_id` must be an entry
+  on the verdict's own node. The Runner journals a run on the **step node**, the
+  work item that carries its attempts, blocks and in-flight state, and records the
+  verdict on the **slice node** the review is attributed to, with
+  `journal_entry_id=None`. The run is linked to the verdict both ways: the
+  verdict carries `sq_run_id`, and the entry's `result` carries the `verdict_ids`
+  it recorded.
 - **Point 5.** The Runner records its reviews **from the artifact through
   slice 105's parser**, so its record id and detection's are the same
-  parsed-content digest. Any overlap is then a `record_verdict` retry, a
-  no-op.
+  parsed-content digest. The Runner does not mint verdict ids: each is that
+  digest. Any overlap is then a `record_verdict` retry, a no-op, and recording a
+  run's reviews twice (a crash, then a repeat) changes nothing.
 
 ### The version label on a detected verdict
 

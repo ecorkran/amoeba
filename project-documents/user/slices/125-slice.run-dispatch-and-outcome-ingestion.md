@@ -145,12 +145,17 @@ amoeba/runner/
   launch.py        CHANGED  reissue: log check, poll, then 122's launch
   faults.py        CHANGED  FaultKind += checkout_unresolved, pointer_write_failed,
                                          review_unknown, pointer_moved
-  tenant.py        CHANGED  production planners = (HumanStepPlanner(), DispatchPlanner())
-  factory.py       CHANGED  captures the sq version label once at start
+  factory.py       CHANGED  PRODUCTION_PLANNERS = (HumanStepPlanner(), DispatchPlanner());
+                            captures the sq version label once at start
 amoeba/process/
   sq_outcome.py    CHANGED  RunCheckpoint (all fields), RunFailure, RunReview; CheckpointKind,
                             FailureKind
-  observers/cf_readback.py  CHANGED  cwd = checkout; expected_slice_index (D10)
+  observers/cf_readback.py  CHANGED  cwd = checkout; expected_slice_index (D10);
+                            read_back_cf_write(), the one comparison
+  observers/cf_get.py       NEW      the `cf get --json` read and its parse (split out)
+  review_scan.py            CHANGED  ledger_key(), detection_key() (D7, D10)
+amoeba/upstream/context_forge/
+  slice_stem.py    NEW      parse_slice_stem(), the one `{index}-slice.` rule (D2, D10)
 amoeba/store/
   schema/011_journal_awaits_routing.sql   NEW
   journal.py / runner_report.py / routing_decisions.py   CHANGED  (D8, D10)
@@ -319,7 +324,7 @@ Status: decided
   - Rejected: journaling on the slice node. Blocks, attempts and the done guard would then sit on a node that is not the work item, and one slice's design, tasks and code runs would share one node's in-flight state.
   - Rejected: relaxing `record_verdict`'s check to allow a child's entry. It would change a 104 invariant to carry a link the run id already carries.
 - **Verdict ids are content digests, not minted.** 100's retry rule keys on the record id, and evidence contract D5 point 5 requires the Runner's id to be 105's parsed-content digest, the same id detection computes. So the Runner does not mint verdict ids at journal time. The arch sentence saying it does ("Run identity") is corrected with this design.
-- **The detection key is computed by detection's own code, not reimplemented.** Today detection builds the key inside its directory source, as the watch directory joined with the file name, with `content_digest` in `review_scan.py`. D10 moves the path half into one exported function, `detection_key(watches, file) -> (path, digest) | None`. Detection's source and ingest both call it. `None` means no watch covers the file. Detection never sees such a file, and ingest then keys it by the resolved absolute path. A test asserts that detection and ingest produce the same key for one file.
+- **The detection key is computed by detection's own code, not reimplemented.** Today detection builds the key inside its directory source, as the watch directory joined with the file name, with `content_digest` in `review_scan.py`. D10 moves the key into one exported function, `detection_key(watches, file, content) -> (path, digest) | None` (`content` is the bytes already read, so the file is read once). `review_scan.examine` forms detection's key through the same `ledger_key` helper, and ingest calls `detection_key`. (`DirectoryReviewSource` is in `store/`, which Rule 1 bars from importing `amoeba.process`, so the source itself cannot call it.) `None` means no watch covers the file. Detection never sees such a file, and ingest then keys it by the resolved absolute path. A test asserts that detection and ingest produce the same key for one file.
 
 ### D8 — Unrouted outcomes are a flag set at resolution (issue #10)
 Status: decided
@@ -362,7 +367,7 @@ Status: decided
   - Callers updated: the stand-in Runner and the store tests.
   - Rejected: a second method beside the single-review one. Two methods would do one job.
 - **Migration `011`**, `unrouted_outcomes`, and the flag clearing in `record_routing_decision` (D8).
-- **`detection_key(watches, file)`**, exported from `amoeba.process.review_scan` next to `content_digest`. It is the one place detection's ledger key is formed (D7). Detection's directory source is changed to call it, and behaviour is unchanged. An agreement test runs detection and ingest over the same file.
+- **`detection_key(watches, file, content)`**, defined in `amoeba.process.review_scan` next to `content_digest` and exported from `amoeba.process`. It and `examine` (and the baseline) form detection's ledger key through one helper, `ledger_key(path, content)` (D7). Behaviour is unchanged. An agreement test runs detection and ingest over the same file.
 - **Order.** These land as this slice's first code tasks, with their contract tests, the contract suite and their contract text updated, before any dispatch code. D7's change to the evidence contract's journal-node sentence lands with them. This follows 122 D3's precedent and the arch's "the contract changes first".
 
 ### D11 — Pointer moves during a run escalate at project scope, while they last

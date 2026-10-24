@@ -182,11 +182,11 @@ Per the LLD, D7 last bullet and D10 "`detection_key`"; see "Task-level additions
 
 Per the LLD, D10 "Order" and "Provides to Other Slices" (Contract documents). Text only.
 
-- [ ] `docs/store-contract.md`: the `cf_write` keys, `record_runner_report`'s new signature, migration `011`, `unrouted_outcomes`, the flag set by issuer resolutions and cleared by a decision (the API Contracts table)
-- [ ] `docs/evidence-contract.md`: the Runner journals the run on the step node and records the verdict on the slice node with `sq_run_id` and `journal_entry_id=None` (replace the sentence "a Runner journals a review command on the node the review is of", D7); multi-part recording; verdict ids are 105's content digest
-- [ ] Correct the LLD (`user/slices/125-slice.run-dispatch-and-outcome-ingestion.md`) where the code contradicts it: D7's last bullet and D10's `detection_key` bullet say detection's directory source calls `detection_key`; state instead that `review_scan.examine` forms detection's key through it (the source is in `store/`, which Rule 1 bars from importing `amoeba.process`). Component Structure's `tenant.py` line names the production planners; move that entry to `factory.py` (`PRODUCTION_PLANNERS`)
+- [x] `docs/store-contract.md`: the `cf_write` keys, `record_runner_report`'s new signature, migration `011`, `unrouted_outcomes`, the flag set by issuer resolutions and cleared by a decision (the API Contracts table)
+- [x] `docs/evidence-contract.md`: the Runner journals the run on the step node and records the verdict on the slice node with `sq_run_id` and `journal_entry_id=None` (replace the sentence "a Runner journals a review command on the node the review is of", D7); multi-part recording; verdict ids are 105's content digest
+- [x] Correct the LLD (`user/slices/125-slice.run-dispatch-and-outcome-ingestion.md`) where the code contradicts it: D7's last bullet and D10's `detection_key` bullet say detection's directory source calls `detection_key`; state instead that `review_scan.examine` forms detection's key through it (the source is in `store/`, which Rule 1 bars from importing `amoeba.process`). Component Structure's `tenant.py` line names the production planners; move that entry to `factory.py` (`PRODUCTION_PLANNERS`)
 - **Success Criteria**:
-  - [ ] Every changed statement matches the code from Tasks 2.2–2.7, and the LLD matches the task-level additions. Commit: `docs: update store, process and evidence contracts for slice 125`
+  - [x] Every changed statement matches the code from Tasks 2.2–2.7, and the LLD matches the task-level additions. Commit: `docs: update store, process and evidence contracts for slice 125`
 
 ---
 
