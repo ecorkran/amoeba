@@ -11,7 +11,7 @@ carries on.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -57,6 +57,7 @@ class FaultKind(StrEnum):
     REVIEW_UNKNOWN = "review_unknown"
     POINTER_WRITE_FAILED = "pointer_write_failed"
     CHECKOUT_UNRESOLVED = "checkout_unresolved"
+    POINTER_MOVED = "pointer_moved"
 
 
 class LaunchFailure(StrEnum):
@@ -90,6 +91,8 @@ class Fault:
     detail: str
     node_id: str | None = None
     run_id: str | None = None
+    #: More keys for the escalation's payload (a fault that names several runs).
+    extra: Mapping[str, object] | None = None
 
 
 class TickFaults:
@@ -157,6 +160,7 @@ def raise_expected_faults(store: Store, project_id: str, faults: TickFaults) -> 
                 PAYLOAD_DETAIL: fault.detail,
                 PAYLOAD_NODE_ID: fault.node_id,
                 PAYLOAD_RUN_ID: fault.run_id,
+                **(fault.extra or {}),
             },
         )
         wrote = wrote or fault.kind.value not in already_open

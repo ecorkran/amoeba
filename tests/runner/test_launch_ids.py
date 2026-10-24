@@ -51,6 +51,7 @@ def test_the_fault_vocabulary_values_are_stable() -> None:
         "review_unknown",
         "pointer_write_failed",
         "checkout_unresolved",
+        "pointer_moved",
     }
     assert {failure.value for failure in LaunchFailure} == {
         "spawn_error",

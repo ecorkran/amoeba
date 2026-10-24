@@ -451,21 +451,21 @@ Per the LLD, D9. Edit `runner/launch.py` (keep it near 300 lines; move the reiss
 
 Per the LLD, D11. Inputs: the pointer write's `worktree_id` result key (defined in 2.3, written in 6.3) and the time the write resolved (the journal entry's `resolved_at`). Create `runner/dispatch/pointer_watch.py` and `tests/runner/dispatch/test_pointer_watch.py`.
 
-- [ ] `pointer_moved(in_flight, snapshots) -> list[MovedPointer]`, pure. For each in-flight run: its pointer write's `worktree_id` (or project level), the latest snapshot recorded after that write resolved, and its `activeSlice` (or project `fileSlice`) parsed by `parse_slice_stem`. A different index gives `MovedPointer(node_id, run_id, worktree_id, observed)`
-- [ ] Tests: same index, no move; different index, moved; snapshot recorded before the write resolved is ignored; no later snapshot, no move; project with no worktrees uses `fileSlice`; unparseable value is not a move
+- [x] `pointer_moved(in_flight, snapshots) -> list[MovedPointer]`, pure. For each in-flight run: its pointer write's `worktree_id` (or project level), the latest snapshot recorded after that write resolved, and its `activeSlice` (or project `fileSlice`) parsed by `parse_slice_stem`. A different index gives `MovedPointer(node_id, run_id, worktree_id, observed)`
+- [x] Tests: same index, no move; different index, moved; snapshot recorded before the write resolved is ignored; no later snapshot, no move; project with no worktrees uses `fileSlice`; unparseable value is not a move
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: detect a CF pointer moved away from a running step`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: detect a CF pointer moved away from a running step`
 
 ### Task 9.2: Raise and close `pointer_moved` at project scope, with tests
 **Owner**: Junior AI | **Dependencies**: 7.1, 9.1 | **Effort**: 2
 
 Per the LLD, D11 bullets on escalation. Wire into observe; add `FaultKind.POINTER_MOVED`; add `tests/runner/dispatch/test_tick_pointer_moved.py`.
 
-- [ ] A non-empty result raises one project-scoped `pointer_moved` escalation whose payload lists every moved run. It counts as a recurrence while the condition holds and closes on the first complete tick without it (122's closure rule, 123's recurrence pattern)
-- [ ] The run is still observed and ingested
-- [ ] Tests: a stub snapshot moving the run's worktree raises one escalation; it stays open while the snapshot holds; it closes when the pointer returns or the run ends; the run is ingested
+- [x] A non-empty result raises one project-scoped `pointer_moved` escalation whose payload lists every moved run. It counts as a recurrence while the condition holds and closes on the first complete tick without it (122's closure rule, 123's recurrence pattern)
+- [x] The run is still observed and ingested
+- [x] Tests: a stub snapshot moving the run's worktree raises one escalation; it stays open while the snapshot holds; it closes when the pointer returns or the run ends; the run is ingested
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: escalate a moved pointer while a run is in flight`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: escalate a moved pointer while a run is in flight`
 
 ---
 
