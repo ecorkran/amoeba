@@ -361,17 +361,60 @@ empty, so nothing launches until slice 125; tests supply their own planner.
   or an `UpstreamShapeError` re-raises and the process exits. Anything else is
   logged and escalated: the node in context blocks on a human when it has no run
   in flight and is not done; otherwise a project-scoped escalation is raised.
-  Expected faults (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`)
-  are project-scoped escalations; one open row exists per project and kind.
+  Expected faults (`run_observation_failed`, `launch_overdue`, `cf_probe_failed`,
+  and from slice 123 `plan_read_failed`) are project-scoped escalations; one open
+  row exists per project and kind. `lifecycle_orphan` and `plan_status_unknown`
+  (slice 123) are node-scoped: the `fault_kind` of a `blocked_on_human` block's
+  payload, closed by resolving the block.
 - **Probes.** `sq runs wait <fresh id> --timeout 0 --json` must answer
   `not_found` before the loop starts, or `start` exits `STARTUP_FAILED`. Each
   Context Forge link is probed once per lifetime (`cf status --json -p <id>` and
-  `cf list initiatives --json -p <id>`); a failing link raises `cf_probe_failed`
-  for its project and the others carry on.
+  `cf list initiatives --json -a -p <id>`, whose output must parse into the plan
+  model); a failing link raises `cf_probe_failed` for its project and the others
+  carry on.
 - **Crash safety.** Recovery leaves an existing run in flight; the Runner's first
   tick polls it and records it. A kill before `Popen` leaves an entry with no run,
   which recovery marks `not_applied` once the launch grace period has passed. The
   Runner does not relaunch it; the reissue is slice 125's (issue #9).
+
+### The plan read
+
+*Slice 123.* The Runner projects each linked Context Forge project's plan into the
+node tree: initiative and slice nodes, each with its step nodes, linked to CF by
+index (see [Lifecycle nodes and the CF
+index](store-contract.md#lifecycle-nodes-and-the-cf-index) and [Plan
+reads](context-forge-contract.md#plan-reads-slice-123)).
+
+- **Which projects.** Every project with a CF link that passed its probe. Reads
+  run after in-flight runs are polled, so a run's poll is never cut off by a plan
+  read, and a link that failed its probe is not read.
+- **When.** A link is due on the first tick of the process lifetime, then once
+  `--plan-read-interval` has passed since its last *complete* read, or at once when
+  the link's latest observed CF snapshot is new and records a change. A failed
+  snapshot or a recovery with no change triggers nothing. A new slice therefore
+  appears on the next plan read, not the next tick.
+- **How.** `cf list initiatives --json -a`, then `cf list slices <index> --json` for
+  each initiative, each a separate subprocess call that checks the `TickBudget`
+  first and is bounded by `--tick-call-timeout`. A call the budget refuses cuts the
+  read off: nothing is applied, a WARNING names the link, no fault is raised, and
+  the link is due again on the next tick. A read is never retried within a tick.
+- **Reconcile** applies a complete read in a fixed order, each rule checking the
+  store before it writes so a crash anywhere is repaired by the next read: orphan
+  nodes CF no longer reports; create missing initiative, slice and step nodes; block
+  slices with an unknown status; update `slice_name` and `artifact_path`; mark steps
+  CF shows complete as `done`. A failed or partial read never orphans: an empty list
+  while linked nodes exist, a duplicate index and a failed read each raise
+  `plan_read_failed` and apply nothing for what they cover.
+- **Failure and closure.** A link whose last read failed raises `plan_read_failed`
+  on every tick until a read of that link succeeds, so the escalation stays open
+  across ticks that do not read. An exception in reconcile reaches the tenant's one
+  catch as a project-scoped `unexpected_fault`, leaves the link due, and the next
+  tick resumes.
+- **Human steps.** `HumanStepPlanner` (`amoeba.runner.lifecycle.human_steps`)
+  blocks each ready human step on a person with one store write that is not
+  journaled (a single transaction has no side effect to recover). It is not in the
+  production planner tuple, which stays empty until slice 124 registers it with the
+  drive filter.
 
 ## Lifecycle failure modes
 
@@ -558,7 +601,8 @@ provenance and never parsed, ordered, or branched on.
 `--idle-interval`, `--shutdown-grace`, `--clock-tolerance`, `--cf-timeout`,
 `--sq-runs-dir`, `--inbox-batch-size`, `--inbox-max-attempts`,
 `--review-scan-interval`, `--sq-timeout`, `--cf-data-dir`, `--launch-grace`,
-`--tick-deadline`, `--tick-call-timeout`, `--run-poll-interval`.
+`--tick-deadline`, `--tick-call-timeout`, `--run-poll-interval`,
+`--plan-read-interval`.
 `--clock-tolerance` and `--sq-runs-dir` are used only by legacy matching.
 `--launch-grace SECONDS` (slice 120) is how long after a launch Squadron may still
 be creating the run; recovery reads it, and the Runner reads the same value to
@@ -566,7 +610,9 @@ confirm launches. *(Slice 122.)* `--tick-deadline SECONDS` (default 5) is how lo
 after a tick starts the Runner may still begin a subprocess call;
 `--tick-call-timeout SECONDS` (default 8) bounds each call and must be below
 `--shutdown-grace`; `--run-poll-interval SECONDS` (default 15) is the least time
-between two polls of one run. All three must be positive, or `start` exits
+between two polls of one run. *(Slice 123.)* `--plan-read-interval SECONDS`
+(default 30) is the least time between two plan reads of one linked CF project
+(see [The plan read](#the-plan-read)). All four must be positive, or `start` exits
 `STARTUP_FAILED`. `--sq-timeout` also bounds the `sq` probe at start. `stop` exposes the one tunable it consumes: `--stop-timeout`.
 
 ### Exit codes

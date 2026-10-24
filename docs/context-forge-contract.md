@@ -190,6 +190,46 @@ the explicit `unavailable` marker if capture fails. This tenant's tick starts no
 subprocess; the Runner's `cf` link probes (slice 122) do, under `TickBudget`.
 A CF upgrade while the process runs is not reflected until restart.
 
+## Plan reads (slice 123)
+
+*Observed on CF 0.19.17 on 2026-10-23 (first on 0.19.16, 2026-10-20). Dated
+observations, not version dependencies; the captured outputs are
+`tests/fixtures/cf/list_*.json` (see `tests/fixtures/README.md`).* The Runner
+reads a linked project's plan with two commands, each with `-p <cf project id>`,
+on an interval or early on a pointer change (see
+[The plan read](process-contract.md#the-plan-read)). Models are in
+`amoeba.upstream.context_forge.plan`; they ignore unknown fields and require only
+what the Runner relies on.
+
+| Command | Output | Required | Optional |
+| --- | --- | --- | --- |
+| `cf list initiatives --json -a` | An array of initiatives. `-a` includes inactive ones. | `index`, `name`, `isChecked` | `archFile` (may be `null`), `status`, `isActive` |
+| `cf list slices <index> --json` | An object with `entries[]`, plus `slicePlan`, `total`, `completed`. | `entries`; per entry `index`, `name`, `isChecked` | `designFile` (path), `status`, `isActive`, `isNext` |
+
+- **`status`** is one of `complete`, `in_progress`, `not_started`, `deprecated`,
+  `deferred`, `degraded`. A value outside that set parses to an explicit unknown
+  carrying the raw text, and an absent status is `None`; neither is read as a
+  default.
+- **"Reported complete"** means `status` is `complete` **or** `isChecked`. The
+  `integration` step uses `isChecked` alone: initiative 120 reports `complete` with
+  `isChecked: false` until the PM checks it.
+- **An initiative without a slice plan** makes `cf list slices <index>` exit 1 and
+  print `{"error": true, "code": "UNKNOWN", "message": ...}` **on stderr**, with an
+  empty stdout. CF reports every error as `code: UNKNOWN`, so a decision never reads
+  `message`. For an initiative with no linked slice nodes this is the normal "no
+  plan yet" state; with linked slices it is a failed read.
+- **Indexes must be explicit.** `cf list slices --json` does not expose CF's
+  `indexSource`. A plan whose entries have no explicit `(nnn)` gets CF's per-file
+  counters as indexes, and those change when an entry is inserted; the Runner cannot
+  detect this from the read. **Upstream ask:** expose `indexSource` (or refuse
+  counter indexes) in `cf list slices --json`. Until then, give every entry an
+  explicit index.
+- **`cf status` is not read in slice 123.** Nothing here uses pointers or gates.
+  For slices 125 and 128, observed 2026-10-20: `cf status -p <id>` without
+  `--worktree` reports only project-level pointers, which are empty on a
+  worktree-scoped project, and `--worktree` accepts the worktree id. Slice 125's
+  pointer read-back is `cf get --json` run in the checkout.
+
 ## The Runner's own writes (D8)
 
 A CF write the Runner issues (102's `cf_write` journal kind) also changes the
