@@ -7,7 +7,12 @@ from dataclasses import dataclass
 
 import pytest
 
-from amoeba.runner.intent.governance import DesiredStateIndex, Governance, governing
+from amoeba.runner.intent.governance import (
+    DesiredStateIndex,
+    Governance,
+    current_steps,
+    governing,
+)
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import DesiredState, Node
 from runner.lifecycle.tree_support import TreeBuilder
@@ -140,3 +145,60 @@ def test_a_slice_drive_until_tasks_leaves_implementation_undriven(
 def test_governing_a_node_that_is_not_a_step_raises(world: World) -> None:
     with pytest.raises(ValueError, match="not a step"):
         governing(world.builder.tree(), DesiredStateIndex([]), world.first)
+
+
+def _finish_planning(world: World) -> None:
+    """Done architecture and slice plan, so both slices' design steps are ready."""
+    for step in (LifecycleStep.ARCHITECTURE, LifecycleStep.SLICE_PLAN):
+        world.builder.done(world.at(step, world.initiative))
+
+
+def _current(world: World, rows: list[DesiredState]) -> list[Node]:
+    return list(current_steps(world.builder.tree(), DesiredStateIndex(rows)))
+
+
+def test_only_ready_steps_can_be_current(world: World) -> None:
+    current = _current(world, [row(drive=True)])
+    ready = list(world.builder.tree().ready_steps())
+    assert current == ready
+    assert world.at(LifecycleStep.IMPLEMENTATION) not in current
+
+
+def test_a_driven_unheld_ready_step_is_current(world: World) -> None:
+    _finish_planning(world)
+    assert world.at(LifecycleStep.SLICE_DESIGN) in _current(world, [row(drive=True)])
+
+
+def test_held_and_undriven_ready_steps_are_not_current(world: World) -> None:
+    _finish_planning(world)
+    rows = [
+        row(drive=True),
+        row(world.first, hold=True),
+        row(world.second, drive=False),
+    ]
+    plain = world.builder.slice(world.initiative, 143)
+    current = _current(world, rows)
+    assert current == [world.at(LifecycleStep.SLICE_DESIGN, plain)]
+
+
+def test_nothing_is_current_without_a_drive(world: World) -> None:
+    assert _current(world, [row(world.first, hold=True)]) == []
+
+
+def test_an_orphans_row_never_affects_a_current_step(world: World) -> None:
+    _finish_planning(world)
+    orphan = world.builder.slice(world.initiative, 143)
+    world.builder.orphan(orphan)
+    baseline = _current(world, [row(drive=True)])
+    with_orphan_row = _current(
+        world, [row(drive=True), row(orphan, drive=False, hold=True)]
+    )
+    assert with_orphan_row == baseline
+    assert world.at(LifecycleStep.SLICE_DESIGN, orphan) not in with_orphan_row
+
+
+def test_current_steps_keep_ready_steps_order(world: World) -> None:
+    _finish_planning(world)
+    current = _current(world, [row(drive=True)])
+    ready = [node.id for node in world.builder.tree().ready_steps()]
+    assert [node.id for node in current] == ready

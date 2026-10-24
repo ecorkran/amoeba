@@ -6,7 +6,7 @@ Pure: no store access. The tick reads the rows once and builds a
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from amoeba.runner.lifecycle.steps import LifecycleStep, step_rank
@@ -76,3 +76,13 @@ def governing(tree: LifecycleTree, index: DesiredStateIndex, step: Node) -> Gove
         and _within_until(lifecycle_step, driving.drive_until_step)
     )
     return Governance(driven=driven, held=any(row.hold for row in rows))
+
+
+def current_steps(tree: LifecycleTree, index: DesiredStateIndex) -> Sequence[Node]:
+    """The ready steps that are driven and not held, in ``ready_steps`` order (D6)."""
+    current: list[Node] = []
+    for step in tree.ready_steps():
+        governance = governing(tree, index, step)
+        if governance.driven and not governance.held:
+            current.append(step)
+    return tuple(current)
