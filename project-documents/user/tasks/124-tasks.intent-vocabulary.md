@@ -204,26 +204,35 @@ Per the LLD, D7. Edit `runner/decide.py`; update every place that builds a `Proj
 
 Per the LLD, D7 ("The guard"). Edit `runner/decide.py`; extend `tests/runner/test_decide.py`.
 
-- [ ] `decide(view, planners)` raises `ValueError` if an action's `node_id` is not the id of a node in `view.current_steps`. Message names the node and project, as the duplicate rule does. Check the guard before the duplicate rule. Nothing is silently dropped
-- [ ] Update the docstring's `Raises:` section
-- [ ] Tests: a test planner that emits an action for every ready step, with a held step, an undriven step and an excluded step, raises `ValueError`; a planner acting only on current steps passes; an action naming an unknown node raises; the duplicate-action rule still raises for two actions on one current step
-- [ ] Migrate the existing test planners without weakening the guard. List every user with `grep -rn "runnable_unbusy" tests`. Change `runnable_unbusy(view)` in `tests/runner/tick_support.py` to take nodes from `view.current_steps` (still `runnable` and not in flight). In each test that builds a view by hand, pass a project drive row to `view_for`. In each test that ticks through a store, call `drive_project` before the tick. Run `uv run pytest tests/runner -q`; any remaining guard `ValueError` names a test still missing a drive. Record the list of migrated test files in the commit message
+- [x] `decide(view, planners)` raises `ValueError` if an action's `node_id` is not the id of a node in `view.current_steps`. Message names the node and project, as the duplicate rule does. Check the guard before the duplicate rule. Nothing is silently dropped
+- [x] Update the docstring's `Raises:` section
+- [x] Tests: a test planner that emits an action for every ready step, with a held step, an undriven step and an excluded step, raises `ValueError`; a planner acting only on current steps passes; an action naming an unknown node raises; the duplicate-action rule still raises for two actions on one current step
+- [x] Migrate the existing test planners without weakening the guard. List every user with `grep -rn "runnable_unbusy" tests`. Change `runnable_unbusy(view)` in `tests/runner/tick_support.py` to take nodes from `view.current_steps` (still `runnable` and not in flight). In each test that builds a view by hand, pass a project drive row to `view_for`. In each test that ticks through a store, call `drive_project` before the tick. Run `uv run pytest tests/runner -q`; any remaining guard `ValueError` names a test still missing a drive. Record the list of migrated test files in the commit message
 - **Success Criteria**:
-  - [ ] Tests, `uv run pytest tests/runner -q`, `ruff` and `pyright` pass. Commit: `feat: refuse actions on steps that are not current`
+  - [x] Tests, `uv run pytest tests/runner -q`, `ruff` and `pyright` pass. Commit: `feat: refuse actions on steps that are not current`
+
+**Notes (5.2)**:
+- The 122-era tests used plain unlinked slices, which can never be current steps. They were migrated to a new `ready_step(store, project_id)` helper in `tests/runner/tick_support.py` (a linked initiative's architecture step) plus `drive_project`.
+- Migrated files: `test_tick`, `test_tenant`, `test_end_to_end`, `test_probes`, `test_tick_human_steps`, `crash_harness`, `test_decide`.
+- `runnable_unbusy` now reads `current_steps`.
 
 ### Task 5.3: `HumanStepPlanner` plans over current steps and joins production, with tests
 **Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 3
 
 Per the LLD, D7 and D8. Edit `runner/lifecycle/human_steps.py`, `runner/factory.py`, `tests/runner/lifecycle/test_human_steps.py`, `tests/runner/test_tick_human_steps.py` and `tests/runner/test_factory.py`.
 
-- [ ] `HumanStepPlanner.plan` iterates `view.current_steps` instead of `view.tree.ready_steps()`. Everything else is unchanged
-- [ ] Update its docstring: it blocks each current step whose executor is a person
-- [ ] Tests: with the project driven, a ready human step is blocked as before; with nothing driven, it plans nothing; with the project driven and paused, it plans nothing; a human step that is already `blocked_on_human` is not current and is not blocked again; update 123's existing human-step tests to drive the project in their setup (`drive_project`)
-- [ ] `PRODUCTION_PLANNERS = (HumanStepPlanner(),)`. Update the comment: slice 125 appends its dispatch planner
-- [ ] Update `tests/runner/test_factory.py` (and any test pinning the empty tuple or relying on it, for example in `test_tenant.py`, `test_end_to_end.py`, `tests/contract`)
-- [ ] Test: `None` planners select a tuple holding exactly one `HumanStepPlanner`; a passed value still overrides it
+- [x] `HumanStepPlanner.plan` iterates `view.current_steps` instead of `view.tree.ready_steps()`. Everything else is unchanged
+- [x] Update its docstring: it blocks each current step whose executor is a person
+- [x] Tests: with the project driven, a ready human step is blocked as before; with nothing driven, it plans nothing; with the project driven and paused, it plans nothing; a human step that is already `blocked_on_human` is not current and is not blocked again; update 123's existing human-step tests to drive the project in their setup (`drive_project`)
+- [x] `PRODUCTION_PLANNERS = (HumanStepPlanner(),)`. Update the comment: slice 125 appends its dispatch planner
+- [x] Update `tests/runner/test_factory.py` (and any test pinning the empty tuple or relying on it, for example in `test_tenant.py`, `test_end_to_end.py`, `tests/contract`)
+- [x] Test: `None` planners select a tuple holding exactly one `HumanStepPlanner`; a passed value still overrides it
 - **Success Criteria**:
-  - [ ] Full `uv run pytest -q`, `ruff` and `pyright` pass. Commit: `feat: plan human steps over current steps and register them in production`
+  - [x] Full `uv run pytest -q`, `ruff` and `pyright` pass. Commit: `feat: plan human steps over current steps and register them in production`
+
+**Notes (5.3)**:
+- The `HumanStepPlanner` change to `current_steps` landed in the 5.2 commit (108e8ac) because the guard would otherwise fail its tests. The 5.3 commit holds the production tuple and factory tests.
+- Full suite: 2912 passed; `ruff` and `pyright` clean.
 
 ---
 
