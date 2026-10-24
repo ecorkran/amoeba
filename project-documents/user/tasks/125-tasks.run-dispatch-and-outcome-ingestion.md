@@ -342,13 +342,13 @@ Per the LLD, D4 and D3 ("Planner does" column). Create `runner/dispatch/planner.
 
 Per the LLD, Interfaces Required (Context Forge) and "Technology Choices". Edit `tests/cf_stub.py`, `tests/cf_fixture.py` and `tests/runner/test_cf_stub_plan.py` (or a new `tests/test_cf_stub_pointer.py`).
 
-- [ ] The stub keeps a `projects.json`-shaped state file (fixture-shaped, with `worktrees`, `indexRange`, `worktreePath`, `activeSlice`, `updatedAt`)
-- [ ] `cf set -p <id> slice <index>`: chooses the worktree whose `worktreePath` is the longest prefix of the process cwd, else the project level; stores `NNN-slice.{name}` from a configured slice-plan entry; bumps `updatedAt`; an index with no entry exits non-zero with `ARTIFACT_NOT_FOUND` on stderr; an unchanged value writes nothing
-- [ ] `cf get --json -p <id>`: emits the shape of `tests/fixtures/cf/cf_get_worktree.json` (Task 2.3) for the cwd's worktree, or the project-level shape of `cf_get_amoeba.json`
-- [ ] Test knobs: make `set` exit non-zero, make `get` fail or time out, make `get` omit `fileSlice`, make `get` report a different `projectPath` or worktree id
-- [ ] Tests: two worktrees, a write from each cwd lands in its own worktree; a cwd outside every worktree lands at project level; output parses through the read-back observer
+- [x] The stub keeps a `projects.json`-shaped state file (fixture-shaped, with `worktrees`, `indexRange`, `worktreePath`, `activeSlice`, `updatedAt`)
+- [x] `cf set -p <id> slice <index>`: chooses the worktree whose `worktreePath` is the longest prefix of the process cwd, else the project level; stores `NNN-slice.{name}` from a configured slice-plan entry; bumps `updatedAt`; an index with no entry exits non-zero with `ARTIFACT_NOT_FOUND` on stderr; an unchanged value writes nothing
+- [x] `cf get --json -p <id>`: emits the shape of `tests/fixtures/cf/cf_get_worktree.json` (Task 2.3) for the cwd's worktree, or the project-level shape of `cf_get_amoeba.json`
+- [x] Test knobs: make `set` exit non-zero, make `get` fail or time out, make `get` omit `fileSlice`, make `get` report a different `projectPath` or worktree id
+- [x] Tests: two worktrees, a write from each cwd lands in its own worktree; a cwd outside every worktree lands at project level; output parses through the read-back observer
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `test: route stub cf pointer writes by working directory`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `test: route stub cf pointer writes by working directory`
 
 ### Task 6.2: `issue_pointer_write` and `read_back` answers, with tests
 **Owner**: Junior AI | **Dependencies**: 2.3, 5.3, 6.1 | **Effort**: 2
