@@ -111,41 +111,44 @@ Per the LLD, D2, D3 and "Component Structure". Create `runner/intent/apply.py` (
 
 `interpret(message, tree, current_row) -> Interpretation` is pure. `Interpretation` is a frozen dataclass: `outcome` (`AcknowledgmentOutcome`), `reason` (`str | None`), `desired_state` (`SetDesiredState | ClearDesiredState | None`). In this task only the rejection paths and the target lookup are complete; the merge arrives in 3.2.
 
-- [ ] Validate `message.payload` against `IntentBody`. On `ValidationError` return `rejected` with reason `malformed_body: <first pydantic error>`, bounded to `REASON_DETAIL_LIMIT` (512) characters. Define the bound once
-- [ ] Resolve the target from `message.node_id`: none is the project. A step node returns `target_not_initiative_or_slice`. A node that is not linked (`tree.is_linked`) returns `target_unlinked`. Order: malformed body first, then target kind, then linked, then `until`
-- [ ] For `drive` with `until`, map the target node's kind to `TargetKind` and call `until_applies`; failure returns `until_not_applicable`
-- [ ] Reason format is `"<code>: <detail>"` with the `IntentRejection` value as the code. Nothing in the code branches on the detail
-- [ ] Tests: each of the four rejection codes is produced by the inputs in the LLD Functional Requirements (malformed body, unknown key, `until` on a non-drive kind, a step-node target, an orphaned target, `architecture` as `until` on a slice); a long malformed detail is cut to 512 characters; the reason starts with the code and `": "`; a valid body on a linked initiative, slice and the project passes through without rejection
+- [x] Validate `message.payload` against `IntentBody`. On `ValidationError` return `rejected` with reason `malformed_body: <first pydantic error>`, bounded to `REASON_DETAIL_LIMIT` (512) characters. Define the bound once
+- [x] Resolve the target from `message.node_id`: none is the project. A step node returns `target_not_initiative_or_slice`. A node that is not linked (`tree.is_linked`) returns `target_unlinked`. Order: malformed body first, then target kind, then linked, then `until`
+- [x] For `drive` with `until`, map the target node's kind to `TargetKind` and call `until_applies`; failure returns `until_not_applicable`
+- [x] Reason format is `"<code>: <detail>"` with the `IntentRejection` value as the code. Nothing in the code branches on the detail
+- [x] Tests: each of the four rejection codes is produced by the inputs in the LLD Functional Requirements (malformed body, unknown key, `until` on a non-drive kind, a step-node target, an orphaned target, `architecture` as `until` on a slice); a long malformed detail is cut to 512 characters; the reason starts with the code and `": "`; a valid body on a linked initiative, slice and the project passes through without rejection
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: reject intents the Runner cannot apply`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: reject intents the Runner cannot apply`
+  - Note: added the `LifecycleTree.node(node_id)` accessor in `tree.py` for the target lookup.
 
 ### Task 3.2: `interpret` — merge, normalization and no-op, with tests
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3
 
 Per the LLD, D1's table and D5. Edit `apply.py` (or add `intent/merge.py`) and create `tests/runner/intent/test_interpret_merge.py`.
 
-- [ ] Compute the merged row from the current row (a `DesiredState` or `None`) for each kind, exactly as D1's table gives: `drive` sets `drive=true` and sets or clears `until`, keeping hold; `exclude` sets `drive=false`, clears `until`, keeping hold; `pause` sets `hold=true`, keeping drive and `until`; `resume` unsets hold, keeping drive and `until`; `clear` deletes the row
-- [ ] Normalize: hold is stored `true` or not set, never `false`. A merged row with drive and hold both unset is a deletion (`ClearDesiredState`), as `clear` is
-- [ ] No-op: if the merged row equals the current row (comparing drive, `until`, hold), or the result is a deletion and no row exists, return `no_op` with no `desired_state`. Otherwise return `applied` with `SetDesiredState` (or `ClearDesiredState`) carrying the target's `node_id`
-- [ ] "Driving to a passed step" is not special-cased: it is `applied` when it changes the row, `no_op` when it does not
-- [ ] Tests (table-driven, one row per D1 body form crossed with current row = none, drive-only, drive-with-until, hold-only, drive+hold): the resulting `SetDesiredState` or `ClearDesiredState`, or `no_op`. Include: same intent twice is `no_op`; `drive until tasks` then `drive until implementation` ends `until=implementation`; `pause` then `drive` keeps the pause; `resume` with no hold on a row with drive keeps the row and is `no_op`; `resume` that removes the only setting deletes the row; `clear` with no row is `no_op`; `drive` without `until` clears a stored `until`; `exclude` clears a stored `until`; a drive-until-passed-step that restricts is `applied` (LLD D5 example)
+- [x] Compute the merged row from the current row (a `DesiredState` or `None`) for each kind, exactly as D1's table gives: `drive` sets `drive=true` and sets or clears `until`, keeping hold; `exclude` sets `drive=false`, clears `until`, keeping hold; `pause` sets `hold=true`, keeping drive and `until`; `resume` unsets hold, keeping drive and `until`; `clear` deletes the row
+- [x] Normalize: hold is stored `true` or not set, never `false`. A merged row with drive and hold both unset is a deletion (`ClearDesiredState`), as `clear` is
+- [x] No-op: if the merged row equals the current row (comparing drive, `until`, hold), or the result is a deletion and no row exists, return `no_op` with no `desired_state`. Otherwise return `applied` with `SetDesiredState` (or `ClearDesiredState`) carrying the target's `node_id`
+- [x] "Driving to a passed step" is not special-cased: it is `applied` when it changes the row, `no_op` when it does not
+- [x] Tests (table-driven, one row per D1 body form crossed with current row = none, drive-only, drive-with-until, hold-only, drive+hold): the resulting `SetDesiredState` or `ClearDesiredState`, or `no_op`. Include: same intent twice is `no_op`; `drive until tasks` then `drive until implementation` ends `until=implementation`; `pause` then `drive` keeps the pause; `resume` with no hold on a row with drive keeps the row and is `no_op`; `resume` that removes the only setting deletes the row; `clear` with no row is `no_op`; `drive` without `until` clears a stored `until`; `exclude` clears a stored `until`; a drive-until-passed-step that restricts is `applied` (LLD D5 example)
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: merge intents into desired-state rows`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: merge intents into desired-state rows`
+  - Note: the merge rules live in `intent/merge.py`.
 
 ### Task 3.3: `apply_pending_intents`, with tests
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 3
 
 Per the LLD, D9 and "Data Flow". Edit `apply.py`; create `tests/runner/intent/test_apply_pending.py`.
 
-- [ ] `apply_pending_intents(store, project_id) -> int`: read `pending_intents`; if none, return 0 without reading the tree. Otherwise build `LifecycleTree(store.nodes_for_project(project_id))` once
-- [ ] For each intent in ascending `seq`: read the target's current row with `store.desired_state(project_id, node_id=...)` (after the previous intent's write), call `interpret`, then `store.acknowledge_message(id, acknowledged_by=RUNNER_ACTOR, outcome=..., reason=..., desired_state=...)`. One acknowledgment per intent. Return the count acknowledged
-- [ ] Do not read link state or check the budget (D9). Do not catch store failures; `STORE_FAILURES` propagate to the tenant (122, D8)
-- [ ] Tests with `Store.open_temporary()`: no pending intents returns 0 and does not call `nodes_for_project` (spy); each outcome (`applied`, `no_op`, `rejected` per code) is stored on the message with its reason; two intents for one target in one call are applied in `seq` order (the second sees the first's write); the row's `message_id` is the intent that last changed it and stays unchanged by a `no_op`; an intent on a project whose CF link is failed or missing is still applied
-- [ ] Crash test: inject a store failure inside `acknowledge_message` (follow `tests/store/test_desired_state.py` and `tests/runner/lifecycle/test_reconcile_crash.py`). The intent stays pending and no row is written. A second call applies it exactly once
-- [ ] Test that every `applied` case in Task 3.2's table is accepted by the store: submit each as an intent against a temporary store (seeding the current row first where the case needs one) and assert `apply_pending_intents` acknowledges it `applied` with the expected stored row, so 121's shape rules never reject what `interpret` produces
-- [ ] Test that an `interpret` result which breaks 121's shape rules raises `ValueError` out of `apply_pending_intents` and leaves the intent pending (monkeypatch `interpret` to return one)
+- [x] `apply_pending_intents(store, project_id) -> int`: read `pending_intents`; if none, return 0 without reading the tree. Otherwise build `LifecycleTree(store.nodes_for_project(project_id))` once
+- [x] For each intent in ascending `seq`: read the target's current row with `store.desired_state(project_id, node_id=...)` (after the previous intent's write), call `interpret`, then `store.acknowledge_message(id, acknowledged_by=RUNNER_ACTOR, outcome=..., reason=..., desired_state=...)`. One acknowledgment per intent. Return the count acknowledged
+- [x] Do not read link state or check the budget (D9). Do not catch store failures; `STORE_FAILURES` propagate to the tenant (122, D8)
+- [x] Tests with `Store.open_temporary()`: no pending intents returns 0 and does not call `nodes_for_project` (spy); each outcome (`applied`, `no_op`, `rejected` per code) is stored on the message with its reason; two intents for one target in one call are applied in `seq` order (the second sees the first's write); the row's `message_id` is the intent that last changed it and stays unchanged by a `no_op`; an intent on a project whose CF link is failed or missing is still applied
+- [x] Crash test: inject a store failure inside `acknowledge_message` (follow `tests/store/test_desired_state.py` and `tests/runner/lifecycle/test_reconcile_crash.py`). The intent stays pending and no row is written. A second call applies it exactly once
+- [x] Test that every `applied` case in Task 3.2's table is accepted by the store: submit each as an intent against a temporary store (seeding the current row first where the case needs one) and assert `apply_pending_intents` acknowledges it `applied` with the expected stored row, so 121's shape rules never reject what `interpret` produces
+- [x] Test that an `interpret` result which breaks 121's shape rules raises `ValueError` out of `apply_pending_intents` and leaves the intent pending (monkeypatch `interpret` to return one)
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: apply pending intents against the store`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: apply pending intents against the store`
+  - Note: the "failed or missing CF link" test covers the missing-link case; apply takes no link input.
 
 ---
 
