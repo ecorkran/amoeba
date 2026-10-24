@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from amoeba.runner.intent.merge import merge_intent
 from amoeba.runner.intent.vocabulary import (
     REASON_DETAIL_LIMIT,
     IntentBody,
@@ -94,5 +95,7 @@ def interpret(
             IntentRejection.UNTIL_NOT_APPLICABLE,
             f"{body.until.value} is not a step of a {kind.value}",
         )
-    # The row merge arrives with the next task.
-    return Interpretation(AcknowledgmentOutcome.NO_OP)
+    change = merge_intent(body, message.node_id, current_row)
+    if change is None:
+        return Interpretation(AcknowledgmentOutcome.NO_OP)
+    return Interpretation(AcknowledgmentOutcome.APPLIED, desired_state=change)
