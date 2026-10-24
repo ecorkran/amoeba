@@ -1,4 +1,4 @@
-"""``record_runner_report``: verdict, ledger row, and resolution as one commit."""
+"""``record_runner_report``: verdicts, ledger rows and resolution as one commit."""
 
 from __future__ import annotations
 
@@ -16,8 +16,10 @@ from amoeba.store import (
     JournalEntry,
     JournalOutcome,
     JournalResolver,
+    RunnerReview,
     Store,
     StoreError,
+    VerdictRecord,
 )
 
 RUN_RESULT = {"run_id": "run-20261019-review-aaaa1111"}
@@ -46,13 +48,41 @@ def _issue(
 def _detection(
     outcome: DetectionOutcome = DetectionOutcome.RUNNER_ISSUED,
     project_id: str = PROJECT,
+    record_id: str = "v-1",
 ) -> DetectionInput:
     return DetectionInput(
         project_id=project_id,
-        path="/r/review.md",
-        digest="d1",
+        path=f"/r/{record_id}.md",
+        digest=f"digest-{record_id}",
         outcome=outcome,
-        record_id="v-1",
+        record_id=record_id,
+    )
+
+
+def _review(
+    node_id: str,
+    record_id: str = "v-1",
+    outcome: DetectionOutcome = DetectionOutcome.RUNNER_ISSUED,
+    project_id: str = PROJECT,
+) -> RunnerReview:
+    return RunnerReview(
+        verdict_input(record_id, node_id),
+        _detection(outcome, project_id, record_id),
+    )
+
+
+def _report(
+    store: Store,
+    entry: JournalEntry,
+    reviews: list[RunnerReview],
+    outcome: JournalOutcome = JournalOutcome.COMPLETED,
+    result: dict[str, object] | None = None,
+) -> list[VerdictRecord]:
+    return store.record_runner_report(
+        entry.id,
+        reviews,
+        outcome=outcome,
+        result=RUN_RESULT if result is None else result,
     )
 
 
@@ -79,11 +109,9 @@ def test_one_call_writes_the_verdict_the_ledger_row_and_the_resolution(
     node_id = seed_node(store)
     entry = _issue(store, node_id)
 
-    record = store.record_runner_report(
-        entry.id, verdict_input("v-1", node_id), _detection(), result=RUN_RESULT
-    )
+    records = _report(store, entry, [_review(node_id)])
 
-    assert store.verdicts(PROJECT) == [record]
+    assert store.verdicts(PROJECT) == records
     [row] = store.detections(PROJECT)
     assert (row.outcome, row.verdict_id, row.node_id) == (
         DetectionOutcome.RUNNER_ISSUED,
@@ -95,7 +123,85 @@ def test_one_call_writes_the_verdict_the_ledger_row_and_the_resolution(
     assert resolved.outcome is JournalOutcome.COMPLETED
     assert resolved.resolved_by is JournalResolver.ISSUER
     assert resolved.result == RUN_RESULT
+    assert resolved.awaits_routing is True
     assert store.recorded_result_run_ids(PROJECT) == {RUN_RESULT["run_id"]: entry.id}
+
+
+def test_zero_reviews_resolve_and_flag_the_entry(store: Store) -> None:
+    node_id = seed_node(store)
+    entry = _issue(store, node_id)
+
+    assert _report(store, entry, []) == []
+
+    resolved = store.journal_entry(entry.id)
+    assert resolved is not None
+    assert resolved.outcome is JournalOutcome.COMPLETED
+    assert resolved.awaits_routing is True
+    assert store.verdicts(PROJECT) == []
+    assert store.detections(PROJECT) == []
+
+
+def test_two_reviews_record_both_verdicts_and_ledger_rows_in_order(
+    store: Store,
+) -> None:
+    node_id = seed_node(store)
+    entry = _issue(store, node_id)
+
+    records = _report(store, entry, [_review(node_id, "v-1"), _review(node_id, "v-2")])
+
+    assert [record.id for record in records] == ["v-1", "v-2"]
+    assert {verdict.id for verdict in store.verdicts(PROJECT)} == {"v-1", "v-2"}
+    assert [row.verdict_id for row in store.detections(PROJECT)] == ["v-1", "v-2"]
+    resolved = store.journal_entry(entry.id)
+    assert resolved is not None and resolved.is_resolved
+
+
+def test_a_failing_check_on_the_second_review_writes_nothing_at_all(
+    store: Store,
+) -> None:
+    node_id = seed_node(store)
+    entry = _issue(store, node_id)
+    before = _snapshot(store, entry.id)
+    reviews = [
+        _review(node_id, "v-1"),
+        _review(node_id, "v-2", project_id=OTHER_PROJECT),
+    ]
+
+    with pytest.raises(InvalidTransitionError, match="belongs to project"):
+        _report(store, entry, reviews)
+
+    assert _snapshot(store, entry.id) == before
+    assert before.entry is not None and not before.entry.is_resolved
+    assert store.verdicts(PROJECT) == []
+
+
+def test_a_failed_outcome_resolves_failed_and_still_flags(store: Store) -> None:
+    node_id = seed_node(store)
+    entry = _issue(store, node_id)
+
+    _report(store, entry, [], outcome=JournalOutcome.FAILED)
+
+    resolved = store.journal_entry(entry.id)
+    assert resolved is not None
+    assert resolved.outcome is JournalOutcome.FAILED
+    assert resolved.awaits_routing is True
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [JournalOutcome.ADOPTED, JournalOutcome.NOT_APPLIED, JournalOutcome.UNKNOWN],
+)
+def test_an_outcome_other_than_completed_or_failed_is_refused(
+    store: Store, outcome: JournalOutcome
+) -> None:
+    node_id = seed_node(store)
+    entry = _issue(store, node_id)
+    before = _snapshot(store, entry.id)
+
+    with pytest.raises(ValueError, match="completed or failed"):
+        _report(store, entry, [_review(node_id)], outcome=outcome)
+
+    assert _snapshot(store, entry.id) == before
 
 
 def test_a_failure_while_resolving_rolls_back_everything(
@@ -111,9 +217,7 @@ def test_a_failure_while_resolving_rolls_back_everything(
     monkeypatch.setattr(store, "_resolve_entry_within", fail)
 
     with pytest.raises(StoreError, match="resolve refused"):
-        store.record_runner_report(
-            entry.id, verdict_input("v-1", node_id), _detection(), result=RUN_RESULT
-        )
+        _report(store, entry, [_review(node_id)])
 
     assert _snapshot(store, entry.id) == before
     assert before.entry is not None and not before.entry.is_resolved
@@ -126,12 +230,10 @@ def test_a_ledger_key_already_present_is_kept_and_the_entry_still_resolves(
     entry = _issue(store, node_id)
     existing = store.record_detection(_detection(DetectionOutcome.INGESTED))
 
-    record = store.record_runner_report(
-        entry.id, verdict_input("v-1", node_id), _detection(), result=RUN_RESULT
-    )
+    records = _report(store, entry, [_review(node_id)])
 
     assert store.detections(PROJECT) == [existing]
-    assert store.verdicts(PROJECT) == [record]
+    assert store.verdicts(PROJECT) == records
     resolved = store.journal_entry(entry.id)
     assert resolved is not None and resolved.is_resolved
 
@@ -143,11 +245,9 @@ def test_a_verdict_already_recorded_is_returned_and_the_rest_still_happens(
     entry = _issue(store, node_id)
     first = store.record_verdict(verdict_input("v-1", node_id), project_id=PROJECT)
 
-    record = store.record_runner_report(
-        entry.id, verdict_input("v-1", node_id), _detection(), result=RUN_RESULT
-    )
+    records = _report(store, entry, [_review(node_id)])
 
-    assert record == first
+    assert records == [first]
     assert len(store.verdicts(PROJECT)) == 1
     [row] = store.detections(PROJECT)
     assert row.outcome is DetectionOutcome.RUNNER_ISSUED
@@ -172,12 +272,7 @@ def test_another_detection_outcome_is_refused(
     before = _snapshot(store, entry.id)
 
     with pytest.raises(ValueError, match="runner_issued"):
-        store.record_runner_report(
-            entry.id,
-            verdict_input("v-1", node_id),
-            _detection(outcome),
-            result=RUN_RESULT,
-        )
+        _report(store, entry, [_review(node_id, outcome=outcome)])
 
     assert _snapshot(store, entry.id) == before
 
@@ -189,9 +284,7 @@ def test_a_resolved_entry_is_refused(store: Store) -> None:
     before = _snapshot(store, entry.id)
 
     with pytest.raises(InvalidTransitionError, match="already resolved"):
-        store.record_runner_report(
-            entry.id, verdict_input("v-1", node_id), _detection(), result=RUN_RESULT
-        )
+        _report(store, entry, [_review(node_id)])
 
     assert _snapshot(store, entry.id) == before
 
@@ -202,8 +295,8 @@ def test_an_unknown_entry_is_refused(store: Store) -> None:
     with pytest.raises(InvalidTransitionError, match="does not exist"):
         store.record_runner_report(
             "no-such-entry",
-            verdict_input("v-1", node_id),
-            _detection(),
+            [_review(node_id)],
+            outcome=JournalOutcome.COMPLETED,
             result=RUN_RESULT,
         )
 
@@ -217,9 +310,7 @@ def test_an_entry_of_a_non_review_kind_is_refused(store: Store) -> None:
     before = _snapshot(store, entry.id)
 
     with pytest.raises(InvalidTransitionError, match="does not produce a review"):
-        store.record_runner_report(
-            entry.id, verdict_input("v-1", node_id), _detection(), result=RUN_RESULT
-        )
+        _report(store, entry, [_review(node_id)])
 
     assert _snapshot(store, entry.id) == before
 
@@ -231,9 +322,7 @@ def test_an_entry_in_another_project_is_refused(store: Store) -> None:
     before = _snapshot(store, entry.id)
 
     with pytest.raises(InvalidTransitionError, match="belongs to project"):
-        store.record_runner_report(
-            entry.id, verdict_input("v-1", node_id), _detection(), result=RUN_RESULT
-        )
+        _report(store, entry, [_review(node_id)])
 
     assert _snapshot(store, entry.id) == before
 
@@ -244,8 +333,6 @@ def test_an_sq_run_result_without_a_run_id_is_refused(store: Store) -> None:
     before = _snapshot(store, entry.id)
 
     with pytest.raises(ValueError, match="run_id"):
-        store.record_runner_report(
-            entry.id, verdict_input("v-1", node_id), _detection(), result={}
-        )
+        _report(store, entry, [_review(node_id)], result={})
 
     assert _snapshot(store, entry.id) == before

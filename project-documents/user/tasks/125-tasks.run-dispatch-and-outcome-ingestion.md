@@ -156,14 +156,14 @@ Per the LLD, D8. Edit `store/journal.py` (and `store/sql_journal.py` for the que
 
 Per the LLD, D10 "`record_runner_report`" and D8 "Cleared by the decision". Edit `store/runner_report.py`, `store/runner_models.py`, `store/routing_decisions.py`, `tests/store/test_runner_report.py` and `tests/store/test_routing_decisions.py`.
 
-- [ ] Add `RunnerReview(verdict, detection)` (frozen) and export it from `amoeba.store`
-- [ ] New signature `record_runner_report(entry_id, reviews: Sequence[RunnerReview], *, outcome, result)`. `outcome` other than `completed` or `failed` raises `ValueError`. One transaction: every review's existing checks, then each verdict and ledger row in order, then the resolution, which sets `awaits_routing`
-- [ ] Update callers: `tests/contract/runner_tenant.py` (the stand-in Runner) and `tests/test_public_api.py`. Fix any contract-suite break in the stand-in (`runner_tenant.py`, `standin.py`), not in the contract assertions
-- [ ] Tests: zero reviews resolves and flags the entry; two reviews record both verdicts and ledger rows in order; a failing check on the second review writes nothing at all (first verdict absent, entry unresolved); `outcome="paused"` raises `ValueError`; `failed` resolves `failed` and still flags
-- [ ] `record_routing_decision` sets `awaits_routing` to null on its `journal_entry_id` inside its own transaction
-- [ ] Tests: after a decision, `unrouted_outcomes` no longer lists the entry; a decision that fails validation leaves the flag set (`test_routing_decisions_atomic.py` pattern)
+- [x] Add `RunnerReview(verdict, detection)` (frozen) and export it from `amoeba.store`
+- [x] New signature `record_runner_report(entry_id, reviews: Sequence[RunnerReview], *, outcome, result)`. `outcome` other than `completed` or `failed` raises `ValueError`. One transaction: every review's existing checks, then each verdict and ledger row in order, then the resolution, which sets `awaits_routing`
+- [x] Update callers: `tests/contract/runner_tenant.py` (the stand-in Runner) and `tests/test_public_api.py`. Fix any contract-suite break in the stand-in (`runner_tenant.py`, `standin.py`), not in the contract assertions
+- [x] Tests: zero reviews resolves and flags the entry; two reviews record both verdicts and ledger rows in order; a failing check on the second review writes nothing at all (first verdict absent, entry unresolved); `outcome="paused"` raises `ValueError`; `failed` resolves `failed` and still flags
+- [x] `record_routing_decision` sets `awaits_routing` to null on its `journal_entry_id` inside its own transaction
+- [x] Tests: after a decision, `unrouted_outcomes` no longer lists the entry; a decision that fails validation leaves the flag set (`test_routing_decisions_atomic.py` pattern)
 - **Success Criteria**:
-  - [ ] Store tests, `uv run pytest tests/contract`, `ruff` and `pyright` pass. Commit: `feat: record every runner review part and clear the flag on decision` with `Fixes #10` in the body
+  - [x] Store tests, `uv run pytest tests/contract`, `ruff` and `pyright` pass. Commit: `feat: record every runner review part and clear the flag on decision` with `Fixes #10` in the body
 
 ### Task 2.7: `detection_key`, shared by detection, with tests
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2

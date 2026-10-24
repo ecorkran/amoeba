@@ -38,6 +38,7 @@ from amoeba.store import (
     Node,
     NodeKind,
     NodeStatus,
+    RunnerReview,
     SQReference,
     Store,
 )
@@ -244,7 +245,10 @@ class ProofRunner:
             record_id=record_id,
         )
         store.record_runner_report(
-            entry.id, verdict, detection, result={"run_id": run_id}
+            entry.id,
+            [RunnerReview(verdict, detection)],
+            outcome=JournalOutcome.COMPLETED,
+            result={"run_id": run_id},
         )
 
     def _checkpoint(self, store: Store, project_id: str) -> None:

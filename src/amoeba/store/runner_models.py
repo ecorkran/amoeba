@@ -17,7 +17,21 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from amoeba.store.evidence_models import VerdictInput
+from amoeba.store.feed_models import DetectionInput
 from amoeba.store.models import NodeStatus
+
+
+@dataclass(frozen=True)
+class RunnerReview:
+    """One review a run produced: its verdict and the ledger row that owns the file.
+
+    ``record_runner_report`` takes a sequence of these (slice 125, D10), so a run
+    that wrote several review files records all of them in one transaction.
+    """
+
+    verdict: VerdictInput
+    detection: DetectionInput
 
 
 class Route(StrEnum):

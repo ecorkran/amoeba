@@ -127,6 +127,14 @@ ORDER BY {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ISSUED_AT},
          {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ID}
 """
 
+#: Clears an entry's routing flag; a routing decision on the entry runs it in the
+#: decision's own transaction (slice 125, D8).
+CLEAR_AWAITS_ROUTING: Final = f"""
+UPDATE {TABLE_COMMAND_JOURNAL}
+SET {COL_JOURNAL_AWAITS_ROUTING} = NULL
+WHERE {COL_JOURNAL_ID} = ?
+"""
+
 #: Resolved entries awaiting a routing decision for one project, oldest first
 #: (slice 125, D8). Served by ``idx_journal_awaits_routing``, whose WHERE this
 #: repeats, so its cost follows unrouted work and not history.

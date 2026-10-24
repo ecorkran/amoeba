@@ -93,6 +93,7 @@ EXPECTED_EXPORTS = {
     "RoutingDecision",
     "RoutingDecisionInput",
     "RoutingTableVersion",
+    "RunnerReview",
     "SetDesiredState",
     "StatusEffect",
     # Locating stores (read-only consumers), added by slice 110

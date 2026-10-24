@@ -191,6 +191,12 @@ class RoutingDecisionOperations(BlockWriter):
                     sql_runner.UPSERT_ATTEMPT_COUNT,
                     (decision.node_id, attempt_step, timestamp),
                 )
+            if decision.journal_entry_id is not None:
+                # The decision is what makes the outcome routed, so the flag and
+                # the decision record cannot disagree (slice 125, D8).
+                self._execute(
+                    sql_journal.CLEAR_AWAITS_ROUTING, (decision.journal_entry_id,)
+                )
             self._apply_effect(decision, effect, timestamp)
             stored = self.routing_decision(decision_id)
 

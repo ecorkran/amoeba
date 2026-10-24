@@ -115,6 +115,7 @@ from amoeba.store.runner_models import (
     RoutingDecision,
     RoutingDecisionInput,
     RoutingTableVersion,
+    RunnerReview,
     SetDesiredState,
     StatusEffect,
 )
@@ -198,6 +199,7 @@ __all__ = [
     "RoutingDecision",
     "RoutingDecisionInput",
     "RoutingTableVersion",
+    "RunnerReview",
     "SetDesiredState",
     "StatusEffect",
     # Locating stores (read-only consumers)
