@@ -83,6 +83,9 @@ class ProcessSettings:
             ``tick_call_timeout_seconds < shutdown_grace_seconds`` is enforced.
         run_poll_interval_seconds: The least time between two polls of the same
             launched run by the Runner.
+        plan_read_interval_seconds: The least time between two plan reads of the
+            same linked Context Forge project. A change in the project's CF
+            snapshot triggers an earlier read.
     """
 
     idle_interval_seconds: float = 1.0
@@ -101,3 +104,4 @@ class ProcessSettings:
     tick_deadline_seconds: float = 5.0
     tick_call_timeout_seconds: float = 8.0
     run_poll_interval_seconds: float = 15.0
+    plan_read_interval_seconds: float = 30.0

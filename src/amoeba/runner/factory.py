@@ -39,6 +39,7 @@ def validate_settings(settings: ProcessSettings) -> None:
         ("tick_deadline_seconds", settings.tick_deadline_seconds),
         ("tick_call_timeout_seconds", settings.tick_call_timeout_seconds),
         ("run_poll_interval_seconds", settings.run_poll_interval_seconds),
+        ("plan_read_interval_seconds", settings.plan_read_interval_seconds),
     )
     for name, value in bounds:
         if value <= 0:
