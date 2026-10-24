@@ -17,7 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from contract.launched import LaunchedProcess
-from sq_stub import LOG_ENV, RUN_OUTCOME_ENV, RUN_SECONDS_ENV, write_sq_stub
+from sq_stub import (
+    LOG_ENV,
+    RUN_OUTCOME_ENV,
+    RUN_SCRIPT_ENV,
+    RUN_SECONDS_ENV,
+    write_sq_stub,
+)
 
 from amoeba.store import (
     BlockedState,
@@ -27,7 +33,8 @@ from amoeba.store import (
     project_store_path,
 )
 from runner.crash_entry import KILL_AT_ENV, KillPoint
-from runner.tick_support import drive_project, ready_step
+from runner.ingest.routing_support import route_outcome
+from runner.tick_support import drive_project, ready_slice_step, ready_step
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
 PROJECT = "crash-proof"
@@ -45,13 +52,20 @@ class RunSettings:
 
     run_seconds: float
     outcome: str = "completed"
+    #: A stub run script (``sq_stub.write_run_script``): the run's review files.
+    script: Path | None = None
 
 
 class CrashHarness:
     """One scenario's directories, node ids and process lifecycle."""
 
-    def __init__(self, tmp_path: Path, node_count: int = 1) -> None:
+    def __init__(
+        self, tmp_path: Path, node_count: int = 1, slice_name: str | None = None
+    ) -> None:
+        """``slice_name`` puts the one step under a slice of that name, so a review
+        the run writes can be attributed to it."""
         self.tmp_path = tmp_path
+        self.slice_name = slice_name
         self.home = tmp_path / "home"
         self.supervisor_dir = tmp_path / "supervisor"
         self.checkout = tmp_path / "checkout"
@@ -73,7 +87,10 @@ class CrashHarness:
     def _create_nodes(self, count: int) -> list[str]:
         """Create the project and its test nodes before any process starts."""
         with Store.open(project_store_path(self.supervisor_dir, PROJECT)) as store:
-            node_ids = [ready_step(store, PROJECT).id for _ in range(count)]
+            if self.slice_name is not None:
+                node_ids = [ready_slice_step(store, self.slice_name, PROJECT)[1].id]
+            else:
+                node_ids = [ready_step(store, PROJECT).id for _ in range(count)]
             drive_project(store, PROJECT)
             return node_ids
 
@@ -92,6 +109,8 @@ class CrashHarness:
             RUN_SECONDS_ENV: str(run.run_seconds),
             RUN_OUTCOME_ENV: run.outcome,
         }
+        if run.script is not None:
+            environment[RUN_SCRIPT_ENV] = str(run.script)
         if kill_at is not None:
             environment[KILL_AT_ENV] = kill_at.value
         return environment
@@ -201,6 +220,24 @@ class CrashHarness:
             project_store_path(self.supervisor_dir, PROJECT)
         ) as store:
             return [s for s in store.all_blocked_states(node_id) if not s.is_resolved]
+
+    def unrouted(self) -> list[JournalEntry]:
+        """The resolved entries still awaiting a routing decision."""
+        with Store.open_read_only(
+            project_store_path(self.supervisor_dir, PROJECT)
+        ) as store:
+            return store.unrouted_outcomes(PROJECT)
+
+    def verdict_ids(self) -> list[str]:
+        with Store.open_read_only(
+            project_store_path(self.supervisor_dir, PROJECT)
+        ) as store:
+            return [verdict.id for verdict in store.verdicts(PROJECT)]
+
+    def route(self, entry: JournalEntry) -> None:
+        """Record a routing decision for ``entry``. Run it with the process stopped."""
+        with Store.open(project_store_path(self.supervisor_dir, PROJECT)) as store:
+            route_outcome(store, PROJECT, entry.node_id, entry.id)
 
     def node(self, node_id: str) -> Node:
         with Store.open_read_only(

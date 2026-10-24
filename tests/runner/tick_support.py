@@ -33,6 +33,7 @@ from amoeba.store import (
     DesiredState,
     Node,
     NodeKind,
+    NodeStatus,
     Store,
     SubmissionKind,
 )
@@ -92,6 +93,55 @@ def ready_step(store: Store, project_id: str = PROJECT) -> Node:
         parent_id=initiative.id,
         cf=CFReference(project="cf-a", phase=LifecycleStep.ARCHITECTURE.value),
     )
+
+
+_SLICE_INDEXES = count(200)
+
+
+def ready_slice_step(
+    store: Store,
+    slice_name: str,
+    project_id: str = PROJECT,
+    step: LifecycleStep = LifecycleStep.SLICE_DESIGN,
+    cf_project: str = "cf-a",
+) -> tuple[Node, Node]:
+    """A ready slice-level step under a linked slice: ``(slice node, step node)``.
+
+    Its initiative has the architecture and slice-plan steps done, which is what a
+    slice design waits for. Each call makes a new initiative and slice.
+    """
+    initiative = store.create_node(
+        project_id=project_id,
+        kind=NodeKind.INITIATIVE,
+        title="initiative",
+        cf=CFReference(project=cf_project, index=next(_INITIATIVE_INDEXES)),
+    )
+    for done in (LifecycleStep.ARCHITECTURE, LifecycleStep.SLICE_PLAN):
+        store.create_node(
+            project_id=project_id,
+            kind=NodeKind.PHASE_OR_ARTIFACT,
+            title=done.value,
+            parent_id=initiative.id,
+            status=NodeStatus.DONE,
+            cf=CFReference(project=cf_project, phase=done.value),
+        )
+    slice_node = store.create_node(
+        project_id=project_id,
+        kind=NodeKind.SLICE,
+        title=slice_name,
+        parent_id=initiative.id,
+        cf=CFReference(
+            project=cf_project, slice_name=slice_name, index=next(_SLICE_INDEXES)
+        ),
+    )
+    step_node = store.create_node(
+        project_id=project_id,
+        kind=NodeKind.PHASE_OR_ARTIFACT,
+        title=step.value,
+        parent_id=slice_node.id,
+        cf=CFReference(project=cf_project, phase=step.value),
+    )
+    return slice_node, step_node
 
 
 def drive_project(store: Store, project_id: str = PROJECT) -> None:

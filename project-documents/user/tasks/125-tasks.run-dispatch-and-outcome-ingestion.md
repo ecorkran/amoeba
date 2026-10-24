@@ -268,13 +268,13 @@ Per the LLD, D6 and D7 "`ReviewUnknown`" (block rules). Create `runner/ingest/re
 
 Per the LLD, "Testing approach", D6 ("Detection must not take that file as external either") and Success Criteria "Ingestion of a completed run", "Crash during ingestion" and "Left for routing". Edit `tests/runner/crash_entry.py`, `tests/runner/crash_harness.py`, `tests/runner/test_crash_recovery.py`; create `tests/runner/ingest/routing_support.py`.
 
-- [ ] Detection skip (in `tests/runner/ingest/test_record.py`, or with `tests/detection_e2e_harness.py`): ingest a completed run whose review file sits in a watched reviews directory, run one detection scan, and assert no new verdict, no new ledger row, and the existing row `runner_issued`. Repeat for a paused run whose last review is the review behind its checkpoint verdict
-- [ ] `routing_support.py`: one helper that records a routing decision for an entry through `store.record_routing_decision` (the stand-in for 126)
-- [ ] Add `KillPoint` members: after the block and before `record_runner_report`; after ingestion and before the test router's decision
-- [ ] `test_kill_between_block_and_report_finishes_once`: after restart the next tick completes the report; the node has one blocked state; each verdict is recorded once
-- [ ] `test_kill_between_ingest_and_route_keeps_outcome_unrouted`: after restart `unrouted_outcomes` still lists the entry; after the helper records a decision it does not
+- [x] Detection skip (in `tests/runner/ingest/test_record.py`, or with `tests/detection_e2e_harness.py`): ingest a completed run whose review file sits in a watched reviews directory, run one detection scan, and assert no new verdict, no new ledger row, and the existing row `runner_issued`. Repeat for a paused run whose last review is the review behind its checkpoint verdict
+- [x] `routing_support.py`: one helper that records a routing decision for an entry through `store.record_routing_decision` (the stand-in for 126)
+- [x] Add `KillPoint` members: after the block and before `record_runner_report`; after ingestion and before the test router's decision
+- [x] `test_kill_between_block_and_report_finishes_once`: after restart the next tick completes the report; the node has one blocked state; each verdict is recorded once
+- [x] `test_kill_between_ingest_and_route_keeps_outcome_unrouted`: after restart `unrouted_outcomes` still lists the entry; after the helper records a decision it does not
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `test: prove detection skip and crash recovery around ingestion`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `test: prove detection skip and crash recovery around ingestion`
 
 ---
 

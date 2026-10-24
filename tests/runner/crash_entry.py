@@ -64,6 +64,12 @@ class KillPoint(StrEnum):
     AFTER_FINISH = "after_finish"
     #: After the node is blocked, as the entry is about to be resolved.
     BETWEEN_BLOCK_AND_RESOLVE = "between_block_and_resolve"
+    #: After the node is blocked, as the run's reviews are about to be recorded
+    #: and the entry resolved together (``record_runner_report``).
+    BETWEEN_BLOCK_AND_REPORT = "between_block_and_report"
+    #: After ingestion committed (reviews recorded, entry resolved and flagged),
+    #: before anything routed it.
+    AFTER_INGEST = "after_ingest"
 
 
 def die() -> None:
@@ -134,6 +140,20 @@ def _arm_resolve_kill() -> None:
     Store.record_runner_report = report  # type: ignore[method-assign]
 
 
+def _arm_report_kill(*, after: bool) -> None:
+    """Make the next ``record_runner_report`` die, before it runs or once it has."""
+    original = Store.record_runner_report
+
+    def report(self: Store, *args: object, **kwargs: object):  # noqa: ANN202
+        if not after:
+            die()
+        result = original(self, *args, **kwargs)  # type: ignore[arg-type]
+        die()
+        return result
+
+    Store.record_runner_report = report  # type: ignore[method-assign]
+
+
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="runner.crash_entry")
     parser.add_argument("--supervisor-dir", type=Path, required=True)
@@ -160,6 +180,10 @@ def main(argv: Sequence[str]) -> None:
     probe_sq(settings, datetime.now(UTC), poll_run)
     if kill_at is KillPoint.BETWEEN_BLOCK_AND_RESOLVE:
         _arm_resolve_kill()
+    if kill_at is KillPoint.BETWEEN_BLOCK_AND_REPORT:
+        _arm_report_kill(after=False)
+    if kill_at is KillPoint.AFTER_INGEST:
+        _arm_report_kill(after=True)
     popen, poll = _hooked(kill_at)
     runner = RunnerTenant(
         settings=settings,
