@@ -17,6 +17,7 @@ from amoeba.process import (
     poll_run,
 )
 from amoeba.runner.decide import Planner
+from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.probes import probe_sq
@@ -24,9 +25,12 @@ from amoeba.runner.tenant import RunnerTenant
 
 logger = logging.getLogger(__name__)
 
-#: The planners production runs: human steps (slice 124), over current steps only.
-#: Slice 125 appends its dispatch planner here.
-PRODUCTION_PLANNERS: Final[tuple[Planner, ...]] = (HumanStepPlanner(),)
+#: The planners production runs, over current steps only: human steps (slice 124),
+#: then dispatch (slice 125), which points a checkout and launches a pipeline.
+PRODUCTION_PLANNERS: Final[tuple[Planner, ...]] = (
+    HumanStepPlanner(),
+    DispatchPlanner(),
+)
 
 
 def _now() -> datetime:

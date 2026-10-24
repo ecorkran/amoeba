@@ -474,12 +474,12 @@ Per the LLD, D11 bullets on escalation. Wire into observe; add `FaultKind.POINTE
 ### Task 10.1: `DispatchPlanner` in production, with tests
 **Owner**: Junior AI | **Dependencies**: 7.4, 8.1, 9.2 | **Effort**: 2
 
-- [ ] `PRODUCTION_PLANNERS = (HumanStepPlanner(), DispatchPlanner())` in `runner/factory.py`
-- [ ] Update `tests/runner/test_factory.py` to assert the tuple and order
-- [ ] Run 122's crash proof, 123's reconcile tests and 124's guard tests (`tests/runner/test_crash_recovery.py`, `tests/runner/lifecycle`, `tests/runner/intent`, `tests/runner/test_tick_governance.py`); fix breaks in test setup only where a test now needs a snapshot or stub `cf` state
-- [ ] `tests/runner/test_budget_coverage.py` covers every new `cf` and `sq` call in the dispatch path
+- [x] `PRODUCTION_PLANNERS = (HumanStepPlanner(), DispatchPlanner())` in `runner/factory.py`
+- [x] Update `tests/runner/test_factory.py` to assert the tuple and order
+- [x] Run 122's crash proof, 123's reconcile tests and 124's guard tests (`tests/runner/test_crash_recovery.py`, `tests/runner/lifecycle`, `tests/runner/intent`, `tests/runner/test_tick_governance.py`); fix breaks in test setup only where a test now needs a snapshot or stub `cf` state
+- [x] `tests/runner/test_budget_coverage.py` covers every new `cf` and `sq` call in the dispatch path
 - **Success Criteria**:
-  - [ ] `tests/runner`, `ruff` and `pyright` pass. Commit: `feat: put DispatchPlanner in the production planners`
+  - [x] `tests/runner`, `ruff` and `pyright` pass. Commit: `feat: put DispatchPlanner in the production planners`
 
 ### Task 10.2: Remaining contract text and CHANGELOG
 **Owner**: Junior AI | **Dependencies**: 10.1 | **Effort**: 2

@@ -13,6 +13,7 @@ from sq_stub import write_sq_stub
 from amoeba.process import ProcessSettings, StartupFailedError
 from amoeba.runner import RunnerTenant, factory, runner_tenant
 from amoeba.runner.decide import Action, ProjectView
+from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.store import Store
@@ -45,9 +46,11 @@ def _planners_given_to_the_tenant(
     return planners
 
 
-def test_the_production_tuple_holds_exactly_the_human_step_planner() -> None:
-    assert len(PRODUCTION_PLANNERS) == 1
-    assert isinstance(PRODUCTION_PLANNERS[0], HumanStepPlanner)
+def test_the_production_tuple_is_the_human_step_planner_then_dispatch() -> None:
+    assert [type(planner) for planner in PRODUCTION_PLANNERS] == [
+        HumanStepPlanner,
+        DispatchPlanner,
+    ]
 
 
 def test_no_planners_selects_the_production_tuple(
