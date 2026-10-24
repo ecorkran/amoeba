@@ -397,22 +397,22 @@ Per the LLD, Data Flow (observe), D2 "A read that fails" and D3 "CF still points
 
 Per the LLD, D1 (`CheckoutUnresolved` blocks) and State Management (per-tick, in memory). Edit the tick's view building.
 
-- [ ] For each current pipeline step: read its entries (`journal_entries(project, node_id=step)`), its slice's latest observed snapshot (`latest_cf_snapshots`), resolve the checkout, compute `dispatch_state`, and compute the project's held checkouts. Built each tick, never cached
-- [ ] Add `FaultKind.CHECKOUT_UNRESOLVED`. `CheckoutUnresolved` blocks the step on `HUMAN` with `{fault_kind: checkout_unresolved, index, reason}` (122's node block path) and the step gets no action this tick
-- [ ] Tests (tick-level): no range holding the index, two ranges holding it, and a missing path each block with `checkout_unresolved`
+- [x] For each current pipeline step: read its entries (`journal_entries(project, node_id=step)`), its slice's latest observed snapshot (`latest_cf_snapshots`), resolve the checkout, compute `dispatch_state`, and compute the project's held checkouts. Built each tick, never cached
+- [x] Add `FaultKind.CHECKOUT_UNRESOLVED`. `CheckoutUnresolved` blocks the step on `HUMAN` with `{fault_kind: checkout_unresolved, index, reason}` (122's node block path) and the step gets no action this tick
+- [x] Tests (tick-level): no range holding the index, two ranges holding it, and a missing path each block with `checkout_unresolved`
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: build per-step dispatch facts each tick`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: build per-step dispatch facts each tick`
 
 ### Task 7.3: Act performs both actions; two-tick dispatch, with tests
 **Owner**: Junior AI | **Dependencies**: 5.4, 7.2 | **Effort**: 3
 
 Per the LLD, Data Flow ("One step, end to end"). Edit `_act` in `runner/tick.py` to dispatch `WriteSlicePointer` to `issue_pointer_write` and `LaunchRun` to 122's launch (reissue arrives in Section 8). Add `tests/runner/dispatch/test_tick_dispatch.py`. Tick tests pass `planners=(HumanStepPlanner(), DispatchPlanner())` explicitly; production wiring is Task 10.1.
 
-- [ ] `LaunchRun` journals an `sq_run` with `checkout` and the `dispatch_params`, and launches with `cwd=checkout` (122)
-- [ ] A `LaunchRun` with `reissue_of` launches nothing yet: it blocks the step on `HUMAN` naming the `not_applied` entry (the overrun fallback). Task 8.1 replaces this, so a new run is never launched over one that may have started
-- [ ] Tests: `test_driven_slice_design_writes_pointer_then_launches_p4` (tick 1 `cf_write` with `checkout` and `expected_slice_index`; tick 2 `sq_run` of `P4` with `-p slice=<index>`, in that checkout); held or not driven issues neither; `P6` carries `-p merge=false`; two worktrees, the write lands in the right one and `slice_name` is set; already-pointed checkout (stub `set` writes nothing, no snapshot follows) still launches on the next tick; `cf set` non-zero, another index, path mismatch and worktree mismatch each block `pointer_write_failed` and resolve `failed`
+- [x] `LaunchRun` journals an `sq_run` with `checkout` and the `dispatch_params`, and launches with `cwd=checkout` (122)
+- [x] A `LaunchRun` with `reissue_of` launches nothing yet: it blocks the step on `HUMAN` naming the `not_applied` entry (the overrun fallback). Task 8.1 replaces this, so a new run is never launched over one that may have started
+- [x] Tests: `test_driven_slice_design_writes_pointer_then_launches_p4` (tick 1 `cf_write` with `checkout` and `expected_slice_index`; tick 2 `sq_run` of `P4` with `-p slice=<index>`, in that checkout); held or not driven issues neither; `P6` carries `-p merge=false`; two worktrees, the write lands in the right one and `slice_name` is set; already-pointed checkout (stub `set` writes nothing, no snapshot follows) still launches on the next tick; `cf set` non-zero, another index, path mismatch and worktree mismatch each block `pointer_write_failed` and resolve `failed`
 - **Success Criteria**:
-  - [ ] Tests, `tests/runner`, `ruff` and `pyright` pass. Commit: `feat: dispatch a driven step in two ticks`
+  - [x] Tests, `tests/runner`, `ruff` and `pyright` pass. Commit: `feat: dispatch a driven step in two ticks`
 
 ### Task 7.4: Checkout concurrency and ingestion at tick level, with tests
 **Owner**: Junior AI | **Dependencies**: 3.2, 4.4, 7.3 | **Effort**: 3

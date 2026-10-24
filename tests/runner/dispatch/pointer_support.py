@@ -39,15 +39,14 @@ def budget_allowing(calls: int) -> TickBudget:
     return TickBudget(calls - 0.5, Host(), partial(next, count()))
 
 
-class Rig:
-    """Two worktrees, a stub ``cf`` over their state, and a step under a slice."""
+class CfWorld:
+    """Two worktrees (indexes 100-199 and 200-299), a stub ``cf`` over their state."""
 
-    def __init__(self, tmp_path: Path, store: Store) -> None:
-        self.store = store
+    def __init__(self, tmp_path: Path) -> None:
         self.root = tmp_path / "main"
         self.second = tmp_path / "second"
-        self.root.mkdir()
-        self.second.mkdir()
+        self.root.mkdir(parents=True)
+        self.second.mkdir(parents=True)
         self.state_path = tmp_path / "cf-state.json"
         self.bin_dir = write_cf_stub(tmp_path / "bin")
         write_cf_state(
@@ -59,18 +58,6 @@ class Rig:
                 self.worktree_entry("wt_b", self.second, 200, 299),
             ],
             slices={125: STEM, 225: "225-slice.second"},
-        )
-        self.slice_node = store.create_node(
-            project_id=PROJECT,
-            kind=NodeKind.SLICE,
-            title="slice",
-            cf=CFReference(project="cf-a", index=125),
-        )
-        self.node = store.create_node(
-            project_id=PROJECT,
-            kind=NodeKind.PHASE_OR_ARTIFACT,
-            title="tasks",
-            parent_id=self.slice_node.id,
         )
 
     @staticmethod
@@ -99,6 +86,26 @@ class Rig:
             )
 
         return call
+
+
+class Rig(CfWorld):
+    """The world, plus a step under a slice node, for the pointer-write tests."""
+
+    def __init__(self, tmp_path: Path, store: Store) -> None:
+        super().__init__(tmp_path)
+        self.store = store
+        self.slice_node = store.create_node(
+            project_id=PROJECT,
+            kind=NodeKind.SLICE,
+            title="slice",
+            cf=CFReference(project="cf-a", index=125),
+        )
+        self.node = store.create_node(
+            project_id=PROJECT,
+            kind=NodeKind.PHASE_OR_ARTIFACT,
+            title="tasks",
+            parent_id=self.slice_node.id,
+        )
 
     def action(self, index: int = 125, where: str = "root") -> WriteSlicePointer:
         path = self.root if where == "root" else self.second

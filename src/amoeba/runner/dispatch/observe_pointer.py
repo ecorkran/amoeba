@@ -23,16 +23,20 @@ from datetime import datetime
 
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
+from amoeba.runner.decide import WriteSlicePointer
 from amoeba.runner.dispatch.pointer import (
     Confirmed,
     PointerAnswer,
     PointerReadFailed,
     expected_checkout,
+    issue_pointer_write,
     read_back,
 )
-from amoeba.runner.dispatch.pointer_apply import apply_answer
+from amoeba.runner.dispatch.pointer_apply import apply_answer, apply_attempt
 from amoeba.runner.dispatch.state import DispatchState, dispatch_state
 from amoeba.runner.faults import NodeContext
+from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
+from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import CommandKind, JournalEntry, Node, Store
 
 
@@ -62,6 +66,29 @@ class PointerStage:
         self._timeout_seconds = timeout_seconds
         self._grace_seconds = grace_seconds
         self._now = now
+
+    def observe_project(
+        self,
+        store: Store,
+        project_id: str,
+        desired: DesiredStateIndex,
+        budget: TickBudget,
+        context: NodeContext,
+    ) -> PointerObservation:
+        """:meth:`observe` over the project's current steps, from the store's tree.
+
+        Reads the tree as it is after the plan stage; the view is built again
+        afterwards, because settling a write can block a step.
+        """
+        tree = LifecycleTree(store.nodes_for_project(project_id))
+        return self.observe(
+            store,
+            project_id,
+            current_steps(tree, desired),
+            drives=desired.drives_anything(),
+            budget=budget,
+            context=context,
+        )
 
     def observe(
         self,
@@ -102,6 +129,20 @@ class PointerStage:
                         confirmed.add(node.id)
         context.clear()
         return PointerObservation(frozenset(confirmed), TickResult.COMPLETE, wrote)
+
+    def write(
+        self, store: Store, action: WriteSlicePointer, budget: TickBudget
+    ) -> None:
+        """Act on a pointer-write action: journal, ``cf set``, read back, apply (D2).
+
+        Writes nothing if the budget refuses the first call. A write cut off before
+        its read-back is left open; the next tick's :meth:`observe` finishes it.
+        """
+        attempt = issue_pointer_write(
+            store, action, self._run, self._timeout_seconds, budget
+        )
+        if attempt is not None:
+            apply_attempt(store, attempt)
 
     def _answer(self, entry: JournalEntry) -> PointerAnswer:
         expected = expected_checkout(entry)

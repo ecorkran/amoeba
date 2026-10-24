@@ -105,6 +105,8 @@ def ready_slice_step(
     project_id: str = PROJECT,
     step: LifecycleStep = LifecycleStep.SLICE_DESIGN,
     cf_project: str = "cf-a",
+    slice_index: int | None = None,
+    done_steps: Sequence[LifecycleStep] = (),
 ) -> tuple[Node, Node]:
     """A ready slice-level step under a linked slice: ``(slice node, step node)``.
 
@@ -132,9 +134,20 @@ def ready_slice_step(
         title=slice_name,
         parent_id=initiative.id,
         cf=CFReference(
-            project=cf_project, slice_name=slice_name, index=next(_SLICE_INDEXES)
+            project=cf_project,
+            slice_name=slice_name,
+            index=next(_SLICE_INDEXES) if slice_index is None else slice_index,
         ),
     )
+    for done in done_steps:
+        store.create_node(
+            project_id=project_id,
+            kind=NodeKind.PHASE_OR_ARTIFACT,
+            title=done.value,
+            parent_id=slice_node.id,
+            status=NodeStatus.DONE,
+            cf=CFReference(project=cf_project, phase=done.value),
+        )
     step_node = store.create_node(
         project_id=project_id,
         kind=NodeKind.PHASE_OR_ARTIFACT,

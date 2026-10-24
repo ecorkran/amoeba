@@ -44,6 +44,7 @@ class FaultKind(StrEnum):
     ``REVIEW_UNKNOWN`` is node-scoped in the same way: a run's review could not be
     read, parsed or attributed, and the step's block names it. So is
     ``POINTER_WRITE_FAILED``: the CF slice pointer write failed or read back wrong.
+    And ``CHECKOUT_UNRESOLVED``: no checkout can be named for a step's slice.
     """
 
     RUN_OBSERVATION_FAILED = "run_observation_failed"
@@ -55,6 +56,7 @@ class FaultKind(StrEnum):
     PLAN_STATUS_UNKNOWN = "plan_status_unknown"
     REVIEW_UNKNOWN = "review_unknown"
     POINTER_WRITE_FAILED = "pointer_write_failed"
+    CHECKOUT_UNRESOLVED = "checkout_unresolved"
 
 
 class LaunchFailure(StrEnum):

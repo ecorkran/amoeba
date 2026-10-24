@@ -24,7 +24,13 @@ from amoeba.runner.decide import (
     WriteSlicePointer,
     decide,
 )
-from amoeba.runner.dispatch.observe_pointer import PointerObservation, PointerStage
+from amoeba.runner.dispatch.build_view import (
+    DispatchView,
+    block_unresolved,
+    build_dispatch_view,
+)
+from amoeba.runner.dispatch.observe_pointer import PointerStage
+from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
     LaunchFailure,
@@ -55,6 +61,7 @@ from amoeba.store import (
     PARAM_RUN_ID,
     CommandKind,
     JournalEntry,
+    Node,
     Store,
 )
 
@@ -92,6 +99,7 @@ class ProjectTick:
         self._plans = plans
         self._pointers = pointers
         self._pointer_confirmed: frozenset[str] = frozenset()
+        self._dispatching = any(isinstance(p, DispatchPlanner) for p in planners)
         self._tracker = tracker
         self._popen = popen
         self._now = now
@@ -123,7 +131,10 @@ class ProjectTick:
             raise UpstreamShapeError(shape_error)
         if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
-        pointed = self._observe_pointers(desired, budget)
+        pointed = self._pointers.observe_project(
+            self._store, self._project_id, desired, budget, self._context
+        )
+        self.wrote = pointed.wrote or self.wrote
         if pointed.result is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._pointer_confirmed = pointed.confirmed
@@ -167,26 +178,6 @@ class ProjectTick:
         self.wrote = wrote or self.wrote
         return result
 
-    def _observe_pointers(
-        self, desired: DesiredStateIndex, budget: TickBudget
-    ) -> PointerObservation:
-        """Settle open pointer writes and confirm pointed steps (D2, D3).
-
-        Reads the store's tree as it is after the plan stage; the view is built
-        again afterwards, because settling a write can block a step.
-        """
-        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
-        observation = self._pointers.observe(
-            self._store,
-            self._project_id,
-            current_steps(tree, desired),
-            drives=desired.drives_anything(),
-            budget=budget,
-            context=self._context,
-        )
-        self.wrote = observation.wrote or self.wrote
-        return observation
-
     def _run_entries(self) -> list[JournalEntry]:
         return [
             entry
@@ -224,6 +215,8 @@ class ProjectTick:
     ) -> list[Action]:
         self._context.clear()
         tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
+        current = current_steps(tree, desired)
+        dispatch = self._dispatch_view(tree, current)
         view = ProjectView(
             project_id=self._project_id,
             now=self._now(),
@@ -233,9 +226,32 @@ class ProjectTick:
             in_flight=tuple(o.run for o in runs if o.finished is None),
             link_probes=link_probes,
             desired=desired,
-            current_steps=current_steps(tree, desired),
+            current_steps=current,
+            dispatch=dispatch.facts,
+            held_checkouts=dispatch.held,
         )
         return list(decide(view, self._planners))
+
+    def _dispatch_view(
+        self, tree: LifecycleTree, current: Sequence[Node]
+    ) -> DispatchView:
+        """The dispatch facts, only when a dispatch planner is registered (D1).
+
+        Without one nothing launches, so a step with no checkout is not a fault, and
+        no step is blocked for it.
+        """
+        if not self._dispatching:
+            return DispatchView({}, frozenset(), ())
+        dispatch = build_dispatch_view(
+            self._store,
+            self._project_id,
+            tree,
+            current,
+            self._pointer_confirmed,
+            is_dir=Path.is_dir,
+        )
+        self.wrote = block_unresolved(self._store, dispatch.unresolved) or self.wrote
+        return dispatch
 
     def _act(self, actions: Sequence[Action], budget: TickBudget) -> TickResult:
         for action in actions:
@@ -251,8 +267,7 @@ class ProjectTick:
                         return TickResult.CUT_OFF
                     self._launch(action)
                 case WriteSlicePointer():
-                    # Act for the pointer write lands with the tick wiring (D2);
-                    # no production planner emits it before then.
+                    # Act for the pointer write lands with the next task (D2).
                     raise NotImplementedError(
                         "WriteSlicePointer is not acted on yet: no planner emits it"
                     )
