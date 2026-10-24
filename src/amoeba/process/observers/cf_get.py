@@ -17,6 +17,7 @@ from typing import Final
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from amoeba.process.recovery import Unknown
+from amoeba.upstream.context_forge import FIELD_PROJECT_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ CF_EXECUTABLE: Final = "cf"
 #: CF record fields the read-back reads besides the ones an entry expects.
 CF_FIELD_UPDATED_AT: Final = "updatedAt"
 CF_FIELD_FILE_SLICE: Final = "fileSlice"
-CF_FIELD_PROJECT_PATH: Final = "projectPath"
+CF_FIELD_PROJECT_PATH: Final = FIELD_PROJECT_PATH
 CF_FIELD_WORKTREE: Final = "worktree"
 CF_FIELD_WORKTREE_ID: Final = "id"
 

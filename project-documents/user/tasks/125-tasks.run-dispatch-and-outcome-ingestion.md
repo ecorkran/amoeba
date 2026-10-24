@@ -287,12 +287,12 @@ All functions in this section are pure: no store, subprocess or clock.
 
 Per the LLD, D1. Create `runner/dispatch/__init__.py`, `runner/dispatch/checkout.py` and `tests/runner/dispatch/test_checkout.py`.
 
-- [ ] `Checkout(path: Path, worktree_id: str | None)` and `CheckoutUnresolved(reason: str)`, frozen
-- [ ] `resolve_checkout(snapshot, slice_index, *, is_dir)` over the projection `latest_cf_snapshots` returns. Inject the directory check (`is_dir`) so the function stays pure; the caller passes `Path.is_dir`
-- [ ] Every D1 rule: worktrees present, exactly one containing `indexRange` with a non-empty `worktreePath`; no worktrees, `projectPath`; else `CheckoutUnresolved` naming which case
-- [ ] Tests (table-driven, one row per D1 case): two worktrees and the index in the second; no worktrees; no snapshot; no range contains the index; two ranges contain it; empty `worktreePath`; path not a directory; range bounds inclusive at both ends. Build rows in the projection shape `tests/store/test_cf_snapshots.py` uses
+- [x] `Checkout(path: Path, worktree_id: str | None)` and `CheckoutUnresolved(reason: str)`, frozen
+- [x] `resolve_checkout(snapshot, slice_index, *, is_dir)` over the projection `latest_cf_snapshots` returns. Inject the directory check (`is_dir`) so the function stays pure; the caller passes `Path.is_dir`
+- [x] Every D1 rule: worktrees present, exactly one containing `indexRange` with a non-empty `worktreePath`; no worktrees, `projectPath`; else `CheckoutUnresolved` naming which case
+- [x] Tests (table-driven, one row per D1 case): two worktrees and the index in the second; no worktrees; no snapshot; no range contains the index; two ranges contain it; empty `worktreePath`; path not a directory; range bounds inclusive at both ends. Build rows in the projection shape `tests/store/test_cf_snapshots.py` uses
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: resolve a slice's checkout from CF worktree ranges`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: resolve a slice's checkout from CF worktree ranges`
 
 ### Task 5.2: `DispatchState` and `dispatch_state`, with tests
 **Owner**: Junior AI | **Dependencies**: 2.5 | **Effort**: 2

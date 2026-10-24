@@ -20,7 +20,12 @@ from amoeba.upstream.context_forge.plan import (
 )
 from amoeba.upstream.context_forge.projects_file import (
     ABSENT,
+    FIELD_INDEX_RANGE,
+    FIELD_PROJECT_PATH,
+    FIELD_WORKTREE_PATH,
     PROJECTS_FILE_NAME,
+    STATE_PROJECT_KEY,
+    STATE_WORKTREES_KEY,
     CFFieldChange,
     CFProjectState,
     CFReadFailure,
@@ -31,9 +36,14 @@ from amoeba.upstream.context_forge.slice_stem import SliceStem, parse_slice_stem
 
 __all__ = [
     "ABSENT",
+    "FIELD_INDEX_RANGE",
+    "FIELD_PROJECT_PATH",
+    "FIELD_WORKTREE_PATH",
     "PROJECTS_FILE_NAME",
     "READ_INITIATIVES",
     "READ_SLICE_LIST",
+    "STATE_PROJECT_KEY",
+    "STATE_WORKTREES_KEY",
     "CFErrorDocument",
     "CFFieldChange",
     "CFInitiative",

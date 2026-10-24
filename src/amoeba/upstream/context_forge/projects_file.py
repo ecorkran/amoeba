@@ -22,9 +22,14 @@ from typing import Any, Final, cast
 PROJECTS_FILE_NAME: Final = "projects.json"
 
 # Projected fields, defined once (observed on CF 0.19.x; see the contract doc).
+#: The projected fields other modules read by name, so they are spelled once.
+FIELD_PROJECT_PATH: Final = "projectPath"
+FIELD_WORKTREE_PATH: Final = "worktreePath"
+FIELD_INDEX_RANGE: Final = "indexRange"
+
 PROJECT_FIELDS: Final[tuple[str, ...]] = (
     "name",
-    "projectPath",
+    FIELD_PROJECT_PATH,
     "developmentPhase",
     "instruction",
     "fileArch",
@@ -34,8 +39,8 @@ PROJECT_FIELDS: Final[tuple[str, ...]] = (
 )
 WORKTREE_FIELDS: Final[tuple[str, ...]] = (
     "name",
-    "worktreePath",
-    "indexRange",
+    FIELD_WORKTREE_PATH,
+    FIELD_INDEX_RANGE,
     "archDoc",
     "slicePlan",
     "developmentPhase",
