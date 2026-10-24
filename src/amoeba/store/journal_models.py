@@ -117,6 +117,9 @@ class JournalEntry:
     result: Mapping[str, object] | None = None
     resolved_at: datetime | None = None
     resolved_by: JournalResolver | None = None
+    #: Set when a Runner resolution left evidence awaiting a routing decision
+    #: (slice 125, D8). Never set by recovery, and cleared by a decision.
+    awaits_routing: bool = False
 
     @property
     def is_resolved(self) -> bool:

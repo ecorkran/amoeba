@@ -36,11 +36,14 @@ COL_JOURNAL_OUTCOME: Final = "outcome"
 COL_JOURNAL_RESULT: Final = "result"
 COL_JOURNAL_RESOLVED_AT: Final = "resolved_at"
 COL_JOURNAL_RESOLVED_BY: Final = "resolved_by"
+#: Added by migration 011. Last in table order, so it is last in JOURNAL_COLUMNS.
+COL_JOURNAL_AWAITS_ROUTING: Final = "awaits_routing"
 
 #: Index names, so the migration test asserts against a constant rather than a
 #: literal repeated between the ``.sql`` file and the test.
 INDEX_JOURNAL_UNRESOLVED: Final = "idx_command_journal_unresolved"
 INDEX_JOURNAL_PROJECT: Final = "idx_command_journal_project"
+INDEX_JOURNAL_AWAITS_ROUTING: Final = "idx_journal_awaits_routing"
 
 #: Column order used by every journal SELECT and by journal row mapping.
 #: Declared once so the statements and the mapper cannot disagree about
@@ -56,6 +59,7 @@ JOURNAL_COLUMNS: Final = (
     COL_JOURNAL_RESULT,
     COL_JOURNAL_RESOLVED_AT,
     COL_JOURNAL_RESOLVED_BY,
+    COL_JOURNAL_AWAITS_ROUTING,
 )
 
 _JOURNAL_SELECT_LIST: Final = ", ".join(

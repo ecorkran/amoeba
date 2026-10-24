@@ -14,7 +14,7 @@ import pytest
 from legacy_nodes import LEGACY_INSERT_NODE
 
 from amoeba.store import Store, sql
-from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, migrate
+from amoeba.store.migrations import migrate
 from amoeba.store.models import (
     CFReference,
     NodeKind,
@@ -67,15 +67,14 @@ def _linked(
     )
 
 
-def test_the_expected_version_is_ten() -> None:
-    assert EXPECTED_SCHEMA_VERSION == INDEX_SCHEMA_VERSION
-
-
 def test_upgrade_keeps_old_rows_and_leaves_the_index_null(store_file: Path) -> None:
     _stage_version_nine_store(store_file)
     with sqlite3.connect(store_file) as connection:
         before = _node_rows(connection)
-        assert migrate(connection) == INDEX_SCHEMA_VERSION
+        assert (
+            migrate(connection, expected_version=INDEX_SCHEMA_VERSION)
+            == INDEX_SCHEMA_VERSION
+        )
         after = _node_rows(connection)
         indexes = connection.execute(
             f"SELECT {sql.COL_NODE_CF_INDEX} FROM nodes"

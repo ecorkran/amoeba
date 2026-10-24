@@ -133,11 +133,11 @@ Per the LLD, D10 bullets on the observer, D2 "Read-back". Edit `process/observer
 
 Per the LLD, "Database / Storage Schema" and D8. Create `store/schema/011_journal_awaits_routing.sql` and `tests/store/test_migration_011.py` (model it on `test_migration_010.py`).
 
-- [ ] The migration adds `awaits_routing INTEGER` and the partial index `idx_journal_awaits_routing` exactly as in the LLD. Register it wherever `010` is registered
-- [ ] `JournalEntry` gains `awaits_routing: bool`. The row mapping (`store/mapping_journal.py`) reads null and `0` as `False`, `1` as `True`
-- [ ] Tests: on a populated v10 store, `011` applies, every existing row reads `awaits_routing=False`, and the schema version reports `11`; `tests/test_migrations.py` passes
+- [x] The migration adds `awaits_routing INTEGER` and the partial index `idx_journal_awaits_routing` exactly as in the LLD. Register it wherever `010` is registered
+- [x] `JournalEntry` gains `awaits_routing: bool`. The row mapping (`store/mapping_journal.py`) reads null and `0` as `False`, `1` as `True`
+- [x] Tests: on a populated v10 store, `011` applies, every existing row reads `awaits_routing=False`, and the schema version reports `11`; `tests/test_migrations.py` passes
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add the awaits_routing journal flag (migration 011)`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: add the awaits_routing journal flag (migration 011)`
 
 ### Task 2.5: Issuer resolutions set the flag; `unrouted_outcomes`, with tests
 **Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 3

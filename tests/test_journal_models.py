@@ -125,4 +125,5 @@ def test_entry_carries_the_contract_fields() -> None:
         "result",
         "resolved_at",
         "resolved_by",
+        "awaits_routing",
     }

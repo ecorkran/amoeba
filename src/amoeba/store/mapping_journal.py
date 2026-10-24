@@ -135,4 +135,14 @@ def map_journal_entry(row: Sequence[object]) -> JournalEntry:
                 resolver_value, JournalResolver, sql_journal.COL_JOURNAL_RESOLVED_BY
             )
         ),
+        awaits_routing=_decode_flag(row[10], sql_journal.COL_JOURNAL_AWAITS_ROUTING),
     )
+
+
+def _decode_flag(value: object, column: str) -> bool:
+    """A nullable 0/1 flag column: null and ``0`` are false, ``1`` is true."""
+    if value is None or value == 0:
+        return False
+    if value == 1:
+        return True
+    raise UnknownVocabularyValueError(f"{column} is not null, 0 or 1: {value!r}")
