@@ -41,6 +41,8 @@ class FaultKind(StrEnum):
     ``PLAN_STATUS_UNKNOWN`` are node-scoped: they name the ``fault_kind`` payload
     of a block on the node CF stopped reporting, or whose status the Runner cannot
     project. They are closed by resolving the block, not by the project rule.
+    ``REVIEW_UNKNOWN`` is node-scoped in the same way: a run's review could not be
+    read, parsed or attributed, and the step's block names it.
     """
 
     RUN_OBSERVATION_FAILED = "run_observation_failed"
@@ -50,6 +52,7 @@ class FaultKind(StrEnum):
     PLAN_READ_FAILED = "plan_read_failed"
     LIFECYCLE_ORPHAN = "lifecycle_orphan"
     PLAN_STATUS_UNKNOWN = "plan_status_unknown"
+    REVIEW_UNKNOWN = "review_unknown"
 
 
 class LaunchFailure(StrEnum):

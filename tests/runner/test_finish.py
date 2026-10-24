@@ -8,9 +8,18 @@ import pytest
 
 from amoeba.process import RunCheckpoint, RunOutcome, RunOutcomeDocument
 from amoeba.runner.faults import LaunchFailure
-from amoeba.runner.finish import RESULT_RUN_ID, record
+from amoeba.runner.finish import RESULT_RUN_ID
+from amoeba.runner.finish import record as finish_record
+from amoeba.runner.ingest.record import (
+    OUTCOME_VANISHED,
+    RESULT_OUTCOME,
+    RESULT_OUTCOME_DOCUMENT,
+    RESULT_REVIEW_FAULT,
+    RESULT_STATUS,
+    RESULT_VERDICT_IDS,
+)
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
-from amoeba.runner.observed import LaunchFailed, RunEnded, RunVanished
+from amoeba.runner.observed import Finished, LaunchFailed, RunEnded, RunVanished
 from amoeba.store import (
     PARAM_RUN_ID,
     BlockedKind,
@@ -27,6 +36,11 @@ from runner.observe_support import document
 
 PROJECT = "demo"
 RUN_ID = "run-1"
+VERSION_LABEL = "sq-test-label"
+
+
+def record(store: Store, entry: JournalEntry, finished: Finished) -> None:
+    finish_record(store, entry, finished, VERSION_LABEL)
 
 
 @pytest.fixture
@@ -63,11 +77,13 @@ def test_completed_resolves_completed_and_blocks_nothing(
         JournalOutcome.COMPLETED,
         JournalResolver.ISSUER,
     )
-    assert done.result == {
-        RESULT_RUN_ID: RUN_ID,
-        "outcome": "completed",
-        "status": "completed",
-    }
+    assert done.awaits_routing is True
+    assert done.result is not None
+    assert done.result[RESULT_RUN_ID] == RUN_ID
+    assert done.result[RESULT_OUTCOME] == "completed"
+    assert done.result[RESULT_STATUS] == "completed"
+    assert done.result[RESULT_VERDICT_IDS] == []
+    assert done.result[RESULT_REVIEW_FAULT] is None
     assert _open_blocks(store, node) == []
 
 
@@ -78,14 +94,14 @@ def test_failed_blocks_on_a_human_then_resolves_completed(
 
     done = _resolved(store, entry)
     assert done.outcome is JournalOutcome.COMPLETED
-    assert done.result is not None and done.result["outcome"] == "failed"
+    assert done.result is not None and done.result[RESULT_OUTCOME] == "failed"
     assert _open_blocks(store, node) == [BlockedKind.HUMAN]
     blocked_node = store.get_node(node.id)
     assert blocked_node is not None
     assert blocked_node.status is NodeStatus.BLOCKED_ON_HUMAN
 
 
-def test_paused_records_the_checkpoint_as_reported(
+def test_paused_blocks_on_the_checkpoint_and_keeps_the_document_in_the_result(
     store: Store, node: Node, entry: JournalEntry
 ) -> None:
     paused_at = datetime(2026, 10, 23, 9, 30, tzinfo=UTC)
@@ -93,7 +109,9 @@ def test_paused_records_the_checkpoint_as_reported(
         run_id=RUN_ID,
         outcome=RunOutcome.PAUSED,
         status="paused",
-        checkpoint=RunCheckpoint(paused_at=paused_at),
+        checkpoint=RunCheckpoint(
+            kind="awaits_human", step="branch-10", paused_at=paused_at
+        ),
     )
 
     record(store, entry, RunEnded(doc))
@@ -101,8 +119,10 @@ def test_paused_records_the_checkpoint_as_reported(
     done = _resolved(store, entry)
     assert done.outcome is JournalOutcome.COMPLETED
     assert done.result is not None
-    assert done.result["checkpoint"] == {"paused_at": paused_at.isoformat()}
-    assert _open_blocks(store, node) == [BlockedKind.HUMAN]
+    stored = done.result[RESULT_OUTCOME_DOCUMENT]
+    assert isinstance(stored, dict)
+    assert stored["checkpoint"]["kind"] == "awaits_human"  # pyright: ignore[reportUnknownVariableType]
+    assert _open_blocks(store, node) == [BlockedKind.SQ_CHECKPOINT]
 
 
 def test_orphaned_blocks_and_resolves_failed(
@@ -121,7 +141,9 @@ def test_a_vanished_run_blocks_and_resolves_failed(
 
     done = _resolved(store, entry)
     assert done.outcome is JournalOutcome.FAILED
-    assert done.result == {RESULT_RUN_ID: RUN_ID, "outcome": "vanished"}
+    assert done.result is not None
+    assert done.result[RESULT_OUTCOME] == OUTCOME_VANISHED
+    assert done.result[RESULT_OUTCOME_DOCUMENT] is None
     assert _open_blocks(store, node) == [BlockedKind.HUMAN]
 
 

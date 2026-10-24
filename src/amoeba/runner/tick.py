@@ -77,8 +77,10 @@ class ProjectTick:
         popen: PopenFactory,
         now: Callable[[], datetime],
         context: NodeContext,
+        version_label: str,
     ) -> None:
         self._project_id = project_id
+        self._version_label = version_label
         self._store = store
         self._supervisor_dir = supervisor_dir
         self._planners = planners
@@ -171,7 +173,7 @@ class ProjectTick:
                 continue
             entry = observed.run.entry
             self._context.set(entry.node_id)
-            finish.record(self._store, entry, observed.finished)
+            finish.record(self._store, entry, observed.finished, self._version_label)
             self._tracker.forget(entry.id)
             self.wrote = True
             if (
@@ -242,7 +244,7 @@ class ProjectTick:
         started = launch(entry, self._supervisor_dir, self._popen)
         if isinstance(started, LaunchError):
             failed = LaunchFailed(started.failure, None, started.detail)
-            finish.record(self._store, entry, failed)
+            finish.record(self._store, entry, failed, self._version_label)
             return
         self._tracker.track(entry.id, started)
 

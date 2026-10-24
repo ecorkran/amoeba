@@ -19,7 +19,12 @@ from sq_stub import (
 from amoeba.process import ProcessSettings, UpstreamShapeError
 from amoeba.runner import RunnerTenant, runner_tenant
 from amoeba.runner.decide import Action, LaunchRun, ProjectView
-from amoeba.runner.finish import RESULT_RUN_ID
+from amoeba.runner.ingest.record import (
+    RESULT_OUTCOME,
+    RESULT_RUN_ID,
+    RESULT_STATUS,
+    RESULT_VERDICT_IDS,
+)
 from amoeba.runner.launch import log_paths
 from amoeba.store import (
     PARAM_RUN_ID,
@@ -131,11 +136,12 @@ def test_the_normal_path_records_run_id_outcome_and_status(scenario: Scenario) -
     entry = scenario.entry()
     run_id = str(entry.parameters[PARAM_RUN_ID])
     assert entry.outcome is JournalOutcome.COMPLETED
-    assert entry.result == {
-        RESULT_RUN_ID: run_id,
-        "outcome": "completed",
-        "status": "completed",
-    }
+    assert entry.result is not None
+    assert entry.result[RESULT_RUN_ID] == run_id
+    assert entry.result[RESULT_OUTCOME] == "completed"
+    assert entry.result[RESULT_STATUS] == "completed"
+    assert entry.result[RESULT_VERDICT_IDS] == []
+    assert entry.awaits_routing is True
     stderr = log_paths(scenario.supervisor_dir, entry.id).stderr.read_text()
     assert f"run_id={run_id}\n" in stderr, "confirmed by its own line"
     assert scenario.escalations() == []

@@ -79,6 +79,7 @@ class Rig:
             poll=self.poll,
             now=self.clock.wall,
             monotonic=self.clock.monotonic,
+            version_label="sq-test-label",
         )
 
     def _popen(self, argv: list[str], **kwargs: Any) -> Child:

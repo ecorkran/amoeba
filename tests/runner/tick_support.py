@@ -187,10 +187,14 @@ class Rig:
             popen=self.popen,
             now=self.clock.wall,
             context=self.context,
+            version_label=TEST_VERSION_LABEL,
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
         return tick.run(budget), tick
 
+
+#: The ``sq --version`` label the rig's ingestion is given; not a real version.
+TEST_VERSION_LABEL = "sq-test-label"
 
 TENANT_SETTINGS = ProcessSettings(
     tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0
@@ -221,6 +225,7 @@ def tenant_for(rig: Rig) -> RunnerTenant:
         poll=rig.poll,
         now=rig.clock.wall,
         monotonic=rig.clock.monotonic,
+        version_label=TEST_VERSION_LABEL,
     )
 
 

@@ -49,6 +49,7 @@ from amoeba.process.sq_outcome import (
     poll_run,
 )
 from amoeba.process.tenants import standard_tenants
+from amoeba.process.version_label import capture_sq_version_label
 
 __all__ = [
     "OUTCOME_EXIT_CODES",
@@ -78,6 +79,7 @@ __all__ = [
     "Unknown",
     "UnknownKind",
     "UpstreamShapeError",
+    "capture_sq_version_label",
     "detection_key",
     "ledger_key",
     "parse_checkpoint_kind",

@@ -40,6 +40,7 @@ EXPECTED_EXPORTS = {
     # Slice 125: the one place detection's ledger key is formed, called by ingest.
     "detection_key",
     "ledger_key",
+    "capture_sq_version_label",
     # Slice 125: the outcome document's checkpoint, failure and reviews.
     "RunFailure",
     "RunReview",

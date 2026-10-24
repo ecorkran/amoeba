@@ -88,6 +88,7 @@ def test_the_tick_is_bounded_fair_and_rate_limited(tmp_path: Path) -> None:
         poll=poll,
         now=lambda: datetime.now(UTC),
         monotonic=time.monotonic,
+        version_label="sq-test-label",
     )
     host = Host(stores)
     started = time.monotonic()

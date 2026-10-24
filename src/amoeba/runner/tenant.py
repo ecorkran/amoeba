@@ -65,9 +65,14 @@ class RunnerTenant:
         poll: Callable[[str], RunPoll],
         now: Callable[[], datetime],
         monotonic: Callable[[], float],
+        version_label: str,
     ) -> None:
-        """Build the tenant; every collaborator is injected so tests never sleep."""
+        """Build the tenant; every collaborator is injected so tests never sleep.
+
+        ``version_label`` is the ``sq --version`` label, captured once at start-up.
+        """
         self._settings = settings
+        self._version_label = version_label
         self._supervisor_dir = supervisor_dir
         self._planners = tuple(planners)
         self._popen = popen
@@ -145,6 +150,7 @@ class RunnerTenant:
             popen=self._popen,
             now=self._now,
             context=context,
+            version_label=self._version_label,
         )
         try:
             return tick.run(budget), tick.wrote

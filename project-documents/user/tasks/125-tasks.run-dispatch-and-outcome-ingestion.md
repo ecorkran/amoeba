@@ -253,15 +253,15 @@ Per the LLD, D7. Create `runner/ingest/reviews.py` and `tests/runner/ingest/test
 
 Per the LLD, D6 and D7 "`ReviewUnknown`" (block rules). Create `runner/ingest/record.py`; change `runner/finish.py` to delegate; edit `runner/factory.py` and `tests/runner/test_finish.py`; add `tests/runner/ingest/test_record.py`.
 
-- [ ] `runner/factory.py` captures the `sq --version` label once at start (120's `version_label`) and passes it to whatever builds ingest. No per-tick capture
-- [ ] Order: block (skipped if the node is already blocked), then one `record_runner_report(entry, reviews, outcome=…, result=…)`
-- [ ] Result keys `run_id`, `outcome`, `status`, `outcome_document` (the polled document, verbatim), `verdict_ids` (part order, empty if nothing recorded), `review_fault` (null or the `ReviewUnknown` reason). Define them once; drop 122's `checkpoint`/`paused_at` result keys in favor of `outcome_document`
-- [ ] Review unknown with no outcome block: block `HUMAN` with `{fault_kind: review_unknown, path, reason}`. With an outcome block: that block stands with `review_fault` added to its payload. Paused with review unknown: block `HUMAN`, not `SQ_CHECKPOINT`. The `reason` is cut to the same bound as Task 4.1
-- [ ] Add `FaultKind.REVIEW_UNKNOWN` in `runner/faults.py`
-- [ ] `finish.record` keeps the `LaunchFailed` path (122) and delegates `RunEnded`/`RunVanished` to `ingest.record`
-- [ ] Tests (store-backed, files on disk): completed records on the slice node with `sq_run_id`, a `runner_issued` ledger row, entry `completed` with `verdict_ids` and `awaits_routing`; `test_split_review_records_every_part` (every part in one transaction); empty list resolves and flags; each unknown case blocks with `review_unknown`, including paused (blocked `HUMAN`); failed plus unknown keeps the failed block with `review_fault`; calling `record` twice gives one block and one verdict per part (re-entry)
+- [x] `runner/factory.py` captures the `sq --version` label once at start (120's `version_label`) and passes it to whatever builds ingest. No per-tick capture
+- [x] Order: block (skipped if the node is already blocked), then one `record_runner_report(entry, reviews, outcome=…, result=…)`
+- [x] Result keys `run_id`, `outcome`, `status`, `outcome_document` (the polled document, verbatim), `verdict_ids` (part order, empty if nothing recorded), `review_fault` (null or the `ReviewUnknown` reason). Define them once; drop 122's `checkpoint`/`paused_at` result keys in favor of `outcome_document`
+- [x] Review unknown with no outcome block: block `HUMAN` with `{fault_kind: review_unknown, path, reason}`. With an outcome block: that block stands with `review_fault` added to its payload. Paused with review unknown: block `HUMAN`, not `SQ_CHECKPOINT`. The `reason` is cut to the same bound as Task 4.1
+- [x] Add `FaultKind.REVIEW_UNKNOWN` in `runner/faults.py`
+- [x] `finish.record` keeps the `LaunchFailed` path (122) and delegates `RunEnded`/`RunVanished` to `ingest.record`
+- [x] Tests (store-backed, files on disk): completed records on the slice node with `sq_run_id`, a `runner_issued` ledger row, entry `completed` with `verdict_ids` and `awaits_routing`; `test_split_review_records_every_part` (every part in one transaction); empty list resolves and flags; each unknown case blocks with `review_unknown`, including paused (blocked `HUMAN`); failed plus unknown keeps the failed block with `review_fault`; calling `record` twice gives one block and one verdict per part (re-entry)
 - **Success Criteria**:
-  - [ ] Tests, the full `tests/runner` suite, `ruff` and `pyright` pass. Commit: `feat: ingest finished runs with their reviews`
+  - [x] Tests, the full `tests/runner` suite, `ruff` and `pyright` pass. Commit: `feat: ingest finished runs with their reviews`
 
 ### Task 4.4: Ingestion proofs: detection skip and crash points, with tests
 **Owner**: Junior AI | **Dependencies**: 3.2, 4.3 | **Effort**: 3

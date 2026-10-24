@@ -114,14 +114,24 @@ def _hooked(kill_at: KillPoint | None) -> tuple[object, object]:
 
 
 def _arm_resolve_kill() -> None:
-    """Make the next ``journal_resolve`` die: the node is already blocked."""
-    original = Store.journal_resolve
+    """Make the next resolution die: the node is already blocked.
+
+    A launch failure resolves through ``journal_resolve``; a finished run through
+    ``record_runner_report``. Both come after the block.
+    """
+    original_resolve = Store.journal_resolve
+    original_report = Store.record_runner_report
 
     def resolve(self: Store, *args: object, **kwargs: object):  # noqa: ANN202
         die()
-        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+        return original_resolve(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    def report(self: Store, *args: object, **kwargs: object):  # noqa: ANN202
+        die()
+        return original_report(self, *args, **kwargs)  # type: ignore[arg-type]
 
     Store.journal_resolve = resolve  # type: ignore[method-assign]
+    Store.record_runner_report = report  # type: ignore[method-assign]
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -164,6 +174,7 @@ def main(argv: Sequence[str]) -> None:
         poll=poll,  # type: ignore[arg-type]
         now=partial(datetime.now, UTC),
         monotonic=time.monotonic,
+        version_label="sq-test-label",
     )
     process = ResidentProcess(
         settings,
