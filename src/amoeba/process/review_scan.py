@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from amoeba.store import (
     DetectionInput,
     DetectionOutcome,
+    ReviewWatch,
     Store,
     attribute_review,
 )
@@ -38,6 +40,36 @@ logger = logging.getLogger(__name__)
 def content_digest(content: bytes) -> str:
     """The ledger's digest: sha256 of the bytes examined."""
     return hashlib.sha256(content).hexdigest()
+
+
+def ledger_key(path: Path, content: bytes) -> tuple[str, str]:
+    """The ledger's ``(path, digest)`` key for a file's path and the bytes read.
+
+    The one place the pair is formed: baselining, examining and
+    :func:`detection_key` all call it, so the three cannot drift apart.
+    """
+    return str(path), content_digest(content)
+
+
+def detection_key(
+    watches: Sequence[ReviewWatch], file: Path, content: bytes
+) -> tuple[str, str] | None:
+    """The key detection would give ``file``, whose bytes are ``content``.
+
+    The Runner calls this on a review file it read (slice 125, D7) so that its
+    record and detection's ledger row collide on one key. The file's directory
+    must be a watch's ``reviews_dir``: the path is that directory joined with
+    the file name, as the directory source builds it, so a watch given with a
+    trailing separator matches too. ``None`` means no watch covers the file;
+    detection never sees such a file, and the caller keys it by its own path.
+
+    ``content`` is passed in, rather than read here, so the file is read once.
+    """
+    for watch in watches:
+        directory = Path(watch.reviews_dir)
+        if directory == file.parent:
+            return ledger_key(directory / file.name, content)
+    return None
 
 
 def recording[ResultT](
@@ -88,8 +120,7 @@ def examine(
     store: Store, project_id: str, detected: DetectedFile, version_label: str
 ) -> bool:
     """Examine one settled file. Returns whether a ledger row was written."""
-    path = str(detected.path)
-    digest = content_digest(detected.content)
+    path, digest = ledger_key(detected.path, detected.content)
     if store.detection(project_id, path, digest) is not None:
         return False
     examined = _Examined(store, project_id, path, digest)

@@ -37,6 +37,8 @@ EXPECTED_EXPORTS = {
     "SQ_USAGE_ERROR_EXIT_CODE",
     # Slice 122: raised by the Runner's probes, mapped to an exit code by the CLI.
     "UpstreamShapeError",
+    # Slice 125: the one place detection's ledger key is formed, called by ingest.
+    "detection_key",
 }
 
 #: Deliberately not part of the contract: run-file parsing and pruning are

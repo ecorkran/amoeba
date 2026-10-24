@@ -170,12 +170,12 @@ Per the LLD, D10 "`record_runner_report`" and D8 "Cleared by the decision". Edit
 
 Per the LLD, D7 last bullet and D10 "`detection_key`"; see "Task-level additions". Edit `process/review_scan.py` and its tests.
 
-- [ ] Add `detection_key(watches, file: Path) -> tuple[str, str] | None` beside `content_digest`: the watch whose `reviews_dir` is the file's parent directory gives `(str(Path(reviews_dir) / file.name), content_digest(bytes))`; no covering watch gives `None`. Take the bytes as an argument if that keeps the file read once (ingest reads each file once, D7); state the final signature in the docstring
-- [ ] `examine` forms its `(path, digest)` through the same helper, so detection's key has one definition. Detection behavior is unchanged
-- [ ] Export it from `amoeba.process`
-- [ ] Tests: a file in a watched directory gets the watch-joined path and the digest; a file outside every watch gives `None`; a watch path given with a trailing separator still matches; the detection test suites (`tests/process/`, `tests/store/test_detections.py`) pass unchanged
+- [x] Add `detection_key(watches, file: Path) -> tuple[str, str] | None` beside `content_digest`: the watch whose `reviews_dir` is the file's parent directory gives `(str(Path(reviews_dir) / file.name), content_digest(bytes))`; no covering watch gives `None`. Take the bytes as an argument if that keeps the file read once (ingest reads each file once, D7); state the final signature in the docstring
+- [x] `examine` forms its `(path, digest)` through the same helper, so detection's key has one definition. Detection behavior is unchanged
+- [x] Export it from `amoeba.process`
+- [x] Tests: a file in a watched directory gets the watch-joined path and the digest; a file outside every watch gives `None`; a watch path given with a trailing separator still matches; the detection test suites (`tests/process/`, `tests/store/test_detections.py`) pass unchanged
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `refactor: form the review detection key in one function`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `refactor: form the review detection key in one function`
 
 ### Task 2.8: Contract text for the store, read-back and evidence changes
 **Owner**: Junior AI | **Dependencies**: 2.2–2.7 | **Effort**: 2

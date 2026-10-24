@@ -28,6 +28,7 @@ from amoeba.process.recovery import (
     Observer,
     Unknown,
 )
+from amoeba.process.review_scan import detection_key
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.sq_outcome import (
     OUTCOME_EXIT_CODES,
@@ -65,6 +66,7 @@ __all__ = [
     "Tenant",
     "Unknown",
     "UpstreamShapeError",
+    "detection_key",
     "poll_run",
     "standard_tenants",
 ]

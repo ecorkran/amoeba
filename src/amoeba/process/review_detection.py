@@ -20,7 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final, Protocol
 
-from amoeba.process.review_scan import content_digest, examine, recording
+from amoeba.process.review_scan import examine, ledger_key, recording
 from amoeba.process.settings import ProcessSettings
 from amoeba.store import BaselineEntry, ReviewWatch, Store
 from amoeba.store.review_sources import (
@@ -192,7 +192,7 @@ class ReviewDetectionTenant:
                 # be ingested later as new, so nothing is written this scan.
                 self._block_baseline(key, f"{path} is unreadable: {error}")
                 return False
-            entries.append(BaselineEntry(str(path), content_digest(content)))
+            entries.append(BaselineEntry(*ledger_key(path, content)))
 
         self._baseline_blocked.pop(key, None)
         recording(
