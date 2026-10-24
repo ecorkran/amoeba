@@ -5,6 +5,7 @@ from __future__ import annotations
 from amoeba.runner.lifecycle.steps import STEP_MAP, LifecycleStep, StepLevel
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import Store
+from amoeba.store.inbox_models import Channel
 from amoeba.store.models import (
     BlockedKind,
     CFReference,
@@ -77,6 +78,16 @@ class TreeBuilder:
         if current is None:
             raise LookupError(f"node {node.id} vanished")
         return current
+
+    def escalation_payloads(self, node: Node) -> list[dict[str, object]]:
+        """The payload of every escalation message raised for ``node``'s blocks."""
+        return [
+            dict(message.payload or {})
+            for message in self.store.messages(
+                self.project_id, channel=Channel.ESCALATION
+            )
+            if message.node_id == node.id
+        ]
 
     def done(self, node: Node) -> None:
         self.store.update_node_status(node.id, NodeStatus.DONE)
