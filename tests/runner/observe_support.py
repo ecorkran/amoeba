@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -70,12 +71,35 @@ class ScriptedPoll:
         return self.answers.pop(0)
 
 
+@dataclass
+class CfReply:
+    """One canned answer to a ``cf`` command."""
+
+    stdout: str = ""
+    returncode: int = 0
+    stderr: str = ""
+
+
+def command_key(argv: list[str]) -> str:
+    """``status``, ``list initiatives`` or ``list slices <index>``."""
+    if argv[1] == "status":
+        return "status"
+    return " ".join(argv[1:3] if argv[2] == "initiatives" else argv[1:4])
+
+
 class FakeCf:
-    """A ``cf`` runner answering the probe commands, or whatever it is told."""
+    """A ``cf`` runner answering the probe commands, or whatever it is told.
+
+    ``replies`` maps a command key (see :func:`command_key`), optionally suffixed
+    ``@<cf project id>`` for one link, to a :class:`CfReply` or an exception to
+    raise. ``stdout`` maps the first word (``status``, ``list``) to output, as the
+    probe tests set it.
+    """
 
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
         self.stdout: dict[str, str] = {}
+        self.replies: dict[str, CfReply | BaseException] = {}
         self.returncode = 0
         self.error: BaseException | None = None
         self.on_call: Any = None
@@ -88,6 +112,14 @@ class FakeCf:
             self.on_call()
         if self.error is not None:
             raise self.error
+        key = command_key(argv)
+        reply = self.replies.get(f"{key}@{argv[-1]}", self.replies.get(key))
+        if isinstance(reply, BaseException):
+            raise reply
+        if reply is not None:
+            return subprocess.CompletedProcess(
+                argv, reply.returncode, reply.stdout, reply.stderr
+            )
         command = argv[1]
         default = '{"project": "stub"}' if command == "status" else "[]"
         return subprocess.CompletedProcess(

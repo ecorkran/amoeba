@@ -20,6 +20,8 @@ from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Planner
 from amoeba.runner.faults import STORE_FAILURES, FaultKind, NodeContext, escalate
 from amoeba.runner.launch import LaunchTracker, PopenFactory
+from amoeba.runner.lifecycle.cadence import PlanReadSchedule
+from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.tick import ProjectTick
@@ -84,6 +86,11 @@ class RunnerTenant:
         self._probes = LinkProbes(
             run=cf_run, timeout_seconds=settings.tick_call_timeout_seconds
         )
+        self._plans = PlanStage(
+            schedule=PlanReadSchedule(settings.plan_read_interval_seconds, monotonic),
+            run=cf_run,
+            timeout_seconds=settings.tick_call_timeout_seconds,
+        )
         self._carried_over: tuple[str, ...] = ()
 
     @property
@@ -133,6 +140,7 @@ class RunnerTenant:
             planners=self._planners,
             observer=self._observer,
             probes=self._probes,
+            plans=self._plans,
             tracker=self.tracker,
             popen=self._popen,
             now=self._now,

@@ -16,6 +16,7 @@ from amoeba.runner.budget import TickResult
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.store import PARAM_RUN_ID, CommandKind, NodeKind, Store
 from runner.observe_support import Child, document
+from runner.plan_tick_support import serve_plan
 from runner.tick_support import PROJECT, Rig, link
 
 DEADLINE = 5.0
@@ -92,3 +93,35 @@ def test_no_call_starts_when_the_budget_is_spent_before_the_tick(
     assert result is TickResult.CUT_OFF and not tick.wrote
     assert started == []
     assert rig.poll.asked == [] and rig.cf.calls == [] and rig.popen.calls == 0
+
+
+@pytest.mark.parametrize(
+    ("deadline", "cf_calls"),
+    [
+        (4.0, 2),  # status, probe: spent before the plan's initiatives read
+        (7.0, 4),  # ... initiatives, slices 100: spent before slices 200
+    ],
+    ids=["before-the-initiatives-read", "between-slice-reads"],
+)
+def test_no_plan_read_call_starts_after_the_deadline_and_nothing_is_written(
+    tmp_path: Path, store: Store, deadline: float, cf_calls: int
+) -> None:
+    rig = Rig(tmp_path, store)
+    rig.planners = ()
+    link(store, "s-1", "cf-1", PROJECT)
+    serve_plan(rig.cf, (100, 200), {100: (101,), 200: (201,)})
+    rig.deadline = deadline
+
+    def call(kind: str) -> None:
+        assert rig.clock.seconds < deadline, f"a {kind} call started after the deadline"
+        rig.clock.seconds += CALL_COST
+
+    rig.cf.on_call = lambda: call("cf")
+    rig.popen.on_call = lambda: call("popen")
+
+    result, _ = rig.tick()
+
+    assert result is TickResult.CUT_OFF
+    assert len(rig.cf.calls) == cf_calls
+    assert store.nodes_for_project(PROJECT) == []
+    assert store.open_project_escalations(PROJECT) == []

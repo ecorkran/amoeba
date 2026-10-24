@@ -15,6 +15,8 @@ from amoeba.runner.launch import (
     LAUNCH_LOGS_DIRNAME,
     LaunchTracker,
 )
+from amoeba.runner.lifecycle.cadence import PlanReadSchedule
+from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.tick import ProjectTick
@@ -30,6 +32,7 @@ from runner.observe_support import (
 )
 
 PROJECT = "demo"
+PLAN_READ_INTERVAL = 30.0
 
 
 def runnable_unbusy(view: ProjectView) -> list[Node]:
@@ -91,7 +94,13 @@ class Rig:
         self.tracker = LaunchTracker()
         self.cf = FakeCf()
         self.probes = LinkProbes(run=self.cf, timeout_seconds=8.0)
+        self.plans = PlanStage(
+            schedule=PlanReadSchedule(PLAN_READ_INTERVAL, self.clock.monotonic),
+            run=self.cf,
+            timeout_seconds=8.0,
+        )
         self.planner = Planner(tmp_path)
+        self.planners: tuple[Any, ...] = (self.planner,)
         self.popen = Popen(store)
         self.context = NodeContext()
         self.deadline = 1_000_000.0
@@ -110,9 +119,10 @@ class Rig:
             project_id=PROJECT,
             store=self.store,
             supervisor_dir=self.supervisor_dir,
-            planners=(self.planner,),
+            planners=self.planners,
             observer=self.observer,
             probes=self.probes,
+            plans=self.plans,
             tracker=self.tracker,
             popen=self.popen,
             now=self.clock.wall,

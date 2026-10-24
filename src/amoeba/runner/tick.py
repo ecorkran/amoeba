@@ -37,6 +37,7 @@ from amoeba.runner.launch import (
     launch,
     mint_run_id,
 )
+from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
@@ -65,6 +66,7 @@ class ProjectTick:
         planners: Sequence[Planner],
         observer: RunObserver,
         probes: LinkProbes,
+        plans: PlanStage,
         tracker: LaunchTracker,
         popen: PopenFactory,
         now: Callable[[], datetime],
@@ -76,6 +78,7 @@ class ProjectTick:
         self._planners = planners
         self._observer = observer
         self._probes = probes
+        self._plans = plans
         self._tracker = tracker
         self._popen = popen
         self._now = now
@@ -90,11 +93,13 @@ class ProjectTick:
         observed = self._observer.observe(
             self._run_entries(), budget, faults, self._context
         )
-        # [reconciliation reads - slice 123]
+        # [reconciliation reads - slice 123: the plan stage, after the probes]
         links = [link.cf_project_id for link in self._store.cf_links(self._project_id)]
         probed = observed.result
         if probed is TickResult.COMPLETE:
             probed = self._probes.check(links, budget, faults, self._project_id)
+        if probed is TickResult.COMPLETE:
+            probed = self._plan_reads(links, budget, faults)
         shape_error = self._record_finished(observed.runs)
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
@@ -109,6 +114,21 @@ class ProjectTick:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE
+
+    def _plan_reads(
+        self, links: Sequence[str], budget: TickBudget, faults: TickFaults
+    ) -> TickResult:
+        """Read and reconcile each due link whose probe passed (D7)."""
+        result, wrote = self._plans.run(
+            self._store,
+            self._project_id,
+            links,
+            self._probes.results(links),
+            budget,
+            faults,
+        )
+        self.wrote = wrote or self.wrote
+        return result
 
     def _run_entries(self) -> list[JournalEntry]:
         return [
