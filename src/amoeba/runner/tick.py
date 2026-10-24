@@ -118,7 +118,13 @@ class ProjectTick:
     def _plan_reads(
         self, links: Sequence[str], budget: TickBudget, faults: TickFaults
     ) -> TickResult:
-        """Read and reconcile each due link whose probe passed (D7)."""
+        """Read and reconcile each due link whose probe passed (D7).
+
+        An exception here is not about any node: the context is cleared so the
+        tenant's catch raises a project-scoped fault, and the link is left due
+        because it was never recorded complete (D5).
+        """
+        self._context.clear()
         result, wrote = self._plans.run(
             self._store,
             self._project_id,
