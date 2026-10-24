@@ -311,15 +311,15 @@ Per the LLD, D3. Create `runner/dispatch/state.py` and `tests/runner/dispatch/te
 
 Per the LLD, D5, "Runner, internal" and Component Structure (`decide.py`). Edit `runner/decide.py` and `tests/runner/test_decide.py`; put `dispatch_params` in `runner/dispatch/params.py` with `tests/runner/dispatch/test_params.py`.
 
-- [ ] Define `PARAM_SLICE = "slice"`, `PARAM_MERGE = "merge"`, `MERGE_DISABLED = "false"` once, beside `dispatch_params(step, slice_index) -> Mapping[str, str]`. The pipeline comes from 123's `STEP_MAP`. Every pipeline step gets `slice`; `implementation` (`P6`) also gets `merge=false`
-- [ ] Tests: `slice_design`, `tasks`, `implementation` give the right pipeline and params; a non-pipeline step raises `ValueError`; **import test** `test_merge_param_is_built_only_by_dispatch_params` scans `src/amoeba/runner` (use `tests/ast_strings.py`) and finds the merge key literal only in `params.py`
+- [x] Define `PARAM_SLICE = "slice"`, `PARAM_MERGE = "merge"`, `MERGE_DISABLED = "false"` once, beside `dispatch_params(step, slice_index) -> Mapping[str, str]`. The pipeline comes from 123's `STEP_MAP`. Every pipeline step gets `slice`; `implementation` (`P6`) also gets `merge=false`
+- [x] Tests: `slice_design`, `tasks`, `implementation` give the right pipeline and params; a non-pipeline step raises `ValueError`; **import test** `test_merge_param_is_built_only_by_dispatch_params` scans `src/amoeba/runner` (use `tests/ast_strings.py`) and finds the merge key literal only in `params.py`
 
-- [ ] Add `WriteSlicePointer(node_id, cf_project_id, slice_index, checkout: Checkout)`. `LaunchRun` gains `run_id: str | None = None` and `reissue_of: str | None = None`. `Action = LaunchRun | BlockHumanStep | WriteSlicePointer`. Update the "125 adds" comment
-- [ ] `ProjectView` gains, per current pipeline step, its dispatch facts (state, resolved checkout or `CheckoutUnresolved`, slice index, CF project id, the latest entry needed for a reissue, sort key `(initiative index, slice index, step rank)`) and the project's held-checkout set. Use one frozen dataclass for the per-step facts, keyed by node id
-- [ ] Existing view builders and tests construct the new fields (empty by default where a test does not dispatch). The guard in `decide()` covers `WriteSlicePointer` unchanged
-- [ ] Tests: `decide()` refuses a `WriteSlicePointer` for a non-current node and two actions for one node
+- [x] Add `WriteSlicePointer(node_id, cf_project_id, slice_index, checkout: Checkout)`. `LaunchRun` gains `run_id: str | None = None` and `reissue_of: str | None = None`. `Action = LaunchRun | BlockHumanStep | WriteSlicePointer`. Update the "125 adds" comment
+- [x] `ProjectView` gains, per current pipeline step, its dispatch facts (state, resolved checkout or `CheckoutUnresolved`, slice index, CF project id, the latest entry needed for a reissue, sort key `(initiative index, slice index, step rank)`) and the project's held-checkout set. Use one frozen dataclass for the per-step facts, keyed by node id
+- [x] Existing view builders and tests construct the new fields (empty by default where a test does not dispatch). The guard in `decide()` covers `WriteSlicePointer` unchanged
+- [x] Tests: `decide()` refuses a `WriteSlicePointer` for a non-current node and two actions for one node
 - **Success Criteria**:
-  - [ ] `tests/runner`, `ruff` and `pyright` pass. Commit: `feat: add dispatch params, the pointer-write action and dispatch facts`
+  - [x] `tests/runner`, `ruff` and `pyright` pass. Commit: `feat: add dispatch params, the pointer-write action and dispatch facts`
 
 ### Task 5.4: Held checkouts and `DispatchPlanner`, with tests
 **Owner**: Junior AI | **Dependencies**: 5.3 | **Effort**: 3

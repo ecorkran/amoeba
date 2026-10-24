@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from ast_strings import string_constants
 
+from amoeba.runner.dispatch import params
 from amoeba.runner.lifecycle import steps
 from amoeba.runner.lifecycle.steps import (
     STEP_MAP,
@@ -149,9 +150,10 @@ def test_integration_follows_is_checked_and_not_status() -> None:
 
 def test_no_other_runner_module_spells_a_step_value() -> None:
     values = {step.value for step in LifecycleStep}
-    others = [
-        p for p in sorted((SRC / "runner").rglob("*.py")) if p != Path(steps.__file__)
-    ]
+    # ``dispatch/params.py`` names P6's ``merge`` parameter: Squadron's word for a
+    # pipeline option, not the lifecycle step of the same name.
+    exempt = {Path(steps.__file__), Path(params.__file__)}
+    others = [p for p in sorted((SRC / "runner").rglob("*.py")) if p not in exempt]
     assert others
     for path in others:
         clashes = values.intersection(string_constants(path))

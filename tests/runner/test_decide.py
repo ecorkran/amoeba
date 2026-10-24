@@ -16,8 +16,10 @@ from amoeba.runner.decide import (
     LaunchRun,
     ProjectView,
     RunState,
+    WriteSlicePointer,
     decide,
 )
+from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import DesiredState, Node
@@ -195,3 +197,41 @@ def test_a_view_with_no_rows_has_no_current_steps() -> None:
         assert not undriven.desired.drives_anything()
     finally:
         builder.close()
+
+
+def _pointer(node_id: str) -> WriteSlicePointer:
+    return WriteSlicePointer(node_id, "cf-id", 125, Checkout(Path("/work"), None))
+
+
+def test_a_pointer_write_for_a_current_step_passes(steps: Steps) -> None:
+    action = _pointer(steps.first.id)
+
+    assert decide(steps.view(), (Fixed(action),)) == [action]
+
+
+def test_a_pointer_write_for_a_node_that_is_not_current_raises(steps: Steps) -> None:
+    held = steps.view(row(drive=True), row(steps.first_owner, hold=True))
+
+    with pytest.raises(ValueError, match=f"node {steps.first.id}"):
+        decide(held, (Fixed(_pointer(steps.first.id)),))
+
+
+def test_a_pointer_write_and_a_launch_for_one_node_raise(steps: Steps) -> None:
+    node_id = steps.first.id
+
+    with pytest.raises(ValueError, match=f"node {node_id}"):
+        decide(steps.view(), (Fixed(_pointer(node_id)), Fixed(_launch(node_id))))
+
+
+def test_a_reissuing_launch_carries_the_old_run_id_and_entry() -> None:
+    action = LaunchRun("n", "P5", {}, Path("/w"), run_id="run-1", reissue_of="entry-1")
+
+    assert (action.run_id, action.reissue_of) == ("run-1", "entry-1")
+    assert _launch("n").run_id is None and _launch("n").reissue_of is None
+
+
+def test_a_view_that_dispatches_nothing_has_empty_dispatch_facts() -> None:
+    view = _view()
+
+    assert view.dispatch == {}
+    assert view.held_checkouts == frozenset()

@@ -9,12 +9,14 @@ do not add a stage registry.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from amoeba.runner.dispatch.checkout import Checkout
+from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import JournalEntry, Node
@@ -40,12 +42,18 @@ class InFlightRun:
 
 @dataclass(frozen=True)
 class LaunchRun:
-    """Start ``pipeline`` in ``checkout`` for a node."""
+    """Start ``pipeline`` in ``checkout`` for a node.
+
+    ``run_id`` and ``reissue_of`` are set together for a reissue (D9): the run id of
+    an attempt that never started, and the id of the entry that attempt was.
+    """
 
     node_id: str
     pipeline: str
     params: Mapping[str, str]
     checkout: Path
+    run_id: str | None = None
+    reissue_of: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,8 +63,18 @@ class BlockHumanStep:
     node_id: str
 
 
-#: The closed set of things a planner may ask for. 125 adds ``WriteCFPointer``.
-type Action = LaunchRun | BlockHumanStep
+@dataclass(frozen=True)
+class WriteSlicePointer:
+    """Point ``checkout``'s CF at a slice (D2); the launch follows on a later tick."""
+
+    node_id: str
+    cf_project_id: str
+    slice_index: int
+    checkout: Checkout
+
+
+#: The closed set of things a planner may ask for.
+type Action = LaunchRun | BlockHumanStep | WriteSlicePointer
 
 
 @dataclass(frozen=True)
@@ -69,7 +87,9 @@ class ProjectView:
     :func:`decide` refuses an action on any other node. ``ready_unbusy`` is the
     wider ready set, kept for slice 125 to narrow.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
-    this process lifetime.
+    this process lifetime. ``dispatch`` holds the dispatch facts of each current
+    pipeline step, by node id, and ``held_checkouts`` the checkouts a pipeline
+    already holds (D4); both are empty for a view that dispatches nothing.
     """
 
     project_id: str
@@ -79,6 +99,10 @@ class ProjectView:
     link_probes: Mapping[str, bool]
     desired: DesiredStateIndex
     current_steps: Sequence[Node]
+    dispatch: Mapping[str, StepDispatchFacts] = field(
+        default_factory=dict[str, StepDispatchFacts]
+    )
+    held_checkouts: frozenset[Path] = frozenset()
 
     def ready_unbusy(self) -> list[Node]:
         """Ready steps (``tree.ready_steps()``) with no run in flight.

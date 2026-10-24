@@ -21,6 +21,7 @@ from amoeba.runner.decide import (
     LaunchRun,
     Planner,
     ProjectView,
+    WriteSlicePointer,
     decide,
 )
 from amoeba.runner.faults import (
@@ -221,6 +222,12 @@ class ProjectTick:
                     if not budget.allows_call():
                         return TickResult.CUT_OFF
                     self._launch(action)
+                case WriteSlicePointer():
+                    # Act for the pointer write lands with the tick wiring (D2);
+                    # no production planner emits it before then.
+                    raise NotImplementedError(
+                        "WriteSlicePointer is not acted on yet: no planner emits it"
+                    )
         self._context.clear()
         return TickResult.COMPLETE
 
