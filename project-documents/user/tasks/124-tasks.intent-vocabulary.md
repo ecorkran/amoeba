@@ -286,11 +286,11 @@ Per the LLD, D7 ("What hold does not stop") and D8.
 
 Per the LLD, D10. Create `inspection/desired_states.py`; register in `inspection/__init__.py` following how `messages` or `verdicts` are registered; create `tests/inspection/test_desired_states.py`. Inspection must not import Runner code.
 
-- [ ] Columns: `target` (`project`, or the node id), `drive`, `until`, `hold`, `message_id`, `updated_at`. Unset values are empty strings. Define the column names and the `project` label once
-- [ ] Project-scoped listing, no options. It reads `store.desired_states(project_id)` only
-- [ ] Tests: a project with a project row, a node row with `until`, and a hold-only row shows each correctly; unset values are empty; `--json`/`/v1/listings/desired-states` carry the same columns (follow `test_read_listing.py` for the HTTP path, and add the name to any test that pins the registry's listing names); an empty project returns no rows; a source check that `inspection/desired_states.py` imports nothing from `amoeba.runner`
+- [x] Columns: `target` (`project`, or the node id), `drive`, `until`, `hold`, `message_id`, `updated_at`. Unset values are empty strings. Define the column names and the `project` label once
+- [x] Project-scoped listing, no options. It reads `store.desired_states(project_id)` only
+- [x] Tests: a project with a project row, a node row with `until`, and a hold-only row shows each correctly; unset values are empty; `--json`/`/v1/listings/desired-states` carry the same columns (follow `test_read_listing.py` for the HTTP path, and add the name to any test that pins the registry's listing names); an empty project returns no rows; a source check that `inspection/desired_states.py` imports nothing from `amoeba.runner`
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. `amoeba inspect desired-states --help` runs. Commit: `feat: add the desired-states listing`
+  - [x] Tests, `ruff` and `pyright` pass. `amoeba inspect desired-states --help` runs. Commit: `feat: add the desired-states listing`
 
 ---
 

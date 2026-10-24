@@ -65,7 +65,7 @@ amoeba submit create-project --project demo --by operator
 amoeba submit resolution --project demo --by operator \
     --blocked-state-id <id> --detail "approved"
 amoeba submit intent --project demo --by operator \
-    --body '{"want": "a review"}' [--node-id <id>]
+    --body '{"intent": "drive", "until": "slice_design"}' [--node-id <id>]
 amoeba submit check --project demo --by ci --node-id <id> --name <name> \
     --outcome passed --examined-count 412 --upstream <tool> \
     --upstream-version <label> --source command_output [--examined '{…}'] \
@@ -77,7 +77,7 @@ Each prints the submission id. `--id` reuses an id.
 **The flag rule** (slice 104). One flag per payload field. A text or enum
 field, or the optional form of either, takes its flag as typed. Every other
 field takes JSON: `--score 82.5`, `--fallback-used null`,
-`--findings '[...]'`, `--body '{"want": "a review"}'`. A value that is not
+`--findings '[...]'`, `--body '{"intent": "pause"}'`. A value that is not
 valid JSON is a usage error naming the flag. The CLI does no type checking of
 its own: the kind's payload model validates the result either way, and an
 invalid payload is refused before anything is written.
@@ -88,7 +88,7 @@ invalid payload is refused before anything is written.
 | --- | --- | --- | --- |
 | `create_project` | none | The project's store exists. The process creates it at once and it is usable immediately. | Never: a project that already exists is `applied` — the requested state holds. |
 | `resolution` | `blocked_state_id`, `detail` | Fills that blocked state's resolution slot and returns its node to `runnable`. `resolved_by` is `submitted_by`. | The blocked state does not exist, belongs to another project, or is already resolved. |
-| `intent` | `body` (a JSON object), optional `node_id` | One unacknowledged row on the `intent` channel, carrying the submission id. | `node_id` is given and is not a node of this project. |
+| `intent` | `body` (a JSON object; see [Intent bodies](#intent-bodies)), optional `node_id` | One unacknowledged row on the `intent` channel, carrying the submission id. | `node_id` is given and is not a node of this project. |
 | `verdict` | A review result: `VerdictInput`'s fields except `id`, with provenance flattened — see [`evidence-contract.md`](evidence-contract.md#through-the-inbox) | One verdict record, whose id is the submission id, and one observation per finding. | The node is not in this project; a provider failure carries findings or a verdict other than `UNKNOWN`; `upstream_version` is empty; a judge sample (optional `judge_invocation_id`) is on another node or review type than the invocation's earlier samples. An unknown word in an enum field, or an omitted `derivation`, `fallback_used`, or `findings_parsed`, fails validation and is quarantined instead. |
 | `check` | A mechanical check result: `node_id`, `name`, `outcome` (`passed`, `failed`, `errored`), `examined_count` (integer or `null`; **required** — `null` says "not reported"), `upstream`, `upstream_version`, `source` (`RecordSource`), and optional `examined` (JSON object), `baseline_ref`, `source_path` — see [`evidence-contract.md`](evidence-contract.md#checks) | One check record, whose id is the submission id. Its standing (`vacuous` when `examined_count` is 0) is computed on read. | The node is not in this project; `examined_count` is negative; `upstream_version` is empty. An unknown `outcome` or `source`, or an omitted `examined_count`, fails validation and is quarantined instead. |
 | `link_cf_project` | `cf_project_id` (a non-empty string) | Links the project to that Context Forge project, so the watch records its pointer moves. Linking again is a no-op; several CF projects per Amoeba project, and several Amoeba projects per CF project, are allowed. The store does not check the id exists in CF: the first check records `missing` if it does not. See [`context-forge-contract.md`](context-forge-contract.md). | Never. An empty `cf_project_id` fails validation and is quarantined. |
@@ -97,6 +97,58 @@ invalid payload is refused before anything is written.
 **A resolution targets a blocked state, never a node.** If a node was resolved
 and blocked again since your reply was written, your reply names the old,
 resolved block and is `rejected` — it is never redirected to the new one.
+
+### Intent bodies
+
+*Slice 124.* The inbox stores an intent's `body` without reading it. The Runner
+validates it when it applies the intent, and answers every intent with exactly one
+acknowledgment. The body is a JSON object with a closed `intent` field and no other
+keys except `until`; an unknown key is rejected, so a misspelled `"untill"` cannot
+silently drive everything.
+
+| Body | Meaning |
+| --- | --- |
+| `{"intent": "drive"}` | Advance all work under the target. |
+| `{"intent": "drive", "until": "<step>"}` | Advance work under the target up to and including `<step>` (`architecture`, `slice_plan`, `slice_design`, `tasks`, `implementation`, `merge`, `integration`, in that order). |
+| `{"intent": "exclude"}` | Do not advance work under the target, unless a narrower target drives it. |
+| `{"intent": "pause"}` | Issue nothing new under the target. A narrower target cannot override a pause. |
+| `{"intent": "resume"}` | Remove the target's own pause. |
+| `{"intent": "clear"}` | Remove all of the target's own settings, so the next one up applies. |
+
+```
+# drive initiative 120 through slice design
+amoeba submit intent --project amoeba --by operator --node-id <initiative-120-node> \
+    --body '{"intent": "drive", "until": "slice_design"}'
+# stop everything new in the project
+amoeba submit intent --project amoeba --by operator --body '{"intent": "pause"}'
+```
+
+**The target** is the message's `node_id`. No `node_id` targets the project.
+Otherwise the node must be an initiative or a slice that Context Forge reports
+(linked); `amoeba inspect nodes` lists node ids with their CF index. Nothing is
+driven until an intent says so, so linking a project changes nothing by itself.
+
+**Rejections** are answers, not errors. The intent is acknowledged `rejected` with
+the reason `"<code>: <detail>"`; branch on the code, never on the detail (at most
+512 characters).
+
+| Code | When |
+| --- | --- |
+| `malformed_body` | The body is not one of the forms above: unknown key, unknown `intent` or `until`, `until` with anything but `drive`, or not an object. |
+| `target_not_initiative_or_slice` | The `node_id` names a step node or any other kind of node. |
+| `target_unlinked` | The node is orphaned or otherwise not linked to Context Forge. |
+| `until_not_applicable` | `until` on a slice names an initiative-level step (`architecture`, `slice_plan`, `integration`). |
+
+**`no_op`** means the target's settings would not change: the same intent twice,
+`resume` with no pause, `clear` with no settings. Nothing is written, and the
+stored settings keep the intent that last changed them. Driving to a step already
+passed is not special: it is `applied` when it changes the settings (it restricts
+work), `no_op` when it does not.
+
+**Reading the answer.** `amoeba inspect messages --project P --channel intent`
+shows `acknowledgment_outcome` and `acknowledgment_reason` for each intent; from
+code, `intent_for_submission(submission_id)`. What the Runner has stored is
+`amoeba inspect desired-states --project P`.
 
 ### Submission ids and retries
 

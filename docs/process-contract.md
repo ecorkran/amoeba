@@ -411,10 +411,40 @@ reads](context-forge-contract.md#plan-reads-slice-123)).
   catch as a project-scoped `unexpected_fault`, leaves the link due, and the next
   tick resumes.
 - **Human steps.** `HumanStepPlanner` (`amoeba.runner.lifecycle.human_steps`)
-  blocks each ready human step on a person with one store write that is not
-  journaled (a single transaction has no side effect to recover). It is not in the
-  production planner tuple, which stays empty until slice 124 registers it with the
-  drive filter.
+  blocks each current human step on a person with one store write that is not
+  journaled (a single transaction has no side effect to recover). Since slice 124
+  it is in the production planner tuple and plans only over current steps (see
+  [Intents and current steps](#intents-and-current-steps)).
+
+### Intents and current steps
+
+*Slice 124.* The PM steers the Runner with intents (the body format, targets and
+rejection codes are in the [inbox contract](inbox-contract.md#intent-bodies)).
+
+- **The apply stage** runs first in each project's tick, before Observe.
+  `apply_pending_intents` acknowledges each pending intent in `seq` order, one
+  acknowledgment and one desired-state change per transaction. It is store-only: it
+  ignores link state and probes, so a pause lands even when Context Forge is down,
+  and it spends no budget. With nothing pending it reads nothing. Applying any
+  intent counts as a write, so `tick()` returns true.
+- **Failure.** A store failure exits the process; the intent was not acknowledged
+  and is applied again after restart. Any other exception is a bug: it becomes a
+  project-scoped `unexpected_fault` (deduplicated), the rest of that tick does not
+  run, intents already acknowledged stay so, and the failing one stays pending.
+- **The index.** Each tick reads the project's desired-state rows once, after the
+  apply stage, into a `DesiredStateIndex`. It is never cached across ticks.
+- **Governance.** A step's drive comes from the nearest row on its path (its slice
+  or initiative, the initiative, then the project) that sets it; no row means not
+  driven. Its `until` must reach the step. A step is held when any row on the path
+  holds. A *current* step is a ready step that is driven and not held; the view
+  exposes them as `current_steps`.
+- **The guard.** `decide()` raises `ValueError` for an action on a node that is not
+  a current step, so a held or undriven target issues nothing new whichever planner
+  asks. The error faults the project like any planner bug.
+- **What hold does not stop.** Observe, recording finished runs, routing and
+  reconcile do not read desired state: a held target's runs are still polled and
+  recorded, and a block written before the hold stays.
+- **Inspection.** `amoeba inspect desired-states --project P` lists the stored rows.
 
 ## Lifecycle failure modes
 
