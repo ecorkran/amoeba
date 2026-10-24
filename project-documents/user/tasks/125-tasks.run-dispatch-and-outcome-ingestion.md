@@ -12,15 +12,24 @@ dependencies:
 projectState: Slices 120–124 are merged. `amoeba.runner` has the tick (`runner/tick.py`,
   with a `# [route - slice 126]` slot), `decide.py` (`Action = LaunchRun | BlockHumanStep`,
   `ProjectView.current_steps`, the current-step guard), `finish.record()` with 122's
-  minimal body, `launch.py` (`launch()`, `log_paths`, `stderr_confirms`), and
-  `PRODUCTION_PLANNERS = (HumanStepPlanner(),)` in `runner/factory.py`. `process/sq_outcome.py`
-  has `RunCheckpoint(paused_at)` only. `cf_write` requires `{project, expected}`. The
-  store is at migration `010`. `record_runner_report` takes one review. The stem rule
-  lives in `runner/lifecycle/slugs.py` and parses design file names only.
-  `amoeba.runner.dispatch` and `amoeba.runner.ingest` do not exist.
+  minimal body, `launch.py` (`launch()`, `log_paths`, `stderr_confirms`), and `PRODUCTION_PLANNERS
+  = (HumanStepPlanner(),)` in `runner/factory.py`. `process/sq_outcome.py` has `RunCheckpoint(paused_at)`
+  only. `cf_write` requires `{project, expected}`. The store is at migration `010`.
+  `record_runner_report` takes one review. The stem rule lives in `runner/lifecycle/slugs.py`
+  and parses design file names only. `amoeba.runner.dispatch` and `amoeba.runner.ingest`
+  do not exist.
 dateCreated: 20261024
 dateUpdated: 20261024
 status: not_started
+turns: 36
+promptTokens: 2823788
+cachedTokens: 2710781
+cacheWriteTokens: 112939
+completionTokens: 37975
+durationSeconds: 522.4
+costUsd: 2.205729
+usageRounds: 1
+pricedRounds: 1
 ---
 
 ## Context Summary
