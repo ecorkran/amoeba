@@ -31,6 +31,7 @@ from amoeba.runner.dispatch.build_view import (
 )
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
+from amoeba.runner.dispatch.reissue import block_unsupported_reissue
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
     LaunchFailure,
@@ -262,15 +263,19 @@ class ProjectTick:
                     # journaled: there is no external side effect to recover (D9).
                     block_human_step(self._store, action)
                     self.wrote = True
+                case LaunchRun(reissue_of=str()):
+                    # Reissuing lands in Section 8; until then it is a person's call.
+                    block_unsupported_reissue(self._store, action)
+                    self.wrote = True
                 case LaunchRun():
                     if not budget.allows_call():
                         return TickResult.CUT_OFF
                     self._launch(action)
                 case WriteSlicePointer():
-                    # Act for the pointer write lands with the next task (D2).
-                    raise NotImplementedError(
-                        "WriteSlicePointer is not acted on yet: no planner emits it"
-                    )
+                    if not budget.allows_call():
+                        return TickResult.CUT_OFF
+                    self._pointers.write(self._store, action, budget)
+                    self.wrote = True
         self._context.clear()
         return TickResult.COMPLETE
 
