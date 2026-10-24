@@ -79,6 +79,7 @@ def test_runner_flags_default_from_process_settings() -> None:
     assert settings.tick_deadline_seconds == defaults.tick_deadline_seconds
     assert settings.tick_call_timeout_seconds == defaults.tick_call_timeout_seconds
     assert settings.run_poll_interval_seconds == defaults.run_poll_interval_seconds
+    assert settings.plan_read_interval_seconds == defaults.plan_read_interval_seconds
 
 
 def test_each_runner_flag_overrides_its_setting() -> None:
@@ -91,16 +92,25 @@ def test_each_runner_flag_overrides_its_setting() -> None:
             "3.5",
             "--run-poll-interval",
             "9",
+            "--plan-read-interval",
+            "45",
         ]
     )
     settings = start_settings(args)
     assert settings.tick_deadline_seconds == 2.0
     assert settings.tick_call_timeout_seconds == 3.5
     assert settings.run_poll_interval_seconds == 9.0
+    assert settings.plan_read_interval_seconds == 45.0
 
 
 @pytest.mark.parametrize(
-    "flag", ["--tick-deadline", "--tick-call-timeout", "--run-poll-interval"]
+    "flag",
+    [
+        "--tick-deadline",
+        "--tick-call-timeout",
+        "--run-poll-interval",
+        "--plan-read-interval",
+    ],
 )
 def test_a_non_numeric_runner_flag_is_a_usage_error(flag: str) -> None:
     with pytest.raises(SystemExit) as raised:
@@ -112,5 +122,10 @@ def test_help_lists_the_runner_flags(capsys: pytest.CaptureFixture[str]) -> None
     with pytest.raises(SystemExit):
         build_parser().parse_args(["start", "--help"])
     out = capsys.readouterr().out
-    for flag in ("--tick-deadline", "--tick-call-timeout", "--run-poll-interval"):
+    for flag in (
+        "--tick-deadline",
+        "--tick-call-timeout",
+        "--run-poll-interval",
+        "--plan-read-interval",
+    ):
         assert flag in out

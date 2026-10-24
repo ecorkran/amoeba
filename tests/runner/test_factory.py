@@ -45,7 +45,12 @@ def test_a_second_build_over_an_existing_directory_succeeds(healthy_sq: Path) ->
 
 @pytest.mark.parametrize(
     "field",
-    ["tick_deadline_seconds", "tick_call_timeout_seconds", "run_poll_interval_seconds"],
+    [
+        "tick_deadline_seconds",
+        "tick_call_timeout_seconds",
+        "run_poll_interval_seconds",
+        "plan_read_interval_seconds",
+    ],
 )
 @pytest.mark.parametrize("value", [0.0, -1.0])
 def test_a_non_positive_bound_fails_naming_the_field(

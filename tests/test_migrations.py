@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from legacy_nodes import LEGACY_INSERT_NODE
 
 from amoeba.store import sql, sql_journal
 from amoeba.store.migrations import (
@@ -73,7 +74,7 @@ def test_migrating_an_already_migrated_store_is_a_no_op(store_file: Path) -> Non
     with _connect(store_file) as connection:
         migrate(connection)
         connection.execute(
-            sql.INSERT_NODE,
+            LEGACY_INSERT_NODE,
             (
                 "n1",
                 "demo",
@@ -157,7 +158,7 @@ def test_migration_advances_the_stamp_and_data_survives(store_file: Path) -> Non
         assert read_schema_version(connection) == 1
 
         connection.execute(
-            sql.INSERT_NODE,
+            LEGACY_INSERT_NODE,
             (
                 "n1",
                 "demo",
@@ -181,9 +182,14 @@ def test_migration_advances_the_stamp_and_data_survives(store_file: Path) -> Non
         assert migrate(connection, expected_version=2) == 2
         assert read_schema_version(connection) == 2
 
-        row = connection.execute(sql.SELECT_NODE_BY_ID, ("n1",)).fetchone()
+        # Not SELECT_NODE_BY_ID: it names columns a version-2 store lacks.
+        row = connection.execute(
+            f"SELECT {sql.COL_NODE_TITLE} FROM {sql.TABLE_NODES} "
+            f"WHERE {sql.COL_NODE_ID} = ?",
+            ("n1",),
+        ).fetchone()
         assert row is not None
-        assert row[5] == "survivor"
+        assert row[0] == "survivor"
 
 
 def test_fresh_store_arrives_at_the_latest_version(store_file: Path) -> None:
@@ -202,7 +208,7 @@ def test_fresh_store_arrives_at_the_latest_version(store_file: Path) -> None:
 def _insert_node(connection: sqlite3.Connection, node_id: str, title: str) -> None:
     """Insert a node directly, for staging a store at an older version."""
     connection.execute(
-        sql.INSERT_NODE,
+        LEGACY_INSERT_NODE,
         (
             node_id,
             "demo",
@@ -260,9 +266,14 @@ def test_version_two_store_with_data_upgrades_to_three(store_file: Path) -> None
         )
         assert read_schema_version(connection) == JOURNAL_SCHEMA_VERSION
 
-        node_row = connection.execute(sql.SELECT_NODE_BY_ID, ("n1",)).fetchone()
+        # Not SELECT_NODE_BY_ID: it names columns a version-3 store lacks.
+        node_row = connection.execute(
+            f"SELECT {sql.COL_NODE_TITLE} FROM {sql.TABLE_NODES} "
+            f"WHERE {sql.COL_NODE_ID} = ?",
+            ("n1",),
+        ).fetchone()
         assert node_row is not None
-        assert node_row[5] == "survivor"
+        assert node_row[0] == "survivor"
 
         blocked_rows = connection.execute(
             sql.SELECT_BLOCKED_STATES_FOR_NODE, ("n1",)

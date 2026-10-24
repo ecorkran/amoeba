@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20261022
+dateUpdated: 20261023
 status: complete
 ---
 
@@ -752,6 +752,38 @@ Decision `inputs` and `route_parameters`, project-escalation payloads, and
 routing-table content are stored verbatim and shown by inspection. **Callers
 must not place secrets in them.** Nothing here is deleted.
 
+### Lifecycle nodes and the CF index
+
+*Added by slice 123. Schema version 10 (migration `010`).* The store holds a
+node's link to Context Forge as an index and enforces that a link is unique. It
+interprets neither: the lifecycle vocabulary (steps, predecessors, "ready") and
+the rules that project CF's plan into nodes are the Runner's
+(`amoeba.runner.lifecycle`).
+
+- **`CFReference.index`** (`int | None`, column `nodes.cf_index`) is the
+  initiative's or slice's index within its CF project. `create_node` and
+  `update_cf_reference` write it; `update_cf_reference` replaces it with the other
+  CF fields, so passing no index clears it. Rows from before `010` read as `None`,
+  i.e. not linked.
+- **One linked node per link key.** The partial unique index `idx_nodes_cf_link`
+  on `(project_id, kind, cf_project, cf_index) WHERE cf_index IS NOT NULL`
+  makes a second node with the same key a `StoreIntegrityError`; `create_node`
+  rolls the whole insert back. The `kind` is part of the key because an initiative
+  and its first slice share an index (initiative 120, slice 120); `cf_project`
+  because one Amoeba project may link several CF projects. Nodes with no index
+  (step nodes, unlinked nodes) never collide.
+- **Step nodes** are `phase_or_artifact` nodes whose `cf.phase` holds the step
+  (`architecture`, `slice_plan`, `slice_design`, `tasks`, `implementation`,
+  `merge`, `integration`) and whose `cf.index` is `None`; they are linked through
+  their parent.
+- **Orphaning clears `cf.index` and `cf.slice_name`** and leaves the rest. The
+  node is kept, never deleted, and a new node can then take its index.
+- **Only the Runner's reconcile creates nodes.** A guard test
+  (`tests/test_create_node_guard.py`) walks the AST of `src/amoeba` and fails if
+  any module other than `runner/lifecycle/reconcile.py` calls `create_node`.
+- **Inspection.** `amoeba inspect nodes` has a `cf_index` column (empty when
+  unset); `--json` carries `cf_index` as a number or `null`.
+
 ## Read-only access
 
 ```python
@@ -844,10 +876,11 @@ adding a table onto working machinery, not debugging both at once.
 **A store stamped newer than the code raises `StoreSchemaError`.** It is never
 silently downgraded.
 
-The latest migration is `009` (slice 121, schema version 9: the five new
-`messages` columns, the open-project-escalation index, and the
+The latest migration is `010` (slice 123, schema version 10: `nodes.cf_index` and
+its partial unique link index). Before it, `009` (slice 121, schema version 9)
+added the five new `messages` columns, the open-project-escalation index, and the
 `routing_table_versions`, `routing_decisions`, `attempt_counts` and
-`desired_states` tables). A read-only open of a store stamped older than the
+`desired_states` tables. A read-only open of a store stamped older than the
 code raises `StoreSchemaError`; only a read-write open migrates.
 
 ## Testing against the store

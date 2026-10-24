@@ -19,6 +19,7 @@ from feed_harness import (
     raw_changes,
     resolve_by_submission,
 )
+from legacy_nodes import LEGACY_INSERT_NODE
 
 from amoeba.store import (
     BlockedKind,
@@ -29,7 +30,6 @@ from amoeba.store import (
     Store,
     SubmissionKind,
     SubmissionOutcome,
-    sql,
 )
 from amoeba.store.feed_models import (
     SILENT_OUTCOMES,
@@ -120,7 +120,7 @@ def test_a_rolled_back_write_leaves_no_change(store: Store) -> None:
     with sqlite3.connect(store.path) as connection:
         connection.execute("BEGIN")
         connection.execute(
-            sql.INSERT_NODE,
+            LEGACY_INSERT_NODE,
             ("n-x", PROJECT, None, "slice", "runnable", "x")
             + (None,) * 7
             + ("2026-10-15T00:00:00+00:00",) * 2,

@@ -29,6 +29,7 @@ from amoeba.store import (
     NodeKind,
     Store,
 )
+from runner.tick_support import runnable_unbusy
 
 PROJECT = "demo"
 GRACE_SECONDS = 0.5
@@ -63,7 +64,7 @@ class OncePerNode:
         self._launched: set[str] = set()
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
-        fresh = [n for n in view.runnable_nodes if n.id not in self._launched]
+        fresh = [n for n in runnable_unbusy(view) if n.id not in self._launched]
         self._launched.update(n.id for n in fresh)
         return [LaunchRun(n.id, "noop", {}, self._checkout) for n in fresh]
 

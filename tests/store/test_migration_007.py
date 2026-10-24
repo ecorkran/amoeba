@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from evidence_harness import finding, pre_judge_verdict_insert, verdict_input
+from legacy_nodes import LEGACY_INSERT_NODE
 
 from amoeba.store import sql, sql_checks, sql_evidence, sql_feed
 from amoeba.store.check_models import CheckOutcome, CheckStanding
@@ -38,7 +39,7 @@ _NEW_TABLES = (sql_checks.TABLE_CHECK_RESULTS, sql_checks.TABLE_PROGRESS_RECORDS
 
 def _insert_node(connection: sqlite3.Connection, node_id: str) -> None:
     connection.execute(
-        sql.INSERT_NODE,
+        LEGACY_INSERT_NODE,
         (node_id, PROJECT, None, "slice", NodeStatus.RUNNABLE.value, node_id)
         + (None,) * 7
         + (STAGED_AT, STAGED_AT),

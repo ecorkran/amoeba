@@ -70,6 +70,8 @@ COL_NODE_SQ_REVIEW_ARTIFACT_PATH: Final = "sq_review_artifact_path"
 COL_NODE_SQ_REVIEWED_SHA: Final = "sq_reviewed_sha"
 COL_NODE_CREATED_AT: Final = "created_at"
 COL_NODE_UPDATED_AT: Final = "updated_at"
+#: Added by migration 010. Last in table order, so it is last in NODE_COLUMNS.
+COL_NODE_CF_INDEX: Final = "cf_index"
 
 # blocked_states
 COL_BLOCKED_ID: Final = "id"
@@ -100,6 +102,7 @@ NODE_COLUMNS: Final = (
     COL_NODE_SQ_REVIEWED_SHA,
     COL_NODE_CREATED_AT,
     COL_NODE_UPDATED_AT,
+    COL_NODE_CF_INDEX,
 )
 
 #: Column order used by every blocked-state SELECT and by its row mapping.
@@ -171,9 +174,10 @@ INSERT INTO {TABLE_NODES} (
     {COL_NODE_SQ_REVIEW_ARTIFACT_PATH},
     {COL_NODE_SQ_REVIEWED_SHA},
     {COL_NODE_CREATED_AT},
-    {COL_NODE_UPDATED_AT}
+    {COL_NODE_UPDATED_AT},
+    {COL_NODE_CF_INDEX}
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 UPDATE_NODE_STATUS: Final = f"""
@@ -188,6 +192,7 @@ SET {COL_NODE_CF_PROJECT} = ?,
     {COL_NODE_CF_PHASE} = ?,
     {COL_NODE_CF_SLICE} = ?,
     {COL_NODE_CF_ARTIFACT_PATH} = ?,
+    {COL_NODE_CF_INDEX} = ?,
     {COL_NODE_UPDATED_AT} = ?
 WHERE {COL_NODE_ID} = ?
 """

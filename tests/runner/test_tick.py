@@ -25,7 +25,7 @@ from runner.observe_support import (
     Child,
     document,
 )
-from runner.tick_support import PROJECT, Rig
+from runner.tick_support import PROJECT, Rig, runnable_unbusy
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ def test_a_node_with_an_unresolved_entry_is_not_offered_to_decide(
     rig.tick()
 
     [view] = rig.planner.views
-    assert view.runnable_nodes == ()
+    assert runnable_unbusy(view) == []
     assert len(view.in_flight) == 1
     assert rig.popen.calls == 1, "not launched twice"
 
@@ -219,3 +219,16 @@ def test_the_node_in_context_is_the_node_being_launched(
     rig.tick()
 
     assert seen == [node.id]
+
+
+def test_the_view_tree_holds_every_node_of_the_project(
+    tmp_path: Path, store: Store, node: Node
+) -> None:
+    other = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="m")
+    store.create_node(project_id="elsewhere", kind=NodeKind.SLICE, title="x")
+    rig = Rig(tmp_path, store)
+
+    rig.tick()
+
+    [view] = rig.planner.views
+    assert {n.id for n in view.tree.nodes} == {node.id, other.id}

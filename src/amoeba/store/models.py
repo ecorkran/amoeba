@@ -78,12 +78,15 @@ class CFReference:
 
     Held as opaque values. The store never parses these; slice 104 correlates
     provenance against them and the Runner, not the store, parses CF output.
+    ``index`` is the slice's or initiative's index within its CF project; the
+    store holds it and enforces link uniqueness, but never interprets it.
     """
 
     project: str | None = None
     phase: str | None = None
     slice_name: str | None = None
     artifact_path: str | None = None
+    index: int | None = None
 
 
 @dataclass(frozen=True)

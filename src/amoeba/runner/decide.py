@@ -15,6 +15,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import JournalEntry, Node
 
 
@@ -46,24 +47,42 @@ class LaunchRun:
     checkout: Path
 
 
+@dataclass(frozen=True)
+class BlockHumanStep:
+    """Block a ready human step on a person (D9). Store-only: no journal entry."""
+
+    node_id: str
+
+
 #: The closed set of things a planner may ask for. 125 adds ``WriteCFPointer``.
-type Action = LaunchRun
+type Action = LaunchRun | BlockHumanStep
 
 
 @dataclass(frozen=True)
 class ProjectView:
     """Everything a planner may look at for one project, frozen.
 
-    ``runnable_nodes`` excludes any node with an unresolved entry.
+    ``tree`` is the project's lifecycle tree, built after reconcile; it holds every
+    node. Planners start work from :meth:`ready_unbusy`.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
     this process lifetime.
     """
 
     project_id: str
     now: datetime
-    runnable_nodes: tuple[Node, ...]
+    tree: LifecycleTree
     in_flight: tuple[InFlightRun, ...]
     link_probes: Mapping[str, bool]
+
+    def ready_unbusy(self) -> list[Node]:
+        """Ready steps (``tree.ready_steps()``) with no run in flight.
+
+        What a planner may start. "In flight" is an unresolved ``sq_run`` entry:
+        ``in_flight`` holds every such entry the tick has not finished and
+        resolved, which is the only kind of unresolved entry the Runner issues.
+        """
+        busy = {run.entry.node_id for run in self.in_flight}
+        return [node for node in self.tree.ready_steps() if node.id not in busy]
 
 
 class Planner(Protocol):

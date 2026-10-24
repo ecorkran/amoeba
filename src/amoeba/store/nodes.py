@@ -91,6 +91,7 @@ class NodeOperations(BlockWriter):
                     node.sq.reviewed_sha,
                     timestamp,
                     timestamp,
+                    node.cf.index,
                 ),
             )
 
@@ -118,6 +119,10 @@ class NodeOperations(BlockWriter):
     def update_cf_reference(self, node_id: str, cf: CFReference) -> Node:
         """Replace a node's CF reference fields. The node's id is unchanged.
 
+        Every field is replaced, ``index`` included: a ``cf`` that leaves ``index``
+        unset **clears the link**. To change one field, start from the node's own
+        reference (``dataclasses.replace(node.cf, ...)``).
+
         Values are stored opaquely: the store never parses CF coordinates.
         """
         self._require_node(node_id)
@@ -130,6 +135,7 @@ class NodeOperations(BlockWriter):
                     cf.phase,
                     cf.slice_name,
                     cf.artifact_path,
+                    cf.index,
                     isoformat(now()),
                     node_id,
                 ),

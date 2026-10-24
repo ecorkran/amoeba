@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,24 +24,17 @@ from amoeba.process import (
     StartupFailedError,
 )
 from amoeba.runner.budget import TickBudget, TickResult
+from amoeba.runner.cf_call import CfCallFailed, CfRun, output_head, run_cf
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.runner.launch import mint_run_id
+from amoeba.runner.lifecycle.plan_read import (
+    CF_INITIATIVES_COMMAND,
+    CF_STATUS_COMMAND,
+    cf_argv,
+)
+from amoeba.upstream.context_forge import PlanParseError, parse_initiatives
 
 logger = logging.getLogger(__name__)
-
-CF_EXECUTABLE: Final = "cf"
-CF_PROJECT_FLAG: Final = "-p"
-CF_JSON_FLAG: Final = "--json"
-
-#: The two commands probed, without the executable or the ``-p <id>`` suffix.
-CF_STATUS_COMMAND: Final = ("status", CF_JSON_FLAG)
-CF_INITIATIVES_COMMAND: Final = ("list", "initiatives", CF_JSON_FLAG)
-
-#: How much of a command's output a failure message quotes.
-OUTPUT_HEAD_CHARS: Final = 200  # keeps a failing probe's detail one line long
-
-#: Runs ``cf``: ``subprocess.run`` in production, a fake in unit tests.
-type CfRun = Callable[..., subprocess.CompletedProcess[str]]
 
 
 def probe_sq(
@@ -94,14 +86,29 @@ def _is_json_object(value: object) -> bool:
     return isinstance(value, dict)
 
 
-def _is_json_array(value: object) -> bool:
-    return isinstance(value, list)
+def _status_problem(stdout: str) -> str | None:
+    """Why ``cf status`` output is not a JSON object, or ``None`` if it is."""
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError:
+        return "printed no JSON object"
+    return None if _is_json_object(parsed) else "did not print a JSON object"
 
 
-#: Each probed command with the top-level form its output must have.
+def _initiatives_problem(stdout: str) -> str | None:
+    """Why the initiatives output is not the full plan model, or ``None``."""
+    try:
+        parse_initiatives(stdout)
+    except PlanParseError as error:
+        # Specific: the probe's job is to turn this into a failed-link answer.
+        return f"printed output the plan model rejects ({' '.join(str(error).split())})"
+    return None
+
+
+#: Each probed command with the check its output must pass.
 _PROBES: Final = (
-    (CF_STATUS_COMMAND, _is_json_object, "object"),
-    (CF_INITIATIVES_COMMAND, _is_json_array, "array"),
+    (CF_STATUS_COMMAND, _status_problem),
+    (CF_INITIATIVES_COMMAND, _initiatives_problem),
 )
 
 
@@ -109,34 +116,19 @@ def probe_link(
     cf_project_id: str, run: CfRun, budget: TickBudget, timeout_seconds: float
 ) -> ProbeResult:
     """Probe one CF link: both commands, each a separate budgeted call."""
-    for command, has_form, form in _PROBES:
+    for command, problem_with in _PROBES:
         if not budget.allows_call():
             return ProbeCutOff()
-        argv = [CF_EXECUTABLE, *command, CF_PROJECT_FLAG, cf_project_id]
+        argv = cf_argv(command, cf_project_id)
         shown = " ".join(argv)
-        try:
-            completed = run(
-                argv,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return ProbeFailed(f"`{shown}` timed out after {timeout_seconds}s")
-        except OSError as error:
-            # An expected external failure: cf missing or not runnable.
-            return ProbeFailed(f"`{shown}` could not run: {error}")
-        head = completed.stdout[:OUTPUT_HEAD_CHARS]
+        completed = run_cf(argv, run, timeout_seconds)
+        if isinstance(completed, CfCallFailed):
+            return ProbeFailed(completed.detail)
+        head = output_head(completed)
         if completed.returncode != 0:
             return ProbeFailed(f"`{shown}` exited {completed.returncode}: {head}")
-        try:
-            parsed = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            return ProbeFailed(f"`{shown}` printed no JSON {form}: {head!r}")
-        if not has_form(parsed):
-            return ProbeFailed(f"`{shown}` did not print a JSON {form}: {head!r}")
+        if (problem := problem_with(completed.stdout)) is not None:
+            return ProbeFailed(f"`{shown}` {problem}: {head!r}")
     return ProbePassed()
 
 

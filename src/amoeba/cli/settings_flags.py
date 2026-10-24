@@ -136,6 +136,13 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         help="The least time between two polls of the same launched run.",
     )
     parser.add_argument(
+        "--plan-read-interval",
+        type=float,
+        default=defaults.plan_read_interval_seconds,
+        metavar="SECONDS",
+        help="The least time between two plan reads of the same linked CF project.",
+    )
+    parser.add_argument(
         "--cf-data-dir",
         type=Path,
         default=DEFAULT_CF_DATA_DIR,
@@ -179,6 +186,7 @@ def start_settings(args: argparse.Namespace) -> ProcessSettings:
         tick_deadline_seconds=args.tick_deadline,
         tick_call_timeout_seconds=args.tick_call_timeout,
         run_poll_interval_seconds=args.run_poll_interval,
+        plan_read_interval_seconds=args.plan_read_interval,
     )
 
 

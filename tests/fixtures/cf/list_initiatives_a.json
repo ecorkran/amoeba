@@ -1,0 +1,50 @@
+[
+  {
+    "index": 100,
+    "name": "Substrate & Run-State Store",
+    "status": "complete",
+    "archFile": "100-arch.substrate-run-state-store.md",
+    "isActive": false,
+    "isChecked": true
+  },
+  {
+    "index": 120,
+    "name": "Runner & Routing Engine",
+    "status": "complete",
+    "archFile": "120-arch.runner-routing-engine.md",
+    "isActive": true,
+    "isChecked": false
+  },
+  {
+    "index": 140,
+    "name": "Judge Invocation & Consensus",
+    "status": "not_started",
+    "archFile": null,
+    "isActive": false,
+    "isChecked": false
+  },
+  {
+    "index": 160,
+    "name": "Translator & Notification",
+    "status": "not_started",
+    "archFile": null,
+    "isActive": false,
+    "isChecked": false
+  },
+  {
+    "index": 180,
+    "name": "Program Record",
+    "status": "not_started",
+    "archFile": null,
+    "isActive": false,
+    "isChecked": false
+  },
+  {
+    "index": 200,
+    "name": "Multi-Agent Chat",
+    "status": "not_started",
+    "archFile": null,
+    "isActive": false,
+    "isChecked": false
+  }
+]

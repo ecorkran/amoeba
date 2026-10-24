@@ -1,0 +1,97 @@
+{
+  "slicePlan": "100-slices.substrate-run-state-store",
+  "total": 10,
+  "completed": 10,
+  "entries": [
+    {
+      "index": 101,
+      "name": "Store Foundation and Node Model",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/101-slice.store-foundation-and-node-model.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 102,
+      "name": "Resident Process and Recovery",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/102-slice.resident-process-and-recovery.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 103,
+      "name": "Durable Inbox and Message Queue",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/103-slice.durable-inbox-and-message-queue.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 104,
+      "name": "Findings, Verdicts, and Provenance",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/104-slice.findings-verdicts-and-provenance.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 105,
+      "name": "Squadron Review Parser and Ingest",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/105-slice.squadron-review-parser-and-ingest.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 106,
+      "name": "Outbound Change Feed and Detection of External Work",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/106-slice.outbound-change-feed-and-detection-of-external-work.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 107,
+      "name": "Judge Samples, Checks, and Calibration",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/107-slice.judge-samples-checks-and-calibration.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 108,
+      "name": "Context Forge Event Seam",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/108-slice.context-forge-event-seam.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 109,
+      "name": "Network API",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/109-slice.network-api.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 110,
+      "name": "Contract Proof and Hardening",
+      "isChecked": true,
+      "designFile": "project-documents/user/slices/110-slice.contract-proof-and-hardening.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    }
+  ]
+}

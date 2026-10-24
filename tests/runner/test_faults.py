@@ -8,7 +8,15 @@ from contextlib import closing
 import pytest
 from sq_run_fixtures import LEGACY_ENTRY_ID, insert_legacy_sq_run_entry
 
-from amoeba.runner.faults import FaultKind, NodeContext, escalate
+from amoeba.runner import faults
+from amoeba.runner.faults import (
+    Fault,
+    FaultKind,
+    NodeContext,
+    TickFaults,
+    escalate,
+    raise_expected_faults,
+)
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.store import (
     PARAM_RUN_ID,
@@ -140,3 +148,53 @@ def test_a_legacy_entry_without_a_run_id_still_counts_as_in_flight(
     assert store.blocked_state_for(node.id) is None
     [row] = store.open_project_escalations(PROJECT)
     assert row.payload is not None and row.payload["run_ids"] == [LEGACY_ENTRY_ID]
+
+
+# -- the plan-read vocabulary (slice 123, D8) -----------------------------------
+
+
+@pytest.mark.parametrize(
+    ("member", "value"),
+    [
+        (FaultKind.PLAN_READ_FAILED, "plan_read_failed"),
+        (FaultKind.LIFECYCLE_ORPHAN, "lifecycle_orphan"),
+        (FaultKind.PLAN_STATUS_UNKNOWN, "plan_status_unknown"),
+    ],
+)
+def test_the_new_fault_kinds_have_their_exact_values(
+    member: FaultKind, value: str
+) -> None:
+    assert member.value == value
+    assert FaultKind(value) is member
+
+
+@pytest.mark.parametrize(
+    ("constant", "value"),
+    [
+        (faults.PAYLOAD_FAULT_KIND, "fault_kind"),
+        (faults.PAYLOAD_CF_PROJECT_ID, "cf_project_id"),
+        (faults.PAYLOAD_INDEX, "index"),
+        (faults.PAYLOAD_FORMER_INDEX, "former_index"),
+        (faults.PAYLOAD_FORMER_SLICE_NAME, "former_slice_name"),
+        (faults.PAYLOAD_STATUS, "status"),
+        (faults.PAYLOAD_STEP, "step"),
+    ],
+)
+def test_the_lifecycle_payload_keys_have_their_exact_values(
+    constant: str, value: str
+) -> None:
+    assert constant == value
+
+
+def test_a_plan_read_failed_fault_raises_one_project_escalation(
+    store: Store,
+) -> None:
+    tick = TickFaults()
+    tick.add(Fault(FaultKind.PLAN_READ_FAILED, "cf list initiatives exited 1"))
+
+    wrote_first = raise_expected_faults(store, PROJECT, tick)
+    wrote_again = raise_expected_faults(store, PROJECT, tick)
+
+    [row] = store.open_project_escalations(PROJECT)
+    assert row.fault_kind == "plan_read_failed"
+    assert wrote_first and not wrote_again

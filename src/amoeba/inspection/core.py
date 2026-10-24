@@ -26,6 +26,7 @@ def node_rows(store: Store, request: ListingRequest) -> list[Row]:
             "status": node.status.value,
             "title": node.title,
             "parent_id": node.parent_id or "",
+            "cf_index": node.cf.index,
         }
         for node in store.nodes_for_project(request.require_project_id())
     ]

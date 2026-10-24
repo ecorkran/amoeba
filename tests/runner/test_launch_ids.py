@@ -45,6 +45,9 @@ def test_the_fault_vocabulary_values_are_stable() -> None:
         "launch_overdue",
         "cf_probe_failed",
         "unexpected_fault",
+        "plan_read_failed",
+        "lifecycle_orphan",
+        "plan_status_unknown",
     }
     assert {failure.value for failure in LaunchFailure} == {
         "spawn_error",

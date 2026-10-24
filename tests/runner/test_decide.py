@@ -4,18 +4,30 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from amoeba.runner.decide import Action, LaunchRun, ProjectView, decide
+from amoeba.runner.decide import (
+    Action,
+    InFlightRun,
+    LaunchRun,
+    ProjectView,
+    RunState,
+    decide,
+)
+from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.lifecycle.tree import LifecycleTree
+from runner.lifecycle.tree_support import TreeBuilder
+from runner.observe_support import entry
 
 NOW = datetime(2026, 10, 23, tzinfo=UTC)
 
 
 def _view() -> ProjectView:
-    return ProjectView("demo", NOW, (), (), {})
+    return ProjectView("demo", NOW, LifecycleTree(()), (), {})
 
 
 def _launch(node_id: str) -> LaunchRun:
@@ -65,3 +77,20 @@ def test_decide_is_deterministic_and_hands_each_planner_the_same_view() -> None:
 def test_the_view_is_immutable() -> None:
     with pytest.raises(dataclasses.FrozenInstanceError):
         _view().project_id = "other"  # type: ignore[misc]  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_ready_unbusy_offers_only_ready_steps_without_a_run_in_flight() -> None:
+    builder = TreeBuilder()
+    try:
+        initiative = builder.initiative(100)
+        architecture = builder.step_node(initiative, LifecycleStep.ARCHITECTURE)
+        view = ProjectView("demo", NOW, builder.tree(), (), {})
+        assert view.ready_unbusy() == [architecture], "no containers, no blocked steps"
+
+        running = InFlightRun(
+            replace(entry(), node_id=architecture.id), "run-1", RunState.RUNNING
+        )
+        busy = replace(view, in_flight=(running,))
+        assert busy.ready_unbusy() == []
+    finally:
+        builder.close()
