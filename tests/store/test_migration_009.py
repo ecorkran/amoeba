@@ -131,8 +131,8 @@ def migrated(store_file: Path) -> sqlite3.Connection:
     return connection
 
 
-def test_the_expected_version_is_nine() -> None:
-    assert EXPECTED_SCHEMA_VERSION == RUNNER_SCHEMA_VERSION
+def test_the_expected_version_is_at_least_nine() -> None:
+    assert EXPECTED_SCHEMA_VERSION >= RUNNER_SCHEMA_VERSION
 
 
 def test_upgrade_keeps_old_rows_and_leaves_the_new_columns_null(

@@ -93,6 +93,9 @@ class NodeOperations(BlockWriter):
                     timestamp,
                 ),
             )
+            if node.cf.index is not None:
+                # Same transaction as the insert: a duplicate link rolls both back.
+                self._execute(sql.UPDATE_NODE_CF_INDEX, (node.cf.index, node.id))
 
         return node
 
@@ -130,6 +133,7 @@ class NodeOperations(BlockWriter):
                     cf.phase,
                     cf.slice_name,
                     cf.artifact_path,
+                    cf.index,
                     isoformat(now()),
                     node_id,
                 ),

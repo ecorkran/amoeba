@@ -27,6 +27,7 @@ from amoeba.store.models import (
     SQReference,
     UnknownVocabularyValueError,
 )
+from amoeba.store.row_values import optional_integer as _optional_integer
 from amoeba.store.row_values import optional_text as _optional_text
 from amoeba.store.row_values import text as _text
 
@@ -88,6 +89,7 @@ def map_node(row: Sequence[object]) -> Node:
             phase=_optional_text(row[7], sql.COL_NODE_CF_PHASE),
             slice_name=_optional_text(row[8], sql.COL_NODE_CF_SLICE),
             artifact_path=_optional_text(row[9], sql.COL_NODE_CF_ARTIFACT_PATH),
+            index=_optional_integer(row[15], sql.COL_NODE_CF_INDEX),
         ),
         sq=SQReference(
             run_id=_optional_text(row[10], sql.COL_NODE_SQ_RUN_ID),

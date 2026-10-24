@@ -23,3 +23,7 @@ def integer(value: object, column: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         raise UnknownVocabularyValueError(f"{column} is not an integer: {value!r}")
     return value
+
+
+def optional_integer(value: object, column: str) -> int | None:
+    return None if value is None else integer(value, column)

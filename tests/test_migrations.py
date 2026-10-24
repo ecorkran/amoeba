@@ -181,9 +181,14 @@ def test_migration_advances_the_stamp_and_data_survives(store_file: Path) -> Non
         assert migrate(connection, expected_version=2) == 2
         assert read_schema_version(connection) == 2
 
-        row = connection.execute(sql.SELECT_NODE_BY_ID, ("n1",)).fetchone()
+        # Not SELECT_NODE_BY_ID: it names columns a version-2 store lacks.
+        row = connection.execute(
+            f"SELECT {sql.COL_NODE_TITLE} FROM {sql.TABLE_NODES} "
+            f"WHERE {sql.COL_NODE_ID} = ?",
+            ("n1",),
+        ).fetchone()
         assert row is not None
-        assert row[5] == "survivor"
+        assert row[0] == "survivor"
 
 
 def test_fresh_store_arrives_at_the_latest_version(store_file: Path) -> None:
@@ -260,9 +265,14 @@ def test_version_two_store_with_data_upgrades_to_three(store_file: Path) -> None
         )
         assert read_schema_version(connection) == JOURNAL_SCHEMA_VERSION
 
-        node_row = connection.execute(sql.SELECT_NODE_BY_ID, ("n1",)).fetchone()
+        # Not SELECT_NODE_BY_ID: it names columns a version-3 store lacks.
+        node_row = connection.execute(
+            f"SELECT {sql.COL_NODE_TITLE} FROM {sql.TABLE_NODES} "
+            f"WHERE {sql.COL_NODE_ID} = ?",
+            ("n1",),
+        ).fetchone()
         assert node_row is not None
-        assert node_row[5] == "survivor"
+        assert node_row[0] == "survivor"
 
         blocked_rows = connection.execute(
             sql.SELECT_BLOCKED_STATES_FOR_NODE, ("n1",)
