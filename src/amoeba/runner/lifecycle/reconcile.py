@@ -7,7 +7,7 @@ before it writes so a crash at any point is repaired by the next read:
 2. create: initiative, slice and step nodes CF reports and the tree lacks (here);
 3. block: slices whose CF status is unknown (``status_block.py``);
 4. update: keep ``slice_name`` and ``artifact_path`` equal to CF's (``references.py``);
-5. later rules, added by the tasks that follow, in this order.
+5. complete: mark steps CF shows complete as done (``completion.py``).
 
 This module is the only caller of ``Store.create_node`` in ``src/amoeba``; a guard
 test enforces it (D10). The read checks (``read_checks.py``) run first and decide
@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 
 from amoeba.runner.faults import TickFaults
+from amoeba.runner.lifecycle.completion import complete_observed_steps
 from amoeba.runner.lifecycle.orphaning import orphan_unlisted
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
 from amoeba.runner.lifecycle.read_checks import ReadScope, checked_scope
@@ -82,7 +83,10 @@ def reconcile(
             tree = _tree(store, project_id)
         blocked = block_unknown_status(store, tree, cf_project_id, read, scope)
         updated = update_references(store, tree, cf_project_id, read, scope)
-        wrote = created or blocked or updated or wrote
+        completed = complete_observed_steps(
+            store, _tree(store, project_id), project_id, cf_project_id, read, scope
+        )
+        wrote = created or blocked or updated or completed or wrote
     return wrote
 
 
