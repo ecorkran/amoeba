@@ -13,8 +13,8 @@ interfaces:
 - 128
 - 129
 dateCreated: 20261020
-dateUpdated: 20261021
-status: not_started
+dateUpdated: 20261023
+status: complete
 turns: 35
 promptTokens: 3530572
 cachedTokens: 3376390
@@ -511,36 +511,58 @@ Run in bash from the repository root. Steps 1–2 are automated and use the stub
    ```bash
    uv run pytest tests/runner/lifecycle tests/upstream/test_cf_plan.py tests/store/test_migration_010.py -v
    ```
-   Expected: all pass. The reconcile tests are named for the rules they prove, for example `test_renumber_yields_one_orphan_and_one_new_node` and `test_empty_list_with_linked_nodes_orphans_nothing`.
+   Expected: all pass (256 on 20261023). The reconcile tests are named for the rules they prove, for example `test_renumber_yields_one_orphan_and_one_new_node` (`tests/runner/lifecycle/test_reconcile_create.py`) and `test_empty_list_with_linked_nodes_orphans_nothing` (`test_orphaning.py`).
 
 2. **Full gate and contract suite:**
    ```bash
    uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright
    uv run pytest tests/contract -v
    ```
+   Expected (20261023): 2758 passed (2384 before the slice); `ruff` and `pyright` clean; the contract suite 47 passed.
 
-3. **Mirror this repository's plan, with the real `cf`:**
+3. **Mirror this repository's plan, with the real `cf`:** verified 20261023 on `cf` 0.19.17 and squadron 0.23.7. `amoeba` is not on `PATH` in a development checkout, so each command is `uv run amoeba …`.
    ```bash
    export AMOEBA_STORE_DIR=$(mktemp -d)
-   amoeba start &                 # or in its own terminal
-   amoeba submit create-project --project amoeba --by operator
-   amoeba submit link-cf-project --project amoeba --by operator \
+   uv run amoeba start > /tmp/amoeba.log 2>&1 &
+   sleep 4
+   uv run amoeba submit create-project --project amoeba --by operator
+   uv run amoeba submit link-cf-project --project amoeba --by operator \
      --cf-project-id "$(cf list projects --json | python3 -c 'import json,os,sys; print(next(p["id"] for p in json.load(sys.stdin) if p.get("projectPath") == os.getcwd()))')"
-   sleep 5; amoeba inspect nodes --project amoeba
+   sleep 8; uv run amoeba inspect nodes --project amoeba
    ```
-   Expected:
-   - one initiative row for each entry of `cf list initiatives --json`, with that entry's index;
-   - every step under initiative 100 and its slices 101–110 `done`;
-   - initiative 120 with slices 120–131, each with four step rows, all `runnable`, because none is reported complete;
-   - initiatives 140–200 each with a `runnable` `architecture` step and no slices, because they have no slice plan.
+   Expected, as observed:
+   - one initiative row for each entry of `cf list initiatives --json -a` (indexes 100, 120, 140, 160, 180, 200), with that index in the `cf_index` column;
+   - every step under initiative 100 and its slices 101–110 `done`, including its `integration` (it is checked);
+   - initiative 120 with slices 120–131, each with four step rows. **Slices 120, 121 and 122 are now reported complete by CF, so their steps are `done`; the other nine are all `runnable`.** (This walkthrough was written when none was complete.) Initiative 120's `architecture` and `slice_plan` are `done`, and its `integration` is `runnable`: CF reports it `complete` but not checked, and `integration` follows `isChecked`;
+   - initiatives 140–200 each with a `runnable` `architecture` step (plus `slice_plan` and `integration`) and no slices, because they have no slice plan.
 
    Then:
    ```bash
-   amoeba inspect messages --project amoeba --json
+   uv run amoeba inspect messages --project amoeba --json
    ```
-   Expected: no `plan_read_failed` and no orphan escalations. No human-step blocks appear either, because `HumanStepPlanner` is not in production until 124.
+   Expected: `[]`. No `plan_read_failed`, no orphan escalation, and no human-step block, because `HumanStepPlanner` is not in production until 124. Stop with `uv run amoeba stop`.
 
-4. **A rename, in a scratch copy.** Copy this repository to a temporary directory, register it with `cf init`, link it as in step 3, and wait for the first read. Then edit the name of slice 131 in the copy's `120-slices.runner-routing-engine.md`. After `plan_read_interval_seconds`, `amoeba inspect nodes` shows the same node id, still linked to index 131, and no orphan escalation appears. Then change `(131)` to `(132)`. On the next read, `amoeba inspect messages` shows one `lifecycle_orphan` escalation naming former index 131, and `amoeba inspect nodes` shows a new slice node 132 and the old node unlinked. Stop the process with `amoeba stop`.
+4. **A rename and a renumber, in a scratch copy:** verified 20261023. This writes CF's project registry (`~/.config/context-forge/projects.json`) with a scratch entry, which the last command removes.
+   ```bash
+   SCR=$(mktemp -d); rsync -a --exclude .git --exclude .venv ./ "$SCR/amoeba-scratch/"
+   (cd "$SCR/amoeba-scratch" && cf init --lite --no-ide --name amoeba-scratch-123)
+   SCF=$(cf list projects --json | python3 -c 'import json,sys; print(next(p["id"] for p in json.load(sys.stdin) if p["name"]=="amoeba-scratch-123"))')
+   export AMOEBA_STORE_DIR=$(mktemp -d)
+   uv run amoeba start --plan-read-interval 3 > /tmp/amoeba.log 2>&1 &
+   sleep 4
+   uv run amoeba submit create-project --project scratch --by operator
+   uv run amoeba submit link-cf-project --project scratch --by operator --cf-project-id "$SCF"
+   sleep 8; uv run amoeba inspect nodes --project scratch --json     # note slice 131's id
+   ```
+   `cf init --lite --no-ide` registers the copy without prompting. `--plan-read-interval 3` shortens the 30-second default.
+
+   *Rename.* Edit the name of slice 131 in the copy's `120-slices.runner-routing-engine.md`, wait one interval, and list the nodes again. Observed: `cf list slices 120` reports the new name; `inspect nodes` shows the **same node id, still linked to index 131**, with its title unchanged (a title is display data and is never updated, D1); `inspect messages` is empty.
+
+   *Renumber.* Change `**(131)` to `**(132)` in the same file and wait one interval. Observed: `inspect nodes` shows the old node (same id) with an empty `cf_index`, `blocked_on_human`, and a new `runnable` slice node with `cf_index` 132; `inspect messages --json` shows exactly one escalation on the old node with payload `{"fault_kind": "lifecycle_orphan", "cf_project_id": "<scratch id>", "former_index": 131, "former_slice_name": null}` (`former_slice_name` is null because the plan lists no design file for 131).
+
+   Clean up: `uv run amoeba stop`, `cf project rm "$SCF" --yes`, and delete `$SCR` and the store directories. Afterwards `cf list projects --json` shows this repository's project active again.
+
+   **Caveat found while capturing the fixtures:** with CF 0.19.17, `cf list slices <index> --json` for an initiative without a slice plan prints its `error: true` document on **stderr**, with an empty stdout and exit 1. The plan read classifies a non-zero exit from both streams (see [Plan reads](../../../docs/context-forge-contract.md#plan-reads-slice-123)).
 
 ## Risk Assessment
 
