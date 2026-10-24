@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
+from amoeba.runner.lifecycle.predecessors import predecessors_done
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.store.models import Node, NodeKind
+from amoeba.store.models import BLOCKED_STATUSES, Node, NodeKind, NodeStatus
 
 #: A linked node's identity within a project: its kind, CF project and CF index.
 type LinkKey = tuple[NodeKind, str, int]
@@ -75,6 +76,35 @@ class LifecycleTree:
             if current.parent_id is None:
                 return True
             current = self.parent(current)
+        return False
+
+    def ready_steps(self) -> Sequence[Node]:
+        """The step nodes that are ready to be worked, in store order.
+
+        A step is ready when it is ``runnable``, linked, has no blocked ancestor,
+        and its predecessors are done (D4). Pure: it reads only this tree.
+
+        This is the widest set. Later slices narrow it in Decide, not here: drive
+        and hold (124), no unresolved journal entry and a free checkout (125), and
+        gates (128). The store's ``runnable`` status alone only means "not blocked,
+        started or done".
+        """
+        return tuple(
+            node
+            for node in self._nodes
+            if self.step_of(node) is not None
+            and node.status is NodeStatus.RUNNABLE
+            and self.is_linked(node)
+            and not self._has_blocked_ancestor(node)
+            and predecessors_done(self, node)
+        )
+
+    def _has_blocked_ancestor(self, node: Node) -> bool:
+        ancestor = self.parent(node)
+        while ancestor is not None:
+            if ancestor.status in BLOCKED_STATUSES:
+                return True
+            ancestor = self.parent(ancestor)
         return False
 
 
