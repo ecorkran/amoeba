@@ -46,6 +46,9 @@ from amoeba.upstream.context_forge import SliceStem, parse_slice_stem
 #: Journal parameter keys of a pointer write besides the checkout and the index.
 PARAM_PROJECT = "project"
 PARAM_EXPECTED = "expected"
+#: The worktree the write was meant for (``None`` for a project without worktrees),
+#: so a read-back in a later tick can judge the record without re-resolving.
+PARAM_EXPECTED_WORKTREE_ID = "expected_worktree_id"
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,7 @@ def issue_pointer_write(
             PARAM_CHECKOUT: str(action.checkout.path),
             PARAM_EXPECTED: {},
             PARAM_EXPECTED_SLICE_INDEX: action.slice_index,
+            PARAM_EXPECTED_WORKTREE_ID: action.checkout.worktree_id,
         },
     )
     result = _set_slice(action, run, timeout_seconds)
@@ -143,6 +147,21 @@ def issue_pointer_write(
     return PointerAttempt(
         entry, result, read_back(entry, action.checkout, run, timeout_seconds)
     )
+
+
+def expected_checkout(entry: JournalEntry) -> Checkout | None:
+    """The checkout a pointer-write entry meant, or ``None`` if it names none.
+
+    ``None`` for an entry the Runner did not write as a pointer write (it has no
+    expected slice index) or one with no checkout.
+    """
+    path = entry.parameters.get(PARAM_CHECKOUT)
+    worktree_id = entry.parameters.get(PARAM_EXPECTED_WORKTREE_ID)
+    if PARAM_EXPECTED_SLICE_INDEX not in entry.parameters:
+        return None
+    if not isinstance(path, str) or not path:
+        return None
+    return Checkout(Path(path), worktree_id if isinstance(worktree_id, str) else None)
 
 
 def read_back(

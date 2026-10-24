@@ -24,6 +24,7 @@ from amoeba.runner.decide import (
     WriteSlicePointer,
     decide,
 )
+from amoeba.runner.dispatch.observe_pointer import PointerObservation, PointerStage
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
     LaunchFailure,
@@ -74,6 +75,7 @@ class ProjectTick:
         observer: RunObserver,
         probes: LinkProbes,
         plans: PlanStage,
+        pointers: PointerStage,
         tracker: LaunchTracker,
         popen: PopenFactory,
         now: Callable[[], datetime],
@@ -88,6 +90,8 @@ class ProjectTick:
         self._observer = observer
         self._probes = probes
         self._plans = plans
+        self._pointers = pointers
+        self._pointer_confirmed: frozenset[str] = frozenset()
         self._tracker = tracker
         self._popen = popen
         self._now = now
@@ -119,6 +123,10 @@ class ProjectTick:
             raise UpstreamShapeError(shape_error)
         if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
+        pointed = self._observe_pointers(desired, budget)
+        if pointed.result is TickResult.CUT_OFF:
+            return TickResult.CUT_OFF
+        self._pointer_confirmed = pointed.confirmed
         # [route - slice 126]
         decided = self._decide(observed.runs, self._probes.results(links), desired)
         if self._act(decided, budget) is TickResult.CUT_OFF:
@@ -158,6 +166,26 @@ class ProjectTick:
         )
         self.wrote = wrote or self.wrote
         return result
+
+    def _observe_pointers(
+        self, desired: DesiredStateIndex, budget: TickBudget
+    ) -> PointerObservation:
+        """Settle open pointer writes and confirm pointed steps (D2, D3).
+
+        Reads the store's tree as it is after the plan stage; the view is built
+        again afterwards, because settling a write can block a step.
+        """
+        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
+        observation = self._pointers.observe(
+            self._store,
+            self._project_id,
+            current_steps(tree, desired),
+            drives=desired.drives_anything(),
+            budget=budget,
+            context=self._context,
+        )
+        self.wrote = observation.wrote or self.wrote
+        return observation
 
     def _run_entries(self) -> list[JournalEntry]:
         return [

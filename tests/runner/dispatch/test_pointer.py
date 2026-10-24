@@ -20,6 +20,7 @@ from cf_stub import (
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.pointer import (
     PARAM_EXPECTED,
+    PARAM_EXPECTED_WORKTREE_ID,
     PARAM_PROJECT,
     Confirmed,
     Mismatch,
@@ -80,6 +81,7 @@ def test_the_write_is_journaled_with_the_checkout_and_the_index(rig: Rig) -> Non
         PARAM_CHECKOUT: str(rig.root),
         PARAM_EXPECTED: {},
         PARAM_EXPECTED_SLICE_INDEX: 125,
+        PARAM_EXPECTED_WORKTREE_ID: "wt_a",
     }
 
 

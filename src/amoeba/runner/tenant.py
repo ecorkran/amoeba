@@ -18,6 +18,7 @@ from amoeba.process import ProcessSettings, RunPoll, UpstreamShapeError
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Planner
+from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.faults import STORE_FAILURES, FaultKind, NodeContext, escalate
 from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.lifecycle.cadence import PlanReadSchedule
@@ -96,6 +97,12 @@ class RunnerTenant:
             run=cf_run,
             timeout_seconds=settings.tick_call_timeout_seconds,
         )
+        self._pointers = PointerStage(
+            cf_run,
+            settings.tick_call_timeout_seconds,
+            settings.launch_grace_seconds,
+            now,
+        )
         self._carried_over: tuple[str, ...] = ()
 
     @property
@@ -146,6 +153,7 @@ class RunnerTenant:
             observer=self._observer,
             probes=self._probes,
             plans=self._plans,
+            pointers=self._pointers,
             tracker=self.tracker,
             popen=self._popen,
             now=self._now,

@@ -385,12 +385,12 @@ Per the LLD, D2 outcome bullets. Edit `runner/dispatch/pointer.py`; extend `test
 
 Per the LLD, Data Flow (observe), D2 "A read that fails" and D3 "CF still points". Edit the tick's observe stage; add `tests/runner/dispatch/test_observe_pointer.py`.
 
-- [ ] Each unresolved `cf_write` entry gets `read_back` under `TickBudget`, handled as in Task 6.3. A read still failing once `launch_grace_seconds` has passed since `issued_at` goes through `journal_escalate` with the last failure as its reason
-- [ ] Each current step whose journal says `POINTED` gets one read-back; the answer becomes `pointer_confirmed` for Task 5.2. Anything but a confirmed index is `False`
-- [ ] Observe scope stays 124's predicate (`drives_anything()` or a run in flight)
-- [ ] Tests: a cut-off read-back completes on the next tick; a read-back with an absent field escalates at once; a read that keeps failing escalates once the grace has passed and not before; a `POINTED` step whose pointer was overwritten reads `pointer_confirmed=False`
+- [x] Each unresolved `cf_write` entry gets `read_back` under `TickBudget`, handled as in Task 6.3. A read still failing once `launch_grace_seconds` has passed since `issued_at` goes through `journal_escalate` with the last failure as its reason
+- [x] Each current step whose journal says `POINTED` gets one read-back; the answer becomes `pointer_confirmed` for Task 5.2. Anything but a confirmed index is `False`
+- [x] Observe scope stays 124's predicate (`drives_anything()` or a run in flight)
+- [x] Tests: a cut-off read-back completes on the next tick; a read-back with an absent field escalates at once; a read that keeps failing escalates once the grace has passed and not before; a `POINTED` step whose pointer was overwritten reads `pointer_confirmed=False`
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: read back CF pointers in the observe stage`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: read back CF pointers in the observe stage`
 
 ### Task 7.2: Build the dispatch facts and block unresolved checkouts, with tests
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 3

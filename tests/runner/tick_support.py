@@ -13,6 +13,7 @@ from feed_harness import apply
 from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
+from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.faults import NodeContext
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
@@ -209,6 +210,7 @@ class Rig:
             run=self.cf,
             timeout_seconds=8.0,
         )
+        self.pointers = PointerStage(self.cf, 8.0, GRACE, self.clock.wall)
         self.planner = Planner(tmp_path)
         self.planners: tuple[Any, ...] = (self.planner,)
         self.popen = Popen(store)
@@ -233,6 +235,7 @@ class Rig:
             observer=self.observer,
             probes=self.probes,
             plans=self.plans,
+            pointers=self.pointers,
             tracker=self.tracker,
             popen=self.popen,
             now=self.clock.wall,
