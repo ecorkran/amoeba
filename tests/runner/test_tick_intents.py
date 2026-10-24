@@ -7,13 +7,11 @@ from typing import Any
 
 import pytest
 
-from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickResult
 from amoeba.runner.faults import RUNNER_ACTOR
 from amoeba.runner.intent import apply as apply_module
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import (
     AcknowledgmentOutcome,
     Channel,
@@ -24,11 +22,10 @@ from amoeba.store import (
 )
 from runner.observe_support import CfReply
 from runner.plan_tick_support import INITIATIVES_KEY, initiatives_json, slices_key
-from runner.tick_support import PROJECT, Rig, link
+from runner.tick_support import PROJECT, Rig, StoreHost, link, tenant_for
 
 from .intent.intent_support import submit
 
-SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
 LINK = "cf-1"
 
 
@@ -37,30 +34,6 @@ def rig(tmp_path: Path, store: Store) -> Rig:
     built = Rig(tmp_path, store)
     built.planners = ()
     return built
-
-
-class _Host:
-    stop_requested = False
-    project_ids = (PROJECT,)
-
-    def __init__(self, store: Store) -> None:
-        self._store = store
-
-    def store_for(self, project_id: str) -> Store:
-        return self._store
-
-
-def _tenant(rig: Rig) -> RunnerTenant:
-    return RunnerTenant(
-        settings=SETTINGS,
-        supervisor_dir=rig.supervisor_dir,
-        planners=rig.planners,
-        popen=rig.popen,
-        cf_run=rig.cf,
-        poll=rig.poll,
-        now=rig.clock.wall,
-        monotonic=rig.clock.monotonic,
-    )
 
 
 def _intent(store: Store, message_id: str) -> Any:
@@ -89,8 +62,8 @@ def test_a_tick_that_only_applied_an_intent_reports_a_write(
     rig: Rig, store: Store
 ) -> None:
     submit(store, {"intent": "pause"}, project_id=PROJECT)
-    assert _tenant(rig).tick(_Host(store)) is True
-    assert _tenant(rig).tick(_Host(store)) is False
+    assert tenant_for(rig).tick(StoreHost(store)) is True
+    assert tenant_for(rig).tick(StoreHost(store)) is False
 
 
 def test_a_driven_initiative_without_arch_file_is_blocked_in_the_same_tick(
@@ -131,9 +104,9 @@ def test_an_unexpected_apply_exception_is_one_project_fault(
     good = submit(store, {"intent": "pause"}, project_id=PROJECT)
     bad = submit(store, {"intent": "drive"}, project_id=PROJECT)
     _break_interpret(monkeypatch, fail_for=bad)
-    tenant = _tenant(rig)
+    tenant = tenant_for(rig)
 
-    tenant.tick(_Host(store))
+    tenant.tick(StoreHost(store))
 
     assert [m.fault_kind for m in store.open_project_escalations(PROJECT)] == [
         "unexpected_fault"
@@ -149,10 +122,10 @@ def test_a_repeating_apply_bug_adds_no_second_escalation(
 ) -> None:
     submit(store, {"intent": "drive"}, project_id=PROJECT)
     _break_interpret(monkeypatch, fail_for=None)
-    tenant = _tenant(rig)
+    tenant = tenant_for(rig)
 
     for _ in range(3):
-        tenant.tick(_Host(store))
+        tenant.tick(StoreHost(store))
 
     assert len(store.messages(PROJECT, channel=Channel.ESCALATION)) == 1
 
@@ -168,5 +141,5 @@ def test_a_store_failure_in_apply_exits_the_tick(
     monkeypatch.setattr(store, "acknowledge_message", locked)
 
     with pytest.raises(StoreBusyError):
-        _tenant(rig).tick(_Host(store))
+        tenant_for(rig).tick(StoreHost(store))
     assert store.open_project_escalations(PROJECT) == []

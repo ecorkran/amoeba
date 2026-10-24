@@ -10,6 +10,7 @@ from typing import Any
 
 from feed_harness import apply
 
+from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
 from amoeba.runner.faults import NodeContext
@@ -25,6 +26,7 @@ from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.tenant import RunnerTenant
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import (
     CFReference,
@@ -188,6 +190,38 @@ class Rig:
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
         return tick.run(budget), tick
+
+
+TENANT_SETTINGS = ProcessSettings(
+    tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0
+)
+
+
+class StoreHost:
+    """A tenant host over one project's store."""
+
+    stop_requested = False
+    project_ids = (PROJECT,)
+
+    def __init__(self, store: Store) -> None:
+        self._store = store
+
+    def store_for(self, project_id: str) -> Store:
+        return self._store
+
+
+def tenant_for(rig: Rig) -> RunnerTenant:
+    """A tenant built from the rig's parts, so its fault boundary is in play."""
+    return RunnerTenant(
+        settings=TENANT_SETTINGS,
+        supervisor_dir=rig.supervisor_dir,
+        planners=rig.planners,
+        popen=rig.popen,
+        cf_run=rig.cf,
+        poll=rig.poll,
+        now=rig.clock.wall,
+        monotonic=rig.clock.monotonic,
+    )
 
 
 def link(store: Store, submission_id: str, cf_id: str, project: str) -> None:
