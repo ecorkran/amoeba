@@ -54,7 +54,7 @@ revision_number: 2
 - **The stem rule moves to `amoeba.upstream.context_forge`.** The read-back observer (`process/observers/cf_readback.py`) must parse an index from `fileSlice`, but `amoeba.process` may not import `amoeba.runner` (`tests/test_import_boundaries.py`, Rule 10). Task 2.1 defines one stem parser in the upstream package, and `runner/lifecycle/slugs.py` delegates to it.
 - **The detection key call site.** The LLD says detection's "directory source" forms the key. `DirectoryReviewSource` is in `store/review_sources.py`, which may not import `amoeba.process` (Rule 1). The key is actually formed in `process/review_scan.py`'s `examine` (`str(detected.path)`, `content_digest`). Task 2.7 makes `examine` and ingest share `detection_key` there.
 - **The routing-flag stand-in.** 126 does not exist. Tests that need a routing decision call `store.record_routing_decision` directly, through one helper in `tests/runner/ingest/routing_support.py` (Task 4.4).
-- **Shared names, defined once.** `DispatchState`, `CheckpointKind`, `FailureKind`, the new `FaultKind` members, the `slice`/`merge` param keys and the `false` value, the `cf_write` keys `checkout` and `expected_slice_index`, the result keys `outcome_document`, `verdict_ids`, `review_fault`, `worktree_id`, `project_path`, and the block reasons `failed`, `orphaned`, `vanished`, `started_before_crash`. Tests import them. They never retype a value.
+- **Shared names, defined once.** `DispatchState`, `CheckpointKind`, `FailureKind`, the new `FaultKind` members, the `slice`/`merge` param keys and the `false` value, the `cf_write` keys `checkout` and `expected_slice_index`, the result keys `outcome_document`, `verdict_ids`, `review_fault`, `worktree_id`, `project_path`, `file_slice` (defined in Task 2.3) and `cf_updated_at` (defined in Task 6.3), and the block reasons `failed`, `orphaned`, `vanished`, `started_before_crash`. Tests import them. They never retype a value.
 - **Exception rule.** No new `except Exception`. Every `except` names a specific exception with a comment, or re-raises after `logger.exception`. Expected external failures are answers (`CheckoutUnresolved`, `ReviewUnknown`, a failed pointer write), never exceptions.
 - **Upstream fixtures are real.** New Squadron and CF fixtures are captured from the real tools with read-only commands and recorded in `tests/fixtures/README.md` with the capture date. A fixture changed by hand carries `-edited` in its name, as existing ones do.
 - **Test doubles.** Pure functions get table-driven tests. Store-backed tests use `Store.open_temporary()`. Tick-level tests use `tests/runner/tick_support.py` and `plan_tick_support.py` with the stub `cf` (`tests/cf_stub.py`) and stub `sq` (`tests/sq_stub.py`) on `PATH` under a temporary `HOME`. Nothing sleeps or runs a real `cf` or `sq`.
@@ -72,16 +72,22 @@ revision_number: 2
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
 - [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [ ] Run `git status --short`. The tree must be clean before the branch is created. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or its tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
+- [ ] Check the two external preconditions now, so the slice fails before any contract work. Both are read-only:
+  - `cf worktree list --json` has an entry whose `worktreePath` is the repo root (Task 2.3 needs it for the worktree-form fixture). Do not register a worktree yourself
+  - `sq runs list` shows local completed, failed and paused runs (Task 3.1 captures fixtures from them). Paused runs are those whose run-state file in `~/.config/squadron/runs/` contains `"status": "paused"`
+  - If either is missing, write `BLOCKED:` naming the missing item and stop
+- [ ] Confirm the D7 correction to the arch "Run identity" sentence (`user/architecture/120-arch.runner-routing-engine.md`) is present per the LLD. If it is not, make that edit and commit it as `docs:`
 - [ ] Create `125-slice.run-dispatch-and-outcome-ingestion` from the target. If it exists, switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task
+- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each
 - **Success Criteria**:
-  - [ ] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
+  - [ ] On the slice branch with a clean tree. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. This task adds no commit of its own
 
 ---
 
 ## Section 2: Contract changes to 100 (D10, D8)
 
-These land before any Runner code (LLD, D10 "Order").
+These land before the new Runner modules (`ingest`, `dispatch`) and the tick wiring (LLD, D10 "Order"). Task 2.1 touches `runner/lifecycle/slugs.py` only to delegate to the shared parser.
 
 ### Task 2.1: One slice stem parser in the upstream package, with tests
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
@@ -111,8 +117,7 @@ Per the LLD, D10 "`cf_write`". Edit `store/journal_models.py` and its tests (`te
 
 Per the LLD, D10 bullets on the observer, D2 "Read-back". Edit `process/observers/cf_readback.py` and `tests/test_observer_cf_readback.py`.
 
-- [ ] Confirm `cf worktree list --json` has an entry whose `worktreePath` is the repo root. If none does, write `BLOCKED:` under this task (the worktree-form fixture cannot be captured) and stop. Do not register a worktree yourself
-- [ ] Capture one real fixture: from the repo root, run `cf get --json -p <amoeba's CF project id>` (read-only) and save the bytes as `tests/fixtures/cf/cf_get_worktree.json`. Confirm it carries `fileSlice`, `projectPath` and a `worktree` object with `id`. Add a README entry with the date
+- [ ] Capture one real fixture (Task 1.1 confirmed the registered worktree): from the repo root, run `cf get --json -p <id>` (read-only), where `<id>` is the top-level `id` field of `tests/fixtures/cf/cf_get_amoeba.json`. Save the bytes as `tests/fixtures/cf/cf_get_worktree.json`. Confirm it carries `fileSlice`, `projectPath` and a `worktree` object with `id`. Add a README entry with the date
 - [ ] `CFProjectRecord` reads `worktree.id` and `projectPath` in addition to the fields it reads today
 - [ ] When the entry has `checkout`, run `cf get` with `cwd=checkout`. Without it (entries before this slice), run with no working directory
 - [ ] When `expected_slice_index` is present: `fileSlice` parsed by `parse_slice_stem` to that index is a match; another index is `NotApplied`; an absent field or a `fileSlice` that does not parse is `Unknown`
@@ -178,7 +183,6 @@ Per the LLD, D7 last bullet and D10 "`detection_key`"; see "Task-level additions
 Per the LLD, D10 "Order" and "Provides to Other Slices" (Contract documents). Text only.
 
 - [ ] `docs/store-contract.md`: the `cf_write` keys, `record_runner_report`'s new signature, migration `011`, `unrouted_outcomes`, the flag set by issuer resolutions and cleared by a decision (the API Contracts table)
-- [ ] `docs/process-contract.md`: the read-back's working directory and index check, and `Unknown` for an empty comparison
 - [ ] `docs/evidence-contract.md`: the Runner journals the run on the step node and records the verdict on the slice node with `sq_run_id` and `journal_entry_id=None` (replace the sentence "a Runner journals a review command on the node the review is of", D7); multi-part recording; verdict ids are 105's content digest
 - [ ] Correct the LLD (`user/slices/125-slice.run-dispatch-and-outcome-ingestion.md`) where the code contradicts it: D7's last bullet and D10's `detection_key` bullet say detection's directory source calls `detection_key`; state instead that `review_scan.examine` forms detection's key through it (the source is in `store/`, which Rule 1 bars from importing `amoeba.process`). Component Structure's `tenant.py` line names the production planners; move that entry to `factory.py` (`PRODUCTION_PLANNERS`)
 - **Success Criteria**:
@@ -418,7 +422,7 @@ Per the LLD, Success Criteria "Checkout concurrency", "Each non-completed outcom
 - [ ] `test_second_slice_waits_for_checkout`: no pointer write while the first is `POINTED`, in flight or paused; dispatched on the first tick after the first run completes or fails; a slice in another worktree is dispatched meanwhile
 - [ ] A paused run with an unknown review (blocked `HUMAN`) still holds its checkout
 - [ ] A `POINTED` step overwritten while not current writes its pointer again before launching
-- [ ] Ingestion end to end with the stub `sq`: completed, split review, empty list, each unknown review, paused (`SQ_CHECKPOINT`, checkpoint in the result), failed with `cost_cap` and `stall`, orphaned, vanished; after ingestion `unrouted_outcomes` lists the entry and the step gets no further action; a routing decision (Task 4.4 helper) removes it
+- [ ] Ingestion end to end with the stub `sq`, three scenarios only (Task 4.1 tests every outcome as a table and 4.3 the store path): a paused run (`SQ_CHECKPOINT`, checkpoint in the result), a failed run, a completed run with an unknown review. After a completed or failed ingestion `unrouted_outcomes` lists the entry and the step gets no further action; a routing decision (Task 4.4 helper) removes it
 - **Success Criteria**:
   - [ ] Tests, `ruff` and `pyright` pass. Commit: `test: prove checkout concurrency and tick-level ingestion`
 
@@ -443,9 +447,9 @@ Per the LLD, D9. Edit `runner/launch.py` (keep it near 300 lines; move the reiss
 ## Section 9: Pointer moved during a run (D11)
 
 ### Task 9.1: `pointer_moved`, with tests
-**Owner**: Junior AI | **Dependencies**: 2.1, 5.1 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 2.1, 2.3, 5.1, 6.3 | **Effort**: 2
 
-Per the LLD, D11. Create `runner/dispatch/pointer_watch.py` and `tests/runner/dispatch/test_pointer_watch.py`.
+Per the LLD, D11. Inputs: the pointer write's `worktree_id` result key (defined in 2.3, written in 6.3) and the time the write resolved (the journal entry's `resolved_at`). Create `runner/dispatch/pointer_watch.py` and `tests/runner/dispatch/test_pointer_watch.py`.
 
 - [ ] `pointer_moved(in_flight, snapshots) -> list[MovedPointer]`, pure. For each in-flight run: its pointer write's `worktree_id` (or project level), the latest snapshot recorded after that write resolved, and its `activeSlice` (or project `fileSlice`) parsed by `parse_slice_stem`. A different index gives `MovedPointer(node_id, run_id, worktree_id, observed)`
 - [ ] Tests: same index, no move; different index, moved; snapshot recorded before the write resolved is ignored; no later snapshot, no move; project with no worktrees uses `fileSlice`; unparseable value is not a move
@@ -482,7 +486,7 @@ Per the LLD, D11 bullets on escalation. Wire into observe; add `FaultKind.POINTE
 
 Per the LLD, "Provides to Other Slices" (Contract documents) and Implementation Notes step 7.
 
-- [ ] `docs/process-contract.md`: the dispatch and ingest stages, the two-tick dispatch, the checkout hold, no `started` status
+- [ ] `docs/process-contract.md` (the only task that edits it): the read-back's working directory and index check, and `Unknown` for an empty comparison (Task 2.3); the dispatch and ingest stages, the two-tick dispatch, the checkout hold, no `started` status
 - [ ] `docs/context-forge-contract.md`: a write lands where its working directory says; the pointer-move rule (D11)
 - [ ] `docs/substrate-guide.md`: the 120 row; issues #9 and #10 closed
 - [ ] `CHANGELOG.md`: an entry under the unreleased section (patch-level per the Release Versioning rule)
@@ -495,7 +499,7 @@ Per the LLD, "Provides to Other Slices" (Contract documents) and Implementation 
 Per the LLD, Verification Walkthrough. Live runs are pre-authorized.
 
 - [ ] Run walkthrough steps 1 and 2 once each. All pass
-- [ ] Run step 3 on a scratch copy exactly as written (one real `P4` run). Record the observed results under this task: the `cf_write` and `sq_run` entries, `cf status` `activeSlice.index`, the `slice_name`, and the final entry state (`awaits_routing`, or the checkpoint block). Then submit the pause intent, confirm no further `cf_write`, and stop the process
+- [ ] Run step 3 on a scratch copy exactly as written (one real `P4` run), including its two fallbacks: `cf init` is interactive if the copy has no CF config (use the same template as this repository), and if the copy's slice 126 is already designed, drive the first slice whose `slice_design` step is `runnable` instead. Record the observed results under this task: the `cf_write` and `sq_run` entries, `cf status` `activeSlice.index`, the `slice_name`, and the final entry state (`awaits_routing`, or the checkpoint block). Then submit the pause intent, confirm no further `cf_write`, and stop the process
 - [ ] If step 3 fails, record the actual error text under this task and fix the cause before checking it off
 - **Success Criteria**:
   - [ ] `uv run pytest -q`, `ruff check`, `ruff format --check` and `pyright` are clean; the walkthrough results are recorded. Commit: `test: record the slice 125 walkthrough`
