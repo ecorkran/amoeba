@@ -8,6 +8,17 @@ shapes observed on Context Forge 0.19.x (20261020):
   array (``tests/fixtures/cf/list_initiatives_a.json``); without ``-a`` it
   exits 2, as an unexpected invocation.
 
+Plan reads (slice 123) answer from the directory ``CF_STUB_PLAN_DIR``:
+
+* ``cf list initiatives --json -a`` prints ``initiatives.json`` (the captured
+  fixture when the directory has none).
+* ``cf list slices <index> --json`` prints ``slices-<index>.json``. When there is
+  none, it prints the captured error document on **stderr** and exits 1, as the
+  real ``cf`` does for an initiative without a slice plan.
+* ``<name>.<n>.json`` files (``slices-120.1.json``, ``slices-120.2.json``) answer
+  successive calls in order, the last repeating, so a test can change the plan
+  between reads. A ``<name>.count`` file in the directory holds the call count.
+
 ``CF_STUB_MODE`` selects a failure; ``CF_STUB_LOG`` appends each invocation's
 arguments. ``write_cf_stub`` is the only definition; a test puts the returned
 directory first on ``PATH``.
@@ -23,8 +34,12 @@ from pathlib import Path
 INITIATIVES_FIXTURE = (
     Path(__file__).parent / "fixtures" / "cf" / "list_initiatives_a.json"
 )
+SLICE_ERROR_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "cf" / "list_slices_error.json"
+)
 MODE_ENV = "CF_STUB_MODE"
 LOG_ENV = "CF_STUB_LOG"
+PLAN_DIR_ENV = "CF_STUB_PLAN_DIR"
 STUB_NAME = "cf"
 
 
@@ -61,7 +76,8 @@ _SCRIPT = textwrap.dedent(
         print("stub cf: unexpected arguments", arguments, file=sys.stderr)
         sys.exit(2)
     is_status = arguments[0] == "status"
-    if not is_status and "-a" not in arguments:
+    is_slices = arguments[:2] == ["list", "slices"]
+    if not is_status and not is_slices and "-a" not in arguments:
         print("stub cf: initiatives needs -a", arguments, file=sys.stderr)
         sys.exit(2)
     if mode == {fail!r}:
@@ -72,10 +88,47 @@ _SCRIPT = textwrap.dedent(
     if mode == {empty!r}:
         sys.exit(0)
     wrong = mode == {wrong_form!r}
+    plan_dir = os.environ.get({plan_env!r})
+
+    def plan_text(name):
+        # name.<n>.json files answer in order, one per call, the last one
+        # repeating; else name.json. None when the plan dir has neither.
+        if not plan_dir:
+            return None
+        numbered = sorted(
+            (entry for entry in os.listdir(plan_dir)
+             if entry.startswith(name + ".") and entry.endswith(".json")
+             and entry[len(name) + 1:-5].isdigit()),
+            key=lambda entry: int(entry[len(name) + 1:-5]),
+        )
+        if numbered:
+            counter = os.path.join(plan_dir, name + ".count")
+            seen = int(open(counter).read()) if os.path.exists(counter) else 0
+            with open(counter, "w") as handle:
+                handle.write(str(seen + 1))
+            chosen = numbered[min(seen, len(numbered) - 1)]
+            return open(os.path.join(plan_dir, chosen), encoding="utf-8").read()
+        path = os.path.join(plan_dir, name + ".json")
+        return open(path, encoding="utf-8").read() if os.path.exists(path) else None
+
     if is_status:
         print("[]" if wrong else '{{"project": "stub"}}')
+    elif is_slices:
+        text = plan_text("slices-" + arguments[2])
+        if text is None:
+            # CF prints this document on stderr, and exits 1.
+            print(
+                open({error_fixture!r}, encoding="utf-8").read(),
+                end="",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print("[]" if wrong else text)
     else:
-        print("{{}}" if wrong else open({fixture!r}, encoding="utf-8").read())
+        text = plan_text("initiatives")
+        if text is None:
+            text = open({fixture!r}, encoding="utf-8").read()
+        print("{{}}" if wrong else text, end="")
     """
 )
 
@@ -95,6 +148,8 @@ def write_cf_stub(bin_dir: Path) -> Path:
             empty=CfMode.EMPTY.value,
             wrong_form=CfMode.WRONG_FORM.value,
             fixture=str(INITIATIVES_FIXTURE),
+            error_fixture=str(SLICE_ERROR_FIXTURE),
+            plan_env=PLAN_DIR_ENV,
         ),
         encoding="utf-8",
     )
