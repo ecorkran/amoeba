@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from collections.abc import Callable
@@ -32,6 +33,7 @@ from amoeba.store import NodeKind, Store
 from runner.observe_support import Clock, FakeCf, Host, document
 from runner.tick_support import PROJECT, Rig, link
 
+FIXTURES = Path(__file__).parents[1] / "fixtures" / "cf"
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
 TIMEOUT = 8.0
 
@@ -110,7 +112,7 @@ def test_a_good_cf_passes_after_two_separate_calls() -> None:
     assert probe_link("cf-1", cf, _budget(), TIMEOUT) == ProbePassed()
     assert cf.calls == [
         ["cf", "status", "--json", "-p", "cf-1"],
-        ["cf", "list", "initiatives", "--json", "-p", "cf-1"],
+        ["cf", "list", "initiatives", "--json", "-a", "-p", "cf-1"],
     ]
 
 
@@ -151,6 +153,23 @@ def test_empty_or_wrongly_shaped_output_fails(command: str, output: str) -> None
 
     assert isinstance(result, ProbeFailed)
     assert "cf-1" in result.detail and "JSON" in result.detail
+
+
+def test_the_probe_passes_on_the_captured_initiatives_output() -> None:
+    cf = FakeCf()
+    cf.stdout["list"] = (FIXTURES / "list_initiatives_a.json").read_text()
+
+    assert probe_link("cf-1", cf, _budget(), TIMEOUT) == ProbePassed()
+
+
+def test_an_initiative_missing_its_index_fails_the_probe() -> None:
+    cf = FakeCf()
+    cf.stdout["list"] = json.dumps([{"name": "n", "isChecked": False}])
+
+    result = probe_link("cf-1", cf, _budget(), TIMEOUT)
+
+    assert isinstance(result, ProbeFailed)
+    assert "plan model rejects" in result.detail and "cf-1" in result.detail
 
 
 def test_a_non_zero_exit_names_the_exit_code() -> None:
@@ -228,7 +247,7 @@ def test_the_stub_cf_in_each_mode(
     if mode is CfMode.GOOD:
         assert stub_path.read_text().splitlines() == [
             "status --json -p cf-1",
-            "list initiatives --json -p cf-1",
+            "list initiatives --json -a -p cf-1",
         ]
 
 

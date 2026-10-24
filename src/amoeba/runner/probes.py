@@ -27,16 +27,15 @@ from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import OUTPUT_HEAD_CHARS, CfCallFailed, CfRun, run_cf
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.runner.launch import mint_run_id
+from amoeba.runner.lifecycle.plan_read import (
+    CF_EXECUTABLE,
+    CF_INITIATIVES_COMMAND,
+    CF_PROJECT_FLAG,
+    CF_STATUS_COMMAND,
+)
+from amoeba.upstream.context_forge import PlanParseError, parse_initiatives
 
 logger = logging.getLogger(__name__)
-
-CF_EXECUTABLE: Final = "cf"
-CF_PROJECT_FLAG: Final = "-p"
-CF_JSON_FLAG: Final = "--json"
-
-#: The two commands probed, without the executable or the ``-p <id>`` suffix.
-CF_STATUS_COMMAND: Final = ("status", CF_JSON_FLAG)
-CF_INITIATIVES_COMMAND: Final = ("list", "initiatives", CF_JSON_FLAG)
 
 
 def probe_sq(
@@ -88,14 +87,29 @@ def _is_json_object(value: object) -> bool:
     return isinstance(value, dict)
 
 
-def _is_json_array(value: object) -> bool:
-    return isinstance(value, list)
+def _status_problem(stdout: str) -> str | None:
+    """Why ``cf status`` output is not a JSON object, or ``None`` if it is."""
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError:
+        return "printed no JSON object"
+    return None if _is_json_object(parsed) else "did not print a JSON object"
 
 
-#: Each probed command with the top-level form its output must have.
+def _initiatives_problem(stdout: str) -> str | None:
+    """Why the initiatives output is not the full plan model, or ``None``."""
+    try:
+        parse_initiatives(stdout)
+    except PlanParseError as error:
+        # Specific: the probe's job is to turn this into a failed-link answer.
+        return f"printed output the plan model rejects ({' '.join(str(error).split())})"
+    return None
+
+
+#: Each probed command with the check its output must pass.
 _PROBES: Final = (
-    (CF_STATUS_COMMAND, _is_json_object, "object"),
-    (CF_INITIATIVES_COMMAND, _is_json_array, "array"),
+    (CF_STATUS_COMMAND, _status_problem),
+    (CF_INITIATIVES_COMMAND, _initiatives_problem),
 )
 
 
@@ -103,7 +117,7 @@ def probe_link(
     cf_project_id: str, run: CfRun, budget: TickBudget, timeout_seconds: float
 ) -> ProbeResult:
     """Probe one CF link: both commands, each a separate budgeted call."""
-    for command, has_form, form in _PROBES:
+    for command, problem_with in _PROBES:
         if not budget.allows_call():
             return ProbeCutOff()
         argv = [CF_EXECUTABLE, *command, CF_PROJECT_FLAG, cf_project_id]
@@ -114,12 +128,8 @@ def probe_link(
         head = completed.stdout[:OUTPUT_HEAD_CHARS]
         if completed.returncode != 0:
             return ProbeFailed(f"`{shown}` exited {completed.returncode}: {head}")
-        try:
-            parsed = json.loads(completed.stdout)
-        except json.JSONDecodeError:
-            return ProbeFailed(f"`{shown}` printed no JSON {form}: {head!r}")
-        if not has_form(parsed):
-            return ProbeFailed(f"`{shown}` did not print a JSON {form}: {head!r}")
+        if (problem := problem_with(completed.stdout)) is not None:
+            return ProbeFailed(f"`{shown}` {problem}: {head!r}")
     return ProbePassed()
 
 

@@ -4,7 +4,9 @@ No test runs the real ``cf``. The stub answers the two probe commands, in the
 shapes observed on Context Forge 0.19.x (20261020):
 
 * ``cf status --json -p <id>`` prints a JSON object.
-* ``cf list initiatives --json -p <id>`` prints a JSON array.
+* ``cf list initiatives --json -a -p <id>`` prints the captured initiatives
+  array (``tests/fixtures/cf/list_initiatives_a.json``); without ``-a`` it
+  exits 2, as an unexpected invocation.
 
 ``CF_STUB_MODE`` selects a failure; ``CF_STUB_LOG`` appends each invocation's
 arguments. ``write_cf_stub`` is the only definition; a test puts the returned
@@ -18,6 +20,9 @@ import textwrap
 from enum import StrEnum
 from pathlib import Path
 
+INITIATIVES_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "cf" / "list_initiatives_a.json"
+)
 MODE_ENV = "CF_STUB_MODE"
 LOG_ENV = "CF_STUB_LOG"
 STUB_NAME = "cf"
@@ -56,6 +61,9 @@ _SCRIPT = textwrap.dedent(
         print("stub cf: unexpected arguments", arguments, file=sys.stderr)
         sys.exit(2)
     is_status = arguments[0] == "status"
+    if not is_status and "-a" not in arguments:
+        print("stub cf: initiatives needs -a", arguments, file=sys.stderr)
+        sys.exit(2)
     if mode == {fail!r}:
         print("stub cf: failed", file=sys.stderr)
         sys.exit(1)
@@ -67,7 +75,7 @@ _SCRIPT = textwrap.dedent(
     if is_status:
         print("[]" if wrong else '{{"project": "stub"}}')
     else:
-        print("{{}}" if wrong else "[]")
+        print("{{}}" if wrong else open({fixture!r}, encoding="utf-8").read())
     """
 )
 
@@ -86,6 +94,7 @@ def write_cf_stub(bin_dir: Path) -> Path:
             sleep=CfMode.SLEEP.value,
             empty=CfMode.EMPTY.value,
             wrong_form=CfMode.WRONG_FORM.value,
+            fixture=str(INITIATIVES_FIXTURE),
         ),
         encoding="utf-8",
     )
