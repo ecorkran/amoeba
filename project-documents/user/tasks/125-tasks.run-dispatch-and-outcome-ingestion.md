@@ -46,7 +46,7 @@ pricedRounds: 1
 
 **Commit cadence:** one commit per task. A commit never holds untested behavior. Run `uv run ruff format .` before each commit. Commit type is `feat:` for new behavior, `refactor:` for behavior-preserving change, `test:` for test-only work, `docs:` for contract text.
 
-**Task-level additions to the LLD** (code facts the LLD does not state; each resolves a placement, not a product decision):
+**Task-level additions to the LLD** (code facts the LLD does not state, checked against the code on 20261024; each resolves a placement, not a product decision):
 - **Planner tuple location.** The LLD puts the production tuple in `tenant.py`. In the code it is `PRODUCTION_PLANNERS` in `runner/factory.py`. Change it there.
 - **The stem rule moves to `amoeba.upstream.context_forge`.** The read-back observer (`process/observers/cf_readback.py`) must parse an index from `fileSlice`, but `amoeba.process` may not import `amoeba.runner` (`tests/test_import_boundaries.py`, Rule 10). Task 2.1 defines one stem parser in the upstream package, and `runner/lifecycle/slugs.py` delegates to it.
 - **The detection key call site.** The LLD says detection's "directory source" forms the key. `DirectoryReviewSource` is in `store/review_sources.py`, which may not import `amoeba.process` (Rule 1). The key is actually formed in `process/review_scan.py`'s `examine` (`str(detected.path)`, `content_digest`). Task 2.8 makes `examine` and ingest share `detection_key` there.
@@ -57,7 +57,7 @@ pricedRounds: 1
 - **Test doubles.** Pure functions get table-driven tests. Store-backed tests use `Store.open_temporary()`. Tick-level tests use `tests/runner/tick_support.py` and `plan_tick_support.py` with the stub `cf` (`tests/cf_stub.py`) and stub `sq` (`tests/sq_stub.py`) on `PATH` under a temporary `HOME`. Nothing sleeps or runs a real `cf` or `sq`.
 - **Test naming and location.** Tests are named for the rule they prove (LLD, Verification Walkthrough step 1). New test packages: `tests/runner/dispatch/` and `tests/runner/ingest/` (each with `__init__.py`).
 
-**Section map.** 1 baseline; 2 contract changes (stem rule, `cf_write`, observer, migration, flag, report, decision, detection key, listing, contract suite, contract text); 3 outcome document and stub `sq`; 4 ingestion; 5 dispatch core (pure); 6 stub `cf` and the pointer write; 7 Observe, view and launch wiring; 8 reissue; 9 pointer move; 10 production wiring, contract text and final validation.
+**Section map.** 1 baseline; 2 contract changes (stem rule, `cf_write`, observer, migration, flag, report, decision, detection key, contract text); 3 outcome document and stub `sq`; 4 ingestion; 5 dispatch core (pure); 6 stub `cf` and the pointer write; 7 Observe, view and launch wiring; 8 reissue; 9 pointer move; 10 production wiring, contract text and final validation.
 
 **Overrun fallback** (LLD, Implementation Notes): Sections 8 and 9 are independent of each other and of Sections 5–7. If the slice overruns, either can be split into a follow-on slice through a plan edit. Until Section 8 lands, Task 7.3's Act blocks a `REISSUE` step on `HUMAN` instead of launching.
 
@@ -108,7 +108,8 @@ Per the LLD, D10 "`cf_write`". Edit `store/journal_models.py` and its tests (`te
 
 Per the LLD, D10 bullets on the observer, D2 "Read-back". Edit `process/observers/cf_readback.py` and `tests/test_observer_cf_readback.py`.
 
-- [ ] Capture one real fixture: from the repo root (a registered CF worktree), run `cf get --json -p <amoeba's CF project id>` (read-only) and save the bytes as `tests/fixtures/cf/cf_get_worktree.json`. Confirm it carries `fileSlice`, `projectPath` and a `worktree` object with `id`. Add a README entry with the date
+- [ ] Confirm `cf worktree list --json` has an entry whose `worktreePath` is the repo root. If none does, write `BLOCKED:` under this task (the worktree-form fixture cannot be captured) and stop. Do not register a worktree yourself
+- [ ] Capture one real fixture: from the repo root, run `cf get --json -p <amoeba's CF project id>` (read-only) and save the bytes as `tests/fixtures/cf/cf_get_worktree.json`. Confirm it carries `fileSlice`, `projectPath` and a `worktree` object with `id`. Add a README entry with the date
 - [ ] `CFProjectRecord` reads `worktree.id` and `projectPath` in addition to the fields it reads today
 - [ ] When the entry has `checkout`, run `cf get` with `cwd=checkout`. Without it (entries before this slice), run with no working directory
 - [ ] When `expected_slice_index` is present: `fileSlice` parsed by `parse_slice_stem` to that index is a match; another index is `NotApplied`; an absent field or a `fileSlice` that does not parse is `Unknown`
@@ -131,13 +132,14 @@ Per the LLD, "Database / Storage Schema" and D8. Create `store/schema/011_journa
   - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add the awaits_routing journal flag (migration 011)`
 
 ### Task 2.5: Issuer resolutions set the flag; `unrouted_outcomes`, with tests
-**Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 3
 
 Per the LLD, D8. Edit `store/journal.py` (and `store/sql_journal.py` for the query).
 
 - [ ] Every issuer resolution of an `sq_run` entry through `journal_resolve` sets `awaits_routing = 1` in the same transaction. Recovery resolutions (`adopted`, `not_applied`, `unknown`) and every non-`sq_run` kind leave it null. Identify the recovery path by the code that performs it, not by a caller-supplied flag
 - [ ] `unrouted_outcomes(project_id) -> list[JournalEntry]`: entries with `awaits_routing = 1`, oldest `issued_at` first
-- [ ] Tests: a `completed` and a `failed` issuer resolution each set the flag; a recovery `not_applied` does not; a resolved `cf_write` does not; `unrouted_outcomes` returns them oldest first and only for its project; an `EXPLAIN QUERY PLAN` of its SQL names `idx_journal_awaits_routing`
+- [ ] Show the flag in `amoeba inspect journal` (LLD, "API Contracts"): an `awaits_routing` column in `inspection/core.py` (`journal_rows`) and the key in `--json`
+- [ ] Tests: a `completed` and a `failed` issuer resolution each set the flag; a recovery `not_applied` does not; a resolved `cf_write` does not; `unrouted_outcomes` returns them oldest first and only for its project; an `EXPLAIN QUERY PLAN` of its SQL names `idx_journal_awaits_routing`; the journal listing shows `true` for a flagged entry and `false` otherwise, in table and JSON output (`tests/test_cli_inspect.py` or `tests/inspection/`)
 - **Success Criteria**:
   - [ ] Store tests, `ruff` and `pyright` pass. Commit: `feat: mark resolved sq_run entries as awaiting routing`
 
@@ -148,10 +150,10 @@ Per the LLD, D10 "`record_runner_report`". Edit `store/runner_report.py`, `store
 
 - [ ] Add `RunnerReview(verdict, detection)` (frozen) and export it from `amoeba.store`
 - [ ] New signature `record_runner_report(entry_id, reviews: Sequence[RunnerReview], *, outcome, result)`. `outcome` other than `completed` or `failed` raises `ValueError`. One transaction: every review's existing checks, then each verdict and ledger row in order, then the resolution, which sets `awaits_routing`
-- [ ] Update callers: `tests/contract/runner_tenant.py` (the stand-in Runner) and `tests/test_public_api.py`
+- [ ] Update callers: `tests/contract/runner_tenant.py` (the stand-in Runner) and `tests/test_public_api.py`. Fix any contract-suite break in the stand-in (`runner_tenant.py`, `standin.py`), not in the contract assertions
 - [ ] Tests: zero reviews resolves and flags the entry; two reviews record both verdicts and ledger rows in order; a failing check on the second review writes nothing at all (first verdict absent, entry unresolved); `outcome="paused"` raises `ValueError`; `failed` resolves `failed` and still flags
 - **Success Criteria**:
-  - [ ] Store tests, `ruff` and `pyright` pass. Commit: `feat: record every part of a runner review in one transaction`
+  - [ ] Store tests, `uv run pytest tests/contract`, `ruff` and `pyright` pass. Commit: `feat: record every part of a runner review in one transaction`
 
 ### Task 2.7: A routing decision clears the flag, with tests
 **Owner**: Junior AI | **Dependencies**: 2.6 | **Effort**: 1
@@ -175,25 +177,8 @@ Per the LLD, D7 last bullet and D10 "`detection_key`"; see "Task-level additions
 - **Success Criteria**:
   - [ ] Tests, `ruff` and `pyright` pass. Commit: `refactor: form the review detection key in one function`
 
-### Task 2.9: Journal listing shows `awaits_routing`, with tests
-**Owner**: Junior AI | **Dependencies**: 2.8 | **Effort**: 1
-
-Per the LLD, "API Contracts" (`amoeba inspect journal`). Edit `inspection/core.py` (`journal_rows`) and its tests under `tests/inspection/` or `tests/test_cli_inspect.py`.
-
-- [ ] Add an `awaits_routing` column to the journal listing, and the key to `--json`
-- [ ] Tests: a flagged entry shows `true` in table and JSON output; an unflagged one shows `false`
-- **Success Criteria**:
-  - [ ] Inspection tests, `ruff` and `pyright` pass. Commit: `feat: show awaits_routing in the journal listing`
-
-### Task 2.10: Contract suite green
-**Owner**: Junior AI | **Dependencies**: 2.9 | **Effort**: 1
-
-- [ ] Run `uv run pytest tests/contract -v` once. Fix any break caused by Tasks 2.2–2.8 in the stand-in Runner (`tests/contract/runner_tenant.py`, `standin.py`), not in the contract assertions
-- **Success Criteria**:
-  - [ ] Contract suite and full suite pass. Commit (if anything changed): `test: update the contract stand-in for the 125 store changes`
-
-### Task 2.11: Contract text for the store, read-back and evidence changes
-**Owner**: Junior AI | **Dependencies**: 2.10 | **Effort**: 2
+### Task 2.9: Contract text for the store, read-back and evidence changes
+**Owner**: Junior AI | **Dependencies**: 2.8 | **Effort**: 2
 
 Per the LLD, D10 "Order" and "Provides to Other Slices" (Contract documents). Text only.
 
@@ -208,11 +193,11 @@ Per the LLD, D10 "Order" and "Provides to Other Slices" (Contract documents). Te
 ## Section 3: Outcome document and the stub `sq`
 
 ### Task 3.1: `checkpoint`, `failure` and `reviews` on the outcome document, with tests
-**Owner**: Junior AI | **Dependencies**: 2.11 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 2.9 | **Effort**: 3
 
 Per the LLD, D7 (Technical Scope), "API Contracts" (Outcome document) and "Patterns and Conventions". Edit `process/sq_outcome.py` and `tests/test_observer_sq_outcome.py`.
 
-- [ ] Capture real fixtures into a new `tests/fixtures/sq_outcomes/` with `sq runs wait --timeout 0 --json <run id>` (read-only) on local runs (`~/.config/squadron/runs/`): a completed run with a non-empty `reviews` list; a completed run whose last review has non-null `paths`; a failed run with `failure`; a paused run with `checkpoint`. Choose run ids by inspecting the output, not by name. If no local paused run yields a document within 60 seconds, copy a real completed document, replace `outcome` and add a `checkpoint` whose keys follow the LLD's Interfaces Required list, and name it `…-paused-edited.json`. Record each file in the README with the date
+- [ ] Capture real fixtures into a new `tests/fixtures/sq_outcomes/` with `sq runs wait --timeout 0 --json <run id>` (read-only) on local runs (`~/.config/squadron/runs/`): a completed run with a non-empty `reviews` list; a completed run whose last review has non-null `paths`; a failed run with `failure`; a paused run with `checkpoint`. Choose run ids by inspecting the output, not by name. Paused candidates are the run-state files containing `"status": "paused"`; their documents carry `checkpoint`. If no local run yields one of the four kinds, write `BLOCKED:` under this task naming the missing kind and stop. Never compose a fixture by hand. Record each file in the README with the date
 - [ ] `RunCheckpoint` gains every field in the LLD (all optional; `None` means unknown). Add `RunFailure` and `RunReview`. `RunOutcomeDocument` gains `checkpoint`, `failure`, `reviews`
 - [ ] `CheckpointKind` and `FailureKind` (`StrEnum`, values from the LLD). The model keeps raw `str | None`. Parse functions return a member, or an explicit unknown value that carries the raw text (for example `UnknownKind(raw)`); `None` stays `None`. Never map to a near match
 - [ ] Export the new names from `amoeba.process`
@@ -244,7 +229,8 @@ Per the LLD, D6 "The block, by outcome". Create `runner/ingest/__init__.py`, `ru
 - [ ] A pure function from a finished run (122's `Finished`: `RunEnded`, `RunVanished`; `LaunchFailed` stays with 122's path) to `BlockPlan(kind, context, payload) | None` and the entry outcome, following every row of the D6 table
 - [ ] Define the block reasons `failed`, `orphaned`, `vanished` once here (reuse 122's `REASON_VANISHED` by moving it, not copying). `started_before_crash` is added here too, for Task 8.1
 - [ ] `SQ_CHECKPOINT` blocks carry no payload; context is `paused: <kind> at <step>, run <run_id>`, with `unknown` for a null kind or step
-- [ ] Tests (table-driven, every D6 row): completed gives no block and `completed`; paused gives `SQ_CHECKPOINT`; failed with each `FailureKind`, an unknown kind and a null failure gives `HUMAN` with `{reason: failed, run_id, failure}`; orphaned and vanished give `HUMAN` and `failed`
+- [ ] Squadron text copied into a block's context or payload (checkpoint kind and step, `failure.message`) is cut to 122's `STDERR_TAIL_LIMIT_BYTES` bound (LLD, Special Considerations "Security"). Reuse that constant; do not define another
+- [ ] Tests (table-driven, every D6 row): completed gives no block and `completed`; paused gives `SQ_CHECKPOINT`; failed with each `FailureKind`, an unknown kind and a null failure gives `HUMAN` with `{reason: failed, run_id, failure}`; orphaned and vanished give `HUMAN` and `failed`; an oversized `failure.message` is cut to the bound
 - **Success Criteria**:
   - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: map finished run outcomes to blocked states`
 
@@ -270,20 +256,21 @@ Per the LLD, D6 and D7 "`ReviewUnknown`" (block rules). Create `runner/ingest/re
 - [ ] `runner/factory.py` captures the `sq --version` label once at start (120's `version_label`) and passes it to whatever builds ingest. No per-tick capture
 - [ ] Order: block (skipped if the node is already blocked), then one `record_runner_report(entry, reviews, outcome=…, result=…)`
 - [ ] Result keys `run_id`, `outcome`, `status`, `outcome_document` (the polled document, verbatim), `verdict_ids` (part order, empty if nothing recorded), `review_fault` (null or the `ReviewUnknown` reason). Define them once; drop 122's `checkpoint`/`paused_at` result keys in favor of `outcome_document`
-- [ ] Review unknown with no outcome block: block `HUMAN` with `{fault_kind: review_unknown, path, reason}`. With an outcome block: that block stands with `review_fault` added to its payload. Paused with review unknown: block `HUMAN`, not `SQ_CHECKPOINT`
+- [ ] Review unknown with no outcome block: block `HUMAN` with `{fault_kind: review_unknown, path, reason}`. With an outcome block: that block stands with `review_fault` added to its payload. Paused with review unknown: block `HUMAN`, not `SQ_CHECKPOINT`. The `reason` is cut to the same bound as Task 4.1
 - [ ] Add `FaultKind.REVIEW_UNKNOWN` in `runner/faults.py`
 - [ ] `finish.record` keeps the `LaunchFailed` path (122) and delegates `RunEnded`/`RunVanished` to `ingest.record`
 - [ ] Tests (store-backed, files on disk): completed records on the slice node with `sq_run_id`, a `runner_issued` ledger row, entry `completed` with `verdict_ids` and `awaits_routing`; split review records every part in one transaction; empty list resolves and flags; each unknown case blocks with `review_unknown`, including paused (blocked `HUMAN`); failed plus unknown keeps the failed block with `review_fault`; calling `record` twice gives one block and one verdict per part (re-entry)
 - **Success Criteria**:
   - [ ] Tests, the full `tests/runner` suite, `ruff` and `pyright` pass. Commit: `feat: ingest finished runs with their reviews`
 
-### Task 4.4: Detection does not re-record an ingested review
+### Task 4.4: Detection does not re-record an ingested review, completed or paused
 **Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 2
 
-Per the LLD, Success Criteria "Ingestion of a completed run". Add a test to `tests/runner/ingest/test_record.py` or an e2e test using `tests/detection_e2e_harness.py`.
+Per the LLD, Success Criteria "Ingestion of a completed run" and D6 ("Detection must not take that file as external either"). Add a test to `tests/runner/ingest/test_record.py` or an e2e test using `tests/detection_e2e_harness.py`.
 
 - [ ] Ingest a completed run whose review file sits in a watched reviews directory, then run one detection scan of that directory
 - [ ] Assert the scan writes no new verdict and no new ledger row, and the existing row is `runner_issued`
+- [ ] Repeat for a paused run whose last review is the review behind its checkpoint verdict
 - **Success Criteria**:
   - [ ] Test, `ruff` and `pyright` pass. Commit: `test: prove detection skips a review the Runner ingested`
 
@@ -381,18 +368,29 @@ Per the LLD, Interfaces Required (Context Forge) and "Technology Choices". Edit 
 - **Success Criteria**:
   - [ ] Tests, `ruff` and `pyright` pass. Commit: `test: route stub cf pointer writes by working directory`
 
-### Task 6.2: `issue_pointer_write` and `read_back`, with tests
-**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 3
+### Task 6.2: `issue_pointer_write` and `read_back` answers, with tests
+**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 2
 
 Per the LLD, D2 and D1 "The read-back confirms it". Create `runner/dispatch/pointer.py` and `tests/runner/dispatch/test_pointer.py`.
 
-- [ ] `issue_pointer_write(store, action, budget, ...)`: journal a `cf_write` with `project`, `checkout` (absolute), `expected={}`, `expected_slice_index`; run `cf set -p <id> slice <index>` with `cwd=checkout` through `TickBudget` and `tick_call_timeout_seconds` (122's injected runner and `runner/cf_call.py`); then `read_back`
+- [ ] `issue_pointer_write(store, action, budget, ...)`: journal a `cf_write` with `project`, `checkout` (absolute), `expected={}`, `expected_slice_index`; run `cf set -p <id> slice <index>` with `cwd=checkout` through `TickBudget` and `tick_call_timeout_seconds` (122's injected runner and `runner/cf_call.py`); then `read_back`. It returns the `cf set` result and the read-back answer; it writes nothing else (Task 6.3 applies them)
 - [ ] `read_back(store, entry, expected_checkout, budget, ...)` calls the observer function from Task 2.3, then checks `project_path == checkout.path` and `worktree_id` equal (absent when no worktrees). Returns an answer: `Confirmed(stem)`, `Mismatch(reason)`, `Unknown(reason)`, or `ReadFailed(reason)`
-- [ ] Outcome handling, per D2: confirmed resolves `completed` with `{cf_updated_at, file_slice, worktree_id, project_path}` and sets the slice node's `cf.slice_name` via `update_cf_reference` when it differs; mismatch or another index blocks the step `HUMAN` with `pointer_write_failed` and resolves `failed`; `Unknown` goes through `journal_escalate` at once; `ReadFailed` leaves the entry unresolved; `cf set` non-zero resolves `failed` and blocks with the bounded stderr head (reuse 122's tail bound); `cf set` timeout is treated as a cut-off (entry unresolved, read back next tick)
-- [ ] Add `FaultKind.POINTER_WRITE_FAILED` and `FaultKind.CHECKOUT_UNRESOLVED`
-- [ ] Tests (store plus stub `cf`): each D2 outcome above, one test each; `slice_name` set from the stem; every subprocess goes through `TickBudget` (122's injected-runner assertion pattern)
+- [ ] Tests (stub `cf`): each answer from the matching stub knob (Task 6.1); the journaled parameters; every subprocess goes through `TickBudget` (122's injected-runner assertion pattern)
 - **Success Criteria**:
   - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: write and read back the CF slice pointer in the checkout`
+
+### Task 6.3: Apply pointer-write outcomes, with tests
+**Owner**: Junior AI | **Dependencies**: 6.2 | **Effort**: 2
+
+Per the LLD, D2 outcome bullets. Edit `runner/dispatch/pointer.py`; extend `tests/runner/dispatch/test_pointer.py`.
+
+- [ ] Add `FaultKind.POINTER_WRITE_FAILED`
+- [ ] `Confirmed` resolves `completed` with `{cf_updated_at, file_slice, worktree_id, project_path}` and sets the slice node's `cf.slice_name` via `update_cf_reference` when it differs
+- [ ] `Mismatch` or another index blocks the step `HUMAN` with `pointer_write_failed` and resolves `failed`. `Unknown` goes through `journal_escalate` at once. `ReadFailed` leaves the entry unresolved
+- [ ] `cf set` non-zero resolves `failed` and blocks with the stderr head bounded by 122's tail bound. A `cf set` timeout is a cut-off: entry unresolved, read back next tick
+- [ ] Tests (store plus stub `cf`): one per outcome above; `slice_name` set from the stem
+- **Success Criteria**:
+  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: resolve or block on the pointer read-back`
 
 ---
 
@@ -401,11 +399,11 @@ Per the LLD, D2 and D1 "The read-back confirms it". Create `runner/dispatch/poin
 `runner/tick.py` is near 255 lines. Put new stage bodies in `runner/dispatch/` (for example `dispatch/stage.py`) and keep `tick.py` to calls, near 300 lines.
 
 ### Task 7.1: Observe reads back pointers, with tests
-**Owner**: Junior AI | **Dependencies**: 6.2 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 6.3 | **Effort**: 3
 
 Per the LLD, Data Flow (observe), D2 "A read that fails" and D3 "CF still points". Edit the tick's observe stage; add `tests/runner/dispatch/test_observe_pointer.py`.
 
-- [ ] Each unresolved `cf_write` entry gets `read_back` under `TickBudget`, handled as in Task 6.2. A read still failing once `launch_grace_seconds` has passed since `issued_at` goes through `journal_escalate` with the last failure as its reason
+- [ ] Each unresolved `cf_write` entry gets `read_back` under `TickBudget`, handled as in Task 6.3. A read still failing once `launch_grace_seconds` has passed since `issued_at` goes through `journal_escalate` with the last failure as its reason
 - [ ] Each current step whose journal says `POINTED` gets one read-back; the answer becomes `pointer_confirmed` for Task 5.2. Anything but a confirmed index is `False`
 - [ ] Observe scope stays 124's predicate (`drives_anything()` or a run in flight)
 - [ ] Tests: a cut-off read-back completes on the next tick; a read-back with an absent field escalates at once; a read that keeps failing escalates once the grace has passed and not before; a `POINTED` step whose pointer was overwritten reads `pointer_confirmed=False`
@@ -418,7 +416,7 @@ Per the LLD, Data Flow (observe), D2 "A read that fails" and D3 "CF still points
 Per the LLD, D1 (`CheckoutUnresolved` blocks) and State Management (per-tick, in memory). Edit the tick's view building.
 
 - [ ] For each current pipeline step: read its entries (`journal_entries(project, node_id=step)`), its slice's latest observed snapshot (`latest_cf_snapshots`), resolve the checkout, compute `dispatch_state`, and compute the project's held checkouts. Built each tick, never cached
-- [ ] `CheckoutUnresolved` blocks the step on `HUMAN` with `{fault_kind: checkout_unresolved, index, reason}` (122's node block path) and the step gets no action this tick
+- [ ] Add `FaultKind.CHECKOUT_UNRESOLVED`. `CheckoutUnresolved` blocks the step on `HUMAN` with `{fault_kind: checkout_unresolved, index, reason}` (122's node block path) and the step gets no action this tick
 - [ ] Tests (tick-level): no range holding the index, two ranges holding it, and a missing path each block with `checkout_unresolved`
 - **Success Criteria**:
   - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: build per-step dispatch facts each tick`
@@ -467,7 +465,7 @@ Per the LLD, D9. Edit `runner/launch.py` (keep it near 300 lines; move the reiss
 ## Section 9: Pointer moved during a run (D11)
 
 ### Task 9.1: `pointer_moved`, with tests
-**Owner**: Junior AI | **Dependencies**: 8.1 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 2
 
 Per the LLD, D11. Create `runner/dispatch/pointer_watch.py` and `tests/runner/dispatch/test_pointer_watch.py`.
 
@@ -492,7 +490,7 @@ Per the LLD, D11 bullets on escalation. Wire into observe; add `FaultKind.POINTE
 ## Section 10: Production wiring, contract text, final validation
 
 ### Task 10.1: `DispatchPlanner` in production, with tests
-**Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 8.1, 9.2 | **Effort**: 2
 
 - [ ] `PRODUCTION_PLANNERS = (HumanStepPlanner(), DispatchPlanner())` in `runner/factory.py`
 - [ ] Update `tests/runner/test_factory.py` to assert the tuple and order
