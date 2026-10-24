@@ -9,16 +9,25 @@ dependencies:
 - 123
 projectState: Slices 120–123 are merged. `amoeba.runner` has the tick (`ProjectTick.run`,
   with a `# [apply intents - slice 124]` slot before observe), `ProjectView(project_id,
-  now, tree, in_flight, link_probes)` with `ready_unbusy()`, `decide()` with a
-  duplicate-action rule, and `PRODUCTION_PLANNERS = ()` in `runner/factory.py`.
-  `amoeba.runner.lifecycle` has `LifecycleStep`, `StepLevel`, `STEP_MAP`,
-  `LifecycleTree`, `HumanStepPlanner` (plans over `view.tree.ready_steps()`) and
-  `BlockHumanStep`. The store has `pending_intents`, `desired_state(s)`,
-  `acknowledge_message(..., desired_state=)`, `SetDesiredState`, `ClearDesiredState`
-  and `DesiredState`. `amoeba.runner.intent` and `STEP_SEQUENCE` do not exist.
+  now, tree, in_flight, link_probes)` with `ready_unbusy()`, `decide()` with a duplicate-action
+  rule, and `PRODUCTION_PLANNERS = ()` in `runner/factory.py`. `amoeba.runner.lifecycle`
+  has `LifecycleStep`, `StepLevel`, `STEP_MAP`, `LifecycleTree`, `HumanStepPlanner`
+  (plans over `view.tree.ready_steps()`) and `BlockHumanStep`. The store has `pending_intents`,
+  `desired_state(s)`, `acknowledge_message(..., desired_state=)`, `SetDesiredState`,
+  `ClearDesiredState` and `DesiredState`. `amoeba.runner.intent` and `STEP_SEQUENCE`
+  do not exist.
 dateCreated: 20261023
-dateUpdated: 20261023
+dateUpdated: 20261024
 status: not_started
+turns: 14
+promptTokens: 511947
+cachedTokens: 443194
+cacheWriteTokens: 68735
+completionTokens: 15961
+durationSeconds: 105.5
+costUsd: 0.479187
+usageRounds: 1
+pricedRounds: 1
 ---
 
 ## Context Summary
