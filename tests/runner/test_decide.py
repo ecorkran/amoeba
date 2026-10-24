@@ -10,12 +10,13 @@ from pathlib import Path
 import pytest
 
 from amoeba.runner.decide import Action, LaunchRun, ProjectView, decide
+from amoeba.runner.lifecycle.tree import LifecycleTree
 
 NOW = datetime(2026, 10, 23, tzinfo=UTC)
 
 
 def _view() -> ProjectView:
-    return ProjectView("demo", NOW, (), (), {})
+    return ProjectView("demo", NOW, LifecycleTree(()), (), {})
 
 
 def _launch(node_id: str) -> LaunchRun:

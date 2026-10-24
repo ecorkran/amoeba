@@ -18,7 +18,7 @@ from amoeba.runner.launch import (
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.tick import ProjectTick
-from amoeba.store import Store, SubmissionKind
+from amoeba.store import Node, NodeStatus, Store, SubmissionKind
 from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
 from runner.observe_support import (
     GRACE,
@@ -32,6 +32,20 @@ from runner.observe_support import (
 PROJECT = "demo"
 
 
+def runnable_unbusy(view: ProjectView) -> list[Node]:
+    """Nodes of the view's tree that are runnable and have no run in flight.
+
+    What 122's flat ``runnable_nodes`` list held, so the test planners launch each
+    node once.
+    """
+    busy = {run.entry.node_id for run in view.in_flight}
+    return [
+        node
+        for node in view.tree.nodes
+        if node.status is NodeStatus.RUNNABLE and node.id not in busy
+    ]
+
+
 class Planner:
     """Launches ``noop`` for each runnable node it is shown, and records views."""
 
@@ -43,7 +57,7 @@ class Planner:
         self.views.append(view)
         return [
             LaunchRun(n.id, "noop", {"k": "v"}, self.checkout)
-            for n in view.runnable_nodes
+            for n in runnable_unbusy(view)
         ]
 
 

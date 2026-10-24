@@ -17,6 +17,7 @@ from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import PARAM_RUN_ID, NodeKind, Store, StoreBusyError
 from runner.observe_support import Child, Clock, FakeCf, ScriptedPoll, document
+from runner.tick_support import runnable_unbusy
 
 SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
 
@@ -46,7 +47,9 @@ class Planner:
         self.seen.append(view.project_id)
         if view.project_id in self.raise_for:
             raise self.raise_for[view.project_id]
-        return [LaunchRun(n.id, "noop", {}, self.checkout) for n in view.runnable_nodes]
+        return [
+            LaunchRun(n.id, "noop", {}, self.checkout) for n in runnable_unbusy(view)
+        ]
 
 
 class Rig:
@@ -205,3 +208,39 @@ def test_the_runner_package_has_exactly_one_broad_except() -> None:
     ]
     assert len(broad) == 1, broad
     assert broad[0].startswith("tenant.py")
+
+
+# -- building the view (slice 123) --------------------------------------------
+
+
+def _fail_tree_build(rig: Rig, project_id: str, error: Exception) -> None:
+    def failing(_project_id: str) -> list[Any]:
+        raise error
+
+    rig.stores[project_id].nodes_for_project = failing  # type: ignore[method-assign]
+
+
+def test_a_store_failure_building_the_view_propagates(make_rig: Any) -> None:
+    rig: Rig = make_rig("a", "b")
+    _fail_tree_build(rig, "a", StoreBusyError("locked"))
+
+    with pytest.raises(StoreBusyError):
+        rig.tenant.tick(rig.host)
+
+    assert rig.launches == 0
+
+
+def test_another_exception_building_the_view_is_one_project_fault_and_no_action(
+    make_rig: Any,
+) -> None:
+    rig: Rig = make_rig("a", "b")
+    _fail_tree_build(rig, "a", RuntimeError("tree exploded"))
+
+    rig.tenant.tick(rig.host)
+    rig.tenant.tick(rig.host)
+
+    assert [m.fault_kind for m in rig.stores["a"].open_project_escalations("a")] == [
+        "unexpected_fault"
+    ]
+    assert rig.stores["a"].unresolved_journal_entries("a") == []
+    assert "a" not in rig.planner.seen, "Decide did not run for the project"

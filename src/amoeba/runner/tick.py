@@ -37,6 +37,7 @@ from amoeba.runner.launch import (
     launch,
     mint_run_id,
 )
+from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
@@ -142,15 +143,10 @@ class ProjectTick:
         self, runs: Sequence[ObservedRun], link_probes: Mapping[str, bool]
     ) -> list[LaunchRun]:
         self._context.clear()
-        busy = {
-            e.node_id for e in self._store.unresolved_journal_entries(self._project_id)
-        }
         view = ProjectView(
             project_id=self._project_id,
             now=self._now(),
-            runnable_nodes=tuple(
-                n for n in self._store.runnable(self._project_id) if n.id not in busy
-            ),
+            tree=LifecycleTree(self._store.nodes_for_project(self._project_id)),
             in_flight=tuple(o.run for o in runs if o.finished is None),
             link_probes=link_probes,
         )

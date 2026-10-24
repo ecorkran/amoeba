@@ -38,6 +38,7 @@ from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
+from runner.tick_support import runnable_unbusy
 
 KILL_AT_ENV = "PROOF_KILL_AT"
 
@@ -80,7 +81,7 @@ class ProofPlanner:
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
         actions: list[Action] = []
-        for node in view.runnable_nodes:
+        for node in runnable_unbusy(view):
             marker = self._markers / node.id
             if node.id in self._node_ids and not marker.exists():
                 marker.touch()

@@ -15,7 +15,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from amoeba.store import JournalEntry, Node
+from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.store import JournalEntry
 
 
 class RunState(StrEnum):
@@ -54,14 +55,15 @@ type Action = LaunchRun
 class ProjectView:
     """Everything a planner may look at for one project, frozen.
 
-    ``runnable_nodes`` excludes any node with an unresolved entry.
+    ``tree`` is the project's lifecycle tree, built after reconcile; it holds every
+    node, so a planner narrows by status, ``ready_steps`` and ``in_flight`` itself.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
     this process lifetime.
     """
 
     project_id: str
     now: datetime
-    runnable_nodes: tuple[Node, ...]
+    tree: LifecycleTree
     in_flight: tuple[InFlightRun, ...]
     link_probes: Mapping[str, bool]
 
