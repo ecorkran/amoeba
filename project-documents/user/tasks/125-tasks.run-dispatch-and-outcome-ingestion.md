@@ -326,12 +326,12 @@ Per the LLD, D5, "Runner, internal" and Component Structure (`decide.py`). Edit 
 
 Per the LLD, D4 and D3 ("Planner does" column). Create `runner/dispatch/planner.py` (put the hold computation in `runner/dispatch/hold.py` if `planner.py` nears 300 lines), `tests/runner/dispatch/test_hold.py` and `tests/runner/dispatch/test_planner.py`.
 
-- [ ] `held_checkouts(...) -> frozenset[Path]`, pure, across the whole project: unresolved `sq_run` entries' `checkout`; a not-done node whose latest `sq_run` has recorded outcome `paused` (read from the result's `outcome`, never the block kind); a current step that is `POINTED` or in flight on a `cf_write`
-- [ ] `DispatchPlanner.plan(view)`: for each current pipeline step with a resolved checkout not held, `POINTED` gives `LaunchRun(pipeline, dispatch_params(...), checkout.path)`; `REISSUE` gives `LaunchRun(..., run_id=<old>, reissue_of=<old entry id>)` with the old entry's pipeline, params and checkout; `NEEDS_POINTER` gives `WriteSlicePointer`. `IN_FLIGHT`, `AWAITING_ROUTING` and `CheckoutUnresolved` give nothing (Task 7.2 blocks the unresolved case)
-- [ ] At most one action per checkout per tick. Within a free checkout: `POINTED` and `REISSUE` first, then `(initiative index, slice index, step rank)`
-- [ ] Tests (table-driven over every D3 row and D4 rule): second slice in a held checkout gets nothing while the first is `POINTED`, in flight, or paused; paused-with-unknown-review (blocked `HUMAN`) still holds; a later `sq_run` on the paused node releases; a slice in another worktree is planned meanwhile; ordering picks the `POINTED` step over an earlier `NEEDS_POINTER` one; a held or excluded slice's in-flight run still holds; `merge=false` on every `P6`
+- [x] `held_checkouts(...) -> frozenset[Path]`, pure, across the whole project: unresolved `sq_run` entries' `checkout`; a not-done node whose latest `sq_run` has recorded outcome `paused` (read from the result's `outcome`, never the block kind); a current step that is `POINTED` or in flight on a `cf_write`
+- [x] `DispatchPlanner.plan(view)`: for each current pipeline step with a resolved checkout not held, `POINTED` gives `LaunchRun(pipeline, dispatch_params(...), checkout.path)`; `REISSUE` gives `LaunchRun(..., run_id=<old>, reissue_of=<old entry id>)` with the old entry's pipeline, params and checkout; `NEEDS_POINTER` gives `WriteSlicePointer`. `IN_FLIGHT`, `AWAITING_ROUTING` and `CheckoutUnresolved` give nothing (Task 7.2 blocks the unresolved case)
+- [x] At most one action per checkout per tick. Within a free checkout: `POINTED` and `REISSUE` first, then `(initiative index, slice index, step rank)`
+- [x] Tests (table-driven over every D3 row and D4 rule): second slice in a held checkout gets nothing while the first is `POINTED`, in flight, or paused; paused-with-unknown-review (blocked `HUMAN`) still holds; a later `sq_run` on the paused node releases; a slice in another worktree is planned meanwhile; ordering picks the `POINTED` step over an earlier `NEEDS_POINTER` one; a held or excluded slice's in-flight run still holds; `merge=false` on every `P6`
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add DispatchPlanner with one pipeline per checkout`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: add DispatchPlanner with one pipeline per checkout`
 
 ---
 
