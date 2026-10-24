@@ -22,6 +22,9 @@ unknown flag (exit 2). Otherwise it writes the id's document as still running
 (``timed_out``), prints ``run_id=<id>`` on stderr, sleeps ``RUN_SECONDS_ENV``,
 writes the final document (``RUN_OUTCOME_ENV``, ``completed`` unless set) and
 exits 0. ``RUN_MODE_ENV`` forces a failure case; see :class:`RunMode`.
+``RUN_SCRIPT_ENV`` (slice 125) names a script: files the run writes under its
+working directory (its reviews) and fields merged into the final document
+(``reviews``, ``checkpoint``, ``failure``); see :func:`write_run_script`.
 
 ``write_sq_stub`` is the only definition. A test puts the returned directory
 first on ``PATH`` and picks a behavior with the environment variables below.
@@ -50,6 +53,9 @@ RUN_OUTCOME_ENV = "SQ_STUB_RUN_OUTCOME"
 RUN_MODE_ENV = "SQ_STUB_RUN_MODE"
 #: How long ``late_line`` waits before it creates the state and prints the line.
 RUN_LATE_SECONDS_ENV = "SQ_STUB_RUN_LATE_SECONDS"
+#: A JSON file (see :func:`write_run_script`) naming the files the run writes under
+#: its working directory and the fields it adds to its final document.
+RUN_SCRIPT_ENV = "SQ_STUB_RUN_SCRIPT"
 
 STUB_NAME = "sq"
 
@@ -173,16 +179,28 @@ _SCRIPT = textwrap.dedent(
             print("stub sq: run already exists", run_id, file=sys.stderr)
             sys.exit(1)
 
-        def write_state(outcome):
+        def write_state(outcome, extra=None):
             state_dir.mkdir(parents=True, exist_ok=True)
             document = dict(run_id=run_id, outcome=outcome, status=outcome)
+            document.update(extra or dict())
             state_file.write_text(json.dumps(document), encoding="utf-8")
 
         write_state("timed_out")
         if run_mode != {no_line!r}:
             print("run_id=" + run_id, file=sys.stderr, flush=True)
         time.sleep(float(os.environ[{run_seconds_env!r}]))
-        write_state(os.environ.get({run_outcome_env!r}, "completed"))
+        extra = dict()
+        script_path = os.environ.get({run_script_env!r})
+        if script_path:
+            # The run's results: files written under the working directory, as a
+            # real run writes its reviews, and fields merged into the document.
+            script = json.loads(Path(script_path).read_text(encoding="utf-8"))
+            for relative, text in script["files"].items():
+                target = Path.cwd() / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+            extra = script["document"]
+        write_state(os.environ.get({run_outcome_env!r}, "completed"), extra)
         sys.exit(0)
 
     mode = os.environ[{mode_env!r}]
@@ -232,6 +250,7 @@ def write_sq_stub(bin_dir: Path) -> Path:
             run_seconds_env=RUN_SECONDS_ENV,
             run_outcome_env=RUN_OUTCOME_ENV,
             run_late_env=RUN_LATE_SECONDS_ENV,
+            run_script_env=RUN_SCRIPT_ENV,
             run_id_pattern=STUB_RUN_ID_PATTERN,
             usage_error=RunMode.USAGE_ERROR.value,
             exit_before_line=RunMode.EXIT_BEFORE_LINE.value,
@@ -243,6 +262,24 @@ def write_sq_stub(bin_dir: Path) -> Path:
     )
     script.chmod(0o755)
     return bin_dir
+
+
+def write_run_script(
+    path: Path,
+    *,
+    files: Mapping[str, str] | None = None,
+    document: Mapping[str, object] | None = None,
+) -> Path:
+    """Write the script ``RUN_SCRIPT_ENV`` names, and return its path.
+
+    ``files`` maps a path relative to the run's working directory to the text the
+    run writes there before it ends. ``document`` is merged into the run's final
+    outcome document: its ``reviews``, ``checkpoint`` and ``failure``. A path that
+    ``document`` lists but ``files`` omits is a listed file that was never written.
+    """
+    script = {"files": dict(files or {}), "document": dict(document or {})}
+    path.write_text(json.dumps(script), encoding="utf-8")
+    return path
 
 
 def write_outcome_document(home: Path, document: Mapping[str, object]) -> Path:

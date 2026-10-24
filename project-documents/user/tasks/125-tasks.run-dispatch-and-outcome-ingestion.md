@@ -210,12 +210,12 @@ Per the LLD, D7 (Technical Scope), "API Contracts" (Outcome document) and "Patte
 
 Per the LLD, "Technology Choices". Edit `tests/sq_stub.py` and `tests/test_sq_stub_run.py`.
 
-- [ ] The stub's run mode can be configured (through its existing state/env mechanism) to write review files into the run's working directory and list them in the outcome document's `reviews`: a single review, a split review (`paths` with two part files), an entry with null `path` and `paths`, an empty list, and a listed file that is not written (missing)
-- [ ] Review file contents come from real fixtures in `tests/fixtures/sq_reviews/`, rewritten only in their `slice` frontmatter where a test needs a given slice (helper in `tests/review_fixtures.py` if it fits)
-- [ ] The stub can emit `checkpoint` and `failure` objects shaped like the Task 3.1 fixtures, and records every `sq run` argv (including `--run-id` and each `-p`) as today
-- [ ] Tests: each configuration produces the files and a document that `RunOutcomeDocument` parses; `paths` order is preserved; the argv log shows `-p slice=…`
+- [x] The stub's run mode can be configured (through its existing state/env mechanism) to write review files into the run's working directory and list them in the outcome document's `reviews`: a single review, a split review (`paths` with two part files), an entry with null `path` and `paths`, an empty list, and a listed file that is not written (missing)
+- [x] Review file contents come from real fixtures in `tests/fixtures/sq_reviews/`, rewritten only in their `slice` frontmatter where a test needs a given slice (helper in `tests/review_fixtures.py` if it fits)
+- [x] The stub can emit `checkpoint` and `failure` objects shaped like the Task 3.1 fixtures, and records every `sq run` argv (including `--run-id` and each `-p`) as today
+- [x] Tests: each configuration produces the files and a document that `RunOutcomeDocument` parses; `paths` order is preserved; the argv log shows `-p slice=…`
 - **Success Criteria**:
-  - [ ] Stub tests, `ruff` and `pyright` pass. Commit: `test: make the stub sq write review files and a reviews list`
+  - [x] Stub tests, `ruff` and `pyright` pass. Commit: `test: make the stub sq write review files and a reviews list`
 
 ---
 
