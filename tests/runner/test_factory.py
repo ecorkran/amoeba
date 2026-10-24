@@ -5,14 +5,16 @@ from __future__ import annotations
 import dataclasses
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sq_stub import write_sq_stub
 
 from amoeba.process import ProcessSettings, StartupFailedError
-from amoeba.runner import RunnerTenant, runner_tenant
+from amoeba.runner import RunnerTenant, factory, runner_tenant
 from amoeba.runner.decide import Action, ProjectView
 from amoeba.runner.factory import PRODUCTION_PLANNERS
+from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.store import Store
 
 
@@ -27,8 +29,39 @@ def healthy_sq(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path / "supervisor"
 
 
-def test_the_production_tuple_is_empty() -> None:
-    assert PRODUCTION_PLANNERS == ()
+def _planners_given_to_the_tenant(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path, **kwargs: Any
+) -> tuple[object, ...]:
+    """Build a tenant through the factory and return the planners it was handed."""
+    captured: list[tuple[object, ...]] = []
+
+    def spy(**tenant_kwargs: Any) -> RunnerTenant:
+        captured.append(tuple(tenant_kwargs["planners"]))
+        return RunnerTenant(**tenant_kwargs)
+
+    monkeypatch.setattr(factory, "RunnerTenant", spy)
+    runner_tenant(ProcessSettings(), healthy_sq, **kwargs)
+    [planners] = captured
+    return planners
+
+
+def test_the_production_tuple_holds_exactly_the_human_step_planner() -> None:
+    assert len(PRODUCTION_PLANNERS) == 1
+    assert isinstance(PRODUCTION_PLANNERS[0], HumanStepPlanner)
+
+
+def test_no_planners_selects_the_production_tuple(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path
+) -> None:
+    planners = _planners_given_to_the_tenant(monkeypatch, healthy_sq)
+    assert planners == PRODUCTION_PLANNERS
+
+
+def test_a_passed_value_overrides_the_production_tuple(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path
+) -> None:
+    planners = _planners_given_to_the_tenant(monkeypatch, healthy_sq, planners=())
+    assert planners == ()
 
 
 def test_a_build_creates_the_launch_logs_directory(healthy_sq: Path) -> None:

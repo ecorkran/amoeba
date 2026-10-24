@@ -13,14 +13,15 @@ from typing import Final
 from amoeba.process import ProcessSettings, StartupFailedError, poll_run
 from amoeba.runner.decide import Planner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
+from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.probes import probe_sq
 from amoeba.runner.tenant import RunnerTenant
 
 logger = logging.getLogger(__name__)
 
-#: The planners production runs. Empty in slice 122: nothing launches yet.
-#: Slice 125 adds the dispatch planner here.
-PRODUCTION_PLANNERS: Final[tuple[Planner, ...]] = ()
+#: The planners production runs: human steps (slice 124), over current steps only.
+#: Slice 125 appends its dispatch planner here.
+PRODUCTION_PLANNERS: Final[tuple[Planner, ...]] = (HumanStepPlanner(),)
 
 
 def _now() -> datetime:

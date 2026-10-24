@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 import pytest
 
 from amoeba.runner.decide import BlockHumanStep, ProjectView, decide
-from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import DesiredState
@@ -92,10 +91,6 @@ def test_two_actions_for_one_node_are_still_refused(builder: TreeBuilder) -> Non
 
     with pytest.raises(ValueError, match="more than one action"):
         decide(view, [Twice(), Twice()])
-
-
-def test_the_production_planner_tuple_is_empty() -> None:
-    assert PRODUCTION_PLANNERS == ()
 
 
 def test_nothing_is_planned_when_nothing_is_driven(builder: TreeBuilder) -> None:
