@@ -18,6 +18,7 @@ from amoeba.store import (
     Channel,
     DesiredState,
     Message,
+    Node,
     Store,
     sql_runner,
 )
@@ -25,7 +26,7 @@ from amoeba.store.runner_models import SetDesiredState
 from runner.lifecycle.tree_support import PROJECT, TreeBuilder
 
 from .intent_support import submit
-from .test_interpret_merge import CASES
+from .merge_cases import CASES
 
 APPLIED = AcknowledgmentOutcome.APPLIED
 
@@ -51,7 +52,7 @@ def test_no_pending_intents_returns_zero_without_reading_the_tree(
     reads: list[str] = []
     real = builder.store.nodes_for_project
 
-    def spy(project_id: str):
+    def spy(project_id: str) -> list[Node]:
         reads.append(project_id)
         return real(project_id)
 

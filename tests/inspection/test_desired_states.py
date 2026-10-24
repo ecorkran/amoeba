@@ -12,6 +12,7 @@ from routing_helpers import submit_intent
 from amoeba.cli.main import ExitCode
 from amoeba.inspection import LISTINGS_BY_NAME, desired_states
 from amoeba.inspection.desired_states import DESIRED_STATE_COLUMNS, PROJECT_TARGET
+from amoeba.runner.intent.vocabulary import TargetKind
 from amoeba.store import (
     AcknowledgmentOutcome,
     NodeKind,
@@ -104,7 +105,9 @@ def test_each_row_shows_its_settings_and_unset_values_are_empty(
 def test_the_project_row_comes_first_and_the_text_form_has_the_same_columns(
     supervisor_dir: Path, seeded: dict[str, str]
 ) -> None:
-    assert _json(supervisor_dir)[0]["target"] == PROJECT_TARGET
+    targets = [str(row["target"]) for row in _json(supervisor_dir)]
+    assert targets[0] == PROJECT_TARGET
+    assert targets[1:] == sorted(targets[1:])
     result = run_cli(["inspect", LISTING, "--project", PROJECT], supervisor_dir)
     assert result.returncode == ExitCode.OK, result.stderr
     assert result.stdout.splitlines()[0].split() == list(DESIRED_STATE_COLUMNS)
@@ -124,3 +127,8 @@ def test_the_listing_imports_nothing_from_the_runner() -> None:
 def test_help_runs(supervisor_dir: Path) -> None:
     result = run_cli(["inspect", LISTING, "--help"], supervisor_dir)
     assert result.returncode == ExitCode.OK, result.stderr
+
+
+def test_the_project_label_matches_the_runner_target_kind() -> None:
+    # The listing may not import the Runner, so the label is stated here once more.
+    assert PROJECT_TARGET == TargetKind.PROJECT.value
