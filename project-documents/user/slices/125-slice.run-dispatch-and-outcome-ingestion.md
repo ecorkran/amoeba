@@ -15,8 +15,8 @@ interfaces:
 - 128
 - 129
 dateCreated: 20261020
-dateUpdated: 20261021
-status: not_started
+dateUpdated: 20261024
+status: in_progress
 turns: 49
 promptTokens: 6628271
 cachedTokens: 6393791
@@ -573,29 +573,31 @@ Run in bash from the repository root. Steps 1–2 are automated and use the stub
    uv run pytest tests/contract -v
    ```
 
-3. **One real slice design, end to end, in a scratch copy:**
+3. **One real slice design, end to end, in a scratch copy** (as run 20261024; `amoeba` here is `uv run amoeba` from the repository root):
    ```bash
    scratch=$(mktemp -d)/amoeba-scratch; git clone -q . "$scratch"
-   (cd "$scratch" && cf init)              # registers the copy as its own CF project
+   (cd "$scratch" && cf init --name amoeba-scratch --lite --no-ide && cf set arch 120)
+   cf_id=$(cd "$scratch" && cf get --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
    export AMOEBA_STORE_DIR=$(mktemp -d)
+   export OPENROUTER_API_KEY=...                         # P4's review model needs it; the Runner's launches inherit it
    amoeba start &
    amoeba submit create-project --project scratch --by operator
-   amoeba submit link-cf-project --project scratch --by operator --cf-project-id <copy's id>
-   sleep 5; amoeba inspect nodes --project scratch      # find slice 126's node id
-   amoeba submit intent --project scratch --by operator --node-id <slice-126> \
+   amoeba submit link-cf-project --project scratch --by operator --cf-project-id "$cf_id"
+   sleep 8; amoeba inspect nodes --project scratch --json   # find a slice node and its slice_design step
+   amoeba submit intent --project scratch --by operator --node-id <slice node id> \
        --body '{"intent": "drive", "until": "slice_design"}'
    ```
-   `cf init` is interactive if the copy has no CF config. If it asks, use the same template as this repository. If the copy's slice 126 is already designed, choose the first slice whose step `slice_design` is `runnable` instead.
+   Corrections found by the live run: `cf init` needs `--lite --no-ide` to be non-interactive in a clone that already holds the guides, and the new CF project has **no slice plan** until `cf set arch 120` (without it the first pointer write fails with `No slice plan is set`, and the step blocks on a human). Slices 126 to 130 are already designed in the copy, so drive one with no design file (131 on 20261024), or any slice whose `slice_design` step is `runnable`.
 
    Expected:
-   - Within two ticks, `amoeba inspect journal --project scratch` shows a `cf_write` resolved `completed`, with `expected_slice_index` 126 and `checkout` the scratch path. Then it shows an `sq_run` for `P4` with params `{slice: 126}` (launched as `sq run P4 126`), unresolved.
-   - `(cd "$scratch" && cf status --json)` shows `activeSlice.index` 126.
-   - `amoeba inspect nodes` shows the slice node's `slice_name` filled in.
+   - Within two ticks, `amoeba inspect journal --project scratch` shows a `cf_write` resolved `completed`, with `expected_slice_index` the slice's index and `checkout` the scratch path. Then it shows an `sq_run` for `P4` with params `{slice: <index>}` (launched as `sq run P4 <index>`: Squadron takes the slice as the positional target and rejects `-p slice=<index>`), unresolved.
+   - `(cd "$scratch" && cf status --json)` shows `activeSlice.index` equal to that index.
+   - The slice node's `slice_name` is filled in. `amoeba inspect nodes` does not show it (it lists `cf_index` only); read it from the store (`Store.open_read_only(...).get_node(id).cf.slice_name`).
    - `sq runs list` shows the run under its `amoeba-…` id, and `amoeba inspect journal` shows nothing new while it runs.
-   - When the run finishes, the `sq_run` entry is resolved with `awaits_routing` true. `amoeba inspect verdicts --project scratch` shows the design review on slice 126's node, with the run id. `amoeba inspect detections --project scratch` shows its file as `runner_issued`, if the scratch reviews directory is watched.
+   - When the run finishes, the `sq_run` entry is resolved with `awaits_routing` true, whatever the outcome. `amoeba inspect verdicts --project scratch` shows the design review on the slice's node, with the run id, and `amoeba inspect detections --project scratch` shows its file as `runner_issued`, if the scratch reviews directory is watched. A **failed** run (for example `No API key found. Set OPENROUTER_API_KEY environment variable.`) blocks the step on a human, records no verdict, and the entry's `review_fault` says the last review lists no file.
    - If the run paused instead, `amoeba inspect blocked --project scratch` shows the step `blocked_on_sq_checkpoint`, and the entry's result holds the checkpoint.
 
-   Then submit `{"intent": "pause"}` for the project, and confirm that no further `cf_write` appears. Stop with `amoeba stop`, and remove the scratch project with `cf project rm` if you want it gone.
+   Then submit `{"intent": "pause"}` for the project (no `--node-id`), and confirm that no further `cf_write` appears. Stop with `amoeba stop`, and remove the scratch project by id with `(cd "$scratch" && cf project rm "$cf_id" --yes)`.
 
 ## Risk Assessment
 
