@@ -14,46 +14,61 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261023
 dateUpdated: 20261023
-reviewedSha: cb3c09e92041db3b15230b613a505ff6b0403ff6
-revision_number: 1
+reviewedSha: fe6eaf4db541a20c2a5e3760bfe9216538fe22de
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-turns: 3
-promptTokens: 146188
-cachedTokens: 105571
-cacheWriteTokens: 40613
-completionTokens: 3866
-durationSeconds: 30.9
-costUsd: 0.212483
+toolCallsMade: 3
+turns: 4
+promptTokens: 195741
+cachedTokens: 98268
+cacheWriteTokens: 97467
+completionTokens: 4651
+durationSeconds: 37.1
+costUsd: 0.447023
 costBasis: provider
 runId: run-20261024-p56-53bc46f9
 squadronVersion: 0.23.7
 findings:
   - id: F001
-    severity: fail
-    category: sequencing
-    summary: "Tasks 5.2 and 5.3 depend on the apply stage that Task 6.1 wires, so their commits cannot be green"
-    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:206"
+    severity: pass
+    category: coverage
+    summary: "Success criteria trace to tasks"
+    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md"
   - id: F002
-    severity: concern
-    category: sequencing
-    summary: "Task 5.1's success criteria describe a behavior change that does not happen until later tasks"
-    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:210"
+    severity: pass
+    category: accuracy
+    summary: "Task-level corrections match the code"
+    location: "src/amoeba/runner/factory.py:23"
   - id: F003
     severity: concern
-    category: traceability
-    summary: "Task 7.1's commit message and title promise idempotence, which the task does not test"
-    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:274"
+    category: task-sizing
+    summary: "Task 4.1 is oversized"
+    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:154-168"
   - id: F004
     severity: concern
     category: proportionality
-    summary: "Several tasks are granular enough to merge"
-    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:162"
+    summary: "Task 3.3 repeats Task 3.2's table through the store"
+    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:145-146"
   - id: F005
-    severity: pass
-    category: uncategorized
-    summary: "Coverage of the slice's functional success criteria"
-    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md"
+    severity: concern
+    category: proportionality
+    summary: "Section 7 and Task 6.1 repeat tests from earlier tasks"
+    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:234,248"
+  - id: F006
+    severity: note
+    category: task-sizing
+    summary: "Task 5.2 carries a large mechanical test migration"
+    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:204"
+  - id: F007
+    severity: note
+    category: sequencing
+    summary: "Section 5 reorder keeps every commit green"
+    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:57"
+  - id: F008
+    severity: note
+    category: clarity
+    summary: "Task 2.2 lists `TargetKind` after the tests that precede it"
+    location: "project-documents/user/tasks/124-tasks.intent-vocabulary.md:97"
 ---
 
 # Review: tasks — slice 124
@@ -63,57 +78,61 @@ findings:
 
 ## Findings
 
-### [FAIL] Tasks 5.2 and 5.3 depend on the apply stage that Task 6.1 wires, so their commits cannot be green
+### [PASS] Success criteria trace to tasks
 
-- Task 5.1 defines `drive_project`, which submits a project-level drive intent through the inbox "so the next tick applies it".
-- Task 5.2 requires every store-ticking test to call `drive_project` before the tick. It also changes `runnable_unbusy` to read `view.current_steps`.
-- Task 5.3 makes `HumanStepPlanner` read `view.current_steps` and tells the 123 human-step tests to drive the project in their setup.
-- The tick does not apply intents until Task 6.1 replaces the `# [apply intents - slice 124]` slot. Until then the intent stays pending and the index is empty.
-- Both tasks would then see no current steps, and the migrated 122 and 123 tick tests would fail. Their success criteria ("`uv run pytest tests/runner -q` passes") cannot be met.
-- Fix: move the apply wiring ahead of 5.2.
-  - Split 6.1 into two parts. The first covers `apply_pending_intents` at the top of `run` and passing the index from one read. It depends only on 3.3 and 5.1, and is tested with a stub planner.
-  - The second part is the "driven initiative blocks `architecture` in one tick" test. It stays after 5.4.
-- Alternative: have `drive_project` write the desired-state row directly in the store until the apply stage lands. The slice's own apply path would then go unused by those tests.
-- Task 6.1's dependency on 5.4 is also looser than it needs to be.
+- **Idempotence and order:** Task 3.2 covers same-intent-twice, drive-until replacement and pause-then-drive. Task 3.3 covers the `seq` ordering.
+- **Hold wins:** Tasks 4.1 and 7.1.
+- **Nearest-drive resolution and `until` rank:** Task 4.1.
+- **Governance as a pure lookup:** Tasks 4.1 and 4.2.
+- **One acknowledgment per intent, with every outcome and every rejection code:** Tasks 3.1 to 3.3.
+- **Held targets issue nothing:** Tasks 5.2, 7.1 and 7.2.
+- **`HumanStepPlanner` in production, with linking quiet and driving blocks `architecture`:** Tasks 5.3, 6.1 and 7.2.
+- **Crash safety:** Task 3.3.
+- **Technical requirements:**
+  - Contract documents: Task 9.1.
+  - CHANGELOG: Task 9.2.
+  - Walkthrough and full validation: Task 9.3.
+- **Integration requirement, contract suite:** Tasks 7.2 and 9.3.
 
-### [CONCERN] Task 5.1's success criteria describe a behavior change that does not happen until later tasks
+I found no scope creep. The slice states no NFR, so no load test or CI-gating task is needed.
 
-- Task 5.1 says tests "that rely on ungoverned planners … now use the helper to drive the project".
-- In 5.1 the guard does not exist and `HumanStepPlanner` still reads `ready_steps`, so no existing test should change behavior. The migration belongs to 5.2 and 5.3.
-- Restate 5.1 as a pure refactor, with the existing tests passing unchanged apart from the `ProjectView` construction. This also keeps its `refactor:` commit type honest.
+### [PASS] Task-level corrections match the code
 
-### [CONCERN] Task 7.1's commit message and title promise idempotence, which the task does not test
+`PRODUCTION_PLANNERS` is in `runner/factory.py`, not `tenant.py` as the LLD says. The slot comment is at `src/amoeba/runner/tick.py:96`. `self.wrote` and `_decide` exist in `tick.py`. `runnable_unbusy` is in `tests/runner/tick_support.py:38`. Tests that pin the empty tuple (`tests/runner/test_factory.py:31`, `tests/runner/lifecycle/test_human_steps.py:90`) are covered by Task 5.3.
 
-- The commit is `test: prove idempotence and hold through the tick`, but the task body covers only hold and the guard.
-- The Section 7 preamble says idempotence is already proven in 3.2 and 3.3.
-- Rename the commit to cover hold only, for example `test: prove hold through the tick`.
+### [CONCERN] Task 4.1 is oversized
 
-### [CONCERN] Several tasks are granular enough to merge
+Task 4.1 is rated Effort 4, the highest in the file. It bundles `DesiredStateIndex`, `drives_anything`, the `Governance` dataclass and `governing` (path walk, nearest-drive, `until` rank, hold). It also adds two test files and a possible `tree.py` accessor. The index is small and independent of the path logic, so a junior AI could stall on the combined task. Split it: the index and `drives_anything` with their tests in one task, then `governing` in the next. `current_steps` (Task 4.2) can stay separate.
 
-- Task 4.1 (`DesiredStateIndex`, two methods) is trivial on its own and its tests are a few lines. Merge it into 4.2, or have 4.2 build it.
-- Task 2.3 (`TargetKind` and `until_applies`, a single predicate) can fold into 2.2. It already edits the same file and test file.
-- Task 3.3 has seven test bullets. The test that every `applied` case in 3.2's table is accepted by the store overlaps the per-outcome store test. Collapse them into a single parametrized test that seeds the current row and asserts the stored row.
-- Task 5.2 asks the junior to record the migrated test files in the commit message. That detail is not needed by any success criterion.
+### [CONCERN] Task 3.3 repeats Task 3.2's table through the store
 
-### [PASS] Coverage of the slice's functional success criteria
+Two tests in Task 3.3 go beyond what the success criteria need:
+- **The store-acceptance test** re-runs every `applied` row of Task 3.2's table through a temporary store. The crash test and the each-outcome test already exercise `acknowledge_message` with real rows. Cut this to a small set of store-shape edge cases: hold-only, drive-with-`until`, and a deleting `resume`. Alternatively, parametrize one shared case table that 3.2 and 3.3 both use.
+- **The `ValueError` propagation test** monkeypatches `interpret`. Task 6.1 already tests the monkeypatched-`interpret` fault path through the tick. Keep only one of the two.
 
-- Idempotence and order: 3.2, 3.3.
-- Hold wins, nearest-target drive resolution, and governance as a pure lookup: 4.2, 4.3, 7.1.
-- One acknowledgment per intent, with every outcome and every rejection code: 3.1 to 3.3.
-- Held targets issue nothing new, and a held human step is not blocked: 5.2, 5.3, 7.1.
-- Observe continuing under hold: 7.2.
-- `HumanStepPlanner` in production, quiet linking, and drive blocking `architecture`: 5.4, 6.1, 7.2.
-- Crash safety: 3.3.
-- Technical and integration requirements: 9.3.
-- Contract text and CHANGELOG: 9.1, 9.2.
-- Walkthrough steps 2–4: 9.3.
-- No task falls outside a success criterion. The slice states no NFR, so no load test or CI gating task is required. Commits are spread one per task across the file.
+### [CONCERN] Section 7 and Task 6.1 repeat tests from earlier tasks
+
+- **Task 7.1, second bullet.** The guard raising for a held step is already proven at `decide()` level in Task 5.2. The `unexpected_fault` and dedupe path is already proven in Task 6.1. The only new thing here is "a held human step blocks nothing under the production tuple", and Task 5.3's "driven and paused plans nothing" test covers that at planner level. Reduce this bullet to the single tick-level production-tuple check.
+- **Task 6.1.** The `STORE_FAILURES` exit and "repeating bug adds no second escalation" are 122's behaviors, and 122's own tests cover them. Keep the one test that proves apply is inside the fault boundary, and drop the other two.
+- **Task 7.2.** It bundles two unrelated tests, observe-under-hold and linking-is-quiet. Consider moving the linking test into 7.1 or 6.1 to avoid a two-line task.
+
+### [NOTE] Task 5.2 carries a large mechanical test migration
+
+Adding the guard forces every existing 122 and 123 test planner to be migrated (`runnable_unbusy`, `view_for`, `drive_project`). The task gives a workable discovery method (`grep`, then run `tests/runner` and read the `ValueError`s). The scope is open-ended, but Effort 2 may understate it. If the migration touches many files, split it into "add the guard and its tests" and "migrate existing tests". The guard cannot land with a green suite without the migration, so the two must stay adjacent. Keeping them in one commit, as written, is acceptable.
+
+### [NOTE] Section 5 reorder keeps every commit green
+
+The tasks put the view, guard and planners (Section 5) before the tick's apply stage (Section 6). `drive_project` calls `apply_pending_intents` directly, so no step needs the tick stage early. 5.1 adds an interim `desired_states` read in `_decide`, and 6.1 removes it, so each commit leaves the suite green. There are no circular dependencies.
+
+### [NOTE] Task 2.2 lists `TargetKind` after the tests that precede it
+
+`TargetKind` and `until_applies` come after the body-model tests in the checklist, but they live in the same module and commit. This is fine as written. Reordering the bullets so definitions come before their tests would read more cleanly.
 
 ### Run Digest
 
-- Response length: 4399 chars
+- Response length: 5883 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -121,13 +140,13 @@ findings:
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 146188 / 105571 / 40613 / 3866 / not computed
-- Duration: 30.9 s
-- Cost: $0.21 (provider)
+- Turns: 4
+- Tokens — prompt / cached / cache write / completion / reasoning: 195741 / 98268 / 97467 / 4651 / not computed
+- Duration: 37.1 s
+- Cost: $0.45 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 5
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 5
-- Finding-shaped matches — surviving validation: 5
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8

@@ -19,16 +19,16 @@ projectState: Slices 120–123 are merged. `amoeba.runner` has the tick (`Projec
 dateCreated: 20261023
 dateUpdated: 20261024
 status: not_started
-turns: 33
-promptTokens: 2155728
-cachedTokens: 2070251
-cacheWriteTokens: 85423
-completionTokens: 24688
-durationSeconds: 169.4
-costUsd: 0.795987
-usageRounds: 2
-pricedRounds: 2
-revision_number: 1
+turns: 52
+promptTokens: 4177544
+cachedTokens: 4071088
+cacheWriteTokens: 106366
+completionTokens: 32580
+durationSeconds: 229.0
+costUsd: 1.158835
+usageRounds: 3
+pricedRounds: 3
+revision_number: 2
 ---
 
 ## Context Summary
