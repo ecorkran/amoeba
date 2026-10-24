@@ -5,7 +5,8 @@ before it writes so a crash at any point is repaired by the next read:
 
 1. orphan: unlink nodes CF no longer reports (``orphaning.py``);
 2. create: initiative, slice and step nodes CF reports and the tree lacks (here);
-3. later rules, added by the tasks that follow, in this order.
+3. block: slices whose CF status is unknown (``status_block.py``);
+4. later rules, added by the tasks that follow, in this order.
 
 This module is the only caller of ``Store.create_node`` in ``src/amoeba``; a guard
 test enforces it (D10). The read checks (``read_checks.py``) run first and decide
@@ -21,6 +22,7 @@ from amoeba.runner.lifecycle.orphaning import orphan_unlisted
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
 from amoeba.runner.lifecycle.read_checks import ReadScope, checked_scope
 from amoeba.runner.lifecycle.slugs import slice_name_from_design_file
+from amoeba.runner.lifecycle.status_block import block_unknown_status
 from amoeba.runner.lifecycle.steps import (
     LifecycleStep,
     PlanObservation,
@@ -73,8 +75,11 @@ def reconcile(
     if isinstance(read, PlanRead) and scope.initiatives:
         if wrote:
             tree = _tree(store, project_id)
-        creator = _Creator(store, project_id, cf_project_id, tree, read, scope)
-        wrote = creator.run() or wrote
+        created = _Creator(store, project_id, cf_project_id, tree, read, scope).run()
+        if created:
+            tree = _tree(store, project_id)
+        blocked = block_unknown_status(store, tree, cf_project_id, read, scope)
+        wrote = created or blocked or wrote
     return wrote
 
 
