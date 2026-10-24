@@ -32,8 +32,7 @@ from amoeba.runner.lifecycle.plan_read import (
 )
 from amoeba.runner.lifecycle.reconcile import reconcile
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Store
-from amoeba.store.models import NodeKind
+from amoeba.store import NodeKind, Store
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ from collections.abc import Iterable, Sequence
 
 from amoeba.runner.lifecycle.predecessors import predecessors_done
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.store.models import BLOCKED_STATUSES, Node, NodeKind, NodeStatus
+from amoeba.store import BLOCKED_STATUSES, Node, NodeKind, NodeStatus
 
 #: A linked node's identity within a project: its kind, CF project and CF index.
 type LinkKey = tuple[NodeKind, str, int]

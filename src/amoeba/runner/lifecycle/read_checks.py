@@ -28,7 +28,7 @@ from amoeba.runner.lifecycle.plan_read import (
     SliceReadFailed,
 )
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store.models import Node, NodeKind
+from amoeba.store import Node, NodeKind
 from amoeba.upstream.context_forge import CFSliceList
 
 

@@ -34,8 +34,7 @@ from amoeba.runner.lifecycle.steps import (
     steps_at,
 )
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Store
-from amoeba.store.models import CFReference, Node, NodeKind, NodeStatus
+from amoeba.store import CFReference, Node, NodeKind, NodeStatus, Store
 from amoeba.upstream.context_forge import (
     CFInitiative,
     CFSliceEntry,

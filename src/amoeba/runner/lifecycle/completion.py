@@ -25,8 +25,7 @@ from amoeba.runner.lifecycle.steps import (
     step_complete,
 )
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Store
-from amoeba.store.models import Node, NodeKind, NodeStatus
+from amoeba.store import Node, NodeKind, NodeStatus, Store
 from amoeba.upstream.context_forge import CFSliceList
 
 #: Who resolves a human step's block when CF shows the step complete.

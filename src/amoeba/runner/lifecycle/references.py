@@ -20,8 +20,7 @@ from amoeba.runner.lifecycle.plan_read import PlanRead
 from amoeba.runner.lifecycle.read_checks import ReadScope
 from amoeba.runner.lifecycle.slugs import slice_name_from_design_file
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Store
-from amoeba.store.models import Node, NodeKind
+from amoeba.store import Node, NodeKind, Store
 from amoeba.upstream.context_forge import CFSliceList
 
 logger = logging.getLogger(__name__)

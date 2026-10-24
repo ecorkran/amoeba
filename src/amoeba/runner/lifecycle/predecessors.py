@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.store.models import Node, NodeKind, NodeStatus
+from amoeba.store import Node, NodeKind, NodeStatus
 
 if TYPE_CHECKING:
     from amoeba.runner.lifecycle.tree import LifecycleTree

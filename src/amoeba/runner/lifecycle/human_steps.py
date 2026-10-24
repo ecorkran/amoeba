@@ -27,8 +27,7 @@ from amoeba.runner.faults import (
     PAYLOAD_STEP,
 )
 from amoeba.runner.lifecycle.steps import STEP_MAP, Executor, LifecycleStep
-from amoeba.store import Store
-from amoeba.store.models import BlockedKind
+from amoeba.store import BlockedKind, Store
 
 
 class HumanStepPlanner:

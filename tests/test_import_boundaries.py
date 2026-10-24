@@ -345,9 +345,11 @@ def test_rule_10_only_the_cli_imports_the_runner() -> None:
 def test_rule_11_the_runner_imports_only_public_names() -> None:
     import importlib
 
-    roots = ("amoeba.store", "amoeba.process", "amoeba.upstream")
+    # The Runner reads Context Forge's plan through the upstream package's public
+    # names (slice 123); nothing else under ``amoeba.upstream`` is its to import.
+    roots = ("amoeba.store", "amoeba.process", "amoeba.upstream.context_forge")
     problems: list[str] = []
-    for path in sorted((SRC / "runner").glob("*.py")):
+    for path in sorted((SRC / "runner").rglob("*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not isinstance(node, ast.ImportFrom) or not node.module:
                 continue

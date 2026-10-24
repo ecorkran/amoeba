@@ -34,14 +34,14 @@ from amoeba.runner.faults import (
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
 from amoeba.runner.lifecycle.read_checks import ReadScope
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Store
-from amoeba.store.models import (
+from amoeba.store import (
     BLOCKED_STATUSES,
     BlockedKind,
     CFReference,
     Node,
     NodeKind,
     NodeStatus,
+    Store,
 )
 from amoeba.upstream.context_forge import CFSliceList
 
