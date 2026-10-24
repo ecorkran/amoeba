@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+from typing import Final, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from amoeba.runner.lifecycle.steps import STEP_MAP, LifecycleStep, StepLevel
+
+#: The longest detail an acknowledgment reason carries after its ``"<code>: "``.
+REASON_DETAIL_LIMIT: Final = 512
 
 
 class IntentKind(StrEnum):

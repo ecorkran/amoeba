@@ -18,7 +18,7 @@ projectState: Slices 120–123 are merged. `amoeba.runner` has the tick (`Projec
   do not exist.
 dateCreated: 20261023
 dateUpdated: 20261024
-status: not_started
+status: in_progress
 turns: 52
 promptTokens: 4177544
 cachedTokens: 4071088
@@ -63,11 +63,11 @@ revision_number: 2
 ### Task 1.1: Create the branch and record the starting state
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Create `124-slice.intent-vocabulary` from the target. If it exists, switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Create `124-slice.intent-vocabulary` from the target. If it exists, switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run pyright` once each. Record the passed-test count in this task. Baseline: 2760 passed
 - **Success Criteria**:
-  - [ ] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
+  - [x] On the slice branch. Baseline suite, `ruff` and `pyright` are clean. If not, write `BLOCKED:` with the failure and stop. No commit needed
 
 ---
 
@@ -78,27 +78,27 @@ revision_number: 2
 
 Per the LLD, D4. Edit `runner/lifecycle/steps.py` and `tests/runner/lifecycle/test_steps.py`.
 
-- [ ] Add `STEP_SEQUENCE: Final[tuple[LifecycleStep, ...]]` listing the seven steps in process order: `architecture`, `slice_plan`, `slice_design`, `tasks`, `implementation`, `merge`, `integration`. Write the order out explicitly. Do not derive it from enum declaration order
-- [ ] Add `step_rank(step) -> int`, the position in `STEP_SEQUENCE`
-- [ ] Export both from `runner/lifecycle/__init__.py` if the package exports its public names
-- [ ] Tests: `STEP_SEQUENCE` holds every `LifecycleStep` exactly once (set equality plus length), `step_rank` is strictly increasing along the sequence, and the explicit order matches the seven names above
+- [x] Add `STEP_SEQUENCE: Final[tuple[LifecycleStep, ...]]` listing the seven steps in process order: `architecture`, `slice_plan`, `slice_design`, `tasks`, `implementation`, `merge`, `integration`. Write the order out explicitly. Do not derive it from enum declaration order
+- [x] Add `step_rank(step) -> int`, the position in `STEP_SEQUENCE`
+- [x] Export both from `runner/lifecycle/__init__.py` if the package exports its public names. N/A: the package exports nothing
+- [x] Tests: `STEP_SEQUENCE` holds every `LifecycleStep` exactly once (set equality plus length), `step_rank` is strictly increasing along the sequence, and the explicit order matches the seven names above
 - **Success Criteria**:
-  - [ ] `tests/runner/lifecycle/test_steps.py`, `ruff` and `pyright` pass. Commit: `feat: define the lifecycle step order`
+  - [x] `tests/runner/lifecycle/test_steps.py`, `ruff` and `pyright` pass. Commit: `feat: define the lifecycle step order`
 
 ### Task 2.2: The intent vocabulary and the `until` rule, with tests
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 2
 
 Per the LLD, D1, D3 and D4 ("`until_not_applicable`"), and "Internal API". Create `runner/intent/__init__.py`, `runner/intent/vocabulary.py` and `tests/runner/intent/test_vocabulary.py`.
 
-- [ ] `IntentKind(StrEnum)`: `drive`, `exclude`, `pause`, `resume`, `clear`
-- [ ] `IntentRejection(StrEnum)`: `malformed_body`, `target_not_initiative_or_slice`, `target_unlinked`, `until_not_applicable`
-- [ ] `IntentBody` (pydantic v2, `extra="forbid"`): `intent: IntentKind`, `until: LifecycleStep | None = None`. A model validator rejects `until` with any kind but `drive`
-- [ ] Tests (parametrized): each of the six body forms parses; an unknown key (`"untill"`) fails; an unknown `intent` value fails; an unknown `until` value fails; `until` with `exclude`, `pause`, `resume` and `clear` fails; a non-object body (list, string) fails when validated
-- [ ] Add `TargetKind(StrEnum)` to `vocabulary.py`: `project`, `initiative`, `slice`. Defined once; Task 3.1 maps a node's kind to it
-- [ ] Add `until_applies(target: TargetKind, step: LifecycleStep) -> bool`. A `slice` target accepts only steps where `STEP_MAP[step].level is StepLevel.SLICE`. `initiative` and `project` targets accept any step
-- [ ] Tests (table-driven over all seven steps and the three target kinds): on a slice, `architecture`, `slice_plan` and `integration` are not applicable and the other four are; on an initiative and on the project, all seven apply
+- [x] `IntentKind(StrEnum)`: `drive`, `exclude`, `pause`, `resume`, `clear`
+- [x] `IntentRejection(StrEnum)`: `malformed_body`, `target_not_initiative_or_slice`, `target_unlinked`, `until_not_applicable`
+- [x] `IntentBody` (pydantic v2, `extra="forbid"`): `intent: IntentKind`, `until: LifecycleStep | None = None`. A model validator rejects `until` with any kind but `drive`
+- [x] Tests (parametrized): each of the six body forms parses; an unknown key (`"untill"`) fails; an unknown `intent` value fails; an unknown `until` value fails; `until` with `exclude`, `pause`, `resume` and `clear` fails; a non-object body (list, string) fails when validated
+- [x] Add `TargetKind(StrEnum)` to `vocabulary.py`: `project`, `initiative`, `slice`. Defined once; Task 3.1 maps a node's kind to it
+- [x] Add `until_applies(target: TargetKind, step: LifecycleStep) -> bool`. A `slice` target accepts only steps where `STEP_MAP[step].level is StepLevel.SLICE`. `initiative` and `project` targets accept any step
+- [x] Tests (table-driven over all seven steps and the three target kinds): on a slice, `architecture`, `slice_plan` and `integration` are not applicable and the other four are; on an initiative and on the project, all seven apply
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add the intent vocabulary and body model`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: add the intent vocabulary and body model`
 
 ---
 
