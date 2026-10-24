@@ -15,6 +15,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import JournalEntry, Node
 
@@ -63,7 +64,10 @@ class ProjectView:
     """Everything a planner may look at for one project, frozen.
 
     ``tree`` is the project's lifecycle tree, built after reconcile; it holds every
-    node. Planners start work from :meth:`ready_unbusy`.
+    node. ``desired`` is the project's desired-state rows, read once for the tick.
+    ``current_steps`` are the ready steps the PM drives and has not held (D6);
+    :func:`decide` refuses an action on any other node. ``ready_unbusy`` is the
+    wider ready set, kept for slice 125 to narrow.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
     this process lifetime.
     """
@@ -73,6 +77,8 @@ class ProjectView:
     tree: LifecycleTree
     in_flight: tuple[InFlightRun, ...]
     link_probes: Mapping[str, bool]
+    desired: DesiredStateIndex
+    current_steps: Sequence[Node]
 
     def ready_unbusy(self) -> list[Node]:
         """Ready steps (``tree.ready_steps()``) with no run in flight.

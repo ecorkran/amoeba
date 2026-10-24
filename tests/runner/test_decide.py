@@ -20,14 +20,16 @@ from amoeba.runner.decide import (
 )
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from runner.intent.rows_support import row
 from runner.lifecycle.tree_support import TreeBuilder
 from runner.observe_support import entry
+from runner.tick_support import view_for
 
 NOW = datetime(2026, 10, 23, tzinfo=UTC)
 
 
 def _view() -> ProjectView:
-    return ProjectView("demo", NOW, LifecycleTree(()), (), {})
+    return view_for(LifecycleTree(()))
 
 
 def _launch(node_id: str) -> LaunchRun:
@@ -84,7 +86,7 @@ def test_ready_unbusy_offers_only_ready_steps_without_a_run_in_flight() -> None:
     try:
         initiative = builder.initiative(100)
         architecture = builder.step_node(initiative, LifecycleStep.ARCHITECTURE)
-        view = ProjectView("demo", NOW, builder.tree(), (), {})
+        view = view_for(builder.tree())
         assert view.ready_unbusy() == [architecture], "no containers, no blocked steps"
 
         running = InFlightRun(
@@ -92,5 +94,28 @@ def test_ready_unbusy_offers_only_ready_steps_without_a_run_in_flight() -> None:
         )
         busy = replace(view, in_flight=(running,))
         assert busy.ready_unbusy() == []
+    finally:
+        builder.close()
+
+
+def test_a_driven_project_view_exposes_its_current_steps() -> None:
+    builder = TreeBuilder()
+    try:
+        initiative = builder.initiative(100)
+        architecture = builder.step_node(initiative, LifecycleStep.ARCHITECTURE)
+        driven = view_for(builder.tree(), [row(drive=True)])
+        assert list(driven.current_steps) == [architecture]
+        assert driven.desired.drives_anything()
+    finally:
+        builder.close()
+
+
+def test_a_view_with_no_rows_has_no_current_steps() -> None:
+    builder = TreeBuilder()
+    try:
+        builder.initiative(100)
+        undriven = view_for(builder.tree())
+        assert list(undriven.current_steps) == []
+        assert not undriven.desired.drives_anything()
     finally:
         builder.close()

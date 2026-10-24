@@ -30,6 +30,7 @@ from amoeba.runner.faults import (
     TickFaults,
     raise_expected_faults,
 )
+from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
 from amoeba.runner.launch import (
     PARAM_PARAMS,
     PARAM_PIPELINE,
@@ -173,14 +174,19 @@ class ProjectTick:
         self, runs: Sequence[ObservedRun], link_probes: Mapping[str, bool]
     ) -> list[Action]:
         self._context.clear()
+        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
+        # Interim read; the apply-stage task moves it to the top of the tick.
+        desired = DesiredStateIndex(self._store.desired_states(self._project_id))
         view = ProjectView(
             project_id=self._project_id,
             now=self._now(),
-            tree=LifecycleTree(self._store.nodes_for_project(self._project_id)),
+            tree=tree,
             # Unresolved sq_run entries the tick did not finish: what ``ready_unbusy``
             # excludes (finished ones were resolved by ``finish.record`` above).
             in_flight=tuple(o.run for o in runs if o.finished is None),
             link_probes=link_probes,
+            desired=desired,
+            current_steps=current_steps(tree, desired),
         )
         return list(decide(view, self._planners))
 

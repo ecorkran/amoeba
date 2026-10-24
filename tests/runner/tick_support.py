@@ -3,25 +3,30 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from feed_harness import apply
 
 from amoeba.runner.budget import TickBudget, TickResult
-from amoeba.runner.decide import Action, LaunchRun, ProjectView
+from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
 from amoeba.runner.faults import NodeContext
+from amoeba.runner.intent.apply import apply_pending_intents
+from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
 from amoeba.runner.launch import (
     LAUNCH_LOGS_DIRNAME,
     LaunchTracker,
 )
 from amoeba.runner.lifecycle.cadence import PlanReadSchedule
 from amoeba.runner.lifecycle.plan_stage import PlanStage
+from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.tick import ProjectTick
-from amoeba.store import Node, NodeStatus, Store, SubmissionKind
+from amoeba.store import DesiredState, Node, NodeStatus, Store, SubmissionKind
 from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
+from runner.intent.intent_support import submit
 from runner.observe_support import (
     GRACE,
     Child,
@@ -33,6 +38,34 @@ from runner.observe_support import (
 
 PROJECT = "demo"
 PLAN_READ_INTERVAL = 30.0
+VIEW_NOW = datetime(2026, 10, 23, tzinfo=UTC)
+
+
+def view_for(
+    tree: LifecycleTree,
+    rows: Sequence[DesiredState] = (),
+    in_flight: tuple[InFlightRun, ...] = (),
+) -> ProjectView:
+    """A view over ``tree`` and hand-built desired-state rows, with current steps."""
+    index = DesiredStateIndex(rows)
+    return ProjectView(
+        project_id=PROJECT,
+        now=VIEW_NOW,
+        tree=tree,
+        in_flight=in_flight,
+        link_probes={},
+        desired=index,
+        current_steps=current_steps(tree, index),
+    )
+
+
+def drive_project(store: Store, project_id: str = PROJECT) -> None:
+    """Drive the whole project now: submit a drive intent and apply it directly.
+
+    Does not rely on the tick's apply stage, so tests can use it before that exists.
+    """
+    submit(store, {"intent": "drive"}, project_id=project_id)
+    apply_pending_intents(store, project_id)
 
 
 def runnable_unbusy(view: ProjectView) -> list[Node]:

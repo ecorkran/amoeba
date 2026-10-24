@@ -11,6 +11,7 @@ from amoeba.runner.decide import BlockHumanStep, ProjectView, decide
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.lifecycle.steps import LifecycleStep
+from runner.tick_support import view_for
 
 from .tree_support import TreeBuilder
 
@@ -25,7 +26,7 @@ def builder() -> Iterator[TreeBuilder]:
 
 
 def _plan(builder: TreeBuilder) -> list[str]:
-    view = ProjectView("demo", NOW, builder.tree(), (), {})
+    view = view_for(builder.tree())
     return [
         a.node_id
         for a in HumanStepPlanner().plan(view)
@@ -76,7 +77,7 @@ def test_a_step_under_an_orphan_or_already_blocked_gets_no_action(
 
 
 def test_two_actions_for_one_node_are_still_refused(builder: TreeBuilder) -> None:
-    view = ProjectView("demo", NOW, builder.tree(), (), {})
+    view = view_for(builder.tree())
 
     class Twice:
         def plan(self, view: ProjectView) -> list[BlockHumanStep]:
