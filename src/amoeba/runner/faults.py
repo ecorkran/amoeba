@@ -42,7 +42,8 @@ class FaultKind(StrEnum):
     of a block on the node CF stopped reporting, or whose status the Runner cannot
     project. They are closed by resolving the block, not by the project rule.
     ``REVIEW_UNKNOWN`` is node-scoped in the same way: a run's review could not be
-    read, parsed or attributed, and the step's block names it.
+    read, parsed or attributed, and the step's block names it. So is
+    ``POINTER_WRITE_FAILED``: the CF slice pointer write failed or read back wrong.
     """
 
     RUN_OBSERVATION_FAILED = "run_observation_failed"
@@ -53,6 +54,7 @@ class FaultKind(StrEnum):
     LIFECYCLE_ORPHAN = "lifecycle_orphan"
     PLAN_STATUS_UNKNOWN = "plan_status_unknown"
     REVIEW_UNKNOWN = "review_unknown"
+    POINTER_WRITE_FAILED = "pointer_write_failed"
 
 
 class LaunchFailure(StrEnum):

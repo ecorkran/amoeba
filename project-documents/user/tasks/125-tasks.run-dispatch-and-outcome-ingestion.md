@@ -366,13 +366,13 @@ Per the LLD, D2 and D1 "The read-back confirms it". Create `runner/dispatch/poin
 
 Per the LLD, D2 outcome bullets. Edit `runner/dispatch/pointer.py`; extend `tests/runner/dispatch/test_pointer.py`.
 
-- [ ] Add `FaultKind.POINTER_WRITE_FAILED`
-- [ ] `Confirmed` resolves `completed` with `{cf_updated_at, file_slice, worktree_id, project_path}` and sets the slice node's `cf.slice_name` via `update_cf_reference` when it differs
-- [ ] `Mismatch` or another index blocks the step `HUMAN` with `pointer_write_failed` and resolves `failed`. `Unknown` goes through `journal_escalate` at once. `ReadFailed` leaves the entry unresolved
-- [ ] `cf set` non-zero resolves `failed` and blocks with the stderr head bounded by 122's tail bound. A `cf set` timeout is a cut-off: entry unresolved, read back next tick
-- [ ] Tests (store plus stub `cf`): one per outcome above; `slice_name` set from the stem
+- [x] Add `FaultKind.POINTER_WRITE_FAILED`
+- [x] `Confirmed` resolves `completed` with `{cf_updated_at, file_slice, worktree_id, project_path}` and sets the slice node's `cf.slice_name` via `update_cf_reference` when it differs
+- [x] `Mismatch` or another index blocks the step `HUMAN` with `pointer_write_failed` and resolves `failed`. `Unknown` goes through `journal_escalate` at once. `ReadFailed` leaves the entry unresolved
+- [x] `cf set` non-zero resolves `failed` and blocks with the stderr head bounded by 122's tail bound. A `cf set` timeout is a cut-off: entry unresolved, read back next tick
+- [x] Tests (store plus stub `cf`): one per outcome above; `slice_name` set from the stem
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: resolve or block on the pointer read-back`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: resolve or block on the pointer read-back`
 
 ---
 

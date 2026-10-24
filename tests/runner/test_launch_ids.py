@@ -49,6 +49,7 @@ def test_the_fault_vocabulary_values_are_stable() -> None:
         "lifecycle_orphan",
         "plan_status_unknown",
         "review_unknown",
+        "pointer_write_failed",
     }
     assert {failure.value for failure in LaunchFailure} == {
         "spawn_error",
