@@ -31,7 +31,11 @@ def raw_changes(store: Store, project_id: str) -> list[Change]:
 
 
 SUBMITTED_AT = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
-ESCALATION_PARAMETERS: dict[str, object] = {"project": "p", "expected": {}}
+ESCALATION_PARAMETERS: dict[str, object] = {
+    "project": "p",
+    "expected": {},
+    "checkout": "/work/p",
+}
 
 
 def apply(

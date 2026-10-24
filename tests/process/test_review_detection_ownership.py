@@ -23,7 +23,11 @@ from amoeba.store.review_sources import DetectedFile, DirectoryReviewSource
 
 SETTLE_SCANS = 2
 SQ_PARAMETERS: dict[str, object] = sq_run_parameters({"pipeline": "p6", "params": {}})
-CF_PARAMETERS: dict[str, object] = {"project": "p", "expected": {}}
+CF_PARAMETERS: dict[str, object] = {
+    "project": "p",
+    "expected": {},
+    "checkout": "/work/p",
+}
 
 
 class CountingSource:

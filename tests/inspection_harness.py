@@ -82,7 +82,11 @@ def seed_every_listing(supervisor_dir: Path) -> SeededStore:
         store.journal_issue(
             runnable.id,
             kind=CommandKind.CF_WRITE,
-            parameters={"project": "amoeba", "expected": {"phase": "6"}},
+            parameters={
+                "project": "amoeba",
+                "expected": {"phase": "6"},
+                "checkout": "/work/amoeba",
+            },
         )
         # Slice 103: a submission record and the intent message it produced.
         store.apply_submission(

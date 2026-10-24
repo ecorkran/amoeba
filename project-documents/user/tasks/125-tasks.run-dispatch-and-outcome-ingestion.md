@@ -105,12 +105,12 @@ See "Task-level additions". Create a module in `upstream/context_forge/` (for ex
 
 Per the LLD, D10 "`cf_write`". Edit `store/journal_models.py` and its tests (`tests/test_journal_models.py`, `tests/test_journal.py`).
 
-- [ ] Define `PARAM_CHECKOUT` and `PARAM_EXPECTED_SLICE_INDEX` once in `journal_models.py` and export them from `amoeba.store`
-- [ ] `REQUIRED_PARAMETER_KEYS[CommandKind.CF_WRITE]` becomes `{project, expected, checkout}`. `expected_slice_index` stays optional
-- [ ] Find every `cf_write` issuer in `src/` and `tests/` (`grep -rn "CF_WRITE" src tests`) and add `checkout` where a new entry is issued. Rows already in a store are untouched
-- [ ] Tests: `journal_issue` of a `cf_write` without `checkout` raises the existing missing-key error; with `checkout` and with or without `expected_slice_index` it succeeds
+- [x] Define `PARAM_CHECKOUT` and `PARAM_EXPECTED_SLICE_INDEX` once in `journal_models.py` and export them from `amoeba.store`
+- [x] `REQUIRED_PARAMETER_KEYS[CommandKind.CF_WRITE]` becomes `{project, expected, checkout}`. `expected_slice_index` stays optional
+- [x] Find every `cf_write` issuer in `src/` and `tests/` (`grep -rn "CF_WRITE" src tests`) and add `checkout` where a new entry is issued. Rows already in a store are untouched
+- [x] Tests: `journal_issue` of a `cf_write` without `checkout` raises the existing missing-key error; with `checkout` and with or without `expected_slice_index` it succeeds
 - **Success Criteria**:
-  - [ ] Journal tests, `ruff` and `pyright` pass, and the full suite still passes. Commit: `feat: require a checkout on cf_write journal entries`
+  - [x] Journal tests, `ruff` and `pyright` pass, and the full suite still passes. Commit: `feat: require a checkout on cf_write journal entries`
 
 ### Task 2.3: The read-back runs in the checkout and checks the slice index, with tests
 **Owner**: Junior AI | **Dependencies**: 2.1, 2.2 | **Effort**: 3

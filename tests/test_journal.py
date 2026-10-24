@@ -35,6 +35,7 @@ SQ_PARAMETERS: dict[str, object] = sq_run_parameters(
 CF_PARAMETERS: dict[str, object] = {
     "project": "amoeba",
     "expected": {"developmentPhase": "Phase 6: Implementation"},
+    "checkout": "/work/amoeba",
 }
 
 
@@ -102,6 +103,7 @@ def test_issue_commits_before_returning(store: Store, node: Node) -> None:
         (CommandKind.SQ_RUN, {"params": {"slice": "102"}}),
         (CommandKind.CF_WRITE, {"project": "amoeba"}),
         (CommandKind.CF_WRITE, {"expected": {"phase": "6"}}),
+        (CommandKind.CF_WRITE, {"project": "amoeba", "expected": {"phase": "6"}}),
         (CommandKind.SQ_RUN, {}),
     ],
 )
@@ -117,6 +119,21 @@ def test_issue_with_a_missing_required_parameter_raises_and_writes_nothing(
         store.journal_issue(node.id, kind=kind, parameters=parameters)
 
     assert _journal_row_count(store) == 0
+
+
+@pytest.mark.parametrize("extra", [{}, {"expected_slice_index": 125}])
+def test_a_cf_write_with_a_checkout_is_issued_with_or_without_a_slice_index(
+    store: Store, node: Node, extra: dict[str, object]
+) -> None:
+    """``checkout`` is required; ``expected_slice_index`` is optional and kept."""
+    entry = store.journal_issue(
+        node.id, kind=CommandKind.CF_WRITE, parameters={**CF_PARAMETERS, **extra}
+    )
+
+    assert entry.parameters["checkout"] == "/work/amoeba"
+    assert dict(entry.parameters).get("expected_slice_index") == extra.get(
+        "expected_slice_index"
+    )
 
 
 def test_an_sq_run_without_a_run_id_is_refused_and_names_the_key(

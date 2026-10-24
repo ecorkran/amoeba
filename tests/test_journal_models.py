@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 import pytest
 
 from amoeba.store.journal_models import (
+    PARAM_CHECKOUT,
+    PARAM_EXPECTED_SLICE_INDEX,
     PARAM_RUN_ID,
     REQUIRED_PARAMETER_KEYS,
     CommandKind,
@@ -64,7 +66,10 @@ def test_required_parameter_keys_match_the_design() -> None:
     assert PARAM_RUN_ID in REQUIRED_PARAMETER_KEYS[CommandKind.SQ_RUN]
     assert PARAM_RUN_ID == "run_id"
     assert REQUIRED_PARAMETER_KEYS[CommandKind.CF_WRITE] == frozenset(
-        {"project", "expected"}
+        {"project", "expected", PARAM_CHECKOUT}
+    )
+    assert (
+        PARAM_EXPECTED_SLICE_INDEX not in REQUIRED_PARAMETER_KEYS[CommandKind.CF_WRITE]
     )
 
 

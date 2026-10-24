@@ -31,7 +31,13 @@ def _issue(
 ) -> JournalEntry:
     # Carries the required keys of both kinds; extra keys are stored verbatim.
     parameters = sq_run_parameters(
-        {"pipeline": "review", "params": {}, "project": "p", "expected": "x"},
+        {
+            "pipeline": "review",
+            "params": {},
+            "project": "p",
+            "expected": "x",
+            "checkout": "/work/p",
+        },
         run_id=RUN_RESULT["run_id"],
     )
     return store.journal_issue(node_id, kind=kind, parameters=parameters)

@@ -74,6 +74,7 @@ from amoeba.store.inbox_models import (
 )
 from amoeba.store.journal_models import (
     PARAM_CHECKOUT,
+    PARAM_EXPECTED_SLICE_INDEX,
     PARAM_RUN_ID,
     REQUIRED_PARAMETER_KEYS,
     REVIEW_PRODUCING_KINDS,
@@ -124,6 +125,7 @@ __all__ = [
     "BLOCKED_KIND_TO_STATUS",
     "BLOCKED_STATUSES",
     "PARAM_CHECKOUT",
+    "PARAM_EXPECTED_SLICE_INDEX",
     "PARAM_RUN_ID",
     "REQUIRED_PARAMETER_KEYS",
     "REVIEW_PRODUCING_KINDS",

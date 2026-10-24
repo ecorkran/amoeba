@@ -62,10 +62,15 @@ class JournalResolver(StrEnum):
 #: The parameter key that carries an ``sq_run``'s Squadron run id (slice 120).
 PARAM_RUN_ID: Final = "run_id"
 
-#: The parameter key that carries an ``sq_run``'s working directory (slice 122):
-#: the absolute path the launch runs in. Stored and returned unchanged; recovery
-#: does not need it, so it is not a required key.
+#: The parameter key that carries the working directory a command runs in (slice 122
+#: for ``sq_run``, slice 125 for ``cf_write``): the absolute path of the checkout.
+#: Stored and returned unchanged. An ``sq_run`` does not require it; a ``cf_write``
+#: does, because its read-back must run ``cf`` in the same checkout.
 PARAM_CHECKOUT: Final = "checkout"
+
+#: The optional ``cf_write`` parameter key naming the slice index the write sets
+#: (slice 125). The read-back compares it with the index parsed from ``fileSlice``.
+PARAM_EXPECTED_SLICE_INDEX: Final = "expected_slice_index"
 
 #: The parameter keys each command kind must carry at issue time.
 #:
@@ -77,7 +82,7 @@ PARAM_CHECKOUT: Final = "checkout"
 #:
 #: Additional keys beyond these are stored and returned unchanged.
 REQUIRED_PARAMETER_KEYS: Final[Mapping[CommandKind, frozenset[str]]] = {
-    CommandKind.CF_WRITE: frozenset({"project", "expected"}),
+    CommandKind.CF_WRITE: frozenset({"project", "expected", PARAM_CHECKOUT}),
     CommandKind.SQ_RUN: frozenset({"pipeline", "params", PARAM_RUN_ID}),
 }
 

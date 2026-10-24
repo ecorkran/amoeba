@@ -63,7 +63,11 @@ def test_a_slice_node_with_no_cf_reference_does_not_match() -> None:
 # --------------------------------------------------------------------------
 
 SQ_PARAMETERS: dict[str, object] = sq_run_parameters({"pipeline": "p6", "params": {}})
-CF_PARAMETERS: dict[str, object] = {"project": "p", "expected": {}}
+CF_PARAMETERS: dict[str, object] = {
+    "project": "p",
+    "expected": {},
+    "checkout": "/work/p",
+}
 
 
 def _slice(store: Store) -> str:

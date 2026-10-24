@@ -20,6 +20,7 @@ EXPECTED_EXPORTS = {
     "BLOCKED_STATUSES",
     "REQUIRED_PARAMETER_KEYS",
     "PARAM_CHECKOUT",
+    "PARAM_EXPECTED_SLICE_INDEX",
     "PARAM_RUN_ID",
     "AcknowledgmentOutcome",
     "BlockedKind",

@@ -57,7 +57,11 @@ PROJECT = "demo"
 SQ_PARAMETERS: dict[str, object] = sq_run_parameters(
     {"pipeline": "p6", "params": {"slice": "102"}}
 )
-CF_PARAMETERS: dict[str, object] = {"project": "amoeba", "expected": {"phase": "6"}}
+CF_PARAMETERS: dict[str, object] = {
+    "project": "amoeba",
+    "expected": {"phase": "6"},
+    "checkout": "/work/amoeba",
+}
 
 
 class FixedObserver:
