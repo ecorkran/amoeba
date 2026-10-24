@@ -89,12 +89,19 @@ VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)
 #: Closes an entry. The ``outcome IS NULL`` guard makes the already-resolved
 #: case a zero-rowcount result rather than a silent overwrite, so the caller
 #: raises on it instead of losing the first outcome.
+#:
+#: Parameters, in order: outcome, result, resolved_at, resolved_by, the kind
+#: whose resolutions await routing, the flag value for that kind (1, or null when
+#: the resolver is not the issuer), the entry id. The store decides the flag
+#: (slice 125, D8), so one statement closes the entry and marks it.
 RESOLVE_JOURNAL_ENTRY: Final = f"""
 UPDATE {TABLE_COMMAND_JOURNAL}
 SET {COL_JOURNAL_OUTCOME} = ?,
     {COL_JOURNAL_RESULT} = ?,
     {COL_JOURNAL_RESOLVED_AT} = ?,
-    {COL_JOURNAL_RESOLVED_BY} = ?
+    {COL_JOURNAL_RESOLVED_BY} = ?,
+    {COL_JOURNAL_AWAITS_ROUTING} =
+        CASE WHEN {COL_JOURNAL_KIND} = ? THEN ? ELSE NULL END
 WHERE {COL_JOURNAL_ID} = ?
   AND {COL_JOURNAL_OUTCOME} IS NULL
 """
@@ -116,6 +123,18 @@ SELECT {_JOURNAL_SELECT_LIST}
 FROM {TABLE_COMMAND_JOURNAL}
 WHERE {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_PROJECT_ID} = ?
   AND {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_OUTCOME} IS NULL
+ORDER BY {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ISSUED_AT},
+         {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ID}
+"""
+
+#: Resolved entries awaiting a routing decision for one project, oldest first
+#: (slice 125, D8). Served by ``idx_journal_awaits_routing``, whose WHERE this
+#: repeats, so its cost follows unrouted work and not history.
+SELECT_UNROUTED_OUTCOMES: Final = f"""
+SELECT {_JOURNAL_SELECT_LIST}
+FROM {TABLE_COMMAND_JOURNAL}
+WHERE {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_PROJECT_ID} = ?
+  AND {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_AWAITS_ROUTING} = 1
 ORDER BY {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ISSUED_AT},
          {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ID}
 """

@@ -87,6 +87,7 @@ LISTINGS: tuple[Listing, ...] = (
             "kind",
             "outcome",
             "resolved_by",
+            "awaits_routing",
             "issued_at",
         ),
         rows=core.journal_rows,

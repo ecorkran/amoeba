@@ -90,4 +90,7 @@ def _cell(row: Row, column: str) -> str:
         return ""
     if isinstance(value, dict):
         return json.dumps(value, default=str, separators=(",", ":"))
+    if isinstance(value, bool):
+        # The same spelling `--json` uses, not Python's `True`.
+        return json.dumps(value)
     return str(value)

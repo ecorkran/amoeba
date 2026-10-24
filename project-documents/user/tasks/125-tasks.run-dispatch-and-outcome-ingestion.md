@@ -144,12 +144,12 @@ Per the LLD, "Database / Storage Schema" and D8. Create `store/schema/011_journa
 
 Per the LLD, D8. Edit `store/journal.py` (and `store/sql_journal.py` for the query).
 
-- [ ] Every issuer resolution of an `sq_run` entry through `journal_resolve` sets `awaits_routing = 1` in the same transaction. Recovery resolutions (`adopted`, `not_applied`, `unknown`) and every non-`sq_run` kind leave it null. Identify the recovery path by the code that performs it, not by a caller-supplied flag
-- [ ] `unrouted_outcomes(project_id) -> list[JournalEntry]`: entries with `awaits_routing = 1`, oldest `issued_at` first
-- [ ] Show the flag in `amoeba inspect journal` (LLD, "API Contracts"): an `awaits_routing` column in `inspection/core.py` (`journal_rows`) and the key in `--json`
-- [ ] Tests: a `completed` and a `failed` issuer resolution each set the flag; a recovery `not_applied` does not; a resolved `cf_write` does not; `unrouted_outcomes` returns them oldest first and only for its project; an `EXPLAIN QUERY PLAN` of its SQL names `idx_journal_awaits_routing`; the journal listing shows `true` for a flagged entry and `false` otherwise, in table and JSON output (`tests/test_cli_inspect.py` or `tests/inspection/`)
+- [x] Every issuer resolution of an `sq_run` entry through `journal_resolve` sets `awaits_routing = 1` in the same transaction. Recovery resolutions (`adopted`, `not_applied`, `unknown`) and every non-`sq_run` kind leave it null. Identify the recovery path by the code that performs it, not by a caller-supplied flag
+- [x] `unrouted_outcomes(project_id) -> list[JournalEntry]`: entries with `awaits_routing = 1`, oldest `issued_at` first
+- [x] Show the flag in `amoeba inspect journal` (LLD, "API Contracts"): an `awaits_routing` column in `inspection/core.py` (`journal_rows`) and the key in `--json`
+- [x] Tests: a `completed` and a `failed` issuer resolution each set the flag; a recovery `not_applied` does not; a resolved `cf_write` does not; `unrouted_outcomes` returns them oldest first and only for its project; an `EXPLAIN QUERY PLAN` of its SQL names `idx_journal_awaits_routing`; the journal listing shows `true` for a flagged entry and `false` otherwise, in table and JSON output (`tests/test_cli_inspect.py` or `tests/inspection/`)
 - **Success Criteria**:
-  - [ ] Store tests, `ruff` and `pyright` pass. Commit: `feat: mark resolved sq_run entries as awaiting routing`
+  - [x] Store tests, `ruff` and `pyright` pass. Commit: `feat: mark resolved sq_run entries as awaiting routing`
 
 ### Task 2.6: `record_runner_report` takes a sequence of reviews; a decision clears the flag, with tests
 **Owner**: Junior AI | **Dependencies**: 2.5 | **Effort**: 3

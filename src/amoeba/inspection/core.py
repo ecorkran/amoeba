@@ -58,6 +58,7 @@ def journal_rows(store: Store, request: ListingRequest) -> list[Row]:
             "kind": entry.kind.value,
             "outcome": entry.outcome.value if entry.outcome else "",
             "resolved_by": entry.resolved_by.value if entry.resolved_by else "",
+            "awaits_routing": entry.awaits_routing,
             "issued_at": entry.issued_at.isoformat() if entry.issued_at else "",
             "parameters": entry.parameters,
             "result": entry.result if entry.result is not None else {},

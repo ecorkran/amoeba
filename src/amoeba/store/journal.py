@@ -41,6 +41,34 @@ from amoeba.store.models import (
 #: same name.
 RESULT_KEY_RUN_ID = "run_id"
 
+#: The value ``awaits_routing`` takes when an entry is marked (slice 125, D8).
+AWAITS_ROUTING_SET = 1
+
+
+def _resolution_parameters(
+    outcome: JournalOutcome,
+    result_json: str | None,
+    timestamp: str,
+    resolved_by: JournalResolver,
+    entry_id: str,
+) -> tuple[object, ...]:
+    """The bound values for ``RESOLVE_JOURNAL_ENTRY``, including the routing flag.
+
+    An issuer's resolution of an ``sq_run`` entry marks it as awaiting routing,
+    because the Runner observed an outcome. A recovery resolution never does: it
+    did not observe one. The store decides, so no caller can forget or forge it.
+    """
+    flag = AWAITS_ROUTING_SET if resolved_by is JournalResolver.ISSUER else None
+    return (
+        outcome.value,
+        result_json,
+        timestamp,
+        resolved_by.value,
+        CommandKind.SQ_RUN.value,
+        flag,
+        entry_id,
+    )
+
 
 class JournalOperations(BlockWriter):
     """The command journal: issue before the side effect, resolve after it."""
@@ -154,11 +182,11 @@ class JournalOperations(BlockWriter):
         """
         cursor = self._execute(
             sql_journal.RESOLVE_JOURNAL_ENTRY,
-            (
-                outcome.value,
+            _resolution_parameters(
+                outcome,
                 None if result is None else json.dumps(dict(result)),
                 isoformat(now()),
-                resolved_by.value,
+                resolved_by,
                 entry_id,
             ),
         )
@@ -208,11 +236,11 @@ class JournalOperations(BlockWriter):
         with self._connection:
             cursor = self._execute(
                 sql_journal.RESOLVE_JOURNAL_ENTRY,
-                (
-                    JournalOutcome.UNKNOWN.value,
+                _resolution_parameters(
+                    JournalOutcome.UNKNOWN,
                     json.dumps({"reason": reason}),
                     timestamp,
-                    JournalResolver.RECOVERY.value,
+                    JournalResolver.RECOVERY,
                     entry_id,
                 ),
             )
@@ -266,6 +294,18 @@ class JournalOperations(BlockWriter):
         """
         rows = self._execute(
             sql_journal.SELECT_UNRESOLVED_JOURNAL_ENTRIES, (project_id,)
+        ).fetchall()
+        return [map_journal_entry(row) for row in rows]
+
+    def unrouted_outcomes(self, project_id: str) -> list[JournalEntry]:
+        """Resolved entries awaiting a routing decision, oldest first.
+
+        What the routing engine consumes (slice 125, D8). Served by the partial
+        index on ``(project_id, issued_at) WHERE awaits_routing = 1``, so its cost
+        follows unrouted work, not history.
+        """
+        rows = self._execute(
+            sql_journal.SELECT_UNROUTED_OUTCOMES, (project_id,)
         ).fetchall()
         return [map_journal_entry(row) for row in rows]
 

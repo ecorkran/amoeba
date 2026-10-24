@@ -173,6 +173,32 @@ def test_journal_unresolved_returns_only_unresolved_entries(
     assert rows[0]["kind"] == "cf_write"
 
 
+def test_journal_listing_shows_the_awaits_routing_flag_in_json(
+    supervisor_dir: Path, populated: Path
+) -> None:
+    """The resolved ``sq_run`` awaits routing; the open ``cf_write`` does not."""
+    rows = json.loads(
+        run_cli(_listing_arguments("journal", ["--json"]), supervisor_dir).stdout
+    )
+
+    assert {row["kind"]: row["awaits_routing"] for row in rows} == {
+        "sq_run": True,
+        "cf_write": False,
+    }
+
+
+def test_journal_table_spells_the_awaits_routing_flag_as_json_does(
+    supervisor_dir: Path, populated: Path
+) -> None:
+    lines = run_cli(_listing_arguments("journal"), supervisor_dir).stdout.splitlines()
+    # Cells can be empty (an unresolved outcome), so read by the header's offsets.
+    kind_at = lines[0].index("kind")
+    flag_at = lines[0].index("awaits_routing")
+    body = {line[kind_at:].split()[0]: line[flag_at:].split()[0] for line in lines[2:]}
+
+    assert body == {"sq_run": "true", "cf_write": "false"}
+
+
 def test_projects_listing_finds_the_store(
     supervisor_dir: Path, populated: Path
 ) -> None:
