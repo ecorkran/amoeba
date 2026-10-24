@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from amoeba.inspection import cf, checks, core, evidence, feed, inbox
+from amoeba.inspection import cf, checks, core, desired_states, evidence, feed, inbox
 from amoeba.inspection.listing import (
     NODE_OPTION,
     ChoiceOption,
@@ -125,6 +125,12 @@ LISTINGS: tuple[Listing, ...] = (
         ),
         rows=inbox.message_rows,
         choice_options=(inbox.CHANNEL_OPTION,),
+    ),
+    Listing(
+        name="desired-states",
+        help_text="What the PM has asked the Runner to drive or hold, by target.",
+        columns=desired_states.DESIRED_STATE_COLUMNS,
+        rows=desired_states.desired_state_rows,
     ),
     Listing(
         name="verdicts",

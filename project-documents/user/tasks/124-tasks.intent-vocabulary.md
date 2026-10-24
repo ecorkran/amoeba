@@ -243,12 +243,13 @@ Per the LLD, D7 and D8. Edit `runner/lifecycle/human_steps.py`, `runner/factory.
 
 Per the LLD, D6 and D9, "Data Flow" and "State Management". Edit `runner/tick.py` (replace the `# [apply intents - slice 124]` comment) and create `tests/runner/test_tick_intents.py`.
 
-- [ ] At the top of `ProjectTick.run`, before observe: clear the node context (the work is project-scoped), call `apply_pending_intents`, and set `self.wrote` true when it returned more than zero
-- [ ] Then read `desired_states(project_id)` once into a `DesiredStateIndex`, before observe, and hand the same index to `_decide` for the view. Never cache it across ticks. Remove the interim read added in Task 5.1
-- [ ] Leave a short comment at the observe call noting that 125 and 128 read `index.drives_anything()` for their Observe scope. Do not change observe now. Observe is not filtered by hold
-- [ ] Tests (stub `cf`/`sq` as in 123): an intent submitted before a tick is acknowledged and its row written in that tick; the same tick's decide sees it (a driven initiative with no `archFile` blocks its `architecture` step in one tick); `tick()` returns true when only an intent was applied; an unexpected exception raised inside apply becomes a project-scoped `unexpected_fault` (monkeypatch `interpret`), earlier acknowledgments stay and the failing intent stays pending; a repeating bug adds no second escalation row; a `STORE_FAILURES` error exits as 122 specifies
+- [x] At the top of `ProjectTick.run`, before observe: clear the node context (the work is project-scoped), call `apply_pending_intents`, and set `self.wrote` true when it returned more than zero
+- [x] Then read `desired_states(project_id)` once into a `DesiredStateIndex`, before observe, and hand the same index to `_decide` for the view. Never cache it across ticks. Remove the interim read added in Task 5.1
+- [x] Leave a short comment at the observe call noting that 125 and 128 read `index.drives_anything()` for their Observe scope. Do not change observe now. Observe is not filtered by hold
+- [x] Tests (stub `cf`/`sq` as in 123): an intent submitted before a tick is acknowledged and its row written in that tick; the same tick's decide sees it (a driven initiative with no `archFile` blocks its `architecture` step in one tick); `tick()` returns true when only an intent was applied; an unexpected exception raised inside apply becomes a project-scoped `unexpected_fault` (monkeypatch `interpret`), earlier acknowledgments stay and the failing intent stays pending; a repeating bug adds no second escalation row; a `STORE_FAILURES` error exits as 122 specifies
 - **Success Criteria**:
-  - [ ] Tests, the 122 and 123 tick tests, `ruff` and `pyright` pass. Commit: `feat: apply intents at the start of each project tick`
+  - [x] Tests, the 122 and 123 tick tests, `ruff` and `pyright` pass. Commit: `feat: apply intents at the start of each project tick`
+  - Note: tests are in `tests/runner/test_tick_intents.py`. `StoreHost` and `tenant_for` were added to `tests/runner/tick_support.py`.
 
 ---
 
@@ -259,20 +260,22 @@ Only Functional Requirements that no earlier task proves through a tick. Idempot
 ### Task 7.1: Hold through the tick
 **Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 2
 
-- [ ] `test_project_pause_wins_over_slice_resume`: project paused, a slice resumed and driven; the slice's steps are not blocked or planned. Then `resume` on the project; on the next tick they are
-- [ ] A test planner that emits an action for every ready step, with a held step, faults the project through 122's catch (`unexpected_fault`, deduplicated); the production tuple with a held human step blocks nothing
+- [x] `test_project_pause_wins_over_slice_resume`: project paused, a slice resumed and driven; the slice's steps are not blocked or planned. Then `resume` on the project; on the next tick they are
+- [x] A test planner that emits an action for every ready step, with a held step, faults the project through 122's catch (`unexpected_fault`, deduplicated); the production tuple with a held human step blocks nothing
 - **Success Criteria**:
-  - [ ] Tests pass. Commit: `test: prove hold through the tick`
+  - [x] Tests pass. Commit: `test: prove hold through the tick`
+  - Note: tests are in `tests/runner/test_tick_governance.py` (new file, as the section intro allows).
 
 ### Task 7.2: Held targets still observe, and linking escalates nothing
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 2
 
 Per the LLD, D7 ("What hold does not stop") and D8.
 
-- [ ] A run in flight under a held slice is still polled and recorded (stub `sq`, as in `test_observe_poll.py`), and a block written before the hold stays
-- [ ] `test_linking_a_project_escalates_nothing`: link a fixture project, tick, and assert no escalation and no block
+- [x] A run in flight under a held slice is still polled and recorded (stub `sq`, as in `test_observe_poll.py`), and a block written before the hold stays
+- [x] `test_linking_a_project_escalates_nothing`: link a fixture project, tick, and assert no escalation and no block
 - **Success Criteria**:
-  - [ ] Tests, `uv run pytest tests/contract -q`, `ruff` and `pyright` pass. Commit: `test: prove observe continues under hold and linking is quiet`
+  - [x] Tests, `uv run pytest tests/contract -q`, `ruff` and `pyright` pass. Commit: `test: prove observe continues under hold and linking is quiet`
+  - Note: tests are in `tests/runner/test_tick_governance.py` (new file, as the section intro allows).
 
 ---
 

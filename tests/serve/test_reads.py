@@ -123,7 +123,11 @@ def test_messages_listing_serves_the_outcome_fault_and_closure_columns(
     seeded: SeededStore, make_client: ClientFactory
 ) -> None:
     with Store.open(seeded.store_file) as store:
-        [intent] = store.messages(PROJECT, channel=Channel.INTENT)
+        [intent] = [
+            m
+            for m in store.messages(PROJECT, channel=Channel.INTENT)
+            if m.acknowledged_at is None  # the seeded desired-state intent is applied
+        ]
         store.acknowledge_message(
             intent.id,
             acknowledged_by="runner",

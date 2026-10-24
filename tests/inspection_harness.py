@@ -16,12 +16,14 @@ from sq_run_fixtures import sq_run_parameters
 
 from amoeba.inbox import submit
 from amoeba.store import (
+    AcknowledgmentOutcome,
     BlockedKind,
     CommandKind,
     DetectionInput,
     DetectionOutcome,
     JournalOutcome,
     NodeKind,
+    SetDesiredState,
     Store,
     SubmissionKind,
 )
@@ -90,6 +92,23 @@ def seed_every_listing(supervisor_dir: Path) -> SeededStore:
             submitted_by="fixture",
             submitted_at=datetime(2026, 9, 23, tzinfo=UTC),
             payload={INTENT_NODE_ID: runnable.id, INTENT_BODY: {"want": "a run"}},
+        )
+        # Slice 124: one applied intent that set a desired state at the project.
+        store.apply_submission(
+            submission_id="fixture-desired-state",
+            project_id=PROJECT,
+            kind=SubmissionKind.INTENT,
+            submitted_by="fixture",
+            submitted_at=datetime(2026, 10, 23, tzinfo=UTC),
+            payload={INTENT_NODE_ID: None, INTENT_BODY: {"intent": "pause"}},
+        )
+        desired_intent = store.intent_for_submission("fixture-desired-state")
+        assert desired_intent is not None
+        store.acknowledge_message(
+            desired_intent.id,
+            acknowledged_by="fixture",
+            outcome=AcknowledgmentOutcome.APPLIED,
+            desired_state=SetDesiredState(hold=True),
         )
         # Slice 104: one review verdict with one finding.
         store.record_verdict(
