@@ -17,8 +17,8 @@ projectState: Slices 120–123 are merged. `amoeba.runner` has the tick (`Projec
   `ClearDesiredState` and `DesiredState`. `amoeba.runner.intent` and `STEP_SEQUENCE`
   do not exist.
 dateCreated: 20261023
-dateUpdated: 20261023
-status: in_progress
+dateUpdated: 20261024
+status: complete
 turns: 52
 promptTokens: 4177544
 cachedTokens: 4071088
