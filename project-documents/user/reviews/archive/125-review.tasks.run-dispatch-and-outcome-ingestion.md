@@ -14,16 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261024
 dateUpdated: 20261024
-reviewedSha: 923f561488da78f1d8a6c92f8fa33e3e3b2a097b
+reviewedSha: 0a1926145a0a0827496a09cc7c96e294b3f64529
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-turns: 3
-promptTokens: 128845
-cachedTokens: 9623
-cacheWriteTokens: 119218
-completionTokens: 28632
-durationSeconds: 128.9
-costUsd: 0.178347
+toolCallsMade: 5
+turns: 6
+promptTokens: 369998
+cachedTokens: 238704
+cacheWriteTokens: 131286
+completionTokens: 17415
+durationSeconds: 82.2
+costUsd: 0.176276
 costBasis: provider
 runId: run-20261024-p5-0a64b162
 squadronVersion: 0.23.7
@@ -31,58 +32,38 @@ findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success criteria are all covered by tasks"
-    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:503"
+    summary: "Success criteria are covered by tasks"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:1"
   - id: F002
-    severity: pass
+    severity: concern
     category: sequencing
-    summary: "Commit cadence and test-with pattern"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:47"
+    summary: "Sequencing is linear where the work is independent, so one blocker stalls unrelated work"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:107"
   - id: F003
     severity: concern
-    category: sequencing
-    summary: "Declared dependencies contradict the file's stated independence of Sections 8 and 9"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:454"
+    category: design-consistency
+    summary: "Detection key placement in the design contradicts the code and Rule 1"
+    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:322"
   - id: F004
-    severity: concern
-    category: proportionality
-    summary: "Task 6.2 is overweight"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:384-395"
+    severity: note
+    category: design-consistency
+    summary: "Planner tuple location differs between the design and the task file"
+    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:148"
   - id: F005
     severity: concern
-    category: fixtures
-    summary: "Task 2.3 assumes a registered CF worktree exists, with no BLOCKED path"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:111"
-  - id: F006
-    severity: concern
-    category: fixtures
-    summary: "The paused-run fixture is hand-built from the LLD, not from real output"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:215"
-  - id: F007
-    severity: concern
-    category: coverage
-    summary: "A D6 requirement has no test: detection must not take a paused run's review as external"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:280-288"
-  - id: F008
-    severity: concern
-    category: security
-    summary: "Payload bounding is required by the design but no task applies it"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:244-247"
-  - id: F009
-    severity: concern
     category: granularity
-    summary: "Several one-item tasks are too granular"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:178-188"
-  - id: F010
+    summary: "Several tasks are too thin to justify their own commit"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:267"
+  - id: F006
     severity: note
     category: coverage
-    summary: "Four placement corrections to the LLD are documented but not verified in this review"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:49-52"
-  - id: F011
-    severity: note
-    category: proportionality
-    summary: "No `tests/load/` task is needed for the restated bound on `unrouted_outcomes`"
-    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:329"
+    summary: "A walkthrough test name has no task that creates it"
+    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:563"
+  - id: F007
+    severity: pass
+    category: commit-cadence
+    summary: "Test-with pattern and commit checkpoints are distributed"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:48"
 ---
 
 # Review: tasks — slice 125
@@ -92,59 +73,52 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria are all covered by tasks
+### [PASS] Success criteria are covered by tasks
 
-Each functional, technical and integration criterion has a task that tests it. Examples: two-tick dispatch (7.3), worktree routing and read-back (6.1, 6.2, 7.3), pointer failure cases (6.2, 7.1), checkout concurrency (5.5, 7.4), split and empty reviews (4.2, 4.3), the reissue (8.1), pointer-moved (9.1, 9.2), the migration and `EXPLAIN` check (2.4, 2.5), and the walkthrough (10.3). The only criterion without a dedicated test is "126 can read `unrouted_outcomes` without changing `dispatch/` or `ingest/`", which is a design property and not testable here.
+Each functional criterion in the slice design maps to at least one task. Two-tick dispatch and `merge=false` are in 7.3. Worktree routing is in 6.1 and 7.3. Pointer failures are in 6.3 and 7.1. Checkout concurrency is in 5.5 and 7.4. Unresolved checkouts are in 5.1 and 7.2. Ingestion, split and empty reviews, unknown reviews and non-completed outcomes are in 4.1 to 4.3. Left-for-routing and crash points are in 2.5, 2.7 and 4.5. Reissue is in 8.1, and pointer-move is in 9.1 and 9.2. Technical requirements (migration 011 with `EXPLAIN QUERY PLAN`, `TickBudget` coverage, the merge-key import test) and integration requirements (the contract suite, 122/123/124 tests with `DispatchPlanner` in production) are covered by 2.4, 2.5, 2.6, 5.3, 10.1 and 10.3.
 
-### [PASS] Commit cadence and test-with pattern
+### [CONCERN] Sequencing is linear where the work is independent, so one blocker stalls unrelated work
 
-Each implementation task carries its own tests and one commit. Test-only tasks (2.10, 3.2, 4.4, 4.5, 7.4) follow the code they exercise. Commits are spread across all ten sections, not batched at the end. The dependency graph has no cycles.
+Task 2.3 can write `BLOCKED:` if the repo root is not a registered CF worktree. Every later task declares a dependency on it, directly or through the chain. That stops the migration, the store flag and the ingestion work, which do not need the observer change at all:
+- 2.4 (migration 011) and 2.5 (flag and `unrouted_outcomes`) need only 2.2 at most. 2.1 is not needed.
+- 2.6 to 2.8 need no CF read-back.
+- Section 4 (ingestion) needs no dispatch code.
+- Section 5 (pure dispatch core) is pure. 5.1 lists 4.5 as its dependency at line 297, a crash test for ingestion, which it does not need.
+- 9.1 is pure and lists 7.4, though it needs only `parse_slice_stem` and the snapshot shape.
 
-### [CONCERN] Declared dependencies contradict the file's stated independence of Sections 8 and 9
+Dependencies should name what each task reads or calls. Sections 4 and 5 should not depend on each other. Each store change should depend only on the store changes it uses. A blocker at 2.3 should then leave the rest of the store and ingestion work free to proceed.
 
-Lines 62–63 say "Sections 8 and 9 are independent of each other and of Sections 5–7." But 8.1 depends on 7.4 and 9.1 depends on 8.1. Also, every task lists only its immediate predecessor, so the file is one linear chain with no parallel work. Two specific fixes:
-- 8.1 needs at least 7.3, because 8.1 replaces the placeholder block that 7.3 adds (line 432).
-- 9.1 needs only 6.2 and the snapshot store, so it should depend on 6.2.
+### [CONCERN] Detection key placement in the design contradicts the code and Rule 1
 
-Correct the declared dependencies, or remove the independence claim.
+D7 says detection builds the key "inside its directory source", and D10 (line 365) says "Detection's directory source is changed to call it." The code shows otherwise. `DirectoryReviewSource` is in `store/review_sources.py:75`, and the store may not import `process` (Rule 1, `tests/test_import_boundaries.py`). The key is formed in `process/review_scan.py:91-92` (`str(detected.path)`, `content_digest`). Task 2.8 places the helper there, which is correct. The design should be corrected so the design and the tasks agree, and the design's "Technical Scope" and "Component Structure" are not left describing the infeasible path.
 
-### [CONCERN] Task 6.2 is overweight
+### [NOTE] Planner tuple location differs between the design and the task file
 
-One effort-3 task covers `issue_pointer_write`, `read_back` with four answer types, seven D2 outcomes, two new fault kinds, and the timeout branch. Split it in two: (a) the journal, the `cf set` call, and its exit and timeout outcomes; (b) the read-back answers and their entry resolutions, including `slice_name`. Task 7.3 (lines 426–435) is also heavy: it wires both actions, adds the reissue placeholder, and covers eight scenarios. Move the `cf set` failure scenarios into 7.4 or into 6.2's split.
+The component table says `tenant.py CHANGED production planners`. The code has `PRODUCTION_PLANNERS` in `src/amoeba/runner/factory.py:24`. The task file's "Task-level additions" records this correctly, and Task 10.1 edits `factory.py`. The design should be updated to match.
 
-### [CONCERN] Task 2.3 assumes a registered CF worktree exists, with no BLOCKED path
+### [CONCERN] Several tasks are too thin to justify their own commit
 
-The step says to capture `cf get --json` "from the repo root (a registered CF worktree)", but nothing checks or creates that registration. If the repo root is not registered, the fixture cannot be captured, and 6.1 and 7.x depend on it. Task 3.1 has a fallback; this task has none. Add: "If the repo root is not a registered CF worktree, write `BLOCKED:` with the reason and stop."
+The file has 35 tasks. Several carry one or two bullets and one commit each:
+- **4.4** is one test, which can be a case in 4.3's test file. Its own bullet says "add a test to `test_record.py` or an e2e test", which is a sign it has no clear home.
+- **2.7** is a one-line change (clearing the flag) plus two tests. It belongs with 2.5, which already owns the flag and the store query.
+- **5.3** is a single function with an import test. It belongs with 5.2 or 5.4.
+- **6.3** extends the same file and test module as 6.2 (`pointer.py`, `test_pointer.py`). It belongs with 6.2.
 
-### [CONCERN] The paused-run fixture is hand-built from the LLD, not from real output
+Merging these four would cut the file to about 31 tasks and keep each commit a unit of behavior.
 
-If no real paused run appears within 60 seconds, 3.1 copies a completed document and writes the `checkpoint` keys from the LLD. The `-edited` suffix records this, but the parser rule in AGENTS.md says a parser's fixture must match the format production emits. A checkpoint shape written from the design doc cannot prove that. Either stop with `BLOCKED:` when no real paused run is found, or make the paused-path tests explicitly shape-only and capture a real paused run during the 10.3 walkthrough.
+### [NOTE] A walkthrough test name has no task that creates it
 
-### [CONCERN] A D6 requirement has no test: detection must not take a paused run's review as external
+The walkthrough's step 1 names `test_split_review_records_every_part`. Task 4.3 describes the behavior ("split review records every part in one transaction") but does not give that name. Step 1 will not find the test unless 4.3 names it.
 
-The slice design (line 301) says a paused run's last review is the review behind its checkpoint verdict, and that "Detection must not take that file as external either." Task 4.4 tests only the completed case. Add a paused-run scan case to 4.4, or to 7.4 if the e2e harness is simpler there.
+### [PASS] Test-with pattern and commit checkpoints are distributed
 
-### [CONCERN] Payload bounding is required by the design but no task applies it
-
-The design's Security note (slice design line 646) says CF and Squadron output stored in payloads is bounded like 122's tail. Task 4.1's `failed` payload `{reason, run_id, failure}` embeds `RunFailure`, including its free-text `message`, and no task states a bound or tests one. The design also stores `outcome_document` verbatim in the result (D6, line 297). That is a result, not a payload, so the two statements may not conflict, but the design does not say so. The PM should decide whether results are exempt. Then 4.1 should state the bound for `failure.message` and test it.
-
-### [CONCERN] Several one-item tasks are too granular
-
-2.9 (journal listing column), 2.10 (run the contract suite) and 4.4 (one detection test) each have one or two checks and effort 1–2. Task 5.3 (`dispatch_params`, effort 1) could fold into 5.4, which edits the same view. Merge 2.9 and 2.10, fold 4.4 into 4.3's test list, and fold 5.3 into 5.4. This keeps the commit-per-task rule and cuts about four tasks.
-
-### [NOTE] Four placement corrections to the LLD are documented but not verified in this review
-
-The task file moves the planner tuple to `runner/factory.py` (LLD says `tenant.py`), moves the stem rule to `upstream/context_forge`, and places the detection key in `process/review_scan.py`. Each is justified by an import boundary or by the code's current state, and the projectState line supports the factory placement. I did not read the source to confirm them. Confirm before 2.1, 2.8 or 10.1 starts.
-
-### [NOTE] No `tests/load/` task is needed for the restated bound on `unrouted_outcomes`
-
-The design says the read cost is "bounded by unrouted work, not by history." The `EXPLAIN QUERY PLAN` test in 2.5 is the proportionate check for that bound. No load test or CI gate is required.
+Each implementation task carries its own tests and one commit. Test-only tasks (4.4, 4.5, 7.4, 10.3) follow the implementation they exercise. Commits are spread across all ten sections, not batched at the end. The `Fixes #9` and `Fixes #10` commits fall on the tasks that deliver the behavior (8.1, 2.7). Live runs in 10.3 are pre-authorized, and no task waits on a Project Manager approval gate.
 
 ### Run Digest
 
-- Response length: 6854 chars
+- Response length: 6074 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -152,13 +126,13 @@ The design says the read cost is "bounded by unrouted work, not by history." The
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 128845 / 9623 / 119218 / 28632 / not computed
-- Duration: 128.9 s
+- Turns: 6
+- Tokens — prompt / cached / cache write / completion / reasoning: 369998 / 238704 / 131286 / 17415 / not computed
+- Duration: 82.2 s
 - Cost: $0.18 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 11
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 11
-- Finding-shaped matches — surviving validation: 11
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7

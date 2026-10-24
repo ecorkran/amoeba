@@ -14,17 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261024
 dateUpdated: 20261024
-reviewedSha: 0a1926145a0a0827496a09cc7c96e294b3f64529
-revision_number: 1
+reviewedSha: 3832c9263fd8f48964ab30a3a76a113df8d69828
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
-turns: 6
-promptTokens: 369998
-cachedTokens: 238704
-cacheWriteTokens: 131286
-completionTokens: 17415
-durationSeconds: 82.2
-costUsd: 0.176276
+toolCallsMade: 2
+turns: 3
+promptTokens: 128991
+cachedTokens: 12782
+cacheWriteTokens: 116205
+completionTokens: 33717
+durationSeconds: 149.5
+costUsd: 0.190617
 costBasis: provider
 runId: run-20261024-p5-0a64b162
 squadronVersion: 0.23.7
@@ -32,38 +32,58 @@ findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success criteria are covered by tasks"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:1"
+    summary: "Every success criterion has a task"
+    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:503"
   - id: F002
     severity: concern
-    category: sequencing
-    summary: "Sequencing is linear where the work is independent, so one blocker stalls unrelated work"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:107"
+    category: process
+    summary: "Prerequisite edits are described as committed but are not"
+    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:95"
   - id: F003
     severity: concern
-    category: design-consistency
-    summary: "Detection key placement in the design contradicts the code and Rule 1"
-    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:322"
+    category: sequencing
+    summary: "Two external preconditions are checked after contract work has started"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:114"
   - id: F004
-    severity: note
-    category: design-consistency
-    summary: "Planner tuple location differs between the design and the task file"
-    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:148"
+    severity: concern
+    category: process
+    summary: "Task 1.1 has no commit and an output with nowhere to go"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:76"
   - id: F005
     severity: concern
-    category: granularity
-    summary: "Several tasks are too thin to justify their own commit"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:267"
+    category: docs
+    summary: "`process-contract.md` is edited in two tasks"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:181"
   - id: F006
-    severity: note
-    category: coverage
-    summary: "A walkthrough test name has no task that creates it"
-    location: "project-documents/user/slices/125-slice.run-dispatch-and-outcome-ingestion.md:563"
+    severity: concern
+    category: sizing
+    summary: "Several tasks bundle too much for one junior pass"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:247"
   - id: F007
-    severity: pass
-    category: commit-cadence
-    summary: "Test-with pattern and commit checkpoints are distributed"
-    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:48"
+    severity: concern
+    category: testing
+    summary: "Tick-level ingestion test repeats the outcome table"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:421"
+  - id: F008
+    severity: note
+    category: sequencing
+    summary: "Dependency list for 9.1 misses its direct inputs"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:446"
+  - id: F009
+    severity: note
+    category: sequencing
+    summary: "Section 2 says contract work lands before Runner code, but 2.1 edits runner code"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:92"
+  - id: F010
+    severity: note
+    category: naming
+    summary: "Some result keys are used but not in the shared-names list"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:57"
+  - id: F011
+    severity: note
+    category: instructions
+    summary: "Two instructions point at a value without saying where it comes from"
+    location: "project-documents/user/tasks/125-tasks.run-dispatch-and-outcome-ingestion.md:115"
 ---
 
 # Review: tasks — slice 125
@@ -73,52 +93,59 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria are covered by tasks
+### [PASS] Every success criterion has a task
 
-Each functional criterion in the slice design maps to at least one task. Two-tick dispatch and `merge=false` are in 7.3. Worktree routing is in 6.1 and 7.3. Pointer failures are in 6.3 and 7.1. Checkout concurrency is in 5.5 and 7.4. Unresolved checkouts are in 5.1 and 7.2. Ingestion, split and empty reviews, unknown reviews and non-completed outcomes are in 4.1 to 4.3. Left-for-routing and crash points are in 2.5, 2.7 and 4.5. Reissue is in 8.1, and pointer-move is in 9.1 and 9.2. Technical requirements (migration 011 with `EXPLAIN QUERY PLAN`, `TickBudget` coverage, the merge-key import test) and integration requirements (the contract suite, 122/123/124 tests with `DispatchPlanner` in production) are covered by 2.4, 2.5, 2.6, 5.3, 10.1 and 10.3.
+Functional criteria map to 6.2–6.3 and 7.3 (two-tick dispatch, pointer failures), 5.4 and 7.4 (concurrency), 7.2 (unresolved checkout), 4.2–4.4 (ingestion, split and empty reviews, unknown reviews, crash points, routing), 8.1 (reissue), and 9.1–9.2 (pointer moved). Technical criteria map to 2.4–2.5 (migration and EXPLAIN), 5.1–5.4 and 4.1 (table tests over D1, D3, D4, D6), 6.2 and 10.1 (TickBudget coverage), 5.3 (merge import test), 2.8 and 10.2 (contract text and CHANGELOG), and 10.3 (full gate and walkthrough). No load-test NFR is restated, so none is required.
 
-### [CONCERN] Sequencing is linear where the work is independent, so one blocker stalls unrelated work
+### [CONCERN] Prerequisite edits are described as committed but are not
 
-Task 2.3 can write `BLOCKED:` if the repo root is not a registered CF worktree. Every later task declares a dependency on it, directly or through the chain. That stops the migration, the store flag and the ingestion work, which do not need the observer change at all:
-- 2.4 (migration 011) and 2.5 (flag and `unrouted_outcomes`) need only 2.2 at most. 2.1 is not needed.
-- 2.6 to 2.8 need no CF read-back.
-- Section 4 (ingestion) needs no dispatch code.
-- Section 5 (pure dispatch core) is pure. 5.1 lists 4.5 as its dependency at line 297, a crash test for ingestion, which it does not need.
-- 9.1 is pure and lists 7.4, though it needs only `parse_slice_stem` and the snapshot shape.
+The slice says the plan entries 6–7 and the arch edits are "committed before merge" and "already met" (also line 643). The session-start git status lists `120-arch.runner-routing-engine.md` and `001-initiative-plan.amoeba.md` as modified and uncommitted. Task 1.1 branches from the target with those edits still in the working tree. Planning edits should be committed to the target before Phase 6. Add a step to 1.1 that confirms a clean tree, or commit the edits first. The D7 correction to the arch "Run identity" sentence has no task that checks it.
 
-Dependencies should name what each task reads or calls. Sections 4 and 5 should not depend on each other. Each store change should depend only on the store changes it uses. A blocker at 2.3 should then leave the rest of the store and ingestion work free to proceed.
+### [CONCERN] Two external preconditions are checked after contract work has started
 
-### [CONCERN] Detection key placement in the design contradicts the code and Rule 1
+Task 2.3 is the first point where the task file checks for a registered worktree (`cf worktree list --json`). Task 3.1 (line 196) is where it checks for local paused, failed and completed runs. Either one can end in BLOCKED, and that stops almost every later task, including all of Sections 5–10. Both checks are cheap and read-only. Move them into Task 1.1 so the slice fails before the contract changes are made.
 
-D7 says detection builds the key "inside its directory source", and D10 (line 365) says "Detection's directory source is changed to call it." The code shows otherwise. `DirectoryReviewSource` is in `store/review_sources.py:75`, and the store may not import `process` (Rule 1, `tests/test_import_boundaries.py`). The key is formed in `process/review_scan.py:91-92` (`str(detected.path)`, `content_digest`). Task 2.8 places the helper there, which is correct. The design should be corrected so the design and the tasks agree, and the design's "Technical Scope" and "Component Structure" are not left describing the infeasible path.
+### [CONCERN] Task 1.1 has no commit and an output with nowhere to go
 
-### [NOTE] Planner tuple location differs between the design and the task file
+The project rules require at least one commit per task. Task 1.1 says "No commit needed" and also says "Record the passed-test count in this task", but the task file is not committed by any step. Either drop the count or put it in the first commit's message or body (Task 2.1).
 
-The component table says `tenant.py CHANGED production planners`. The code has `PRODUCTION_PLANNERS` in `src/amoeba/runner/factory.py:24`. The task file's "Task-level additions" records this correctly, and Task 10.1 edits `factory.py`. The design should be updated to match.
+### [CONCERN] `process-contract.md` is edited in two tasks
 
-### [CONCERN] Several tasks are too thin to justify their own commit
+Task 2.8 (line 181) edits the read-back section of `docs/process-contract.md`. Task 10.2 (line 485) edits the dispatch and ingest stages of the same file. Two passes over one doc invite drift. Keep the whole process-contract edit in 10.2, or make 2.8 cover only the store and evidence docs.
 
-The file has 35 tasks. Several carry one or two bullets and one commit each:
-- **4.4** is one test, which can be a case in 4.3's test file. Its own bullet says "add a test to `test_record.py` or an e2e test", which is a sign it has no clear home.
-- **2.7** is a one-line change (clearing the flag) plus two tests. It belongs with 2.5, which already owns the flag and the store query.
-- **5.3** is a single function with an import test. It belongs with 5.2 or 5.4.
-- **6.3** extends the same file and test module as 6.2 (`pointer.py`, `test_pointer.py`). It belongs with 6.2.
+### [CONCERN] Several tasks bundle too much for one junior pass
 
-Merging these four would cut the file to about 31 tasks and keep each commit a unit of behavior.
+- **4.3** combines the block and result logic, the factory version label, the new fault kind, the `finish` delegation, and seven test cases. Split the block and result from the `finish` delegation and re-entry tests.
+- **5.3** (line 305) combines `dispatch_params`, the new action and `LaunchRun` fields, per-step `ProjectView` facts, the held-set plumbing and the import test. Split it into params and types, then view facts.
+- **7.3** (line 403) combines Act for both actions, the reissue placeholder and six scenario tests. Move the concurrency and ingestion scenarios to 7.4.
+- **2.3** (line 109) combines fixture capture, record fields, cwd selection, the index rule and function extraction. Split out the capture and record fields.
 
-### [NOTE] A walkthrough test name has no task that creates it
+### [CONCERN] Tick-level ingestion test repeats the outcome table
 
-The walkthrough's step 1 names `test_split_review_records_every_part`. Task 4.3 describes the behavior ("split review records every part in one transaction") but does not give that name. Step 1 will not find the test unless 4.3 names it.
+Task 7.4 lists every outcome again (completed, split, empty, each unknown, paused, failed with `cost_cap` and `stall`, orphaned, vanished). Task 4.1 already tests each outcome as a table, and 4.3 tests the store path. The success criteria need the tick-level path, not every outcome again. Keep one paused, one failed and one unknown-review scenario, plus the unrouted check.
 
-### [PASS] Test-with pattern and commit checkpoints are distributed
+### [NOTE] Dependency list for 9.1 misses its direct inputs
 
-Each implementation task carries its own tests and one commit. Test-only tasks (4.4, 4.5, 7.4, 10.3) follow the implementation they exercise. Commits are spread across all ten sections, not batched at the end. The `Fixes #9` and `Fixes #10` commits fall on the tasks that deliver the behavior (8.1, 2.7). Live runs in 10.3 are pre-authorized, and no task waits on a Project Manager approval gate.
+Task 9.1 uses the pointer write's `worktree_id` (defined in 2.3) and the time the write resolved (6.3). Its listed dependencies are 2.1 and 5.1, and neither supplies those inputs. Either list 2.3 and 6.3, or state that the function takes plain values.
+
+### [NOTE] Section 2 says contract work lands before Runner code, but 2.1 edits runner code
+
+Task 2.1 changes `runner/lifecycle/slugs.py`. That is a placement detail, not a problem, but the section intro should not say "before any Runner code".
+
+### [NOTE] Some result keys are used but not in the shared-names list
+
+Task 6.3 writes `cf_updated_at` and `file_slice`. The shared-names list in line 57 does not name either, and Task 2.3's adoption record does not include `cf_updated_at`. Add both to the shared list, or state which task defines `cf_updated_at`.
+
+### [NOTE] Two instructions point at a value without saying where it comes from
+
+- Task 2.3 says `cf get --json -p <amoeba's CF project id>` but does not say where the id comes from. If the existing `tests/fixtures/cf/cf_get_amoeba.json` carries it, name that file.
+- Task 10.3 (line 498) omits two fallbacks in the slice's walkthrough: running `cf init` if the scratch copy asks for config, and choosing the first runnable slice if slice 126 is already designed. Include both, since the task says to run the walkthrough "exactly as written".
 
 ### Run Digest
 
-- Response length: 6074 chars
+- Response length: 6731 chars
 - Response is newline-free: no
-- Tool calls made: 5
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -126,13 +153,13 @@ Each implementation task carries its own tests and one commit. Test-only tasks (
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 6
-- Tokens — prompt / cached / cache write / completion / reasoning: 369998 / 238704 / 131286 / 17415 / not computed
-- Duration: 82.2 s
-- Cost: $0.18 (provider)
+- Turns: 3
+- Tokens — prompt / cached / cache write / completion / reasoning: 128991 / 12782 / 116205 / 33717 / not computed
+- Duration: 149.5 s
+- Cost: $0.19 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 11
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 11
+- Finding-shaped matches — surviving validation: 11
