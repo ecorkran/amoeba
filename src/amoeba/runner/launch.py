@@ -149,15 +149,32 @@ class LaunchError:
     detail: str
 
 
+#: Squadron takes a pipeline's primary required parameter as a positional target
+#: (``sq run P4 131``) and rejects it as ``-p slice=131`` ("Pipeline 'p4' requires a
+#: 'slice' argument"; observed squadron-ai 0.23.7, 20261024). Every pipeline the Runner
+#: dispatches (P4, P5, P6) has ``slice`` as that parameter, so a ``slice`` parameter is
+#: passed positionally and the others as ``-p``.
+TARGET_PARAM_KEY: Final = "slice"
+
+
 def build_argv(pipeline: str, run_id: str, params: Mapping[str, str]) -> list[str]:
-    """The ``sq run`` command line, one ``-p key=value`` per parameter.
+    """The ``sq run`` command line: the target, then a ``-p key=value`` per other param.
 
     Raises:
-        ValueError: If a value contains ``,`` or a key contains ``,`` or ``=``.
-            Squadron would split them. Call this before journaling.
+        ValueError: If a value contains ``,`` or a key contains ``,`` or ``=``
+            (Squadron would split them), or the target looks like an option. Call
+            this before journaling.
     """
-    argv = [SQ_EXECUTABLE, SQ_RUN_COMMAND, pipeline, SQ_RUN_ID_FLAG, run_id]
+    argv = [SQ_EXECUTABLE, SQ_RUN_COMMAND, pipeline]
+    target = params.get(TARGET_PARAM_KEY)
+    if target is not None:
+        if not target or target.startswith("-"):
+            raise ValueError(f"the target {target!r} is not a usable argument")
+        argv.append(target)
+    argv += [SQ_RUN_ID_FLAG, run_id]
     for key, value in params.items():
+        if key == TARGET_PARAM_KEY:
+            continue
         if PARAM_VALUE_SEPARATOR in key or PARAM_KEY_VALUE_SEPARATOR in key:
             raise ValueError(f"parameter key {key!r} may not contain ',' or '='")
         if PARAM_VALUE_SEPARATOR in value:

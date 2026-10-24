@@ -18,6 +18,7 @@ from cf_stub import (
 from amoeba.runner.dispatch.params import MERGE_DISABLED, PARAM_MERGE, PARAM_SLICE
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.intent.apply import apply_pending_intents
+from amoeba.runner.launch import PARAM_PARAMS
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import (
     PARAM_CHECKOUT,
@@ -59,8 +60,9 @@ def test_driven_slice_design_writes_pointer_then_launches_p4(rig: DispatchRig) -
     assert not run.is_resolved
     assert run.parameters[PARAM_CHECKOUT] == str(rig.world.root)
     [argv] = rig.popen.argvs
-    assert argv[:3] == ["sq", "run", "P4"]
-    assert f"{PARAM_SLICE}=125" in argv and str(run.parameters[PARAM_RUN_ID]) in argv
+    assert argv[:4] == ["sq", "run", "P4", "125"], "the slice is the target"
+    assert str(run.parameters[PARAM_RUN_ID]) in argv
+    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125"}
     assert rig.popen.cwds == [str(rig.world.root)]
 
 

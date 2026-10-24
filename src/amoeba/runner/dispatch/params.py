@@ -13,14 +13,16 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final
 
+from amoeba.runner.launch import TARGET_PARAM_KEY
 from amoeba.runner.lifecycle.steps import (
     STEP_MAP,
     Executor,
     LifecycleStep,
 )
 
-#: ``-p`` parameter keys and the one value ``merge`` takes in this slice.
-PARAM_SLICE: Final = "slice"
+#: The parameter keys and the one value ``merge`` takes in this slice. ``slice`` is
+#: the pipeline's primary parameter, which ``build_argv`` passes as the target.
+PARAM_SLICE: Final = TARGET_PARAM_KEY
 PARAM_MERGE: Final = "merge"
 MERGE_DISABLED: Final = "false"
 

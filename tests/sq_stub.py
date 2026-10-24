@@ -16,7 +16,9 @@ id prints ``{"run_id": id, "outcome": "not_found"}`` and exits 5. That directory
 is deliberately not ``.config/squadron/runs``, so a test can put contrary files
 in the runs directory and show that nothing reads them.
 
-``sq run <pipeline> --run-id <id> -p k=v`` (slice 122): the detached launch. It
+``sq run <pipeline> [<target>] --run-id <id> -p k=v`` (slice 122; the optional
+target is slice 125's, Squadron's positional for a pipeline's primary param): the
+detached launch. It
 refuses an id that is malformed (exit 2) or already has state (exit 1), and an
 unknown flag (exit 2). Otherwise it writes the id's document as still running
 (``timed_out``), prints ``run_id=<id>`` on stderr, sleeps ``RUN_SECONDS_ENV``,
@@ -164,7 +166,8 @@ _SCRIPT = textwrap.dedent(
                 sys.exit(2)
             else:
                 pipelines.append(argument)
-        if len(pipelines) != 1 or run_id is None:
+        # A pipeline, then optionally its target (the primary required param).
+        if not 1 <= len(pipelines) <= 2 or run_id is None:
             print("stub sq: need a pipeline and --run-id", file=sys.stderr)
             sys.exit(2)
         if not re.fullmatch({run_id_pattern!r}, run_id):

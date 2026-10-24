@@ -460,9 +460,10 @@ is stored beyond the journal.
   written. On the first tick Act journals a `cf_write` (the CF project, the
   `checkout`, `expected` `{}`, `expected_slice_index`, the expected worktree),
   runs `cf set -p <id> slice <index>` in the checkout, and reads it back. On a
-  later tick the step is `POINTED` and launches `sq run <pipeline> --run-id <id>
-  -p slice=<index>` in that checkout; `P6` also gets `-p merge=false`, always, in
-  this slice. There is **no `started` status**: a step stays `runnable` while its
+  later tick the step is `POINTED` and launches `sq run <pipeline> <index> --run-id
+  <id>` in that checkout (Squadron takes a pipeline's primary required parameter,
+  `slice`, as the positional target and rejects it as `-p slice=<index>`; observed
+  squadron-ai 0.23.7); `P6` also gets `-p merge=false`, always, in this slice. There is **no `started` status**: a step stays `runnable` while its
   run is in flight, and "in flight" is an unresolved entry.
 - **Where it runs.** The checkout comes from the link's latest *observed*
   snapshot: the worktree whose `indexRange` contains the slice index, or the

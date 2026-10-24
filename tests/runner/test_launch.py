@@ -89,6 +89,22 @@ def test_the_argv_has_one_p_flag_per_param() -> None:
     ]  # fmt: skip
 
 
+def test_the_slice_param_is_the_positional_target_and_the_rest_are_p_flags() -> None:
+    """Squadron rejects `-p slice=131` and takes `sq run P4 131` (observed 0.23.7)."""
+    argv = build_argv("P6", RUN_ID, {"slice": "131", "merge": "false"})
+
+    assert argv == [
+        "sq", "run", "P6", "131", "--run-id", RUN_ID, "-p", "merge=false",
+    ]  # fmt: skip
+    assert "slice=131" not in argv
+
+
+@pytest.mark.parametrize("target", ["", "-x"], ids=["empty", "option"])
+def test_a_target_that_is_not_a_usable_argument_is_rejected(target: str) -> None:
+    with pytest.raises(ValueError, match="target"):
+        build_argv("P4", RUN_ID, {"slice": target})
+
+
 @pytest.mark.parametrize(
     "params", [{"a": "x,y"}, {"a,b": "1"}, {"a=b": "1"}], ids=["value", "comma", "eq"]
 )
