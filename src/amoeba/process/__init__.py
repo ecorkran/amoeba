@@ -28,7 +28,7 @@ from amoeba.process.recovery import (
     Observer,
     Unknown,
 )
-from amoeba.process.review_scan import detection_key
+from amoeba.process.review_scan import detection_key, ledger_key
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.sq_outcome import (
     OUTCOME_EXIT_CODES,
@@ -79,6 +79,7 @@ __all__ = [
     "UnknownKind",
     "UpstreamShapeError",
     "detection_key",
+    "ledger_key",
     "parse_checkpoint_kind",
     "parse_failure_kind",
     "poll_run",

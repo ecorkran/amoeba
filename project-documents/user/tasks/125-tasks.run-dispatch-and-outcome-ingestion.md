@@ -239,14 +239,14 @@ Per the LLD, D6 "The block, by outcome". Create `runner/ingest/__init__.py`, `ru
 
 Per the LLD, D7. Create `runner/ingest/reviews.py` and `tests/runner/ingest/test_reviews.py`.
 
-- [ ] `select_review_files(document, checkout, …) -> ReviewFiles | ReviewUnknown`. Last `reviews` entry; its `paths` in order if non-null, else its `path`; empty or absent list gives empty `ReviewFiles`. Relative paths resolve against `checkout`
-- [ ] Each file is read once, whole. Parse with `parse_review_artifact`; build each verdict with `to_verdict_input` (`sq_run_id`, `journal_entry_id=None`, provenance per D7). Version label: the file's `squadronVersion`, else the captured `sq --version` label (passed in), else the explicit `unavailable` marker detection uses (import it, never retype it)
-- [ ] The ledger key comes from `detection_key` (Task 2.7); `None` falls back to the resolved absolute path
-- [ ] Attribution: `attribute_review(slice nodes, review.slice)` must return exactly the step's parent slice node
-- [ ] `ReviewUnknown(path, reason)` for each D7 case: null `path` and `paths`; missing, unreadable or unparseable file; attribution to none, several, or another node. Any one makes the whole run unknown
-- [ ] Tests: single review; split review in part order; empty list; each `ReviewUnknown` case; the version-label fallback chain; **agreement test** `test_ingest_and_detection_compute_the_same_key` (one file under a watched directory, detection's `examine` path and ingest's key are equal)
+- [x] `select_review_files(document, checkout, …) -> ReviewFiles | ReviewUnknown`. Last `reviews` entry; its `paths` in order if non-null, else its `path`; empty or absent list gives empty `ReviewFiles`. Relative paths resolve against `checkout`
+- [x] Each file is read once, whole. Parse with `parse_review_artifact`; build each verdict with `to_verdict_input` (`sq_run_id`, `journal_entry_id=None`, provenance per D7). Version label: the file's `squadronVersion`, else the captured `sq --version` label (passed in), else the explicit `unavailable` marker detection uses (import it, never retype it)
+- [x] The ledger key comes from `detection_key` (Task 2.7); `None` falls back to the resolved absolute path
+- [x] Attribution: `attribute_review(slice nodes, review.slice)` must return exactly the step's parent slice node
+- [x] `ReviewUnknown(path, reason)` for each D7 case: null `path` and `paths`; missing, unreadable or unparseable file; attribution to none, several, or another node. Any one makes the whole run unknown
+- [x] Tests: single review; split review in part order; empty list; each `ReviewUnknown` case; the version-label fallback chain; **agreement test** `test_ingest_and_detection_compute_the_same_key` (one file under a watched directory, detection's `examine` path and ingest's key are equal)
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: select, parse and attribute a run's last review`
+  - [x] Tests, `ruff` and `pyright` pass. Commit: `feat: select, parse and attribute a run's last review`
 
 ### Task 4.3: `ingest.record` replaces 122's body, with tests
 **Owner**: Junior AI | **Dependencies**: 2.6, 4.1, 4.2 | **Effort**: 3
