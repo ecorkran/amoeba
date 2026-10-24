@@ -69,7 +69,7 @@ LISTINGS: tuple[Listing, ...] = (
     Listing(
         name="nodes",
         help_text="Lifecycle nodes for a project.",
-        columns=("id", "kind", "status", "title", "parent_id"),
+        columns=("id", "kind", "status", "title", "parent_id", "cf_index"),
         rows=core.node_rows,
     ),
     Listing(

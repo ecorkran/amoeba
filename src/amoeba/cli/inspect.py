@@ -86,6 +86,8 @@ def _print_table(columns: Sequence[str], rows: Sequence[Row]) -> None:
 def _cell(row: Row, column: str) -> str:
     """Render one cell. Mappings are compacted so a row stays one line."""
     value = row.get(column, "")
+    if value is None:
+        return ""
     if isinstance(value, dict):
         return json.dumps(value, default=str, separators=(",", ":"))
     return str(value)
