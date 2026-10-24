@@ -54,7 +54,7 @@ revision_number: 1
 - **Test naming.** Tests are named for the rule they prove, for example `test_project_pause_wins_over_slice_resume`, `test_same_intent_twice_is_no_op`.
 - **Test location.** `tests/runner/intent/` (add `__init__.py`).
 
-**Section map.** 1 baseline; 2 step order and vocabulary; 3 interpret and apply; 4 governance; 5 view, guard and planners; 6 tick wiring; 7 tick-level behavior tests; 8 desired-states listing; 9 contract text and final validation.
+**Section map.** 1 baseline; 2 step order and vocabulary; 3 interpret and apply; 4 governance (index and `governing`, then `current_steps`); 5 view, guard and planners (the helpers apply intents directly, so 5 does not need 6); 6 tick wiring; 7 tick-level behavior tests; 8 desired-states listing; 9 contract text and final validation.
 
 ---
 
@@ -85,35 +85,27 @@ Per the LLD, D4. Edit `runner/lifecycle/steps.py` and `tests/runner/lifecycle/te
 - **Success Criteria**:
   - [ ] `tests/runner/lifecycle/test_steps.py`, `ruff` and `pyright` pass. Commit: `feat: define the lifecycle step order`
 
-### Task 2.2: `IntentKind`, `IntentRejection` and `IntentBody`, with tests
+### Task 2.2: The intent vocabulary and the `until` rule, with tests
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 2
 
-Per the LLD, D1 and D3, and "Internal API". Create `runner/intent/__init__.py`, `runner/intent/vocabulary.py` and `tests/runner/intent/test_vocabulary.py`.
+Per the LLD, D1, D3 and D4 ("`until_not_applicable`"), and "Internal API". Create `runner/intent/__init__.py`, `runner/intent/vocabulary.py` and `tests/runner/intent/test_vocabulary.py`.
 
 - [ ] `IntentKind(StrEnum)`: `drive`, `exclude`, `pause`, `resume`, `clear`
 - [ ] `IntentRejection(StrEnum)`: `malformed_body`, `target_not_initiative_or_slice`, `target_unlinked`, `until_not_applicable`
 - [ ] `IntentBody` (pydantic v2, `extra="forbid"`): `intent: IntentKind`, `until: LifecycleStep | None = None`. A model validator rejects `until` with any kind but `drive`
 - [ ] Tests (parametrized): each of the six body forms parses; an unknown key (`"untill"`) fails; an unknown `intent` value fails; an unknown `until` value fails; `until` with `exclude`, `pause`, `resume` and `clear` fails; a non-object body (list, string) fails when validated
-- **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add the intent vocabulary and body model`
-
-### Task 2.3: `until_applies` rule, with tests
-**Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 1
-
-Per the LLD, D4 ("`until_not_applicable`"). Edit `vocabulary.py` and its test file.
-
 - [ ] Add `TargetKind(StrEnum)` to `vocabulary.py`: `project`, `initiative`, `slice`. Defined once; Task 3.1 maps a node's kind to it
 - [ ] Add `until_applies(target: TargetKind, step: LifecycleStep) -> bool`. A `slice` target accepts only steps where `STEP_MAP[step].level is StepLevel.SLICE`. `initiative` and `project` targets accept any step
 - [ ] Tests (table-driven over all seven steps and the three target kinds): on a slice, `architecture`, `slice_plan` and `integration` are not applicable and the other four are; on an initiative and on the project, all seven apply
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add the until applicability rule`
+  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add the intent vocabulary and body model`
 
 ---
 
 ## Section 3: Interpreting and applying intents
 
 ### Task 3.1: `interpret` — target rules, with tests
-**Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 3
 
 Per the LLD, D2, D3 and "Component Structure". Create `runner/intent/apply.py` (the pure part only) and `tests/runner/intent/test_interpret_targets.py`. Add a small test builder for a tree of initiative, slice and step nodes (reuse `tree_support.py`; add to it only if it lacks a needed shape, such as an unlinked orphan).
 
@@ -159,32 +151,24 @@ Per the LLD, D9 and "Data Flow". Edit `apply.py`; create `tests/runner/intent/te
 
 ## Section 4: Governance
 
-### Task 4.1: `DesiredStateIndex`, with tests
-**Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 2
+### Task 4.1: `DesiredStateIndex` and `governing`, with tests
+**Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 4
 
-Per the LLD, D6. Create `runner/intent/governance.py` (no store import; it may import the `DesiredState` model type) and `tests/runner/intent/test_governance_index.py`.
+Per the LLD, D4 ("within drive") and D6. Create `runner/intent/governance.py` (no store import; it may import the `DesiredState` model type), `tests/runner/intent/test_governance_index.py` and `tests/runner/intent/test_governing.py`.
 
 - [ ] `DesiredStateIndex` is built from a sequence of `DesiredState` rows. It maps a target (`None` for the project, else a node id) to its row. Provide a lookup `row_for(target) -> DesiredState | None`
 - [ ] `drives_anything() -> bool`: true when any row has `drive is True`
-- [ ] Tests: lookup of the project row, of a node row, of a missing target; `drives_anything` is false for no rows, for `drive=false` only and for hold-only rows, and true when any row drives
-- **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: add the desired-state index`
-
-### Task 4.2: `governing`, with tests
-**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 3
-
-Per the LLD, D4 ("within drive") and D6. Edit `governance.py`; create `tests/runner/intent/test_governing.py`.
-
+- [ ] Index tests: lookup of the project row, of a node row, of a missing target; `drives_anything` is false for no rows, for `drive=false` only and for hold-only rows, and true when any row drives
 - [ ] `Governance` frozen dataclass: `driven: bool`, `held: bool`
 - [ ] `governing(tree, index, step) -> Governance`. The path is the step's container (slice or initiative), the slice's initiative if any, then the project (key `None`). Use `LifecycleTree` accessors (`step_of`, parent lookups); add a small accessor to `tree.py` only if the path cannot be walked with what exists, and say so in the commit
 - [ ] Drive: the nearest row on the path whose `drive` is set decides `driven` with that row's value. The step must also be within that row's `until`: `until` unset, or `step_rank(step) <= step_rank(until)`. No row sets drive: not driven (the default)
 - [ ] Held: true if any row on the path has `hold` set
 - [ ] Tests (table-driven, hand-built tree and rows, no store), asserting `driven` and `held` per step: nothing driven by default; project drive drives every step; initiative `exclude` under a driven project leaves that initiative's steps undriven and a slice `drive` under it restores that slice's; project `pause` with a slice `resume` leaves the slice's steps held; no project pause leaves them not held; `drive until slice_design` on an initiative drives the initiative's `architecture` and `slice_plan` and every slice's `slice_design`, and never `tasks` or `integration`; `drive until tasks` on a slice leaves `implementation` undriven; a pause on a slice does not hold its sibling
 - **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. `governance.py` imports nothing from `amoeba.store` except model types. Commit: `feat: resolve drive and hold up the node path`
+  - [ ] Tests, `ruff` and `pyright` pass. `governance.py` imports nothing from `amoeba.store` except model types. Commit: `feat: add the desired-state index and resolve drive and hold`
 
-### Task 4.3: `current_steps`, with tests
-**Owner**: Junior AI | **Dependencies**: 4.2 | **Effort**: 2
+### Task 4.2: `current_steps`, with tests
+**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
 
 Per the LLD, D6. Edit `governance.py`; extend `tests/runner/intent/test_governing.py`.
 
@@ -198,16 +182,16 @@ Per the LLD, D6. Edit `governance.py`; extend `tests/runner/intent/test_governin
 ## Section 5: View, guard and planners
 
 ### Task 5.1: `ProjectView` gains `desired` and `current_steps`, with tests
-**Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 4.2 | **Effort**: 3
 
 Per the LLD, D7. Edit `runner/decide.py`; update every place that builds a `ProjectView` (`grep -rn "ProjectView(" src tests`), including `runner/tick.py`'s `_decide` for now (pass an index from `desired_states` there; Task 6.1 moves the read). Edit `tests/runner/tick_support.py` and `tests/runner/test_decide.py`.
 
 - [ ] Add `desired: DesiredStateIndex` and `current_steps: Sequence[Node]` to `ProjectView`. The tick computes `current_steps` with `current_steps(tree, index)` when it builds the view
-- [ ] Test helpers in `tests/runner/tick_support.py`: `view_for(tree, rows=(), in_flight=())` builds a `ProjectView` from hand-built `DesiredState` rows and computes `current_steps`; `drive_project(store, project_id)` submits a project-level `{"intent": "drive"}` through the inbox (as `plan_tick_support.py` submits other messages), so the next tick applies it. Update existing view construction to use `view_for`
+- [ ] Test helpers in `tests/runner/tick_support.py`: `view_for(tree, rows=(), in_flight=())` builds a `ProjectView` from hand-built `DesiredState` rows and computes `current_steps`; `drive_project(store, project_id)` submits a project-level `{"intent": "drive"}` through the inbox (as `plan_tick_support.py` submits other messages) and then calls `apply_pending_intents(store, project_id)` itself, so the row exists before the next tick. It must not depend on the tick's apply stage, which Task 6.1 adds. Update existing view construction to use `view_for`
 - [ ] Leave `ready_unbusy()` and its test unchanged. Slice 125 owns the dispatch planner and decides how it excludes busy nodes from `current_steps`
 - [ ] Tests: a view built from a driven project exposes the expected `current_steps`, and one built with no rows exposes none
 - **Success Criteria**:
-  - [ ] Existing 122 and 123 runner tests pass with the new view (behavior unchanged where no desired state is set, except tests that rely on ungoverned planners, which now use the helper to drive the project). `ruff` and `pyright` pass. Commit: `refactor: give ProjectView the desired-state index and current steps`
+  - [ ] Existing 122 and 123 runner tests pass unchanged apart from how they build the view. No behavior changes yet: planners and `decide()` still ignore `current_steps` until Tasks 5.2 and 5.3. `ruff` and `pyright` pass. Commit: `refactor: give ProjectView the desired-state index and current steps`
 
 ### Task 5.2: The current-step guard in `decide()`, with tests
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 2
@@ -221,34 +205,26 @@ Per the LLD, D7 ("The guard"). Edit `runner/decide.py`; extend `tests/runner/tes
 - **Success Criteria**:
   - [ ] Tests, `uv run pytest tests/runner -q`, `ruff` and `pyright` pass. Commit: `feat: refuse actions on steps that are not current`
 
-### Task 5.3: `HumanStepPlanner` plans over current steps, with tests
-**Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 2
+### Task 5.3: `HumanStepPlanner` plans over current steps and joins production, with tests
+**Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 3
 
-Per the LLD, D7 and D8. Edit `runner/lifecycle/human_steps.py`, `tests/runner/lifecycle/test_human_steps.py` and `tests/runner/test_tick_human_steps.py`.
+Per the LLD, D7 and D8. Edit `runner/lifecycle/human_steps.py`, `runner/factory.py`, `tests/runner/lifecycle/test_human_steps.py`, `tests/runner/test_tick_human_steps.py` and `tests/runner/test_factory.py`.
 
 - [ ] `HumanStepPlanner.plan` iterates `view.current_steps` instead of `view.tree.ready_steps()`. Everything else is unchanged
 - [ ] Update its docstring: it blocks each current step whose executor is a person
-- [ ] Tests: with the project driven, a ready human step is blocked as before; with nothing driven, it plans nothing; with the project driven and paused, it plans nothing; a human step that is already `blocked_on_human` is not current and is not blocked again; update 123's existing human-step tests to drive the project in their setup
-- **Success Criteria**:
-  - [ ] Tests, `ruff` and `pyright` pass. Commit: `feat: plan human steps over current steps only`
-
-### Task 5.4: `HumanStepPlanner` joins the production tuple, with tests
-**Owner**: Junior AI | **Dependencies**: 5.3 | **Effort**: 1
-
-Per the LLD, D8. Edit `runner/factory.py` and `tests/runner/test_factory.py`.
-
+- [ ] Tests: with the project driven, a ready human step is blocked as before; with nothing driven, it plans nothing; with the project driven and paused, it plans nothing; a human step that is already `blocked_on_human` is not current and is not blocked again; update 123's existing human-step tests to drive the project in their setup (`drive_project`)
 - [ ] `PRODUCTION_PLANNERS = (HumanStepPlanner(),)`. Update the comment: slice 125 appends its dispatch planner
 - [ ] Update `tests/runner/test_factory.py` (and any test pinning the empty tuple or relying on it, for example in `test_tenant.py`, `test_end_to_end.py`, `tests/contract`)
 - [ ] Test: `None` planners select a tuple holding exactly one `HumanStepPlanner`; a passed value still overrides it
 - **Success Criteria**:
-  - [ ] Full `uv run pytest -q`, `ruff` and `pyright` pass. Commit: `feat: register HumanStepPlanner in production`
+  - [ ] Full `uv run pytest -q`, `ruff` and `pyright` pass. Commit: `feat: plan human steps over current steps and register them in production`
 
 ---
 
 ## Section 6: Tick wiring
 
 ### Task 6.1: The apply stage and the per-tick index, with tests
-**Owner**: Junior AI | **Dependencies**: 5.4 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 5.3 | **Effort**: 3
 
 Per the LLD, D6 and D9, "Data Flow" and "State Management". Edit `runner/tick.py` (replace the `# [apply intents - slice 124]` comment) and create `tests/runner/test_tick_intents.py`.
 
@@ -271,7 +247,7 @@ Only Functional Requirements that no earlier task proves through a tick. Idempot
 - [ ] `test_project_pause_wins_over_slice_resume`: project paused, a slice resumed and driven; the slice's steps are not blocked or planned. Then `resume` on the project; on the next tick they are
 - [ ] A test planner that emits an action for every ready step, with a held step, faults the project through 122's catch (`unexpected_fault`, deduplicated); the production tuple with a held human step blocks nothing
 - **Success Criteria**:
-  - [ ] Tests pass. Commit: `test: prove idempotence and hold through the tick`
+  - [ ] Tests pass. Commit: `test: prove hold through the tick`
 
 ### Task 7.2: Held targets still observe, and linking escalates nothing
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 2
