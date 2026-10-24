@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Final, Literal, cast
+from typing import Annotated, Final, Literal, Protocol, cast
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
 
@@ -126,7 +126,17 @@ class CFErrorDocument(_PlanModel):
     message: str | None = None
 
 
-def reported_complete(entry: CFInitiative | CFSliceEntry) -> bool:
+class PlanEntryLike(Protocol):
+    """What :func:`reported_complete` reads: an entry, or a value holding its fields."""
+
+    @property
+    def is_checked(self) -> bool: ...
+
+    @property
+    def status(self) -> PlanStatus | None: ...
+
+
+def reported_complete(entry: PlanEntryLike) -> bool:
     """Whether CF reports the entry complete: ``complete`` status or checked."""
     return entry.is_checked or entry.status == PlanEntryStatus.COMPLETE
 
