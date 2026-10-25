@@ -39,6 +39,8 @@ class SubmissionKind(StrEnum):
 #: the two together, so neither side can rename a key alone.
 RESOLUTION_BLOCKED_STATE_ID: Final = "blocked_state_id"
 RESOLUTION_DETAIL: Final = "detail"
+RESOLUTION_DECISION: Final = "decision"
+RESOLUTION_INSTRUCTIONS: Final = "instructions"
 INTENT_NODE_ID: Final = "node_id"
 INTENT_BODY: Final = "body"
 WATCH_REVIEWS_DIR: Final = "reviews_dir"

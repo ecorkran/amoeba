@@ -17,7 +17,9 @@ from amoeba.store.inbox_models import (
     INTENT_BODY,
     INTENT_NODE_ID,
     RESOLUTION_BLOCKED_STATE_ID,
+    RESOLUTION_DECISION,
     RESOLUTION_DETAIL,
+    RESOLUTION_INSTRUCTIONS,
     Channel,
     SubmissionKind,
     SubmissionOutcome,
@@ -159,6 +161,49 @@ def test_resolution_fills_the_slot_and_releases_the_node(store: Store) -> None:
     assert resolved.resolution.resolved_by == "tester"
     assert resolved.resolution.detail == "go"
     assert node is not None and node.status is NodeStatus.RUNNABLE
+
+
+def test_a_resolution_with_a_decision_stores_it_and_awaits_the_runner(
+    store: Store,
+) -> None:
+    node_id = _node(store)
+    blocked = store.block(node_id, kind=BlockedKind.HUMAN, context="decide")
+    payload = _resolution(blocked.id) | {
+        RESOLUTION_DECISION: "retry",
+        RESOLUTION_INSTRUCTIONS: "only the schema",
+    }
+
+    _apply(store, "s-1", SubmissionKind.RESOLUTION, payload)
+
+    resolved = store.blocked_state_for(node_id, include_resolved=True)
+    assert resolved is not None and resolved.resolution is not None
+    assert resolved.resolution.decision == "retry"
+    assert resolved.resolution.instructions == "only the schema"
+    assert resolved.awaits_runner is True
+    assert resolved.runner_outcome is None
+
+
+def test_a_bare_resolution_awaits_the_runner_with_null_fields(store: Store) -> None:
+    node_id = _node(store)
+    blocked = store.block(node_id, kind=BlockedKind.HUMAN, context="decide")
+
+    _apply(store, "s-1", SubmissionKind.RESOLUTION, _resolution(blocked.id))
+
+    resolved = store.blocked_state_for(node_id, include_resolved=True)
+    assert resolved is not None and resolved.resolution is not None
+    assert resolved.resolution.decision is None
+    assert resolved.resolution.instructions is None
+    assert resolved.awaits_runner is True
+
+
+def test_the_runners_own_resolve_never_awaits_the_runner(store: Store) -> None:
+    node_id = _node(store)
+    store.block(node_id, kind=BlockedKind.HUMAN, context="decide")
+
+    resolved = store.resolve(node_id, resolved_by="runner", detail="routed")
+
+    assert resolved.awaits_runner is False
+    assert resolved.resolution is not None and resolved.resolution.decision is None
 
 
 def _assert_rejected(record: SubmissionRecord, fragment: str) -> None:

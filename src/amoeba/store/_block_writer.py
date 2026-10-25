@@ -168,7 +168,15 @@ class BlockWriter(StoreBase):
         return blocked_state_id
 
     def _write_resolution(
-        self, node_id: str, *, resolved_by: str, detail: str, timestamp: str
+        self,
+        node_id: str,
+        *,
+        resolved_by: str,
+        detail: str,
+        timestamp: str,
+        decision: str | None = None,
+        instructions: str | None = None,
+        awaits_runner: bool = False,
     ) -> bool:
         """Fill a node's open resolution slot and flip it back to runnable.
 
@@ -177,13 +185,26 @@ class BlockWriter(StoreBase):
         one place without opening a second transaction. It needs no done check:
         it acts only on a blocked node, and a done node is never blocked.
 
+        ``awaits_runner`` is set only on the inbox path: a PM's resolution is
+        the Runner's to answer, while ``resolve()`` is the Runner's own write
+        and has no one to answer it (slice 127, D9).
+
         Returns:
             Whether an open slot was filled. ``False`` means the node had no
             open blocked state, and nothing was written.
         """
         cursor = self._execute(
             sql.FILL_RESOLUTION_SLOT,
-            (resolved_by, detail, timestamp, timestamp, node_id),
+            (
+                resolved_by,
+                detail,
+                timestamp,
+                timestamp,
+                decision,
+                instructions,
+                1 if awaits_runner else None,
+                node_id,
+            ),
         )
         if cursor.rowcount != 1:
             return False

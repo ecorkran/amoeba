@@ -11,7 +11,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from legacy_nodes import LEGACY_INSERT_NODE
+from legacy_nodes import LEGACY_FILL_RESOLUTION_SLOT, LEGACY_INSERT_NODE
 
 from amoeba.store import sql, sql_inbox, sql_journal
 from amoeba.store.inbox_models import Channel
@@ -75,7 +75,7 @@ def _stage_version_three_store(path: Path) -> None:
         _insert_node(connection, "n-resolved", NodeStatus.RUNNABLE)
         _insert_block(connection, "b-resolved", "n-resolved", BlockedKind.HUMAN)
         connection.execute(
-            sql.FILL_RESOLUTION_SLOT,
+            LEGACY_FILL_RESOLUTION_SLOT,
             ("pm", "approved", STAGED_AT, STAGED_AT, "n-resolved"),
         )
 

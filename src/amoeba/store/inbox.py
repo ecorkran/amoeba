@@ -38,7 +38,9 @@ from amoeba.store.inbox_models import (
     INTENT_NODE_ID,
     LINK_CF_PROJECT_ID,
     RESOLUTION_BLOCKED_STATE_ID,
+    RESOLUTION_DECISION,
     RESOLUTION_DETAIL,
+    RESOLUTION_INSTRUCTIONS,
     WATCH_ACTIVE,
     WATCH_REVIEWS_DIR,
     Channel,
@@ -234,6 +236,11 @@ class InboxOperations(BlockWriter, VerdictWriter, CheckWriter, CFWriter):
             resolved_by=application.submitted_by,
             detail=detail,
             timestamp=application.timestamp,
+            decision=_payload_optional_text(application.payload, RESOLUTION_DECISION),
+            instructions=_payload_optional_text(
+                application.payload, RESOLUTION_INSTRUCTIONS
+            ),
+            awaits_runner=True,
         ):
             raise StoreIntegrityError(
                 f"blocked state {blocked_state_id!r} is open but its slot "

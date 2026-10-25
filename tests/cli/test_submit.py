@@ -420,3 +420,13 @@ def test_link_cf_project_writes_the_id_as_typed_and_help_lists_it(
     }
     help_result = run_cli(["submit", "--help"], supervisor_dir)
     assert "link-cf-project" in help_result.stdout
+
+
+def test_the_resolution_command_lists_the_decision_and_instructions_flags(
+    supervisor_dir: Path,
+) -> None:
+    result = run_cli(["submit", "resolution", "--help"], supervisor_dir)
+
+    assert result.returncode == ExitCode.OK, result.stderr
+    assert "--decision" in result.stdout
+    assert "--instructions" in result.stdout

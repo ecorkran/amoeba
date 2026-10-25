@@ -21,7 +21,9 @@ from amoeba.store.inbox_models import (
     INTENT_NODE_ID,
     LINK_CF_PROJECT_ID,
     RESOLUTION_BLOCKED_STATE_ID,
+    RESOLUTION_DECISION,
     RESOLUTION_DETAIL,
+    RESOLUTION_INSTRUCTIONS,
     WATCH_ACTIVE,
     WATCH_REVIEWS_DIR,
     QuarantineReason,
@@ -33,7 +35,12 @@ from amoeba.store.verdict_payload import FINDING_PAYLOAD_KEYS, VERDICT_PAYLOAD_K
 #: payload models' field names must equal these exactly.
 EFFECT_KEYS = {
     SubmissionKind.CREATE_PROJECT: set[str](),
-    SubmissionKind.RESOLUTION: {RESOLUTION_BLOCKED_STATE_ID, RESOLUTION_DETAIL},
+    SubmissionKind.RESOLUTION: {
+        RESOLUTION_BLOCKED_STATE_ID,
+        RESOLUTION_DETAIL,
+        RESOLUTION_DECISION,
+        RESOLUTION_INSTRUCTIONS,
+    },
     SubmissionKind.INTENT: {INTENT_NODE_ID, INTENT_BODY},
     SubmissionKind.VERDICT: set(VERDICT_PAYLOAD_KEYS),
     SubmissionKind.WATCH_REVIEWS: {WATCH_REVIEWS_DIR, WATCH_ACTIVE},
@@ -127,6 +134,33 @@ def test_a_payload_that_does_not_fit_its_kind_is_invalid() -> None:
     data = _valid() | {"kind": SubmissionKind.RESOLUTION.value}
 
     assert _reason(data) is QuarantineReason.INVALID_PAYLOAD
+
+
+@pytest.mark.parametrize("field", [RESOLUTION_DECISION, RESOLUTION_INSTRUCTIONS])
+@pytest.mark.parametrize("blank", ["", "   ", "\n\t"])
+def test_a_blank_decision_or_instructions_is_invalid(field: str, blank: str) -> None:
+    payload = {
+        RESOLUTION_BLOCKED_STATE_ID: "b-1",
+        RESOLUTION_DETAIL: "go",
+        field: blank,
+    }
+    data = _valid() | {"kind": SubmissionKind.RESOLUTION.value, "payload": payload}
+
+    assert _reason(data) is QuarantineReason.INVALID_PAYLOAD
+
+
+def test_a_decision_with_instructions_is_valid_as_submitted() -> None:
+    payload = {
+        RESOLUTION_BLOCKED_STATE_ID: "b-1",
+        RESOLUTION_DETAIL: "go",
+        RESOLUTION_DECISION: "retry",
+        RESOLUTION_INSTRUCTIONS: "  keep the spaces  ",
+    }
+    data = _valid() | {"kind": SubmissionKind.RESOLUTION.value, "payload": payload}
+
+    envelope = validate_envelope(data)
+
+    assert envelope.payload == payload
 
 
 @pytest.mark.parametrize("raw", [b"", b"{truncated", b"[1, 2]", b"\xff\xfe"])

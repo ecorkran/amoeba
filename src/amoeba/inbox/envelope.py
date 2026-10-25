@@ -73,6 +73,17 @@ class ResolutionPayload(BaseModel):
 
     blocked_state_id: str
     detail: str
+    decision: str | None = None
+    instructions: str | None = None
+
+    @field_validator("decision", "instructions")
+    @classmethod
+    def _present_values_are_not_blank(cls, value: str | None) -> str | None:
+        # Stored as submitted. The decision vocabulary is the Runner's to judge
+        # (slice 127, D1); a blank value could never mean anything to it.
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank when present")
+        return value
 
 
 class IntentPayload(BaseModel):

@@ -11,7 +11,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from legacy_nodes import LEGACY_INSERT_NODE
+from legacy_nodes import LEGACY_FILL_RESOLUTION_SLOT, LEGACY_INSERT_NODE
 
 from amoeba.store import sql
 from amoeba.store.mapping import map_blocked_state
@@ -59,7 +59,7 @@ def _stage_version_eleven_store(path: Path) -> None:
             ("b-done", "n-1", "human", "earlier", STAGED_AT, STAGED_AT),
         )
         connection.execute(
-            sql.FILL_RESOLUTION_SLOT,
+            LEGACY_FILL_RESOLUTION_SLOT,
             ("pm", "done by hand", STAGED_AT, STAGED_AT, "n-1"),
         )
         # One open block per node: the second is inserted after the first resolves.
