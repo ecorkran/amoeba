@@ -52,7 +52,7 @@ revision_number: 1
 
 **Order and dependencies:** work tasks in file order. Each task's **Dependencies** lists only its real prerequisites. If a task is `BLOCKED:`, continue with the next task whose dependencies are all checked off; only its dependents wait.
 
-**Commit cadence:** one commit per task unless a task says otherwise. A commit never holds untested behavior. Run `uv run ruff format .` before each commit. Commit type is `feat:` for new behavior, `refactor:` for behavior-preserving change, `test:` for test-only work, `docs:` for contract text.
+**Commit cadence:** each task ends in one commit. An implementation task with no commit step is committed together with the test task right after it, so a commit never holds untested behavior. Run `uv run ruff format .` before each commit. Commit type is `feat:` for new behavior, `refactor:` for behavior-preserving change, `test:` for test-only work, `docs:` for contract text.
 
 **Task-level additions to the LLD** (code facts the LLD does not state, checked against the code on 20261024; each resolves a placement, not a product decision):
 - **`store.verdict(id)` returns `None`, it does not raise.** `observations` and `finding_changes` raise `VerdictNotFoundError`. `gather` treats a `None` verdict the same as the raise: the review inputs are `unknown` (LLD D5, "Failure handling").
@@ -61,8 +61,9 @@ revision_number: 1
 - **Two version labels.** `RunnerTenant` already carries `version_label`, the `sq --version` label. The Amoeba package version is a separate value named `amoeba_version` everywhere, so the two are never confused.
 - **The per-project decision listing.** The store reads decisions per node (`routing_decisions(node_id)`). The listing iterates the project's nodes (`nodes_for_project`) and sorts by `decided_at`. No store change.
 - **`issued_at`.** `JournalEntry.issued_at` is `datetime | None`. `overrun_runs` raises `ValueError` for an in-flight entry without a timezone-aware `issued_at`, as `runner/observe.py` treats it, so it faults the project through 122's catch.
-- **The stand-in is retired.** Once the route stage is in the tick, `tests/runner/ingest/routing_support.py`'s `route_outcome` would record a second decision for an entry the tick already routed. Task 6.4 moves its callers to the real stage, or to a direct store call where a test needs an outcome left unrouted.
+- **The stand-in is retired.** Once the route stage is in the tick, `tests/runner/ingest/routing_support.py`'s `route_outcome` would record a second decision for an entry the tick already routed. Task 6.3 moves its callers to the real stage, or to a direct store call where a test needs an outcome left unrouted.
 - **Two modules beyond the LLD's component sketch,** to keep each file near 300 lines: `reduce.py` holds `OutcomeEvidence`, `ReviewPart` and `reduce`, leaving `inputs.py` the vocabulary only; `validate.py` holds the load-time validation that `table.py`'s `parse_table` calls.
+- **Where `Route` members may be compared.** The LLD says only in `engine.py`. Validation must also branch on `Route` (each route's required parameters and its `outcome: completed` rule), and it cannot live in `engine.py`, which imports `table.py`, which calls `validate.py`. So Task 4.4's source test allows exactly `engine.py` and `validate.py`. `validate.py` checks which grammar a route accepts; it never chooses a route, which is what the LLD's rule protects.
 - **Overrun check placement and closure.** The LLD draws the overrun check after the route stage. Task 7.2 places it beside `watch_pointers`, before `raise_expected_faults`, so the existing raise path records it. The order changes no result: routing touches only finished entries and the check reads only in-flight ones. Closure needs no registration: `ProjectTick._close_recovered` closes every open project escalation whose fault kind is absent from the tick's `TickFaults`, and no set of project-scoped kinds exists in `runner/faults.py`.
 - **Inspection registry.** A listing is a `Listing` in `inspection/__init__.py`'s `LISTINGS`; `cli/main.py` adds one `inspect` subcommand per entry. `cli/inspect.py` needs no change unless a column type needs new rendering.
 - **Shared names, defined once.** `RoutingInput` and each value set, `UNKNOWN`, `NONE`, `ROUTED_SEVERITIES`, the split-review combine order, the eligibility predicates, the escalate payload keys and `REASON_ROUTED`, `VERSION_PREFIX = "sha256:"`, `FaultKind.RUN_OVERRUN`, `DEFAULT_ROUTING_TABLE_PATH` and the `run_overrun` payload keys. Tests import them. They never retype a value.
@@ -100,18 +101,13 @@ revision_number: 1
   - [ ] `VALUE_SETS: Mapping[RoutingInput, frozenset[str]]`, one closed set per input, each including `UNKNOWN`. Sets that mirror an enum are built from it (`VerdictStanding`, `LifecycleStep`, `CheckpointKind`, `FailureKind`), never retyped
   - [ ] `ROUTED_SEVERITIES` (`concern`, `fail`, from `FindingSeverity`) and the split-review combine order (`fail` over `concerns` over `pass`)
   - [ ] the frozen dataclass `RoutingInputs(values, attempt)`, where `attempt` is `int | None` (null when `step` is unknown, D1 "Attempts"). Construction raises `ValueError` if `values` lacks an input or holds a value outside its set
-- [ ] **Success:** `inputs.py` imports nothing from `amoeba.store` writes or `runner/tick.py`; pyright strict is clean
-
-### Task 2.2: Test the vocabulary
-**Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 1
-
 - [ ] `tests/runner/routing/test_inputs.py`: every set contains `UNKNOWN`; `RoutingInputs` refuses a missing input and an out-of-set value
-- [ ] **Success:** tests pass. Commit `feat: add the routing input vocabulary`
+- [ ] **Success:** tests pass; `inputs.py` imports nothing from `amoeba.store` writes or `runner/tick.py`; pyright strict is clean. Commit `feat: add the routing input vocabulary`
 
-### Task 2.3: Implement `reduce` for the outcome inputs
+### Task 2.2: Implement `reduce` for the outcome inputs
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 3
 
-- [ ] Create `runner/routing/reduce.py` (Task-level additions). In it, define the frozen `OutcomeEvidence` dataclass that `reduce` consumes: the entry result mapping, the node's status and `cf.phase`, the attempt count, and one `ReviewPart` per recorded verdict (verdict value, standing, its observations' severities, its finding-change tags and `comparable` flag), or a marker that the review could not be read. Keep it plain data so tests build it by hand
+- [ ] Create `runner/routing/reduce.py` (Task-level additions). In it, define the frozen `OutcomeEvidence` (with one `ReviewPart` per recorded verdict) holding what D1's reductions read, as plain data so tests build it by hand
 - [ ] Implement `reduce(evidence) -> RoutingInputs` for `outcome`, `checkpoint_kind`, `at_loop`, `failure_kind`, `step` and `node_state`, per D1's table and "Reduction rules":
   - [ ] `outcome` from `RESULT_OUTCOME`, or `launch_failed` when `RESULT_LAUNCH_FAILURE` is present
   - [ ] the checkpoint and failure kinds through 125's `parse_checkpoint_kind` / `parse_failure_kind`: absent document section is `none`, a null field or `UnknownKind` is `unknown`
@@ -121,14 +117,14 @@ revision_number: 1
   - [ ] `attempt` is `attempt_count + 1`, or `None` when `step` is `unknown`
 - [ ] **Success:** `reduce` is pure (no store, no clock); each rule lives in one small helper
 
-### Task 2.4: Test the outcome reductions
-**Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 2
+### Task 2.3: Test the outcome reductions
+**Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 2
 
 - [ ] `tests/runner/routing/test_reduce_outcome.py`, table-driven over hand-built `OutcomeEvidence`: every `outcome` value including `vanished` and `launch_failed`, and a `RunOutcome` outside the set; each checkpoint and failure kind, a null kind, an unrecognized kind, and no section; `is_loop` true, false, a string, absent; every `NodeStatus`; a known and an unknown `cf.phase`, with the `attempt` result for each
 - [ ] **Success:** every row of D1 for these six inputs has a case, and every `unknown` source among them. Commit `feat: reduce outcome evidence to routing inputs`
 
-### Task 2.5: Implement `reduce` for the review inputs
-**Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 3
+### Task 2.4: Implement `reduce` for the review inputs
+**Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 3
 
 - [ ] Extend `reduce` in `reduce.py` for `verdict`, `standing`, `severity` and `recurrence` per D1 "Reduction rules":
   - [ ] all four `none` when there are no parts; all four `unknown` when `RESULT_REVIEW_FAULT` is set, the review could not be read, or any part's verdict is `UNKNOWN`
@@ -137,21 +133,21 @@ revision_number: 1
   - [ ] verdict and severity values lower-cased into D1's value sets (store `PASS` → `pass`)
 - [ ] **Success:** `reduce` stays pure; no helper exceeds ~50 lines
 
-### Task 2.6: Test the review reductions
-**Owner**: Junior AI | **Dependencies**: 2.5 | **Effort**: 2
+### Task 2.5: Test the review reductions
+**Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 2
 
 - [ ] `tests/runner/routing/test_reduce_review.py`, table-driven: no review; review fault; unreadable review; a single PASS, CONCERNS and FAIL; each standing; split reviews with mixed verdicts, matching and differing standings, and mixed severities; recurrence with a recurring concern, only new concerns, only notes (→ `clear`), only gone findings (→ `clear`), a recurring note (→ not `recurring`), and a non-comparable part
 - [ ] **Success:** includes `test_split_review_takes_worst_verdict` and `test_recurring_note_does_not_recur`. Commit `feat: reduce review evidence to routing inputs`
 
-### Task 2.7: Implement `gather`
-**Owner**: Junior AI | **Dependencies**: 2.5 | **Effort**: 2
+### Task 2.6: Implement `gather`
+**Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 2
 
 - [ ] Create `runner/routing/evidence.py` with `gather(store, entry) -> OutcomeEvidence`. Store reads only: `get_node`, `attempt_count(node, step)` when the step is known, and for each id in `RESULT_VERDICT_IDS`: `verdict`, `observations`, `finding_changes`
 - [ ] A `None` verdict or a `VerdictNotFoundError` from either read marks the review unreadable (Task-level additions). Catch only `VerdictNotFoundError`, with a comment citing D5. Any other exception propagates
 - [ ] **Success:** `gather` writes nothing; pyright strict is clean
 
-### Task 2.8: Test `gather`
-**Owner**: Junior AI | **Dependencies**: 2.7 | **Effort**: 2
+### Task 2.7: Test `gather`
+**Owner**: Junior AI | **Dependencies**: 2.6 | **Effort**: 2
 
 - [ ] `tests/runner/routing/test_evidence.py` on `Store.open_temporary()`: an entry with recorded verdicts (reuse `tests/evidence_harness.py` or `tests/review_fixtures.py` helpers) gathers the parts; an entry naming a missing verdict id is unreadable, not an exception; a launch-failure entry gathers no parts; `attempt_count` is read for a known step only
 - [ ] `gather` then `reduce` on a recorded stated PASS gives `verdict: pass, standing: stated`
@@ -170,7 +166,7 @@ revision_number: 1
   - [ ] `SUPPORTED_FORMATS = frozenset({1})` and `VERSION_PREFIX = "sha256:"`
   - [ ] condition values accept one value or a list, are trimmed and lower-cased, and become `frozenset[str]`
   - [ ] `parse_table(text)`: `yaml.safe_load`, model validation, conversion; the version is `sha256:` plus the hex digest of the text's UTF-8 bytes; `content` is the text verbatim
-  - [ ] `load_table(path)`: reads bytes; a missing file, an unreadable file, or bytes that are not UTF-8 raise `TableError` naming the path and the error. Catch only `OSError` and `UnicodeDecodeError`, with comments
+  - [ ] `load_table(path)`: reads bytes; a missing file, an unreadable file, or bytes that are not UTF-8 raise `TableError` naming the path and the error
   - [ ] `TableError(problems: tuple[str, ...])`, whose message lists every problem
 - [ ] **Success:** malformed YAML raises `TableError` naming the YAML error, never `yaml.YAMLError`
 
@@ -208,44 +204,34 @@ revision_number: 1
 
 ## Section 4: Engine, Effects and Recompute
 
-### Task 4.1: Implement `evaluate` and the eligibility predicates
-**Owner**: Junior AI | **Dependencies**: 2.1, 3.1 | **Effort**: 2
+### Task 4.1: Implement `evaluate`, the eligibility predicates and `effect_for`
+**Owner**: Junior AI | **Dependencies**: 2.1, 3.1 | **Effort**: 3
 
 - [ ] Create `runner/routing/engine.py` with the frozen `Match(rule, route, parameters)` and `evaluate(table, inputs)` per D4 "Matching" and "Eligibility predicates": rules in file order; a rule matches when every named input's value is in its set; a matching but ineligible rule is passed over
 - [ ] One predicate per route, in one mapping keyed by `Route`. `rerun` is ineligible when `attempt` is `None` or `attempt >= max_attempts`
 - [ ] A table with no eligible match raises `ValueError` (load validation makes it impossible, since the catch-all escalate is always eligible)
 - [ ] `parameters` is the rule's parameter mapping (`max_attempts` or `judge_eligible`), the value recorded as `route_parameters`
-- [ ] **Success:** pure; pyright strict clean
+- [ ] In `engine.py`, `effect_for(match, inputs, *, table_version, run_id) -> StatusEffect | BlockEffect | None` per the D5 table: advance → `StatusEffect(NodeStatus.DONE)`; rerun → `None`; escalate on `runnable` → `BlockEffect` with context `routed by <rule id>` and the payload of D5 (keys defined once as constants, `REASON_ROUTED = "routed"`); escalate on any other `node_state` → `None`. It is the only place a route becomes an effect
+- [ ] **Success:** both functions pure; pyright strict clean
 
-### Task 4.2: Test `evaluate`
+### Task 4.2: Test `evaluate` and `effect_for`
 **Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
 
 - [ ] `tests/runner/routing/test_engine.py`, table-driven over small tables built with `parse_table`: first match wins; an unnamed input is unconstrained; `test_unknown_matches_only_named_unknown`; advance passed over on a blocked node; `test_rerun_limit_falls_through_to_next_rule` (attempt 1 reruns, attempt 2 falls through with `max_attempts: 2`); a rerun rule not naming `step` passed over when `step` is `unknown`; the catch-all always applies
-- [ ] **Success:** tests pass. Commit `feat: evaluate routing rules with eligibility`
-
-### Task 4.3: Implement `effect_for`
-**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
-
-- [ ] In `engine.py`, `effect_for(match, inputs, *, table_version, run_id) -> StatusEffect | BlockEffect | None` per the D5 table: advance → `StatusEffect(NodeStatus.DONE)`; rerun → `None`; escalate on `runnable` → `BlockEffect` with context `routed by <rule id>` and the payload of D5 (keys defined once as constants, `REASON_ROUTED = "routed"`); escalate on any other `node_state` → `None`
-- [ ] **Success:** pure; it is the only place a route becomes an effect
-
-### Task 4.4: Test `effect_for`
-**Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 1
-
 - [ ] `tests/runner/routing/test_effects.py`: one case per D5 row, including escalate on `blocked`, `done` and `unknown`; the block payload carries `judge_eligible` from the rule
-- [ ] **Success:** tests pass. Commit `feat: map routes to node effects`
+- [ ] **Success:** tests pass. Commit `feat: evaluate routing rules and map routes to effects`
 
-### Task 4.5: Implement and test `recompute`
+### Task 4.3: Implement and test `recompute`
 **Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 2
 
 - [ ] Create `runner/routing/recompute.py`: `recompute(decision, stored) -> Recomputation` per D6. Rebuild `RoutingInputs` from `decision.inputs` (including `attempt`), parse `stored.content` with `parse_table`, evaluate, and report the rule id, route and whether both equal the record. A `TableError` or inputs outside today's vocabulary yield a `Recomputation` carrying the error reason, never a mismatch
-- [ ] `tests/runner/routing/test_recompute.py`: a matching decision recomputes; a decision with an altered rule id does not; unparseable stored content and an unsupported `format` give an error reason
+- [ ] `tests/runner/routing/test_recompute.py`: `test_decision_recomputes_from_stored_version` (a matching decision recomputes); a decision with an altered rule id does not; unparseable stored content and an unsupported `format` give an error reason
 - [ ] **Success:** tests pass; `recompute` reads nothing but its two arguments. Commit `feat: recompute routing decisions from the stored table`
 
-### Task 4.6: Prove no route is chosen outside the engine
-**Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 1
+### Task 4.4: Prove no route is chosen outside the engine
+**Owner**: Junior AI | **Dependencies**: 3.2, 4.1 | **Effort**: 1
 
-- [ ] `tests/runner/routing/test_route_comparisons.py`: walk every module under `src/amoeba/runner/` with `ast` (see `tests/ast_strings.py` and `tests/runner/test_cf_commands_defined_once.py` for the pattern) and assert that `Route.<member>` appears in a comparison, `match` case or mapping key only in `runner/routing/engine.py`
+- [ ] `tests/runner/routing/test_route_comparisons.py`: walk every module under `src/amoeba/runner/` with `ast` (see `tests/ast_strings.py` and `tests/runner/test_cf_commands_defined_once.py` for the pattern) and assert that `Route.<member>` appears in a comparison, `match` case or mapping key only in `runner/routing/engine.py` and `runner/routing/validate.py` (Task-level additions)
 - [ ] **Success:** passes now, and fails when a `Route.ADVANCE` comparison is added to another module (check once by hand, then revert). Commit `test: assert routes are compared only in the engine`
 
 ---
@@ -274,8 +260,8 @@ revision_number: 1
 
 ## Section 6: The Route Stage in the Tick
 
-### Task 6.1: Implement the route stage
-**Owner**: Junior AI | **Dependencies**: 2.7, 4.3, 5.2 | **Effort**: 3
+### Task 6.1: Implement and test the route stage
+**Owner**: Junior AI | **Dependencies**: 2.6, 4.1, 5.2 | **Effort**: 3
 
 - [ ] Create `runner/routing/stage.py` with `route_outcomes(store, project_id, routing, amoeba_version, context) -> bool` (whether it wrote), where `routing` is the loaded `RoutingTable`. For each entry in `unrouted_outcomes(project_id)`, oldest first:
   - [ ] set the tick context to the entry's node (so 122's catch blocks the right node)
@@ -283,24 +269,19 @@ revision_number: 1
   - [ ] build `RoutingDecisionInput` per D5 "The decision row": `inputs` is every input's value plus `attempt`; `route_parameters` from the match; `journal_entry_id` is the entry; `table_version` and `amoeba_version`
   - [ ] call `record_routing_decision(..., table=RoutingTableVersion(version, content), effect=..., attempt_step=step or None)`
 - [ ] No `except`: store failures and other exceptions propagate to the tick and tenant (D5)
-- [ ] **Success:** the function is under ~50 lines, with any row-building in a helper
-
-### Task 6.2: Test the route stage on the store
-**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 2
-
 - [ ] `tests/runner/routing/test_stage.py` on `Store.open_temporary()` with ingested-shape entries (reuse 125's ingest test helpers): a stated PASS marks the step done and counts attempt 1; a stated CONCERNS with new findings records `rerun`, leaves the node `runnable`, and a second such outcome escalates with a `HUMAN` block; a paused entry escalates with no second block and the node stays `blocked_on_sq_checkpoint`; a failed, an orphaned, a vanished and a launch-failed entry escalate with no second block; an entry with a missing verdict id escalates
 - [ ] After each, `unrouted_outcomes` is empty, and the table version is stored once across several decisions
-- [ ] **Success:** tests pass. Commit `feat: route unrouted outcomes`
+- [ ] **Success:** tests pass; the function is under ~50 lines, with any row-building in a helper. Commit `feat: route unrouted outcomes`
 
-### Task 6.3: Build the view before the route slot
+### Task 6.2: Build the view before the route slot
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
 - [ ] In `runner/tick.py`, split `_decide` so `ProjectView` is built by a separate method called before the `# [route - slice 126]` slot (D8), and `_decide` takes the built view. The slot stays empty, so behavior is unchanged
 - [ ] Keep `tick.py` near 300 lines. If it grows past ~330, move the view building into a helper module beside it (`runner/dispatch/build_view.py` already builds the dispatch part)
 - [ ] **Success:** the full suite passes unchanged. Commit `refactor: build the project view before the route slot`
 
-### Task 6.4: Wire the stage into the tick and retire the routing stand-in
-**Owner**: Junior AI | **Dependencies**: 6.1, 6.3 | **Effort**: 3
+### Task 6.3: Wire the stage into the tick and retire the routing stand-in
+**Owner**: Junior AI | **Dependencies**: 6.1, 6.2 | **Effort**: 3
 
 - [ ] Replace the `# [route - slice 126]` slot with the call to `route_outcomes`, setting `self.wrote`. Confirm it adds no `TickBudget` check (it starts no subprocess, LLD "Data Flow")
 - [ ] Find every caller of `route_outcome` and `review_harness.route` (`grep -rn "route_outcome\|\.route(" tests`). For each:
@@ -310,8 +291,8 @@ revision_number: 1
 - [ ] Run 125's crash and ingestion tests and 124's guard tests
 - [ ] **Success:** the full suite passes. Commit `feat: route outcomes in the tick before decide`
 
-### Task 6.5: Tick-level routing tests
-**Owner**: Junior AI | **Dependencies**: 6.4 | **Effort**: 3
+### Task 6.4: Tick-level routing tests
+**Owner**: Junior AI | **Dependencies**: 6.3 | **Effort**: 3
 
 - [ ] `tests/runner/routing/test_tick_routing.py`, with the stub `sq` and a small table:
   - [ ] `test_advance_dispatches_successor_next_tick`: a completed P4 run with a stated PASS marks `slice_design` done on tick m, and `tasks` gets its pointer write on tick m+1, not tick m
@@ -334,7 +315,7 @@ revision_number: 1
 - [ ] **Success:** tests pass. Commit `feat: find in-flight runs past their time bound`
 
 ### Task 7.2: Raise the overrun escalation in the tick
-**Owner**: Junior AI | **Dependencies**: 6.4, 7.1 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 6.3, 7.1 | **Effort**: 2
 
 - [ ] In `runner/tick.py`, compute `overrun_runs` over the in-flight entries the tick already has (`o.run.entry for o in observed.runs if o.finished is None`). If non-empty, add a `Fault(FaultKind.RUN_OVERRUN, …, extra={runs: [...], table_version})` to the tick's `TickFaults`, exactly as `runner/dispatch/pointer_watch.py` adds `POINTER_MOVED`
 - [ ] Call it beside `watch_pointers`, before `raise_expected_faults` (placement per Task-level additions), with a one-line comment giving the reason
@@ -352,7 +333,7 @@ revision_number: 1
 ## Section 8: Inspection
 
 ### Task 8.1: Add the `routing-decisions` listing
-**Owner**: Junior AI | **Dependencies**: 4.5 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 2
 
 - [ ] Create `inspection/routing.py` with the columns and row function per D6: `decided_at`, node, step, rule id, route, attempt, short version, `recomputes`. Rows come from `routing_decisions` over the project's nodes (or the one `--node-id`), sorted oldest first. `recomputes` is `yes`, `no`, or `error: <reason>` (a missing version row, or a `Recomputation` error)
 - [ ] Register it in `LISTINGS` (`inspection/__init__.py`) as project-scoped with a `node_id` option, following the existing listings. Add the short-version length as a constant in `routing.py`
@@ -369,25 +350,19 @@ revision_number: 1
 
 ## Section 9: Contract Text, CHANGELOG and Final Validation
 
-### Task 9.1: Update the contract documents
+### Task 9.1: Update the contract documents and CHANGELOG
 **Owner**: Junior AI | **Dependencies**: 7.3, 8.2 | **Effort**: 2
 
-- [ ] `docs/process-contract.md`: the route stage and the tick order with the view before it (D8); the table file format, inputs and values, matching, eligibility and validation rules (D1–D4); the `routing_table_path` setting and `--routing-table` flag; the `run_overrun` escalation and its payload (D7); the rule that no secrets go in the table
+- [ ] `docs/process-contract.md`: the route stage and the tick order with the view before it (D8); the table file format, inputs and values, matching, eligibility and validation rules (D1–D4); the `routing_table_path` setting and `--routing-table` flag; the `run_overrun` escalation, its payload (D7) and its actual place in the tick order (Task-level additions); the rule that no secrets go in the table
 - [ ] `docs/substrate-guide.md`: update the 120 row for routing
+- [ ] `CHANGELOG.md`: add 1–2 line Slice 126 entries under `[Unreleased]` / `### Added`: routing by table with recorded, recomputable decisions; the overrun escalation; `--routing-table`; `inspect routing-decisions`
 - [ ] **Success:** every name in the text matches the code. Commit `docs: document the routing engine contract`
 
-### Task 9.2: CHANGELOG
-**Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 1
-
-- [ ] Add 1–2 line Slice 126 entries under `[Unreleased]` / `### Added`: routing by table with recorded, recomputable decisions; the overrun escalation; `--routing-table`; `inspect routing-decisions`
-- [ ] **Success:** commit `docs: add slice 126 to the CHANGELOG`
-
-### Task 9.3: Final validation
-**Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
+### Task 9.2: Final validation
+**Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 2
 
 - [ ] Run `uv run pytest tests/runner/routing -v`, then `uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright`. All pass
 - [ ] Walkthrough step 2: copy the shipped table, delete the last rule, and `AMOEBA_STORE_DIR=$(mktemp -d) uv run amoeba start --routing-table /tmp/t.yaml`. It exits 7 naming the missing catch-all. Record the output under this task
 - [ ] Walkthrough step 4 (real Squadron runs on a scratch copy, pre-authorized): follow 125's walkthrough step 3 to drive one slice `until: tasks`, then check `inspect routing-decisions`, `inspect journal` and `inspect blocked` against the LLD's expected results. Record the decision row and outcome under this task. If the scratch setup cannot be built, write `BLOCKED:` with the reason
-- [ ] Review every new or changed source file for ~300 lines and functions for ~50; split any that exceed with a `refactor:` commit
-- [ ] Coverage check against the LLD Success Criteria: each Functional Requirement maps to a passing test named here. List any gap under this task and close it before finishing
+- [ ] Record under this task whether `test_wheel_contents.py` ran or skipped. If it skipped, run it once with network access (without `--offline`) and record that it passed
 - [ ] **Success:** all gates green; work is committed on `126-slice.routing-engine`. Commit any remaining fixes as `fix:` or `test:`
