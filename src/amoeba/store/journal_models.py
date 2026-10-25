@@ -62,6 +62,15 @@ class JournalResolver(StrEnum):
 #: The parameter key that carries an ``sq_run``'s Squadron run id (slice 120).
 PARAM_RUN_ID: Final = "run_id"
 
+#: Optional ``sq_run`` keys that mark a continuation of an earlier run (slice 127):
+#: what it does (``retry``, ``accept`` or ``observe``), the entry it continues, and
+#: the resolution it carries out. ``PARAM_RESOLUTION`` is also optional on a
+#: ``cf_write``, naming the resolution a rerun's pointer write carries out. The
+#: recovery observer checks only that ``PARAM_CONTINUATION`` is present.
+PARAM_CONTINUATION: Final = "continuation"
+PARAM_CONTINUES: Final = "continues"
+PARAM_RESOLUTION: Final = "resolution"
+
 #: The parameter key that carries the working directory a command runs in (slice 122
 #: for ``sq_run``, slice 125 for ``cf_write``): the absolute path of the checkout.
 #: Stored and returned unchanged. An ``sq_run`` does not require it; a ``cf_write``

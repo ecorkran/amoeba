@@ -537,3 +537,33 @@ def test_recorded_result_run_ids_ignores_results_without_a_run_id(
     store.journal_escalate(entry.id, reason="zero candidates")
 
     assert store.recorded_result_run_ids(PROJECT) == {}
+
+
+def test_recorded_result_run_nodes_names_the_owning_node(
+    store: Store, node: Node
+) -> None:
+    """A continuation tells its own node's claim from another node's."""
+    entry = store.journal_issue(
+        node.id, kind=CommandKind.SQ_RUN, parameters=SQ_PARAMETERS
+    )
+    store.journal_resolve(
+        entry.id,
+        outcome=JournalOutcome.ADOPTED,
+        result={"run_id": "run-20260921-p6-abcd1234"},
+        resolved_by=JournalResolver.RECOVERY,
+    )
+
+    assert store.recorded_result_run_nodes(PROJECT) == {
+        "run-20260921-p6-abcd1234": node.id
+    }
+
+
+def test_recorded_result_run_nodes_ignores_results_without_a_run_id(
+    store: Store, node: Node
+) -> None:
+    entry = store.journal_issue(
+        node.id, kind=CommandKind.SQ_RUN, parameters=SQ_PARAMETERS
+    )
+    store.journal_escalate(entry.id, reason="zero candidates")
+
+    assert store.recorded_result_run_nodes(PROJECT) == {}

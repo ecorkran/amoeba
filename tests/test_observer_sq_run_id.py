@@ -7,6 +7,7 @@ said and when.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from sq_run_fixtures import sq_run_parameters
 
 import amoeba.process.observers.sq_run_id as sq_run_id
 from amoeba.process.observers.sq_run_id import (
+    REASON_RESUME_RUN_MISSING,
     STATE_BEARING_OUTCOMES,
     SquadronRunIdObserver,
     SquadronRunObserver,
@@ -22,7 +24,13 @@ from amoeba.process.observers.sq_run_id import (
 from amoeba.process.observers.sq_runs import RunsDirectoryScan, SquadronRunsObserver
 from amoeba.process.recovery import Adopt, InFlight, NotApplied, Observation, Unknown
 from amoeba.process.sq_outcome import PollFailure, RunOutcome, RunOutcomeDocument
-from amoeba.store.journal_models import PARAM_RUN_ID, CommandKind, JournalEntry
+from amoeba.store.journal_models import (
+    PARAM_CONTINUATION,
+    PARAM_CONTINUES,
+    PARAM_RUN_ID,
+    CommandKind,
+    JournalEntry,
+)
 
 RUN_ID = "run-20261022-p5-aaaa1111"
 NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
@@ -75,6 +83,7 @@ class Rig:
         monkeypatch: pytest.MonkeyPatch,
         *answers: RunOutcomeDocument | PollFailure,
         claimed: dict[str, str] | None = None,
+        claimed_nodes: dict[str, str] | None = None,
     ) -> None:
         self.poll = FakePoll(*answers)
         self.sleeps: list[float] = []
@@ -83,6 +92,7 @@ class Rig:
             launch_grace_seconds=GRACE_SECONDS,
             poll_timeout_seconds=POLL_TIMEOUT_SECONDS,
             claimed_run_ids=claimed,
+            claimed_run_nodes=claimed_nodes,
             now=lambda: NOW,
             sleep=self.sleeps.append,
         )
@@ -355,3 +365,93 @@ def test_an_id_bearing_entry_never_touches_the_legacy_scan(
 
     assert isinstance(observation, InFlight)
     assert legacy.seen == []
+
+
+# 7. Continuation entries (slice 127) ---------------------------------------
+
+
+def _continuation(**overrides: object) -> JournalEntry:
+    parameters = sq_run_parameters({"pipeline": "p5", "params": {}}, run_id=RUN_ID)
+    parameters.update({PARAM_CONTINUATION: "retry", PARAM_CONTINUES: "entry-0"})
+    parameters.update(overrides)
+    return _entry(parameters=parameters)
+
+
+def test_a_continuation_ignores_a_claim_on_its_own_node(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch,
+        _document(RunOutcome.PAUSED),
+        claimed={RUN_ID: "entry-0"},
+        claimed_nodes={RUN_ID: "node-1"},
+    )
+
+    assert isinstance(rig.observe(_continuation()), InFlight)
+
+
+def test_a_continuation_still_escalates_on_a_claim_from_another_node(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch,
+        claimed={RUN_ID: "entry-0"},
+        claimed_nodes={RUN_ID: "node-2"},
+    )
+
+    answer = rig.observe(_continuation())
+
+    assert isinstance(answer, Unknown)
+    assert rig.poll.calls == []
+
+
+def test_an_entry_without_the_key_keeps_the_guard_on_its_own_node(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch,
+        claimed={RUN_ID: "entry-0"},
+        claimed_nodes={RUN_ID: "node-1"},
+    )
+
+    assert isinstance(rig.observe(_entry()), Unknown)
+
+
+@pytest.mark.parametrize("continuation", ["retry", "accept", "observe"])
+def test_continuation_never_reissued(
+    monkeypatch: pytest.MonkeyPatch, continuation: str
+) -> None:
+    """No run state after the grace period is Unknown: NotApplied reissues."""
+    rig = Rig(monkeypatch, _document(RunOutcome.NOT_FOUND))
+
+    answer = rig.observe(_continuation(**{PARAM_CONTINUATION: continuation}))
+
+    assert isinstance(answer, Unknown)
+    assert REASON_RESUME_RUN_MISSING in answer.reason
+    assert not isinstance(answer, NotApplied)
+
+
+def test_a_continuation_in_grace_waits_then_is_unknown_if_still_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(
+        monkeypatch,
+        _document(RunOutcome.NOT_FOUND),
+        _document(RunOutcome.NOT_FOUND),
+    )
+    entry = _continuation()
+    entry = replace(entry, issued_at=NOW - timedelta(seconds=10))
+
+    answer = rig.observe(entry)
+
+    assert isinstance(answer, Unknown)
+    assert rig.sleeps == [50.0]
+    assert len(rig.poll.calls) == 2
+
+
+def test_a_continuation_with_a_state_is_in_flight_as_before(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rig = Rig(monkeypatch, _document(RunOutcome.COMPLETED))
+
+    assert isinstance(rig.observe(_continuation()), InFlight)

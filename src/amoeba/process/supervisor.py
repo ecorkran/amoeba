@@ -37,7 +37,9 @@ def store_path_for(store_dir: Path, project_id: str) -> Path:
 
 
 def build_observer_registry(
-    settings: ProcessSettings, claimed_run_ids: Mapping[str, str] | None = None
+    settings: ProcessSettings,
+    claimed_run_ids: Mapping[str, str] | None = None,
+    claimed_run_nodes: Mapping[str, str] | None = None,
 ) -> ObserverRegistry:
     """Assemble the observers for **one** recovery pass.
 
@@ -52,6 +54,8 @@ def build_observer_registry(
             runs directory and clock tolerance, and the cf timeout.
         claimed_run_ids: Run ids already recorded in another entry's result,
             which are therefore not candidates for any further entry.
+        claimed_run_nodes: The same run ids mapped to the node that owns the
+            recording entry, for a continuation's claimed-id guard.
     """
     return {
         CommandKind.SQ_RUN: SquadronRunObserver(
@@ -59,6 +63,7 @@ def build_observer_registry(
                 launch_grace_seconds=settings.launch_grace_seconds,
                 poll_timeout_seconds=settings.sq_timeout_seconds,
                 claimed_run_ids=claimed_run_ids,
+                claimed_run_nodes=claimed_run_nodes,
                 now=lambda: datetime.now(UTC),
                 sleep=time.sleep,
             ),
@@ -89,7 +94,9 @@ def recover_every_project(
     for project_id, store in projects:
         try:
             registry = build_observer_registry(
-                settings, store.recorded_result_run_ids(project_id)
+                settings,
+                store.recorded_result_run_ids(project_id),
+                store.recorded_result_run_nodes(project_id),
             )
             summary = reconcile(store, project_id, registry)
         except Exception as error:

@@ -11,6 +11,10 @@ instead of matching attributes against Squadron's internal run files.
 * ``not_found`` is the launch grace rule (D4): a launch is detached and may
   still be creating its run, so inside the grace period the observer waits out
   the remainder once and asks again before it concludes ``NotApplied``.
+* A continuation entry (slice 127) shares its run id with the entry it continues,
+  so the claimed-id guard ignores an owner on the same node, and a run with no
+  state is ``Unknown``, never ``NotApplied``: ``NotApplied`` would let recovery
+  reissue the command as a fresh run under the old id, which a resume forbids.
 * Entries journaled before 120 carry no run id. :class:`SquadronRunObserver`
   sends them to the unchanged attribute matcher (D5).
 
@@ -37,7 +41,7 @@ from amoeba.process.sq_outcome import (
     RunOutcomeDocument,
     poll_run,
 )
-from amoeba.store.journal_models import PARAM_RUN_ID, JournalEntry
+from amoeba.store.journal_models import PARAM_CONTINUATION, PARAM_RUN_ID, JournalEntry
 
 #: Outcomes that mean Squadron holds a state for the run, so the command reached
 #: it. Defined once, from :class:`RunOutcome`: the two that mean "no usable
@@ -46,6 +50,10 @@ STATE_BEARING_OUTCOMES: Final = frozenset(RunOutcome) - {
     RunOutcome.NOT_FOUND,
     RunOutcome.UNREADABLE,
 }
+
+
+#: The ``Unknown`` reason for a continuation whose run has no state (slice 127, D9).
+REASON_RESUME_RUN_MISSING: Final = "resume_run_missing"
 
 
 class SquadronRunIdObserver:
@@ -57,6 +65,7 @@ class SquadronRunIdObserver:
         launch_grace_seconds: float,
         poll_timeout_seconds: float,
         claimed_run_ids: Mapping[str, str] | None,
+        claimed_run_nodes: Mapping[str, str] | None,
         now: Callable[[], datetime],
         sleep: Callable[[float], None],
     ) -> None:
@@ -69,6 +78,9 @@ class SquadronRunIdObserver:
             claimed_run_ids: Run ids already recorded in another entry's
                 result, mapped to that entry's id. Such a run is never adopted
                 by a second entry.
+            claimed_run_nodes: The same run ids mapped to the node that owns
+                the recording entry, so a continuation can tell its own node's
+                claim from another node's.
             now: The clock, injected so tests control it.
             sleep: Waits for the remainder of the grace period, injected so
                 tests record it instead of waiting.
@@ -76,6 +88,7 @@ class SquadronRunIdObserver:
         self._grace_seconds = launch_grace_seconds
         self._poll_timeout_seconds = poll_timeout_seconds
         self._claimed_run_ids = dict(claimed_run_ids or {})
+        self._claimed_run_nodes = dict(claimed_run_nodes or {})
         self._now = now
         self._sleep = sleep
 
@@ -86,8 +99,10 @@ class SquadronRunIdObserver:
             return Unknown(
                 reason=f"entry {entry.id} has an unusable {PARAM_RUN_ID}: {run_id!r}"
             )
+        continuation = PARAM_CONTINUATION in entry.parameters
         owner = self._claimed_run_ids.get(run_id)
-        if owner is not None and owner != entry.id:
+        own_node = continuation and self._claimed_run_nodes.get(run_id) == entry.node_id
+        if owner is not None and owner != entry.id and not own_node:
             return Unknown(
                 reason=f"run {run_id} is already recorded on entry {owner}",
                 candidates=(run_id,),
@@ -96,15 +111,20 @@ class SquadronRunIdObserver:
         answer = _classify(run_id, self._poll(run_id))
         if answer is not None:
             return answer
-        return self._not_found(entry, run_id)
+        return self._not_found(entry, run_id, continuation=continuation)
 
     def _poll(self, run_id: str) -> RunOutcomeDocument | PollFailure:
         return poll_run(run_id, timeout_seconds=self._poll_timeout_seconds)
 
-    def _not_found(self, entry: JournalEntry, run_id: str) -> Observation:
+    def _not_found(
+        self, entry: JournalEntry, run_id: str, *, continuation: bool
+    ) -> Observation:
         """The launch grace rule (D4): wait out the remainder once, ask again."""
-        not_applied = NotApplied(
-            f"no run state for {run_id} after the launch grace period"
+        reason = f"no run state for {run_id} after the launch grace period"
+        not_applied: Observation = (
+            Unknown(reason=f"{REASON_RESUME_RUN_MISSING}: {reason}")
+            if continuation
+            else NotApplied(reason)
         )
         if entry.issued_at is None:
             return Unknown(

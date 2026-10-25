@@ -221,6 +221,7 @@ def test_startup_stall_is_bounded_by_one_grace_and_two_polls_per_entry(
         launch_grace_seconds=STARTUP_GRACE_SECONDS,
         poll_timeout_seconds=10.0,
         claimed_run_ids=None,
+        claimed_run_nodes=None,
         now=lambda: clock.now,
         sleep=clock.sleep,
     )
