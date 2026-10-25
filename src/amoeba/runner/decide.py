@@ -19,6 +19,7 @@ from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import JournalEntry, Node
 
 
@@ -73,8 +74,35 @@ class WriteSlicePointer:
     checkout: Checkout
 
 
+@dataclass(frozen=True)
+class ResumeRun:
+    """Resume a paused run for an applied ``retry`` or ``accept`` (slice 127, D4).
+
+    ``continues`` is the entry whose run it resumes, and ``resolution`` the blocked
+    state whose decision it carries out. The run id is the continued one.
+    """
+
+    node_id: str
+    run_id: str
+    decision: Continuation
+    continues: str
+    resolution: str
+    checkout: Path
+
+
+@dataclass(frozen=True)
+class ObserveRun:
+    """Observe a run the PM moved by hand, after an applied ``handled`` (D4)."""
+
+    node_id: str
+    run_id: str
+    continues: str
+    resolution: str
+    checkout: Path
+
+
 #: The closed set of things a planner may ask for.
-type Action = LaunchRun | BlockHumanStep | WriteSlicePointer
+type Action = LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | ObserveRun
 
 
 @dataclass(frozen=True)

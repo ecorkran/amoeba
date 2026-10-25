@@ -15,7 +15,14 @@ from pathlib import Path
 from amoeba.process import RunPoll
 from amoeba.runner import finish
 from amoeba.runner.budget import TickBudget, TickResult
-from amoeba.runner.decide import Action, BlockHumanStep, LaunchRun, WriteSlicePointer
+from amoeba.runner.decide import (
+    Action,
+    BlockHumanStep,
+    LaunchRun,
+    ObserveRun,
+    ResumeRun,
+    WriteSlicePointer,
+)
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.reissue import ReissueLaunch, begin_reissue
 from amoeba.runner.faults import NodeContext
@@ -90,6 +97,9 @@ class ActStage:
                     if not budget.allows_call():
                         return ActOutcome(TickResult.CUT_OFF, wrote)
                     self._pointers.write(self._store, action, budget)
+                case ResumeRun() | ObserveRun():
+                    # Unreachable until Task 6.4a: no planner emits these before 7.3.
+                    raise NotImplementedError("continuation acts: Task 6.4a")
             wrote = True
         self._context.clear()
         return ActOutcome(TickResult.COMPLETE, wrote)

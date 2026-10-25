@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from itertools import count
 from pathlib import Path
@@ -18,6 +18,7 @@ from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
+    BlockedState,
     CommandKind,
     JournalEntry,
     JournalOutcome,
@@ -86,6 +87,8 @@ def facts(
     slice_index: int = 125,
     initiative_index: int = 120,
     reissue_of: JournalEntry | None = None,
+    resolution: BlockedState | None = None,
+    continues: JournalEntry | None = None,
 ) -> StepDispatchFacts:
     """Dispatch facts for a step; the sort key follows the LLD's order."""
     resolved = (
@@ -100,6 +103,8 @@ def facts(
         cf_project_id=CF_PROJECT,
         sort_key=sort_key,
         reissue_of=reissue_of,
+        resolution=resolution,
+        continues=continues,
     )
 
 
@@ -107,12 +112,18 @@ def view_of(
     steps: dict[str, StepDispatchFacts],
     held: Iterable[Path] = (),
     current: Iterable[str] | None = None,
+    holders: Mapping[Path, frozenset[str]] | None = None,
 ) -> ProjectView:
-    """A view whose current steps are ``current`` (default: all of ``steps``)."""
+    """A view whose current steps are ``current`` (default: all of ``steps``).
+
+    ``holders`` names who holds each held checkout; its checkouts are held too.
+    """
     names = list(steps) if current is None else list(current)
+    named = dict(holders or {})
     return replace(
         view_for(LifecycleTree(())),
         current_steps=tuple(node(name) for name in names),
         dispatch=steps,
-        held_checkouts=frozenset(held),
+        held_checkouts=frozenset(held) | frozenset(named),
+        checkout_holders=named,
     )
