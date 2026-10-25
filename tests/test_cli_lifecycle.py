@@ -24,6 +24,7 @@ from cli_harness import (
     run_cli,
     start_background,
 )
+from runner.routing.table_support import table_text
 from sq_run_fixtures import (
     LEGACY_ENTRY_ID,
     insert_legacy_sq_run_entry,
@@ -40,6 +41,12 @@ from amoeba.store.migrations import (
 )
 
 PROJECT = "demo"
+
+ADVANCE_RULE = """\
+- id: advance
+  when: {outcome: completed, verdict: pass}
+  route: advance
+"""
 
 
 @pytest.fixture
@@ -496,3 +503,19 @@ def test_a_failing_sq_probe_fails_the_start_naming_the_shape(
 
     assert result.returncode == ExitCode.STARTUP_FAILED == 7
     assert "runs wait" in result.stderr and "--timeout 0 --json" in result.stderr
+
+
+def test_a_broken_routing_table_fails_the_start_naming_the_missing_catch_all(
+    supervisor_dir: Path, runs_dir: Path, tmp_path: Path
+) -> None:
+    broken = tmp_path / "broken.yaml"
+    broken.write_text(table_text(ADVANCE_RULE, catch_all=False), encoding="utf-8")
+
+    result = run_cli(
+        ["start", *_start_arguments(runs_dir), "--routing-table", str(broken)],
+        supervisor_dir,
+    )
+
+    assert result.returncode == ExitCode.STARTUP_FAILED == 7
+    assert "catch-all" in result.stderr
+    assert str(broken) in result.stderr

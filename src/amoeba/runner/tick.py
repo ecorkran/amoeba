@@ -58,6 +58,7 @@ from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.routing.table import RoutingTable
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -90,9 +91,13 @@ class ProjectTick:
         now: Callable[[], datetime],
         context: NodeContext,
         version_label: str,
+        routing_table: RoutingTable,
+        amoeba_version: str,
     ) -> None:
         self._project_id = project_id
         self._version_label = version_label
+        self._routing_table = routing_table
+        self._amoeba_version = amoeba_version
         self._store = store
         self._supervisor_dir = supervisor_dir
         self._planners = planners

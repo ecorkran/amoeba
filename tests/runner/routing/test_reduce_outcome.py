@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from amoeba.process.sq_outcome import (
+from amoeba.process import (
     CheckpointKind,
     FailureKind,
     RunCheckpoint,

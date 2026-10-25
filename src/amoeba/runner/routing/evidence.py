@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import cast
 
-from amoeba.process.sq_outcome import RunOutcomeDocument
+from amoeba.process import RunOutcomeDocument
 from amoeba.runner.finish import RESULT_LAUNCH_FAILURE
 from amoeba.runner.ingest.record import (
     RESULT_OUTCOME,

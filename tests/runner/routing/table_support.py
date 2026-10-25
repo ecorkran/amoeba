@@ -7,6 +7,9 @@ from textwrap import dedent
 from amoeba.runner.lifecycle.steps import PIPELINE_P4, PIPELINE_P5, PIPELINE_P6
 from amoeba.runner.routing.table import RoutingTable, parse_table
 
+#: The Amoeba package version a test tenant is given; not a real release.
+TEST_AMOEBA_VERSION = "0.0.0-test"
+
 #: Every pipeline a table must bound, with a generous default.
 DEFAULT_BOUNDS = {PIPELINE_P4: 240, PIPELINE_P5: 240, PIPELINE_P6: 720}
 

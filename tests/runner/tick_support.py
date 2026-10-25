@@ -48,6 +48,7 @@ from runner.observe_support import (
     Host,
     ScriptedPoll,
 )
+from runner.routing.table_support import TEST_AMOEBA_VERSION, small_table
 
 PROJECT = "demo"
 PLAN_READ_INTERVAL = 30.0
@@ -225,6 +226,7 @@ class Rig:
         )
         self.pointers = PointerStage(self.cf, 8.0, GRACE, self.clock.wall)
         self.planner = Planner(tmp_path)
+        self.routing_table = small_table()
         self.planners: tuple[Any, ...] = (self.planner,)
         self.popen = Popen(store)
         self.context = NodeContext()
@@ -254,6 +256,8 @@ class Rig:
             now=self.clock.wall,
             context=self.context,
             version_label=TEST_VERSION_LABEL,
+            routing_table=self.routing_table,
+            amoeba_version=TEST_AMOEBA_VERSION,
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
         return tick.run(budget), tick
@@ -292,6 +296,8 @@ def tenant_for(rig: Rig) -> RunnerTenant:
         now=rig.clock.wall,
         monotonic=rig.clock.monotonic,
         version_label=TEST_VERSION_LABEL,
+        routing_table=rig.routing_table,
+        amoeba_version=TEST_AMOEBA_VERSION,
     )
 
 

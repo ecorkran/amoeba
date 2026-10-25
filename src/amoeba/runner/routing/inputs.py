@@ -14,7 +14,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
-from amoeba.process.sq_outcome import CheckpointKind, FailureKind, RunOutcome
+from amoeba.process import CheckpointKind, FailureKind, RunOutcome
 from amoeba.runner.ingest.record import OUTCOME_VANISHED
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import FindingSeverity, ReviewVerdict, VerdictStanding

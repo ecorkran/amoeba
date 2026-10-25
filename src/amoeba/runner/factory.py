@@ -7,6 +7,7 @@ import subprocess
 import time
 from datetime import UTC, datetime
 from functools import partial
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Final
 
@@ -21,9 +22,13 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.probes import probe_sq
+from amoeba.runner.routing.table import RoutingTable, TableError, load_table
 from amoeba.runner.tenant import RunnerTenant
 
 logger = logging.getLogger(__name__)
+
+#: The installed distribution whose version labels each routing decision.
+AMOEBA_DISTRIBUTION: Final = "amoeba"
 
 #: The planners production runs, over current steps only: human steps (slice 124),
 #: then dispatch (slice 125), which points a checkout and launches a pipeline.
@@ -62,6 +67,35 @@ def validate_settings(settings: ProcessSettings) -> None:
         )
 
 
+def load_routing(settings: ProcessSettings) -> tuple[RoutingTable, str]:
+    """The routing table and the Amoeba package version, read once at start.
+
+    Raises:
+        StartupFailedError: Listing every problem with the table, or saying the
+            package version cannot be read.
+    """
+    try:
+        table = load_table(settings.routing_table_path)
+    except TableError as error:
+        # Expected: a table that fails to load stops start-up, with every problem.
+        problems = "\n".join(f"  - {problem}" for problem in error.problems)
+        raise StartupFailedError(
+            f"the routing table is refused:\n{problems}"
+        ) from error
+    try:
+        amoeba_version = version(AMOEBA_DISTRIBUTION)
+    except PackageNotFoundError as error:
+        # Expected: not installed as a distribution. Decisions record the
+        # version, so start-up cannot go on without one.
+        raise StartupFailedError(
+            f"cannot read the installed version of {AMOEBA_DISTRIBUTION}"
+        ) from error
+    logger.info(
+        "routing table %s loaded from %s", table.version, settings.routing_table_path
+    )
+    return table, amoeba_version
+
+
 def runner_tenant(
     settings: ProcessSettings,
     supervisor_dir: Path,
@@ -77,9 +111,11 @@ def runner_tenant(
             (tests, later slices) is used as given.
 
     Raises:
-        StartupFailedError: For a bad bound or a failed ``sq`` probe.
+        StartupFailedError: For a bad bound, a refused routing table, or a failed
+            ``sq`` probe.
     """
     validate_settings(settings)
+    routing_table, amoeba_version = load_routing(settings)
     (supervisor_dir / LAUNCH_LOGS_DIRNAME).mkdir(parents=True, exist_ok=True)
     probe_sq(settings, _now(), poll_run)
     logger.info("sq probe passed: `sq runs wait` has the shape the Runner needs")
@@ -95,4 +131,6 @@ def runner_tenant(
         now=_now,
         monotonic=time.monotonic,
         version_label=version_label,
+        routing_table=routing_table,
+        amoeba_version=amoeba_version,
     )

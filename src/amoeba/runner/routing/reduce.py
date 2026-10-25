@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from amoeba.process.sq_outcome import (
+from amoeba.process import (
     RunCheckpoint,
     RunFailure,
     UnknownKind,
