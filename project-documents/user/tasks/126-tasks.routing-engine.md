@@ -21,21 +21,21 @@ projectState: Slices 120–125 are merged. The tick (`runner/tick.py`) has a `# 
 dateCreated: 20261024
 dateUpdated: 20261025
 status: not_started
-turns: 43
-promptTokens: 2822580
-cachedTokens: 2711939
-cacheWriteTokens: 110575
-completionTokens: 31577
-durationSeconds: 341.0
-costUsd: 2.05907
-usageRounds: 2
-pricedRounds: 2
+turns: 49
+promptTokens: 3655862
+cachedTokens: 3516714
+cacheWriteTokens: 139070
+completionTokens: 39762
+durationSeconds: 416.6
+costUsd: 2.611733
+usageRounds: 3
+pricedRounds: 3
 usageByModel:
   claude-opus-5-5:
-    rounds: 2
-    costUsd: 2.0590706000000005
-    completionTokens: 31577
-revision_number: 1
+    rounds: 3
+    costUsd: 2.611733600000001
+    completionTokens: 39762
+revision_number: 2
 ---
 
 ## Context Summary
