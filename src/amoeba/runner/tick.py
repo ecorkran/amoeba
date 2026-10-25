@@ -24,11 +24,6 @@ from amoeba.runner.decide import (
     WriteSlicePointer,
     decide,
 )
-from amoeba.runner.dispatch.build_view import (
-    DispatchView,
-    block_unresolved,
-    build_dispatch_view,
-)
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.pointer_watch import watch_pointers
@@ -41,7 +36,7 @@ from amoeba.runner.faults import (
     raise_expected_faults,
 )
 from amoeba.runner.intent.apply import apply_pending_intents
-from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
+from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.launch import (
     PARAM_PARAMS,
     PARAM_PIPELINE,
@@ -54,17 +49,16 @@ from amoeba.runner.launch import (
 )
 from amoeba.runner.lifecycle.human_steps import block_human_step
 from amoeba.runner.lifecycle.plan_stage import PlanStage
-from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.project_view import build_project_view
 from amoeba.runner.routing.table import RoutingTable
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
     CommandKind,
     JournalEntry,
-    Node,
     Store,
 )
 
@@ -151,8 +145,11 @@ class ProjectTick:
         if pointed.result is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._pointer_confirmed = pointed.confirmed
+        # The view is built before routing: what routing does is first seen by the
+        # next tick's view (slice 126, D8).
+        view = self._build_view(observed.runs, self._probes.results(links), desired)
         # [route - slice 126]
-        decided = self._decide(observed.runs, self._probes.results(links), desired)
+        decided = self._decide(view)
         if self._act(decided, budget) is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
@@ -220,51 +217,29 @@ class ProjectTick:
                 )
         return shape_error
 
-    def _decide(
+    def _build_view(
         self,
         runs: Sequence[ObservedRun],
         link_probes: Mapping[str, bool],
         desired: DesiredStateIndex,
-    ) -> list[Action]:
+    ) -> ProjectView:
         self._context.clear()
-        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
-        current = current_steps(tree, desired)
-        dispatch = self._dispatch_view(tree, current)
-        view = ProjectView(
-            project_id=self._project_id,
-            now=self._now(),
-            tree=tree,
-            # Unresolved sq_run entries the tick did not finish: what ``ready_unbusy``
-            # excludes (finished ones were resolved by ``finish.record`` above).
-            in_flight=tuple(o.run for o in runs if o.finished is None),
-            link_probes=link_probes,
-            desired=desired,
-            current_steps=current,
-            dispatch=dispatch.facts,
-            held_checkouts=dispatch.held,
-        )
-        return list(decide(view, self._planners))
-
-    def _dispatch_view(
-        self, tree: LifecycleTree, current: Sequence[Node]
-    ) -> DispatchView:
-        """The dispatch facts, only when a dispatch planner is registered (D1).
-
-        Without one nothing launches, so a step with no checkout is not a fault, and
-        no step is blocked for it.
-        """
-        if not self._dispatching:
-            return DispatchView({}, frozenset(), ())
-        dispatch = build_dispatch_view(
+        built = build_project_view(
             self._store,
             self._project_id,
-            tree,
-            current,
-            self._pointer_confirmed,
-            is_dir=Path.is_dir,
+            self._now(),
+            runs,
+            link_probes,
+            desired,
+            dispatching=self._dispatching,
+            pointer_confirmed=self._pointer_confirmed,
         )
-        self.wrote = block_unresolved(self._store, dispatch.unresolved) or self.wrote
-        return dispatch
+        self.wrote = built.wrote or self.wrote
+        return built.view
+
+    def _decide(self, view: ProjectView) -> list[Action]:
+        self._context.clear()
+        return list(decide(view, self._planners))
 
     def _act(self, actions: Sequence[Action], budget: TickBudget) -> TickResult:
         for action in actions:
