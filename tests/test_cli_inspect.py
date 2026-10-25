@@ -21,6 +21,7 @@ from inspection_harness import FIXTURE_VERDICT, PROJECT, seed_every_listing
 from amoeba.cli.main import ExitCode
 from amoeba.inspection import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.inspection.listing import ListingScope
+from amoeba.store import Store
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
@@ -142,6 +143,19 @@ def test_blocked_listing_names_what_each_node_waits_on(
     assert rows[0]["title"] == "awaiting review"
     assert rows[0]["blocked_on"] == "judge"
     assert rows[0]["context"] == "needs a verdict"
+
+
+def test_blocked_listing_carries_the_id_a_resolution_names(
+    supervisor_dir: Path, populated: Path
+) -> None:
+    rows = json.loads(
+        run_cli(_listing_arguments("blocked", ["--json"]), supervisor_dir).stdout
+    )
+
+    with Store.open_read_only(populated) as store:
+        state = store.blocked_state_for(rows[0]["node_id"])
+    assert state is not None
+    assert rows[0]["blocked_state_id"] == state.id
 
 
 def test_journal_listing_shows_resolved_and_unresolved(

@@ -84,7 +84,7 @@ LISTINGS: tuple[Listing, ...] = (
     Listing(
         name="blocked",
         help_text="Blocked nodes for a project, and what each is blocked on.",
-        columns=("node_id", "title", "blocked_on", "context"),
+        columns=("node_id", "title", "blocked_on", "context", "blocked_state_id"),
         rows=core.blocked_rows,
     ),
     Listing(

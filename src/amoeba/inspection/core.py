@@ -40,6 +40,8 @@ def blocked_rows(store: Store, request: ListingRequest) -> list[Row]:
             "title": blocked.node.title,
             "blocked_on": blocked.blocked_state.kind.value,
             "context": blocked.blocked_state.context,
+            # The id a resolution names (slice 127).
+            "blocked_state_id": blocked.blocked_state.id,
         }
         for blocked in store.blocked(request.require_project_id())
     ]
