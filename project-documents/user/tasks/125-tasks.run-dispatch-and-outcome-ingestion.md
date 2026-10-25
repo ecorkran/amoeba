@@ -20,7 +20,7 @@ projectState: Slices 120–124 are merged. `amoeba.runner` has the tick (`runner
   do not exist.
 dateCreated: 20261024
 dateUpdated: 20261024
-status: in_progress
+status: complete
 turns: 48
 promptTokens: 4568605
 cachedTokens: 4415865
