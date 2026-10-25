@@ -8,9 +8,8 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from sq_stub_scripts import RunScript, single_review
 
-from amoeba.process import RunOutcome, RunOutcomeDocument
+from amoeba.process import RunOutcome
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.faults import ResumeFailure
 from amoeba.runner.lifecycle.steps import Executor
@@ -30,19 +29,18 @@ from amoeba.store import (
 )
 from runner.dispatch.tick_rig import DispatchRig
 from runner.observe_support import GRACE, Child
-from runner.resolutions.resolution_support import PAUSED_AT, resolve_block
+from runner.resolutions.resolution_support import resolve_block
+from runner.resolutions.rig_support import (
+    INDEX,
+    LOOP_CHECKPOINT,
+    STATED_CONCERNS,
+    answer_poll,
+    write_review,
+)
 from runner.routing.table_support import shipped_table
 
 SLICE = "accepted"
-INDEX = 125
-CF_SLUG = "run-dispatch-and-outcome-ingestion"
-STATED_CONCERNS = "verdict: CONCERNS"
 STEP_SECONDS = 20.0
-CHECKPOINT = {
-    "kind": "loop_exhausted",
-    "is_loop": True,
-    "paused_at": PAUSED_AT.isoformat(),
-}
 
 
 @pytest.fixture
@@ -53,34 +51,19 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
     yield built
 
 
-def _review(rig: DispatchRig, verdict: str = STATED_CONCERNS) -> RunScript:
-    """The captured review with its stated verdict set, written into the checkout."""
-    script = single_review(CF_SLUG)
-    for path, text in script.files.items():
-        target = rig.world.root / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text.replace(STATED_CONCERNS, verdict, 1), encoding="utf-8")
-    return script
-
-
 def _paused_loop(rig: DispatchRig) -> tuple[Node, str]:
     """A step whose run paused at a loop with a CONCERNS review, ingested and routed."""
     _, step = rig.slice_and_step(SLICE, INDEX)
     rig.tick()
     rig.tick()
-    rig.end_run(step, RunOutcome.PAUSED, checkpoint=CHECKPOINT, **_review(rig).document)
+    rig.end_run(
+        step,
+        RunOutcome.PAUSED,
+        checkpoint=LOOP_CHECKPOINT,
+        **write_review(rig).document,
+    )
     run_id = str(rig.entries(CommandKind.SQ_RUN, step)[0].parameters["run_id"])
     return step, run_id
-
-
-def _answer(
-    rig: DispatchRig, run_id: str, outcome: RunOutcome, **fields: object
-) -> None:
-    rig.tick_rig.poll.answers.append(
-        RunOutcomeDocument.model_validate(
-            {"run_id": run_id, "outcome": outcome.value, **fields}
-        )
-    )
 
 
 def _resolve(rig: DispatchRig, step: Node, decision: str) -> None:
@@ -124,10 +107,10 @@ def _accept_and_finish(
 ) -> tuple[Node, JournalEntry]:
     step, run_id = _paused_loop(rig)
     _resolve(rig, step, "accept")
-    _answer(rig, run_id, RunOutcome.PAUSED, checkpoint=CHECKPOINT)
+    answer_poll(rig, run_id, RunOutcome.PAUSED, checkpoint=LOOP_CHECKPOINT)
     rig.tick()  # acknowledged, then resumed
-    review = _review(rig, verdict)
-    _answer(rig, run_id, RunOutcome.COMPLETED, **review.document)
+    review = write_review(rig, verdict)
+    answer_poll(rig, run_id, RunOutcome.COMPLETED, **review.document)
     rig.tick_rig.clock.seconds += STEP_SECONDS
     rig.tick()  # confirmed, ingested and routed
     return step, _continuation(rig, step)
@@ -175,11 +158,11 @@ def test_a_failed_resume_escalates_once_and_offers_the_pause_decisions_again(
 ) -> None:
     step, run_id = _paused_loop(rig)
     _resolve(rig, step, "retry")
-    _answer(rig, run_id, RunOutcome.PAUSED, checkpoint=CHECKPOINT)
+    answer_poll(rig, run_id, RunOutcome.PAUSED, checkpoint=LOOP_CHECKPOINT)
     rig.tick()
     entry = _continuation(rig, step)
     rig.tick_rig.tracker.track(entry.id, Child(exit_code))
-    _answer(rig, run_id, RunOutcome.PAUSED, checkpoint=CHECKPOINT)
+    answer_poll(rig, run_id, RunOutcome.PAUSED, checkpoint=LOOP_CHECKPOINT)
     _issued_long_ago(rig, entry, seconds)
     rig.tick_rig.clock.seconds += STEP_SECONDS
 

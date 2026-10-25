@@ -89,8 +89,8 @@ def judge_resolution(
     if blocked.resolution is None:
         raise ValueError(f"blocked state {blocked.id} is not resolved")
     decision = blocked.resolution.decision
-    instructions = blocked.resolution.instructions
-    rejection = _first_rejection(decision, instructions, situation, checkpoint)
+    has_instructions = blocked.resolution.has_instructions
+    rejection = _first_rejection(decision, has_instructions, situation, checkpoint)
     if rejection is not None:
         return _rejected(blocked, situation, *rejection)
     known = _decision_of(decision)
@@ -103,7 +103,7 @@ def judge_resolution(
 
 def _first_rejection(
     decision: str | None,
-    instructions: str | None,
+    has_instructions: bool,
     situation: Situation,
     checkpoint: RunCheckpoint | None,
 ) -> tuple[ResolutionRejection, str] | None:
@@ -132,7 +132,7 @@ def _first_rejection(
         paused = _paused_run_rejection(known, checkpoint)
         if paused is not None:
             return paused
-    if instructions is not None and known not in _TAKES_INSTRUCTIONS:
+    if has_instructions and known not in _TAKES_INSTRUCTIONS:
         return (
             ResolutionRejection.INSTRUCTIONS_NOT_APPLICABLE,
             f"{known.value} takes no instructions",

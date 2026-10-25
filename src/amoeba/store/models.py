@@ -131,6 +131,11 @@ class Resolution:
     instructions: str | None = None
     """Free text for Squadron, only meaningful with some decisions (slice 127)."""
 
+    @property
+    def has_instructions(self) -> bool:
+        """Whether instructions were given, for callers that must not read the text."""
+        return self.instructions is not None
+
 
 class ResolutionOutcome(StrEnum):
     """The Runner's answer to a resolution (slice 127, D9)."""
