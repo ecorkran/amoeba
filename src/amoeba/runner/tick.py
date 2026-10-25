@@ -53,6 +53,7 @@ from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.project_view import build_project_view
+from amoeba.runner.routing.overrun import watch_overruns
 from amoeba.runner.routing.stage import route_outcomes
 from amoeba.runner.routing.table import RoutingTable
 from amoeba.store import (
@@ -126,12 +127,12 @@ class ProjectTick:
         if probed is TickResult.COMPLETE:
             probed = self._plan_reads(links, budget, faults)
         shape_error = self._record_finished(observed.runs)
-        watch_pointers(
-            self._store,
-            self._project_id,
-            [o.run.entry for o in observed.runs if o.finished is None],
-            faults,
-        )
+        in_flight = [o.run.entry for o in observed.runs if o.finished is None]
+        watch_pointers(self._store, self._project_id, in_flight, faults)
+        # Beside the pointer watch, before the faults are raised, so the existing
+        # raise path records the overrun (slice 126, D7). It reads only in-flight
+        # entries, which routing never touches, so its place changes no result.
+        watch_overruns(in_flight, self._routing_table, self._now(), faults)
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )

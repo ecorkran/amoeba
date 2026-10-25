@@ -39,7 +39,7 @@ def busy_rig(tmp_path: Path, store: Store) -> Rig:
             node.id,
             kind=CommandKind.SQ_RUN,
             parameters={
-                PARAM_PIPELINE: "p",
+                PARAM_PIPELINE: "P4",
                 PARAM_PARAMS: {},
                 PARAM_RUN_ID: f"run-{index}",
             },

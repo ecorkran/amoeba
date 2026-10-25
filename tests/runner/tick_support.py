@@ -175,7 +175,7 @@ def runnable_unbusy(view: ProjectView) -> list[Node]:
 
 
 class Planner:
-    """Launches ``noop`` for each runnable node it is shown, and records views."""
+    """Launches ``P4`` for each runnable node it is shown, and records views."""
 
     def __init__(self, checkout: Path) -> None:
         self.checkout = checkout
@@ -184,7 +184,7 @@ class Planner:
     def plan(self, view: ProjectView) -> Sequence[Action]:
         self.views.append(view)
         return [
-            LaunchRun(n.id, "noop", {"k": "v"}, self.checkout)
+            LaunchRun(n.id, "P4", {"k": "v"}, self.checkout)
             for n in runnable_unbusy(view)
         ]
 

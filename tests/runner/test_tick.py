@@ -52,7 +52,7 @@ def test_the_entry_is_journaled_before_the_launch_call(
     assert rig.popen.open_entries_at_call == [1]
     [entry] = store.unresolved_journal_entries(PROJECT)
     assert entry.node_id == node.id and entry.kind is CommandKind.SQ_RUN
-    assert entry.parameters["pipeline"] == "noop"
+    assert entry.parameters["pipeline"] == "P4"
     assert entry.parameters["params"] == {"k": "v"}
     assert entry.parameters["checkout"] == str(tmp_path)
     assert str(entry.parameters[PARAM_RUN_ID]).startswith("amoeba-")

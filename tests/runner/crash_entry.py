@@ -49,7 +49,7 @@ from runner.tick_support import runnable_unbusy
 KILL_AT_ENV = "PROOF_KILL_AT"
 
 #: The stub's no-op pipeline name; the stub ignores it.
-PIPELINE = "noop"
+PIPELINE = "P4"
 
 IDLE_INTERVAL_SECONDS = 0.05
 SHUTDOWN_GRACE_SECONDS = 5.0

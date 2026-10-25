@@ -51,9 +51,7 @@ class Planner:
         self.seen.append(view.project_id)
         if view.project_id in self.raise_for:
             raise self.raise_for[view.project_id]
-        return [
-            LaunchRun(n.id, "noop", {}, self.checkout) for n in runnable_unbusy(view)
-        ]
+        return [LaunchRun(n.id, "P4", {}, self.checkout) for n in runnable_unbusy(view)]
 
 
 class Rig:

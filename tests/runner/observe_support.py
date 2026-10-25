@@ -142,7 +142,7 @@ def entry(index: int = 1, issued_ago: float = 0.0) -> JournalEntry:
         node_id=f"node-{index}",
         kind=CommandKind.SQ_RUN,
         parameters={
-            PARAM_PIPELINE: "noop",
+            PARAM_PIPELINE: "P4",
             PARAM_PARAMS: {},
             PARAM_RUN_ID: f"run-{index}",
         },

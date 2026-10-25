@@ -68,7 +68,7 @@ def test_the_tick_is_bounded_fair_and_rate_limited(tmp_path: Path) -> None:
             store.journal_issue(
                 node.id,
                 kind=CommandKind.SQ_RUN,
-                parameters={"pipeline": "p", "params": {}, "run_id": run_id},
+                parameters={"pipeline": "P4", "params": {}, "run_id": run_id},
             )
     polls: Counter[str] = Counter()
 

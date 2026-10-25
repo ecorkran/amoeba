@@ -70,7 +70,7 @@ class OncePerNode:
     def plan(self, view: ProjectView) -> Sequence[Action]:
         fresh = [n for n in runnable_unbusy(view) if n.id not in self._launched]
         self._launched.update(n.id for n in fresh)
-        return [LaunchRun(n.id, "noop", {}, self._checkout) for n in fresh]
+        return [LaunchRun(n.id, "P4", {}, self._checkout) for n in fresh]
 
 
 class Scenario:
