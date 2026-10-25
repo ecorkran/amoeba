@@ -38,6 +38,7 @@ from amoeba.store import (
     Node,
     NodeKind,
     NodeStatus,
+    ResolutionOutcome,
     RunnerReview,
     SQReference,
     Store,
@@ -113,7 +114,8 @@ class ProofRunner:
         return RUNNER_NAME
 
     def tick(self, host: ResidentProcess) -> bool:
-        """Finish any run left in flight, else perform one pending intent."""
+        """Answer resolutions, then finish a run left in flight or do one intent."""
+        answered = self._acknowledge_resolutions(host)
         if self._finish_in_flight(host):
             return True
         for project_id in host.project_ids:
@@ -130,7 +132,23 @@ class ProofRunner:
             )
             self._perform(store, project_id, step, crash_at)
             return True
-        return False
+        return answered
+
+    def _acknowledge_resolutions(self, host: ResidentProcess) -> bool:
+        """Answer each PM resolution ``applied`` with no effect (slice 127, D9).
+
+        The stand-in has no decisions to judge; answering is what clears the flag
+        the inbox sets, as the real Runner's first stage does each tick.
+        """
+        answered = False
+        for project_id in host.project_ids:
+            store = host.store_for(project_id)
+            for state in store.pending_resolutions(project_id):
+                store.acknowledge_resolution(
+                    state.id, outcome=ResolutionOutcome.APPLIED
+                )
+                answered = True
+        return answered
 
     def _finish_in_flight(self, host: ResidentProcess) -> bool:
         """Resolve each entry recovery left in flight, as the real Runner will.
