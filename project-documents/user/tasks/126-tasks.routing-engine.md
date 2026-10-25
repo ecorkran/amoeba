@@ -61,6 +61,8 @@ usageByModel:
 - **The per-project decision listing.** The store reads decisions per node (`routing_decisions(node_id)`). The listing iterates the project's nodes (`nodes_for_project`) and sorts by `decided_at`. No store change.
 - **`issued_at`.** `JournalEntry.issued_at` is `datetime | None`. `overrun_runs` raises `ValueError` for an in-flight entry without a timezone-aware `issued_at`, as `runner/observe.py` treats it, so it faults the project through 122's catch.
 - **The stand-in is retired.** Once the route stage is in the tick, `tests/runner/ingest/routing_support.py`'s `route_outcome` would record a second decision for an entry the tick already routed. Task 6.4 moves its callers to the real stage, or to a direct store call where a test needs an outcome left unrouted.
+- **Two modules beyond the LLD's component sketch,** to keep each file near 300 lines: `reduce.py` holds `OutcomeEvidence`, `ReviewPart` and `reduce`, leaving `inputs.py` the vocabulary only; `validate.py` holds the load-time validation that `table.py`'s `parse_table` calls.
+- **Overrun check placement and closure.** The LLD draws the overrun check after the route stage. Task 7.2 places it beside `watch_pointers`, before `raise_expected_faults`, so the existing raise path records it. The order changes no result: routing touches only finished entries and the check reads only in-flight ones. Closure needs no registration: `ProjectTick._close_recovered` closes every open project escalation whose fault kind is absent from the tick's `TickFaults`, and no set of project-scoped kinds exists in `runner/faults.py`.
 - **Inspection registry.** A listing is a `Listing` in `inspection/__init__.py`'s `LISTINGS`; `cli/main.py` adds one `inspect` subcommand per entry. `cli/inspect.py` needs no change unless a column type needs new rendering.
 - **Shared names, defined once.** `RoutingInput` and each value set, `UNKNOWN`, `NONE`, `ROUTED_SEVERITIES`, the split-review combine order, the eligibility predicates, the escalate payload keys and `REASON_ROUTED`, `VERSION_PREFIX = "sha256:"`, `FaultKind.RUN_OVERRUN`, `DEFAULT_ROUTING_TABLE_PATH` and the `run_overrun` payload keys. Tests import them. They never retype a value.
 - **Exception rule.** No new `except Exception`. Every `except` names a specific exception with a comment, or re-raises after `logger.exception`. Table problems are a `TableError` listing every problem, never the first one only.
@@ -102,13 +104,13 @@ usageByModel:
 ### Task 2.2: Test the vocabulary
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 1
 
-- [ ] `tests/runner/routing/test_inputs.py`: every set contains `UNKNOWN`; the enum-mirrored sets equal their enum's values (plus `none` where D1 lists it); `RoutingInputs` refuses a missing input and an out-of-set value
+- [ ] `tests/runner/routing/test_inputs.py`: every set contains `UNKNOWN`; `RoutingInputs` refuses a missing input and an out-of-set value
 - [ ] **Success:** tests pass. Commit `feat: add the routing input vocabulary`
 
 ### Task 2.3: Implement `reduce` for the outcome inputs
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 3
 
-- [ ] In `inputs.py`, define the frozen `OutcomeEvidence` dataclass that `reduce` consumes: the entry result mapping, the node's status and `cf.phase`, the attempt count, and one `ReviewPart` per recorded verdict (verdict value, standing, its observations' severities, its finding-change tags and `comparable` flag), or a marker that the review could not be read. Keep it plain data so tests build it by hand
+- [ ] Create `runner/routing/reduce.py` (Task-level additions). In it, define the frozen `OutcomeEvidence` dataclass that `reduce` consumes: the entry result mapping, the node's status and `cf.phase`, the attempt count, and one `ReviewPart` per recorded verdict (verdict value, standing, its observations' severities, its finding-change tags and `comparable` flag), or a marker that the review could not be read. Keep it plain data so tests build it by hand
 - [ ] Implement `reduce(evidence) -> RoutingInputs` for `outcome`, `checkpoint_kind`, `at_loop`, `failure_kind`, `step` and `node_state`, per D1's table and "Reduction rules":
   - [ ] `outcome` from `RESULT_OUTCOME`, or `launch_failed` when `RESULT_LAUNCH_FAILURE` is present
   - [ ] the checkpoint and failure kinds through 125's `parse_checkpoint_kind` / `parse_failure_kind`: absent document section is `none`, a null field or `UnknownKind` is `unknown`
@@ -127,7 +129,7 @@ usageByModel:
 ### Task 2.5: Implement `reduce` for the review inputs
 **Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 3
 
-- [ ] Extend `reduce` for `verdict`, `standing`, `severity` and `recurrence` per D1 "Reduction rules":
+- [ ] Extend `reduce` in `reduce.py` for `verdict`, `standing`, `severity` and `recurrence` per D1 "Reduction rules":
   - [ ] all four `none` when there are no parts; all four `unknown` when `RESULT_REVIEW_FAULT` is set, the review could not be read, or any part's verdict is `UNKNOWN`
   - [ ] split review: worst verdict, common standing or `unknown`, highest severity
   - [ ] `recurrence` over `ROUTED_SEVERITIES` findings only: `recurring`, `new`, `clear`; `unknown` when any part is not `comparable`
@@ -174,7 +176,7 @@ usageByModel:
 ### Task 3.2: Implement load-time validation
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3
 
-- [ ] In `table.py`, collect every problem from D4 "Load-time validation" before raising, each naming the rule id where there is one:
+- [ ] Create `runner/routing/validate.py` (Task-level additions), called by `parse_table`. It collects every problem from D4 "Load-time validation" before raising, each naming the rule id where there is one:
   - [ ] unsupported `format`; empty or duplicate rule id
   - [ ] an input or value not in `VALUE_SETS` (so `gate_state` is refused, D3)
   - [ ] a route that is not a `Route` member
@@ -188,7 +190,7 @@ usageByModel:
 ### Task 3.3: Test the parser and validation
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 2
 
-- [ ] `tests/runner/routing/test_table.py`, one case per D4 problem and per LLD "Load refusal" item: no catch-all, a non-escalate catch-all, an early empty `when`, an unknown input, `gate_state`, an unknown value, an unknown route, a missing and an extra parameter, a non-`completed` advance and rerun, a duplicate id, a missing and an extra time bound, an unsupported `format`, malformed YAML, a missing file
+- [ ] `tests/runner/routing/test_table.py`, one case per D4 problem and per LLD "Load refusal" item: no catch-all, a non-escalate catch-all, an early empty `when`, an unknown input, `gate_state`, an unknown value, an unknown route, a missing and an extra parameter, a non-`completed` advance and rerun, a duplicate id, a missing and an extra time bound, an unsupported `format`, malformed YAML, a missing file, and an unreadable file: a directory path (the `OSError` branch) and a file of non-UTF-8 bytes (the `UnicodeDecodeError` branch)
 - [ ] Also: flow and block YAML styles parse to equal rules; `PASS` and ` pass ` equal `pass`; the version equals `sha256:` plus `hashlib.sha256(bytes).hexdigest()`; one byte changed gives a new version; several problems are all reported
 - [ ] **Success:** tests pass. Commit `feat: parse and validate the routing table`
 
@@ -198,7 +200,7 @@ usageByModel:
 - [ ] Create `runner/routing/tables/default.yaml` with the four rules of D9 and the bounds of D7 (P4 240, P5 240, P6 720), `format: 1`. A comment at the top says no secrets go in the table, since its content is stored verbatim
 - [ ] In `pyproject.toml`, add `src/amoeba/runner/routing/tables/*.yaml` to the `artifacts` list beside the schema SQL
 - [ ] `tests/runner/routing/test_default_table.py`: the shipped table, read through `importlib.resources`, passes `parse_table`; its rule ids are in D9's order
-- [ ] `tests/runner/routing/test_wheel_contents.py`: `uv build --wheel` into a temporary directory, and the wheel's file list contains `amoeba/runner/routing/tables/default.yaml`. It runs in the default suite (the project defines no pytest markers)
+- [ ] `tests/runner/routing/test_wheel_contents.py`: `uv build --wheel --offline` into a temporary directory, and the wheel's file list contains `amoeba/runner/routing/tables/default.yaml`. The build backend (`hatchling`) is not a dev dependency, so when uv reports it is not cached, the test calls `pytest.skip` with uv's stderr as the reason; any other build failure fails the test
 - [ ] **Success:** both tests pass. Commit `feat: ship the default routing table`
 
 ---
@@ -289,23 +291,23 @@ usageByModel:
 - [ ] After each, `unrouted_outcomes` is empty, and the table version is stored once across several decisions
 - [ ] **Success:** tests pass. Commit `feat: route unrouted outcomes`
 
-### Task 6.3: Wire the stage into the tick and build the view before it
-**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 3
+### Task 6.3: Build the view before the route slot
+**Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] In `runner/tick.py`, split `_decide` so `ProjectView` is built by a separate method called before routing (D8), and `_decide` takes the built view. Replace the `# [route - slice 126]` slot with the call to `route_outcomes`, setting `self.wrote`
-- [ ] Keep `tick.py` near 300 lines. If it grows past ~330, move the view building into a helper module beside it, as a `refactor:` commit first
-- [ ] Confirm the route stage adds no `TickBudget` check (it starts no subprocess, LLD "Data Flow")
-- [ ] **Success:** pyright clean. Existing tick tests may now fail where they use the stand-in; that is Task 6.4. Do not commit until 6.4 passes
+- [ ] In `runner/tick.py`, split `_decide` so `ProjectView` is built by a separate method called before the `# [route - slice 126]` slot (D8), and `_decide` takes the built view. The slot stays empty, so behavior is unchanged
+- [ ] Keep `tick.py` near 300 lines. If it grows past ~330, move the view building into a helper module beside it (`runner/dispatch/build_view.py` already builds the dispatch part)
+- [ ] **Success:** the full suite passes unchanged. Commit `refactor: build the project view before the route slot`
 
-### Task 6.4: Retire the routing stand-in
-**Owner**: Junior AI | **Dependencies**: 6.3 | **Effort**: 3
+### Task 6.4: Wire the stage into the tick and retire the routing stand-in
+**Owner**: Junior AI | **Dependencies**: 6.1, 6.3 | **Effort**: 3
 
+- [ ] Replace the `# [route - slice 126]` slot with the call to `route_outcomes`, setting `self.wrote`. Confirm it adds no `TickBudget` check (it starts no subprocess, LLD "Data Flow")
 - [ ] Find every caller of `route_outcome` and `review_harness.route` (`grep -rn "route_outcome\|\.route(" tests`). For each:
   - [ ] where the tick now routes the entry, delete the stand-in call and assert the real decision instead
   - [ ] where a test needs an outcome left unrouted (the crash harness's kill before routing), keep the kill point and let the restart's tick route it
 - [ ] Delete `tests/runner/ingest/routing_support.py` once it has no callers. Keep `tests/routing_helpers.py` if store tests still use it
 - [ ] Run 125's crash and ingestion tests and 124's guard tests
-- [ ] **Success:** the full suite passes. Commit 6.3 and 6.4 together: `feat: route outcomes in the tick before decide`
+- [ ] **Success:** the full suite passes. Commit `feat: route outcomes in the tick before decide`
 
 ### Task 6.5: Tick-level routing tests
 **Owner**: Junior AI | **Dependencies**: 6.4 | **Effort**: 3
@@ -334,8 +336,8 @@ usageByModel:
 **Owner**: Junior AI | **Dependencies**: 6.4, 7.1 | **Effort**: 2
 
 - [ ] In `runner/tick.py`, compute `overrun_runs` over the in-flight entries the tick already has (`o.run.entry for o in observed.runs if o.finished is None`). If non-empty, add a `Fault(FaultKind.RUN_OVERRUN, …, extra={runs: [...], table_version})` to the tick's `TickFaults`, exactly as `runner/dispatch/pointer_watch.py` adds `POINTER_MOVED`
-- [ ] Placement: call it beside `watch_pointers`, before `raise_expected_faults`, so the existing raise path records it. The LLD draws the check after the route stage; the order does not change any result, because routing touches only finished entries and the check reads only in-flight ones. Note this in a one-line comment
-- [ ] Confirm `_close_recovered` closes it on the first complete tick without the condition (122's closure rule); add it to whatever set names the project-scoped kinds, if one exists
+- [ ] Call it beside `watch_pointers`, before `raise_expected_faults` (placement per Task-level additions), with a one-line comment giving the reason
+- [ ] Closure needs no change: `_close_recovered` already closes the escalation on the first complete tick whose `TickFaults` lacks `RUN_OVERRUN` (Task-level additions)
 - [ ] **Success:** pyright clean; existing tests pass
 
 ### Task 7.3: Tick-level overrun test
