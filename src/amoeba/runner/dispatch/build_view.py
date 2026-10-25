@@ -18,7 +18,7 @@ from typing import Final
 
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved, resolve_checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
-from amoeba.runner.dispatch.hold import held_checkouts
+from amoeba.runner.dispatch.hold import checkout_holders
 from amoeba.runner.dispatch.state import DispatchState, dispatch_state
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON, BlockPlan, cut_to_bound
@@ -27,12 +27,14 @@ from amoeba.runner.lifecycle.steps import STEP_MAP, Executor, step_rank
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import (
     BlockedKind,
+    BlockedState,
     CFSnapshot,
     CommandKind,
     JournalEntry,
     Node,
     NodeKind,
     NodeStatus,
+    ResolutionOutcome,
     Store,
 )
 
@@ -54,14 +56,23 @@ class DispatchView:
     """What the view carries for dispatch."""
 
     facts: Mapping[str, StepDispatchFacts]
-    held: frozenset[Path]
+    holders: Mapping[Path, frozenset[str]]
     unresolved: tuple[UnresolvedStep, ...]
 
 
 #: The states that write a pointer or launch a run, so need a checkout to act.
 _NEEDS_CHECKOUT: Final = frozenset(
-    {DispatchState.NEEDS_POINTER, DispatchState.POINTED, DispatchState.REISSUE}
+    {
+        DispatchState.NEEDS_POINTER,
+        DispatchState.POINTED,
+        DispatchState.REISSUE,
+        DispatchState.RESUME,
+        DispatchState.REOBSERVE,
+    }
 )
+
+#: The states that continue the step's latest run rather than start one.
+_CONTINUING: Final = frozenset({DispatchState.RESUME, DispatchState.REOBSERVE})
 
 
 def build_dispatch_view(
@@ -90,7 +101,8 @@ def build_dispatch_view(
             )
     entries = store.journal_entries(project_id)
     done = {n.id for n in tree.nodes if n.status is NodeStatus.DONE}
-    return DispatchView(facts, held_checkouts(entries, done, facts), tuple(unresolved))
+    holders = checkout_holders(entries, done, facts)
+    return DispatchView(facts, holders, tuple(unresolved))
 
 
 def block_unresolved(store: Store, unresolved: Sequence[UnresolvedStep]) -> bool:
@@ -137,7 +149,8 @@ def _facts_for(
     if cf_project not in observed:
         observed[cf_project] = store.latest_cf_snapshots(project_id, cf_project)[1]
     entries = store.journal_entries(project_id, node_id=node.id)
-    state = dispatch_state(entries, pointer_confirmed=node.id in confirmed)
+    resolution = _applied_resolution(store, node.id)
+    state = dispatch_state(entries, resolution, pointer_confirmed=node.id in confirmed)
     return StepDispatchFacts(
         step=step,
         state=state,
@@ -146,7 +159,22 @@ def _facts_for(
         cf_project_id=cf_project,
         sort_key=(initiative.cf.index, index, step_rank(step)),
         reissue_of=_latest_run(entries) if state is DispatchState.REISSUE else None,
+        resolution=resolution,
+        continues=_latest_run(entries) if state in _CONTINUING else None,
     )
+
+
+def _applied_resolution(store: Store, node_id: str) -> BlockedState | None:
+    """The step's latest blocked state, if the Runner applied a decision on it."""
+    latest = store.blocked_state_for(node_id, include_resolved=True)
+    if (
+        latest is None
+        or latest.runner_outcome is not ResolutionOutcome.APPLIED
+        or latest.resolution is None
+        or latest.resolution.decision is None
+    ):
+        return None
+    return latest
 
 
 def _latest_run(entries: Sequence[JournalEntry]) -> JournalEntry | None:

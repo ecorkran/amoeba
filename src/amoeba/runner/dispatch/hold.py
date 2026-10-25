@@ -30,18 +30,19 @@ from amoeba.runner.ingest.record import RESULT_OUTCOME
 from amoeba.store import PARAM_CHECKOUT, CommandKind, JournalEntry
 
 
-def held_checkouts(
+def checkout_holders(
     entries: Sequence[JournalEntry],
     done_node_ids: Collection[str],
     current: Mapping[str, StepDispatchFacts],
-) -> frozenset[Path]:
-    """The checkouts a pipeline already holds.
+) -> Mapping[Path, frozenset[str]]:
+    """Each held checkout, with the ids of the nodes that hold it.
 
     ``entries`` are the project's journal entries, oldest first. ``done_node_ids``
     are the nodes that are ``done``. ``current`` is the dispatch facts of the
-    current pipeline steps, by node id.
+    current pipeline steps, by node id. Naming the holders lets a step's own
+    continuation act in a checkout held only by itself (slice 127, D5).
     """
-    held: set[Path] = set()
+    holders: dict[Path, set[str]] = {}
     latest_run: dict[str, JournalEntry] = {}
     for entry in entries:
         checkout = _checkout_of(entry)
@@ -50,19 +51,28 @@ def held_checkouts(
         if entry.kind is CommandKind.SQ_RUN:
             latest_run[entry.node_id] = entry
             if not entry.is_resolved:
-                held.add(checkout)
+                holders.setdefault(checkout, set()).add(entry.node_id)
         elif not entry.is_resolved and _claimant_is_current(entry, current):
-            held.add(checkout)
+            holders.setdefault(checkout, set()).add(entry.node_id)
     for node_id, entry in latest_run.items():
         checkout = _checkout_of(entry)
         if checkout is not None and node_id not in done_node_ids and _paused(entry):
-            held.add(checkout)
-    for facts in current.values():
+            holders.setdefault(checkout, set()).add(node_id)
+    for node_id, facts in current.items():
         if facts.state is DispatchState.POINTED and isinstance(
             facts.checkout, Checkout
         ):
-            held.add(facts.checkout.path)
-    return frozenset(held)
+            holders.setdefault(facts.checkout.path, set()).add(node_id)
+    return {path: frozenset(nodes) for path, nodes in holders.items()}
+
+
+def held_checkouts(
+    entries: Sequence[JournalEntry],
+    done_node_ids: Collection[str],
+    current: Mapping[str, StepDispatchFacts],
+) -> frozenset[Path]:
+    """The checkouts a pipeline already holds (see :func:`checkout_holders`)."""
+    return frozenset(checkout_holders(entries, done_node_ids, current))
 
 
 def _checkout_of(entry: JournalEntry) -> Path | None:

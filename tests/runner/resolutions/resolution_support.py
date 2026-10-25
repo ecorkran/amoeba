@@ -87,6 +87,7 @@ def finished_run(
     document: Mapping[str, object] | None = None,
     extra: Mapping[str, object] | None = None,
     routed: bool = True,
+    checkout: str | None = None,
 ) -> JournalEntry:
     """Journal an ``sq_run`` on the node and resolve it with ``outcome``.
 
@@ -97,7 +98,10 @@ def finished_run(
     entry = store.journal_issue(
         node.id,
         kind=CommandKind.SQ_RUN,
-        parameters=sq_run_parameters(_RUN_PARAMETERS, run_id=run_id),
+        parameters=sq_run_parameters(
+            {**_RUN_PARAMETERS, **({} if checkout is None else {"checkout": checkout})},
+            run_id=run_id,
+        ),
     )
     result: dict[str, object] = {
         RESULT_RUN_ID: run_id,

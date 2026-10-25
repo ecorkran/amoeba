@@ -186,4 +186,6 @@ class PointerStage:
 
 
 def _journal_says_pointed(entries: Sequence[JournalEntry]) -> bool:
-    return dispatch_state(entries, pointer_confirmed=True) is DispatchState.POINTED
+    return (
+        dispatch_state(entries, None, pointer_confirmed=True) is DispatchState.POINTED
+    )

@@ -160,28 +160,30 @@ revision_number: 2
 ### Task 3.1: Define the resolution vocabulary
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Create `runner/resolutions/vocabulary.py` per the LLD "API Contracts": `ResolutionDecision`, `Situation`, `ResolutionRejection`, `Continuation`; `ALLOWED: Mapping[Situation, frozenset[ResolutionDecision]]` from D2's table; the payload reasons `REASON_RESOLUTION_REJECTED`, `REASON_STOPPED`, and the payload keys of D3 (`code`, `detail`, `rejected_blocked_state_id`, `allowed`, `stopped_blocked_state_id`); `PARAM_RESUME_SKIPPED` (`"resume_skipped"`) and its value `RESUME_SKIPPED_RUN_NOT_AT_PAUSE` (`"run_not_at_pause"`)
-- [ ] `runner/faults.py`: add `ResumeFailure` (D6). `runner/finish.py`: add `RESULT_RESUME_FAILURE` (Task-level additions). `process/sq_outcome.py`: add `CheckpointKind.USAGE_LIMIT` (Task-level additions)
-- [ ] `tests/runner/resolutions/test_vocabulary.py`: `ALLOWED` matches D2 row for row; `UNRESOLVABLE` and `NO_DECISION` allow nothing; `Continuation` values are `retry`, `accept`, `observe`; 126's `checkpoint_kind` value set contains `usage_limit`
-- [ ] **Success:** tests pass. Commit `feat: add the resolution vocabulary`
+- [x] Create `runner/resolutions/vocabulary.py` per the LLD "API Contracts": `ResolutionDecision`, `Situation`, `ResolutionRejection`, `Continuation`; `ALLOWED: Mapping[Situation, frozenset[ResolutionDecision]]` from D2's table; the payload reasons `REASON_RESOLUTION_REJECTED`, `REASON_STOPPED`, and the payload keys of D3 (`code`, `detail`, `rejected_blocked_state_id`, `allowed`, `stopped_blocked_state_id`); `PARAM_RESUME_SKIPPED` (`"resume_skipped"`) and its value `RESUME_SKIPPED_RUN_NOT_AT_PAUSE` (`"run_not_at_pause"`)
+- [x] `runner/faults.py`: add `ResumeFailure` (D6). `runner/finish.py`: add `RESULT_RESUME_FAILURE` (Task-level additions). `process/sq_outcome.py`: add `CheckpointKind.USAGE_LIMIT` (Task-level additions)
+- [x] `tests/runner/resolutions/test_vocabulary.py`: `ALLOWED` matches D2 row for row; `UNRESOLVABLE` and `NO_DECISION` allow nothing; `Continuation` values are `retry`, `accept`, `observe`; 126's `checkpoint_kind` value set contains `usage_limit`
+- [x] **Success:** tests pass. Commit `feat: add the resolution vocabulary`
 
 ### Task 3.2: Implement `classify`
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 3
 
-- [ ] Create `runner/resolutions/classify.py` with the pure `classify(node, executor, entries) -> Situation` (Task-level additions), testing rows in D2's order: `unresolvable`, `no_decision`, `paused_run`, `completed_outcome`, `ended_run`, `before_run`
-- [ ] "Paused" and "completed" are read from the latest `sq_run` entry's `RESULT_OUTCOME` (`runner/ingest/record.py`) against `RunOutcome` values, never from the block kind. `completed_outcome` also requires no `RESULT_RESUME_FAILURE` in the result. A `cf_write` latest entry, or no entry, is `before_run`
-- [ ] `tests/runner/resolutions/test_classify.py`, table-driven over every D2 row and the order cases: an unrouted pause is `unresolvable`; a failed resume (outcome `paused`, with `resume_failure`) is `paused_run`; a `run_missing` resume (outcome `not_found`) is `ended_run`; a paused run whose step is blocked on `HUMAN` is still `paused_run`; a human step is `no_decision`; a recovery-resolved entry is `ended_run`
-- [ ] **Success:** tests pass; `classify` does no I/O. Commit `feat: classify a blocked step for its resolution`
+- [x] Create `runner/resolutions/classify.py` with the pure `classify(node, executor, entries) -> Situation` (Task-level additions), testing rows in D2's order: `unresolvable`, `no_decision`, `paused_run`, `completed_outcome`, `ended_run`, `before_run`
+- [x] "Paused" and "completed" are read from the latest `sq_run` entry's `RESULT_OUTCOME` (`runner/ingest/record.py`) against `RunOutcome` values, never from the block kind. `completed_outcome` also requires no `RESULT_RESUME_FAILURE` in the result. A `cf_write` latest entry, or no entry, is `before_run`
+- [x] `tests/runner/resolutions/test_classify.py`, table-driven over every D2 row and the order cases: an unrouted pause is `unresolvable`; a failed resume (outcome `paused`, with `resume_failure`) is `paused_run`; a `run_missing` resume (outcome `not_found`) is `ended_run`; a paused run whose step is blocked on `HUMAN` is still `paused_run`; a human step is `no_decision`; a recovery-resolved entry is `ended_run`
+- [x] **Success:** tests pass; `classify` does no I/O. Commit `feat: classify a blocked step for its resolution`
+
+**Note:** the signature is `classify(executor, entries)`; the `node` argument the task text lists was dropped because nothing reads it.
 
 ### Task 3.3: Implement `judge_resolution`
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 3
 
-- [ ] Create `runner/resolutions/judge.py` with the frozen `Acknowledgment(outcome, code, reason, effect)` and the pure `judge_resolution(blocked, situation, checkpoint) -> Acknowledgment`
-  - [ ] Checks 0–7 in D2's order; the first failure is the rejection. `checkpoint` is the latest `sq_run` entry's `outcome_document.checkpoint`, parsed with 125's model; a document that does not parse is passed as `None` (D2)
-  - [ ] Effects per D3's table: a rejection's `BlockEffect` on `HUMAN` with context `resolution rejected: <code>` and payload `{reason, code, detail, rejected_blocked_state_id, allowed}` (`allowed` sorted, as values); `stop`'s `BlockEffect` with context `stopped by <resolved_by>`; `accept` on `completed_outcome` is `StatusEffect(done)`; the rest have none
-  - [ ] Add a small helper in the same module, `checkpoint_of(entry) -> RunCheckpoint | None`, used by the stage, that never raises for a bad document
-- [ ] `tests/runner/resolutions/test_judge.py`, table-driven over every check and every D3 row, including `test_accept_refused_when_not_at_loop` (`is_loop` false and null), `usage_limit_pause` at a loop, `checkpoint_unknown` for a null kind and for a null `paused_at`, `interactive_checkpoint` for retry, `instructions_not_applicable` for handled, rerun and stop, a decision on a human step (`decision_not_applicable`), a bare resolution of a human step (applied, no effect), a bare resolution of a pipeline step (`decision_required`), an unparseable document (`checkpoint_unknown`)
-- [ ] **Success:** tests pass; no rejection raises. Commit `feat: judge a resolution against its situation`
+- [x] Create `runner/resolutions/judge.py` with the frozen `Acknowledgment(outcome, code, reason, effect)` and the pure `judge_resolution(blocked, situation, checkpoint) -> Acknowledgment`
+  - [x] Checks 0–7 in D2's order; the first failure is the rejection. `checkpoint` is the latest `sq_run` entry's `outcome_document.checkpoint`, parsed with 125's model; a document that does not parse is passed as `None` (D2)
+  - [x] Effects per D3's table: a rejection's `BlockEffect` on `HUMAN` with context `resolution rejected: <code>` and payload `{reason, code, detail, rejected_blocked_state_id, allowed}` (`allowed` sorted, as values); `stop`'s `BlockEffect` with context `stopped by <resolved_by>`; `accept` on `completed_outcome` is `StatusEffect(done)`; the rest have none
+  - [x] Add a small helper in the same module, `checkpoint_of(entry) -> RunCheckpoint | None`, used by the stage, that never raises for a bad document
+- [x] `tests/runner/resolutions/test_judge.py`, table-driven over every check and every D3 row, including `test_accept_refused_when_not_at_loop` (`is_loop` false and null), `usage_limit_pause` at a loop, `checkpoint_unknown` for a null kind and for a null `paused_at`, `interactive_checkpoint` for retry, `instructions_not_applicable` for handled, rerun and stop, a decision on a human step (`decision_not_applicable`), a bare resolution of a human step (applied, no effect), a bare resolution of a pipeline step (`decision_required`), an unparseable document (`checkpoint_unknown`)
+- [x] **Success:** tests pass; no rejection raises. Commit `feat: judge a resolution against its situation`
 
 ---
 
@@ -190,18 +192,20 @@ revision_number: 2
 ### Task 4.1: Implement `apply_pending_resolutions`
 **Owner**: Junior AI | **Dependencies**: 2.3, 3.3 | **Effort**: 2
 
-- [ ] Create `runner/resolutions/stage.py` with `apply_pending_resolutions(store, project_id, tree, context) -> bool` (whether anything was acknowledged). For each pending row, oldest first: set `context` to its node, read the node's entries, find its step and executor through the lifecycle tree and `STEP_MAP`, `classify`, `judge_resolution`, then `acknowledge_resolution`
-- [ ] Store errors propagate unchanged (D3, "Store failures")
-- [ ] `tests/runner/resolutions/test_stage.py`, store-backed: one applied and one rejected resolution in the same call, each with its effect; ordering; a second call does nothing; a rejection's new block is open and carries `allowed`
-- [ ] **Success:** tests pass. Commit with Task 4.2
+- [x] Create `runner/resolutions/stage.py` with `apply_pending_resolutions(store, project_id, tree, context) -> bool` (whether anything was acknowledged). For each pending row, oldest first: set `context` to its node, read the node's entries, find its step and executor through the lifecycle tree and `STEP_MAP`, `classify`, `judge_resolution`, then `acknowledge_resolution`
+- [x] Store errors propagate unchanged (D3, "Store failures")
+- [x] `tests/runner/resolutions/test_stage.py`, store-backed: one applied and one rejected resolution in the same call, each with its effect; ordering; a second call does nothing; a rejection's new block is open and carries `allowed`
+- [x] **Success:** tests pass. Commit with Task 4.2
 
 ### Task 4.2: Run the stage first in the project tick
 **Owner**: Junior AI | **Dependencies**: 1.2, 4.1 | **Effort**: 3
 
-- [ ] `runner/tick.py`: call the stage right after `_apply_intents` and before Observe, with the context cleared afterwards, and fold its result into `self.wrote`. No budget check (it starts no subprocess). The tree the stage needs is built the way `_build_view` builds it; if that needs a store read the view also makes, read it once
-- [ ] Tick tests (`tests/runner/resolutions/test_tick_stage.py`): a resolution submitted and applied by the inbox is acknowledged in the next project tick, before any planner sees the node; `test_poisoned_resolution_is_contained`: one step's resolution with an unparseable outcome document is rejected, and another step's finished run in the same project is still ingested that tick
-- [ ] Run `uv run pytest -q`. Every failure caused by a pipeline step's bare inbox resolution now being rejected `decision_required` (D2, check 2) is changed to submit the decision the test means (usually `rerun`), or to call `store.resolve()` where the test is about the store and not the Runner. Any other failure is a defect: fix it here, or write `BLOCKED:` with the failure
-- [ ] **Success:** full suite green. Commit `feat: acknowledge pending resolutions at the start of each project tick`
+- [x] `runner/tick.py`: call the stage right after `_apply_intents` and before Observe, with the context cleared afterwards, and fold its result into `self.wrote`. No budget check (it starts no subprocess). The tree the stage needs is built the way `_build_view` builds it; if that needs a store read the view also makes, read it once
+- [x] Tick tests (`tests/runner/resolutions/test_tick_stage.py`): a resolution submitted and applied by the inbox is acknowledged in the next project tick, before any planner sees the node; `test_poisoned_resolution_is_contained`: one step's resolution with an unparseable outcome document is rejected, and another step's finished run in the same project is still ingested that tick
+- [x] Run `uv run pytest -q`. Every failure caused by a pipeline step's bare inbox resolution now being rejected `decision_required` (D2, check 2) is changed to submit the decision the test means (usually `rerun`), or to call `store.resolve()` where the test is about the store and not the Runner. Any other failure is a defect: fix it here, or write `BLOCKED:` with the failure
+- [x] **Success:** full suite green. Commit `feat: acknowledge pending resolutions at the start of each project tick`
+
+**Note:** full suite 3754 passed; no existing test needed its bare inbox resolution changed.
 
 ---
 

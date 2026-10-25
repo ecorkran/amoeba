@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from amoeba.runner.dispatch.state import DispatchState, dispatch_state
-from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
+from amoeba.store import (
+    PARAM_RESOLUTION,
+    BlockedKind,
+    BlockedState,
+    CommandKind,
+    JournalEntry,
+    JournalOutcome,
+    JournalResolver,
+    Resolution,
+    ResolutionOutcome,
+)
 
 _COUNTER = [0]
 
@@ -57,7 +69,9 @@ def _run(
 
 
 def test_no_entries_needs_a_pointer() -> None:
-    assert dispatch_state([], pointer_confirmed=True) is DispatchState.NEEDS_POINTER
+    assert (
+        dispatch_state([], None, pointer_confirmed=True) is DispatchState.NEEDS_POINTER
+    )
 
 
 @pytest.mark.parametrize(
@@ -71,14 +85,16 @@ def test_no_entries_needs_a_pointer() -> None:
     ids=["open pointer", "open run", "pointed then open run", "open pointer after run"],
 )
 def test_any_unresolved_entry_is_in_flight(entries: list[JournalEntry]) -> None:
-    assert dispatch_state(entries, pointer_confirmed=True) is DispatchState.IN_FLIGHT
+    assert (
+        dispatch_state(entries, None, pointer_confirmed=True) is DispatchState.IN_FLIGHT
+    )
 
 
 def test_a_resolved_run_with_the_flag_awaits_routing() -> None:
     entries = [_pointer(), _run(awaits_routing=True)]
 
     assert (
-        dispatch_state(entries, pointer_confirmed=True)
+        dispatch_state(entries, None, pointer_confirmed=True)
         is DispatchState.AWAITING_ROUTING
     )
 
@@ -87,7 +103,7 @@ def test_a_failed_run_with_the_flag_awaits_routing_too() -> None:
     entries = [_pointer(), _run(JournalOutcome.FAILED, awaits_routing=True)]
 
     assert (
-        dispatch_state(entries, pointer_confirmed=False)
+        dispatch_state(entries, None, pointer_confirmed=False)
         is DispatchState.AWAITING_ROUTING
     )
 
@@ -98,7 +114,9 @@ def test_a_run_recovery_found_never_started_is_reissued() -> None:
         _run(JournalOutcome.NOT_APPLIED, resolved_by=JournalResolver.RECOVERY),
     ]
 
-    assert dispatch_state(entries, pointer_confirmed=False) is DispatchState.REISSUE
+    assert (
+        dispatch_state(entries, None, pointer_confirmed=False) is DispatchState.REISSUE
+    )
 
 
 @pytest.mark.parametrize("outcome", [JournalOutcome.COMPLETED, JournalOutcome.ADOPTED])
@@ -106,7 +124,7 @@ def test_a_landed_pointer_write_confirmed_now_is_pointed(
     outcome: JournalOutcome,
 ) -> None:
     assert (
-        dispatch_state([_pointer(outcome)], pointer_confirmed=True)
+        dispatch_state([_pointer(outcome)], None, pointer_confirmed=True)
         is DispatchState.POINTED
     )
 
@@ -116,7 +134,7 @@ def test_a_landed_pointer_write_not_confirmed_now_needs_a_pointer(
     outcome: JournalOutcome,
 ) -> None:
     assert (
-        dispatch_state([_pointer(outcome)], pointer_confirmed=False)
+        dispatch_state([_pointer(outcome)], None, pointer_confirmed=False)
         is DispatchState.NEEDS_POINTER
     )
 
@@ -125,7 +143,8 @@ def test_a_failed_pointer_write_needs_a_pointer() -> None:
     entries = [_pointer(JournalOutcome.FAILED)]
 
     assert (
-        dispatch_state(entries, pointer_confirmed=True) is DispatchState.NEEDS_POINTER
+        dispatch_state(entries, None, pointer_confirmed=True)
+        is DispatchState.NEEDS_POINTER
     )
 
 
@@ -134,7 +153,8 @@ def test_a_routed_run_needs_a_pointer_again() -> None:
     entries = [_pointer(), _run(awaits_routing=False)]
 
     assert (
-        dispatch_state(entries, pointer_confirmed=True) is DispatchState.NEEDS_POINTER
+        dispatch_state(entries, None, pointer_confirmed=True)
+        is DispatchState.NEEDS_POINTER
     )
 
 
@@ -145,11 +165,120 @@ def test_a_run_recovery_resolved_unknown_or_adopted_needs_a_pointer(
     entries = [_pointer(), _run(outcome, resolved_by=JournalResolver.RECOVERY)]
 
     assert (
-        dispatch_state(entries, pointer_confirmed=True) is DispatchState.NEEDS_POINTER
+        dispatch_state(entries, None, pointer_confirmed=True)
+        is DispatchState.NEEDS_POINTER
     )
 
 
 def test_a_pointer_write_after_a_routed_run_is_pointed() -> None:
     entries = [_pointer(), _run(), _pointer()]
 
-    assert dispatch_state(entries, pointer_confirmed=True) is DispatchState.POINTED
+    assert (
+        dispatch_state(entries, None, pointer_confirmed=True) is DispatchState.POINTED
+    )
+
+
+# -- the latest applied resolution (slice 127, D5) ------------------------------
+
+
+def _decided(
+    decision: str | None,
+    outcome: ResolutionOutcome | None = ResolutionOutcome.APPLIED,
+) -> BlockedState:
+    return BlockedState(
+        id="b-1",
+        node_id="node-1",
+        kind=BlockedKind.HUMAN,
+        context="decide",
+        resolution=Resolution(resolved_by="pm", detail="go", decision=decision),
+        runner_outcome=outcome,
+    )
+
+
+def _naming(entry: JournalEntry, resolution_id: str = "b-1") -> JournalEntry:
+    return replace(entry, parameters={PARAM_RESOLUTION: resolution_id})
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        ("retry", DispatchState.RESUME),
+        ("accept", DispatchState.RESUME),
+        ("handled", DispatchState.REOBSERVE),
+        ("rerun", DispatchState.NEEDS_POINTER),
+    ],
+)
+def test_an_applied_decision_nobody_carried_out_decides(
+    decision: str, expected: DispatchState
+) -> None:
+    entries = [_run(awaits_routing=False)]
+
+    assert (
+        dispatch_state(entries, _decided(decision), pointer_confirmed=True) is expected
+    )
+
+
+@pytest.mark.parametrize("decision", ["retry", "accept", "handled", "rerun"])
+def test_once_an_entry_names_it_the_older_rules_apply(decision: str) -> None:
+    entries = [_run(), _naming(_pointer())]
+
+    state = dispatch_state(entries, _decided(decision), pointer_confirmed=True)
+
+    assert state is DispatchState.POINTED
+
+
+def test_a_continuation_that_names_the_resolution_is_awaiting_routing_when_done() -> (
+    None
+):
+    entries = [_run(), _naming(_run(awaits_routing=True))]
+
+    state = dispatch_state(entries, _decided("retry"), pointer_confirmed=True)
+
+    assert state is DispatchState.AWAITING_ROUTING
+
+
+def test_rerun_after_a_not_applied_entry_is_not_a_reissue() -> None:
+    not_applied = _run(JournalOutcome.NOT_APPLIED, resolved_by=JournalResolver.RECOVERY)
+
+    older = dispatch_state([not_applied], None, pointer_confirmed=True)
+    rerun = dispatch_state([not_applied], _decided("rerun"), pointer_confirmed=True)
+
+    assert older is DispatchState.REISSUE
+    assert rerun is DispatchState.NEEDS_POINTER
+
+
+@pytest.mark.parametrize(
+    "resolution",
+    [
+        _decided("retry", ResolutionOutcome.REJECTED),
+        _decided("retry", None),
+        _decided(None),
+        _decided("stop"),
+        BlockedState(id="b", node_id="n", kind=BlockedKind.HUMAN, context="c"),
+        None,
+    ],
+)
+def test_a_rejected_undecided_or_stop_resolution_changes_nothing(
+    resolution: BlockedState | None,
+) -> None:
+    entries = [_run(), _pointer()]
+
+    state = dispatch_state(entries, resolution, pointer_confirmed=True)
+
+    assert state is DispatchState.POINTED
+
+
+def test_an_unresolved_continuation_is_in_flight() -> None:
+    entries = [_run(), _naming(_run(None))]
+
+    state = dispatch_state(entries, _decided("retry"), pointer_confirmed=True)
+
+    assert state is DispatchState.IN_FLIGHT
+
+
+def test_an_unrouted_outcome_waits_for_routing_before_a_decision_applies() -> None:
+    entries = [_run(awaits_routing=True)]
+
+    state = dispatch_state(entries, _decided("rerun"), pointer_confirmed=True)
+
+    assert state is DispatchState.AWAITING_ROUTING

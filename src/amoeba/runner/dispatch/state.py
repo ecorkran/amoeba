@@ -10,8 +10,18 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import StrEnum
+from typing import Final
 
-from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
+from amoeba.runner.resolutions.vocabulary import ResolutionDecision
+from amoeba.store import (
+    PARAM_RESOLUTION,
+    BlockedState,
+    CommandKind,
+    JournalEntry,
+    JournalOutcome,
+    JournalResolver,
+    ResolutionOutcome,
+)
 
 
 class DispatchState(StrEnum):
@@ -27,16 +37,38 @@ class DispatchState(StrEnum):
     POINTED = "pointed"
     #: Anything else: write the pointer.
     NEEDS_POINTER = "needs_pointer"
+    #: An applied ``retry`` or ``accept`` nobody has carried out: resume the paused run.
+    RESUME = "resume"
+    #: An applied ``handled`` nobody has carried out: observe the run the PM moved.
+    REOBSERVE = "reobserve"
 
 
 #: What a pointer write may be resolved as, for the step to count as pointed.
 _POINTED_OUTCOMES = frozenset({JournalOutcome.COMPLETED, JournalOutcome.ADOPTED})
 
 
+#: What an applied, not yet carried-out decision makes of the step (slice 127, D5).
+_DECISION_STATES: Final = {
+    ResolutionDecision.RETRY.value: DispatchState.RESUME,
+    ResolutionDecision.ACCEPT.value: DispatchState.RESUME,
+    ResolutionDecision.HANDLED.value: DispatchState.REOBSERVE,
+    ResolutionDecision.RERUN.value: DispatchState.NEEDS_POINTER,
+}
+
+
 def dispatch_state(
-    entries: Sequence[JournalEntry], *, pointer_confirmed: bool
+    entries: Sequence[JournalEntry],
+    resolution: BlockedState | None,
+    *,
+    pointer_confirmed: bool,
 ) -> DispatchState:
-    """The step's state from its ``entries``, oldest first.
+    """The step's state from its ``entries``, oldest first, and its ``resolution``.
+
+    ``resolution`` is the step's latest acknowledged-applied resolution with a
+    decision, or ``None``. While no entry names it in ``PARAM_RESOLUTION`` it has
+    not been carried out, and it decides (D5); this is a reference, not a time
+    comparison. ``accept`` of a completed outcome and ``stop`` leave the step done
+    or blocked, so they never reach here as a state.
 
     ``pointer_confirmed`` is this tick's read-back: whether CF, read in the checkout
     now, still points at the step's slice. A journal that says pointed with
@@ -50,6 +82,9 @@ def dispatch_state(
     )
     if latest_run is not None and latest_run.awaits_routing:
         return DispatchState.AWAITING_ROUTING
+    pending = _pending_decision(entries, resolution)
+    if pending is not None:
+        return pending
     latest = entries[-1] if entries else None
     if latest is None:
         return DispatchState.NEEDS_POINTER
@@ -58,6 +93,22 @@ def dispatch_state(
     if _pointed(latest) and pointer_confirmed:
         return DispatchState.POINTED
     return DispatchState.NEEDS_POINTER
+
+
+def _pending_decision(
+    entries: Sequence[JournalEntry], resolution: BlockedState | None
+) -> DispatchState | None:
+    """The state an applied decision nobody has carried out sets, or ``None``."""
+    if resolution is None or resolution.resolution is None:
+        return None
+    if resolution.runner_outcome is not ResolutionOutcome.APPLIED:
+        return None
+    decision = resolution.resolution.decision
+    if decision is None or any(
+        entry.parameters.get(PARAM_RESOLUTION) == resolution.id for entry in entries
+    ):
+        return None
+    return _DECISION_STATES.get(decision)
 
 
 def _recovery_found_no_run(entry: JournalEntry) -> bool:

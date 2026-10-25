@@ -59,7 +59,8 @@ def build_project_view(
         desired=desired,
         current_steps=current,
         dispatch=dispatch.facts,
-        held_checkouts=dispatch.held,
+        held_checkouts=frozenset(dispatch.holders),
+        checkout_holders=dispatch.holders,
     )
     return BuiltView(view, wrote)
 
@@ -78,7 +79,7 @@ def _dispatch_view(
     no step is blocked for it. Returns whether blocking unresolved steps wrote.
     """
     if not dispatching:
-        return DispatchView({}, frozenset(), ()), False
+        return DispatchView({}, {}, ()), False
     dispatch = build_dispatch_view(
         store,
         project_id,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved
-from amoeba.runner.dispatch.hold import held_checkouts
+from amoeba.runner.dispatch.hold import checkout_holders, held_checkouts
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.store import CommandKind, JournalOutcome, JournalResolver
 from runner.dispatch.dispatch_support import FIRST, SECOND, entry, facts
@@ -115,3 +115,25 @@ def test_different_checkouts_are_held_independently() -> None:
     entries = [entry(RUN, "a", checkout=FIRST), entry(RUN, "b", checkout=SECOND)]
 
     assert held_checkouts(entries, set(), {}) == {FIRST, SECOND}
+
+
+def test_holders_name_every_node_behind_a_held_checkout() -> None:
+    pointed = facts(DispatchState.POINTED, FIRST)
+
+    holders = checkout_holders([entry(RUN, "a")], set(), {"b": pointed})
+
+    assert holders == {FIRST: {"a", "b"}}
+
+
+def test_a_paused_run_is_held_by_its_own_node_only() -> None:
+    paused = entry(RUN, "a", outcome=JournalOutcome.COMPLETED, outcome_text="paused")
+
+    assert checkout_holders([paused], set(), {}) == {FIRST: {"a"}}
+
+
+def test_held_checkouts_is_the_keys_of_the_holders() -> None:
+    entries = [entry(RUN, "a", checkout=FIRST), entry(RUN, "b", checkout=SECOND)]
+
+    assert held_checkouts(entries, set(), {}) == set(
+        checkout_holders(entries, set(), {})
+    )
