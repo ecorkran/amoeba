@@ -64,6 +64,9 @@ their payload fields, so a new kind appears without a second list:
 amoeba submit create-project --project demo --by operator
 amoeba submit resolution --project demo --by operator \
     --blocked-state-id <id> --detail "approved"
+amoeba submit resolution --project amoeba --by operator --blocked-state-id <id> \
+    --detail "loop is close; one more round" --decision retry \
+    --instructions "Address the two schema concerns only."
 amoeba submit intent --project demo --by operator \
     --body '{"intent": "drive", "until": "slice_design"}' [--node-id <id>]
 amoeba submit check --project demo --by ci --node-id <id> --name <name> \
@@ -87,7 +90,7 @@ invalid payload is refused before anything is written.
 | Kind | Payload | Effect | Rejected when |
 | --- | --- | --- | --- |
 | `create_project` | none | The project's store exists. The process creates it at once and it is usable immediately. | Never: a project that already exists is `applied` — the requested state holds. |
-| `resolution` | `blocked_state_id`, `detail` | Fills that blocked state's resolution slot and returns its node to `runnable`. `resolved_by` is `submitted_by`. | The blocked state does not exist, belongs to another project, or is already resolved. |
+| `resolution` | `blocked_state_id`, `detail`, optional `decision`, optional `instructions` (see [A resolution's decision](#a-resolutions-decision)) | Fills that blocked state's resolution slot and returns its node to `runnable`. `resolved_by` is `submitted_by`. A decision and instructions are stored with it, and the block is flagged for the Runner to answer. | The blocked state does not exist, belongs to another project, or is already resolved. A blank `decision` or `instructions` fails validation and is quarantined instead. |
 | `intent` | `body` (a JSON object; see [Intent bodies](#intent-bodies)), optional `node_id` | One unacknowledged row on the `intent` channel, carrying the submission id. | `node_id` is given and is not a node of this project. |
 | `verdict` | A review result: `VerdictInput`'s fields except `id`, with provenance flattened — see [`evidence-contract.md`](evidence-contract.md#through-the-inbox) | One verdict record, whose id is the submission id, and one observation per finding. | The node is not in this project; a provider failure carries findings or a verdict other than `UNKNOWN`; `upstream_version` is empty; a judge sample (optional `judge_invocation_id`) is on another node or review type than the invocation's earlier samples. An unknown word in an enum field, or an omitted `derivation`, `fallback_used`, or `findings_parsed`, fails validation and is quarantined instead. |
 | `check` | A mechanical check result: `node_id`, `name`, `outcome` (`passed`, `failed`, `errored`), `examined_count` (integer or `null`; **required** — `null` says "not reported"), `upstream`, `upstream_version`, `source` (`RecordSource`), and optional `examined` (JSON object), `baseline_ref`, `source_path` — see [`evidence-contract.md`](evidence-contract.md#checks) | One check record, whose id is the submission id. Its standing (`vacuous` when `examined_count` is 0) is computed on read. | The node is not in this project; `examined_count` is negative; `upstream_version` is empty. An unknown `outcome` or `source`, or an omitted `examined_count`, fails validation and is quarantined instead. |
@@ -97,6 +100,55 @@ invalid payload is refused before anything is written.
 **A resolution targets a blocked state, never a node.** If a node was resolved
 and blocked again since your reply was written, your reply names the old,
 resolved block and is `rejected` — it is never redirected to the new one.
+
+### A resolution's decision
+
+*Slice 127.* A resolution of a blocked pipeline step names what the Runner should do
+about it. The inbox stores the decision and the instructions as submitted and checks
+only their shape; the Runner judges them.
+
+| Field | Rule |
+| --- | --- |
+| `decision` | Optional text, non-blank when present. `retry`, `accept`, `handled`, `rerun` or `stop`, checked by the Runner, not the inbox. |
+| `instructions` | Optional text, non-blank when present. Allowed only with `retry` or `accept`, and passed to Squadron verbatim as one argument. **No secrets**: the text is stored in the store as written and shown in the process list while the resume runs, the same rule as every payload. |
+
+**What each decision does**, by where the step stands:
+
+| Step stands at | Allowed decisions |
+| --- | --- |
+| A paused run (its latest `sq_run` recorded `paused`) | `retry` (resume with `--decision retry`), `accept` (resume with `--decision accept`; only when the pause is at a loop), `handled` (you dealt with the run yourself; the Runner re-observes it and routes what it finds), `stop` |
+| A completed run whose outcome was escalated | `accept` (the step is done; nothing in CF or the review is edited), `rerun`, `stop` |
+| A failed, orphaned or vanished run, a launch that never started, a run Squadron no longer has, or no run yet | `rerun`, `stop` |
+| A human step | none: a bare resolution only |
+
+`stop` parks the step as a block; resolving that block with any decision allowed for
+where it stands starts it again.
+
+**A bare resolution of a pipeline step is rejected `decision_required`.** This is a
+change for existing submitters. Before slice 127 a resolution returned the node to
+`runnable` and the Runner's dispatch rules then relaunched the step; now the Runner
+answers it, and a pipeline step needs a decision. Name `rerun` for the old behavior.
+
+**The Runner's answer** is on the blocked state, not the submission: the submission
+record is the inbox's answer and is written once. The Runner answers each flagged
+resolution, oldest first, at the start of its next tick, before it reads any node,
+so no planner sees a resolved node before its resolution is checked. See
+[Learning the outcome](#learning-the-outcome).
+
+| `runner_code` (rejected) | Meaning |
+| --- | --- |
+| `unresolvable` | The step's latest command is still in flight, or its outcome is not routed yet. Try again after the next tick. |
+| `unknown_decision` | The decision is not one of the five words. |
+| `decision_required` | A pipeline step was resolved without a decision. |
+| `decision_not_applicable` | A decision on a human step, or one not allowed where the step stands. |
+| `not_at_loop` | `accept` on a pause that is not at a loop. |
+| `usage_limit_pause` | `accept` on a usage-limit pause, whose round never ran. `retry` after the limit resets. |
+| `checkpoint_unknown` | `retry` or `accept` on a pause whose kind or time the Runner cannot read. |
+| `interactive_checkpoint` | `retry` at an interactive checkpoint, which a non-interactive resume cannot pass. Resume it by hand, then submit `handled`. |
+| `instructions_not_applicable` | `instructions` with a decision other than `retry` or `accept`. |
+
+A rejection blocks the step again on a human; its escalation payload lists the
+decisions `allowed` where the step stands.
 
 ### Intent bodies
 
@@ -202,6 +254,21 @@ migrated, so a store that exists is always complete.
 `submission(create_id)` reports `applied` before submitting into that project.
 A submission that reaches the process before its project exists is quarantined
 as `no_store_for_project`, not held.
+
+**A resolution's own outcome.** *Slice 127.* Once `submission(id)` is `applied`, the
+Runner's answer is on the blocked state:
+
+```python
+with Store.open_read_only(project_id="demo") as store:
+    state = store.blocked_state(blocked_state_id)  # None if no such block
+    state.awaits_runner   # True until the Runner has answered
+    state.runner_outcome  # ResolutionOutcome.APPLIED or REJECTED, or None
+    state.runner_code     # the rejection code above; None when applied
+    state.runner_reason   # the detail, for people; branch on runner_code
+```
+
+`amoeba inspect blocked` shows each blocked node's `blocked_state_id`, the id a
+resolution names.
 
 **An intent's own outcome.** `submission(id)` reports only whether the inbox
 applied the submission. For an `intent`, the Runner's later verdict is on the

@@ -299,6 +299,7 @@ field was never recorded is the failure this prevents.
 | `unrouted_outcomes(project_id)` | Entries with `awaits_routing` set, oldest `issued_at` first (slice 125). What the routing engine consumes. Served by the partial index `idx_journal_awaits_routing`, so its cost follows unrouted work, not history. |
 | `journal_entries(project_id, *, node_id=None, include_resolved=True)` | What inspection consumes. |
 | `recorded_result_run_ids(project_id)` | Run ids already recorded in some entry's result, mapped to that entry's id. The Squadron matcher's fourth candidate condition reads this. |
+| `recorded_result_run_nodes(project_id)` | The same run ids, mapped to the id of the *node* that owns the recording entry (slice 127). A continuation shares its run id with the entry it continues, and the observer's claimed-id guard uses this to tell its own node's claim from another node's. |
 
 ### `JournalEntry`
 
@@ -791,6 +792,43 @@ the rules that project CF's plan into nodes are the Runner's
 - **Inspection.** `amoeba inspect nodes` has a `cf_index` column (empty when
   unset); `--json` carries `cf_index` as a number or `null`.
 
+### Resolution answers
+
+*Added by slice 127. Schema version 12 (migration `012`).* A PM's resolution fills a
+blocked state's slot (the inbox's effect, unchanged) and now also asks the Runner a
+question. The store records the question and the Runner's answer on the blocked
+state, so finding the unanswered ones costs what they cost, not what the history
+costs.
+
+- **Columns on `blocked_states`**, all null before `012` (no backfill):
+  `resolution_decision`, `resolution_instructions`, `awaits_runner` (null or `1`),
+  `runner_outcome`, `runner_code`, `runner_reason`. A partial index
+  `idx_blocked_states_awaits_runner` on `(resolved_at) WHERE awaits_runner = 1` serves
+  `pending_resolutions`.
+- **Models.** `Resolution` gains `decision`, `instructions` and the property
+  `has_instructions`. `BlockedState` gains `awaits_runner`, `runner_outcome`
+  (`ResolutionOutcome`, a `StrEnum`: `applied` or `rejected`), `runner_code` and
+  `runner_reason`. An unknown stored `runner_outcome` raises
+  `UnknownVocabularyValueError`. `runner_code` is text; its vocabulary is the
+  Runner's.
+- **Set by the inbox, never by `resolve()`.** An inbox `resolution` stores the
+  decision and instructions and sets `awaits_runner` in the same transaction. The
+  Runner's own `resolve()` calls (for example the completion of a human step) pass
+  neither and never set the flag.
+
+| Method | Effect |
+| --- | --- |
+| `pending_resolutions(project_id)` | The project's flagged blocked states, oldest `resolved_at` first, through the partial index. |
+| `acknowledge_resolution(blocked_state_id, *, outcome, code=None, reason=None, effect=None)` | **One transaction:** records the outcome, code and reason, clears the flag, and applies `effect` (a `StatusEffect` or `BlockEffect`, written through the same writers a routing decision uses). `rejected` requires a code and a reason; `applied` takes neither (`ValueError`). A block that does not exist, is unresolved, or is not flagged raises `InvalidTransitionError`. An effect the node refuses rolls everything back, so the flag stays set. |
+| `blocked_state(blocked_state_id)` | One blocked state by id, open or resolved, or `None`. Works through a read-only handle. |
+
+The journal gains three optional `sq_run` parameter keys, `continuation`
+(`retry`, `accept` or `observe`), `continues` (the entry whose run it continues) and
+`resolution` (the blocked state id whose decision it carries out), and `resolution`
+also on a `cf_write` (the `rerun` whose pointer write it is). None is required, and
+the recovery observer checks only that `continuation` is present. See
+[`process-contract.md`](process-contract.md#resolutions-and-resumption).
+
 ### Unrouted outcomes
 
 *Added by slice 125. Schema version 11 (migration `011`).* A run the Runner
@@ -906,8 +944,11 @@ adding a table onto working machinery, not debugging both at once.
 **A store stamped newer than the code raises `StoreSchemaError`.** It is never
 silently downgraded.
 
-The latest migration is `010` (slice 123, schema version 10: `nodes.cf_index` and
-its partial unique link index). Before it, `009` (slice 121, schema version 9)
+The latest migration is `012` (slice 127, schema version 12: the resolution
+decision, instructions and the Runner's answer on `blocked_states`, and the partial
+index of unanswered ones). Before it, `011` (slice 125, schema version 11) added
+`command_journal.awaits_routing` and its partial index, and `010` (slice 123, schema
+version 10) added `nodes.cf_index` and its partial unique link index. Before them, `009` (slice 121, schema version 9)
 added the five new `messages` columns, the open-project-escalation index, and the
 `routing_table_versions`, `routing_decisions`, `attempt_counts` and
 `desired_states` tables. A read-only open of a store stamped older than the

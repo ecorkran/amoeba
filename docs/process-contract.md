@@ -603,6 +603,76 @@ version on first use, the decision, the attempt count and the node's effect.
   killed, and no decision is recorded. An in-flight entry whose pipeline has no
   bound faults the project (a programming error).
 
+### Resolutions and resumption
+
+*Slice 127.* A PM's `resolution` of a blocked pipeline step carries a decision
+(`retry`, `accept`, `handled`, `rerun`, `stop`) and optional instructions (see
+[A resolution's decision](inbox-contract.md#a-resolutions-decision)). The Runner
+answers each one and carries out what it decided.
+
+- **The resolution stage.** Each project tick, right after the intents are applied
+  and before Observe, `apply_pending_resolutions` reads `pending_resolutions`, and for
+  each one, oldest first, classifies the step (`paused_run`, `completed_outcome`,
+  `ended_run`, `before_run`, `no_decision`, `unresolvable`) from its executor and its
+  journal, judges the decision against it, and writes the answer with
+  `acknowledge_resolution`: the outcome, the rejection code, and the effect (`done`
+  for an accept of a completed outcome, a `HUMAN` block for a rejection or a stop),
+  in one transaction. Every problem in the inputs is a rejection, which blocks only
+  its own node; a poisoned outcome document is `checkpoint_unknown`, not a fault.
+  The stage starts no subprocess and so takes no budget check. A tick that
+  acknowledges anything counts as a write.
+- **What carries a decision out.** The next action comes from the journal and the
+  step's latest applied resolution: while no entry on the step names that resolution
+  in its `resolution` key, `retry` and `accept` are `RESUME`, `handled` is
+  `REOBSERVE`, and `rerun` is `NEEDS_POINTER` (even where the older rules would say
+  `REISSUE`). `ContinuationPlanner` (after `DispatchPlanner`) turns the first two
+  into `ResumeRun` and `ObserveRun`; a `rerun`'s pointer write carries the
+  `resolution`. They are actions on current steps, so a held or undriven step's
+  resolution is acknowledged and its continuation waits. A paused run's checkout
+  stays held; the continuation may act in a checkout held only by its own step.
+- **Continuation entries.** A continuation is an `sq_run` entry on the step with the
+  continued entry's `pipeline`, `params`, `run_id` and `checkout`, plus `continuation`
+  (`retry`, `accept` or `observe`), `continues` and `resolution`. The run id is the
+  continued one, never minted. The instructions are not copied into the journal: Act
+  reads them from the resolution slot. Act polls the run once first. A failed or
+  timed-out poll writes nothing (a `run_observation_failed` fault, and the step is
+  decided again next tick). A run with no state journals the entry and records a
+  failed resume `run_missing`; it is never relaunched. A resume whose run is no longer
+  at the pause the PM decided on (for example because the PM resumed it by hand) is
+  withheld: the entry is journaled as an observation, `continuation` `observe`, with
+  the parameter `resume_skipped` set to `run_not_at_pause`, and nothing is launched.
+  Otherwise the entry is journaled and `sq run --resume <run_id> --decision <retry|accept>`
+  (plus `--instructions <text>` as one argument) is started detached in the checkout,
+  with no pipeline, `-p` or `--run-id`. `handled` always journals an observation and
+  launches nothing; the entry owns the run while it is observed, so detection defers
+  and ingestion can record its review.
+- **Resume confirmation.** A resumed run prints no line, so it is polled on
+  `--run-poll-interval` from the start. It is confirmed when a poll shows any outcome
+  other than `paused`, or `paused` with a `checkpoint.paused_at` different from the one
+  the continued entry recorded. While it still shows the old pause: a tracked child
+  that exited 2 is `refused`; any other exit code is `exited_before_claim`; after
+  `--launch-grace` since `issued_at` it is `no_claim_within_grace` (the only rule after
+  a restart, when no child is tracked); `not_found` is `run_missing`; a `Popen` error is
+  `spawn_error`. A failed resume blocks the step on `HUMAN` with `{reason: resume_failed,
+  resume_failure, run_id, exit_code, stderr_tail}` and resolves the entry `failed` with
+  the run's real outcome (`paused`, so the checkout stays held and the step offers the
+  paused-run decisions again; `not_found` for `run_missing`, which releases it) and a
+  `resume_failure` key. A confirmed continuation is observed, ingested and routed by
+  the usual rules.
+- **Routing.** `outcome` gains `resume_failed`, reduced from `resume_failure` and
+  winning over the recorded outcome, so a failed resume can only escalate. A new
+  input, `review_accepted`, is `none` unless the entry's `continuation` is `accept`,
+  `true` when its `verdict_ids` equal the continued entry's (the loop ended on the
+  review the PM accepted) and `false` otherwise. The shipped table gains
+  `advance-on-accepted-review` after `advance-on-stated-pass`.
+- **Crash safety.** The acknowledgment is durable. A crash after it and before the
+  continuation is journaled leaves `RESUME`, and the next tick issues it once. A crash
+  after the entry is journaled and before the launch leaves an entry recovery keeps
+  in flight (below); Observe fails it `no_claim_within_grace`, and no resume is ever
+  launched by recovery.
+- **Spend.** Only a PM decision resumes a run, and a `retry` of an exhausted loop is
+  one paid review round. No route in the table resumes a run.
+
 ## Lifecycle failure modes
 
 Three cases where the process must decide rather than converge. Each is
@@ -732,6 +802,14 @@ polls once more, and then leaves it in flight, escalates, or marks the entry `no
 Past the grace period the entry is `not_applied` at once. A start-up after a
 crash within one grace period of a launch therefore stalls by at most the grace
 still remaining; each id-bearing entry makes at most two polls.
+
+*Continuations.* An entry carrying `continuation` (slice 127) shares its run id with
+the entry it continues, by design. The claimed-id guard therefore ignores an owner
+on the same node (`recorded_result_run_nodes`); an id claimed on another node still
+escalates. A run with no state, after the grace rule, is `Unknown` with the reason
+`resume_run_missing`, never `NotApplied`: `NotApplied` would let the Runner reissue the
+command as a fresh run under the old id, which a resume forbids. A run that has state
+is `InFlight` as above, and the Runner's confirmation rules finish it.
 
 *Legacy.* An entry without a `run_id` key (a row from before slice 120) goes to
 the attribute matcher below, unchanged. It reads
