@@ -25,7 +25,7 @@ from amoeba.runner.decide import (
 )
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.reissue import ReissueLaunch, begin_reissue
-from amoeba.runner.faults import NodeContext
+from amoeba.runner.faults import NodeContext, TickFaults
 from amoeba.runner.launch import (
     PARAM_PARAMS,
     PARAM_PIPELINE,
@@ -38,6 +38,7 @@ from amoeba.runner.launch import (
 )
 from amoeba.runner.lifecycle.human_steps import block_human_step
 from amoeba.runner.observed import LaunchFailed
+from amoeba.runner.resolutions.act import Acted, ContinuationActs
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, CommandKind, JournalEntry, Store
 
 
@@ -74,9 +75,18 @@ class ActStage:
         self._now = now
         self._context = context
         self._version_label = version_label
+        self._continuations = ContinuationActs(
+            store=store, poll_run=poll_run, version_label=version_label
+        )
 
-    def run(self, actions: Sequence[Action], budget: TickBudget) -> ActOutcome:
-        """Issue each action in order; ``CUT_OFF`` when the budget runs out."""
+    def run(
+        self, actions: Sequence[Action], budget: TickBudget, faults: TickFaults
+    ) -> ActOutcome:
+        """Issue each action in order; ``CUT_OFF`` when the budget runs out.
+
+        ``faults`` collects expected faults an action meets (a failed pre-poll); the
+        tick raises them after this stage.
+        """
         wrote = False
         for action in actions:
             self._context.set(action.node_id)
@@ -98,8 +108,11 @@ class ActStage:
                         return ActOutcome(TickResult.CUT_OFF, wrote)
                     self._pointers.write(self._store, action, budget)
                 case ResumeRun() | ObserveRun():
-                    # Unreachable until Task 6.4a: no planner emits these before 7.3.
-                    raise NotImplementedError("continuation acts: Task 6.4a")
+                    acted = self._continuations.act(action, budget, faults)
+                    if acted is Acted.CUT_OFF:
+                        return ActOutcome(TickResult.CUT_OFF, wrote)
+                    if acted is Acted.WAITED:
+                        continue
             wrote = True
         self._context.clear()
         return ActOutcome(TickResult.COMPLETE, wrote)

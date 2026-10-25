@@ -151,8 +151,13 @@ class ProjectTick:
             or self.wrote
         )
         decided = self._decide(view)
-        acted = self._act.run(decided, budget)
+        acted = self._act.run(decided, budget, faults)
         self.wrote = acted.wrote or self.wrote
+        # Faults the act stage met (a failed continuation pre-poll) are raised here;
+        # the store deduplicates, so the kinds raised above write nothing twice.
+        self.wrote = (
+            raise_expected_faults(self._store, self._project_id, faults) or self.wrote
+        )
         if acted.result is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
