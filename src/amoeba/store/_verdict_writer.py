@@ -91,6 +91,15 @@ class VerdictWriter(StoreBase):
             return VerdictRejection("judge_invocation_id must not be blank")
         return self._invocation_mismatch(project_id, verdict)
 
+    def verdict_refusal(self, project_id: str, verdict: VerdictInput) -> str | None:
+        """Why the store would refuse ``verdict`` now, or ``None`` if it would take it.
+
+        Read-only. The write path raises the same reason, so a caller checks first and
+        records a refused review as unknown rather than failing the whole write.
+        """
+        rejection = self._verdict_rejection(project_id, verdict)
+        return None if rejection is None else rejection.reason
+
     def _invocation_mismatch(
         self, project_id: str, verdict: VerdictInput
     ) -> VerdictRejection | None:

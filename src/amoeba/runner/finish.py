@@ -13,10 +13,9 @@ from __future__ import annotations
 from typing import Final
 
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON, PAYLOAD_RUN_ID, BlockPlan
-from amoeba.runner.ingest.record import RESULT_RUN_ID, block_once, ingest
+from amoeba.runner.ingest.record import RESULT_RUN_ID, block_once, entry_run_id, ingest
 from amoeba.runner.observed import Finished, LaunchFailed, RunEnded, RunVanished
 from amoeba.store import (
-    PARAM_RUN_ID,
     BlockedKind,
     JournalEntry,
     JournalOutcome,
@@ -47,7 +46,7 @@ def record(
 def _record_launch_failed(
     store: Store, entry: JournalEntry, finished: LaunchFailed
 ) -> None:
-    run_id = _run_id(entry)
+    run_id = entry_run_id(entry)
     code = "unknown" if finished.exit_code is None else str(finished.exit_code)
     context = (
         f"launch of {run_id} failed ({finished.failure.value}); "
@@ -65,10 +64,3 @@ def _record_launch_failed(
         outcome=JournalOutcome.FAILED,
         result={RESULT_RUN_ID: run_id, RESULT_LAUNCH_FAILURE: finished.failure.value},
     )
-
-
-def _run_id(entry: JournalEntry) -> str:
-    run_id = entry.parameters.get(PARAM_RUN_ID)
-    if not isinstance(run_id, str) or not run_id:
-        raise ValueError(f"entry {entry.id} has an unusable run id: {run_id!r}")
-    return run_id

@@ -277,6 +277,15 @@ def test_another_detection_outcome_is_refused(
     assert _snapshot(store, entry.id) == before
 
 
+def test_verdict_refusal_gives_the_reason_the_write_would_refuse(store: Store) -> None:
+    node_id = seed_node(store)
+
+    reason = store.verdict_refusal(PROJECT, verdict_input("v-1", "no-such-node"))
+
+    assert reason == f"no node 'no-such-node' in project '{PROJECT}'"
+    assert store.verdict_refusal(PROJECT, verdict_input("v-2", node_id)) is None
+
+
 def test_a_resolved_entry_is_refused(store: Store) -> None:
     node_id = seed_node(store)
     entry = _issue(store, node_id)

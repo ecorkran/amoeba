@@ -33,7 +33,7 @@ from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.dispatch.params import dispatch_params, pipeline_for
 from amoeba.runner.dispatch.state import DispatchState
-from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
+from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
 
 #: The order states go in within a checkout: launches before pointer writes.
@@ -97,19 +97,12 @@ def _reissue(node: Node, facts: StepDispatchFacts) -> LaunchRun:
         raise ValueError(f"step {node.id} is to be reissued but has no old entry")
     return LaunchRun(
         node.id,
-        _text(old, PARAM_PIPELINE),
+        text_parameter(old, PARAM_PIPELINE),
         _params(old),
-        Path(_text(old, PARAM_CHECKOUT)),
-        run_id=_text(old, PARAM_RUN_ID),
+        Path(text_parameter(old, PARAM_CHECKOUT)),
+        run_id=text_parameter(old, PARAM_RUN_ID),
         reissue_of=old.id,
     )
-
-
-def _text(entry: JournalEntry, key: str) -> str:
-    value = entry.parameters.get(key)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"entry {entry.id} has an unusable {key}: {value!r}")
-    return value
 
 
 def _params(entry: JournalEntry) -> Mapping[str, str]:

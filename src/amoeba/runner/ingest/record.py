@@ -13,7 +13,7 @@ needs, and the entry still resolves and is left for routing.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -67,7 +67,7 @@ def ingest(
     version_label: str,
 ) -> None:
     """Block the node if needed, record the run's reviews, resolve the entry."""
-    run_id = _run_id(entry)
+    run_id = entry_run_id(entry)
     plan = plan_outcome(finished, run_id)
     reviews = _reviews(store, entry, finished, run_id, version_label)
     unknown: ReviewUnknown | None = None
@@ -128,7 +128,24 @@ def _reviews(
     scope = _scope(store, entry, run_id, version_label)
     if isinstance(scope, ReviewUnknown):
         return scope
-    return select_review_files(finished.document, scope)
+    selected = select_review_files(finished.document, scope)
+    if isinstance(selected, ReviewUnknown):
+        return selected
+    refusal = _refusal(store, entry.project_id, selected.reviews)
+    if refusal is not None:
+        return ReviewUnknown(None, refusal)
+    return selected
+
+
+def _refusal(
+    store: Store, project_id: str, reviews: Sequence[RunnerReview]
+) -> str | None:
+    """The first review the store would refuse, as a reason, or ``None``."""
+    for review in reviews:
+        reason = store.verdict_refusal(project_id, review.verdict)
+        if reason is not None:
+            return f"review {review.verdict.id} is not recordable: {reason}"
+    return None
 
 
 def _scope(
@@ -180,7 +197,8 @@ def _result(
     }
 
 
-def _run_id(entry: JournalEntry) -> str:
+def entry_run_id(entry: JournalEntry) -> str:
+    """The run id an ``sq_run`` entry carries. Raises if it carries none usable."""
     run_id = entry.parameters.get(PARAM_RUN_ID)
     if not isinstance(run_id, str) or not run_id:
         raise ValueError(f"entry {entry.id} has an unusable run id: {run_id!r}")
