@@ -8,7 +8,7 @@ import pytest
 
 from amoeba.cli.main import build_parser
 from amoeba.cli.settings_flags import start_settings
-from amoeba.process.settings import ProcessSettings
+from amoeba.process.settings import DEFAULT_ROUTING_TABLE_PATH, ProcessSettings
 
 
 def test_detection_defaults_come_from_process_settings() -> None:
@@ -129,3 +129,14 @@ def test_help_lists_the_runner_flags(capsys: pytest.CaptureFixture[str]) -> None
         "--plan-read-interval",
     ):
         assert flag in out
+
+
+def test_the_routing_table_defaults_to_the_shipped_one_and_the_flag_overrides() -> None:
+    default = start_settings(build_parser().parse_args(["start"]))
+    assert default.routing_table_path == ProcessSettings().routing_table_path
+    assert default.routing_table_path == DEFAULT_ROUTING_TABLE_PATH
+    assert default.routing_table_path.is_file()
+    assert default.routing_table_path.name == "default.yaml"
+
+    args = build_parser().parse_args(["start", "--routing-table", "/scratch/t.yaml"])
+    assert start_settings(args).routing_table_path == Path("/scratch/t.yaml")

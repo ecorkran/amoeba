@@ -13,6 +13,7 @@ second source of truth to reconcile. The CLI exposes these as flags instead.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 
 #: Where Squadron writes its run-state files. Not overridable by environment —
@@ -25,6 +26,16 @@ DEFAULT_SQ_RUNS_DIR = Path.home() / ".config" / "squadron" / "runs"
 #: read): the shell that starts Amoeba need not match the CF clients'. The CLI's
 #: ``--cf-data-dir`` flag overrides it.
 DEFAULT_CF_DATA_DIR = Path.home() / ".config" / "context-forge"
+
+#: The routing table shipped in the package, resolved once. The CLI's
+#: ``--routing-table`` flag points at another file.
+DEFAULT_ROUTING_TABLE_PATH = Path(
+    str(
+        resources.files("amoeba").joinpath(
+            "runner", "routing", "tables", "default.yaml"
+        )
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -86,6 +97,8 @@ class ProcessSettings:
         plan_read_interval_seconds: The least time between two plan reads of the
             same linked Context Forge project. A change in the project's CF
             snapshot triggers an earlier read.
+        routing_table_path: The routing table file, loaded and validated once at
+            start-up. Defaults to the table shipped in the package.
     """
 
     idle_interval_seconds: float = 1.0
@@ -105,3 +118,4 @@ class ProcessSettings:
     tick_call_timeout_seconds: float = 8.0
     run_poll_interval_seconds: float = 15.0
     plan_read_interval_seconds: float = 30.0
+    routing_table_path: Path = DEFAULT_ROUTING_TABLE_PATH
