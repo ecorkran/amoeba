@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 
-from amoeba.store import sql
+from amoeba.store import sql, sql_inbox
 from amoeba.store._base import isoformat, now
 from amoeba.store._block_writer import BlockWriter
 from amoeba.store.mapping import map_blocked_state, map_node
@@ -25,7 +25,9 @@ from amoeba.store.models import (
     InvalidTransitionError,
     Node,
     NodeStatus,
+    ResolutionOutcome,
 )
+from amoeba.store.runner_models import BlockEffect, StatusEffect
 
 
 class BlockingOperations(BlockWriter):
@@ -182,3 +184,82 @@ class BlockingOperations(BlockWriter):
             )
             for row in rows
         ]
+
+    def pending_resolutions(self, project_id: str) -> list[BlockedState]:
+        """The project's PM resolutions the Runner has not yet answered.
+
+        Oldest resolution first. Served by the partial index on the flag, so
+        the cost follows the unanswered rows, not the history (slice 127, D9).
+        """
+        rows = self._execute(sql.SELECT_PENDING_RESOLUTIONS, (project_id,)).fetchall()
+        return [map_blocked_state(row) for row in rows]
+
+    def blocked_state(self, blocked_state_id: str) -> BlockedState | None:
+        """One blocked state by id, open or resolved, or ``None``."""
+        row = self._execute(sql.SELECT_BLOCKED_STATE_BY_ID, (blocked_state_id,))
+        found = row.fetchone()
+        return None if found is None else map_blocked_state(found)
+
+    def acknowledge_resolution(
+        self,
+        blocked_state_id: str,
+        *,
+        outcome: ResolutionOutcome,
+        code: str | None = None,
+        reason: str | None = None,
+        effect: StatusEffect | BlockEffect | None = None,
+    ) -> None:
+        """Record the Runner's answer to a resolution, with its effect.
+
+        One transaction: the outcome, code and reason are recorded, the flag is
+        cleared, and ``effect`` is applied through the writers a routing
+        decision uses. An effect that fails rolls the whole answer back, so the
+        flag stays set and nothing is written.
+
+        Args:
+            blocked_state_id: The resolved, flagged blocked state.
+            outcome: ``applied`` or ``rejected``.
+            code: The rejection code. Required with ``rejected``, forbidden with
+                ``applied``.
+            reason: The rejection detail, for people. Same rule as ``code``.
+            effect: What the answer does to the node, if anything.
+
+        Raises:
+            ValueError: ``rejected`` without a code and a reason, or ``applied``
+                with a code or a reason.
+            InvalidTransitionError: The blocked state does not exist, is
+                unresolved, or is not awaiting the Runner; or the effect is
+                refused.
+        """
+        answered = code is not None and reason is not None
+        unanswered = code is None and reason is None
+        if outcome is ResolutionOutcome.REJECTED and not answered:
+            raise ValueError("a rejected resolution takes a code and a reason")
+        if outcome is ResolutionOutcome.APPLIED and not unanswered:
+            raise ValueError("an applied resolution takes no code and no reason")
+        timestamp = isoformat(now())
+        with self._connection:
+            # Takes the write lock before the flag is read, as a routing
+            # decision does, so two answers cannot both see it set.
+            self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
+            row = self._execute(
+                sql.SELECT_BLOCKED_STATE_BY_ID, (blocked_state_id,)
+            ).fetchone()
+            state = None if row is None else map_blocked_state(row)
+            if state is None or not state.awaits_runner:
+                raise InvalidTransitionError(
+                    f"blocked state {blocked_state_id!r} is not a resolution "
+                    "awaiting the Runner"
+                )
+            node = self._require_node(state.node_id)
+            self._execute(
+                sql.ACKNOWLEDGE_RESOLUTION,
+                (outcome.value, code, reason, timestamp, blocked_state_id),
+            )
+            self._apply_effect(
+                node.id,
+                project_id=node.project_id,
+                effect=effect,
+                timestamp=timestamp,
+                journal_entry_id=None,
+            )

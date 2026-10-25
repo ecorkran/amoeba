@@ -27,6 +27,7 @@ from amoeba.store.models import (
     NodeStatus,
     StoreIntegrityError,
 )
+from amoeba.store.runner_models import BlockEffect, StatusEffect
 
 #: The blocker kinds that raise an escalation message. Only a human has a
 #: channel; a judge or a Squadron checkpoint is resolved by the machinery that
@@ -114,6 +115,33 @@ class BlockWriter(StoreBase):
                     f"{entry[0]!r} is unresolved"
                 )
         self._execute(sql.UPDATE_NODE_STATUS, (status.value, timestamp, node_id))
+
+    def _apply_effect(
+        self,
+        node_id: str,
+        *,
+        project_id: str,
+        effect: StatusEffect | BlockEffect | None,
+        timestamp: str,
+        journal_entry_id: str | None,
+    ) -> None:
+        """Apply a routing decision's or a resolution's effect, in the caller's
+        transaction. The one place both read, so neither can skip a rule.
+        """
+        if isinstance(effect, StatusEffect):
+            self._write_status(node_id, NodeStatus(effect.status), timestamp)
+        elif isinstance(effect, BlockEffect):
+            # The refusal block() makes, checked here under the write lock.
+            self._refuse_if_blocked(self._require_node(node_id))
+            self._write_block(
+                node_id,
+                project_id=project_id,
+                kind=BlockedKind.HUMAN,
+                context=effect.context,
+                timestamp=timestamp,
+                payload=effect.payload,
+                journal_entry_id=journal_entry_id,
+            )
 
     def _write_block(
         self,

@@ -20,10 +20,8 @@ from amoeba.store.journal_models import JournalEntry
 from amoeba.store.mapping_journal import map_journal_entry
 from amoeba.store.mapping_runner import map_routing_decision, map_table_version
 from amoeba.store.models import (
-    BlockedKind,
     InvalidTransitionError,
     NodeNotFoundError,
-    NodeStatus,
     StoreIntegrityError,
 )
 from amoeba.store.row_values import integer
@@ -197,7 +195,13 @@ class RoutingDecisionOperations(BlockWriter):
                 self._execute(
                     sql_journal.CLEAR_AWAITS_ROUTING, (decision.journal_entry_id,)
                 )
-            self._apply_effect(decision, effect, timestamp)
+            self._apply_effect(
+                decision.node_id,
+                project_id=decision.project_id,
+                effect=effect,
+                timestamp=timestamp,
+                journal_entry_id=decision.journal_entry_id,
+            )
             stored = self.routing_decision(decision_id)
 
         if stored is None:
@@ -216,28 +220,6 @@ class RoutingDecisionOperations(BlockWriter):
             raise StoreIntegrityError(
                 f"routing table version {table.version!r} is already stored with "
                 "different content; change the version label with the content"
-            )
-
-    def _apply_effect(
-        self,
-        decision: RoutingDecisionInput,
-        effect: StatusEffect | BlockEffect | None,
-        timestamp: str,
-    ) -> None:
-        """Apply a decision's effect inside the caller's transaction."""
-        if isinstance(effect, StatusEffect):
-            self._write_status(decision.node_id, NodeStatus(effect.status), timestamp)
-        elif isinstance(effect, BlockEffect):
-            # The refusal block() makes, checked here under the write lock.
-            self._refuse_if_blocked(self._require_node(decision.node_id))
-            self._write_block(
-                decision.node_id,
-                project_id=decision.project_id,
-                kind=BlockedKind.HUMAN,
-                context=effect.context,
-                timestamp=timestamp,
-                payload=effect.payload,
-                journal_entry_id=decision.journal_entry_id,
             )
 
     def _validate_routing_decision(
