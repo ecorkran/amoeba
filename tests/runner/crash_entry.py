@@ -37,6 +37,7 @@ from amoeba.runner.decide import Action, LaunchRun, Planner, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
+from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
 from runner.routing.table_support import (
@@ -76,6 +77,11 @@ class KillPoint(StrEnum):
     #: After ingestion committed (reviews recorded, entry resolved and flagged),
     #: before anything routed it.
     AFTER_INGEST = "after_ingest"
+    #: After a PM's resolution is acknowledged, before the continuation is journaled
+    #: (slice 127).
+    AFTER_ACKNOWLEDGE = "after_acknowledge"
+    #: After the resume is journaled, before ``sq run --resume`` is started (slice 127).
+    BEFORE_RESUME_LAUNCH = "before_resume_launch"
 
 
 def die() -> None:
@@ -106,6 +112,8 @@ def _hooked(kill_at: KillPoint | None) -> tuple[object, object]:
 
     def popen(argv: list[str], **kwargs: object) -> subprocess.Popen[bytes]:
         if kill_at is KillPoint.BEFORE_LAUNCH:
+            die()
+        if kill_at is KillPoint.BEFORE_RESUME_LAUNCH and "--resume" in argv:
             die()
         return subprocess.Popen(argv, **kwargs)  # type: ignore[call-overload]
 
@@ -160,6 +168,17 @@ def _arm_report_kill(*, after: bool) -> None:
     Store.record_runner_report = report  # type: ignore[method-assign]
 
 
+def _arm_acknowledge_kill() -> None:
+    """Make the next acknowledgment die once it has committed."""
+    original = Store.acknowledge_resolution
+
+    def acknowledge(self: Store, *args: object, **kwargs: object) -> None:
+        original(self, *args, **kwargs)  # type: ignore[arg-type]
+        die()
+
+    Store.acknowledge_resolution = acknowledge  # type: ignore[method-assign]
+
+
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="runner.crash_entry")
     parser.add_argument("--supervisor-dir", type=Path, required=True)
@@ -191,8 +210,10 @@ def main(argv: Sequence[str]) -> None:
         _arm_report_kill(after=False)
     if kill_at is KillPoint.AFTER_INGEST:
         _arm_report_kill(after=True)
+    if kill_at is KillPoint.AFTER_ACKNOWLEDGE:
+        _arm_acknowledge_kill()
     planners: tuple[Planner, ...] = (
-        (DispatchPlanner(),)
+        (DispatchPlanner(), ContinuationPlanner())
         if arguments.dispatch
         else (
             ProofPlanner(
