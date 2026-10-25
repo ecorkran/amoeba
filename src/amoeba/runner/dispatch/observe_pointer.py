@@ -28,6 +28,7 @@ from amoeba.runner.dispatch.pointer import (
     Confirmed,
     PointerAnswer,
     PointerReadFailed,
+    PointerUnknown,
     expected_checkout,
     issue_pointer_write,
     read_back,
@@ -147,7 +148,10 @@ class PointerStage:
     def _answer(self, entry: JournalEntry) -> PointerAnswer:
         expected = expected_checkout(entry)
         if expected is None:
-            raise ValueError(f"entry {entry.id} is not a pointer write")
+            # Escalating resolves it once; raising would recur every tick.
+            return PointerUnknown(
+                reason=f"entry {entry.id} lacks the keys of a pointer write"
+            )
         return read_back(entry, expected, self._run, self._timeout_seconds)
 
     def _settle(self, store: Store, entry: JournalEntry) -> bool:

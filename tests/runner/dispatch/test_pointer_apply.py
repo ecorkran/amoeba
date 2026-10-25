@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -38,6 +39,7 @@ from amoeba.store import (
     JournalEntry,
     JournalOutcome,
     JournalResolver,
+    NodeKind,
     Store,
 )
 from runner.dispatch.pointer_support import (
@@ -214,3 +216,20 @@ def test_a_later_read_back_finishes_the_entry_the_same_way(rig: Rig) -> None:
     apply_answer(rig.store, attempt.entry, answer)
 
     assert _entry(rig, attempt).outcome is JournalOutcome.COMPLETED
+
+
+def test_a_step_with_no_slice_node_blocks_instead_of_raising(rig: Rig) -> None:
+    orphan = rig.store.create_node(
+        project_id=PROJECT, kind=NodeKind.PHASE_OR_ARTIFACT, title="orphan"
+    )
+    action = dataclasses.replace(rig.action(), node_id=orphan.id)
+    attempt = issue_pointer_write(
+        rig.store, action, rig.run(), TIMEOUT, generous_budget()
+    )
+    assert attempt is not None
+
+    apply_attempt(rig.store, attempt)
+
+    assert _entry(rig, attempt).outcome is JournalOutcome.FAILED
+    [blocked] = rig.store.all_blocked_states(orphan.id)
+    assert blocked.kind is BlockedKind.HUMAN

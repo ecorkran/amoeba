@@ -73,7 +73,9 @@ def _confirm(store: Store, entry: JournalEntry, answer: Confirmed) -> None:
         else store.get_node(node.parent_id)
     )
     if parent is None or parent.kind is not NodeKind.SLICE:
-        raise ValueError(f"the step of entry {entry.id} has no slice node to name")
+        # Raising would repeat every tick: the entry stays open until resolved.
+        _fail(store, entry, "the step has no parent slice node to name")
+        return
     if parent.cf.slice_name != answer.stem.name:
         store.update_cf_reference(
             parent.id, dataclasses.replace(parent.cf, slice_name=answer.stem.name)
