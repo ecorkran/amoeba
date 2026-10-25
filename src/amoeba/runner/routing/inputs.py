@@ -27,6 +27,9 @@ UNKNOWN: Final = "unknown"
 #: The outcome of a launch that never produced a run (122's launch failure).
 OUTCOME_LAUNCH_FAILED: Final = "launch_failed"
 
+#: The key under which a decision's recorded ``inputs`` holds the attempt number.
+INPUT_ATTEMPT: Final = "attempt"
+
 #: JSON booleans as routing values, for ``at_loop``.
 TRUE: Final = "true"
 FALSE: Final = "false"
@@ -138,3 +141,30 @@ class RoutingInputs:
             if value not in VALUE_SETS[name]:
                 raise ValueError(f"routing input {name.value} has no value {value!r}")
         object.__setattr__(self, "values", MappingProxyType(dict(self.values)))
+
+    def to_record(self) -> dict[str, object]:
+        """The inputs as a decision stores them: every value, plus the attempt."""
+        record: dict[str, object] = {n.value: v for n, v in self.values.items()}
+        record[INPUT_ATTEMPT] = self.attempt
+        return record
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, object]) -> RoutingInputs:
+        """Rebuild inputs from a decision's stored ``inputs``.
+
+        Raises:
+            ValueError: A value is missing, is not text, or is outside today's
+                vocabulary, or the attempt is not an integer or null.
+        """
+        values: dict[RoutingInput, str] = {}
+        for name in RoutingInput:
+            value = record.get(name.value)
+            if not isinstance(value, str):
+                raise ValueError(f"the record holds no text value for {name.value}")
+            values[name] = value
+        attempt = record.get(INPUT_ATTEMPT)
+        if attempt is not None and (
+            not isinstance(attempt, int) or isinstance(attempt, bool)
+        ):
+            raise ValueError(f"the record holds a bad attempt: {attempt!r}")
+        return cls(values, attempt)

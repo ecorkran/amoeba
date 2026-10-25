@@ -10,12 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from amoeba.runner.routing.engine import evaluate
-from amoeba.runner.routing.inputs import RoutingInput, RoutingInputs
+from amoeba.runner.routing.inputs import RoutingInputs
 from amoeba.runner.routing.table import TableError, parse_table
 from amoeba.store import Route, RoutingDecision, RoutingTableVersion
-
-#: The key under which a decision's ``inputs`` records the attempt number.
-INPUT_ATTEMPT = "attempt"
 
 
 @dataclass(frozen=True)
@@ -42,7 +39,7 @@ def recompute(decision: RoutingDecision, stored: RoutingTableVersion) -> Recompu
         # An unreadable table is shown as an error, never as a mismatch.
         return _unreadable(f"stored table {stored.version}: {error}")
     try:
-        inputs = _inputs_of(decision)
+        inputs = RoutingInputs.from_record(decision.inputs)
         match = evaluate(table, inputs)
     except ValueError as error:
         # Expected: recorded inputs outside today's vocabulary, or a table no rule
@@ -57,20 +54,3 @@ def recompute(decision: RoutingDecision, stored: RoutingTableVersion) -> Recompu
 
 def _unreadable(reason: str) -> Recomputation:
     return Recomputation(rule_id=None, route=None, matches=False, error=reason)
-
-
-def _inputs_of(decision: RoutingDecision) -> RoutingInputs:
-    values: dict[RoutingInput, str] = {}
-    for name in RoutingInput:
-        value = decision.inputs.get(name.value)
-        if not isinstance(value, str):
-            raise ValueError(
-                f"decision {decision.id} records no value for {name.value}"
-            )
-        values[name] = value
-    attempt = decision.inputs.get(INPUT_ATTEMPT)
-    if attempt is not None and (
-        not isinstance(attempt, int) or isinstance(attempt, bool)
-    ):
-        raise ValueError(f"decision {decision.id} records a bad attempt: {attempt!r}")
-    return RoutingInputs(values, attempt)

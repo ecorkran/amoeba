@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import resources
 from textwrap import dedent
 
 from amoeba.runner.lifecycle.steps import PIPELINE_P4, PIPELINE_P5, PIPELINE_P6
@@ -57,3 +58,9 @@ def small_table(
     the defaults, for example a one-minute bound for an overrun test.
     """
     return parse_table(table_text(rules, bounds=bounds, catch_all=catch_all))
+
+
+def shipped_table() -> RoutingTable:
+    """The table shipped in the package, through the real parser."""
+    package = resources.files("amoeba.runner.routing")
+    return parse_table(package.joinpath("tables/default.yaml").read_text("utf-8"))

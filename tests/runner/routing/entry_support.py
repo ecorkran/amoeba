@@ -23,6 +23,7 @@ from amoeba.runner.ingest.record import (
     RESULT_VERDICT_IDS,
 )
 from amoeba.store import (
+    BlockedKind,
     CFReference,
     CommandKind,
     DetectionInput,
@@ -78,13 +79,20 @@ def stage_outcome(
     verdict_ids: Sequence[str] | None = None,
     review_fault: str | None = None,
     launch_failure: str | None = None,
+    block: BlockedKind | None = None,
 ) -> JournalEntry:
-    """Issue an ``sq_run`` on ``node_id`` and resolve it as ingestion would."""
+    """Issue an ``sq_run`` on ``node_id`` and resolve it as ingestion would.
+
+    ``block`` is the block ingestion writes for a paused, failed or vanished run,
+    written before the entry is resolved, in ingestion's order.
+    """
     issued = store.journal_issue(
         node_id,
         kind=CommandKind.SQ_RUN,
         parameters=sq_run_parameters(_RUN_PARAMETERS, run_id=run_id),
     )
+    if block is not None:
+        store.block(node_id, kind=block, context="ingested outcome", payload=None)
     recorded = [_review(node_id, staged) for staged in reviews]
     result: dict[str, object] = {RESULT_RUN_ID: run_id}
     if launch_failure is not None:

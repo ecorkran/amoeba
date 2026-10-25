@@ -6,8 +6,8 @@ import dataclasses
 from datetime import UTC, datetime
 
 from amoeba.runner.routing.engine import evaluate
-from amoeba.runner.routing.inputs import RoutingInputs
-from amoeba.runner.routing.recompute import INPUT_ATTEMPT, recompute
+from amoeba.runner.routing.inputs import INPUT_ATTEMPT, RoutingInputs
+from amoeba.runner.routing.recompute import recompute
 from amoeba.store import Route, RoutingDecision, RoutingTableVersion
 from runner.routing.inputs_support import make_inputs
 from runner.routing.table_support import small_table, table_text
