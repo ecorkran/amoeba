@@ -17,6 +17,7 @@ from amoeba.runner.decide import Action, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
+from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.routing.table import parse_table
 from amoeba.store import Store
 from runner.routing.table_support import table_text
@@ -51,10 +52,11 @@ def _planners_given_to_the_tenant(
     return planners
 
 
-def test_the_production_tuple_is_the_human_step_planner_then_dispatch() -> None:
+def test_the_production_tuple_is_human_steps_then_dispatch_then_continuations() -> None:
     assert [type(planner) for planner in PRODUCTION_PLANNERS] == [
         HumanStepPlanner,
         DispatchPlanner,
+        ContinuationPlanner,
     ]
 
 

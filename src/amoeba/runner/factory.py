@@ -22,6 +22,7 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.probes import probe_sq
+from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.routing.table import RoutingTable, TableError, load_table
 from amoeba.runner.tenant import RunnerTenant
 
@@ -31,10 +32,12 @@ logger = logging.getLogger(__name__)
 AMOEBA_DISTRIBUTION: Final = "amoeba"
 
 #: The planners production runs, over current steps only: human steps (slice 124),
-#: then dispatch (slice 125), which points a checkout and launches a pipeline.
+#: then dispatch (slice 125), which points a checkout and launches a pipeline, then
+#: continuations (slice 127), which resume or observe the run a resolution names.
 PRODUCTION_PLANNERS: Final[tuple[Planner, ...]] = (
     HumanStepPlanner(),
     DispatchPlanner(),
+    ContinuationPlanner(),
 )
 
 
