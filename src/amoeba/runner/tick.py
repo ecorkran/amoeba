@@ -34,6 +34,7 @@ from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
+from amoeba.runner.observe_resume import resumed_from_pauses
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.project_view import build_project_view
@@ -105,8 +106,13 @@ class ProjectTick:
         self._answer_resolutions()
         # Observe is not filtered by hold or drive. Slices 125 and 128 read
         # ``desired.drives_anything()`` to scope their Observe work.
+        entries = self._run_entries()
         observed = self._observer.observe(
-            self._run_entries(), budget, faults, self._context
+            entries,
+            budget,
+            faults,
+            self._context,
+            resumed_from_pauses(self._store, entries),
         )
         # [reconciliation reads - slice 123: the plan stage, after the probes]
         links = [link.cf_project_id for link in self._store.cf_links(self._project_id)]

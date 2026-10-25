@@ -214,33 +214,35 @@ revision_number: 2
 ### Task 5.1: Extend `dispatch_state` with the latest applied resolution
 **Owner**: Junior AI | **Dependencies**: 2.4, 3.1 | **Effort**: 2
 
-- [ ] `runner/dispatch/state.py`: add `RESUME` and `REOBSERVE`; the signature becomes `dispatch_state(entries, resolution, *, pointer_confirmed)`. After the `IN_FLIGHT` and `AWAITING_ROUTING` checks, a resolution with `runner_outcome` `applied` and a decision that no entry names in `PARAM_RESOLUTION` decides per D5's table (`rerun` is `NEEDS_POINTER`, even where 125 would say `REISSUE`). Otherwise 125's rules apply unchanged
-- [ ] `tests/runner/dispatch/test_state.py`, table-driven over D5's rows: each decision unnamed and named; a `rerun` after a `not_applied` entry; a rejected or undecided resolution changes nothing; an unresolved continuation is `IN_FLIGHT`
-- [ ] Update every existing caller and test of `dispatch_state` to the new signature, passing `resolution=None`; their expected states do not change
-- [ ] **Success:** tests pass. Commit with Task 5.2
+- [x] `runner/dispatch/state.py`: add `RESUME` and `REOBSERVE`; the signature becomes `dispatch_state(entries, resolution, *, pointer_confirmed)`. After the `IN_FLIGHT` and `AWAITING_ROUTING` checks, a resolution with `runner_outcome` `applied` and a decision that no entry names in `PARAM_RESOLUTION` decides per D5's table (`rerun` is `NEEDS_POINTER`, even where 125 would say `REISSUE`). Otherwise 125's rules apply unchanged
+- [x] `tests/runner/dispatch/test_state.py`, table-driven over D5's rows: each decision unnamed and named; a `rerun` after a `not_applied` entry; a rejected or undecided resolution changes nothing; an unresolved continuation is `IN_FLIGHT`
+- [x] Update every existing caller and test of `dispatch_state` to the new signature, passing `resolution=None`; their expected states do not change
+- [x] **Success:** tests pass. Commit with Task 5.2
 
 ### Task 5.2: Carry the resolution, the continued entry and the checkout holders into the view
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 3
 
-- [ ] `runner/dispatch/build_view.py` `_facts_for`: read `blocked_state_for(node.id, include_resolved=True)`; pass it to `dispatch_state` only when it is applied with a decision; set `StepDispatchFacts.resolution` and, for `RESUME`/`REOBSERVE`, `continues` (Task-level additions). Add `RESUME` and `REOBSERVE` to `_NEEDS_CHECKOUT`
-- [ ] `runner/dispatch/hold.py`: `checkout_holders` and the derived `held_checkouts`; `ProjectView` gains `checkout_holders` (Task-level additions)
-- [ ] Tests: facts for a step with an applied `retry` are `RESUME` with `continues` set; a paused run's checkout is held by its own node only; a pointed step and an in-flight run in one checkout name both holders; existing hold and view tests pass
-- [ ] **Success:** tests pass. Commit `feat: derive resume and reobserve states from applied resolutions`
+- [x] `runner/dispatch/build_view.py` `_facts_for`: read `blocked_state_for(node.id, include_resolved=True)`; pass it to `dispatch_state` only when it is applied with a decision; set `StepDispatchFacts.resolution` and, for `RESUME`/`REOBSERVE`, `continues` (Task-level additions). Add `RESUME` and `REOBSERVE` to `_NEEDS_CHECKOUT`
+- [x] `runner/dispatch/hold.py`: `checkout_holders` and the derived `held_checkouts`; `ProjectView` gains `checkout_holders` (Task-level additions)
+- [x] Tests: facts for a step with an applied `retry` are `RESUME` with `continues` set; a paused run's checkout is held by its own node only; a pointed step and an in-flight run in one checkout name both holders; existing hold and view tests pass
+- [x] **Success:** tests pass. Commit `feat: derive resume and reobserve states from applied resolutions`
+
+**Note:** the dispatch tests in tests/runner/dispatch/test_view_resolution.py build the view with DispatchRig and build_dispatch_view directly.
 
 ### Task 5.3: Add `ResumeRun`, `ObserveRun` and `ContinuationPlanner`
 **Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 3
 
-- [ ] `runner/decide.py`: add the two frozen dataclasses per the LLD "API Contracts" and widen `Action`
-- [ ] Create `runner/resolutions/planner.py` with the pure `ContinuationPlanner`: for each current pipeline step in `RESUME` or `REOBSERVE` with a resolved checkout, emit `ResumeRun` (decision `retry` or `accept` as `Continuation`) or `ObserveRun`, with run id, checkout and `continues` from the continued entry and `resolution` the blocked state id. It acts when the checkout's holders are empty or only the step itself; otherwise it waits
-- [ ] `tests/runner/resolutions/test_planner.py`: one action per eligible step; a checkout held by another node waits; a held step (not current) gets nothing; `DispatchPlanner` and `ContinuationPlanner` never act on the same step; `decide` accepts the new actions under the current-step guard
-- [ ] **Success:** tests pass. Commit `feat: plan resumes and observations for resolved steps`
+- [x] `runner/decide.py`: add the two frozen dataclasses per the LLD "API Contracts" and widen `Action`
+- [x] Create `runner/resolutions/planner.py` with the pure `ContinuationPlanner`: for each current pipeline step in `RESUME` or `REOBSERVE` with a resolved checkout, emit `ResumeRun` (decision `retry` or `accept` as `Continuation`) or `ObserveRun`, with run id, checkout and `continues` from the continued entry and `resolution` the blocked state id. It acts when the checkout's holders are empty or only the step itself; otherwise it waits
+- [x] `tests/runner/resolutions/test_planner.py`: one action per eligible step; a checkout held by another node waits; a held step (not current) gets nothing; `DispatchPlanner` and `ContinuationPlanner` never act on the same step; `decide` accepts the new actions under the current-step guard
+- [x] **Success:** tests pass. Commit `feat: plan resumes and observations for resolved steps`
 
 ### Task 5.4: Carry the resolution on a rerun's pointer write
 **Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 1
 
-- [ ] `runner/dispatch/planner.py` `_action` sets `WriteSlicePointer.resolution` from the facts' resolution when its decision is `rerun`; `runner/dispatch/pointer.py` writes it as `PARAM_RESOLUTION` on the `cf_write` entry
-- [ ] Tests: the pointer write after a `rerun` names the resolution, and the next `dispatch_state` follows 125's rules; a pointer write with no resolution has no key
-- [ ] **Success:** tests pass. Commit `feat: name the carried-out resolution on a rerun's pointer write`
+- [x] `runner/dispatch/planner.py` `_action` sets `WriteSlicePointer.resolution` from the facts' resolution when its decision is `rerun`; `runner/dispatch/pointer.py` writes it as `PARAM_RESOLUTION` on the `cf_write` entry
+- [x] Tests: the pointer write after a `rerun` names the resolution, and the next `dispatch_state` follows 125's rules; a pointer write with no resolution has no key
+- [x] **Success:** tests pass. Commit `feat: name the carried-out resolution on a rerun's pointer write`
 
 ---
 
@@ -249,42 +251,46 @@ revision_number: 2
 ### Task 6.1: Add the stub `sq`'s resume mode
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
-- [ ] Add `sq run --resume <id> [--decision D] [--instructions T]` to the stub per the LLD "Technology Choices": environment-configured claim delay, exit code and resulting outcome (pause again with a new `paused_at`, complete, refuse with exit 2, exit before the claim, never claim). It records its argv to the stub log, and a missing run exits 1. Put the resume code in a new `tests/sq_stub_resume.py` so `tests/sq_stub.py` stays near 300 lines
-- [ ] `tests/test_sq_stub_run.py`: each mode leaves the documented state; the argv log holds the instructions element unchanged
-- [ ] **Success:** tests pass. Commit `test: add a resume mode to the stub sq`
+- [x] Add `sq run --resume <id> [--decision D] [--instructions T]` to the stub per the LLD "Technology Choices": environment-configured claim delay, exit code and resulting outcome (pause again with a new `paused_at`, complete, refuse with exit 2, exit before the claim, never claim). It records its argv to the stub log, and a missing run exits 1. Put the resume code in a new `tests/sq_stub_resume.py` so `tests/sq_stub.py` stays near 300 lines
+- [x] `tests/test_sq_stub_run.py`: each mode leaves the documented state; the argv log holds the instructions element unchanged
+- [x] **Success:** tests pass. Commit `test: add a resume mode to the stub sq`
+
+**Note:** the resume-mode tests are in tests/test_sq_stub_resume.py (a new file, to keep test_sq_stub_run.py from growing), and sq_stub.py is 304 lines.
 
 ### Task 6.2: Record a failed resume
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 2
 
-- [ ] `runner/observed.py`: `ResumeFailed` (Task-level additions). `runner/finish.py`: `record` handles it per D6: block on `HUMAN` with `{reason: resume_failed, resume_failure, run_id, exit_code, stderr_tail}` (4 KiB tail), resolve `failed` with `{run_id, outcome, outcome_document, resume_failure}`; outcome `paused` and the last poll for every failure except `run_missing`, whose outcome is `not_found`
-- [ ] `tests/runner/test_finish.py`: the block payload and result for `refused` and for `run_missing`; a failed resume keeps the checkout held (`held_checkouts`) and `classify` reads `paused_run`; after `run_missing` the hold is released and `classify` reads `ended_run`
-- [ ] **Success:** tests pass. Commit `feat: record failed resumes`
+- [x] `runner/observed.py`: `ResumeFailed` (Task-level additions). `runner/finish.py`: `record` handles it per D6: block on `HUMAN` with `{reason: resume_failed, resume_failure, run_id, exit_code, stderr_tail}` (4 KiB tail), resolve `failed` with `{run_id, outcome, outcome_document, resume_failure}`; outcome `paused` and the last poll for every failure except `run_missing`, whose outcome is `not_found`
+- [x] `tests/runner/test_finish.py`: the block payload and result for `refused` and for `run_missing`; a failed resume keeps the checkout held (`held_checkouts`) and `classify` reads `paused_run`; after `run_missing` the hold is released and `classify` reads `ended_run`
+- [x] **Success:** tests pass. Commit `feat: record failed resumes`
 
 ### Task 6.3: Decide the act from the pre-poll, and build the resume command line
 **Owner**: Junior AI | **Dependencies**: 3.1, 5.3 | **Effort**: 2
 
-- [ ] Create `runner/resolutions/argv.py` with the flag constants `--resume`, `--decision`, `--instructions` and `resume_argv(run_id, decision, instructions) -> list[str]` per D4 step 3. The instructions are one element; no pipeline, `-p` or `--run-id`. `observe` is refused with `ValueError`
-- [ ] Create `runner/resolutions/prepoll.py` with the pure `prepoll_decision(action, poll, resumed_from)` per D4 step 1: a `PollFailure` is wait; `not_found` is run missing; a `ResumeRun` whose run is paused at `resumed_from` is launch; any other `ResumeRun` poll is observe with `PARAM_RESUME_SKIPPED` set to `RESUME_SKIPPED_RUN_NOT_AT_PAUSE` (Task-level additions); an `ObserveRun` with a run state is observe
-- [ ] Tests: argv for retry and accept, with and without instructions; instructions with spaces, quotes, newlines and non-ASCII are one element, byte for byte; `prepoll_decision`, table-driven over every branch
-- [ ] **Success:** tests pass; both modules do no I/O. Commit `feat: decide continuation acts from the pre-poll`
+- [x] Create `runner/resolutions/argv.py` with the flag constants `--resume`, `--decision`, `--instructions` and `resume_argv(run_id, decision, instructions) -> list[str]` per D4 step 3. The instructions are one element; no pipeline, `-p` or `--run-id`. `observe` is refused with `ValueError`
+- [x] Create `runner/resolutions/prepoll.py` with the pure `prepoll_decision(action, poll, resumed_from)` per D4 step 1: a `PollFailure` is wait; `not_found` is run missing; a `ResumeRun` whose run is paused at `resumed_from` is launch; any other `ResumeRun` poll is observe with `PARAM_RESUME_SKIPPED` set to `RESUME_SKIPPED_RUN_NOT_AT_PAUSE` (Task-level additions); an `ObserveRun` with a run state is observe
+- [x] Tests: argv for retry and accept, with and without instructions; instructions with spaces, quotes, newlines and non-ASCII are one element, byte for byte; `prepoll_decision`, table-driven over every branch
+- [x] **Success:** tests pass; both modules do no I/O. Commit `feat: decide continuation acts from the pre-poll`
 
 ### Task 6.4a: Implement the continuation act's pre-poll, wait, run-missing and observe branches
 **Owner**: Junior AI | **Dependencies**: 1.2, 2.4, 6.2, 6.3 | **Effort**: 3
 
-- [ ] Create `runner/resolutions/act.py` with `act_continuation(...)`, called from `runner/act.py` for `ResumeRun` and `ObserveRun`, in D4's order: budget check, one `observer.poll_run`, `prepoll_decision`, then:
-  - [ ] wait: write nothing; a `PollFailure` adds a `run_observation_failed` fault. A spent budget returns cut-off with nothing written
-  - [ ] run missing: journal the continuation entry, then record `ResumeFailed(run_missing)` through `finish.record`; launch nothing
-  - [ ] observe: after a second budget check, journal the entry (`PARAM_CONTINUATION` `observe`, `PARAM_CONTINUES`, `PARAM_RESOLUTION`, `PARAM_RESUME_SKIPPED` when set, plus the continued `pipeline`, `params`, `run_id`, `checkout`); launch nothing. Put the journaling in a helper that Task 6.4b reuses
-  - [ ] launch decision: raises `NotImplementedError("resume launch: Task 6.4b")`. No tick reaches it, because `ContinuationPlanner` is not registered until Task 7.3
-- [ ] `tests/runner/resolutions/test_act.py`: a spent budget and a failed pre-poll write nothing and the step stays `RESUME`; `test_missing_run_launches_nothing`; `test_run_moved_by_hand_is_observed`; `handled` journals and launches nothing; a run not at its pause is observed with `resume_skipped`
-- [ ] **Success:** tests pass. Commit `feat: observe continuation runs and handle a missing run`
+- [x] Create `runner/resolutions/act.py` with `act_continuation(...)`, called from `runner/act.py` for `ResumeRun` and `ObserveRun`, in D4's order: budget check, one `observer.poll_run`, `prepoll_decision`, then:
+  - [x] wait: write nothing; a `PollFailure` adds a `run_observation_failed` fault. A spent budget returns cut-off with nothing written
+  - [x] run missing: journal the continuation entry, then record `ResumeFailed(run_missing)` through `finish.record`; launch nothing
+  - [x] observe: after a second budget check, journal the entry (`PARAM_CONTINUATION` `observe`, `PARAM_CONTINUES`, `PARAM_RESOLUTION`, `PARAM_RESUME_SKIPPED` when set, plus the continued `pipeline`, `params`, `run_id`, `checkout`); launch nothing. Put the journaling in a helper that Task 6.4b reuses
+  - [x] launch decision: raises `NotImplementedError("resume launch: Task 6.4b")`. No tick reaches it, because `ContinuationPlanner` is not registered until Task 7.3
+- [x] `tests/runner/resolutions/test_act.py`: a spent budget and a failed pre-poll write nothing and the step stays `RESUME`; `test_missing_run_launches_nothing`; `test_run_moved_by_hand_is_observed`; `handled` journals and launches nothing; a run not at its pause is observed with `resume_skipped`
+- [x] **Success:** tests pass. Commit `feat: observe continuation runs and handle a missing run`
+
+**Note:** the act stage now takes the tick's TickFaults and the tick raises them after the act stage, because a failed pre-poll adds run_observation_failed there.
 
 ### Task 6.4b: Implement the continuation act's launch branch
 **Owner**: Junior AI | **Dependencies**: 6.1, 6.4a | **Effort**: 2
 
-- [ ] Replace the `NotImplementedError` in `act_continuation` with the launch path: after a second budget check, journal the entry with the decision's continuation (`retry` or `accept`) through the Task 6.4a helper, then `spawn` `resume_argv` in the checkout with the instructions read from `store.blocked_state(resolution)`, logs named by the entry id. Track the child; a `LaunchError` records `ResumeFailed(spawn_error)`. Keep each function near 50 lines; move the launch path to `runner/resolutions/launch_act.py` if `act.py` passes 300 lines
-- [ ] Tests (same file): the stub's argv log shows `--resume <id> --decision retry --instructions <text>` with no `--run-id`, pipeline or `-p`; `accept` passes `--decision accept`; the entry is journaled before the spawn; a spawn error blocks with `spawn_error`
-- [ ] **Success:** tests pass. Commit `feat: resume paused runs for applied resolutions`
+- [x] Replace the `NotImplementedError` in `act_continuation` with the launch path: after a second budget check, journal the entry with the decision's continuation (`retry` or `accept`) through the Task 6.4a helper, then `spawn` `resume_argv` in the checkout with the instructions read from `store.blocked_state(resolution)`, logs named by the entry id. Track the child; a `LaunchError` records `ResumeFailed(spawn_error)`. Keep each function near 50 lines; move the launch path to `runner/resolutions/launch_act.py` if `act.py` passes 300 lines
+- [x] Tests (same file): the stub's argv log shows `--resume <id> --decision retry --instructions <text>` with no `--run-id`, pipeline or `-p`; `accept` passes `--decision accept`; the entry is journaled before the spawn; a spawn error blocks with `spawn_error`
+- [x] **Success:** tests pass. Commit `feat: resume paused runs for applied resolutions`
 
 ---
 

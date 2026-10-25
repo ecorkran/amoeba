@@ -161,6 +161,8 @@ class Rig:
         self.tracker = LaunchTracker()
         self.faults = TickFaults()
         self.context = NodeContext()
+        #: Entry id to the pause a resume was decided on (slice 127, D6).
+        self.resumed_from: dict[str, datetime | None] = {}
         self.deadline = 1_000_000.0
         self.observer = RunObserver(
             supervisor_dir=tmp_path,
@@ -184,4 +186,6 @@ class Rig:
             log_paths(self.supervisor_dir, e.id).stderr.touch()
 
     def observe(self, *entries: JournalEntry):  # noqa: ANN201
-        return self.observer.observe(entries, self.budget(), self.faults, self.context)
+        return self.observer.observe(
+            entries, self.budget(), self.faults, self.context, self.resumed_from
+        )

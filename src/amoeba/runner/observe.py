@@ -9,7 +9,7 @@ as confirmed and only polled. Expected failures are recorded in the tick's
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -33,7 +33,12 @@ from amoeba.runner.launch import (
     TrackedLaunch,
     log_paths,
     stderr_confirms,
-    stderr_tail,
+)
+from amoeba.runner.observe_resume import (
+    ResumeObserver,
+    is_resume,
+    resume_pending,
+    tail_or_error,
 )
 from amoeba.runner.observed import (
     Finished,
@@ -94,6 +99,15 @@ class RunObserver:
         # The last poll-fault per entry, replayed on ticks between polls so a
         # fault that stands does not look recovered (and its escalation close).
         self._faulted: dict[str, Fault] = {}
+        self._resume = ResumeObserver(
+            supervisor_dir=supervisor_dir,
+            tracker=tracker,
+            now=now,
+            launch_grace_seconds=launch_grace_seconds,
+            classify=self._classify,
+            ended=self._ended,
+            fault=self._fault,
+        )
 
     def poll_run(self, run_id: str) -> RunPoll:
         """One bounded poll of a run id, for the caller to act on (the reissue)."""
@@ -105,11 +119,13 @@ class RunObserver:
         budget: TickBudget,
         faults: TickFaults,
         context: NodeContext,
+        resumed_from: Mapping[str, datetime | None],
     ) -> Observed:
         """Observe each entry, least recently polled first.
 
         Sets ``context`` to each entry's node before observing it. Stops with
         ``CUT_OFF`` as soon as a poll is due but the budget refuses.
+        ``resumed_from`` maps a resume entry's id to the pause it was decided on.
         """
         ordered = sorted(
             entries, key=lambda e: self._last_poll.get(e.id, float("-inf"))
@@ -117,14 +133,18 @@ class RunObserver:
         runs: list[ObservedRun] = []
         for entry in ordered:
             context.set(entry.node_id)
-            observed = self._observe_one(entry, budget, faults)
+            observed = self._observe_one(entry, budget, faults, resumed_from)
             if observed is None:
                 return Observed(tuple(runs), TickResult.CUT_OFF)
             runs.append(observed)
         return Observed(tuple(runs), TickResult.COMPLETE)
 
     def _observe_one(
-        self, entry: JournalEntry, budget: TickBudget, faults: TickFaults
+        self,
+        entry: JournalEntry,
+        budget: TickBudget,
+        faults: TickFaults,
+        resumed_from: Mapping[str, datetime | None],
     ) -> ObservedRun | None:
         run_id = entry.parameters.get(PARAM_RUN_ID)
         if not isinstance(run_id, str) or not run_id:
@@ -132,14 +152,20 @@ class RunObserver:
             # faults this entry and the others are still observed.
             return self._fault(entry, "", f"has an unusable run id: {run_id!r}", faults)
         tracked = self._tracker.get(entry.id)
-        if tracked is None or tracked.confirmed:
-            return self._confirmed(entry, run_id, budget, faults)
+        if tracked is None or tracked.confirmed or is_resume(entry):
+            # A resume prints no line to wait for, so it is polled from the start.
+            return self._confirmed(entry, run_id, budget, faults, resumed_from)
         return self._unconfirmed(entry, run_id, tracked, budget, faults)
 
     # -- a confirmed run ------------------------------------------------------
 
     def _confirmed(
-        self, entry: JournalEntry, run_id: str, budget: TickBudget, faults: TickFaults
+        self,
+        entry: JournalEntry,
+        run_id: str,
+        budget: TickBudget,
+        faults: TickFaults,
+        resumed_from: Mapping[str, datetime | None],
     ) -> ObservedRun | None:
         if not self._poll_due(entry.id):
             standing = self._faulted.get(entry.id)
@@ -149,7 +175,10 @@ class RunObserver:
             return ObservedRun(InFlightRun(entry, run_id, RunState.FAULT))
         if not budget.allows_call():
             return None
-        return self._classify(entry, run_id, self._poll_now(entry.id, run_id), faults)
+        poll = self._poll_now(entry.id, run_id)
+        if resume_pending(entry, self._tracker.get(entry.id)):
+            return self._resume.step(entry, run_id, poll, resumed_from, faults)
+        return self._classify(entry, run_id, poll, faults)
 
     def _classify(
         self,
@@ -254,7 +283,7 @@ class RunObserver:
             if exit_code == SQ_USAGE_ERROR_EXIT_CODE
             else LaunchFailure.EXITED_BEFORE_LINE
         )
-        tail = log_error or _tail_or_error(stderr_path)
+        tail = log_error or tail_or_error(stderr_path)
         return self._ended(entry, run_id, LaunchFailed(failure, exit_code, tail))
 
     def _still_overdue(
@@ -267,7 +296,7 @@ class RunObserver:
     ) -> ObservedRun:
         """Past grace, no line, a poll found no state: raise it, keep the entry."""
         if entry.id in self._overdue:
-            tail = log_error or _tail_or_error(stderr_path)
+            tail = log_error or tail_or_error(stderr_path)
             faults.add(
                 Fault(
                     FaultKind.LAUNCH_OVERDUE,
@@ -325,11 +354,3 @@ class RunObserver:
         faults.add(fault)
         self._faulted[entry.id] = fault
         return ObservedRun(InFlightRun(entry, run_id, RunState.FAULT))
-
-
-def _tail_or_error(path: Path) -> str:
-    try:
-        return stderr_tail(path)
-    except OSError as error:
-        # Expected: the log vanished. The error replaces the tail in the report.
-        return f"stderr log unreadable: {error}"

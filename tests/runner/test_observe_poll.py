@@ -138,7 +138,13 @@ def test_the_budget_is_checked_before_every_poll(tmp_path: Path) -> None:
         def allows_call(self) -> bool:
             return next(budgets)
 
-    observed = rig.observer.observe((first, second), OneCall(), rig.faults, rig.context)  # type: ignore[arg-type]
+    observed = rig.observer.observe(
+        (first, second),
+        OneCall(),  # type: ignore[arg-type]
+        rig.faults,
+        rig.context,
+        {},
+    )
 
     assert rig.poll.asked == ["run-1"]
     assert observed.result is TickResult.CUT_OFF
