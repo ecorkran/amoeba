@@ -77,6 +77,9 @@ class CheckpointKind(StrEnum):
     LOOP_EXHAUSTED = "loop_exhausted"
     INTERACTIVE_CHECKPOINT = "interactive_checkpoint"
     AWAITS_HUMAN = "awaits_human"
+    #: squadron#248: a pause for a usage limit. Its round never ran, so accept is
+    #: refused and the answer is retry after ``resets_at`` (slice 127, D2).
+    USAGE_LIMIT = "usage_limit"
     OTHER = "other"
 
 

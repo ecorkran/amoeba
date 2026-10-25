@@ -71,6 +71,16 @@ class LaunchFailure(StrEnum):
     USAGE_ERROR = "usage_error"
 
 
+class ResumeFailure(StrEnum):
+    """How a resume of a paused run failed (slice 127, D6)."""
+
+    REFUSED = "refused"
+    EXITED_BEFORE_CLAIM = "exited_before_claim"
+    NO_CLAIM_WITHIN_GRACE = "no_claim_within_grace"
+    SPAWN_ERROR = "spawn_error"
+    RUN_MISSING = "run_missing"
+
+
 #: A failure of the store itself. These are never a per-project fault: the
 #: Runner re-raises them so the process stops rather than running blind.
 STORE_FAILURES: Final = (

@@ -105,49 +105,53 @@ revision_number: 2
 ### Task 2.1: Add migration `012` and extend the models
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
-- [ ] Create `store/schema/012_resolution_decisions.sql` with the six columns and the partial index, per the LLD "Database / Storage Schema". Set `EXPECTED_SCHEMA_VERSION` to 12 in `store/migrations.py`. Add the column-name constants to `store/sql.py` beside `COL_BLOCKED_RESOLUTION_DETAIL`
-- [ ] In `store/models.py`: `Resolution` gains `decision: str | None` and `instructions: str | None`; add `ResolutionOutcome(StrEnum)` (`applied`, `rejected`); `BlockedState` gains `awaits_runner: bool`, `runner_outcome: ResolutionOutcome | None`, `runner_code: str | None`, `runner_reason: str | None`. All default so existing constructors are unchanged. Export `ResolutionOutcome` from `amoeba.store`
-- [ ] Update the blocked-state SELECTs in `store/sql.py` and `map_blocked_state` in `store/mapping.py` to read the new columns. An unknown `runner_outcome` text raises `UnknownVocabularyValueError`, as other vocabulary columns do
-- [ ] Tests: `tests/store/test_migration_012.py`, following `test_migration_011.py`: applies to a populated v11 store, existing rows read null in all six columns and map with `awaits_runner` false, the index exists (its use is asserted in Task 2.3); mapping tests: each new column round-trips and an unknown outcome text raises
-- [ ] **Success:** tests, existing migration tests and pyright pass. Commit `feat: add migration 012 and carry resolution decisions on blocked states`
+- [x] Create `store/schema/012_resolution_decisions.sql` with the six columns and the partial index, per the LLD "Database / Storage Schema". Set `EXPECTED_SCHEMA_VERSION` to 12 in `store/migrations.py`. Add the column-name constants to `store/sql.py` beside `COL_BLOCKED_RESOLUTION_DETAIL`
+- [x] In `store/models.py`: `Resolution` gains `decision: str | None` and `instructions: str | None`; add `ResolutionOutcome(StrEnum)` (`applied`, `rejected`); `BlockedState` gains `awaits_runner: bool`, `runner_outcome: ResolutionOutcome | None`, `runner_code: str | None`, `runner_reason: str | None`. All default so existing constructors are unchanged. Export `ResolutionOutcome` from `amoeba.store`
+- [x] Update the blocked-state SELECTs in `store/sql.py` and `map_blocked_state` in `store/mapping.py` to read the new columns. An unknown `runner_outcome` text raises `UnknownVocabularyValueError`, as other vocabulary columns do
+- [x] Tests: `tests/store/test_migration_012.py`, following `test_migration_011.py`: applies to a populated v11 store, existing rows read null in all six columns and map with `awaits_runner` false, the index exists (its use is asserted in Task 2.3); mapping tests: each new column round-trips and an unknown outcome text raises
+- [x] **Success:** tests, existing migration tests and pyright pass. Commit `feat: add migration 012 and carry resolution decisions on blocked states`
 
 ### Task 2.2: Add the resolution payload fields and the inbox flag
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 2
 
-- [ ] `inbox/envelope.py`: `ResolutionPayload` gains `decision: str | None = None` and `instructions: str | None = None`. Each, when present, must be non-blank after trimming (D1); the value is stored as submitted. The decision vocabulary is not checked here
-- [ ] `store/inbox_models.py`: add `RESOLUTION_DECISION` and `RESOLUTION_INSTRUCTIONS`
-- [ ] `store/inbox.py` `_apply_resolution` and `store/_block_writer.py` `_write_resolution`: store both fields, and set `awaits_runner = 1`, in the same transaction, only on the inbox path. `resolve()` (the Runner's own path) passes neither and never sets the flag
-- [ ] Tests (`tests/store/test_inbox_apply.py`, `tests/inbox/`): a resolution with both fields stores them and is flagged; one with neither is flagged with nulls; a blank decision or blank instructions is refused by the payload model; `store.resolve()` leaves the flag unset; `amoeba submit resolution --help` lists `--decision` and `--instructions` (the flag rule in `cli/submit.py` derives them; no CLI code change)
-- [ ] **Success:** tests pass. Commit `feat: accept a decision and instructions on resolution submissions`
+- [x] `inbox/envelope.py`: `ResolutionPayload` gains `decision: str | None = None` and `instructions: str | None = None`. Each, when present, must be non-blank after trimming (D1); the value is stored as submitted. The decision vocabulary is not checked here
+- [x] `store/inbox_models.py`: add `RESOLUTION_DECISION` and `RESOLUTION_INSTRUCTIONS`
+- [x] `store/inbox.py` `_apply_resolution` and `store/_block_writer.py` `_write_resolution`: store both fields, and set `awaits_runner = 1`, in the same transaction, only on the inbox path. `resolve()` (the Runner's own path) passes neither and never sets the flag
+- [x] Tests (`tests/store/test_inbox_apply.py`, `tests/inbox/`): a resolution with both fields stores them and is flagged; one with neither is flagged with nulls; a blank decision or blank instructions is refused by the payload model; `store.resolve()` leaves the flag unset; `amoeba submit resolution --help` lists `--decision` and `--instructions` (the flag rule in `cli/submit.py` derives them; no CLI code change)
+- [x] **Success:** tests pass. Commit `feat: accept a decision and instructions on resolution submissions`
+
+**Note:** the migration/older-version tests now stage with tests/legacy_nodes.py LEGACY_FILL_RESOLUTION_SLOT.
 
 ### Task 2.3: Add `pending_resolutions`, `acknowledge_resolution` and `blocked_state`
 **Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 3
 
-- [ ] In `store/blocking.py`, per D9 "Store methods":
-  - [ ] `pending_resolutions(project_id)`: flagged rows for the project, oldest `resolved_at` first, through the partial index
-  - [ ] `acknowledge_resolution(blocked_state_id, *, outcome, code=None, reason=None, effect=None)`: one transaction records outcome, code and reason, clears the flag, and applies a `StatusEffect` or `BlockEffect` through the writers 121's `record_routing_decision` uses. `rejected` without code and reason, or `applied` with a code, raises `ValueError`. A row that is unresolved or not flagged raises `InvalidTransitionError`. An effect failure rolls back everything
-  - [ ] `blocked_state(blocked_state_id) -> BlockedState | None`, usable through a read-only handle
-- [ ] `tests/store/test_resolutions.py`: ordering; project scoping; applied with no effect; applied with `StatusEffect(done)` marks the node done; rejected with a `BlockEffect` blocks again and the new block is the open one; the argument rules; acknowledging twice raises; an effect that fails (for example done on a node with an unresolved entry) leaves the flag set and nothing written; `blocked_state` through a read-only store; `EXPLAIN QUERY PLAN` of the method's query uses `idx_blocked_states_awaits_runner`
-- [ ] **Success:** tests pass. Commit `feat: add the store methods for acknowledging resolutions`
+- [x] In `store/blocking.py`, per D9 "Store methods":
+  - [x] `pending_resolutions(project_id)`: flagged rows for the project, oldest `resolved_at` first, through the partial index
+  - [x] `acknowledge_resolution(blocked_state_id, *, outcome, code=None, reason=None, effect=None)`: one transaction records outcome, code and reason, clears the flag, and applies a `StatusEffect` or `BlockEffect` through the writers 121's `record_routing_decision` uses. `rejected` without code and reason, or `applied` with a code, raises `ValueError`. A row that is unresolved or not flagged raises `InvalidTransitionError`. An effect failure rolls back everything
+  - [x] `blocked_state(blocked_state_id) -> BlockedState | None`, usable through a read-only handle
+- [x] `tests/store/test_resolutions.py`: ordering; project scoping; applied with no effect; applied with `StatusEffect(done)` marks the node done; rejected with a `BlockEffect` blocks again and the new block is the open one; the argument rules; acknowledging twice raises; an effect that fails (for example done on a node with an unresolved entry) leaves the flag set and nothing written; `blocked_state` through a read-only store; `EXPLAIN QUERY PLAN` of the method's query uses `idx_blocked_states_awaits_runner`
+- [x] **Success:** tests pass. Commit `feat: add the store methods for acknowledging resolutions`
 
 ### Task 2.4: Add the journal keys and the recovery observer's continuation rules
 **Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 3
 
-- [ ] `store/journal_models.py`: `PARAM_CONTINUATION`, `PARAM_CONTINUES`, `PARAM_RESOLUTION` (Task-level additions). `REQUIRED_PARAMETER_KEYS` is unchanged: all three are optional, on `sq_run`, and `PARAM_RESOLUTION` also on `cf_write` (D9)
-- [ ] `store/journal.py`: add `recorded_result_run_nodes(project_id)` (Task-level additions). Pass it from `process/supervisor.py` to `SquadronRunIdObserver` as a new required argument `claimed_run_nodes`
-- [ ] `process/observers/sq_run_id.py`, for an entry carrying `PARAM_CONTINUATION`, per D9 "Recovery observer":
-  - [ ] the claimed-id guard ignores an owner on the same node; an owner on another node is still `Unknown`
-  - [ ] no run state (`not_found`, after the grace rule) is `Unknown` with reason `resume_run_missing` (a named constant), never `NotApplied`
-  - [ ] a state that exists is `InFlight`, as now
-- [ ] `tests/test_observer_sq_run_id.py`: each rule above, plus an entry without the key behaving exactly as before; `test_continuation_never_reissued` asserts the missing-run answer is `Unknown`
-- [ ] **Success:** tests pass; `tests/test_import_boundaries.py` passes (the observer imports no Runner module). Commit `feat: recover continuation entries without reissuing them`
+- [x] `store/journal_models.py`: `PARAM_CONTINUATION`, `PARAM_CONTINUES`, `PARAM_RESOLUTION` (Task-level additions). `REQUIRED_PARAMETER_KEYS` is unchanged: all three are optional, on `sq_run`, and `PARAM_RESOLUTION` also on `cf_write` (D9)
+- [x] `store/journal.py`: add `recorded_result_run_nodes(project_id)` (Task-level additions). Pass it from `process/supervisor.py` to `SquadronRunIdObserver` as a new required argument `claimed_run_nodes`
+- [x] `process/observers/sq_run_id.py`, for an entry carrying `PARAM_CONTINUATION`, per D9 "Recovery observer":
+  - [x] the claimed-id guard ignores an owner on the same node; an owner on another node is still `Unknown`
+  - [x] no run state (`not_found`, after the grace rule) is `Unknown` with reason `resume_run_missing` (a named constant), never `NotApplied`
+  - [x] a state that exists is `InFlight`, as now
+- [x] `tests/test_observer_sq_run_id.py`: each rule above, plus an entry without the key behaving exactly as before; `test_continuation_never_reissued` asserts the missing-run answer is `Unknown`
+- [x] **Success:** tests pass; `tests/test_import_boundaries.py` passes (the observer imports no Runner module). Commit `feat: recover continuation entries without reissuing them`
+
+**Note:** `tests/load/test_recovery_scale.py::test_a_pass_of_id_bearing_entries_polls_once_each_and_scans_nothing` fails at baseline 41c1f7a too (the load tier is not collected by default); unrelated to this slice.
 
 ### Task 2.5: Make the contract suite's stand-in Runner acknowledge resolutions
 **Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 1
 
-- [ ] `tests/contract/runner_tenant.py` `ProofRunner.tick`: acknowledge each `pending_resolutions` row `applied` with no effect, before performing intents
-- [ ] Run `uv run pytest tests/contract -v`
-- [ ] **Success:** the contract suite passes with the new payload fields and observer rules. Commit `test: acknowledge resolutions in the contract stand-in Runner`
+- [x] `tests/contract/runner_tenant.py` `ProofRunner.tick`: acknowledge each `pending_resolutions` row `applied` with no effect, before performing intents
+- [x] Run `uv run pytest tests/contract -v`
+- [x] **Success:** the contract suite passes with the new payload fields and observer rules. Commit `test: acknowledge resolutions in the contract stand-in Runner`
 
 ---
 

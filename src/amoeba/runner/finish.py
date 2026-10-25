@@ -24,6 +24,8 @@ from amoeba.store import (
 
 #: Result and payload keys of a failed launch.
 RESULT_LAUNCH_FAILURE: Final = "launch_failure"
+#: The result key of a failed resume (slice 127, D6), beside the launch's.
+RESULT_RESUME_FAILURE: Final = "resume_failure"
 PAYLOAD_EXIT_CODE: Final = "exit_code"
 PAYLOAD_STDERR_TAIL: Final = "stderr_tail"
 
