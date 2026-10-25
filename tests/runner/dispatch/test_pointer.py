@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,7 @@ from amoeba.runner.dispatch.pointer import (
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_EXPECTED_SLICE_INDEX,
+    PARAM_RESOLUTION,
     CommandKind,
     Store,
 )
@@ -235,3 +237,23 @@ def test_a_budget_that_refuses_the_read_back_leaves_it_for_the_next_tick(
     assert isinstance(attempt.set_result, SetDone) and attempt.answer is None
     assert [argv[1] for argv in calls] == ["set"], "one call, the read-back waits"
     assert not attempt.entry.is_resolved
+
+
+def test_a_write_carrying_a_resolution_names_it_on_the_entry(rig: Rig) -> None:
+    action = replace(rig.action(), resolution="blocked-1")
+
+    attempt = issue_pointer_write(
+        rig.store, action, rig.run(), TIMEOUT, generous_budget()
+    )
+
+    assert attempt is not None
+    assert attempt.entry.parameters[PARAM_RESOLUTION] == "blocked-1"
+
+
+def test_a_write_with_no_resolution_has_no_key(rig: Rig) -> None:
+    attempt = issue_pointer_write(
+        rig.store, rig.action(), rig.run(), TIMEOUT, generous_budget()
+    )
+
+    assert attempt is not None
+    assert PARAM_RESOLUTION not in attempt.entry.parameters

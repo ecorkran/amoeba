@@ -34,6 +34,7 @@ from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.dispatch.params import dispatch_params, pipeline_for
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
+from amoeba.runner.resolutions.vocabulary import ResolutionDecision
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
 
 #: The order states go in within a checkout: launches before pointer writes.
@@ -84,10 +85,23 @@ def _action(node: Node, facts: StepDispatchFacts) -> Action:
             return _reissue(node, facts)
         case DispatchState.NEEDS_POINTER:
             return WriteSlicePointer(
-                node.id, facts.cf_project_id, facts.slice_index, checkout
+                node.id,
+                facts.cf_project_id,
+                facts.slice_index,
+                checkout,
+                _carried_resolution(facts),
             )
         case _:
             raise ValueError(f"step {node.id} in state {facts.state} is not planned")
+
+
+def _carried_resolution(facts: StepDispatchFacts) -> str | None:
+    """The blocked state id of the ``rerun`` this pointer write carries out."""
+    blocked = facts.resolution
+    if blocked is None or blocked.resolution is None:
+        return None
+    rerun = blocked.resolution.decision == ResolutionDecision.RERUN.value
+    return blocked.id if rerun else None
 
 
 def _reissue(node: Node, facts: StepDispatchFacts) -> LaunchRun:

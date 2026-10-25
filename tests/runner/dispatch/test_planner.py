@@ -12,7 +12,15 @@ from amoeba.runner.dispatch.params import MERGE_DISABLED, PARAM_MERGE
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.store import CommandKind, JournalOutcome, JournalResolver
+from amoeba.store import (
+    BlockedKind,
+    BlockedState,
+    CommandKind,
+    JournalOutcome,
+    JournalResolver,
+    Resolution,
+    ResolutionOutcome,
+)
 from runner.dispatch.dispatch_support import (
     CF_PROJECT,
     FIRST,
@@ -204,3 +212,36 @@ def test_a_checkout_path_is_compared_not_its_spelling() -> None:
     steps = {"a": facts(DispatchState.NEEDS_POINTER, Path("/work/amoeba/"))}
 
     assert PLANNER.plan(view_of(steps, held=[Path("/work/amoeba")])) == []
+
+
+def _decided(decision: str) -> BlockedState:
+    return BlockedState(
+        id="b-9",
+        node_id="a",
+        kind=BlockedKind.HUMAN,
+        context="decide",
+        resolution=Resolution(resolved_by="pm", detail="go", decision=decision),
+        runner_outcome=ResolutionOutcome.APPLIED,
+    )
+
+
+def test_a_pointer_write_after_a_rerun_names_the_resolution() -> None:
+    view = view_of(
+        {"a": facts(DispatchState.NEEDS_POINTER, resolution=_decided("rerun"))}
+    )
+
+    [action] = PLANNER.plan(view)
+
+    assert isinstance(action, WriteSlicePointer) and action.resolution == "b-9"
+
+
+@pytest.mark.parametrize("resolution", [None, "stop", "retry"])
+def test_a_pointer_write_otherwise_carries_no_resolution(
+    resolution: str | None,
+) -> None:
+    carried = None if resolution is None else _decided(resolution)
+    view = view_of({"a": facts(DispatchState.NEEDS_POINTER, resolution=carried)})
+
+    [action] = PLANNER.plan(view)
+
+    assert isinstance(action, WriteSlicePointer) and action.resolution is None

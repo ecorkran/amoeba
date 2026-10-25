@@ -39,6 +39,7 @@ from amoeba.store import (
     PARAM_EXPECTED,
     PARAM_EXPECTED_SLICE_INDEX,
     PARAM_PROJECT,
+    PARAM_RESOLUTION,
     CommandKind,
     JournalEntry,
     Store,
@@ -129,16 +130,19 @@ def issue_pointer_write(
     """
     if not budget.allows_call():
         return None
+    parameters: dict[str, object] = {
+        PARAM_PROJECT: action.cf_project_id,
+        PARAM_CHECKOUT: str(action.checkout.path),
+        PARAM_EXPECTED: {},
+        PARAM_EXPECTED_SLICE_INDEX: action.slice_index,
+        PARAM_EXPECTED_WORKTREE_ID: action.checkout.worktree_id,
+    }
+    if action.resolution is not None:
+        # Names the rerun this write carries out, so dispatch state stops
+        # treating the resolution as pending (slice 127, D5).
+        parameters[PARAM_RESOLUTION] = action.resolution
     entry = store.journal_issue(
-        action.node_id,
-        kind=CommandKind.CF_WRITE,
-        parameters={
-            PARAM_PROJECT: action.cf_project_id,
-            PARAM_CHECKOUT: str(action.checkout.path),
-            PARAM_EXPECTED: {},
-            PARAM_EXPECTED_SLICE_INDEX: action.slice_index,
-            PARAM_EXPECTED_WORKTREE_ID: action.checkout.worktree_id,
-        },
+        action.node_id, kind=CommandKind.CF_WRITE, parameters=parameters
     )
     result = _set_slice(action, run, timeout_seconds)
     if not isinstance(result, SetDone) or not budget.allows_call():

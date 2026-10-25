@@ -72,6 +72,8 @@ class WriteSlicePointer:
     cf_project_id: str
     slice_index: int
     checkout: Checkout
+    #: The blocked state id of the ``rerun`` this write carries out (slice 127, D5).
+    resolution: str | None = None
 
 
 @dataclass(frozen=True)
