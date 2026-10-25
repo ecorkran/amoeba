@@ -12,7 +12,7 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba's Runner and routing engine — the deterministic lifecycle loop that runs as a tenant of the resident process, dispatches Context Forge and Squadron work, records what comes back, and routes every outcome to advance, Judge, or a persisted blocked-state through a static routing table.
 dateCreated: 20261020
-dateUpdated: 20261024
+dateUpdated: 20261025
 status: in_progress
 ---
 
