@@ -45,6 +45,8 @@ class FaultKind(StrEnum):
     read, parsed or attributed, and the step's block names it. So is
     ``POINTER_WRITE_FAILED``: the CF slice pointer write failed or read back wrong.
     And ``CHECKOUT_UNRESOLVED``: no checkout can be named for a step's slice.
+    ``RUN_OVERRUN`` is project-scoped: a run in flight is older than its pipeline's
+    time bound, so its node cannot be blocked (it blocks only when its run ends).
     """
 
     RUN_OBSERVATION_FAILED = "run_observation_failed"
@@ -58,6 +60,7 @@ class FaultKind(StrEnum):
     POINTER_WRITE_FAILED = "pointer_write_failed"
     CHECKOUT_UNRESOLVED = "checkout_unresolved"
     POINTER_MOVED = "pointer_moved"
+    RUN_OVERRUN = "run_overrun"
 
 
 class LaunchFailure(StrEnum):
