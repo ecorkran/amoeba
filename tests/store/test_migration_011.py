@@ -69,8 +69,8 @@ def _journal_rows(connection: sqlite3.Connection) -> list[tuple[object, ...]]:
     ).fetchall()
 
 
-def test_the_expected_version_is_eleven() -> None:
-    assert EXPECTED_SCHEMA_VERSION == FLAG_SCHEMA_VERSION
+def test_the_expected_version_includes_the_flag() -> None:
+    assert EXPECTED_SCHEMA_VERSION >= FLAG_SCHEMA_VERSION
 
 
 def test_upgrade_keeps_old_rows_and_reads_them_as_not_awaiting(
@@ -79,7 +79,10 @@ def test_upgrade_keeps_old_rows_and_reads_them_as_not_awaiting(
     _stage_version_ten_store(store_file)
     with sqlite3.connect(store_file) as connection:
         before = _journal_rows(connection)
-        assert migrate(connection) == FLAG_SCHEMA_VERSION
+        assert (
+            migrate(connection, expected_version=FLAG_SCHEMA_VERSION)
+            == FLAG_SCHEMA_VERSION
+        )
         after = _journal_rows(connection)
         rows = connection.execute(
             f"SELECT {', '.join(sql_journal.JOURNAL_COLUMNS)} "
@@ -96,7 +99,7 @@ def test_upgrade_keeps_old_rows_and_reads_them_as_not_awaiting(
 
 def test_the_flag_is_the_last_journal_column_and_exists(store_file: Path) -> None:
     with sqlite3.connect(store_file) as connection:
-        migrate(connection)
+        migrate(connection, expected_version=FLAG_SCHEMA_VERSION)
         info = connection.execute("PRAGMA table_info(command_journal)").fetchall()
     assert set(sql_journal.JOURNAL_COLUMNS) == {str(row[1]) for row in info}
     assert sql_journal.JOURNAL_COLUMNS[-1] == sql_journal.COL_JOURNAL_AWAITS_ROUTING
@@ -104,7 +107,7 @@ def test_the_flag_is_the_last_journal_column_and_exists(store_file: Path) -> Non
 
 def test_the_partial_index_exists_on_the_flagged_rows(store_file: Path) -> None:
     with sqlite3.connect(store_file) as connection:
-        migrate(connection)
+        migrate(connection, expected_version=FLAG_SCHEMA_VERSION)
         found = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
             (sql_journal.INDEX_JOURNAL_AWAITS_ROUTING,),

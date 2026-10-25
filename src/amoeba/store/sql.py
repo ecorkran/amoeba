@@ -83,6 +83,13 @@ COL_BLOCKED_RESOLUTION_DETAIL: Final = "resolution_detail"
 COL_BLOCKED_RESOLVED_AT: Final = "resolved_at"
 COL_BLOCKED_CREATED_AT: Final = "created_at"
 COL_BLOCKED_UPDATED_AT: Final = "updated_at"
+COL_BLOCKED_RESOLUTION_DECISION: Final = "resolution_decision"
+COL_BLOCKED_RESOLUTION_INSTRUCTIONS: Final = "resolution_instructions"
+COL_BLOCKED_AWAITS_RUNNER: Final = "awaits_runner"
+COL_BLOCKED_RUNNER_OUTCOME: Final = "runner_outcome"
+COL_BLOCKED_RUNNER_CODE: Final = "runner_code"
+COL_BLOCKED_RUNNER_REASON: Final = "runner_reason"
+INDEX_BLOCKED_AWAITS_RUNNER: Final = "idx_blocked_states_awaits_runner"
 
 #: Column order used by every node SELECT and by node row mapping. Declared
 #: once so the statements and the mapper cannot disagree about position.
@@ -116,6 +123,12 @@ BLOCKED_STATE_COLUMNS: Final = (
     COL_BLOCKED_RESOLVED_AT,
     COL_BLOCKED_CREATED_AT,
     COL_BLOCKED_UPDATED_AT,
+    COL_BLOCKED_RESOLUTION_DECISION,
+    COL_BLOCKED_RESOLUTION_INSTRUCTIONS,
+    COL_BLOCKED_AWAITS_RUNNER,
+    COL_BLOCKED_RUNNER_OUTCOME,
+    COL_BLOCKED_RUNNER_CODE,
+    COL_BLOCKED_RUNNER_REASON,
 )
 
 

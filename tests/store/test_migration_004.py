@@ -120,7 +120,9 @@ def test_upgrade_keeps_every_prior_row(store_file: Path) -> None:
         assert _count(connection, sql_journal.TABLE_COMMAND_JOURNAL) == 1
 
         resolved = connection.execute(
-            sql.SELECT_BLOCKED_STATES_FOR_NODE, ("n-resolved",)
+            f"SELECT {sql.COL_BLOCKED_ID} FROM {sql.TABLE_BLOCKED_STATES} "
+            f"WHERE {sql.COL_BLOCKED_NODE_ID} = ?",
+            ("n-resolved",),
         ).fetchall()
         assert len(resolved) == 1
 

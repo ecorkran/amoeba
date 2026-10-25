@@ -24,6 +24,7 @@ from amoeba.store.models import (
     NodeKind,
     NodeStatus,
     Resolution,
+    ResolutionOutcome,
     SQReference,
     UnknownVocabularyValueError,
 )
@@ -32,7 +33,7 @@ from amoeba.store.row_values import optional_text as _optional_text
 from amoeba.store.row_values import text as _text
 
 
-def _vocabulary[VocabularyT: (NodeStatus, NodeKind, BlockedKind)](
+def _vocabulary[VocabularyT: (NodeStatus, NodeKind, BlockedKind, ResolutionOutcome)](
     value: object, vocabulary: type[VocabularyT], column: str
 ) -> VocabularyT:
     """Coerce a stored value into a closed vocabulary, or raise."""
@@ -127,8 +128,15 @@ def map_blocked_state(row: Sequence[object]) -> BlockedState:
                 f"{sql.TABLE_BLOCKED_STATES} row has a partially-filled resolution slot"
             )
         resolution = Resolution(
-            resolved_by=resolved_by, detail=detail, resolved_at=resolved_at
+            resolved_by=resolved_by,
+            detail=detail,
+            resolved_at=resolved_at,
+            decision=_optional_text(row[9], sql.COL_BLOCKED_RESOLUTION_DECISION),
+            instructions=_optional_text(
+                row[10], sql.COL_BLOCKED_RESOLUTION_INSTRUCTIONS
+            ),
         )
+    outcome = row[12]
 
     return BlockedState(
         id=_text(row[0], sql.COL_BLOCKED_ID),
@@ -138,4 +146,12 @@ def map_blocked_state(row: Sequence[object]) -> BlockedState:
         resolution=resolution,
         created_at=_timestamp(row[7], sql.COL_BLOCKED_CREATED_AT),
         updated_at=_timestamp(row[8], sql.COL_BLOCKED_UPDATED_AT),
+        awaits_runner=_optional_integer(row[11], sql.COL_BLOCKED_AWAITS_RUNNER) == 1,
+        runner_outcome=(
+            None
+            if outcome is None
+            else _vocabulary(outcome, ResolutionOutcome, sql.COL_BLOCKED_RUNNER_OUTCOME)
+        ),
+        runner_code=_optional_text(row[13], sql.COL_BLOCKED_RUNNER_CODE),
+        runner_reason=_optional_text(row[14], sql.COL_BLOCKED_RUNNER_REASON),
     )

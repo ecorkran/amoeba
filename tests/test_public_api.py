@@ -68,6 +68,7 @@ EXPECTED_EXPORTS = {
     "Message",
     "Node",
     "Resolution",
+    "ResolutionOutcome",
     "SQReference",
     "SubmissionRecord",
     "FindingChanges",

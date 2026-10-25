@@ -19,7 +19,7 @@ projectState: Slices 120–126 are merged. The route stage runs in `runner/tick.
   size guideline. `amoeba.runner.resolutions` does not exist.
 dateCreated: 20261025
 dateUpdated: 20261025
-status: not_started
+status: in_progress
 turns: 46
 promptTokens: 4994737
 cachedTokens: 4813986
@@ -79,20 +79,24 @@ revision_number: 2
 ### Task 1.1: Create the branch and confirm the design's edits
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
-- [ ] Confirm the edits the LLD lists under "Special Considerations" are present in `user/architecture/120-slices.runner-routing-engine.md` (entries 8 and 9, the 20261020 Notes entry, Future Work 11) and in `120-arch.runner-routing-engine.md` (how stop is held, the `handled` journaling exception). Make any missing edit per the LLD and commit it to the target as `docs:`
-- [ ] Create `127-slice.resolutions-and-resumption` from the target and switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. Record the pass count under this task. If any fails, write `BLOCKED:` with the failure and stop
-- [ ] Create `src/amoeba/runner/resolutions/__init__.py` (docstring only) and `tests/runner/resolutions/__init__.py`
-- [ ] **Success:** on the slice branch, the suite is green and both packages exist. Commit `chore: add the resolutions package skeleton`
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
+- [x] Confirm the edits the LLD lists under "Special Considerations" are present in `user/architecture/120-slices.runner-routing-engine.md` (entries 8 and 9, the 20261020 Notes entry, Future Work 11) and in `120-arch.runner-routing-engine.md` (how stop is held, the `handled` journaling exception). Make any missing edit per the LLD and commit it to the target as `docs:`
+- [x] Create `127-slice.resolutions-and-resumption` from the target and switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. Record the pass count under this task. If any fails, write `BLOCKED:` with the failure and stop
+- [x] Create `src/amoeba/runner/resolutions/__init__.py` (docstring only) and `tests/runner/resolutions/__init__.py`
+- [x] **Success:** on the slice branch, the suite is green and both packages exist. Commit `chore: add the resolutions package skeleton`
+
+**Note:** baseline suite 3611 passed; ruff check, ruff format --check and pyright clean.
 
 ### Task 1.2: Move the act stage out of the tick and split `spawn` from `launch`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Create `runner/act.py` holding the act stage now in `ProjectTick._act`, `_launch`, `_reissue` and `_start`, with the same behavior and the same budget checks. `tick.py` calls it and keeps the `wrote` accounting
-- [ ] `runner/launch.py`: extract `spawn(argv, checkout, logs, popen) -> ChildHandle | LaunchError` from `launch()`; `launch()` builds its argv and calls it
-- [ ] **Success:** full suite green with no test changed; `tick.py` and `launch.py` are each under 300 lines. Commit `refactor: extract the act stage and the detached spawn`
+- [x] Create `runner/act.py` holding the act stage now in `ProjectTick._act`, `_launch`, `_reissue` and `_start`, with the same behavior and the same budget checks. `tick.py` calls it and keeps the `wrote` accounting
+- [x] `runner/launch.py`: extract `spawn(argv, checkout, logs, popen) -> ChildHandle | LaunchError` from `launch()`; `launch()` builds its argv and calls it
+- [x] **Success:** full suite green with no test changed; `tick.py` and `launch.py` are each under 300 lines. Commit `refactor: extract the act stage and the detached spawn`
+
+**Note:** full suite 3614 passed after the refactor; tick.py 249 lines, launch.py 298 lines.
 
 ---
 

@@ -275,11 +275,14 @@ def test_version_two_store_with_data_upgrades_to_three(store_file: Path) -> None
         assert node_row is not None
         assert node_row[0] == "survivor"
 
+        # Not the SELECT list: it names columns a version-3 store lacks.
         blocked_rows = connection.execute(
-            sql.SELECT_BLOCKED_STATES_FOR_NODE, ("n1",)
+            f"SELECT {sql.COL_BLOCKED_CONTEXT} FROM {sql.TABLE_BLOCKED_STATES} "
+            f"WHERE {sql.COL_BLOCKED_NODE_ID} = ?",
+            ("n1",),
         ).fetchall()
         assert len(blocked_rows) == 1
-        assert blocked_rows[0][3] == "waiting on the PM"
+        assert blocked_rows[0][0] == "waiting on the PM"
 
 
 def test_journal_table_and_partial_index_exist_after_migration(

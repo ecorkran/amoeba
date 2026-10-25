@@ -126,6 +126,17 @@ class Resolution:
     resolved_by: str
     detail: str
     resolved_at: datetime | None = None
+    decision: str | None = None
+    """The PM's decision, as submitted. The Runner judges it; the store does not."""
+    instructions: str | None = None
+    """Free text for Squadron, only meaningful with some decisions (slice 127)."""
+
+
+class ResolutionOutcome(StrEnum):
+    """The Runner's answer to a resolution (slice 127, D9)."""
+
+    APPLIED = "applied"
+    REJECTED = "rejected"
 
 
 @dataclass(frozen=True)
@@ -143,6 +154,13 @@ class BlockedState:
     resolution: Resolution | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    awaits_runner: bool = False
+    """A PM resolution the Runner has not yet answered (slice 127, D9)."""
+    runner_outcome: ResolutionOutcome | None = None
+    runner_code: str | None = None
+    """The rejection code; null when applied."""
+    runner_reason: str | None = None
+    """The rejection detail, for people."""
 
     @property
     def is_resolved(self) -> bool:
