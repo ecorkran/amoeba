@@ -14,20 +14,12 @@ from typing import Final
 
 from amoeba.process import UpstreamShapeError
 from amoeba.runner import finish
+from amoeba.runner.act import ActStage
 from amoeba.runner.budget import TickBudget, TickResult
-from amoeba.runner.decide import (
-    Action,
-    BlockHumanStep,
-    LaunchRun,
-    Planner,
-    ProjectView,
-    WriteSlicePointer,
-    decide,
-)
+from amoeba.runner.decide import Action, Planner, ProjectView, decide
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.pointer_watch import watch_pointers
-from amoeba.runner.dispatch.reissue import ReissueLaunch, begin_reissue
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
     LaunchFailure,
@@ -37,17 +29,7 @@ from amoeba.runner.faults import (
 )
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex
-from amoeba.runner.launch import (
-    PARAM_PARAMS,
-    PARAM_PIPELINE,
-    LaunchError,
-    LaunchTracker,
-    PopenFactory,
-    build_argv,
-    launch,
-    mint_run_id,
-)
-from amoeba.runner.lifecycle.human_steps import block_human_step
+from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
@@ -56,13 +38,7 @@ from amoeba.runner.project_view import build_project_view
 from amoeba.runner.routing.overrun import watch_overruns
 from amoeba.runner.routing.stage import route_outcomes
 from amoeba.runner.routing.table import RoutingTable
-from amoeba.store import (
-    PARAM_CHECKOUT,
-    PARAM_RUN_ID,
-    CommandKind,
-    JournalEntry,
-    Store,
-)
+from amoeba.store import CommandKind, JournalEntry, Store
 
 #: Who closes a project escalation that stopped recurring.
 CLOSED_BY: Final = RUNNER_ACTOR
@@ -95,7 +71,6 @@ class ProjectTick:
         self._routing_table = routing_table
         self._amoeba_version = amoeba_version
         self._store = store
-        self._supervisor_dir = supervisor_dir
         self._planners = planners
         self._observer = observer
         self._probes = probes
@@ -104,9 +79,19 @@ class ProjectTick:
         self._pointer_confirmed: frozenset[str] = frozenset()
         self._dispatching = any(isinstance(p, DispatchPlanner) for p in planners)
         self._tracker = tracker
-        self._popen = popen
         self._now = now
         self._context = context
+        self._act = ActStage(
+            store=store,
+            supervisor_dir=supervisor_dir,
+            pointers=pointers,
+            poll_run=observer.poll_run,
+            tracker=tracker,
+            popen=popen,
+            now=now,
+            context=context,
+            version_label=version_label,
+        )
         self.wrote = False
         """Whether this tick wrote to the store or issued a command."""
 
@@ -162,7 +147,9 @@ class ProjectTick:
             or self.wrote
         )
         decided = self._decide(view)
-        if self._act(decided, budget) is TickResult.CUT_OFF:
+        acted = self._act.run(decided, budget)
+        self.wrote = acted.wrote or self.wrote
+        if acted.result is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE
@@ -252,68 +239,6 @@ class ProjectTick:
     def _decide(self, view: ProjectView) -> list[Action]:
         self._context.clear()
         return list(decide(view, self._planners))
-
-    def _act(self, actions: Sequence[Action], budget: TickBudget) -> TickResult:
-        for action in actions:
-            self._context.set(action.node_id)
-            match action:
-                case BlockHumanStep():
-                    # Store-only actions are applied in one transaction and not
-                    # journaled: there is no external side effect to recover (D9).
-                    block_human_step(self._store, action)
-                    self.wrote = True
-                case LaunchRun(reissue_of=str()):
-                    if not budget.allows_call():
-                        return TickResult.CUT_OFF
-                    self._reissue(action)
-                case LaunchRun():
-                    if not budget.allows_call():
-                        return TickResult.CUT_OFF
-                    self._launch(action)
-                case WriteSlicePointer():
-                    if not budget.allows_call():
-                        return TickResult.CUT_OFF
-                    self._pointers.write(self._store, action, budget)
-                    self.wrote = True
-        self._context.clear()
-        return TickResult.COMPLETE
-
-    def _launch(self, action: LaunchRun) -> None:
-        """Journal the command, then launch. A failed launch is recorded."""
-        run_id = mint_run_id(self._now())
-        build_argv(
-            action.pipeline, run_id, action.params
-        )  # ValueError before journaling
-        entry = self._store.journal_issue(
-            action.node_id,
-            kind=CommandKind.SQ_RUN,
-            parameters={
-                PARAM_PIPELINE: action.pipeline,
-                PARAM_PARAMS: dict(action.params),
-                PARAM_RUN_ID: run_id,
-                PARAM_CHECKOUT: str(action.checkout),
-            },
-        )
-        self.wrote = True
-        self._start(entry)
-
-    def _reissue(self, action: LaunchRun) -> None:
-        """Repeat a launch recovery found never started, under its own id (D9)."""
-        decision = begin_reissue(
-            self._store, action, self._supervisor_dir, self._observer.poll_run
-        )
-        self.wrote = True
-        if isinstance(decision, ReissueLaunch):
-            self._start(decision.entry)
-
-    def _start(self, entry: JournalEntry) -> None:
-        """Launch a journaled entry. A launch that cannot start is recorded."""
-        started = launch(entry, self._supervisor_dir, self._popen)
-        if isinstance(started, LaunchError):
-            failed = LaunchFailed(started.failure, None, started.detail)
-            finish.record(self._store, entry, failed, self._version_label)
-            return
-        self._tracker.track(entry.id, started)
 
     def _close_recovered(self, faults: TickFaults) -> None:
         """Close each open project escalation whose kind did not recur."""
