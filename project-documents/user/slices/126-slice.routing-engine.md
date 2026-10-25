@@ -125,6 +125,7 @@ One project's tick, with this slice's changes marked:
 apply intents (124)
 observe   in-flight runs, read-backs, plan read (122, 123, 125)
 record    finished runs → ingest (125)                 ── sets awaits_routing
+overrun   check over in-flight runs                    ── NEW, D7: beside watch_pointers, before raise_expected_faults
 view      ProjectView built here, before routing        ── CHANGED (D8)
 route     for entry in unrouted_outcomes(project):      ── NEW
               evidence ← gather(store, entry)            store reads
@@ -132,7 +133,6 @@ route     for entry in unrouted_outcomes(project):      ── NEW
               match    ← evaluate(table, inputs)         pure
               effect   ← effect_for(match, inputs)       pure
               record_routing_decision(…, table, effect, attempt_step=step)
-          overrun check over in-flight runs              ── NEW, D7
 decide    planners over the view (unchanged)
 act       (unchanged)
 close     project escalations, including run_overrun
@@ -271,12 +271,12 @@ Status: decided
 Status: decided
 - `recompute(decision, stored_version)` parses the stored content with `parse_table`, evaluates it on the decision's recorded `inputs` (including `attempt`), and returns the rule id and route it gets, and whether both equal the record.
 - It reads nothing else, so it meets the plan's "from its record and its stored table version alone". It checks the table's application. The reduction from raw evidence is checked by the reducer's own tests, and the evidence stays in the store, linked through `journal_entry_id`.
-- `amoeba inspect routing-decisions --project P [--node-id N] [--json]` lists decisions oldest first with `decided_at`, node, step, rule id, route, attempt, the short version, and `recomputes`. It opens the store with `Store.open_read_only`, as every `inspect` command does, so it is safe beside a running process, and a store at another schema version fails with the existing `StoreSchemaError` exit.
+- `amoeba inspect routing-decisions --project P [--node ID] [--json]` lists decisions oldest first with `decided_at`, node, step, rule id, route, attempt, the short version, and `recomputes`. It opens the store with `Store.open_read_only`, as every `inspect` command does, so it is safe beside a running process, and a store at another schema version fails with the existing `StoreSchemaError` exit.
 - `recomputes` is `yes` or `no` when the stored table parses, and `error: <reason>` when its version row is missing or its content does not parse (for example an unsupported `format`). An unreadable table is never shown as a mismatched decision.
 
 ### D7 — Per-pipeline time bounds raise a project-scoped escalation
 Status: decided
-- After the route stage, `overrun_runs(in_flight, table, now)` lists each unresolved `sq_run` entry whose age exceeds its pipeline's bound. Age is `now - issued_at`. The entry is journaled just before the launch, so this needs no field from the outcome document, which a running run has not finished writing. 125's recorded `started_at` is not needed.
+- Beside `watch_pointers`, before `raise_expected_faults` (so before the route stage), `overrun_runs(in_flight, table, now)` lists each unresolved `sq_run` entry whose age exceeds its pipeline's bound. Age is `now - issued_at`. The entry is journaled just before the launch, so this needs no field from the outcome document, which a running run has not finished writing. 125's recorded `started_at` is not needed.
 - If the list is non-empty, the Runner raises `run_overrun`, a project-scoped escalation with the payload `{runs: [{node_id, run_id, pipeline, issued_at, bound_minutes}], table_version}`. A node with a run in flight is never blocked mid-run (122, D8), which is why this is project-scoped.
 - The condition counts as a recurrence on every tick it holds, so the escalation closes on the first complete tick with no overrun, normally the tick that ingests the run. 125's D11 dedup limit applies: a second run that overruns while the escalation is open joins it only when it is raised again.
 - **The table decides the bound, and the response is fixed.** This is the one stated exception to the arch's "no route is chosen in a code branch outside the table", and departs from its "the node escalates". The arch is edited to say both. An in-flight run can only be escalated: it has no outcome to advance, and a rerun would start a second pipeline in a held checkout. So no rule chooses it, and no decision record is written. A decision record would also take the entry's one decision slot, which its outcome needs.
@@ -309,7 +309,7 @@ Status: decided
 
 - Defined once: `RoutingInput` and each value set, `UNKNOWN` and `NONE`, `ROUTED_SEVERITIES`, the combine order for split-review verdicts, the eligibility predicates, the escalate payload keys and `reason: routed`, the version prefix `sha256:`, `FaultKind.run_overrun`, and the default table path.
 - `reduce`, `evaluate`, `effect_for`, `recompute` and `overrun_runs` are pure and table-tested.
-- A source test asserts that `Route` members are compared only in `engine.py`, which holds `evaluate`, the eligibility predicates and `effect_for`. So no route is chosen in a code branch elsewhere.
+- A source test asserts that `Route` members are compared only in `engine.py` (`evaluate`, the eligibility predicates and `effect_for`) and `validate.py`. `validate.py` only checks the grammar (which parameters each route requires); it chooses no route. So no route is chosen in a code branch elsewhere.
 - Expected failures are answers. A table problem is a `TableError` that lists every problem. Unexpected exceptions in the route stage reach 122's one catch.
 - Modules stay under about 300 lines and functions under about 50.
 
@@ -339,7 +339,7 @@ def recompute(decision: RoutingDecision, stored: RoutingTableVersion) -> Recompu
 **CLI:**
 
 - `amoeba start --routing-table PATH`. It also lets tests and the first proof run a small table.
-- `amoeba inspect routing-decisions --project P [--node-id N] [--json]` (D6).
+- `amoeba inspect routing-decisions --project P [--node ID] [--json]` (D6).
 
 ## Integration Points
 
@@ -372,7 +372,7 @@ def recompute(decision: RoutingDecision, stored: RoutingTableVersion) -> Recompu
 - **Escalate:** a paused run's decision is `escalate` with no second block, and the node stays `blocked_on_sq_checkpoint`. A failed, orphaned, vanished or launch-failed run is escalated with no second block. An unknown review escalates.
 - **Load refusal:** each of these makes `amoeba start` exit `STARTUP_FAILED`, with the problem named: no catch-all, a catch-all that is not `escalate`, an empty `when` before the last rule, an unknown input or value (including `gate_state` before 128), an unknown route, a missing or extra parameter, an advance or rerun rule not limited to `outcome: completed`, a duplicate rule id, a missing or extra time bound, an unsupported `format`, a missing or unreadable table file, and malformed YAML.
 - **Unknown:** an input that reduces to `unknown` satisfies only a condition that names `unknown`.
-- **No route in code:** a test asserts that `Route` members are compared only in the evaluator and the effect mapping.
+- **No route in code:** a test asserts that `Route` members are compared only in the evaluator, the effect mapping and the load-time grammar check (`validate.py`).
 - **Time bound:** a stub run in flight past a one-minute bound raises one `run_overrun` escalation naming it. The run is not killed, is still polled, and its outcome is ingested and routed. The escalation closes on the first complete tick after.
 - **Crash:** a process killed between ingestion and routing routes the outcome after restart, exactly once.
 - **Hold:** a held step's outcome is still routed, and nothing new is issued under the hold.

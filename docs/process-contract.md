@@ -332,7 +332,7 @@ P` show the links and the recorded snapshots.
 *Slice 122.* `RunnerTenant` (`amoeba.runner`, imported only by `amoeba.cli`) is
 composed by `amoeba start` after the shipped tenants. Each tick, for every
 project, it runs: **observe** the unresolved `sq_run` entries, **record** each
-finished run, **decide** (pure: a `Planner` sees a frozen `ProjectView` and
+finished run, **route** each unrouted outcome (slice 126), **decide** (pure: a `Planner` sees a frozen `ProjectView` and
 returns actions), **act** (journal a command, then launch it), and **close** any
 project escalation whose fault did not recur. The production planner tuple is
 `HumanStepPlanner` then `DispatchPlanner` (slice 125); tests supply their own
@@ -510,7 +510,7 @@ is stored beyond the journal.
   checkpoint block posts no message), and the entry still resolves. Squadron text
   that reaches a block is cut to the 4 KiB tail bound.
 - **Awaiting routing.** The resolution marks the entry (`awaits_routing`); routing
-  (slice 126) reads `unrouted_outcomes` and its decision clears the mark. A step
+  (slice 126, see [Routing](#routing)) reads `unrouted_outcomes` and its decision clears the mark. A step
   with an unrouted outcome gets no further action.
 - **Reissue (issue #9).** A step whose latest entry is an `sq_run` recovery
   resolved `not_applied` launches again under the same run id: the old launch log
@@ -527,6 +527,81 @@ is stored beyond the journal.
 - **Fault kinds** added: `review_unknown`, `pointer_write_failed` and
   `checkout_unresolved` (node-scoped: the `fault_kind` of a block's payload) and
   `pointer_moved` (project-scoped).
+
+### Routing
+
+*Slice 126.* Every finished run gets one recorded route, chosen by a table. The
+route stage (`amoeba.runner.routing`) reads `unrouted_outcomes`, reduces each
+entry's stored evidence to named inputs, evaluates the table, and records the
+decision with `record_routing_decision`. That one transaction stores the table
+version on first use, the decision, the attempt count and the node's effect.
+
+- **Tick order.** apply intents, observe, record finished runs, the overrun
+  check, the pointer observe, **build the view**, **route**, decide, act, close.
+  The view is built before routing, so a step routing advances is first seen by
+  the next tick, which then plans its successor. Routing starts no subprocess and
+  adds no budget check. A store write failure exits the process; recovery and
+  `unrouted_outcomes` route the outcome after restart.
+- **The table** is one YAML file for every project, loaded and validated once at
+  start. `--routing-table PATH` (setting `routing_table_path`) selects it; the
+  default is the table shipped in the package. A table that fails validation
+  stops `amoeba start` with `STARTUP_FAILED`, listing every problem. Changing the
+  table takes a restart. **No secrets go in the table**: its text is stored
+  verbatim with every decision and shown by `inspect`.
+
+  ```yaml
+  format: 1
+  time_bounds_minutes: {P4: 240, P5: 240, P6: 720}
+  rules:
+    - id: advance-on-stated-pass
+      when: {outcome: completed, verdict: pass, standing: stated}
+      route: advance
+    - id: escalate-everything-else
+      when: {}
+      route: escalate
+      judge_eligible: false
+  ```
+
+- **Version.** `sha256:<hex>` of the file's bytes, so any edit is a new version.
+  `format` is required; `1` is the only supported value.
+- **Inputs** are defined in code (`amoeba.runner.routing.inputs`), each with a
+  closed value set that includes `unknown`: `outcome`, `checkpoint_kind`,
+  `at_loop`, `failure_kind`, `verdict`, `standing`, `severity`, `recurrence`,
+  `step`, `node_state`. `none` means the input does not apply to this outcome;
+  `unknown` means it should apply and could not be read. A condition's value is
+  one value or a list, compared after trimming and lower-casing. A table naming
+  any other input or value refuses to load. `attempt` is recorded with each
+  decision but is not matchable; `max_attempts` bounds it.
+- **Matching.** Rules are tried in file order. A rule matches when every input it
+  names has one of its listed values; an unnamed input is unconstrained, and
+  `unknown` matches only a condition that names it. A matching rule whose route
+  is not eligible is passed over: `advance` needs `node_state` `runnable`;
+  `rerun` needs `runnable`, a known `step`, and `attempt < max_attempts`;
+  `escalate` is always eligible. First eligible match wins.
+- **Routes and effects.** `advance` marks the step `done`. `rerun` writes nothing:
+  the step stays `runnable` and the next tick re-points and relaunches the same
+  pipeline. `escalate` blocks the node on a human with context
+  `routed by <rule id>` and payload `{reason: routed, rule_id, table_version,
+  run_id, judge_eligible}`, unless the node is already blocked or done. Every
+  decision on a known step counts one attempt.
+- **Validation** collects every problem, naming the rule id: a supported
+  `format`; unique non-empty rule ids; known inputs and values; a known route;
+  `rerun` needs `max_attempts` (integer, at least 1), `escalate` needs
+  `judge_eligible` (boolean), `advance` takes none; `advance` and `rerun` rules
+  must name `outcome: completed`; the last rule is an empty-`when` `escalate` and
+  no earlier rule is empty; `time_bounds_minutes` has one positive integer per
+  pipeline (`P4`, `P5`, `P6`) and no other key.
+- **Recompute.** `amoeba inspect routing-decisions --project P [--node ID]
+  [--json]` lists decisions oldest first, with a `recomputes` column: `yes` or
+  `no` from evaluating the decision's stored table version on its recorded
+  inputs, or `error: <reason>` when that version is missing or unreadable.
+- **Overrun.** An unresolved `sq_run` older than its pipeline's bound raises one
+  project-scoped `run_overrun` escalation, payload `{runs: [{node_id, run_id,
+  pipeline, issued_at, bound_minutes}], table_version}`. It closes on the first
+  complete tick with no overrun. The check runs beside the pointer watch, before
+  the expected faults are raised and before the route stage. The run is never
+  killed, and no decision is recorded. An in-flight entry whose pipeline has no
+  bound faults the project (a programming error).
 
 ## Lifecycle failure modes
 
