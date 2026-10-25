@@ -76,7 +76,12 @@ class ActStage:
         self._context = context
         self._version_label = version_label
         self._continuations = ContinuationActs(
-            store=store, poll_run=poll_run, version_label=version_label
+            store=store,
+            supervisor_dir=supervisor_dir,
+            poll_run=poll_run,
+            tracker=tracker,
+            popen=popen,
+            version_label=version_label,
         )
 
     def run(

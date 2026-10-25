@@ -13,14 +13,24 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 
 from amoeba.process import RunOutcomeDocument, RunPoll
 from amoeba.runner import finish
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.decide import ObserveRun, ResumeRun
 from amoeba.runner.faults import Fault, FaultKind, ResumeFailure, TickFaults
-from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
+from amoeba.runner.launch import (
+    PARAM_PARAMS,
+    PARAM_PIPELINE,
+    LaunchError,
+    LaunchTracker,
+    PopenFactory,
+    log_paths,
+    spawn,
+)
 from amoeba.runner.observed import ResumeFailed
+from amoeba.runner.resolutions.argv import resume_argv
 from amoeba.runner.resolutions.judge import checkpoint_of
 from amoeba.runner.resolutions.prepoll import Act, prepoll_decision
 from amoeba.runner.resolutions.vocabulary import PARAM_RESUME_SKIPPED, Continuation
@@ -81,11 +91,17 @@ class ContinuationActs:
         self,
         *,
         store: Store,
+        supervisor_dir: Path,
         poll_run: Callable[[str], RunPoll],
+        tracker: LaunchTracker,
+        popen: PopenFactory,
         version_label: str,
     ) -> None:
         self._store = store
+        self._supervisor_dir = supervisor_dir
         self._poll_run = poll_run
+        self._tracker = tracker
+        self._popen = popen
         self._version_label = version_label
 
     def act(
@@ -118,7 +134,44 @@ class ContinuationActs:
                 )
                 return Acted.WROTE
             case Act.LAUNCH:
-                raise NotImplementedError("resume launch: Task 6.4b")
+                if not budget.allows_call():
+                    return Acted.CUT_OFF
+                self._launch(action, continued, poll)
+                return Acted.WROTE
+
+    def _launch(
+        self, action: ContinuationAction, continued: JournalEntry, poll: RunPoll
+    ) -> None:
+        """Journal the entry, then start ``sq run --resume`` detached (D4 step 3).
+
+        Only the journal write, a store call, runs between the budget check and the
+        spawn. A spawn that fails is recorded as a failed resume, never retried.
+        """
+        if not isinstance(action, ResumeRun):
+            raise ValueError(f"{action.node_id}: only a resume launches")
+        entry = journal_continuation(self._store, action, continued, action.decision)
+        argv = resume_argv(action.run_id, action.decision, self._instructions(action))
+        started = spawn(
+            argv,
+            str(action.checkout),
+            log_paths(self._supervisor_dir, entry.id),
+            self._popen,
+        )
+        if isinstance(started, LaunchError):
+            document = poll if isinstance(poll, RunOutcomeDocument) else None
+            failed = ResumeFailed(
+                ResumeFailure.SPAWN_ERROR, None, started.detail, document
+            )
+            finish.record(self._store, entry, failed, self._version_label)
+            return
+        self._tracker.track(entry.id, started)
+
+    def _instructions(self, action: ResumeRun) -> str | None:
+        """The PM's instructions, read from the resolution slot (never journaled)."""
+        blocked = self._store.blocked_state(action.resolution)
+        if blocked is None or blocked.resolution is None:
+            raise ValueError(f"resolution {action.resolution} has no resolution slot")
+        return blocked.resolution.instructions
 
     def _record_missing(
         self, action: ContinuationAction, continued: JournalEntry, poll: RunPoll

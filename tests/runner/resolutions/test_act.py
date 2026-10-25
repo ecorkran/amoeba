@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,6 +18,7 @@ from amoeba.process import (
 from amoeba.runner.decide import ObserveRun, ResumeRun
 from amoeba.runner.faults import FaultKind, TickFaults
 from amoeba.runner.finish import RESULT_RESUME_FAILURE
+from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME, LaunchTracker, log_paths
 from amoeba.runner.resolutions.act import Acted, ContinuationActs
 from amoeba.runner.resolutions.vocabulary import (
     PARAM_RESUME_SKIPPED,
@@ -36,9 +38,10 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.pointer_support import budget_allowing, generous_budget
-from runner.observe_support import ScriptedPoll
+from runner.observe_support import Child, ScriptedPoll
 from runner.resolutions.resolution_support import (
     PAUSED_AT,
+    block_and_resolve,
     design_step,
     finished_run,
     paused_document,
@@ -48,10 +51,32 @@ from runner.tick_support import PROJECT
 CHECKOUT = "/work/a"
 
 
+class RecordingPopen:
+    """A fake ``Popen``: remembers each start and returns a child that never exits."""
+
+    def __init__(self) -> None:
+        self.argvs: list[list[str]] = []
+        self.kwargs: list[dict[str, Any]] = []
+        self.error: OSError | None = None
+        self.open_entries: list[int] = []
+        self.store: Store | None = None
+
+    def __call__(self, argv: list[str], **kwargs: Any) -> Child:
+        if self.store is not None:
+            self.open_entries.append(
+                len(self.store.unresolved_journal_entries(PROJECT))
+            )
+        if self.error is not None:
+            raise self.error
+        self.argvs.append(argv)
+        self.kwargs.append(kwargs)
+        return Child(None)
+
+
 class Rig:
     """A paused step, its resume action, and the act under test."""
 
-    def __init__(self, store: Store) -> None:
+    def __init__(self, store: Store, tmp_path: Path) -> None:
         self.store = store
         self.node = design_step(store)
         self.entry: JournalEntry = finished_run(
@@ -63,8 +88,18 @@ class Rig:
         )
         self.run_id = str(self.entry.parameters[PARAM_RUN_ID])
         self.poll = ScriptedPoll()
+        self.supervisor_dir = tmp_path / "supervisor"
+        (self.supervisor_dir / LAUNCH_LOGS_DIRNAME).mkdir(parents=True)
+        self.tracker = LaunchTracker()
+        self.popen = RecordingPopen()
+        self.popen.store = store
         self.acts = ContinuationActs(
-            store=store, poll_run=self.poll, version_label="sq-label"
+            store=store,
+            supervisor_dir=self.supervisor_dir,
+            poll_run=self.poll,
+            tracker=self.tracker,
+            popen=self.popen,
+            version_label="sq-label",
         )
         self.faults = TickFaults()
 
@@ -93,8 +128,8 @@ class Rig:
 
 
 @pytest.fixture
-def rig(store: Store) -> Rig:
-    return Rig(store)
+def rig(store: Store, tmp_path: Path) -> Rig:
+    return Rig(store, tmp_path)
 
 
 def test_a_spent_budget_polls_and_writes_nothing(rig: Rig) -> None:
@@ -190,3 +225,97 @@ def test_a_continued_entry_that_is_gone_is_a_defect(rig: Rig) -> None:
 
     with pytest.raises(ValueError, match="does not exist"):
         rig.acts.act(action, generous_budget(), rig.faults)
+
+
+# -- the launch branch --------------------------------------------------------
+
+INSTRUCTIONS = 'Address "only" the schema\nconcerns, é.'
+
+
+def _resolved(rig: Rig, decision: str, instructions: str | None = None) -> str:
+    return block_and_resolve(rig.store, rig.node, decision, instructions)
+
+
+def _launch(rig: Rig, decision: str, instructions: str | None = None) -> Acted:
+    resolution = _resolved(rig, decision, instructions)
+    rig.answer(rig.paused())
+    action = ResumeRun(
+        rig.node.id,
+        rig.run_id,
+        Continuation(decision),
+        rig.entry.id,
+        resolution,
+        Path(CHECKOUT),
+    )
+    return rig.acts.act(action, generous_budget(), rig.faults)
+
+
+def test_a_retry_resumes_the_run_with_its_decision_and_instructions(rig: Rig) -> None:
+    result = _launch(rig, "retry", INSTRUCTIONS)
+
+    assert result is Acted.WROTE
+    [argv] = rig.popen.argvs
+    assert argv[1:] == [
+        "run",
+        "--resume",
+        rig.run_id,
+        "--decision",
+        "retry",
+        "--instructions",
+        INSTRUCTIONS,
+    ]
+    assert "--run-id" not in argv and "-p" not in argv and "P4" not in argv
+    assert rig.popen.kwargs[0]["cwd"] == CHECKOUT
+
+
+def test_an_accept_passes_its_decision_and_no_instructions_when_there_are_none(
+    rig: Rig,
+) -> None:
+    _launch(rig, "accept")
+
+    [argv] = rig.popen.argvs
+    assert argv[argv.index("--decision") + 1] == "accept"
+    assert "--instructions" not in argv
+
+
+def test_the_entry_is_journaled_before_the_spawn_and_the_child_is_tracked(
+    rig: Rig,
+) -> None:
+    _launch(rig, "retry")
+
+    assert rig.popen.open_entries == [1]
+    entry = rig.entries()[-1]
+    assert not entry.is_resolved
+    assert entry.parameters[PARAM_CONTINUATION] == "retry"
+    assert rig.tracker.get(entry.id) is not None
+    assert log_paths(rig.supervisor_dir, entry.id).stderr.exists()
+
+
+def test_the_instructions_are_not_copied_into_the_journal(rig: Rig) -> None:
+    _launch(rig, "retry", INSTRUCTIONS)
+
+    entry = rig.entries()[-1]
+    assert INSTRUCTIONS not in str(entry.parameters)
+
+
+def test_a_spawn_error_blocks_with_spawn_error_and_launches_nothing(rig: Rig) -> None:
+    rig.popen.error = FileNotFoundError("sq")
+
+    result = _launch(rig, "retry")
+
+    assert result is Acted.WROTE
+    entry = rig.entries()[-1]
+    assert entry.outcome is JournalOutcome.FAILED
+    assert entry.result is not None
+    assert entry.result[RESULT_RESUME_FAILURE] == "spawn_error"
+    assert rig.tracker.get(entry.id) is None
+    node = rig.store.get_node(rig.node.id)
+    assert node is not None and node.status is NodeStatus.BLOCKED_ON_HUMAN
+
+
+def test_an_observe_action_never_launches(rig: Rig) -> None:
+    rig.answer(rig.paused())
+
+    rig.acts.act(rig.observe(), generous_budget(), rig.faults)
+
+    assert rig.popen.argvs == []
