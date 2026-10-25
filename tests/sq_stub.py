@@ -28,6 +28,9 @@ exits 0. ``RUN_MODE_ENV`` forces a failure case; see :class:`RunMode`.
 working directory (its reviews) and fields merged into the final document
 (``reviews``, ``checkpoint``, ``failure``); see :func:`write_run_script`.
 
+``sq run --resume <id> --decision D [--instructions T]`` (slice 127): see
+``sq_stub_resume``, which holds that code.
+
 ``write_sq_stub`` is the only definition. A test puts the returned directory
 first on ``PATH`` and picks a behavior with the environment variables below.
 """
@@ -41,6 +44,8 @@ from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
+
+from sq_stub_resume import resume_branch
 
 #: Environment variables the stub reads.
 MODE_ENV = "SQ_STUB_MODE"
@@ -147,7 +152,7 @@ _SCRIPT = textwrap.dedent(
         sys.exit(exit_codes[outcome])
 
     state_dir = Path.home().joinpath(*{state_parts!r})
-
+    {resume_branch}
     if arguments[:1] == ["run"]:
         run_mode = os.environ.get({run_mode_env!r})
         if run_mode == {usage_error!r}:
@@ -260,6 +265,7 @@ def write_sq_stub(bin_dir: Path) -> Path:
             no_line=RunMode.NO_LINE.value,
             late_line=RunMode.LATE_LINE.value,
             delete_then_exit_one=StubMode.DELETE_THEN_EXIT_ONE.value,
+            resume_branch=resume_branch(),
         ),
         encoding="utf-8",
     )
