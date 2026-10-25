@@ -12,9 +12,25 @@ from __future__ import annotations
 
 from typing import Final
 
+from amoeba.process import RunOutcome
+from amoeba.runner.faults import ResumeFailure
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON, PAYLOAD_RUN_ID, BlockPlan
-from amoeba.runner.ingest.record import RESULT_RUN_ID, block_once, entry_run_id, ingest
-from amoeba.runner.observed import Finished, LaunchFailed, RunEnded, RunVanished
+from amoeba.runner.ingest.record import (
+    RESULT_OUTCOME,
+    RESULT_OUTCOME_DOCUMENT,
+    RESULT_RUN_ID,
+    block_once,
+    entry_run_id,
+    ingest,
+)
+from amoeba.runner.observed import (
+    Finished,
+    LaunchFailed,
+    ResumeFailed,
+    RunEnded,
+    RunVanished,
+)
+from amoeba.runner.resolutions.vocabulary import REASON_RESUME_FAILED
 from amoeba.store import (
     BlockedKind,
     JournalEntry,
@@ -43,6 +59,8 @@ def record(
             ingest(store, entry, finished, version_label)
         case LaunchFailed():
             _record_launch_failed(store, entry, finished)
+        case ResumeFailed():
+            _record_resume_failed(store, entry, finished)
 
 
 def _record_launch_failed(
@@ -65,4 +83,45 @@ def _record_launch_failed(
         entry.id,
         outcome=JournalOutcome.FAILED,
         result={RESULT_RUN_ID: run_id, RESULT_LAUNCH_FAILURE: finished.failure.value},
+    )
+
+
+def _record_resume_failed(
+    store: Store, entry: JournalEntry, finished: ResumeFailed
+) -> None:
+    """Block on a human, then resolve ``failed`` keeping the run's real outcome.
+
+    The run is still paused, with its branch checked out, so the result says
+    ``paused`` and carries the last poll: the checkout stays held and the situation
+    stays ``paused_run``. A run that is gone says ``not_found``, which releases both
+    (D6).
+    """
+    run_id = entry_run_id(entry)
+    code = "unknown" if finished.exit_code is None else str(finished.exit_code)
+    context = (
+        f"resume of {run_id} failed ({finished.failure.value}); "
+        f"exit code {code}; stderr: {finished.tail}"
+    )
+    payload: dict[str, object] = {
+        PAYLOAD_REASON: REASON_RESUME_FAILED,
+        RESULT_RESUME_FAILURE: finished.failure.value,
+        PAYLOAD_RUN_ID: run_id,
+        PAYLOAD_EXIT_CODE: finished.exit_code,
+        PAYLOAD_STDERR_TAIL: finished.tail,
+    }
+    block_once(store, entry.node_id, BlockPlan(BlockedKind.HUMAN, context, payload))
+    missing = finished.failure is ResumeFailure.RUN_MISSING
+    outcome = RunOutcome.NOT_FOUND if missing else RunOutcome.PAUSED
+    document = finished.document
+    store.journal_resolve(
+        entry.id,
+        outcome=JournalOutcome.FAILED,
+        result={
+            RESULT_RUN_ID: run_id,
+            RESULT_OUTCOME: outcome.value,
+            RESULT_OUTCOME_DOCUMENT: (
+                None if document is None else document.model_dump(mode="json")
+            ),
+            RESULT_RESUME_FAILURE: finished.failure.value,
+        },
     )

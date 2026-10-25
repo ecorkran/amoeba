@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from amoeba.process import RunOutcomeDocument
 from amoeba.runner.budget import TickResult
 from amoeba.runner.decide import InFlightRun
-from amoeba.runner.faults import LaunchFailure
+from amoeba.runner.faults import LaunchFailure, ResumeFailure
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,22 @@ class LaunchFailed:
     tail: str
 
 
-type Finished = RunEnded | RunVanished | LaunchFailed
+@dataclass(frozen=True)
+class ResumeFailed:
+    """A resume that did not take (slice 127, D6).
+
+    ``document`` is the last poll of the run, or ``None`` if there was none. The run
+    itself is still where the poll left it, which is why a failed resume keeps the
+    run's checkout held and its outcome ``paused``.
+    """
+
+    failure: ResumeFailure
+    exit_code: int | None
+    tail: str
+    document: RunOutcomeDocument | None
+
+
+type Finished = RunEnded | RunVanished | LaunchFailed | ResumeFailed
 
 
 @dataclass(frozen=True)

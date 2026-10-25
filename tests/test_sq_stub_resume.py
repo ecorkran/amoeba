@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 from sq_stub import (
@@ -91,8 +92,7 @@ def test_a_resume_can_pause_again_with_a_new_paused_at(rig: Rig) -> None:
     assert result.returncode == 0
     state = rig.state()
     assert state["outcome"] == "paused"
-    checkpoint = state["checkpoint"]
-    assert isinstance(checkpoint, dict)
+    checkpoint = cast("dict[str, object]", state["checkpoint"])
     assert checkpoint["kind"] == "loop_exhausted"
     new_pause = datetime.fromisoformat(str(checkpoint["paused_at"]))
     assert new_pause > datetime.fromisoformat(OLD_PAUSE).astimezone(UTC)
