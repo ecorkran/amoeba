@@ -360,17 +360,17 @@ Committed together with Task 7.2 in `feat: escalate runs past their time bound`.
 ### Task 8.1: Add the `routing-decisions` listing
 **Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 2
 
-- [x] Create `inspection/routing.py` with the columns and row function per D6: `decided_at`, node, step, rule id, route, attempt, short version, `recomputes`. Rows come from `routing_decisions` over the project's nodes (or the one `--node-id`), sorted oldest first. `recomputes` is `yes`, `no`, or `error: <reason>` (a missing version row, or a `Recomputation` error)
+- [x] Create `inspection/routing.py` with the columns and row function per D6: `decided_at`, node, step, rule id, route, attempt, short version, `recomputes`. Rows come from `routing_decisions` over the project's nodes (or the one `--node ID`), sorted oldest first. `recomputes` is `yes`, `no`, or `error: <reason>` (a missing version row, or a `Recomputation` error)
 - [x] Register it in `LISTINGS` (`inspection/__init__.py`) as project-scoped with a `node_id` option, following the existing listings. Add the short-version length as a constant in `routing.py`
 - [x] Check `inspection` may import `amoeba.runner.routing` under `tests/test_import_boundaries.py`. If a rule forbids it, write `BLOCKED:` naming the rule and stop
-- [x] **Success:** `amoeba inspect routing-decisions --help` lists `--project`, `--node-id` and `--json`
+- [x] **Success:** `amoeba inspect routing-decisions --help` lists `--project`, `--node` and `--json`
 
 Resolved by the PM: Rule 10 exempts `amoeba.runner.routing.inputs` and `.recompute` for inspection (commit e1bdcc3). The node option is `--node ID` (the existing inspect convention), not `--node-id`.
 
 ### Task 8.2: Test the listing
 **Owner**: Junior AI | **Dependencies**: 8.1 | **Effort**: 2
 
-- [x] `tests/inspection/test_routing_decisions.py` (follow `tests/inspection_harness.py`): rows oldest first across two nodes; `--node-id` narrows; a recomputing decision shows `yes`; a decision whose stored content was written with an unsupported `format` shows `error: …`, not `no`; `--json` emits full rows; the store opens read-only (the writer-guard test still passes)
+- [x] `tests/inspection/test_routing_decisions.py` (follow `tests/inspection_harness.py`): rows oldest first across two nodes; `--node` narrows; a recomputing decision shows `yes`; a decision whose stored content was written with an unsupported `format` shows `error: …`, not `no`; `--json` emits full rows; the store opens read-only (the writer-guard test still passes)
 - [x] **Success:** tests pass. Commit `feat: add inspect routing-decisions`
 
 ---
