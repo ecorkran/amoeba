@@ -1,6 +1,7 @@
 """One project's tick: observe, record finished runs, decide, act, close.
 
-The sequence is fixed code (D1): intents are applied first (124), then the rest.
+The sequence is fixed code (D1): intents are applied first (124), then the PM's
+resolutions are answered (127), then the rest.
 Slots later slices fill are marked in comments only: the body of
 ``finish.record`` (125). Routing (126) runs after record, on a view built before it.
 """
@@ -31,10 +32,12 @@ from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.lifecycle.plan_stage import PlanStage
+from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.project_view import build_project_view
+from amoeba.runner.resolutions.stage import apply_pending_resolutions
 from amoeba.runner.routing.overrun import watch_overruns
 from amoeba.runner.routing.stage import route_outcomes
 from amoeba.runner.routing.table import RoutingTable
@@ -99,6 +102,7 @@ class ProjectTick:
         """Run the stages in order; ``CUT_OFF`` when the budget ran out."""
         faults = TickFaults()
         desired = self._apply_intents()
+        self._answer_resolutions()
         # Observe is not filtered by hold or drive. Slices 125 and 128 read
         # ``desired.drives_anything()`` to scope their Observe work.
         observed = self._observer.observe(
@@ -165,6 +169,21 @@ class ProjectTick:
         applied = apply_pending_intents(self._store, self._project_id)
         self.wrote = applied > 0 or self.wrote
         return DesiredStateIndex(self._store.desired_states(self._project_id))
+
+    def _answer_resolutions(self) -> None:
+        """Answer the PM's pending resolutions, before anything reads the nodes.
+
+        Store reads and writes only, so no budget check: it starts no subprocess.
+        It runs before Observe and the view so no planner or route sees a node
+        whose resolution has not been acknowledged (slice 127, D1). The context is
+        cleared afterwards: an exception past this stage is not about that node.
+        """
+        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
+        answered = apply_pending_resolutions(
+            self._store, self._project_id, tree, self._context
+        )
+        self._context.clear()
+        self.wrote = answered or self.wrote
 
     def _plan_reads(
         self, links: Sequence[str], budget: TickBudget, faults: TickFaults

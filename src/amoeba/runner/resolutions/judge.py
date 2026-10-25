@@ -12,8 +12,12 @@ from typing import Final
 
 from pydantic import ValidationError
 
-from amoeba.process import CheckpointKind, RunCheckpoint, RunOutcomeDocument
-from amoeba.process.sq_outcome import parse_checkpoint_kind
+from amoeba.process import (
+    CheckpointKind,
+    RunCheckpoint,
+    RunOutcomeDocument,
+    parse_checkpoint_kind,
+)
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON
 from amoeba.runner.ingest.record import RESULT_OUTCOME_DOCUMENT
 from amoeba.runner.resolutions.vocabulary import (
