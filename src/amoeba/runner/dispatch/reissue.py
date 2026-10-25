@@ -27,6 +27,7 @@ phase step sets the slice pointer itself.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,8 @@ from amoeba.store import (
     JournalEntry,
     Store,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -136,6 +139,7 @@ def _run_exists(polled: RunPoll) -> bool:
     Squadron refuses an id that already has state.
     """
     if isinstance(polled, PollFailure):
+        logger.warning("poll before reissue failed: %s", polled.reason)
         return False
     return polled.outcome is not RunOutcome.NOT_FOUND
 

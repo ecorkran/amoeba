@@ -141,6 +141,24 @@ PAYLOAD_NODE_ID: Final = "node_id"
 PAYLOAD_RUN_ID: Final = "run_id"
 
 
+def _escalation_payload(fault: Fault) -> dict[str, object]:
+    """The escalation payload: the standard keys plus the fault's extra keys.
+
+    Raises:
+        ValueError: If an extra key would replace a standard key.
+    """
+    standard: dict[str, object] = {
+        PAYLOAD_DETAIL: fault.detail,
+        PAYLOAD_NODE_ID: fault.node_id,
+        PAYLOAD_RUN_ID: fault.run_id,
+    }
+    extra = dict(fault.extra or {})
+    clashes = sorted(standard.keys() & extra.keys())
+    if clashes:
+        raise ValueError(f"fault extra keys shadow standard payload keys: {clashes}")
+    return {**extra, **standard}
+
+
 def raise_expected_faults(store: Store, project_id: str, faults: TickFaults) -> bool:
     """Raise each expected fault as a project-scoped escalation.
 
@@ -156,12 +174,7 @@ def raise_expected_faults(store: Store, project_id: str, faults: TickFaults) -> 
         store.raise_project_escalation(
             project_id,
             fault_kind=fault.kind.value,
-            payload={
-                PAYLOAD_DETAIL: fault.detail,
-                PAYLOAD_NODE_ID: fault.node_id,
-                PAYLOAD_RUN_ID: fault.run_id,
-                **(fault.extra or {}),
-            },
+            payload=_escalation_payload(fault),
         )
         wrote = wrote or fault.kind.value not in already_open
         already_open.add(fault.kind.value)

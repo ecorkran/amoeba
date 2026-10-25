@@ -198,3 +198,18 @@ def test_a_plan_read_failed_fault_raises_one_project_escalation(
     [row] = store.open_project_escalations(PROJECT)
     assert row.fault_kind == "plan_read_failed"
     assert wrote_first and not wrote_again
+
+
+def test_an_extra_key_that_would_shadow_a_standard_key_raises(store: Store) -> None:
+    tick = TickFaults()
+    tick.add(
+        Fault(
+            FaultKind.PLAN_READ_FAILED,
+            "cf list initiatives exited 1",
+            extra={faults.PAYLOAD_DETAIL: "shadowed"},
+        )
+    )
+
+    with pytest.raises(ValueError, match=faults.PAYLOAD_DETAIL):
+        raise_expected_faults(store, PROJECT, tick)
+    assert store.open_project_escalations(PROJECT) == []

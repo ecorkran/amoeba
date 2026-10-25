@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved, resolve_checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
@@ -57,6 +58,12 @@ class DispatchView:
     unresolved: tuple[UnresolvedStep, ...]
 
 
+#: The states that write a pointer or launch a run, so need a checkout to act.
+_NEEDS_CHECKOUT: Final = frozenset(
+    {DispatchState.NEEDS_POINTER, DispatchState.POINTED, DispatchState.REISSUE}
+)
+
+
 def build_dispatch_view(
     store: Store,
     project_id: str,
@@ -75,7 +82,9 @@ def build_dispatch_view(
         if found is None:
             continue
         facts[node.id] = found
-        if isinstance(found.checkout, CheckoutUnresolved):
+        if isinstance(found.checkout, CheckoutUnresolved) and (
+            found.state in _NEEDS_CHECKOUT
+        ):
             unresolved.append(
                 UnresolvedStep(node.id, found.slice_index, found.checkout.reason)
             )

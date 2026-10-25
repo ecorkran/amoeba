@@ -81,9 +81,10 @@ def log_paths(supervisor_dir: Path, entry_id: str) -> LaunchLogs:
 def stderr_confirms(path: Path, run_id: str) -> bool:
     """Whether a whole line of the stderr log equals ``run_id=<run_id>``.
 
-    Reads at most :data:`STDERR_HEAD_LIMIT_BYTES`. Only the line terminator is
-    removed before comparing, so the id inside another line, or a longer id
-    with this one as its prefix, does not confirm.
+    Reads at most :data:`STDERR_HEAD_LIMIT_BYTES`. Before comparing, one
+    trailing carriage return and any trailing spaces or tabs are removed, so
+    the id inside another line, or a longer id with this one as its prefix,
+    does not confirm.
 
     Raises:
         OSError: If the log cannot be read; the caller decides what that means.
@@ -91,9 +92,13 @@ def stderr_confirms(path: Path, run_id: str) -> bool:
     with path.open("rb") as handle:
         head = handle.read(STDERR_HEAD_LIMIT_BYTES)
     expected = f"{RUN_ID_LINE_PREFIX}{run_id}".encode()
-    # Split on b"\n" only and drop one trailing b"\r": str.splitlines() would
-    # also split on form feeds and Unicode separators, which are not terminators.
-    return any(line.removesuffix(b"\r") == expected for line in head.split(b"\n"))
+    # Split on b"\n" only: str.splitlines() would also split on form feeds and
+    # Unicode separators, which are not terminators. Then drop one trailing b"\r"
+    # and any trailing spaces or tabs; a second b"\r" still fails to match.
+    return any(
+        line.removesuffix(b"\r").rstrip(b" \t") == expected
+        for line in head.split(b"\n")
+    )
 
 
 def stderr_tail(path: Path) -> str:
@@ -183,7 +188,7 @@ def build_argv(pipeline: str, run_id: str, params: Mapping[str, str]) -> list[st
     return argv
 
 
-def _text_parameter(entry: JournalEntry, key: str) -> str:
+def text_parameter(entry: JournalEntry, key: str) -> str:
     value = entry.parameters.get(key)
     if not isinstance(value, str) or not value:
         raise ValueError(f"entry {entry.id} has an unusable {key!r}: {value!r}")
@@ -221,11 +226,11 @@ def launch(
         created or the child cannot be started.
     """
     argv = build_argv(
-        _text_parameter(entry, PARAM_PIPELINE),
-        _text_parameter(entry, PARAM_RUN_ID),
+        text_parameter(entry, PARAM_PIPELINE),
+        text_parameter(entry, PARAM_RUN_ID),
         _params_parameter(entry),
     )
-    checkout = _text_parameter(entry, PARAM_CHECKOUT)
+    checkout = text_parameter(entry, PARAM_CHECKOUT)
     logs = log_paths(supervisor_dir, entry.id)
     try:
         with ExitStack() as stack:

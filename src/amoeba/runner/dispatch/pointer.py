@@ -191,7 +191,9 @@ def _confirmed(
     if stem is None:
         return PointerUnknown(f"CF's fileSlice does not parse: {file_slice!r}")
     path = result.get(RESULT_PROJECT_PATH)
-    if not isinstance(path, str) or Path(path) != expected.path:
+    if not isinstance(path, str):
+        return PointerUnknown(f"CF's projectPath is not a string: {path!r}")
+    if Path(path) != expected.path:
         return Mismatch(f"CF answered for {path!r}, not {str(expected.path)!r}")
     worktree_id = result.get(RESULT_WORKTREE_ID)
     if worktree_id != expected.worktree_id:

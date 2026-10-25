@@ -7,6 +7,7 @@ hand, so a change in Squadron's shape fails here first.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -97,6 +98,20 @@ def test_a_paused_run_carries_its_checkpoint() -> None:
     assert checkpoint.reason == "checkpoint"
     assert checkpoint.paused_at == datetime(2026, 10, 16, 2, 20, 27, 561691, tzinfo=UTC)
     assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.AWAITS_HUMAN
+
+
+def test_an_unexpected_reporting_type_does_not_fail_the_document() -> None:
+    raw = json.loads(
+        (FIXTURES / "paused_awaits_human.json").read_text(encoding="utf-8")
+    )
+    raw["checkpoint"]["round"] = "2/3"
+    raw["checkpoint"]["is_loop"] = "yes"
+
+    document = RunOutcomeDocument.model_validate(raw)
+
+    assert document.checkpoint is not None
+    assert (document.checkpoint.round, document.checkpoint.is_loop) == ("2/3", "yes")
+    assert document.checkpoint.kind == "awaits_human"
 
 
 def test_a_document_without_a_reviews_key_reads_none() -> None:

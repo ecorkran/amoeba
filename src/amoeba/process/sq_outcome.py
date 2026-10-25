@@ -21,7 +21,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, JsonValue, ValidationError
 
 #: The Squadron executable, defined once.
 SQ_EXECUTABLE: Final = "sq"
@@ -126,7 +126,9 @@ def _parse_kind[KindT: StrEnum](
 class RunCheckpoint(BaseModel):
     """A paused run's checkpoint. Every field is optional; ``None`` means unknown.
 
-    The kind stays raw text here; :func:`parse_checkpoint_kind` reads it.
+    The kind stays raw text here; :func:`parse_checkpoint_kind` reads it. The
+    reporting-only fields (``is_loop``, ``round``, ``max_rounds``, ``verdict``) are
+    kept as Squadron sent them, so an unexpected type cannot fail the document.
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
@@ -134,10 +136,10 @@ class RunCheckpoint(BaseModel):
     kind: str | None = None
     step: str | None = None
     step_type: str | None = None
-    is_loop: bool | None = None
-    round: int | None = None
-    max_rounds: int | None = None
-    verdict: str | None = None
+    is_loop: JsonValue | None = None
+    round: JsonValue | None = None
+    max_rounds: JsonValue | None = None
+    verdict: JsonValue | None = None
     review_file: str | None = None
     reason: str | None = None
     paused_at: datetime | None = None
@@ -157,16 +159,19 @@ class RunFailure(BaseModel):
 
 
 class RunReview(BaseModel):
-    """One review file a run wrote. ``paths`` lists the parts of a split review."""
+    """One review file a run wrote. ``paths`` lists the parts of a split review.
+
+    ``verdict`` and ``round`` are reporting-only, kept as Squadron sent them.
+    """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     path: str | None = None
     paths: list[str] | None = None
     template: str | None = None
-    verdict: str | None = None
+    verdict: JsonValue | None = None
     step: str | None = None
-    round: int | None = None
+    round: JsonValue | None = None
 
 
 class RunOutcomeDocument(BaseModel):

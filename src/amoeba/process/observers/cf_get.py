@@ -13,6 +13,7 @@ import logging
 import subprocess
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -107,7 +108,11 @@ def read_project(
             **options,
         )
     except FileNotFoundError:
-        # Specific: cf is not on PATH. An answer, not a bug.
+        # Specific: cf is not on PATH, or the checkout directory is missing;
+        # subprocess raises this for both, so the checkout is checked first.
+        if checkout is not None and not Path(checkout).is_dir():
+            logger.warning("checkout directory is missing: %s", checkout)
+            return ReadFailed(reason=f"checkout directory does not exist: {checkout}")
         logger.warning("cf is not on PATH")
         return ReadFailed(reason="cf is not available on PATH")
     except subprocess.TimeoutExpired:

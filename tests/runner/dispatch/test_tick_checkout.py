@@ -80,3 +80,19 @@ def test_no_observed_snapshot_blocks_the_step(tmp_path: Path, store: Store) -> N
 
     assert rig.status(node) is NodeStatus.BLOCKED_ON_HUMAN
     _assert_blocked_unresolved(rig, 125, "no observed snapshot")
+
+
+def test_a_running_step_is_not_blocked_when_its_checkout_stops_resolving(
+    rig: DispatchRig, tmp_path: Path
+) -> None:
+    node = rig.step("running", 125)
+    rig.tick()
+    rig.tick()
+    assert rig.run_of(node)
+    rig.snapshot(
+        {"wt_a": rig.world.worktree_entry("wt_a", tmp_path / "nowhere", 100, 199)}
+    )
+
+    rig.tick()
+
+    assert rig.status(node) is not NodeStatus.BLOCKED_ON_HUMAN

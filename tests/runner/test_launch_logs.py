@@ -34,7 +34,9 @@ def test_logs_are_named_by_entry_id_under_the_launch_logs_directory(
 
 
 @pytest.mark.parametrize(
-    "terminator", [b"\n", b"\r\n", b""], ids=["lf", "crlf", "none"]
+    "terminator",
+    [b"\n", b"\r\n", b" \t\r\n", b""],
+    ids=["lf", "crlf", "trailing-blanks-crlf", "none"],
 )
 def test_an_exact_line_confirms(tmp_path: Path, terminator: bytes) -> None:
     content = b"banner\nrun_id=" + RUN_ID.encode() + terminator

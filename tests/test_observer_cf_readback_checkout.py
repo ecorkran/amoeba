@@ -15,6 +15,7 @@ from typing import cast
 
 import pytest
 
+from amoeba.process.observers.cf_get import ReadFailed, read_project
 from amoeba.process.observers.cf_readback import (
     RESULT_FILE_SLICE,
     RESULT_PROJECT_PATH,
@@ -24,6 +25,8 @@ from amoeba.process.observers.cf_readback import (
     read_back_cf_write,
 )
 from amoeba.process.recovery import Adopt, NotApplied, Unknown
+from amoeba.runner.dispatch.checkout import Checkout
+from amoeba.runner.dispatch.pointer import PointerUnknown, read_back
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_EXPECTED_SLICE_INDEX,
@@ -96,6 +99,20 @@ def test_a_matching_index_adopts_with_the_checkout_identity() -> None:
         RESULT_WORKTREE_ID: worktree["id"],
         RESULT_PROJECT_PATH: record["projectPath"],
     }
+
+
+def test_a_record_without_project_path_is_unknown_not_a_mismatch() -> None:
+    record = _record()
+    del record["projectPath"]
+    entry = _entry(
+        **{PARAM_CHECKOUT: CHECKOUT, PARAM_EXPECTED_SLICE_INDEX: _fixture_index()}
+    )
+
+    answer = read_back(
+        entry, Checkout(Path(CHECKOUT), None), RecordingRun(record), TIMEOUT_SECONDS
+    )
+
+    assert isinstance(answer, PointerUnknown)
 
 
 def test_the_version_label_is_recorded_only_when_a_label_is_supplied() -> None:
@@ -175,3 +192,12 @@ def test_an_entry_from_before_the_checkout_key_reads_without_a_working_directory
 
     assert isinstance(_read_back(entry, run), Adopt)
     assert "cwd" not in run.calls[0]
+
+
+def test_a_missing_checkout_directory_is_named_as_such(tmp_path: Path) -> None:
+    missing = tmp_path / "gone"
+
+    answer = read_project("project_1", str(missing), subprocess.run, TIMEOUT_SECONDS)
+
+    assert isinstance(answer, ReadFailed)
+    assert answer.reason == f"checkout directory does not exist: {missing}"
