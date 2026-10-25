@@ -19,6 +19,7 @@ from amoeba.process import CF_FIELD_FILE_SLICE, RESULT_WORKTREE_ID
 from amoeba.runner.dispatch.checkout import is_plain_int
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.store import (
+    PARAM_CONTINUATION,
     PARAM_EXPECTED_SLICE_INDEX,
     PARAM_PROJECT,
     PARAM_RUN_ID,
@@ -49,7 +50,8 @@ class WatchedRun:
     worktree_id: str | None
     #: The slice index the pointer was written to.
     slice_index: int
-    #: When the pointer write resolved: only later snapshots say anything about it.
+    #: When the pointer write resolved (for a continuation, when the continuation was
+    #: issued): only later snapshots say anything about it.
     pointer_resolved_at: datetime
 
 
@@ -91,7 +93,9 @@ def watched_runs(
     """The in-flight ``sq_run`` entries that started under a resolved pointer write.
 
     A run with no resolved pointer write on its step (one launched some other way) is
-    not watched: there is no pointer to have moved.
+    not watched: there is no pointer to have moved. A continuation (slice 127) watches
+    the step's latest pointer write too, but only snapshots after the continuation
+    was issued count: a move while the run sat paused is the PM's business.
     """
     watched: list[WatchedRun] = []
     for entry in in_flight:
@@ -99,9 +103,10 @@ def watched_runs(
         run_id = entry.parameters.get(PARAM_RUN_ID)
         cf_project = pointer.parameters.get(PARAM_PROJECT) if pointer else None
         index = pointer.parameters.get(PARAM_EXPECTED_SLICE_INDEX) if pointer else None
+        since = _watch_start(entry, pointer)
         if (
             pointer is None
-            or pointer.resolved_at is None
+            or since is None
             or not isinstance(run_id, str)
             or not isinstance(cf_project, str)
             or not is_plain_int(index)
@@ -115,10 +120,19 @@ def watched_runs(
                 cf_project,
                 worktree if isinstance(worktree, str) else None,
                 index,
-                pointer.resolved_at,
+                since,
             )
         )
     return watched
+
+
+def _watch_start(run: JournalEntry, pointer: JournalEntry | None) -> datetime | None:
+    """When snapshots start to count: the pointer write, or a continuation's issue."""
+    if pointer is None:
+        return None
+    if PARAM_CONTINUATION in run.parameters:
+        return run.issued_at
+    return pointer.resolved_at
 
 
 def _pointer_write_before(
