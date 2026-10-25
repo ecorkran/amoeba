@@ -14,7 +14,8 @@ errors, takes ``SubmissionKind`` from its defining module, and never calls
 ``Store.open``.
 Rule 9: ``process/run_pruning.py`` is pure: it imports only the standard library
 and the outcome-document model it shares with the ``sq_run`` observer.
-Rule 10: only ``amoeba.cli`` imports ``amoeba.runner``.
+Rule 10: only ``amoeba.cli`` imports ``amoeba.runner``, except that inspection
+may import the pure routing modules in ``INSPECTION_RUNNER_IMPORTS``.
 Rule 11: ``amoeba.runner`` takes from ``amoeba.store``, ``amoeba.process`` and
 ``amoeba.upstream`` only names those packages export.
 """
@@ -328,12 +329,38 @@ def test_the_run_file_read_check_reports_both_imports(tmp_path: Path) -> None:
     ]
 
 
+#: The pure routing modules inspection may import to recompute a decision.
+#: Nothing else under ``amoeba.runner`` is open to it (Rule 10 exemption).
+INSPECTION_RUNNER_IMPORTS = frozenset(
+    {
+        "amoeba.runner.routing.inputs",
+        "amoeba.runner.routing.recompute",
+    }
+)
+
+
+def _runner_imports(path: Path) -> set[str]:
+    names = {
+        name for name in _imported_names(path) if _mentions({name}, "amoeba.runner")
+    }
+    if path.relative_to(SRC).parts[0] == "inspection":
+        names = {
+            name
+            for name in names
+            if not any(
+                _mentions({name}, allowed) for allowed in INSPECTION_RUNNER_IMPORTS
+            )
+            and name not in {"amoeba.runner", "amoeba.runner.routing"}
+        }
+    return names
+
+
 def test_rule_10_only_the_cli_imports_the_runner() -> None:
     offenders = [
         str(path.relative_to(SRC))
         for path in sorted(SRC.rglob("*.py"))
         if path.relative_to(SRC).parts[0] not in {"cli", "runner"}
-        and _mentions(_imported_names(path), "amoeba.runner")
+        and _runner_imports(path)
     ]
     assert offenders == []
     assert any(
