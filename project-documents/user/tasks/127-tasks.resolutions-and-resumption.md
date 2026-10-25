@@ -20,20 +20,21 @@ projectState: Slices 120–126 are merged. The route stage runs in `runner/tick.
 dateCreated: 20261025
 dateUpdated: 20261025
 status: not_started
-turns: 31
-promptTokens: 2453822
-cachedTokens: 2322867
-cacheWriteTokens: 130905
-completionTokens: 34169
-durationSeconds: 342.5
-costUsd: 2.195678
-usageRounds: 1
-pricedRounds: 1
+turns: 46
+promptTokens: 4994737
+cachedTokens: 4813986
+cacheWriteTokens: 180671
+completionTokens: 53506
+durationSeconds: 533.3
+costUsd: 3.47889
+usageRounds: 3
+pricedRounds: 3
 usageByModel:
   claude-opus-5-5:
-    rounds: 1
-    costUsd: 2.1956782
-    completionTokens: 34169
+    rounds: 3
+    costUsd: 3.4788900000000003
+    completionTokens: 53506
+revision_number: 2
 ---
 
 ## Context Summary
@@ -46,7 +47,7 @@ usageByModel:
 
 **Branch:** all implementation happens on `127-slice.resolutions-and-resumption`, forked from the target (`cf config get git.integration_branch`; empty means `main`). No task here merges. Merging follows the code review.
 
-**Reading note:** this file does not restate the LLD. "Per the LLD" means open `user/slices/127-slice.resolutions-and-resumption.md` at the named decision (D1–D9), "Architecture" or "Implementation Details". Source lives under `src/amoeba/`; paths below are relative to it unless they start with `tests/` or `docs/`. Keep every new or changed source file near 300 lines and each function near 50.
+**Reading note:** this file does not restate the LLD. "Per the LLD" means open `user/slices/127-slice.resolutions-and-resumption.md` at the named decision (D1–D9), "Architecture" or "Implementation Details". Source lives under `src/amoeba/`; paths below are relative to it unless they start with `tests/` or `docs/`. Keep every new or changed source file near 300 lines and each function near 50. Where this file's "Task-level additions" differ from the LLD, this file wins; the LLD is not amended.
 
 **Order and dependencies:** work tasks in file order. Each task's **Dependencies** lists only its real prerequisites. If a task is `BLOCKED:`, continue with the next task whose dependencies are all checked off; only its dependents wait.
 
@@ -57,13 +58,13 @@ usageByModel:
 - **Journal keys live in the store.** `amoeba.process` (the recovery observer) may not import the Runner. So `PARAM_CONTINUATION`, `PARAM_CONTINUES` and `PARAM_RESOLUTION` (`"continuation"`, `"continues"`, `"resolution"`) go in `store/journal_models.py` beside `PARAM_RUN_ID`, and the Runner imports them. The `Continuation` enum is Runner vocabulary, in `runner/resolutions/vocabulary.py`. The observer checks only that the key is present.
 - **`usage_limit` is not yet a `CheckpointKind` member.** Task 3.1 adds `USAGE_LIMIT = "usage_limit"` to `process/sq_outcome.py`, so D2 check 4 compares a member and never a string. 126's `checkpoint_kind` value set is built from the enum and gains the value with no other edit.
 - **`classify` reads entry fields only.** The LLD's sketch passes routing decisions, but every D2 row reads the entry (`awaits_routing` is on `JournalEntry`). The signature is `classify(node, executor, entries) -> Situation`, with `executor` `None` for a node that is not a step.
-- **The claimed-id guard needs the owner's node.** `recorded_result_run_ids` maps run id to entry id, and prune uses it unchanged. Task 2.5 adds a sibling read, `recorded_result_run_nodes(project_id) -> dict[str, str]` (run id to node id, same query), which `process/supervisor.py` passes to `SquadronRunIdObserver`. It is documented beside the other three methods.
+- **The claimed-id guard needs the owner's node.** `recorded_result_run_ids` maps run id to entry id, and prune uses it unchanged. Task 2.4 adds a sibling read, `recorded_result_run_nodes(project_id) -> dict[str, str]` (run id to node id, same query), which `process/supervisor.py` passes to `SquadronRunIdObserver`. It is documented beside the other three methods.
 - **The resumed-from pause.** Confirmation (D6) compares a poll with the `paused_at` the continued entry recorded. Before Observe, the tick reads `store.journal_entry(continues)` for each unresolved `retry`/`accept` continuation and passes the observer a mapping from entry id to that `paused_at` (`datetime | None`). A missing continued entry or an unparseable document maps to `None`, which the confirmation rule treats as "cannot confirm": it waits out the grace period and fails `no_claim_within_grace`.
 - **Size.** `tick.py`, `observe.py` and `launch.py` cannot take this slice's code. Task 1.2 moves the act stage out of `tick.py` into `runner/act.py` and splits a `spawn(argv, checkout, logs, popen)` out of `launch()`, behavior unchanged. The resume path of Observe is a new `runner/observe_resume.py` that `RunObserver` delegates to, so `observe.py` grows by a dispatch line or two.
 - **The checkout hold names its holders.** D5 lets `ContinuationPlanner` act in a checkout held only by its own step. `dispatch/hold.py` gains `checkout_holders(...) -> Mapping[Path, frozenset[str]]` (node ids), and `held_checkouts` becomes `frozenset(checkout_holders(...))`. `ProjectView` gains `checkout_holders`; `DispatchPlanner` is unchanged.
 - **Dispatch facts.** `StepDispatchFacts` gains `resolution: BlockedState | None` (the latest applied resolution with a decision) and `continues: JournalEntry | None` (the latest `sq_run` entry, set for `RESUME` and `REOBSERVE`). `WriteSlicePointer` gains `resolution: str | None`, written as `PARAM_RESOLUTION` on the `cf_write` entry.
 - **A failed resume is a `Finished` value.** `runner/observed.py` gains `ResumeFailed(failure, exit_code, tail, document)`, and `finish.record` records it (D6 payload and result). `ResumeFailure` is in `runner/faults.py` beside `LaunchFailure`. `RESULT_RESUME_FAILURE` (`"resume_failure"`) is in `runner/finish.py` beside `RESULT_LAUNCH_FAILURE`.
-- **`resume_skipped` is a parameter.** D4 journals it with the entry ("the entry is journaled as an observation, with continuation `observe` and `resume_skipped`"), and the entry has no result until ingestion resolves it. The LLD's "Patterns and Conventions" list calls it a result key; this file follows D4, and Task 9.3's process-contract text names it as a parameter. It is journaled as the parameter `PARAM_RESUME_SKIPPED` (`"resume_skipped"`, value `run_not_at_pause`, both constants in `runner/resolutions/vocabulary.py`).
+- **`resume_skipped` is a parameter.** D4 journals it with the entry ("the entry is journaled as an observation, with continuation `observe` and `resume_skipped`"), and the entry has no result until ingestion resolves it. The LLD's "Patterns and Conventions" list calls it a result key; this file follows D4, and Task 9.3's process-contract text names it as a parameter. It is journaled as the parameter `PARAM_RESUME_SKIPPED` with the value `RESUME_SKIPPED_RUN_NOT_AT_PAUSE`, both defined in Task 3.1.
 - **Shared names, defined once.** Everything in the LLD's "Patterns and Conventions" list, plus the three journal keys above and the rejection detail texts. Tests import them; they never retype a value.
 - **Exception rule.** No new `except Exception`. Every `except` names a specific exception with a comment, or re-raises after `logger.exception`.
 - **Test doubles.** Pure functions get table-driven tests. Store-backed tests use `Store.open_temporary()`. Tick-level tests use `tests/runner/tick_support.py` and `plan_tick_support.py` with the stub `cf` and stub `sq` on `PATH` under a temporary `HOME`, and a small routing table. Nothing sleeps or runs a real `cf` or `sq`, except Task 9.5's walkthrough step 3.
@@ -97,23 +98,17 @@ usageByModel:
 
 ## Section 2: Store and Inbox Contract (D9)
 
-### Task 2.1: Add migration `012`
-**Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
+### Task 2.1: Add migration `012` and extend the models
+**Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
 - [ ] Create `store/schema/012_resolution_decisions.sql` with the six columns and the partial index, per the LLD "Database / Storage Schema". Set `EXPECTED_SCHEMA_VERSION` to 12 in `store/migrations.py`. Add the column-name constants to `store/sql.py` beside `COL_BLOCKED_RESOLUTION_DETAIL`
-- [ ] `tests/store/test_migration_012.py`, following `test_migration_011.py`: applies to a populated v11 store; existing rows read null in all six columns; the index exists (its use is asserted in Task 2.4)
-- [ ] **Success:** tests pass, existing migration tests still pass. Commit `feat: add migration 012 for resolution decisions`
-
-### Task 2.2: Extend the models and row mapping
-**Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 2
-
 - [ ] In `store/models.py`: `Resolution` gains `decision: str | None` and `instructions: str | None`; add `ResolutionOutcome(StrEnum)` (`applied`, `rejected`); `BlockedState` gains `awaits_runner: bool`, `runner_outcome: ResolutionOutcome | None`, `runner_code: str | None`, `runner_reason: str | None`. All default so existing constructors are unchanged. Export `ResolutionOutcome` from `amoeba.store`
 - [ ] Update the blocked-state SELECTs in `store/sql.py` and `map_blocked_state` in `store/mapping.py` to read the new columns. An unknown `runner_outcome` text raises `UnknownVocabularyValueError`, as other vocabulary columns do
-- [ ] Tests (extend `tests/test_models.py` or the mapping tests): a v11-shaped row maps with nulls and `awaits_runner` false; each new column round-trips; an unknown outcome text raises
-- [ ] **Success:** tests and pyright pass. Commit `feat: carry resolution decisions and the Runner's answer on blocked states`
+- [ ] Tests: `tests/store/test_migration_012.py`, following `test_migration_011.py`: applies to a populated v11 store, existing rows read null in all six columns and map with `awaits_runner` false, the index exists (its use is asserted in Task 2.3); mapping tests: each new column round-trips and an unknown outcome text raises
+- [ ] **Success:** tests, existing migration tests and pyright pass. Commit `feat: add migration 012 and carry resolution decisions on blocked states`
 
-### Task 2.3: Add the resolution payload fields and the inbox flag
-**Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 2
+### Task 2.2: Add the resolution payload fields and the inbox flag
+**Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 2
 
 - [ ] `inbox/envelope.py`: `ResolutionPayload` gains `decision: str | None = None` and `instructions: str | None = None`. Each, when present, must be non-blank after trimming (D1); the value is stored as submitted. The decision vocabulary is not checked here
 - [ ] `store/inbox_models.py`: add `RESOLUTION_DECISION` and `RESOLUTION_INSTRUCTIONS`
@@ -121,18 +116,18 @@ usageByModel:
 - [ ] Tests (`tests/store/test_inbox_apply.py`, `tests/inbox/`): a resolution with both fields stores them and is flagged; one with neither is flagged with nulls; a blank decision or blank instructions is refused by the payload model; `store.resolve()` leaves the flag unset; `amoeba submit resolution --help` lists `--decision` and `--instructions` (the flag rule in `cli/submit.py` derives them; no CLI code change)
 - [ ] **Success:** tests pass. Commit `feat: accept a decision and instructions on resolution submissions`
 
-### Task 2.4: Add `pending_resolutions`, `acknowledge_resolution` and `blocked_state`
-**Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 3
+### Task 2.3: Add `pending_resolutions`, `acknowledge_resolution` and `blocked_state`
+**Owner**: Junior AI | **Dependencies**: 2.2 | **Effort**: 3
 
 - [ ] In `store/blocking.py`, per D9 "Store methods":
-  - [ ] `pending_resolutions(project_id)`: flagged rows for the project, oldest `resolved_at` first, through the partial index (the query Task 2.1's plan test names)
+  - [ ] `pending_resolutions(project_id)`: flagged rows for the project, oldest `resolved_at` first, through the partial index
   - [ ] `acknowledge_resolution(blocked_state_id, *, outcome, code=None, reason=None, effect=None)`: one transaction records outcome, code and reason, clears the flag, and applies a `StatusEffect` or `BlockEffect` through the writers 121's `record_routing_decision` uses. `rejected` without code and reason, or `applied` with a code, raises `ValueError`. A row that is unresolved or not flagged raises `InvalidTransitionError`. An effect failure rolls back everything
   - [ ] `blocked_state(blocked_state_id) -> BlockedState | None`, usable through a read-only handle
 - [ ] `tests/store/test_resolutions.py`: ordering; project scoping; applied with no effect; applied with `StatusEffect(done)` marks the node done; rejected with a `BlockEffect` blocks again and the new block is the open one; the argument rules; acknowledging twice raises; an effect that fails (for example done on a node with an unresolved entry) leaves the flag set and nothing written; `blocked_state` through a read-only store; `EXPLAIN QUERY PLAN` of the method's query uses `idx_blocked_states_awaits_runner`
 - [ ] **Success:** tests pass. Commit `feat: add the store methods for acknowledging resolutions`
 
-### Task 2.5: Add the journal keys and the recovery observer's continuation rules
-**Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 3
+### Task 2.4: Add the journal keys and the recovery observer's continuation rules
+**Owner**: Junior AI | **Dependencies**: 2.3 | **Effort**: 3
 
 - [ ] `store/journal_models.py`: `PARAM_CONTINUATION`, `PARAM_CONTINUES`, `PARAM_RESOLUTION` (Task-level additions). `REQUIRED_PARAMETER_KEYS` is unchanged: all three are optional, on `sq_run`, and `PARAM_RESOLUTION` also on `cf_write` (D9)
 - [ ] `store/journal.py`: add `recorded_result_run_nodes(project_id)` (Task-level additions). Pass it from `process/supervisor.py` to `SquadronRunIdObserver` as a new required argument `claimed_run_nodes`
@@ -143,8 +138,8 @@ usageByModel:
 - [ ] `tests/test_observer_sq_run_id.py`: each rule above, plus an entry without the key behaving exactly as before; `test_continuation_never_reissued` asserts the missing-run answer is `Unknown`
 - [ ] **Success:** tests pass; `tests/test_import_boundaries.py` passes (the observer imports no Runner module). Commit `feat: recover continuation entries without reissuing them`
 
-### Task 2.6: Make the contract suite's stand-in Runner acknowledge resolutions
-**Owner**: Junior AI | **Dependencies**: 2.5 | **Effort**: 1
+### Task 2.5: Make the contract suite's stand-in Runner acknowledge resolutions
+**Owner**: Junior AI | **Dependencies**: 2.4 | **Effort**: 1
 
 - [ ] `tests/contract/runner_tenant.py` `ProofRunner.tick`: acknowledge each `pending_resolutions` row `applied` with no effect, before performing intents
 - [ ] Run `uv run pytest tests/contract -v`
@@ -157,8 +152,8 @@ usageByModel:
 ### Task 3.1: Define the resolution vocabulary
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Create `runner/resolutions/vocabulary.py` per the LLD "API Contracts": `ResolutionDecision`, `Situation`, `ResolutionRejection`, `Continuation`; `ALLOWED: Mapping[Situation, frozenset[ResolutionDecision]]` from D2's table; the payload reasons `REASON_RESOLUTION_REJECTED`, `REASON_STOPPED`, and the payload keys of D3 (`code`, `detail`, `rejected_blocked_state_id`, `allowed`, `stopped_blocked_state_id`)
-- [ ] `runner/faults.py`: add `ResumeFailure` (D6). `process/sq_outcome.py`: add `CheckpointKind.USAGE_LIMIT` (Task-level additions)
+- [ ] Create `runner/resolutions/vocabulary.py` per the LLD "API Contracts": `ResolutionDecision`, `Situation`, `ResolutionRejection`, `Continuation`; `ALLOWED: Mapping[Situation, frozenset[ResolutionDecision]]` from D2's table; the payload reasons `REASON_RESOLUTION_REJECTED`, `REASON_STOPPED`, and the payload keys of D3 (`code`, `detail`, `rejected_blocked_state_id`, `allowed`, `stopped_blocked_state_id`); `PARAM_RESUME_SKIPPED` (`"resume_skipped"`) and its value `RESUME_SKIPPED_RUN_NOT_AT_PAUSE` (`"run_not_at_pause"`)
+- [ ] `runner/faults.py`: add `ResumeFailure` (D6). `runner/finish.py`: add `RESULT_RESUME_FAILURE` (Task-level additions). `process/sq_outcome.py`: add `CheckpointKind.USAGE_LIMIT` (Task-level additions)
 - [ ] `tests/runner/resolutions/test_vocabulary.py`: `ALLOWED` matches D2 row for row; `UNRESOLVABLE` and `NO_DECISION` allow nothing; `Continuation` values are `retry`, `accept`, `observe`; 126's `checkpoint_kind` value set contains `usage_limit`
 - [ ] **Success:** tests pass. Commit `feat: add the resolution vocabulary`
 
@@ -185,7 +180,7 @@ usageByModel:
 ## Section 4: The Resolution Stage (D3)
 
 ### Task 4.1: Implement `apply_pending_resolutions`
-**Owner**: Junior AI | **Dependencies**: 2.4, 3.3 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 2.3, 3.3 | **Effort**: 2
 
 - [ ] Create `runner/resolutions/stage.py` with `apply_pending_resolutions(store, project_id, tree, context) -> bool` (whether anything was acknowledged). For each pending row, oldest first: set `context` to its node, read the node's entries, find its step and executor through the lifecycle tree and `STEP_MAP`, `classify`, `judge_resolution`, then `acknowledge_resolution`
 - [ ] Store errors propagate unchanged (D3, "Store failures")
@@ -193,7 +188,7 @@ usageByModel:
 - [ ] **Success:** tests pass. Commit with Task 4.2
 
 ### Task 4.2: Run the stage first in the project tick
-**Owner**: Junior AI | **Dependencies**: 4.1 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 1.2, 4.1 | **Effort**: 3
 
 - [ ] `runner/tick.py`: call the stage right after `_apply_intents` and before Observe, with the context cleared afterwards, and fold its result into `self.wrote`. No budget check (it starts no subprocess). The tree the stage needs is built the way `_build_view` builds it; if that needs a store read the view also makes, read it once
 - [ ] Tick tests (`tests/runner/resolutions/test_tick_stage.py`): a resolution submitted and applied by the inbox is acknowledged in the next project tick, before any planner sees the node; `test_poisoned_resolution_is_contained`: one step's resolution with an unparseable outcome document is rejected, and another step's finished run in the same project is still ingested that tick
@@ -205,11 +200,12 @@ usageByModel:
 ## Section 5: Dispatch State and the Continuation Planner (D5)
 
 ### Task 5.1: Extend `dispatch_state` with the latest applied resolution
-**Owner**: Junior AI | **Dependencies**: 3.1, 2.5 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 2.4, 3.1 | **Effort**: 2
 
 - [ ] `runner/dispatch/state.py`: add `RESUME` and `REOBSERVE`; the signature becomes `dispatch_state(entries, resolution, *, pointer_confirmed)`. After the `IN_FLIGHT` and `AWAITING_ROUTING` checks, a resolution with `runner_outcome` `applied` and a decision that no entry names in `PARAM_RESOLUTION` decides per D5's table (`rerun` is `NEEDS_POINTER`, even where 125 would say `REISSUE`). Otherwise 125's rules apply unchanged
 - [ ] `tests/runner/dispatch/test_state.py`, table-driven over D5's rows: each decision unnamed and named; a `rerun` after a `not_applied` entry; a rejected or undecided resolution changes nothing; an unresolved continuation is `IN_FLIGHT`
-- [ ] **Success:** tests pass; existing state tests pass with `resolution=None`. Commit with Task 5.2
+- [ ] Update every existing caller and test of `dispatch_state` to the new signature, passing `resolution=None`; their expected states do not change
+- [ ] **Success:** tests pass. Commit with Task 5.2
 
 ### Task 5.2: Carry the resolution, the continued entry and the checkout holders into the view
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 3
@@ -238,43 +234,44 @@ usageByModel:
 
 ## Section 6: The Continuation Acts (D4)
 
-### Task 6.1: Build the resume command line
-**Owner**: Junior AI | **Dependencies**: 1.2, 3.1 | **Effort**: 1
-
-- [ ] Create `runner/resolutions/argv.py` with the flag constants `--resume`, `--decision`, `--instructions` and `resume_argv(run_id, decision, instructions) -> list[str]` per D4 step 3. The instructions are one element; no pipeline, `-p` or `--run-id`
-- [ ] Tests: argv for retry, accept, with and without instructions; instructions with spaces, quotes, newlines and non-ASCII are one element, byte for byte; `observe` is refused with `ValueError`
-- [ ] **Success:** tests pass. Commit `feat: build the sq resume command line`
-
-### Task 6.2: Add the stub `sq`'s resume mode
-**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 3
+### Task 6.1: Add the stub `sq`'s resume mode
+**Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
 - [ ] Add `sq run --resume <id> [--decision D] [--instructions T]` to the stub per the LLD "Technology Choices": environment-configured claim delay, exit code and resulting outcome (pause again with a new `paused_at`, complete, refuse with exit 2, exit before the claim, never claim). It records its argv to the stub log, and a missing run exits 1. Put the resume code in a new `tests/sq_stub_resume.py` so `tests/sq_stub.py` stays near 300 lines
 - [ ] `tests/test_sq_stub_run.py`: each mode leaves the documented state; the argv log holds the instructions element unchanged
 - [ ] **Success:** tests pass. Commit `test: add a resume mode to the stub sq`
 
-### Task 6.3: Record a failed resume
-**Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 2
+### Task 6.2: Record a failed resume
+**Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 2
 
 - [ ] `runner/observed.py`: `ResumeFailed` (Task-level additions). `runner/finish.py`: `record` handles it per D6: block on `HUMAN` with `{reason: resume_failed, resume_failure, run_id, exit_code, stderr_tail}` (4 KiB tail), resolve `failed` with `{run_id, outcome, outcome_document, resume_failure}`; outcome `paused` and the last poll for every failure except `run_missing`, whose outcome is `not_found`
 - [ ] `tests/runner/test_finish.py`: the block payload and result for `refused` and for `run_missing`; a failed resume keeps the checkout held (`held_checkouts`) and `classify` reads `paused_run`; after `run_missing` the hold is released and `classify` reads `ended_run`
 - [ ] **Success:** tests pass. Commit `feat: record failed resumes`
 
-### Task 6.4: Implement the pre-poll and the observe act
-**Owner**: Junior AI | **Dependencies**: 5.3, 6.3 | **Effort**: 3
+### Task 6.3: Decide the act from the pre-poll, and build the resume command line
+**Owner**: Junior AI | **Dependencies**: 3.1, 5.3 | **Effort**: 2
 
-- [ ] Create `runner/resolutions/act.py` with `act_continuation(...)`, called from `runner/act.py` for `ResumeRun` and `ObserveRun`, following D4 step 1 exactly:
-  - [ ] budget check, then one `observer.poll_run`; a spent budget returns cut-off with nothing written; a `PollFailure` adds a `run_observation_failed` fault and writes nothing
-  - [ ] `not_found`: journal the continuation entry, then record `ResumeFailed(run_missing)` through `finish.record`; launch nothing
-  - [ ] retry/accept on a run not paused at the continued entry's `paused_at`: journal it as continuation `observe` with `resume_skipped: run_not_at_pause` in its parameters (Task-level additions) and launch nothing
-  - [ ] `ObserveRun`: journal the entry (`PARAM_CONTINUATION`, `PARAM_CONTINUES`, `PARAM_RESOLUTION`, plus the continued `pipeline`, `params`, `run_id`, `checkout`) after a second budget check; launch nothing. Leave the `ResumeRun` launch branch raising `NotImplementedError` until Task 6.5
-- [ ] `tests/runner/resolutions/test_act.py`: a spent budget and a failed pre-poll write nothing and the step stays `RESUME`; `test_missing_run_launches_nothing`; `test_run_moved_by_hand_is_observed`; `handled` journals and launches nothing
-- [ ] **Success:** tests pass. Commit `feat: observe runs for applied resolutions`
+- [ ] Create `runner/resolutions/argv.py` with the flag constants `--resume`, `--decision`, `--instructions` and `resume_argv(run_id, decision, instructions) -> list[str]` per D4 step 3. The instructions are one element; no pipeline, `-p` or `--run-id`. `observe` is refused with `ValueError`
+- [ ] Create `runner/resolutions/prepoll.py` with the pure `prepoll_decision(action, poll, resumed_from)` per D4 step 1: a `PollFailure` is wait; `not_found` is run missing; a `ResumeRun` whose run is paused at `resumed_from` is launch; any other `ResumeRun` poll is observe with `PARAM_RESUME_SKIPPED` set to `RESUME_SKIPPED_RUN_NOT_AT_PAUSE` (Task-level additions); an `ObserveRun` with a run state is observe
+- [ ] Tests: argv for retry and accept, with and without instructions; instructions with spaces, quotes, newlines and non-ASCII are one element, byte for byte; `prepoll_decision`, table-driven over every branch
+- [ ] **Success:** tests pass; both modules do no I/O. Commit `feat: decide continuation acts from the pre-poll`
 
-### Task 6.5: Launch the resume
-**Owner**: Junior AI | **Dependencies**: 6.1, 6.2, 6.4 | **Effort**: 2
+### Task 6.4a: Implement the continuation act's pre-poll, wait, run-missing and observe branches
+**Owner**: Junior AI | **Dependencies**: 1.2, 2.4, 6.2, 6.3 | **Effort**: 3
 
-- [ ] In `runner/resolutions/act.py`, for `ResumeRun` at the old pause: check the budget again, journal the entry as `ObserveRun` does, then `spawn` `resume_argv` in the checkout with the instructions read from `store.blocked_state(resolution)`, logs named by the entry id (D4 steps 2–3). Track the child; a `LaunchError` records `ResumeFailed(spawn_error)`
-- [ ] Tests: the stub's argv log shows `--resume <id> --decision retry --instructions <text>` with no `--run-id`, pipeline or `-p`; `accept` passes `--decision accept`; a budget spent at the second check writes nothing; a spawn error blocks with `spawn_error`
+- [ ] Create `runner/resolutions/act.py` with `act_continuation(...)`, called from `runner/act.py` for `ResumeRun` and `ObserveRun`, in D4's order: budget check, one `observer.poll_run`, `prepoll_decision`, then:
+  - [ ] wait: write nothing; a `PollFailure` adds a `run_observation_failed` fault. A spent budget returns cut-off with nothing written
+  - [ ] run missing: journal the continuation entry, then record `ResumeFailed(run_missing)` through `finish.record`; launch nothing
+  - [ ] observe: after a second budget check, journal the entry (`PARAM_CONTINUATION` `observe`, `PARAM_CONTINUES`, `PARAM_RESOLUTION`, `PARAM_RESUME_SKIPPED` when set, plus the continued `pipeline`, `params`, `run_id`, `checkout`); launch nothing. Put the journaling in a helper that Task 6.4b reuses
+  - [ ] launch decision: raises `NotImplementedError("resume launch: Task 6.4b")`. No tick reaches it, because `ContinuationPlanner` is not registered until Task 7.3
+- [ ] `tests/runner/resolutions/test_act.py`: a spent budget and a failed pre-poll write nothing and the step stays `RESUME`; `test_missing_run_launches_nothing`; `test_run_moved_by_hand_is_observed`; `handled` journals and launches nothing; a run not at its pause is observed with `resume_skipped`
+- [ ] **Success:** tests pass. Commit `feat: observe continuation runs and handle a missing run`
+
+### Task 6.4b: Implement the continuation act's launch branch
+**Owner**: Junior AI | **Dependencies**: 6.1, 6.4a | **Effort**: 2
+
+- [ ] Replace the `NotImplementedError` in `act_continuation` with the launch path: after a second budget check, journal the entry with the decision's continuation (`retry` or `accept`) through the Task 6.4a helper, then `spawn` `resume_argv` in the checkout with the instructions read from `store.blocked_state(resolution)`, logs named by the entry id. Track the child; a `LaunchError` records `ResumeFailed(spawn_error)`. Keep each function near 50 lines; move the launch path to `runner/resolutions/launch_act.py` if `act.py` passes 300 lines
+- [ ] Tests (same file): the stub's argv log shows `--resume <id> --decision retry --instructions <text>` with no `--run-id`, pipeline or `-p`; `accept` passes `--decision accept`; the entry is journaled before the spawn; a spawn error blocks with `spawn_error`
 - [ ] **Success:** tests pass. Commit `feat: resume paused runs for applied resolutions`
 
 ---
@@ -289,18 +286,17 @@ usageByModel:
 - [ ] **Success:** tests pass. Commit `feat: add the resume confirmation rule`
 
 ### Task 7.2: Observe continuation entries
-**Owner**: Junior AI | **Dependencies**: 7.1, 6.3 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 2.4, 6.2, 7.1 | **Effort**: 3
 
-- [ ] Create `runner/observe_resume.py`; `RunObserver._observe_one` sends a `retry`/`accept` continuation that is not confirmed in memory to it, whether or not it is tracked. It polls on `run_poll_interval_seconds` under the budget, applies `resume_progress`, confirms in the tracker on `Confirmed` and then classifies the poll as `_confirmed` does, and ends with `ResumeFailed` on a failure. `observe` continuations take the existing confirmed path unchanged. `observe` takes the resumed-from mapping as a new argument (Task-level additions)
-- [ ] `tests/runner/resolutions/test_observe_resume.py`, with a fake poll and tracker: a run that stays paused then claims is confirmed by the first poll after the claim; a new `paused_at` ends the run as a pause; exit 2, exit before claim and no claim within grace each end with their failure; with no tracked child (after a restart) only the grace rule applies
+- [ ] Create `runner/observe_resume.py`; `RunObserver._observe_one` sends a `retry`/`accept` continuation that is not confirmed in memory to it, whether or not it is tracked. It polls on `run_poll_interval_seconds` under the budget, applies `resume_progress`, confirms in the tracker on `Confirmed` and then classifies the poll as `_confirmed` does, and ends with `ResumeFailed` on a failure. `observe` continuations take the existing confirmed path unchanged. `observe` takes the resumed-from mapping as a new argument (Task-level additions), and `ProjectTick` builds that mapping before Observe and passes it, so the suite stays green at this commit
+- [ ] `tests/runner/resolutions/test_observe_resume.py`, with a fake poll and tracker: a run that stays paused then claims is confirmed by the first poll after the claim; a new `paused_at` ends the run as a pause; the tick builds the mapping from the continued entries (a missing entry and an unparseable document map to `None`); exit 2, exit before claim and no claim within grace each end with their failure; with no tracked child (after a restart) only the grace rule applies
 - [ ] **Success:** tests pass; `observe.py` grows only by the dispatch to `observe_resume.py` and the new argument (a few lines). Commit `feat: confirm resumes by run state`
 
-### Task 7.3: Wire confirmation and the continuation planner into the tick
-**Owner**: Junior AI | **Dependencies**: 6.5, 7.2 | **Effort**: 3
+### Task 7.3: Register the continuation planner and prove resumes in the tick
+**Owner**: Junior AI | **Dependencies**: 4.2, 6.4b, 7.2 | **Effort**: 3
 
-- [ ] `ProjectTick` builds the resumed-from mapping before Observe and passes it to `observe` (Task-level additions)
 - [ ] Add `ContinuationPlanner()` after `DispatchPlanner()` in `PRODUCTION_PLANNERS` (`runner/factory.py`); update `tests/runner/test_factory.py`
-- [ ] Tick tests (`tests/runner/resolutions/test_tick_resume.py`), from an applied retry through to routing: confirmed and completed, ingested and routed; a new pause after the retry is recognized by its new `paused_at`, ingested, and routed to escalate; exit 2, exit before claim and no claim within grace each block the step with their `ResumeFailure` and the node offers the paused-run decisions again
+- [ ] Tick tests (`tests/runner/resolutions/test_tick_resume.py`), from an applied retry through to routing: confirmed and completed, ingested and routed; a new pause after the retry is recognized by its new `paused_at`, ingested, and routed to escalate; a `handled` resolution on a run that has moved on is observed, its current outcome ingested and routed. Failed-resume ticks are proven in Task 8.2, after `resume_failed` exists as a routing input
 - [ ] **Success:** tests pass. Commit `feat: run resumes and their confirmation in the tick`
 
 ### Task 7.4: Watch the pointer of continuation entries
@@ -308,7 +304,7 @@ usageByModel:
 
 - [ ] `runner/dispatch/pointer_watch.py` `watched_runs`: for an entry carrying `PARAM_CONTINUATION`, keep the step's latest pointer write for the worktree and slice index, and use the continuation's `issued_at` as the start, so only snapshots after it count (LLD "Consumes from Other Slices", 125)
 - [ ] Tests (`tests/runner/dispatch/`): a pointer moved after a continuation's `issued_at` is reported; a move before it, during the pause, is not; a non-continuation entry is unchanged
-- [ ] **Success:** tests pass. Commit `feat: watch the pointer of continuation entries`
+- [ ] **Success:** a pointer moved while a resumed run is in flight raises 125's pointer-moved fault, a move during the pause does not, and the existing pointer-watch tests pass unchanged. Commit `feat: watch the pointer of continuation entries`
 
 ### Task 7.5: Prove crash safety
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 3
@@ -329,10 +325,10 @@ usageByModel:
 - [ ] **Success:** tests pass. Commit with Task 8.2
 
 ### Task 8.2: Add `advance-on-accepted-review` to the shipped table
-**Owner**: Junior AI | **Dependencies**: 8.1 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 7.3, 8.1 | **Effort**: 2
 
 - [ ] `runner/routing/tables/default.yaml`: the rule per D8, after `advance-on-stated-pass`
-- [ ] Tick test: an accepted CONCERNS loop whose final review is the accepted one routes through `advance-on-accepted-review`; one that wrote a newer review routes on that review; a failed resume escalates
+- [ ] Tick test: an accepted CONCERNS loop whose final review is the accepted one routes through `advance-on-accepted-review`; one that wrote a newer review routes on that review; a failed resume escalates; exit 2, exit before claim and no claim within grace each block the step with their `ResumeFailure`, route `resume_failed` to escalate once, and the node offers the paused-run decisions again
 - [ ] **Success:** tests pass. Commit `feat: route accepted reviews and failed resumes`
 
 ---
@@ -347,9 +343,9 @@ usageByModel:
 - [ ] **Success:** tests pass. Commit `feat: show the blocked state id in inspect blocked`
 
 ### Task 9.2: Prove each decision end to end with the stub `sq`
-**Owner**: Junior AI | **Dependencies**: 8.2, 9.1 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 4.2, 5.4, 8.2, 9.1 | **Effort**: 3
 
-- [ ] `tests/runner/resolutions/test_decisions_e2e.py`, through `amoeba submit resolution` and ticks, for the decisions no earlier task proves at tick level (retry, accept and handled are proven in Tasks 6.4, 6.5 and 7.3): accept of an escalated completed outcome marks the step done and the successor's pointer write follows next tick, and `blocked_state` and the latest entry's `verdict_ids` give the identifiable accept (D7); rerun after a routed outcome and after `not_applied`; stop blocks with `reason: stopped` and nothing is issued; a held step's resolution is acknowledged and its resume waits until the hold is removed
+- [ ] `tests/runner/resolutions/test_decisions_e2e.py`, through `amoeba submit resolution` and ticks, for the decisions no earlier task proves at tick level (retry, accept and handled are proven in Tasks 6.4b and 7.3): accept of an escalated completed outcome marks the step done and the successor's pointer write follows next tick, and `blocked_state` and the latest entry's `verdict_ids` give the identifiable accept (D7); rerun after a routed outcome and after `not_applied`; stop blocks with `reason: stopped` and nothing is issued; a held step's resolution is acknowledged and its resume waits until the hold is removed
 - [ ] Source test: no Runner module other than `runner/resolutions/act.py` reads `Resolution.instructions`, and none builds an `--instructions` element except `argv.py` (use `tests/ast_strings.py` as other source tests do)
 - [ ] **Success:** tests pass. Commit `test: prove each resolution decision end to end`
 
@@ -370,5 +366,5 @@ usageByModel:
 
 - [ ] Run LLD Verification Walkthrough steps 1 and 2. Record the pass count under this task
 - [ ] Run step 3 on a scratch copy (real `sq`, one P4 run, plus P5 if the accept advances it). Record what happened, including which branch (completed or paused) was taken. Pause the project and `amoeba stop` when done. A failure caused by this slice's code is fixed here; anything else gets an issue and a note under this task
-- [ ] Confirm every source file this slice created or changed is near 300 lines and pyright strict is clean
+- [ ] Confirm every source file this slice created is near 300 lines, that no file this slice changed grew past it (`observe.py` was already over before this slice and may keep only its dispatch lines), and that pyright strict is clean
 - [ ] **Success:** steps 1–3 behave as the LLD expects. Commit `docs: record slice 127 validation`
