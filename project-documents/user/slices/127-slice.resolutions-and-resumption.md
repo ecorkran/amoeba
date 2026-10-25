@@ -11,8 +11,8 @@ interfaces:
 - 129
 - 160
 dateCreated: 20261020
-dateUpdated: 20261021
-status: not_started
+dateUpdated: 20261025
+status: in_progress
 turns: 48
 promptTokens: 6280494
 cachedTokens: 6063484
@@ -470,44 +470,57 @@ type Action = LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | Obser
 
 ### Verification Walkthrough
 
-Run in bash from the repository root. Steps 1–2 use the stub `sq`. Step 3 launches one real `P4` run on a scratch copy, plus a `P5` run if the accept advances it.
+Run in bash from the repository root (`amoeba` below is `uv run amoeba`). Steps 1–2 use the stub `sq`. Step 3 launches one real `P4` run on a scratch copy. Verified on 20261025 (branch `127-slice.resolutions-and-resumption`).
 
 1. **Tests:**
    ```bash
    uv run pytest tests/runner/resolutions tests/store/test_migration_012.py \
      tests/store/test_resolutions.py tests/test_observer_sq_run_id.py -v
    ```
-   Expected: all pass. Tests are named for their rules, for example `test_accept_refused_when_not_at_loop`, `test_retry_confirmed_by_new_paused_at`, `test_missing_run_launches_nothing` and `test_continuation_never_reissued`.
+   Expected: all pass (246 tests). Tests are named for their rules, for example `test_accept_refused_when_not_at_loop`, `test_retry_confirmed_by_new_paused_at`, `test_missing_run_launches_nothing` and `test_continuation_never_reissued`. The crash proofs are `uv run pytest tests/runner/test_crash_resume.py -v` (real processes and `SIGKILL`, about 17 s with `test_crash_recovery.py`).
 
 2. **Full gate and contract suite:**
    ```bash
    uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright
    uv run pytest tests/contract -v
    ```
+   Expected: 3952 passed; `All checks passed!`; `594 files already formatted`; `0 errors, 0 warnings, 0 informations`; the contract suite 47 passed. (`tests/load` is not collected by a bare `pytest`; `test_a_pass_of_id_bearing_entries_polls_once_each_and_scans_nothing` there fails at the base commit too and is unrelated.)
 
-3. **An escalated outcome, rejected and then accepted, on a scratch copy.** Write a table that escalates everything:
+3. **A failed run, rejected and then stopped, on a scratch copy.** Write a table that escalates everything:
    ```bash
-   cp src/amoeba/runner/routing/tables/default.yaml /tmp/escalate.yaml
-   # keep only the last rule (escalate-everything-else) in /tmp/escalate.yaml
+   scratch=$(mktemp -d)/amoeba-scratch; git clone -q . "$scratch"
+   (cd "$scratch" && cf init --name amoeba-scratch --lite --no-ide && cf set arch 120)
+   cf_id=$(cd "$scratch" && cf get --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+   python3 - <<'EOF' > /tmp/escalate.yaml
+   src = open("src/amoeba/runner/routing/tables/default.yaml").read()
+   print(src[: src.index("rules:")] + "rules:\n" + src[src.index("  - id: escalate-everything-else") :])
+   EOF
+   export AMOEBA_STORE_DIR=$(mktemp -d)
+   amoeba start --routing-table /tmp/escalate.yaml &
+   amoeba submit create-project --project scratch --by operator
+   amoeba submit link-cf-project --project scratch --by operator --cf-project-id "$cf_id"
+   sleep 10; amoeba inspect nodes --project scratch --json   # slice 131's slice_design is runnable
+   amoeba submit intent --project scratch --by operator --node-id <slice 131 node id> \
+       --body '{"intent": "drive", "until": "slice_design"}'
    ```
-   Follow 125's walkthrough step 3 to create the scratch project, starting with `amoeba start --routing-table /tmp/escalate.yaml &`, and drive one slice `until: tasks`. When the P4 run finishes:
+   Drive `until: slice_design` and not `tasks`, so an accept spends no `P5` run. When the P4 run finishes (about 15 minutes):
    ```bash
-   amoeba inspect blocked --project scratch          # note blocked_state_id of slice_design
+   amoeba inspect blocked --project scratch --json     # note blocked_state_id of slice_design
    amoeba submit resolution --project scratch --by operator \
        --blocked-state-id <id> --detail "try a resume" --decision retry
-   sleep 3; amoeba inspect messages --project scratch --channel escalation
+   sleep 4; amoeba inspect messages --project scratch --channel escalation --json
    ```
-   Expected, if the run completed: the resolution is rejected. `inspect blocked` shows a new block, and its escalation payload carries `code: decision_not_applicable` and `allowed` as `accept, rerun, stop`. If the run paused instead, retry is allowed: skip to the paused-run check below.
+   Expected, for a run that **failed** (observed 20261025: the Runner's launches did not inherit `OPENROUTER_API_KEY` in this session, so P4 failed with `No API key found`): the resolution is rejected, `inspect blocked` shows a new block `resolution rejected: decision_not_applicable`, and its escalation payload carries `reason: resolution_rejected`, `code: decision_not_applicable` and `allowed: [rerun, stop]`. Then:
    ```bash
-   amoeba inspect blocked --project scratch          # the new blocked_state_id
+   amoeba inspect blocked --project scratch --json     # the new blocked_state_id
    amoeba submit resolution --project scratch --by operator \
-       --blocked-state-id <new id> --detail "good enough" --decision accept
+       --blocked-state-id <new id> --detail "park it" --decision stop
    ```
-   Expected: `inspect nodes` shows `slice_design` done, with no new block, and `inspect journal` shows a `cf_write` for `tasks` on a later tick, then a `P5` `sq_run`. Then pause the project with `{"intent": "pause"}` to stop spending.
+   Expected: `inspect blocked` shows one block, `stopped by operator`, and `inspect journal` shows no new entry. Stop with `amoeba stop`, and remove the scratch project with `(cd "$scratch" && cf project rm "$cf_id" --yes)`.
 
-   **If the run paused:** submit `--decision accept` if its checkpoint is at a loop (`inspect journal --json` shows `outcome_document.checkpoint.is_loop`), otherwise `--decision retry`. Expected: a new `sq_run` entry with `continuation` and `continues`, `sq runs list` showing the same run id running again, and on its end an ingested outcome and a routing decision.
+   **If the run completed instead** (an escalated completed outcome, `inspect blocked` context naming the run), `--decision retry` is rejected with `allowed: [accept, rerun, stop]`, and `--decision accept` on the new block marks `slice_design` done with no new block. **If it paused**, submit `--decision accept` when `inspect journal --json` shows `outcome_document.checkpoint.is_loop` true, otherwise `retry`: a new `sq_run` entry with `continuation` and `continues`, the same run id running again, and on its end an ingested outcome and a routing decision. These two branches are proven with the stub `sq` (`test_decisions_e2e.py`, `test_tick_resume.py`, `test_tick_accept_routing.py`) and were not reached live: the live run took the failed branch.
 
-   Stop with `amoeba stop`.
+   Corrections found while running it: `amoeba inspect blocked` had no id column before this slice (it now has `blocked_state_id`); the scratch project needs `cf set arch 120` before the first pointer write, as in 125's walkthrough; and an `accept` resolves the successor's pointer write in the same tick, because the resolution stage runs before the view is built.
 
 ## Risk Assessment
 

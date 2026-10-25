@@ -125,9 +125,7 @@ class BlockWriter(StoreBase):
         timestamp: str,
         journal_entry_id: str | None,
     ) -> None:
-        """Apply a routing decision's or a resolution's effect, in the caller's
-        transaction. The one place both read, so neither can skip a rule.
-        """
+        """Apply a decision's or a resolution's effect in the caller's transaction."""
         if isinstance(effect, StatusEffect):
             self._write_status(node_id, NodeStatus(effect.status), timestamp)
         elif isinstance(effect, BlockEffect):
@@ -213,9 +211,8 @@ class BlockWriter(StoreBase):
         one place without opening a second transaction. It needs no done check:
         it acts only on a blocked node, and a done node is never blocked.
 
-        ``awaits_runner`` is set only on the inbox path: a PM's resolution is
-        the Runner's to answer, while ``resolve()`` is the Runner's own write
-        and has no one to answer it (slice 127, D9).
+        ``awaits_runner`` is set only on the inbox path: ``resolve()`` is the
+        Runner's own write and has no one to answer it (slice 127, D9).
 
         Returns:
             Whether an open slot was filled. ``False`` means the node had no

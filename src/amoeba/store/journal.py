@@ -356,17 +356,9 @@ class JournalOperations(BlockWriter):
         Returns:
             A mapping of ``run_id`` to the entry id that recorded it.
         """
-        rows = self._execute(
-            sql_journal.SELECT_ENTRIES_WITH_RESULT, (project_id,)
-        ).fetchall()
-
-        recorded: dict[str, str] = {}
-        for row in rows:
-            result = decode_mapping(row[1], sql_journal.COL_JOURNAL_RESULT)
-            run_id = result.get(RESULT_KEY_RUN_ID)
-            if isinstance(run_id, str):
-                recorded[run_id] = str(row[0])
-        return recorded
+        return self._recorded_run_ids(
+            sql_journal.SELECT_ENTRIES_WITH_RESULT, project_id
+        )
 
     def recorded_result_run_nodes(self, project_id: str) -> dict[str, str]:
         """Run ids already recorded in some entry's result, by owning node id.
@@ -378,12 +370,14 @@ class JournalOperations(BlockWriter):
         Returns:
             A mapping of ``run_id`` to the node id of the entry that recorded it.
         """
-        rows = self._execute(
-            sql_journal.SELECT_ENTRY_NODES_WITH_RESULT, (project_id,)
-        ).fetchall()
+        return self._recorded_run_ids(
+            sql_journal.SELECT_ENTRY_NODES_WITH_RESULT, project_id
+        )
 
+    def _recorded_run_ids(self, statement: str, project_id: str) -> dict[str, str]:
+        """``run_id`` to the first selected column of the entry that recorded it."""
         recorded: dict[str, str] = {}
-        for row in rows:
+        for row in self._execute(statement, (project_id,)).fetchall():
             result = decode_mapping(row[1], sql_journal.COL_JOURNAL_RESULT)
             run_id = result.get(RESULT_KEY_RUN_ID)
             if isinstance(run_id, str):

@@ -341,17 +341,19 @@ revision_number: 2
 ### Task 8.1: Add `resume_failed` and `review_accepted`
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 3
 
-- [ ] `runner/routing/inputs.py`: `outcome` gains `resume_failed`; new input `RoutingInput.REVIEW_ACCEPTED` with `true`, `false`, `none` and `unknown`
-- [ ] `runner/routing/reduce.py` and `evidence.py`: `OutcomeEvidence` gains `resume_failed` and the continuation and continued `verdict_ids`; `RESULT_RESUME_FAILURE` takes precedence over `outcome` as `launch_failure` does; `review_accepted` per D8. `gather` reads the continued entry once (`store.journal_entry`), so `reduce` stays pure
-- [ ] Tests in `tests/runner/routing/`: reduction of each new value; table validation still accepts the shipped table; recompute of a pre-127 decision record (with no `review_accepted`) still matches, or fails with the error 126 defines for a changed vocabulary. If neither holds, write `BLOCKED:` with the failure
-- [ ] **Success:** tests pass. Commit with Task 8.2
+- [x] `runner/routing/inputs.py`: `outcome` gains `resume_failed`; new input `RoutingInput.REVIEW_ACCEPTED` with `true`, `false`, `none` and `unknown`
+- [x] `runner/routing/reduce.py` and `evidence.py`: `OutcomeEvidence` gains `resume_failed` and the continuation and continued `verdict_ids`; `RESULT_RESUME_FAILURE` takes precedence over `outcome` as `launch_failure` does; `review_accepted` per D8. `gather` reads the continued entry once (`store.journal_entry`), so `reduce` stays pure
+- [x] Tests in `tests/runner/routing/`: reduction of each new value; table validation still accepts the shipped table; recompute of a pre-127 decision record (with no `review_accepted`) still matches, or fails with the error 126 defines for a changed vocabulary. If neither holds, write `BLOCKED:` with the failure
+- [x] **Success:** tests pass. Commit with Task 8.2
+
+**Note:** a decision recorded before this slice has no review_accepted input; recompute reports an error naming it (126's changed-vocabulary error), not a mismatch.
 
 ### Task 8.2: Add `advance-on-accepted-review` to the shipped table
 **Owner**: Junior AI | **Dependencies**: 7.3, 8.1 | **Effort**: 2
 
-- [ ] `runner/routing/tables/default.yaml`: the rule per D8, after `advance-on-stated-pass`
-- [ ] Tick test: an accepted CONCERNS loop whose final review is the accepted one routes through `advance-on-accepted-review`; one that wrote a newer review routes on that review; a failed resume escalates; exit 2, exit before claim and no claim within grace each block the step with their `ResumeFailure`, route `resume_failed` to escalate once, and the node offers the paused-run decisions again
-- [ ] **Success:** tests pass. Commit `feat: route accepted reviews and failed resumes`
+- [x] `runner/routing/tables/default.yaml`: the rule per D8, after `advance-on-stated-pass`
+- [x] Tick test: an accepted CONCERNS loop whose final review is the accepted one routes through `advance-on-accepted-review`; one that wrote a newer review routes on that review; a failed resume escalates; exit 2, exit before claim and no claim within grace each block the step with their `ResumeFailure`, route `resume_failed` to escalate once, and the node offers the paused-run decisions again
+- [x] **Success:** tests pass. Commit `feat: route accepted reviews and failed resumes`
 
 ---
 
@@ -360,28 +362,30 @@ revision_number: 2
 ### Task 9.1: Add `blocked_state_id` to `inspect blocked`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 1
 
-- [ ] `inspection/__init__.py` and `inspection/core.py` `blocked_rows`: add the column from `BlockedNode.blocked_state.id`
-- [ ] Update the inspection and CLI tests that pin the columns
-- [ ] **Success:** tests pass. Commit `feat: show the blocked state id in inspect blocked`
+- [x] `inspection/__init__.py` and `inspection/core.py` `blocked_rows`: add the column from `BlockedNode.blocked_state.id`
+- [x] Update the inspection and CLI tests that pin the columns
+- [x] **Success:** tests pass. Commit `feat: show the blocked state id in inspect blocked`
 
 ### Task 9.2: Prove each decision end to end with the stub `sq`
 **Owner**: Junior AI | **Dependencies**: 4.2, 5.4, 8.2, 9.1 | **Effort**: 3
 
-- [ ] `tests/runner/resolutions/test_decisions_e2e.py`, through `amoeba submit resolution` and ticks, for the decisions no earlier task proves at tick level (retry, accept and handled are proven in Tasks 6.4b and 7.3): accept of an escalated completed outcome marks the step done and the successor's pointer write follows next tick, and `blocked_state` and the latest entry's `verdict_ids` give the identifiable accept (D7); rerun after a routed outcome and after `not_applied`; stop blocks with `reason: stopped` and nothing is issued; a held step's resolution is acknowledged and its resume waits until the hold is removed
-- [ ] Source test: no Runner module other than `runner/resolutions/act.py` reads `Resolution.instructions`, and none builds an `--instructions` element except `argv.py` (use `tests/ast_strings.py` as other source tests do)
-- [ ] **Success:** tests pass. Commit `test: prove each resolution decision end to end`
+- [x] `tests/runner/resolutions/test_decisions_e2e.py`, through `amoeba submit resolution` and ticks, for the decisions no earlier task proves at tick level (retry, accept and handled are proven in Tasks 6.4b and 7.3): accept of an escalated completed outcome marks the step done and the successor's pointer write follows next tick, and `blocked_state` and the latest entry's `verdict_ids` give the identifiable accept (D7); rerun after a routed outcome and after `not_applied`; stop blocks with `reason: stopped` and nothing is issued; a held step's resolution is acknowledged and its resume waits until the hold is removed
+- [x] Source test: no Runner module other than `runner/resolutions/act.py` reads `Resolution.instructions`, and none builds an `--instructions` element except `argv.py` (use `tests/ast_strings.py` as other source tests do)
+- [x] **Success:** tests pass. Commit `test: prove each resolution decision end to end`
+
+**Note:** the resolution stage runs before the view is built, so after an accept the successor's pointer write happens in the same tick, not the next; and `Resolution.has_instructions` was added so the judge never reads the instructions text.
 
 ### Task 9.3: Update the contract documents
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
 
-- [ ] Per the LLD "Provides to Other Slices", "Contract documents": `docs/inbox-contract.md` (fields, rules, the Runner's answer, codes, the no-secrets rule for instructions, and the change for existing submitters: a bare resolution of a pipeline step is now rejected `decision_required`); `docs/store-contract.md` (migration `012`, the three methods, `recorded_result_run_nodes`); `docs/process-contract.md` (the resolution stage, continuation entries, resume confirmation, the observer's continuation rules, the `resume_skipped` parameter); `docs/substrate-guide.md` (the 120 row)
-- [ ] **Success:** every name in the text matches the code. Commit `docs: document resolutions and resumption`
+- [x] Per the LLD "Provides to Other Slices", "Contract documents": `docs/inbox-contract.md` (fields, rules, the Runner's answer, codes, the no-secrets rule for instructions, and the change for existing submitters: a bare resolution of a pipeline step is now rejected `decision_required`); `docs/store-contract.md` (migration `012`, the three methods, `recorded_result_run_nodes`); `docs/process-contract.md` (the resolution stage, continuation entries, resume confirmation, the observer's continuation rules, the `resume_skipped` parameter); `docs/substrate-guide.md` (the 120 row)
+- [x] **Success:** every name in the text matches the code. Commit `docs: document resolutions and resumption`
 
 ### Task 9.4: Add the CHANGELOG entry
 **Owner**: Junior AI | **Dependencies**: 9.3 | **Effort**: 1
 
-- [ ] Under `[Unreleased]` in `CHANGELOG.md`: the decisions, the Runner's answer, resumes, the new routing rule, the `inspect blocked` column, migration `012`, and the `decision_required` change for existing submitters
-- [ ] **Success:** Commit `docs: add the resolutions and resumption changelog entry`
+- [x] Under `[Unreleased]` in `CHANGELOG.md`: the decisions, the Runner's answer, resumes, the new routing rule, the `inspect blocked` column, migration `012`, and the `decision_required` change for existing submitters
+- [x] **Success:** Commit `docs: add the resolutions and resumption changelog entry`
 
 ### Task 9.5: Final validation and walkthrough
 **Owner**: Junior AI | **Dependencies**: 9.4 | **Effort**: 2

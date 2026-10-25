@@ -261,10 +261,10 @@ Runner's answer is on the blocked state:
 ```python
 with Store.open_read_only(project_id="demo") as store:
     state = store.blocked_state(blocked_state_id)  # None if no such block
-    state.awaits_runner   # True until the Runner has answered
+    state.awaits_runner  # True until the Runner has answered
     state.runner_outcome  # ResolutionOutcome.APPLIED or REJECTED, or None
-    state.runner_code     # the rejection code above; None when applied
-    state.runner_reason   # the detail, for people; branch on runner_code
+    state.runner_code  # the rejection code above; None when applied
+    state.runner_reason  # the detail, for people; branch on runner_code
 ```
 
 `amoeba inspect blocked` shows each blocked node's `blocked_state_id`, the id a
