@@ -8,6 +8,7 @@ job, and the evidence stays in the store, linked by ``journal_entry_id``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from amoeba.runner.routing.engine import evaluate
 from amoeba.runner.routing.inputs import RoutingInputs
@@ -33,7 +34,7 @@ class Recomputation:
 def recompute(decision: RoutingDecision, stored: RoutingTableVersion) -> Recomputation:
     """Evaluate ``stored``'s table on ``decision``'s inputs and compare."""
     try:
-        table = parse_table(stored.content)
+        table = _parsed(stored.content)
     except TableError as error:
         # Expected: a table stored under a grammar this code no longer reads.
         # An unreadable table is shown as an error, never as a mismatch.
@@ -50,6 +51,12 @@ def recompute(decision: RoutingDecision, stored: RoutingTableVersion) -> Recompu
         route=match.route,
         matches=(match.rule.id, match.route) == (decision.rule_id, decision.route),
     )
+
+
+#: A listing recomputes many decisions under few table versions; parsing each
+#: stored text once is enough. Tables are immutable, and a failed parse is not
+#: cached (the exception propagates).
+_parsed = lru_cache(maxsize=16)(parse_table)
 
 
 def _unreadable(reason: str) -> Recomputation:

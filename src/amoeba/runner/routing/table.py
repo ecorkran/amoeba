@@ -33,6 +33,7 @@ from amoeba.runner.routing.validate import (
     SUPPORTED_FORMATS,
     normalize_condition,
     normalize_input_name,
+    normalize_route,
     validate,
 )
 from amoeba.store import Route
@@ -195,7 +196,7 @@ def _rule_of(rule: RuleFile) -> Rule:
             RoutingInput(normalize_input_name(name)): normalize_condition(values)
             for name, values in rule.when.items()
         },
-        route=Route(rule.route.strip().lower()),
+        route=normalize_route(rule.route),
         max_attempts=rule.max_attempts,
         judge_eligible=rule.judge_eligible,
     )

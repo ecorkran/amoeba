@@ -120,9 +120,18 @@ def _rule_problems(rule: RuleFile) -> list[str]:
     return problems
 
 
+def normalize_route(text: str) -> Route:
+    """The ``Route`` a table's route text names (trimmed, case-insensitive).
+
+    Raises:
+        ValueError: The text names no route.
+    """
+    return Route(text.strip().lower())
+
+
 def _route_of(text: str) -> Route | None:
     try:
-        return Route(text.strip().lower())
+        return normalize_route(text)
     except ValueError:
         # Expected: the table names a route this code does not have. It is
         # reported as a problem, not raised.
