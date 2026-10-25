@@ -9,18 +9,32 @@ dependencies:
 - 123
 - 124
 - 125
-projectState: Slices 120–125 are merged. The tick (`runner/tick.py`) has a `# [route - slice 126]`
-  slot after the pointer observe, and `_decide` builds `ProjectView` itself. Ingestion
-  (`runner/ingest/record.py`) resolves finished runs with `awaits_routing` and the result
-  keys `RESULT_OUTCOME`, `RESULT_OUTCOME_DOCUMENT`, `RESULT_VERDICT_IDS`, `RESULT_REVIEW_FAULT`;
-  `finish.RESULT_LAUNCH_FAILURE` marks a launch failure. The store has `record_routing_decision`,
-  `Route` (advance, rerun, escalate), `StatusEffect`, `BlockEffect`, `routing_table_version`,
-  `routing_decisions(node_id)`, `attempt_count` and `unrouted_outcomes`. Tests route outcomes
-  through the stand-in `tests/runner/ingest/routing_support.py`. `amoeba.runner.routing`
-  does not exist.
+projectState: Slices 120–125 are merged. The tick (`runner/tick.py`) has a `# [route
+  - slice 126]` slot after the pointer observe, and `_decide` builds `ProjectView`
+  itself. Ingestion (`runner/ingest/record.py`) resolves finished runs with `awaits_routing`
+  and the result keys `RESULT_OUTCOME`, `RESULT_OUTCOME_DOCUMENT`, `RESULT_VERDICT_IDS`,
+  `RESULT_REVIEW_FAULT`; `finish.RESULT_LAUNCH_FAILURE` marks a launch failure. The
+  store has `record_routing_decision`, `Route` (advance, rerun, escalate), `StatusEffect`,
+  `BlockEffect`, `routing_table_version`, `routing_decisions(node_id)`, `attempt_count`
+  and `unrouted_outcomes`. Tests route outcomes through the stand-in `tests/runner/ingest/routing_support.py`.
+  `amoeba.runner.routing` does not exist.
 dateCreated: 20261024
-dateUpdated: 20261024
+dateUpdated: 20261025
 status: not_started
+turns: 23
+promptTokens: 1381998
+cachedTokens: 1296453
+cacheWriteTokens: 85505
+completionTokens: 23950
+durationSeconds: 247.9
+costUsd: 1.422769
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-opus-5-5:
+    rounds: 1
+    costUsd: 1.4227694
+    completionTokens: 23950
 ---
 
 ## Context Summary
