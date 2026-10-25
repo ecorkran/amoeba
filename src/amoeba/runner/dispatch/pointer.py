@@ -36,16 +36,15 @@ from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.lifecycle.plan_read import set_slice_argv
 from amoeba.store import (
     PARAM_CHECKOUT,
+    PARAM_EXPECTED,
     PARAM_EXPECTED_SLICE_INDEX,
+    PARAM_PROJECT,
     CommandKind,
     JournalEntry,
     Store,
 )
 from amoeba.upstream.context_forge import SliceStem, parse_slice_stem
 
-#: Journal parameter keys of a pointer write besides the checkout and the index.
-PARAM_PROJECT = "project"
-PARAM_EXPECTED = "expected"
 #: The worktree the write was meant for (``None`` for a project without worktrees),
 #: so a read-back in a later tick can judge the record without re-resolving.
 PARAM_EXPECTED_WORKTREE_ID = "expected_worktree_id"

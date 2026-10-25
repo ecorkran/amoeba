@@ -72,6 +72,11 @@ PARAM_CHECKOUT: Final = "checkout"
 #: (slice 125). The read-back compares it with the index parsed from ``fileSlice``.
 PARAM_EXPECTED_SLICE_INDEX: Final = "expected_slice_index"
 
+#: The ``cf_write`` parameter keys naming the CF project id and the expected record
+#: (both required at issue time).
+PARAM_PROJECT: Final = "project"
+PARAM_EXPECTED: Final = "expected"
+
 #: The parameter keys each command kind must carry at issue time.
 #:
 #: Validated by ``journal_issue`` *before* anything is written, because the
@@ -82,7 +87,7 @@ PARAM_EXPECTED_SLICE_INDEX: Final = "expected_slice_index"
 #:
 #: Additional keys beyond these are stored and returned unchanged.
 REQUIRED_PARAMETER_KEYS: Final[Mapping[CommandKind, frozenset[str]]] = {
-    CommandKind.CF_WRITE: frozenset({"project", "expected", PARAM_CHECKOUT}),
+    CommandKind.CF_WRITE: frozenset({PARAM_PROJECT, PARAM_EXPECTED, PARAM_CHECKOUT}),
     CommandKind.SQ_RUN: frozenset({"pipeline", "params", PARAM_RUN_ID}),
 }
 

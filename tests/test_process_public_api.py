@@ -46,6 +46,7 @@ EXPECTED_EXPORTS = {
     "ReadBackAnswer",
     "ReadFailed",
     "CFRun",
+    "CF_FIELD_FILE_SLICE",
     "RESULT_FILE_SLICE",
     "RESULT_PROJECT_PATH",
     "RESULT_UPDATED_AT",

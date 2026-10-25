@@ -15,11 +15,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from amoeba.process import RESULT_WORKTREE_ID
-from amoeba.runner.dispatch.pointer import PARAM_PROJECT
+from amoeba.process import CF_FIELD_FILE_SLICE, RESULT_WORKTREE_ID
+from amoeba.runner.dispatch.checkout import is_plain_int
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.store import (
     PARAM_EXPECTED_SLICE_INDEX,
+    PARAM_PROJECT,
     PARAM_RUN_ID,
     CFSnapshot,
     CommandKind,
@@ -35,7 +36,6 @@ from amoeba.upstream.context_forge import (
 
 #: The projected field holding each level's active slice.
 _WORKTREE_ACTIVE_SLICE = "activeSlice"
-_PROJECT_FILE_SLICE = "fileSlice"
 
 
 @dataclass(frozen=True)
@@ -104,7 +104,7 @@ def watched_runs(
             or pointer.resolved_at is None
             or not isinstance(run_id, str)
             or not isinstance(cf_project, str)
-            or not isinstance(index, int)
+            or not is_plain_int(index)
         ):
             continue
         worktree = (pointer.result or {}).get(RESULT_WORKTREE_ID)
@@ -144,7 +144,7 @@ def _active_slice(snapshot: CFSnapshot, worktree_id: str | None) -> str | None:
         return None
     if worktree_id is None:
         project = snapshot.state.get(STATE_PROJECT_KEY)
-        return _text(project, _PROJECT_FILE_SLICE)
+        return _text(project, CF_FIELD_FILE_SLICE)
     worktrees = snapshot.state.get(STATE_WORKTREES_KEY)
     if not isinstance(worktrees, Mapping):
         return None
@@ -160,6 +160,12 @@ def _text(level: object, field: str) -> str | None:
 
 #: The escalation payload key listing every moved run.
 PAYLOAD_RUNS = "runs"
+
+#: Keys of each moved-run listing in that payload.
+LISTING_NODE_ID = "node_id"
+LISTING_RUN_ID = "run_id"
+LISTING_WORKTREE_ID = "worktree_id"
+LISTING_OBSERVED = "observed"
 
 
 def watch_pointers(
@@ -181,10 +187,10 @@ def watch_pointers(
         return
     listing = [
         {
-            "node_id": m.node_id,
-            "run_id": m.run_id,
-            "worktree_id": m.worktree_id,
-            "observed": m.observed,
+            LISTING_NODE_ID: m.node_id,
+            LISTING_RUN_ID: m.run_id,
+            LISTING_WORKTREE_ID: m.worktree_id,
+            LISTING_OBSERVED: m.observed,
         }
         for m in moved
     ]

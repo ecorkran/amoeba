@@ -54,15 +54,12 @@ from amoeba.process.recovery import Adopt, NotApplied, Observation, Unknown
 from amoeba.process.version_label import VERSION_UNAVAILABLE
 from amoeba.store.journal_models import (
     PARAM_CHECKOUT,
+    PARAM_EXPECTED,
     PARAM_EXPECTED_SLICE_INDEX,
+    PARAM_PROJECT,
     JournalEntry,
 )
 from amoeba.upstream.context_forge import parse_slice_stem
-
-#: Journal parameter keys this observer reads. ``project`` and ``expected`` are
-#: required at issue time, as is ``checkout`` for entries written since slice 125.
-PARAM_PROJECT = "project"
-PARAM_EXPECTED = "expected"
 
 #: Result keys recorded on adoption.
 RESULT_UPDATED_AT = "cf_updated_at"

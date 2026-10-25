@@ -67,7 +67,8 @@ def detection_key(
     """
     for watch in watches:
         directory = Path(watch.reviews_dir)
-        if directory == file.parent:
+        # Resolved too: a checkout path and a watch can differ by a symlink.
+        if directory == file.parent or directory.resolve() == file.parent.resolve():
             return ledger_key(directory / file.name, content)
     return None
 

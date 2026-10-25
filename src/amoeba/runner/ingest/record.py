@@ -20,6 +20,7 @@ from typing import Final
 from amoeba.process import RunOutcomeDocument
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.ingest.outcome import (
+    PAYLOAD_REASON,
     BlockPlan,
     OutcomePlan,
     cut_to_bound,
@@ -53,7 +54,6 @@ RESULT_REVIEW_FAULT: Final = "review_fault"
 
 #: Block payload keys added by an unknown review.
 PAYLOAD_PATH: Final = "path"
-PAYLOAD_REASON_TEXT: Final = "reason"
 PAYLOAD_REVIEW_FAULT: Final = "review_fault"
 
 #: What the result says for a run Squadron no longer knows.
@@ -111,7 +111,7 @@ def _block_with(plan: OutcomePlan, unknown: ReviewUnknown | None) -> BlockPlan |
         {
             PAYLOAD_FAULT_KIND: FaultKind.REVIEW_UNKNOWN.value,
             PAYLOAD_PATH: unknown.path,
-            PAYLOAD_REASON_TEXT: cut_to_bound(unknown.reason),
+            PAYLOAD_REASON: cut_to_bound(unknown.reason),
         },
     )
 

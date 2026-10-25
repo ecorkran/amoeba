@@ -37,10 +37,12 @@ from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
 
 #: The order states go in within a checkout: launches before pointer writes.
+_RANK_LAUNCH = 0
+_RANK_POINTER_WRITE = 1
 _PRIORITY = {
-    DispatchState.POINTED: 0,
-    DispatchState.REISSUE: 0,
-    DispatchState.NEEDS_POINTER: 1,
+    DispatchState.POINTED: _RANK_LAUNCH,
+    DispatchState.REISSUE: _RANK_LAUNCH,
+    DispatchState.NEEDS_POINTER: _RANK_POINTER_WRITE,
 }
 
 
@@ -80,10 +82,12 @@ def _action(node: Node, facts: StepDispatchFacts) -> Action:
             )
         case DispatchState.REISSUE:
             return _reissue(node, facts)
-        case _:
+        case DispatchState.NEEDS_POINTER:
             return WriteSlicePointer(
                 node.id, facts.cf_project_id, facts.slice_index, checkout
             )
+        case _:
+            raise ValueError(f"step {node.id} in state {facts.state} is not planned")
 
 
 def _reissue(node: Node, facts: StepDispatchFacts) -> LaunchRun:

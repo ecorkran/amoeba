@@ -109,12 +109,12 @@ def _bounds(value: object) -> tuple[int, int] | None:
     if len(pair) != _RANGE_LENGTH:
         return None
     low, high = pair
-    if not (_is_int(low) and _is_int(high)):
+    if not (is_plain_int(low) and is_plain_int(high)):
         return None
     return low, high
 
 
-def _is_int(value: object) -> TypeGuard[int]:
+def is_plain_int(value: object) -> TypeGuard[int]:
     """An integer; ``bool`` is not one, though Python says so."""
     return isinstance(value, int) and not isinstance(value, bool)
 

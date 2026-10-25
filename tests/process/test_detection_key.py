@@ -79,3 +79,19 @@ def test_detection_files_a_row_under_the_key_detection_key_names(
 
         assert key is not None
         assert store.detection(PROJECT, *key) is not None
+
+
+def test_a_watch_reached_through_a_symlink_still_matches_with_the_watch_path(
+    tmp_path: Path,
+) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    file = real / "a.md"
+
+    key = detection_key([_watch(str(link))], file, CONTENT)
+
+    assert key == (str(link / "a.md"), content_digest(CONTENT)), (
+        "keyed by the watch's own path, as detection builds it"
+    )

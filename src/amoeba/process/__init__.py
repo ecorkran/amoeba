@@ -20,6 +20,7 @@ from amoeba.process.errors import (
     UpstreamShapeError,
 )
 from amoeba.process.host import ResidentProcess, Tenant
+from amoeba.process.observers.cf_get import CF_FIELD_FILE_SLICE
 from amoeba.process.observers.cf_readback import (
     RESULT_FILE_SLICE,
     RESULT_PROJECT_PATH,
@@ -62,6 +63,7 @@ from amoeba.process.tenants import standard_tenants
 from amoeba.process.version_label import capture_sq_version_label
 
 __all__ = [
+    "CF_FIELD_FILE_SLICE",
     "RESULT_FILE_SLICE",
     "RESULT_PROJECT_PATH",
     "RESULT_UPDATED_AT",
