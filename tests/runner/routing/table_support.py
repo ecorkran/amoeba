@@ -14,6 +14,13 @@ TEST_AMOEBA_VERSION = "0.0.0-test"
 #: Every pipeline a table must bound, with a generous default.
 DEFAULT_BOUNDS = {PIPELINE_P4: 240, PIPELINE_P5: 240, PIPELINE_P6: 720}
 
+#: A rule that advances every completed run, for tests that only need runs to land.
+ADVANCE_COMPLETED = """\
+- id: advance-completed
+  when: {outcome: completed}
+  route: advance
+"""
+
 CATCH_ALL = """\
   - id: catch-all
     when: {}

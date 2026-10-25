@@ -23,13 +23,16 @@ from amoeba.store import (
     BlockedKind,
     Channel,
     CommandKind,
+    JournalEntry,
     JournalOutcome,
     Node,
     NodeStatus,
+    Route,
+    RoutingDecision,
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
-from runner.ingest.routing_support import route_outcome
+from runner.routing.table_support import ADVANCE_COMPLETED, small_table
 
 PROJECT = "demo"
 SLICE = "ingest-slice"
@@ -67,6 +70,14 @@ def _unrouted_ids(rig: DispatchRig) -> list[str]:
     return [entry.id for entry in rig.store.unrouted_outcomes(PROJECT)]
 
 
+def _routed(rig: DispatchRig, entry: JournalEntry) -> RoutingDecision:
+    """The one decision the same tick made for ``entry``, which cleared its flag."""
+    decision = rig.store.routing_decision_for_entry(entry.id)
+    assert decision is not None
+    assert _unrouted_ids(rig) == []
+    return decision
+
+
 def _no_new_work(rig: DispatchRig, node: Node) -> None:
     pointers = len(rig.entries(CommandKind.CF_WRITE, node))
     runs = len(rig.entries(CommandKind.SQ_RUN, node))
@@ -101,10 +112,12 @@ def test_a_paused_run_blocks_on_the_checkpoint_and_keeps_it_in_the_result(
     assert isinstance(document, dict)
     assert document["checkpoint"]["kind"] == "awaits_human"  # pyright: ignore[reportUnknownVariableType]
     assert len(rig.store.verdicts(PROJECT)) == 1, "the review behind the checkpoint"
-    assert _unrouted_ids(rig) == [entry.id]
+    decision = _routed(rig, entry)
+    assert decision.route is Route.ESCALATE
+    assert _open_blocks(rig, node) == [BlockedKind.SQ_CHECKPOINT], "no second block"
 
 
-def test_a_failed_run_blocks_on_a_human_and_is_left_for_routing(
+def test_a_failed_run_blocks_on_a_human_and_is_routed_without_a_second_block(
     rig: DispatchRig,
 ) -> None:
     node = _launched(rig)
@@ -117,17 +130,12 @@ def test_a_failed_run_blocks_on_a_human_and_is_left_for_routing(
         reviews=[],
     )
 
-    assert _open_blocks(rig, node) == [BlockedKind.HUMAN]
-    assert _unrouted_ids(rig) == [entry.id]
+    assert _routed(rig, entry).route is Route.ESCALATE
+    assert _open_blocks(rig, node) == [BlockedKind.HUMAN], "no second block"
     _no_new_work(rig, node)
-    assert _unrouted_ids(rig) == [entry.id], "nothing routes it but a decision"
-
-    route_outcome(rig.store, PROJECT, node.id, entry.id)
-
-    assert _unrouted_ids(rig) == []
 
 
-def test_a_completed_run_with_an_unknown_review_blocks_and_is_left_for_routing(
+def test_a_completed_run_with_an_unknown_review_blocks_and_is_routed(
     rig: DispatchRig,
 ) -> None:
     node = _launched(rig)
@@ -144,16 +152,16 @@ def test_a_completed_run_with_an_unknown_review_blocks_and_is_left_for_routing(
     assert done is not None and done.result is not None
     assert "missing" in str(done.result[RESULT_REVIEW_FAULT])
     assert done.result[RESULT_VERDICT_IDS] == []
-    assert _unrouted_ids(rig) == [entry.id]
+    decision = _routed(rig, entry)
+    assert decision.route is Route.ESCALATE
+    assert decision.inputs["verdict"] == "unknown"
+    assert _open_blocks(rig, node) == [BlockedKind.HUMAN], "no second block"
 
-    route_outcome(rig.store, PROJECT, node.id, entry.id)
 
-    assert _unrouted_ids(rig) == []
-
-
-def test_a_clean_completed_run_leaves_its_step_waiting_for_routing(
+def test_a_clean_completed_run_is_routed_in_the_tick_that_ingests_it(
     rig: DispatchRig,
 ) -> None:
+    rig.tick_rig.routing_table = small_table(ADVANCE_COMPLETED)
     node = _launched(rig)
     review = single_review(CF_SLUG)
     _write(rig, review)
@@ -161,11 +169,8 @@ def test_a_clean_completed_run_leaves_its_step_waiting_for_routing(
 
     rig.end_run(node, RunOutcome.COMPLETED, **review.document)
 
-    assert rig.status(node) is NodeStatus.RUNNABLE, "no `started`, no `done`"
+    decision = _routed(rig, entry)
+    assert (decision.rule_id, decision.route) == ("advance-completed", Route.ADVANCE)
+    assert rig.status(node) is NodeStatus.DONE
     assert _open_blocks(rig, node) == []
-    assert _unrouted_ids(rig) == [entry.id]
     _no_new_work(rig, node)
-
-    route_outcome(rig.store, PROJECT, node.id, entry.id)
-
-    assert _unrouted_ids(rig) == []

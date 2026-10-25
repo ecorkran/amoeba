@@ -111,7 +111,8 @@ def test_it_closes_when_the_run_ends_and_the_run_is_ingested(
     rig.end_run(node, RunOutcome.COMPLETED)
 
     done = rig.store.journal_entry(entry.id)
-    assert done is not None and done.is_resolved and done.awaits_routing
+    assert done is not None and done.is_resolved
+    assert rig.store.routing_decision_for_entry(entry.id) is not None, "routed"
     assert _open(rig) == []
     assert len(rig.entries(CommandKind.SQ_RUN, node)) == 1
 

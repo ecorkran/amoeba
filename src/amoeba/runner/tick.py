@@ -2,7 +2,7 @@
 
 The sequence is fixed code (D1): intents are applied first (124), then the rest.
 Slots later slices fill are marked in comments only: the body of
-``finish.record`` (125), routing (126) after record.
+``finish.record`` (125). Routing (126) runs after record, on a view built before it.
 """
 
 from __future__ import annotations
@@ -53,6 +53,7 @@ from amoeba.runner.observe import RunObserver
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.project_view import build_project_view
+from amoeba.runner.routing.stage import route_outcomes
 from amoeba.runner.routing.table import RoutingTable
 from amoeba.store import (
     PARAM_CHECKOUT,
@@ -148,7 +149,17 @@ class ProjectTick:
         # The view is built before routing: what routing does is first seen by the
         # next tick's view (slice 126, D8).
         view = self._build_view(observed.runs, self._probes.results(links), desired)
-        # [route - slice 126]
+        # Store reads and writes only, so no budget check: it starts no subprocess.
+        self.wrote = (
+            route_outcomes(
+                self._store,
+                self._project_id,
+                self._routing_table,
+                self._amoeba_version,
+                self._context,
+            )
+            or self.wrote
+        )
         decided = self._decide(view)
         if self._act(decided, budget) is TickResult.CUT_OFF:
             return TickResult.CUT_OFF

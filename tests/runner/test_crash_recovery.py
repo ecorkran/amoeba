@@ -176,7 +176,7 @@ def test_kill_between_block_and_report_finishes_once(
     review_harness.stop(process)
 
 
-def test_kill_between_ingest_and_route_keeps_outcome_unrouted(
+def test_kill_between_ingest_and_route_routes_the_outcome_once_after_restart(
     review_harness: CrashHarness,
 ) -> None:
     run = _review_run(review_harness, single_review(REVIEW_SLICE))
@@ -187,12 +187,13 @@ def test_kill_between_ingest_and_route_keeps_outcome_unrouted(
     assert [e.id for e in review_harness.unrouted()] == [entry.id]
 
     second = review_harness.start(run)
+    decision = review_harness.wait_for_decision(entry)
     review_harness.stop(second)
 
-    assert [e.id for e in review_harness.unrouted()] == [entry.id], "still unrouted"
-    assert len(review_harness.verdict_ids()) == 1, "recorded once, not again"
-    review_harness.route(entry)
+    assert decision.journal_entry_id == entry.id
     assert review_harness.unrouted() == []
+    assert len(review_harness.decisions(entry)) == 1, "routed exactly once"
+    assert len(review_harness.verdict_ids()) == 1, "recorded once, not again"
 
 
 # --------------------------------------------------------------------------

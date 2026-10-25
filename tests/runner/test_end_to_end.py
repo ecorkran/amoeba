@@ -141,7 +141,8 @@ def test_the_normal_path_records_run_id_outcome_and_status(scenario: Scenario) -
     assert entry.result[RESULT_OUTCOME] == "completed"
     assert entry.result[RESULT_STATUS] == "completed"
     assert entry.result[RESULT_VERDICT_IDS] == []
-    assert entry.awaits_routing is True
+    assert entry.awaits_routing is False, "routed in the tick that ingested it"
+    assert scenario.store.routing_decision_for_entry(entry.id) is not None
     stderr = log_paths(scenario.supervisor_dir, entry.id).stderr.read_text()
     assert f"run_id={run_id}\n" in stderr, "confirmed by its own line"
     assert scenario.escalations() == []

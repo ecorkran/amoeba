@@ -39,7 +39,11 @@ from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
-from runner.routing.table_support import TEST_AMOEBA_VERSION, small_table
+from runner.routing.table_support import (
+    ADVANCE_COMPLETED,
+    TEST_AMOEBA_VERSION,
+    small_table,
+)
 from runner.tick_support import runnable_unbusy
 
 KILL_AT_ENV = "PROOF_KILL_AT"
@@ -207,7 +211,7 @@ def main(argv: Sequence[str]) -> None:
         now=partial(datetime.now, UTC),
         monotonic=time.monotonic,
         version_label="sq-test-label",
-        routing_table=small_table(),
+        routing_table=small_table(ADVANCE_COMPLETED),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
     process = ResidentProcess(
