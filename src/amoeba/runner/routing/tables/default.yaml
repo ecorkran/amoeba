@@ -1,0 +1,39 @@
+# The shipped routing table (slice 126, D9). Rules are tried in order; the first
+# match whose route is eligible wins. The table ends in a catch-all escalate.
+#
+# No secrets go in this file: its text is stored verbatim with every decision.
+format: 1
+
+# Minutes an in-flight run may take before a run_overrun escalation is raised.
+# Starting values, to be calibrated by real runs. The run is never killed.
+time_bounds_minutes:
+  P4: 240
+  P5: 240
+  P6: 720
+
+rules:
+  - id: advance-on-stated-pass
+    when: {outcome: completed, verdict: pass, standing: stated}
+    route: advance
+
+  # A new concern is worth one more round with the fresh review as feedback.
+  - id: rerun-new-concerns
+    when:
+      outcome: completed
+      verdict: concerns
+      standing: stated
+      recurrence: new
+    route: rerun
+    max_attempts: 2
+
+  # The outcomes a Judge would weigh. A recurring concern is not rerun.
+  - id: escalate-completed-concerns
+    when: {outcome: completed, verdict: [concerns, fail]}
+    route: escalate
+    judge_eligible: true
+
+  # Every pause, failure, unknown and untrusted standing lands here.
+  - id: escalate-everything-else
+    when: {}
+    route: escalate
+    judge_eligible: false

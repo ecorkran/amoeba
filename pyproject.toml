@@ -21,8 +21,12 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/amoeba"]
-# Migration SQL must ship in the wheel, not only exist in a source checkout.
-artifacts = ["src/amoeba/store/schema/*.sql"]
+# Migration SQL and the shipped routing table must ship in the wheel, not only
+# exist in a source checkout.
+artifacts = [
+    "src/amoeba/store/schema/*.sql",
+    "src/amoeba/runner/routing/tables/*.yaml",
+]
 
 [dependency-groups]
 dev = [
