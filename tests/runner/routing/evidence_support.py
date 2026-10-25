@@ -31,6 +31,10 @@ def completed_evidence(**changes: object) -> OutcomeEvidence:
     base = OutcomeEvidence(
         outcome="completed",
         launch_failed=False,
+        resume_failed=False,
+        continuation=None,
+        verdict_ids=(),
+        continued_verdict_ids=None,
         checkpoint=None,
         failure=None,
         step="slice_design",

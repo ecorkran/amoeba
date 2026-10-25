@@ -16,6 +16,12 @@ rules:
     when: {outcome: completed, verdict: pass, standing: stated}
     route: advance
 
+  # An accepted loop that ended on the review the PM accepted (slice 127, D8). Without
+  # this the completed CONCERNS review would be routed again, undoing the decision.
+  - id: advance-on-accepted-review
+    when: {outcome: completed, review_accepted: true}
+    route: advance
+
   # A new concern is worth one more round with the fresh review as feedback.
   - id: rerun-new-concerns
     when:

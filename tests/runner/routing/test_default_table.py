@@ -23,6 +23,7 @@ def test_the_shipped_rule_ids_are_in_the_designed_order() -> None:
     table = parse_table(_shipped_text())
     assert [rule.id for rule in table.rules] == [
         "advance-on-stated-pass",
+        "advance-on-accepted-review",
         "rerun-new-concerns",
         "escalate-completed-concerns",
         "escalate-everything-else",

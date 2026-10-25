@@ -17,6 +17,7 @@ from amoeba.process import (
     parse_checkpoint_kind,
     parse_failure_kind,
 )
+from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.runner.routing.inputs import (
     CLEAR,
     FALSE,
@@ -26,6 +27,7 @@ from amoeba.runner.routing.inputs import (
     NODE_RUNNABLE,
     NONE,
     OUTCOME_LAUNCH_FAILED,
+    OUTCOME_RESUME_FAILED,
     RECURRING,
     SEVERITY_LOW_TO_HIGH,
     TRUE,
@@ -66,7 +68,12 @@ class ReviewPart:
 class OutcomeEvidence:
     """Everything the reduction reads, as plain data.
 
-    ``outcome`` is the entry result's ``outcome`` text. ``checkpoint`` and
+    ``outcome`` is the entry result's ``outcome`` text. ``resume_failed`` is set when
+    the result carries a ``resume_failure`` and wins over ``outcome``, as
+    ``launch_failed`` does. ``continuation`` is the entry's continuation (``retry``,
+    ``accept`` or ``observe``), ``None`` for an ordinary run; ``verdict_ids`` are the
+    entry's recorded reviews and ``continued_verdict_ids`` those of the entry it
+    continues, ``None`` when that entry could not be read. ``checkpoint`` and
     ``failure`` are the outcome document's sections, ``None`` when it has none.
     ``attempt_count`` is the node's counted attempts for ``step``, ``None`` when
     the step is not a known one (it cannot be counted). ``review_unreadable`` is
@@ -75,6 +82,10 @@ class OutcomeEvidence:
 
     outcome: str | None
     launch_failed: bool
+    resume_failed: bool
+    continuation: str | None
+    verdict_ids: tuple[str, ...]
+    continued_verdict_ids: tuple[str, ...] | None
     checkpoint: RunCheckpoint | None
     failure: RunFailure | None
     step: str | None
@@ -95,6 +106,7 @@ def reduce(evidence: OutcomeEvidence) -> RoutingInputs:
         RoutingInput.FAILURE_KIND: _failure_kind(evidence.failure),
         RoutingInput.STEP: step,
         RoutingInput.NODE_STATE: _node_state(evidence.node_status),
+        RoutingInput.REVIEW_ACCEPTED: _review_accepted(evidence),
         **_review_inputs(evidence),
     }
     return RoutingInputs(values, _attempt(evidence, step))
@@ -103,9 +115,21 @@ def reduce(evidence: OutcomeEvidence) -> RoutingInputs:
 def _outcome(evidence: OutcomeEvidence) -> str:
     if evidence.launch_failed:
         return OUTCOME_LAUNCH_FAILED
+    if evidence.resume_failed:
+        return OUTCOME_RESUME_FAILED
     if evidence.outcome is None:
         return UNKNOWN
     return _in_set(RoutingInput.OUTCOME, evidence.outcome)
+
+
+def _review_accepted(evidence: OutcomeEvidence) -> str:
+    """``true`` when an accepted loop ended on the review the PM accepted (D8)."""
+    if evidence.continuation != Continuation.ACCEPT.value:
+        return NONE
+    if evidence.continued_verdict_ids is None:
+        return UNKNOWN
+    same = evidence.verdict_ids == evidence.continued_verdict_ids
+    return TRUE if same else FALSE
 
 
 def _checkpoint_kind(checkpoint: RunCheckpoint | None) -> str:

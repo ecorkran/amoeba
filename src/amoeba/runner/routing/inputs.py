@@ -27,6 +27,10 @@ UNKNOWN: Final = "unknown"
 #: The outcome of a launch that never produced a run (122's launch failure).
 OUTCOME_LAUNCH_FAILED: Final = "launch_failed"
 
+#: The outcome of a resume that did not take (slice 127, D8). It is reduced from the
+#: entry's ``resume_failure``, which wins over the run's recorded outcome.
+OUTCOME_RESUME_FAILED: Final = "resume_failed"
+
 #: The key under which a decision's recorded ``inputs`` holds the attempt number.
 INPUT_ATTEMPT: Final = "attempt"
 
@@ -48,6 +52,8 @@ class RoutingInput(StrEnum):
     RECURRENCE = "recurrence"
     STEP = "step"
     NODE_STATE = "node_state"
+    #: Whether a PM-accepted loop ended on the review the PM accepted (slice 127, D8).
+    REVIEW_ACCEPTED = "review_accepted"
 
 
 #: ``recurrence`` values (a finding-level tag folded over one outcome, D1).
@@ -90,6 +96,7 @@ _OUTCOMES: Final = (
     RunOutcome.ORPHANED.value,
     OUTCOME_VANISHED,
     OUTCOME_LAUNCH_FAILED,
+    OUTCOME_RESUME_FAILED,
 )
 
 #: Each input's closed value set. Every set holds ``unknown``.
@@ -117,6 +124,7 @@ VALUE_SETS: Final[Mapping[RoutingInput, frozenset[str]]] = MappingProxyType(
         RoutingInput.NODE_STATE: _values(
             NODE_RUNNABLE, NODE_BLOCKED, NODE_DONE, UNKNOWN
         ),
+        RoutingInput.REVIEW_ACCEPTED: _values(TRUE, FALSE, NONE, UNKNOWN),
     }
 )
 

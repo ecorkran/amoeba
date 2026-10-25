@@ -155,3 +155,79 @@ def test_gather_writes_nothing(store: Store) -> None:
     gather(store, entry)
 
     assert [e.id for e in store.unrouted_outcomes(PROJECT)] == [entry.id]
+
+
+# -- slice 127: continuations -------------------------------------------------
+
+
+def test_a_failed_resume_is_carried_and_wins_over_the_recorded_outcome(
+    store: Store,
+) -> None:
+    node_id = stage_node(store)
+    entry = stage_outcome(store, node_id, outcome="paused", resume_failure="refused")
+
+    evidence = gather(store, entry)
+
+    assert evidence.resume_failed is True
+    assert reduce(evidence).values[RoutingInput.OUTCOME] == "resume_failed"
+
+
+def test_an_ordinary_run_carries_no_continuation(store: Store) -> None:
+    node_id = stage_node(store)
+    entry = stage_outcome(store, node_id)
+
+    evidence = gather(store, entry)
+
+    assert evidence.continuation is None and evidence.continued_verdict_ids is None
+    assert evidence.resume_failed is False
+
+
+def test_an_accepted_loop_that_wrote_no_newer_review_is_review_accepted(
+    store: Store,
+) -> None:
+    node_id = stage_node(store)
+    paused = stage_outcome(
+        store, node_id, outcome="paused", reviews=(StagedReview("v-1"),)
+    )
+    accepted = stage_outcome(
+        store,
+        node_id,
+        run_id="run-20261025-p4-aaaa0001",
+        verdict_ids=["v-1"],
+        continuation=("accept", paused.id),
+    )
+
+    evidence = gather(store, accepted)
+
+    assert (evidence.continuation, evidence.continued_verdict_ids) == (
+        "accept",
+        ("v-1",),
+    )
+    assert reduce(evidence).values[RoutingInput.REVIEW_ACCEPTED] == "true"
+
+
+def test_an_accepted_loop_that_wrote_a_newer_review_is_not(store: Store) -> None:
+    node_id = stage_node(store)
+    paused = stage_outcome(
+        store, node_id, outcome="paused", reviews=(StagedReview("v-1"),)
+    )
+    accepted = stage_outcome(
+        store,
+        node_id,
+        reviews=(StagedReview("v-2"),),
+        continuation=("accept", paused.id),
+    )
+
+    evidence = gather(store, accepted)
+
+    assert reduce(evidence).values[RoutingInput.REVIEW_ACCEPTED] == "false"
+
+
+def test_an_accept_whose_continued_entry_is_gone_is_unknown(store: Store) -> None:
+    node_id = stage_node(store)
+    accepted = stage_outcome(store, node_id, continuation=("accept", "no-such-entry"))
+
+    evidence = gather(store, accepted)
+
+    assert evidence.continued_verdict_ids is None
+    assert reduce(evidence).values[RoutingInput.REVIEW_ACCEPTED] == "unknown"

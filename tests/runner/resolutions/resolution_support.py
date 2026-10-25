@@ -133,8 +133,19 @@ def block_and_resolve(
 ) -> str:
     """Block the node on a human and submit the PM's resolution; the blocked id."""
     blocked = store.block(node.id, kind=BlockedKind.HUMAN, context="decide")
+    return resolve_block(store, blocked.id, decision, instructions, project_id)
+
+
+def resolve_block(
+    store: Store,
+    blocked_state_id: str,
+    decision: str | None = None,
+    instructions: str | None = None,
+    project_id: str = PROJECT,
+) -> str:
+    """Submit the PM's resolution of an existing open block; its id."""
     payload: dict[str, object] = {
-        RESOLUTION_BLOCKED_STATE_ID: blocked.id,
+        RESOLUTION_BLOCKED_STATE_ID: blocked_state_id,
         RESOLUTION_DETAIL: "go",
     }
     if decision is not None:
@@ -142,14 +153,14 @@ def block_and_resolve(
     if instructions is not None:
         payload[RESOLUTION_INSTRUCTIONS] = instructions
     store.apply_submission(
-        submission_id=f"sub-{blocked.id}",
+        submission_id=f"sub-{blocked_state_id}",
         project_id=project_id,
         kind=SubmissionKind.RESOLUTION,
         submitted_by="pm",
         submitted_at=PAUSED_AT,
         payload=payload,
     )
-    return blocked.id
+    return blocked_state_id
 
 
 def tree_of(store: Store) -> LifecycleTree:

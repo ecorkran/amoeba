@@ -16,6 +16,7 @@ BASE_VALUES = {
     RoutingInput.RECURRENCE: NONE,
     RoutingInput.STEP: "slice_design",
     RoutingInput.NODE_STATE: "runnable",
+    RoutingInput.REVIEW_ACCEPTED: NONE,
 }
 
 

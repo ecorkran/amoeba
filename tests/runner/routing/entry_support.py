@@ -13,7 +13,7 @@ from evidence_harness import PROJECT, finding, verdict_input
 from sq_run_fixtures import sq_run_parameters
 
 from amoeba.process import RunOutcome
-from amoeba.runner.finish import RESULT_LAUNCH_FAILURE
+from amoeba.runner.finish import RESULT_LAUNCH_FAILURE, RESULT_RESUME_FAILURE
 from amoeba.runner.ingest.record import (
     RESULT_OUTCOME,
     RESULT_OUTCOME_DOCUMENT,
@@ -23,6 +23,8 @@ from amoeba.runner.ingest.record import (
     RESULT_VERDICT_IDS,
 )
 from amoeba.store import (
+    PARAM_CONTINUATION,
+    PARAM_CONTINUES,
     BlockedKind,
     CFReference,
     CommandKind,
@@ -79,22 +81,31 @@ def stage_outcome(
     verdict_ids: Sequence[str] | None = None,
     review_fault: str | None = None,
     launch_failure: str | None = None,
+    resume_failure: str | None = None,
+    continuation: tuple[str, str] | None = None,
     block: BlockedKind | None = None,
 ) -> JournalEntry:
     """Issue an ``sq_run`` on ``node_id`` and resolve it as ingestion would.
 
     ``block`` is the block ingestion writes for a paused, failed or vanished run,
-    written before the entry is resolved, in ingestion's order.
+    written before the entry is resolved, in ingestion's order. ``continuation`` is
+    ``(kind, continued entry id)`` for a resume or an observation (slice 127), and
+    ``resume_failure`` marks the result of a failed resume.
     """
+    parameters: dict[str, object] = dict(
+        sq_run_parameters(_RUN_PARAMETERS, run_id=run_id)
+    )
+    if continuation is not None:
+        parameters[PARAM_CONTINUATION], parameters[PARAM_CONTINUES] = continuation
     issued = store.journal_issue(
-        node_id,
-        kind=CommandKind.SQ_RUN,
-        parameters=sq_run_parameters(_RUN_PARAMETERS, run_id=run_id),
+        node_id, kind=CommandKind.SQ_RUN, parameters=parameters
     )
     if block is not None:
         store.block(node_id, kind=block, context="ingested outcome", payload=None)
     recorded = [_review(node_id, staged) for staged in reviews]
     result: dict[str, object] = {RESULT_RUN_ID: run_id}
+    if resume_failure is not None:
+        result[RESULT_RESUME_FAILURE] = resume_failure
     if launch_failure is not None:
         result[RESULT_LAUNCH_FAILURE] = launch_failure
     else:

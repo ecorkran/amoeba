@@ -110,3 +110,16 @@ def test_a_null_attempt_recomputes() -> None:
     inputs = make_inputs(attempt=None, verdict="pass", step="unknown")
     result = recompute(_decision(inputs, "sha256:x"), STORED)
     assert result.error is None and result.matches is True
+
+
+def test_a_decision_recorded_before_review_accepted_existed_cannot_be_recomputed() -> (
+    None
+):
+    """Slice 127 added an input: an older record fails as a changed vocabulary."""
+    decision = _decision(make_inputs(verdict="pass"), "sha256:x")
+    inputs = {k: v for k, v in decision.inputs.items() if k != "review_accepted"}
+
+    result = recompute(dataclasses.replace(decision, inputs=inputs), STORED)
+
+    assert result.matches is False
+    assert result.error is not None and "review_accepted" in result.error

@@ -299,36 +299,40 @@ revision_number: 2
 ### Task 7.1: Implement the pure confirmation rule
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 2
 
-- [ ] Create `runner/resolutions/confirm.py` with `resume_progress(poll, resumed_from, exit_code, past_grace) -> Confirmed | StillResuming | ResumeFailure` per D6: confirmed on any outcome other than `paused`, or `paused` with a different `paused_at`; `not_found` is `run_missing`; at the old pause, exit 2 is `refused`, another exit code is `exited_before_claim`, no child and past grace (or a child still running past grace) is `no_claim_within_grace`; otherwise still resuming. `resumed_from` `None` never confirms on a pause (Task-level additions)
-- [ ] `tests/runner/resolutions/test_confirm.py`, table-driven over every D6 row, including `test_retry_confirmed_by_new_paused_at` and `timed_out` confirming
-- [ ] **Success:** tests pass. Commit `feat: add the resume confirmation rule`
+- [x] Create `runner/resolutions/confirm.py` with `resume_progress(poll, resumed_from, exit_code, past_grace) -> Confirmed | StillResuming | ResumeFailure` per D6: confirmed on any outcome other than `paused`, or `paused` with a different `paused_at`; `not_found` is `run_missing`; at the old pause, exit 2 is `refused`, another exit code is `exited_before_claim`, no child and past grace (or a child still running past grace) is `no_claim_within_grace`; otherwise still resuming. `resumed_from` `None` never confirms on a pause (Task-level additions)
+- [x] `tests/runner/resolutions/test_confirm.py`, table-driven over every D6 row, including `test_retry_confirmed_by_new_paused_at` and `timed_out` confirming
+- [x] **Success:** tests pass. Commit `feat: add the resume confirmation rule`
 
 ### Task 7.2: Observe continuation entries
 **Owner**: Junior AI | **Dependencies**: 2.4, 6.2, 7.1 | **Effort**: 3
 
-- [ ] Create `runner/observe_resume.py`; `RunObserver._observe_one` sends a `retry`/`accept` continuation that is not confirmed in memory to it, whether or not it is tracked. It polls on `run_poll_interval_seconds` under the budget, applies `resume_progress`, confirms in the tracker on `Confirmed` and then classifies the poll as `_confirmed` does, and ends with `ResumeFailed` on a failure. `observe` continuations take the existing confirmed path unchanged. `observe` takes the resumed-from mapping as a new argument (Task-level additions), and `ProjectTick` builds that mapping before Observe and passes it, so the suite stays green at this commit
-- [ ] `tests/runner/resolutions/test_observe_resume.py`, with a fake poll and tracker: a run that stays paused then claims is confirmed by the first poll after the claim; a new `paused_at` ends the run as a pause; the tick builds the mapping from the continued entries (a missing entry and an unparseable document map to `None`); exit 2, exit before claim and no claim within grace each end with their failure; with no tracked child (after a restart) only the grace rule applies
-- [ ] **Success:** tests pass; `observe.py` grows only by the dispatch to `observe_resume.py` and the new argument (a few lines). Commit `feat: confirm resumes by run state`
+- [x] Create `runner/observe_resume.py`; `RunObserver._observe_one` sends a `retry`/`accept` continuation that is not confirmed in memory to it, whether or not it is tracked. It polls on `run_poll_interval_seconds` under the budget, applies `resume_progress`, confirms in the tracker on `Confirmed` and then classifies the poll as `_confirmed` does, and ends with `ResumeFailed` on a failure. `observe` continuations take the existing confirmed path unchanged. `observe` takes the resumed-from mapping as a new argument (Task-level additions), and `ProjectTick` builds that mapping before Observe and passes it, so the suite stays green at this commit
+- [x] `tests/runner/resolutions/test_observe_resume.py`, with a fake poll and tracker: a run that stays paused then claims is confirmed by the first poll after the claim; a new `paused_at` ends the run as a pause; the tick builds the mapping from the continued entries (a missing entry and an unparseable document map to `None`); exit 2, exit before claim and no claim within grace each end with their failure; with no tracked child (after a restart) only the grace rule applies
+- [x] **Success:** tests pass; `observe.py` grows only by the dispatch to `observe_resume.py` and the new argument (a few lines). Commit `feat: confirm resumes by run state`
+
+**Note:** observe.py is now 356 lines (it was 335): the new argument threads through observe, _observe_one and _confirmed, and the ResumeObserver is built in __init__. The resume logic itself is in runner/observe_resume.py.
 
 ### Task 7.3: Register the continuation planner and prove resumes in the tick
 **Owner**: Junior AI | **Dependencies**: 4.2, 6.4b, 7.2 | **Effort**: 3
 
-- [ ] Add `ContinuationPlanner()` after `DispatchPlanner()` in `PRODUCTION_PLANNERS` (`runner/factory.py`); update `tests/runner/test_factory.py`
-- [ ] Tick tests (`tests/runner/resolutions/test_tick_resume.py`), from an applied retry through to routing: confirmed and completed, ingested and routed; a new pause after the retry is recognized by its new `paused_at`, ingested, and routed to escalate; a `handled` resolution on a run that has moved on is observed, its current outcome ingested and routed. Failed-resume ticks are proven in Task 8.2, after `resume_failed` exists as a routing input
-- [ ] **Success:** tests pass. Commit `feat: run resumes and their confirmation in the tick`
+- [x] Add `ContinuationPlanner()` after `DispatchPlanner()` in `PRODUCTION_PLANNERS` (`runner/factory.py`); update `tests/runner/test_factory.py`
+- [x] Tick tests (`tests/runner/resolutions/test_tick_resume.py`), from an applied retry through to routing: confirmed and completed, ingested and routed; a new pause after the retry is recognized by its new `paused_at`, ingested, and routed to escalate; a `handled` resolution on a run that has moved on is observed, its current outcome ingested and routed. Failed-resume ticks are proven in Task 8.2, after `resume_failed` exists as a routing input
+- [x] **Success:** tests pass. Commit `feat: run resumes and their confirmation in the tick`
 
 ### Task 7.4: Watch the pointer of continuation entries
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 1
 
-- [ ] `runner/dispatch/pointer_watch.py` `watched_runs`: for an entry carrying `PARAM_CONTINUATION`, keep the step's latest pointer write for the worktree and slice index, and use the continuation's `issued_at` as the start, so only snapshots after it count (LLD "Consumes from Other Slices", 125)
-- [ ] Tests (`tests/runner/dispatch/`): a pointer moved after a continuation's `issued_at` is reported; a move before it, during the pause, is not; a non-continuation entry is unchanged
-- [ ] **Success:** a pointer moved while a resumed run is in flight raises 125's pointer-moved fault, a move during the pause does not, and the existing pointer-watch tests pass unchanged. Commit `feat: watch the pointer of continuation entries`
+- [x] `runner/dispatch/pointer_watch.py` `watched_runs`: for an entry carrying `PARAM_CONTINUATION`, keep the step's latest pointer write for the worktree and slice index, and use the continuation's `issued_at` as the start, so only snapshots after it count (LLD "Consumes from Other Slices", 125)
+- [x] Tests (`tests/runner/dispatch/`): a pointer moved after a continuation's `issued_at` is reported; a move before it, during the pause, is not; a non-continuation entry is unchanged
+- [x] **Success:** a pointer moved while a resumed run is in flight raises 125's pointer-moved fault, a move during the pause does not, and the existing pointer-watch tests pass unchanged. Commit `feat: watch the pointer of continuation entries`
 
 ### Task 7.5: Prove crash safety
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 3
 
-- [ ] Extend `tests/runner/test_crash_recovery.py` and `crash_harness.py` with 125's `SIGKILL` pattern at two new kill points (LLD "Testing approach"): after an acknowledgment, before the continuation is journaled (the next tick issues it once); after a resume is journaled, before the launch (recovery leaves it in flight, Observe fails it `no_claim_within_grace`, and the stub log shows no resume launched)
-- [ ] **Success:** tests pass. Commit `test: prove resumes survive a crash at both kill points`
+- [x] Extend `tests/runner/test_crash_recovery.py` and `crash_harness.py` with 125's `SIGKILL` pattern at two new kill points (LLD "Testing approach"): after an acknowledgment, before the continuation is journaled (the next tick issues it once); after a resume is journaled, before the launch (recovery leaves it in flight, Observe fails it `no_claim_within_grace`, and the stub log shows no resume launched)
+- [x] **Success:** tests pass. Commit `test: prove resumes survive a crash at both kill points`
+
+**Note:** the crash proofs are in a new file tests/runner/test_crash_resume.py with staging in tests/runner/crash_resume.py, and crash_entry.py gained the kill points after_acknowledge and before_resume_launch; its dispatch mode now runs ContinuationPlanner too.
 
 ---
 

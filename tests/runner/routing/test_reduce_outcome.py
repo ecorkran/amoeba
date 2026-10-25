@@ -138,3 +138,53 @@ def test_an_unknown_step_has_no_attempt(step: str | None) -> None:
 def test_a_known_step_without_a_count_is_a_gather_bug() -> None:
     with pytest.raises(ValueError, match="attempts were not counted"):
         reduce(completed_evidence(attempt_count=None))
+
+
+# -- slice 127: continuations -------------------------------------------------
+
+
+def test_a_failed_resume_reduces_to_resume_failed_whatever_the_recorded_outcome() -> (
+    None
+):
+    evidence = completed_evidence(outcome="paused", resume_failed=True)
+
+    assert value(evidence, RoutingInput.OUTCOME) == "resume_failed"
+
+
+def test_a_launch_failure_still_wins_over_a_resume_failure() -> None:
+    evidence = completed_evidence(launch_failed=True, resume_failed=True)
+
+    assert value(evidence, RoutingInput.OUTCOME) == "launch_failed"
+
+
+@pytest.mark.parametrize("continuation", [None, "retry", "observe"])
+def test_review_accepted_is_none_unless_the_continuation_is_an_accept(
+    continuation: str | None,
+) -> None:
+    evidence = completed_evidence(
+        continuation=continuation,
+        verdict_ids=("v1",),
+        continued_verdict_ids=("v1",),
+    )
+
+    assert value(evidence, RoutingInput.REVIEW_ACCEPTED) == "none"
+
+
+@pytest.mark.parametrize(
+    ("final", "continued", "expected"),
+    [
+        (("v1",), ("v1",), "true"),
+        ((), (), "true"),
+        (("v2",), ("v1",), "false"),
+        (("v1", "v2"), ("v1",), "false"),
+        (("v1",), None, "unknown"),
+    ],
+)
+def test_review_accepted_compares_the_final_review_with_the_accepted_one(
+    final: tuple[str, ...], continued: tuple[str, ...] | None, expected: str
+) -> None:
+    evidence = completed_evidence(
+        continuation="accept", verdict_ids=final, continued_verdict_ids=continued
+    )
+
+    assert value(evidence, RoutingInput.REVIEW_ACCEPTED) == expected

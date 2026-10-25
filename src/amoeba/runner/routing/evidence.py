@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from typing import cast
 
 from amoeba.process import RunOutcomeDocument
-from amoeba.runner.finish import RESULT_LAUNCH_FAILURE
+from amoeba.runner.finish import RESULT_LAUNCH_FAILURE, RESULT_RESUME_FAILURE
 from amoeba.runner.ingest.record import (
     RESULT_OUTCOME,
     RESULT_OUTCOME_DOCUMENT,
@@ -23,6 +23,8 @@ from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.routing.inputs import ROUTED_SEVERITIES, SEVERITY_LOW_TO_HIGH
 from amoeba.runner.routing.reduce import OutcomeEvidence, ReviewPart
 from amoeba.store import (
+    PARAM_CONTINUATION,
+    PARAM_CONTINUES,
     FindingSeverity,
     JournalEntry,
     Store,
@@ -46,10 +48,16 @@ def gather(store: Store, entry: JournalEntry) -> OutcomeEvidence:
         if isinstance(document, dict)
         else None
     )
-    parts = _read_parts(store, _verdict_ids(result.get(RESULT_VERDICT_IDS)))
+    verdict_ids = _verdict_ids(result.get(RESULT_VERDICT_IDS))
+    parts = _read_parts(store, verdict_ids)
+    continuation = entry.parameters.get(PARAM_CONTINUATION)
     return OutcomeEvidence(
         outcome=outcome if isinstance(outcome, str) else None,
         launch_failed=RESULT_LAUNCH_FAILURE in result,
+        resume_failed=RESULT_RESUME_FAILURE in result,
+        continuation=continuation if isinstance(continuation, str) else None,
+        verdict_ids=tuple(verdict_ids),
+        continued_verdict_ids=_continued_verdict_ids(store, entry),
         checkpoint=None if parsed is None else parsed.checkpoint,
         failure=None if parsed is None else parsed.failure,
         step=step,
@@ -59,6 +67,25 @@ def gather(store: Store, entry: JournalEntry) -> OutcomeEvidence:
         review_unreadable=parts is None,
         parts=parts or (),
     )
+
+
+def _continued_verdict_ids(store: Store, entry: JournalEntry) -> tuple[str, ...] | None:
+    """The reviews recorded on the entry this one continues, one store read.
+
+    ``None`` for an ordinary run, and when the continued entry or its ids cannot be
+    read; ``reduce`` turns the latter into ``unknown`` for an accept.
+    """
+    continues = entry.parameters.get(PARAM_CONTINUES)
+    if not isinstance(continues, str):
+        return None
+    continued = store.journal_entry(continues)
+    if continued is None or continued.result is None:
+        return None
+    try:
+        return tuple(_verdict_ids(continued.result.get(RESULT_VERDICT_IDS)))
+    except ValueError:
+        # Specific: malformed ids on the continued entry mean "cannot compare".
+        return None
 
 
 def _verdict_ids(raw: object) -> list[str]:

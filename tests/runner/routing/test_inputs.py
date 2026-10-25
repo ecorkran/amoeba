@@ -23,6 +23,7 @@ KNOWN_VALUES = {
     RoutingInput.RECURRENCE: "clear",
     RoutingInput.STEP: "slice_design",
     RoutingInput.NODE_STATE: "runnable",
+    RoutingInput.REVIEW_ACCEPTED: NONE,
 }
 
 
