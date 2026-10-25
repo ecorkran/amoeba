@@ -20,7 +20,7 @@ projectState: Slices 120–125 are merged. The tick (`runner/tick.py`) has a `# 
   `amoeba.runner.routing` does not exist.
 dateCreated: 20261024
 dateUpdated: 20261025
-status: not_started
+status: complete
 turns: 49
 promptTokens: 3655862
 cachedTokens: 3516714
@@ -360,18 +360,18 @@ Committed together with Task 7.2 in `feat: escalate runs past their time bound`.
 ### Task 8.1: Add the `routing-decisions` listing
 **Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 2
 
-- [ ] Create `inspection/routing.py` with the columns and row function per D6: `decided_at`, node, step, rule id, route, attempt, short version, `recomputes`. Rows come from `routing_decisions` over the project's nodes (or the one `--node-id`), sorted oldest first. `recomputes` is `yes`, `no`, or `error: <reason>` (a missing version row, or a `Recomputation` error)
-- [ ] Register it in `LISTINGS` (`inspection/__init__.py`) as project-scoped with a `node_id` option, following the existing listings. Add the short-version length as a constant in `routing.py`
-- [ ] Check `inspection` may import `amoeba.runner.routing` under `tests/test_import_boundaries.py`. If a rule forbids it, write `BLOCKED:` naming the rule and stop
-- [ ] **Success:** `amoeba inspect routing-decisions --help` lists `--project`, `--node-id` and `--json`
+- [x] Create `inspection/routing.py` with the columns and row function per D6: `decided_at`, node, step, rule id, route, attempt, short version, `recomputes`. Rows come from `routing_decisions` over the project's nodes (or the one `--node-id`), sorted oldest first. `recomputes` is `yes`, `no`, or `error: <reason>` (a missing version row, or a `Recomputation` error)
+- [x] Register it in `LISTINGS` (`inspection/__init__.py`) as project-scoped with a `node_id` option, following the existing listings. Add the short-version length as a constant in `routing.py`
+- [x] Check `inspection` may import `amoeba.runner.routing` under `tests/test_import_boundaries.py`. If a rule forbids it, write `BLOCKED:` naming the rule and stop
+- [x] **Success:** `amoeba inspect routing-decisions --help` lists `--project`, `--node-id` and `--json`
 
-BLOCKED: inspection/routing.py must import amoeba.runner.routing (engine, table, recompute), but tests/test_import_boundaries.py Rule 10 says only amoeba.cli imports amoeba.runner (and Rule 4 keeps inspection off the CLI). The Project Manager must decide: move the pure routing core out of amoeba.runner, exempt it in Rule 10, or have the CLI inject recompute into the listing.
+Resolved by the PM: Rule 10 exempts `amoeba.runner.routing.inputs` and `.recompute` for inspection (commit e1bdcc3). The node option is `--node ID` (the existing inspect convention), not `--node-id`.
 
 ### Task 8.2: Test the listing
 **Owner**: Junior AI | **Dependencies**: 8.1 | **Effort**: 2
 
-- [ ] `tests/inspection/test_routing_decisions.py` (follow `tests/inspection_harness.py`): rows oldest first across two nodes; `--node-id` narrows; a recomputing decision shows `yes`; a decision whose stored content was written with an unsupported `format` shows `error: …`, not `no`; `--json` emits full rows; the store opens read-only (the writer-guard test still passes)
-- [ ] **Success:** tests pass. Commit `feat: add inspect routing-decisions`
+- [x] `tests/inspection/test_routing_decisions.py` (follow `tests/inspection_harness.py`): rows oldest first across two nodes; `--node-id` narrows; a recomputing decision shows `yes`; a decision whose stored content was written with an unsupported `format` shows `error: …`, not `no`; `--json` emits full rows; the store opens read-only (the writer-guard test still passes)
+- [x] **Success:** tests pass. Commit `feat: add inspect routing-decisions`
 
 ---
 
@@ -380,17 +380,25 @@ BLOCKED: inspection/routing.py must import amoeba.runner.routing (engine, table,
 ### Task 9.1: Update the contract documents and CHANGELOG
 **Owner**: Junior AI | **Dependencies**: 7.3, 8.2 | **Effort**: 2
 
-- [ ] `docs/process-contract.md`: the route stage and the tick order with the view before it (D8); the table file format, inputs and values, matching, eligibility and validation rules (D1–D4); the `routing_table_path` setting and `--routing-table` flag; the `run_overrun` escalation, its payload (D7) and its actual place in the tick order (Task-level additions); the rule that no secrets go in the table
-- [ ] `user/slices/126-slice.routing-engine.md`: amend the two places the tasks depart from it, so the design matches what was built. (1) The `Route`-comparison rule (D-Patterns and Success Criteria): members are compared in `engine.py` and `validate.py`, and `validate.py` only checks grammar. (2) The overrun check (Data Flow diagram and D7): it runs beside `watch_pointers`, before `raise_expected_faults`, not after the route stage
-- [ ] `docs/substrate-guide.md`: update the 120 row for routing
-- [ ] `CHANGELOG.md`: add 1–2 line Slice 126 entries under `[Unreleased]` / `### Added`: routing by table with recorded, recomputable decisions; the overrun escalation; `--routing-table`; `inspect routing-decisions`
-- [ ] **Success:** every name in the text matches the code. Commit `docs: document the routing engine contract`
+- [x] `docs/process-contract.md`: the route stage and the tick order with the view before it (D8); the table file format, inputs and values, matching, eligibility and validation rules (D1–D4); the `routing_table_path` setting and `--routing-table` flag; the `run_overrun` escalation, its payload (D7) and its actual place in the tick order (Task-level additions); the rule that no secrets go in the table
+- [x] `user/slices/126-slice.routing-engine.md`: amend the two places the tasks depart from it, so the design matches what was built. (1) The `Route`-comparison rule (D-Patterns and Success Criteria): members are compared in `engine.py` and `validate.py`, and `validate.py` only checks grammar. (2) The overrun check (Data Flow diagram and D7): it runs beside `watch_pointers`, before `raise_expected_faults`, not after the route stage
+- [x] `docs/substrate-guide.md`: update the 120 row for routing
+- [x] `CHANGELOG.md`: add 1–2 line Slice 126 entries under `[Unreleased]` / `### Added`: routing by table with recorded, recomputable decisions; the overrun escalation; `--routing-table`; `inspect routing-decisions`
+- [x] **Success:** every name in the text matches the code. Commit `docs: document the routing engine contract`
 
 ### Task 9.2: Final validation
 **Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 2
 
-- [ ] Run `uv run pytest tests/runner/routing -v`, then `uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright`. All pass
-- [ ] Walkthrough step 2: copy the shipped table, delete the last rule, and `AMOEBA_STORE_DIR=$(mktemp -d) uv run amoeba start --routing-table /tmp/t.yaml`. It exits 7 naming the missing catch-all. Record the output under this task
-- [ ] Walkthrough step 4 (real Squadron runs on a scratch copy, pre-authorized): follow 125's walkthrough step 3 to drive one slice `until: tasks`, then check `inspect routing-decisions`, `inspect journal` and `inspect blocked` against the LLD's expected results. Record the decision row and outcome under this task. If the scratch setup cannot be built, write `BLOCKED:` with the reason
-- [ ] Record under this task whether `test_wheel_contents.py` ran or skipped. If it skipped, run it once with network access (without `--offline`) and record that it passed
-- [ ] **Success:** all gates green; work is committed on `126-slice.routing-engine`. Commit any remaining fixes as `fix:` or `test:`
+- [x] Run `uv run pytest tests/runner/routing -v`, then `uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright`. All pass
+- [x] Walkthrough step 2: copy the shipped table, delete the last rule, and `AMOEBA_STORE_DIR=$(mktemp -d) uv run amoeba start --routing-table /tmp/t.yaml`. It exits 7 naming the missing catch-all. Record the output under this task
+- [x] Walkthrough step 4 (real Squadron runs on a scratch copy, pre-authorized): follow 125's walkthrough step 3 to drive one slice `until: tasks`, then check `inspect routing-decisions`, `inspect journal` and `inspect blocked` against the LLD's expected results. Record the decision row and outcome under this task. If the scratch setup cannot be built, write `BLOCKED:` with the reason
+- [x] Record under this task whether `test_wheel_contents.py` ran or skipped. If it skipped, run it once with network access (without `--offline`) and record that it passed
+- [x] **Success:** all gates green; work is committed on `126-slice.routing-engine`. Commit any remaining fixes as `fix:` or `test:`
+
+Gates: `uv run pytest -q` 3610 passed; ruff check, ruff format --check and pyright clean.
+
+Walkthrough step 2: with the last rule deleted, `amoeba start --routing-table` exits 7: "the routing table is refused: ... the last rule 'escalate-completed-concerns' must be a catch-all: an empty when and route escalate".
+
+Walkthrough step 4 (real Squadron, scratch clone, slice 131 driven until slice_design): P4 run amoeba-20261025T140947Z-53c51eb78c36 ran 18 min and FAILED with Squadron reporting no failure kind and no steps completed. Routed in the same tick it was ingested: decision rule `escalate-everything-else`, route `escalate`, attempt 1, table sha256:518453b2…, `recomputes: yes`. `inspect journal` showed the sq_run `completed`, awaits_routing false; `inspect blocked` showed slice_design blocked on human ("run … failed: unknown", ingestion's block stood, routing's own block skipped by design). A passing run (advance-on-stated-pass) was not exercised live; it is covered by tests/runner/routing. Scratch CF project removed, amoeba stopped.
+
+Wheel test: tests/runner/routing/test_wheel_contents.py ran (not skipped) and passed.
