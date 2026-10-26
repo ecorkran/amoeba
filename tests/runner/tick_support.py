@@ -27,7 +27,7 @@ from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
-from amoeba.runner.project_config import ProjectConfig
+from amoeba.runner.project_config import PROJECT_DEFAULTS, ProjectConfig
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import (
@@ -228,6 +228,7 @@ class Rig:
         self.pointers = PointerStage(self.cf, 8.0, GRACE, self.clock.wall)
         self.planner = Planner(tmp_path)
         self.routing_table = small_table()
+        self.project_settings = PROJECT_DEFAULTS
         self.planners: tuple[Any, ...] = (self.planner,)
         self.popen = Popen(store)
         self.context = NodeContext()
@@ -258,6 +259,7 @@ class Rig:
             context=self.context,
             version_label=TEST_VERSION_LABEL,
             routing_table=self.routing_table,
+            project_settings=self.project_settings,
             amoeba_version=TEST_AMOEBA_VERSION,
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)

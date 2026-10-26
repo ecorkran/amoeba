@@ -15,11 +15,17 @@ from cf_stub import (
     write_cf_state,
 )
 
-from amoeba.runner.dispatch.params import MERGE_DISABLED, PARAM_MERGE, PARAM_SLICE
+from amoeba.runner.dispatch.params import (
+    MERGE_DISABLED,
+    PARAM_MERGE,
+    PARAM_MERGE_POLICY,
+    PARAM_SLICE,
+)
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.launch import PARAM_PARAMS
 from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.project_config import MergePolicy, ProjectSettings
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_EXPECTED_SLICE_INDEX,
@@ -75,6 +81,45 @@ def test_implementation_carries_merge_false(rig: DispatchRig) -> None:
     [argv] = rig.popen.argvs
     assert "P6" in argv
     assert f"{PARAM_MERGE}={MERGE_DISABLED}" in argv
+
+
+def test_with_no_config_the_p6_entry_records_the_human_policy(
+    rig: DispatchRig,
+) -> None:
+    node = rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
+
+    rig.tick()
+    rig.tick()
+
+    [run] = rig.entries(CommandKind.SQ_RUN, node)
+    assert run.parameters[PARAM_MERGE_POLICY] == "human"
+    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125", PARAM_MERGE: "false"}
+
+
+def test_under_the_auto_policy_p6_runs_without_merge_false_and_records_auto(
+    rig: DispatchRig,
+) -> None:
+    rig.tick_rig.project_settings = ProjectSettings(merge_policy=MergePolicy.AUTO)
+    node = rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
+
+    rig.tick()
+    rig.tick()
+
+    [run] = rig.entries(CommandKind.SQ_RUN, node)
+    assert run.parameters[PARAM_MERGE_POLICY] == "auto"
+    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125"}
+    [argv] = rig.popen.argvs
+    assert not any(arg.startswith(f"{PARAM_MERGE}=") for arg in argv)
+
+
+def test_a_planning_launch_records_no_merge_policy(rig: DispatchRig) -> None:
+    node = rig.step("run-dispatch", 125)
+
+    rig.tick()
+    rig.tick()
+
+    [run] = rig.entries(CommandKind.SQ_RUN, node)
+    assert PARAM_MERGE_POLICY not in run.parameters
 
 
 def test_a_project_that_is_not_driven_issues_neither(rig: DispatchRig) -> None:

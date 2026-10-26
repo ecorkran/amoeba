@@ -37,6 +37,7 @@ from amoeba.runner.observe import RunObserver
 from amoeba.runner.observe_resume import resumed_from_pauses
 from amoeba.runner.observed import LaunchFailed, ObservedRun
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.project_view import build_project_view
 from amoeba.runner.resolutions.stage import apply_pending_resolutions
 from amoeba.runner.routing.overrun import watch_overruns
@@ -68,11 +69,13 @@ class ProjectTick:
         context: NodeContext,
         version_label: str,
         routing_table: RoutingTable,
+        project_settings: ProjectSettings,
         amoeba_version: str,
     ) -> None:
         self._project_id = project_id
         self._version_label = version_label
         self._routing_table = routing_table
+        self._project_settings = project_settings
         self._amoeba_version = amoeba_version
         self._store = store
         self._planners = planners
@@ -262,6 +265,7 @@ class ProjectTick:
             desired,
             dispatching=self._dispatching,
             pointer_confirmed=self._pointer_confirmed,
+            merge_policy=self._project_settings.merge_policy,
         )
         self.wrote = built.wrote or self.wrote
         return built.view

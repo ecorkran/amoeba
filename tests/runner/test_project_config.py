@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.process.errors import StartupFailedError
+from amoeba.process import StartupFailedError
 from amoeba.runner.project_config import (
     PROJECT_DEFAULTS,
     MergePolicy,

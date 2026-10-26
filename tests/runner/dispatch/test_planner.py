@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from amoeba.runner.decide import LaunchRun, WriteSlicePointer
 from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
-from amoeba.runner.dispatch.params import MERGE_DISABLED, PARAM_MERGE
+from amoeba.runner.dispatch.params import (
+    MERGE_DISABLED,
+    PARAM_MERGE,
+    PARAM_MERGE_POLICY,
+)
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.project_config import MergePolicy
 from amoeba.store import (
     BlockedKind,
     BlockedState,
@@ -61,6 +67,34 @@ def test_each_step_launches_its_pipeline_and_p6_never_merges(
         assert action.params[PARAM_MERGE] == MERGE_DISABLED
 
 
+def test_p6_records_the_policy_it_launches_under_and_merges_only_under_auto() -> None:
+    human = view_of(
+        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)}
+    )
+    auto = view_of(
+        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)},
+        merge_policy=MergePolicy.AUTO,
+    )
+
+    [under_human] = PLANNER.plan(human)
+    [under_auto] = PLANNER.plan(auto)
+
+    assert isinstance(under_human, LaunchRun) and isinstance(under_auto, LaunchRun)
+    assert under_human.params[PARAM_MERGE] == MERGE_DISABLED
+    assert under_human.journal_extra == {PARAM_MERGE_POLICY: "human"}
+    assert PARAM_MERGE not in under_auto.params
+    assert under_auto.journal_extra == {PARAM_MERGE_POLICY: "auto"}
+
+
+@pytest.mark.parametrize("step", [LifecycleStep.SLICE_DESIGN, LifecycleStep.TASKS])
+def test_a_planning_launch_records_no_merge_policy(step: LifecycleStep) -> None:
+    view = view_of({"a": facts(DispatchState.POINTED, step=step)})
+
+    [action] = PLANNER.plan(view)
+
+    assert isinstance(action, LaunchRun) and action.journal_extra == {}
+
+
 def test_a_step_that_needs_a_pointer_writes_it() -> None:
     view = view_of({"a": facts(DispatchState.NEEDS_POINTER, SECOND, slice_index=130)})
 
@@ -85,6 +119,24 @@ def test_a_reissue_repeats_the_old_attempt_under_its_run_id() -> None:
     assert action == LaunchRun(
         "a", "P5", {"slice": "125"}, FIRST, run_id="run-old", reissue_of=old.id
     )
+
+
+def test_a_reissue_keeps_the_policy_of_the_attempt_it_repeats() -> None:
+    first = entry(
+        CommandKind.SQ_RUN,
+        "a",
+        FIRST,
+        JournalOutcome.NOT_APPLIED,
+        resolved_by=JournalResolver.RECOVERY,
+        run_id="run-old",
+    )
+    old = replace(first, parameters={**first.parameters, PARAM_MERGE_POLICY: "auto"})
+    view = view_of({"a": facts(DispatchState.REISSUE, reissue_of=old)})
+
+    [action] = PLANNER.plan(view)
+
+    assert isinstance(action, LaunchRun)
+    assert action.journal_extra == {PARAM_MERGE_POLICY: "auto"}, "not this view's human"
 
 
 def test_a_reissue_without_its_old_entry_is_refused() -> None:

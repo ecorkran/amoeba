@@ -173,6 +173,7 @@ class RunnerTenant:
             context=context,
             version_label=self._version_label,
             routing_table=self._routing_table,
+            project_settings=self._project_config.for_project(project_id),
             amoeba_version=self._amoeba_version,
         )
         try:

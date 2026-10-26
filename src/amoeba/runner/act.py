@@ -136,6 +136,7 @@ class ActStage:
                 PARAM_PARAMS: dict(action.params),
                 PARAM_RUN_ID: run_id,
                 PARAM_CHECKOUT: str(action.checkout),
+                **action.journal_extra,
             },
         )
         self._start(entry)

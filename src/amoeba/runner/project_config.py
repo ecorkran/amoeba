@@ -19,7 +19,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from pydantic_core import ErrorDetails
 
-from amoeba.process.errors import StartupFailedError
+from amoeba.process import StartupFailedError
 
 
 class MergePolicy(StrEnum):

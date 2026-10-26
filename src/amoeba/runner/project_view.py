@@ -20,6 +20,7 @@ from amoeba.runner.dispatch.build_view import (
 from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observed import ObservedRun
+from amoeba.runner.project_config import MergePolicy
 from amoeba.store import Node, Store
 
 
@@ -41,6 +42,7 @@ def build_project_view(
     *,
     dispatching: bool,
     pointer_confirmed: frozenset[str],
+    merge_policy: MergePolicy,
 ) -> BuiltView:
     """The facts the planners decide on, for ``project_id``."""
     tree = LifecycleTree(store.nodes_for_project(project_id))
@@ -60,6 +62,7 @@ def build_project_view(
         current_steps=current,
         dispatch=dispatch.facts,
         checkout_holders=dispatch.holders,
+        merge_policy=merge_policy,
     )
     return BuiltView(view, wrote)
 

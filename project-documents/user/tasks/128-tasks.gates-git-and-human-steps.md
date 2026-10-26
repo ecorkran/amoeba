@@ -119,17 +119,19 @@ Note: porcelain v2 rename lines (type 2) are `<new path>TAB<old path>`, so the p
 ### Task 3.1: Implement `ProjectConfig` and its loader
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Create `runner/project_config.py` per D8: `MergePolicy`, `PROJECT_DEFAULTS`, the pydantic models (`extra="forbid"`, values trimmed and lower-cased), `ProjectConfig.for_project(project_id)` returning the entry merged over the defaults, and `load_project_config(path: Path | None) -> ProjectConfig`. `None` gives defaults. A missing or unreadable file, bad YAML, an unknown key or value raises `StartupFailedError` listing every problem
-- [ ] `tests/runner/test_project_config.py`: no path; a named project; an unnamed project; an omitted key; `" Auto "` normalised; each failure, with two problems in one file both named
-- [ ] **Success:** tests pass. Commit with Task 3.2
+- [x] Create `runner/project_config.py` per D8: `MergePolicy`, `PROJECT_DEFAULTS`, the pydantic models (`extra="forbid"`, values trimmed and lower-cased), `ProjectConfig.for_project(project_id)` returning the entry merged over the defaults, and `load_project_config(path: Path | None) -> ProjectConfig`. `None` gives defaults. A missing or unreadable file, bad YAML, an unknown key or value raises `StartupFailedError` listing every problem
+- [x] `tests/runner/test_project_config.py`: no path; a named project; an unnamed project; an omitted key; `" Auto "` normalised; each failure, with two problems in one file both named
+- [x] **Success:** tests pass. Commit with Task 3.2
 
 ### Task 3.2: Add the setting and flag, and load the config at start
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 2
 
-- [ ] `process/settings.py`: `project_config_path: Path | None = None`, documented beside `routing_table_path`. `cli/settings_flags.py`: `--project-config PATH`
-- [ ] `runner/factory.py`: `runner_tenant()` loads the config once, after the routing table; with no path, logs at INFO naming the defaults. Pass it through `RunnerTenant` to each `ProjectTick`
-- [ ] Tests: `tests/test_settings_flags.py` for the flag; `tests/runner/test_factory.py`: an invalid file raises `StartupFailedError`; `amoeba start --project-config` with `merge_policy: sometimes` exits `STARTUP_FAILED` naming `merge_policy` and `sometimes` (CLI test)
-- [ ] **Success:** tests pass. Commit `feat: load a per-project config holding the merge policy`
+- [x] `process/settings.py`: `project_config_path: Path | None = None`, documented beside `routing_table_path`. `cli/settings_flags.py`: `--project-config PATH`
+- [x] `runner/factory.py`: `runner_tenant()` loads the config once, after the routing table; with no path, logs at INFO naming the defaults. Pass it through `RunnerTenant` to each `ProjectTick`
+- [x] Tests: `tests/test_settings_flags.py` for the flag; `tests/runner/test_factory.py`: an invalid file raises `StartupFailedError`; `amoeba start --project-config` with `merge_policy: sometimes` exits `STARTUP_FAILED` naming `merge_policy` and `sometimes` (CLI test)
+- [x] **Success:** tests pass. Commit `feat: load a per-project config holding the merge policy`
+
+Note: RunnerTenant takes a required `project_config: ProjectConfig` keyword (no default); the four test constructions pass `ProjectConfig()`. `load_projects(settings)` in factory.py loads and logs it.
 
 ### Task 3.3: Pass the merge policy into `dispatch_params`
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 2

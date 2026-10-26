@@ -19,6 +19,7 @@ from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import JournalEntry, Node
 
@@ -47,6 +48,8 @@ class LaunchRun:
 
     ``run_id`` and ``reissue_of`` are set together for a reissue (D9): the run id of
     an attempt that never started, and the id of the entry that attempt was.
+    ``journal_extra`` is evidence written into the entry's parameters beside the
+    launch's own (the merge policy, the target, the pre-dispatch check; slice 128).
     """
 
     node_id: str
@@ -55,6 +58,7 @@ class LaunchRun:
     checkout: Path
     run_id: str | None = None
     reissue_of: str | None = None
+    journal_extra: Mapping[str, object] = field(default_factory=dict[str, object])
 
 
 @dataclass(frozen=True)
@@ -121,7 +125,7 @@ class ProjectView:
     pipeline step, by node id, and ``checkout_holders`` names, for each checkout a
     pipeline already holds (D4), the nodes that hold it, so a step's own continuation
     can act in a checkout held only by itself (slice 127). Both are empty for a view
-    that dispatches nothing.
+    that dispatches nothing. ``merge_policy`` is the project's (slice 128, D8).
     """
 
     project_id: str
@@ -137,6 +141,7 @@ class ProjectView:
     checkout_holders: Mapping[Path, frozenset[str]] = field(
         default_factory=dict[Path, frozenset[str]]
     )
+    merge_policy: MergePolicy = PROJECT_DEFAULTS.merge_policy
 
     def ready_unbusy(self) -> list[Node]:
         """Ready steps (``tree.ready_steps()``) with no run in flight.

@@ -31,9 +31,15 @@ from typing import cast
 from amoeba.runner.decide import Action, LaunchRun, ProjectView, WriteSlicePointer
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
-from amoeba.runner.dispatch.params import dispatch_params, pipeline_for
+from amoeba.runner.dispatch.params import (
+    PARAM_MERGE_POLICY,
+    dispatch_params,
+    pipeline_for,
+)
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
+from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.project_config import MergePolicy
 from amoeba.runner.resolutions.vocabulary import ResolutionDecision
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
 
@@ -69,10 +75,13 @@ class DispatchPlanner:
             if path not in best or rank < best[path][0]:
                 best[path] = (rank, node)
         ordered = sorted(best.values(), key=lambda pair: pair[0])
-        return [_action(node, view.dispatch[node.id]) for _, node in ordered]
+        return [
+            _action(node, view.dispatch[node.id], view.merge_policy)
+            for _, node in ordered
+        ]
 
 
-def _action(node: Node, facts: StepDispatchFacts) -> Action:
+def _action(node: Node, facts: StepDispatchFacts, policy: MergePolicy) -> Action:
     checkout = facts.checkout
     if not isinstance(checkout, Checkout):
         raise ValueError(f"step {node.id} has no resolved checkout")
@@ -81,8 +90,9 @@ def _action(node: Node, facts: StepDispatchFacts) -> Action:
             return LaunchRun(
                 node.id,
                 pipeline_for(facts.step),
-                dispatch_params(facts.step, facts.slice_index),
+                dispatch_params(facts.step, facts.slice_index, policy),
                 checkout.path,
+                journal_extra=_policy_evidence(facts.step, policy),
             )
         case DispatchState.REISSUE:
             return _reissue(node, facts)
@@ -96,6 +106,13 @@ def _action(node: Node, facts: StepDispatchFacts) -> Action:
             )
         case _:
             raise ValueError(f"step {node.id} in state {facts.state} is not planned")
+
+
+def _policy_evidence(step: LifecycleStep, policy: MergePolicy) -> Mapping[str, object]:
+    """The merge policy a ``P6`` launch was made under, for its journal entry (D8)."""
+    if step is LifecycleStep.IMPLEMENTATION:
+        return {PARAM_MERGE_POLICY: policy.value}
+    return {}
 
 
 def _carried_resolution(facts: StepDispatchFacts) -> str | None:
@@ -119,7 +136,14 @@ def _reissue(node: Node, facts: StepDispatchFacts) -> LaunchRun:
         Path(text_parameter(old, PARAM_CHECKOUT)),
         run_id=text_parameter(old, PARAM_RUN_ID),
         reissue_of=old.id,
+        journal_extra=_old_policy(old),
     )
+
+
+def _old_policy(old: JournalEntry) -> Mapping[str, object]:
+    """A run keeps the policy it was first launched under (D8)."""
+    policy = old.parameters.get(PARAM_MERGE_POLICY)
+    return {} if policy is None else {PARAM_MERGE_POLICY: policy}
 
 
 def _params(entry: JournalEntry) -> Mapping[str, str]:
