@@ -280,14 +280,16 @@ Note: part of Task 7.5's rig update landed here to keep the suite green: `Dispat
 ### Task 7.5: Filter the planners on the checks
 **Owner**: Junior AI | **Dependencies**: 3.3, 7.4 | **Effort**: 3
 
-- [ ] `DispatchPlanner`: the chosen `POINTED` or `REISSUE` step launches only on `Ok`, with `dispatch_check` (and, for `P6`, `target`) in `journal_extra`; a `Block` gives `BlockDispatch`; no entry gives nothing. `ContinuationPlanner`: the same for `RESUME`, and `runner/resolutions/act.py` writes `ResumeRun.journal_extra` into the continuation entry's parameters. `decide()`: a `LaunchRun` or `ResumeRun` for a node without `Ok` in `dispatch_checks` raises `ValueError` (D5 guard)
-- [ ] **Rig update** (same commit, so the suite stays green). Using Task 4.4's helpers, make every checkout a clean git repository on `main` and have the stub answer the gate past each step's entry gate, in exactly these files:
-  - [ ] `tests/runner/tick_support.py`
-  - [ ] `tests/runner/dispatch/tick_rig.py`
-  - [ ] `tests/runner/plan_tick_support.py`
-  - [ ] `tests/runner/crash_harness.py`, `tests/runner/crash_entry.py` and `tests/runner/crash_resume.py`
-- [ ] Run `uv run pytest -q`. A failure the rig update fixes is done. A failure in the planners, `decide()` or `runner/resolutions/act.py` is this task's defect: fix it. Any failure elsewhere: write `BLOCKED:` naming the test and its error, and stop
-- [ ] **Success:** full suite green, including 125's dispatch and crash tests and 127's resume tests. Commit `feat: launch and resume only on a passed pre-dispatch check`
+- [x] `DispatchPlanner`: the chosen `POINTED` or `REISSUE` step launches only on `Ok`, with `dispatch_check` (and, for `P6`, `target`) in `journal_extra`; a `Block` gives `BlockDispatch`; no entry gives nothing. `ContinuationPlanner`: the same for `RESUME`, and `runner/resolutions/act.py` writes `ResumeRun.journal_extra` into the continuation entry's parameters. `decide()`: a `LaunchRun` or `ResumeRun` for a node without `Ok` in `dispatch_checks` raises `ValueError` (D5 guard)
+- [x] **Rig update** (same commit, so the suite stays green). Using Task 4.4's helpers, make every checkout a clean git repository on `main` and have the stub answer the gate past each step's entry gate, in exactly these files:
+  - [x] `tests/runner/tick_support.py`
+  - [x] `tests/runner/dispatch/tick_rig.py`
+  - [x] `tests/runner/plan_tick_support.py`
+  - [x] `tests/runner/crash_harness.py`, `tests/runner/crash_entry.py` and `tests/runner/crash_resume.py`
+- [x] Run `uv run pytest -q`. A failure the rig update fixes is done. A failure in the planners, `decide()` or `runner/resolutions/act.py` is this task's defect: fix it. Any failure elsewhere: write `BLOCKED:` naming the test and its error, and stop
+- [x] **Success:** full suite green, including 125's dispatch and crash tests and 127's resume tests. Commit `feat: launch and resume only on a passed pre-dispatch check`
+
+Note: the rig update differs from the list. Only tests/runner/dispatch/tick_rig.py (DispatchRig.use_clean_checkouts), tests/runner/crash_harness.py (dispatch mode) and tests/runner/tick_support.py changed for the checkout and gate; test-double planners that launch without dispatch facts (tests/runner/tick_support.py Planner, the crash proof planner) get `PassingGates`, installed by the `passing_checks` fixture (tests/runner/conftest.py) and in tests/runner/crash_entry.py. tests/runner/plan_tick_support.py and crash_resume.py needed no change. The planners also take a reissue's or a resume's checkout from its recorded entry in `launch_candidates`.
 
 ### Task 7.6: Prove the pre-dispatch checks in the tick
 **Owner**: Junior AI | **Dependencies**: 7.5 | **Effort**: 2
