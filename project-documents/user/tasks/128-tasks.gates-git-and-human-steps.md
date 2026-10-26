@@ -160,17 +160,19 @@ Note: `cf status --json --worktree` accepts the worktree id (`wt_...`) as well a
 ### Task 4.2: Add the CF command words and the gate and config reads
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `runner/lifecycle/plan_read.py`: the additions under Task-level additions; update `COMMAND_WORDS` in the source test
-- [ ] Create `runner/gates/cf_reads.py`: `DEFAULT_TARGET_BRANCH` (citing the key's description); `read_config(key, checkout, cf_project_id, budget, run, timeout) -> str | ReadFailure | None` (a missing or non-string `value` is a failure, never a default; `None` when cut off); `read_target(...)` mapping empty to `DEFAULT_TARGET_BRANCH`; `read_gate(checkout, worktree_id, cf_project_id, budget, run, timeout) -> dict | ReadFailure | None` returning the parsed JSON for Task 4.3's model
-- [ ] Tests (`tests/runner/gates/test_cf_reads.py`) with a fake `CfRun`: argv for each read, with and without `--worktree`; `cwd` is the checkout; a non-string value, a non-zero exit, bad JSON and a timeout are failures; empty target is `main`; a spent budget starts nothing
-- [ ] **Success:** tests pass, including `test_cf_commands_defined_once.py`. Commit with Task 4.3
+- [x] `runner/lifecycle/plan_read.py`: the additions under Task-level additions; update `COMMAND_WORDS` in the source test
+- [x] Create `runner/gates/cf_reads.py`: `DEFAULT_TARGET_BRANCH` (citing the key's description); `read_config(key, checkout, cf_project_id, budget, run, timeout) -> str | ReadFailure | None` (a missing or non-string `value` is a failure, never a default; `None` when cut off); `read_target(...)` mapping empty to `DEFAULT_TARGET_BRANCH`; `read_gate(checkout, worktree_id, cf_project_id, budget, run, timeout) -> dict | ReadFailure | None` returning the parsed JSON for Task 4.3's model
+- [x] Tests (`tests/runner/gates/test_cf_reads.py`) with a fake `CfRun`: argv for each read, with and without `--worktree`; `cwd` is the checkout; a non-string value, a non-zero exit, bad JSON and a timeout are failures; empty target is `main`; a spent budget starts nothing
+- [x] **Success:** tests pass, including `test_cf_commands_defined_once.py`. Commit with Task 4.3
 
 ### Task 4.3: Implement the CF status model and `position_of`
 **Owner**: Junior AI | **Dependencies**: 4.1, 4.2 | **Effort**: 2
 
-- [ ] Create `runner/gates/cf_status.py` per D1 and "API Contracts": `CFActiveSlice` (lenient about added keys, strict about mapped fields), `parse_status(document) -> CFActiveSlice | None`, `GatePosition` with `PENDING_DECISION` and `UNKNOWN` outside the ordered scale, `position_of(active_slice)`, `EXIT_GATE` and `ENTRY_GATE` (Task-level additions)
-- [ ] `tests/runner/gates/test_cf_status.py`: every D1 row against its captured fixture; trimmed and upper-case status text; an unknown status, an unknown review type and a missing `gateInfo` are `UNKNOWN`; `rationale` and `pendingDecisions` are carried, never matched
-- [ ] **Success:** tests pass. Commit `feat: read CF's gate position from cf status`
+- [x] Create `runner/gates/cf_status.py` per D1 and "API Contracts": `CFActiveSlice` (lenient about added keys, strict about mapped fields), `parse_status(document) -> CFActiveSlice | None`, `GatePosition` with `PENDING_DECISION` and `UNKNOWN` outside the ordered scale, `position_of(active_slice)`, `EXIT_GATE` and `ENTRY_GATE` (Task-level additions)
+- [x] `tests/runner/gates/test_cf_status.py`: every D1 row against its captured fixture; trimmed and upper-case status text; an unknown status, an unknown review type and a missing `gateInfo` are `UNKNOWN`; `rationale` and `pendingDecisions` are carried, never matched
+- [x] **Success:** tests pass. Commit `feat: read CF's gate position from cf status`
+
+Note: `GatePosition.UNKNOWN` and `PENDING_DECISION` are negative (off the scale); use `.on_scale` before any ordered comparison against a gate. `read_config` takes the checkout path with no `--worktree`; `read_gate` takes `(checkout, worktree_id, ...)`.
 
 ### Task 4.4: Add the stub `cf` gate modes and the rig helpers
 **Owner**: Junior AI | **Dependencies**: 2.1, 4.1 | **Effort**: 3
