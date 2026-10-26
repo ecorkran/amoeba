@@ -32,7 +32,7 @@ _RESUMING = frozenset({Continuation.RETRY.value, Continuation.ACCEPT.value})
 
 type Classify = Callable[[JournalEntry, str, RunPoll, TickFaults], ObservedRun]
 type Ended = Callable[[JournalEntry, str, Finished], ObservedRun]
-type Fault = Callable[[JournalEntry, str, str, TickFaults], ObservedRun]
+type RaiseFault = Callable[[JournalEntry, str, str, TickFaults], ObservedRun]
 
 
 def is_resume(entry: JournalEntry) -> bool:
@@ -79,7 +79,7 @@ class ResumeObserver:
         launch_grace_seconds: float,
         classify: Classify,
         ended: Ended,
-        fault: Fault,
+        fault: RaiseFault,
     ) -> None:
         self._supervisor_dir = supervisor_dir
         self._tracker = tracker

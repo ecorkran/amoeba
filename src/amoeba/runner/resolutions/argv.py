@@ -3,6 +3,9 @@
 Pure. The instructions are one argv element, byte for byte: they go to a process
 without a shell, so spaces, quotes and newlines need no escaping. A resume names the
 run it continues and nothing else: no pipeline, no ``-p``, no ``--run-id``.
+
+Checked against the real ``sq`` (squadron 0.24.5): a value that starts with ``-``,
+even ``--decision accept``, is read as the instructions text, not as an option.
 """
 
 from __future__ import annotations

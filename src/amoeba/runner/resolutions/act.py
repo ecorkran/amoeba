@@ -117,6 +117,8 @@ class ContinuationActs:
         decision = prepoll_decision(action, poll, _paused_at(continued))
         match decision.act:
             case Act.WAIT:
+                if decision.detail is None:
+                    raise ValueError("a WAIT decision carries its poll failure text")
                 faults.add(_poll_fault(action, decision.detail))
                 return Acted.WAITED
             case Act.RUN_MISSING:
@@ -195,7 +197,7 @@ def _paused_at(continued: JournalEntry) -> datetime | None:
     return None if checkpoint is None else checkpoint.paused_at
 
 
-def _poll_fault(action: ContinuationAction, detail: str | None) -> Fault:
+def _poll_fault(action: ContinuationAction, detail: str) -> Fault:
     return Fault(
         FaultKind.RUN_OBSERVATION_FAILED,
         f"continuation of {action.run_id}: {detail}",

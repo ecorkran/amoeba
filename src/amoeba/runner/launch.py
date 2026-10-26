@@ -92,8 +92,9 @@ def stderr_confirms(path: Path, run_id: str) -> bool:
     with path.open("rb") as handle:
         head = handle.read(STDERR_HEAD_LIMIT_BYTES)
     expected = f"{RUN_ID_LINE_PREFIX}{run_id}".encode()
-    # Split on b"\n" only (splitlines() also splits on form feeds and Unicode
-    # separators), then drop one trailing b"\r" and trailing spaces or tabs.
+    # Split on b"\n" only: str.splitlines() would also split on form feeds and
+    # Unicode separators, which are not terminators. Then drop one trailing b"\r"
+    # and any trailing spaces or tabs; a second b"\r" still fails to match.
     return any(
         line.removesuffix(b"\r").rstrip(b" \t") == expected
         for line in head.split(b"\n")
@@ -124,7 +125,8 @@ SQ_PARAM_FLAG: Final = "-p"
 #: Journal parameter keys besides the run id and checkout.
 PARAM_PIPELINE: Final = "pipeline"
 PARAM_PARAMS: Final = "params"
-#: On a reissue entry (D9): the id of the ``not_applied`` entry it repeats.
+#: Set on the entry that reissues a launch recovery found never started (D9): the
+#: id of the ``not_applied`` entry it repeats.
 PARAM_REISSUE_OF: Final = "reissue_of"
 
 #: Characters Squadron splits or parses on in a ``-p key=value`` argument.
@@ -152,9 +154,11 @@ class LaunchError:
     detail: str
 
 
-#: Squadron takes a pipeline's primary parameter positionally (``sq run P4 131``) and
-#: rejects ``-p slice=131`` (observed squadron-ai 0.23.7, 20261024). Every pipeline
-#: the Runner dispatches (P4, P5, P6) has ``slice`` there; the others go as ``-p``.
+#: Squadron takes a pipeline's primary required parameter as a positional target
+#: (``sq run P4 131``) and rejects it as ``-p slice=131`` ("Pipeline 'p4' requires a
+#: 'slice' argument"; observed squadron-ai 0.23.7, 20261024). Every pipeline the Runner
+#: dispatches (P4, P5, P6) has ``slice`` as that parameter, so a ``slice`` parameter is
+#: passed positionally and the others as ``-p``.
 TARGET_PARAM_KEY: Final = "slice"
 
 
@@ -248,7 +252,8 @@ def spawn(
                 close_fds=True,
             )
     except OSError as error:
-        # Expected external failure (log, missing sq, gone checkout): recorded.
+        # An expected external failure (log creation, missing sq, gone checkout)
+        # is an answer for the caller to record, not a bug.
         return LaunchError(
             LaunchFailure.SPAWN_ERROR, f"{type(error).__name__}: {error}"
         )
@@ -265,7 +270,8 @@ class TrackedLaunch:
 class LaunchTracker:
     """The children this process launched, so they are reaped and not leaked.
 
-    In memory only: after a restart every in-flight entry has a run state (D3).
+    In memory only. After a restart every in-flight entry has a run state, so it
+    needs no handle (D3); the children themselves live in their own sessions.
     """
 
     def __init__(self) -> None:
@@ -290,7 +296,8 @@ class LaunchTracker:
     def reap(self) -> None:
         """Poll every child, collecting exits; drop exited, confirmed ones.
 
-        An unconfirmed child stays: observation needs its exit code.
+        An exited but unconfirmed child stays: observation still needs its exit
+        to decide whether the launch failed.
         """
         for entry_id, tracked in list(self._launches.items()):
             exited = tracked.child.poll() is not None
