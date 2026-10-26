@@ -90,6 +90,7 @@ class RunnerTenant:
         self._supervisor_dir = supervisor_dir
         self._planners = tuple(planners)
         self._popen = popen
+        self._cf_run = cf_run
         self._now = now
         self._monotonic = monotonic
         self.tracker = LaunchTracker()
@@ -174,6 +175,8 @@ class RunnerTenant:
             version_label=self._version_label,
             routing_table=self._routing_table,
             project_settings=self._project_config.for_project(project_id),
+            cf_run=self._cf_run,
+            call_timeout_seconds=self._settings.tick_call_timeout_seconds,
             amoeba_version=self._amoeba_version,
         )
         try:

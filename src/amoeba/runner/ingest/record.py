@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
-from amoeba.process import RunOutcomeDocument
+from amoeba.process import RunOutcome, RunOutcomeDocument
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.ingest.outcome import (
     PAYLOAD_REASON,
@@ -43,6 +43,10 @@ from amoeba.store import (
     Store,
 )
 
+if TYPE_CHECKING:
+    # Only for the annotation: the gates package imports this module's keys.
+    from amoeba.runner.gates.outcome import OutcomeObservation
+
 #: Keys of the ``sq_run`` entry's result: 126's input for the run, and 127's source
 #: for resuming a paused run.
 RESULT_RUN_ID: Final = PARAM_RUN_ID
@@ -50,6 +54,10 @@ RESULT_OUTCOME: Final = "outcome"
 RESULT_STATUS: Final = "status"
 RESULT_OUTCOME_DOCUMENT: Final = "outcome_document"
 RESULT_VERDICT_IDS: Final = "verdict_ids"
+#: Slice 128 (D2): the gate, design and git reads taken when a run completes, and the
+#: ids of the two hatch checks recorded with them.
+RESULT_OUTCOME_OBSERVATION: Final = "outcome_observation"
+RESULT_CHECK_IDS: Final = "check_ids"
 RESULT_REVIEW_FAULT: Final = "review_fault"
 
 #: Block payload keys added by an unknown review.
@@ -65,10 +73,24 @@ def ingest(
     entry: JournalEntry,
     finished: RunEnded | RunVanished,
     version_label: str,
+    observation: OutcomeObservation | None = None,
 ) -> None:
-    """Block the node if needed, record the run's reviews, resolve the entry."""
+    """Block the node if needed, record the run's reviews, resolve the entry.
+
+    A ``completed`` run needs its outcome observation (slice 128, D2): its two hatch
+    checks are recorded first, then the block, then the report, whose result carries
+    the observation and the check ids. Check ids are fixed by the entry, so a repeat
+    after a crash between the writes keeps the first records. Other outcomes ignore
+    ``observation``.
+
+    Raises:
+        ValueError: The run completed and no observation was given.
+    """
     run_id = entry_run_id(entry)
     plan = plan_outcome(finished, run_id)
+    completed = _completed(finished)
+    if completed and observation is None:
+        raise ValueError(f"entry {entry.id} completed without an outcome observation")
     reviews = _reviews(store, entry, finished, run_id, version_label)
     unknown: ReviewUnknown | None = None
     recorded: tuple[RunnerReview, ...] = ()
@@ -76,14 +98,23 @@ def ingest(
         unknown = reviews
     else:
         recorded = reviews.reviews
+    result = _result(finished, run_id, [r.verdict.id for r in recorded], unknown)
+    if completed and observation is not None:
+        for check in observation.checks:
+            store.record_check(check, project_id=entry.project_id)
+        result = {**result, **observation.to_result()}
     block = _block_with(plan, unknown)
     if block is not None:
         block_once(store, entry.node_id, block)
     store.record_runner_report(
-        entry.id,
-        recorded,
-        outcome=plan.entry_outcome,
-        result=_result(finished, run_id, [r.verdict.id for r in recorded], unknown),
+        entry.id, recorded, outcome=plan.entry_outcome, result=result
+    )
+
+
+def _completed(finished: RunEnded | RunVanished) -> bool:
+    return (
+        isinstance(finished, RunEnded)
+        and finished.document.outcome is RunOutcome.COMPLETED
     )
 
 

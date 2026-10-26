@@ -9,6 +9,7 @@ Slots later slices fill are marked in comments only: the body of
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Final
@@ -17,6 +18,7 @@ from amoeba.process import UpstreamShapeError
 from amoeba.runner import finish
 from amoeba.runner.act import ActStage
 from amoeba.runner.budget import TickBudget, TickResult
+from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, Planner, ProjectView, decide
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
@@ -28,6 +30,8 @@ from amoeba.runner.faults import (
     TickFaults,
     raise_expected_faults,
 )
+from amoeba.runner.gates.outcome import OutcomeObservation
+from amoeba.runner.gates.stage import GateStage, completes
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.launch import LaunchTracker, PopenFactory
@@ -44,6 +48,15 @@ from amoeba.runner.routing.overrun import watch_overruns
 from amoeba.runner.routing.stage import route_outcomes
 from amoeba.runner.routing.table import RoutingTable
 from amoeba.store import CommandKind, JournalEntry, Store
+
+
+@dataclass(frozen=True)
+class RecordedRuns:
+    """What recording left: a usage-error message, and the runs still in flight."""
+
+    shape_error: str | None
+    pending: tuple[ObservedRun, ...]
+
 
 #: Who closes a project escalation that stopped recurring.
 CLOSED_BY: Final = RUNNER_ACTOR
@@ -70,6 +83,8 @@ class ProjectTick:
         version_label: str,
         routing_table: RoutingTable,
         project_settings: ProjectSettings,
+        cf_run: CfRun,
+        call_timeout_seconds: float,
         amoeba_version: str,
     ) -> None:
         self._project_id = project_id
@@ -99,6 +114,14 @@ class ProjectTick:
             context=context,
             version_label=version_label,
         )
+        self._gates = GateStage(
+            store=store,
+            project_id=project_id,
+            context=context,
+            cf_run=cf_run,
+            call_timeout_seconds=call_timeout_seconds,
+            amoeba_version=amoeba_version,
+        )
         self.wrote = False
         """Whether this tick wrote to the store or issued a command."""
 
@@ -124,8 +147,12 @@ class ProjectTick:
             probed = self._probes.check(links, budget, faults, self._project_id)
         if probed is TickResult.COMPLETE:
             probed = self._plan_reads(links, budget, faults)
-        shape_error = self._record_finished(observed.runs)
-        in_flight = [o.run.entry for o in observed.runs if o.finished is None]
+        # A completed run is recorded only with its outcome observation. One the
+        # budget cut off stays unresolved and tracked, and is observed next tick.
+        outcomes = self._gates.observe_outcomes(observed.runs, budget)
+        runs = self._record_finished(observed.runs, outcomes.observations)
+        shape_error = runs.shape_error
+        in_flight = [o.run.entry for o in runs.pending if o.finished is None]
         watch_pointers(self._store, self._project_id, in_flight, faults)
         # Beside the pointer watch, before the faults are raised, so the existing
         # raise path records the overrun (slice 126, D7). It reads only in-flight
@@ -147,7 +174,7 @@ class ProjectTick:
         self._pointer_confirmed = pointed.confirmed
         # The view is built before routing: what routing does is first seen by the
         # next tick's view (slice 126, D8).
-        view = self._build_view(observed.runs, self._probes.results(links), desired)
+        view = self._build_view(runs.pending, self._probes.results(links), desired)
         # Store reads and writes only, so no budget check: it starts no subprocess.
         self.wrote = (
             route_outcomes(
@@ -227,15 +254,36 @@ class ProjectTick:
             if entry.kind is CommandKind.SQ_RUN
         ]
 
-    def _record_finished(self, runs: Sequence[ObservedRun]) -> str | None:
-        """Record each finished run. Returns a usage-error message, if one."""
+    def _record_finished(
+        self,
+        runs: Sequence[ObservedRun],
+        observations: Mapping[str, OutcomeObservation],
+    ) -> RecordedRuns:
+        """Record each finished run. Returns what is still pending, and any shape error.
+
+        A completed run with no observation (the budget cut it off) is not recorded:
+        it stays unresolved and tracked, and counts as still in flight.
+        """
         shape_error: str | None = None
+        pending: list[ObservedRun] = []
         for observed in runs:
             if observed.finished is None:
+                pending.append(observed)
                 continue
             entry = observed.run.entry
+            observation = observations.get(entry.id)
+            if completes(observed) and observation is None:
+                pending.append(ObservedRun(observed.run))
+                continue
+            pending.append(observed)
             self._context.set(entry.node_id)
-            finish.record(self._store, entry, observed.finished, self._version_label)
+            finish.record(
+                self._store,
+                entry,
+                observed.finished,
+                self._version_label,
+                observation,
+            )
             self._tracker.forget(entry.id)
             self.wrote = True
             if (
@@ -247,7 +295,7 @@ class ProjectTick:
                     f"{entry.id}: a shape the Runner needs is missing; "
                     f"stderr: {observed.finished.tail}"
                 )
-        return shape_error
+        return RecordedRuns(shape_error, tuple(pending))
 
     def _build_view(
         self,

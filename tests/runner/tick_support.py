@@ -12,6 +12,7 @@ from feed_harness import apply
 
 from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
+from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.faults import NodeContext
@@ -219,6 +220,8 @@ class Rig:
         self.poll = ScriptedPoll(*answers)
         self.tracker = LaunchTracker()
         self.cf = FakeCf()
+        #: Runs the gate reads (slice 128); a test points it at the stub ``cf``.
+        self.gate_run: CfRun = self.cf
         self.probes = LinkProbes(run=self.cf, timeout_seconds=8.0)
         self.plans = PlanStage(
             schedule=PlanReadSchedule(PLAN_READ_INTERVAL, self.clock.monotonic),
@@ -260,6 +263,8 @@ class Rig:
             version_label=TEST_VERSION_LABEL,
             routing_table=self.routing_table,
             project_settings=self.project_settings,
+            cf_run=self.gate_run,
+            call_timeout_seconds=8.0,
             amoeba_version=TEST_AMOEBA_VERSION,
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)

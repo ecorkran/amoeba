@@ -10,7 +10,7 @@ sequence.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from amoeba.process import RunOutcome
 from amoeba.runner.faults import ResumeFailure
@@ -31,6 +31,9 @@ from amoeba.runner.observed import (
     RunVanished,
 )
 from amoeba.runner.resolutions.vocabulary import REASON_RESUME_FAILED
+
+if TYPE_CHECKING:
+    from amoeba.runner.gates.outcome import OutcomeObservation
 from amoeba.store import (
     BlockedKind,
     JournalEntry,
@@ -47,16 +50,21 @@ PAYLOAD_STDERR_TAIL: Final = "stderr_tail"
 
 
 def record(
-    store: Store, entry: JournalEntry, finished: Finished, version_label: str
+    store: Store,
+    entry: JournalEntry,
+    finished: Finished,
+    version_label: str,
+    observation: OutcomeObservation | None = None,
 ) -> None:
     """Block the entry's node when a human must look, then resolve the entry.
 
     ``version_label`` is the ``sq --version`` label captured once at start-up; it
-    labels a recorded review whose file carries no stamp of its own.
+    labels a recorded review whose file carries no stamp of its own. ``observation``
+    is the outcome observation a ``completed`` run needs (slice 128, D2).
     """
     match finished:
         case RunEnded() | RunVanished():
-            ingest(store, entry, finished, version_label)
+            ingest(store, entry, finished, version_label, observation)
         case LaunchFailed():
             _record_launch_failed(store, entry, finished)
         case ResumeFailed():

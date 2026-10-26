@@ -8,6 +8,7 @@ import pytest
 from ast_strings import string_constants
 
 from amoeba.runner.dispatch import params
+from amoeba.runner.gates import cf_status
 from amoeba.runner.lifecycle import steps
 from amoeba.runner.lifecycle.steps import (
     STEP_MAP,
@@ -151,8 +152,9 @@ def test_integration_follows_is_checked_and_not_status() -> None:
 def test_no_other_runner_module_spells_a_step_value() -> None:
     values = {step.value for step in LifecycleStep}
     # ``dispatch/params.py`` names P6's ``merge`` parameter: Squadron's word for a
-    # pipeline option, not the lifecycle step of the same name.
-    exempt = {Path(steps.__file__), Path(params.__file__)}
+    # pipeline option, not the lifecycle step of the same name. ``cf_status.py`` names
+    # CF's ``tasks`` review type: CF's word for a gate, not the step of that name.
+    exempt = {Path(steps.__file__), Path(params.__file__), Path(cf_status.__file__)}
     others = [p for p in sorted((SRC / "runner").rglob("*.py")) if p not in exempt]
     assert others
     for path in others:

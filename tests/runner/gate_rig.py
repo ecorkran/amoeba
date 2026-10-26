@@ -19,9 +19,20 @@ from cf_stub_gates import (
     write_status_map,
 )
 
+from amoeba.runner.gates.outcome import OutcomeObservation, unobservable
+from amoeba.store import JournalEntry
 from runner.git_repo import make_repo
 
 STATUS_FIXTURES = Path(__file__).parents[1] / "fixtures" / "cf" / "status"
+
+
+def failed_reads(entry: JournalEntry) -> OutcomeObservation:
+    """An observation in which every read failed, for tests that ingest directly.
+
+    Ingesting a ``completed`` run needs an observation; these tests do not care what
+    CF said, only that the run is recorded.
+    """
+    return unobservable(entry, entry.node_id, "test: nothing was read", "amoeba-test")
 
 
 def git_checkout(checkout: Path, branch: str = "main") -> Path:
