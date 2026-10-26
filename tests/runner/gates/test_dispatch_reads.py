@@ -14,19 +14,14 @@ from amoeba.runner.budget import TickBudget
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
+from amoeba.runner.gates.candidates import Candidate, launch_candidates
 from amoeba.runner.gates.dispatch_reads import (
     DispatchReadFailed,
     DispatchReads,
     check_candidate,
     read_dispatch_facts,
 )
-from amoeba.runner.gates.predispatch import (
-    Block,
-    Candidate,
-    Disagreement,
-    Ok,
-    launch_candidates,
-)
+from amoeba.runner.gates.predispatch import Block, Disagreement, Ok
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver

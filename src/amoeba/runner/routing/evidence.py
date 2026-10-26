@@ -13,7 +13,7 @@ from typing import cast
 
 from amoeba.process import RunOutcomeDocument
 from amoeba.runner.finish import RESULT_LAUNCH_FAILURE, RESULT_RESUME_FAILURE
-from amoeba.runner.gates.outcome import OBS_GATE
+from amoeba.runner.gates.outcome_record import OBS_GATE
 from amoeba.runner.ingest.record import (
     RESULT_CHECK_IDS,
     RESULT_OUTCOME,

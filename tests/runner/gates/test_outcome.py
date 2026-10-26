@@ -14,7 +14,8 @@ from cf_stub_gates import CONFIG_MODE_ENV, STATUS_MODE_ENV, GateMode
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.gates.cf_status import GatePosition
 from amoeba.runner.gates.checks import RunnerCheck
-from amoeba.runner.gates.outcome import (
+from amoeba.runner.gates.outcome import observe_outcome
+from amoeba.runner.gates.outcome_record import (
     FAILURE,
     GATE_POSITION,
     GATE_STATUS,
@@ -25,7 +26,6 @@ from amoeba.runner.gates.outcome import (
     OutcomeObservation,
     ReadFailed,
     gate_state_at_exit,
-    observe_outcome,
 )
 from amoeba.runner.ingest.record import RESULT_CHECK_IDS, RESULT_OUTCOME_OBSERVATION
 from amoeba.runner.lifecycle.plan_read import CF_KEY_REVIEW_GATE_EFFECTIVE_DATE

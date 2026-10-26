@@ -24,7 +24,7 @@ from sq_stub_scripts import (
 from amoeba.process import RunOutcome, RunOutcomeDocument
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.finish import record
-from amoeba.runner.gates.outcome import OutcomeObservation, unobservable
+from amoeba.runner.gates.outcome_record import OutcomeObservation, unobservable
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON, REASON_FAILED
 from amoeba.runner.ingest.record import (
     PAYLOAD_PATH,

@@ -9,13 +9,12 @@ Slots later slices fill are marked in comments only: the body of
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Final
 
 from amoeba.process import UpstreamShapeError
-from amoeba.runner import finish
 from amoeba.runner.act import ActStage
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
@@ -25,13 +24,11 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.pointer_watch import watch_pointers
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
-    LaunchFailure,
     NodeContext,
     TickFaults,
     raise_expected_faults,
 )
-from amoeba.runner.gates.outcome import OutcomeObservation
-from amoeba.runner.gates.stage import GateStage, completes
+from amoeba.runner.gates.stage import GateStage
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.launch import LaunchTracker, PopenFactory
@@ -39,24 +36,16 @@ from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observe_resume import resumed_from_pauses
-from amoeba.runner.observed import LaunchFailed, ObservedRun
+from amoeba.runner.observed import ObservedRun
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.project_view import build_project_view
+from amoeba.runner.record_runs import record_finished
 from amoeba.runner.resolutions.stage import apply_pending_resolutions
 from amoeba.runner.routing.overrun import watch_overruns
 from amoeba.runner.routing.stage import route_outcomes
 from amoeba.runner.routing.table import RoutingTable
 from amoeba.store import CommandKind, JournalEntry, Store
-
-
-@dataclass(frozen=True)
-class RecordedRuns:
-    """What recording left: a usage-error message, and the runs still in flight."""
-
-    shape_error: str | None
-    pending: tuple[ObservedRun, ...]
-
 
 #: Who closes a project escalation that stopped recurring.
 CLOSED_BY: Final = RUNNER_ACTOR
@@ -150,7 +139,15 @@ class ProjectTick:
         # A completed run is recorded only with its outcome observation. One the
         # budget cut off stays unresolved and tracked, and is observed next tick.
         outcomes = self._gates.observe_outcomes(observed.runs, budget)
-        runs = self._record_finished(observed.runs, outcomes.observations)
+        runs = record_finished(
+            self._store,
+            self._context,
+            self._tracker,
+            self._version_label,
+            observed.runs,
+            outcomes.observations,
+        )
+        self.wrote = runs.wrote or self.wrote
         shape_error = runs.shape_error
         in_flight = [o.run.entry for o in runs.pending if o.finished is None]
         watch_pointers(self._store, self._project_id, in_flight, faults)
@@ -265,49 +262,6 @@ class ProjectTick:
             for entry in self._store.unresolved_journal_entries(self._project_id)
             if entry.kind is CommandKind.SQ_RUN
         ]
-
-    def _record_finished(
-        self,
-        runs: Sequence[ObservedRun],
-        observations: Mapping[str, OutcomeObservation],
-    ) -> RecordedRuns:
-        """Record each finished run. Returns what is still pending, and any shape error.
-
-        A completed run with no observation (the budget cut it off) is not recorded:
-        it stays unresolved and tracked, and counts as still in flight.
-        """
-        shape_error: str | None = None
-        pending: list[ObservedRun] = []
-        for observed in runs:
-            if observed.finished is None:
-                pending.append(observed)
-                continue
-            entry = observed.run.entry
-            observation = observations.get(entry.id)
-            if completes(observed) and observation is None:
-                pending.append(ObservedRun(observed.run))
-                continue
-            pending.append(observed)
-            self._context.set(entry.node_id)
-            finish.record(
-                self._store,
-                entry,
-                observed.finished,
-                self._version_label,
-                observation,
-            )
-            self._tracker.forget(entry.id)
-            self.wrote = True
-            if (
-                isinstance(observed.finished, LaunchFailed)
-                and observed.finished.failure is LaunchFailure.USAGE_ERROR
-            ):
-                shape_error = (
-                    f"`sq run ... --run-id` exited 2 and left no run for entry "
-                    f"{entry.id}: a shape the Runner needs is missing; "
-                    f"stderr: {observed.finished.tail}"
-                )
-        return RecordedRuns(shape_error, tuple(pending))
 
     def _build_view(
         self,

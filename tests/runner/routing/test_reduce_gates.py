@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from amoeba.runner.gates.cf_status import GatePosition
-from amoeba.runner.gates.outcome import GATE_POSITION, GATE_STATUS
+from amoeba.runner.gates.outcome_record import GATE_POSITION, GATE_STATUS
 from amoeba.runner.routing.inputs import NONE, UNKNOWN, RoutingInput
 from amoeba.store import CheckStanding
 from runner.routing.evidence_support import completed_evidence, value

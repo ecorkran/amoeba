@@ -45,7 +45,7 @@ from amoeba.store import (
 
 if TYPE_CHECKING:
     # Only for the annotation: the gates package imports this module's keys.
-    from amoeba.runner.gates.outcome import OutcomeObservation
+    from amoeba.runner.gates.outcome_record import OutcomeObservation
 
 #: Keys of the ``sq_run`` entry's result: 126's input for the run, and 127's source
 #: for resuming a paused run.

@@ -19,7 +19,7 @@ from amoeba.process import (
     parse_failure_kind,
 )
 from amoeba.runner.gates.cf_status import EXIT_GATE
-from amoeba.runner.gates.outcome import gate_state_at_exit
+from amoeba.runner.gates.outcome_record import gate_state_at_exit
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.runner.routing.inputs import (

@@ -33,7 +33,7 @@ from amoeba.runner.observed import (
 from amoeba.runner.resolutions.vocabulary import REASON_RESUME_FAILED
 
 if TYPE_CHECKING:
-    from amoeba.runner.gates.outcome import OutcomeObservation
+    from amoeba.runner.gates.outcome_record import OutcomeObservation
 from amoeba.store import (
     BlockedKind,
     JournalEntry,

@@ -17,6 +17,7 @@ from typing import Final
 
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
+from amoeba.runner.gates.candidates import Candidate
 from amoeba.runner.gates.cf_reads import ReadFailure, read_gate, read_target
 from amoeba.runner.gates.cf_status import CFActiveSlice, parse_status
 from amoeba.runner.gates.predispatch import (
@@ -24,7 +25,6 @@ from amoeba.runner.gates.predispatch import (
     EVIDENCE_GATE_REVIEW_TYPE,
     EVIDENCE_GATE_STATUS,
     Block,
-    Candidate,
     Disagreement,
     DispatchCheck,
     NoResult,

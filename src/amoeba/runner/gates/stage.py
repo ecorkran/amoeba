@@ -21,24 +21,20 @@ from amoeba.runner.gates.accepted import (
     accepted_by_pm,
     disagreement_check,
 )
+from amoeba.runner.gates.candidates import Candidate, launch_candidates
 from amoeba.runner.gates.dispatch_reads import (
     DispatchReadFailed,
     check_candidate,
     read_dispatch_facts,
 )
 from amoeba.runner.gates.merge import MergePass, observe_merges
-from amoeba.runner.gates.outcome import (
-    OutcomeObservation,
-    observe_outcome,
-    unobservable,
-)
+from amoeba.runner.gates.outcome import observe_outcome
+from amoeba.runner.gates.outcome_record import OutcomeObservation, unobservable
 from amoeba.runner.gates.predispatch import (
     EVIDENCE_DISAGREEMENT_CHECK,
-    Candidate,
     Disagreement,
     DispatchCheck,
     Ok,
-    launch_candidates,
 )
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.steps import STEP_SEQUENCE, LifecycleStep

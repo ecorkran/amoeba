@@ -5,7 +5,7 @@ from __future__ import annotations
 from routing_helpers import TABLE, decision_input
 
 from amoeba.process import RunOutcome
-from amoeba.runner.gates.outcome import unobservable
+from amoeba.runner.gates.outcome_record import unobservable
 from amoeba.runner.ingest.record import RESULT_CHECK_IDS, RESULT_OUTCOME_OBSERVATION
 from amoeba.runner.routing.evidence import gather
 from amoeba.runner.routing.inputs import RoutingInput

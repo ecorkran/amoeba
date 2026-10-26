@@ -27,7 +27,7 @@ from amoeba.runner.gates.merge_observation import (
     NotMerged,
     Unobservable,
 )
-from amoeba.runner.gates.outcome import GIT_BRANCH, GIT_HEAD, OBS_GIT
+from amoeba.runner.gates.outcome_record import GIT_BRANCH, GIT_HEAD, OBS_GIT
 from amoeba.runner.gates.predispatch import is_slice_branch
 from amoeba.runner.git_read import GitReadFailure, git_read, is_ancestor_args
 from amoeba.runner.ingest.record import RESULT_OUTCOME, RESULT_OUTCOME_OBSERVATION

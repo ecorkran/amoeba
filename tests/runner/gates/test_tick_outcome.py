@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from amoeba.process import RunOutcome, RunOutcomeDocument
-from amoeba.runner.gates.outcome import GATE_POSITION, OBS_DESIGN_PATH, OBS_GATE
+from amoeba.runner.gates.outcome_record import GATE_POSITION, OBS_DESIGN_PATH, OBS_GATE
 from amoeba.runner.ingest.record import RESULT_CHECK_IDS, RESULT_OUTCOME_OBSERVATION
 from amoeba.runner.launch import log_paths
 from amoeba.runner.lifecycle.plan_read import CF_KEY_REVIEW_GATE_EFFECTIVE_DATE

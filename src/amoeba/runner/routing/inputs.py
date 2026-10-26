@@ -15,7 +15,7 @@ from types import MappingProxyType
 from typing import Final
 
 from amoeba.process import CheckpointKind, FailureKind, RunOutcome
-from amoeba.runner.gates.outcome import (
+from amoeba.runner.gates.outcome_record import (
     GATE_CLEAR,
     GATE_MISPLACED,
     GATE_PENDING_DECISION,

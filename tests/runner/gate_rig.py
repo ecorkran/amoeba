@@ -22,7 +22,7 @@ from cf_stub_gates import (
 
 from amoeba.runner.gates.cf_status import EXIT_GATE, GatePosition
 from amoeba.runner.gates.hatches import DesignText, hatch_checks
-from amoeba.runner.gates.outcome import (
+from amoeba.runner.gates.outcome_record import (
     GateRead,
     OutcomeObservation,
     ReadFailed,

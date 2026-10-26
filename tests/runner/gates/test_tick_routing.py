@@ -13,7 +13,7 @@ from sq_stub_scripts import RunScript, single_review
 from amoeba.inspection.checks import check_rows
 from amoeba.inspection.listing import NODE_OPTION, ListingRequest
 from amoeba.process import RunOutcome
-from amoeba.runner.gates.outcome import OBS_GATE
+from amoeba.runner.gates.outcome_record import OBS_GATE
 from amoeba.runner.ingest.record import RESULT_OUTCOME_OBSERVATION
 from amoeba.runner.lifecycle.plan_read import CF_KEY_REVIEW_GATE_EFFECTIVE_DATE
 from amoeba.runner.lifecycle.steps import LifecycleStep
