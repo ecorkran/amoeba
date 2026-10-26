@@ -1,0 +1,6 @@
+{
+  "key": "workflow.review_gate_effective_date",
+  "value": "",
+  "source": "default",
+  "description": "Grandfathers slices/architecture designed before this date (YYYYMMDD, compared against the artifact's own dateCreated) out of every review gate boundary. Empty (default) applies no cutoff — every slice is subject to gating. Lets a project turn on review_enabled without retroactively demanding reviews for work completed before the gate existed."
+}

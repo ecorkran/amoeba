@@ -136,10 +136,12 @@ Note: RunnerTenant takes a required `project_config: ProjectConfig` keyword (no 
 ### Task 3.3: Pass the merge policy into `dispatch_params`
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 2
 
-- [ ] `runner/dispatch/params.py`: `dispatch_params(step, slice_index, merge_policy)`; `human` gives `merge=false` for `P6`, `auto` no `merge` key. Add `PARAM_MERGE_POLICY`, `PARAM_TARGET`, `PARAM_DISPATCH_CHECK` (Task-level additions). Update the module docstring
-- [ ] `ProjectView.merge_policy` and `LaunchRun.journal_extra` (Task-level additions); `DispatchPlanner` passes the view's policy and, for `P6`, puts `merge_policy` in `journal_extra`; the act stage writes `journal_extra` into the entry's parameters. `ProjectTick` passes its project's policy into the view
-- [ ] Tests: `tests/runner/dispatch/`: both policies' params; a `P6` entry records `merge_policy: human` with no config and `auto` when configured; a reissue keeps its old entry's `merge_policy`; 125's import test still passes. `target` and `dispatch_check` are not written yet: they come from the pre-dispatch read and arrive in Task 7.5 (tested in 7.6), so these tests do not cover them
-- [ ] **Success:** tests pass. Commit `feat: launch P6 under the project's merge policy`
+- [x] `runner/dispatch/params.py`: `dispatch_params(step, slice_index, merge_policy)`; `human` gives `merge=false` for `P6`, `auto` no `merge` key. Add `PARAM_MERGE_POLICY`, `PARAM_TARGET`, `PARAM_DISPATCH_CHECK` (Task-level additions). Update the module docstring
+- [x] `ProjectView.merge_policy` and `LaunchRun.journal_extra` (Task-level additions); `DispatchPlanner` passes the view's policy and, for `P6`, puts `merge_policy` in `journal_extra`; the act stage writes `journal_extra` into the entry's parameters. `ProjectTick` passes its project's policy into the view
+- [x] Tests: `tests/runner/dispatch/`: both policies' params; a `P6` entry records `merge_policy: human` with no config and `auto` when configured; a reissue keeps its old entry's `merge_policy`; 125's import test still passes. `target` and `dispatch_check` are not written yet: they come from the pre-dispatch read and arrive in Task 7.5 (tested in 7.6), so these tests do not cover them
+- [x] **Success:** tests pass. Commit `feat: launch P6 under the project's merge policy`
+
+Note: ProjectTick takes a required `project_settings: ProjectSettings` (the tenant passes `project_config.for_project(project_id)`); the test Rig holds `project_settings` (defaults) so tick-level tests can set a policy. A reissue copies `merge_policy` from its old entry into `journal_extra`.
 
 ---
 
