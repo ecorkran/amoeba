@@ -223,17 +223,21 @@ Note: `ProjectTick` takes `cf_run` and `call_timeout_seconds` and builds `GateSt
 ### Task 6.1: Add `gate_state` and `check_standing`
 **Owner**: Junior AI | **Dependencies**: 5.3 | **Effort**: 3
 
-- [ ] `routing/inputs.py`: the two inputs and their value sets; `STANDING_WORST_FIRST`. `routing/evidence.py`: `gather` reads `outcome_observation` and the check records named by `check_ids` (`store.check`). `routing/reduce.py`: `gate_state` through `gate_state_at_exit`; `check_standing` the worst standing, `unknown` for an id the store does not hold; both `none` for an outcome other than `completed`
-- [ ] Tests in `tests/runner/routing/`: each value of both inputs; a pre-128 completed entry (no observation) gives `unknown`; table validation accepts a table naming both; recompute of a decision recorded before this slice reports 126's changed-vocabulary error, as 127's note records for `review_accepted`
-- [ ] **Success:** tests pass. Commit with Task 6.2
+- [x] `routing/inputs.py`: the two inputs and their value sets; `STANDING_WORST_FIRST`. `routing/evidence.py`: `gather` reads `outcome_observation` and the check records named by `check_ids` (`store.check`). `routing/reduce.py`: `gate_state` through `gate_state_at_exit`; `check_standing` the worst standing, `unknown` for an id the store does not hold; both `none` for an outcome other than `completed`
+- [x] Tests in `tests/runner/routing/`: each value of both inputs; a pre-128 completed entry (no observation) gives `unknown`; table validation accepts a table naming both; recompute of a decision recorded before this slice reports 126's changed-vocabulary error, as 127's note records for `review_accepted`
+- [x] **Success:** tests pass. Commit with Task 6.2
+
+Note: `OutcomeEvidence` gained required fields `gate_record` and `check_standings` (None means the entry carries no observation); the tests' `completed_evidence` builder passes None for both.
 
 ### Task 6.2: Edit the shipped table
 **Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 3
 
-- [ ] `routing/tables/default.yaml`: the three changed rules per D3; bump the table version
-- [ ] Tick tests (`tests/runner/gates/test_tick_routing.py`), one per LLD "Gate at the outcome" and "Hatches" criterion: `P5` PASS with `in-implementation` advances; with `review-failed` at the tasks gate escalates; `test_derived_pass_cleared_by_cf_escalates`; `pending-decision` after `P4` escalates with the decisions in the result; `P6` with `in-implementation` escalates as `misplaced`; a failed gate read escalates as `unknown`; `test_review_none_check_failed_and_escalates`; an early `dateCreated` escalates; a missing design escalates with both checks `vacuous`; in the `review: none` test, `amoeba inspect checks --node <slice>` shows each hatch check with the design path and the values examined; a PM completed-outcome accept of a hatch escalation advances
-- [ ] Run `uv run pytest -q`. Each test that now escalates only because its rig gives no gate answer sets the stub status past that step's exit gate; any other failure is a defect
-- [ ] **Success:** full suite green. Commit `feat: require a clear gate and passed checks before advancing`
+- [x] `routing/tables/default.yaml`: the three changed rules per D3; bump the table version
+- [x] Tick tests (`tests/runner/gates/test_tick_routing.py`), one per LLD "Gate at the outcome" and "Hatches" criterion: `P5` PASS with `in-implementation` advances; with `review-failed` at the tasks gate escalates; `test_derived_pass_cleared_by_cf_escalates`; `pending-decision` after `P4` escalates with the decisions in the result; `P6` with `in-implementation` escalates as `misplaced`; a failed gate read escalates as `unknown`; `test_review_none_check_failed_and_escalates`; an early `dateCreated` escalates; a missing design escalates with both checks `vacuous`; in the `review: none` test, `amoeba inspect checks --node <slice>` shows each hatch check with the design path and the values examined; a PM completed-outcome accept of a hatch escalation advances
+- [x] Run `uv run pytest -q`. Each test that now escalates only because its rig gives no gate answer sets the stub status past that step's exit gate; any other failure is a defect
+- [x] **Success:** full suite green. Commit `feat: require a clear gate and passed checks before advancing`
+
+Note: tests that stage an ingested outcome (`stage_outcome`) now get a healthy observation by default (`observed=False` stages a pre-128 entry); tick-level tests that must advance call `gate_rig.clear_gates(rig, slice_node, step)`. A completed run whose step is unknown now escalates (gate_state unknown). Hatch tick tests are in tests/runner/gates/test_tick_routing.py; `amoeba inspect checks` is exercised through `inspection.checks.check_rows`.
 
 ---
 

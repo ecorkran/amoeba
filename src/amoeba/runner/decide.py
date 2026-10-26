@@ -17,6 +17,7 @@ from typing import Protocol
 
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.gates.predispatch import Block, DispatchCheck
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
@@ -107,8 +108,26 @@ class ObserveRun:
     checkout: Path
 
 
+@dataclass(frozen=True)
+class BlockDispatch:
+    """Block a step on a human because its pre-dispatch check said not to go ahead.
+
+    Store-only, like :class:`BlockHumanStep` (slice 128, D5).
+    """
+
+    node_id: str
+    block: Block
+
+
 #: The closed set of things a planner may ask for.
-type Action = LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | ObserveRun
+type Action = (
+    LaunchRun
+    | BlockHumanStep
+    | WriteSlicePointer
+    | ResumeRun
+    | ObserveRun
+    | BlockDispatch
+)
 
 
 @dataclass(frozen=True)
@@ -125,7 +144,9 @@ class ProjectView:
     pipeline step, by node id, and ``checkout_holders`` names, for each checkout a
     pipeline already holds (D4), the nodes that hold it, so a step's own continuation
     can act in a checkout held only by itself (slice 127). Both are empty for a view
-    that dispatches nothing. ``merge_policy`` is the project's (slice 128, D8).
+    that dispatches nothing. ``merge_policy`` is the project's (slice 128, D8), and
+    ``dispatch_checks`` holds this tick's pre-dispatch result for each candidate, by
+    node id (D5); a node with no entry has no result.
     """
 
     project_id: str
@@ -142,6 +163,9 @@ class ProjectView:
         default_factory=dict[Path, frozenset[str]]
     )
     merge_policy: MergePolicy = PROJECT_DEFAULTS.merge_policy
+    dispatch_checks: Mapping[str, DispatchCheck] = field(
+        default_factory=dict[str, DispatchCheck]
+    )
 
     def ready_unbusy(self) -> list[Node]:
         """Ready steps (``tree.ready_steps()``) with no run in flight.

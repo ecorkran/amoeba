@@ -53,6 +53,11 @@ def test_the_fault_vocabulary_values_are_stable() -> None:
         "checkout_unresolved",
         "pointer_moved",
         "run_overrun",
+        "checkout_dirty",
+        "checkout_branch",
+        "cf_gate_blocks",
+        "pending_decision",
+        "checkout_read_failed",
     }
     assert {failure.value for failure in LaunchFailure} == {
         "spawn_error",
