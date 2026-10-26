@@ -37,6 +37,8 @@ from runner.tick_support import (
 
 from .intent.intent_support import submit
 
+pytestmark = pytest.mark.usefixtures("passing_checks")
+
 
 class Everything:
     """A faulty planner: acts on every ready step, current or not."""

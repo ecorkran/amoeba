@@ -26,6 +26,8 @@ from runner.tick_support import drive_project, link, ready_step, runnable_unbusy
 
 SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
 
+pytestmark = pytest.mark.usefixtures("passing_checks")
+
 
 class Host:
     def __init__(self, stores: dict[str, Store]) -> None:

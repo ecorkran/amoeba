@@ -12,16 +12,21 @@ import pytest
 
 from amoeba.runner.decide import (
     Action,
+    BlockDispatch,
     InFlightRun,
     LaunchRun,
     ProjectView,
+    ResumeRun,
     RunState,
     WriteSlicePointer,
     decide,
 )
 from amoeba.runner.dispatch.checkout import Checkout
+from amoeba.runner.faults import FaultKind
+from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import DesiredState, Node
 from runner.intent.rows_support import row
 from runner.lifecycle.tree_support import TreeBuilder
@@ -60,7 +65,10 @@ class Steps:
     second_owner: Node
 
     def view(self, *rows: DesiredState) -> ProjectView:
-        return view_for(self.builder.tree(), rows or (row(drive=True),))
+        """A driven view whose current steps have passed their pre-dispatch check."""
+        view = view_for(self.builder.tree(), rows or (row(drive=True),))
+        passed = {node.id: Ok({"target": "main"}) for node in view.current_steps}
+        return replace(view, dispatch_checks=passed)
 
 
 @pytest.fixture
@@ -235,3 +243,40 @@ def test_a_view_that_dispatches_nothing_has_empty_dispatch_facts() -> None:
 
     assert view.dispatch == {}
     assert view.checkout_holders == {}
+
+
+# -- slice 128, D5: nothing starts Squadron work unchecked -----------------------
+
+
+def _resume(node_id: str) -> ResumeRun:
+    return ResumeRun(node_id, "run-1", Continuation.RETRY, "entry-1", "b-1", Path("/w"))
+
+
+def test_decide_refuses_a_launch_without_a_passed_check(steps: Steps) -> None:
+    view = replace(steps.view(), dispatch_checks={})
+
+    with pytest.raises(ValueError, match="no passed pre-dispatch check"):
+        decide(view, (Fixed(_launch(steps.first.id)),))
+
+
+def test_decide_refuses_a_resume_without_a_passed_check(steps: Steps) -> None:
+    view = replace(steps.view(), dispatch_checks={})
+
+    with pytest.raises(ValueError, match="no passed pre-dispatch check"):
+        decide(view, (Fixed(_resume(steps.first.id)),))
+
+
+def test_decide_refuses_a_launch_whose_check_blocked(steps: Steps) -> None:
+    block = Block(FaultKind.CHECKOUT_DIRTY, "dirty", {})
+    view = replace(steps.view(), dispatch_checks={steps.first.id: block})
+
+    with pytest.raises(ValueError, match="no passed pre-dispatch check"):
+        decide(view, (Fixed(_launch(steps.first.id)),))
+
+
+def test_a_block_dispatch_and_a_pointer_write_need_no_check(steps: Steps) -> None:
+    view = replace(steps.view(), dispatch_checks={})
+    block = BlockDispatch(steps.first.id, Block(FaultKind.CHECKOUT_DIRTY, "dirty", {}))
+
+    assert decide(view, (Fixed(block),)) == [block]
+    assert decide(view, (Fixed(_pointer(steps.second.id)),)) != []

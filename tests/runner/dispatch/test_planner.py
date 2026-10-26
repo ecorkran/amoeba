@@ -7,21 +7,26 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.runner.decide import LaunchRun, WriteSlicePointer
+from amoeba.runner.decide import BlockDispatch, LaunchRun, WriteSlicePointer
 from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
 from amoeba.runner.dispatch.params import (
     MERGE_DISABLED,
+    PARAM_DISPATCH_CHECK,
     PARAM_MERGE,
     PARAM_MERGE_POLICY,
+    PARAM_TARGET,
 )
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
+from amoeba.runner.faults import FaultKind
+from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.project_config import MergePolicy
 from amoeba.store import (
     BlockedKind,
     BlockedState,
     CommandKind,
+    JournalEntry,
     JournalOutcome,
     JournalResolver,
     Resolution,
@@ -30,6 +35,7 @@ from amoeba.store import (
 from runner.dispatch.dispatch_support import (
     CF_PROJECT,
     FIRST,
+    OK_EVIDENCE,
     SECOND,
     entry,
     facts,
@@ -42,7 +48,15 @@ PLANNER = DispatchPlanner()
 def test_a_pointed_step_launches_its_pipeline() -> None:
     view = view_of({"a": facts(DispatchState.POINTED, step=LifecycleStep.TASKS)})
 
-    assert PLANNER.plan(view) == [LaunchRun("a", "P5", {"slice": "125"}, FIRST)]
+    assert PLANNER.plan(view) == [
+        LaunchRun(
+            "a",
+            "P5",
+            {"slice": "125"},
+            FIRST,
+            journal_extra={PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)},
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -81,9 +95,13 @@ def test_p6_records_the_policy_it_launches_under_and_merges_only_under_auto() ->
 
     assert isinstance(under_human, LaunchRun) and isinstance(under_auto, LaunchRun)
     assert under_human.params[PARAM_MERGE] == MERGE_DISABLED
-    assert under_human.journal_extra == {PARAM_MERGE_POLICY: "human"}
+    assert under_human.journal_extra == {
+        PARAM_MERGE_POLICY: "human",
+        PARAM_TARGET: "main",
+        PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE),
+    }
     assert PARAM_MERGE not in under_auto.params
-    assert under_auto.journal_extra == {PARAM_MERGE_POLICY: "auto"}
+    assert under_auto.journal_extra[PARAM_MERGE_POLICY] == "auto"
 
 
 @pytest.mark.parametrize("step", [LifecycleStep.SLICE_DESIGN, LifecycleStep.TASKS])
@@ -92,7 +110,8 @@ def test_a_planning_launch_records_no_merge_policy(step: LifecycleStep) -> None:
 
     [action] = PLANNER.plan(view)
 
-    assert isinstance(action, LaunchRun) and action.journal_extra == {}
+    assert isinstance(action, LaunchRun)
+    assert action.journal_extra == {PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)}
 
 
 def test_a_step_that_needs_a_pointer_writes_it() -> None:
@@ -117,7 +136,13 @@ def test_a_reissue_repeats_the_old_attempt_under_its_run_id() -> None:
     [action] = PLANNER.plan(view)
 
     assert action == LaunchRun(
-        "a", "P5", {"slice": "125"}, FIRST, run_id="run-old", reissue_of=old.id
+        "a",
+        "P5",
+        {"slice": "125"},
+        FIRST,
+        run_id="run-old",
+        reissue_of=old.id,
+        journal_extra={PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)},
     )
 
 
@@ -136,7 +161,7 @@ def test_a_reissue_keeps_the_policy_of_the_attempt_it_repeats() -> None:
     [action] = PLANNER.plan(view)
 
     assert isinstance(action, LaunchRun)
-    assert action.journal_extra == {PARAM_MERGE_POLICY: "auto"}, "not this view's human"
+    assert action.journal_extra[PARAM_MERGE_POLICY] == "auto", "not this view's human"
 
 
 def test_a_reissue_without_its_old_entry_is_refused() -> None:
@@ -297,3 +322,81 @@ def test_a_pointer_write_otherwise_carries_no_resolution(
     [action] = PLANNER.plan(view)
 
     assert isinstance(action, WriteSlicePointer) and action.resolution is None
+
+
+# -- slice 128, D5: a launch goes ahead only on a passed check ------------------
+
+
+def _old_for(state: DispatchState) -> JournalEntry | None:
+    """The attempt a reissue repeats; a pointed step repeats nothing."""
+    if state is not DispatchState.REISSUE:
+        return None
+    return entry(
+        CommandKind.SQ_RUN,
+        "a",
+        FIRST,
+        JournalOutcome.NOT_APPLIED,
+        resolved_by=JournalResolver.RECOVERY,
+    )
+
+
+@pytest.mark.parametrize("state", [DispatchState.POINTED, DispatchState.REISSUE])
+def test_a_launch_with_no_result_does_nothing(state: DispatchState) -> None:
+    view = view_of({"a": facts(state, reissue_of=_old_for(state))}, checks={})
+
+    assert PLANNER.plan(view) == []
+
+
+@pytest.mark.parametrize("state", [DispatchState.POINTED, DispatchState.REISSUE])
+def test_a_blocked_check_gives_block_dispatch_and_no_launch(
+    state: DispatchState,
+) -> None:
+    block = Block(FaultKind.CHECKOUT_DIRTY, "dirty", {"path_count": 1})
+    view = view_of({"a": facts(state, reissue_of=_old_for(state))}, checks={"a": block})
+
+    assert PLANNER.plan(view) == [BlockDispatch("a", block)]
+
+
+def test_a_pointer_write_needs_no_check() -> None:
+    view = view_of({"a": facts(DispatchState.NEEDS_POINTER, SECOND)}, checks={})
+
+    [action] = PLANNER.plan(view)
+
+    assert isinstance(action, WriteSlicePointer)
+
+
+def test_a_p6_launch_records_the_target_the_check_read() -> None:
+    evidence = {**OK_EVIDENCE, "target": "dev/erik"}
+    view = view_of(
+        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)},
+        checks={"a": Ok(evidence)},
+    )
+
+    [action] = PLANNER.plan(view)
+
+    assert isinstance(action, LaunchRun)
+    assert action.journal_extra[PARAM_TARGET] == "dev/erik"
+    assert action.journal_extra[PARAM_DISPATCH_CHECK] == evidence
+
+
+def test_a_reissue_keeps_the_old_target_and_records_this_ticks_check() -> None:
+    first = entry(
+        CommandKind.SQ_RUN,
+        "a",
+        FIRST,
+        JournalOutcome.NOT_APPLIED,
+        resolved_by=JournalResolver.RECOVERY,
+    )
+    old = replace(first, parameters={**first.parameters, PARAM_TARGET: "dev/old"})
+    evidence = {**OK_EVIDENCE, "head": "newer"}
+    view = view_of(
+        {"a": facts(DispatchState.REISSUE, reissue_of=old)}, checks={"a": Ok(evidence)}
+    )
+
+    [action] = PLANNER.plan(view)
+
+    assert isinstance(action, LaunchRun)
+    assert action.journal_extra == {
+        PARAM_TARGET: "dev/old",
+        PARAM_DISPATCH_CHECK: evidence,
+    }

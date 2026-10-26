@@ -17,7 +17,7 @@ from typing import Protocol
 
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
-from amoeba.runner.gates.predispatch import Block, DispatchCheck
+from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
@@ -95,6 +95,8 @@ class ResumeRun:
     continues: str
     resolution: str
     checkout: Path
+    #: Evidence written into the continuation entry's parameters (slice 128, D5).
+    journal_extra: Mapping[str, object] = field(default_factory=dict[str, object])
 
 
 @dataclass(frozen=True)
@@ -194,7 +196,10 @@ def decide(view: ProjectView, planners: Sequence[Planner]) -> list[Action]:
             ``view.current_steps`` (not driven, held, not ready, or unknown): the
             guard that makes drive and hold bind every planner (D7). Or if two
             actions name the same node: a node gets at most one action per tick.
-            Neither is ever silently dropped; both are programming errors.
+            Neither is ever silently dropped; both are programming errors. Or if a
+            ``LaunchRun`` or ``ResumeRun`` names a node with no passed pre-dispatch
+            check (``Ok``) in ``view.dispatch_checks``: nothing may start Squadron
+            work unchecked (slice 128, D5).
     """
     actions: list[Action] = []
     claimed: set[str] = set()
@@ -210,6 +215,13 @@ def decide(view: ProjectView, planners: Sequence[Planner]) -> list[Action]:
                 raise ValueError(
                     f"more than one action for node {action.node_id} in project "
                     f"{view.project_id}"
+                )
+            if isinstance(action, LaunchRun | ResumeRun) and not isinstance(
+                view.dispatch_checks.get(action.node_id), Ok
+            ):
+                raise ValueError(
+                    f"{type(action).__name__} for node {action.node_id} in project "
+                    f"{view.project_id} has no passed pre-dispatch check"
                 )
             claimed.add(action.node_id)
             actions.append(action)

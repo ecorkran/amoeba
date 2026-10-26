@@ -24,6 +24,7 @@ from pathlib import Path
 
 from contract.bootstrap import ReadyAnnouncer
 
+import amoeba.runner.tick as tick_module
 from amoeba.process import (
     ProcessSettings,
     ResidentProcess,
@@ -46,7 +47,7 @@ from runner.routing.table_support import (
     TEST_AMOEBA_VERSION,
     small_table,
 )
-from runner.tick_support import runnable_unbusy
+from runner.tick_support import PassingGates, runnable_unbusy
 
 KILL_AT_ENV = "PROOF_KILL_AT"
 
@@ -223,6 +224,10 @@ def main(argv: Sequence[str]) -> None:
         )
     )
     popen, poll = _hooked(kill_at)
+    if not arguments.dispatch:
+        # The proof planner launches without dispatch facts, so it has no checks to
+        # pass; this process tests crash recovery, not the pre-dispatch checks.
+        tick_module.GateStage = PassingGates  # type: ignore[misc]
     runner = RunnerTenant(
         settings=settings,
         supervisor_dir=supervisor_dir,

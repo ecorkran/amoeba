@@ -8,14 +8,18 @@ from itertools import count
 from pathlib import Path
 from typing import Any
 
+import pytest
 from feed_harness import apply
 
+import amoeba.runner.tick as tick_module
 from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
 from amoeba.runner.dispatch.observe_pointer import PointerStage
-from amoeba.runner.faults import NodeContext
+from amoeba.runner.faults import NodeContext, TickFaults
+from amoeba.runner.gates.predispatch import DispatchCheck, Ok
+from amoeba.runner.gates.stage import DispatchStageResult, GateStage
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
 from amoeba.runner.launch import (
@@ -189,6 +193,37 @@ class Planner:
             LaunchRun(n.id, "P4", {"k": "v"}, self.checkout)
             for n in runnable_unbusy(view)
         ]
+
+
+class PassingGates(GateStage):
+    """A gate stage whose pre-dispatch check passes every current step.
+
+    For rigs whose planner is a test double that launches without dispatch facts: they
+    test the tick's sequencing, not the checks. A step with a real result keeps it.
+    """
+
+    def check_dispatch(
+        self, view: ProjectView, budget: TickBudget, faults: TickFaults
+    ) -> DispatchStageResult:
+        real = super().check_dispatch(view, budget, faults)
+        passed: dict[str, DispatchCheck] = {
+            node.id: Ok(
+                {
+                    "branch": "main",
+                    "head": None,
+                    "target": "main",
+                    "gate_status": None,
+                    "gate_review_type": None,
+                }
+            )
+            for node in view.current_steps
+        }
+        return DispatchStageResult({**passed, **real.checks}, real.cut_off)
+
+
+def install_passing_gates(patch: pytest.MonkeyPatch) -> None:
+    """Make every ``ProjectTick`` built from now on use :class:`PassingGates`."""
+    patch.setattr(tick_module, "GateStage", PassingGates)
 
 
 class Popen:

@@ -128,11 +128,14 @@ def _complete(
         **single_status_knobs(fixture),
         **config_knobs(tmp_path, {CF_KEY_REVIEW_GATE_EFFECTIVE_DATE: effective}),
     }
-    if gate_mode is not None:
-        knobs[STATUS_MODE_ENV] = gate_mode.value
     rig.tick_rig.gate_run = rig.world.run(knobs)
     rig.tick()  # the pointer write
     rig.tick()  # the launch
+    if gate_mode is not None:
+        # The gate fails only for the outcome observation: the launch has happened.
+        rig.tick_rig.gate_run = rig.world.run(
+            {**knobs, STATUS_MODE_ENV: gate_mode.value}
+        )
     review = _review(rig, verdict, derived=derived)
     entry = rig.run_of(node)
     rig.end_run(node, RunOutcome.COMPLETED, **review.document)

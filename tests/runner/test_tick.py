@@ -33,6 +33,8 @@ from runner.tick_support import (
     runnable_unbusy,
 )
 
+pytestmark = pytest.mark.usefixtures("passing_checks")
+
 
 @pytest.fixture
 def node(store: Store) -> Node:

@@ -27,7 +27,7 @@ from amoeba.runner.gates.cf_status import (
 from amoeba.runner.git_read import GitStatus
 from amoeba.runner.launch import PARAM_PIPELINE, text_parameter
 from amoeba.runner.lifecycle.steps import PIPELINE_P6, LifecycleStep
-from amoeba.store import JournalEntry, Node
+from amoeba.store import PARAM_CHECKOUT, JournalEntry, Node
 from amoeba.upstream.context_forge import parse_slice_stem
 
 #: How many changed paths a ``checkout_dirty`` block lists; the count is always given.
@@ -258,6 +258,10 @@ def launch_candidates(
         if step_facts is None or not isinstance(step_facts.checkout, Checkout):
             continue
         checkout = step_facts.checkout
+        if step_facts.state is DispatchState.REISSUE:
+            checkout = _entry_checkout(step_facts.reissue_of, checkout)
+        elif step_facts.state is DispatchState.RESUME:
+            checkout = _entry_checkout(step_facts.continues, checkout)
         held_by = holders.get(checkout.path, frozenset[str]())
         if step_facts.state is DispatchState.POINTED:
             pipeline = pipeline_for(step_facts.step)
@@ -279,6 +283,17 @@ def launch_candidates(
             )
         )
     return tuple(found)
+
+
+def _entry_checkout(entry: JournalEntry | None, resolved: Checkout) -> Checkout:
+    """Where a reissue or resume acts: the checkout its entry recorded.
+
+    The resolved checkout supplies the worktree id when it is the same directory.
+    """
+    if entry is None:
+        raise ValueError("a reissue or resume step has no entry to take its checkout")
+    path = Path(text_parameter(entry, PARAM_CHECKOUT))
+    return Checkout(path, resolved.worktree_id if path == resolved.path else None)
 
 
 def _pipeline_of(entry: JournalEntry | None) -> str:

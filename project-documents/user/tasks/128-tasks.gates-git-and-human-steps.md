@@ -246,32 +246,36 @@ Note: tests that stage an ingested outcome (`stage_outcome`) now get a healthy o
 ### Task 7.1: Add the fault kinds, `DispatchCheck` and `BlockDispatch`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `runner/faults.py`: the five members per D11, documented in the class docstring (`checkout_read_failed` project-scoped, the rest node blocks)
-- [ ] Create `runner/gates/predispatch.py` with `Ok`, `Block` and `DispatchCheck` per "API Contracts" (no import of `decide.py`). `runner/decide.py`: `BlockDispatch`, the widened `Action`, and `ProjectView.dispatch_checks` (empty by default). `ProjectView.merge_observations` waits for Task 9.2, which defines its value type
-- [ ] `runner/act.py`: apply `BlockDispatch` with `block_once` on `HUMAN`, with `fault_kind` in the payload, store only
-- [ ] Tests: `tests/runner/test_act*.py`: a `BlockDispatch` writes one block and no journal entry, and a second is skipped
-- [ ] **Success:** tests pass. Commit `feat: add the dispatch block action and its fault kinds`
+- [x] `runner/faults.py`: the five members per D11, documented in the class docstring (`checkout_read_failed` project-scoped, the rest node blocks)
+- [x] Create `runner/gates/predispatch.py` with `Ok`, `Block` and `DispatchCheck` per "API Contracts" (no import of `decide.py`). `runner/decide.py`: `BlockDispatch`, the widened `Action`, and `ProjectView.dispatch_checks` (empty by default). `ProjectView.merge_observations` waits for Task 9.2, which defines its value type
+- [x] `runner/act.py`: apply `BlockDispatch` with `block_once` on `HUMAN`, with `fault_kind` in the payload, store only
+- [x] Tests: `tests/runner/test_act*.py`: a `BlockDispatch` writes one block and no journal entry, and a second is skipped
+- [x] **Success:** tests pass. Commit `feat: add the dispatch block action and its fault kinds`
 
 ### Task 7.2: Implement `branch_rule` and the entry gate
 **Owner**: Junior AI | **Dependencies**: 4.3, 7.1 | **Effort**: 3
 
-- [ ] In `runner/gates/predispatch.py`, pure: `allowed_branches(pipeline, target, slice_index)` and `branch_rule(status, target, pipeline, slice_index, *, resume) -> Block | None` per D5's git order and D6's table (Task-level additions for the own-branch rule; dirty paths capped at 20 with the count; a resume never blocks on a dirty tree); `entry_gate(step, active_slice, slice_index, accepted: bool) -> Ok | Block | NoResult | Disagreement` per D5's entry-gate table, where `accepted` says the predecessor was accepted by the PM and `Disagreement` tells the caller to record D7's check, then go on
-- [ ] `tests/runner/gates/test_predispatch.py`, table-driven over every D5 and D6 row: `test_dirty_tree_blocks_launch`; `test_planning_run_refused_off_target`; `P6` on its own branch is allowed and on another slice's branch blocks; `test_resume_not_blocked_by_its_own_dirty_tree`; detached blocks; a `/`-prefixed branch is not the slice's own; each entry-gate row for `tasks` and `implementation`; `slice_design` has no entry gate
-- [ ] **Success:** tests pass; no I/O. Commit with Task 7.3
+- [x] In `runner/gates/predispatch.py`, pure: `allowed_branches(pipeline, target, slice_index)` and `branch_rule(status, target, pipeline, slice_index, *, resume) -> Block | None` per D5's git order and D6's table (Task-level additions for the own-branch rule; dirty paths capped at 20 with the count; a resume never blocks on a dirty tree); `entry_gate(step, active_slice, slice_index, accepted: bool) -> Ok | Block | NoResult | Disagreement` per D5's entry-gate table, where `accepted` says the predecessor was accepted by the PM and `Disagreement` tells the caller to record D7's check, then go on
+- [x] `tests/runner/gates/test_predispatch.py`, table-driven over every D5 and D6 row: `test_dirty_tree_blocks_launch`; `test_planning_run_refused_off_target`; `P6` on its own branch is allowed and on another slice's branch blocks; `test_resume_not_blocked_by_its_own_dirty_tree`; detached blocks; a `/`-prefixed branch is not the slice's own; each entry-gate row for `tasks` and `implementation`; `slice_design` has no entry gate
+- [x] **Success:** tests pass; no I/O. Commit with Task 7.3
 
 ### Task 7.3: Implement `launch_candidates` and `read_dispatch_facts`
 **Owner**: Junior AI | **Dependencies**: 2.2, 4.2, 7.2 | **Effort**: 3
 
-- [ ] In `runner/gates/predispatch.py`: the pure `launch_candidates(current, facts, holders)` (Task-level additions). In a new `runner/gates/dispatch_reads.py`: `read_dispatch_facts(candidate, budget, run, timeout) -> DispatchReads | ReadFailure | None` doing D5's reads in order (the gate read only for a fresh or reissued `tasks` or `implementation` launch), and `check_candidate(candidate, reads, accepted: bool) -> DispatchCheck | Disagreement | None` combining the two rules and building `Ok`'s evidence (`branch`, `head`, `target`, `gate_status`, `gate_review_type`, plus dirty paths for a resume)
-- [ ] Tests: `launch_candidates` over each state and holder case (a `REISSUE` in a held checkout and a `RESUME` in a checkout held by another node are not candidates; `NEEDS_POINTER` and `REOBSERVE` never are); `read_dispatch_facts` with the stub `cf` and a real repository, including a failed read and a cut-off; `check_candidate`'s evidence for a launch and a resume
-- [ ] **Success:** tests pass. Commit `feat: check the checkout and the entry gate before dispatch`
+- [x] In `runner/gates/predispatch.py`: the pure `launch_candidates(current, facts, holders)` (Task-level additions). In a new `runner/gates/dispatch_reads.py`: `read_dispatch_facts(candidate, budget, run, timeout) -> DispatchReads | ReadFailure | None` doing D5's reads in order (the gate read only for a fresh or reissued `tasks` or `implementation` launch), and `check_candidate(candidate, reads, accepted: bool) -> DispatchCheck | Disagreement | None` combining the two rules and building `Ok`'s evidence (`branch`, `head`, `target`, `gate_status`, `gate_review_type`, plus dirty paths for a resume)
+- [x] Tests: `launch_candidates` over each state and holder case (a `REISSUE` in a held checkout and a `RESUME` in a checkout held by another node are not candidates; `NEEDS_POINTER` and `REOBSERVE` never are); `read_dispatch_facts` with the stub `cf` and a real repository, including a failed read and a cut-off; `check_candidate`'s evidence for a launch and a resume
+- [x] **Success:** tests pass. Commit `feat: check the checkout and the entry gate before dispatch`
+
+Note: `Candidate` (node_id, step, state, checkout, pipeline, slice_index, cf_project_id) is defined in predispatch.py; `read_dispatch_facts` returns `DispatchReads | DispatchReadFailed | None`. `Ok.evidence` is `Mapping[str, object]` so a resume can carry its dirty paths as a list. Text from git and CF is bounded in `act.block_dispatch`, not in predispatch, to keep predispatch free of the ingest import cycle.
 
 ### Task 7.4: Run the checks in the tick
 **Owner**: Junior AI | **Dependencies**: 5.3, 7.3 | **Effort**: 2
 
-- [ ] `GateStage.check_dispatch(view, budget, faults)`: for each candidate, the reads and the check; a failed read adds `checkout_read_failed` with `{checkout, command, reason}`; returns `dispatch_checks` by node id. (`Disagreement` is treated as `Ok` here; Task 8.2 records it.) `tick.py` replaces the view with them (Task-level additions). No planner reads them yet
-- [ ] Tests (`tests/runner/gates/test_stage_dispatch.py`): a tick with a pointed step on a dirty checkout puts a `Block` in the view's `dispatch_checks`; a clean one puts `Ok`; a failed read puts nothing and raises `checkout_read_failed`
-- [ ] **Success:** full suite green. Commit `feat: run the pre-dispatch checks in the tick`
+- [x] `GateStage.check_dispatch(view, budget, faults)`: for each candidate, the reads and the check; a failed read adds `checkout_read_failed` with `{checkout, command, reason}`; returns `dispatch_checks` by node id. (`Disagreement` is treated as `Ok` here; Task 8.2 records it.) `tick.py` replaces the view with them (Task-level additions). No planner reads them yet
+- [x] Tests (`tests/runner/gates/test_stage_dispatch.py`): a tick with a pointed step on a dirty checkout puts a `Block` in the view's `dispatch_checks`; a clean one puts `Ok`; a failed read puts nothing and raises `checkout_read_failed`
+- [x] **Success:** full suite green. Commit `feat: run the pre-dispatch checks in the tick`
+
+Note: part of Task 7.5's rig update landed here to keep the suite green: `DispatchRig.use_clean_checkouts` makes both world checkouts clean git repositories (`gate_rig.rig_checkout`, ignoring everything but README.md) and points the tick's `gate_run` at the stub with `CF_STUB_STATUS_POINTER`, which reports the captured in_implementation status for whichever slice the pointer holds. `GateStage.check_dispatch` returns `DispatchStageResult(checks, cut_off)`; the tick ends as cut off when it is.
 
 ### Task 7.5: Filter the planners on the checks
 **Owner**: Junior AI | **Dependencies**: 3.3, 7.4 | **Effort**: 3
