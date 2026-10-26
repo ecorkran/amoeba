@@ -55,13 +55,18 @@ from amoeba.store import (
 def block_dispatch(store: Store, action: BlockDispatch) -> None:
     """Block the step on a human for a failed pre-dispatch check, once (D5, D11)."""
     block = action.block
+    # Text from git and CF is bounded like 122's tail before it is stored (D11).
+    payload = {
+        key: cut_to_bound(value) if isinstance(value, str) else value
+        for key, value in block.payload.items()
+    }
     block_once(
         store,
         action.node_id,
         BlockPlan(
             BlockedKind.HUMAN,
             cut_to_bound(block.context),
-            {**block.payload, PAYLOAD_FAULT_KIND: block.fault_kind.value},
+            {**payload, PAYLOAD_FAULT_KIND: block.fault_kind.value},
         ),
     )
 
