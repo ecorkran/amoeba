@@ -306,16 +306,18 @@ Note: the guard test lives in tests/runner/test_decide.py (a launch or resume wi
 ### Task 8.1: Implement `accepted_by_pm`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Create `runner/gates/accepted.py` with the pure `accepted_by_pm(entries, latest_blocked) -> AcceptedOutcome | None`: set when the latest blocked state has `runner_outcome` `applied` and decision `accept`, and the latest `sq_run` entry's `RESULT_OUTCOME` is `completed` (127, D7). It carries the blocked state id, the entry id and the entry's `verdict_ids`. A loop accept (a `continuation` entry) is not counted (issue #17)
-- [ ] `tests/runner/gates/test_accepted.py`: accept of a completed outcome; a rejected accept; a `rerun`; a loop accept; no blocked state; an accept followed by a newer run
-- [ ] **Success:** tests pass. Commit with Task 8.2
+- [x] Create `runner/gates/accepted.py` with the pure `accepted_by_pm(entries, latest_blocked) -> AcceptedOutcome | None`: set when the latest blocked state has `runner_outcome` `applied` and decision `accept`, and the latest `sq_run` entry's `RESULT_OUTCOME` is `completed` (127, D7). It carries the blocked state id, the entry id and the entry's `verdict_ids`. A loop accept (a `continuation` entry) is not counted (issue #17)
+- [x] `tests/runner/gates/test_accepted.py`: accept of a completed outcome; a rejected accept; a `rerun`; a loop accept; no blocked state; an accept followed by a newer run
+- [x] **Success:** tests pass. Commit with Task 8.2
 
 ### Task 8.2: Record the disagreement and dispatch
 **Owner**: Junior AI | **Dependencies**: 7.5, 8.1 | **Effort**: 2
 
-- [ ] `GateStage.check_dispatch`: for a `tasks` or `implementation` candidate, read the predecessor step's entries and latest blocked state (the previous step in `STEP_SEQUENCE`, same slice) and pass whether `accepted_by_pm` found an `AcceptedOutcome` to `check_candidate`. On `Disagreement`, `record_check` D7's record on the slice node, built from that `AcceptedOutcome` (id `chk-<accepted entry id>-cf_gate_accept_disagreement`), then `Ok` with the check id in its evidence
-- [ ] Tick tests (`tests/runner/gates/test_tick_disagreement.py`): after a PM accept of a completed `slice_design` outcome whose slice gate still fails, the `tasks` launch records one check and launches; `test_accept_disagreement_recorded_once` (a rerun of `tasks` adds no record); without an accept, the same gate blocks `cf_gate_blocks`; `amoeba inspect checks --node <slice>` shows it
-- [ ] **Success:** tests pass. Commit `feat: record a PM accept CF's gate still fails` with `Fixes #15` in the body
+- [x] `GateStage.check_dispatch`: for a `tasks` or `implementation` candidate, read the predecessor step's entries and latest blocked state (the previous step in `STEP_SEQUENCE`, same slice) and pass whether `accepted_by_pm` found an `AcceptedOutcome` to `check_candidate`. On `Disagreement`, `record_check` D7's record on the slice node, built from that `AcceptedOutcome` (id `chk-<accepted entry id>-cf_gate_accept_disagreement`), then `Ok` with the check id in its evidence
+- [x] Tick tests (`tests/runner/gates/test_tick_disagreement.py`): after a PM accept of a completed `slice_design` outcome whose slice gate still fails, the `tasks` launch records one check and launches; `test_accept_disagreement_recorded_once` (a rerun of `tasks` adds no record); without an accept, the same gate blocks `cf_gate_blocks`; `amoeba inspect checks --node <slice>` shows it
+- [x] **Success:** tests pass. Commit `feat: record a PM accept CF's gate still fails` with `Fixes #15` in the body
+
+Note: `disagreement_check` (the D7 record builder) lives in gates/accepted.py; `DispatchStageResult.wrote` tells the tick a disagreement check was written; `Ok.evidence` carries `disagreement_check` (the check id). tick.py is now 336 lines (279 before this slice); a split is a candidate refactor for the final tasks.
 
 ---
 

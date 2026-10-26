@@ -174,11 +174,18 @@ class ProjectTick:
         self._pointer_confirmed = pointed.confirmed
         # The view is built before routing: what routing does is first seen by the
         # next tick's view (slice 126, D8).
+        # Reads, and the completion write of a merge git shows done; before the view.
+        merges = self._gates.observe_merges(desired, budget, faults)
+        self.wrote = merges.wrote or self.wrote
         view = self._build_view(runs.pending, self._probes.results(links), desired)
         # Reads only, so a cut-off just defers them: a candidate with no result
         # cannot launch this tick (D5).
         dispatch = self._gates.check_dispatch(view, budget, faults)
-        view = replace(view, dispatch_checks=dispatch.checks)
+        view = replace(
+            view,
+            dispatch_checks=dispatch.checks,
+            merge_observations=merges.observations,
+        )
         self.wrote = dispatch.wrote or self.wrote
         # Store reads and writes only, so no budget check: it starts no subprocess.
         self.wrote = (
@@ -199,7 +206,7 @@ class ProjectTick:
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )
-        if acted.result is TickResult.CUT_OFF or dispatch.cut_off:
+        if acted.result is TickResult.CUT_OFF or dispatch.cut_off or merges.cut_off:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE

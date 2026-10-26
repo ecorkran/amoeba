@@ -98,15 +98,20 @@ def allowed_branches(pipeline: str, target: str, slice_index: int) -> tuple[str,
     return (target,)
 
 
+def is_slice_branch(branch: str, slice_index: int) -> bool:
+    """Whether ``branch`` is the slice's own branch: ``{index}-slice.*`` (D6).
+
+    ``parse_slice_stem`` reads only the last path part, so a "/"-prefixed name is
+    never the slice's own branch: Squadron names slice branches with no prefix.
+    """
+    stem = parse_slice_stem(branch)
+    return stem is not None and "/" not in branch and stem.index == slice_index
+
+
 def _is_allowed(branch: str, pipeline: str, target: str, slice_index: int) -> bool:
     if branch == target:
         return True
-    if pipeline != PIPELINE_P6:
-        return False
-    # parse_slice_stem reads only the last path part, so a "/"-prefixed name is
-    # never the slice's own branch: Squadron names slice branches with no prefix.
-    stem = parse_slice_stem(branch)
-    return stem is not None and "/" not in branch and stem.index == slice_index
+    return pipeline == PIPELINE_P6 and is_slice_branch(branch, slice_index)
 
 
 def branch_rule(

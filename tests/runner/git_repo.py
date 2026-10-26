@@ -28,7 +28,7 @@ def commit_file(repo: Path, name: str, text: str, message: str) -> str:
     path = repo / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
-    git(repo, "add", "--", name)
+    git(repo, "add", "-f", "--", name)  # -f: a rig checkout ignores everything
     git(repo, "commit", "-q", "-m", message)
     return head_of(repo)
 

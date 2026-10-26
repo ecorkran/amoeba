@@ -17,6 +17,7 @@ from typing import Protocol
 
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.gates.merge_observation import MergeObservation
 from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
@@ -64,9 +65,14 @@ class LaunchRun:
 
 @dataclass(frozen=True)
 class BlockHumanStep:
-    """Block a ready human step on a person (D9). Store-only: no journal entry."""
+    """Block a ready human step on a person (D9). Store-only: no journal entry.
+
+    ``payload_extra`` is merged into the block's payload (slice 128, D9: why a merge
+    could not be observed).
+    """
 
     node_id: str
+    payload_extra: Mapping[str, object] = field(default_factory=dict[str, object])
 
 
 @dataclass(frozen=True)
@@ -148,7 +154,8 @@ class ProjectView:
     can act in a checkout held only by itself (slice 127). Both are empty for a view
     that dispatches nothing. ``merge_policy`` is the project's (slice 128, D8), and
     ``dispatch_checks`` holds this tick's pre-dispatch result for each candidate, by
-    node id (D5); a node with no entry has no result.
+    node id (D5); a node with no entry has no result. ``merge_observations`` holds the
+    git observation of each pending merge step, by the merge step's node id (D9).
     """
 
     project_id: str
@@ -167,6 +174,9 @@ class ProjectView:
     merge_policy: MergePolicy = PROJECT_DEFAULTS.merge_policy
     dispatch_checks: Mapping[str, DispatchCheck] = field(
         default_factory=dict[str, DispatchCheck]
+    )
+    merge_observations: Mapping[str, MergeObservation] = field(
+        default_factory=dict[str, MergeObservation]
     )
 
     def ready_unbusy(self) -> list[Node]:

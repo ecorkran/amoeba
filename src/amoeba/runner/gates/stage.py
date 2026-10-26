@@ -26,6 +26,7 @@ from amoeba.runner.gates.dispatch_reads import (
     check_candidate,
     read_dispatch_facts,
 )
+from amoeba.runner.gates.merge import MergePass, observe_merges
 from amoeba.runner.gates.outcome import (
     OutcomeObservation,
     observe_outcome,
@@ -39,6 +40,7 @@ from amoeba.runner.gates.predispatch import (
     Ok,
     launch_candidates,
 )
+from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.steps import STEP_SEQUENCE, LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observed import ObservedRun, RunEnded
@@ -116,6 +118,28 @@ class GateStage:
                 return OutcomeStageResult(observations, True)
             observations[entry.id] = observation
         return OutcomeStageResult(observations, False)
+
+    def observe_merges(
+        self, desired: DesiredStateIndex, budget: TickBudget, faults: TickFaults
+    ) -> MergePass:
+        """Observe the merge of each slice awaiting one (D9); only for a driven project.
+
+        Not driven means the PM wants nothing done: nothing is read. The pass is
+        reads plus the completion write of a step git shows merged.
+        """
+        if not desired.drives_anything():
+            return MergePass({}, False, False)
+        self._context.clear()
+        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
+        return observe_merges(
+            self._store,
+            tree,
+            self._project_id,
+            budget,
+            self._cf_run,
+            self._timeout_seconds,
+            faults,
+        )
 
     def check_dispatch(
         self, view: ProjectView, budget: TickBudget, faults: TickFaults
