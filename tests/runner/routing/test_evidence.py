@@ -5,10 +5,13 @@ from __future__ import annotations
 from routing_helpers import TABLE, decision_input
 
 from amoeba.process import RunOutcome
+from amoeba.runner.gates.outcome import unobservable
+from amoeba.runner.ingest.record import RESULT_CHECK_IDS, RESULT_OUTCOME_OBSERVATION
 from amoeba.runner.routing.evidence import gather
 from amoeba.runner.routing.inputs import RoutingInput
-from amoeba.runner.routing.reduce import reduce
+from amoeba.runner.routing.reduce import OutcomeEvidence, reduce
 from amoeba.store import (
+    CheckStanding,
     FindingChange,
     FindingSeverity,
     ReviewVerdict,
@@ -231,3 +234,52 @@ def test_an_accept_whose_continued_entry_is_gone_is_unknown(store: Store) -> Non
 
     assert evidence.continued_verdict_ids is None
     assert reduce(evidence).values[RoutingInput.REVIEW_ACCEPTED] == "unknown"
+
+
+def test_an_entry_with_an_observation_gathers_the_gate_and_the_check_standings(
+    store: Store,
+) -> None:
+    node_id = stage_node(store)
+    placeholder = stage_outcome(store, node_id, observed=False)
+    observation = unobservable(placeholder, node_id, "no reads", "amoeba-test")
+    for check in observation.checks:
+        store.record_check(check, project_id=PROJECT)
+    entry = stage_outcome(
+        store, node_id, extra_result=observation.to_result(), run_id="run-2"
+    )
+
+    evidence = gather(store, entry)
+
+    assert evidence.gate_record == {"failure": "no reads"}
+    assert evidence.check_standings == (CheckStanding.VACUOUS, CheckStanding.ERRORED)
+
+
+def test_a_check_id_the_store_does_not_hold_gathers_as_none(store: Store) -> None:
+    node_id = stage_node(store)
+    entry = stage_outcome(
+        store,
+        node_id,
+        extra_result={
+            RESULT_OUTCOME_OBSERVATION: {"gate": {}},
+            RESULT_CHECK_IDS: ["ghost"],
+        },
+    )
+
+    evidence = gather(store, entry)
+
+    assert evidence.check_standings == (None,)
+    assert value_of(evidence, RoutingInput.CHECK_STANDING) == "unknown"
+
+
+def test_an_entry_ingested_before_slice_128_has_no_observation(store: Store) -> None:
+    entry = stage_outcome(store, stage_node(store), observed=False)
+
+    evidence = gather(store, entry)
+
+    assert evidence.gate_record is None and evidence.check_standings is None
+    assert value_of(evidence, RoutingInput.GATE_STATE) == "unknown"
+    assert value_of(evidence, RoutingInput.CHECK_STANDING) == "unknown"
+
+
+def value_of(evidence: OutcomeEvidence, name: RoutingInput) -> str:
+    return reduce(evidence).values[name]

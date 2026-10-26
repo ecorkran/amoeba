@@ -12,23 +12,37 @@ time_bounds_minutes:
   P6: 720
 
 rules:
+  # Slice 128, D3: a stated pass advances only where CF's gate also clears (CF is not
+  # trusted alone, and the store's stated pass is required) and the ungate-hatch
+  # checks passed. A hatch, a vacuous or unreadable check, a gate CF still blocks, a
+  # pending decision, a misplaced or unreadable gate all fall through to escalate.
   - id: advance-on-stated-pass
-    when: {outcome: completed, verdict: pass, standing: stated}
+    when:
+      outcome: completed
+      verdict: pass
+      standing: stated
+      gate_state: clear
+      check_standing: passed
     route: advance
 
   # An accepted loop that ended on the review the PM accepted (slice 127, D8). Without
   # this the completed CONCERNS review would be routed again, undoing the decision.
+  # It does not name gate_state: CF failing the accepted review is the disagreement
+  # slice 128 records (D7), not a reason to undo the accept.
   - id: advance-on-accepted-review
-    when: {outcome: completed, review_accepted: true}
+    when: {outcome: completed, review_accepted: true, check_standing: passed}
     route: advance
 
-  # A new concern is worth one more round with the fresh review as feedback.
+  # A new concern is worth one more round with the fresh review as feedback. It does
+  # not name gate_state: a CONCERNS review fails CF's gate under a pass threshold, and
+  # a rerun is the step's own answer to its review.
   - id: rerun-new-concerns
     when:
       outcome: completed
       verdict: concerns
       standing: stated
       recurrence: new
+      check_standing: passed
     route: rerun
     max_attempts: 2
 

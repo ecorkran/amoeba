@@ -19,11 +19,22 @@ from cf_stub_gates import (
     write_status_map,
 )
 
-from amoeba.runner.gates.outcome import OutcomeObservation, unobservable
-from amoeba.store import JournalEntry
+from amoeba.runner.gates.cf_status import EXIT_GATE, GatePosition
+from amoeba.runner.gates.hatches import DesignText, hatch_checks
+from amoeba.runner.gates.outcome import (
+    GateRead,
+    OutcomeObservation,
+    ReadFailed,
+    unobservable,
+)
+from amoeba.runner.lifecycle.plan_read import CF_KEY_REVIEW_GATE_EFFECTIVE_DATE
+from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.store import JournalEntry, Node
+from runner.dispatch.tick_rig import DispatchRig
 from runner.git_repo import make_repo
 
 STATUS_FIXTURES = Path(__file__).parents[1] / "fixtures" / "cf" / "status"
+DESIGN_PATH = "project-documents/user/slices/128-slice.gates.md"
 
 
 def failed_reads(entry: JournalEntry) -> OutcomeObservation:
@@ -33,6 +44,73 @@ def failed_reads(entry: JournalEntry) -> OutcomeObservation:
     CF said, only that the run is recorded.
     """
     return unobservable(entry, entry.node_id, "test: nothing was read", "amoeba-test")
+
+
+CLEAR_FIXTURE = {
+    LifecycleStep.SLICE_DESIGN: "needs_tasks",
+    LifecycleStep.TASKS: "in_implementation_no_task_done",
+    LifecycleStep.IMPLEMENTATION: "complete",
+}
+
+
+def clear_observation(
+    entry: JournalEntry, node_id: str, step: LifecycleStep | None
+) -> OutcomeObservation:
+    """A healthy observation: CF's gate one past the step's exit, both hatches passed.
+
+    For tests that stage an ingested outcome and route it through the shipped table.
+    A step with no exit gate gets an unreadable gate, as it would in production.
+    """
+    exit_gate = None if step is None else EXIT_GATE.get(step)
+    gate: GateRead | ReadFailed = (
+        ReadFailed("test: the step has no exit gate")
+        if exit_gate is None
+        else GateRead(
+            index=1,
+            status="clear",
+            review_type=None,
+            position=GatePosition(exit_gate + 1),
+            rationale=None,
+            pending_decisions=None,
+        )
+    )
+    design = DesignText(DESIGN_PATH, "---\ndateCreated: 20261026\n---\n\n# Design\n")
+    return OutcomeObservation(
+        gate=gate,
+        design_path=DESIGN_PATH,
+        design_failure=None,
+        git=None,
+        checks=hatch_checks(entry.id, node_id, design, "", "amoeba-test"),
+    )
+
+
+def clear_gates(
+    rig: DispatchRig, slice_node: Node, step: LifecycleStep = LifecycleStep.SLICE_DESIGN
+) -> None:
+    """Point a dispatch rig's gate reads at a healthy stub ``cf`` for ``slice_node``.
+
+    CF stands one past ``step``'s exit gate, the design is in the checkout, no
+    hatch applies. Tick-level routing tests that must advance call this.
+    """
+    assert slice_node.parent_id is not None and slice_node.cf.index is not None
+    initiative = rig.store.get_node(slice_node.parent_id)
+    assert initiative is not None and initiative.cf.index is not None
+    gates = rig.world.root.parent / "gates"
+    gates.mkdir(exist_ok=True)
+    checkout = git_checkout(rig.world.root)
+    write_design(checkout, DESIGN_PATH)
+    knobs = {
+        **write_slice_list(
+            gates / "plan", initiative.cf.index, {slice_node.cf.index: DESIGN_PATH}
+        ),
+        **single_status_knobs(
+            status_fixture(
+                gates / "status.json", CLEAR_FIXTURE[step], slice_node.cf.index
+            )
+        ),
+        **config_knobs(gates, {CF_KEY_REVIEW_GATE_EFFECTIVE_DATE: ""}),
+    }
+    rig.tick_rig.gate_run = rig.world.run(knobs)
 
 
 def git_checkout(checkout: Path, branch: str = "main") -> Path:

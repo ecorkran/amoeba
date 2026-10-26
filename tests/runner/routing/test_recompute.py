@@ -5,6 +5,8 @@ from __future__ import annotations
 import dataclasses
 from datetime import UTC, datetime
 
+import pytest
+
 from amoeba.runner.routing.engine import evaluate
 from amoeba.runner.routing.inputs import INPUT_ATTEMPT, RoutingInputs
 from amoeba.runner.routing.recompute import recompute
@@ -110,6 +112,20 @@ def test_a_null_attempt_recomputes() -> None:
     inputs = make_inputs(attempt=None, verdict="pass", step="unknown")
     result = recompute(_decision(inputs, "sha256:x"), STORED)
     assert result.error is None and result.matches is True
+
+
+@pytest.mark.parametrize("missing", ["gate_state", "check_standing"])
+def test_a_decision_recorded_before_slice_128_cannot_be_recomputed(
+    missing: str,
+) -> None:
+    """Slice 128 added two inputs: an older record fails as a changed vocabulary."""
+    decision = _decision(make_inputs(verdict="pass"), "sha256:x")
+    inputs = {k: v for k, v in decision.inputs.items() if k != missing}
+
+    result = recompute(dataclasses.replace(decision, inputs=inputs), STORED)
+
+    assert result.matches is False
+    assert result.error is not None and missing in result.error
 
 
 def test_a_decision_recorded_before_review_accepted_existed_cannot_be_recomputed() -> (

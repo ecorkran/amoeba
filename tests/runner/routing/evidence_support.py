@@ -43,6 +43,8 @@ def completed_evidence(**changes: object) -> OutcomeEvidence:
         review_fault=False,
         review_unreadable=False,
         parts=(),
+        gate_record=None,
+        check_standings=None,
     )
     return replace(base, **changes)  # type: ignore[arg-type]
 

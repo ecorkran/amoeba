@@ -191,26 +191,30 @@ Note: the gate stub code lives in tests/cf_stub_gates.py and is embedded in the 
 ### Task 5.1: Implement the check vocabulary and `hatch_checks`
 **Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 3
 
-- [ ] Create `runner/gates/checks.py` (Task-level additions). Create `runner/gates/hatches.py` with `read_frontmatter(text) -> Mapping | FrontmatterError` (D4's frontmatter rule, byte-order mark and leading whitespace allowed, `dateCreated` converted back to text) and the pure `hatch_checks(entry_id, slice_node_id, design, effective_date, amoeba_version) -> tuple[CheckInput, CheckInput]`. `design` is the path and text, or a reason it is unknown or missing; `effective_date` is text or a failed read
-- [ ] `tests/runner/gates/test_hatches.py`, table-driven over every D4 cell: each `failed`, `passed` and `errored` case of both checks; a missing design is `vacuous` for both (`examined_count` 0); `None`/`NONE` escalate; `dateCreated: 20261021` as an integer compares as text; ids and provenance as D4 gives them
-- [ ] **Success:** tests pass; the module does no I/O. Commit `feat: record the ungate hatches as checks`
+- [x] Create `runner/gates/checks.py` (Task-level additions). Create `runner/gates/hatches.py` with `read_frontmatter(text) -> Mapping | FrontmatterError` (D4's frontmatter rule, byte-order mark and leading whitespace allowed, `dateCreated` converted back to text) and the pure `hatch_checks(entry_id, slice_node_id, design, effective_date, amoeba_version) -> tuple[CheckInput, CheckInput]`. `design` is the path and text, or a reason it is unknown or missing; `effective_date` is text or a failed read
+- [x] `tests/runner/gates/test_hatches.py`, table-driven over every D4 cell: each `failed`, `passed` and `errored` case of both checks; a missing design is `vacuous` for both (`examined_count` 0); `None`/`NONE` escalate; `dateCreated: 20261021` as an integer compares as text; ids and provenance as D4 gives them
+- [x] **Success:** tests pass; the module does no I/O. Commit `feat: record the ungate hatches as checks`
 
 ### Task 5.2: Implement `observe_outcome` and `gate_state_at_exit`
 **Owner**: Junior AI | **Dependencies**: 2.2, 4.2, 4.4, 5.1 | **Effort**: 3
 
-- [ ] Create `runner/gates/outcome.py` per D2: `OutcomeObservation` (the gate part, `design_path`, the optional git part, the two `CheckInput`s) with `to_result()` producing the "Entry result" shape; `observe_outcome(entry, step, slice_node, initiative_index, budget, cf_run, timeout, amoeba_version) -> OutcomeObservation | None` running D2's five reads in order, `None` only when the budget cut it off. A gate read for another slice index is recorded as a gate failure. The design file is resolved against the checkout as 125 (D7) resolves review paths
-- [ ] The pure `gate_state_at_exit(step, gate_record) -> str` per D3's `gate_state` rules, reading the stored gate record
-- [ ] `tests/runner/gates/test_outcome.py`: with the stub `cf` and a real repository, each read's answer lands in the observation; `git` is present only for `implementation`; each failed read is recorded, not raised; a cut-off between reads returns `None`; `gate_state_at_exit` table-driven over D3's rows for all three steps, including `misplaced` and `unknown`
-- [ ] **Success:** tests pass. Commit with Task 5.3
+- [x] Create `runner/gates/outcome.py` per D2: `OutcomeObservation` (the gate part, `design_path`, the optional git part, the two `CheckInput`s) with `to_result()` producing the "Entry result" shape; `observe_outcome(entry, step, slice_node, initiative_index, budget, cf_run, timeout, amoeba_version) -> OutcomeObservation | None` running D2's five reads in order, `None` only when the budget cut it off. A gate read for another slice index is recorded as a gate failure. The design file is resolved against the checkout as 125 (D7) resolves review paths
+- [x] The pure `gate_state_at_exit(step, gate_record) -> str` per D3's `gate_state` rules, reading the stored gate record
+- [x] `tests/runner/gates/test_outcome.py`: with the stub `cf` and a real repository, each read's answer lands in the observation; `git` is present only for `implementation`; each failed read is recorded, not raised; a cut-off between reads returns `None`; `gate_state_at_exit` table-driven over D3's rows for all three steps, including `misplaced` and `unknown`
+- [x] **Success:** tests pass. Commit with Task 5.3
+
+Note: `unobservable(entry, node_id, reason, amoeba_version)` builds an observation in which every read failed; `observe_outcome` returns it for a slice node with no CF project or index, and `GateStage` for a step that is not under a slice and initiative. `cf_reads.read_design_file` was added for the slice-list read. The gate read relies on the checkout's working directory for the worktree (no `--worktree`).
 
 ### Task 5.3: Record the observation at ingestion and wire the stage
 **Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 3
 
-- [ ] `runner/ingest/record.py` and `runner/finish.py`: `record` takes `observation: OutcomeObservation | None`. For a `completed` outcome: both `record_check` calls first, then 125's block, then the result with `outcome_observation` and `check_ids` (D2 "Order"). Other outcomes ignore it. A `completed` outcome without an observation raises `ValueError`
-- [ ] Create `runner/gates/stage.py` with `GateStage.observe_outcomes(runs, budget)` returning the observations by entry id for each finished `completed` run. `tick.py` calls it after Observe; `_record_finished` records a `completed` run only when its observation is present, otherwise leaves the entry unresolved and keeps it tracked (D2, "Only a TickBudget cut-off defers")
-- [ ] Tests: `tests/runner/ingest/`: the write order (checks, block, report); a repeat after a crash between the writes keeps the first check records; `tests/runner/gates/test_tick_outcome.py`: a completed `P5` records two checks on the slice node and the observation in its result; a cut-off before the observation leaves the entry unresolved and the next tick records it once
-- [ ] Run `uv run pytest -q`. Each failure because a tick test's rig has no design or gate answer is fixed with Task 4.4's helpers; any other failure is a defect: fix it here or write `BLOCKED:`
-- [ ] **Success:** full suite green. Commit `feat: observe CF's gate, the hatches and git when a run completes`
+- [x] `runner/ingest/record.py` and `runner/finish.py`: `record` takes `observation: OutcomeObservation | None`. For a `completed` outcome: both `record_check` calls first, then 125's block, then the result with `outcome_observation` and `check_ids` (D2 "Order"). Other outcomes ignore it. A `completed` outcome without an observation raises `ValueError`
+- [x] Create `runner/gates/stage.py` with `GateStage.observe_outcomes(runs, budget)` returning the observations by entry id for each finished `completed` run. `tick.py` calls it after Observe; `_record_finished` records a `completed` run only when its observation is present, otherwise leaves the entry unresolved and keeps it tracked (D2, "Only a TickBudget cut-off defers")
+- [x] Tests: `tests/runner/ingest/`: the write order (checks, block, report); a repeat after a crash between the writes keeps the first check records; `tests/runner/gates/test_tick_outcome.py`: a completed `P5` records two checks on the slice node and the observation in its result; a cut-off before the observation leaves the entry unresolved and the next tick records it once
+- [x] Run `uv run pytest -q`. Each failure because a tick test's rig has no design or gate answer is fixed with Task 4.4's helpers; any other failure is a defect: fix it here or write `BLOCKED:`
+- [x] **Success:** full suite green. Commit `feat: observe CF's gate, the hatches and git when a run completes`
+
+Note: `ProjectTick` takes `cf_run` and `call_timeout_seconds` and builds `GateStage`; `_record_finished` returns `RecordedRuns(shape_error, pending)` and a completed run with no observation is reported as still in flight. The test Rig has `gate_run` (defaults to its FakeCf, so existing tests record failed reads) and `tests/runner/gate_rig.py` has `failed_reads(entry)` for direct ingest tests.
 
 ---
 
