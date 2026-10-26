@@ -150,10 +150,12 @@ Note: ProjectTick takes a required `project_settings: ProjectSettings` (the tena
 ### Task 4.1: Capture CF status and config output
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
-- [ ] In a scratch CF project under a temporary directory (never this repository's CF project), with `workflow.review_enabled` and `workflow.decision_gate_enabled` set to `true`, capture `cf status --json -p <id>` for each `activeSlice.status` in the LLD's D1 table: `needs-design`, `needs-tasks`, `in-implementation`, `complete`, `no-active-slice`, `pending-decision`, and `pending-review` and `review-failed` at each of the `slice`, `tasks` and `code` gates. Reach each state by CF's position rules (LLD "Interfaces Required"; CF source `reviewGate.ts`). Also capture one with `gateExempt` (`review: none`), one from a worktree with `--worktree`, and `cf config get <key> --json` for both keys, empty and set
-- [ ] Save under `tests/fixtures/cf/status/` and `tests/fixtures/cf/config/`, one file per case, with a README naming the CF version, date and how each state was reached. Remove the scratch CF project afterwards
-- [ ] If a state cannot be reached, write `BLOCKED:` naming it and the attempt; only Task 4.3's row for that state waits
-- [ ] **Success:** a fixture exists for every D1 row and both config keys. Commit `test: capture CF status and config fixtures`
+- [x] In a scratch CF project under a temporary directory (never this repository's CF project), with `workflow.review_enabled` and `workflow.decision_gate_enabled` set to `true`, capture `cf status --json -p <id>` for each `activeSlice.status` in the LLD's D1 table: `needs-design`, `needs-tasks`, `in-implementation`, `complete`, `no-active-slice`, `pending-decision`, and `pending-review` and `review-failed` at each of the `slice`, `tasks` and `code` gates. Reach each state by CF's position rules (LLD "Interfaces Required"; CF source `reviewGate.ts`). Also capture one with `gateExempt` (`review: none`), one from a worktree with `--worktree`, and `cf config get <key> --json` for both keys, empty and set
+- [x] Save under `tests/fixtures/cf/status/` and `tests/fixtures/cf/config/`, one file per case, with a README naming the CF version, date and how each state was reached. Remove the scratch CF project afterwards
+- [x] If a state cannot be reached, write `BLOCKED:` naming it and the attempt; only Task 4.3's row for that state waits
+- [x] **Success:** a fixture exists for every D1 row and both config keys. Commit `test: capture CF status and config fixtures`
+
+Note: `cf status --json --worktree` accepts the worktree id (`wt_...`) as well as its name. Fixtures are in tests/fixtures/cf/status/ (15 files) and tests/fixtures/cf/config/ (4 files); the README names how each state was reached. CF 0.19.19.
 
 ### Task 4.2: Add the CF command words and the gate and config reads
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2

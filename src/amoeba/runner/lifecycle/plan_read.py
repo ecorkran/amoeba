@@ -46,6 +46,20 @@ def slice_list_command(initiative_index: int) -> tuple[str, ...]:
     return ("list", "slices", str(initiative_index), CF_JSON_FLAG)
 
 
+#: Picks one worktree's context by id (slice 128, D1). Without it CF chooses by the
+#: working directory.
+CF_WORKTREE_FLAG: Final = "--worktree"
+
+#: The CF config keys the Runner reads (slice 128, D5, D1 hatches).
+CF_KEY_INTEGRATION_BRANCH: Final = "git.integration_branch"
+CF_KEY_REVIEW_GATE_EFFECTIVE_DATE: Final = "workflow.review_gate_effective_date"
+
+
+def config_get_command(key: str) -> tuple[str, ...]:
+    """``cf config get <key> --json``, run in a checkout."""
+    return ("config", "get", key, CF_JSON_FLAG)
+
+
 #: ``cf set -p <id> slice <index>``: the pointer write (slice 125, D2).
 CF_SET_COMMAND: Final = "set"
 CF_SET_FIELD_SLICE: Final = "slice"
