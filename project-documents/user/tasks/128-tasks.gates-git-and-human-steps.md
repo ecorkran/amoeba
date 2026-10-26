@@ -19,7 +19,7 @@ projectState: Slices 120–127 are merged. The tick (`runner/tick.py`, 279 lines
   step. The Runner never runs `git`. `amoeba.runner.gates` does not exist.
 dateCreated: 20261026
 dateUpdated: 20261026
-status: not_started
+status: in_progress
 turns: 51
 promptTokens: 4746462
 cachedTokens: 4581749
@@ -79,15 +79,17 @@ revision_number: 2
 ### Task 1.1: Create the branch and confirm the design's edits
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
-- [ ] Confirm the edits the LLD lists under "Special Considerations" are present: plan entry 9 and Future Work 13 in `user/architecture/120-slices.runner-routing-engine.md`, and the three arch sections in `120-arch.runner-routing-engine.md`. Make any missing edit per the LLD and commit it to the target as `docs:`
-- [ ] Fold the interface changes from "Task-level additions" into the LLD, so the code review compares against one design: in "API Contracts", the `launch_candidates(current, facts, holders)` signature, `LaunchRun.journal_extra`, `ResumeRun.journal_extra`, `BlockHumanStep.payload_extra`, `ProjectView.merge_policy` and the public `complete_step`; in "Component Structure", the modules `gates/checks.py`, `gates/stage.py`, `gates/dispatch_reads.py` and `gates/accepted.py`, and the homes of `EXIT_GATE`, `ENTRY_GATE` and `DEFAULT_TARGET_BRANCH`. Also drop `list slices` from the stub's new modes (the stub already answers it). Commit it to the target as `docs:`
-- [ ] Confirm issues #15, #17 and #18 exist (`gh issue view <n>`). If #17 or #18 is missing, file it with the text the LLD gives (D7, D6) and note its number under this task
-- [ ] Create `128-slice.gates-git-and-human-steps` from the target and switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. Record the pass count under this task. If any fails, write `BLOCKED:` with the failure and stop
-- [ ] Create `src/amoeba/runner/gates/__init__.py` (docstring only) and `tests/runner/gates/__init__.py`
-- [ ] **Success:** on the slice branch, the suite is green and both packages exist. Commit `chore: add the gates package skeleton`
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
+- [x] Confirm the edits the LLD lists under "Special Considerations" are present: plan entry 9 and Future Work 13 in `user/architecture/120-slices.runner-routing-engine.md`, and the three arch sections in `120-arch.runner-routing-engine.md`. Make any missing edit per the LLD and commit it to the target as `docs:`
+- [x] Fold the interface changes from "Task-level additions" into the LLD, so the code review compares against one design: in "API Contracts", the `launch_candidates(current, facts, holders)` signature, `LaunchRun.journal_extra`, `ResumeRun.journal_extra`, `BlockHumanStep.payload_extra`, `ProjectView.merge_policy` and the public `complete_step`; in "Component Structure", the modules `gates/checks.py`, `gates/stage.py`, `gates/dispatch_reads.py` and `gates/accepted.py`, and the homes of `EXIT_GATE`, `ENTRY_GATE` and `DEFAULT_TARGET_BRANCH`. Also drop `list slices` from the stub's new modes (the stub already answers it). Commit it to the target as `docs:`
+- [x] Confirm issues #15, #17 and #18 exist (`gh issue view <n>`). If #17 or #18 is missing, file it with the text the LLD gives (D7, D6) and note its number under this task
+- [x] Create `128-slice.gates-git-and-human-steps` from the target and switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. Record the pass count under this task. If any fails, write `BLOCKED:` with the failure and stop
+- [x] Create `src/amoeba/runner/gates/__init__.py` (docstring only) and `tests/runner/gates/__init__.py`
+- [x] **Success:** on the slice branch, the suite is green and both packages exist. Commit `chore: add the gates package skeleton`
+
+Baseline: 3951 passed; ruff check, ruff format --check and pyright clean. Issues #15, #17, #18 exist.
 
 ---
 
