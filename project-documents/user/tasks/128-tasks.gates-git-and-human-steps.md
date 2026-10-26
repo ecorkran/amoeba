@@ -177,10 +177,12 @@ Note: `GatePosition.UNKNOWN` and `PENDING_DECISION` are negative (off the scale)
 ### Task 4.4: Add the stub `cf` gate modes and the rig helpers
 **Owner**: Junior AI | **Dependencies**: 2.1, 4.1 | **Effort**: 3
 
-- [ ] Put the new stub code in `tests/cf_stub_gates.py` (`tests/cf_stub.py` is 325 lines): `status --json` answers with a fixture named by an environment variable (or a per-index mapping file), defaulting to the existing probe answer when unset; `config get <key> --json` answers from a state file, empty values by default; a failure mode for each. Every call is logged to the stub log, as now
-- [ ] Add rig helpers in a new `tests/runner/gate_rig.py`: make a rig's checkout a real git repository on `main` (Task 2.1's helper), write a slice design with given frontmatter at the path the stub's `list slices` reports, and set the stub's status fixture for a slice
-- [ ] Tests (`tests/test_cf_stub_gates.py`): each mode returns its fixture byte for byte; the probe answer is unchanged; existing stub tests pass
-- [ ] **Success:** tests pass. Commit `test: add gate modes to the stub cf`
+- [x] Put the new stub code in `tests/cf_stub_gates.py` (`tests/cf_stub.py` is 325 lines): `status --json` answers with a fixture named by an environment variable (or a per-index mapping file), defaulting to the existing probe answer when unset; `config get <key> --json` answers from a state file, empty values by default; a failure mode for each. Every call is logged to the stub log, as now
+- [x] Add rig helpers in a new `tests/runner/gate_rig.py`: make a rig's checkout a real git repository on `main` (Task 2.1's helper), write a slice design with given frontmatter at the path the stub's `list slices` reports, and set the stub's status fixture for a slice
+- [x] Tests (`tests/test_cf_stub_gates.py`): each mode returns its fixture byte for byte; the probe answer is unchanged; existing stub tests pass
+- [x] **Success:** tests pass. Commit `test: add gate modes to the stub cf`
+
+Note: the gate stub code lives in tests/cf_stub_gates.py and is embedded in the stub by cf_stub.py (`{gate_commands}`). `CF_STUB_STATUS_MAP` maps a checkout's real path to a status fixture, `CF_STUB_STATUS_FIXTURE` is the fallback answer, `CF_STUB_CONFIG` holds config values. `tests/runner/gate_rig.py` has git_checkout, write_design, write_slice_list, status_fixture, status_knobs, single_status_knobs and config_knobs.
 
 ---
 
