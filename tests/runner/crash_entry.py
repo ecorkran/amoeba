@@ -37,6 +37,7 @@ from amoeba.runner.decide import Action, LaunchRun, Planner, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
+from amoeba.runner.project_config import ProjectConfig
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
@@ -233,6 +234,7 @@ def main(argv: Sequence[str]) -> None:
         monotonic=time.monotonic,
         version_label="sq-test-label",
         routing_table=small_table(ADVANCE_COMPLETED),
+        project_config=ProjectConfig(),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
     process = ResidentProcess(

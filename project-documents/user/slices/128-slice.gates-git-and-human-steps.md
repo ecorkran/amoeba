@@ -429,7 +429,7 @@ Status: decided
 - **Allowlist:** `GIT_SUBCOMMANDS = {status, merge-base}`. Any other subcommand raises `ValueError`, a programming error. The two calls are:
   - `git --no-optional-locks status --porcelain=v2 --branch --untracked-files=normal`. `--no-optional-locks` stops `status` from refreshing and rewriting the index, so even the read writes nothing.
   - `git merge-base --is-ancestor <head> <target>`.
-- **The parser** reads `# branch.head` (`(detached)` is detached) and `# branch.oid`, and treats every other non-empty line as a dirty entry. It takes the path from the line's last field. Header lines it does not know are ignored. The test fixture is real output captured from git on clean, modified, untracked, staged, renamed, unmerged and detached checkouts, as the parsing rule requires.
+- **The parser** reads `# branch.head` (`(detached)` is detached) and `# branch.oid`, and treats every other non-empty line as a dirty entry. It reads the path by entry kind: a rename line is `<new path>`, a TAB, `<old path>`, and the new path is taken. Header lines it does not know are ignored. The test fixture is real output captured from git on clean, modified, untracked, staged, renamed, unmerged and detached checkouts, as the parsing rule requires.
 - **Never, under any policy:** merge, commit, checkout, branch deletion, reset, stash or push. A source test asserts that `git` appears as an executable only in `git_read.py`.
 - Rejected: dropping that source test because the allowlist enforces the rule at runtime. The allowlist sees only calls made through `git_read`. The source test is what makes `git_read` the only path, as 125's and 126's source tests do for their one-place rules.
 

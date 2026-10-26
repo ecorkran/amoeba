@@ -140,3 +140,12 @@ def test_the_routing_table_defaults_to_the_shipped_one_and_the_flag_overrides() 
 
     args = build_parser().parse_args(["start", "--routing-table", "/scratch/t.yaml"])
     assert start_settings(args).routing_table_path == Path("/scratch/t.yaml")
+
+
+def test_the_project_config_has_no_default_file_and_the_flag_sets_one() -> None:
+    default = start_settings(build_parser().parse_args(["start"]))
+    assert default.project_config_path is None
+    assert ProcessSettings().project_config_path is None
+
+    args = build_parser().parse_args(["start", "--project-config", "/scratch/p.yaml"])
+    assert start_settings(args).project_config_path == Path("/scratch/p.yaml")

@@ -25,6 +25,7 @@ from amoeba.runner.lifecycle.cadence import PlanReadSchedule
 from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.project_config import ProjectConfig
 from amoeba.runner.routing.table import RoutingTable
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import Store
@@ -69,19 +70,22 @@ class RunnerTenant:
         monotonic: Callable[[], float],
         version_label: str,
         routing_table: RoutingTable,
+        project_config: ProjectConfig,
         amoeba_version: str,
     ) -> None:
         """Build the tenant; every collaborator is injected so tests never sleep.
 
         ``version_label`` is the ``sq --version`` label, captured once at start-up.
-        ``routing_table`` and ``amoeba_version`` are read once at start-up and held
-        for the process's life; a restart is the only way to change them.
+        ``routing_table``, ``project_config`` and ``amoeba_version`` are read once at
+        start-up and held for the process's life; a restart is the only way to
+        change them.
         ``amoeba_version`` is the installed package version, never confused with
         ``version_label``.
         """
         self._settings = settings
         self._version_label = version_label
         self._routing_table = routing_table
+        self._project_config = project_config
         self._amoeba_version = amoeba_version
         self._supervisor_dir = supervisor_dir
         self._planners = tuple(planners)

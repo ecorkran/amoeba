@@ -14,6 +14,7 @@ import amoeba.runner
 from amoeba.process import ProcessSettings, RunOutcome, UpstreamShapeError
 from amoeba.runner.decide import Action, LaunchRun, ProjectView
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
+from amoeba.runner.project_config import ProjectConfig
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import PARAM_RUN_ID, Store, StoreBusyError
 from amoeba.store.inbox_models import Channel
@@ -80,6 +81,7 @@ class Rig:
             monotonic=self.clock.monotonic,
             version_label="sq-test-label",
             routing_table=small_table(),
+            project_config=ProjectConfig(),
             amoeba_version=TEST_AMOEBA_VERSION,
         )
 

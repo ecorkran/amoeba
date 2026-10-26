@@ -27,6 +27,7 @@ from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.project_config import ProjectConfig
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import (
@@ -297,6 +298,7 @@ def tenant_for(rig: Rig) -> RunnerTenant:
         monotonic=rig.clock.monotonic,
         version_label=TEST_VERSION_LABEL,
         routing_table=rig.routing_table,
+        project_config=ProjectConfig(),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
 

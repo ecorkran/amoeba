@@ -98,17 +98,19 @@ Baseline: 3951 passed; ruff check, ruff format --check and pyright clean. Issues
 ### Task 2.1: Capture real `git status` output
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Add `tests/fixtures/git/` with a README naming the git version and date. In throwaway repositories under a temporary directory, capture `git --no-optional-locks status --porcelain=v2 --branch --untracked-files=normal` for: clean on `main`; a modified file; an untracked file; a staged file; a renamed file; an unmerged file (a real conflicting merge); a detached HEAD; a path with a space. One file per case
-- [ ] Add `tests/runner/git_repo.py`: helpers that create a temporary repository on a named branch with one commit, make a branch, commit, combine one test branch into another inside the temporary repository, delete a branch, and detach HEAD, all with real `git` (identity set by `-c` flags, not global config)
-- [ ] **Success:** fixtures exist and are byte-for-byte git's output. Commit `test: capture git status fixtures and a git repository helper`
+- [x] Add `tests/fixtures/git/` with a README naming the git version and date. In throwaway repositories under a temporary directory, capture `git --no-optional-locks status --porcelain=v2 --branch --untracked-files=normal` for: clean on `main`; a modified file; an untracked file; a staged file; a renamed file; an unmerged file (a real conflicting merge); a detached HEAD; a path with a space. One file per case
+- [x] Add `tests/runner/git_repo.py`: helpers that create a temporary repository on a named branch with one commit, make a branch, commit, combine one test branch into another inside the temporary repository, delete a branch, and detach HEAD, all with real `git` (identity set by `-c` flags, not global config)
+- [x] **Success:** fixtures exist and are byte-for-byte git's output. Commit `test: capture git status fixtures and a git repository helper`
 
 ### Task 2.2: Implement `git_read` and the porcelain parser
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 3
 
-- [ ] Create `runner/git_read.py` per D10: `GIT_SUBCOMMANDS`, the two argument builders (`status_args()`, `is_ancestor_args(head, target)`), `git_read(args, cwd, budget, run, timeout_seconds) -> GitReadResult | GitReadFailure | None` (`None` when the budget refuses the call), stdin `/dev/null`, `GIT_TERMINAL_PROMPT=0` in the environment, a subcommand outside the allowlist raises `ValueError`
-- [ ] `parse_porcelain_v2(text) -> GitStatus(branch: str | None, head: str | None, dirty: tuple[str, ...])`: `(detached)` gives `branch` `None`; unknown header lines are ignored; the path is the line's last field (for a rename, the new path)
-- [ ] `tests/runner/test_git_read.py`: the parser on every captured fixture; the allowlist refuses `commit`, `checkout` and `push`; `git_read` against a real repository for `status_args()` and for `is_ancestor_args(...)` exit 0 and 1; a timeout and a missing executable are `GitReadFailure`; a spent budget starts nothing
-- [ ] **Success:** tests pass. Commit `feat: read git through one allowlisted function`
+- [x] Create `runner/git_read.py` per D10: `GIT_SUBCOMMANDS`, the two argument builders (`status_args()`, `is_ancestor_args(head, target)`), `git_read(args, cwd, budget, run, timeout_seconds) -> GitReadResult | GitReadFailure | None` (`None` when the budget refuses the call), stdin `/dev/null`, `GIT_TERMINAL_PROMPT=0` in the environment, a subcommand outside the allowlist raises `ValueError`
+- [x] `parse_porcelain_v2(text) -> GitStatus(branch: str | None, head: str | None, dirty: tuple[str, ...])`: `(detached)` gives `branch` `None`; unknown header lines are ignored; the path is read by entry kind (for a rename, the new path)
+- [x] `tests/runner/test_git_read.py`: the parser on every captured fixture; the allowlist refuses `commit`, `checkout` and `push`; `git_read` against a real repository for `status_args()` and for `is_ancestor_args(...)` exit 0 and 1; a timeout and a missing executable are `GitReadFailure`; a spent budget starts nothing
+- [x] **Success:** tests pass. Commit `feat: read git through one allowlisted function`
+
+Note: porcelain v2 rename lines (type 2) are `<new path>TAB<old path>`, so the parser reads the path by entry kind (splitting on the field count, then on the TAB for renames) instead of taking the last field; this keeps paths with spaces and gives the new path for renames.
 
 ---
 

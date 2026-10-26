@@ -505,6 +505,22 @@ def test_a_failing_sq_probe_fails_the_start_naming_the_shape(
     assert "runs wait" in result.stderr and "--timeout 0 --json" in result.stderr
 
 
+def test_a_bad_merge_policy_fails_the_start_naming_the_key_and_value(
+    supervisor_dir: Path, runs_dir: Path, tmp_path: Path
+) -> None:
+    config = tmp_path / "projects.yaml"
+    config.write_text("projects:\n  scratch:\n    merge_policy: sometimes\n")
+
+    result = run_cli(
+        ["start", *_start_arguments(runs_dir), "--project-config", str(config)],
+        supervisor_dir,
+    )
+
+    assert result.returncode == ExitCode.STARTUP_FAILED == 7
+    assert "merge_policy" in result.stderr
+    assert "sometimes" in result.stderr
+
+
 def test_a_broken_routing_table_fails_the_start_naming_the_missing_catch_all(
     supervisor_dir: Path, runs_dir: Path, tmp_path: Path
 ) -> None:

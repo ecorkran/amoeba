@@ -157,6 +157,14 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         help="The routing table file (default: the table shipped with Amoeba).",
     )
+    parser.add_argument(
+        "--project-config",
+        type=Path,
+        default=defaults.project_config_path,
+        metavar="PATH",
+        help="The per-project config file holding the merge policy "
+        "(default: every project takes the built-in defaults).",
+    )
 
 
 def add_stop_flags(parser: argparse.ArgumentParser) -> None:
@@ -196,6 +204,7 @@ def start_settings(args: argparse.Namespace) -> ProcessSettings:
         run_poll_interval_seconds=args.run_poll_interval,
         plan_read_interval_seconds=args.plan_read_interval,
         routing_table_path=args.routing_table,
+        project_config_path=args.project_config,
     )
 
 
