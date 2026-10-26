@@ -9,7 +9,7 @@ Slots later slices fill are marked in comments only: the body of
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Final
@@ -175,6 +175,10 @@ class ProjectTick:
         # The view is built before routing: what routing does is first seen by the
         # next tick's view (slice 126, D8).
         view = self._build_view(runs.pending, self._probes.results(links), desired)
+        # Reads only, so a cut-off just defers them: a candidate with no result
+        # cannot launch this tick (D5).
+        dispatch = self._gates.check_dispatch(view, budget, faults)
+        view = replace(view, dispatch_checks=dispatch.checks)
         # Store reads and writes only, so no budget check: it starts no subprocess.
         self.wrote = (
             route_outcomes(
@@ -194,7 +198,7 @@ class ProjectTick:
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )
-        if acted.result is TickResult.CUT_OFF:
+        if acted.result is TickResult.CUT_OFF or dispatch.cut_off:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE

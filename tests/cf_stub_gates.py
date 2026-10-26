@@ -7,6 +7,10 @@
   path) to a fixture path, so two checkouts can stand at different gate positions.
   ``CF_STUB_STATUS_FIXTURE`` is the answer for any other directory. With neither set
   (or no entry for the directory), the stub gives its probe answer, unchanged.
+  ``CF_STUB_STATUS_POINTER`` is a third way: the path of a status fixture to print for
+  whichever slice the pointer state (``CF_STUB_STATE``) says the working directory's
+  worktree points at, with ``activeSlice.index`` set to that slice's index, as CF
+  reports the slice its pointer holds. It applies after the map and the fixture.
 * ``cf config get <key> --json`` from the JSON file ``CF_STUB_CONFIG`` (key to string
   value); a key it does not hold answers the empty string, as CF does for an unset key.
 
@@ -22,9 +26,12 @@ from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
 
+#: The pointer state file; ``cf_stub.py`` re-exports it for the pointer commands.
+STATE_ENV = "CF_STUB_STATE"
 STATUS_FIXTURE_ENV = "CF_STUB_STATUS_FIXTURE"
 STATUS_MAP_ENV = "CF_STUB_STATUS_MAP"
 STATUS_MODE_ENV = "CF_STUB_STATUS_MODE"
+STATUS_POINTER_ENV = "CF_STUB_STATUS_POINTER"
 CONFIG_ENV = "CF_STUB_CONFIG"
 CONFIG_MODE_ENV = "CF_STUB_CONFIG_MODE"
 
@@ -71,6 +78,28 @@ _SCRIPT = textwrap.dedent(
                     sys.stdout.buffer.write(handle.read())
                 sys.stdout.flush()
                 sys.exit(0)
+            pointer_fixture = os.environ.get({status_pointer_env!r})
+            if pointer_fixture:
+                import re
+
+                with open(os.environ[{state_env!r}], encoding="utf-8") as handle:
+                    entry = json.load(handle)
+                cwd = os.path.realpath(os.getcwd())
+                stem = entry.get("fileSlice")
+                best = -1
+                for candidate in entry.get("worktrees", []):
+                    root = os.path.realpath(candidate["worktreePath"])
+                    inside = cwd == root or cwd.startswith(root + os.sep)
+                    if inside and len(root) > best:
+                        best = len(root)
+                        stem = candidate.get("activeSlice")
+                found = re.match(r"(\\d+)-", stem or "")
+                if found:
+                    with open(pointer_fixture, encoding="utf-8") as handle:
+                        document = json.load(handle)
+                    document["activeSlice"]["index"] = int(found.group(1))
+                    print(json.dumps(document, indent=2))
+                    sys.exit(0)
             # No fixture: fall through to the probe answer below.
         else:
             key = arguments[2]
@@ -97,6 +126,8 @@ def gate_commands_script() -> str:
         config_mode_env=CONFIG_MODE_ENV,
         status_map_env=STATUS_MAP_ENV,
         status_fixture_env=STATUS_FIXTURE_ENV,
+        status_pointer_env=STATUS_POINTER_ENV,
+        state_env=STATE_ENV,
         config_env=CONFIG_ENV,
         fail=GateMode.FAIL.value,
         sleep=GateMode.SLEEP.value,

@@ -54,7 +54,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from cf_stub_gates import gate_commands_script
+from cf_stub_gates import STATE_ENV, gate_commands_script
 
 INITIATIVES_FIXTURE = (
     Path(__file__).parent / "fixtures" / "cf" / "list_initiatives_a.json"
@@ -65,7 +65,6 @@ SLICE_ERROR_FIXTURE = (
 MODE_ENV = "CF_STUB_MODE"
 LOG_ENV = "CF_STUB_LOG"
 PLAN_DIR_ENV = "CF_STUB_PLAN_DIR"
-STATE_ENV = "CF_STUB_STATE"
 SET_MODE_ENV = "CF_STUB_SET_MODE"
 GET_MODE_ENV = "CF_STUB_GET_MODE"
 GET_QUIRK_ENV = "CF_STUB_GET_QUIRK"
