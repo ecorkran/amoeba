@@ -673,6 +673,75 @@ answers each one and carries out what it decided.
 - **Spend.** Only a PM decision resumes a run, and a `retry` of an exhausted loop is
   one paid review round. No route in the table resumes a run.
 
+### Gates, git and human steps
+
+*Slice 128.* The Runner works in a checkout the PM also uses, so it looks before it
+dispatches, and it never changes a branch. All git the Runner runs goes through one
+function, `git_read`, which allows `status` and `merge-base` only (stdin closed,
+prompts off, `--no-optional-locks`); nothing in `amoeba.runner` merges, commits,
+checks out, resets, stashes, deletes a branch or pushes, under any policy.
+
+- **The per-project config.** `--project-config PATH` (setting `project_config_path`,
+  default none) names a YAML file, loaded and validated once at start like the routing
+  table:
+
+  ```yaml
+  projects:
+    amoeba:
+      merge_policy: human
+    scratch:
+      merge_policy: auto
+  ```
+
+  Keys under `projects` are Amoeba project ids; values are trimmed and lower-cased;
+  an unknown key or value, a missing or unreadable file or invalid YAML exits
+  `STARTUP_FAILED` listing every problem. With no file every project takes the
+  defaults (`merge_policy: human`, defined once in `runner/project_config.py`). The
+  file holds no secrets. A change needs a restart.
+- **The merge policy.** Under `human`, `P6` runs with `-p merge=false` and the PM
+  merges. Under `auto`, `P6` runs without the parameter and merges. A `P6` entry
+  records `merge_policy` and `target` in its parameters. The Runner never merges
+  itself, and nothing merges to `main` while CF's `git.integration_branch` is set,
+  because the target is read from CF in the run's checkout.
+- **Pre-dispatch checks.** Before every launch, reissue and resume (not before a
+  pointer write or an observation) the Runner reads the checkout and decides, in this
+  order: a detached HEAD blocks `checkout_branch`; a branch outside the pipeline's
+  allowed set blocks `checkout_branch` (`P4` and `P5` only on the target, `P6` on the
+  target or the slice's own `{index}-slice.*` branch); a launch or reissue with any
+  changed, staged, unmerged or untracked path blocks `checkout_dirty` (first 20 paths
+  and the count). **A resume is not checked for a clean tree**: a paused run can leave
+  uncommitted work. For a fresh or reissued `tasks` or `implementation` launch CF's
+  gate is read as well: `pending-decision` blocks `pending_decision`; CF at or before
+  the step's entry gate blocks `cf_gate_blocks`, unless the PM accepted the
+  predecessor in the store, in which case the disagreement is recorded as a check
+  (below) and the launch goes ahead; past it launches. A block is a `HUMAN` block with
+  `fault_kind` in the payload and no journal entry. The PM's answer is 127's: `rerun`
+  (or `retry`/`accept` for a resume) after fixing the checkout, and the check runs
+  again.
+- **Evidence on the entry.** A launch or resume entry records `dispatch_check`:
+  `branch`, `head`, `target`, `gate_status`, `gate_review_type` (and for a resume
+  `dirty_paths` and `dirty_count`, and when a disagreement was recorded
+  `disagreement_check`). `decide()` refuses a launch or resume for a node whose check
+  did not pass.
+- **A read that fails** (a `git` or `cf` call before a dispatch or a merge
+  observation) blocks nothing and raises the project-scoped `checkout_read_failed`
+  escalation `{checkout, command, reason}`, which closes on the first complete tick
+  without it. A `TickBudget` cut-off defers the reads to the next tick.
+- **The outcome observation.** When a run completes, the Runner reads CF's gate
+  (`cf status --json`), the slice's design file, the review gate's effective date and,
+  for `implementation`, git's branch and head, and stores them in the entry result as
+  `outcome_observation` with the ids of the two hatch checks in `check_ids`. Routing
+  reads two new inputs from it: `gate_state` (`clear`, `pending_review`,
+  `review_failed`, `pending_decision`, `misplaced`, `unknown`, `none`) and
+  `check_standing` (the worst standing of the outcome's checks, or `unknown`, `none`).
+  The shipped table advances a stated pass only with `gate_state: clear` and
+  `check_standing: passed`; a failed read, an unreadable design or a hatch escalates.
+- **The merge.** For each slice whose `implementation` is done and `merge` is not,
+  the Runner runs `git merge-base --is-ancestor <head> <target>` with the head `P6`
+  recorded. Reachable completes the `merge` step (a blocked human step is resolved by
+  `runner`); not reachable, or not observable, blocks it on the PM. A squash merge is
+  not observed. Only local refs are read.
+
 ## Lifecycle failure modes
 
 Three cases where the process must decide rather than converge. Each is

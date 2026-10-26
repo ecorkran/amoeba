@@ -350,10 +350,12 @@ Note: `observe_merges` returns `MergePass(observations, wrote, cut_off)`; a slic
 ### Task 10.1: Add the git source test and extend the budget coverage test
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
 
-- [ ] Source test (`tests/runner/test_git_read_only_place.py`, using `tests/ast_strings.py`): the string `"git"` as an executable appears in no `src/amoeba/runner` module other than `runner/git_read.py`
-- [ ] `tests/runner/test_budget_coverage.py`: wrap the `git` and new `cf` calls so a call starting after the deadline fails the test; drive a tick with an outcome observation, a pre-dispatch check and a merge observation
-- [ ] In that same driven tick, wrap the injected runner to record every `git` argv, and assert each recorded subcommand (the first argument after any `--no-optional-locks`) is in `GIT_SUBCOMMANDS`, and that at least one `status` and one `merge-base` call were recorded
-- [ ] **Success:** tests pass. Commit `test: guard the git read path and the tick budget`
+- [x] Source test (`tests/runner/test_git_read_only_place.py`, using `tests/ast_strings.py`): the string `"git"` as an executable appears in no `src/amoeba/runner` module other than `runner/git_read.py`
+- [x] `tests/runner/test_budget_coverage.py`: wrap the `git` and new `cf` calls so a call starting after the deadline fails the test; drive a tick with an outcome observation, a pre-dispatch check and a merge observation
+- [x] In that same driven tick, wrap the injected runner to record every `git` argv, and assert each recorded subcommand (the first argument after any `--no-optional-locks`) is in `GIT_SUBCOMMANDS`, and that at least one `status` and one `merge-base` call were recorded
+- [x] **Success:** tests pass. Commit `test: guard the git read path and the tick budget`
+
+Note: the source test (tests/runner/test_git_read_only_place.py) looks for a list or tuple literal whose first element is the executable, because the observation key `git` is the same string. The budget coverage test drives one slice from launch to merge observation with guarded cf and git calls; `tests/runner/gates/merge_support.py` has the shared `implemented` helper.
 
 ---
 
