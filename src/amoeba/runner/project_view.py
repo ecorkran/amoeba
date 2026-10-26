@@ -59,7 +59,6 @@ def build_project_view(
         desired=desired,
         current_steps=current,
         dispatch=dispatch.facts,
-        held_checkouts=frozenset(dispatch.holders),
         checkout_holders=dispatch.holders,
     )
     return BuiltView(view, wrote)

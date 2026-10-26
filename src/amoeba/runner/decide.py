@@ -118,10 +118,10 @@ class ProjectView:
     wider ready set, kept for slice 125 to narrow.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
     this process lifetime. ``dispatch`` holds the dispatch facts of each current
-    pipeline step, by node id, and ``held_checkouts`` the checkouts a pipeline
-    already holds (D4); both are empty for a view that dispatches nothing.
-    ``checkout_holders`` names, for each held checkout, the nodes that hold it, so a
-    step's own continuation can act in a checkout held only by itself (slice 127).
+    pipeline step, by node id, and ``checkout_holders`` names, for each checkout a
+    pipeline already holds (D4), the nodes that hold it, so a step's own continuation
+    can act in a checkout held only by itself (slice 127). Both are empty for a view
+    that dispatches nothing.
     """
 
     project_id: str
@@ -134,7 +134,6 @@ class ProjectView:
     dispatch: Mapping[str, StepDispatchFacts] = field(
         default_factory=dict[str, StepDispatchFacts]
     )
-    held_checkouts: frozenset[Path] = frozenset()
     checkout_holders: Mapping[Path, frozenset[str]] = field(
         default_factory=dict[Path, frozenset[str]]
     )

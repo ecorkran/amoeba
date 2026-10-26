@@ -116,14 +116,14 @@ def view_of(
 ) -> ProjectView:
     """A view whose current steps are ``current`` (default: all of ``steps``).
 
-    ``holders`` names who holds each held checkout; its checkouts are held too.
+    ``held`` checkouts are held by an unnamed node; ``holders`` names who holds each.
     """
     names = list(steps) if current is None else list(current)
-    named = dict(holders or {})
+    named = {path: frozenset({"unnamed-holder"}) for path in held}
+    named.update(holders or {})
     return replace(
         view_for(LifecycleTree(())),
         current_steps=tuple(node(name) for name in names),
         dispatch=steps,
-        held_checkouts=frozenset(held) | frozenset(named),
         checkout_holders=named,
     )

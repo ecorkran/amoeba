@@ -66,15 +66,6 @@ def checkout_holders(
     return {path: frozenset(nodes) for path, nodes in holders.items()}
 
 
-def held_checkouts(
-    entries: Sequence[JournalEntry],
-    done_node_ids: Collection[str],
-    current: Mapping[str, StepDispatchFacts],
-) -> frozenset[Path]:
-    """The checkouts a pipeline already holds (see :func:`checkout_holders`)."""
-    return frozenset(checkout_holders(entries, done_node_ids, current))
-
-
 def _checkout_of(entry: JournalEntry) -> Path | None:
     value = entry.parameters.get(PARAM_CHECKOUT)
     return Path(value) if isinstance(value, str) and value else None

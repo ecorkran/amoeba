@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from amoeba.process import RunCheckpoint, RunOutcome, RunOutcomeDocument
-from amoeba.runner.dispatch.hold import held_checkouts
+from amoeba.runner.dispatch.hold import checkout_holders
 from amoeba.runner.faults import ResumeFailure
 from amoeba.runner.finish import (
     PAYLOAD_EXIT_CODE,
@@ -136,7 +136,7 @@ def test_a_failed_resume_keeps_the_checkout_held_and_reads_paused_run(
 ) -> None:
     done = _fail(store, entry, failure)
 
-    assert held_checkouts([done], set(), {}) == {CHECKOUT}
+    assert set(checkout_holders([done], set(), {})) == {CHECKOUT}
     assert classify(Executor.PIPELINE, [_routed(done)]) is Situation.PAUSED_RUN
 
 
@@ -145,7 +145,7 @@ def test_after_a_missing_run_the_hold_is_released_and_the_run_has_ended(
 ) -> None:
     done = _fail(store, entry, ResumeFailure.RUN_MISSING)
 
-    assert held_checkouts([done], set(), {}) == frozenset()
+    assert set(checkout_holders([done], set(), {})) == frozenset()
     assert classify(Executor.PIPELINE, [_routed(done)]) is Situation.ENDED_RUN
 
 

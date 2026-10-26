@@ -2,26 +2,38 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping, Sequence
+from pathlib import Path
+
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved
-from amoeba.runner.dispatch.hold import checkout_holders, held_checkouts
+from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.dispatch.hold import checkout_holders
 from amoeba.runner.dispatch.state import DispatchState
-from amoeba.store import CommandKind, JournalOutcome, JournalResolver
+from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
 from runner.dispatch.dispatch_support import FIRST, SECOND, entry, facts
 
 RUN = CommandKind.SQ_RUN
 POINTER = CommandKind.CF_WRITE
 
 
+def _held(
+    entries: Sequence[JournalEntry],
+    done: Collection[str],
+    current: Mapping[str, StepDispatchFacts],
+) -> frozenset[Path]:
+    return frozenset(checkout_holders(entries, done, current))
+
+
 def test_nothing_is_held_without_entries_or_current_steps() -> None:
-    assert held_checkouts([], set(), {}) == frozenset()
+    assert _held([], set(), {}) == frozenset()
 
 
 def test_an_unresolved_run_holds_its_checkout() -> None:
-    assert held_checkouts([entry(RUN, "a")], set(), {}) == {FIRST}
+    assert _held([entry(RUN, "a")], set(), {}) == {FIRST}
 
 
 def test_an_unresolved_run_holds_even_when_its_step_is_not_current() -> None:
-    held = held_checkouts(
+    held = _held(
         [entry(RUN, "excluded")],
         set(),
         {"other": facts(DispatchState.NEEDS_POINTER, SECOND)},
@@ -33,13 +45,13 @@ def test_an_unresolved_run_holds_even_when_its_step_is_not_current() -> None:
 def test_a_paused_run_of_a_node_that_is_not_done_holds_its_checkout() -> None:
     paused = entry(RUN, "a", outcome=JournalOutcome.COMPLETED, outcome_text="paused")
 
-    assert held_checkouts([paused], set(), {}) == {FIRST}
+    assert _held([paused], set(), {}) == {FIRST}
 
 
 def test_a_paused_run_of_a_done_node_holds_nothing() -> None:
     paused = entry(RUN, "a", outcome=JournalOutcome.COMPLETED, outcome_text="paused")
 
-    assert held_checkouts([paused], {"a"}, {}) == frozenset()
+    assert _held([paused], {"a"}, {}) == frozenset()
 
 
 def test_a_later_run_on_the_node_releases_a_paused_one() -> None:
@@ -48,7 +60,7 @@ def test_a_later_run_on_the_node_releases_a_paused_one() -> None:
         RUN, "a", outcome=JournalOutcome.COMPLETED, outcome_text="completed"
     )
 
-    assert held_checkouts([paused, resumed], set(), {}) == frozenset()
+    assert _held([paused, resumed], set(), {}) == frozenset()
 
 
 def test_the_recorded_outcome_decides_not_the_block() -> None:
@@ -62,7 +74,7 @@ def test_the_recorded_outcome_decides_not_the_block() -> None:
         checkout=SECOND,
     )
 
-    assert held_checkouts([paused, failed], set(), {}) == {FIRST}
+    assert _held([paused, failed], set(), {}) == {FIRST}
 
 
 def test_a_recovery_resolved_run_holds_nothing() -> None:
@@ -73,11 +85,11 @@ def test_a_recovery_resolved_run_holds_nothing() -> None:
         resolved_by=JournalResolver.RECOVERY,
     )
 
-    assert held_checkouts([adopted], set(), {}) == frozenset()
+    assert _held([adopted], set(), {}) == frozenset()
 
 
 def test_a_pointed_current_step_holds_its_checkout() -> None:
-    held = held_checkouts([], set(), {"a": facts(DispatchState.POINTED, SECOND)})
+    held = _held([], set(), {"a": facts(DispatchState.POINTED, SECOND)})
 
     assert held == {SECOND}
 
@@ -86,35 +98,35 @@ def test_a_pointer_write_in_flight_holds_while_its_step_is_current() -> None:
     pointer = entry(POINTER, "a")
     current = {"a": facts(DispatchState.IN_FLIGHT)}
 
-    assert held_checkouts([pointer], set(), current) == {FIRST}
+    assert _held([pointer], set(), current) == {FIRST}
 
 
 def test_a_pointer_claim_lapses_when_its_step_stops_being_current() -> None:
     pointer = entry(POINTER, "a")
 
-    assert held_checkouts([pointer], set(), {}) == frozenset()
+    assert _held([pointer], set(), {}) == frozenset()
 
 
 def test_a_step_that_needs_a_pointer_holds_nothing_yet() -> None:
     current = {"a": facts(DispatchState.NEEDS_POINTER)}
 
-    assert held_checkouts([], set(), current) == frozenset()
+    assert _held([], set(), current) == frozenset()
 
 
 def test_an_unresolved_checkout_holds_nothing() -> None:
     current = {"a": facts(DispatchState.POINTED, CheckoutUnresolved("no snapshot"))}
 
-    assert held_checkouts([], set(), current) == frozenset()
+    assert _held([], set(), current) == frozenset()
 
 
 def test_an_entry_without_a_checkout_holds_nothing() -> None:
-    assert held_checkouts([entry(RUN, "a", checkout=None)], set(), {}) == frozenset()
+    assert _held([entry(RUN, "a", checkout=None)], set(), {}) == frozenset()
 
 
 def test_different_checkouts_are_held_independently() -> None:
     entries = [entry(RUN, "a", checkout=FIRST), entry(RUN, "b", checkout=SECOND)]
 
-    assert held_checkouts(entries, set(), {}) == {FIRST, SECOND}
+    assert _held(entries, set(), {}) == {FIRST, SECOND}
 
 
 def test_holders_name_every_node_behind_a_held_checkout() -> None:
@@ -129,11 +141,3 @@ def test_a_paused_run_is_held_by_its_own_node_only() -> None:
     paused = entry(RUN, "a", outcome=JournalOutcome.COMPLETED, outcome_text="paused")
 
     assert checkout_holders([paused], set(), {}) == {FIRST: {"a"}}
-
-
-def test_held_checkouts_is_the_keys_of_the_holders() -> None:
-    entries = [entry(RUN, "a", checkout=FIRST), entry(RUN, "b", checkout=SECOND)]
-
-    assert held_checkouts(entries, set(), {}) == set(
-        checkout_holders(entries, set(), {})
-    )

@@ -234,4 +234,4 @@ def test_a_view_that_dispatches_nothing_has_empty_dispatch_facts() -> None:
     view = _view()
 
     assert view.dispatch == {}
-    assert view.held_checkouts == frozenset()
+    assert view.checkout_holders == {}

@@ -60,7 +60,10 @@ class DispatchPlanner:
             if facts.state not in _PRIORITY:
                 continue
             path = facts.checkout.path
-            if path in view.held_checkouts and facts.state is not DispatchState.POINTED:
+            if (
+                path in view.checkout_holders
+                and facts.state is not DispatchState.POINTED
+            ):
                 continue
             rank = (_PRIORITY[facts.state], facts.sort_key)
             if path not in best or rank < best[path][0]:
