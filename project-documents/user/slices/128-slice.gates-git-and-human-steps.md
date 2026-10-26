@@ -68,7 +68,7 @@ User value. The Runner can be pointed at a real repository without surprising th
 - A new store-only Action, `BlockDispatch`.
 - New `FaultKind` members: `checkout_dirty`, `checkout_branch`, `cf_gate_blocks`, `pending_decision` and the project-scoped `checkout_read_failed`.
 - A setting, `project_config_path`, with the start flag `--project-config`.
-- Stub changes: the stub `cf` gains `status --json`, `config get --json` and `list slices <i> --json`, using fixtures captured from CF 0.19.16. Tests use real `git` in temporary repositories.
+- Stub changes: the stub `cf` gains `status --json` and `config get --json` (it already answers `list slices`), using fixtures captured from CF 0.19.16. Tests use real `git` in temporary repositories.
 - Contract text in `docs/process-contract.md`, `docs/evidence-contract.md`, `docs/context-forge-contract.md` and `docs/substrate-guide.md`.
 
 **Excluded**
@@ -121,12 +121,17 @@ User value. The Runner can be pointed at a real repository without surprising th
 
 ```
 amoeba/runner/gates/                 NEW
-  cf_status.py     CFActiveSlice model; parse_status(); GatePosition, position_of() (pure)
+  checks.py        RunnerCheck, check_id(entry_id, name), runner_provenance() (pure)
+  cf_status.py     CFActiveSlice model; parse_status(); GatePosition, position_of();
+                   EXIT_GATE, ENTRY_GATE: the exit and entry gate of each step (pure)
+  cf_reads.py      DEFAULT_TARGET_BRANCH; read_config(), read_target() (I/O under TickBudget)
   outcome.py       OutcomeObservation; observe_outcome() (I/O under TickBudget);
                    gate_state_at_exit(step, slice) (pure)
   hatches.py       hatch_checks(design, effective_date) → (CheckInput, CheckInput) (pure)
-  predispatch.py   DispatchCheck = Ok | Block; entry_gate(step, slice, accepted);
-                   branch_rule(...); read_dispatch_facts() (I/O)
+  predispatch.py   DispatchCheck = Ok | Block; launch_candidates(current, facts, holders);
+                   entry_gate(step, slice, accepted); branch_rule(...) (pure)
+  dispatch_reads.py read_dispatch_facts(candidate, ...) (I/O under TickBudget)
+  stage.py         GateStage: the tick's outcome, merge and pre-dispatch stages
   accepted.py      accepted_by_pm(entries, resolution) (pure)
   merge.py         MergeObservation; merge_state(...) (pure); observe_merges() (I/O)
 amoeba/runner/
@@ -137,15 +142,18 @@ amoeba/runner/
   tick.py / observe.py  CHANGED  outcome observation, merge observation, pre-dispatch reads
   faults.py        CHANGED  FaultKind += five members (D11)
   factory.py       CHANGED  loads the project config once at start
-amoeba/runner/dispatch/params.py, planner.py   CHANGED  merge policy; launch only on Ok
-amoeba/runner/resolutions/planner.py           CHANGED  resume only on Ok
-amoeba/runner/lifecycle/human_steps.py         CHANGED  merge blocked only on not_merged
+amoeba/runner/dispatch/params.py, planner.py   CHANGED  merge policy; launch only on Ok;
+                                               LaunchRun.journal_extra
+amoeba/runner/lifecycle/completion.py          CHANGED  _complete becomes public complete_step
+amoeba/runner/resolutions/planner.py           CHANGED  resume only on Ok; ResumeRun.journal_extra
+amoeba/runner/lifecycle/human_steps.py         CHANGED  merge blocked only on not_merged;
+                                               BlockHumanStep.payload_extra
 amoeba/runner/ingest/record.py                 CHANGED  checks, observation into the result
 amoeba/runner/routing/inputs.py, evidence.py, tables/default.yaml   CHANGED  (D3)
 amoeba/process/settings.py, amoeba/cli/settings_flags.py   CHANGED  project_config_path
 ```
 
-`cf_status`, `hatches`, `accepted`, the position and branch rules, and `merge_state` are pure. Only `observe_outcome`, `read_dispatch_facts`, `observe_merges` and `git_read` start subprocesses, and each call checks `TickBudget` first.
+`checks`, `cf_status`, `hatches`, `accepted`, the position and branch rules, and `merge_state` are pure. Only `observe_outcome`, `read_config`, `read_dispatch_facts`, `observe_merges` and `git_read` start subprocesses, and each call checks `TickBudget` first.
 
 ### Data Flow
 
@@ -170,7 +178,7 @@ close     + checkout_read_failed
 ```
 
 - **Outcome observation comes right after polling,** because an ingestion waits on it. Merge observation and pre-dispatch reads come last, because they only enable new work. A cut-off defers them to the next tick, which is safe because they only read.
-- **Candidates** come from one pure function, `launch_candidates(tree, desired, entries, held)`, called once in Observe after this tick's read-backs. A candidate is a step that would launch or resume this tick: `POINTED`, `REISSUE` or `RESUME`, in a free checkout, or one held only by itself for `RESUME`. Observe reads only for those steps, and the planners launch or resume only steps that have an `Ok` in `dispatch_checks` (D5). So the planners never recompute the set, and a step Observe did not check cannot launch.
+- **Candidates** come from one pure function, `launch_candidates(current, facts, holders)`, which takes each current step's dispatch state and resolved checkout and the checkout holders from the view's dispatch facts and recomputes nothing, called once in Observe after this tick's read-backs. A candidate is a step that would launch or resume this tick: `POINTED`, `REISSUE` or `RESUME`, in a free checkout, or one held only by itself for `RESUME`. Observe reads only for those steps, and the planners launch or resume only steps that have an `Ok` in `dispatch_checks` (D5). So the planners never recompute the set, and a step Observe did not check cannot launch.
 - **Reads are per candidate and per merge observation,** and never kept across ticks. `TickBudget` and the per-call timeout bound their cost. Sharing reads per checkout is added only if a measured tick overruns.
 - Rejected: dropping `launch_candidates` and reading for every step. The function is not an optimisation. It is the one definition of which steps Observe checks, and the `decide()` guard (D5) relies on that set.
 
@@ -465,6 +473,13 @@ type Action = (LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | Obse
                | BlockDispatch)
 # ProjectView += dispatch_checks: Mapping[str, DispatchCheck]
 #                merge_observations: Mapping[str, MergeObservation]
+#                merge_policy: MergePolicy          # defaults to PROJECT_DEFAULTS' value
+# LaunchRun, ResumeRun += journal_extra: Mapping[str, object] = {}
+#     written into the entry's parameters: P6 launch: merge_policy, target, dispatch_check;
+#     any other launch or resume: dispatch_check
+# BlockHumanStep += payload_extra: Mapping[str, object] = {}   # merged into the block payload
+launch_candidates(current, facts, holders) -> tuple[Candidate, ...]   # pure, gates/predispatch.py
+complete_step(store, node, step, has_open_entry, *, detail)           # lifecycle/completion.py, public
 ```
 
 **Entry result** (`sq_run`, `completed` outcomes, extending 125 D6):
