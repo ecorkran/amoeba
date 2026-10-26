@@ -11,15 +11,16 @@ dependencies:
 - 125
 - 126
 - 127
-projectState: Slices 120–127 are merged. The tick (`runner/tick.py`, 279 lines) runs
-  intents, resolutions, Observe, record, the pointer stage, the view, routing, decide
-  and act. `DispatchPlanner` launches every `POINTED` or `REISSUE` step it picks,
-  and `ContinuationPlanner` every `RESUME`, with no check of the checkout. `dispatch_params`
-  always passes `merge=false` to `P6`. `HumanStepPlanner` blocks every current human
-  step. The Runner never runs `git`. `amoeba.runner.gates` does not exist.
+projectState: Slice 128 is implemented on its branch and not yet reviewed or merged.
+  The tick (`runner/tick.py`, 297 lines) now observes the outcome of a completed run
+  (CF's gate, the design, git), records the two ungate hatches as checks, observes
+  merges in git, and checks every launch, reissue and resume before dispatch; routing
+  reads `gate_state` and `check_standing`. `amoeba.runner.gates` holds the pure rules
+  and the reads, `git_read.py` is the only place `git` runs, and the per-project merge
+  policy comes from `--project-config`.
 dateCreated: 20261026
 dateUpdated: 20261026
-status: in_progress
+status: complete
 turns: 51
 promptTokens: 4746462
 cachedTokens: 4581749
@@ -364,16 +365,26 @@ Note: the source test (tests/runner/test_git_read_only_place.py) looks for a lis
 ### Task 11.1: Update the contract documents and the CHANGELOG
 **Owner**: Junior AI | **Dependencies**: 10.1 | **Effort**: 2
 
-- [ ] Per the LLD "Provides to Other Slices", "Contract documents": `docs/process-contract.md` (the per-project config format, setting and flag, no secrets in it, and the pre-dispatch checks); `docs/evidence-contract.md` (the Runner's checks, ids and provenance); `docs/context-forge-contract.md` (the `cf status` fields and positions, the two config keys, the observed CF version); `docs/substrate-guide.md` (the 120 row, issue #15 closed)
-- [ ] Under `[Unreleased]` in `CHANGELOG.md`: the pre-dispatch checks, the gate and hatch checks, the two routing inputs and the table change (completed outcomes now need a clear gate and passed checks to advance), `--project-config` and the merge policy, the merge observation, and the read-only git rule
-- [ ] **Success:** every name in the text matches the code. Commit `docs: document gates, git checks and the merge policy`
+- [x] Per the LLD "Provides to Other Slices", "Contract documents": `docs/process-contract.md` (the per-project config format, setting and flag, no secrets in it, and the pre-dispatch checks); `docs/evidence-contract.md` (the Runner's checks, ids and provenance); `docs/context-forge-contract.md` (the `cf status` fields and positions, the two config keys, the observed CF version); `docs/substrate-guide.md` (the 120 row, issue #15 closed)
+- [x] Under `[Unreleased]` in `CHANGELOG.md`: the pre-dispatch checks, the gate and hatch checks, the two routing inputs and the table change (completed outcomes now need a clear gate and passed checks to advance), `--project-config` and the merge policy, the merge observation, and the read-only git rule
+- [x] **Success:** every name in the text matches the code. Commit `docs: document gates, git checks and the merge policy`
+
+Note: the contract text is in process-contract.md ('Gates, git and human steps'), evidence-contract.md ('The Runner's own checks'), context-forge-contract.md ('Gate state and config reads', observed on CF 0.19.19) and the 120 row of substrate-guide.md; the CHANGELOG entries are under [Unreleased] and flag the behavior change to the shipped table.
 
 ### Task 11.2: Final validation and walkthrough
 **Owner**: Junior AI | **Dependencies**: 11.1 | **Effort**: 2
 
-- [ ] Run LLD Verification Walkthrough steps 1, 2 and 3. Record the pass counts and step 3's exit code and message under this task
-- [ ] Confirm every source file this slice created is near 300 lines and that no file it changed grew past 300 (record any that did, with before and after counts); pyright strict is clean
-- [ ] Run Verification Walkthrough step 4 on a scratch copy with the real `cf` and `git` (it launches nothing). Record what `inspect journal` and `inspect blocked` showed for the dirty tree and the wrong branch. Pause the project, switch the scratch copy back, `amoeba stop`, and remove the scratch CF project
-- [ ] Step 5 is optional and spends three runs. Run it only if steps 1–4 pass; record the result either way
-- [ ] A failure caused by this slice's code is fixed here; anything else gets an issue and a note under this task
-- [ ] **Success:** steps 1–3 behave as the LLD expects, and step 4 shows `checkout_dirty`, then `checkout_branch`, and no `sq_run`. Commit `docs: record slice 128 validation`
+- [x] Run LLD Verification Walkthrough steps 1, 2 and 3. Record the pass counts and step 3's exit code and message under this task
+- [x] Confirm every source file this slice created is near 300 lines and that no file it changed grew past 300 (record any that did, with before and after counts); pyright strict is clean
+- [x] Run Verification Walkthrough step 4 on a scratch copy with the real `cf` and `git` (it launches nothing). Record what `inspect journal` and `inspect blocked` showed for the dirty tree and the wrong branch. Pause the project, switch the scratch copy back, `amoeba stop`, and remove the scratch CF project
+- [x] Step 5 is optional and spends three runs. Run it only if steps 1–4 pass; record the result either way
+- [x] A failure caused by this slice's code is fixed here; anything else gets an issue and a note under this task
+- [x] **Success:** steps 1–3 behave as the LLD expects, and step 4 shows `checkout_dirty`, then `checkout_branch`, and no `sq_run`. Commit `docs: record slice 128 validation`
+
+Note: walkthrough 1: 313 passed (tests/runner/gates, test_git_read.py, test_project_config.py). Walkthrough 2: full suite 4414 passed; `tests/runner tests/contract` 1724 passed; ruff check, `ruff format --check` (640 files) and pyright strict clean. Walkthrough 3: `amoeba start --project-config` with `merge_policy: sometimes` printed `amoeba: project config /tmp/projects.yaml is invalid:` and `  - projects.scratch.merge_policy: Input should be 'human' or 'auto' (got 'sometimes')`, exit 7; with `merge_policy: auto` it started, logged `project config loaded from /tmp/projects.yaml`, and `amoeba stop` stopped it (exit 0).
+
+Note: sizes. Before the final split, three files passed 300 lines: tick.py 279 to 343, outcome.py (new) 348, predispatch.py (new) 311. The record step moved to runner/record_runs.py, the observation's value types and gate_state_at_exit to gates/outcome_record.py, and the candidates to gates/candidates.py. Now: tick.py 297, outcome.py 181, outcome_record.py 188, predispatch.py 216, candidates.py 109. Other changed files grew but stay under 300 (largest: reduce.py 277, faults.py 278, stage.py 271, merge.py 236, decide.py 238). Pyright strict is clean.
+
+Note: walkthrough 4 (real cf 0.19.19 and git on a scratch clone, scratch CF project removed afterwards): with a stray file the drive of slice 131 wrote one `cf_write` (completed), no `sq_run`, and blocked `slice_design` with `fault_kind: checkout_dirty` (paths `.gitignore`, `stray.txt`, count 2; `cf init --lite` also modifies the clone's .gitignore). After cleaning, switching the clone to branch `scratch-other` and submitting `rerun`, a second `cf_write` and a block `checkout_branch` {branch: scratch-other, target: main, allowed: [main]}; still no `sq_run`. Corrections recorded in the LLD walkthrough: check out the target in the clone first; the payload is on the escalation message (`inspect messages --json`), not `inspect blocked`.
+
+Note: walkthrough step 5 (a human merge observed with three real runs) was not run: it is slice 129's first proof. The same path is covered at tick level by tests/runner/gates/test_tick_merge.py with real git merges.

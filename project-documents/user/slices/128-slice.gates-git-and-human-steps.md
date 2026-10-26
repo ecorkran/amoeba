@@ -12,8 +12,8 @@ interfaces:
 - 130
 - 131
 dateCreated: 20261021
-dateUpdated: 20261021
-status: not_started
+dateUpdated: 20261026
+status: complete
 turns: 48
 promptTokens: 7117998
 cachedTokens: 6874801
@@ -125,16 +125,20 @@ amoeba/runner/gates/                 NEW
   cf_status.py     CFActiveSlice model; parse_status(); GatePosition, position_of();
                    EXIT_GATE, ENTRY_GATE: the exit and entry gate of each step (pure)
   cf_reads.py      DEFAULT_TARGET_BRANCH; read_config(), read_target() (I/O under TickBudget)
-  outcome.py       OutcomeObservation; observe_outcome() (I/O under TickBudget);
-                   gate_state_at_exit(step, slice) (pure)
+  outcome.py       observe_outcome() (I/O under TickBudget)
+  outcome_record.py OutcomeObservation, GateRead, GitRead, ReadFailed, unobservable(),
+                   the stored keys, gate_state_at_exit(step, gate_record) (pure)
   hatches.py       hatch_checks(design, effective_date) → (CheckInput, CheckInput) (pure)
-  predispatch.py   DispatchCheck = Ok | Block; launch_candidates(current, facts, holders);
-                   entry_gate(step, slice, accepted); branch_rule(...) (pure)
+  predispatch.py   DispatchCheck = Ok | Block; entry_gate(step, slice, accepted);
+                   branch_rule(...), is_slice_branch() (pure)
+  candidates.py    Candidate; launch_candidates(current, facts, holders) (pure)
   dispatch_reads.py read_dispatch_facts(candidate, ...) (I/O under TickBudget)
   stage.py         GateStage: the tick's outcome, merge and pre-dispatch stages
   accepted.py      accepted_by_pm(entries, resolution) (pure)
-  merge.py         MergeObservation; merge_state(...) (pure); observe_merges() (I/O)
+  merge.py         merge_state(...) (pure); observe_merges() (I/O)
+  merge_observation.py  Merged, NotMerged, Unobservable (the view's value types)
 amoeba/runner/
+  record_runs.py   NEW  record_finished(): the tick's record step, moved out of tick.py
   git_read.py      NEW  git_read(args, cwd, budget); GIT_SUBCOMMANDS; parse_porcelain_v2()
   project_config.py NEW ProjectConfig, MergePolicy, PROJECT_DEFAULTS, load_project_config()
   decide.py        CHANGED  Action += BlockDispatch; ProjectView += dispatch_checks,
@@ -583,36 +587,37 @@ Run in bash from the repository root. Steps 1–3 use the stub `sq` and `cf` wit
    uv run pytest tests/runner/gates tests/runner/test_git_read.py \
      tests/runner/test_project_config.py -v
    ```
-   Expected: all pass. Tests are named for their rules, for example `test_dirty_tree_blocks_launch`, `test_planning_run_refused_off_target`, `test_resume_not_blocked_by_its_own_dirty_tree`, `test_derived_pass_cleared_by_cf_escalates`, `test_review_none_check_failed_and_escalates`, `test_accept_disagreement_recorded_once`, `test_merge_observed_after_branch_deleted` and `test_auto_merge_step_never_blocked`.
+   Expected: all pass (313 on 20261026). Tests are named for their rules, for example `test_dirty_tree_blocks_launch`, `test_planning_run_refused_off_target`, `test_resume_not_blocked_by_its_own_dirty_tree`, `test_derived_pass_cleared_by_cf_escalates`, `test_review_none_check_failed_and_escalates`, `test_accept_disagreement_recorded_once`, `test_merge_observed_after_branch_deleted` and `test_auto_merge_step_never_blocked`.
 
 2. **Full gate and the earlier slices' suites:**
    ```bash
    uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run pyright
    uv run pytest tests/runner tests/contract -q
    ```
+   Expected (20261026): 4414 passed in the full run, 1724 in the second; ruff, `ruff format --check` and pyright clean.
 
 3. **An invalid per-project config refuses to start:**
    ```bash
    printf 'projects:\n  scratch:\n    merge_policy: sometimes\n' > /tmp/projects.yaml
    AMOEBA_STORE_DIR=$(mktemp -d) uv run amoeba start --project-config /tmp/projects.yaml; echo "exit $?"
    ```
-   Expected: exit 7 (`STARTUP_FAILED`), naming `merge_policy` and the value `sometimes`. With `merge_policy: auto`, start succeeds. Stop it with `amoeba stop`.
+   Expected: exit 7 (`STARTUP_FAILED`), naming `merge_policy` and the value `sometimes`. Observed 20261026: `amoeba: project config /tmp/projects.yaml is invalid:` then `  - projects.scratch.merge_policy: Input should be 'human' or 'auto' (got 'sometimes')`, exit 7. With `merge_policy: auto`, start succeeds and logs `project config loaded from /tmp/projects.yaml`; stop it with `amoeba stop` (from another shell with the same `AMOEBA_STORE_DIR`).
 
-4. **A dirty tree and a wrong branch block before any launch, on a scratch copy.** Follow 125's walkthrough step 3 to create the scratch project, but before submitting the drive intent:
+4. **A dirty tree and a wrong branch block before any launch, on a scratch copy.** Follow 125's walkthrough step 3 to create the scratch project, but with these corrections found on 20261026: check out the target in the clone first (`git -C "$scratch" checkout -q main`: a clone of a slice branch starts on that branch, and the first block would be `checkout_branch`), give the CF project a name no other project has, and do not export `OPENROUTER_API_KEY` (nothing launches). Before submitting the drive intent:
    ```bash
    touch "$scratch/stray.txt"
    ```
    Then submit the drive for one undesigned slice, `until: slice_design`. Expected:
    - `amoeba inspect journal --project scratch` shows the `cf_write` resolved `completed`, and no `sq_run`.
-   - `amoeba inspect blocked --project scratch` shows `slice_design` blocked, with `fault_kind: checkout_dirty` and `stray.txt` in the payload.
+   - `amoeba inspect blocked --project scratch` shows `slice_design` blocked (`context: the checkout has 2 changed path(s): .gitignore, stray.txt`). `cf init --lite` also modifies the clone's `.gitignore`, so it is listed; restore it with `git -C "$scratch" checkout -- .gitignore` before the next step. The payload (`fault_kind: checkout_dirty`, `paths`, `path_count`) is on the escalation message: `amoeba inspect messages --project scratch --json`.
 
-   Move to another branch while keeping the stray file out of the tree:
+   Move to another branch while keeping the tree clean:
    ```bash
-   rm "$scratch/stray.txt"; git -C "$scratch" checkout -q -b scratch-other
+   git -C "$scratch" checkout -q -- .gitignore; rm "$scratch/stray.txt"; git -C "$scratch" checkout -q -b scratch-other
    amoeba submit resolution --project scratch --by operator \
        --blocked-state-id <id from inspect blocked> --detail "cleaned" --decision rerun
    ```
-   Expected: a new `cf_write`, then a new block with `fault_kind: checkout_branch`, naming `scratch-other`, the target and the allowed set. Still no `sq_run`. Submit `{"intent": "pause"}` for the project before switching the scratch copy back to its target, then stop with `amoeba stop`.
+   Expected: a new `cf_write`, then a new block with `fault_kind: checkout_branch`, naming `scratch-other`, the target and the allowed set (observed payload: `{branch: scratch-other, target: main, allowed: [main], fault_kind: checkout_branch}`). Still no `sq_run`. Remove the scratch CF project with `(cd "$scratch" && cf project rm "$cf_id" --yes)`. Submit `{"intent": "pause"}` for the project before switching the scratch copy back to its target, then stop with `amoeba stop`.
 
 5. **Optional, a human merge observed (spends one design, tasks and implementation run).** This is 129's path. On a scratch copy, drive one slice `until: merge`. When `P6` completes:
    - `amoeba inspect journal --project scratch --json` shows the `P6` entry with `merge_policy: human`, `-p merge=false`, and `outcome_observation.git` naming the slice branch.
