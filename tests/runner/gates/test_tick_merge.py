@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Iterator
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 from cf_stub_gates import CONFIG_MODE_ENV, STATUS_POINTER_ENV, GateMode
 
-from amoeba.process import RunOutcome
+from amoeba.runner.cf_call import CfRun
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
@@ -18,41 +19,26 @@ from amoeba.runner.project_config import MergePolicy, ProjectSettings
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.store import (
     BlockedKind,
-    CFReference,
     Channel,
     CommandKind,
-    Node,
-    NodeKind,
     NodeStatus,
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
-from runner.gate_rig import STATUS_FIXTURES, clear_gates, config_knobs
+from runner.gate_rig import STATUS_FIXTURES, config_knobs
+from runner.gates.merge_support import BRANCH, Scenario, implemented
 from runner.git_repo import (
     commit_file,
     delete_branch,
     git,
     head_of,
-    make_branch,
     merge_branch,
     switch,
 )
 from runner.resolutions.resolution_support import resolve_block
-from runner.resolutions.rig_support import INDEX, write_review
 from runner.routing.table_support import shipped_table
 
 PROJECT = "demo"
-BRANCH = f"{INDEX}-slice.merge-me"
-
-
-@dataclass
-class Scenario:
-    """A slice whose implementation just finished, and its merge step."""
-
-    slice_node: Node
-    implementation: Node
-    merge: Node
-    head: str
 
 
 @pytest.fixture
@@ -67,45 +53,6 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
     yield built
 
 
-def _implemented(
-    rig: DispatchRig, *, own_branch: bool = True, auto_merged: bool = False
-) -> Scenario:
-    """Run ``P6`` to completion, leaving the checkout as Squadron would.
-
-    Under ``human`` the run ends on the slice's own branch with its work committed.
-    ``own_branch=False`` ends it on the target; ``auto_merged`` has Squadron merge the
-    slice branch into the target before it completes.
-    """
-    root = rig.world.root
-    slice_node, implementation = rig.slice_and_step(
-        "merge-me", INDEX, LifecycleStep.IMPLEMENTATION
-    )
-    merge = rig.store.create_node(
-        project_id=PROJECT,
-        kind=NodeKind.PHASE_OR_ARTIFACT,
-        title=LifecycleStep.MERGE.value,
-        parent_id=slice_node.id,
-        cf=CFReference(project="cf-a", phase=LifecycleStep.MERGE.value),
-    )
-    clear_gates(rig, slice_node, LifecycleStep.IMPLEMENTATION)
-    rig.tick()  # the pointer write
-    rig.tick()  # the launch, on the target
-    if own_branch or auto_merged:
-        make_branch(root, BRANCH)
-        commit_file(root, "work.txt", "slice work\n", "implement the slice")
-    if auto_merged:
-        switch(root, "main")
-        merge_branch(root, BRANCH)
-    head = head_of(root)
-    rig.end_run(
-        implementation,
-        RunOutcome.COMPLETED,
-        **write_review(rig, "verdict: PASS").document,
-    )
-    assert rig.status(implementation) is NodeStatus.DONE
-    return Scenario(slice_node, implementation, merge, head)
-
-
 def _merge_status(rig: DispatchRig, scenario: Scenario) -> NodeStatus:
     return rig.status(scenario.merge)
 
@@ -117,7 +64,7 @@ def _pm_merges(rig: DispatchRig) -> None:
 
 
 def test_under_human_the_merge_step_blocks_after_p6(rig: DispatchRig) -> None:
-    scenario = _implemented(rig)
+    scenario = implemented(rig)
 
     rig.tick()
 
@@ -129,7 +76,7 @@ def test_under_human_the_merge_step_blocks_after_p6(rig: DispatchRig) -> None:
 def test_a_no_ff_merge_completes_the_step_and_resolves_its_block_by_runner(
     rig: DispatchRig,
 ) -> None:
-    scenario = _implemented(rig)
+    scenario = implemented(rig)
     rig.tick()
     assert _merge_status(rig, scenario) is NodeStatus.BLOCKED_ON_HUMAN
 
@@ -144,7 +91,7 @@ def test_a_no_ff_merge_completes_the_step_and_resolves_its_block_by_runner(
 
 
 def test_merge_observed_after_branch_deleted(rig: DispatchRig) -> None:
-    scenario = _implemented(rig)
+    scenario = implemented(rig)
     rig.tick()
     _pm_merges(rig)
     delete_branch(rig.world.root, BRANCH)
@@ -155,7 +102,7 @@ def test_merge_observed_after_branch_deleted(rig: DispatchRig) -> None:
 
 
 def test_a_fix_up_commit_before_the_merge_is_still_observed(rig: DispatchRig) -> None:
-    scenario = _implemented(rig)
+    scenario = implemented(rig)
     rig.tick()
     commit_file(rig.world.root, "fixup.txt", "fix\n", "the PM's fix-up")
 
@@ -167,7 +114,7 @@ def test_a_fix_up_commit_before_the_merge_is_still_observed(rig: DispatchRig) ->
 
 
 def test_a_squash_merge_is_not_observed(rig: DispatchRig) -> None:
-    scenario = _implemented(rig)
+    scenario = implemented(rig)
     rig.tick()
     root = rig.world.root
     switch(root, "main")
@@ -181,7 +128,7 @@ def test_a_squash_merge_is_not_observed(rig: DispatchRig) -> None:
 
 def test_auto_merge_step_never_blocked(rig: DispatchRig) -> None:
     rig.tick_rig.project_settings = ProjectSettings(merge_policy=MergePolicy.AUTO)
-    scenario = _implemented(rig, auto_merged=True)
+    scenario = implemented(rig, auto_merged=True)
 
     rig.tick()
 
@@ -192,7 +139,7 @@ def test_auto_merge_step_never_blocked(rig: DispatchRig) -> None:
 def test_a_human_entry_that_ended_on_the_target_is_unobservable(
     rig: DispatchRig,
 ) -> None:
-    scenario = _implemented(rig, own_branch=False)
+    scenario = implemented(rig, own_branch=False)
 
     rig.tick()
 
@@ -208,7 +155,7 @@ def test_a_human_entry_that_ended_on_the_target_is_unobservable(
 def test_a_failed_read_blocks_nothing_and_closes_once_a_read_succeeds(
     rig: DispatchRig, tmp_path: Path
 ) -> None:
-    scenario = _implemented(rig)
+    scenario = implemented(rig)
     working = rig.tick_rig.gate_run
     rig.tick_rig.gate_run = rig.world.run(
         {
@@ -235,7 +182,7 @@ def test_a_failed_read_blocks_nothing_and_closes_once_a_read_succeeds(
 def test_a_later_slices_p4_in_the_checkout_blocks_until_the_merge(
     rig: DispatchRig,
 ) -> None:
-    scenario = _implemented(rig)
+    scenario = implemented(rig)
     rig.tick()
     later = rig.step("later", 126, LifecycleStep.SLICE_DESIGN)
     rig.tick()  # its pointer write
@@ -259,3 +206,23 @@ def test_a_later_slices_p4_in_the_checkout_blocks_until_the_merge(
 
     assert _merge_status(rig, scenario) is NodeStatus.DONE
     assert rig.entries(CommandKind.SQ_RUN, later), "launched once the merge landed"
+
+
+def test_a_spent_budget_starts_no_merge_read(rig: DispatchRig) -> None:
+    calls: list[list[str]] = []
+
+    def count(real: CfRun) -> CfRun:
+        def counted(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            calls.append(argv)
+            return real(argv, **kwargs)
+
+        return counted
+
+    scenario = implemented(rig, wrap_gate_run=count)
+    calls.clear()
+    rig.tick_rig.deadline = 0.0
+
+    rig.tick()
+
+    assert calls == [], "no cf or git call starts once the budget is spent"
+    assert _merge_status(rig, scenario) is NodeStatus.RUNNABLE

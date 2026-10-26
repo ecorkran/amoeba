@@ -326,18 +326,22 @@ Note: `disagreement_check` (the D7 record builder) lives in gates/accepted.py; `
 ### Task 9.1: Implement `merge_state` and share the completion write
 **Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 2
 
-- [ ] Create `runner/gates/merge.py` with `MergeObservation` (`merged`, `not_merged`, `unobservable` with a reason) and the pure `merge_state(entry, slice_index, ancestor_exit) -> MergeObservation | None` per D9's table (`None` for a read failure)
-- [ ] `lifecycle/completion.py`: `complete_step` (Task-level additions), plan-read behavior unchanged
-- [ ] Tests: `merge_state` table-driven over every D9 row; the existing completion tests pass unchanged
-- [ ] **Success:** tests pass. Commit `feat: decide a merge from the recorded head's reachability`
+- [x] Create `runner/gates/merge.py` with `MergeObservation` (`merged`, `not_merged`, `unobservable` with a reason) and the pure `merge_state(entry, slice_index, ancestor_exit) -> MergeObservation | None` per D9's table (`None` for a read failure)
+- [x] `lifecycle/completion.py`: `complete_step` (Task-level additions), plan-read behavior unchanged
+- [x] Tests: `merge_state` table-driven over every D9 row; the existing completion tests pass unchanged
+- [x] **Success:** tests pass. Commit `feat: decide a merge from the recorded head's reachability`
+
+Note: 9.1 and 9.2 landed in one commit because `merge.py` holds both. The value types (Merged, NotMerged, Unobservable) are in gates/merge_observation.py so the view and HumanStepPlanner can name them without an import cycle through decide.py; `unobservable_reason(entry, slice_index)` is the read-free half of `merge_state`. An entry with no recorded `merge_policy` (launched before slice 128) is treated as human, which is what 125 ran every P6 with.
 
 ### Task 9.2: Observe merges in the tick and change `HumanStepPlanner`
 **Owner**: Junior AI | **Dependencies**: 7.5, 9.1 | **Effort**: 3
 
-- [ ] `runner/gates/merge.py`: `observe_merges(store, tree, project_id, budget, run, timeout, faults) -> Mapping[str, MergeObservation]` for each slice whose `implementation` is done and `merge` is not, reading the step's latest completed `sq_run` entry, the target in its checkout and `merge-base --is-ancestor`; `merged` completes the step with `complete_step` and detail per D9; a read failure adds `checkout_read_failed`. `GateStage` runs it after the pointer stage, only when `desired.drives_anything()`; `runner/decide.py` gains `ProjectView.merge_observations: Mapping[str, MergeObservation]` (empty by default), keyed by the merge step's node id, and the view carries the result there
-- [ ] `HumanStepPlanner`: a current `merge` step blocks on `not_merged` or `unobservable` (with `{merge_observation: unobservable, reason}` as `payload_extra`), and is skipped with no observation. Other human steps are unchanged
-- [ ] Tick tests (`tests/runner/gates/test_tick_merge.py`), with real merges in the checkout: under `human`, after `P6` the `merge` step blocks; a `git merge --no-ff` completes it on the next tick and resolves its block by `runner`; `test_merge_observed_after_branch_deleted`; a fix-up commit before the merge is observed; a squash merge is not; `test_auto_merge_step_never_blocked`; a `human` entry that ended on the target is `unobservable`; a failed read blocks nothing and raises `checkout_read_failed`, which closes once a read succeeds; a later slice's `P4` in that checkout blocks `checkout_branch` until the merge
-- [ ] **Success:** tests pass. Commit `feat: observe merges in git and complete the merge step`
+- [x] `runner/gates/merge.py`: `observe_merges(store, tree, project_id, budget, run, timeout, faults) -> Mapping[str, MergeObservation]` for each slice whose `implementation` is done and `merge` is not, reading the step's latest completed `sq_run` entry, the target in its checkout and `merge-base --is-ancestor`; `merged` completes the step with `complete_step` and detail per D9; a read failure adds `checkout_read_failed`. `GateStage` runs it after the pointer stage, only when `desired.drives_anything()`; `runner/decide.py` gains `ProjectView.merge_observations: Mapping[str, MergeObservation]` (empty by default), keyed by the merge step's node id, and the view carries the result there
+- [x] `HumanStepPlanner`: a current `merge` step blocks on `not_merged` or `unobservable` (with `{merge_observation: unobservable, reason}` as `payload_extra`), and is skipped with no observation. Other human steps are unchanged
+- [x] Tick tests (`tests/runner/gates/test_tick_merge.py`), with real merges in the checkout: under `human`, after `P6` the `merge` step blocks; a `git merge --no-ff` completes it on the next tick and resolves its block by `runner`; `test_merge_observed_after_branch_deleted`; a fix-up commit before the merge is observed; a squash merge is not; `test_auto_merge_step_never_blocked`; a `human` entry that ended on the target is `unobservable`; a failed read blocks nothing and raises `checkout_read_failed`, which closes once a read succeeds; a later slice's `P4` in that checkout blocks `checkout_branch` until the merge
+- [x] **Success:** tests pass. Commit `feat: observe merges in git and complete the merge step`
+
+Note: `observe_merges` returns `MergePass(observations, wrote, cut_off)`; a slice whose implementation is done but has no completed run entry is `Unobservable` (no run recorded), so the PM still sees the human step. `BlockHumanStep.payload_extra` carries `{merge_observation: unobservable, reason}`. tests/runner/lifecycle/test_human_steps.py's merge test now sets `merge_observations`.
 
 ---
 
