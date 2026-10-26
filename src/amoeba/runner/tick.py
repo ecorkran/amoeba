@@ -179,6 +179,7 @@ class ProjectTick:
         # cannot launch this tick (D5).
         dispatch = self._gates.check_dispatch(view, budget, faults)
         view = replace(view, dispatch_checks=dispatch.checks)
+        self.wrote = dispatch.wrote or self.wrote
         # Store reads and writes only, so no budget check: it starts no subprocess.
         self.wrote = (
             route_outcomes(

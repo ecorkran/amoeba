@@ -48,6 +48,8 @@ PAYLOAD_RATIONALE: Final = "rationale"
 #: ``Ok`` evidence keys.
 EVIDENCE_GATE_STATUS: Final = "gate_status"
 EVIDENCE_GATE_REVIEW_TYPE: Final = "gate_review_type"
+#: Set when the PM accepted a step CF still fails: the id of the check recording it.
+EVIDENCE_DISAGREEMENT_CHECK: Final = "disagreement_check"
 
 
 @dataclass(frozen=True)
