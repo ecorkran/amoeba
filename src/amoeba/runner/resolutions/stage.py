@@ -13,7 +13,11 @@ from amoeba.runner.lifecycle.steps import STEP_MAP, Executor
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.resolutions.classify import classify
 from amoeba.runner.resolutions.judge import checkpoint_of, judge_resolution
-from amoeba.store import BlockedState, CommandKind, JournalEntry, Store
+from amoeba.store import (
+    BlockedState,
+    Store,
+    latest_run_entry,
+)
 
 
 def apply_pending_resolutions(
@@ -38,7 +42,9 @@ def _answer(
 ) -> None:
     entries = store.journal_entries(project_id, node_id=blocked.node_id)
     situation = classify(_executor_of(tree, blocked), entries)
-    answer = judge_resolution(blocked, situation, checkpoint_of(_latest_run(entries)))
+    answer = judge_resolution(
+        blocked, situation, checkpoint_of(latest_run_entry(entries))
+    )
     store.acknowledge_resolution(
         blocked.id,
         outcome=answer.outcome,
@@ -55,7 +61,3 @@ def _executor_of(tree: LifecycleTree, blocked: BlockedState) -> Executor | None:
         raise ValueError(f"blocked state {blocked.id} names a node not in the tree")
     step = tree.step_of(node)
     return None if step is None else STEP_MAP[step].executor
-
-
-def _latest_run(entries: list[JournalEntry]) -> JournalEntry | None:
-    return next((e for e in reversed(entries) if e.kind is CommandKind.SQ_RUN), None)

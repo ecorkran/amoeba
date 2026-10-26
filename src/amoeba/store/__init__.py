@@ -87,6 +87,7 @@ from amoeba.store.journal_models import (
     JournalEntry,
     JournalOutcome,
     JournalResolver,
+    latest_run_entry,
 )
 from amoeba.store.models import (
     BLOCKED_KIND_TO_STATUS,
@@ -178,6 +179,7 @@ __all__ = [
     "CFReference",
     "JournalEntry",
     "Message",
+    "latest_run_entry",
     "Node",
     "Resolution",
     "ResolutionOutcome",

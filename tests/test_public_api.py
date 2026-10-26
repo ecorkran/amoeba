@@ -74,6 +74,7 @@ EXPECTED_EXPORTS = {
     "ResolutionOutcome",
     "SQReference",
     "SubmissionRecord",
+    "latest_run_entry",
     "FindingChanges",
     "FindingInput",
     "FindingObservation",

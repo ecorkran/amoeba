@@ -18,7 +18,7 @@ thing as an unmappable stored string.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -143,3 +143,8 @@ class JournalEntry:
         never disagree.
         """
         return self.outcome is not None
+
+
+def latest_run_entry(entries: Sequence[JournalEntry]) -> JournalEntry | None:
+    """The newest ``sq_run`` entry of ``entries`` (oldest first), or ``None``."""
+    return next((e for e in reversed(entries) if e.kind is CommandKind.SQ_RUN), None)

@@ -29,13 +29,12 @@ from amoeba.store import (
     BlockedKind,
     BlockedState,
     CFSnapshot,
-    CommandKind,
-    JournalEntry,
     Node,
     NodeKind,
     NodeStatus,
     ResolutionOutcome,
     Store,
+    latest_run_entry,
 )
 
 #: A block's payload key for the slice index the checkout could not be found for.
@@ -158,9 +157,11 @@ def _facts_for(
         slice_index=index,
         cf_project_id=cf_project,
         sort_key=(initiative.cf.index, index, step_rank(step)),
-        reissue_of=_latest_run(entries) if state is DispatchState.REISSUE else None,
+        reissue_of=latest_run_entry(entries)
+        if state is DispatchState.REISSUE
+        else None,
         resolution=resolution,
-        continues=_latest_run(entries) if state in _CONTINUING else None,
+        continues=latest_run_entry(entries) if state in _CONTINUING else None,
     )
 
 
@@ -175,7 +176,3 @@ def _applied_resolution(store: Store, node_id: str) -> BlockedState | None:
     ):
         return None
     return latest
-
-
-def _latest_run(entries: Sequence[JournalEntry]) -> JournalEntry | None:
-    return next((e for e in reversed(entries) if e.kind is CommandKind.SQ_RUN), None)

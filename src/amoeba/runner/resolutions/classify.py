@@ -15,7 +15,7 @@ from amoeba.runner.finish import RESULT_RESUME_FAILURE
 from amoeba.runner.ingest.record import RESULT_OUTCOME
 from amoeba.runner.lifecycle.steps import Executor
 from amoeba.runner.resolutions.vocabulary import Situation
-from amoeba.store import CommandKind, JournalEntry
+from amoeba.store import CommandKind, JournalEntry, latest_run_entry
 
 
 def classify(executor: Executor | None, entries: Sequence[JournalEntry]) -> Situation:
@@ -26,10 +26,7 @@ def classify(executor: Executor | None, entries: Sequence[JournalEntry]) -> Situ
     ``paused_run`` and a failed resume, whose recorded outcome stays ``paused``,
     always is.
     """
-    latest_run = next(
-        (entry for entry in reversed(entries) if entry.kind is CommandKind.SQ_RUN),
-        None,
-    )
+    latest_run = latest_run_entry(entries)
     latest = entries[-1] if entries else None
     if (latest is not None and not latest.is_resolved) or (
         latest_run is not None and latest_run.awaits_routing

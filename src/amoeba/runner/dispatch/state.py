@@ -21,6 +21,7 @@ from amoeba.store import (
     JournalOutcome,
     JournalResolver,
     ResolutionOutcome,
+    latest_run_entry,
 )
 
 
@@ -77,9 +78,7 @@ def dispatch_state(
     """
     if any(not entry.is_resolved for entry in entries):
         return DispatchState.IN_FLIGHT
-    latest_run = next(
-        (e for e in reversed(entries) if e.kind is CommandKind.SQ_RUN), None
-    )
+    latest_run = latest_run_entry(entries)
     if latest_run is not None and latest_run.awaits_routing:
         return DispatchState.AWAITING_ROUTING
     pending = _pending_decision(entries, resolution)
