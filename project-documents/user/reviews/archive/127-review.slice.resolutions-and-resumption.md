@@ -14,56 +14,51 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261020
 dateUpdated: 20261020
-reviewedSha: d704c0ef59f97cbf0f7d777415882884323a89c3
-revision_number: 1
+reviewedSha: bf6b10be2a7d2dfd04791ccef45cb93785004820
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 turns: 3
-promptTokens: 115096
+promptTokens: 115339
 cachedTokens: 11266
-cacheWriteTokens: 103826
-completionTokens: 8044
-durationSeconds: 64.4
-costUsd: 0.497683
+cacheWriteTokens: 104069
+completionTokens: 6702
+durationSeconds: 55.0
+costUsd: 0.485235
 costBasis: provider
 runId: run-20261020-slices-plan-31ea04a8
 squadronVersion: 0.23.5
 findings:
   - id: F001
-    severity: pass
-    category: architecture-alignment
-    summary: "Boundaries, routing authority and tick order match the architecture"
-    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md#Technical Decisions"
-  - id: F002
-    severity: pass
-    category: error-handling
-    summary: "Failure modes are enumerated for the new I/O paths"
-    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md:248-256, 280-296"
-  - id: F003
     severity: concern
     category: scope
-    summary: "Gate-disagreement criterion is deferred out of this slice"
-    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md:298-304"
-  - id: F004
-    severity: concern
-    category: under-specification
-    summary: "The situation table is ambiguous for failed resumes"
-    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md:194-202, 295"
-  - id: F005
+    summary: "Plan-assigned gate-disagreement criterion is moved out of this slice"
+    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md#D7 — Accepting an outcome CF's gate still fails is detected by 128"
+  - id: F002
     severity: concern
     category: proportionality
-    summary: "The design is heavier than the slice needs"
-    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md:324-333, 413-414, 531"
-  - id: F006
+    summary: "Design is heavier than the plan entry, and its component list contradicts its own exclusions"
+    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md#Component Structure"
+  - id: F003
+    severity: pass
+    category: architecture-alignment
+    summary: "Boundaries and dependency direction match the arch"
+    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md#D1 — Decisions ride on the existing resolution kind"
+  - id: F004
+    severity: pass
+    category: error-handling
+    summary: "Failure modes and the tick-budget NFR are explicit"
+    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md#D4 — Continuation entries"
+  - id: F005
     severity: note
     category: dependencies
-    summary: "Known pruning defect sits on this slice's main path"
-    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md:76"
-  - id: F007
+    summary: "Pruning defect is a known prerequisite for 129"
+    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md#Technical Scope (Excluded)"
+  - id: F006
     severity: note
-    category: documentation
-    summary: "Architecture edits listed in the design are incomplete"
-    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md:205-212, 544-559"
+    category: integration
+    summary: "Bare resolutions of pipeline steps are now rejected"
+    location: "project-documents/user/slices/127-slice.resolutions-and-resumption.md#D2 — Situations and the allowed decisions"
 ---
 
 # Review: slice — slice 127
@@ -73,89 +68,60 @@ findings:
 
 ## Findings
 
-### [PASS] Boundaries, routing authority and tick order match the architecture
+### [CONCERN] Plan-assigned gate-disagreement criterion is moved out of this slice
 
-- **Routing and vocabulary.** `ResolutionDecision`, `Situation`, `ALLOWED`, `Continuation` and `ResumeFailure` are each defined once.
-  - The accepted-CONCERNS case is handled by a new routing input and a table rule (D8), not a code branch. This honors "one edit point for routing".
-- **Resolution stage.** It runs after intents and before Observe, as the architecture's loop describes.
-- **Store access and inbox.** The store and inbox contract changes land first (D9), as "Respect the store's rules" requires.
-  - The inbox does not import Runner vocabulary (D1), consistent with 124 D3.
-- **Resume rules.**
-  - A paused run is never restarted. `rerun` is absent from the `paused_run` set.
-  - A missing run launches nothing.
-  - Exit 2 on a resume escalates the node and does not stop the process.
-  - `accept` is offered only when `is_loop` is true.
-- **Performance targets.** The tick-never-waits obligations are restated with concrete handling.
-  - The budget is checked before each `sq` call.
-  - The pre-poll runs under `tick_call_timeout_seconds`.
-  - Confirmation polls are paced by `run_poll_interval_seconds`.
-  - The resolution stage starts no subprocess.
+The slice plan entry for 127 asks that an accepted outcome CF's gate still fails be recorded on the node. D7 moves that criterion to entry 9 (128). The arch's "Resolution and resumption" section was edited to match, so the two documents agree. But the slice still defers scope the plan assigned to it, and the Runner has a gap until 128 lands.
 
-### [PASS] Failure modes are enumerated for the new I/O paths
+- **Reason given:** only 128 reads the CF gate (`activeSlice.status` and `gateInfo`).
+- **What 127 delivers:** an accept that can be identified later. It does not record the disagreement.
+- **The window:** between 127 and 128, an accept advances the step and dispatches the successor with nothing recorded. The first signal is a Squadron refusal at the successor's run.
+- **How it is bounded:** the document says 128 follows directly and lands before 129, and that the Runner is driven only on scratch copies until then. Plan entry 9 and issue #15 carry the criterion, and the plan Notes record the dated change (20261020).
+- **Why it is still a CONCERN:** the deferral rests on a plan edit and an issue, not on anything in this slice. Before approval, confirm that entry 9 lists the criterion as required before 128 merges and lists 127's identifiable accept as its input. The design must not rely on prose alone to keep this from being dropped.
 
-- **Pre-poll.** The design handles four cases:
-  - spent budget;
-  - `PollFailure`;
-  - `not_found`;
-  - run not at the recorded pause.
-- **Resume child.** The design handles five cases:
-  - exit 2;
-  - other exit;
-  - never claims;
-  - spawn error;
-  - restart with no tracked child.
-- **Crash points.** The design covers a crash between acknowledgment and journaling, and between journaling and launch.
-- **Store failure and unexpected exceptions.** Both reach 122's one catch.
-- **Poll failure during confirmation.** It is covered only by reference to 122's `run_observation_failed` and 126's time bound. That is adequate, but it could be one explicit sentence.
+### [CONCERN] Design is heavier than the plan entry, and its component list contradicts its own exclusions
 
-### [CONCERN] Gate-disagreement criterion is deferred out of this slice
+The plan sized this slice at effort 2. The design says 3/5. The growth comes from Squadron's resume behaviour, which is a legitimate cause, and the added mechanisms mostly trace to an arch requirement or a named risk. Two items can be cut or fixed:
 
-- **What moved.** The plan entry for this slice assigns a criterion: an accepted outcome that CF's gate still fails is recorded on the node.
-  - D7 moves it to 128 and edits the plan to match.
-  - The architecture's accept text ("recorded on the node and shown to the PM") now points at 128's gate read as well.
-- **The cost.** Until 128 lands, an accept advances the step and dispatches the successor with no disagreement recorded. The first signal is a Squadron refusal at the successor's run.
-  - The design bounds this with "128 lands before 129" and scratch-only driving.
-  - Dropping assigned scope is a CONCERN under the review criteria, however well argued.
-- **Why the rationale holds.** `cf status --json` reports the gate only for the active slice, so the comparison cannot be made reliably at accept time.
-  - The Project Manager should confirm the deferral. It should not stay a design-only edit.
-- **What to do.** Keep the deferral, but record it as a named, dated plan change with the Project Manager's acknowledgment. Add an explicit entry-9 criterion that 128 cannot merge without.
+- **Contradiction on `inspect resolutions`.**
+  - The Component Structure lists `amoeba/inspection/ CHANGED resolutions listing; blocked gains blocked_state_id`.
+  - Technical Scope excludes `amoeba inspect resolutions`, deferred to issue #16.
+  - Remove "resolutions listing" from the component list so the implementer does not build it.
+- **The `resume_skipped: run_not_at_pause` observation entry (D4 step 1).** It adds a third journal-entry flavor beyond resume and observe. It does address the named "resuming the wrong pause" risk, so I would keep it. The design should say the entry reuses the `observe` continuation path, so it needs no new planner state or confirmation rule. As written, D4 doesn't make that clear.
+- **Rejection codes.** There are eight (`UNKNOWN_DECISION`, `DECISION_REQUIRED`, `DECISION_NOT_APPLICABLE`, `NOT_AT_LOOP`, `CHECKPOINT_UNKNOWN`, `INTERACTIVE_CHECKPOINT`, `INSTRUCTIONS_NOT_APPLICABLE`, `UNRESOLVABLE`). Every one is tested and consumed by 160's whitelist, so I do not recommend cutting any of them.
+- **The "Plan and arch edits" list in Special Considerations.** It restates arch text that already contains those edits. Trim it to the plan edits that are still pending.
 
-### [CONCERN] The situation table is ambiguous for failed resumes
+### [PASS] Boundaries and dependency direction match the arch
 
-- **The conflict.** D2's `ended_run` row includes "a launch or resume failure", but D6 says a failed resume keeps `outcome: paused`.
-  - D2's `paused_run` row keys on the recorded outcome being `paused`. Every resume failure except `run_missing` is therefore `paused_run`, which is what D6 intends.
-  - Only `run_missing` yields `ended_run`.
-- **The risk.** `classify` is pure and will be table-tested row by row. The overlapping rows leave precedence undefined.
-  - A wrong reading would offer `rerun` on a paused run, which the architecture forbids.
-- **What to do.** Restrict the `ended_run` row to resume failures whose recorded outcome is not `paused`. Alternatively, state the test order, as the document already does for `unexpected_state` and `outcome_not_routed`.
+- **Inbox boundary:** the inbox validates only the shape of `decision` and `instructions`. The decision vocabulary stays in the Runner, so no Runner vocabulary is imported into the inbox.
+- **Store contract:** the store holds `runner_code` as text. 100's contracts change first (D9, following 125's D10), and the Runner codes against them.
+- **Table-only routing:** the Runner does not choose accepted-review routing in code. The slice adds the `review_accepted` input and one table rule (D8), which keeps the arch's "one edit point for routing" intact.
+- **Resolution answers:** these are the closed set the arch defines. Anything else is rejected explicitly.
+- **Stop:** the arch records that a stop is held as a block. This matches D3.
+- **Interactive checkpoint:** a retry there is refused. This matches D2 rule 6.
+- **Exit 2 on a resume:** the node is escalated rather than the process stopped. This matches the arch's Resume rule.
+- **Tick order:** resolutions are acknowledged after intents and before Observe. This matches the arch's "loop, per tick" text.
+- **Recovery:** a continuation with no run state is `Unknown` and never `NotApplied`, so a resume is never relaunched under the old id.
 
-### [CONCERN] The design is heavier than the slice needs
+### [PASS] Failure modes and the tick-budget NFR are explicit
 
-- **The weight.** The slice is nine decisions, seven new columns, three store methods, four contract documents and a six-file subpackage.
-  - It also edits 122, 125 and 126, and its effort estimate rose from 2 to 3.
-  - Most of it traces to a requirement. These items can be cut or deferred:
-    - **`runner_outcome_at`:** nothing in the design reads it.
-    - **`amoeba inspect resolutions`:** `blocked_state(id)` already serves submitters.
-      - The listing serves 128 and the 129 write-up, so defer it unless the plan entry assigns it.
-      - Keep the `blocked_state_id` column on `inspect blocked`, which the PM needs.
-    - **`unexpected_state` and `outcome_not_routed`:** both are reject-only situations with distinct codes but identical handling. One situation with a detail field would remove a row and a vocabulary member.
-- **What to do.** Cut or defer these three, or state which requirement each one serves.
+- **Pre-poll, in order:** budget spent, poll failure or timeout, `not_found`, run moved off the pause, and the `observe` case are each handled explicitly.
+- **Journaling:** nothing is written until the pre-poll has answered and the budget allows the launch.
+- **Resume failure:** D6 covers a child that exits 2, a child that exits with another code, a child that never claims (including after a restart), a spawn error, and a missing run. Each is decided on observed state and exit code, never on message text.
+- **Crash points:** two are covered, after acknowledgment and after journaling.
+- **Poisoned resolutions:** a bad resolution is contained as a rejection, not a project fault.
+- **NFR restatement:** the arch's tick-deadline and per-call-timeout obligations are restated as "Every `sq` call in the continuation path goes through `TickBudget`".
 
-### [NOTE] Known pruning defect sits on this slice's main path
+### [NOTE] Pruning defect is a known prerequisite for 129
 
-A paused run can be pruned while its resolution is pending (issue #14), because pruning holds runs by `sq.run_id` and the Runner never sets it. The design contains this by surfacing the pruned run as `run_missing`, which blocks the node and launches nothing. That matches the architecture's missing-resume rule. It should be fixed before real-project use.
+Pruning holds runs by node `sq.run_id`, which the Runner never sets. A paused run can therefore be pruned while its resolution is pending, and it then surfaces as `run_missing`. The design handles that safely (the node blocks and nothing is launched). It names issue #14 and gates it before 129. No change is needed, but the gate should appear in 129's plan entry too.
 
-### [NOTE] Architecture edits listed in the design are incomplete
+### [NOTE] Bare resolutions of pipeline steps are now rejected
 
-Two behaviors go beyond the architecture's text, and the "Plan and arch edits" list does not name them:
-- Rule 6 in D2 rejects `retry` at an interactive checkpoint, which the architecture's retry bullet does not exclude.
-- "Any other blocked pipeline step: rerun or stop" is not in the architecture's resolution section.
-
-Add both to the architecture edits so the document stays the source of truth.
+A resolution with no decision on a pipeline step used to just return the node to runnable. It is now rejected as `decision_required`. This follows the arch ("Anything else is rejected explicitly") and is justified in the design. It is a behavioral change for existing submitters, so `docs/inbox-contract.md` and the CHANGELOG should say so.
 
 ### Run Digest
 
-- Response length: 6987 chars
+- Response length: 6855 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -166,12 +132,12 @@ Add both to the architecture edits so the document stays the source of truth.
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 115096 / 11266 / 103826 / 8044 / not computed
-- Duration: 64.4 s
-- Cost: $0.50 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 115339 / 11266 / 104069 / 6702 / not computed
+- Duration: 55.0 s
+- Cost: $0.49 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
