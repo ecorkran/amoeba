@@ -109,9 +109,6 @@ The LLD makes three acts the PM's, by definition, not as approvals: choosing the
   - [ ] `test_lists_resolved_blocks_oldest_first`: three resolved blocks come back in `resolved_at` order.
   - [ ] `test_omits_open_blocks`.
   - [ ] `test_is_scoped_to_one_project`: a resolved block in another project is not returned.
-  - [ ] `test_node_filter_returns_only_that_node`.
-  - [ ] `test_unacknowledged_resolution_is_listed_with_null_runner_fields`.
-  - [ ] `test_reads_through_a_read_only_handle`.
 - [ ] `uv run pytest tests/store -q` passes.
 - [ ] Commit `feat: add resolved blocked-state store read`.
 
@@ -133,20 +130,18 @@ The LLD makes three acts the PM's, by definition, not as approvals: choosing the
 - [ ] Create `tests/inspection/test_resolutions.py`, using the helpers in `tests/inspection_harness.py` and the patterns in `tests/inspection/test_routing_decisions.py`. Name each test for the rule it proves:
   - [ ] One test per column source: the block fields, the resolution fields, the `runner_*` fields of an applied and of a rejected resolution, and `step` for a step node.
   - [ ] `reason` for a routed escalation, for a fault block (`fault_kind`), and null for a block with no escalation message.
-  - [ ] `accepted_verdict_ids` set for an applied accept of a completed run, and null for a `retry`, for a rejected accept and for a loop accept.
-  - [ ] An older accept on a step that was blocked again later still reads the run it accepted.
+  - [ ] `accepted_verdict_ids` set for an applied accept of a completed run, and null for a `retry`.
   - [ ] An unacknowledged resolution is listed, with null `runner_*` fields.
   - [ ] `--node` returns only that node's rows.
-  - [ ] `--json` and the table form both work through the CLI.
   - [ ] A store at another schema version exits with the `StoreSchemaError` code, as the other listings do (see `tests/test_read_only_open.py`).
 - [ ] `uv run pytest tests/inspection tests/test_cli_inspect.py -q` passes.
-- [ ] Commit `feat: add amoeba inspect resolutions listing (#16)`.
+- [ ] Commit `feat: add amoeba inspect resolutions listing`, with `Closes #16` in the body.
 
 ### Task 2.5: Contract text for the read and the listing
 **Effort:** 1/5. **Dependencies:** 2.4.
 
 - [ ] In `docs/store-contract.md`, under "Resolution answers", document `resolved_blocked_states`: what it returns, its order, its scope and its node filter. Say that it serves operators, not the Runner (LLD D6).
-- [ ] Where the other `inspect` listings are documented (find `routing-decisions` in `docs/`), add `resolutions`, its columns and the unacknowledged case. Link the store contract. Do not copy it.
+- [ ] Where the other `inspect` listings are documented (find `routing-decisions` in `docs/`), add `resolutions`, its columns and the unacknowledged case. State that its node flag is `--node`, the shared spelling, not the LLD's `--node-id`. Link the store contract. Do not copy it.
 - [ ] `uv run pytest tests/contract -q` passes.
 - [ ] Commit `docs: document resolved-blocks read and inspect resolutions`.
 
@@ -173,9 +168,10 @@ Worked with the PM present (see "Roles in the proof"). Every `<…>` value comes
   - [ ] The intent is acknowledged `applied` (`inspect desired-states`).
   - [ ] Within a tick or two, `inspect journal` shows a `cf_write` and then an `sq_run` for `P4`.
 - [ ] Do not edit `default.yaml` or restart with `--routing-table` from here until Section 5 (D2).
+- [ ] Commit `review: record first-proof setup and drive`.
 
-### Task 3.3: Answer each stop as it comes
-**Effort:** 3/5. **Dependencies:** 3.2. Repeats until the `merge` step blocks as a human step.
+### Task 3.3: Answer each stop up to `P6`'s launch
+**Effort:** 3/5. **Dependencies:** 3.2. Repeats until `P6`'s `sq_run` is confirmed in `inspect journal`. Task 3.4 later reuses this procedure.
 
 - [ ] Poll `inspect blocked --project <P>`. For each new block:
   - [ ] Read its escalation (`inspect messages`) and its decision (`inspect routing-decisions --node <node>`). For a fault, read its `fault_kind`.
@@ -186,9 +182,10 @@ Worked with the PM present (see "Roles in the proof"). Every `<…>` value comes
   - [ ] Add a draft row to the write-up's Stops section, using D5's fields. Leave the classification blank.
 - [ ] If the PM acts by hand at a step the table sent them to, such as launching a run, log the action with its block id.
 - [ ] Repeated stops of the same kind are answered the same way each time and recorded each time. Do not edit the table (D2).
+- [ ] Commit `review: record first-proof stops through P6 launch`.
 
 ### Task 3.4: Crash the resident process with `P6` in flight
-**Effort:** 2/5. **Dependencies:** `P6`'s `sq_run` is confirmed in `inspect journal` (inside Task 3.3).
+**Effort:** 2/5. **Dependencies:** 3.3.
 
 - [ ] As soon as `P6`'s launch is confirmed, `kill -9` the resident process, then run `amoeba start` again (walkthrough step 5). Log both, with the time.
 - [ ] Check D3's pass conditions and record each one in the write-up with its evidence:
@@ -196,9 +193,11 @@ Worked with the PM present (see "Roles in the proof"). Every `<…>` value comes
   - [ ] After the restart, the entry stays unresolved until the run finishes, and then resolves `completed`, or whatever the run's real outcome is.
   - [ ] The step has exactly one `sq_run` entry for that attempt (`inspect journal --json`).
 - [ ] If `P6` finished before the kill, it is a miss, not a pass. Repeat at the unit's next in-flight run. If no run remains in flight, the crash criterion is unmet. Write `BLOCKED:` here, and the PM names a second unit per D1, which is driven through Tasks 3.1–3.4 in the same supervisor directory.
+- [ ] Answer the remaining stops by Task 3.3's procedure until the `merge` step blocks as a human step.
+- [ ] Commit `review: record first-proof crash and remaining stops`.
 
 ### Task 3.5: Observe the human merge
-**Effort:** 1/5. **Dependencies:** 3.3 (the `merge` step is blocked as a human step). The merge itself is the PM's act at that human step in `<target-checkout>`, under that project's rules. It is not a task. The agent logs it when the PM reports it.
+**Effort:** 1/5. **Dependencies:** 3.4 (the `merge` step is blocked as a human step). The merge itself is the PM's act at that human step in `<target-checkout>`, under that project's rules. It is not a task. The agent logs it when the PM reports it.
 
 - [ ] Confirm that `P6` ran with `merge=false` (the `P6` entry's `merge_policy` and parameters), and that the `merge` step is blocked as a human step.
 - [ ] Confirm the observation. The `merge` step goes `done`, and so does the slice node (`inspect nodes`). If it does not, apply D9.
@@ -277,7 +276,7 @@ If Task 4.1 has no `wrong` row whose proposal is a table edit, write "No table e
 ## Section 6: Operator guide and close-out (D8)
 
 ### Task 6.1: Write the operator guide
-**Effort:** 3/5. **Dependencies:** 3.6.
+**Effort:** 3/5. **Dependencies:** 2.5 (`inspect resolutions`), 4.1 (the stops used as examples), 5.3 or the "no table edit" line (the table section).
 
 - [ ] Create `docs/runner-guide.md` in D8's order: setup; settings; driving with intents; reading stops; answering with resolutions; the routing table; merge policy; crashes and restarts; pruning.
   - [ ] Take each setting, flag and default from `src/amoeba/` settings (`settings.py`, `cli/settings_flags.py`) and `--help`, not from the slice designs.
@@ -308,11 +307,10 @@ If Task 4.1 has no `wrong` row whose proposal is a table edit, write "No table e
 - [ ] In `user/architecture/120-slices.runner-routing-engine.md`, add each follow-on proposal from the write-up to 130's or 131's entry, or as a new Future Work entry. Link the write-up row. Update Future Work 2 and 10 with the answers from Task 4.2.
 - [ ] Commit `docs: add first-proof proposals to the 120 slice plan`.
 
-### Task 6.5: Update issues #12, #13 and #16
-**Effort:** 1/5. **Dependencies:** 4.2, 2.5.
+### Task 6.5: Update issues #12 and #13
+**Effort:** 1/5. **Dependencies:** 4.2.
 
 - [ ] #12 and #13: comment with the write-up's answer, linking it. Close an issue the write-up finds not needed, or re-scope it.
-- [ ] #16: comment that `inspect resolutions` is on `129-slice.first-proof`. Leave it open until the merge.
 - [ ] Each code-issue proposal from Task 4.1 has a filed issue, and the write-up row links it.
 
 ### Task 6.6: CHANGELOG
