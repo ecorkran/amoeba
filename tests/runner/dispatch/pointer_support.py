@@ -111,9 +111,12 @@ class CfWorld:
         }
 
         def call(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            # A caller's own env (git runs with prompts off) is kept; the world's
+            # stub PATH and knobs win.
+            merged = {**kwargs.pop("env", {}), **env}
             return cast(
                 "subprocess.CompletedProcess[str]",
-                subprocess.run(argv, env=env, **kwargs),  # pyright: ignore[reportUnknownMemberType]
+                subprocess.run(argv, env=merged, **kwargs),  # pyright: ignore[reportUnknownMemberType]
             )
 
         return call

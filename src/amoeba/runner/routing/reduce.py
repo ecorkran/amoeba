@@ -7,16 +7,20 @@ rule below is one small helper, so each row of D1 has one place to read.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from amoeba.process import (
     RunCheckpoint,
     RunFailure,
+    RunOutcome,
     UnknownKind,
     parse_checkpoint_kind,
     parse_failure_kind,
 )
+from amoeba.runner.gates.cf_status import EXIT_GATE
+from amoeba.runner.gates.outcome_record import gate_state_at_exit
+from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.runner.routing.inputs import (
     CLEAR,
@@ -30,6 +34,7 @@ from amoeba.runner.routing.inputs import (
     OUTCOME_RESUME_FAILED,
     RECURRING,
     SEVERITY_LOW_TO_HIGH,
+    STANDING_WORST_FIRST,
     TRUE,
     UNKNOWN,
     VALUE_SETS,
@@ -39,6 +44,7 @@ from amoeba.runner.routing.inputs import (
 )
 from amoeba.store import (
     BLOCKED_STATUSES,
+    CheckStanding,
     FindingChange,
     FindingSeverity,
     NodeStatus,
@@ -94,6 +100,12 @@ class OutcomeEvidence:
     review_fault: bool
     review_unreadable: bool
     parts: tuple[ReviewPart, ...]
+    #: The stored ``outcome_observation.gate`` (slice 128), ``None`` when the entry
+    #: carries no observation: it was ingested before the gates existed.
+    gate_record: Mapping[str, object] | None
+    #: The standing of each check the entry names, ``None`` for an id the store does
+    #: not hold; the whole field is ``None`` when the entry names no checks.
+    check_standings: tuple[CheckStanding | None, ...] | None
 
 
 def reduce(evidence: OutcomeEvidence) -> RoutingInputs:
@@ -107,6 +119,8 @@ def reduce(evidence: OutcomeEvidence) -> RoutingInputs:
         RoutingInput.STEP: step,
         RoutingInput.NODE_STATE: _node_state(evidence.node_status),
         RoutingInput.REVIEW_ACCEPTED: _review_accepted(evidence),
+        RoutingInput.GATE_STATE: _gate_state(evidence, step),
+        RoutingInput.CHECK_STANDING: _check_standing(evidence),
         **_review_inputs(evidence),
     }
     return RoutingInputs(values, _attempt(evidence, step))
@@ -120,6 +134,30 @@ def _outcome(evidence: OutcomeEvidence) -> str:
     if evidence.outcome is None:
         return UNKNOWN
     return _in_set(RoutingInput.OUTCOME, evidence.outcome)
+
+
+def _completed(evidence: OutcomeEvidence) -> bool:
+    return _outcome(evidence) == RunOutcome.COMPLETED.value
+
+
+def _gate_state(evidence: OutcomeEvidence, step: str) -> str:
+    """CF's gate against the step's exit gate; ``none`` unless the run completed."""
+    if not _completed(evidence):
+        return NONE
+    if step == UNKNOWN or LifecycleStep(step) not in EXIT_GATE:
+        return UNKNOWN
+    return gate_state_at_exit(LifecycleStep(step), evidence.gate_record)
+
+
+def _check_standing(evidence: OutcomeEvidence) -> str:
+    """The worst check standing; ``unknown`` if a check is missing or unreported."""
+    if not _completed(evidence):
+        return NONE
+    standings = evidence.check_standings
+    if not standings or any(standing is None for standing in standings):
+        return UNKNOWN
+    present = {standing for standing in standings if standing is not None}
+    return next(s for s in STANDING_WORST_FIRST if s in present).value
 
 
 def _review_accepted(evidence: OutcomeEvidence) -> str:

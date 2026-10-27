@@ -33,6 +33,7 @@ from amoeba.store import (
     JournalOutcome,
     NodeKind,
 )
+from runner.gate_rig import failed_reads
 
 RUN_ID = "amoeba-20261024T101500Z-0123456789ab"
 VERSION_LABEL = "sq-test-label"
@@ -147,4 +148,4 @@ def _ingest(
             **extra,
         }
     )
-    record(rig.store, entry, RunEnded(document), VERSION_LABEL)
+    record(rig.store, entry, RunEnded(document), VERSION_LABEL, failed_reads(entry))

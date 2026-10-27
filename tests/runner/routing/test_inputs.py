@@ -24,6 +24,8 @@ KNOWN_VALUES = {
     RoutingInput.STEP: "slice_design",
     RoutingInput.NODE_STATE: "runnable",
     RoutingInput.REVIEW_ACCEPTED: NONE,
+    RoutingInput.GATE_STATE: "clear",
+    RoutingInput.CHECK_STANDING: "passed",
 }
 
 

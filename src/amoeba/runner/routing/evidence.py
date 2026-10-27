@@ -8,14 +8,17 @@ back here.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import cast
 
 from amoeba.process import RunOutcomeDocument
 from amoeba.runner.finish import RESULT_LAUNCH_FAILURE, RESULT_RESUME_FAILURE
+from amoeba.runner.gates.outcome_record import OBS_GATE
 from amoeba.runner.ingest.record import (
+    RESULT_CHECK_IDS,
     RESULT_OUTCOME,
     RESULT_OUTCOME_DOCUMENT,
+    RESULT_OUTCOME_OBSERVATION,
     RESULT_REVIEW_FAULT,
     RESULT_VERDICT_IDS,
 )
@@ -25,6 +28,7 @@ from amoeba.runner.routing.reduce import OutcomeEvidence, ReviewPart
 from amoeba.store import (
     PARAM_CONTINUATION,
     PARAM_CONTINUES,
+    CheckStanding,
     FindingSeverity,
     JournalEntry,
     Store,
@@ -66,7 +70,33 @@ def gather(store: Store, entry: JournalEntry) -> OutcomeEvidence:
         review_fault=result.get(RESULT_REVIEW_FAULT) is not None,
         review_unreadable=parts is None,
         parts=parts or (),
+        gate_record=_gate_record(result.get(RESULT_OUTCOME_OBSERVATION)),
+        check_standings=_check_standings(store, result.get(RESULT_CHECK_IDS)),
     )
+
+
+def _gate_record(observation: object) -> Mapping[str, object] | None:
+    """The stored gate record, or ``None`` for an entry with no observation."""
+    if not isinstance(observation, dict):
+        return None
+    gate = cast("dict[str, object]", observation).get(OBS_GATE)
+    return cast("dict[str, object]", gate) if isinstance(gate, dict) else None
+
+
+def _check_standings(
+    store: Store, raw: object
+) -> tuple[CheckStanding | None, ...] | None:
+    """Each named check's standing, ``None`` for an id the store does not hold."""
+    if not isinstance(raw, list):
+        return None
+    ids = cast("list[object]", raw)
+    if not ids or not all(isinstance(item, str) for item in ids):
+        return None
+    standings: list[CheckStanding | None] = []
+    for check_id in ids:
+        record = store.check(str(check_id))
+        standings.append(None if record is None else record.standing)
+    return tuple(standings)
 
 
 def _continued_verdict_ids(store: Store, entry: JournalEntry) -> tuple[str, ...] | None:

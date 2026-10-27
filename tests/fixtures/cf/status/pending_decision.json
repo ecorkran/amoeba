@@ -1,0 +1,18 @@
+{
+  "project": "scratch",
+  "phase": "Phase 0: Concept",
+  "activeSlice": {
+    "name": "alpha",
+    "index": 900,
+    "status": "pending-decision",
+    "pendingDecisions": [
+      {
+        "heading": "Decision",
+        "line": 12
+      }
+    ]
+  },
+  "slicePlan": null,
+  "summary": "scratch — Phase 0: Concept — slice 900 pending-decision",
+  "resolutionSource": "cwd"
+}

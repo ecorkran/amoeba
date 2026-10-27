@@ -68,9 +68,23 @@ def test_an_unknown_input_is_refused() -> None:
     assert _mentions(_problems(table_text(rule)), "r", "mood")
 
 
-def test_gate_state_is_refused_before_slice_128() -> None:
+def test_a_table_may_name_gate_state_and_check_standing() -> None:
+    rule = _escalate("{gate_state: [clear, misplaced], check_standing: passed}")
+    table = parse_table(table_text(rule))
+    assert table.rules[0].when[RoutingInput.GATE_STATE] == frozenset(
+        {"clear", "misplaced"}
+    )
+    assert table.rules[0].when[RoutingInput.CHECK_STANDING] == frozenset({"passed"})
+
+
+def test_a_gate_state_outside_the_vocabulary_is_refused() -> None:
     rule = _escalate("{gate_state: open}")
-    assert _mentions(_problems(table_text(rule)), "gate_state", "not a routing input")
+    assert _mentions(_problems(table_text(rule)), "gate_state", "open")
+
+
+def test_a_check_standing_outside_the_vocabulary_is_refused() -> None:
+    rule = _escalate("{check_standing: fine}")
+    assert _mentions(_problems(table_text(rule)), "check_standing", "fine")
 
 
 def test_an_unknown_value_is_refused() -> None:

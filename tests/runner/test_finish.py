@@ -32,6 +32,7 @@ from amoeba.store import (
     NodeStatus,
     Store,
 )
+from runner.gate_rig import failed_reads
 from runner.observe_support import document
 
 PROJECT = "demo"
@@ -40,7 +41,7 @@ VERSION_LABEL = "sq-test-label"
 
 
 def record(store: Store, entry: JournalEntry, finished: Finished) -> None:
-    finish_record(store, entry, finished, VERSION_LABEL)
+    finish_record(store, entry, finished, VERSION_LABEL, failed_reads(entry))
 
 
 @pytest.fixture

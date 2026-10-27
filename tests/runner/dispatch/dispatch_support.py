@@ -11,10 +11,12 @@ from amoeba.runner.decide import ProjectView
 from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
 from amoeba.runner.dispatch.facts import SortKey, StepDispatchFacts
 from amoeba.runner.dispatch.state import DispatchState
+from amoeba.runner.gates.predispatch import DispatchCheck, Ok
 from amoeba.runner.ingest.record import RESULT_OUTCOME
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.lifecycle.steps import LifecycleStep, step_rank
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -35,6 +37,16 @@ FIRST = Path("/work/amoeba")
 SECOND = Path("/work/amoeba-2")
 
 _ENTRY_IDS = count(1)
+
+#: What a passed pre-dispatch check says, as the planners record it on a launch.
+OK_EVIDENCE: Mapping[str, object] = {
+    "branch": "main",
+    "head": "abc123",
+    "target": "main",
+    "gate_status": None,
+    "gate_review_type": None,
+}
+OK = Ok(OK_EVIDENCE)
 
 
 def node(node_id: str) -> Node:
@@ -113,10 +125,14 @@ def view_of(
     held: Iterable[Path] = (),
     current: Iterable[str] | None = None,
     holders: Mapping[Path, frozenset[str]] | None = None,
+    merge_policy: MergePolicy = PROJECT_DEFAULTS.merge_policy,
+    checks: Mapping[str, DispatchCheck] | None = None,
 ) -> ProjectView:
     """A view whose current steps are ``current`` (default: all of ``steps``).
 
     ``held`` checkouts are held by an unnamed node; ``holders`` names who holds each.
+    ``checks`` are the pre-dispatch results; by default every current step has passed
+    (``OK``), so a planner test sees a launch unless it says otherwise.
     """
     names = list(steps) if current is None else list(current)
     named = {path: frozenset({"unnamed-holder"}) for path in held}
@@ -126,4 +142,6 @@ def view_of(
         current_steps=tuple(node(name) for name in names),
         dispatch=steps,
         checkout_holders=named,
+        merge_policy=merge_policy,
+        dispatch_checks={name: OK for name in names} if checks is None else checks,
     )

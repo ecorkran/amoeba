@@ -99,6 +99,9 @@ class ProcessSettings:
             snapshot triggers an earlier read.
         routing_table_path: The routing table file, loaded and validated once at
             start-up. Defaults to the table shipped in the package.
+        project_config_path: The per-project config file (the merge policy),
+            loaded and validated once at start-up. ``None`` gives every project
+            the defaults in ``runner/project_config.py``.
     """
 
     idle_interval_seconds: float = 1.0
@@ -119,3 +122,4 @@ class ProcessSettings:
     run_poll_interval_seconds: float = 15.0
     plan_read_interval_seconds: float = 30.0
     routing_table_path: Path = DEFAULT_ROUTING_TABLE_PATH
+    project_config_path: Path | None = None

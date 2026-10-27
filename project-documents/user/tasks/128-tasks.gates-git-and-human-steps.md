@@ -11,15 +11,16 @@ dependencies:
 - 125
 - 126
 - 127
-projectState: Slices 120–127 are merged. The tick (`runner/tick.py`, 279 lines) runs
-  intents, resolutions, Observe, record, the pointer stage, the view, routing, decide
-  and act. `DispatchPlanner` launches every `POINTED` or `REISSUE` step it picks,
-  and `ContinuationPlanner` every `RESUME`, with no check of the checkout. `dispatch_params`
-  always passes `merge=false` to `P6`. `HumanStepPlanner` blocks every current human
-  step. The Runner never runs `git`. `amoeba.runner.gates` does not exist.
+projectState: Slice 128 is implemented on its branch and not yet reviewed or merged.
+  The tick (`runner/tick.py`, 297 lines) now observes the outcome of a completed run
+  (CF's gate, the design, git), records the two ungate hatches as checks, observes
+  merges in git, and checks every launch, reissue and resume before dispatch; routing
+  reads `gate_state` and `check_standing`. `amoeba.runner.gates` holds the pure rules
+  and the reads, `git_read.py` is the only place `git` runs, and the per-project merge
+  policy comes from `--project-config`.
 dateCreated: 20261026
 dateUpdated: 20261026
-status: not_started
+status: complete
 turns: 51
 promptTokens: 4746462
 cachedTokens: 4581749
@@ -79,15 +80,17 @@ revision_number: 2
 ### Task 1.1: Create the branch and confirm the design's edits
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
-- [ ] Confirm the edits the LLD lists under "Special Considerations" are present: plan entry 9 and Future Work 13 in `user/architecture/120-slices.runner-routing-engine.md`, and the three arch sections in `120-arch.runner-routing-engine.md`. Make any missing edit per the LLD and commit it to the target as `docs:`
-- [ ] Fold the interface changes from "Task-level additions" into the LLD, so the code review compares against one design: in "API Contracts", the `launch_candidates(current, facts, holders)` signature, `LaunchRun.journal_extra`, `ResumeRun.journal_extra`, `BlockHumanStep.payload_extra`, `ProjectView.merge_policy` and the public `complete_step`; in "Component Structure", the modules `gates/checks.py`, `gates/stage.py`, `gates/dispatch_reads.py` and `gates/accepted.py`, and the homes of `EXIT_GATE`, `ENTRY_GATE` and `DEFAULT_TARGET_BRANCH`. Also drop `list slices` from the stub's new modes (the stub already answers it). Commit it to the target as `docs:`
-- [ ] Confirm issues #15, #17 and #18 exist (`gh issue view <n>`). If #17 or #18 is missing, file it with the text the LLD gives (D7, D6) and note its number under this task
-- [ ] Create `128-slice.gates-git-and-human-steps` from the target and switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. Record the pass count under this task. If any fails, write `BLOCKED:` with the failure and stop
-- [ ] Create `src/amoeba/runner/gates/__init__.py` (docstring only) and `tests/runner/gates/__init__.py`
-- [ ] **Success:** on the slice branch, the suite is green and both packages exist. Commit `chore: add the gates package skeleton`
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
+- [x] Confirm the edits the LLD lists under "Special Considerations" are present: plan entry 9 and Future Work 13 in `user/architecture/120-slices.runner-routing-engine.md`, and the three arch sections in `120-arch.runner-routing-engine.md`. Make any missing edit per the LLD and commit it to the target as `docs:`
+- [x] Fold the interface changes from "Task-level additions" into the LLD, so the code review compares against one design: in "API Contracts", the `launch_candidates(current, facts, holders)` signature, `LaunchRun.journal_extra`, `ResumeRun.journal_extra`, `BlockHumanStep.payload_extra`, `ProjectView.merge_policy` and the public `complete_step`; in "Component Structure", the modules `gates/checks.py`, `gates/stage.py`, `gates/dispatch_reads.py` and `gates/accepted.py`, and the homes of `EXIT_GATE`, `ENTRY_GATE` and `DEFAULT_TARGET_BRANCH`. Also drop `list slices` from the stub's new modes (the stub already answers it). Commit it to the target as `docs:`
+- [x] Confirm issues #15, #17 and #18 exist (`gh issue view <n>`). If #17 or #18 is missing, file it with the text the LLD gives (D7, D6) and note its number under this task
+- [x] Create `128-slice.gates-git-and-human-steps` from the target and switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. Record the pass count under this task. If any fails, write `BLOCKED:` with the failure and stop
+- [x] Create `src/amoeba/runner/gates/__init__.py` (docstring only) and `tests/runner/gates/__init__.py`
+- [x] **Success:** on the slice branch, the suite is green and both packages exist. Commit `chore: add the gates package skeleton`
+
+Baseline: 3951 passed; ruff check, ruff format --check and pyright clean. Issues #15, #17, #18 exist.
 
 ---
 
@@ -96,17 +99,19 @@ revision_number: 2
 ### Task 2.1: Capture real `git status` output
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Add `tests/fixtures/git/` with a README naming the git version and date. In throwaway repositories under a temporary directory, capture `git --no-optional-locks status --porcelain=v2 --branch --untracked-files=normal` for: clean on `main`; a modified file; an untracked file; a staged file; a renamed file; an unmerged file (a real conflicting merge); a detached HEAD; a path with a space. One file per case
-- [ ] Add `tests/runner/git_repo.py`: helpers that create a temporary repository on a named branch with one commit, make a branch, commit, combine one test branch into another inside the temporary repository, delete a branch, and detach HEAD, all with real `git` (identity set by `-c` flags, not global config)
-- [ ] **Success:** fixtures exist and are byte-for-byte git's output. Commit `test: capture git status fixtures and a git repository helper`
+- [x] Add `tests/fixtures/git/` with a README naming the git version and date. In throwaway repositories under a temporary directory, capture `git --no-optional-locks status --porcelain=v2 --branch --untracked-files=normal` for: clean on `main`; a modified file; an untracked file; a staged file; a renamed file; an unmerged file (a real conflicting merge); a detached HEAD; a path with a space. One file per case
+- [x] Add `tests/runner/git_repo.py`: helpers that create a temporary repository on a named branch with one commit, make a branch, commit, combine one test branch into another inside the temporary repository, delete a branch, and detach HEAD, all with real `git` (identity set by `-c` flags, not global config)
+- [x] **Success:** fixtures exist and are byte-for-byte git's output. Commit `test: capture git status fixtures and a git repository helper`
 
 ### Task 2.2: Implement `git_read` and the porcelain parser
 **Owner**: Junior AI | **Dependencies**: 2.1 | **Effort**: 3
 
-- [ ] Create `runner/git_read.py` per D10: `GIT_SUBCOMMANDS`, the two argument builders (`status_args()`, `is_ancestor_args(head, target)`), `git_read(args, cwd, budget, run, timeout_seconds) -> GitReadResult | GitReadFailure | None` (`None` when the budget refuses the call), stdin `/dev/null`, `GIT_TERMINAL_PROMPT=0` in the environment, a subcommand outside the allowlist raises `ValueError`
-- [ ] `parse_porcelain_v2(text) -> GitStatus(branch: str | None, head: str | None, dirty: tuple[str, ...])`: `(detached)` gives `branch` `None`; unknown header lines are ignored; the path is the line's last field (for a rename, the new path)
-- [ ] `tests/runner/test_git_read.py`: the parser on every captured fixture; the allowlist refuses `commit`, `checkout` and `push`; `git_read` against a real repository for `status_args()` and for `is_ancestor_args(...)` exit 0 and 1; a timeout and a missing executable are `GitReadFailure`; a spent budget starts nothing
-- [ ] **Success:** tests pass. Commit `feat: read git through one allowlisted function`
+- [x] Create `runner/git_read.py` per D10: `GIT_SUBCOMMANDS`, the two argument builders (`status_args()`, `is_ancestor_args(head, target)`), `git_read(args, cwd, budget, run, timeout_seconds) -> GitReadResult | GitReadFailure | None` (`None` when the budget refuses the call), stdin `/dev/null`, `GIT_TERMINAL_PROMPT=0` in the environment, a subcommand outside the allowlist raises `ValueError`
+- [x] `parse_porcelain_v2(text) -> GitStatus(branch: str | None, head: str | None, dirty: tuple[str, ...])`: `(detached)` gives `branch` `None`; unknown header lines are ignored; the path is read by entry kind (for a rename, the new path)
+- [x] `tests/runner/test_git_read.py`: the parser on every captured fixture; the allowlist refuses `commit`, `checkout` and `push`; `git_read` against a real repository for `status_args()` and for `is_ancestor_args(...)` exit 0 and 1; a timeout and a missing executable are `GitReadFailure`; a spent budget starts nothing
+- [x] **Success:** tests pass. Commit `feat: read git through one allowlisted function`
+
+Note: porcelain v2 rename lines (type 2) are `<new path>TAB<old path>`, so the parser reads the path by entry kind (splitting on the field count, then on the TAB for renames) instead of taking the last field; this keeps paths with spaces and gives the new path for renames.
 
 ---
 
@@ -115,25 +120,29 @@ revision_number: 2
 ### Task 3.1: Implement `ProjectConfig` and its loader
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Create `runner/project_config.py` per D8: `MergePolicy`, `PROJECT_DEFAULTS`, the pydantic models (`extra="forbid"`, values trimmed and lower-cased), `ProjectConfig.for_project(project_id)` returning the entry merged over the defaults, and `load_project_config(path: Path | None) -> ProjectConfig`. `None` gives defaults. A missing or unreadable file, bad YAML, an unknown key or value raises `StartupFailedError` listing every problem
-- [ ] `tests/runner/test_project_config.py`: no path; a named project; an unnamed project; an omitted key; `" Auto "` normalised; each failure, with two problems in one file both named
-- [ ] **Success:** tests pass. Commit with Task 3.2
+- [x] Create `runner/project_config.py` per D8: `MergePolicy`, `PROJECT_DEFAULTS`, the pydantic models (`extra="forbid"`, values trimmed and lower-cased), `ProjectConfig.for_project(project_id)` returning the entry merged over the defaults, and `load_project_config(path: Path | None) -> ProjectConfig`. `None` gives defaults. A missing or unreadable file, bad YAML, an unknown key or value raises `StartupFailedError` listing every problem
+- [x] `tests/runner/test_project_config.py`: no path; a named project; an unnamed project; an omitted key; `" Auto "` normalised; each failure, with two problems in one file both named
+- [x] **Success:** tests pass. Commit with Task 3.2
 
 ### Task 3.2: Add the setting and flag, and load the config at start
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 2
 
-- [ ] `process/settings.py`: `project_config_path: Path | None = None`, documented beside `routing_table_path`. `cli/settings_flags.py`: `--project-config PATH`
-- [ ] `runner/factory.py`: `runner_tenant()` loads the config once, after the routing table; with no path, logs at INFO naming the defaults. Pass it through `RunnerTenant` to each `ProjectTick`
-- [ ] Tests: `tests/test_settings_flags.py` for the flag; `tests/runner/test_factory.py`: an invalid file raises `StartupFailedError`; `amoeba start --project-config` with `merge_policy: sometimes` exits `STARTUP_FAILED` naming `merge_policy` and `sometimes` (CLI test)
-- [ ] **Success:** tests pass. Commit `feat: load a per-project config holding the merge policy`
+- [x] `process/settings.py`: `project_config_path: Path | None = None`, documented beside `routing_table_path`. `cli/settings_flags.py`: `--project-config PATH`
+- [x] `runner/factory.py`: `runner_tenant()` loads the config once, after the routing table; with no path, logs at INFO naming the defaults. Pass it through `RunnerTenant` to each `ProjectTick`
+- [x] Tests: `tests/test_settings_flags.py` for the flag; `tests/runner/test_factory.py`: an invalid file raises `StartupFailedError`; `amoeba start --project-config` with `merge_policy: sometimes` exits `STARTUP_FAILED` naming `merge_policy` and `sometimes` (CLI test)
+- [x] **Success:** tests pass. Commit `feat: load a per-project config holding the merge policy`
+
+Note: RunnerTenant takes a required `project_config: ProjectConfig` keyword (no default); the four test constructions pass `ProjectConfig()`. `load_projects(settings)` in factory.py loads and logs it.
 
 ### Task 3.3: Pass the merge policy into `dispatch_params`
 **Owner**: Junior AI | **Dependencies**: 3.2 | **Effort**: 2
 
-- [ ] `runner/dispatch/params.py`: `dispatch_params(step, slice_index, merge_policy)`; `human` gives `merge=false` for `P6`, `auto` no `merge` key. Add `PARAM_MERGE_POLICY`, `PARAM_TARGET`, `PARAM_DISPATCH_CHECK` (Task-level additions). Update the module docstring
-- [ ] `ProjectView.merge_policy` and `LaunchRun.journal_extra` (Task-level additions); `DispatchPlanner` passes the view's policy and, for `P6`, puts `merge_policy` in `journal_extra`; the act stage writes `journal_extra` into the entry's parameters. `ProjectTick` passes its project's policy into the view
-- [ ] Tests: `tests/runner/dispatch/`: both policies' params; a `P6` entry records `merge_policy: human` with no config and `auto` when configured; a reissue keeps its old entry's `merge_policy`; 125's import test still passes. `target` and `dispatch_check` are not written yet: they come from the pre-dispatch read and arrive in Task 7.5 (tested in 7.6), so these tests do not cover them
-- [ ] **Success:** tests pass. Commit `feat: launch P6 under the project's merge policy`
+- [x] `runner/dispatch/params.py`: `dispatch_params(step, slice_index, merge_policy)`; `human` gives `merge=false` for `P6`, `auto` no `merge` key. Add `PARAM_MERGE_POLICY`, `PARAM_TARGET`, `PARAM_DISPATCH_CHECK` (Task-level additions). Update the module docstring
+- [x] `ProjectView.merge_policy` and `LaunchRun.journal_extra` (Task-level additions); `DispatchPlanner` passes the view's policy and, for `P6`, puts `merge_policy` in `journal_extra`; the act stage writes `journal_extra` into the entry's parameters. `ProjectTick` passes its project's policy into the view
+- [x] Tests: `tests/runner/dispatch/`: both policies' params; a `P6` entry records `merge_policy: human` with no config and `auto` when configured; a reissue keeps its old entry's `merge_policy`; 125's import test still passes. `target` and `dispatch_check` are not written yet: they come from the pre-dispatch read and arrive in Task 7.5 (tested in 7.6), so these tests do not cover them
+- [x] **Success:** tests pass. Commit `feat: launch P6 under the project's merge policy`
+
+Note: ProjectTick takes a required `project_settings: ProjectSettings` (the tenant passes `project_config.for_project(project_id)`); the test Rig holds `project_settings` (defaults) so tick-level tests can set a policy. A reissue copies `merge_policy` from its old entry into `journal_extra`.
 
 ---
 
@@ -142,33 +151,39 @@ revision_number: 2
 ### Task 4.1: Capture CF status and config output
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
-- [ ] In a scratch CF project under a temporary directory (never this repository's CF project), with `workflow.review_enabled` and `workflow.decision_gate_enabled` set to `true`, capture `cf status --json -p <id>` for each `activeSlice.status` in the LLD's D1 table: `needs-design`, `needs-tasks`, `in-implementation`, `complete`, `no-active-slice`, `pending-decision`, and `pending-review` and `review-failed` at each of the `slice`, `tasks` and `code` gates. Reach each state by CF's position rules (LLD "Interfaces Required"; CF source `reviewGate.ts`). Also capture one with `gateExempt` (`review: none`), one from a worktree with `--worktree`, and `cf config get <key> --json` for both keys, empty and set
-- [ ] Save under `tests/fixtures/cf/status/` and `tests/fixtures/cf/config/`, one file per case, with a README naming the CF version, date and how each state was reached. Remove the scratch CF project afterwards
-- [ ] If a state cannot be reached, write `BLOCKED:` naming it and the attempt; only Task 4.3's row for that state waits
-- [ ] **Success:** a fixture exists for every D1 row and both config keys. Commit `test: capture CF status and config fixtures`
+- [x] In a scratch CF project under a temporary directory (never this repository's CF project), with `workflow.review_enabled` and `workflow.decision_gate_enabled` set to `true`, capture `cf status --json -p <id>` for each `activeSlice.status` in the LLD's D1 table: `needs-design`, `needs-tasks`, `in-implementation`, `complete`, `no-active-slice`, `pending-decision`, and `pending-review` and `review-failed` at each of the `slice`, `tasks` and `code` gates. Reach each state by CF's position rules (LLD "Interfaces Required"; CF source `reviewGate.ts`). Also capture one with `gateExempt` (`review: none`), one from a worktree with `--worktree`, and `cf config get <key> --json` for both keys, empty and set
+- [x] Save under `tests/fixtures/cf/status/` and `tests/fixtures/cf/config/`, one file per case, with a README naming the CF version, date and how each state was reached. Remove the scratch CF project afterwards
+- [x] If a state cannot be reached, write `BLOCKED:` naming it and the attempt; only Task 4.3's row for that state waits
+- [x] **Success:** a fixture exists for every D1 row and both config keys. Commit `test: capture CF status and config fixtures`
+
+Note: `cf status --json --worktree` accepts the worktree id (`wt_...`) as well as its name. Fixtures are in tests/fixtures/cf/status/ (15 files) and tests/fixtures/cf/config/ (4 files); the README names how each state was reached. CF 0.19.19.
 
 ### Task 4.2: Add the CF command words and the gate and config reads
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `runner/lifecycle/plan_read.py`: the additions under Task-level additions; update `COMMAND_WORDS` in the source test
-- [ ] Create `runner/gates/cf_reads.py`: `DEFAULT_TARGET_BRANCH` (citing the key's description); `read_config(key, checkout, cf_project_id, budget, run, timeout) -> str | ReadFailure | None` (a missing or non-string `value` is a failure, never a default; `None` when cut off); `read_target(...)` mapping empty to `DEFAULT_TARGET_BRANCH`; `read_gate(checkout, worktree_id, cf_project_id, budget, run, timeout) -> dict | ReadFailure | None` returning the parsed JSON for Task 4.3's model
-- [ ] Tests (`tests/runner/gates/test_cf_reads.py`) with a fake `CfRun`: argv for each read, with and without `--worktree`; `cwd` is the checkout; a non-string value, a non-zero exit, bad JSON and a timeout are failures; empty target is `main`; a spent budget starts nothing
-- [ ] **Success:** tests pass, including `test_cf_commands_defined_once.py`. Commit with Task 4.3
+- [x] `runner/lifecycle/plan_read.py`: the additions under Task-level additions; update `COMMAND_WORDS` in the source test
+- [x] Create `runner/gates/cf_reads.py`: `DEFAULT_TARGET_BRANCH` (citing the key's description); `read_config(key, checkout, cf_project_id, budget, run, timeout) -> str | ReadFailure | None` (a missing or non-string `value` is a failure, never a default; `None` when cut off); `read_target(...)` mapping empty to `DEFAULT_TARGET_BRANCH`; `read_gate(checkout, worktree_id, cf_project_id, budget, run, timeout) -> dict | ReadFailure | None` returning the parsed JSON for Task 4.3's model
+- [x] Tests (`tests/runner/gates/test_cf_reads.py`) with a fake `CfRun`: argv for each read, with and without `--worktree`; `cwd` is the checkout; a non-string value, a non-zero exit, bad JSON and a timeout are failures; empty target is `main`; a spent budget starts nothing
+- [x] **Success:** tests pass, including `test_cf_commands_defined_once.py`. Commit with Task 4.3
 
 ### Task 4.3: Implement the CF status model and `position_of`
 **Owner**: Junior AI | **Dependencies**: 4.1, 4.2 | **Effort**: 2
 
-- [ ] Create `runner/gates/cf_status.py` per D1 and "API Contracts": `CFActiveSlice` (lenient about added keys, strict about mapped fields), `parse_status(document) -> CFActiveSlice | None`, `GatePosition` with `PENDING_DECISION` and `UNKNOWN` outside the ordered scale, `position_of(active_slice)`, `EXIT_GATE` and `ENTRY_GATE` (Task-level additions)
-- [ ] `tests/runner/gates/test_cf_status.py`: every D1 row against its captured fixture; trimmed and upper-case status text; an unknown status, an unknown review type and a missing `gateInfo` are `UNKNOWN`; `rationale` and `pendingDecisions` are carried, never matched
-- [ ] **Success:** tests pass. Commit `feat: read CF's gate position from cf status`
+- [x] Create `runner/gates/cf_status.py` per D1 and "API Contracts": `CFActiveSlice` (lenient about added keys, strict about mapped fields), `parse_status(document) -> CFActiveSlice | None`, `GatePosition` with `PENDING_DECISION` and `UNKNOWN` outside the ordered scale, `position_of(active_slice)`, `EXIT_GATE` and `ENTRY_GATE` (Task-level additions)
+- [x] `tests/runner/gates/test_cf_status.py`: every D1 row against its captured fixture; trimmed and upper-case status text; an unknown status, an unknown review type and a missing `gateInfo` are `UNKNOWN`; `rationale` and `pendingDecisions` are carried, never matched
+- [x] **Success:** tests pass. Commit `feat: read CF's gate position from cf status`
+
+Note: `GatePosition.UNKNOWN` and `PENDING_DECISION` are negative (off the scale); use `.on_scale` before any ordered comparison against a gate. `read_config` takes the checkout path with no `--worktree`; `read_gate` takes `(checkout, worktree_id, ...)`.
 
 ### Task 4.4: Add the stub `cf` gate modes and the rig helpers
 **Owner**: Junior AI | **Dependencies**: 2.1, 4.1 | **Effort**: 3
 
-- [ ] Put the new stub code in `tests/cf_stub_gates.py` (`tests/cf_stub.py` is 325 lines): `status --json` answers with a fixture named by an environment variable (or a per-index mapping file), defaulting to the existing probe answer when unset; `config get <key> --json` answers from a state file, empty values by default; a failure mode for each. Every call is logged to the stub log, as now
-- [ ] Add rig helpers in a new `tests/runner/gate_rig.py`: make a rig's checkout a real git repository on `main` (Task 2.1's helper), write a slice design with given frontmatter at the path the stub's `list slices` reports, and set the stub's status fixture for a slice
-- [ ] Tests (`tests/test_cf_stub_gates.py`): each mode returns its fixture byte for byte; the probe answer is unchanged; existing stub tests pass
-- [ ] **Success:** tests pass. Commit `test: add gate modes to the stub cf`
+- [x] Put the new stub code in `tests/cf_stub_gates.py` (`tests/cf_stub.py` is 325 lines): `status --json` answers with a fixture named by an environment variable (or a per-index mapping file), defaulting to the existing probe answer when unset; `config get <key> --json` answers from a state file, empty values by default; a failure mode for each. Every call is logged to the stub log, as now
+- [x] Add rig helpers in a new `tests/runner/gate_rig.py`: make a rig's checkout a real git repository on `main` (Task 2.1's helper), write a slice design with given frontmatter at the path the stub's `list slices` reports, and set the stub's status fixture for a slice
+- [x] Tests (`tests/test_cf_stub_gates.py`): each mode returns its fixture byte for byte; the probe answer is unchanged; existing stub tests pass
+- [x] **Success:** tests pass. Commit `test: add gate modes to the stub cf`
+
+Note: the gate stub code lives in tests/cf_stub_gates.py and is embedded in the stub by cf_stub.py (`{gate_commands}`). `CF_STUB_STATUS_MAP` maps a checkout's real path to a status fixture, `CF_STUB_STATUS_FIXTURE` is the fallback answer, `CF_STUB_CONFIG` holds config values. `tests/runner/gate_rig.py` has git_checkout, write_design, write_slice_list, status_fixture, status_knobs, single_status_knobs and config_knobs.
 
 ---
 
@@ -177,26 +192,30 @@ revision_number: 2
 ### Task 5.1: Implement the check vocabulary and `hatch_checks`
 **Owner**: Junior AI | **Dependencies**: 4.3 | **Effort**: 3
 
-- [ ] Create `runner/gates/checks.py` (Task-level additions). Create `runner/gates/hatches.py` with `read_frontmatter(text) -> Mapping | FrontmatterError` (D4's frontmatter rule, byte-order mark and leading whitespace allowed, `dateCreated` converted back to text) and the pure `hatch_checks(entry_id, slice_node_id, design, effective_date, amoeba_version) -> tuple[CheckInput, CheckInput]`. `design` is the path and text, or a reason it is unknown or missing; `effective_date` is text or a failed read
-- [ ] `tests/runner/gates/test_hatches.py`, table-driven over every D4 cell: each `failed`, `passed` and `errored` case of both checks; a missing design is `vacuous` for both (`examined_count` 0); `None`/`NONE` escalate; `dateCreated: 20261021` as an integer compares as text; ids and provenance as D4 gives them
-- [ ] **Success:** tests pass; the module does no I/O. Commit `feat: record the ungate hatches as checks`
+- [x] Create `runner/gates/checks.py` (Task-level additions). Create `runner/gates/hatches.py` with `read_frontmatter(text) -> Mapping | FrontmatterError` (D4's frontmatter rule, byte-order mark and leading whitespace allowed, `dateCreated` converted back to text) and the pure `hatch_checks(entry_id, slice_node_id, design, effective_date, amoeba_version) -> tuple[CheckInput, CheckInput]`. `design` is the path and text, or a reason it is unknown or missing; `effective_date` is text or a failed read
+- [x] `tests/runner/gates/test_hatches.py`, table-driven over every D4 cell: each `failed`, `passed` and `errored` case of both checks; a missing design is `vacuous` for both (`examined_count` 0); `None`/`NONE` escalate; `dateCreated: 20261021` as an integer compares as text; ids and provenance as D4 gives them
+- [x] **Success:** tests pass; the module does no I/O. Commit `feat: record the ungate hatches as checks`
 
 ### Task 5.2: Implement `observe_outcome` and `gate_state_at_exit`
 **Owner**: Junior AI | **Dependencies**: 2.2, 4.2, 4.4, 5.1 | **Effort**: 3
 
-- [ ] Create `runner/gates/outcome.py` per D2: `OutcomeObservation` (the gate part, `design_path`, the optional git part, the two `CheckInput`s) with `to_result()` producing the "Entry result" shape; `observe_outcome(entry, step, slice_node, initiative_index, budget, cf_run, timeout, amoeba_version) -> OutcomeObservation | None` running D2's five reads in order, `None` only when the budget cut it off. A gate read for another slice index is recorded as a gate failure. The design file is resolved against the checkout as 125 (D7) resolves review paths
-- [ ] The pure `gate_state_at_exit(step, gate_record) -> str` per D3's `gate_state` rules, reading the stored gate record
-- [ ] `tests/runner/gates/test_outcome.py`: with the stub `cf` and a real repository, each read's answer lands in the observation; `git` is present only for `implementation`; each failed read is recorded, not raised; a cut-off between reads returns `None`; `gate_state_at_exit` table-driven over D3's rows for all three steps, including `misplaced` and `unknown`
-- [ ] **Success:** tests pass. Commit with Task 5.3
+- [x] Create `runner/gates/outcome.py` per D2: `OutcomeObservation` (the gate part, `design_path`, the optional git part, the two `CheckInput`s) with `to_result()` producing the "Entry result" shape; `observe_outcome(entry, step, slice_node, initiative_index, budget, cf_run, timeout, amoeba_version) -> OutcomeObservation | None` running D2's five reads in order, `None` only when the budget cut it off. A gate read for another slice index is recorded as a gate failure. The design file is resolved against the checkout as 125 (D7) resolves review paths
+- [x] The pure `gate_state_at_exit(step, gate_record) -> str` per D3's `gate_state` rules, reading the stored gate record
+- [x] `tests/runner/gates/test_outcome.py`: with the stub `cf` and a real repository, each read's answer lands in the observation; `git` is present only for `implementation`; each failed read is recorded, not raised; a cut-off between reads returns `None`; `gate_state_at_exit` table-driven over D3's rows for all three steps, including `misplaced` and `unknown`
+- [x] **Success:** tests pass. Commit with Task 5.3
+
+Note: `unobservable(entry, node_id, reason, amoeba_version)` builds an observation in which every read failed; `observe_outcome` returns it for a slice node with no CF project or index, and `GateStage` for a step that is not under a slice and initiative. `cf_reads.read_design_file` was added for the slice-list read. The gate read relies on the checkout's working directory for the worktree (no `--worktree`).
 
 ### Task 5.3: Record the observation at ingestion and wire the stage
 **Owner**: Junior AI | **Dependencies**: 5.2 | **Effort**: 3
 
-- [ ] `runner/ingest/record.py` and `runner/finish.py`: `record` takes `observation: OutcomeObservation | None`. For a `completed` outcome: both `record_check` calls first, then 125's block, then the result with `outcome_observation` and `check_ids` (D2 "Order"). Other outcomes ignore it. A `completed` outcome without an observation raises `ValueError`
-- [ ] Create `runner/gates/stage.py` with `GateStage.observe_outcomes(runs, budget)` returning the observations by entry id for each finished `completed` run. `tick.py` calls it after Observe; `_record_finished` records a `completed` run only when its observation is present, otherwise leaves the entry unresolved and keeps it tracked (D2, "Only a TickBudget cut-off defers")
-- [ ] Tests: `tests/runner/ingest/`: the write order (checks, block, report); a repeat after a crash between the writes keeps the first check records; `tests/runner/gates/test_tick_outcome.py`: a completed `P5` records two checks on the slice node and the observation in its result; a cut-off before the observation leaves the entry unresolved and the next tick records it once
-- [ ] Run `uv run pytest -q`. Each failure because a tick test's rig has no design or gate answer is fixed with Task 4.4's helpers; any other failure is a defect: fix it here or write `BLOCKED:`
-- [ ] **Success:** full suite green. Commit `feat: observe CF's gate, the hatches and git when a run completes`
+- [x] `runner/ingest/record.py` and `runner/finish.py`: `record` takes `observation: OutcomeObservation | None`. For a `completed` outcome: both `record_check` calls first, then 125's block, then the result with `outcome_observation` and `check_ids` (D2 "Order"). Other outcomes ignore it. A `completed` outcome without an observation raises `ValueError`
+- [x] Create `runner/gates/stage.py` with `GateStage.observe_outcomes(runs, budget)` returning the observations by entry id for each finished `completed` run. `tick.py` calls it after Observe; `_record_finished` records a `completed` run only when its observation is present, otherwise leaves the entry unresolved and keeps it tracked (D2, "Only a TickBudget cut-off defers")
+- [x] Tests: `tests/runner/ingest/`: the write order (checks, block, report); a repeat after a crash between the writes keeps the first check records; `tests/runner/gates/test_tick_outcome.py`: a completed `P5` records two checks on the slice node and the observation in its result; a cut-off before the observation leaves the entry unresolved and the next tick records it once
+- [x] Run `uv run pytest -q`. Each failure because a tick test's rig has no design or gate answer is fixed with Task 4.4's helpers; any other failure is a defect: fix it here or write `BLOCKED:`
+- [x] **Success:** full suite green. Commit `feat: observe CF's gate, the hatches and git when a run completes`
+
+Note: `ProjectTick` takes `cf_run` and `call_timeout_seconds` and builds `GateStage`; `_record_finished` returns `RecordedRuns(shape_error, pending)` and a completed run with no observation is reported as still in flight. The test Rig has `gate_run` (defaults to its FakeCf, so existing tests record failed reads) and `tests/runner/gate_rig.py` has `failed_reads(entry)` for direct ingest tests.
 
 ---
 
@@ -205,17 +224,21 @@ revision_number: 2
 ### Task 6.1: Add `gate_state` and `check_standing`
 **Owner**: Junior AI | **Dependencies**: 5.3 | **Effort**: 3
 
-- [ ] `routing/inputs.py`: the two inputs and their value sets; `STANDING_WORST_FIRST`. `routing/evidence.py`: `gather` reads `outcome_observation` and the check records named by `check_ids` (`store.check`). `routing/reduce.py`: `gate_state` through `gate_state_at_exit`; `check_standing` the worst standing, `unknown` for an id the store does not hold; both `none` for an outcome other than `completed`
-- [ ] Tests in `tests/runner/routing/`: each value of both inputs; a pre-128 completed entry (no observation) gives `unknown`; table validation accepts a table naming both; recompute of a decision recorded before this slice reports 126's changed-vocabulary error, as 127's note records for `review_accepted`
-- [ ] **Success:** tests pass. Commit with Task 6.2
+- [x] `routing/inputs.py`: the two inputs and their value sets; `STANDING_WORST_FIRST`. `routing/evidence.py`: `gather` reads `outcome_observation` and the check records named by `check_ids` (`store.check`). `routing/reduce.py`: `gate_state` through `gate_state_at_exit`; `check_standing` the worst standing, `unknown` for an id the store does not hold; both `none` for an outcome other than `completed`
+- [x] Tests in `tests/runner/routing/`: each value of both inputs; a pre-128 completed entry (no observation) gives `unknown`; table validation accepts a table naming both; recompute of a decision recorded before this slice reports 126's changed-vocabulary error, as 127's note records for `review_accepted`
+- [x] **Success:** tests pass. Commit with Task 6.2
+
+Note: `OutcomeEvidence` gained required fields `gate_record` and `check_standings` (None means the entry carries no observation); the tests' `completed_evidence` builder passes None for both.
 
 ### Task 6.2: Edit the shipped table
 **Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 3
 
-- [ ] `routing/tables/default.yaml`: the three changed rules per D3; bump the table version
-- [ ] Tick tests (`tests/runner/gates/test_tick_routing.py`), one per LLD "Gate at the outcome" and "Hatches" criterion: `P5` PASS with `in-implementation` advances; with `review-failed` at the tasks gate escalates; `test_derived_pass_cleared_by_cf_escalates`; `pending-decision` after `P4` escalates with the decisions in the result; `P6` with `in-implementation` escalates as `misplaced`; a failed gate read escalates as `unknown`; `test_review_none_check_failed_and_escalates`; an early `dateCreated` escalates; a missing design escalates with both checks `vacuous`; in the `review: none` test, `amoeba inspect checks --node <slice>` shows each hatch check with the design path and the values examined; a PM completed-outcome accept of a hatch escalation advances
-- [ ] Run `uv run pytest -q`. Each test that now escalates only because its rig gives no gate answer sets the stub status past that step's exit gate; any other failure is a defect
-- [ ] **Success:** full suite green. Commit `feat: require a clear gate and passed checks before advancing`
+- [x] `routing/tables/default.yaml`: the three changed rules per D3; bump the table version
+- [x] Tick tests (`tests/runner/gates/test_tick_routing.py`), one per LLD "Gate at the outcome" and "Hatches" criterion: `P5` PASS with `in-implementation` advances; with `review-failed` at the tasks gate escalates; `test_derived_pass_cleared_by_cf_escalates`; `pending-decision` after `P4` escalates with the decisions in the result; `P6` with `in-implementation` escalates as `misplaced`; a failed gate read escalates as `unknown`; `test_review_none_check_failed_and_escalates`; an early `dateCreated` escalates; a missing design escalates with both checks `vacuous`; in the `review: none` test, `amoeba inspect checks --node <slice>` shows each hatch check with the design path and the values examined; a PM completed-outcome accept of a hatch escalation advances
+- [x] Run `uv run pytest -q`. Each test that now escalates only because its rig gives no gate answer sets the stub status past that step's exit gate; any other failure is a defect
+- [x] **Success:** full suite green. Commit `feat: require a clear gate and passed checks before advancing`
+
+Note: tests that stage an ingested outcome (`stage_outcome`) now get a healthy observation by default (`observed=False` stages a pre-128 entry); tick-level tests that must advance call `gate_rig.clear_gates(rig, slice_node, step)`. A completed run whose step is unknown now escalates (gate_state unknown). Hatch tick tests are in tests/runner/gates/test_tick_routing.py; `amoeba inspect checks` is exercised through `inspection.checks.check_rows`.
 
 ---
 
@@ -224,50 +247,58 @@ revision_number: 2
 ### Task 7.1: Add the fault kinds, `DispatchCheck` and `BlockDispatch`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `runner/faults.py`: the five members per D11, documented in the class docstring (`checkout_read_failed` project-scoped, the rest node blocks)
-- [ ] Create `runner/gates/predispatch.py` with `Ok`, `Block` and `DispatchCheck` per "API Contracts" (no import of `decide.py`). `runner/decide.py`: `BlockDispatch`, the widened `Action`, and `ProjectView.dispatch_checks` (empty by default). `ProjectView.merge_observations` waits for Task 9.2, which defines its value type
-- [ ] `runner/act.py`: apply `BlockDispatch` with `block_once` on `HUMAN`, with `fault_kind` in the payload, store only
-- [ ] Tests: `tests/runner/test_act*.py`: a `BlockDispatch` writes one block and no journal entry, and a second is skipped
-- [ ] **Success:** tests pass. Commit `feat: add the dispatch block action and its fault kinds`
+- [x] `runner/faults.py`: the five members per D11, documented in the class docstring (`checkout_read_failed` project-scoped, the rest node blocks)
+- [x] Create `runner/gates/predispatch.py` with `Ok`, `Block` and `DispatchCheck` per "API Contracts" (no import of `decide.py`). `runner/decide.py`: `BlockDispatch`, the widened `Action`, and `ProjectView.dispatch_checks` (empty by default). `ProjectView.merge_observations` waits for Task 9.2, which defines its value type
+- [x] `runner/act.py`: apply `BlockDispatch` with `block_once` on `HUMAN`, with `fault_kind` in the payload, store only
+- [x] Tests: `tests/runner/test_act*.py`: a `BlockDispatch` writes one block and no journal entry, and a second is skipped
+- [x] **Success:** tests pass. Commit `feat: add the dispatch block action and its fault kinds`
 
 ### Task 7.2: Implement `branch_rule` and the entry gate
 **Owner**: Junior AI | **Dependencies**: 4.3, 7.1 | **Effort**: 3
 
-- [ ] In `runner/gates/predispatch.py`, pure: `allowed_branches(pipeline, target, slice_index)` and `branch_rule(status, target, pipeline, slice_index, *, resume) -> Block | None` per D5's git order and D6's table (Task-level additions for the own-branch rule; dirty paths capped at 20 with the count; a resume never blocks on a dirty tree); `entry_gate(step, active_slice, slice_index, accepted: bool) -> Ok | Block | NoResult | Disagreement` per D5's entry-gate table, where `accepted` says the predecessor was accepted by the PM and `Disagreement` tells the caller to record D7's check, then go on
-- [ ] `tests/runner/gates/test_predispatch.py`, table-driven over every D5 and D6 row: `test_dirty_tree_blocks_launch`; `test_planning_run_refused_off_target`; `P6` on its own branch is allowed and on another slice's branch blocks; `test_resume_not_blocked_by_its_own_dirty_tree`; detached blocks; a `/`-prefixed branch is not the slice's own; each entry-gate row for `tasks` and `implementation`; `slice_design` has no entry gate
-- [ ] **Success:** tests pass; no I/O. Commit with Task 7.3
+- [x] In `runner/gates/predispatch.py`, pure: `allowed_branches(pipeline, target, slice_index)` and `branch_rule(status, target, pipeline, slice_index, *, resume) -> Block | None` per D5's git order and D6's table (Task-level additions for the own-branch rule; dirty paths capped at 20 with the count; a resume never blocks on a dirty tree); `entry_gate(step, active_slice, slice_index, accepted: bool) -> Ok | Block | NoResult | Disagreement` per D5's entry-gate table, where `accepted` says the predecessor was accepted by the PM and `Disagreement` tells the caller to record D7's check, then go on
+- [x] `tests/runner/gates/test_predispatch.py`, table-driven over every D5 and D6 row: `test_dirty_tree_blocks_launch`; `test_planning_run_refused_off_target`; `P6` on its own branch is allowed and on another slice's branch blocks; `test_resume_not_blocked_by_its_own_dirty_tree`; detached blocks; a `/`-prefixed branch is not the slice's own; each entry-gate row for `tasks` and `implementation`; `slice_design` has no entry gate
+- [x] **Success:** tests pass; no I/O. Commit with Task 7.3
 
 ### Task 7.3: Implement `launch_candidates` and `read_dispatch_facts`
 **Owner**: Junior AI | **Dependencies**: 2.2, 4.2, 7.2 | **Effort**: 3
 
-- [ ] In `runner/gates/predispatch.py`: the pure `launch_candidates(current, facts, holders)` (Task-level additions). In a new `runner/gates/dispatch_reads.py`: `read_dispatch_facts(candidate, budget, run, timeout) -> DispatchReads | ReadFailure | None` doing D5's reads in order (the gate read only for a fresh or reissued `tasks` or `implementation` launch), and `check_candidate(candidate, reads, accepted: bool) -> DispatchCheck | Disagreement | None` combining the two rules and building `Ok`'s evidence (`branch`, `head`, `target`, `gate_status`, `gate_review_type`, plus dirty paths for a resume)
-- [ ] Tests: `launch_candidates` over each state and holder case (a `REISSUE` in a held checkout and a `RESUME` in a checkout held by another node are not candidates; `NEEDS_POINTER` and `REOBSERVE` never are); `read_dispatch_facts` with the stub `cf` and a real repository, including a failed read and a cut-off; `check_candidate`'s evidence for a launch and a resume
-- [ ] **Success:** tests pass. Commit `feat: check the checkout and the entry gate before dispatch`
+- [x] In `runner/gates/predispatch.py`: the pure `launch_candidates(current, facts, holders)` (Task-level additions). In a new `runner/gates/dispatch_reads.py`: `read_dispatch_facts(candidate, budget, run, timeout) -> DispatchReads | ReadFailure | None` doing D5's reads in order (the gate read only for a fresh or reissued `tasks` or `implementation` launch), and `check_candidate(candidate, reads, accepted: bool) -> DispatchCheck | Disagreement | None` combining the two rules and building `Ok`'s evidence (`branch`, `head`, `target`, `gate_status`, `gate_review_type`, plus dirty paths for a resume)
+- [x] Tests: `launch_candidates` over each state and holder case (a `REISSUE` in a held checkout and a `RESUME` in a checkout held by another node are not candidates; `NEEDS_POINTER` and `REOBSERVE` never are); `read_dispatch_facts` with the stub `cf` and a real repository, including a failed read and a cut-off; `check_candidate`'s evidence for a launch and a resume
+- [x] **Success:** tests pass. Commit `feat: check the checkout and the entry gate before dispatch`
+
+Note: `Candidate` (node_id, step, state, checkout, pipeline, slice_index, cf_project_id) is defined in predispatch.py; `read_dispatch_facts` returns `DispatchReads | DispatchReadFailed | None`. `Ok.evidence` is `Mapping[str, object]` so a resume can carry its dirty paths as a list. Text from git and CF is bounded in `act.block_dispatch`, not in predispatch, to keep predispatch free of the ingest import cycle.
 
 ### Task 7.4: Run the checks in the tick
 **Owner**: Junior AI | **Dependencies**: 5.3, 7.3 | **Effort**: 2
 
-- [ ] `GateStage.check_dispatch(view, budget, faults)`: for each candidate, the reads and the check; a failed read adds `checkout_read_failed` with `{checkout, command, reason}`; returns `dispatch_checks` by node id. (`Disagreement` is treated as `Ok` here; Task 8.2 records it.) `tick.py` replaces the view with them (Task-level additions). No planner reads them yet
-- [ ] Tests (`tests/runner/gates/test_stage_dispatch.py`): a tick with a pointed step on a dirty checkout puts a `Block` in the view's `dispatch_checks`; a clean one puts `Ok`; a failed read puts nothing and raises `checkout_read_failed`
-- [ ] **Success:** full suite green. Commit `feat: run the pre-dispatch checks in the tick`
+- [x] `GateStage.check_dispatch(view, budget, faults)`: for each candidate, the reads and the check; a failed read adds `checkout_read_failed` with `{checkout, command, reason}`; returns `dispatch_checks` by node id. (`Disagreement` is treated as `Ok` here; Task 8.2 records it.) `tick.py` replaces the view with them (Task-level additions). No planner reads them yet
+- [x] Tests (`tests/runner/gates/test_stage_dispatch.py`): a tick with a pointed step on a dirty checkout puts a `Block` in the view's `dispatch_checks`; a clean one puts `Ok`; a failed read puts nothing and raises `checkout_read_failed`
+- [x] **Success:** full suite green. Commit `feat: run the pre-dispatch checks in the tick`
+
+Note: part of Task 7.5's rig update landed here to keep the suite green: `DispatchRig.use_clean_checkouts` makes both world checkouts clean git repositories (`gate_rig.rig_checkout`, ignoring everything but README.md) and points the tick's `gate_run` at the stub with `CF_STUB_STATUS_POINTER`, which reports the captured in_implementation status for whichever slice the pointer holds. `GateStage.check_dispatch` returns `DispatchStageResult(checks, cut_off)`; the tick ends as cut off when it is.
 
 ### Task 7.5: Filter the planners on the checks
 **Owner**: Junior AI | **Dependencies**: 3.3, 7.4 | **Effort**: 3
 
-- [ ] `DispatchPlanner`: the chosen `POINTED` or `REISSUE` step launches only on `Ok`, with `dispatch_check` (and, for `P6`, `target`) in `journal_extra`; a `Block` gives `BlockDispatch`; no entry gives nothing. `ContinuationPlanner`: the same for `RESUME`, and `runner/resolutions/act.py` writes `ResumeRun.journal_extra` into the continuation entry's parameters. `decide()`: a `LaunchRun` or `ResumeRun` for a node without `Ok` in `dispatch_checks` raises `ValueError` (D5 guard)
-- [ ] **Rig update** (same commit, so the suite stays green). Using Task 4.4's helpers, make every checkout a clean git repository on `main` and have the stub answer the gate past each step's entry gate, in exactly these files:
-  - [ ] `tests/runner/tick_support.py`
-  - [ ] `tests/runner/dispatch/tick_rig.py`
-  - [ ] `tests/runner/plan_tick_support.py`
-  - [ ] `tests/runner/crash_harness.py`, `tests/runner/crash_entry.py` and `tests/runner/crash_resume.py`
-- [ ] Run `uv run pytest -q`. A failure the rig update fixes is done. A failure in the planners, `decide()` or `runner/resolutions/act.py` is this task's defect: fix it. Any failure elsewhere: write `BLOCKED:` naming the test and its error, and stop
-- [ ] **Success:** full suite green, including 125's dispatch and crash tests and 127's resume tests. Commit `feat: launch and resume only on a passed pre-dispatch check`
+- [x] `DispatchPlanner`: the chosen `POINTED` or `REISSUE` step launches only on `Ok`, with `dispatch_check` (and, for `P6`, `target`) in `journal_extra`; a `Block` gives `BlockDispatch`; no entry gives nothing. `ContinuationPlanner`: the same for `RESUME`, and `runner/resolutions/act.py` writes `ResumeRun.journal_extra` into the continuation entry's parameters. `decide()`: a `LaunchRun` or `ResumeRun` for a node without `Ok` in `dispatch_checks` raises `ValueError` (D5 guard)
+- [x] **Rig update** (same commit, so the suite stays green). Using Task 4.4's helpers, make every checkout a clean git repository on `main` and have the stub answer the gate past each step's entry gate, in exactly these files:
+  - [x] `tests/runner/tick_support.py`
+  - [x] `tests/runner/dispatch/tick_rig.py`
+  - [x] `tests/runner/plan_tick_support.py`
+  - [x] `tests/runner/crash_harness.py`, `tests/runner/crash_entry.py` and `tests/runner/crash_resume.py`
+- [x] Run `uv run pytest -q`. A failure the rig update fixes is done. A failure in the planners, `decide()` or `runner/resolutions/act.py` is this task's defect: fix it. Any failure elsewhere: write `BLOCKED:` naming the test and its error, and stop
+- [x] **Success:** full suite green, including 125's dispatch and crash tests and 127's resume tests. Commit `feat: launch and resume only on a passed pre-dispatch check`
+
+Note: the rig update differs from the list. Only tests/runner/dispatch/tick_rig.py (DispatchRig.use_clean_checkouts), tests/runner/crash_harness.py (dispatch mode) and tests/runner/tick_support.py changed for the checkout and gate; test-double planners that launch without dispatch facts (tests/runner/tick_support.py Planner, the crash proof planner) get `PassingGates`, installed by the `passing_checks` fixture (tests/runner/conftest.py) and in tests/runner/crash_entry.py. tests/runner/plan_tick_support.py and crash_resume.py needed no change. The planners also take a reissue's or a resume's checkout from its recorded entry in `launch_candidates`.
 
 ### Task 7.6: Prove the pre-dispatch checks in the tick
 **Owner**: Junior AI | **Dependencies**: 7.5 | **Effort**: 2
 
-- [ ] `tests/runner/gates/test_tick_predispatch.py`, one test per "Clean tree and branch" and "Gate at dispatch" criterion: a dirty tree blocks a pointed step with the paths and launches nothing; wrong branch and detached block; an integration branch set in the stub's config makes `main` block a planning launch; a reissue is checked like a launch; a resume on a dirty tree resumes; `ObserveRun` and pointer writes are not checked; `pending-decision` blocks; a failing entry gate blocks `cf_gate_blocks`; a position past it launches; a failed read blocks nothing and raises `checkout_read_failed`, which closes on the next complete tick; the guard test (`decide()` refuses `LaunchRun` and `ResumeRun` without `Ok`); a blocked launch resolved with `rerun` is checked again; a launch entry's `dispatch_check` parameter equals the `Ok` evidence (`branch`, `head`, `target`, `gate_status`, `gate_review_type`); a `P6` entry's `target` is the integration branch when one is set and `main` otherwise; a resume entry's `dispatch_check` names its dirty paths
-- [ ] **Success:** tests pass. Commit `test: prove the pre-dispatch checks in the tick`
+- [x] `tests/runner/gates/test_tick_predispatch.py`, one test per "Clean tree and branch" and "Gate at dispatch" criterion: a dirty tree blocks a pointed step with the paths and launches nothing; wrong branch and detached block; an integration branch set in the stub's config makes `main` block a planning launch; a reissue is checked like a launch; a resume on a dirty tree resumes; `ObserveRun` and pointer writes are not checked; `pending-decision` blocks; a failing entry gate blocks `cf_gate_blocks`; a position past it launches; a failed read blocks nothing and raises `checkout_read_failed`, which closes on the next complete tick; the guard test (`decide()` refuses `LaunchRun` and `ResumeRun` without `Ok`); a blocked launch resolved with `rerun` is checked again; a launch entry's `dispatch_check` parameter equals the `Ok` evidence (`branch`, `head`, `target`, `gate_status`, `gate_review_type`); a `P6` entry's `target` is the integration branch when one is set and `main` otherwise; a resume entry's `dispatch_check` names its dirty paths
+- [x] **Success:** tests pass. Commit `test: prove the pre-dispatch checks in the tick`
+
+Note: the guard test lives in tests/runner/test_decide.py (a launch or resume without Ok, or with a Block, raises); the rest are in test_tick_predispatch.py.
 
 ---
 
@@ -276,16 +307,18 @@ revision_number: 2
 ### Task 8.1: Implement `accepted_by_pm`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] Create `runner/gates/accepted.py` with the pure `accepted_by_pm(entries, latest_blocked) -> AcceptedOutcome | None`: set when the latest blocked state has `runner_outcome` `applied` and decision `accept`, and the latest `sq_run` entry's `RESULT_OUTCOME` is `completed` (127, D7). It carries the blocked state id, the entry id and the entry's `verdict_ids`. A loop accept (a `continuation` entry) is not counted (issue #17)
-- [ ] `tests/runner/gates/test_accepted.py`: accept of a completed outcome; a rejected accept; a `rerun`; a loop accept; no blocked state; an accept followed by a newer run
-- [ ] **Success:** tests pass. Commit with Task 8.2
+- [x] Create `runner/gates/accepted.py` with the pure `accepted_by_pm(entries, latest_blocked) -> AcceptedOutcome | None`: set when the latest blocked state has `runner_outcome` `applied` and decision `accept`, and the latest `sq_run` entry's `RESULT_OUTCOME` is `completed` (127, D7). It carries the blocked state id, the entry id and the entry's `verdict_ids`. A loop accept (a `continuation` entry) is not counted (issue #17)
+- [x] `tests/runner/gates/test_accepted.py`: accept of a completed outcome; a rejected accept; a `rerun`; a loop accept; no blocked state; an accept followed by a newer run
+- [x] **Success:** tests pass. Commit with Task 8.2
 
 ### Task 8.2: Record the disagreement and dispatch
 **Owner**: Junior AI | **Dependencies**: 7.5, 8.1 | **Effort**: 2
 
-- [ ] `GateStage.check_dispatch`: for a `tasks` or `implementation` candidate, read the predecessor step's entries and latest blocked state (the previous step in `STEP_SEQUENCE`, same slice) and pass whether `accepted_by_pm` found an `AcceptedOutcome` to `check_candidate`. On `Disagreement`, `record_check` D7's record on the slice node, built from that `AcceptedOutcome` (id `chk-<accepted entry id>-cf_gate_accept_disagreement`), then `Ok` with the check id in its evidence
-- [ ] Tick tests (`tests/runner/gates/test_tick_disagreement.py`): after a PM accept of a completed `slice_design` outcome whose slice gate still fails, the `tasks` launch records one check and launches; `test_accept_disagreement_recorded_once` (a rerun of `tasks` adds no record); without an accept, the same gate blocks `cf_gate_blocks`; `amoeba inspect checks --node <slice>` shows it
-- [ ] **Success:** tests pass. Commit `feat: record a PM accept CF's gate still fails` with `Fixes #15` in the body
+- [x] `GateStage.check_dispatch`: for a `tasks` or `implementation` candidate, read the predecessor step's entries and latest blocked state (the previous step in `STEP_SEQUENCE`, same slice) and pass whether `accepted_by_pm` found an `AcceptedOutcome` to `check_candidate`. On `Disagreement`, `record_check` D7's record on the slice node, built from that `AcceptedOutcome` (id `chk-<accepted entry id>-cf_gate_accept_disagreement`), then `Ok` with the check id in its evidence
+- [x] Tick tests (`tests/runner/gates/test_tick_disagreement.py`): after a PM accept of a completed `slice_design` outcome whose slice gate still fails, the `tasks` launch records one check and launches; `test_accept_disagreement_recorded_once` (a rerun of `tasks` adds no record); without an accept, the same gate blocks `cf_gate_blocks`; `amoeba inspect checks --node <slice>` shows it
+- [x] **Success:** tests pass. Commit `feat: record a PM accept CF's gate still fails` with `Fixes #15` in the body
+
+Note: `disagreement_check` (the D7 record builder) lives in gates/accepted.py; `DispatchStageResult.wrote` tells the tick a disagreement check was written; `Ok.evidence` carries `disagreement_check` (the check id). tick.py is now 336 lines (279 before this slice); a split is a candidate refactor for the final tasks.
 
 ---
 
@@ -294,18 +327,22 @@ revision_number: 2
 ### Task 9.1: Implement `merge_state` and share the completion write
 **Owner**: Junior AI | **Dependencies**: 3.3 | **Effort**: 2
 
-- [ ] Create `runner/gates/merge.py` with `MergeObservation` (`merged`, `not_merged`, `unobservable` with a reason) and the pure `merge_state(entry, slice_index, ancestor_exit) -> MergeObservation | None` per D9's table (`None` for a read failure)
-- [ ] `lifecycle/completion.py`: `complete_step` (Task-level additions), plan-read behavior unchanged
-- [ ] Tests: `merge_state` table-driven over every D9 row; the existing completion tests pass unchanged
-- [ ] **Success:** tests pass. Commit `feat: decide a merge from the recorded head's reachability`
+- [x] Create `runner/gates/merge.py` with `MergeObservation` (`merged`, `not_merged`, `unobservable` with a reason) and the pure `merge_state(entry, slice_index, ancestor_exit) -> MergeObservation | None` per D9's table (`None` for a read failure)
+- [x] `lifecycle/completion.py`: `complete_step` (Task-level additions), plan-read behavior unchanged
+- [x] Tests: `merge_state` table-driven over every D9 row; the existing completion tests pass unchanged
+- [x] **Success:** tests pass. Commit `feat: decide a merge from the recorded head's reachability`
+
+Note: 9.1 and 9.2 landed in one commit because `merge.py` holds both. The value types (Merged, NotMerged, Unobservable) are in gates/merge_observation.py so the view and HumanStepPlanner can name them without an import cycle through decide.py; `unobservable_reason(entry, slice_index)` is the read-free half of `merge_state`. An entry with no recorded `merge_policy` (launched before slice 128) is treated as human, which is what 125 ran every P6 with.
 
 ### Task 9.2: Observe merges in the tick and change `HumanStepPlanner`
 **Owner**: Junior AI | **Dependencies**: 7.5, 9.1 | **Effort**: 3
 
-- [ ] `runner/gates/merge.py`: `observe_merges(store, tree, project_id, budget, run, timeout, faults) -> Mapping[str, MergeObservation]` for each slice whose `implementation` is done and `merge` is not, reading the step's latest completed `sq_run` entry, the target in its checkout and `merge-base --is-ancestor`; `merged` completes the step with `complete_step` and detail per D9; a read failure adds `checkout_read_failed`. `GateStage` runs it after the pointer stage, only when `desired.drives_anything()`; `runner/decide.py` gains `ProjectView.merge_observations: Mapping[str, MergeObservation]` (empty by default), keyed by the merge step's node id, and the view carries the result there
-- [ ] `HumanStepPlanner`: a current `merge` step blocks on `not_merged` or `unobservable` (with `{merge_observation: unobservable, reason}` as `payload_extra`), and is skipped with no observation. Other human steps are unchanged
-- [ ] Tick tests (`tests/runner/gates/test_tick_merge.py`), with real merges in the checkout: under `human`, after `P6` the `merge` step blocks; a `git merge --no-ff` completes it on the next tick and resolves its block by `runner`; `test_merge_observed_after_branch_deleted`; a fix-up commit before the merge is observed; a squash merge is not; `test_auto_merge_step_never_blocked`; a `human` entry that ended on the target is `unobservable`; a failed read blocks nothing and raises `checkout_read_failed`, which closes once a read succeeds; a later slice's `P4` in that checkout blocks `checkout_branch` until the merge
-- [ ] **Success:** tests pass. Commit `feat: observe merges in git and complete the merge step`
+- [x] `runner/gates/merge.py`: `observe_merges(store, tree, project_id, budget, run, timeout, faults) -> Mapping[str, MergeObservation]` for each slice whose `implementation` is done and `merge` is not, reading the step's latest completed `sq_run` entry, the target in its checkout and `merge-base --is-ancestor`; `merged` completes the step with `complete_step` and detail per D9; a read failure adds `checkout_read_failed`. `GateStage` runs it after the pointer stage, only when `desired.drives_anything()`; `runner/decide.py` gains `ProjectView.merge_observations: Mapping[str, MergeObservation]` (empty by default), keyed by the merge step's node id, and the view carries the result there
+- [x] `HumanStepPlanner`: a current `merge` step blocks on `not_merged` or `unobservable` (with `{merge_observation: unobservable, reason}` as `payload_extra`), and is skipped with no observation. Other human steps are unchanged
+- [x] Tick tests (`tests/runner/gates/test_tick_merge.py`), with real merges in the checkout: under `human`, after `P6` the `merge` step blocks; a `git merge --no-ff` completes it on the next tick and resolves its block by `runner`; `test_merge_observed_after_branch_deleted`; a fix-up commit before the merge is observed; a squash merge is not; `test_auto_merge_step_never_blocked`; a `human` entry that ended on the target is `unobservable`; a failed read blocks nothing and raises `checkout_read_failed`, which closes once a read succeeds; a later slice's `P4` in that checkout blocks `checkout_branch` until the merge
+- [x] **Success:** tests pass. Commit `feat: observe merges in git and complete the merge step`
+
+Note: `observe_merges` returns `MergePass(observations, wrote, cut_off)`; a slice whose implementation is done but has no completed run entry is `Unobservable` (no run recorded), so the PM still sees the human step. `BlockHumanStep.payload_extra` carries `{merge_observation: unobservable, reason}`. tests/runner/lifecycle/test_human_steps.py's merge test now sets `merge_observations`.
 
 ---
 
@@ -314,10 +351,12 @@ revision_number: 2
 ### Task 10.1: Add the git source test and extend the budget coverage test
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
 
-- [ ] Source test (`tests/runner/test_git_read_only_place.py`, using `tests/ast_strings.py`): the string `"git"` as an executable appears in no `src/amoeba/runner` module other than `runner/git_read.py`
-- [ ] `tests/runner/test_budget_coverage.py`: wrap the `git` and new `cf` calls so a call starting after the deadline fails the test; drive a tick with an outcome observation, a pre-dispatch check and a merge observation
-- [ ] In that same driven tick, wrap the injected runner to record every `git` argv, and assert each recorded subcommand (the first argument after any `--no-optional-locks`) is in `GIT_SUBCOMMANDS`, and that at least one `status` and one `merge-base` call were recorded
-- [ ] **Success:** tests pass. Commit `test: guard the git read path and the tick budget`
+- [x] Source test (`tests/runner/test_git_read_only_place.py`, using `tests/ast_strings.py`): the string `"git"` as an executable appears in no `src/amoeba/runner` module other than `runner/git_read.py`
+- [x] `tests/runner/test_budget_coverage.py`: wrap the `git` and new `cf` calls so a call starting after the deadline fails the test; drive a tick with an outcome observation, a pre-dispatch check and a merge observation
+- [x] In that same driven tick, wrap the injected runner to record every `git` argv, and assert each recorded subcommand (the first argument after any `--no-optional-locks`) is in `GIT_SUBCOMMANDS`, and that at least one `status` and one `merge-base` call were recorded
+- [x] **Success:** tests pass. Commit `test: guard the git read path and the tick budget`
+
+Note: the source test (tests/runner/test_git_read_only_place.py) looks for a list or tuple literal whose first element is the executable, because the observation key `git` is the same string. The budget coverage test drives one slice from launch to merge observation with guarded cf and git calls; `tests/runner/gates/merge_support.py` has the shared `implemented` helper.
 
 ---
 
@@ -326,16 +365,26 @@ revision_number: 2
 ### Task 11.1: Update the contract documents and the CHANGELOG
 **Owner**: Junior AI | **Dependencies**: 10.1 | **Effort**: 2
 
-- [ ] Per the LLD "Provides to Other Slices", "Contract documents": `docs/process-contract.md` (the per-project config format, setting and flag, no secrets in it, and the pre-dispatch checks); `docs/evidence-contract.md` (the Runner's checks, ids and provenance); `docs/context-forge-contract.md` (the `cf status` fields and positions, the two config keys, the observed CF version); `docs/substrate-guide.md` (the 120 row, issue #15 closed)
-- [ ] Under `[Unreleased]` in `CHANGELOG.md`: the pre-dispatch checks, the gate and hatch checks, the two routing inputs and the table change (completed outcomes now need a clear gate and passed checks to advance), `--project-config` and the merge policy, the merge observation, and the read-only git rule
-- [ ] **Success:** every name in the text matches the code. Commit `docs: document gates, git checks and the merge policy`
+- [x] Per the LLD "Provides to Other Slices", "Contract documents": `docs/process-contract.md` (the per-project config format, setting and flag, no secrets in it, and the pre-dispatch checks); `docs/evidence-contract.md` (the Runner's checks, ids and provenance); `docs/context-forge-contract.md` (the `cf status` fields and positions, the two config keys, the observed CF version); `docs/substrate-guide.md` (the 120 row, issue #15 closed)
+- [x] Under `[Unreleased]` in `CHANGELOG.md`: the pre-dispatch checks, the gate and hatch checks, the two routing inputs and the table change (completed outcomes now need a clear gate and passed checks to advance), `--project-config` and the merge policy, the merge observation, and the read-only git rule
+- [x] **Success:** every name in the text matches the code. Commit `docs: document gates, git checks and the merge policy`
+
+Note: the contract text is in process-contract.md ('Gates, git and human steps'), evidence-contract.md ('The Runner's own checks'), context-forge-contract.md ('Gate state and config reads', observed on CF 0.19.19) and the 120 row of substrate-guide.md; the CHANGELOG entries are under [Unreleased] and flag the behavior change to the shipped table.
 
 ### Task 11.2: Final validation and walkthrough
 **Owner**: Junior AI | **Dependencies**: 11.1 | **Effort**: 2
 
-- [ ] Run LLD Verification Walkthrough steps 1, 2 and 3. Record the pass counts and step 3's exit code and message under this task
-- [ ] Confirm every source file this slice created is near 300 lines and that no file it changed grew past 300 (record any that did, with before and after counts); pyright strict is clean
-- [ ] Run Verification Walkthrough step 4 on a scratch copy with the real `cf` and `git` (it launches nothing). Record what `inspect journal` and `inspect blocked` showed for the dirty tree and the wrong branch. Pause the project, switch the scratch copy back, `amoeba stop`, and remove the scratch CF project
-- [ ] Step 5 is optional and spends three runs. Run it only if steps 1–4 pass; record the result either way
-- [ ] A failure caused by this slice's code is fixed here; anything else gets an issue and a note under this task
-- [ ] **Success:** steps 1–3 behave as the LLD expects, and step 4 shows `checkout_dirty`, then `checkout_branch`, and no `sq_run`. Commit `docs: record slice 128 validation`
+- [x] Run LLD Verification Walkthrough steps 1, 2 and 3. Record the pass counts and step 3's exit code and message under this task
+- [x] Confirm every source file this slice created is near 300 lines and that no file it changed grew past 300 (record any that did, with before and after counts); pyright strict is clean
+- [x] Run Verification Walkthrough step 4 on a scratch copy with the real `cf` and `git` (it launches nothing). Record what `inspect journal` and `inspect blocked` showed for the dirty tree and the wrong branch. Pause the project, switch the scratch copy back, `amoeba stop`, and remove the scratch CF project
+- [x] Step 5 is optional and spends three runs. Run it only if steps 1–4 pass; record the result either way
+- [x] A failure caused by this slice's code is fixed here; anything else gets an issue and a note under this task
+- [x] **Success:** steps 1–3 behave as the LLD expects, and step 4 shows `checkout_dirty`, then `checkout_branch`, and no `sq_run`. Commit `docs: record slice 128 validation`
+
+Note: walkthrough 1: 313 passed (tests/runner/gates, test_git_read.py, test_project_config.py). Walkthrough 2: full suite 4414 passed; `tests/runner tests/contract` 1724 passed; ruff check, `ruff format --check` (640 files) and pyright strict clean. Walkthrough 3: `amoeba start --project-config` with `merge_policy: sometimes` printed `amoeba: project config /tmp/projects.yaml is invalid:` and `  - projects.scratch.merge_policy: Input should be 'human' or 'auto' (got 'sometimes')`, exit 7; with `merge_policy: auto` it started, logged `project config loaded from /tmp/projects.yaml`, and `amoeba stop` stopped it (exit 0).
+
+Note: sizes. Before the final split, three files passed 300 lines: tick.py 279 to 343, outcome.py (new) 348, predispatch.py (new) 311. The record step moved to runner/record_runs.py, the observation's value types and gate_state_at_exit to gates/outcome_record.py, and the candidates to gates/candidates.py. Now: tick.py 297, outcome.py 181, outcome_record.py 188, predispatch.py 216, candidates.py 109. Other changed files grew but stay under 300 (largest: reduce.py 277, faults.py 278, stage.py 271, merge.py 236, decide.py 238). Pyright strict is clean.
+
+Note: walkthrough 4 (real cf 0.19.19 and git on a scratch clone, scratch CF project removed afterwards): with a stray file the drive of slice 131 wrote one `cf_write` (completed), no `sq_run`, and blocked `slice_design` with `fault_kind: checkout_dirty` (paths `.gitignore`, `stray.txt`, count 2; `cf init --lite` also modifies the clone's .gitignore). After cleaning, switching the clone to branch `scratch-other` and submitting `rerun`, a second `cf_write` and a block `checkout_branch` {branch: scratch-other, target: main, allowed: [main]}; still no `sq_run`. Corrections recorded in the LLD walkthrough: check out the target in the clone first; the payload is on the escalation message (`inspect messages --json`), not `inspect blocked`.
+
+Note: walkthrough step 5 (a human merge observed with three real runs) was not run: it is slice 129's first proof. The same path is covered at tick level by tests/runner/gates/test_tick_merge.py with real git merges.

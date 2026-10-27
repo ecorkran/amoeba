@@ -47,6 +47,14 @@ class FaultKind(StrEnum):
     And ``CHECKOUT_UNRESOLVED``: no checkout can be named for a step's slice.
     ``RUN_OVERRUN`` is project-scoped: a run in flight is older than its pipeline's
     time bound, so its node cannot be blocked (it blocks only when its run ends).
+
+    Slice 128 (D11) adds four node blocks, each named in the block's ``fault_kind``:
+    ``CHECKOUT_DIRTY`` and ``CHECKOUT_BRANCH`` (the checkout is not fit for a launch),
+    ``CF_GATE_BLOCKS`` (CF's gate for the step has not cleared) and
+    ``PENDING_DECISION`` (the design holds a decision the PM owes). And one
+    project-scoped kind: ``CHECKOUT_READ_FAILED``, a ``git`` or ``cf`` read before a
+    dispatch or a merge observation gave no usable answer. It blocks no step, because
+    the step is not at fault, and closes on the first complete tick without it.
     """
 
     RUN_OBSERVATION_FAILED = "run_observation_failed"
@@ -61,6 +69,11 @@ class FaultKind(StrEnum):
     CHECKOUT_UNRESOLVED = "checkout_unresolved"
     POINTER_MOVED = "pointer_moved"
     RUN_OVERRUN = "run_overrun"
+    CHECKOUT_DIRTY = "checkout_dirty"
+    CHECKOUT_BRANCH = "checkout_branch"
+    CF_GATE_BLOCKS = "cf_gate_blocks"
+    PENDING_DECISION = "pending_decision"
+    CHECKOUT_READ_FAILED = "checkout_read_failed"
 
 
 class LaunchFailure(StrEnum):

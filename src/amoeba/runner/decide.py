@@ -17,8 +17,11 @@ from typing import Protocol
 
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.gates.merge_observation import MergeObservation
+from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import JournalEntry, Node
 
@@ -47,6 +50,8 @@ class LaunchRun:
 
     ``run_id`` and ``reissue_of`` are set together for a reissue (D9): the run id of
     an attempt that never started, and the id of the entry that attempt was.
+    ``journal_extra`` is evidence written into the entry's parameters beside the
+    launch's own (the merge policy, the target, the pre-dispatch check; slice 128).
     """
 
     node_id: str
@@ -55,13 +60,19 @@ class LaunchRun:
     checkout: Path
     run_id: str | None = None
     reissue_of: str | None = None
+    journal_extra: Mapping[str, object] = field(default_factory=dict[str, object])
 
 
 @dataclass(frozen=True)
 class BlockHumanStep:
-    """Block a ready human step on a person (D9). Store-only: no journal entry."""
+    """Block a ready human step on a person (D9). Store-only: no journal entry.
+
+    ``payload_extra`` is merged into the block's payload (slice 128, D9: why a merge
+    could not be observed).
+    """
 
     node_id: str
+    payload_extra: Mapping[str, object] = field(default_factory=dict[str, object])
 
 
 @dataclass(frozen=True)
@@ -90,6 +101,8 @@ class ResumeRun:
     continues: str
     resolution: str
     checkout: Path
+    #: Evidence written into the continuation entry's parameters (slice 128, D5).
+    journal_extra: Mapping[str, object] = field(default_factory=dict[str, object])
 
 
 @dataclass(frozen=True)
@@ -103,8 +116,26 @@ class ObserveRun:
     checkout: Path
 
 
+@dataclass(frozen=True)
+class BlockDispatch:
+    """Block a step on a human because its pre-dispatch check said not to go ahead.
+
+    Store-only, like :class:`BlockHumanStep` (slice 128, D5).
+    """
+
+    node_id: str
+    block: Block
+
+
 #: The closed set of things a planner may ask for.
-type Action = LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | ObserveRun
+type Action = (
+    LaunchRun
+    | BlockHumanStep
+    | WriteSlicePointer
+    | ResumeRun
+    | ObserveRun
+    | BlockDispatch
+)
 
 
 @dataclass(frozen=True)
@@ -121,7 +152,10 @@ class ProjectView:
     pipeline step, by node id, and ``checkout_holders`` names, for each checkout a
     pipeline already holds (D4), the nodes that hold it, so a step's own continuation
     can act in a checkout held only by itself (slice 127). Both are empty for a view
-    that dispatches nothing.
+    that dispatches nothing. ``merge_policy`` is the project's (slice 128, D8), and
+    ``dispatch_checks`` holds this tick's pre-dispatch result for each candidate, by
+    node id (D5); a node with no entry has no result. ``merge_observations`` holds the
+    git observation of each pending merge step, by the merge step's node id (D9).
     """
 
     project_id: str
@@ -136,6 +170,13 @@ class ProjectView:
     )
     checkout_holders: Mapping[Path, frozenset[str]] = field(
         default_factory=dict[Path, frozenset[str]]
+    )
+    merge_policy: MergePolicy = PROJECT_DEFAULTS.merge_policy
+    dispatch_checks: Mapping[str, DispatchCheck] = field(
+        default_factory=dict[str, DispatchCheck]
+    )
+    merge_observations: Mapping[str, MergeObservation] = field(
+        default_factory=dict[str, MergeObservation]
     )
 
     def ready_unbusy(self) -> list[Node]:
@@ -165,7 +206,10 @@ def decide(view: ProjectView, planners: Sequence[Planner]) -> list[Action]:
             ``view.current_steps`` (not driven, held, not ready, or unknown): the
             guard that makes drive and hold bind every planner (D7). Or if two
             actions name the same node: a node gets at most one action per tick.
-            Neither is ever silently dropped; both are programming errors.
+            Neither is ever silently dropped; both are programming errors. Or if a
+            ``LaunchRun`` or ``ResumeRun`` names a node with no passed pre-dispatch
+            check (``Ok``) in ``view.dispatch_checks``: nothing may start Squadron
+            work unchecked (slice 128, D5).
     """
     actions: list[Action] = []
     claimed: set[str] = set()
@@ -181,6 +225,13 @@ def decide(view: ProjectView, planners: Sequence[Planner]) -> list[Action]:
                 raise ValueError(
                     f"more than one action for node {action.node_id} in project "
                     f"{view.project_id}"
+                )
+            if isinstance(action, LaunchRun | ResumeRun) and not isinstance(
+                view.dispatch_checks.get(action.node_id), Ok
+            ):
+                raise ValueError(
+                    f"{type(action).__name__} for node {action.node_id} in project "
+                    f"{view.project_id} has no passed pre-dispatch check"
                 )
             claimed.add(action.node_id)
             actions.append(action)

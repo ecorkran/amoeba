@@ -37,6 +37,8 @@ prefix of the process's cwd, else the project level.
 ``CF_STUB_SET_MODE`` and ``CF_STUB_GET_MODE`` make those commands ``fail`` (exit 1)
 or ``sleep``; ``CF_STUB_GET_QUIRK`` bends what ``get`` reports (see ``GetQuirk``).
 
+``status`` fixtures and ``config get`` (slice 128) are in ``cf_stub_gates.py``.
+
 ``CF_STUB_MODE`` selects a failure; ``CF_STUB_LOG`` appends each invocation's
 arguments. ``write_cf_stub`` is the only definition; a test puts the returned
 directory first on ``PATH``.
@@ -52,6 +54,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from cf_stub_gates import STATE_ENV, gate_commands_script
+
 INITIATIVES_FIXTURE = (
     Path(__file__).parent / "fixtures" / "cf" / "list_initiatives_a.json"
 )
@@ -61,7 +65,6 @@ SLICE_ERROR_FIXTURE = (
 MODE_ENV = "CF_STUB_MODE"
 LOG_ENV = "CF_STUB_LOG"
 PLAN_DIR_ENV = "CF_STUB_PLAN_DIR"
-STATE_ENV = "CF_STUB_STATE"
 SET_MODE_ENV = "CF_STUB_SET_MODE"
 GET_MODE_ENV = "CF_STUB_GET_MODE"
 GET_QUIRK_ENV = "CF_STUB_GET_QUIRK"
@@ -192,6 +195,7 @@ _SCRIPT = textwrap.dedent(
         print(json.dumps(document))
         sys.exit(0)
 
+    {gate_commands}
     if len(arguments) < 3 or arguments[-2] != "-p" or "--json" not in arguments:
         print("stub cf: unexpected arguments", arguments, file=sys.stderr)
         sys.exit(2)
@@ -260,6 +264,7 @@ def write_cf_stub(bin_dir: Path) -> Path:
     script.write_text(
         _SCRIPT.format(
             python=sys.executable,
+            gate_commands=gate_commands_script(),
             log_env=LOG_ENV,
             mode_env=MODE_ENV,
             good=CfMode.GOOD.value,

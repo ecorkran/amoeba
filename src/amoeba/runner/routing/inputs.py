@@ -15,9 +15,16 @@ from types import MappingProxyType
 from typing import Final
 
 from amoeba.process import CheckpointKind, FailureKind, RunOutcome
+from amoeba.runner.gates.outcome_record import (
+    GATE_CLEAR,
+    GATE_MISPLACED,
+    GATE_PENDING_DECISION,
+    GATE_PENDING_REVIEW,
+    GATE_REVIEW_FAILED,
+)
 from amoeba.runner.ingest.record import OUTCOME_VANISHED
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.store import FindingSeverity, ReviewVerdict, VerdictStanding
+from amoeba.store import CheckStanding, FindingSeverity, ReviewVerdict, VerdictStanding
 
 #: The input does not apply to this outcome (a completed run has no checkpoint).
 NONE: Final = "none"
@@ -54,6 +61,11 @@ class RoutingInput(StrEnum):
     NODE_STATE = "node_state"
     #: Whether a PM-accepted loop ended on the review the PM accepted (slice 127, D8).
     REVIEW_ACCEPTED = "review_accepted"
+    #: Where CF's gate stood when the run completed, against the step's exit gate
+    #: (slice 128, D3).
+    GATE_STATE = "gate_state"
+    #: The worst standing of the checks recorded with the outcome (slice 128, D3).
+    CHECK_STANDING = "check_standing"
 
 
 #: ``recurrence`` values (a finding-level tag folded over one outcome, D1).
@@ -74,6 +86,16 @@ VERDICT_WORST_FIRST: Final = (
     ReviewVerdict.FAIL,
     ReviewVerdict.CONCERNS,
     ReviewVerdict.PASS,
+)
+
+#: The worst check standing wins when an outcome has several checks (D3). Defined
+#: once: failed and errored checks outrank vacuous and unattested ones.
+STANDING_WORST_FIRST: Final = (
+    CheckStanding.FAILED,
+    CheckStanding.ERRORED,
+    CheckStanding.VACUOUS,
+    CheckStanding.UNATTESTED,
+    CheckStanding.PASSED,
 )
 
 #: Severities from lowest to highest, for taking the highest across parts.
@@ -125,6 +147,18 @@ VALUE_SETS: Final[Mapping[RoutingInput, frozenset[str]]] = MappingProxyType(
             NODE_RUNNABLE, NODE_BLOCKED, NODE_DONE, UNKNOWN
         ),
         RoutingInput.REVIEW_ACCEPTED: _values(TRUE, FALSE, NONE, UNKNOWN),
+        RoutingInput.GATE_STATE: _values(
+            GATE_CLEAR,
+            GATE_PENDING_REVIEW,
+            GATE_REVIEW_FAILED,
+            GATE_PENDING_DECISION,
+            GATE_MISPLACED,
+            NONE,
+            UNKNOWN,
+        ),
+        RoutingInput.CHECK_STANDING: _values(
+            *(standing.value for standing in STANDING_WORST_FIRST), NONE, UNKNOWN
+        ),
     }
 )
 

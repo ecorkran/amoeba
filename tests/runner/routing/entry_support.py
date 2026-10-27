@@ -22,6 +22,7 @@ from amoeba.runner.ingest.record import (
     RESULT_STATUS,
     RESULT_VERDICT_IDS,
 )
+from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import (
     PARAM_CONTINUATION,
     PARAM_CONTINUES,
@@ -39,6 +40,7 @@ from amoeba.store import (
     RunnerReview,
     Store,
 )
+from runner.gate_rig import clear_observation
 
 #: Keys an ``sq_run`` entry must carry; their values here are inert.
 _RUN_PARAMETERS: Mapping[str, object] = {
@@ -84,13 +86,19 @@ def stage_outcome(
     resume_failure: str | None = None,
     continuation: tuple[str, str] | None = None,
     block: BlockedKind | None = None,
+    extra_result: Mapping[str, object] | None = None,
+    observed: bool = True,
 ) -> JournalEntry:
     """Issue an ``sq_run`` on ``node_id`` and resolve it as ingestion would.
 
     ``block`` is the block ingestion writes for a paused, failed or vanished run,
     written before the entry is resolved, in ingestion's order. ``continuation`` is
     ``(kind, continued entry id)`` for a resume or an observation (slice 127), and
-    ``resume_failure`` marks the result of a failed resume.
+    ``resume_failure`` marks the result of a failed resume. ``extra_result`` is merged
+    into the result: slice 128's ``outcome_observation`` and ``check_ids``. A
+    completed outcome gets a healthy observation (CF past the step's exit gate, both
+    hatches passed) unless ``observed`` is false, which stages an entry ingested
+    before slice 128.
     """
     parameters: dict[str, object] = dict(
         sq_run_parameters(_RUN_PARAMETERS, run_id=run_id)
@@ -122,6 +130,10 @@ def stage_outcome(
                 RESULT_REVIEW_FAULT: review_fault,
             }
         )
+    if observed and extra_result is None and outcome == RunOutcome.COMPLETED.value:
+        if launch_failure is None and resume_failure is None:
+            extra_result = _healthy(store, issued, node_id)
+    result.update(extra_result or {})
     journal_outcome = (
         JournalOutcome.COMPLETED
         if outcome == RunOutcome.COMPLETED.value and launch_failure is None
@@ -133,6 +145,17 @@ def stage_outcome(
     staged_entry = store.journal_entry(issued.id)
     assert staged_entry is not None
     return staged_entry
+
+
+def _healthy(store: Store, issued: JournalEntry, node_id: str) -> Mapping[str, object]:
+    """Record the two passed hatch checks and return the observation's result keys."""
+    node = store.get_node(node_id)
+    phase = None if node is None else node.cf.phase
+    step = LifecycleStep(phase) if phase in set(LifecycleStep) else None
+    observation = clear_observation(issued, node_id, step)
+    for check in observation.checks:
+        store.record_check(check, project_id=PROJECT)
+    return observation.to_result()
 
 
 def _review(node_id: str, staged: StagedReview) -> RunnerReview:

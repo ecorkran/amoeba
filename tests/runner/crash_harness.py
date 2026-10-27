@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cf_stub import STATE_ENV
+from cf_stub_gates import STATUS_POINTER_ENV
 from contract.launched import LaunchedProcess
 from sq_stub import (
     LOG_ENV,
@@ -36,6 +37,7 @@ from amoeba.store import (
 )
 from runner.crash_entry import KILL_AT_ENV, KillPoint
 from runner.dispatch.pointer_support import CfWorld
+from runner.gate_rig import STATUS_FIXTURES, rig_checkout
 from runner.tick_support import drive_project, ready_slice_step, ready_step
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
@@ -91,7 +93,8 @@ class CrashHarness:
         ):
             directory.mkdir()
         if self.world is not None:
-            self.checkout = self.world.root
+            # A clean git repository, as the pre-dispatch checks read it (slice 128).
+            self.checkout = rig_checkout(self.world.root)
         self.stub_dir = write_sq_stub(tmp_path / "stub-bin")
         self._launched: list[LaunchedProcess] = []
         self.node_ids = self._create_nodes(node_count)
@@ -134,6 +137,9 @@ class CrashHarness:
                 f"{self.world.bin_dir}{os.pathsep}{environment['PATH']}"
             )
             environment[STATE_ENV] = str(self.world.state_path)
+            environment[STATUS_POINTER_ENV] = str(
+                STATUS_FIXTURES / "in_implementation.json"
+            )
         if kill_at is not None:
             environment[KILL_AT_ENV] = kill_at.value
         return environment

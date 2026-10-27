@@ -1,0 +1,17 @@
+{
+  "project": "scratch",
+  "phase": "Phase 0: Concept",
+  "activeSlice": {
+    "name": "alpha",
+    "index": 900,
+    "status": "in-implementation",
+    "taskProgress": {
+      "completed": 1,
+      "total": 3,
+      "inferredStatus": "in_progress"
+    }
+  },
+  "slicePlan": null,
+  "summary": "scratch — Phase 0: Concept — slice 900 in-implementation (1/3 tasks)",
+  "resolutionSource": "cwd"
+}

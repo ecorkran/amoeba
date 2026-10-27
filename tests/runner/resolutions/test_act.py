@@ -16,6 +16,7 @@ from amoeba.process import (
     RunPoll,
 )
 from amoeba.runner.decide import ObserveRun, ResumeRun
+from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.faults import FaultKind, TickFaults
 from amoeba.runner.finish import RESULT_RESUME_FAILURE
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME, LaunchTracker, log_paths
@@ -236,7 +237,12 @@ def _resolved(rig: Rig, decision: str, instructions: str | None = None) -> str:
     return block_and_resolve(rig.store, rig.node, decision, instructions)
 
 
-def _launch(rig: Rig, decision: str, instructions: str | None = None) -> Acted:
+def _launch(
+    rig: Rig,
+    decision: str,
+    instructions: str | None = None,
+    journal_extra: dict[str, object] | None = None,
+) -> Acted:
     resolution = _resolved(rig, decision, instructions)
     rig.answer(rig.paused())
     action = ResumeRun(
@@ -246,8 +252,17 @@ def _launch(rig: Rig, decision: str, instructions: str | None = None) -> Acted:
         rig.entry.id,
         resolution,
         Path(CHECKOUT),
+        journal_extra=journal_extra or {},
     )
     return rig.acts.act(action, generous_budget(), rig.faults)
+
+
+def test_a_resume_records_the_evidence_it_was_checked_on(rig: Rig) -> None:
+    _launch(rig, "retry", None, {PARAM_DISPATCH_CHECK: {"branch": "main"}})
+
+    continuation = rig.entries()[-1]
+    assert continuation.parameters[PARAM_CONTINUATION] == "retry"
+    assert continuation.parameters[PARAM_DISPATCH_CHECK] == {"branch": "main"}
 
 
 def test_a_retry_resumes_the_run_with_its_decision_and_instructions(rig: Rig) -> None:

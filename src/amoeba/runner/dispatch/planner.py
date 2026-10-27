@@ -28,18 +28,34 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import cast
 
-from amoeba.runner.decide import Action, LaunchRun, ProjectView, WriteSlicePointer
+from amoeba.runner.decide import (
+    Action,
+    BlockDispatch,
+    LaunchRun,
+    ProjectView,
+    WriteSlicePointer,
+)
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
-from amoeba.runner.dispatch.params import dispatch_params, pipeline_for
+from amoeba.runner.dispatch.params import (
+    PARAM_DISPATCH_CHECK,
+    PARAM_MERGE_POLICY,
+    PARAM_TARGET,
+    dispatch_params,
+    pipeline_for,
+)
 from amoeba.runner.dispatch.state import DispatchState
+from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
+from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.project_config import MergePolicy
 from amoeba.runner.resolutions.vocabulary import ResolutionDecision
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
 
 #: The order states go in within a checkout: launches before pointer writes.
 _RANK_LAUNCH = 0
 _RANK_POINTER_WRITE = 1
+_LAUNCHES = frozenset({DispatchState.POINTED, DispatchState.REISSUE})
 _PRIORITY = {
     DispatchState.POINTED: _RANK_LAUNCH,
     DispatchState.REISSUE: _RANK_LAUNCH,
@@ -69,23 +85,23 @@ class DispatchPlanner:
             if path not in best or rank < best[path][0]:
                 best[path] = (rank, node)
         ordered = sorted(best.values(), key=lambda pair: pair[0])
-        return [_action(node, view.dispatch[node.id]) for _, node in ordered]
+        actions = (_action(node, view.dispatch[node.id], view) for _, node in ordered)
+        return [action for action in actions if action is not None]
 
 
-def _action(node: Node, facts: StepDispatchFacts) -> Action:
+def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action | None:
     checkout = facts.checkout
     if not isinstance(checkout, Checkout):
         raise ValueError(f"step {node.id} has no resolved checkout")
+    if facts.state in _LAUNCHES:
+        # A launch or reissue goes ahead only on a passed pre-dispatch check (D5).
+        check = view.dispatch_checks.get(node.id)
+        if check is None:
+            return None
+        if isinstance(check, Block):
+            return BlockDispatch(node.id, check)
+        return _launch(node, facts, checkout, check, view.merge_policy)
     match facts.state:
-        case DispatchState.POINTED:
-            return LaunchRun(
-                node.id,
-                pipeline_for(facts.step),
-                dispatch_params(facts.step, facts.slice_index),
-                checkout.path,
-            )
-        case DispatchState.REISSUE:
-            return _reissue(node, facts)
         case DispatchState.NEEDS_POINTER:
             return WriteSlicePointer(
                 node.id,
@@ -98,6 +114,29 @@ def _action(node: Node, facts: StepDispatchFacts) -> Action:
             raise ValueError(f"step {node.id} in state {facts.state} is not planned")
 
 
+def _launch(
+    node: Node,
+    facts: StepDispatchFacts,
+    checkout: Checkout,
+    check: Ok,
+    policy: MergePolicy,
+) -> LaunchRun:
+    """The launch or reissue, with the evidence it was based on (D5, D8)."""
+    if facts.state is DispatchState.REISSUE:
+        return _reissue(node, facts, check)
+    extra: dict[str, object] = {PARAM_DISPATCH_CHECK: dict(check.evidence)}
+    if facts.step is LifecycleStep.IMPLEMENTATION:
+        extra[PARAM_MERGE_POLICY] = policy.value
+        extra[PARAM_TARGET] = check.evidence["target"]
+    return LaunchRun(
+        node.id,
+        pipeline_for(facts.step),
+        dispatch_params(facts.step, facts.slice_index, policy),
+        checkout.path,
+        journal_extra=extra,
+    )
+
+
 def _carried_resolution(facts: StepDispatchFacts) -> str | None:
     """The blocked state id of the ``rerun`` this pointer write carries out."""
     blocked = facts.resolution
@@ -107,7 +146,7 @@ def _carried_resolution(facts: StepDispatchFacts) -> str | None:
     return blocked.id if rerun else None
 
 
-def _reissue(node: Node, facts: StepDispatchFacts) -> LaunchRun:
+def _reissue(node: Node, facts: StepDispatchFacts, check: Ok) -> LaunchRun:
     """The attempt that never started, repeated under its own run id (D9)."""
     old = facts.reissue_of
     if old is None:
@@ -119,7 +158,18 @@ def _reissue(node: Node, facts: StepDispatchFacts) -> LaunchRun:
         Path(text_parameter(old, PARAM_CHECKOUT)),
         run_id=text_parameter(old, PARAM_RUN_ID),
         reissue_of=old.id,
+        journal_extra=_reissue_extra(old, check),
     )
+
+
+def _reissue_extra(old: JournalEntry, check: Ok) -> Mapping[str, object]:
+    """A run keeps the policy and target it was first launched under (D8)."""
+    kept = {
+        key: old.parameters[key]
+        for key in (PARAM_MERGE_POLICY, PARAM_TARGET)
+        if key in old.parameters
+    }
+    return {**kept, PARAM_DISPATCH_CHECK: dict(check.evidence)}
 
 
 def _params(entry: JournalEntry) -> Mapping[str, str]:

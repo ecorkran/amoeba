@@ -1,0 +1,6 @@
+{
+  "key": "git.integration_branch",
+  "value": "",
+  "source": "default",
+  "description": "Optional long-lived integration branch that work branches fork from and merge into instead of main (e.g. \"dev/erik\": a slice branch is still named \"910-slice.foo\", but is forked from and merged into \"dev/erik\"). Empty means no integration branch — work branches fork from and merge into main directly. Relative and contained: must not be absolute or escape via \"..\"."
+}

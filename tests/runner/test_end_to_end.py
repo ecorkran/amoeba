@@ -47,6 +47,8 @@ SETTINGS = ProcessSettings(
     shutdown_grace_seconds=10.0,
 )
 
+pytestmark = pytest.mark.usefixtures("passing_checks")
+
 
 class Host:
     stop_requested = False

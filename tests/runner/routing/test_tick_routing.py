@@ -28,6 +28,7 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.tick_rig import CF_PROJECT, DispatchRig
+from runner.gate_rig import clear_gates
 from runner.intent.intent_support import submit
 from runner.routing.table_support import (
     ADVANCE_COMPLETED,
@@ -55,6 +56,7 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
 def _launched(rig: DispatchRig) -> tuple[Node, Node]:
     """``(slice, step)``: a slice design step with its run in flight."""
     slice_node, step = rig.slice_and_step(SLICE, INDEX)
+    clear_gates(rig, slice_node)
     rig.tick()
     rig.tick()
     assert rig.run_of(step)

@@ -28,6 +28,7 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
+from runner.gate_rig import clear_gates
 from runner.observe_support import GRACE, Child
 from runner.resolutions.resolution_support import resolve_block
 from runner.resolutions.rig_support import (
@@ -53,7 +54,8 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
 
 def _paused_loop(rig: DispatchRig) -> tuple[Node, str]:
     """A step whose run paused at a loop with a CONCERNS review, ingested and routed."""
-    _, step = rig.slice_and_step(SLICE, INDEX)
+    slice_node, step = rig.slice_and_step(SLICE, INDEX)
+    clear_gates(rig, slice_node)
     rig.tick()
     rig.tick()
     rig.end_run(

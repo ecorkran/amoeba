@@ -1,0 +1,29 @@
+{
+  "project": "scratch",
+  "phase": null,
+  "activeSlice": {
+    "name": "alpha",
+    "index": 900,
+    "status": "complete",
+    "taskProgress": {
+      "completed": 3,
+      "total": 3,
+      "inferredStatus": "complete"
+    }
+  },
+  "slicePlan": null,
+  "summary": "scratch — slice 900 complete (3/3 tasks)",
+  "resolutionSource": "worktree",
+  "worktree": {
+    "id": "wt_1793016098333_ol6a6d2lv",
+    "name": "second",
+    "indexRange": [
+      900,
+      999
+    ],
+    "worktreePath": "/private/tmp/claude-501/-Users-manta-source-repos-manta-amoeba/d26fda8e-0d36-4020-aac5-aab9a0c64ded/scratchpad/cfcap2/wt",
+    "isDefault": false,
+    "activeSlice": "900-slice.alpha",
+    "activeTaskFile": "900-tasks.alpha"
+  }
+}

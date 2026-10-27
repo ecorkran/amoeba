@@ -13,10 +13,18 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from amoeba.runner.decide import Action, ObserveRun, ProjectView, ResumeRun
+from amoeba.runner.decide import (
+    Action,
+    BlockDispatch,
+    ObserveRun,
+    ProjectView,
+    ResumeRun,
+)
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.dispatch.state import DispatchState
+from amoeba.runner.gates.predispatch import Block
 from amoeba.runner.launch import text_parameter
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, Node
@@ -56,5 +64,19 @@ def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action |
     run_id = text_parameter(continued, PARAM_RUN_ID)
     if facts.state is DispatchState.REOBSERVE:
         return ObserveRun(node.id, run_id, continued.id, resolution.id, checkout)
+    # A resume goes ahead only on a passed pre-dispatch check (slice 128, D5).
+    check = view.dispatch_checks.get(node.id)
+    if check is None:
+        return None
+    if isinstance(check, Block):
+        return BlockDispatch(node.id, check)
     decision = Continuation(resolution.resolution.decision)
-    return ResumeRun(node.id, run_id, decision, continued.id, resolution.id, checkout)
+    return ResumeRun(
+        node.id,
+        run_id,
+        decision,
+        continued.id,
+        resolution.id,
+        checkout,
+        journal_extra={PARAM_DISPATCH_CHECK: dict(check.evidence)},
+    )

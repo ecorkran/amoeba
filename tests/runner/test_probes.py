@@ -37,6 +37,8 @@ FIXTURES = Path(__file__).parents[1] / "fixtures" / "cf"
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
 TIMEOUT = 8.0
 
+pytestmark = pytest.mark.usefixtures("passing_checks")
+
 
 def _budget(deadline: float = 1_000.0, clock: Clock | None = None) -> TickBudget:
     return TickBudget(deadline, Host(), (clock or Clock()).monotonic)

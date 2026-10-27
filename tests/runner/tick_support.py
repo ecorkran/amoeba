@@ -8,13 +8,18 @@ from itertools import count
 from pathlib import Path
 from typing import Any
 
+import pytest
 from feed_harness import apply
 
+import amoeba.runner.tick as tick_module
 from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
+from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
 from amoeba.runner.dispatch.observe_pointer import PointerStage
-from amoeba.runner.faults import NodeContext
+from amoeba.runner.faults import NodeContext, TickFaults
+from amoeba.runner.gates.predispatch import DispatchCheck, Ok
+from amoeba.runner.gates.stage import DispatchStageResult, GateStage
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
 from amoeba.runner.launch import (
@@ -27,6 +32,7 @@ from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.project_config import PROJECT_DEFAULTS, ProjectConfig
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import (
@@ -189,6 +195,37 @@ class Planner:
         ]
 
 
+class PassingGates(GateStage):
+    """A gate stage whose pre-dispatch check passes every current step.
+
+    For rigs whose planner is a test double that launches without dispatch facts: they
+    test the tick's sequencing, not the checks. A step with a real result keeps it.
+    """
+
+    def check_dispatch(
+        self, view: ProjectView, budget: TickBudget, faults: TickFaults
+    ) -> DispatchStageResult:
+        real = super().check_dispatch(view, budget, faults)
+        passed: dict[str, DispatchCheck] = {
+            node.id: Ok(
+                {
+                    "branch": "main",
+                    "head": None,
+                    "target": "main",
+                    "gate_status": None,
+                    "gate_review_type": None,
+                }
+            )
+            for node in view.current_steps
+        }
+        return DispatchStageResult({**passed, **real.checks}, real.cut_off)
+
+
+def install_passing_gates(patch: pytest.MonkeyPatch) -> None:
+    """Make every ``ProjectTick`` built from now on use :class:`PassingGates`."""
+    patch.setattr(tick_module, "GateStage", PassingGates)
+
+
 class Popen:
     def __init__(self, store: Store, error: OSError | None = None) -> None:
         self.store = store
@@ -218,6 +255,8 @@ class Rig:
         self.poll = ScriptedPoll(*answers)
         self.tracker = LaunchTracker()
         self.cf = FakeCf()
+        #: Runs the gate reads (slice 128); a test points it at the stub ``cf``.
+        self.gate_run: CfRun = self.cf
         self.probes = LinkProbes(run=self.cf, timeout_seconds=8.0)
         self.plans = PlanStage(
             schedule=PlanReadSchedule(PLAN_READ_INTERVAL, self.clock.monotonic),
@@ -227,6 +266,7 @@ class Rig:
         self.pointers = PointerStage(self.cf, 8.0, GRACE, self.clock.wall)
         self.planner = Planner(tmp_path)
         self.routing_table = small_table()
+        self.project_settings = PROJECT_DEFAULTS
         self.planners: tuple[Any, ...] = (self.planner,)
         self.popen = Popen(store)
         self.context = NodeContext()
@@ -257,6 +297,9 @@ class Rig:
             context=self.context,
             version_label=TEST_VERSION_LABEL,
             routing_table=self.routing_table,
+            project_settings=self.project_settings,
+            cf_run=self.gate_run,
+            call_timeout_seconds=8.0,
             amoeba_version=TEST_AMOEBA_VERSION,
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
@@ -297,6 +340,7 @@ def tenant_for(rig: Rig) -> RunnerTenant:
         monotonic=rig.clock.monotonic,
         version_label=TEST_VERSION_LABEL,
         routing_table=rig.routing_table,
+        project_config=ProjectConfig(),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
 

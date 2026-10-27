@@ -264,6 +264,37 @@ dependency. The capture is `tests/fixtures/cf/cf_get_worktree.json`.*
   own writes never move a pointer away from a run, and Squadron's `cf set slice`
   during the run writes the same index.
 
+## Gate state and config reads (slice 128)
+
+*Observed on CF 0.19.19 on 2026-10-26; a dated observation, not a version
+dependency. The captures are `tests/fixtures/cf/status/` and
+`tests/fixtures/cf/config/`, with a README naming how each state was reached.*
+
+- **`cf status --json -p <id> [--worktree <id>]`**, run in the checkout, reports
+  `activeSlice: {name, index, status, gateInfo?, pendingDecisions?, gateExempt?}`.
+  `status` is `needs-design`, `needs-tasks`, `in-implementation`, `complete`,
+  `no-active-slice`, `pending-review`, `review-failed` or `pending-decision`;
+  `gateInfo: {reviewType, rationale}` (`reviewType` `slice`, `tasks` or `code`) is
+  present with the two review statuses; `pendingDecisions` is `[{heading, line}]`.
+  `--worktree` takes a worktree id as well as its name. CF evaluates only the boundary
+  at the slice's current position, so the gate a step creates can be read only just
+  after it and the gate a step must cross only just before it.
+- **The position.** The Runner maps status and review type onto one ordered scale:
+  `NEEDS_DESIGN` (0), `AT_SLICE_GATE` (1), `PAST_SLICE_GATE` (2), `AT_TASKS_GATE` (3),
+  `PAST_TASKS_GATE` (4), `AT_CODE_GATE` (5), `PAST_CODE_GATE` (6), and two positions
+  off the scale: `PENDING_DECISION` and `UNKNOWN` (anything else). Status text is
+  trimmed and lower-cased; keys CF adds are ignored; `rationale` and
+  `pendingDecisions` are shown to people and never matched. The read must be about the
+  slice's own index; another index is a failed read.
+- **`cf config get <key> --json`**, run in the checkout, reports `{key, value, source,
+  description}`. The Runner reads `git.integration_branch` (empty means `main`, by the
+  key's own description) and `workflow.review_gate_effective_date` (empty, or
+  `YYYYMMDD`). An answer without a string `value` is a failed read, never a default.
+- **CF's two ungate hatches** are a design whose frontmatter `dateCreated` sorts before
+  a non-empty effective date, and one whose `review` is `none`. CF reports `gateExempt`
+  for the second only. The Runner reads both from the design and records them as checks
+  (see [The Runner's own checks](evidence-contract.md#the-runners-own-checks-slice-128)).
+
 ## The Runner's own writes (D8)
 
 A CF write the Runner issues (102's `cf_write` journal kind) also changes the

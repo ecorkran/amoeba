@@ -107,6 +107,7 @@ def begin_reissue(
             PARAM_RUN_ID: action.run_id,
             PARAM_CHECKOUT: str(action.checkout),
             PARAM_REISSUE_OF: action.reissue_of,
+            **action.journal_extra,
         },
     )
     if _run_exists(poll(action.run_id)):

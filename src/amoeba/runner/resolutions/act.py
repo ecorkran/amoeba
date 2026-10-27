@@ -79,6 +79,8 @@ def journal_continuation(
     parameters[PARAM_RESOLUTION] = action.resolution
     if resume_skipped is not None:
         parameters[PARAM_RESUME_SKIPPED] = resume_skipped
+    if isinstance(action, ResumeRun):
+        parameters.update(action.journal_extra)
     return store.journal_issue(
         action.node_id, kind=CommandKind.SQ_RUN, parameters=parameters
     )

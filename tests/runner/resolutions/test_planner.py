@@ -8,14 +8,18 @@ import pytest
 
 from amoeba.runner.decide import (
     Action,
+    BlockDispatch,
     LaunchRun,
     ObserveRun,
     Planner,
     ResumeRun,
     decide,
 )
+from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
+from amoeba.runner.faults import FaultKind
+from amoeba.runner.gates.predispatch import Block
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import (
@@ -27,7 +31,14 @@ from amoeba.store import (
     Resolution,
     ResolutionOutcome,
 )
-from runner.dispatch.dispatch_support import FIRST, SECOND, entry, facts, view_of
+from runner.dispatch.dispatch_support import (
+    FIRST,
+    OK_EVIDENCE,
+    SECOND,
+    entry,
+    facts,
+    view_of,
+)
 
 PLANNER = ContinuationPlanner()
 
@@ -64,7 +75,15 @@ def test_retry_and_accept_resume_the_continued_run(
     view = view_of({"a": _facts(DispatchState.RESUME, decision, continued)})
 
     assert PLANNER.plan(view) == [
-        ResumeRun("a", "run-a", expected, continued.id, "b-1", FIRST)
+        ResumeRun(
+            "a",
+            "run-a",
+            expected,
+            continued.id,
+            "b-1",
+            FIRST,
+            journal_extra={PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)},
+        )
     ]
 
 
@@ -180,3 +199,34 @@ def test_decide_refuses_a_continuation_for_a_step_that_is_not_current() -> None:
 
 def test_launch_runs_are_not_continuations() -> None:
     assert not issubclass(LaunchRun, (ResumeRun, ObserveRun))
+
+
+# -- slice 128, D5: a resume goes ahead only on a passed check -------------------
+
+
+def test_a_resume_with_no_result_waits() -> None:
+    continued = _continued()
+    view = view_of({"a": _facts(DispatchState.RESUME, "retry", continued)}, checks={})
+
+    assert ContinuationPlanner().plan(view) == []
+
+
+def test_a_blocked_resume_gives_block_dispatch() -> None:
+    continued = _continued()
+    block = Block(FaultKind.CHECKOUT_BRANCH, "wrong branch", {"branch": "x"})
+    view = view_of(
+        {"a": _facts(DispatchState.RESUME, "retry", continued)}, checks={"a": block}
+    )
+
+    assert ContinuationPlanner().plan(view) == [BlockDispatch("a", block)]
+
+
+def test_an_observation_needs_no_check() -> None:
+    continued = _continued()
+    view = view_of(
+        {"a": _facts(DispatchState.REOBSERVE, "handled", continued)}, checks={}
+    )
+
+    [action] = ContinuationPlanner().plan(view)
+
+    assert isinstance(action, ObserveRun)

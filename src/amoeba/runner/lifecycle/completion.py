@@ -60,7 +60,10 @@ def complete_observed_steps(
         if observation is None or not tree.is_linked(node):
             continue
         if step_complete(step, observation):
-            wrote = _complete(store, node, step, has_open_entry) or wrote
+            detail = f"observed: {step} is complete in the CF plan"
+            wrote = (
+                complete_step(store, node, step, has_open_entry, detail=detail) or wrote
+            )
     return wrote
 
 
@@ -72,9 +75,19 @@ def _observation_for(
     return observations.get((owner.kind, owner.cf.index))
 
 
-def _complete(
-    store: Store, node: Node, step: LifecycleStep, has_open_entry: set[str]
+def complete_step(
+    store: Store,
+    node: Node,
+    step: LifecycleStep,
+    has_open_entry: set[str],
+    *,
+    detail: str,
 ) -> bool:
+    """Mark ``node`` done, resolving a human step's block first; ``detail`` says why.
+
+    Used by the plan read (CF shows the step complete) and by the merge observation
+    (git shows the head merged). Returns whether anything was written.
+    """
     if node.id in has_open_entry:
         return False
     if node.status is NodeStatus.RUNNABLE:
@@ -86,7 +99,7 @@ def _complete(
         store.resolve(
             node.id,
             resolved_by=RUNNER_ACTOR,
-            detail=f"observed: {step} is complete in the CF plan",
+            detail=detail,
         )
         store.update_node_status(node.id, NodeStatus.DONE)
         return True

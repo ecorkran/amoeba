@@ -24,6 +24,7 @@ from pathlib import Path
 
 from contract.bootstrap import ReadyAnnouncer
 
+import amoeba.runner.tick as tick_module
 from amoeba.process import (
     ProcessSettings,
     ResidentProcess,
@@ -37,6 +38,7 @@ from amoeba.runner.decide import Action, LaunchRun, Planner, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
+from amoeba.runner.project_config import ProjectConfig
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
@@ -45,7 +47,7 @@ from runner.routing.table_support import (
     TEST_AMOEBA_VERSION,
     small_table,
 )
-from runner.tick_support import runnable_unbusy
+from runner.tick_support import PassingGates, runnable_unbusy
 
 KILL_AT_ENV = "PROOF_KILL_AT"
 
@@ -222,6 +224,10 @@ def main(argv: Sequence[str]) -> None:
         )
     )
     popen, poll = _hooked(kill_at)
+    if not arguments.dispatch:
+        # The proof planner launches without dispatch facts, so it has no checks to
+        # pass; this process tests crash recovery, not the pre-dispatch checks.
+        tick_module.GateStage = PassingGates  # type: ignore[misc]
     runner = RunnerTenant(
         settings=settings,
         supervisor_dir=supervisor_dir,
@@ -233,6 +239,7 @@ def main(argv: Sequence[str]) -> None:
         monotonic=time.monotonic,
         version_label="sq-test-label",
         routing_table=small_table(ADVANCE_COMPLETED),
+        project_config=ProjectConfig(),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
     process = ResidentProcess(

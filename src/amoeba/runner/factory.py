@@ -22,6 +22,11 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.probes import probe_sq
+from amoeba.runner.project_config import (
+    PROJECT_DEFAULTS,
+    ProjectConfig,
+    load_project_config,
+)
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.routing.table import RoutingTable, TableError, load_table
 from amoeba.runner.tenant import RunnerTenant
@@ -99,6 +104,20 @@ def load_routing(settings: ProcessSettings) -> tuple[RoutingTable, str]:
     return table, amoeba_version
 
 
+def load_projects(settings: ProcessSettings) -> ProjectConfig:
+    """The per-project config, read once at start.
+
+    Raises:
+        StartupFailedError: Listing every problem with the file.
+    """
+    config = load_project_config(settings.project_config_path)
+    if settings.project_config_path is None:
+        logger.info("no project config: every project uses %s", PROJECT_DEFAULTS)
+    else:
+        logger.info("project config loaded from %s", settings.project_config_path)
+    return config
+
+
 def runner_tenant(
     settings: ProcessSettings,
     supervisor_dir: Path,
@@ -114,11 +133,13 @@ def runner_tenant(
             (tests, later slices) is used as given.
 
     Raises:
-        StartupFailedError: For a bad bound, a refused routing table, or a failed
+        StartupFailedError: For a bad bound, a refused routing table or project
+            config, or a failed
             ``sq`` probe.
     """
     validate_settings(settings)
     routing_table, amoeba_version = load_routing(settings)
+    project_config = load_projects(settings)
     (supervisor_dir / LAUNCH_LOGS_DIRNAME).mkdir(parents=True, exist_ok=True)
     probe_sq(settings, _now(), poll_run)
     logger.info("sq probe passed: `sq runs wait` has the shape the Runner needs")
@@ -135,5 +156,6 @@ def runner_tenant(
         monotonic=time.monotonic,
         version_label=version_label,
         routing_table=routing_table,
+        project_config=project_config,
         amoeba_version=amoeba_version,
     )

@@ -1,0 +1,21 @@
+{
+  "project": "scratch",
+  "phase": "Phase 0: Concept",
+  "activeSlice": {
+    "name": "alpha",
+    "index": 900,
+    "status": "pending-review",
+    "taskProgress": {
+      "completed": 3,
+      "total": 3,
+      "inferredStatus": "complete"
+    },
+    "gateInfo": {
+      "reviewType": "code",
+      "rationale": "Slice 900 requires a code review before proceeding — no review artifact found."
+    }
+  },
+  "slicePlan": null,
+  "summary": "scratch — Phase 0: Concept — slice 900 pending-review (3/3 tasks)",
+  "resolutionSource": "cwd"
+}

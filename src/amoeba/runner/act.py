@@ -17,6 +17,7 @@ from amoeba.runner import finish
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import (
     Action,
+    BlockDispatch,
     BlockHumanStep,
     LaunchRun,
     ObserveRun,
@@ -25,7 +26,9 @@ from amoeba.runner.decide import (
 )
 from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.reissue import ReissueLaunch, begin_reissue
-from amoeba.runner.faults import NodeContext, TickFaults
+from amoeba.runner.faults import PAYLOAD_FAULT_KIND, NodeContext, TickFaults
+from amoeba.runner.ingest.outcome import BlockPlan, cut_to_bound
+from amoeba.runner.ingest.record import block_once
 from amoeba.runner.launch import (
     PARAM_PARAMS,
     PARAM_PIPELINE,
@@ -39,7 +42,33 @@ from amoeba.runner.launch import (
 from amoeba.runner.lifecycle.human_steps import block_human_step
 from amoeba.runner.observed import LaunchFailed
 from amoeba.runner.resolutions.act import Acted, ContinuationActs
-from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, CommandKind, JournalEntry, Store
+from amoeba.store import (
+    PARAM_CHECKOUT,
+    PARAM_RUN_ID,
+    BlockedKind,
+    CommandKind,
+    JournalEntry,
+    Store,
+)
+
+
+def block_dispatch(store: Store, action: BlockDispatch) -> None:
+    """Block the step on a human for a failed pre-dispatch check, once (D5, D11)."""
+    block = action.block
+    # Text from git and CF is bounded like 122's tail before it is stored (D11).
+    payload = {
+        key: cut_to_bound(value) if isinstance(value, str) else value
+        for key, value in block.payload.items()
+    }
+    block_once(
+        store,
+        action.node_id,
+        BlockPlan(
+            BlockedKind.HUMAN,
+            cut_to_bound(block.context),
+            {**payload, PAYLOAD_FAULT_KIND: block.fault_kind.value},
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -100,6 +129,9 @@ class ActStage:
                     # Store-only actions are applied in one transaction and not
                     # journaled: there is no external side effect to recover (D9).
                     block_human_step(self._store, action)
+                case BlockDispatch():
+                    # Store-only, and idempotent: a step already blocked is left be.
+                    block_dispatch(self._store, action)
                 case LaunchRun(reissue_of=str()):
                     if not budget.allows_call():
                         return ActOutcome(TickResult.CUT_OFF, wrote)
@@ -136,6 +168,7 @@ class ActStage:
                 PARAM_PARAMS: dict(action.params),
                 PARAM_RUN_ID: run_id,
                 PARAM_CHECKOUT: str(action.checkout),
+                **action.journal_extra,
             },
         )
         self._start(entry)

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from amoeba.runner.routing.inputs import NONE, RoutingInput, RoutingInputs
 
-#: A completed run on a runnable ``slice_design`` step with no review.
+#: A completed run on a runnable ``slice_design`` step with no review, whose CF gate
+#: is clear and whose checks passed.
 BASE_VALUES = {
     RoutingInput.OUTCOME: "completed",
     RoutingInput.CHECKPOINT_KIND: NONE,
@@ -17,6 +18,8 @@ BASE_VALUES = {
     RoutingInput.STEP: "slice_design",
     RoutingInput.NODE_STATE: "runnable",
     RoutingInput.REVIEW_ACCEPTED: NONE,
+    RoutingInput.GATE_STATE: "clear",
+    RoutingInput.CHECK_STANDING: "passed",
 }
 
 

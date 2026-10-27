@@ -22,6 +22,10 @@ COMMAND_WORDS: Final = frozenset(
         "initiatives",
         "slices",
         plan_read.CF_SET_COMMAND,
+        "config",
+        plan_read.CF_WORKTREE_FLAG,
+        plan_read.CF_KEY_INTEGRATION_BRANCH,
+        plan_read.CF_KEY_REVIEW_GATE_EFFECTIVE_DATE,
     }
 )
 

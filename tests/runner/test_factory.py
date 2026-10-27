@@ -17,6 +17,7 @@ from amoeba.runner.decide import Action, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
+from amoeba.runner.project_config import MergePolicy, ProjectConfig
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.routing.table import parse_table
 from amoeba.store import Store
@@ -217,3 +218,56 @@ def test_an_unreadable_package_version_fails_start(
 
     with pytest.raises(StartupFailedError, match="installed version"):
         runner_tenant(ProcessSettings(), healthy_sq)
+
+
+def _settings_with_project_config(path: Path) -> ProcessSettings:
+    return dataclasses.replace(ProcessSettings(), project_config_path=path)
+
+
+def test_the_tenant_holds_the_project_config_the_file_gives(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path, tmp_path: Path
+) -> None:
+    config_file = tmp_path / "projects.yaml"
+    config_file.write_text("projects:\n  scratch:\n    merge_policy: auto\n")
+    captured: list[dict[str, Any]] = []
+
+    def spy(**tenant_kwargs: Any) -> RunnerTenant:
+        captured.append(tenant_kwargs)
+        return RunnerTenant(**tenant_kwargs)
+
+    monkeypatch.setattr(factory, "RunnerTenant", spy)
+
+    runner_tenant(_settings_with_project_config(config_file), healthy_sq)
+
+    [kwargs] = captured
+    config = kwargs["project_config"]
+    assert config.for_project("scratch").merge_policy is MergePolicy.AUTO
+    assert config.for_project("amoeba").merge_policy is MergePolicy.HUMAN
+
+
+def test_with_no_project_config_every_project_takes_the_defaults(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path
+) -> None:
+    captured: list[dict[str, Any]] = []
+
+    def spy(**tenant_kwargs: Any) -> RunnerTenant:
+        captured.append(tenant_kwargs)
+        return RunnerTenant(**tenant_kwargs)
+
+    monkeypatch.setattr(factory, "RunnerTenant", spy)
+
+    runner_tenant(ProcessSettings(), healthy_sq)
+
+    assert captured[0]["project_config"] == ProjectConfig()
+
+
+def test_an_invalid_project_config_fails_start_before_anything_is_created(
+    healthy_sq: Path, tmp_path: Path
+) -> None:
+    config_file = tmp_path / "projects.yaml"
+    config_file.write_text("projects:\n  scratch:\n    merge_policy: sometimes\n")
+
+    with pytest.raises(StartupFailedError, match="sometimes"):
+        runner_tenant(_settings_with_project_config(config_file), healthy_sq)
+
+    assert not healthy_sq.exists()

@@ -1,0 +1,16 @@
+{
+  "project": "scratch",
+  "phase": "Phase 0: Concept",
+  "activeSlice": {
+    "name": "alpha",
+    "index": 900,
+    "status": "review-failed",
+    "gateInfo": {
+      "reviewType": "slice",
+      "rationale": "Review artifact present but verdict FAIL does not clear threshold 'concerns' for slice 900 (project-documents/user/reviews/900-review.slice.alpha.md)."
+    }
+  },
+  "slicePlan": null,
+  "summary": "scratch — Phase 0: Concept — slice 900 review-failed",
+  "resolutionSource": "cwd"
+}

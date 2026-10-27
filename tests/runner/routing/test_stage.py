@@ -203,8 +203,10 @@ def test_an_unknown_step_is_routed_without_counting_an_attempt(store: Store) -> 
     assert decision.inputs["step"] == "unknown"
     assert decision.inputs["attempt"] is None
     assert decision.attempt_step is None and decision.attempt_count is None
-    # The shipped advance rule does not name step, and advance has no attempt limit.
-    assert decision.route is Route.ADVANCE
+    # No exit gate can be named for a step nobody knows, so the shipped advance rule's
+    # gate_state is unknown and the outcome escalates.
+    assert decision.inputs["gate_state"] == "unknown"
+    assert decision.route is Route.ESCALATE
 
 
 def test_the_decision_records_the_table_and_versions(store: Store) -> None:
