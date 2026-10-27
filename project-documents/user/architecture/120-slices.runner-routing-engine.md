@@ -24,7 +24,7 @@ Architecture-level, built on a complete initiative 100. The Runner is new code, 
 
 Three things shape the decomposition:
 
-- **The first proof is the turning point.** The arch puts tier inference and batch dispatch after the first proof, because the proof's wrong stops decide what they need. Slices 120–129 reach the proof. Slices 130 and 131 follow it and are still in this initiative's scope. Multi-project scheduling waits for real multi-project use and is listed under Future Work.
+- **The first proof is the turning point.** The arch puts tier inference and batch dispatch after the first proof, because the proof's wrong stops decide what they need. Slices 120–128 build the Runner. Slices 130 and 131 follow it and are still in this initiative's scope. Multi-project scheduling waits for real multi-project use and is listed under Future Work.
 - **Squadron 0.23.5 carries everything the proof needs.** S9 through S13 were released on 20261020. The Runner checks the shapes at start (slice 122). It does not check version numbers.
 - **One edit point for routing.** Only slice 126 decides routes. Slices before it ingest and record, and route nothing. A slice that needs a route before 126 exists escalates, which is the table's catch-all anyway.
 
@@ -70,7 +70,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - A fault in one project is logged at ERROR and escalated, and the tick continues for the other projects. A store write failure exits the process.
    - A tick stops issuing subprocess calls at its deadline. Work it did not reach goes first on the next tick.
    **Dependencies:** [120, 121]
-   **Interfaces:** Provides the tick skeleton, the launch and observe primitives, and settings to 123–129. Consumes the journal, recovery, and the project-scoped escalation.
+   **Interfaces:** Provides the tick skeleton, the launch and observe primitives, and settings to 123–128. Consumes the journal, recovery, and the project-scoped escalation.
    **Risk Level:** High. Detached launch, launch confirmation and crash adoption are where the Runner can lose or duplicate a run.
    **Relative Effort:** 4
 
@@ -83,7 +83,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - A failed snapshot, or a recovery that found nothing changed, triggers no early plan read. The plan is still read on its interval (slice 123, D7).
    - Human steps (P2, P3, P7, host cutover) are `blocked_on_human` from the moment they become current. This is proven under a test planner. The planner joins production in 124, because "current" needs drive (slice 123, D9).
    **Dependencies:** [122]
-   **Interfaces:** Provides the node tree, the step map and the predecessor function to 124–129. Consumes CF's `--json` surfaces and 108's snapshots.
+   **Interfaces:** Provides the node tree, the step map and the predecessor function to 124–128. Consumes CF's `--json` surfaces and 108's snapshots.
    **Risk Level:** Medium. Identity across plan edits is the subtle part.
    **Relative Effort:** 3
 
@@ -124,7 +124,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - No route is chosen in code outside the table. Code defines only inputs and predicates.
    - A run in flight past its pipeline's time bound escalates, without being killed.
    **Dependencies:** [121, 125]
-   **Interfaces:** Provides decision records to 127–129 and the judge-eligible mark to 140. Defines the table file format: YAML, one table for every project (slice 126, D2).
+   **Interfaces:** Provides decision records to 127–128 and the judge-eligible mark to 140. Defines the table file format: YAML, one table for every project (slice 126, D2).
    **Risk Level:** Medium. The grammar is hard to change once tables exist.
    **Relative Effort:** 3
 
@@ -157,30 +157,18 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 
 ## Integration Work
 
-10. [ ] **(129) First Proof** — One project, one PM-chosen unstarted unit, driven end to end by the Runner under intents, through design, tasks and implementation to the human merge. Every stop is recorded. Wrong stops (escalations a human found routable, or routes a human disagreed with) become the next routing rules, or become the trigger for 130 and 131. The slice also closes out the substrate guide's 120 row and the operator documentation for running the Runner, and adds `amoeba inspect resolutions` (issue #16) for the write-up. Before the Runner is pointed at a real project, pruning must hold runs paused under the Runner (issue #14), or a paused run can be pruned while its resolution is pending (slice 127, Technical Scope).
-   **Value:** The Runner is shown to drive real work, and its stops become evidence for the routing table.
-   **Success Criteria:**
-   - The chosen unit reaches merged with no Squadron or CF command run by hand, except at steps the routing table sent to the PM.
-   - Every decision in the run can be recomputed from its record.
-   - A restart of the resident process during the proof leaves the run completable.
-   - The proof's stops are written up with a proposed table edit or follow-on slice for each wrong stop.
-   - Operator documentation covers settings, intents, resolutions and the routing table.
-   **Dependencies:** [120–128]
-   **Interfaces:** Consumes the whole Runner. Produces the evidence that shapes 130, 131 and 140.
-   **Risk Level:** Medium
-   **Relative Effort:** 3
 
 ## After the First Proof
 
-These are in scope for initiative 120. They are built after 129 because the arch makes the proof's stops their input.
+These are in scope for initiative 120. They are built after 128 because the arch makes the proof's stops their input.
 
-11. [ ] **(130) Batch Dispatch** — Treats a plan-wide run, `slices-plan` first, as one dispatch whose per-item outcomes (Squadron's batch report, `items[]`) map onto per-slice nodes. The Runner acts only at items Squadron flags or pauses on. Resuming a flagged item is an explicit per-item resume carrying the resolution's decision. Which lifecycle steps may be batched, and how report items map to nodes, are decided at slice design. Dependencies: [129]. Risk: Medium. Effort: 4/5 (raised at slice design: the store kinds and the item-resume observer)
+11. [ ] **(130) Batch Dispatch** — Treats a plan-wide run, `slices-plan` first, as one dispatch whose per-item outcomes (Squadron's batch report, `items[]`) map onto per-slice nodes. The Runner acts only at items Squadron flags or pauses on. Resuming a flagged item is an explicit per-item resume carrying the resolution's decision. Which lifecycle steps may be batched, and how report items map to nodes, are decided at slice design. Dependencies: [128]. Risk: Medium. Effort: 4/5 (raised at slice design: the store kinds and the item-resume observer)
 
-12. [ ] **(131) Tier Inference and Baseline-Diffed Checks** — Adds the inferred tier as a routing input, built from closed signals only: severity, `location_verified`, standing, recurrence and the Runner's Tier-1 predicates. A finding the rules cannot classify is Tier 2, never Tier 1. Adds test checks diffed against a baseline, dispatched like a run because they are long and write. Scope is set by the first proof's stops. When Squadron ships a tier field (S1), it becomes one more input. Dependencies: [129]. Risk: Medium. Effort: 3/5
+12. [ ] **(131) Tier Inference and Baseline-Diffed Checks** — Adds the inferred tier as a routing input, built from closed signals only: severity, `location_verified`, standing, recurrence and the Runner's Tier-1 predicates. A finding the rules cannot classify is Tier 2, never Tier 1. Adds test checks diffed against a baseline, dispatched like a run because they are long and write. Scope is set by the first proof's stops. When Squadron ships a tier field (S1), it becomes one more input. Dependencies: [128]. Risk: Medium. Effort: 3/5
 
 ## Implementation Order
 
-`120 → 121 → 122 → 123 → 124 → 125 → 126 → 127 → 128 → 129`, then 130 and 131 in either order.
+`120 → 121 → 122 → 123 → 124 → 125 → 126 → 127 → 128`, then 130 and 131 in either order.
 
 - **Dependencies.** The contract changes (120, 121) come first, as the arch requires. 122 is the loop every later slice adds to. 123 has to exist before intents have targets (124), and dispatch needs both a node and a drive setting (125).
 - **Testability.** 122 proves a journaled run across a crash before any lifecycle logic exists. 125 is the first point where a real slice step runs, and its outcomes are recorded and escalated through the catch-all rather than routed.
@@ -199,8 +187,8 @@ These are in scope for initiative 120. They are built after 129 because the arch
 
 Living backlog; entries may be added during slice design, task breakdown, or implementation.
 
-1. [ ] **Multi-project scheduling** — Fairness across projects and a global limit on in-flight runs. Waits until real multi-project use shows it is needed. Dependencies: [129]. Effort: 3/5
-2. [ ] **Retry class for transient faults** — v1 escalates every fault. Once the first proof shows which faults recur (timeouts, provider errors), give them a bounded automatic retry in the routing table. Dependencies: [129]. Effort: 2/5
+1. [ ] **Multi-project scheduling** — Fairness across projects and a global limit on in-flight runs. Waits until real multi-project use shows it is needed. Dependencies: [128]. Effort: 3/5
+2. [ ] **Retry class for transient faults** — v1 escalates every fault. Once the first proof shows which faults recur (timeouts, provider errors), give them a bounded automatic retry in the routing table. Dependencies: [128]. Effort: 2/5
 3. [ ] **Relink intent for renumbered slices** — A renumber currently orphans the node and resets its history. Add an intent that links an orphan to its new index, if renumbering turns out to be common. Dependencies: [123, 124]. Effort: 2/5
 4. [ ] **Judge route** — Initiative 140 adds the judge route, and rules marked judge-eligible switch to it. Listed here so the mark's consumer is recorded. Dependencies: [126], initiative 140.
 5. [ ] **Squadron review-completed event (S8)** — If Squadron adds the event, it can replace per-tick polling for completion. Dependencies: [122].
@@ -208,7 +196,7 @@ Living backlog; entries may be added during slice design, task breakdown, or imp
 7. [ ] **Feed change for project-escalation closure** — From 121's design: a project-scoped escalation's opening reaches the feed as `message_posted`, but its closure is a column update and emits nothing. Add a closure change kind (new `ChangeKind`, trigger, invariant-test step) once a subscriber such as the notification bridge needs to clear a shown fault. Dependencies: [121]. Effort: 1/5
 8. [ ] **Mark a step done** — From 123's design: a slice already partly done by hand gets all its steps runnable, because the Runner infers no partial progress. Add an intent or resolution that marks a step done, if driving such slices turns out to be common. Dependencies: [123, 124]. Effort: 1/5
 9. [ ] **CF asks: `indexSource` and a no-plan error code** — From 123's design: `cf list slices --json` does not expose `indexSource`, so CF's fallback counters cannot be told from explicit indexes. CF also reports "no slice plan" as `code: UNKNOWN`. Ask CF for both. Dependencies: none. Effort: 1/5
-10. [ ] **Per-project routing tables** — From 126's design: one table serves every project in v1. Let a project override it once the first proof or a second project shows different rules are needed. Each decision already records its table version. Dependencies: [129]. Effort: 2/5
+10. [ ] **Per-project routing tables** — From 126's design: one table serves every project in v1. Let a project override it once the first proof or a second project shows different rules are needed. Each decision already records its table version. Dependencies: [128]. Effort: 2/5
 11. [ ] **Resume a failed run** — From 127's design: Squadron resumes a failed run by re-running its failed step, but v1 offers only rerun or stop for one. A failed run releases its checkout, so another slice may have changed the branch since. Add a `retry` for failed runs once the checkout hold covers them. Dependencies: [127, 128]. Effort: 2/5
 12. [ ] **Batch `tasks` with `tasks-plan`** — From 130's design (D1): `tasks-plan` also selects slices whose tasks exist but whose tasks review is missing or below threshold, and it pre-flags slices whose design review is below threshold. The store may already hold either step as done through a PM accept. Batching it needs its own selection predicate and item-to-step mapping, over 130's generic fan-out and item resume. Dependencies: [130]. Effort: 2/5
 13. [ ] **Observe merges made on a hosting service** — From 128's design (D9): the Runner sees a merge only in local refs, so a merge made only on the hosting service is seen after the PM pulls it into the local target. Fetching would be a git write. Add a read-only remote check if PR merges turn out to be common. Dependencies: [128]. Effort: 1/5
