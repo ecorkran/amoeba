@@ -31,7 +31,7 @@ status: not_started
 - **What this slice delivers:** `amoeba inspect resolutions` (D6); the proof run (D3, D4); the stop write-up `user/analysis/120-analysis.first-proof-stops.md` (D5); table edits with fixtures and `tests/runner/routing/test_first_proof_rules.py` (D7); `docs/runner-guide.md` and the substrate guide close-out (D8); CHANGELOG.
 - **Next planned slices:** 130 (batch dispatch) and 131 (tier inference). The write-up's proposals are their scope input.
 
-**Branch:** all work happens on `129-slice.first-proof`, forked from the target (`cf config get git.integration_branch`; empty means `main`). No task here merges this repository's branch. The only merge in this file is the PM's merge of the *target project's* slice branch at its human step (Task 3.5), which is the subject of the proof.
+**Branch:** all work happens on `129-slice.first-proof`, forked from the target (`cf config get git.integration_branch`; empty means `main`). No task merges anything. Task 3.5 only observes the PM's merge in the target project.
 
 **Reading note:** this file does not restate the LLD. "Per the LLD" means open `user/slices/129-slice.first-proof.md` at the named decision (D1–D9), "Implementation Details" or "Verification Walkthrough" step. Source paths are relative to `src/amoeba/` unless they start with `tests/`, `docs/` or `project-documents/`. Keep new or changed source files near 300 lines and functions near 50.
 
@@ -197,11 +197,10 @@ Worked with the PM present (see "Roles in the proof"). Every `<…>` value comes
   - [ ] The step has exactly one `sq_run` entry for that attempt (`inspect journal --json`).
 - [ ] If `P6` finished before the kill, it is a miss, not a pass. Repeat at the unit's next in-flight run. If no run remains in flight, the crash criterion is unmet. Write `BLOCKED:` here, and the PM names a second unit per D1, which is driven through Tasks 3.1–3.4 in the same supervisor directory.
 
-### Task 3.5: The human merge
-**Effort:** 1/5. **Dependencies:** 3.3 (the `merge` step is blocked as a human step).
+### Task 3.5: Observe the human merge
+**Effort:** 1/5. **Dependencies:** 3.3 (the `merge` step is blocked as a human step). The merge itself is the PM's act at that human step in `<target-checkout>`, under that project's rules. It is not a task. The agent logs it when the PM reports it.
 
 - [ ] Confirm that `P6` ran with `merge=false` (the `P6` entry's `merge_policy` and parameters), and that the `merge` step is blocked as a human step.
-- [ ] **(PM)** The PM merges the slice branch into the target project's target, in `<target-checkout>`, under that project's rules. Log it.
 - [ ] Confirm the observation. The `merge` step goes `done`, and so does the slice node (`inspect nodes`). If it does not, apply D9.
 - [ ] The unit's `slice_design`, `tasks`, `implementation` and `merge` steps are all `done`.
 
