@@ -696,7 +696,7 @@ checks out, resets, stashes, deletes a branch or pushes, under any policy.
   Keys under `projects` are Amoeba project ids; values are trimmed and lower-cased;
   an unknown key or value, a missing or unreadable file or invalid YAML exits
   `STARTUP_FAILED` listing every problem. With no file every project takes the
-  defaults (`merge_policy: human`, defined once in `runner/project_config.py`). The
+  defaults (`merge_policy: auto`, defined once in `runner/project_config.py`). The
   file holds no secrets. A change needs a restart.
 - **The merge policy.** Under `human`, `P6` runs with `-p merge=false` and the PM
   merges. Under `auto`, `P6` runs without the parameter and merges. A `P6` entry

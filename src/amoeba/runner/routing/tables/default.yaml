@@ -33,20 +33,25 @@ rules:
     when: {outcome: completed, review_accepted: true, check_standing: passed}
     route: advance
 
-  # A new concern is worth one more round with the fresh review as feedback. It does
-  # not name gate_state: a CONCERNS review fails CF's gate under a pass threshold, and
-  # a rerun is the step's own answer to its review.
-  - id: rerun-new-concerns
+  # Squadron's own revision loop already ran and accepted CONCERNS under the run's
+  # accept threshold, and CF's gate clears it. Keep going; do not ask the PM.
+  - id: advance-on-accepted-concerns
     when:
       outcome: completed
       verdict: concerns
       standing: stated
-      recurrence: new
+      gate_state: clear
       check_standing: passed
+    route: advance
+
+  # A FAIL gets fresh rounds before anyone is asked.
+  - id: rerun-failed-review
+    when: {outcome: completed, verdict: fail, check_standing: passed}
     route: rerun
     max_attempts: 2
 
-  # The outcomes a Judge would weigh. A recurring concern is not rerun.
+  # A review still short after its reruns, or one CF's gate blocks. A Judge would
+  # weigh these.
   - id: escalate-completed-concerns
     when: {outcome: completed, verdict: [concerns, fail]}
     route: escalate

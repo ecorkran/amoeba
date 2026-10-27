@@ -70,7 +70,10 @@ def test_a_pointed_step_launches_its_pipeline() -> None:
 def test_each_step_launches_its_pipeline_and_p6_never_merges(
     step: LifecycleStep, pipeline: str
 ) -> None:
-    view = view_of({"a": facts(DispatchState.POINTED, step=step)})
+    view = view_of(
+        {"a": facts(DispatchState.POINTED, step=step)},
+        merge_policy=MergePolicy.HUMAN,
+    )
 
     [action] = PLANNER.plan(view)
 
@@ -83,7 +86,8 @@ def test_each_step_launches_its_pipeline_and_p6_never_merges(
 
 def test_p6_records_the_policy_it_launches_under_and_merges_only_under_auto() -> None:
     human = view_of(
-        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)}
+        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)},
+        merge_policy=MergePolicy.HUMAN,
     )
     auto = view_of(
         {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)},

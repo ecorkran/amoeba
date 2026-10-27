@@ -24,7 +24,7 @@ def test_no_path_gives_every_project_the_defaults() -> None:
     config = load_project_config(None)
 
     assert config.for_project("anything") == PROJECT_DEFAULTS
-    assert PROJECT_DEFAULTS.merge_policy is MergePolicy.HUMAN
+    assert PROJECT_DEFAULTS.merge_policy is MergePolicy.AUTO
 
 
 def test_a_named_project_takes_its_own_policy(tmp_path: Path) -> None:

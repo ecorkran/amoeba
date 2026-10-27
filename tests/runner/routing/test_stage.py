@@ -54,6 +54,10 @@ def _passed() -> tuple[StagedReview, ...]:
     return (StagedReview("v-pass", verdict=ReviewVerdict.PASS),)
 
 
+def _failed(verdict_id: str) -> tuple[StagedReview, ...]:
+    return (StagedReview(verdict_id, verdict=ReviewVerdict.FAIL),)
+
+
 def _concerned(verdict_id: str, summary: str) -> tuple[StagedReview, ...]:
     return (StagedReview(verdict_id, findings=(concern(summary),)),)
 
@@ -74,24 +78,36 @@ def test_a_stated_pass_marks_the_step_done_and_counts_attempt_one(
     assert store.unrouted_outcomes(PROJECT) == []
 
 
-def test_new_concerns_rerun_then_escalate_on_the_second_outcome(
-    store: Store,
-) -> None:
+def test_accepted_concerns_advance_without_asking(store: Store) -> None:
     node_id = stage_node(store)
     stage_outcome(
         store, node_id, run_id="run-1", reviews=_concerned("v-1", "first problem")
     )
     _route(store)
 
+    decision = _only_decision(store, node_id)
+    assert (decision.rule_id, decision.route) == (
+        "advance-on-accepted-concerns",
+        Route.ADVANCE,
+    )
+    assert _status(store, node_id) is NodeStatus.DONE
+    assert _open_blocks(store, node_id) == []
+
+
+def test_a_failed_review_reruns_then_escalates_on_the_second_outcome(
+    store: Store,
+) -> None:
+    node_id = stage_node(store)
+    stage_outcome(store, node_id, run_id="run-1", reviews=_failed("v-1"))
+    _route(store)
+
     first = _only_decision(store, node_id)
-    assert (first.rule_id, first.route) == ("rerun-new-concerns", Route.RERUN)
+    assert (first.rule_id, first.route) == ("rerun-failed-review", Route.RERUN)
     assert first.route_parameters == {"max_attempts": 2}
     assert _status(store, node_id) is NodeStatus.RUNNABLE
     assert _open_blocks(store, node_id) == []
 
-    stage_outcome(
-        store, node_id, run_id="run-2", reviews=_concerned("v-2", "another problem")
-    )
+    stage_outcome(store, node_id, run_id="run-2", reviews=_failed("v-2"))
     _route(store)
 
     second = store.routing_decisions(node_id)[-1]
@@ -102,20 +118,6 @@ def test_new_concerns_rerun_then_escalate_on_the_second_outcome(
     assert second.attempt_count == 2
     assert second.route_parameters == {"judge_eligible": True}
     assert _open_blocks(store, node_id) == [BlockedKind.HUMAN]
-
-
-def test_a_recurring_concern_is_not_rerun(store: Store) -> None:
-    node_id = stage_node(store)
-    stage_outcome(
-        store, node_id, run_id="run-1", reviews=_concerned("v-1", "same problem")
-    )
-    _route(store)
-    stage_outcome(
-        store, node_id, run_id="run-2", reviews=_concerned("v-2", "same problem")
-    )
-    _route(store)
-
-    assert store.routing_decisions(node_id)[-1].rule_id == "escalate-completed-concerns"
 
 
 def test_a_paused_entry_escalates_with_no_second_block(store: Store) -> None:

@@ -72,7 +72,10 @@ def test_driven_slice_design_writes_pointer_then_launches_p4(rig: DispatchRig) -
     assert rig.popen.cwds == [str(rig.world.root)]
 
 
-def test_implementation_carries_merge_false(rig: DispatchRig) -> None:
+def test_implementation_carries_merge_false_under_the_human_policy(
+    rig: DispatchRig,
+) -> None:
+    rig.tick_rig.project_settings = ProjectSettings(merge_policy=MergePolicy.HUMAN)
     rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
 
     rig.tick()
@@ -83,7 +86,7 @@ def test_implementation_carries_merge_false(rig: DispatchRig) -> None:
     assert f"{PARAM_MERGE}={MERGE_DISABLED}" in argv
 
 
-def test_with_no_config_the_p6_entry_records_the_human_policy(
+def test_with_no_config_the_p6_entry_records_the_auto_policy(
     rig: DispatchRig,
 ) -> None:
     node = rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
@@ -92,8 +95,8 @@ def test_with_no_config_the_p6_entry_records_the_human_policy(
     rig.tick()
 
     [run] = rig.entries(CommandKind.SQ_RUN, node)
-    assert run.parameters[PARAM_MERGE_POLICY] == "human"
-    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125", PARAM_MERGE: "false"}
+    assert run.parameters[PARAM_MERGE_POLICY] == "auto"
+    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125"}
 
 
 def test_under_the_auto_policy_p6_runs_without_merge_false_and_records_auto(

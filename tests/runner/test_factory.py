@@ -17,7 +17,7 @@ from amoeba.runner.decide import Action, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
-from amoeba.runner.project_config import MergePolicy, ProjectConfig
+from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy, ProjectConfig
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.routing.table import parse_table
 from amoeba.store import Store
@@ -242,7 +242,7 @@ def test_the_tenant_holds_the_project_config_the_file_gives(
     [kwargs] = captured
     config = kwargs["project_config"]
     assert config.for_project("scratch").merge_policy is MergePolicy.AUTO
-    assert config.for_project("amoeba").merge_policy is MergePolicy.HUMAN
+    assert config.for_project("amoeba").merge_policy is PROJECT_DEFAULTS.merge_policy
 
 
 def test_with_no_project_config_every_project_takes_the_defaults(

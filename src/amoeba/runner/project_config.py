@@ -36,7 +36,7 @@ class ProjectSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    merge_policy: MergePolicy = MergePolicy.HUMAN
+    merge_policy: MergePolicy = MergePolicy.AUTO
 
     @field_validator("merge_policy", mode="before")
     @classmethod

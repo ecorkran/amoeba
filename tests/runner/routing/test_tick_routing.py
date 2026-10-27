@@ -44,6 +44,7 @@ INDEX = 125
 CF_SLUG = "run-dispatch-and-outcome-ingestion"
 PASS_VERDICT = "verdict: PASS"
 STATED_CONCERNS = "verdict: CONCERNS"
+STATED_FAIL = "verdict: FAIL"
 
 
 @pytest.fixture
@@ -112,12 +113,12 @@ def test_advance_dispatches_successor_next_tick(rig: DispatchRig) -> None:
 def test_rerun_relaunches_same_pipeline(rig: DispatchRig) -> None:
     _, step = _launched(rig)
     [first] = rig.entries(CommandKind.SQ_RUN, step)
-    review = _review(rig, verdict=STATED_CONCERNS)
+    review = _review(rig, verdict=STATED_FAIL)
 
     rig.end_run(step, RunOutcome.COMPLETED, **review.document)
 
     [decision] = _decisions(rig, step)
-    assert (decision.rule_id, decision.route) == ("rerun-new-concerns", Route.RERUN)
+    assert (decision.rule_id, decision.route) == ("rerun-failed-review", Route.RERUN)
     assert rig.status(step) is NodeStatus.RUNNABLE
     rig.tick()
     rig.tick()
@@ -159,21 +160,21 @@ def test_decisions_recompute_against_their_own_table_version(
     rig.end_run(
         step,
         RunOutcome.COMPLETED,
-        **_review(rig, verdict=STATED_CONCERNS).document,
+        **_review(rig, verdict=STATED_FAIL).document,
     )
     rig.tick()
     rig.tick()
     assert len(rig.entries(CommandKind.SQ_RUN, step)) == 2
 
-    # The restart: a table edited to have no rerun rule, so a second round of the
-    # same concerns takes the first rule that still applies.
+    # The restart: a table edited to have no rerun rule, so a second round takes
+    # the first rule that still applies.
     table_b = _edited(ADVANCE_COMPLETED)
     rig.tick_rig.routing_table = table_b
     assert table_b.version != table_a.version
     rig.end_run(
         step,
         RunOutcome.COMPLETED,
-        **_review(rig, verdict=STATED_CONCERNS, edit="\nOne more line.\n").document,
+        **_review(rig, verdict=STATED_FAIL, edit="\nOne more line.\n").document,
     )
 
     first, second = _decisions(rig, step)
@@ -182,7 +183,7 @@ def test_decisions_recompute_against_their_own_table_version(
         table_b.version,
     )
     assert (first.rule_id, second.rule_id) == (
-        "rerun-new-concerns",
+        "rerun-failed-review",
         "advance-completed",
     )
     stored_a = rig.store.routing_table_version(table_a.version)

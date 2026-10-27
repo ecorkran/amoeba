@@ -52,6 +52,8 @@ PROJECT = "demo"
 @pytest.fixture
 def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
     built = DispatchRig(tmp_path, store)
+    # These tests exercise the human merge; the auto ones set their own policy.
+    built.tick_rig.project_settings = ProjectSettings(merge_policy=MergePolicy.HUMAN)
     built.tick_rig.planners = (
         HumanStepPlanner(),
         DispatchPlanner(),

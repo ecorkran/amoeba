@@ -24,7 +24,8 @@ def test_the_shipped_rule_ids_are_in_the_designed_order() -> None:
     assert [rule.id for rule in table.rules] == [
         "advance-on-stated-pass",
         "advance-on-accepted-review",
-        "rerun-new-concerns",
+        "advance-on-accepted-concerns",
+        "rerun-failed-review",
         "escalate-completed-concerns",
         "escalate-everything-else",
     ]
