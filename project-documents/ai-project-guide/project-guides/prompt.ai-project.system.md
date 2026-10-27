@@ -10,7 +10,7 @@ dependsOn:
   - guide.ai-project.process.md
 npmScriptsAiSupport: "!include ../snippets/npm-scripts.ai-support.json"
 dateCreated: 20250724
-dateUpdated: 20261011
+dateUpdated: 20261025
 ---
 ## Prompts
 This document contains prepared prompts useful in applying the `guide.ai-project.process` and performing additional supplemental tasks.
@@ -365,7 +365,7 @@ Use the following as overview input when needed.  Primary input is the task file
 
 Commit at each checkpoint marked in the task file (look for lines starting with `**Commit**:`). Use the commit message provided. If a task has no explicit commit marker, commit at the end of the task before moving to the next.
 
-Do not merge the slice branch during this phase, even if a task item says to. Merging happens in Phase 7, after code review passes. If the task file contains a merge step, leave it unchecked and tell the Project Manager.
+Do not merge the slice branch or push during this phase, even if a task item says to. Merging happens in Phase 7, after code review passes. Pushing happens only when the Project Manager asks. If the task file contains a merge or push step, leave it unchecked and tell the Project Manager.
 {{#if targetBranch}}
 Branch target for this checkout: `{{targetBranch}}`. Slice branches fork from it and merge into it, in a worktree as in the primary tree. If it is `main`, no integration branch is configured.
 {{/if}}
@@ -439,42 +439,41 @@ Branch target for this checkout: `{{targetBranch}}`. If it is `main`, no integra
 
 
 ##### Brownfield Adoption
-*Use this prompt when adopting an existing codebase that has no planning artifacts. Context Forge selects it (profile `brownfield-adoption`) and appends an "Adoption Facts" section after it.*
+*Use this prompt when adopting an existing codebase that has no planning artifacts. Squadron's `sq onboard` fetches it with `cf prompt get brownfield-adoption`, after its analysis and concept flow have run, and cf appends an "Adoption Inputs" section after it.*
 ```markdown
 We're adopting project {project}, an existing codebase, into the AI Project Creation methods in `guide.ai-project.process`. The code exists; the planning artifacts do not. Your role as described in the Project Guide is Architect. Use `guide.ai-project.brownfield-adoption` for detailed guidance.
 
-The goal is to recover three artifacts from what is already built, in order: a baseline concept, an architecture, and an existing-state slice plan. Work from whichever of these already exist; if an artifact is present, review it with the PM and continue from there. Never overwrite an existing artifact without the PM saying so.
+The goal is to recover two artifacts from what is already built, in order: an architecture and an existing-state slice plan. You start from the baseline concept that `sq onboard` produced and the PM confirmed. If the architecture or slice plan already exists, review it with the PM and continue from there. Never overwrite an existing artifact without the PM saying so.
 
 **Never fabricate intent.** Why the project exists, who it is for, and what it was meant to become come only from the repo's own prose (README, docs, comments) or from the PM. If neither says, write "unknown" in that place and ask the PM. Describing what the code does is analysis; describing what it was meant to do is intent, and intent is not inferred.
 
-**Inputs.** The code itself is always available. If a codebase comprehension analysis was provided, use it as evidence for structure and dependencies; verify claims that matter against the code. If none was provided, work from the repo alone.
+**Inputs.** The Adoption Inputs section appended after this prompt names your inputs. An input listed as `none` does not exist yet.
+- If the Adoption Inputs section is absent, stop and say this prompt was not delivered by `cf prompt get`. Do not continue.
+- The Concept line names the confirmed concept. If it is `none`, stop and say the concept comes from `sq onboard`. Do not draft one.
+- If a comprehension analysis is named, use it as evidence for structure and dependencies, and verify claims that matter against the code. If the section says none was provided, work from the repo alone.
 
-**Choose the path.** The Adoption Facts section, appended after this prompt, holds the detection facts and squadron's probe output. Do not run the probe yourself. If the section is missing, stop and say: "The Adoption Facts section is missing; cf build should always supply it. Update cf or report the issue." Do not continue on any path.
-- `surfaces` in the facts has one entry per agent surface where the squadron path can run. Find the entry for the surface you are running in. If there is none, take the CF-only path. The set of surfaces is squadron's to extend; do not assume which ones it holds.
-- If the probe output's `probe_version` is not 1, treat squadron as unavailable and say so.
-- Squadron path: the probe output is present, your surface has an entry, and that entry has `analysis_skill_installed` true and `understand_plugin_installed` true. This is the normal path.
-- If your entry has `analysis_skill_installed` true and `understand_plugin_installed` false, ask the PM to choose: install the plugin, or take the CF-only path.
-- CF-only path: any other case. Say why in one line (the section says squadron is absent or unreadable, or this surface is not supported) and continue from the repo alone.
-- A null fact means unknown. Say it is unknown; do not treat it as true or false.
+**1. Architecture, reverse-engineered.** First run `cf docs map`; it writes `050-docs-map.{project}.md`, which links the project's existing docs where they live. Describe the system as built: components, boundaries, data flow, external dependencies, and the conventions the code actually follows. Link the docs map for existing documentation; do not copy or move those docs. Give the document `provenance: derived` in its frontmatter. Where the code contradicts the concept or its own docs, record both and ask the PM which is intended.
 
-**Squadron path steps.** Run them in order:
-1. Graph. Whether to build one is the only question on this path, and you ask it once:
-   - `graph.commits_behind` is 0: use the graph, no question.
-   - `graph.present` is false: ask "Build the graph? It is a paid multi-agent run."
-   - `graph.commits_behind` is above 0 or null: ask once, offering: rebuild (paid multi-agent run); use it as is (state how many commits behind, or that this is unknown); or take the CF-only path.
-   Do not rebuild without the PM's answer, however few commits behind. To build or rebuild, invoke the `graph_build` value in your surface's entry, read from the facts; never hardcode it. The analysis entry in the next step never builds the graph: if the graph is missing it stops and says so.
-2. Start squadron's analysis with the `entry` value in your surface's entry.
-3. Baseline concept: invoke the `concept` value in your surface's entry, read from the facts; never hardcode it. `entry` alone does not write the concept. Skip this step when a concept already exists, unless the PM confirms an overwrite. The PM confirms or corrects the result.
-4. Re-run `cf build` so the new artifacts are picked up, then do the architecture and slice plan below.
-Offer the adoption baseline (only if `baseline.available` is true) and the initiative candidates as optional extras at the end; do not run them unprompted.
+**2. Existing-state slice plan.** Group the built work into slices. Each built slice is recorded as a retroactive completed slice, using the retroactive marker defined in `guide.ai-project.brownfield-adoption` (Retroactive Slices). Retroactive slices were not reviewed. Then ask the PM what comes next and add it as normal, unbuilt slices.
 
-**1. Baseline concept.** If a concept document exists and carries a provenance block or `[INFERRED]` markers, it was machine-derived. Present it to the PM and have them confirm or correct it before building on it. If no concept exists, draft one in `guide.ai-project.000-concept` structure from the repo's prose and the PM's answers, marking unsupported statements unknown.
-
-**2. Architecture, reverse-engineered.** Describe the system as built: components, boundaries, data flow, external dependencies, and the conventions the code actually follows. Where the code contradicts the concept or its own docs, record both and ask the PM which is intended.
-
-**3. Existing-state slice plan.** Group the built work into slices. Each built slice is recorded as a retroactive completed slice, using the retroactive marker defined in the process guide. Retroactive slices were not reviewed. Then ask the PM what comes next and add it as normal, unbuilt slices.
+**3. Project rules.** Run `cf detect --json` and read `facts.ruleFiles`. If it lists project rule files, tell the PM the project's own rules should be reconciled with the guide's, and offer the Conventions Reconciliation prompt (`cf prompt get conventions-reconciliation`). Do not run it unprompted.
 
 *Ask questions* whenever the repo and the PM leave something unclear. Do not assume or guess.
+```
+
+##### Conventions Reconciliation
+*Use this prompt to reconcile the project's own rule files with the guide's rules. Context Forge never selects it; fetch it by key (`conventions-reconciliation`).*
+```markdown
+We're reconciling the project's own rules in project {project} with the guide's rules. Your role is Senior AI.
+
+1. Run `cf rules inventory --json`. If it fails, stop and report the error. The output lists the guide rules, the project's own rule sources with the line range of each file's managed block, and the resolutions already stored.
+2. Compare only project-owned text: the parts of each project rule source outside its managed block. The managed block holds the guide's rules; never compare it with the guide rules.
+3. Find conflicts: places where a project rule and a guide rule tell the agent to do different things. Wording differences that agree are not conflicts. Skip any conflict whose guide rule and project source pair already has a stored resolution. Skip pairs where the guide rule never reaches that source: a guide rule whose `agents` field in the inventory is a list applies only to the outputs it names (`claude`: CLAUDE.md and `.claude/rules/`; `agents`: AGENTS.md; `copilot`: copilot-instructions.md and `.github/instructions/`; `cursor`: `.cursor/rules/`); a null `agents` field means it reaches every source.
+4. Present each conflict to the PM: the guide rule, the project source, both texts, and how they disagree. Do not decide which wins. Ask the PM for the decision.
+5. Record each decision with `cf rules resolve <guideRule> <projectSource> --statement "<text>"`, using the guide rule and project source identifiers as the inventory output gives them. The statement says, in one or two sentences, which rule applies and when.
+6. When every conflict is resolved or the PM defers the rest, run `cf setup-ide`. It renders the stored resolutions as a `## Project Rule Resolutions` section at the end of each managed block. If no conflicts were found, say so and still run it.
+
+Do not edit the project's rule files or the guide's rules as part of this prompt unless the PM asks.
 ```
 
 ##### Context Initialization
