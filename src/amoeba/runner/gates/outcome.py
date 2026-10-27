@@ -156,8 +156,12 @@ def _design(checkout: Path, design_file: str | ReadFailure) -> DesignSource:
     """Read the design file, resolved against the checkout as review paths are."""
     if isinstance(design_file, ReadFailure):
         return DesignMissing(design_file.detail)
+    path = (checkout / design_file).resolve()
+    if not path.is_relative_to(checkout.resolve()):
+        # CF named a path outside the checkout; it is not read.
+        return DesignMissing("the design file is outside the checkout", design_file)
     try:
-        text = (checkout / design_file).read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         # Specific: CF names a design the checkout does not hold. An answer.
         return DesignMissing("the design file is missing", design_file)

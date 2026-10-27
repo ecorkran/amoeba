@@ -21,6 +21,7 @@ from amoeba.runner.gates.predispatch import (
 )
 from amoeba.runner.git_read import GitStatus
 from amoeba.runner.lifecycle.steps import LifecycleStep
+from runner.gates.purity import io_use
 
 STATUS_FIXTURES = Path(__file__).parents[2] / "fixtures" / "cf" / "status"
 TARGET = "main"
@@ -254,6 +255,4 @@ def test_slice_design_has_no_entry_gate() -> None:
 def test_the_module_does_no_io() -> None:
     import amoeba.runner.gates.predispatch as module
 
-    source = Path(module.__file__).read_text()
-    for forbidden in ("subprocess", "open(", "read_text", "write_text"):
-        assert forbidden not in source
+    assert io_use(module) == []

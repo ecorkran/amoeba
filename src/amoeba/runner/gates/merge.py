@@ -145,11 +145,22 @@ def _completed_implementation_run(
     return None
 
 
-def _pending_merges(tree: LifecycleTree) -> Sequence[tuple[Node, Node, Node]]:
-    """``(slice, implementation, merge)`` for each slice awaiting its merge."""
-    pending: list[tuple[Node, Node, Node]] = []
+@dataclass(frozen=True)
+class PendingMerge:
+    """A slice whose implementation is done and whose merge step is not."""
+
+    slice_node: Node
+    implementation: Node
+    merge: Node
+    index: int
+
+
+def _pending_merges(tree: LifecycleTree) -> Sequence[PendingMerge]:
+    """Each slice awaiting its merge."""
+    pending: list[PendingMerge] = []
     for slice_node in tree.nodes:
-        if slice_node.kind is not NodeKind.SLICE or slice_node.cf.index is None:
+        index = slice_node.cf.index
+        if slice_node.kind is not NodeKind.SLICE or index is None:
             continue
         steps = {child.cf.phase: child for child in tree.children(slice_node)}
         implementation = steps.get(LifecycleStep.IMPLEMENTATION.value)
@@ -160,7 +171,7 @@ def _pending_merges(tree: LifecycleTree) -> Sequence[tuple[Node, Node, Node]]:
             and implementation.status is NodeStatus.DONE
             and merge.status is not NodeStatus.DONE
         ):
-            pending.append((slice_node, implementation, merge))
+            pending.append(PendingMerge(slice_node, implementation, merge, index))
     return pending
 
 
@@ -171,6 +182,55 @@ def _read_failed(node: Node, checkout: Path, command: str, reason: str) -> Fault
         node_id=node.id,
         extra={"checkout": str(checkout), "command": command, "reason": reason},
     )
+
+
+@dataclass(frozen=True)
+class _Observed:
+    """A slice's merge observation, with the target it was read against."""
+
+    state: MergeObservation
+    target: str | None = None
+
+
+def _observe_one(
+    pending: PendingMerge,
+    entry: JournalEntry | None,
+    budget: TickBudget,
+    run: CfRun,
+    timeout_seconds: float,
+) -> _Observed | Fault | None:
+    """One slice's observation, a fault for a failed read, or ``None`` when cut off."""
+    reason = unobservable_reason(entry, pending.index)
+    if reason is not None:
+        return _Observed(Unobservable(reason))
+    if entry is None:
+        return _Observed(Unobservable(REASON_NO_RUN))
+    _, head = _recorded_git(entry)
+    if head is None:
+        return _Observed(Unobservable(REASON_NO_GIT))
+    merge = pending.merge
+    checkout = Path(text_parameter(entry, PARAM_CHECKOUT))
+    project = pending.slice_node.cf.project
+    if project is None:
+        reason = f"slice {pending.slice_node.id} carries no CF project"
+        return _read_failed(merge, checkout, COMMAND_TARGET, reason)
+    target = read_target(checkout, project, budget, run, timeout_seconds)
+    if target is None:
+        return None
+    if isinstance(target, ReadFailure):
+        return _read_failed(merge, checkout, COMMAND_TARGET, target.detail)
+    answer = git_read(
+        is_ancestor_args(head, target), checkout, budget, run, timeout_seconds
+    )
+    if answer is None:
+        return None
+    if isinstance(answer, GitReadFailure):
+        return _read_failed(merge, checkout, COMMAND_ANCESTOR, answer.detail)
+    state = merge_state(entry, pending.index, answer.exit_code)
+    if state is None:
+        reason = f"exited {answer.exit_code}: {answer.stderr_head}"
+        return _read_failed(merge, checkout, COMMAND_ANCESTOR, reason)
+    return _Observed(state, target)
 
 
 def observe_merges(
@@ -192,45 +252,19 @@ def observe_merges(
     has_open = {e.node_id for e in store.unresolved_journal_entries(project_id)}
     found: dict[str, MergeObservation] = {}
     wrote = False
-    for slice_node, implementation, merge in _pending_merges(tree):
-        entry = _completed_implementation_run(store, project_id, implementation)
-        index = slice_node.cf.index
-        if index is None:
-            continue
-        reason = unobservable_reason(entry, index)
-        if reason is not None or entry is None:
-            found[merge.id] = Unobservable(reason or REASON_NO_RUN)
-            continue
-        checkout = Path(text_parameter(entry, PARAM_CHECKOUT))
-        target = read_target(
-            checkout, slice_node.cf.project or "", budget, run, timeout_seconds
-        )
-        if target is None:
+    for pending in _pending_merges(tree):
+        entry = _completed_implementation_run(store, project_id, pending.implementation)
+        result = _observe_one(pending, entry, budget, run, timeout_seconds)
+        if result is None:
             return MergePass(found, wrote, True)
-        if isinstance(target, ReadFailure):
-            faults.add(_read_failed(merge, checkout, COMMAND_TARGET, target.detail))
+        if isinstance(result, Fault):
+            faults.add(result)
             continue
-        _, head = _recorded_git(entry)
-        answer = git_read(
-            is_ancestor_args(head or "", target), checkout, budget, run, timeout_seconds
-        )
-        if answer is None:
-            return MergePass(found, wrote, True)
-        if isinstance(answer, GitReadFailure):
-            faults.add(_read_failed(merge, checkout, COMMAND_ANCESTOR, answer.detail))
-            continue
-        state = merge_state(entry, index, answer.exit_code)
-        if state is None:
-            reason = f"exited {answer.exit_code}: {answer.stderr_head}"
-            faults.add(_read_failed(merge, checkout, COMMAND_ANCESTOR, reason))
-            continue
-        found[merge.id] = state
-        if isinstance(state, Merged):
-            detail = f"observed: {state.head} reachable from {target}"
-            wrote = (
-                complete_step(
-                    store, merge, LifecycleStep.MERGE, has_open, detail=detail
-                )
-                or wrote
+        found[pending.merge.id] = result.state
+        if isinstance(result.state, Merged):
+            detail = f"observed: {result.state.head} reachable from {result.target}"
+            done = complete_step(
+                store, pending.merge, LifecycleStep.MERGE, has_open, detail=detail
             )
+            wrote = done or wrote
     return MergePass(found, wrote, False)

@@ -2,8 +2,8 @@
 
 ``tick.py`` is near its size limit, so what this slice adds to the tick lives here and
 ``tick.py`` calls it in a few lines. The stage is built in ``ProjectTick.__init__``
-beside the act stage. This task adds the outcome stage; the merge observation and the
-pre-dispatch reads join it in later tasks.
+beside the act stage. It holds the outcome stage (D2), the merge observation (D9) and
+the pre-dispatch reads (D5).
 """
 
 from __future__ import annotations
@@ -71,6 +71,22 @@ def completes(observed: ObservedRun) -> bool:
         isinstance(finished, RunEnded)
         and finished.document.outcome is RunOutcome.COMPLETED
     )
+
+
+@dataclass(frozen=True)
+class _Lineage:
+    """A step node and the slice and initiative above it; ``None`` where absent."""
+
+    step: Node | None
+    slice_node: Node | None
+    initiative: Node | None
+
+
+def _lineage(tree: LifecycleTree, node_id: str) -> _Lineage:
+    step = tree.node(node_id)
+    slice_node = None if step is None else tree.parent(step)
+    initiative = None if slice_node is None else tree.parent(slice_node)
+    return _Lineage(step, slice_node, initiative)
 
 
 class GateStage:
@@ -162,11 +178,16 @@ class GateStage:
             if isinstance(reads, DispatchReadFailed):
                 faults.add(_read_failed(candidate, reads))
                 continue
-            accepted = self._accepted(tree, candidate)
+            predecessor = self._predecessor(tree, candidate)
+            accepted = self._accepted(candidate, predecessor)
             result = check_candidate(candidate, reads, accepted=accepted is not None)
-            if isinstance(result, Disagreement) and accepted is not None:
+            if (
+                isinstance(result, Disagreement)
+                and accepted is not None
+                and predecessor is not None
+            ):
                 result, new = self._record_disagreement(
-                    tree, candidate, result, accepted
+                    tree, candidate, result, accepted, predecessor
                 )
                 wrote = wrote or new
             elif isinstance(result, Disagreement):
@@ -177,8 +198,7 @@ class GateStage:
 
     def _predecessor(self, tree: LifecycleTree, candidate: Candidate) -> Node | None:
         """The node of the step before ``candidate``'s, under the same slice."""
-        step_node = tree.node(candidate.node_id)
-        slice_node = None if step_node is None else tree.parent(step_node)
+        slice_node = _lineage(tree, candidate.node_id).slice_node
         if slice_node is None:
             return None
         before = STEP_SEQUENCE[STEP_SEQUENCE.index(candidate.step) - 1]
@@ -187,13 +207,10 @@ class GateStage:
         )
 
     def _accepted(
-        self, tree: LifecycleTree, candidate: Candidate
+        self, candidate: Candidate, predecessor: Node | None
     ) -> AcceptedOutcome | None:
         """Whether the PM accepted the predecessor's completed outcome (D7)."""
-        if not candidate.needs_gate:
-            return None
-        predecessor = self._predecessor(tree, candidate)
-        if predecessor is None:
+        if not candidate.needs_gate or predecessor is None:
             return None
         entries = self._store.journal_entries(self._project_id, node_id=predecessor.id)
         blocked = self._store.blocked_state_for(predecessor.id, include_resolved=True)
@@ -205,15 +222,14 @@ class GateStage:
         candidate: Candidate,
         disagreement: Disagreement,
         accepted: AcceptedOutcome,
+        predecessor: Node,
     ) -> tuple[Ok, bool]:
         """Record D7's check on the slice node; dispatch goes on with its id.
 
         Returns the ``Ok`` naming the check, and whether a record was written.
         """
-        predecessor = self._predecessor(tree, candidate)
-        step_node = tree.node(candidate.node_id)
-        slice_node = None if step_node is None else tree.parent(step_node)
-        if predecessor is None or slice_node is None:
+        slice_node = _lineage(tree, candidate.node_id).slice_node
+        if slice_node is None:
             return disagreement.ok, False
         check = disagreement_check(
             accepted,
@@ -231,10 +247,9 @@ class GateStage:
         self, tree: LifecycleTree, observed: ObservedRun, budget: TickBudget
     ) -> OutcomeObservation | None:
         entry = observed.run.entry
-        step_node = tree.node(entry.node_id)
-        slice_node = None if step_node is None else tree.parent(step_node)
-        initiative = None if slice_node is None else tree.parent(slice_node)
-        step = None if step_node is None else tree.step_of(step_node)
+        lineage = _lineage(tree, entry.node_id)
+        slice_node, initiative = lineage.slice_node, lineage.initiative
+        step = None if lineage.step is None else tree.step_of(lineage.step)
         if step is None or slice_node is None or initiative is None:
             reason = f"the node of entry {entry.id} is not a step of a slice"
             return unobservable(entry, entry.node_id, reason, self._amoeba_version)

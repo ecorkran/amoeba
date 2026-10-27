@@ -26,7 +26,7 @@ KEY_REVIEW: Final = "review"
 KEY_DATE_CREATED: Final = "dateCreated"
 REVIEW_NONE: Final = "none"
 EFFECTIVE_DATE_DIGITS: Final = 8
-_BYTE_ORDER_MARK: Final = "﻿"
+_BYTE_ORDER_MARK: Final = "\ufeff"
 
 
 @dataclass(frozen=True)

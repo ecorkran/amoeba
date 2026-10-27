@@ -10,6 +10,7 @@ import pytest
 from cf_stub import write_cf_stub
 from cf_stub_gates import STATUS_MODE_ENV, GateMode
 
+from amoeba.runner.decide import ProjectView
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind, NodeContext, TickFaults
 from amoeba.runner.gates.predispatch import Block, Ok
@@ -52,7 +53,7 @@ class Setup:
             amoeba_version="amoeba-test",
         )
 
-    def view(self, step: LifecycleStep = LifecycleStep.TASKS):  # type: ignore[no-untyped-def]
+    def view(self, step: LifecycleStep = LifecycleStep.TASKS) -> ProjectView:
         return view_of(
             {
                 "a": facts(

@@ -16,6 +16,7 @@ from amoeba.runner.gates.hatches import (
 )
 from amoeba.store import CheckOutcome, CheckStanding, RecordSource
 from amoeba.store.check_models import check_standing
+from runner.gates.purity import io_use
 
 PATH = "project-documents/user/slices/128-slice.x.md"
 ENTRY = "entry-1"
@@ -204,10 +205,6 @@ def test_an_empty_frontmatter_block_is_an_empty_mapping() -> None:
 
 
 def test_the_module_does_no_io() -> None:
-    from pathlib import Path
-
     import amoeba.runner.gates.hatches as hatches
 
-    source = Path(hatches.__file__).read_text()
-    for forbidden in ("open(", "read_text", "subprocess", "Path("):
-        assert forbidden not in source
+    assert io_use(hatches) == []

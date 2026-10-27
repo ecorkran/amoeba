@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,12 @@ from cf_stub_gates import CONFIG_MODE_ENV, STATUS_POINTER_ENV, GateMode
 
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.dispatch.planner import DispatchPlanner
-from amoeba.runner.faults import PAYLOAD_FAULT_KIND
+from amoeba.runner.faults import PAYLOAD_FAULT_KIND, Fault, FaultKind
+from amoeba.runner.gates.merge import (
+    PendingMerge,
+    _completed_implementation_run,  # pyright: ignore[reportPrivateUsage]
+    _observe_one,  # pyright: ignore[reportPrivateUsage]
+)
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.project_config import MergePolicy, ProjectSettings
@@ -24,6 +30,7 @@ from amoeba.store import (
     NodeStatus,
     Store,
 )
+from runner.dispatch.pointer_support import generous_budget
 from runner.dispatch.tick_rig import DispatchRig
 from runner.gate_rig import STATUS_FIXTURES, config_knobs
 from runner.gates.merge_support import BRANCH, Scenario, implemented
@@ -36,6 +43,7 @@ from runner.git_repo import (
     switch,
 )
 from runner.resolutions.resolution_support import resolve_block
+from runner.resolutions.rig_support import INDEX
 from runner.routing.table_support import shipped_table
 
 PROJECT = "demo"
@@ -226,3 +234,22 @@ def test_a_spent_budget_starts_no_merge_read(rig: DispatchRig) -> None:
 
     assert calls == [], "no cf or git call starts once the budget is spent"
     assert _merge_status(rig, scenario) is NodeStatus.RUNNABLE
+
+
+def test_a_slice_without_a_cf_project_is_a_read_fault_not_an_empty_project(
+    rig: DispatchRig,
+) -> None:
+    scenario = implemented(rig)
+    entry = _completed_implementation_run(rig.store, PROJECT, scenario.implementation)
+    projectless = replace(
+        scenario.slice_node, cf=replace(scenario.slice_node.cf, project=None)
+    )
+    pending = PendingMerge(projectless, scenario.implementation, scenario.merge, INDEX)
+
+    result = _observe_one(
+        pending, entry, generous_budget(), rig.tick_rig.gate_run, 20.0
+    )
+
+    assert isinstance(result, Fault)
+    assert result.kind is FaultKind.CHECKOUT_READ_FAILED
+    assert "no CF project" in result.detail

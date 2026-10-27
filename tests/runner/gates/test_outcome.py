@@ -207,6 +207,22 @@ def test_a_design_file_that_is_not_there_is_vacuous_not_a_pass(world: World) -> 
     assert _standings(observation) == ["vacuous", "vacuous"]
 
 
+def test_a_design_path_outside_the_checkout_is_not_read(world: World) -> None:
+    outside = world.tmp_path / "outside.md"
+    outside.write_text("---\nreview: none\n---\n", encoding="utf-8")
+    world.set_knobs(
+        write_slice_list(
+            world.tmp_path / "plan", INITIATIVE, {SLICE_INDEX: "../outside.md"}
+        )
+    )
+
+    observation = world.observe()
+
+    assert observation is not None
+    assert observation.design_failure == "the design file is outside the checkout"
+    assert _standings(observation) == ["vacuous", "vacuous"]
+
+
 def test_a_failed_config_read_errors_the_effective_date_check(world: World) -> None:
     world.monkeypatch.setenv(CONFIG_MODE_ENV, GateMode.FAIL.value)
 

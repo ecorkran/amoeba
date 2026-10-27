@@ -31,15 +31,15 @@ from amoeba.runner.observed import (
     RunVanished,
 )
 from amoeba.runner.resolutions.vocabulary import REASON_RESUME_FAILED
-
-if TYPE_CHECKING:
-    from amoeba.runner.gates.outcome_record import OutcomeObservation
 from amoeba.store import (
     BlockedKind,
     JournalEntry,
     JournalOutcome,
     Store,
 )
+
+if TYPE_CHECKING:
+    from amoeba.runner.gates.outcome_record import OutcomeObservation
 
 #: Result and payload keys of a failed launch.
 RESULT_LAUNCH_FAILURE: Final = "launch_failure"
