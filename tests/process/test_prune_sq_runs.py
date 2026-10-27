@@ -34,6 +34,7 @@ from amoeba.store import (
     CommandKind,
     JournalOutcome,
     NodeKind,
+    NodeStatus,
     SQReference,
     Store,
     StoreError,
@@ -52,6 +53,7 @@ CANDIDATE_A, CANDIDATE_B = (
 )
 HELD = "run-20260101-review-cccccccc"
 UNOWNED = "run-20260101-review-dddddddd"
+RUNNER_PAUSED = "run-20260101-review-eeeeeeee"
 SHORT_TIMEOUT_SECONDS = 0.5
 LONG_TIMEOUT_SECONDS = 30.0
 
@@ -92,6 +94,7 @@ class Rig:
                     outcome=JournalOutcome.COMPLETED,
                     result={"run_id": run_id},
                 )
+            store.update_node_status(gate.id, NodeStatus.DONE)
             store.create_node(
                 project_id=PROJECT,
                 kind=NodeKind.GATE,
@@ -162,6 +165,36 @@ def test_a_preview_lists_the_candidates_and_never_calls_sq(
     assert "2 run(s) to prune; 1 owned paused run(s) kept" in out
     assert rig.stub_calls() == []
     assert rig.present() == ALL_RUNS
+
+
+def test_a_run_the_journal_ties_to_an_unfinished_node_is_never_a_candidate(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The Runner keeps a run id only in a journal entry (issue #14)."""
+    with Store.open(project_store_path(rig.supervisor, PROJECT)) as store:
+        step = store.create_node(project_id=PROJECT, kind=NodeKind.GATE, title="step")
+        entry = store.journal_issue(
+            step.id,
+            kind=CommandKind.SQ_RUN,
+            parameters=sq_run_parameters({"pipeline": "review", "params": {}}),
+        )
+        store.journal_resolve(
+            entry.id,
+            outcome=JournalOutcome.COMPLETED,
+            result={"run_id": RUNNER_PAUSED},
+        )
+    write_outcome(
+        rig.home,
+        run_id=RUNNER_PAUSED,
+        started_at=OLD,
+        updated_at=OLD,
+        status=STATUS_PAUSED,
+    )
+    rig.mode(StubMode.DELETE)
+
+    assert rig.prune(confirm=False) is ExitCode.OK
+
+    assert RUNNER_PAUSED not in capsys.readouterr().out
 
 
 def test_yes_prunes_exactly_the_candidates(rig: Rig) -> None:

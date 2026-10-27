@@ -995,12 +995,15 @@ five** hold, and a null in any of them makes it a non-candidate:
    "The ownership guarantee").
 2. Its `outcome` and its `status` both say `paused`, and `checkpoint.paused_at`
    is present and timezone-aware.
-3. No node in any project that is not `done` names it in `sq.run_id`. This is
+3. No node in any project that is not `done` names it, in `sq.run_id` or in the
+   result of one of its `sq_run` journal entries (the Runner records a run only
+   in the journal). This is
    stricter than "no open checkpoint": after a human resolves a checkpoint the
    node is runnable and the Runner has not yet issued `sq run --resume`, and
    pruning then would delete the run it is about to resume. "Every node that
    names it is done" is the earliest point at which Amoeba is provably finished
-   with a run. The rule reads each node's *current* `sq.run_id`, never history.
+   with a run. The rule reads each node's *current* `sq.run_id`, plus every run its journal
+   recorded while the node is unfinished.
 4. Its `updated_at` is present, timezone-aware, and at least `PRUNE_RETENTION`
    (7 days, in `process/run_pruning.py`, with no flag) before now.
 

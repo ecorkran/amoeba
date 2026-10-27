@@ -144,17 +144,33 @@ def _select(store_dir: Path, poll_timeout_seconds: float, now: datetime) -> _Sel
             owned.update(
                 dict.fromkeys(store.recorded_result_run_ids(project_id), project_id)
             )
-            held.update(
-                node.sq.run_id
-                for node in store.nodes_for_project(project_id)
-                if node.status is not NodeStatus.DONE and node.sq.run_id
-            )
+            held.update(_held_run_ids(store, project_id))
     documents = _poll_owned(sorted(owned), poll_timeout_seconds)
     candidates = select_prunable(documents, owned=owned, held=held, now=now)
     kept = sum(1 for doc in documents if doc.outcome is RunOutcome.PAUSED) - len(
         candidates
     )
     return _Selection(candidates, owned, kept)
+
+
+def _held_run_ids(store: Store, project_id: str) -> set[str]:
+    """Run ids a node that is not ``done`` still depends on.
+
+    The process pipeline records a run in ``sq.run_id``. The Runner records it
+    only in the result of the node's ``sq_run`` journal entry (issue #14), so
+    both sources count.
+    """
+    nodes = store.nodes_for_project(project_id)
+    unfinished = {node.id for node in nodes if node.status is not NodeStatus.DONE}
+    held = {
+        node.sq.run_id for node in nodes if node.id in unfinished and node.sq.run_id
+    }
+    held.update(
+        run_id
+        for run_id, node_id in store.recorded_result_run_nodes(project_id).items()
+        if node_id in unfinished
+    )
+    return held
 
 
 def _poll_owned(
