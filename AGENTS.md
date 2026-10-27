@@ -32,10 +32,8 @@ A fix is any work that will be committed as `fix:`. Decide the commit type befor
 - Do not hard-code magic defaults.  In the example below, the defaults for model and n are both wrong.  If such defaults are needed they should be centralized at the config level.  This applies in all languages.
 ```python
 async def _model_start(self, prompt: str) -> str:
-    model = (
-        self._config.model or "gpt-5.3-codex"
-    )  # wrong: silent fallback to a magic model
-    n = self._config.index or 1234  # wrong: magic number
+    model = self._config.model or "gpt-5.3-codex"  # wrong: silent fallback to a magic model
+    n = self._config.index or 1234                 # wrong: magic number
     ...
 ```
 - NEVER use user-accessible labels as logical structure.  They are fragile.
@@ -132,7 +130,7 @@ Before starting work:
 7. if in doubt, STOP and ask the Project Manager
 
 **Merging (Phase 7 only, after code review passes):**
-Phase 6 ends with the work committed on the slice branch. Do not merge at the end of implementation, and never write a merge as a task, sub-item, or Success Criteria in a task file. Merge the slice branch into the target only during Phase 7 (Slice Integration), after the slice's code review has passed:
+Phase 6 ends with the work committed on the slice branch. Do not merge or push at the end of implementation, and never write a merge or push as a task, sub-item, or Success Criteria in a task file. Merge the slice branch into the target only during Phase 7 (Slice Integration), after the slice's code review has passed:
 1. re-read the target (step 1 above) — do not infer it from the current branch or from memory
 2. `git checkout {target}`, then `git merge {branch-name}`
 3. if either command fails, STOP and ask the Project Manager
