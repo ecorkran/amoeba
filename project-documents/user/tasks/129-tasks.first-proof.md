@@ -59,7 +59,7 @@ The LLD makes three acts the PM's, by definition, not as approvals: choosing the
 - **Where `step` and `reason` come from.** `BlockedState` has `node_id`, `kind` and `context` but no step or reason. The step is the blocked node's `cf.phase` for a `phase_or_artifact` node, which is the rule in `runner/lifecycle/tree.py` `LifecycleTree.step_of`. Reuse that rule. If calling it from `amoeba.inspection` needs a tree the listing does not have, extract the rule into one function that both call. Do not copy it. The reason is the `reason` key of the escalation message's payload, joined by `blocked_state_id`. For a fault block, which has no `reason`, use its `fault_kind` (`runner/faults.py` `PAYLOAD_FAULT_KIND`). For a block with no escalation message, use null. Reuse the existing payload key constants. Do not add new string literals.
 - **`accepted_verdict_ids`.** `runner/gates/accepted.py` `accepted_by_pm(entries, latest_blocked)` already identifies an accept from the step's journal entries and the blocked state. For a resolved block, call it with that block and with the step's entries created before the block's `created_at`, so an older accept reads the run it accepted. The value is null unless the result is not `None`.
 - **The new store read.** `Store.resolved_blocked_states(project_id, *, node_id=None) -> list[BlockedState]`, in `store/blocking.py`. It returns resolved blocked states, ordered by `resolved_at` then `id`, through the existing `BLOCKED_STATE_COLUMNS` and `map_blocked_state`. `store/sql.py` is already 364 lines, so the SQL constant goes in `store/sql_runner.py` (278 lines). If that file would pass about 300 lines, put it in a new `store/sql_resolutions.py`.
-- **The listing.** A new `inspection/resolutions.py` holds `RESOLUTION_COLUMNS` and `resolution_rows`. It is registered in `inspection/__init__.py` like `routing-decisions`, with `value_options=(NODE_OPTION,)`. `NODE_OPTION` spells the flag `--node` (`inspection/listing.py`), so the listing takes `--node`, not the LLD's `--node-id`, like every other listing. Do not add a second option. Task 2.5 records this spelling in the contract text.
+- **The listing.** A new `inspection/resolutions.py` holds `RESOLUTION_COLUMNS` and `resolution_rows`. It is registered in `inspection/__init__.py` like `routing-decisions`, with `value_options=(NODE_OPTION,)`. `NODE_OPTION` spells the flag `--node` (`inspection/listing.py`), so the listing takes `--node`, like every other listing (the LLD uses the same spelling). Do not add a second option.
 - **Walkthrough step 1's branch check does not work.** `git branch --merged main` lists 122–128 only, because the tips of the 120 and 121 branches carry commits that are not on main. Task 1.2 checks the slice plan's ticks and the `merge` commits instead.
 - **Shipped-table test.** `tests/runner/routing/test_default_table.py` asserts the rule ids in order and the time bounds. A D7 edit that adds, removes or reorders a rule, or changes a bound, updates that test in the same commit.
 - **Exceptions.** Add no `except Exception`. Each `except` names a specific exception with a comment, or re-raises after `logger.exception`.
@@ -86,7 +86,7 @@ The LLD makes three acts the PM's, by definition, not as approvals: choosing the
   - [ ] "Proof unit" is filled in, and the unit meets D1. It is not this repository. It has no slice design file. Its initiative's slice plan is complete. It is real code, not docs only.
   - [ ] If either check fails, write `BLOCKED:` and the reason under this task and continue with Section 2.
 - [ ] Check that 120–128 are complete. Entries 1–9 of `user/architecture/120-slices.runner-routing-engine.md` are ticked `[x]`, and `git log --oneline <target>` shows a merge commit for each of 120–128.
-- [ ] Create `project-documents/user/analysis/120-analysis.first-proof-stops.md` with frontmatter per `file-naming-conventions.md` (`docType: analysis`, `status: in_progress`). Add the header recording the D1 choice, then empty sections for: Stops, Answers to deferred questions, Gate disagreements, Defects and restarts (D9), Command log (D4), and Evidence appendix.
+- [ ] Create `project-documents/user/analysis/120-analysis.first-proof-stops.md` with frontmatter per `file-naming-conventions.md` (`docType: analysis`, `status: in_progress`). Add the header recording the D1 choice. If the proof unit is unnamed, create the file anyway with the header line "Proof unit: pending (D1)"; Task 3.1 replaces it once the PM names the unit. Then add empty sections for: Stops, Answers to deferred questions, Gate disagreements, Defects and restarts (D9), Command log (D4), and Evidence appendix.
 - [ ] Commit `review: open the first-proof stop write-up`.
 
 ---
@@ -141,7 +141,7 @@ The LLD makes three acts the PM's, by definition, not as approvals: choosing the
 **Effort:** 1/5. **Dependencies:** 2.4.
 
 - [ ] In `docs/store-contract.md`, under "Resolution answers", document `resolved_blocked_states`: what it returns, its order, its scope and its node filter. Say that it serves operators, not the Runner (LLD D6).
-- [ ] Where the other `inspect` listings are documented (find `routing-decisions` in `docs/`), add `resolutions`, its columns and the unacknowledged case. State that its node flag is `--node`, the shared spelling, not the LLD's `--node-id`. Link the store contract. Do not copy it.
+- [ ] Where the other `inspect` listings are documented (find `routing-decisions` in `docs/`), add `resolutions`, its columns and the unacknowledged case. Link the store contract. Do not copy it.
 - [ ] `uv run pytest tests/contract -q` passes.
 - [ ] Commit `docs: document resolved-blocks read and inspect resolutions`.
 
@@ -156,6 +156,7 @@ Worked with the PM present (see "Roles in the proof"). Every `<…>` value comes
 ### Task 3.1: Start the Runner and link the project
 **Effort:** 1/5. **Dependencies:** 1.2 (preconditions met), 2.5.
 
+- [ ] If the write-up header still says "Proof unit: pending (D1)", replace it with the D1 choice from "Proof unit".
 - [ ] Create a dedicated supervisor directory outside both repositories. Record its path in the write-up. Do not prune or delete it until Task 7.1 is committed.
 - [ ] Run LLD walkthrough step 2 with `AMOEBA_STORE_DIR` set to it: `start`, `create-project`, `link-cf-project`, `watch-reviews` with `--active true`, then `inspect nodes`.
   - [ ] The slice's node exists with four step rows, and `slice_design` is runnable. No escalation is open.
@@ -182,7 +183,7 @@ Worked with the PM present (see "Roles in the proof"). Every `<…>` value comes
   - [ ] Add a draft row to the write-up's Stops section, using D5's fields. Leave the classification blank.
 - [ ] If the PM acts by hand at a step the table sent them to, such as launching a run, log the action with its block id.
 - [ ] Repeated stops of the same kind are answered the same way each time and recorded each time. Do not edit the table (D2).
-- [ ] Commit `review: record first-proof stops through P6 launch`.
+- [ ] Commit `review: record first-proof stops through P6 launch`. The loop may span hours, so also commit the write-up (`review: record first-proof stops, batch n`) after each batch of stops, so the Command log and draft rows cannot be lost.
 
 ### Task 3.4: Crash the resident process with `P6` in flight
 **Effort:** 2/5. **Dependencies:** 3.3.

@@ -204,7 +204,7 @@ Status: decided
 Status: decided
 
 - The write-up needs every resolved block on the unit, with what was decided and what the Runner did with it. `inspect blocked` lists open blocks only. Reading `blocked_state(id)` one id at a time means already knowing every id. Issue #16 was deferred for exactly this use.
-- `amoeba inspect resolutions --project P [--node-id N] [--json]` lists resolved blocks oldest first. Columns:
+- `amoeba inspect resolutions --project P [--node N] [--json]` lists resolved blocks oldest first. Columns:
   - `blocked_state_id`, node, step, reason, `opened_at`, `resolved_at`;
   - the resolution's decision and instructions;
   - `runner_outcome`, `runner_code`, `runner_reason`;
@@ -266,7 +266,7 @@ No new libraries. The proof uses `amoeba`, `cf`, `sq`, `git` and `jq` for readin
 ### API Contracts
 
 ```bash
-amoeba inspect resolutions --project P [--node-id N] [--json]
+amoeba inspect resolutions --project P [--node N] [--json]
 ```
 
 | Column | Source |
@@ -305,7 +305,7 @@ A block that has been resolved but not yet acknowledged by the Runner shows null
 
 ### Technical Requirements
 
-- `inspect resolutions` has tests for each column, the unacknowledged case, `--node-id` filtering, and the schema-mismatch exit.
+- `inspect resolutions` has tests for each column, the unacknowledged case, `--node` filtering, and the schema-mismatch exit.
 - D7's test passes on the edited table: decisions the PM accepted keep their routes, and each wrong decision reaches only its proposed rule.
 - `uv run pytest -q`, `ruff check`, `ruff format --check`, `pyright` and `tests/contract` pass.
 - `docs/runner-guide.md`, `docs/store-contract.md` (the new read), `docs/substrate-guide.md`, README and CHANGELOG are updated.
