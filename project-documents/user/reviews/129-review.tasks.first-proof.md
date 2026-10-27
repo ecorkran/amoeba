@@ -14,17 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261027
 dateUpdated: 20261027
-reviewedSha: 67b6e8886094cae6791e1ae000b49bad2f41c0ef
-revision_number: 1
+reviewedSha: 7a7bd6005b6440fdcfb04cb8feed0af7744fa202
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 turns: 3
-promptTokens: 104023
+promptTokens: 104037
 cachedTokens: 11176
-cacheWriteTokens: 92843
-completionTokens: 4982
-durationSeconds: 43.8
-costUsd: 0.423123
+cacheWriteTokens: 92857
+completionTokens: 5750
+durationSeconds: 49.4
+costUsd: 0.430858
 costBasis: provider
 runId: run-20261027-p5-85a72bbf
 squadronVersion: 0.24.5
@@ -32,38 +32,33 @@ findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success criteria coverage"
-    location: "project-documents/user/tasks/129-tasks.first-proof.md"
+    summary: "Success criteria are covered by tasks"
+    location: "project-documents/user/tasks/129-tasks.first-proof.md:71-333"
   - id: F002
-    severity: concern
+    severity: pass
     category: sequencing
-    summary: "Task 3.4 is nested inside Task 3.3, so the order is ambiguous"
-    location: "project-documents/user/tasks/129-tasks.first-proof.md:177-198"
+    summary: "Sequencing and test-with pattern"
+    location: "project-documents/user/tasks/129-tasks.first-proof.md:96-146"
   - id: F003
     severity: concern
-    category: commit-checkpoints
-    summary: "No commit between Task 3.1 and Task 3.6 during the longest, riskiest stretch"
-    location: "project-documents/user/tasks/129-tasks.first-proof.md:161-216"
+    category: consistency
+    summary: "`--node` versus the LLD's `--node-id` will trip the final criteria check"
+    location: "project-documents/user/tasks/129-tasks.first-proof.md:62"
   - id: F004
     severity: concern
-    category: gap
-    summary: "The `--node` spelling is promised for Task 2.5 but missing from its steps"
-    location: "project-documents/user/tasks/129-tasks.first-proof.md:62"
-  - id: F005
-    severity: concern
     category: proportionality
-    summary: "The test lists in 2.2 and 2.4 go beyond what the success criteria need"
-    location: "project-documents/user/tasks/129-tasks.first-proof.md:105-143"
+    summary: "Several tasks are finer-grained than the slice needs"
+    location: "project-documents/user/tasks/129-tasks.first-proof.md:199-214"
+  - id: F005
+    severity: note
+    category: commit-checkpoints
+    summary: "Task 3.3 has one commit however many stops occur"
+    location: "project-documents/user/tasks/129-tasks.first-proof.md:173-185"
   - id: F006
     severity: note
     category: sequencing
-    summary: "Task 6.1 dependency understates its inputs"
-    location: "project-documents/user/tasks/129-tasks.first-proof.md:279-286"
-  - id: F007
-    severity: note
-    category: coverage
-    summary: "Issue #16 close-out is left to Phase 7"
-    location: "project-documents/user/tasks/129-tasks.first-proof.md:315"
+    summary: "Task 1.2 creates the write-up even when the proof unit is missing"
+    location: "project-documents/user/tasks/129-tasks.first-proof.md:81-90"
 ---
 
 # Review: tasks — slice 129
@@ -73,60 +68,61 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria coverage
+### [PASS] Success criteria are covered by tasks
 
-Each LLD criterion has a task:
-- **Four steps `done` and merged:** Tasks 3.2, 3.3 and 3.5.
-- **Nothing run by hand:** the Command log in 3.3 and the audit in 3.6.
-- **`recomputes: yes`:** 3.6 before the edits and 5.3 after them.
-- **SIGKILL with P6 in flight:** 3.4, which spells out D3's three pass conditions.
-- **Every stop classified, one proposal per wrong stop:** 4.1.
-- **`inspect resolutions`:** 2.1–2.5, with tests for the columns, the unacknowledged case, node filtering and the schema-mismatch exit in 2.4.
-- **D7 rule test:** 5.1–5.3.
-- **Validation commands:** 7.1.
-- **Guides, plan entries, issues and CHANGELOG:** 6.1–6.6.
+| LLD success criterion | Task |
+| --- | --- |
+| Four steps `done`, PM merges | 3.5 |
+| No hand-run commands; D4 log agrees with store evidence | 3.3, 3.6 |
+| `recomputes: yes` on all rows | 3.6 |
+| Still `yes` after edits and restart | 5.3 |
+| SIGKILL with P6 in flight | 3.4 |
+| Every stop classified, one proposal per wrong stop | 4.1 |
+| `inspect resolutions` columns, unacknowledged case, schema-mismatch exit | 2.3, 2.4 |
+| D7 rule test | 5.2 |
+| Full validation | 7.1 |
+| Guide, store contract, substrate guide, README, CHANGELOG | 2.5, 6.1–6.3, 6.6 |
+| 130/131 entries and Future Work | 6.4 |
+| Issues #12, #13, #16 | 6.5 and the `Closes #16` in 2.4 |
 
-The test-with pattern holds: 2.1→2.2 and 2.3→2.4 each pair implementation with its tests and commit. Merging stays out of the checklist, as the project rules require.
+Every task traces to the LLD. Nothing is scope creep.
 
-### [CONCERN] Task 3.4 is nested inside Task 3.3, so the order is ambiguous
+### [PASS] Sequencing and test-with pattern
 
-Task 3.3 "repeats until the `merge` step blocks". Task 3.4's dependency is "`P6`'s `sq_run` is confirmed (inside Task 3.3)". The crash must therefore happen partway through the 3.3 loop, and 3.4 cannot be done after 3.3 as the file order implies. An implementer reading in file order would finish 3.3 first, and by then P6 has long finished. That is the miss case 3.4 itself calls a failure.
+- Each implementation task is followed immediately by its test task: 2.1→2.2, 2.3→2.4 and 5.1→5.2→5.3.
+- `inspect resolutions` is built before the proof (2.5 before 3.1), because Task 3.3 uses it.
+- Commits fall at the end of each section or sub-group, and are not batched at the end.
+- Dependencies are acyclic.
+- Both D9 branches have a path: the defect path and the crash-miss path with a second unit.
 
-Fix it by adding an explicit trigger to 3.3's loop, such as "when the journal shows `P6`'s `sq_run` confirmed, do Task 3.4 now, then resume the loop". Alternatively, split 3.3 into "answer stops through P5" and "answer stops from P6 on".
+### [CONCERN] `--node` versus the LLD's `--node-id` will trip the final criteria check
 
-### [CONCERN] No commit between Task 3.1 and Task 3.6 during the longest, riskiest stretch
+- The task file deliberately uses `--node`, the shared spelling in `inspection/listing.py`.
+- The LLD still says `--node-id` in the API Contracts section (`project-documents/user/slices/129-slice.first-proof.md:269`) and in the Technical Requirements (`:308`).
+- Task 7.1 (`:330`) checks the LLD's criteria one by one, and says to mark any unmet criterion `BLOCKED:`. The `--node-id` criterion would be flagged as unmet, or the reviewer would have to rediscover the reason.
+- Fix: add a line to 7.1 saying `--node` satisfies the `--node-id` criterion, or amend the LLD wording in Task 2.5.
 
-Tasks 3.1–3.5 produce the Command log, draft Stops rows, crash evidence and the D9 defect records. These accumulate in the write-up, but the only commit is at 3.6. P6 can run for hours and the loop can span days. The D4 log is the primary record, so losing it to an uncommitted working tree is a real risk.
+### [CONCERN] Several tasks are finer-grained than the slice needs
 
-Add a commit checkpoint at 3.4's end and after any D9 restart, for example `review: log first-proof run progress`. The write-up is a document, not state the Runner reads, so this costs little.
+The slice is rated 3/5 and is mostly an operation, yet the file has about 27 tasks, many rated 1/5. Three merges would help:
+- **Task 3.5** has no commit and no artifact of its own. Its three checks are the state that 3.6's audit and the exports record. Fold them into the head of 3.6, and keep the PM-merge note.
+- **Tasks 6.4 and 6.5** (`:304-314`) are both small write-up-to-plan or issue updates that depend only on 4.2. Merge them into one "propagate the write-up's proposals" task. Task 6.5 has no commit of its own.
+- **Tasks 3.1 and 3.2** are both 1/5 and form one setup-and-drive unit. Merging them leaves one `review:` commit.
 
-### [CONCERN] The `--node` spelling is promised for Task 2.5 but missing from its steps
+### [NOTE] Task 3.3 has one commit however many stops occur
 
-The Task-level additions say "Task 2.5 records this spelling in the contract text". The LLD uses `--node-id`, including in its Success Criteria and API Contracts. The task file deliberately uses `--node` to match every other listing. Task 2.5's checklist (lines 148–151) has no item that records this. Without one, the departure from the LLD is never documented, and the next reader finds `--node-id` in the LLD and `--node` in the code.
+- Task 3.3 is an open-ended loop over an unknown number of stops, possibly across hours of wall-clock time.
+- It commits once, at the end. The D4 command log and the draft stop rows exist only in an uncommitted write-up until then.
+- The supervisor store holds the evidence either way. Still, consider a line allowing a `review:` commit of the write-up after each batch of stops, so the log cannot be lost.
 
-Add an item to 2.5, and consider noting the correction in the LLD's API Contracts.
+### [NOTE] Task 1.2 creates the write-up even when the proof unit is missing
 
-### [CONCERN] The test lists in 2.2 and 2.4 go beyond what the success criteria need
-
-The LLD requires tests for each column, the unacknowledged case, node filtering and the schema-mismatch exit. These tasks add:
-- `test_reads_through_a_read_only_handle` and `test_is_scoped_to_one_project` in 2.2.
-- A separate "older accept on a re-blocked step" case in 2.4.
-- A "`--json` and table form both work" case in 2.4.
-- A separate `reason` case for each of three block kinds in 2.4.
-
-Some of these are defensible, such as project scoping and the older-accept rule that the Task-level additions call out. Others are likely covered by the harness or the node filter test. Merge the read-only test into the store tests that already use the handle, and combine the `--json`/table case with the column tests. State which extras are intentionally kept.
-
-### [NOTE] Task 6.1 dependency understates its inputs
-
-Task 6.1 lists only 3.6, but its resolutions section "uses the stops the proof met as examples". Those come from the classified rows in 4.1/4.2, and 2.5 owns the `inspect resolutions` text it links. File order satisfies both, and the stated rule is to work in file order. List 4.2 and 2.5 so the dependency is correct if tasks are reordered.
-
-### [NOTE] Issue #16 close-out is left to Phase 7
-
-The LLD says "#16 closes with this slice". Task 6.5 comments on #16 and leaves it open until the merge, which fits the rule against merge tasks. Task 2.4's commit message cites `(#16)` but not `Fixes #16`. Confirm that Phase 7 closes it, or use `Fixes #16` on a commit.
+- The write-up header must record the D1 choice. If the proof unit is unnamed, Task 1.2 writes `BLOCKED:` and the header cannot be written.
+- State whether the file is still created, with a placeholder header, or whether the creation and commit wait for the PM.
 
 ### Run Digest
 
-- Response length: 5152 chars
+- Response length: 4269 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -137,12 +133,12 @@ The LLD says "#16 closes with this slice". Task 6.5 comments on #16 and leaves i
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 104023 / 11176 / 92843 / 4982 / not computed
-- Duration: 43.8 s
-- Cost: $0.42 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 104037 / 11176 / 92857 / 5750 / not computed
+- Duration: 49.4 s
+- Cost: $0.43 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
