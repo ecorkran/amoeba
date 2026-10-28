@@ -216,7 +216,7 @@ Status: decided
   | any other `failed` (`artifact_missing`, `cost_cap`, an unknown kind) | `BLOCKED` | `block(HUMAN)`, payload `{run_id, reason: failed, failure}`. `failure` includes `agent_text` when Squadron sent it. |
   | vanished, launch failed, resume failed | `BLOCKED` | as 122, 125 and 127 write them today |
 
-- **Atomic completion.** Resolving the `sq_run` entry and marking the slice `done` happen in one store transaction. Otherwise a crash between them would leave a runnable slice whose run completed, and the next tick would launch the pipeline again. `Store` gains this as an additive option on the ingestion write. The resolution and `runner_issued` marking already share a transaction there (125). 121's `done`-terminal rule is unchanged. `store-contract.md` documents it.
+- **Atomic completion.** Resolving the `sq_run` entry and marking the slice `done` happen in one store transaction. Otherwise a crash between them would leave a runnable slice whose run completed, and the next tick would launch the pipeline again. `Store` gains this as an additive option on the ingestion write. The resolution and `runner_issued` marking already share a transaction there (125). 121's `done`-terminal rule is unchanged. `store-contract.md` documents it. This is a contract change made inside a Runner slice, an exception to the arch's "contract changes land as their own slice". It is taken deliberately: the change is additive, one option on an existing write, and a separate slice for it would be ceremony. It still lands first, as its own task with its own contract test, before any Runner code uses it (Migration Plan step 3). The alternative, marking `done` before resolving the entry, was rejected because a crash between the two leaves an unresolved entry whose completed run is ingested again onto a `done` node.
 - **No `awaits_routing`, no decision record.** The map is fixed code over closed inputs, and the resolved entry holds the outcome document it acted on. The direction's rule "completed → done; resumable → resume; question → 140; anything else → blocked" is the whole policy. A table to configure it would be the second copy of policy this slice exists to remove.
 - **Text bounds.** `question`, `agent_text` and every checkpoint and failure text field pass through `cut_to_bound` (`STDERR_TAIL_LIMIT_BYTES`), as 125 does today.
 - **Constants defined once** in `supervise.py`: the payload reasons `agent_question`, `paused`, `failed` and `auto_resume_exhausted`, and the two transient failure kinds.
@@ -225,12 +225,13 @@ Status: decided
 Status: decided
 - **Who resumes.** At ingest, a `TRANSIENT` outcome under the bound leaves the slice `runnable`. Its entry is resolved with the outcome document, as now. The view lists it as a resume candidate. Decide issues `ResumeRun(node, run_id, checkout, instructions=None, cause=transient)` for a current (driven, not held) candidate whose pre-dispatch check passed. A held slice is not resumed until released, which matches "a held target issues nothing new".
 - **When.** Immediately, except for a `usage_limit` pause, which waits until `view.now >= resets_at`. Decide reads `now` from the view, so it stays pure. The slice is runnable but not yet a candidate.
-- **The bound.** The setting `auto_resume_limit` (default 3, defined once in `Settings`, flag `--auto-resume-limit`) is the most consecutive automatic resumes of one run. The count is the number of `sq_run` entries for the slice since the last entry that was a fresh launch or a PM `resume`, whose `resume_cause` journal parameter is `transient`. It is counted from the slice's journal entries, which the view already reads (125). At ingest, a `TRANSIENT` outcome at the bound blocks `HUMAN` instead, with reason `auto_resume_exhausted`, the last failure or checkpoint, and the count.
-- **Usage limits are bounded too.** Each wait for `resets_at` counts. A `usage_limit` pause with no `resets_at` is `BLOCKED`, never resumed blind.
+- **The bound.** The setting `auto_resume_limit` (default 3, defined once in `Settings`, flag `--auto-resume-limit`) is the most consecutive automatic resumes of one run **at one step**. The count is the number of trailing `sq_run` entries for the slice whose `resume_cause` journal parameter is `transient` and whose resumed-from outcome stopped at the same step as the outcome being ingested. The step is the outcome document's `checkpoint.step` or `failure.step`; an `orphaned` outcome with neither counts as the same step as the entry before it. A fresh launch, a PM `resume`, or a transient outcome at a different step ends the run of entries, so the count restarts. A `p456` run that crashes once in design, once in tasks and once in implementation is resumed each time; a run that crashes three times at the same step is not resumed a fourth time. The count is read from the slice's journal entries, which the view already reads (125), so a restart cannot reset it. At ingest, a `TRANSIENT` outcome at the bound blocks `HUMAN` instead, with reason `auto_resume_exhausted`, the last failure or checkpoint, the step, and the count.
+- **Usage limits are bounded the same way.** Each wait for `resets_at` is an automatic resume and counts at its step. A long run that meets a usage-limit window at each of its phases is resumed at each one. A `usage_limit` pause with no `resets_at` is `BLOCKED`, never resumed blind.
 - **Confirmation.** 127's D6 `resume_progress` generalises from "left the pause" to "left the state it was resumed from". That state is the resumed-from entry's recorded `outcome` and `updated_at`. A poll showing the run going (`timed_out`), or with a later `updated_at`, confirms the resume. Every resume entry is judged this way, automatic or resolution. `Continuation` becomes `{RESUME}`, the one value that marks an entry as a resume.
 - **No stale re-ingestion.** Until a resume entry is confirmed, a poll that still shows the resumed-from state is `StillResuming`. It is never ingested, so it neither counts toward the bound nor triggers a second resume.
 - **A resume that never takes.** If the child has exited, or the launch grace period has passed, while the run still shows its old state, 127's `ResumeFailed` path applies. The slice blocks `HUMAN` with reason `resume_failed`, the entry is resolved `failed`, and no further automatic resume is issued.
 - **The act-time pre-poll** (127, D4) stays. Act polls the run once before resuming. If the run is no longer in the state that was classified, the resume is withheld and the run is observed again.
+- **A run that is still live.** `orphaned` comes from Squadron's own liveness check, so a resume normally finds the run dead. If its owner comes back between the pre-poll and the resume, Squadron refuses with exit 1 ("still running", `_refuse_live_run`). The Runner does not read that message. After any failed resume it polls the run once more, and decides on what it sees (122's rule: the observed run state, never the error text). If the run is `running`, the resume entry resolves `not_applied`, the run is observed again as in flight, and nothing counts toward the bound or blocks the slice. Any other state takes the `ResumeFailed` path described under "A resume that never takes".
 - **This extends the plan entry,** which lists orphaned, provider error and stall. `usage_limit` with `resets_at` is added because Squadron says resume after `resets_at`, and blocking it would put the PM in the loop for a timer. The plan entry is edited to say so.
 - **Rejected:** keeping 126's attempt counts. Those bound reruns of a phase after a review. These count resumes of one crashed run, which the journal already records.
 
@@ -282,7 +283,7 @@ Status: decided
   | `cf_write` pointer moves and pointer watch | each phase step's `cf set` and `cf build` |
   | CF gate reads, `pending_decision` | the review loop inside each phase step, which pauses or fails rather than proceeding |
   | ungate-hatch checks | none needed. The hatches only fooled the Runner's own CF gate reads, which are gone. |
-  | merge policy and merge observation | a merging pipeline, or the PM; a non-merging run's slice is done when its run completes |
+  | merge policy and merge observation | a merging pipeline, or the PM; a non-merging run's slice is done when its run completes. Squadron's merge (`pipeline/branch_ops.py` `merge_slice_branch`, read 20261028 at `cc300518`) re-reads `git.integration_branch` from CF at merge time through `read_integration_target` and merges only into that target, raising rather than falling back to `main` when CF cannot be read. It also refuses to merge while any of the slice's task files has an unchecked box (`_require_checked_tasks`). |
   | run overrun and the per-pipeline time bound | Squadron's `stall` failure and its orphan detection, both of which this slice resumes |
 
 - **Stays in the store, unwritten:** the routing-decision, table-version and attempt-count tables and their API, `awaits_routing` and `unrouted_outcomes`, and `CommandKind.CF_WRITE` and its observer. They are 100's contract. Retiring them is Future Work, below.
@@ -298,7 +299,12 @@ Status: decided
   **`CheckpointKind` gains** `AGENT_QUESTION`.
 
   All are optional, extra keys are still ignored, and an absent field is `None`, never a fill.
-- **`agent_question` with no `question`** is still `QUESTION`. The payload's `question` is `null`, and 140 handles the absence. An `agent_question` from an implement step is only seen once Squadron ships its Unreleased fix. Until then such a run completes, as it does in Squadron. The slice goes `done` and its successor launches, so a project configured with a pipeline that includes implement accepts this until that Squadron release.
+- **`agent_question` with no `question`** is still `QUESTION`. The payload's `question` is `null`, and 140 handles the absence. An `agent_question` from an implement step is only seen once Squadron ships its Unreleased fix. Until then the gap is limited by what the pipeline does after implement:
+  - **A merging pipeline** (`p4567`, or anything with Squadron's merge step) cannot merge unfinished work. The merge refuses while any task box is unchecked (`_require_checked_tasks`, D9), so the run fails and the slice blocks with the failure (D4, "any other `failed`"). An agent that stopped to ask leaves its tasks unchecked.
+  - **A non-merging pipeline** (`p456`, `p56`, `p6`) still runs its code review on what was written, but if that review passes the run completes and the slice goes `done` with unfinished work.
+
+  The Runner does not refuse implement-containing pipelines until the fix ships. That would block the main use case for a gap Squadron has already fixed in Unreleased, and the merging case, the one that writes to the target, is already covered. Running the same pipeline by hand has the same gap today. When the fix ships, these runs pause as `agent_question` and take the `QUESTION` row with no Runner change.
+- **A task the agent marked blocked for a person** (the arch's Technical Considerations) is the same event as a question: the agent stops instead of finishing. It reaches the Runner through the same paths: as `agent_question` once Squadron's fix ships, and until then as an unchecked task that a merging pipeline refuses to merge. No separate input is read.
 - **No run-state file read.** The arch's exception exists to recover the agent's reply on `artifact_missing` for answering it. That is 140's job, and Squadron's `failure.agent_text` is already in its Unreleased changes.
 - **No new probe.** These are optional fields on a shape 122 already probes.
 
@@ -430,7 +436,7 @@ amoeba inspect blocked [--project ID] [--json]     # D8: every project when --pr
 - Slices of one initiative run in index order, each waiting until its predecessor is `done`.
 - A fresh launch on a dirty tree or off the target blocks with `checkout_dirty` or `checkout_branch`. A resume on the slice's own branch with a dirty tree goes ahead.
 - Each D4 row produces its effect. A crash between ingest's writes never leaves a completed run's slice `runnable`. Proven with the crash harness.
-- `orphaned`, `provider_error` and `stall` outcomes are resumed with `sq run --resume <id>` and no instructions, up to `auto_resume_limit` consecutive times. The next one blocks with `auto_resume_exhausted`.
+- `orphaned`, `provider_error` and `stall` outcomes are resumed with `sq run --resume <id>` and no instructions, up to `auto_resume_limit` consecutive times at one step. The next one at that step blocks with `auto_resume_exhausted`. A transient outcome at a different step restarts the count.
 - A `usage_limit` pause with `resets_at` is not resumed before `resets_at` and is resumed on the first tick after it.
 - A held slice is not resumed. Releasing the hold resumes it.
 - An `agent_question` pause blocks with the question in the payload, bounded.
@@ -443,7 +449,7 @@ amoeba inspect blocked [--project ID] [--json]     # D8: every project when --pr
 - No module in `src/amoeba/runner/` imports `routing`, `gates.cf_*`, `gates.hatches`, `gates.merge*` or `dispatch.pointer*`. The modules do not exist. A grep test in `test_import_boundaries.py` names them.
 - No code path issues `cf set`. The CF commands-defined-once test drops the write commands.
 - `supervise.py` is pure and fully covered, one test per D4 row and per D5 bound edge.
-- Format, lint and typecheck clean. The full suite passes, including 100's contract suite unchanged.
+- Format, lint and typecheck clean. The full suite passes. 100's existing contract tests pass unchanged, and the one added contract test covers atomic completion (D4).
 - The listed contract docs are updated.
 
 ### Integration Requirements
@@ -479,7 +485,7 @@ Draft, to be refined after implementation. Uses the stub `sq` and `cf` from `tes
 ### Technical Risks
 
 - **Broad deletion through tested code.** 126–128 threaded fields through `ProjectView`, `LaunchRun` and the tick. A missed consumer shows up as a type error or a dead test, not a silent fault, but the work is wide.
-- **Implement-step questions advance the slice.** Until Squadron ships its Unreleased fix (D10), an implement agent that stops on a question completes its run. The Runner marks the slice `done` and launches its successor. This is the one path where the Runner advances past unfinished work. Exposed: any configured pipeline with an implement step, which covers `p6`, `p56`, `p456` and user pipelines such as `p4567`. Not exposed: `p4`, `p5`, `p45`.
+- **Implement-step questions advance the slice.** Until Squadron ships its Unreleased fix (D10), an implement agent that stops on a question completes its run. The Runner marks the slice `done` and launches its successor. This is the one path where the Runner advances past unfinished work. Exposed: non-merging pipelines with an implement step (`p6`, `p56`, `p456`), when the code review passes the partial work. Not exposed: `p4`, `p5`, `p45`, and merging pipelines such as `p4567`, whose merge refuses unchecked tasks (D10).
 - **Resume loops spending money.** A run that fails transiently forever would be resumed forever without D5's bound.
 
 ### Mitigation Strategies
@@ -497,7 +503,7 @@ Follow the Migration Plan order. Write the D4 and D5 tests for `supervise.py` fi
 
 - **Effort:** 4/5. Most of it is deletion and retargeting tests.
 - No secrets enter the config file or journal. `params` are pipeline parameters, and the config loader's docstring says so, as 128's did.
-- Merging stays out of the Runner. A pipeline the PM configures may merge. The integration-branch rule ("never merge to `main` when one is set") is enforced by Squadron's merge step, not by Amoeba.
+- Merging stays out of the Runner. A pipeline the PM configures may merge. The integration-branch rule ("never merge to `main` when one is set") is enforced by Squadron's merge step, which merges only into the CF-configured target (D9, merge row). The Runner adds one guard of its own: a fresh launch runs only on the target (D3), so a merging pipeline starts from the branch it will merge back into.
 
 ### Future Work
 
