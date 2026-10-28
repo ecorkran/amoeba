@@ -69,7 +69,7 @@ What stands from 120–128: the tenant and its observe / decide / act stages, th
 
 - Answering questions. That is 140, which reads the block this slice writes.
 - Notification. That is 160.
-- Reading Squadron's run-state file. The arch allows it only for the agent's reply on `artifact_missing`, which 140 needs and this slice does not (D10).
+- Reading Squadron's run-state file. Everything this slice and 140 need is in `sq runs wait --json` (D10).
 - Retiring the store's routing tables and their API. They stay in 100's contract, unwritten (D9).
 - Multi-project scheduling (plan Future Work 1).
 - Recording every review of a multi-phase run. Ingestion keeps 125's last-review rule (Future Work, below).
@@ -79,8 +79,7 @@ What stands from 120–128: the tenant and its observe / decide / act stages, th
 ### Prerequisites
 
 - Slices 120–128, complete and merged. This slice cuts code they built.
-- Squadron with the `agent_question` checkpoint for design and tasks steps (20261021, after 0.23.7) and `checkpoint.resets_at` (#248). Installed: `sq` 0.24.8, observed 20261028.
-- Squadron's unreleased changes (in its CHANGELOG under Unreleased, 20261028): implement steps pause on `agent_question`, and `failure.agent_text`. This slice reads both when present and works without them (D10).
+- Squadron 0.24.9 (released 20261028, installed and observed 20261028): the `agent_question` checkpoint on design, tasks and implement steps, `checkpoint.resets_at` (#248), and `failure.agent_text`. The fields are optional, so an older `sq` degrades to the `BLOCKED` row of D4, never to a resume (D10).
 
 ### Interfaces Required
 
@@ -299,13 +298,9 @@ Status: decided
   **`CheckpointKind` gains** `AGENT_QUESTION`.
 
   All are optional, extra keys are still ignored, and an absent field is `None`, never a fill.
-- **`agent_question` with no `question`** is still `QUESTION`. The payload's `question` is `null`, and 140 handles the absence. An `agent_question` from an implement step is only seen once Squadron ships its Unreleased fix. Until then the gap is limited by what the pipeline does after implement:
-  - **A merging pipeline** (`p4567`, or anything with Squadron's merge step) cannot merge unfinished work. The merge refuses while any task box is unchecked (`_require_checked_tasks`, D9), so the run fails and the slice blocks with the failure (D4, "any other `failed`"). An agent that stopped to ask leaves its tasks unchecked.
-  - **A non-merging pipeline** (`p456`, `p56`, `p6`) still runs its code review on what was written, but if that review passes the run completes and the slice goes `done` with unfinished work.
-
-  The Runner does not refuse implement-containing pipelines until the fix ships. That would block the main use case for a gap Squadron has already fixed in Unreleased, and the merging case, the one that writes to the target, is already covered. Running the same pipeline by hand has the same gap today. When the fix ships, these runs pause as `agent_question` and take the `QUESTION` row with no Runner change.
-- **A task the agent marked blocked for a person** (the arch's Technical Considerations) is the same event as a question: the agent stops instead of finishing. It reaches the Runner through the same paths: as `agent_question` once Squadron's fix ships, and until then as an unchecked task that a merging pipeline refuses to merge. No separate input is read.
-- **No run-state file read.** The arch's exception exists to recover the agent's reply on `artifact_missing` for answering it. That is 140's job, and Squadron's `failure.agent_text` is already in its Unreleased changes.
+- **`agent_question` with no `question`** is still `QUESTION`. The payload's `question` is `null`, and 140 handles the absence. Implement steps pause on `agent_question` the same way as design and tasks steps (0.24.9), so a question from any phase of a `p456` or `p4567` takes the `QUESTION` row.
+- **A task the agent marked blocked for a person** (the arch's Technical Considerations) is the same event as a question: the agent stops instead of finishing, and the run pauses as `agent_question`. A merging pipeline is also guarded by Squadron's merge, which refuses while any task box is unchecked (`_require_checked_tasks`, D9). No separate input is read.
+- **No run-state file read.** `failure.agent_text` (0.24.9) carries the agent's reply on `artifact_missing`, so nothing needs the file.
 - **No new probe.** These are optional fields on a shape 122 already probes.
 
 ### D11 — Faults
@@ -485,7 +480,6 @@ Draft, to be refined after implementation. Uses the stub `sq` and `cf` from `tes
 ### Technical Risks
 
 - **Broad deletion through tested code.** 126–128 threaded fields through `ProjectView`, `LaunchRun` and the tick. A missed consumer shows up as a type error or a dead test, not a silent fault, but the work is wide.
-- **Implement-step questions advance the slice.** Until Squadron ships its Unreleased fix (D10), an implement agent that stops on a question completes its run. The Runner marks the slice `done` and launches its successor. This is the one path where the Runner advances past unfinished work. Exposed: non-merging pipelines with an implement step (`p6`, `p56`, `p456`), when the code review passes the partial work. Not exposed: `p4`, `p5`, `p45`, and merging pipelines such as `p4567`, whose merge refuses unchecked tasks (D10).
 - **Resume loops spending money.** A run that fails transiently forever would be resumed forever without D5's bound.
 
 ### Mitigation Strategies

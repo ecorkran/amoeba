@@ -39,7 +39,7 @@ The Runner becomes a **supervisor over Squadron pipelines**. Squadron owns the p
 - **Resolutions:** cut to resume-with-instructions and stop.
 - **Per-project config:** cut to which pipeline a project runs and its parameters.
 
-**Reading the run-state file.** "Observe outcomes from the contract" below forbids reading Squadron's run-state file. One exception is allowed until Squadron puts the agent's reply on `artifact_missing` failures (`failure.agent_text`, agreed with Squadron 20261028): the agent's full reply may be read from that file (`completed_steps[].action_results[]`, the `dispatch` entry, `outputs.response`). The exception goes once the field ships.
+**Agent questions from Squadron (0.24.9, 20261028).** A step whose agent ends on a question pauses with `checkpoint.kind` `agent_question` and the reply's last 400 characters in `checkpoint.question`, on design, tasks and implement steps alike. An `artifact_missing` failure carries the same tail in `failure.agent_text`. Both come from `sq runs wait --json`, so "Observe outcomes from the contract" below holds without exception: the Runner never reads the run-state file.
 
 ## Overview
 

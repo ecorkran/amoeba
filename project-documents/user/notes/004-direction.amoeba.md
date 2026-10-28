@@ -79,12 +79,10 @@ Read from Squadron's source 20261027 (installed `sq` 0.24.6).
 - **Resume works on paused and failed runs.** `sq run --resume <id> --instructions "<answer>"` reruns the stopped step as a fresh dispatch, with the answer prepended to every prompt. The rerun may not see the earlier conversation, so an answer restates the question it answers. `--decision accept` applies only at loop steps.
 - **Pipelines move CF's pointers themselves.** Every design, tasks and implement phase step runs `cf set slice`, `cf set phase` and `cf build` before dispatching. Amoeba's own pointer moves in `runner/dispatch/` are redundant.
 
-## Squadron gaps
+## Squadron gaps (fixed in 0.24.9, 20261028)
 
-- **Implement-step questions are missed.** Implement has no expected artifact, so an implementation agent that stops on a question counts as a successful step, and the pipeline goes on to review and merge. Fix on Squadron's side: run the question check on implement dispatches too.
-- **`artifact_missing` carries no question field.** Small fix on Squadron's side: put the final text on the failure (`dispatch_artifact.py` `_failure_metadata`, `run_outcome.py` `_failure`). Until then Amoeba reads `outputs.response` from the run-state file.
-
-Both gaps were sent to the Squadron session 20261028 and accepted. Planned shapes: an implement step whose agent ends on a question pauses with `checkpoint.kind = agent_question`, including a question followed by an options list; `artifact_missing` failures gain `failure.agent_text` (the reply's tail, null when the failure is not from an artifact check). Not yet shipped and no version yet.
+- **Implement-step questions.** Implement has no expected artifact, so an implementation agent that stopped on a question used to count as a successful step. Since 0.24.9 an implement step pauses with `checkpoint.kind = agent_question` when a line ending in `?` falls within the reply's last 400 characters, so a question followed by an options list pauses and a stray `?` high in a long report does not. `--resume --instructions` reruns the step with the answer. Other no-artifact steps, such as close-out, are not checked.
+- **`artifact_missing` reply.** Since 0.24.9 the failure carries `failure.agent_text`: the agent's final text, whitespace-collapsed, last 400 characters; null for failures not from the artifact check. Amoeba no longer needs the run-state file.
 
 ## Next
 
