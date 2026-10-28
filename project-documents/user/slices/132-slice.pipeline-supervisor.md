@@ -3,11 +3,28 @@ docType: slice-design
 slice: pipeline-supervisor
 project: amoeba
 parent: user/architecture/120-slices.runner-routing-engine.md
-dependencies: [128]
-interfaces: [140, 160]
+dependencies:
+- 128
+interfaces:
+- 140
+- 160
 dateCreated: 20261028
 dateUpdated: 20261028
 status: not_started
+turns: 40
+promptTokens: 3728063
+cachedTokens: 3586849
+cacheWriteTokens: 141142
+completionTokens: 35806
+durationSeconds: 366.9
+costUsd: 2.563241
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-opus-5-5:
+    rounds: 1
+    costUsd: 2.5632408
+    completionTokens: 35806
 ---
 
 # Slice Design: Pipeline Supervisor
