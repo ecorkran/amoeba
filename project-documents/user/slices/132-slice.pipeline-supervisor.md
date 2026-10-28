@@ -106,7 +106,8 @@ After the cut, `src/amoeba/runner/` holds:
 | `resolutions/` | stage, act, confirm, prepoll, argv | vocabulary cut to `resume` and `stop`. Situations collapse (D6). |
 | `git_read.py`, `gates/predispatch.py` | the git half of the pre-dispatch check | the CF gate half goes. `predispatch.py` moves to `dispatch/checkout_check.py` once `gates/` is otherwise empty. |
 | `project_config.py` | load, validate, defaults | `merge_policy` becomes `pipeline` and `params` (D2) |
-| `routing/`, `gates/` (all but predispatch), `dispatch/pointer*.py`, `dispatch/observe_pointer.py`, `lifecycle/steps.py`, `lifecycle/human_steps.py`, `lifecycle/completion.py` (step rule) | | deleted (D9) |
+
+The deleted modules are listed in D9.
 
 One new pure module, `runner/supervise.py`, holds the outcome map (D4) and the resume rule (D5). Nothing else names an outcome class.
 
@@ -178,7 +179,7 @@ Status: decided
   - an unknown key beside `pipeline` and `params`.
 
   The first three are the rules `build_argv` already enforces, checked at load so a bad config fails at start rather than at first launch.
-- **The pipeline name is not validated at load.** An unknown pipeline fails its launch before the `run_id=` line. 122's launch-failure path then blocks the slice with Squadron's stderr. An exit 2 still stops the process (122, D6). No help text or pipeline list is parsed.
+- **The pipeline name is not validated at load.** An unknown pipeline makes `sq run` print `Error: Pipeline '<name>' not found.` and exit 1, not 2, before the `run_id=` line. This was observed with `sq` 0.24.8 on 20261028 (`run.py`, `load_pipeline`'s `FileNotFoundError`). So it takes 122's launch-failure path, which blocks only that slice, with Squadron's stderr. It never takes the exit-2 path that stops the process (122, D6). No help text or pipeline list is parsed.
 - `MergePolicy`, `merge_policy`, `PROJECT_DEFAULTS.merge_policy` and the `merge_policy` and `target` journal keys go. A pipeline that merges is a pipeline that merges.
 - The settings flag `--project-config` stays. `--routing-table` and `routing_table_path` go.
 
@@ -192,7 +193,7 @@ Status: decided
   - `pointer_watch` (`pointer_moved`) and the snapshot-after-own-write rule.
 
   `CommandKind.CF_WRITE` stays in the store for recovery of old entries.
-- **The launch:** `LaunchRun(slice_node, config.pipeline, {slice: <index>, **config.params}, checkout)`. 125's checkout resolution (the CF worktree whose index range holds the slice) and its one-pipeline-per-checkout hold are kept. A checkout is held from launch until the run is neither running nor paused. 125's hold rule counts a not-`done` slice whose latest `sq_run` entry recorded `paused`. That rule widens to `paused`, `failed` or `orphaned`, because each leaves the slice's work in the checkout for a resume (D5, D6). Release is the same as for `paused`. The planner's per-checkout order becomes `(initiative index, slice index)`. Reissue (125, D9) is kept.
+- **The launch:** `LaunchRun(slice_node, config.pipeline, {slice: <index>, **config.params}, checkout)`. 125's checkout resolution (the CF worktree whose index range holds the slice) and its one-pipeline-per-checkout hold are kept. A checkout is held from launch until the run is neither running nor paused. 125's hold rule counts a not-`done` slice whose latest `sq_run` entry recorded `paused`. That rule widens to `paused`, `failed` or `orphaned`, because each leaves the slice's work in the checkout for a resume (D5, D6). Release is the same as for `paused`. A blocked slice, including one at `auto_resume_exhausted` or stopped, therefore holds its checkout until the PM acts. This widens the arch's "until its run is no longer running or paused". The arch text is fixed under #22. The planner's per-checkout order becomes `(initiative index, slice index)`. Reissue (125, D9) is kept.
 - **Pre-dispatch check, git only.** It keeps 128's D5 git rules and D6 with one allowed-branch rule for every pipeline:
   - **Fresh launch or reissue:** on the target and clean.
   - **Resume:** on the target or this slice's own branch (`{index}-slice.` stem). The tree is not checked for cleanliness, because a crashed or paused run's uncommitted work is what the resume continues.
@@ -424,6 +425,7 @@ amoeba inspect blocked [--project ID] [--json]     # D8: every project when --pr
 
 - A driven slice in a project configured with `pipeline: p456` gets one `sq run p456 <index> --run-id <id>` launch, with no `cf set` from Amoeba, and is `done` when the run completes.
 - `params` reach the launch as `-p key=value`. A config with a `slice` key, a `,` or `=` in a key, a `,` in a value, or a non-string value refuses to start, listing each problem.
+- A driven slice whose configured pipeline does not exist blocks with Squadron's `not found` stderr. The resident process and other projects keep running.
 - A driven slice in an unconfigured project launches nothing and raises one `pipeline_unconfigured` escalation, which closes once the project is configured or no longer driven.
 - Slices of one initiative run in index order, each waiting until its predecessor is `done`.
 - A fresh launch on a dirty tree or off the target blocks with `checkout_dirty` or `checkout_branch`. A resume on the slice's own branch with a dirty tree goes ahead.
@@ -477,6 +479,7 @@ Draft, to be refined after implementation. Uses the stub `sq` and `cf` from `tes
 ### Technical Risks
 
 - **Broad deletion through tested code.** 126–128 threaded fields through `ProjectView`, `LaunchRun` and the tick. A missed consumer shows up as a type error or a dead test, not a silent fault, but the work is wide.
+- **Implement-step questions advance the slice.** Until Squadron ships its Unreleased fix (D10), an implement agent that stops on a question completes its run. The Runner marks the slice `done` and launches its successor. This is the one path where the Runner advances past unfinished work. Exposed: any configured pipeline with an implement step, which covers `p6`, `p56`, `p456` and user pipelines such as `p4567`. Not exposed: `p4`, `p5`, `p45`.
 - **Resume loops spending money.** A run that fails transiently forever would be resumed forever without D5's bound.
 
 ### Mitigation Strategies
