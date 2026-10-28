@@ -8,7 +8,7 @@ audience: [human, ai]
 description: Concept for Amoeba — an orchestration runner with deterministic control flow and bounded nondeterminism that drives Context Forge and Squadron through a project's full lifecycle, escalating to a human (or first to an ephemeral Judge) only where judgment is the actual work.
 dependsOn: [000-pre-concept.amoeba.md]
 dateCreated: 20260618
-dateUpdated: 20261020
+dateUpdated: 20261028
 status: in_progress
 ---
 
@@ -173,6 +173,12 @@ The "forest of runnable / blocked / done nodes" is not only several unrelated pr
 2. **Multi-agent chat.** One channel in which each project's resident agent is a participant, so the PM can work across projects without Claude Desktop projects or named agents (which only cover Claude projects). It is the original orchestration idea that became Squadron; with Squadron dropping comms, it lands here as a client over the slice 109 network API. Planned as initiative 200, after 180 (the chat needs the program context to anchor to).
 
 Open: whether and how an agent in one project may read another project's state (cross-project visibility). The PM half-remembered a further item; none is recorded. Neither need is built before initiative 120; 100 and 120 only avoid foreclosing a program key or cross-project edges.
+
+#### Supervisor over Squadron — 2026-10-28 (PM)
+
+Building the Runner (120, slices 120–128) showed that its routing table, phase chaining, reruns, batching and judging repeat what Squadron's pipelines already do: `p456`-style pipelines chain phases, run thresholds decide pass or accept, `--max-revisions` bounds reruns, `*-plan` pipelines batch, and `judge-cycle` judges. Two copies of one policy disagree. So the Runner described above, which applies a routing table and spawns a Judge on findings, becomes a **supervisor**: it launches each project's configured pipeline, watches and resumes its runs, and keeps one blocked list across projects. Tier routing of review findings stays Squadron's.
+
+The judgment Amoeba spends moves from reviewing findings to **answering agents' questions**. A run most often stops because its agent asked something ("which branch?", "redesign or leave?"). Amoeba answers from the project's rules, plan, the program concept, and its earlier answers, and resumes the run with the answer. Only what it cannot answer reaches the PM. Initiative 140 becomes this answerer. The thesis stands: deterministic control flow around a bounded nondeterministic subroutine, now pointed at questions instead of findings. Full reasoning: `notes/004-direction.amoeba.md`.
 
 #### Decisions locked at concept
 

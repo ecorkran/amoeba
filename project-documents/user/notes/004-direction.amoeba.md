@@ -6,7 +6,7 @@ source: user/project-guides/000-concept.amoeba.md
 audience: [human, ai]
 description: Direction set 20261027. Amoeba becomes a supervisor network over Squadron, not a second orchestrator. Squadron owns the pipeline; Amoeba launches, watches, resumes, answers agents' questions, and keeps one blocked list across projects. Replaces the rest of the 120 slice plan.
 dateCreated: 20261027
-dateUpdated: 20261027
+dateUpdated: 20261028
 status: in_progress
 ---
 
@@ -65,8 +65,7 @@ Measured 20261027: `src/amoeba/runner/` is about 12k lines; the rest of `src/amo
 
 ## Plan changes
 
-- **130 (Batch Dispatch):** superseded. Squadron's `*-plan` pipelines batch.
-- **131 (Tier Inference):** superseded. Review routing is Squadron's.
+- **120:** slice 132 (Pipeline Supervisor) closes it, doing the cut above. Batch dispatch and tier inference are dropped from the plan: Squadron's `*-plan` pipelines batch, and review routing is Squadron's.
 - **140:** re-scoped to the question answerer above.
 - **160, 180, 200:** unchanged in purpose.
 - **Rule for all new work:** no design, task or step needs the PM to act, choose, or relay. Every decision has an automated answer; the blocked list is the only path to the PM.
@@ -85,8 +84,9 @@ Read from Squadron's source 20261027 (installed `sq` 0.24.6).
 - **Implement-step questions are missed.** Implement has no expected artifact, so an implementation agent that stops on a question counts as a successful step, and the pipeline goes on to review and merge. Fix on Squadron's side: run the question check on implement dispatches too.
 - **`artifact_missing` carries no question field.** Small fix on Squadron's side: put the final text on the failure (`dispatch_artifact.py` `_failure_metadata`, `run_outcome.py` `_failure`). Until then Amoeba reads `outputs.response` from the run-state file.
 
+Both gaps were sent to the Squadron session 20261028 and accepted. Planned shapes: an implement step whose agent ends on a question pauses with `checkpoint.kind = agent_question`, including a question followed by an options list; `artifact_missing` failures gain `failure.agent_text` (the reply's tail, null when the failure is not from an artifact check). Not yet shipped and no version yet.
+
 ## Next
 
-1. One slice: Amoeba runs a project's configured pipeline, marks completed runs done, resumes crashed ones, lists the rest, and deletes the routing, chaining and CF pointer moves it no longer needs.
-2. One slice: the question answerer. It reads `checkpoint.question` and answers with `--resume --instructions`; otherwise the question goes on the list.
-3. Squadron: the two gaps above.
+1. Slice 132 (Pipeline Supervisor): Amoeba runs a project's configured pipeline, marks completed runs done, resumes crashed ones, lists the rest, and deletes the routing, chaining and CF pointer moves it no longer needs.
+2. Initiative 140: the question answerer. It reads `checkpoint.question` and answers with `--resume --instructions`; otherwise the question goes on the list. Starts with its architecture document.
