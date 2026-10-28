@@ -11,20 +11,21 @@ interfaces:
 dateCreated: 20261028
 dateUpdated: 20261028
 status: not_started
-turns: 40
-promptTokens: 3728063
-cachedTokens: 3586849
-cacheWriteTokens: 141142
-completionTokens: 35806
-durationSeconds: 366.9
-costUsd: 2.563241
-usageRounds: 1
-pricedRounds: 1
+turns: 53
+promptTokens: 5170291
+cachedTokens: 5016134
+cacheWriteTokens: 154067
+completionTokens: 40935
+durationSeconds: 419.2
+costUsd: 3.05515
+usageRounds: 2
+pricedRounds: 2
 usageByModel:
   claude-opus-5-5:
-    rounds: 1
-    costUsd: 2.5632408
-    completionTokens: 35806
+    rounds: 2
+    costUsd: 3.0551497999999997
+    completionTokens: 40935
+revision_number: 1
 ---
 
 # Slice Design: Pipeline Supervisor

@@ -14,60 +14,56 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261028
 dateUpdated: 20261028
-reviewedSha: 3976df0a3fcf5689e7a0b3a9d2059b5ee484c432
+reviewedSha: 84bf0029c9d5491798302b475116347df1c967a5
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 turns: 3
-promptTokens: 85028
-cachedTokens: 22309
-cacheWriteTokens: 62715
-completionTokens: 5576
-durationSeconds: 48.2
-costUsd: 0.309664
+promptTokens: 113860
+cachedTokens: 11220
+cacheWriteTokens: 102636
+completionTokens: 5638
+durationSeconds: 49.3
+costUsd: 0.468859
 costBasis: provider
 runId: run-20261028-p4-86ec9636
 squadronVersion: 0.24.8
 findings:
   - id: F001
     severity: pass
-    category: architectural-alignment
-    summary: "Slice matches the Direction Change cut"
+    category: alignment
+    summary: "Supervisor cut matches the Direction Change"
     location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#Overview"
   - id: F002
     severity: concern
-    category: concurrency
-    summary: "Checkout hold does not cover a pending transient resume"
-    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D3, #D5"
-  - id: F003
-    severity: concern
     category: error-handling
-    summary: "Automatic resume confirmation and re-ingestion are not specified"
-    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D5, #D6"
+    summary: "A mistyped pipeline name can stop the whole resident process"
+    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D2 (pipeline name is not validated at load)"
+  - id: F003
+    severity: note
+    category: architecture-alignment
+    summary: "The checkout hold now outlasts the arch's stated rule"
+    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D3"
   - id: F004
-    severity: concern
-    category: boundary
-    summary: "Store contract change is bundled inside the Runner slice"
-    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D4"
+    severity: note
+    category: dependency
+    summary: "The store change lands inside this slice, not ahead of it"
+    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D4 (Atomic completion)"
   - id: F005
     severity: note
-    category: documentation
-    summary: "Arch body still describes the superseded design"
-    location: "project-documents/user/architecture/120-arch.runner-routing-engine.md"
+    category: risk
+    summary: "Implement-step questions are accepted as completions until Squadron ships its fix"
+    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D10"
   - id: F006
     severity: note
-    category: scope
-    summary: "`usage_limit` auto-resume extends the arch's transient list"
-    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D5"
-  - id: F007
-    severity: note
-    category: hidden-dependency
-    summary: "Pre-ship `agent_question` on implement steps completes silently"
-    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D10"
-  - id: F008
-    severity: pass
     category: proportionality
-    summary: "Proportionality and deferred scope"
-    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#Technical-Scope"
+    summary: "Some restated content could be trimmed"
+    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#Component Structure"
+  - id: F007
+    severity: pass
+    category: error-handling
+    summary: "Failure modes on the new resume and question paths are enumerated"
+    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md#D5"
 ---
 
 # Review: slice — slice 132
@@ -77,60 +73,57 @@ findings:
 
 ## Findings
 
-### [PASS] Slice matches the Direction Change cut
+### [PASS] Supervisor cut matches the Direction Change
 
-Each item in the arch's "What slice 132 removes or shrinks" has a matching decision:
-- Routing engine: D4, D9.
-- Step map: D1.
-- CF gate reads, ungate hatches, merge policy and merge observation: D9.
-- Pointer writes: D3.
-- Resolutions cut to resume and stop: D6.
-- Config cut to pipeline and params: D2.
-- Clean-tree check kept: D3.
+The slice implements each item the arch's "What slice 132 removes or shrinks" list names:
+- **Routing and steps:** it removes the routing engine and the lifecycle step map.
+- **Gates and merge:** it removes CF gate reads, the ungate hatches, and merge policy and observation.
+- **Pointer writes:** it removes `cf_write` pointer moves.
+- **Resolutions:** it cuts resolutions to `resume` and `stop`.
+- **Config:** it cuts per-project config to `pipeline` and `params`.
 
-The "What stands" list (tenant stages, journal, probes, one pipeline per checkout, drive/hold) is preserved. The dependency direction is correct, since the slice cuts code in 120–128 and provides inputs to 140 and 160. Declining the run-state-file exception (D10) is a justified narrowing of what the arch allows.
+It keeps what the arch says stands: tenant stages, fault isolation, detached launch and confirmation, journal and recovery, drive and hold intents, per-checkout concurrency, and shape probes. The clean-tree check stays, and a resume is checked for branch only. The outcome map (D4) is a closed enum over closed inputs, and unknown kinds go to `BLOCKED`. That matches the arch's "Unknown escalates" and "Closed vocabularies" principles.
 
-### [CONCERN] Checkout hold does not cover a pending transient resume
+### [CONCERN] A mistyped pipeline name can stop the whole resident process
 
-D3 keeps 125's rule that a checkout is held "until the run is neither running nor paused". For an `orphaned` or `failed` (`provider_error`/`stall`) outcome, D5 sets the slice `runnable` and queues a `ResumeRun` for a later Decide. In that window the run is neither running nor paused, so the hold lapses. The arch's concurrency rule says a checkout runs one pipeline at a time. Another slice in the same checkout (a different initiative, since the planner orders by initiative then slice) could be launched while the transient slice's branch holds uncommitted work. The pre-dispatch check would probably block that launch with `checkout_dirty` or `checkout_branch`, but the slice relies on that side effect instead of saying the hold persists. A held slice, or one waiting on `resets_at`, makes the window long. State that a slice with a resume candidate keeps its checkout held until the resume is issued or the slice blocks.
+D2 leaves the pipeline name unvalidated at load. It says an unknown pipeline "fails its launch before the `run_id=` line", and 122's launch-failure path then blocks the slice. In the same bullet it adds "an exit 2 still stops the process (122, D6)". The arch says Squadron exits 2 on a usage error before anything runs, and that an exit 2 from a launch stops the resident process. An unknown pipeline name is plausibly such a usage error. If so, one typo in one project's `pipeline` value stops the supervisor for every project, on first launch rather than at start. The slice does not say which exit code an unknown pipeline produces, so it does not say whether the slice blocks or the process stops. Fix this in one of these ways:
+- **State the exit code:** pin the exit code Squadron returns for an unknown pipeline and say which path it takes.
+- **Probe at start:** validate configured pipeline names once at start, in the way the arch already probes other shapes.
+- **Isolate the fault:** treat a launch exit 2 caused by the configured pipeline as a per-project fault.
 
-### [CONCERN] Automatic resume confirmation and re-ingestion are not specified
+The Success Criteria also have no case for this.
 
-The arch (127, D6) confirms a resume when a poll shows the run has left the pause it was resumed from, because Squadron prints no `run_id=` on resume. That rule fits `paused` runs. D5 now resumes `failed` and `orphaned` runs automatically, where "left the pause" does not apply. The slice does not say two things:
-- **Confirmation:** how a resume of a failed or orphaned run is confirmed.
-- **Stale re-ingestion:** what stops observation from re-ingesting the same terminal `failed` or `orphaned` state before the resumed process claims the run. That would double-count toward the bound or issue a second resume. The `_refuse_live_run` guard (#195) and the act-time pre-poll only partly cover this.
+### [NOTE] The checkout hold now outlasts the arch's stated rule
 
-Each new `ResumeRun` is an I/O path with a failure mode, so name the confirmation rule and the failure handling for "resume issued, run never leaves the failed state". The bound will probably catch it, but the design should say so.
+The arch's concurrency item holds a checkout "until its run is no longer running or paused". D3 widens this to failed and orphaned runs, because a resume needs their work left in the checkout. The reasoning is sound. It does mean a blocked slice holds its project's checkout until the PM acts, including after `auto_resume_exhausted` or `stop`. The arch body is only trimmed later (issue #22), so the two documents disagree until then. Record the widening in the arch's Direction Change text, or in #22's scope.
 
-### [CONCERN] Store contract change is bundled inside the Runner slice
+### [NOTE] The store change lands inside this slice, not ahead of it
 
-The arch says contract changes to 100 "land as their own slice ahead of the Runner" and that where "the contract lacks, the contract changes first". D4 adds an additive atomic-completion option to the store's ingestion write inside 132, ordered in Migration Plan step 3 with the wiring. The change is small and additive, so a separate slice is not needed. The Migration Plan should make it the first task of step 3 with its own contract-suite test, and `store-contract.md` should be updated in that same task. Otherwise the Runner code in this slice could be written against an API that does not yet exist.
+The arch says "the contract changes first and the Runner then codes against it". The atomic-completion option on the ingestion write is an additive change to 100's contract. The slice makes it the first task of step 3, with its own contract-suite test and the `store-contract.md` update in the same task. That is proportionate, and a separate slice for one additive option would be heavier. The dependency direction is still correct, because 100's suite is stated to pass unchanged.
 
-### [NOTE] Arch body still describes the superseded design
+### [NOTE] Implement-step questions are accepted as completions until Squadron ships its fix
 
-The Direction Change section is authoritative, but the rest of the arch still describes the routing table, `cf_write`, the step map, merge policy and the retry/accept/handled resolutions. Examples are "Merge policy is a pipeline parameter" and "In v1 the kinds are `sq_run` and `cf_write`". The slice is consistent with the Direction Change, but a reader of the arch alone sees contradictions. The arch should be trimmed once 132 lands.
+The arch's "hand off questions" behaviour is only partly delivered for `p456`-style pipelines. With Squadron's current release, an implement-step question completes the run. This slice then marks the slice `done` and launches its successor. D10 states this and accepts it. The Risk Assessment omits it, though, and it is the one path where the Runner can advance past unfinished work. Add it to the Risks, and tell the PM which pipelines are exposed.
 
-### [NOTE] `usage_limit` auto-resume extends the arch's transient list
+### [NOTE] Some restated content could be trimmed
 
-The arch says only "transient reason". The slice picks orphaned, `provider_error`, `stall` and `usage_limit` with `resets_at`, and edits the plan entry to match. This is proportionate and bounded. The wait itself is not covered by the "tick never waits" rule, because Decide reads `view.now` and nothing blocks.
+The Component Structure table's last row repeats D9's deletion list. D9's "confirmed against Squadron" table restates reasoning from `004-direction.amoeba.md`. Both are cheap to keep, but they are the first things to cut or replace with a reference if the document needs to shrink. The rest of the design is proportionate: most of the effort is deletion, no new tables are added, and the one new setting (`auto_resume_limit`) has a justified use.
 
-### [NOTE] Pre-ship `agent_question` on implement steps completes silently
+### [PASS] Failure modes on the new resume and question paths are enumerated
 
-Until Squadron ships its Unreleased change, an implement-step question completes the run and the slice goes `done`. The slice states this and degrades the other absent fields to `BLOCKED`, never to a resume. The behaviour is Squadron's, not the Runner's, but the PM should know about it before enabling a pipeline that includes implement.
+The resume path has an explicit handling strategy for each failure, instead of leaving it "TBD":
+- **Stale poll:** a poll that still shows the old state is `StillResuming` and is not re-ingested.
+- **Resume never takes:** the slice blocks with `resume_failed` and no further automatic resume is issued.
+- **Run gone at act time:** the act-time pre-poll withholds the resume.
+- **Run missing or exit 2:** it is a failed command and never a relaunch.
+- **Exhausted resumes:** the slice blocks with `auto_resume_exhausted`.
+- **Restart:** the resume count is derived from the journal, so a restart cannot reset it.
 
-### [PASS] Proportionality and deferred scope
-
-Most of the work is deletion. The new mechanisms are minimal:
-- One pure module (`supervise.py`).
-- One setting (`auto_resume_limit`).
-- No new tables or columns.
-- No configurable outcome table, with the reason stated.
-
-The deferrals (routing store API retirement, per-phase review recording, multi-project scheduling) are not assigned to this slice by the plan, and each has a stated reason and a Future Work entry.
+Text bounds apply to questions and failure text. The new fields are optional, and an absent field degrades to `BLOCKED`, never to a resume.
 
 ### Run Digest
 
-- Response length: 6018 chars
+- Response length: 5979 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -141,12 +134,12 @@ The deferrals (routing store API retirement, per-phase review recording, multi-p
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 85028 / 22309 / 62715 / 5576 / not computed
-- Duration: 48.2 s
-- Cost: $0.31 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 113860 / 11220 / 102636 / 5638 / not computed
+- Duration: 49.3 s
+- Cost: $0.47 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
