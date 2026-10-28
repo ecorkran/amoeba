@@ -160,7 +160,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 
 ## After the First Proof
 
-These are in scope for initiative 120. They are built after 128 because the arch makes the proof's stops their input.
+**Superseded 20261027** by `user/notes/004-direction.amoeba.md`: Squadron's `*-plan` pipelines batch (130) and review routing is Squadron's (131). Neither is built. Kept for the record.
 
 11. [ ] **(130) Batch Dispatch** — Treats a plan-wide run, `slices-plan` first, as one dispatch whose per-item outcomes (Squadron's batch report, `items[]`) map onto per-slice nodes. The Runner acts only at items Squadron flags or pauses on. Resuming a flagged item is an explicit per-item resume carrying the resolution's decision. Which lifecycle steps may be batched, and how report items map to nodes, are decided at slice design. Dependencies: [128]. Risk: Medium. Effort: 4/5 (raised at slice design: the store kinds and the item-resume observer)
 
