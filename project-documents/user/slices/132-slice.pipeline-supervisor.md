@@ -191,7 +191,7 @@ Status: decided
   - `pointer_watch` (`pointer_moved`) and the snapshot-after-own-write rule.
 
   `CommandKind.CF_WRITE` stays in the store for recovery of old entries.
-- **The launch:** `LaunchRun(slice_node, config.pipeline, {slice: <index>, **config.params}, checkout)`. 125's checkout resolution (the CF worktree whose index range holds the slice) and its one-pipeline-per-checkout hold are kept. A checkout is held from launch until the run is neither running nor paused. The planner's per-checkout order becomes `(initiative index, slice index)`. Reissue (125, D9) is kept.
+- **The launch:** `LaunchRun(slice_node, config.pipeline, {slice: <index>, **config.params}, checkout)`. 125's checkout resolution (the CF worktree whose index range holds the slice) and its one-pipeline-per-checkout hold are kept. A checkout is held from launch until the run is neither running nor paused. 125's hold rule counts a not-`done` slice whose latest `sq_run` entry recorded `paused`. That rule widens to `paused`, `failed` or `orphaned`, because each leaves the slice's work in the checkout for a resume (D5, D6). Release is the same as for `paused`. The planner's per-checkout order becomes `(initiative index, slice index)`. Reissue (125, D9) is kept.
 - **Pre-dispatch check, git only.** It keeps 128's D5 git rules and D6 with one allowed-branch rule for every pipeline:
   - **Fresh launch or reissue:** on the target and clean.
   - **Resume:** on the target or this slice's own branch (`{index}-slice.` stem). The tree is not checked for cleanliness, because a crashed or paused run's uncommitted work is what the resume continues.
@@ -225,6 +225,9 @@ Status: decided
 - **When.** Immediately, except for a `usage_limit` pause, which waits until `view.now >= resets_at`. Decide reads `now` from the view, so it stays pure. The slice is runnable but not yet a candidate.
 - **The bound.** The setting `auto_resume_limit` (default 3, defined once in `Settings`, flag `--auto-resume-limit`) is the most consecutive automatic resumes of one run. The count is the number of `sq_run` entries for the slice since the last entry that was a fresh launch or a PM `resume`, whose `resume_cause` journal parameter is `transient`. It is counted from the slice's journal entries, which the view already reads (125). At ingest, a `TRANSIENT` outcome at the bound blocks `HUMAN` instead, with reason `auto_resume_exhausted`, the last failure or checkpoint, and the count.
 - **Usage limits are bounded too.** Each wait for `resets_at` counts. A `usage_limit` pause with no `resets_at` is `BLOCKED`, never resumed blind.
+- **Confirmation.** 127's D6 `resume_progress` generalises from "left the pause" to "left the state it was resumed from". That state is the resumed-from entry's recorded `outcome` and `updated_at`. A poll showing the run going (`timed_out`), or with a later `updated_at`, confirms the resume. Every resume entry is judged this way, automatic or resolution. `Continuation` becomes `{RESUME}`, the one value that marks an entry as a resume.
+- **No stale re-ingestion.** Until a resume entry is confirmed, a poll that still shows the resumed-from state is `StillResuming`. It is never ingested, so it neither counts toward the bound nor triggers a second resume.
+- **A resume that never takes.** If the child has exited, or the launch grace period has passed, while the run still shows its old state, 127's `ResumeFailed` path applies. The slice blocks `HUMAN` with reason `resume_failed`, the entry is resolved `failed`, and no further automatic resume is issued.
 - **The act-time pre-poll** (127, D4) stays. Act polls the run once before resuming. If the run is no longer in the state that was classified, the resume is withheld and the run is observed again.
 - **This extends the plan entry,** which lists orphaned, provider error and stall. `usage_limit` with `resets_at` is added because Squadron says resume after `resets_at`, and blocking it would put the PM in the loop for a timer. The plan entry is edited to say so.
 - **Rejected:** keeping 126's attempt counts. Those bound reruns of a phase after a review. These count resumes of one crashed run, which the journal already records.
@@ -293,7 +296,7 @@ Status: decided
   **`CheckpointKind` gains** `AGENT_QUESTION`.
 
   All are optional, extra keys are still ignored, and an absent field is `None`, never a fill.
-- **`agent_question` with no `question`** is still `QUESTION`. The payload's `question` is `null`, and 140 handles the absence. An `agent_question` from an implement step is only seen once Squadron ships its Unreleased fix. Until then such a run completes, as it does in Squadron.
+- **`agent_question` with no `question`** is still `QUESTION`. The payload's `question` is `null`, and 140 handles the absence. An `agent_question` from an implement step is only seen once Squadron ships its Unreleased fix. Until then such a run completes, as it does in Squadron. The slice goes `done` and its successor launches, so a project configured with a pipeline that includes implement accepts this until that Squadron release.
 - **No run-state file read.** The arch's exception exists to recover the agent's reply on `artifact_missing` for answering it. That is 140's job, and Squadron's `failure.agent_text` is already in its Unreleased changes.
 - **No new probe.** These are optional fields on a shape 122 already probes.
 
@@ -333,7 +336,7 @@ This slice restructures the Runner in place. The resident process must start and
    - completion
    - `ProjectView.current_steps` (renamed `current_slices`)
    - `decide`'s guard
-3. **Outcome map and resume.** Add `supervise.py` and wire it into ingest with atomic completion. Add `ResumeRun(cause=transient)`, then remove `route_outcomes` from the tick.
+3. **Outcome map and resume.** First task: the store's atomic-completion option (D4), with its own contract-suite test and the `store-contract.md` update in the same task. Then add `supervise.py` and wire it into ingest with atomic completion. Add `ResumeRun(cause=transient)`, then remove `route_outcomes` from the tick.
 4. **Resolutions and intents.** Cut the vocabularies and update `inbox-contract.md` in the same task.
 5. **Deletions,** in dependency order:
    1. `routing/` and its listing;
@@ -357,7 +360,7 @@ This slice restructures the Runner in place. The resident process must start and
 
 - `process-contract.md`: config format, settings, the outcome map, auto-resume
 - `inbox-contract.md`: intent body, resolution vocabulary
-- `store-contract.md`: the atomic completion option, and the routing tables marked unwritten by the Runner
+- `store-contract.md`: the routing tables marked unwritten by the Runner. The atomic completion option is documented in step 3's first task.
 - `context-forge-contract.md`: the Runner no longer writes pointers or reads gates
 - `substrate-guide.md`: the 120 row
 
@@ -494,5 +497,6 @@ Follow the Migration Plan order. Write the D4 and D5 tests for `supervise.py` fi
 
 ### Future Work
 
+- **Trim the 120 arch body to the supervisor design** once this slice lands (review F005). Issue #22.
 - **Retire the routing store API.** Drop the Runner-only routing-decision, table-version and attempt-count API and `awaits_routing` from 100's contract, with a migration that removes the tables once no store holds rows the PM wants. Dependencies: [132]. Effort: 1/5
 - **Record every review of a multi-phase run.** A `p456` run lists three phases' reviews, and ingestion records only the last. Record each, attributed to the slice, if 140 or calibration needs the design and tasks reviews. Dependencies: [132]. Effort: 2/5
