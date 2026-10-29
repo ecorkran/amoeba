@@ -76,7 +76,7 @@ usageByModel:
 - [ ] Create `132-slice.pipeline-supervisor` from the target and switch to it
 - [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. If any fails, write `BLOCKED:` with the failure and stop
 - [ ] Record under this task: the pass count, and `find src/amoeba/runner -name '*.py' | xargs wc -l | tail -1` (the "before" line count for the final commit message)
-- [ ] **Success:** on the slice branch, the suite is green and both numbers are recorded. No commit (nothing changed on the branch)
+- [ ] **Success:** the planning edits are committed to the target; on the slice branch, the suite is green and both numbers are recorded. No commit on the slice branch
 
 ---
 
@@ -86,7 +86,7 @@ usageByModel:
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
 - [ ] `runner/project_config.py`: each project entry gains `pipeline: str | None` and `params: Mapping[str, str]` (empty by default). `merge_policy` stays for now; Task 10.4 removes it. `ProjectSettings` carries both. A project the file does not name has `pipeline` `None` (no default pipeline, D2)
-- [ ] Load-time validation per D2, every problem listed in one `StartupFailedError`: a key `slice`; a key containing `,` or `=`; a value containing `,`; a non-string value; an entry naming a project with no `pipeline`. The pipeline name itself is not validated. Reuse the forbidden-character rule `build_argv` enforces (import it, do not copy it)
+- [ ] Load-time validation per D2, every problem listed in one `StartupFailedError`: a key `slice`; a key containing `,` or `=`; a value containing `,`; a non-string value; an entry naming a project with no `pipeline`; any key beside `pipeline`, `params` and `merge_policy` (Task 10.4 removes `merge_policy` from that list). The pipeline name itself is not validated. Reuse the forbidden-character rule `build_argv` enforces (import it, do not copy it)
 - [ ] Update the loader's docstring: `params` are pipeline parameters and hold no secrets (LLD "Special Considerations")
 - [ ] `tests/runner/test_project_config.py`: a named project with and without `params`; an unnamed project gives `pipeline` `None`; each failure; two problems in one file both named, the `slice` one as `projects.<id>.params.slice`
 - [ ] **Success:** tests pass, existing config tests pass. Commit `feat: name the pipeline and its parameters per project`
@@ -134,7 +134,7 @@ usageByModel:
 - [ ] `usage_limit` is `TRANSIENT` only with `resets_at`; without it, `BLOCKED`. `agent_question` with no `question` is still `QUESTION` (D10)
 - [ ] `tests/runner/test_supervise.py`, table-driven: one case per D4 row, plus every listed `paused` and `failed` kind of the "any other" rows and an unknown kind of each
 - [ ] Add `supervise.py` to the purity check used for `gates/` (`tests/runner/gates/purity.py`) or an equivalent import test: it imports nothing that does I/O
-- [ ] **Success:** tests pass. Commit with Task 5.2
+- [ ] **Success:** tests pass. Commit `feat: add the outcome map`
 
 ### Task 5.2: Implement the resume bound
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 3
@@ -142,24 +142,24 @@ usageByModel:
 - [ ] `supervise.py`: `step_of(document) -> str | None` (`checkpoint.step` or `failure.step`); `resume_count(entries, step) -> int` per D5 (Task-level additions). Count trailing `sq_run` entries with `resume_cause` `transient` whose resumed-from outcome stopped at `step`; an `orphaned` outcome with no step counts as the step of the entry before it; a fresh launch, a `resolution` resume or a different step ends the run of entries
 - [ ] `resume_ready(document, now) -> bool`: true for every `TRANSIENT` outcome except a `usage_limit` pause before its `resets_at` (D5 "When")
 - [ ] Tests (same file): count 0 for a fresh launch; 1, 2, 3 at one step; a different step restarts at 0; a `resolution` resume restarts at 0; an orphaned outcome inherits the step; `resume_ready` before, at and after `resets_at`
-- [ ] **Success:** tests pass and `supervise.py` is fully covered (`uv run pytest --cov=amoeba.runner.supervise`). Commit `feat: add the outcome map and the resume bound`
+- [ ] **Success:** tests pass and `supervise.py` is fully covered (`uv run pytest --cov=amoeba.runner.supervise`). Commit `feat: add the resume bound`
 
 ---
 
 ## Section 6: Ingest by the Outcome Map
 
-### Task 6.1: Ingest with `supervise.classify` and atomic completion
-**Owner**: Junior AI | **Dependencies**: 2.2, 4.1, 5.2 | **Effort**: 4
+### Task 6.1: Add the supervised outcome plan
+**Owner**: Junior AI | **Dependencies**: 2.2, 4.1, 5.2 | **Effort**: 3
 
-- [ ] `runner/ingest/outcome.py`: replace `plan_outcome`'s match with `supervise.classify`. Each class gives its D4 effect: `COMPLETED` resolves with `complete_node_id`; `QUESTION` blocks `SQ_CHECKPOINT` with `{run_id, reason, step, question}`; `BLOCKED` keeps the payloads D4 lists, with `agent_text` inside `failure` when sent; vanished, launch failed and resume failed are unchanged. Every text field passes through `cut_to_bound`
-- [ ] `TRANSIENT`: with `resume_count` below `auto_resume_limit`, resolve the entry with its outcome document and do not block. At the bound, block `HUMAN` with `{reason: auto_resume_exhausted, step, count, checkpoint | failure}`. Pass the limit in from settings through the tick to `record_finished`
-- [ ] `runner/ingest/record.py`: stop marking `awaits_routing`; drop the `observation` argument and the hatch-check writes (the CF outcome read leaves the tick in Task 6.2)
-- [ ] Tests in `tests/runner/ingest/`: one per D4 row's effect at ingest, against a temporary store; `TRANSIENT` under and at the bound; a question longer than the bound is cut
-- [ ] **Success:** ingest tests pass. Commit with Task 6.2
+- [ ] `runner/ingest/outcome.py`: add `plan_supervised(finished, run_id, count, limit) -> OutcomePlan` beside `plan_outcome`, built on `supervise.classify`; nothing calls it yet. Each class gives its D4 effect: `COMPLETED` resolves and completes the node; `QUESTION` blocks `SQ_CHECKPOINT` with `{run_id, reason, step, question}`; `BLOCKED` keeps the payloads D4 lists, with `agent_text` inside `failure` when sent; vanished, launch failed and resume failed are as today. Every text field passes through `cut_to_bound`
+- [ ] `TRANSIENT`: with `count` below `limit`, resolve the entry with its outcome document and do not block. At the bound, block `HUMAN` with `{reason: auto_resume_exhausted, step, count, checkpoint | failure}`
+- [ ] Tests in `tests/runner/ingest/`: one per D4 row's plan; `TRANSIENT` under and at the bound; a question longer than the bound is cut
+- [ ] **Success:** tests pass and the full suite is green. Commit `feat: add the supervised outcome plan`
 
-### Task 6.2: Take routing and the CF outcome read off the tick
-**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 3
+### Task 6.2: Ingest by the outcome map and take routing off the tick
+**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 4
 
+- [ ] `runner/ingest/record.py`: `ingest` uses `plan_supervised` with `supervise.resume_count` and passes `complete_node_id` for `COMPLETED`; remove `plan_outcome`; stop marking `awaits_routing`; drop the `observation` argument and the hatch-check writes. Pass `auto_resume_limit` from settings through the tick to `record_finished`
 - [ ] `runner/tick.py`: remove `GateStage.observe_outcomes`, `route_outcomes` and `watch_overruns`; `record_finished` no longer takes outcome observations. `ProjectTick` stops taking `routing_table`. The routing, outcome and overrun modules stay on disk, unused, until Section 10
 - [ ] Rewrite tick-level tests that asserted a routing decision or an outcome observation after a completed run (`tests/runner/gates/test_tick_outcome.py`, `test_tick_routing.py`, `tests/runner/routing/test_tick_routing.py`, `tests/runner/resolutions/test_tick_accept_routing.py`) to assert the D4 effect instead, or delete them where the behaviour no longer exists. Pure unit tests of the unused modules stay until their modules go
 - [ ] Crash test with `tests/runner/crash_harness.py`: kill between ingest's writes of a completed run; after restart the node is `done` and nothing is relaunched (Success Criteria, "A crash between ingest's writes")
@@ -186,7 +186,7 @@ usageByModel:
 - [ ] `gates/candidates.py`: an `AUTO_RESUME` node is a candidate on the same terms as `RESUME` (its checkout held by no one or only by itself; pipeline and checkout from the resumed entry)
 - [ ] Pre-dispatch for both resume states: the branch is the target or the slice's own branch, and the tree is not checked for cleanliness (D3). Confirm 128's resume rule already does this; change it only where it differs
 - [ ] Tests in `tests/runner/dispatch/test_state.py`, `test_hold.py` and `tests/runner/gates/test_predispatch.py`: each transient outcome gives `AUTO_RESUME`; a blocked node does not; a `failed` and an `orphaned` entry hold the checkout; a resume on the slice branch with a dirty tree passes; a fresh launch with a dirty tree still blocks
-- [ ] **Success:** tests pass. Commit with Task 7.3
+- [ ] **Success:** tests pass and the full suite is green. Commit `feat: list transient outcomes as resume candidates`
 
 ### Task 7.3: Issue `ResumeRun(cause=transient)` from Decide
 **Owner**: Junior AI | **Dependencies**: 7.2 | **Effort**: 2
@@ -255,28 +255,40 @@ usageByModel:
 ### Task 9.3: Add the slice-level ready rule and initiative completion
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `lifecycle/tree.py`: `ready_slices()` per D1's ready rule. `lifecycle/predecessors.py` reduces to `_previous_eligible_slice` made public (the one place 180 extends). `lifecycle/completion.py`: an initiative is `done` when every eligible slice under it is `done`; a CF-complete slice with no unresolved entry and not blocked is `done` (D1). The step versions stay until Task 9.4
+- [ ] `lifecycle/tree.py`: `ready_slices()` per D1's ready rule. `lifecycle/predecessors.py`: make `_previous_eligible_slice` public as the slice predecessor (the one place 180 extends). `lifecycle/completion.py`: an initiative is `done` when every eligible slice under it is `done`; a CF-complete slice with no unresolved entry and not blocked is `done` (D1). The step rules in these modules stay until Task 10.4 deletes them
 - [ ] Tests in `tests/runner/lifecycle/test_ready_steps.py` (rename to `test_ready_slices.py`), `test_predecessors.py`, `test_completion.py`: each ready condition; predecessor by index within an initiative; deferred and deprecated skipped; initiative completion
 - [ ] **Success:** tests pass. Commit `feat: add the slice-level ready rule`
 
-### Task 9.4: Dispatch slice nodes with the configured pipeline
-**Owner**: Junior AI | **Dependencies**: 2.1, 8.1, 8.2, 9.2, 9.3 | **Effort**: 5
+### Task 9.4: Take human steps and the merge observation off the tick
+**Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
+
+- [ ] `factory.py` and `tick.py`: remove `HumanStepPlanner` and the merge observation (`GateStage.observe_merges`); `ProjectView` loses `merge_policy` and `merge_observations`. The modules stay on disk, unused, until Section 10
+- [ ] Delete `tests/runner/test_tick_human_steps.py` and `tests/runner/gates/test_tick_merge.py`; rewrite any other tick test that asserted a human-step block or a merge completion
+- [ ] **Success:** full suite green. Commit `refactor: stop planning human steps and observing merges`
+
+### Task 9.5: Dispatch slice nodes with the configured pipeline
+**Owner**: Junior AI | **Dependencies**: 2.1, 8.1, 8.2, 9.3, 9.4 | **Effort**: 4
 
 - [ ] `lifecycle/reconcile.py` creates initiative and slice nodes only. Step nodes in an older store are never candidates (LLD "State Management")
 - [ ] `ProjectView.current_steps` becomes `current_slices` from `ready_slices()`; `ready_unbusy` follows; governance (`intent/governance.py`) resolves on slice nodes; the `decide` guard names slices
-- [ ] `dispatch/planner.py` launches `LaunchRun(slice_node, settings.pipeline, {slice: <index>, **settings.params}, checkout)`; the per-checkout order is `(initiative index, slice index)`; reissue (125, D9) is kept. `dispatch/params.py` reads the project settings, not the step
-- [ ] `faults.py`: `FaultKind.PIPELINE_UNCONFIGURED`, project-scoped, raised once per tick when a current slice has no configured pipeline; the slice launches nothing; the existing close path closes it (D11)
-- [ ] `factory.py` and `tick.py`: remove `HumanStepPlanner` and the merge observation (`GateStage.observe_merges`); `ProjectView` loses `merge_policy` and `merge_observations`
-- [ ] Rewrite the tick tests that drove step nodes (`tests/runner/test_tick*.py`, `tests/runner/dispatch/`, `tests/runner/resolutions/test_tick_*.py`) against slice nodes; delete `test_tick_human_steps.py` and `tests/runner/gates/test_tick_merge.py`
-- [ ] New tick tests: `pipeline: p456` gives `sq run p456 <index> --run-id <id>` with each param as `-p k=v`; an unconfigured project raises one `pipeline_unconfigured` that closes once configured or not driven; a pipeline the stub `sq` reports not found (exit 1, `Error: Pipeline '<name>' not found.`) blocks only that slice with the stderr while other projects tick; the next slice waits for its predecessor `done`
+- [ ] `dispatch/planner.py` launches `LaunchRun(slice_node, settings.pipeline, {slice: <index>, **settings.params}, checkout)`; the per-checkout order is `(initiative index, slice index)`; reissue (125, D9) is kept. `dispatch/params.py` reads the project settings, not the step. A slice whose project has no `pipeline` launches nothing (its fault arrives in Task 9.6)
+- [ ] Rewrite the tick tests that drove step nodes (`tests/runner/test_tick*.py`, `tests/runner/dispatch/`, `tests/runner/resolutions/test_tick_*.py`) against slice nodes
+- [ ] New tick tests: `pipeline: p456` gives `sq run p456 <index> --run-id <id>` with each param as `-p k=v`; a pipeline the stub `sq` reports not found (exit 1, `Error: Pipeline '<name>' not found.`) blocks only that slice with the stderr while other projects tick; the next slice waits for its predecessor `done`
 - [ ] **Success:** full suite green; 122's crash tests and 125's ingestion tests pass against the slice node. Commit `feat: drive slices with the project's configured pipeline`
+
+### Task 9.6: Raise `pipeline_unconfigured`
+**Owner**: Junior AI | **Dependencies**: 9.5 | **Effort**: 1
+
+- [ ] `faults.py`: `FaultKind.PIPELINE_UNCONFIGURED`, project-scoped, raised once per tick when a current slice has no configured pipeline; the existing close path closes it (D11)
+- [ ] Tick tests: an unconfigured project with a driven slice launches nothing and raises one `pipeline_unconfigured`; it closes once the project is configured or the slice is no longer driven
+- [ ] **Success:** full suite green. Commit `feat: raise an escalation for a project with no pipeline`
 
 ---
 
 ## Section 10: Deletions (D9, D11)
 
 ### Task 10.1: Delete routing
-**Owner**: Junior AI | **Dependencies**: 9.4 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 9.6 | **Effort**: 2
 
 - [ ] Delete `runner/routing/` (with `tables/default.yaml`), `inspection/routing.py` and the `routing-decisions` listing in `inspection/__init__.py`; `--routing-table` and `routing_table_path`; the table load in `factory.py` and `cli/lifecycle.py`; `tests/runner/routing/`, `tests/routing_helpers.py` and the package-data entry (Task-level additions)
 - [ ] **Success:** full suite green; `amoeba start --routing-table x` fails as an unknown flag. Commit `refactor: delete the routing engine`
@@ -330,7 +342,7 @@ usageByModel:
 ### Task 12.1: Rewrite the end-to-end test against a stub `p456`
 **Owner**: Junior AI | **Dependencies**: 11.1 | **Effort**: 3
 
-- [ ] Rewrite `tests/runner/test_end_to_end.py` to drive one slice through a stub `p456`, with one run-state script per scenario in `tests/sq_stub_scripts.py` (LLD "Development Approach"): completion then the next slice launching; `-k transient` (two `provider_error` then `completed`; four failures to `auto_resume_exhausted`); `-k agent_question` (block with the question, then a `resume` resolution with instructions resumes the run with them verbatim and the slice proceeds)
+- [ ] Rewrite `tests/runner/test_end_to_end.py` to drive one slice through a stub `p456`, with one run-state script per scenario in `tests/sq_stub_scripts.py` (LLD "Development Approach"): completion then the next slice launching; `-k agent_question` (block with the question, then a `resume` resolution with instructions resumes the run with them verbatim and the slice proceeds). The transient scenarios are Task 7.5's `tests/runner/test_tick_auto_resume.py`; Task 13.3 points walkthrough step 5 there
 - [ ] **Success:** tests pass and the full suite is green. Commit `test: drive a slice end to end through a stub p456`
 
 ---
@@ -354,11 +366,11 @@ usageByModel:
 - [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. All clean. Record the pass count under this task
 - [ ] Check every LLD Success Criterion (Functional, Technical, Integration) against a named test or this task's run; write the test name beside each under this task. Any criterion with no proof gets a test now
 - [ ] Record the "after" line count of `src/amoeba/runner/` beside Task 1.1's "before"
-- [ ] **Success:** all green, every criterion mapped. Commit `test: close the supervisor's success criteria`
+- [ ] **Success:** all green, every criterion mapped. If a test was added, commit `test: close the supervisor's success criteria`; otherwise no commit (the notes are committed with Task 13.3)
 
 ### Task 13.3: Run the Verification Walkthrough
 **Owner**: Junior AI | **Dependencies**: 13.2 | **Effort**: 3
 
 - [ ] Run LLD "Verification Walkthrough" steps 1–8 as written: steps 5–7 against the stubs, steps 1–4 live against a real slice with `sq` (pre-authorized). Write each step's observed output under this task, and fix any step whose command or expectation differs from what the code does
-- [ ] Update the walkthrough in the LLD to what was run (it is marked "Draft, to be refined after implementation") and commit the LLD as `docs:` on the slice branch
-- [ ] **Success:** every step passes as recorded. Commit `chore: verify the pipeline supervisor`, with the before and after line counts of `src/amoeba/runner/` in the message body (LLD "Integration Requirements")
+- [ ] Update the walkthrough in the LLD to what was run, with step 5 running `tests/runner/test_tick_auto_resume.py`, and remove its "Draft, to be refined after implementation" note
+- [ ] **Success:** every step passes as recorded. Commit the LLD and this task's notes as `docs: record the verified walkthrough`, with the before and after line counts of `src/amoeba/runner/` in the message body (LLD "Integration Requirements")
