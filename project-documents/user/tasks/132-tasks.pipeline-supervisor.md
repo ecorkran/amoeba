@@ -14,20 +14,21 @@ projectState: Slices 120–128 are merged. The Runner (`src/amoeba/runner/`, 120
 dateCreated: 20261029
 dateUpdated: 20261029
 status: not_started
-turns: 23
-promptTokens: 1589033
-cachedTokens: 1485484
-cacheWriteTokens: 103509
-completionTokens: 30060
-durationSeconds: 275.9
-costUsd: 1.726812
-usageRounds: 1
-pricedRounds: 1
+turns: 39
+promptTokens: 3204704
+cachedTokens: 3075326
+cacheWriteTokens: 129314
+completionTokens: 40166
+durationSeconds: 361.1
+costUsd: 2.453436
+usageRounds: 2
+pricedRounds: 2
 usageByModel:
   claude-opus-5-5:
-    rounds: 1
-    costUsd: 1.7268116000000002
-    completionTokens: 30060
+    rounds: 2
+    costUsd: 2.4534360000000004
+    completionTokens: 40166
+revision_number: 1
 ---
 
 ## Context Summary
