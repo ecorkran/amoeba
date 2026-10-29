@@ -157,12 +157,21 @@ revision_number: 1
 - [ ] Tests in `tests/runner/ingest/`: one per D4 row's plan; `TRANSIENT` under and at the bound; a question longer than the bound is cut
 - [ ] **Success:** tests pass and the full suite is green. Commit `feat: add the supervised outcome plan`
 
-### Task 6.2: Ingest by the outcome map and take routing off the tick
-**Owner**: Junior AI | **Dependencies**: 6.1 | **Effort**: 4
+### Task 6.2: Take routing and the CF outcome read off the tick
+**Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
-- [ ] `runner/ingest/record.py`: `ingest` uses `plan_supervised` with `supervise.resume_count` and passes `complete_node_id` for `COMPLETED`; remove `plan_outcome`; stop marking `awaits_routing`; drop the `observation` argument and the hatch-check writes. Pass `auto_resume_limit` from settings through the tick to `record_finished`
-- [ ] `runner/tick.py`: remove `GateStage.observe_outcomes`, `route_outcomes` and `watch_overruns`; `record_finished` no longer takes outcome observations. `ProjectTick` stops taking `routing_table`. The routing, outcome and overrun modules stay on disk, unused, until Section 10
-- [ ] Rewrite tick-level tests that asserted a routing decision or an outcome observation after a completed run (`tests/runner/gates/test_tick_outcome.py`, `test_tick_routing.py`, `tests/runner/routing/test_tick_routing.py`, `tests/runner/resolutions/test_tick_accept_routing.py`) to assert the D4 effect instead, or delete them where the behaviour no longer exists. Pure unit tests of the unused modules stay until their modules go
+- [ ] `runner/tick.py`: remove `GateStage.observe_outcomes`, `route_outcomes` and `watch_overruns`. `ProjectTick` stops taking `routing_table`. `runner/ingest/record.py`: stop marking `awaits_routing`; drop the `observation` argument and the hatch-check writes; `record_finished` no longer takes outcome observations. The routing, outcome and overrun modules stay on disk, unused, until Section 10
+- [ ] Tick tests, file by file (unit tests of the unused modules stay until their modules go):
+  1. Delete `tests/runner/gates/test_tick_outcome.py` and `tests/runner/gates/test_tick_routing.py`: they prove the CF outcome read, the hatches and gate-based routing, which D9 removes
+  2. `tests/runner/routing/test_tick_routing.py`: delete the rerun, held-step and recompute tests (D9 removes them). Delete `test_advance_dispatches_successor_next_tick`; Task 6.3 replaces it
+  3. `tests/runner/resolutions/test_tick_accept_routing.py`: delete the two `accept` tests (D6 removes `accept`). Move `test_a_failed_resume_escalates_once_and_offers_the_pause_decisions_again` to `test_tick_resume.py`, dropping only an assertion about a routing decision if it makes one
+- [ ] **Success:** full suite green. Commit `refactor: take routing and the CF outcome read off the tick`
+
+### Task 6.3: Ingest by the outcome map
+**Owner**: Junior AI | **Dependencies**: 6.1, 6.2 | **Effort**: 3
+
+- [ ] `runner/ingest/record.py`: `ingest` uses `plan_supervised` with `supervise.resume_count` and passes `complete_node_id` for `COMPLETED`; remove `plan_outcome`. Pass `auto_resume_limit` from settings through the tick to `record_finished`
+- [ ] Tick test replacing Task 6.2's deleted advance test: a completed run's node is `done` and its successor launches on the next tick
 - [ ] Crash test with `tests/runner/crash_harness.py`: kill between ingest's writes of a completed run; after restart the node is `done` and nothing is relaunched (Success Criteria, "A crash between ingest's writes")
 - [ ] **Success:** full suite green. Commit `feat: ingest finished runs by the outcome map`
 
@@ -171,7 +180,7 @@ revision_number: 1
 ## Section 7: Automatic Resume (D5)
 
 ### Task 7.1: Add the resume cause and reshape `ResumeRun`
-**Owner**: Junior AI | **Dependencies**: 6.2 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 6.3 | **Effort**: 2
 
 - [ ] `resolutions/vocabulary.py`: `ResumeCause` (`transient`, `resolution`) and `PARAM_RESUME_CAUSE = "resume_cause"` (Task-level additions)
 - [ ] `decide.py`: `ResumeRun` gains `cause` and `instructions`; `resolution` becomes optional, required when `cause` is `resolution` (raise `ValueError` in `__post_init__` otherwise). `decision` stays until Task 8.1
@@ -185,8 +194,8 @@ revision_number: 1
 - [ ] `dispatch/state.py`: `DispatchState.AUTO_RESUME` (Task-level additions): the latest `sq_run` entry is resolved, its outcome classifies `TRANSIENT` (call `supervise.classify`, do not re-derive), and the node is not blocked
 - [ ] `dispatch/hold.py`: `_paused` becomes "recorded `paused`, `failed` or `orphaned`" (D3); rename it to match. Release is unchanged
 - [ ] `gates/candidates.py`: an `AUTO_RESUME` node is a candidate on the same terms as `RESUME` (its checkout held by no one or only by itself; pipeline and checkout from the resumed entry)
-- [ ] Pre-dispatch for both resume states: the branch is the target or the slice's own branch, and the tree is not checked for cleanliness (D3). Confirm 128's resume rule already does this; change it only where it differs
-- [ ] Tests in `tests/runner/dispatch/test_state.py`, `test_hold.py` and `tests/runner/gates/test_predispatch.py`: each transient outcome gives `AUTO_RESUME`; a blocked node does not; a `failed` and an `orphaned` entry hold the checkout; a resume on the slice branch with a dirty tree passes; a fresh launch with a dirty tree still blocks
+- [ ] The pre-dispatch check treats an `AUTO_RESUME` candidate as a resume: it calls `gates/predispatch.py`'s `branch_rule` with `resume=True`, which already skips the clean-tree check. The branch rule itself is Task 9.1's
+- [ ] Tests in `tests/runner/dispatch/test_state.py`, `test_hold.py` and `tests/runner/gates/test_dispatch_reads.py`: each transient outcome gives `AUTO_RESUME`; a blocked node does not; a `failed` and an `orphaned` entry hold the checkout; an `AUTO_RESUME` candidate with a dirty tree on the target passes
 - [ ] **Success:** tests pass and the full suite is green. Commit `feat: list transient outcomes as resume candidates`
 
 ### Task 7.3: Issue `ResumeRun(cause=transient)` from Decide
@@ -218,7 +227,7 @@ revision_number: 1
 ## Section 8: Resolutions and Intents (D6, D7)
 
 ### Task 8.1: Cut the resolution vocabulary to `resume` and `stop`
-**Owner**: Junior AI | **Dependencies**: 7.5 | **Effort**: 4
+**Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 4
 
 - [ ] `resolutions/vocabulary.py`: `ResolutionDecision` `{RESUME, STOP}`; `Situation` `{RUN_TO_RESUME, NO_RUN, UNRESOLVABLE}`; `ResolutionRejection` `{UNKNOWN_DECISION, DECISION_REQUIRED, INSTRUCTIONS_NOT_APPLICABLE, UNRESOLVABLE}`; `Continuation` `{RESUME}`; `ALLOWED` rewritten. Remove `ResumeRun.decision` and the `ObserveRun` action
 - [ ] `classify.py`, `judge.py`, `planner.py`, `act.py`, `argv.py`, `prepoll.py` per D6: `resume` with a run Squadron still has issues `ResumeRun(cause=resolution, instructions)`; `resume` with no run resolves the block and the node launches afresh when next current; instructions there are rejected `instructions_not_applicable`; `stop` is 127's D3. The pre-dispatch check runs before either. The missing-run and exit-2 rules of 127 stand. `--decision` is never passed
@@ -239,10 +248,11 @@ revision_number: 1
 ## Section 9: The Slice Switch (D1, D2, D3, D11)
 
 ### Task 9.1: Cut the pre-dispatch check to git
-**Owner**: Junior AI | **Dependencies**: 7.5 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 7.2 | **Effort**: 2
 
-- [ ] `gates/dispatch_reads.py`, `gates/predispatch.py`, `gates/stage.py`: stop reading CF's gate; remove the entry-gate rows and the `pending_decision` block; one allowed-branch rule for every pipeline (fresh launch or reissue: target and clean; resume: target or own branch). The target read (`read_target`) stays. `dispatch/state.py` loses its pending-decision state
-- [ ] Tests in `tests/runner/gates/test_predispatch.py`, `test_dispatch_reads.py`, `test_tick_predispatch.py`: no `cf status` call before a launch; each git rule; delete entry-gate and pending-decision cases
+- [ ] `gates/dispatch_reads.py`, `gates/predispatch.py`, `gates/stage.py`: stop reading CF's gate; remove the entry-gate rows and the `pending_decision` block. The target read (`read_target`) stays. `dispatch/state.py` loses its pending-decision state
+- [ ] `gates/predispatch.py`: one allowed-branch rule for every pipeline (D3). `allowed_branches` and `_is_allowed` key on `resume`, not on `PIPELINE_P6`: a fresh launch or reissue may start only on the target; a resume on the target or the slice's own branch. The clean-tree rule is unchanged (checked only when not resuming)
+- [ ] Tests in `tests/runner/gates/test_predispatch.py`, `test_dispatch_reads.py`, `test_tick_predispatch.py`: no `cf status` call before a launch; a fresh launch of any pipeline on the slice branch blocks `checkout_branch`; a resume on the slice branch with a dirty tree passes; a fresh launch with a dirty tree blocks `checkout_dirty`; delete entry-gate and pending-decision cases
 - [ ] **Success:** full suite green. Commit `refactor: check only git before dispatch`
 
 ### Task 9.2: Launch without the pointer write
@@ -270,18 +280,24 @@ revision_number: 1
 ### Task 9.5: Dispatch slice nodes with the configured pipeline
 **Owner**: Junior AI | **Dependencies**: 2.1, 8.1, 8.2, 9.3, 9.4 | **Effort**: 4
 
-- [ ] `lifecycle/reconcile.py` creates initiative and slice nodes only. Step nodes in an older store are never candidates (LLD "State Management")
-- [ ] `ProjectView.current_steps` becomes `current_slices` from `ready_slices()`; `ready_unbusy` follows; governance (`intent/governance.py`) resolves on slice nodes; the `decide` guard names slices
-- [ ] `dispatch/planner.py` launches `LaunchRun(slice_node, settings.pipeline, {slice: <index>, **settings.params}, checkout)`; the per-checkout order is `(initiative index, slice index)`; reissue (125, D9) is kept. `dispatch/params.py` reads the project settings, not the step. A slice whose project has no `pipeline` launches nothing (its fault arrives in Task 9.6)
+- [ ] `ProjectView.current_steps` becomes `current_slices` from `ready_slices()`; `ready_unbusy` follows; governance (`intent/governance.py`) resolves on slice nodes; the `decide` guard names slices. Reconcile still creates step nodes until Task 9.6; they are never current
+- [ ] `dispatch/planner.py` launches `LaunchRun(slice_node, settings.pipeline, {slice: <index>, **settings.params}, checkout)`; the per-checkout order is `(initiative index, slice index)`; reissue (125, D9) is kept. `dispatch/params.py` reads the project settings, not the step. A slice whose project has no `pipeline` launches nothing (its fault arrives in Task 9.7)
 - [ ] Rewrite the tick tests that drove step nodes (`tests/runner/test_tick*.py`, `tests/runner/dispatch/`, `tests/runner/resolutions/test_tick_*.py`) against slice nodes
-- [ ] New tick tests: `pipeline: p456` gives `sq run p456 <index> --run-id <id>` with each param as `-p k=v`; a pipeline the stub `sq` reports not found (exit 1, `Error: Pipeline '<name>' not found.`) blocks only that slice with the stderr while other projects tick; the next slice waits for its predecessor `done`
+- [ ] New tick tests: `pipeline: p456` gives `sq run p456 <index> --run-id <id>` with each param as `-p k=v`; the next slice waits for its predecessor `done`
 - [ ] **Success:** full suite green; 122's crash tests and 125's ingestion tests pass against the slice node. Commit `feat: drive slices with the project's configured pipeline`
 
-### Task 9.6: Raise `pipeline_unconfigured`
+### Task 9.6: Stop creating step nodes
+**Owner**: Junior AI | **Dependencies**: 9.5 | **Effort**: 2
+
+- [ ] `lifecycle/reconcile.py` creates initiative and slice nodes only. Step nodes in an older store are never candidates (LLD "State Management")
+- [ ] Tests in `tests/runner/lifecycle/test_reconcile_create.py` and `test_reconcile_update.py`: a slice gets no step children; a store holding step nodes from before still ticks and never launches them
+- [ ] **Success:** full suite green. Commit `refactor: stop creating step nodes`
+
+### Task 9.7: Raise `pipeline_unconfigured`
 **Owner**: Junior AI | **Dependencies**: 9.5 | **Effort**: 1
 
 - [ ] `faults.py`: `FaultKind.PIPELINE_UNCONFIGURED`, project-scoped, raised once per tick when a current slice has no configured pipeline; the existing close path closes it (D11)
-- [ ] Tick tests: an unconfigured project with a driven slice launches nothing and raises one `pipeline_unconfigured`; it closes once the project is configured or the slice is no longer driven
+- [ ] Tick tests: an unconfigured project with a driven slice launches nothing and raises one `pipeline_unconfigured`; it closes once the project is configured or the slice is no longer driven; a pipeline the stub `sq` reports not found (exit 1, `Error: Pipeline '<name>' not found.`) blocks only that slice with the stderr while other projects tick
 - [ ] **Success:** full suite green. Commit `feat: raise an escalation for a project with no pipeline`
 
 ---
@@ -289,7 +305,7 @@ revision_number: 1
 ## Section 10: Deletions (D9, D11)
 
 ### Task 10.1: Delete routing
-**Owner**: Junior AI | **Dependencies**: 9.6 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 9.6, 9.7 | **Effort**: 2
 
 - [ ] Delete `runner/routing/` (with `tables/default.yaml`), `inspection/routing.py` and the `routing-decisions` listing in `inspection/__init__.py`; `--routing-table` and `routing_table_path`; the table load in `factory.py` and `cli/lifecycle.py`; `tests/runner/routing/`, `tests/routing_helpers.py` and the package-data entry (Task-level additions)
 - [ ] **Success:** full suite green; `amoeba start --routing-table x` fails as an unknown flag. Commit `refactor: delete the routing engine`
@@ -329,7 +345,7 @@ revision_number: 1
 ## Section 11: The Blocked List (D8)
 
 ### Task 11.1: List blocked nodes across every project
-**Owner**: Junior AI | **Dependencies**: 10.5 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
 - [ ] `inspection/__init__.py`, `inspection/core.py`: `blocked` has both row functions (Task-level additions). Columns `project_id`, `node_id`, `title`, `blocked_on`, `reason`, `context`, `blocked_state_id`; `reason` is the payload's `reason` or `fault_kind`, empty with neither. `--json` adds the full payload. Every store opens read-only
 - [ ] The network API's per-project blocked surface is unchanged
@@ -341,7 +357,7 @@ revision_number: 1
 ## Section 12: End to End
 
 ### Task 12.1: Rewrite the end-to-end test against a stub `p456`
-**Owner**: Junior AI | **Dependencies**: 11.1 | **Effort**: 3
+**Owner**: Junior AI | **Dependencies**: 10.5, 11.1 | **Effort**: 3
 
 - [ ] Rewrite `tests/runner/test_end_to_end.py` to drive one slice through a stub `p456`, with one run-state script per scenario in `tests/sq_stub_scripts.py` (LLD "Development Approach"): completion then the next slice launching; `-k agent_question` (block with the question, then a `resume` resolution with instructions resumes the run with them verbatim and the slice proceeds). The transient scenarios are Task 7.5's `tests/runner/test_tick_auto_resume.py`; Task 13.3 points walkthrough step 5 there
 - [ ] **Success:** tests pass and the full suite is green. Commit `test: drive a slice end to end through a stub p456`
