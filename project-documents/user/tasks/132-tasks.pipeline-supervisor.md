@@ -134,7 +134,7 @@ revision_number: 2
 - [ ] Create `runner/supervise.py`, pure: `OutcomeClass` (`COMPLETED`, `TRANSIENT`, `QUESTION`, `BLOCKED`); `classify(observed) -> OutcomeClass` over a run document, vanished, launch failed or resume failed, per the D4 table. Define once here: the payload reasons `agent_question`, `paused`, `failed`, `auto_resume_exhausted`, and the transient failure kinds `provider_error` and `stall`
 - [ ] `usage_limit` is `TRANSIENT` only with `resets_at`; without it, `BLOCKED`. `agent_question` with no `question` is still `QUESTION` (D10)
 - [ ] `tests/runner/test_supervise.py`, table-driven: one case per D4 row, plus every listed `paused` and `failed` kind of the "any other" rows and an unknown kind of each
-- [ ] Add `supervise.py` to the purity check used for `gates/` (`tests/runner/gates/purity.py`) or an equivalent import test: it imports nothing that does I/O
+- [ ] Add a purity test for `supervise.py` in `tests/runner/test_supervise.py`, using `io_use` from `tests/runner/gates/purity.py` for now (Task 10.2 moves that helper to `tests/runner/purity.py` and fixes this import). It must outlive `gates/`: `supervise.py` imports nothing that does I/O
 - [ ] **Success:** tests pass. Commit `feat: add the outcome map`
 
 ### Task 5.2: Implement the resume bound
@@ -183,7 +183,7 @@ revision_number: 2
 **Owner**: Junior AI | **Dependencies**: 6.3 | **Effort**: 2
 
 - [ ] `resolutions/vocabulary.py`: `ResumeCause` (`transient`, `resolution`) and `PARAM_RESUME_CAUSE = "resume_cause"` (Task-level additions)
-- [ ] `decide.py`: `ResumeRun` gains `cause` and `instructions`; `resolution` becomes optional, required when `cause` is `resolution` (raise `ValueError` in `__post_init__` otherwise). `decision` stays until Task 8.1
+- [ ] `decide.py`: `ResumeRun` gains `cause` and `instructions`; `resolution` becomes optional, required when `cause` is `resolution` (raise `ValueError` in `__post_init__` otherwise). `decision` stays until Task 8.1b
 - [ ] The act stage writes `resume_cause` into every resume entry's parameters, and `--instructions` only when `instructions` is set. Today's resolution resumes write `resume_cause: resolution`
 - [ ] Tests: `tests/runner/resolutions/test_act.py` and `test_argv.py` for both causes, with and without instructions
 - [ ] **Success:** tests pass. Commit `feat: record why each resume was issued`
@@ -226,14 +226,22 @@ revision_number: 2
 
 ## Section 8: Resolutions and Intents (D6, D7)
 
-### Task 8.1: Cut the resolution vocabulary to `resume` and `stop`
-**Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 4
+### Task 8.1: Cut the resolution vocabulary and judgement to `resume` and `stop`
+**Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 2
 
-- [ ] `resolutions/vocabulary.py`: `ResolutionDecision` `{RESUME, STOP}`; `Situation` `{RUN_TO_RESUME, NO_RUN, UNRESOLVABLE}`; `ResolutionRejection` `{UNKNOWN_DECISION, DECISION_REQUIRED, INSTRUCTIONS_NOT_APPLICABLE, UNRESOLVABLE}`; `Continuation` `{RESUME}`; `ALLOWED` rewritten. Remove `ResumeRun.decision` and the `ObserveRun` action
-- [ ] `classify.py`, `judge.py`, `planner.py`, `act.py`, `argv.py`, `prepoll.py` per D6: `resume` with a run Squadron still has issues `ResumeRun(cause=resolution, instructions)`; `resume` with no run resolves the block and the node launches afresh when next current; instructions there are rejected `instructions_not_applicable`; `stop` is 127's D3. The pre-dispatch check runs before either. The missing-run and exit-2 rules of 127 stand. `--decision` is never passed
+- [ ] `resolutions/vocabulary.py`: `ResolutionDecision` `{RESUME, STOP}`; `Situation` `{RUN_TO_RESUME, NO_RUN, UNRESOLVABLE}`; `ResolutionRejection` `{UNKNOWN_DECISION, DECISION_REQUIRED, INSTRUCTIONS_NOT_APPLICABLE, UNRESOLVABLE}`; `Continuation` `{RESUME}`; `ALLOWED` rewritten
+- [ ] `classify.py` and `judge.py` per D6 and the vocabulary
+- [ ] Tests for `vocabulary`, `classify` and `judge` in `tests/runner/resolutions/`: `retry`, `accept`, `handled` and `rerun` are each rejected `unknown_decision`; `resume` with instructions and no run is rejected `instructions_not_applicable`
+- [ ] **Success:** those tests pass. The planner, act, argv and prepoll tests are red until Task 8.1b, so this task makes no commit; Task 8.1b commits both
+
+### Task 8.1b: Cut the resolution planner, act, argv and prepoll to `resume` and `stop`
+**Owner**: Junior AI | **Dependencies**: 8.1 | **Effort**: 3
+
+- [ ] Remove `ResumeRun.decision` (Task 7.1 kept it) and the `ObserveRun` action
+- [ ] `planner.py`, `act.py`, `argv.py`, `prepoll.py` per D6: `resume` with a run Squadron still has issues `ResumeRun(cause=resolution, instructions)`; `resume` with no run resolves the block and the node launches afresh when next current; instructions there are rejected `instructions_not_applicable`; `stop` is 127's D3. The pre-dispatch check runs before either. The missing-run and exit-2 rules of 127 stand. `--decision` is never passed
 - [ ] `docs/inbox-contract.md`: the resolution vocabulary, and one line on the intent `resume` versus resolution `resume` name clash
-- [ ] Rewrite the resolution tests (`tests/runner/resolutions/`) to the new vocabulary: `retry`, `accept`, `handled` and `rerun` are each rejected `unknown_decision`; `resume` with instructions passes them verbatim and resets the D5 count; `resume` with no run relaunches; `stop` keeps the block with reason `stopped`. Delete tests whose only subject was a removed decision
-- [ ] **Success:** full suite green. Commit `feat: reduce resolutions to resume and stop`
+- [ ] Rewrite the remaining resolution tests (`tests/runner/resolutions/`) to the new vocabulary: `resume` with instructions passes them verbatim and resets the D5 count; `resume` with no run relaunches; `stop` keeps the block with reason `stopped`. Delete tests whose only subject was a removed decision
+- [ ] **Success:** full suite green. Commit Tasks 8.1 and 8.1b together as `feat: reduce resolutions to resume and stop`
 
 ### Task 8.2: Remove `until` from intents
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
@@ -278,23 +286,28 @@ revision_number: 2
 - [ ] **Success:** full suite green. Commit `refactor: stop planning human steps and observing merges`
 
 ### Task 9.5: Dispatch slice nodes with the configured pipeline
-**Owner**: Junior AI | **Dependencies**: 2.1, 8.1, 8.2, 9.3, 9.4 | **Effort**: 4
+**Owner**: Junior AI | **Dependencies**: 2.1, 8.1b, 8.2, 9.3, 9.4 | **Effort**: 2
 
 - [ ] `ProjectView.current_steps` becomes `current_slices` from `ready_slices()`; `ready_unbusy` follows; governance (`intent/governance.py`) resolves on slice nodes; the `decide` guard names slices. Reconcile still creates step nodes until Task 9.6; they are never current
 - [ ] `dispatch/planner.py` launches `LaunchRun(slice_node, settings.pipeline, {slice: <index>, **settings.params}, checkout)`; the per-checkout order is `(initiative index, slice index)`; reissue (125, D9) is kept. `dispatch/params.py` reads the project settings, not the step. A slice whose project has no `pipeline` launches nothing (its fault arrives in Task 9.7)
-- [ ] Rewrite the tick tests that drove step nodes (`tests/runner/test_tick*.py`, `tests/runner/dispatch/`, `tests/runner/resolutions/test_tick_*.py`) against slice nodes
 - [ ] New tick tests: `pipeline: p456` gives `sq run p456 <index> --run-id <id>` with each param as `-p k=v`; the next slice waits for its predecessor `done`
-- [ ] **Success:** full suite green; 122's crash tests and 125's ingestion tests pass against the slice node. Commit `feat: drive slices with the project's configured pipeline`
+- [ ] **Success:** the new tests pass. Tick tests that drove step nodes are red until Task 9.5b, so this task makes no commit; Task 9.5b commits both
+
+### Task 9.5b: Migrate the step-node tick tests to slice nodes
+**Owner**: Junior AI | **Dependencies**: 9.5 | **Effort**: 3
+
+- [ ] Rewrite the tick tests that drove step nodes against slice nodes, one directory at a time, re-running that directory after each: `tests/runner/test_tick*.py`, then `tests/runner/dispatch/`, then `tests/runner/resolutions/test_tick_*.py`. A test whose only subject was a step is deleted
+- [ ] **Success:** full suite green; 122's crash tests and 125's ingestion tests pass against the slice node. Commit Tasks 9.5 and 9.5b together as `feat: drive slices with the project's configured pipeline`
 
 ### Task 9.6: Stop creating step nodes
-**Owner**: Junior AI | **Dependencies**: 9.5 | **Effort**: 2
+**Owner**: Junior AI | **Dependencies**: 9.5b | **Effort**: 2
 
-- [ ] `lifecycle/reconcile.py` creates initiative and slice nodes only. Step nodes in an older store are never candidates (LLD "State Management")
+- [ ] `lifecycle/reconcile.py creates initiative and slice nodes only. Step nodes in an older store are never candidates (LLD "State Management")
 - [ ] Tests in `tests/runner/lifecycle/test_reconcile_create.py` and `test_reconcile_update.py`: a slice gets no step children; a store holding step nodes from before still ticks and never launches them
 - [ ] **Success:** full suite green. Commit `refactor: stop creating step nodes`
 
 ### Task 9.7: Raise `pipeline_unconfigured`
-**Owner**: Junior AI | **Dependencies**: 9.5 | **Effort**: 1
+**Owner**: Junior AI | **Dependencies**: 9.5b | **Effort**: 1
 
 - [ ] `faults.py`: `FaultKind.PIPELINE_UNCONFIGURED`, project-scoped, raised once per tick when a current slice has no configured pipeline; the existing close path closes it (D11)
 - [ ] Tick tests: an unconfigured project with a driven slice launches nothing and raises one `pipeline_unconfigured`; it closes once the project is configured or the slice is no longer driven; a pipeline the stub `sq` reports not found (exit 1, `Error: Pipeline '<name>' not found.`) blocks only that slice with the stderr while other projects tick
@@ -310,16 +323,23 @@ revision_number: 2
 - [ ] Delete `runner/routing/` (with `tables/default.yaml`), `inspection/routing.py` and the `routing-decisions` listing in `inspection/__init__.py`; `--routing-table` and `routing_table_path`; the table load in `factory.py` and `cli/lifecycle.py`; `tests/runner/routing/`, `tests/routing_helpers.py` and the package-data entry (Task-level additions)
 - [ ] **Success:** full suite green; `amoeba start --routing-table x` fails as an unknown flag. Commit `refactor: delete the routing engine`
 
-### Task 10.2: Delete the CF gate, hatch and merge modules and move the survivors
-**Owner**: Junior AI | **Dependencies**: 10.1 | **Effort**: 3
+### Task 10.2: Move the surviving gate modules to `dispatch/`
+**Owner**: Junior AI | **Dependencies**: 10.1 | **Effort**: 2
 
-- [ ] Delete `gates/cf_status.py`, `hatches.py`, `checks.py`, `accepted.py`, `outcome.py`, `outcome_record.py`, `merge.py`, `merge_observation.py`, and `read_gate` from `cf_reads.py`
-- [ ] Move the survivors to `runner/dispatch/` per Task-level additions, delete `gates/`, and update imports. The git rules keep their tests, moved to `tests/runner/dispatch/`
-- [ ] Remove the gate modes from `tests/cf_stub_gates.py` (keep `config get`) and the gate helpers from `tests/runner/gate_rig.py`; delete the gate tests whose modules went
+- [ ] Move the survivors to `runner/dispatch/` per Task-level additions and update imports. The dead gate modules stay where they are, unused, until Task 10.2b
+- [ ] Move the survivors' tests to `tests/runner/dispatch/`, and `tests/runner/gates/purity.py` to `tests/runner/purity.py`; fix its importers (`test_predispatch.py`, `test_supervise.py`, and `test_hatches.py` until 10.2b deletes it)
+- [ ] **Success:** full suite green; only moves and import changes in the diff. Commit `refactor: move the surviving gate modules to dispatch`
+
+### Task 10.2b: Delete the CF gate, hatch and merge modules
+**Owner**: Junior AI | **Dependencies**: 10.2 | **Effort**: 2
+
+- [ ] Delete `gates/cf_status.py`, `hatches.py`, `checks.py`, `accepted.py`, `outcome.py`, `outcome_record.py`, `merge.py`, `merge_observation.py`, and `read_gate` from `cf_reads.py`; delete `gates/` and the gate tests whose modules went
+- [ ] Remove the gate modes from `tests/cf_stub_gates.py` (keep `config get`) and the gate helpers from `tests/runner/gate_rig.py`
+- [ ] Confirm `tests/runner/test_supervise.py` still runs its purity test
 - [ ] **Success:** full suite green. Commit `refactor: delete CF gate reads, hatches and merge observation`
 
 ### Task 10.3: Delete the pointer modules
-**Owner**: Junior AI | **Dependencies**: 10.2 | **Effort**: 1
+**Owner**: Junior AI | **Dependencies**: 10.2b | **Effort**: 1
 
 - [ ] Delete `dispatch/pointer.py`, `pointer_apply.py`, `pointer_watch.py`, `observe_pointer.py`, their tests, `tests/runner/dispatch/pointer_support.py`, `tests/test_cf_stub_pointer.py` and the stub's pointer-write code
 - [ ] **Success:** full suite green. Commit `refactor: delete the pointer modules`
@@ -337,7 +357,7 @@ revision_number: 2
 
 - [ ] `faults.py`: remove `pointer_write_failed`, `pointer_moved`, `run_overrun`, `cf_gate_blocks`, `pending_decision` (D11)
 - [ ] `tests/test_import_boundaries.py`: a grep test that no module under `src/amoeba/runner/` imports `routing`, `gates`, or `dispatch.pointer*`, and that those paths do not exist. The create-node guard test still passes
-- [ ] Confirm `ProjectView`, `decide.Action`, `tick.py` and `factory.py` hold no field, argument or comment naming a removed concept (`grep -rn "pointer\|routing\|merge_policy\|gate" src/amoeba/runner`; each remaining hit is justified or removed)
+- [ ] Confirm `ProjectView`, `decide.Action`, `tick.py` and `factory.py` hold no field, argument or comment naming a removed concept (`grep -rnw "pointer\|routing\|merge_policy\|gate\|gates" src/amoeba/runner`; each remaining hit is justified or removed)
 - [ ] **Success:** full suite green. Commit `refactor: delete unused fault kinds and pin the runner's boundaries`
 
 ---
@@ -373,7 +393,7 @@ revision_number: 2
 - [ ] `docs/store-contract.md`: the routing-decision, table-version and attempt-count tables, `awaits_routing` and `drive_until_step` marked unwritten by the Runner (D9)
 - [ ] `docs/context-forge-contract.md`: the Runner writes no pointers and reads no gates; it reads `git.integration_branch`
 - [ ] `docs/substrate-guide.md`: the 120 row
-- [ ] Confirm `docs/inbox-contract.md` was updated in Tasks 8.1 and 8.2
+- [ ] Confirm `docs/inbox-contract.md` was updated in Tasks 8.1b and 8.2
 - [ ] `CHANGELOG.md` under `[Unreleased]`: the supervisor (Added, Changed, Removed), naming the removed flags and resolution decisions
 - [ ] **Success:** every doc named in the LLD's Migration Plan is updated. Commit `docs: describe the pipeline supervisor in the contracts`
 
