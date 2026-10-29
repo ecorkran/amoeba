@@ -14,17 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261029
 dateUpdated: 20261029
-reviewedSha: e54e5aa47759dc2fd5d690a229386b42340f670a
-revision_number: 1
+reviewedSha: 6b8ef22ecd8d906c92567219b236dd329e1d5c64
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 turns: 3
-promptTokens: 114239
+promptTokens: 114959
 cachedTokens: 11176
-cacheWriteTokens: 103059
-completionTokens: 6900
-durationSeconds: 59.6
-costUsd: 0.483169
+cacheWriteTokens: 103779
+completionTokens: 5402
+durationSeconds: 43.0
+costUsd: 0.471069
 costBasis: provider
 runId: run-20261029-p5-cb381f49
 squadronVersion: 0.24.9
@@ -32,33 +32,48 @@ findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success criteria are covered"
-    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:13.2"
+    summary: "Success criteria coverage"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md"
   - id: F002
-    severity: pass
-    category: sequencing
-    summary: "Sequencing and commit cadence"
-    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:50"
+    severity: concern
+    category: task-sizing
+    summary: "Task 8.1 bundles too much for one task"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:229-236"
   - id: F003
     severity: concern
     category: task-sizing
-    summary: "Tasks 9.5 and 6.2 are too large for one junior AI task"
-    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:270-278"
+    summary: "Task 9.5 is the largest change and rewrites tests across several directories"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:280-287"
   - id: F004
     severity: concern
-    category: task-clarity
-    summary: "Test-rewrite instructions in Task 6.2 leave coverage loss to the implementer's judgement"
-    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:165"
+    category: task-sizing
+    summary: "Task 10.2 combines mass deletion with a module move"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:313-319"
   - id: F005
     severity: concern
-    category: task-clarity
-    summary: "The resume pre-dispatch rule has two owners, and Task 7.2 states it as an open check"
-    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:188"
+    category: test-continuity
+    summary: "The supervise purity test may be deleted with `gates/`"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:137"
   - id: F006
+    severity: concern
+    category: coverage
+    summary: "The slice design's edit to the plan entry has no task"
+    location: "project-documents/user/slices/132-slice.pipeline-supervisor.md:234"
+  - id: F007
+    severity: note
+    category: task-clarity
+    summary: "The `gate` grep in Task 10.5 will be noisy"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:340"
+  - id: F008
     severity: note
     category: sequencing
-    summary: "Some dependency edges are tighter than needed"
-    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:332"
+    summary: "Behaviour is temporarily degraded between 6.2 and 6.3"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:160-176"
+  - id: F009
+    severity: pass
+    category: sequencing
+    summary: "Sequencing, test-with pattern and commit cadence"
+    location: "project-documents/user/tasks/132-tasks.pipeline-supervisor.md:46-48"
 ---
 
 # Review: tasks — slice 132
@@ -68,55 +83,68 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria are covered
+### [PASS] Success criteria coverage
 
-I traced each Functional, Technical and Integration criterion to a task:
-- **Config and launch:** config validation (2.1), launch with params and the pipeline-not-found block (9.5), `pipeline_unconfigured` (9.6), and index-ordered slices (9.3, 9.5).
-- **Git rules and outcome map:** dirty-tree and branch rules (7.2, 9.1), each D4 row (6.1), and atomic completion with its crash test (4.1, 6.2).
-- **Resume:** the bound, `usage_limit` timing and held slices (5.2, 7.3, 7.5), and `resume` with instructions, `stop` and the rejected decisions (8.1).
-- **Intents, inspection and cleanup:** `until` (8.2), the cross-project blocked list (11.1), the import-boundary grep and the CF-write grep (9.2, 10.5), contract docs (13.1), and the before and after line counts (1.1, 13.2, 13.3).
+- **Launch and config:** pipeline launch with no `cf set` maps to 9.2 and 9.5. `params` and config refusal map to 2.1 and 9.5. A missing pipeline and `pipeline_unconfigured` map to 9.7. Index order maps to 9.3 and 9.5.
+- **Pre-dispatch:** the dirty-tree and wrong-branch rules map to 9.1.
+- **Outcome map and resume:**
+  - The D4 rows and the crash test map to 6.1 and 6.3.
+  - The bound and `usage_limit` wait map to 5.2, 7.3 and 7.5.
+  - Hold and release map to 7.3 and 7.5.
+  - Questions map to 6.1.
+- **Resolutions and intents:** the resolution vocabulary maps to 8.1. `until` rejection maps to 8.2.
+- **Blocked list:** the cross-project list maps to 11.1.
+- **Technical and integration:** the grep and import tests map to 9.2 and 10.5. `supervise.py` coverage maps to 5.2. Docs map to 13.1. The line-count record maps to 1.1 and 13.3.
 
-Task 13.2 maps each criterion to a named test and adds a test for any criterion with no proof. I found no task that lacks a source in the design. The extra work, such as folding the task-level additions into the slice design in 1.1, serves review traceability.
+I found no scope creep. Every task traces to a decision or criterion in the slice design.
 
-### [PASS] Sequencing and commit cadence
+### [CONCERN] Task 8.1 bundles too much for one task
 
-- The dependencies are acyclic.
-- The re-ordering against the slice design's Migration Plan is explained and justified.
-- Every implementation task carries its own tests and ends in one commit, so checkpoints are spread across all 13 sections.
-- Deletion tasks remove their tests in the same commit, and the suite stays green after each task.
-- The atomic-completion store option (4.1) lands before any task uses it, as the slice design requires.
+Task 8.1 is Effort 4. It rewrites the vocabulary enums, changes six modules (`classify`, `judge`, `planner`, `act`, `argv`, `prepoll`), removes `ObserveRun` and `ResumeRun.decision`, edits the inbox contract, and rewrites the whole resolution test suite in one commit. A junior AI would struggle to keep the suite green while all of that is in flight.
 
-### [CONCERN] Tasks 9.5 and 6.2 are too large for one junior AI task
+Split it into two tasks:
+- **Vocabulary and classification/judge:** enums, `Situation` and rejection codes, with their tests.
+- **Planner, act, argv and prepoll:** the `ResumeRun(cause=resolution)` and no-run relaunch behaviour, plus the docs.
 
-Task 9.5 (Effort 4) bundles four separate pieces of work:
-- the reconcile change to slice-only nodes;
-- the `current_steps` to `current_slices` rename through `ProjectView`, governance and the `decide` guard;
-- the planner and params rewrite;
-- a rewrite of every tick test that drove step nodes, across `tests/runner/test_tick*.py`, `tests/runner/dispatch/` and `tests/runner/resolutions/test_tick_*.py`, plus new tests.
+### [CONCERN] Task 9.5 is the largest change and rewrites tests across several directories
 
-Task 6.2 (Effort 4) combines the ingest rewire, removing three tick stages, rewriting four named test files, and a new crash test.
+Task 9.5 is Effort 4. It switches the view and governance to slices, changes the planner and params, and rewrites every tick test that drove step nodes. That covers `tests/runner/test_tick*.py`, `tests/runner/dispatch/` and `tests/runner/resolutions/test_tick_*.py`. The "full suite green" gate cannot be reached until all of these are rewritten together.
 
-Split 9.5 into:
-- (a) reconcile, view and governance retargeted to slice nodes, with the existing tick tests rewritten;
-- (b) the planner and params launch of the configured pipeline, with the new `p456` and not-found tests.
+Split it into two tasks:
+- **Production switch:** `current_slices`, governance and the planner launch.
+- **Test migration:** rewrite the tick tests, in groups by directory.
 
-Split 6.2 into the ingest and tick rewire, and a separate crash-test task. Task 8.1 touches six modules plus a full test rewrite. It is also a candidate to split into a vocabulary and classification half and an act and argv half.
+### [CONCERN] Task 10.2 combines mass deletion with a module move
 
-### [CONCERN] Test-rewrite instructions in Task 6.2 leave coverage loss to the implementer's judgement
+Task 10.2 deletes eight or more modules and removes `read_gate`. It also moves four surviving modules into `dispatch/` under new names, rewrites imports, relocates their tests, and prunes the stub and rig helpers. A bad import rewrite is hard to tell apart from a bad deletion. Do the move and rename as a `refactor:` commit first, then delete the dead gate modules.
 
-The task says to rewrite the listed tick tests "to assert the D4 effect instead, or delete them where the behaviour no longer exists", and the step is open-ended. A junior AI can delete a test without checking that the behaviour is covered elsewhere. Give a disposition for each named file (rewrite or delete) and a one-line reason, or add a check that each deleted test's behaviour is covered by a named D4 test from 6.1.
+### [CONCERN] The supervise purity test may be deleted with `gates/`
 
-### [CONCERN] The resume pre-dispatch rule has two owners, and Task 7.2 states it as an open check
+Task 5.1 adds `supervise.py` to `tests/runner/gates/purity.py`. Task 10.2 deletes `gates/` and "the gate tests whose modules went", and nothing says the purity check survives. The slice design requires `supervise.py` to stay pure ("Patterns and Conventions"; Technical Requirements), so that guarantee could be dropped silently.
 
-Task 7.2 says "Confirm 128's resume rule already does this; change it only where it differs". Task 9.1 later sets "one allowed-branch rule for every pipeline", with a resume that may be on the target or the slice's own branch and an uncleaned tree. It is unclear which task owns the resume branch and cleanliness rule. Task 7.2's tests (resume on the slice branch with a dirty tree passes) rely on it. Decide now what 128's rule is, then either move the rule change into 7.2 and have 9.1 only remove the CF rows, or keep it in 9.1 and give 7.2 no rule change. Replace "confirm" with a concrete instruction.
+Task 5.1 should put the purity test in `tests/runner/test_supervise.py` or `tests/test_import_boundaries.py`. Otherwise Task 10.2 should say explicitly where `purity.py` moves.
 
-### [NOTE] Some dependency edges are tighter than needed
+### [CONCERN] The slice design's edit to the plan entry has no task
 
-Task 11.1 depends on 10.5, and 12.1 depends on 11.1. Task 11.1 only needs the inspection registry that 10.1 changes. The end-to-end rewrite in 12.1 needs the blocked listing only if it asserts via `inspect blocked`. This does no harm in a linear file order, but the chain makes the "continue past a BLOCKED task" rule in the file header less useful than it could be.
+D5 says "The plan entry is edited to say so", meaning `usage_limit` with `resets_at` is added to the resume list. No task edits that document. Task 1.1 folds only the task-level additions into the LLD, and #22 covers only the arch body text. The result is a plan that contradicts the delivered behaviour. Add a sub-item to Task 1.1 or 13.1 that edits that plan entry.
+
+### [NOTE] The `gate` grep in Task 10.5 will be noisy
+
+`grep -rn "pointer\|routing\|merge_policy\|gate"` also matches `investigate`, `propagate` and `aggregate`. The task already says "each remaining hit is justified or removed". Using `-w` or a word-boundary pattern would stop the junior AI from chasing false hits.
+
+### [NOTE] Behaviour is temporarily degraded between 6.2 and 6.3
+
+Task 6.2 takes routing off the tick, so completed runs are not marked `done` until Task 6.3. The suite stays green because the affected tests are deleted, and 6.3 depends on 6.2, so the order is correct. The two tasks should stay adjacent, and the branch is not usable end to end between them.
+
+### [PASS] Sequencing, test-with pattern and commit cadence
+
+- **Dependencies:** they are acyclic and sufficient. Atomic completion (4.1) lands before it is used (6.3). Resume machinery (7.1 to 7.4) comes before the vocabulary cut (8.1). The slice switch (9.5) comes after the dependencies it needs (2.1, 8.1, 8.2, 9.3, 9.4). Deletions come last.
+- **Tests and commits:** each implementation task carries its own tests. Every task ends in its own commit, spread across all sections rather than batched.
+- **Load testing:** the slice restates no NFR, so no load-test or CI-gating task is needed.
 
 ### Run Digest
 
-- Response length: 5115 chars
+- Response length: 6249 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -127,12 +155,12 @@ Task 11.1 depends on 10.5, and 12.1 depends on 11.1. Task 11.1 only needs the in
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 114239 / 11176 / 103059 / 6900 / not computed
-- Duration: 59.6 s
-- Cost: $0.48 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 114959 / 11176 / 103779 / 5402 / not computed
+- Duration: 43.0 s
+- Cost: $0.47 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9
