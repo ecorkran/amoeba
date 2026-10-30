@@ -53,14 +53,14 @@ def test_completed_resolves_and_completes_the_node() -> None:
     )
 
 
-def test_an_agent_question_blocks_on_the_checkpoint_with_its_question() -> None:
+def test_an_agent_question_blocks_on_a_human_with_its_question() -> None:
     checkpoint = {"kind": "agent_question", "step": "design-0", "question": "Which?"}
 
     plan = _plan(_ended("paused", checkpoint=checkpoint))
 
     assert plan.entry_outcome is JournalOutcome.COMPLETED
     assert not plan.complete_node
-    assert plan.block is not None and plan.block.kind is BlockedKind.SQ_CHECKPOINT
+    assert plan.block is not None and plan.block.kind is BlockedKind.HUMAN
     assert _payload(plan) == {
         PAYLOAD_RUN_ID: RUN_ID,
         PAYLOAD_REASON: REASON_AGENT_QUESTION,

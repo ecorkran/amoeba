@@ -109,3 +109,20 @@ def failed_run() -> RunScript:
     """The real ``artifact_missing`` failure, with no reviews."""
     failure = _captured("failed_artifact_missing.json", "failure")
     return RunScript({}, {"failure": failure, "reviews": []})
+
+
+def agent_question_run(question: str) -> RunScript:
+    """A run paused on the agent's own question (run it with outcome ``paused``).
+
+    The real ``agent_question`` checkpoint, with ``question`` as the agent's text.
+    """
+    checkpoint = dict(
+        _captured_checkpoint("composed_paused_agent_question.json"), question=question
+    )
+    return RunScript({}, {"checkpoint": checkpoint, "reviews": []})
+
+
+def _captured_checkpoint(name: str) -> dict[str, object]:
+    checkpoint = _captured(name, "checkpoint")
+    assert isinstance(checkpoint, dict)
+    return dict(checkpoint)  # pyright: ignore[reportUnknownArgumentType]

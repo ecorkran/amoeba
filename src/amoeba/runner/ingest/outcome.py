@@ -234,7 +234,9 @@ def _question_block(finished: RunEnded, run_id: str) -> BlockPlan:
         **_bounded({PAYLOAD_STEP: step, PAYLOAD_QUESTION: question}),
     }
     context = f"question at {cut_to_bound(step or UNKNOWN_TEXT)}, run {run_id}"
-    return BlockPlan(BlockedKind.SQ_CHECKPOINT, context, payload)
+    # A HUMAN block: the store keeps a payload only on a human block's escalation, and
+    # the question must reach the person (and 140) with it.
+    return BlockPlan(BlockedKind.HUMAN, context, payload)
 
 
 def _blocked(finished: RunEnded, run_id: str, resolved: JournalOutcome) -> OutcomePlan:

@@ -1,24 +1,35 @@
-"""The Runner against the stub ``sq``, in process: launch, fault and shape paths."""
+"""The Runner against the stub ``sq``, in process: a slice through ``p456``.
+
+The tenant, the planners and the store are the production ones; ``sq`` and ``cf`` are
+stubs on ``PATH`` and the checkout is a real git repository. One run-state script per
+scenario (``tests/sq_stub_scripts.py``).
+"""
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import os
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 from sq_stub import (
     RUN_LATE_SECONDS_ENV,
     RUN_MODE_ENV,
+    RUN_OUTCOME_ENV,
+    RUN_SCRIPT_ENV,
     RUN_SECONDS_ENV,
     RunMode,
+    write_run_script,
     write_sq_stub,
 )
+from sq_stub_resume import RESUME_ARGV_LOG_ENV
+from sq_stub_scripts import RunScript, agent_question_run, empty_reviews
 
 from amoeba.process import ProcessSettings, UpstreamShapeError
 from amoeba.runner import RunnerTenant, runner_tenant
-from amoeba.runner.decide import Action, LaunchRun, ProjectView
 from amoeba.runner.ingest.record import (
     RESULT_OUTCOME,
     RESULT_RUN_ID,
@@ -28,15 +39,27 @@ from amoeba.runner.ingest.record import (
 from amoeba.runner.launch import log_paths
 from amoeba.store import (
     PARAM_RUN_ID,
+    BlockedKind,
+    BlockedState,
+    CFReference,
+    Channel,
+    CommandKind,
     JournalEntry,
     JournalOutcome,
     Node,
+    NodeKind,
     NodeStatus,
     Store,
 )
-from runner.tick_support import drive_project, ready_slice, runnable_unbusy
+from runner.dispatch.cf_world import CfWorld
+from runner.gate_rig import rig_checkout
+from runner.resolutions.resolution_support import resolve_block
+from runner.tick_support import drive_project
 
 PROJECT = "demo"
+CF_PROJECT = "cf-a"
+PIPELINE = "p456"
+FIRST_SLICE, SECOND_SLICE = 125, 126
 GRACE_SECONDS = 0.5
 WAIT_SECONDS = 20.0
 
@@ -47,8 +70,6 @@ SETTINGS = ProcessSettings(
     tick_call_timeout_seconds=4.0,
     shutdown_grace_seconds=10.0,
 )
-
-pytestmark = pytest.mark.usefixtures("passing_checks")
 
 
 class Host:
@@ -63,44 +84,57 @@ class Host:
         return self._store
 
 
-class OncePerNode:
-    """The test planner: launch the no-op pipeline once for each node it sees."""
-
-    def __init__(self, checkout: Path) -> None:
-        self._checkout = checkout
-        self._launched: set[str] = set()
-
-    def plan(self, view: ProjectView) -> Sequence[Action]:
-        fresh = [n for n in runnable_unbusy(view) if n.id not in self._launched]
-        self._launched.update(n.id for n in fresh)
-        return [LaunchRun(n.id, "P4", {}, self._checkout) for n in fresh]
-
-
 class Scenario:
-    def __init__(self, tmp_path: Path, store: Store, monkeypatch: pytest.MonkeyPatch):
+    """One driven project: a clean checkout, a stub ``cf``, and slices to run."""
+
+    def __init__(
+        self,
+        tmp_path: Path,
+        store: Store,
+        monkeypatch: pytest.MonkeyPatch,
+        slices: int = 1,
+    ):
         home = tmp_path / "home"
         home.mkdir()
+        self.tmp_path = tmp_path
         self.supervisor_dir = tmp_path / "supervisor"
-        checkout = tmp_path / "checkout"
-        checkout.mkdir()
         monkeypatch.setenv("HOME", str(home))
+        world = CfWorld(tmp_path / "world")
+        rig_checkout(world.root)
+        rig_checkout(world.second)
         bin_dir = write_sq_stub(tmp_path / "bin")
-        monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+        monkeypatch.setenv(
+            "PATH",
+            os.pathsep.join([str(bin_dir), str(world.bin_dir), os.environ["PATH"]]),
+        )
         monkeypatch.setenv(RUN_SECONDS_ENV, "0.2")
         self.monkeypatch = monkeypatch
         self.store = store
         self.host = Host(store)
-        self.node: Node = ready_slice(store)
+        store.record_cf_snapshot(world.snapshot_input(PROJECT, CF_PROJECT))
+        self.nodes = _slices(store, slices)
+        self.node: Node = self.nodes[0]
         drive_project(store)
-        self.planner = OncePerNode(checkout)
+        config = tmp_path / "projects.yaml"
+        config.write_text(f"projects:\n  {PROJECT}:\n    pipeline: {PIPELINE}\n")
+        self.settings = dataclasses.replace(SETTINGS, project_config_path=config)
         self._tenant: RunnerTenant | None = None
+
+    def script(self, script: RunScript, outcome: str | None = None) -> None:
+        """Make every run end as ``script`` says, with ``outcome`` if given."""
+        path = write_run_script(
+            self.tmp_path / "run-script.json",
+            files=script.files,
+            document=script.document,
+        )
+        self.monkeypatch.setenv(RUN_SCRIPT_ENV, str(path))
+        if outcome is not None:
+            self.monkeypatch.setenv(RUN_OUTCOME_ENV, outcome)
 
     @property
     def tenant(self) -> RunnerTenant:
         if self._tenant is None:
-            self._tenant = runner_tenant(
-                SETTINGS, self.supervisor_dir, planners=(self.planner,)
-            )
+            self._tenant = runner_tenant(self.settings, self.supervisor_dir)
         return self._tenant
 
     def tick_until(self, description: str, done: Callable[[], bool]) -> None:
@@ -112,18 +146,53 @@ class Scenario:
             self.tenant.tick(self.host)
             time.sleep(0.05)
 
+    def entries(self, node: Node | None = None) -> list[JournalEntry]:
+        found = self.store.journal_entries(PROJECT, node_id=(node or self.node).id)
+        return [e for e in found if e.kind is CommandKind.SQ_RUN]
+
     def entry(self) -> JournalEntry:
-        [entry] = self.store.journal_entries(PROJECT)
+        [entry] = self.entries()
         return entry
 
     def resolved(self) -> bool:
-        entries = self.store.journal_entries(PROJECT)
+        entries = self.entries()
         return len(entries) == 1 and entries[0].is_resolved
+
+    def done(self, node: Node) -> bool:
+        return self.status(node) is NodeStatus.DONE
+
+    def blocked(self) -> BlockedState | None:
+        return self.store.blocked_state_for(self.node.id)
+
+    def status(self, node: Node | None = None) -> NodeStatus:
+        found = self.store.get_node((node or self.node).id)
+        assert found is not None
+        return found.status
 
     def escalations(self) -> list[str]:
         return [
             m.fault_kind or "" for m in self.store.open_project_escalations(PROJECT)
         ]
+
+
+def _slices(store: Store, count: int) -> list[Node]:
+    """``count`` slices under one initiative, in CF index order from the first."""
+    initiative = store.create_node(
+        project_id=PROJECT,
+        kind=NodeKind.INITIATIVE,
+        title="initiative",
+        cf=CFReference(project=CF_PROJECT, index=120),
+    )
+    return [
+        store.create_node(
+            project_id=PROJECT,
+            kind=NodeKind.SLICE,
+            title=f"slice {FIRST_SLICE + offset}",
+            parent_id=initiative.id,
+            cf=CFReference(project=CF_PROJECT, index=FIRST_SLICE + offset),
+        )
+        for offset in range(count)
+    ]
 
 
 @pytest.fixture
@@ -224,3 +293,54 @@ def test_the_shape_error_exits_fifteen_through_the_cli_boundary(
 
     assert cli_main.main(["status"]) == cli_main.ExitCode.UPSTREAM_SHAPE == 15
     assert "--run-id" in capsys.readouterr().err
+
+
+def test_a_completed_slice_is_followed_by_the_next_slice_launching(
+    tmp_path: Path, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scenario = Scenario(tmp_path, store, monkeypatch, slices=2)
+    first, second = scenario.nodes
+    scenario.script(empty_reviews())
+
+    scenario.tick_until(
+        "the second slice to launch", lambda: bool(scenario.entries(second))
+    )
+
+    assert scenario.status(first) is NodeStatus.DONE
+    [launched] = scenario.entries(second)
+    assert launched.parameters["pipeline"] == PIPELINE
+    assert launched.parameters["params"] == {"slice": str(SECOND_SLICE)}
+    scenario.tick_until("the second slice to finish", lambda: scenario.done(second))
+    assert scenario.escalations() == []
+
+
+def test_an_agent_question_blocks_with_the_question_then_resumes_with_instructions(
+    tmp_path: Path, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    scenario = Scenario(tmp_path, store, monkeypatch)
+    question = "Which slice should I design, 178 or 179?"
+    instructions = 'Design 178.\nQuote: "go" \u2014 not 179.'
+    argv_log = tmp_path / "resume-argv.jsonl"
+    monkeypatch.setenv(RESUME_ARGV_LOG_ENV, str(argv_log))
+    scenario.script(agent_question_run(question), outcome="paused")
+
+    scenario.tick_until("the node to block", lambda: scenario.blocked() is not None)
+
+    blocked = scenario.blocked()
+    assert blocked is not None and blocked.kind is BlockedKind.HUMAN
+    [message] = [
+        m
+        for m in store.messages(PROJECT, channel=Channel.ESCALATION)
+        if m.blocked_state_id == blocked.id
+    ]
+    assert message.payload is not None
+    assert message.payload["reason"] == "agent_question"
+    assert message.payload["question"] == question
+
+    scenario.script(empty_reviews())
+    resolve_block(store, blocked.id, "resume", instructions)
+    scenario.tick_until("the slice to finish", lambda: scenario.done(scenario.node))
+
+    [resume_argv] = [json.loads(line) for line in argv_log.read_text().splitlines()]
+    assert resume_argv[resume_argv.index("--instructions") + 1] == instructions
+    assert scenario.escalations() == []
