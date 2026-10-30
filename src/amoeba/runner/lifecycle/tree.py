@@ -11,7 +11,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from amoeba.runner.lifecycle.predecessors import predecessors_done
+from amoeba.runner.lifecycle.predecessors import (
+    predecessors_done,
+    slice_predecessor_done,
+)
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import BLOCKED_STATUSES, Node, NodeKind, NodeStatus
 
@@ -125,6 +128,25 @@ class LifecycleTree:
             and self.is_linked(node)
             and not self._has_blocked_ancestor(node)
             and predecessors_done(self, node)
+        )
+
+    def ready_slices(self) -> Sequence[Node]:
+        """The slice nodes that are ready to be worked, in store order (D1).
+
+        A slice is ready when it is ``runnable``, linked, has no blocked ancestor
+        and its predecessor slice is ``done``. A slice CF reports complete is
+        marked ``done`` by reconcile, so it is not ``runnable`` here. Pure: it reads
+        only this tree. This is the widest set; Decide narrows it by drive and hold,
+        a free checkout and the pre-dispatch check.
+        """
+        return tuple(
+            node
+            for node in self._nodes
+            if node.kind is NodeKind.SLICE
+            and node.status is NodeStatus.RUNNABLE
+            and self.is_linked(node)
+            and not self._has_blocked_ancestor(node)
+            and slice_predecessor_done(self, node)
         )
 
     def _has_blocked_ancestor(self, node: Node) -> bool:

@@ -20,7 +20,11 @@ import logging
 from collections.abc import Callable
 
 from amoeba.runner.faults import TickFaults
-from amoeba.runner.lifecycle.completion import complete_observed_steps
+from amoeba.runner.lifecycle.completion import (
+    complete_initiatives,
+    complete_observed_slices,
+    complete_observed_steps,
+)
 from amoeba.runner.lifecycle.orphaning import orphan_unlisted
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
 from amoeba.runner.lifecycle.read_checks import ReadScope, checked_scope, observations
@@ -86,6 +90,10 @@ def reconcile(
         lambda t: complete_observed_steps(
             store, t, project_id, cf_project_id, read, scope
         ),
+        lambda t: complete_observed_slices(
+            store, t, project_id, cf_project_id, read, scope
+        ),
+        lambda t: complete_initiatives(store, t, cf_project_id),
     )
     stale = wrote
     for rule in rules:

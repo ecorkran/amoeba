@@ -30,7 +30,8 @@ from amoeba.runner.lifecycle.steps import (
     step_complete,
 )
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Node, NodeStatus, Store
+from amoeba.store import Node, NodeKind, NodeStatus, Store
+from amoeba.upstream.context_forge import reported_complete
 
 
 def complete_observed_steps(
@@ -104,3 +105,59 @@ def complete_step(
         store.update_node_status(node.id, NodeStatus.DONE)
         return True
     return False
+
+
+# -- the slice level (slice 132, D1) --------------------------------------------
+
+
+def complete_observed_slices(
+    store: Store,
+    tree: LifecycleTree,
+    project_id: str,
+    cf_project_id: str,
+    read: PlanRead,
+    scope: ReadScope,
+) -> bool:
+    """Mark done every linked slice CF reports complete (work the PM did by hand).
+
+    A slice with an unresolved journal entry, or one that is blocked, is left
+    alone: its run finishes its own course. Returns whether anything was written.
+    """
+    found = observations(read, scope)
+    has_open_entry = {
+        entry.node_id for entry in store.unresolved_journal_entries(project_id)
+    }
+    wrote = False
+    for node in tree.nodes:
+        if node.kind is not NodeKind.SLICE or node.cf.project != cf_project_id:
+            continue
+        observation = _observation_for(found, node)
+        if observation is None or not tree.is_linked(node):
+            continue
+        if (
+            reported_complete(observation)
+            and node.status is NodeStatus.RUNNABLE
+            and node.id not in has_open_entry
+        ):
+            store.update_node_status(node.id, NodeStatus.DONE)
+            wrote = True
+    return wrote
+
+
+def complete_initiatives(store: Store, tree: LifecycleTree, cf_project_id: str) -> bool:
+    """Mark an initiative done when every slice under it is done (D1).
+
+    An initiative with no linked slice is not done: there is nothing to have
+    finished. Returns whether anything was written.
+    """
+    wrote = False
+    for initiative in tree.linked_initiatives(cf_project_id):
+        slices = tree.linked_slices(initiative)
+        if (
+            slices
+            and initiative.status is NodeStatus.RUNNABLE
+            and all(child.status is NodeStatus.DONE for child in slices)
+        ):
+            store.update_node_status(initiative.id, NodeStatus.DONE)
+            wrote = True
+    return wrote

@@ -292,9 +292,11 @@ Note (20261029): the pointer modules and their tests were deleted here rather th
 ### Task 9.3: Add the slice-level ready rule and initiative completion
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `lifecycle/tree.py`: `ready_slices()` per D1's ready rule. `lifecycle/predecessors.py`: make `_previous_eligible_slice` public as the slice predecessor (the one place 180 extends). `lifecycle/completion.py`: an initiative is `done` when every eligible slice under it is `done`; a CF-complete slice with no unresolved entry and not blocked is `done` (D1). The step rules in these modules stay until Task 10.4 deletes them
-- [ ] Tests in `tests/runner/lifecycle/test_ready_steps.py` (rename to `test_ready_slices.py`), `test_predecessors.py`, `test_completion.py`: each ready condition; predecessor by index within an initiative; deferred and deprecated skipped; initiative completion
-- [ ] **Success:** tests pass. Commit `feat: add the slice-level ready rule`
+- [x] `lifecycle/tree.py`: `ready_slices()` per D1's ready rule. `lifecycle/predecessors.py`: make `_previous_eligible_slice` public as the slice predecessor (the one place 180 extends). `lifecycle/completion.py`: an initiative is `done` when every eligible slice under it is `done`; a CF-complete slice with no unresolved entry and not blocked is `done` (D1). The step rules in these modules stay until Task 10.4 deletes them
+- [x] Tests in `tests/runner/lifecycle/test_ready_steps.py` (rename to `test_ready_slices.py`), `test_predecessors.py`, `test_completion.py`: each ready condition; predecessor by index within an initiative; deferred and deprecated skipped; initiative completion
+- [x] **Success:** tests pass. Commit `feat: add the slice-level ready rule`
+
+Note (20261029): the slice predecessor is new public code in `predecessors.py` (`slice_predecessor`, `slice_predecessor_done`, `linked_slices_by_index`) beside the step rules, which stay until Task 10.4; the slice level does not require step children, so the old private `_previous_eligible_slice` is untouched. The new slice-level tests are in a new `tests/runner/lifecycle/test_ready_slices.py` (the old `test_ready_steps.py` still covers `ready_steps` until 10.4) and in `test_completion.py`. A deferred or deprecated slice is skipped by never having a node (Task 9.6 stops reconcile creating one); a slice node that already exists and later turns deferred in CF is not retired by this slice, the same as before. Reconcile now also marks a CF-complete slice done and an initiative done when every linked slice under it is done (an initiative with no slices is not done).
 
 ### Task 9.4: Take human steps and the merge observation off the tick
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2

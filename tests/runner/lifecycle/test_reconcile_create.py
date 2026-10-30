@@ -97,7 +97,7 @@ def test_every_container_carries_its_index_and_every_step_a_phase(
 
     for node in _nodes(store, NodeKind.INITIATIVE) + _nodes(store, NodeKind.SLICE):
         assert node.cf.project == CF_PROJECT and node.cf.index is not None
-        assert node.status is NodeStatus.RUNNABLE
+        assert node.status in {NodeStatus.RUNNABLE, NodeStatus.DONE}
     for step in _nodes(store, NodeKind.PHASE_OR_ARTIFACT):
         assert step.cf.project == CF_PROJECT and step.cf.index is None
         assert step.cf.phase == step.title

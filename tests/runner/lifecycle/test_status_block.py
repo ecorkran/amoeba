@@ -117,10 +117,10 @@ def test_a_done_slice_is_not_blocked(store: Store) -> None:
     _run(store, _read((121, "in_progress")))
     store.update_node_status(_slice(store, 121).id, NodeStatus.DONE)
 
-    wrote, _ = _run(store, _read((121, "degraded")))
+    _run(store, _read((121, "degraded")))
 
-    assert not wrote
-    assert _slice(store, 121).status is NodeStatus.DONE
+    node = _slice(store, 121)
+    assert node.status is NodeStatus.DONE and _block_count(store, node) == 0
 
 
 def test_an_out_of_vocabulary_status_blocks_with_its_raw_text(store: Store) -> None:

@@ -184,3 +184,91 @@ def test_a_done_step_is_untouched_and_a_rerun_writes_nothing(store: Store) -> No
     wrote, _ = _run(store, _slice_read("complete"))
 
     assert not wrote and store.nodes_for_project(PROJECT) == before
+
+
+# -- the slice level (slice 132, D1) --------------------------------------------
+
+
+def _slice_node(store: Store, index: int) -> Node:
+    [found] = [
+        n
+        for n in store.nodes_for_project(PROJECT)
+        if n.kind is NodeKind.SLICE and n.cf.index == index
+    ]
+    return found
+
+
+def _initiative_node(store: Store, index: int) -> Node:
+    [found] = [
+        n
+        for n in store.nodes_for_project(PROJECT)
+        if n.kind is NodeKind.INITIATIVE and n.cf.index == index
+    ]
+    return found
+
+
+def test_a_slice_cf_reports_complete_is_marked_done(store: Store) -> None:
+    _run(store, _slice_read("in_progress"))
+    assert _status(store, _slice_node(store, 121)) is NodeStatus.RUNNABLE
+
+    _run(store, _slice_read("complete"))
+
+    assert _status(store, _slice_node(store, 121)) is NodeStatus.DONE
+
+
+def test_a_complete_slice_with_an_unresolved_entry_is_not_marked_done(
+    store: Store,
+) -> None:
+    _run(store, _slice_read("in_progress"))
+    node = _slice_node(store, 121)
+    store.journal_issue(
+        node.id,
+        kind=CommandKind.SQ_RUN,
+        parameters={PARAM_PIPELINE: "p", PARAM_PARAMS: {}, PARAM_RUN_ID: "run-1"},
+    )
+
+    _run(store, _slice_read("complete"))
+
+    assert _status(store, node) is not NodeStatus.DONE
+
+
+def test_a_blocked_complete_slice_is_left_alone(store: Store) -> None:
+    _run(store, _slice_read("in_progress"))
+    node = _slice_node(store, 121)
+    store.block(node.id, kind=BlockedKind.HUMAN, context="stopped")
+
+    _run(store, _slice_read("complete"))
+
+    assert _status(store, node) is NodeStatus.BLOCKED_ON_HUMAN
+
+
+def test_an_initiative_is_done_when_every_slice_under_it_is_done(
+    store: Store,
+) -> None:
+    _run(store, _slice_read("in_progress"))
+    assert _status(store, _initiative_node(store, 120)) is NodeStatus.RUNNABLE
+
+    _run(store, _slice_read("complete"))
+
+    assert _status(store, _initiative_node(store, 120)) is NodeStatus.DONE
+
+
+def test_an_initiative_with_a_slice_still_to_do_is_not_done(store: Store) -> None:
+    read = plan(
+        cf_initiative(120, arch_file="120-arch.y.md"),
+        slices={
+            120: slice_list(
+                cf_slice(121, status="complete"), cf_slice(122, status="in_progress")
+            )
+        },
+    )
+
+    _run(store, read)
+
+    assert _status(store, _initiative_node(store, 120)) is NodeStatus.RUNNABLE
+
+
+def test_an_initiative_with_no_slices_is_not_done(store: Store) -> None:
+    _run(store, plan(cf_initiative(140), slices={140: NoSlicePlan()}))
+
+    assert _status(store, _initiative_node(store, 140)) is NodeStatus.RUNNABLE
