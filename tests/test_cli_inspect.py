@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,7 @@ from inspection_harness import FIXTURE_VERDICT, PROJECT, seed_every_listing
 from amoeba.cli.main import ExitCode
 from amoeba.inspection import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
 from amoeba.inspection.listing import ListingScope
-from amoeba.store import Store
+from amoeba.store import BlockedKind, NodeKind, Store
 from amoeba.store.migrations import (
     EXPECTED_SCHEMA_VERSION,
     migrate,
@@ -156,6 +156,81 @@ def test_blocked_listing_carries_the_id_a_resolution_names(
         state = store.blocked_state_for(rows[0]["node_id"])
     assert state is not None
     assert rows[0]["blocked_state_id"] == state.id
+
+
+def _block_a_slice(
+    supervisor_dir: Path,
+    project_id: str,
+    payload: Mapping[str, object] | None,
+    kind: BlockedKind = BlockedKind.HUMAN,
+) -> str:
+    """A store for ``project_id`` holding one blocked slice; returns its title."""
+    title = f"{project_id} slice"
+    with Store.open(supervisor_dir / f"{project_id}.sqlite3") as store:
+        node = store.create_node(
+            project_id=project_id, kind=NodeKind.SLICE, title=title
+        )
+        store.block(node.id, kind=kind, context="stopped", payload=payload)
+    return title
+
+
+def test_blocked_without_a_project_lists_every_projects_blocks(
+    supervisor_dir: Path,
+) -> None:
+    _block_a_slice(supervisor_dir, "alpha", {"fault_kind": "checkout_dirty"})
+    _block_a_slice(supervisor_dir, "beta", {"reason": "agent_question"})
+
+    result = run_cli(["inspect", "blocked", "--json"], supervisor_dir)
+
+    assert result.returncode == ExitCode.OK
+    rows = json.loads(result.stdout)
+    assert {row["project_id"]: row["title"] for row in rows} == {
+        "alpha": "alpha slice",
+        "beta": "beta slice",
+    }
+    assert {row["project_id"]: row["reason"] for row in rows} == {
+        "alpha": "checkout_dirty",
+        "beta": "agent_question",
+    }
+
+
+def test_blocked_with_a_project_narrows_to_it(supervisor_dir: Path) -> None:
+    _block_a_slice(supervisor_dir, "alpha", None)
+    _block_a_slice(supervisor_dir, "beta", None)
+
+    result = run_cli(
+        ["inspect", "blocked", "--project", "beta", "--json"], supervisor_dir
+    )
+
+    assert [row["project_id"] for row in json.loads(result.stdout)] == ["beta"]
+
+
+def test_an_agent_question_block_carries_the_question_in_its_json_row(
+    supervisor_dir: Path,
+) -> None:
+    payload = {"reason": "agent_question", "question": "which branch?"}
+    _block_a_slice(supervisor_dir, "alpha", payload)
+
+    [row] = json.loads(run_cli(["inspect", "blocked", "--json"], supervisor_dir).stdout)
+
+    assert row["payload"] == payload
+    assert row["reason"] == "agent_question"
+
+
+def test_a_block_with_neither_key_has_an_empty_reason(supervisor_dir: Path) -> None:
+    _block_a_slice(supervisor_dir, "alpha", {"step": "tasks"})
+    _block_a_slice(supervisor_dir, "beta", None, kind=BlockedKind.JUDGE)
+
+    rows = json.loads(run_cli(["inspect", "blocked", "--json"], supervisor_dir).stdout)
+
+    assert [row["reason"] for row in rows] == ["", ""]
+
+
+def test_blocked_with_no_projects_prints_none(supervisor_dir: Path) -> None:
+    result = run_cli(["inspect", "blocked"], supervisor_dir)
+
+    assert result.returncode == ExitCode.OK
+    assert result.stdout.strip() == "(none)"
 
 
 def test_journal_listing_shows_resolved_and_unresolved(

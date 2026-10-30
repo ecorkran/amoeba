@@ -133,8 +133,10 @@ class ListingRequest:
 class Listing:
     """One inspection listing: its name, its query, and its columns.
 
-    Exactly one of ``rows`` and ``supervisor_rows`` is set. Which one is what
-    makes a listing project-scoped or supervisor-level — never its name.
+    At least one of ``rows`` and ``supervisor_rows`` is set. ``rows`` alone makes a
+    listing project-scoped, ``supervisor_rows`` alone supervisor-level, never its
+    name. Both make it project-scoped with the project optional: asked without one,
+    it reads every project through ``supervisor_rows``.
 
     Attributes:
         name: The subcommand name and URL segment. Derived *from* this entry.
@@ -143,7 +145,7 @@ class Listing:
         rows: For a project-scoped listing: receives an open **read-only**
             store and the request.
         supervisor_rows: For a supervisor-level listing: receives the
-            supervisor directory, and opens no store.
+            supervisor directory. It opens no store, or only read-only ones.
         flags: Boolean flags.
         choice_options: Options taking one value from a set.
         value_options: Options taking one free value. The three stay separate
@@ -160,10 +162,9 @@ class Listing:
     value_options: tuple[ValueOption, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
-        if (self.rows is None) == (self.supervisor_rows is None):
+        if self.rows is None and self.supervisor_rows is None:
             raise ValueError(
-                f"listing {self.name!r} must set exactly one of rows and "
-                "supervisor_rows"
+                f"listing {self.name!r} must set rows, supervisor_rows or both"
             )
 
     @property
@@ -174,9 +175,14 @@ class Listing:
     @property
     def scope(self) -> ListingScope:
         """Project-scoped when ``rows`` is set, supervisor-level otherwise."""
-        if self.supervisor_rows is None:
-            return ListingScope.PROJECT
-        return ListingScope.SUPERVISOR
+        if self.rows is None:
+            return ListingScope.SUPERVISOR
+        return ListingScope.PROJECT
+
+    @property
+    def project_optional(self) -> bool:
+        """Whether a project-scoped listing may be asked without a project."""
+        return self.rows is not None and self.supervisor_rows is not None
 
 
 #: Shared by every listing that can narrow to one node.

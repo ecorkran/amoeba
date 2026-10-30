@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from amoeba.inspection.listing import FlagOption, ListingRequest, Row
-from amoeba.store import Store, paths
+from amoeba.store import Channel, Store, paths
 from amoeba.store.discovery import discover_project_ids
 
 UNRESOLVED_OPTION = FlagOption(
@@ -33,18 +33,46 @@ def node_rows(store: Store, request: ListingRequest) -> list[Row]:
 
 
 def blocked_rows(store: Store, request: ListingRequest) -> list[Row]:
-    """Every blocked node, with what it is blocked on."""
-    return [
-        {
-            "node_id": blocked.node.id,
-            "title": blocked.node.title,
-            "blocked_on": blocked.blocked_state.kind.value,
-            "context": blocked.blocked_state.context,
-            # The id a resolution names (slice 127).
-            "blocked_state_id": blocked.blocked_state.id,
-        }
-        for blocked in store.blocked(request.require_project_id())
-    ]
+    """Every blocked node in one project, with what it is blocked on."""
+    return _blocked_rows(store, request.require_project_id())
+
+
+def all_blocked_rows(store_dir: Path) -> list[Row]:
+    """Every blocked node in every project, each store opened read-only."""
+    rows: list[Row] = []
+    for project_id in discover_project_ids(store_dir):
+        with Store.open_read_only(
+            paths.project_store_path(store_dir, project_id)
+        ) as store:
+            with store.read_transaction():
+                rows.extend(_blocked_rows(store, project_id))
+    return rows
+
+
+def _blocked_rows(store: Store, project_id: str) -> list[Row]:
+    """The blocked rows of one project; ``payload`` is the escalation's, in full."""
+    payloads = {
+        message.blocked_state_id: dict(message.payload or {})
+        for message in store.messages(project_id, channel=Channel.ESCALATION)
+        if message.blocked_state_id is not None
+    }
+    rows: list[Row] = []
+    for blocked in store.blocked(project_id):
+        payload = payloads.get(blocked.blocked_state.id, {})
+        rows.append(
+            {
+                "project_id": project_id,
+                "node_id": blocked.node.id,
+                "title": blocked.node.title,
+                "blocked_on": blocked.blocked_state.kind.value,
+                "reason": payload.get("reason") or payload.get("fault_kind") or "",
+                "context": blocked.blocked_state.context,
+                # The id a resolution names (slice 127).
+                "blocked_state_id": blocked.blocked_state.id,
+                "payload": payload,
+            }
+        )
+    return rows
 
 
 def journal_rows(store: Store, request: ListingRequest) -> list[Row]:

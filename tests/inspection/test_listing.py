@@ -42,19 +42,8 @@ def test_every_option_class_derives_its_flag_the_same_way(
     assert option.flag == "--only-open"
 
 
-def test_a_listing_with_both_row_functions_is_refused() -> None:
-    with pytest.raises(ValueError, match="exactly one"):
-        Listing(
-            name="x",
-            help_text="h",
-            columns=(),
-            rows=_project_rows,
-            supervisor_rows=_supervisor_rows,
-        )
-
-
 def test_a_listing_with_neither_row_function_is_refused() -> None:
-    with pytest.raises(ValueError, match="exactly one"):
+    with pytest.raises(ValueError, match="rows, supervisor_rows or both"):
         Listing(name="x", help_text="h", columns=())
 
 
@@ -66,6 +55,21 @@ def test_scope_follows_the_row_function() -> None:
 
     assert project.scope is ListingScope.PROJECT
     assert supervisor.scope is ListingScope.SUPERVISOR
+
+
+def test_both_row_functions_make_the_project_optional() -> None:
+    both = Listing(
+        name="b",
+        help_text="h",
+        columns=(),
+        rows=_project_rows,
+        supervisor_rows=_supervisor_rows,
+    )
+    project = Listing(name="p", help_text="h", columns=(), rows=_project_rows)
+
+    assert both.scope is ListingScope.PROJECT
+    assert both.project_optional
+    assert not project.project_optional
 
 
 def test_option_returns_the_stored_value() -> None:

@@ -206,7 +206,9 @@ def _add_inspect_parser(subparsers: Any) -> None:
         )
         if listing.scope is ListingScope.PROJECT:
             listing_parser.add_argument(
-                "--project", required=True, help="The project to list."
+                "--project",
+                required=not listing.project_optional,
+                help="The project to list.",
             )
         for flag in listing.flags:
             listing_parser.add_argument(

@@ -82,9 +82,18 @@ LISTINGS: tuple[Listing, ...] = (
     ),
     Listing(
         name="blocked",
-        help_text="Blocked nodes for a project, and what each is blocked on.",
-        columns=("node_id", "title", "blocked_on", "context", "blocked_state_id"),
+        help_text="Blocked nodes and what each is blocked on; all projects by default.",
+        columns=(
+            "project_id",
+            "node_id",
+            "title",
+            "blocked_on",
+            "reason",
+            "context",
+            "blocked_state_id",
+        ),
         rows=core.blocked_rows,
+        supervisor_rows=core.all_blocked_rows,
     ),
     Listing(
         name="journal",
@@ -228,7 +237,9 @@ def read_listing(name: str, request: ListingRequest, store_dir: Path) -> Listing
             includes a store needing migration, since inspection never migrates.
     """
     listing = LISTINGS_BY_NAME[name]
-    if listing.supervisor_rows is not None:
+    if listing.supervisor_rows is not None and (
+        listing.rows is None or request.project_id is None
+    ):
         return ListingResult(rows=listing.supervisor_rows(store_dir), as_of_seq=None)
     if listing.rows is None:
         raise ValueError(f"listing {name!r} declares no rows")
