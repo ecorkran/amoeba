@@ -133,11 +133,11 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 5.1: Implement `supervise.classify`
 **Owner**: Junior AI | **Dependencies**: 3.1 | **Effort**: 2
 
-- [ ] Create `runner/supervise.py`, pure: `OutcomeClass` (`COMPLETED`, `TRANSIENT`, `QUESTION`, `BLOCKED`); `classify(observed) -> OutcomeClass` over a run document, vanished, launch failed or resume failed, per the D4 table. Define once here: the payload reasons `agent_question`, `paused`, `failed`, `auto_resume_exhausted`, and the transient failure kinds `provider_error` and `stall`
-- [ ] `usage_limit` is `TRANSIENT` only with `resets_at`; without it, `BLOCKED`. `agent_question` with no `question` is still `QUESTION` (D10)
-- [ ] `tests/runner/test_supervise.py`, table-driven: one case per D4 row, plus every listed `paused` and `failed` kind of the "any other" rows and an unknown kind of each
-- [ ] Add a purity test for `supervise.py` in `tests/runner/test_supervise.py`, using `io_use` from `tests/runner/gates/purity.py` for now (Task 10.2 moves that helper to `tests/runner/purity.py` and fixes this import). It must outlive `gates/`: `supervise.py` imports nothing that does I/O
-- [ ] **Success:** tests pass. Commit `feat: add the outcome map`
+- [x] Create `runner/supervise.py`, pure: `OutcomeClass` (`COMPLETED`, `TRANSIENT`, `QUESTION`, `BLOCKED`); `classify(observed) -> OutcomeClass` over a run document, vanished, launch failed or resume failed, per the D4 table. Define once here: the payload reasons `agent_question`, `paused`, `failed`, `auto_resume_exhausted`, and the transient failure kinds `provider_error` and `stall`
+- [x] `usage_limit` is `TRANSIENT` only with `resets_at`; without it, `BLOCKED`. `agent_question` with no `question` is still `QUESTION` (D10)
+- [x] `tests/runner/test_supervise.py`, table-driven: one case per D4 row, plus every listed `paused` and `failed` kind of the "any other" rows and an unknown kind of each
+- [x] Add a purity test for `supervise.py` in `tests/runner/test_supervise.py`, using `io_use` from `tests/runner/gates/purity.py` for now (Task 10.2 moves that helper to `tests/runner/purity.py` and fixes this import). It must outlive `gates/`: `supervise.py` imports nothing that does I/O
+- [x] **Success:** tests pass. Commit `feat: add the outcome map`
 
 ### Task 5.2: Implement the resume bound
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 3
