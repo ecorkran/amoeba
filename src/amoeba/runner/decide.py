@@ -16,11 +16,9 @@ from pathlib import Path
 from typing import Protocol
 
 from amoeba.runner.dispatch.facts import StepDispatchFacts
-from amoeba.runner.gates.merge_observation import MergeObservation
 from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import JournalEntry, Node
 
@@ -129,10 +127,8 @@ class ProjectView:
     pipeline step, by node id, and ``checkout_holders`` names, for each checkout a
     pipeline already holds (D4), the nodes that hold it, so a step's own continuation
     can act in a checkout held only by itself (slice 127). Both are empty for a view
-    that dispatches nothing. ``merge_policy`` is the project's (slice 128, D8), and
-    ``dispatch_checks`` holds this tick's pre-dispatch result for each candidate, by
-    node id (D5); a node with no entry has no result. ``merge_observations`` holds the
-    git observation of each pending merge step, by the merge step's node id (D9).
+    that dispatches nothing. ``dispatch_checks`` holds this tick's pre-dispatch result
+    for each candidate, by node id (D5); a node with no entry has no result.
     """
 
     project_id: str
@@ -148,12 +144,8 @@ class ProjectView:
     checkout_holders: Mapping[Path, frozenset[str]] = field(
         default_factory=dict[Path, frozenset[str]]
     )
-    merge_policy: MergePolicy = PROJECT_DEFAULTS.merge_policy
     dispatch_checks: Mapping[str, DispatchCheck] = field(
         default_factory=dict[str, DispatchCheck]
-    )
-    merge_observations: Mapping[str, MergeObservation] = field(
-        default_factory=dict[str, MergeObservation]
     )
 
     def ready_unbusy(self) -> list[Node]:

@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from amoeba.process import PollFailure, RunOutcome
-from amoeba.runner.dispatch.params import PARAM_MERGE_POLICY
 from amoeba.runner.dispatch.reissue import REASON_STARTED_BEFORE_CRASH
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON, PAYLOAD_RUN_ID
 from amoeba.runner.launch import (
@@ -125,18 +124,6 @@ def test_no_run_id_line_relaunches_once_under_the_same_run_id(
     [argv] = rig.popen.argvs
     assert argv.count(OLD_RUN_ID) == 1, "one `sq run` for that id"
     assert rig.popen.cwds == [str(rig.world.root)]
-
-
-def test_a_reissue_keeps_the_merge_policy_of_the_attempt_it_repeats(
-    rig: DispatchRig,
-) -> None:
-    node, _ = _never_started(rig, {PARAM_MERGE_POLICY: "auto"})
-    _nothing_running(rig)
-
-    rig.tick()
-
-    [new] = [e for e in rig.entries(CommandKind.SQ_RUN, node) if not e.is_resolved]
-    assert new.parameters[PARAM_MERGE_POLICY] == "auto", "the config says human"
 
 
 def test_a_run_state_that_appeared_meanwhile_is_adopted_without_a_launch(

@@ -20,7 +20,6 @@ from amoeba.process import (
 from amoeba.runner.decide import Planner
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
-from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.probes import probe_sq
 from amoeba.runner.project_config import (
     PROJECT_DEFAULTS,
@@ -40,7 +39,6 @@ AMOEBA_DISTRIBUTION: Final = "amoeba"
 #: then dispatch (slice 125), which points a checkout and launches a pipeline, then
 #: continuations (slice 127), which resume or observe the run a resolution names.
 PRODUCTION_PLANNERS: Final[tuple[Planner, ...]] = (
-    HumanStepPlanner(),
     DispatchPlanner(),
     ContinuationPlanner(),
 )

@@ -10,7 +10,7 @@ import pytest
 from cf_stub_gates import CONFIG_MODE_ENV, STATUS_POINTER_ENV, GateMode
 
 from amoeba.process import RunOutcome
-from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK, PARAM_TARGET
+from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
@@ -193,15 +193,15 @@ def test_a_launch_entry_records_what_the_check_found(rig: DispatchRig) -> None:
     }
 
 
-def test_a_p6_entry_records_main_as_its_target(rig: DispatchRig) -> None:
+def test_a_launch_records_main_as_its_target(rig: DispatchRig) -> None:
     node = _step(rig, LifecycleStep.IMPLEMENTATION)
 
     rig.tick()
 
-    assert _launched(rig, node).parameters[PARAM_TARGET] == "main"
+    assert _evidence(_launched(rig, node))["target"] == "main"
 
 
-def test_a_p6_entry_records_the_integration_branch_when_one_is_set(
+def test_a_launch_records_the_integration_branch_when_one_is_set(
     rig: DispatchRig, tmp_path: Path
 ) -> None:
     node = _step(rig, LifecycleStep.IMPLEMENTATION)
@@ -211,15 +211,7 @@ def test_a_p6_entry_records_the_integration_branch_when_one_is_set(
 
     rig.tick()
 
-    assert _launched(rig, node).parameters[PARAM_TARGET] == "dev/erik"
-
-
-def test_a_planning_entry_records_no_target(rig: DispatchRig) -> None:
-    node = _step(rig, LifecycleStep.SLICE_DESIGN)
-
-    rig.tick()
-
-    assert PARAM_TARGET not in _launched(rig, node).parameters
+    assert _evidence(_launched(rig, node))["target"] == "dev/erik"
 
 
 # -- a failed read -------------------------------------------------------------

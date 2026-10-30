@@ -36,16 +36,12 @@ from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.dispatch.params import (
     PARAM_DISPATCH_CHECK,
-    PARAM_MERGE_POLICY,
-    PARAM_TARGET,
     dispatch_params,
     pipeline_for,
 )
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
-from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.runner.project_config import MergePolicy
 from amoeba.runner.resolutions.vocabulary import (
     ResumeCause,
 )
@@ -107,7 +103,7 @@ def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action |
             return None
         if isinstance(check, Block):
             return BlockDispatch(node.id, check)
-        return _launch(node, facts, checkout, check, view.merge_policy)
+        return _launch(node, facts, checkout, check)
     raise ValueError(f"step {node.id} in state {facts.state} is not planned")
 
 
@@ -116,21 +112,16 @@ def _launch(
     facts: StepDispatchFacts,
     checkout: Checkout,
     check: Ok,
-    policy: MergePolicy,
 ) -> LaunchRun:
-    """The launch or reissue, with the evidence it was based on (D5, D8)."""
+    """The launch or reissue, with the evidence it was based on (D5)."""
     if facts.state is DispatchState.REISSUE:
         return _reissue(node, facts, check)
-    extra: dict[str, object] = {PARAM_DISPATCH_CHECK: dict(check.evidence)}
-    if facts.step is LifecycleStep.IMPLEMENTATION:
-        extra[PARAM_MERGE_POLICY] = policy.value
-        extra[PARAM_TARGET] = check.evidence["target"]
     return LaunchRun(
         node.id,
         pipeline_for(facts.step),
-        dispatch_params(facts.step, facts.slice_index, policy),
+        dispatch_params(facts.step, facts.slice_index),
         checkout.path,
-        journal_extra=extra,
+        journal_extra={PARAM_DISPATCH_CHECK: dict(check.evidence)},
     )
 
 
@@ -172,18 +163,8 @@ def _reissue(node: Node, facts: StepDispatchFacts, check: Ok) -> LaunchRun:
         Path(text_parameter(old, PARAM_CHECKOUT)),
         run_id=text_parameter(old, PARAM_RUN_ID),
         reissue_of=old.id,
-        journal_extra=_reissue_extra(old, check),
+        journal_extra={PARAM_DISPATCH_CHECK: dict(check.evidence)},
     )
-
-
-def _reissue_extra(old: JournalEntry, check: Ok) -> Mapping[str, object]:
-    """A run keeps the policy and target it was first launched under (D8)."""
-    kept = {
-        key: old.parameters[key]
-        for key in (PARAM_MERGE_POLICY, PARAM_TARGET)
-        if key in old.parameters
-    }
-    return {**kept, PARAM_DISPATCH_CHECK: dict(check.evidence)}
 
 
 def _params(entry: JournalEntry) -> Mapping[str, str]:

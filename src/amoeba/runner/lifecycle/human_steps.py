@@ -25,13 +25,8 @@ from amoeba.runner.faults import (
     PAYLOAD_INDEX,
     PAYLOAD_STEP,
 )
-from amoeba.runner.gates.merge_observation import NotMerged, Unobservable
 from amoeba.runner.lifecycle.steps import STEP_MAP, Executor, LifecycleStep
 from amoeba.store import BlockedKind, Store
-
-#: Block payload keys for a merge step that cannot be observed (slice 128, D9).
-PAYLOAD_MERGE_OBSERVATION = "merge_observation"
-PAYLOAD_REASON = "reason"
 
 
 class HumanStepPlanner:
@@ -47,33 +42,8 @@ class HumanStepPlanner:
             step = view.tree.step_of(node)
             if step is None or STEP_MAP[step].executor is not Executor.HUMAN:
                 continue
-            if step is LifecycleStep.MERGE:
-                action = _merge_action(node.id, view)
-                if action is not None:
-                    actions.append(action)
-                continue
             actions.append(BlockHumanStep(node.id))
         return actions
-
-
-def _merge_action(node_id: str, view: ProjectView) -> BlockHumanStep | None:
-    """A merge step waits on a person only while git shows it is not merged (D9).
-
-    No observation this tick (a read failed or was cut off) blocks nothing: it would
-    otherwise block a step that ``auto`` already merged.
-    """
-    observation = view.merge_observations.get(node_id)
-    if isinstance(observation, NotMerged):
-        return BlockHumanStep(node_id)
-    if isinstance(observation, Unobservable):
-        return BlockHumanStep(
-            node_id,
-            {
-                PAYLOAD_MERGE_OBSERVATION: "unobservable",
-                PAYLOAD_REASON: observation.reason,
-            },
-        )
-    return None
 
 
 def block_human_step(store: Store, action: BlockHumanStep) -> None:

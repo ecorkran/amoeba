@@ -301,9 +301,11 @@ Note (20261029): the slice predecessor is new public code in `predecessors.py` (
 ### Task 9.4: Take human steps and the merge observation off the tick
 **Owner**: Junior AI | **Dependencies**: 9.2 | **Effort**: 2
 
-- [ ] `factory.py` and `tick.py`: remove `HumanStepPlanner` and the merge observation (`GateStage.observe_merges`); `ProjectView` loses `merge_policy` and `merge_observations`. The modules stay on disk, unused, until Section 10
-- [ ] Delete `tests/runner/test_tick_human_steps.py` and `tests/runner/gates/test_tick_merge.py`; rewrite any other tick test that asserted a human-step block or a merge completion
-- [ ] **Success:** full suite green. Commit `refactor: stop planning human steps and observing merges`
+- [x] `factory.py` and `tick.py`: remove `HumanStepPlanner` and the merge observation (`GateStage.observe_merges`); `ProjectView` loses `merge_policy` and `merge_observations`. The modules stay on disk, unused, until Section 10
+- [x] Delete `tests/runner/test_tick_human_steps.py` and `tests/runner/gates/test_tick_merge.py`; rewrite any other tick test that asserted a human-step block or a merge completion
+- [x] **Success:** full suite green. Commit `refactor: stop planning human steps and observing merges`
+
+Note (20261030): beyond the task text, a launch no longer carries `merge=false`, `merge_policy` or `target` (D2: whether a pipeline merges is the pipeline's business), so `dispatch_params(step, index)` returns only the slice and `PARAM_MERGE`, `MERGE_DISABLED` and `PARAM_TARGET` are gone; `PARAM_MERGE_POLICY` stays only for the unused `gates/merge.py` (Task 10.2b). `human_steps.py` stays on disk with its merge branch removed (it could not compile without `merge_observations`); `BlockHumanStep` and `block_human_step` stay until 10.4. `tests/runner/gates/test_tick_merge.py` was already deleted in Task 6.2.
 
 ### Task 9.5: Dispatch slice nodes with the configured pipeline
 **Owner**: Junior AI | **Dependencies**: 2.1, 8.1b, 8.2, 9.3, 9.4 | **Effort**: 2

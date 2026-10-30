@@ -16,7 +16,6 @@ from amoeba.runner.ingest.record import RESULT_OUTCOME
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.lifecycle.steps import LifecycleStep, step_rank
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -125,7 +124,6 @@ def view_of(
     held: Iterable[Path] = (),
     current: Iterable[str] | None = None,
     holders: Mapping[Path, frozenset[str]] | None = None,
-    merge_policy: MergePolicy = PROJECT_DEFAULTS.merge_policy,
     checks: Mapping[str, DispatchCheck] | None = None,
 ) -> ProjectView:
     """A view whose current steps are ``current`` (default: all of ``steps``).
@@ -142,6 +140,5 @@ def view_of(
         current_steps=tuple(node(name) for name in names),
         dispatch=steps,
         checkout_holders=named,
-        merge_policy=merge_policy,
         dispatch_checks={name: OK for name in names} if checks is None else checks,
     )

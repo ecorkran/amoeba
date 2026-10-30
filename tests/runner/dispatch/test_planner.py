@@ -16,18 +16,13 @@ from amoeba.runner.decide import (
 )
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved
 from amoeba.runner.dispatch.params import (
-    MERGE_DISABLED,
     PARAM_DISPATCH_CHECK,
-    PARAM_MERGE,
-    PARAM_MERGE_POLICY,
-    PARAM_TARGET,
 )
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.runner.project_config import MergePolicy
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import (
@@ -71,49 +66,22 @@ def test_a_ready_step_launches_its_pipeline() -> None:
         (LifecycleStep.IMPLEMENTATION, "P6"),
     ],
 )
-def test_each_step_launches_its_pipeline_and_p6_never_merges(
+def test_each_step_launches_its_pipeline_with_only_the_slice(
     step: LifecycleStep, pipeline: str
 ) -> None:
-    view = view_of(
-        {"a": facts(DispatchState.READY, step=step)},
-        merge_policy=MergePolicy.HUMAN,
-    )
+    view = view_of({"a": facts(DispatchState.READY, step=step, slice_index=125)})
 
     [action] = PLANNER.plan(view)
 
     assert isinstance(action, LaunchRun) and action.pipeline == pipeline
-    has_merge = PARAM_MERGE in action.params
-    assert has_merge is (step is LifecycleStep.IMPLEMENTATION)
-    if has_merge:
-        assert action.params[PARAM_MERGE] == MERGE_DISABLED
+    assert action.params == {"slice": "125"}
 
 
-def test_p6_records_the_policy_it_launches_under_and_merges_only_under_auto() -> None:
-    human = view_of(
-        {"a": facts(DispatchState.READY, step=LifecycleStep.IMPLEMENTATION)},
-        merge_policy=MergePolicy.HUMAN,
-    )
-    auto = view_of(
-        {"a": facts(DispatchState.READY, step=LifecycleStep.IMPLEMENTATION)},
-        merge_policy=MergePolicy.AUTO,
-    )
-
-    [under_human] = PLANNER.plan(human)
-    [under_auto] = PLANNER.plan(auto)
-
-    assert isinstance(under_human, LaunchRun) and isinstance(under_auto, LaunchRun)
-    assert under_human.params[PARAM_MERGE] == MERGE_DISABLED
-    assert under_human.journal_extra == {
-        PARAM_MERGE_POLICY: "human",
-        PARAM_TARGET: "main",
-        PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE),
-    }
-    assert PARAM_MERGE not in under_auto.params
-    assert under_auto.journal_extra[PARAM_MERGE_POLICY] == "auto"
-
-
-@pytest.mark.parametrize("step", [LifecycleStep.SLICE_DESIGN, LifecycleStep.TASKS])
-def test_a_planning_launch_records_no_merge_policy(step: LifecycleStep) -> None:
+@pytest.mark.parametrize(
+    "step",
+    [LifecycleStep.SLICE_DESIGN, LifecycleStep.TASKS, LifecycleStep.IMPLEMENTATION],
+)
+def test_a_launch_records_only_the_check(step: LifecycleStep) -> None:
     view = view_of({"a": facts(DispatchState.READY, step=step)})
 
     [action] = PLANNER.plan(view)
@@ -155,13 +123,12 @@ def test_a_reissue_keeps_the_policy_of_the_attempt_it_repeats() -> None:
         resolved_by=JournalResolver.RECOVERY,
         run_id="run-old",
     )
-    old = replace(first, parameters={**first.parameters, PARAM_MERGE_POLICY: "auto"})
-    view = view_of({"a": facts(DispatchState.REISSUE, reissue_of=old)})
+    view = view_of({"a": facts(DispatchState.REISSUE, reissue_of=first)})
 
     [action] = PLANNER.plan(view)
 
     assert isinstance(action, LaunchRun)
-    assert action.journal_extra[PARAM_MERGE_POLICY] == "auto", "not this view's human"
+    assert action.run_id == "run-old" and action.reissue_of == first.id
 
 
 def test_a_reissue_without_its_old_entry_is_refused() -> None:
@@ -295,21 +262,7 @@ def test_a_blocked_check_gives_block_dispatch_and_no_launch(
     assert PLANNER.plan(view) == [BlockDispatch("a", block)]
 
 
-def test_a_p6_launch_records_the_target_the_check_read() -> None:
-    evidence = {**OK_EVIDENCE, "target": "dev/erik"}
-    view = view_of(
-        {"a": facts(DispatchState.READY, step=LifecycleStep.IMPLEMENTATION)},
-        checks={"a": Ok(evidence)},
-    )
-
-    [action] = PLANNER.plan(view)
-
-    assert isinstance(action, LaunchRun)
-    assert action.journal_extra[PARAM_TARGET] == "dev/erik"
-    assert action.journal_extra[PARAM_DISPATCH_CHECK] == evidence
-
-
-def test_a_reissue_keeps_the_old_target_and_records_this_ticks_check() -> None:
+def test_a_reissue_records_this_ticks_check() -> None:
     first = entry(
         CommandKind.SQ_RUN,
         "a",
@@ -317,19 +270,16 @@ def test_a_reissue_keeps_the_old_target_and_records_this_ticks_check() -> None:
         JournalOutcome.NOT_APPLIED,
         resolved_by=JournalResolver.RECOVERY,
     )
-    old = replace(first, parameters={**first.parameters, PARAM_TARGET: "dev/old"})
     evidence = {**OK_EVIDENCE, "head": "newer"}
     view = view_of(
-        {"a": facts(DispatchState.REISSUE, reissue_of=old)}, checks={"a": Ok(evidence)}
+        {"a": facts(DispatchState.REISSUE, reissue_of=first)},
+        checks={"a": Ok(evidence)},
     )
 
     [action] = PLANNER.plan(view)
 
     assert isinstance(action, LaunchRun)
-    assert action.journal_extra == {
-        PARAM_TARGET: "dev/old",
-        PARAM_DISPATCH_CHECK: evidence,
-    }
+    assert action.journal_extra == {PARAM_DISPATCH_CHECK: evidence}
 
 
 # -- automatic resume (slice 132, D5) -------------------------------------------

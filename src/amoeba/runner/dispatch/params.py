@@ -1,14 +1,12 @@
 """The pipeline and parameters a step is launched with (D5), defined once.
 
-The pipeline comes from ``STEP_MAP``. Every pipeline step gets the slice index. The
-implementation step (``P6``) declares ``merge: "true"``, so its ``merge`` parameter
-follows the project's merge policy (slice 128, D8): under ``human`` it gets
-``merge=false`` ("merging is a human step by default"), under ``auto`` it gets none
-and ``P6`` merges. Other parameters (models, revision limits) are not passed:
-Squadron's pipeline defaults apply.
+The pipeline comes from ``STEP_MAP``. Every pipeline step gets the slice index and
+nothing else: whether a pipeline merges is the pipeline's own business (slice 132, D2).
+Other parameters (models, revision limits) are not passed: Squadron's pipeline
+defaults apply.
 
-The journal keys that record the policy, the target branch and the pre-dispatch check
-on a launch's entry are defined here too; they are evidence, not ``-p`` parameters.
+The journal key that records the pre-dispatch check on a launch's entry is defined
+here too; it is evidence, not a ``-p`` parameter.
 """
 
 from __future__ import annotations
@@ -22,17 +20,14 @@ from amoeba.runner.lifecycle.steps import (
     Executor,
     LifecycleStep,
 )
-from amoeba.runner.project_config import MergePolicy
 
-#: The parameter keys and the one value ``merge`` takes when disabled. ``slice`` is
-#: the pipeline's primary parameter, which ``build_argv`` passes as the target.
+#: ``slice`` is the pipeline's primary parameter, which ``build_argv`` passes as the
+#: target.
 PARAM_SLICE: Final = TARGET_PARAM_KEY
-PARAM_MERGE: Final = "merge"
-MERGE_DISABLED: Final = "false"
 
-#: Journal parameter keys a launch's entry records beside its ``-p`` params (D8, D5).
+#: The journal parameter key a launch's entry records beside its ``-p`` params (D5).
+#: ``PARAM_MERGE_POLICY`` is read only by the unused merge module (Task 10.2b).
 PARAM_MERGE_POLICY: Final = "merge_policy"
-PARAM_TARGET: Final = "target"
 PARAM_DISPATCH_CHECK: Final = "dispatch_check"
 
 
@@ -48,16 +43,11 @@ def pipeline_for(step: LifecycleStep) -> str:
     return spec.pipeline
 
 
-def dispatch_params(
-    step: LifecycleStep, slice_index: int, merge_policy: MergePolicy
-) -> Mapping[str, str]:
+def dispatch_params(step: LifecycleStep, slice_index: int) -> Mapping[str, str]:
     """The ``-p`` parameters for launching ``step``'s pipeline on a slice.
 
     Raises:
         ValueError: ``step`` is a human step.
     """
     pipeline_for(step)
-    params = {PARAM_SLICE: str(slice_index)}
-    if step is LifecycleStep.IMPLEMENTATION and merge_policy is MergePolicy.HUMAN:
-        params[PARAM_MERGE] = MERGE_DISABLED
-    return params
+    return {PARAM_SLICE: str(slice_index)}

@@ -141,18 +141,11 @@ class ProjectTick:
             raise UpstreamShapeError(shape_error)
         if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
-        # Reads, and the completion write of a merge git shows done; before the view.
-        merges = self._gates.observe_merges(desired, budget, faults)
-        self.wrote = merges.wrote or self.wrote
         view = self._build_view(runs.pending, self._probes.results(links), desired)
         # Reads only, so a cut-off just defers them: a candidate with no result
         # cannot launch this tick (D5).
         dispatch = self._gates.check_dispatch(view, budget, faults)
-        view = replace(
-            view,
-            dispatch_checks=dispatch.checks,
-            merge_observations=merges.observations,
-        )
+        view = replace(view, dispatch_checks=dispatch.checks)
         decided = self._decide(view)
         acted = self._act.run(decided, budget, faults)
         self.wrote = acted.wrote or self.wrote
@@ -161,7 +154,7 @@ class ProjectTick:
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )
-        if acted.result is TickResult.CUT_OFF or dispatch.cut_off or merges.cut_off:
+        if acted.result is TickResult.CUT_OFF or dispatch.cut_off:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE
@@ -235,7 +228,6 @@ class ProjectTick:
             link_probes,
             desired,
             dispatching=self._dispatching,
-            merge_policy=self._project_settings.merge_policy,
         )
         self.wrote = built.wrote or self.wrote
         return built.view

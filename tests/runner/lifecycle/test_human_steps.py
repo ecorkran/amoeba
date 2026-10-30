@@ -3,18 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
 from amoeba.runner.decide import BlockHumanStep, ProjectView, decide
-from amoeba.runner.gates.merge_observation import (
-    Merged,
-    MergeObservation,
-    NotMerged,
-    Unobservable,
-)
 from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import DesiredState
@@ -59,64 +52,6 @@ def test_a_pipeline_step_gets_none(builder: TreeBuilder) -> None:
     builder.slice(initiative, 101)
 
     assert _plan(builder) == [], "slice_design is ready, but it is a pipeline step"
-
-
-def _ready_merge(builder: TreeBuilder) -> str:
-    """The id of a merge step that is current: its implementation is done."""
-    initiative = builder.initiative(100)
-    builder.done(builder.step_node(initiative, LifecycleStep.ARCHITECTURE))
-    builder.done(builder.step_node(initiative, LifecycleStep.SLICE_PLAN))
-    slice_node = builder.slice(initiative, 101)
-    for step in (
-        LifecycleStep.SLICE_DESIGN,
-        LifecycleStep.TASKS,
-        LifecycleStep.IMPLEMENTATION,
-    ):
-        builder.done(builder.step_node(slice_node, step))
-    return builder.step_node(slice_node, LifecycleStep.MERGE).id
-
-
-def _merge_plan(
-    builder: TreeBuilder, observations: dict[str, MergeObservation]
-) -> list[BlockHumanStep]:
-    view = replace(view_for(builder.tree(), DRIVEN), merge_observations=observations)
-    return [a for a in HumanStepPlanner().plan(view) if isinstance(a, BlockHumanStep)]
-
-
-def test_merge_is_blocked_while_git_shows_it_is_not_merged(
-    builder: TreeBuilder,
-) -> None:
-    merge_id = _ready_merge(builder)
-
-    assert _merge_plan(builder, {merge_id: NotMerged()}) == [BlockHumanStep(merge_id)]
-
-
-def test_an_unobservable_merge_is_blocked_with_the_reason(
-    builder: TreeBuilder,
-) -> None:
-    merge_id = _ready_merge(builder)
-
-    [action] = _merge_plan(builder, {merge_id: Unobservable("ended on the target")})
-
-    assert action.node_id == merge_id
-    assert action.payload_extra == {
-        "merge_observation": "unobservable",
-        "reason": "ended on the target",
-    }
-
-
-def test_a_merge_with_no_observation_this_tick_is_skipped(
-    builder: TreeBuilder,
-) -> None:
-    _ready_merge(builder)
-
-    assert _merge_plan(builder, {}) == []
-
-
-def test_a_merge_git_shows_done_is_not_blocked(builder: TreeBuilder) -> None:
-    merge_id = _ready_merge(builder)
-
-    assert _merge_plan(builder, {merge_id: Merged("abc")}) == []
 
 
 def test_a_step_under_an_orphan_or_already_blocked_gets_no_action(

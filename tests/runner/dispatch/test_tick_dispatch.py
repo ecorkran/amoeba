@@ -1,4 +1,4 @@
-"""Dispatch at tick level: a step is pointed on one tick, launched on the next."""
+"""Dispatch at tick level: a driven step launches on the first tick."""
 
 from __future__ import annotations
 
@@ -8,15 +8,11 @@ from pathlib import Path
 import pytest
 
 from amoeba.runner.dispatch.params import (
-    MERGE_DISABLED,
-    PARAM_MERGE,
-    PARAM_MERGE_POLICY,
     PARAM_SLICE,
 )
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.launch import PARAM_PARAMS
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.runner.project_config import MergePolicy, ProjectSettings
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -50,53 +46,17 @@ def test_driven_slice_design_launches_p4_on_the_first_tick(rig: DispatchRig) -> 
     assert rig.popen.cwds == [str(rig.world.root)]
 
 
-def test_implementation_carries_merge_false_under_the_human_policy(
-    rig: DispatchRig,
-) -> None:
-    rig.tick_rig.project_settings = ProjectSettings(merge_policy=MergePolicy.HUMAN)
-    rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
+def test_implementation_launches_p6_with_only_the_slice(rig: DispatchRig) -> None:
+    node = rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
 
     rig.tick()
 
+    [run] = rig.entries(CommandKind.SQ_RUN, node)
+    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125"}
     [argv] = rig.popen.argvs
     assert "P6" in argv
-    assert f"{PARAM_MERGE}={MERGE_DISABLED}" in argv
-
-
-def test_with_no_config_the_p6_entry_records_the_auto_policy(
-    rig: DispatchRig,
-) -> None:
-    node = rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
-
-    rig.tick()
-
-    [run] = rig.entries(CommandKind.SQ_RUN, node)
-    assert run.parameters[PARAM_MERGE_POLICY] == "auto"
-    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125"}
-
-
-def test_under_the_auto_policy_p6_runs_without_merge_false_and_records_auto(
-    rig: DispatchRig,
-) -> None:
-    rig.tick_rig.project_settings = ProjectSettings(merge_policy=MergePolicy.AUTO)
-    node = rig.step("build-it", 125, LifecycleStep.IMPLEMENTATION)
-
-    rig.tick()
-
-    [run] = rig.entries(CommandKind.SQ_RUN, node)
-    assert run.parameters[PARAM_MERGE_POLICY] == "auto"
-    assert run.parameters[PARAM_PARAMS] == {PARAM_SLICE: "125"}
-    [argv] = rig.popen.argvs
-    assert not any(arg.startswith(f"{PARAM_MERGE}=") for arg in argv)
-
-
-def test_a_planning_launch_records_no_merge_policy(rig: DispatchRig) -> None:
-    node = rig.step("run-dispatch", 125)
-
-    rig.tick()
-
-    [run] = rig.entries(CommandKind.SQ_RUN, node)
-    assert PARAM_MERGE_POLICY not in run.parameters
+    assert not any(arg.startswith("merge") for arg in argv)
+    assert "merge_policy" not in run.parameters and "target" not in run.parameters
 
 
 def test_a_project_that_is_not_driven_launches_nothing(rig: DispatchRig) -> None:
