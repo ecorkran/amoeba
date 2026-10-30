@@ -348,45 +348,51 @@ Note (20261030): the tick raises `pipeline_unconfigured` after the view is built
 ### Task 10.1: Delete routing
 **Owner**: Junior AI | **Dependencies**: 9.6, 9.7 | **Effort**: 2
 
-- [ ] Delete `runner/routing/` (with `tables/default.yaml`), `inspection/routing.py` and the `routing-decisions` listing in `inspection/__init__.py`; `--routing-table` and `routing_table_path`; the table load in `factory.py` and `cli/lifecycle.py`; `tests/runner/routing/`, `tests/routing_helpers.py` and the package-data entry (Task-level additions)
-- [ ] **Success:** full suite green; `amoeba start --routing-table x` fails as an unknown flag. Commit `refactor: delete the routing engine`
+- [x] Delete `runner/routing/` (with `tables/default.yaml`), `inspection/routing.py` and the `routing-decisions` listing in `inspection/__init__.py`; `--routing-table` and `routing_table_path`; the table load in `factory.py` and `cli/lifecycle.py`; `tests/runner/routing/`, `tests/routing_helpers.py` and the package-data entry (Task-level additions). Note: `tests/routing_helpers.py` was kept because surviving store tests (`tests/store/test_routing_*.py`, `test_messages`, `test_desired_state`, etc.) import it; it depends only on `amoeba.store`. The Rule 10 import-boundary exemption for `inspection` was also removed.
+- [x] **Success:** full suite green; `amoeba start --routing-table x` fails as an unknown flag. Commit `refactor: delete the routing engine`
 
 ### Task 10.2: Move the surviving gate modules to `dispatch/`
 **Owner**: Junior AI | **Dependencies**: 10.1 | **Effort**: 2
 
-- [ ] Move the survivors to `runner/dispatch/` per Task-level additions and update imports. The dead gate modules stay where they are, unused, until Task 10.2b
-- [ ] Move the survivors' tests to `tests/runner/dispatch/`, and `tests/runner/gates/purity.py` to `tests/runner/purity.py`; fix its importers (`test_predispatch.py`, `test_supervise.py`, and `test_hatches.py` until 10.2b deletes it)
-- [ ] **Success:** full suite green; only moves and import changes in the diff. Commit `refactor: move the surviving gate modules to dispatch`
+- [x] Move the survivors to `runner/dispatch/` per Task-level additions and update imports. The dead gate modules stay where they are, unused, until Task 10.2b. Note (20261030): the survivors landed as `dispatch/checkout_check.py`, `candidates.py`, `checkout_reads.py` (plus `read_config`, `read_target`, `ReadFailure`, `DEFAULT_TARGET_BRANCH`, rewritten compactly from `cf_reads`) and `check_stage.py` (class `CheckStage`, takes only `context`, `cf_run`, `call_timeout_seconds`; the outcome half was dropped)
+- [x] Move the survivors' tests to `tests/runner/dispatch/`, and `tests/runner/gates/purity.py` to `tests/runner/purity.py`; fix its importers (`test_predispatch.py`, `test_supervise.py`, and `test_hatches.py` until 10.2b deletes it). Note (20261030): tests moved to `tests/runner/dispatch/` as `test_checkout_check`, `test_checkout_reads`, `test_check_stage`, and `test_checkout_target` (split from `test_cf_reads`); the purity helper is now `tests/runner/purity.py`
+- [x] **Success:** full suite green; only moves and import changes in the diff. Commit `refactor: move the surviving gate modules to dispatch`
 
 ### Task 10.2b: Delete the CF gate, hatch and merge modules
 **Owner**: Junior AI | **Dependencies**: 10.2 | **Effort**: 2
 
-- [ ] Delete `gates/cf_status.py`, `hatches.py`, `checks.py`, `accepted.py`, `outcome.py`, `outcome_record.py`, `merge.py`, `merge_observation.py`, and `read_gate` from `cf_reads.py`; delete `gates/` and the gate tests whose modules went
-- [ ] Remove the gate modes from `tests/cf_stub_gates.py` (keep `config get`) and the gate helpers from `tests/runner/gate_rig.py`
-- [ ] Confirm `tests/runner/test_supervise.py` still runs its purity test
-- [ ] **Success:** full suite green. Commit `refactor: delete CF gate reads, hatches and merge observation`
+- [x] Delete `gates/cf_status.py`, `hatches.py`, `checks.py`, `accepted.py`, `outcome.py`, `outcome_record.py`, `merge.py`, `merge_observation.py`, and `read_gate` from `cf_reads.py`; delete `gates/` and the gate tests whose modules went. Note (20261030): `cf_reads.py` was deleted wholesale (its surviving parts moved to `checkout_reads.py` in 10.2), and `tests/load/test_gate_reads_load.py` was deleted
+- [x] Remove the gate modes from `tests/cf_stub_gates.py` (keep `config get`) and the gate helpers from `tests/runner/gate_rig.py`. Note (20261030): `gate_rig.py` now holds only `rig_checkout`, `git_checkout` and `config_knobs`; `cf_stub_gates.py` keeps only `config get` and `STATE_ENV`; the `clear_gates` calls were removed from three tick tests
+- [x] Confirm `tests/runner/test_supervise.py` still runs its purity test. Note (20261030): confirmed running
+- [x] **Success:** full suite green. Commit `refactor: delete CF gate reads, hatches and merge observation`
 
 ### Task 10.3: Delete the pointer modules
 **Owner**: Junior AI | **Dependencies**: 10.2b | **Effort**: 1
 
-- [ ] (Modules and their tests deleted in Task 9.2; still to do: `tests/test_cf_stub_pointer.py`, the stub's pointer-write code, and `pointer_support.py`'s leftover names are kept because `CfWorld` and the budget helpers live there.) Delete `dispatch/pointer.py`, `pointer_apply.py`, `pointer_watch.py`, `observe_pointer.py`, their tests, `tests/runner/dispatch/pointer_support.py`, `tests/test_cf_stub_pointer.py` and the stub's pointer-write code
-- [ ] **Success:** full suite green. Commit `refactor: delete the pointer modules`
+- [x] (Modules and their tests deleted in Task 9.2; still to do: `tests/test_cf_stub_pointer.py`, the stub's pointer-write code, and `pointer_support.py`'s leftover names are kept because `CfWorld` and the budget helpers live there.) Delete `dispatch/pointer.py`, `pointer_apply.py`, `pointer_watch.py`, `observe_pointer.py`, their tests, `tests/runner/dispatch/pointer_support.py`, `tests/test_cf_stub_pointer.py` and the stub's pointer-write code
+- [x] **Success:** full suite green (3677 passed), ruff and pyright clean. Commit `refactor: delete the pointer modules`
+
+Note (20261030): `tests/runner/dispatch/pointer_support.py` was renamed `cf_world.py` rather than deleted; it holds `CfWorld` and the budget helpers and no pointer logic. The stub's `set`/`get` pointer commands, its state file, `STATE_ENV` and `write_cf_state` are gone. The unused status fixtures (`tests/fixtures/cf/status/` and `cf_get_worktree.json`) are deleted.
 
 ### Task 10.4: Delete the step map, human steps and merge policy
 **Owner**: Junior AI | **Dependencies**: 10.3 | **Effort**: 2
 
-- [ ] Delete `lifecycle/steps.py`, `human_steps.py`, the step rules in `completion.py`, `predecessors.py` and `tree.py`, and `BlockHumanStep`
-- [ ] `project_config.py`: remove `MergePolicy`, `merge_policy`, `PROJECT_DEFAULTS.merge_policy`; an entry with any key beside `pipeline` and `params` fails load (D2). Remove `PARAM_MERGE_POLICY` and `PARAM_TARGET`
-- [ ] Delete `tests/runner/lifecycle/test_steps.py`, `test_human_steps.py`; update `test_project_config.py` (a `merge_policy` key is refused)
-- [ ] **Success:** full suite green. Commit `refactor: delete the step map, human steps and merge policy`
+- [x] Delete `lifecycle/steps.py`, `human_steps.py`, the step rules in `completion.py`, `predecessors.py` and `tree.py`, and `BlockHumanStep`
+- [x] `project_config.py`: remove `MergePolicy`, `merge_policy`, `PROJECT_DEFAULTS.merge_policy`; an entry with any key beside `pipeline` and `params` fails load (D2). Remove `PARAM_MERGE_POLICY` and `PARAM_TARGET`
+- [x] Delete `tests/runner/lifecycle/test_steps.py`, `test_human_steps.py`; update `test_project_config.py` (a `merge_policy` key is refused)
+- [x] **Success:** full suite green (3677 passed), ruff and pyright clean. Commit `refactor: delete the step map, human steps and merge policy`
+
+Note (20261030): `PARAM_TARGET` was already gone before this task. `lifecycle/predecessors.py` keeps only the slice-level rules (Task 9.3). `tree.py` lost `step_of` and `ready_steps`, and `is_linked` now needs each node's own CF index. `read_checks.py` now holds `PlanObservation`, moved from its old home. `TreeBuilder` lost its step helpers and gained `phase_node`. The tests `test_steps`, `test_ready_steps` and `test_predecessors` are deleted. A `merge_policy` key now fails config load through `extra=forbid`.
 
 ### Task 10.5: Delete the unused fault kinds and pin the boundaries
 **Owner**: Junior AI | **Dependencies**: 10.4 | **Effort**: 1
 
-- [ ] `faults.py`: remove `pointer_write_failed`, `pointer_moved`, `run_overrun`, `cf_gate_blocks`, `pending_decision` (D11)
-- [ ] `tests/test_import_boundaries.py`: a grep test that no module under `src/amoeba/runner/` imports `routing`, `gates`, or `dispatch.pointer*`, and that those paths do not exist. The create-node guard test still passes
-- [ ] Confirm `ProjectView`, `decide.Action`, `tick.py` and `factory.py` hold no field, argument or comment naming a removed concept (`grep -rnw "pointer\|routing\|merge_policy\|gate\|gates" src/amoeba/runner`; each remaining hit is justified or removed)
-- [ ] **Success:** full suite green. Commit `refactor: delete unused fault kinds and pin the runner's boundaries`
+- [x] `faults.py`: remove `pointer_write_failed`, `pointer_moved`, `run_overrun`, `cf_gate_blocks`, `pending_decision` (D11)
+- [x] `tests/test_import_boundaries.py`: a grep test that no module under `src/amoeba/runner/` imports `routing`, `gates`, or `dispatch.pointer*`, and that those paths do not exist. The create-node guard test still passes
+- [x] Confirm `ProjectView`, `decide.Action`, `tick.py` and `factory.py` hold no field, argument or comment naming a removed concept (`grep -rnw "pointer\|routing\|merge_policy\|gate\|gates" src/amoeba/runner`; each remaining hit is justified or removed)
+- [x] **Success:** full suite green (3677 passed), ruff and pyright clean. Commit `refactor: delete unused fault kinds and pin the runner's boundaries`
+
+Note (20261030): five fault kinds are removed (`pointer_write_failed`, `pointer_moved`, `run_overrun`, `cf_gate_blocks`, `pending_decision`), and the duplicate `PAYLOAD_STEP` goes with them. `tests/test_import_boundaries.py` gained Rule 12: the removed paths do not exist and nothing imports them. The grep sweep leaves one justified hit, a docstring in `dispatch/checkout_reads.py` saying CF's gate is not read. Stale comments are fixed in `project_view`, `factory`, `supervise`, `reissue`, `record`, `references` and `cadence`.
 
 ---
 
