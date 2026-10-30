@@ -8,8 +8,12 @@ a transient failure kind.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import datetime
 from enum import StrEnum
 from typing import Final
+
+from pydantic import ValidationError
 
 from amoeba.process import (
     CheckpointKind,
@@ -20,6 +24,12 @@ from amoeba.process import (
     parse_failure_kind,
 )
 from amoeba.runner.observed import Finished, RunEnded
+from amoeba.runner.resolutions.vocabulary import PARAM_RESUME_CAUSE, ResumeCause
+from amoeba.store import JournalEntry
+
+#: The key of a resolved ``sq_run`` entry's result that holds the outcome document it
+#: was resolved with: the supervisor's record of where the run stopped (D4).
+RESULT_OUTCOME_DOCUMENT: Final = "outcome_document"
 
 #: The ``reason`` a block payload carries (D4). ``agent_question`` is 140's input.
 REASON_AGENT_QUESTION: Final = "agent_question"
@@ -90,3 +100,78 @@ def _classify_pause(document: RunOutcomeDocument) -> OutcomeClass:
     if kind is CheckpointKind.USAGE_LIMIT and checkpoint and checkpoint.resets_at:
         return OutcomeClass.TRANSIENT
     return OutcomeClass.BLOCKED
+
+
+def step_of(document: RunOutcomeDocument) -> str | None:
+    """The pipeline step a run stopped at: the checkpoint's, else the failure's."""
+    if document.checkpoint and document.checkpoint.step:
+        return document.checkpoint.step
+    if document.failure and document.failure.step:
+        return document.failure.step
+    return None
+
+
+def recorded_document(entry: JournalEntry) -> RunOutcomeDocument | None:
+    """The outcome document a resolved entry holds, or ``None`` if it holds none.
+
+    A missing or unparsable document is unknown, never an error.
+    """
+    raw = None if entry.result is None else entry.result.get(RESULT_OUTCOME_DOCUMENT)
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return RunOutcomeDocument.model_validate(raw)
+    except ValidationError:
+        # A stored document that no longer fits the model is unknown, not a fault.
+        return None
+
+
+def resume_count(entries: Sequence[JournalEntry], step: str | None) -> int:
+    """How many automatic resumes of one run have already stopped at ``step`` (D5).
+
+    ``entries`` are the slice's ``sq_run`` entries, newest first, starting with the
+    entry whose outcome is being ingested. It counts the trailing entries that are
+    transient resumes of an outcome that stopped at ``step``; a fresh launch, a
+    resolution resume or a different step ends the count. A ``step`` of ``None``
+    (an orphaned run reports none) is the step the newest entry resumed from.
+    """
+    if step is None:
+        step = _stopped_step(entries, 1)
+    count = 0
+    for index, entry in enumerate(entries):
+        if entry.parameters.get(PARAM_RESUME_CAUSE) != ResumeCause.TRANSIENT:
+            break
+        if _stopped_step(entries, index + 1) != step:
+            break
+        count += 1
+    return count
+
+
+def _stopped_step(entries: Sequence[JournalEntry], index: int) -> str | None:
+    """The step the outcome of ``entries[index]`` stopped at.
+
+    An orphaned outcome reports no step and counts as the step of the entry before it.
+    """
+    while index < len(entries):
+        document = recorded_document(entries[index])
+        if document is None:
+            return None
+        step = step_of(document)
+        if step is not None or document.outcome is not RunOutcome.ORPHANED:
+            return step
+        index += 1
+    return None
+
+
+def resume_ready(document: RunOutcomeDocument, now: datetime) -> bool:
+    """Whether a resume may be issued now (D5, "When").
+
+    True for every ``TRANSIENT`` outcome except a ``usage_limit`` pause before its
+    ``resets_at``. Any other class is never resumed automatically.
+    """
+    if classify(RunEnded(document)) is not OutcomeClass.TRANSIENT:
+        return False
+    checkpoint = document.checkpoint
+    if document.outcome is RunOutcome.PAUSED and checkpoint and checkpoint.resets_at:
+        return now >= checkpoint.resets_at
+    return True

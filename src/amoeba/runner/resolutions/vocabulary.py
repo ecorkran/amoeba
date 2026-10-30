@@ -85,6 +85,17 @@ PAYLOAD_REJECTED_BLOCKED_STATE_ID: Final = "rejected_blocked_state_id"
 PAYLOAD_ALLOWED: Final = "allowed"
 PAYLOAD_STOPPED_BLOCKED_STATE_ID: Final = "stopped_blocked_state_id"
 
+#: Why a resume was issued, journaled on the resume entry (slice 132, D5 and D6).
+PARAM_RESUME_CAUSE: Final = "resume_cause"
+
+
+class ResumeCause(StrEnum):
+    """What caused a resume: the supervisor retrying, or a PM's resolution."""
+
+    TRANSIENT = "transient"
+    RESOLUTION = "resolution"
+
+
 #: A resume skipped because its run was no longer at the pause the PM resolved
 #: (D4). Journaled as a parameter of the observation entry.
 PARAM_RESUME_SKIPPED: Final = "resume_skipped"

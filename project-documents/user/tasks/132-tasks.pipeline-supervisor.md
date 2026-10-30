@@ -142,10 +142,10 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 5.2: Implement the resume bound
 **Owner**: Junior AI | **Dependencies**: 5.1 | **Effort**: 3
 
-- [ ] `supervise.py`: `step_of(document) -> str | None` (`checkpoint.step` or `failure.step`); `resume_count(entries, step) -> int` per D5 (Task-level additions). Count trailing `sq_run` entries with `resume_cause` `transient` whose resumed-from outcome stopped at `step`; an `orphaned` outcome with no step counts as the step of the entry before it; a fresh launch, a `resolution` resume or a different step ends the run of entries
-- [ ] `resume_ready(document, now) -> bool`: true for every `TRANSIENT` outcome except a `usage_limit` pause before its `resets_at` (D5 "When")
-- [ ] Tests (same file): count 0 for a fresh launch; 1, 2, 3 at one step; a different step restarts at 0; a `resolution` resume restarts at 0; an orphaned outcome inherits the step; `resume_ready` before, at and after `resets_at`
-- [ ] **Success:** tests pass and `supervise.py` is fully covered (`uv run pytest --cov=amoeba.runner.supervise`). Commit `feat: add the resume bound`
+- [x] `supervise.py`: `step_of(document) -> str | None` (`checkpoint.step` or `failure.step`); `resume_count(entries, step) -> int` per D5 (Task-level additions). Count trailing `sq_run` entries with `resume_cause` `transient` whose resumed-from outcome stopped at `step`; an `orphaned` outcome with no step counts as the step of the entry before it; a fresh launch, a `resolution` resume or a different step ends the run of entries
+- [x] `resume_ready(document, now) -> bool`: true for every `TRANSIENT` outcome except a `usage_limit` pause before its `resets_at` (D5 "When")
+- [x] Tests (same file): count 0 for a fresh launch; 1, 2, 3 at one step; a different step restarts at 0; a `resolution` resume restarts at 0; an orphaned outcome inherits the step; `resume_ready` before, at and after `resets_at`
+- [x] **Success:** tests pass and `supervise.py` is fully covered (`uv run pytest --cov=amoeba.runner.supervise`). Commit `feat: add the resume bound`
 
 ---
 
@@ -184,7 +184,7 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 7.1: Add the resume cause and reshape `ResumeRun`
 **Owner**: Junior AI | **Dependencies**: 6.3 | **Effort**: 2
 
-- [ ] `resolutions/vocabulary.py`: `ResumeCause` (`transient`, `resolution`) and `PARAM_RESUME_CAUSE = "resume_cause"` (Task-level additions)
+- [ ] `resolutions/vocabulary.py`: `ResumeCause` (`transient`, `resolution`) and `PARAM_RESUME_CAUSE = "resume_cause"` (Task-level additions) (already added in Task 5.2; verify only)
 - [ ] `decide.py`: `ResumeRun` gains `cause` and `instructions`; `resolution` becomes optional, required when `cause` is `resolution` (raise `ValueError` in `__post_init__` otherwise). `decision` stays until Task 8.1b
 - [ ] The act stage writes `resume_cause` into every resume entry's parameters, and `--instructions` only when `instructions` is set. Today's resolution resumes write `resume_cause: resolution`
 - [ ] Tests: `tests/runner/resolutions/test_act.py` and `test_argv.py` for both causes, with and without instructions

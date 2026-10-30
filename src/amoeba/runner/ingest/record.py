@@ -33,6 +33,7 @@ from amoeba.runner.ingest.reviews import (
     select_review_files,
 )
 from amoeba.runner.observed import RunEnded, RunVanished
+from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -52,7 +53,6 @@ if TYPE_CHECKING:
 RESULT_RUN_ID: Final = PARAM_RUN_ID
 RESULT_OUTCOME: Final = "outcome"
 RESULT_STATUS: Final = "status"
-RESULT_OUTCOME_DOCUMENT: Final = "outcome_document"
 RESULT_VERDICT_IDS: Final = "verdict_ids"
 #: Slice 128 (D2): the gate, design and git reads taken when a run completes, and the
 #: ids of the two hatch checks recorded with them.
