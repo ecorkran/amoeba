@@ -30,7 +30,7 @@ from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
-from amoeba.runner.project_config import PROJECT_DEFAULTS, ProjectConfig
+from amoeba.runner.project_config import ProjectConfig, ProjectSettings
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import (
@@ -212,7 +212,7 @@ class Rig:
         self.planner = Planner(tmp_path)
         self.routing_table = small_table()
         self.auto_resume_limit = ProcessSettings().auto_resume_limit
-        self.project_settings = PROJECT_DEFAULTS
+        self.project_settings = ProjectSettings(pipeline="p456")
         self.planners: tuple[Any, ...] = (self.planner,)
         self.popen = Popen(store)
         self.context = NodeContext()
@@ -285,7 +285,7 @@ def tenant_for(rig: Rig) -> RunnerTenant:
         monotonic=rig.clock.monotonic,
         version_label=TEST_VERSION_LABEL,
         routing_table=rig.routing_table,
-        project_config=ProjectConfig(),
+        project_config=ProjectConfig({PROJECT: rig.project_settings}),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
 

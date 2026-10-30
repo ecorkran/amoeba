@@ -55,6 +55,10 @@ class FaultKind(StrEnum):
     project-scoped kind: ``CHECKOUT_READ_FAILED``, a ``git`` or ``cf`` read before a
     dispatch or a merge observation gave no usable answer. It blocks no step, because
     the step is not at fault, and closes on the first complete tick without it.
+
+    Slice 132 (D11) adds the project-scoped ``PIPELINE_UNCONFIGURED``: a project has a
+    current slice and the project config names no pipeline for it. Nothing launches
+    until the config does; the escalation closes on the first complete tick without it.
     """
 
     RUN_OBSERVATION_FAILED = "run_observation_failed"
@@ -74,6 +78,7 @@ class FaultKind(StrEnum):
     CF_GATE_BLOCKS = "cf_gate_blocks"
     PENDING_DECISION = "pending_decision"
     CHECKOUT_READ_FAILED = "checkout_read_failed"
+    PIPELINE_UNCONFIGURED = "pipeline_unconfigured"
 
 
 class LaunchFailure(StrEnum):

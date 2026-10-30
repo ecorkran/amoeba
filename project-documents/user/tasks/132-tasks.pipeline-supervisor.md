@@ -335,9 +335,11 @@ Note (20261030): a deferred or deprecated slice now gets no node at all (it used
 ### Task 9.7: Raise `pipeline_unconfigured`
 **Owner**: Junior AI | **Dependencies**: 9.5b | **Effort**: 1
 
-- [ ] `faults.py`: `FaultKind.PIPELINE_UNCONFIGURED`, project-scoped, raised once per tick when a current slice has no configured pipeline; the existing close path closes it (D11)
-- [ ] Tick tests: an unconfigured project with a driven slice launches nothing and raises one `pipeline_unconfigured`; it closes once the project is configured or the slice is no longer driven; a pipeline the stub `sq` reports not found (exit 1, `Error: Pipeline '<name>' not found.`) blocks only that slice with the stderr while other projects tick
-- [ ] **Success:** full suite green. Commit `feat: raise an escalation for a project with no pipeline`
+- [x] `faults.py`: `FaultKind.PIPELINE_UNCONFIGURED`, project-scoped, raised once per tick when a current slice has no configured pipeline; the existing close path closes it (D11)
+- [x] Tick tests: an unconfigured project with a driven slice launches nothing and raises one `pipeline_unconfigured`; it closes once the project is configured or the slice is no longer driven; a pipeline the stub `sq` reports not found (exit 1, `Error: Pipeline '<name>' not found.`) blocks only that slice with the stderr while other projects tick
+- [x] **Success:** full suite green. Commit `feat: raise an escalation for a project with no pipeline`
+
+Note (20261030): the tick raises `pipeline_unconfigured` after the view is built when `current_slices` is non-empty and the project's settings name no pipeline; the existing close path closes it. The base tick rig and the tenant-building tests now configure their projects with pipeline `p456`, since an unconfigured project raises the escalation. The not-found case is covered through the fake launch: exit 1 with Squadron's stderr blocks only that slice (122's launch-failure path), and another checkout's slice still launches. The five retired FaultKind members stay until Task 10.5.
 
 ---
 

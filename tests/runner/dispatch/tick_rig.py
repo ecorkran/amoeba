@@ -7,6 +7,7 @@ records the command and working directory and starts nothing. Clocks do not slee
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -52,10 +53,14 @@ class RecordingPopen(Popen):
         super().__init__(store)
         self.argvs: list[list[str]] = []
         self.cwds: list[str] = []
+        #: A test sets this to answer a launch itself; it returns ``None`` to decline.
+        self.delegate: Callable[..., Child | None] | None = None
 
     def __call__(self, argv: list[str], **kwargs: Any) -> Child:
         self.argvs.append(argv)
         self.cwds.append(str(kwargs.get("cwd")))
+        if self.delegate is not None and (child := self.delegate(argv, **kwargs)):
+            return child
         return super().__call__(argv, **kwargs)
 
 

@@ -20,6 +20,8 @@ from amoeba.runner.decide import Action, Planner, ProjectView, decide
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
+    Fault,
+    FaultKind,
     NodeContext,
     TickFaults,
     raise_expected_faults,
@@ -142,6 +144,7 @@ class ProjectTick:
         if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         view = self._build_view(runs.pending, self._probes.results(links), desired)
+        self._flag_unconfigured(view, faults)
         # Reads only, so a cut-off just defers them: a candidate with no result
         # cannot launch this tick (D5).
         dispatch = self._gates.check_dispatch(view, budget, faults)
@@ -158,6 +161,17 @@ class ProjectTick:
             return TickResult.CUT_OFF
         self._close_recovered(faults)
         return TickResult.COMPLETE
+
+    def _flag_unconfigured(self, view: ProjectView, faults: TickFaults) -> None:
+        """Raise ``pipeline_unconfigured`` for a driven slice with no pipeline (D11)."""
+        if view.current_slices and self._project_settings.pipeline is None:
+            faults.add(
+                Fault(
+                    FaultKind.PIPELINE_UNCONFIGURED,
+                    f"project {self._project_id} has a driven slice and no pipeline "
+                    "in the project config",
+                )
+            )
 
     def _apply_intents(self) -> DesiredStateIndex:
         """Apply pending intents, then read the desired state once for this tick.

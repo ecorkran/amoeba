@@ -58,6 +58,7 @@ def test_the_fault_vocabulary_values_are_stable() -> None:
         "cf_gate_blocks",
         "pending_decision",
         "checkout_read_failed",
+        "pipeline_unconfigured",
     }
     assert {failure.value for failure in LaunchFailure} == {
         "spawn_error",

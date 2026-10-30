@@ -27,7 +27,7 @@ from runner.routing.table_support import TEST_AMOEBA_VERSION, small_table
 
 from amoeba.process import ProcessSettings, RunOutcome
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
-from amoeba.runner.project_config import ProjectConfig
+from amoeba.runner.project_config import ProjectConfig, ProjectSettings
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import CommandKind, NodeKind, Store
 
@@ -92,7 +92,9 @@ def test_the_tick_is_bounded_fair_and_rate_limited(tmp_path: Path) -> None:
         monotonic=time.monotonic,
         version_label="sq-test-label",
         routing_table=small_table(),
-        project_config=ProjectConfig(),
+        project_config=ProjectConfig(
+            {project: ProjectSettings(pipeline="p456") for project in stores}
+        ),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
     host = Host(stores)

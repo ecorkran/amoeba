@@ -44,16 +44,6 @@ def _slice_read(status: str, *, checked: bool = False) -> PlanRead:
     )
 
 
-def _step(store: Store, kind: NodeKind, index: int, step: LifecycleStep) -> Node:
-    [owner] = [
-        n
-        for n in store.nodes_for_project(PROJECT)
-        if n.kind is kind and n.cf.index == index
-    ]
-    [found] = [c for c in store.children_of(owner.id) if c.cf.phase == step.value]
-    return found
-
-
 def _status(store: Store, node: Node) -> NodeStatus:
     current = store.get_node(node.id)
     assert current is not None
