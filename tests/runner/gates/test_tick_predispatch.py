@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from cf_stub_gates import STATUS_MODE_ENV, STATUS_POINTER_ENV, GateMode
+from cf_stub_gates import CONFIG_MODE_ENV, STATUS_POINTER_ENV, GateMode
 
 from amoeba.process import RunOutcome
 from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK, PARAM_TARGET
@@ -59,15 +59,15 @@ def _gates(
     *,
     status: str = "in_implementation",
     config: dict[str, str] | None = None,
-    mode: GateMode | None = None,
+    config_mode: GateMode | None = None,
 ) -> None:
     """Point the tick's gate reads at the stub: where CF stands, and its config."""
     knobs = {
         STATUS_POINTER_ENV: str(STATUS_FIXTURES / f"{status}.json"),
         **config_knobs(tmp_path, config or {}),
     }
-    if mode is not None:
-        knobs[STATUS_MODE_ENV] = mode.value
+    if config_mode is not None:
+        knobs[CONFIG_MODE_ENV] = config_mode.value
     rig.tick_rig.gate_run = rig.world.run(knobs)
 
 
@@ -164,9 +164,7 @@ def test_an_integration_branch_in_cf_config_makes_main_block_a_planning_launch(
     assert payload["target"] == "dev/erik" and payload["branch"] == "main"
 
 
-def test_a_p6_launch_on_a_foreign_branch_blocks_and_on_its_own_branch_launches(
-    rig: DispatchRig,
-) -> None:
+def test_a_launch_on_a_foreign_or_a_slice_branch_blocks(rig: DispatchRig) -> None:
     node = _step(rig, LifecycleStep.IMPLEMENTATION)
     make_branch(rig.world.root, "feature-x")
     rig.tick()
@@ -177,60 +175,9 @@ def test_a_p6_launch_on_a_foreign_branch_blocks_and_on_its_own_branch_launches(
     make_branch(rig.world.root, f"126-slice.{'own'}")
     rig.tick()
 
-    assert len(rig.entries(CommandKind.SQ_RUN, other)) == 1
+    # Only a resume may start on the slice's own branch (132, D3).
+    assert rig.entries(CommandKind.SQ_RUN, other) == []
     assert rig.entries(CommandKind.SQ_RUN, node) == []
-
-
-# -- the entry gate ------------------------------------------------------------
-
-
-def test_pending_decision_blocks(rig: DispatchRig, tmp_path: Path) -> None:
-    node = _step(rig)
-    _gates(rig, tmp_path, status="pending_decision")
-
-    rig.tick()
-
-    assert _blocked_on_human(rig, node)
-    payload = _block_payload(rig)
-    assert payload[PAYLOAD_FAULT_KIND] == "pending_decision"
-    assert payload["decisions"] == [{"heading": "Decision", "line": 12}]
-    assert rig.popen.argvs == []
-
-
-@pytest.mark.parametrize(
-    ("step", "status"),
-    [
-        (LifecycleStep.TASKS, "review_failed_slice"),
-        (LifecycleStep.TASKS, "pending_review_slice"),
-        (LifecycleStep.IMPLEMENTATION, "review_failed_tasks"),
-        (LifecycleStep.IMPLEMENTATION, "needs_tasks"),
-    ],
-)
-def test_a_failing_entry_gate_blocks_cf_gate_blocks(
-    rig: DispatchRig, tmp_path: Path, step: LifecycleStep, status: str
-) -> None:
-    node = _step(rig, step)
-    _gates(rig, tmp_path, status=status)
-
-    rig.tick()
-
-    assert _blocked_on_human(rig, node)
-    payload = _block_payload(rig)
-    assert payload[PAYLOAD_FAULT_KIND] == "cf_gate_blocks"
-    assert payload["status"] and "rationale" in payload
-    assert rig.popen.argvs == []
-
-
-def test_a_position_past_the_entry_gate_launches(
-    rig: DispatchRig, tmp_path: Path
-) -> None:
-    node = _step(rig)
-    _gates(rig, tmp_path, status="needs_tasks")
-
-    rig.tick()
-
-    assert not _blocked_on_human(rig, node)
-    assert _evidence(_launched(rig, node))["gate_status"] == "needs-tasks"
 
 
 # -- evidence on the launch ----------------------------------------------------
@@ -246,8 +193,6 @@ def test_a_launch_entry_records_what_the_check_found(rig: DispatchRig) -> None:
         "branch": "main",
         "head": head_of(rig.world.root),
         "target": "main",
-        "gate_status": "in-implementation",
-        "gate_review_type": None,
     }
 
 
@@ -287,7 +232,7 @@ def test_a_failed_read_blocks_nothing_raises_a_fault_and_closes_when_it_stops(
     rig: DispatchRig, tmp_path: Path
 ) -> None:
     node = _step(rig)
-    _gates(rig, tmp_path, mode=GateMode.FAIL)
+    _gates(rig, tmp_path, config_mode=GateMode.FAIL)
 
     rig.tick()
 
@@ -296,7 +241,7 @@ def test_a_failed_read_blocks_nothing_raises_a_fault_and_closes_when_it_stops(
     [fault] = rig.store.open_project_escalations(PROJECT)
     assert fault.fault_kind == "checkout_read_failed"
     payload = dict(fault.payload or {})
-    assert payload["command"] == "cf status --json"
+    assert payload["command"] == f"cf config get {CF_KEY_INTEGRATION_BRANCH}"
     assert payload["checkout"] == str(rig.world.root)
     assert payload["reason"]
 
@@ -416,7 +361,6 @@ def test_a_resume_on_a_dirty_tree_resumes_and_names_the_dirty_paths(
     assert resumed.parameters[PARAM_CONTINUATION] == "resume"
     evidence = _evidence(resumed)
     assert evidence["dirty_paths"] == ["README.md"] and evidence["dirty_count"] == 1
-    assert evidence["gate_status"] is None, "a resume does not read the gate"
 
 
 def test_a_resume_on_the_wrong_branch_blocks(rig: DispatchRig) -> None:

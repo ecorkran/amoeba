@@ -272,10 +272,12 @@ Note (20261029): 8.1/8.1b are one commit (`feat: reduce resolutions to resume an
 ### Task 9.1: Cut the pre-dispatch check to git
 **Owner**: Junior AI | **Dependencies**: 7.2 | **Effort**: 2
 
-- [ ] `gates/dispatch_reads.py`, `gates/predispatch.py`, `gates/stage.py`: stop reading CF's gate; remove the entry-gate rows and the `pending_decision` block. The target read (`read_target`) stays. `dispatch/state.py` loses its pending-decision state
-- [ ] `gates/predispatch.py`: one allowed-branch rule for every pipeline (D3). `allowed_branches` and `_is_allowed` key on `resume`, not on `PIPELINE_P6`: a fresh launch or reissue may start only on the target; a resume on the target or the slice's own branch. The clean-tree rule is unchanged (checked only when not resuming)
-- [ ] Tests in `tests/runner/gates/test_predispatch.py`, `test_dispatch_reads.py`, `test_tick_predispatch.py`: no `cf status` call before a launch; a fresh launch of any pipeline on the slice branch blocks `checkout_branch`; a resume on the slice branch with a dirty tree passes; a fresh launch with a dirty tree blocks `checkout_dirty`; delete entry-gate and pending-decision cases
-- [ ] **Success:** full suite green. Commit `refactor: check only git before dispatch`
+- [x] `gates/dispatch_reads.py`, `gates/predispatch.py`, `gates/stage.py`: stop reading CF's gate; remove the entry-gate rows and the `pending_decision` block. The target read (`read_target`) stays. `dispatch/state.py` loses its pending-decision state
+- [x] `gates/predispatch.py`: one allowed-branch rule for every pipeline (D3). `allowed_branches` and `_is_allowed` key on `resume`, not on `PIPELINE_P6`: a fresh launch or reissue may start only on the target; a resume on the target or the slice's own branch. The clean-tree rule is unchanged (checked only when not resuming)
+- [x] Tests in `tests/runner/gates/test_predispatch.py`, `test_dispatch_reads.py`, `test_tick_predispatch.py`: no `cf status` call before a launch; a fresh launch of any pipeline on the slice branch blocks `checkout_branch`; a resume on the slice branch with a dirty tree passes; a fresh launch with a dirty tree blocks `checkout_dirty`; delete entry-gate and pending-decision cases
+- [x] **Success:** full suite green. Commit `refactor: check only git before dispatch`
+
+Note (20261029): `dispatch/state.py` had no CF pending-decision state, so nothing was removed there (`FaultKind.PENDING_DECISION` and `CF_GATE_BLOCKS` stay until Task 10.5). The dispatch check now reads only `git status` and the target, so the cut-off test counts two reads. `Candidate.needs_gate`, `entry_gate`, `NoResult`, `Disagreement`, the gate evidence keys, `GateStage`'s accepted-outcome and disagreement code are gone; `gates/accepted.py` is unused until Task 10.2b. `branch_rule(status, target, slice_index, resume=...)` no longer takes a pipeline.
 
 ### Task 9.2: Launch without the pointer write
 **Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 3

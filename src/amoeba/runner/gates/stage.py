@@ -16,11 +16,6 @@ from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import ProjectView
 from amoeba.runner.faults import Fault, FaultKind, NodeContext, TickFaults
-from amoeba.runner.gates.accepted import (
-    AcceptedOutcome,
-    accepted_by_pm,
-    disagreement_check,
-)
 from amoeba.runner.gates.candidates import Candidate, launch_candidates
 from amoeba.runner.gates.dispatch_reads import (
     DispatchReadFailed,
@@ -31,13 +26,9 @@ from amoeba.runner.gates.merge import MergePass, observe_merges
 from amoeba.runner.gates.outcome import observe_outcome
 from amoeba.runner.gates.outcome_record import OutcomeObservation, unobservable
 from amoeba.runner.gates.predispatch import (
-    EVIDENCE_DISAGREEMENT_CHECK,
-    Disagreement,
     DispatchCheck,
-    Ok,
 )
 from amoeba.runner.intent.governance import DesiredStateIndex
-from amoeba.runner.lifecycle.steps import STEP_SEQUENCE, LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observed import ObservedRun, RunEnded
 from amoeba.store import Node, Store
@@ -52,8 +43,6 @@ class DispatchStageResult:
 
     checks: Mapping[str, DispatchCheck]
     cut_off: bool
-    #: Whether the stage wrote a disagreement check (D7).
-    wrote: bool = False
 
 
 @dataclass(frozen=True)
@@ -164,8 +153,6 @@ class GateStage:
         as cut off so the closure waits for a complete tick.
         """
         checks: dict[str, DispatchCheck] = {}
-        wrote = False
-        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
         for candidate in launch_candidates(
             view.current_steps, view.dispatch, view.checkout_holders
         ):
@@ -174,74 +161,12 @@ class GateStage:
                 candidate, budget, self._cf_run, self._timeout_seconds
             )
             if reads is None:
-                return DispatchStageResult(checks, True, wrote)
+                return DispatchStageResult(checks, True)
             if isinstance(reads, DispatchReadFailed):
                 faults.add(_read_failed(candidate, reads))
                 continue
-            predecessor = self._predecessor(tree, candidate)
-            accepted = self._accepted(candidate, predecessor)
-            result = check_candidate(candidate, reads, accepted=accepted is not None)
-            if (
-                isinstance(result, Disagreement)
-                and accepted is not None
-                and predecessor is not None
-            ):
-                result, new = self._record_disagreement(
-                    tree, candidate, result, accepted, predecessor
-                )
-                wrote = wrote or new
-            elif isinstance(result, Disagreement):
-                result = result.ok
-            if result is not None:
-                checks[candidate.node_id] = result
-        return DispatchStageResult(checks, False, wrote)
-
-    def _predecessor(self, tree: LifecycleTree, candidate: Candidate) -> Node | None:
-        """The node of the step before ``candidate``'s, under the same slice."""
-        slice_node = _lineage(tree, candidate.node_id).slice_node
-        if slice_node is None:
-            return None
-        before = STEP_SEQUENCE[STEP_SEQUENCE.index(candidate.step) - 1]
-        return next(
-            (c for c in tree.children(slice_node) if c.cf.phase == before.value), None
-        )
-
-    def _accepted(
-        self, candidate: Candidate, predecessor: Node | None
-    ) -> AcceptedOutcome | None:
-        """Whether the PM accepted the predecessor's completed outcome (D7)."""
-        if not candidate.needs_gate or predecessor is None:
-            return None
-        entries = self._store.journal_entries(self._project_id, node_id=predecessor.id)
-        blocked = self._store.blocked_state_for(predecessor.id, include_resolved=True)
-        return accepted_by_pm(entries, blocked)
-
-    def _record_disagreement(
-        self,
-        tree: LifecycleTree,
-        candidate: Candidate,
-        disagreement: Disagreement,
-        accepted: AcceptedOutcome,
-        predecessor: Node,
-    ) -> tuple[Ok, bool]:
-        """Record D7's check on the slice node; dispatch goes on with its id.
-
-        Returns the ``Ok`` naming the check, and whether a record was written.
-        """
-        slice_node = _lineage(tree, candidate.node_id).slice_node
-        if slice_node is None:
-            return disagreement.ok, False
-        check = disagreement_check(
-            accepted,
-            slice_node.id,
-            LifecycleStep(predecessor.cf.phase),
-            disagreement.gate,
-            self._amoeba_version,
-        )
-        new = self._store.check(check.id) is None
-        self._store.record_check(check, project_id=self._project_id)
-        ok = Ok({**disagreement.ok.evidence, EVIDENCE_DISAGREEMENT_CHECK: check.id})
-        return ok, new
+            checks[candidate.node_id] = check_candidate(candidate, reads)
+        return DispatchStageResult(checks, False)
 
     def _observe(
         self, tree: LifecycleTree, observed: ObservedRun, budget: TickBudget

@@ -21,7 +21,7 @@ from amoeba.runner.gates.dispatch_reads import (
     check_candidate,
     read_dispatch_facts,
 )
-from amoeba.runner.gates.predispatch import Block, Disagreement, Ok
+from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
@@ -73,13 +73,13 @@ def test_a_pointed_step_is_a_candidate_even_in_the_checkout_it_holds() -> None:
     [candidate] = _candidates(DispatchState.POINTED, held)
 
     assert candidate.pipeline == "P5"
-    assert candidate.resume is False and candidate.needs_gate is True
+    assert candidate.resume is False
 
 
 def test_a_reissue_in_a_free_checkout_is_a_candidate_with_its_old_pipeline() -> None:
     [candidate] = _candidates(DispatchState.REISSUE)
 
-    assert candidate.pipeline == "P5" and candidate.needs_gate is True
+    assert candidate.pipeline == "P5"
 
 
 def test_a_reissue_in_a_held_checkout_is_not_a_candidate() -> None:
@@ -104,10 +104,10 @@ def test_a_resume_is_a_candidate_only_when_held_by_no_one_or_itself(
 
 
 @pytest.mark.parametrize("state", [DispatchState.RESUME, DispatchState.AUTO_RESUME])
-def test_a_resume_never_needs_the_gate(state: DispatchState) -> None:
+def test_a_resume_continues_a_run(state: DispatchState) -> None:
     [candidate] = _candidates(state)
 
-    assert candidate.resume is True and candidate.needs_gate is False
+    assert candidate.resume is True
 
 
 @pytest.mark.parametrize(
@@ -119,12 +119,6 @@ def test_a_resume_never_needs_the_gate(state: DispatchState) -> None:
 )
 def test_other_states_are_never_candidates(state: DispatchState) -> None:
     assert _candidates(state) == ()
-
-
-def test_slice_design_is_a_candidate_that_needs_no_gate() -> None:
-    [candidate] = _candidates(DispatchState.POINTED, step=LifecycleStep.SLICE_DESIGN)
-
-    assert candidate.pipeline == "P4" and candidate.needs_gate is False
 
 
 def test_a_step_with_no_facts_or_no_checkout_is_skipped() -> None:
@@ -186,13 +180,12 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     return World(tmp_path, monkeypatch)
 
 
-def test_the_reads_give_git_the_target_and_the_gate(world: World) -> None:
+def test_the_reads_give_git_and_the_target(world: World) -> None:
     reads = world.read(world.candidate())
 
     assert isinstance(reads, DispatchReads)
     assert reads.git.branch == "main" and reads.git.head == head_of(world.checkout)
     assert reads.target == "main"
-    assert reads.gate is not None and reads.gate.status == "in-implementation"
 
 
 def test_the_target_is_the_integration_branch_when_one_is_set(world: World) -> None:
@@ -203,21 +196,13 @@ def test_the_target_is_the_integration_branch_when_one_is_set(world: World) -> N
     assert isinstance(reads, DispatchReads) and reads.target == "dev/erik"
 
 
-def test_a_resume_and_slice_design_do_not_read_the_gate(world: World) -> None:
-    resume = world.read(world.candidate(resume=True))
-    design = world.read(world.candidate(LifecycleStep.SLICE_DESIGN))
-
-    assert isinstance(resume, DispatchReads) and resume.gate is None
-    assert isinstance(design, DispatchReads) and design.gate is None
-
-
-def test_a_failed_gate_read_is_a_read_failure_naming_the_command(world: World) -> None:
+def test_cf_s_gate_is_not_read(world: World) -> None:
+    """A failing ``cf status`` changes nothing: the pipeline owns its gates (132)."""
     world.monkeypatch.setenv(STATUS_MODE_ENV, GateMode.FAIL.value)
 
     result = world.read(world.candidate())
 
-    assert isinstance(result, DispatchReadFailed)
-    assert result.command == "cf status --json"
+    assert isinstance(result, DispatchReads)
 
 
 def test_a_failed_target_read_is_a_read_failure(world: World) -> None:
@@ -250,7 +235,7 @@ def test_a_checkout_that_is_not_a_repository_is_a_read_failure(world: World) -> 
 
 
 def test_a_cut_off_at_any_read_returns_none(world: World) -> None:
-    for calls in range(3):
+    for calls in range(2):
         assert world.read(world.candidate(), budget_allowing(calls)) is None
 
 
@@ -268,20 +253,18 @@ def _reads(world: World, *, dirty: bool = False, branch: str = "main") -> Dispat
     return reads
 
 
-def test_the_evidence_for_a_launch_names_branch_head_target_and_the_gate(
+def test_the_evidence_for_a_launch_names_branch_head_and_target(
     world: World,
 ) -> None:
     reads = _reads(world)
 
-    result = check_candidate(world.candidate(), reads, accepted=False)
+    result = check_candidate(world.candidate(), reads)
 
     assert isinstance(result, Ok)
     assert result.evidence == {
         "branch": "main",
         "head": head_of(world.checkout),
         "target": "main",
-        "gate_status": "in-implementation",
-        "gate_review_type": None,
     }
 
 
@@ -294,50 +277,35 @@ def test_a_resume_s_evidence_names_its_dirty_paths_and_it_launches(
     reads = world.read(candidate)
     assert isinstance(reads, DispatchReads)
 
-    result = check_candidate(candidate, reads, accepted=False)
+    result = check_candidate(candidate, reads)
 
     assert isinstance(result, Ok)
     assert result.evidence["dirty_paths"] == ["work.txt"]
     assert result.evidence["dirty_count"] == 1
-    assert result.evidence["gate_status"] is None
 
 
-def test_a_dirty_tree_blocks_a_launch_before_the_gate_is_judged(world: World) -> None:
+def test_a_dirty_tree_blocks_a_launch(world: World) -> None:
     reads = _reads(world, dirty=True)
 
-    result = check_candidate(world.candidate(), reads, accepted=False)
+    result = check_candidate(world.candidate(), reads)
 
     assert isinstance(result, Block) and result.fault_kind is FaultKind.CHECKOUT_DIRTY
 
 
-def test_p6_on_its_own_branch_launches(world: World) -> None:
+def test_a_fresh_launch_on_the_slice_branch_blocks(world: World) -> None:
     reads = _reads(world, branch=OWN)
 
-    assert isinstance(check_candidate(world.candidate(), reads, accepted=False), Ok)
+    result = check_candidate(world.candidate(), reads)
+
+    assert isinstance(result, Block) and result.fault_kind is FaultKind.CHECKOUT_BRANCH
 
 
-def test_a_failing_gate_blocks_and_a_pm_accept_turns_it_into_a_disagreement(
-    world: World,
-) -> None:
-    world.status("review_failed_tasks")
-    candidate = world.candidate()
+def test_a_resume_on_the_slice_branch_with_a_dirty_tree_passes(world: World) -> None:
+    make_branch(world.checkout, OWN)
+    commit_file(world.checkout, "x.txt", "x\n", "x")
+    (world.checkout / "work.txt").write_text("w\n")
+    candidate = world.candidate(resume=True)
     reads = world.read(candidate)
     assert isinstance(reads, DispatchReads)
 
-    blocked = check_candidate(candidate, reads, accepted=False)
-    accepted = check_candidate(candidate, reads, accepted=True)
-
-    assert isinstance(blocked, Block) and blocked.fault_kind is FaultKind.CF_GATE_BLOCKS
-    assert isinstance(accepted, Disagreement)
-    assert accepted.ok.evidence["gate_status"] == "review-failed"
-    assert accepted.ok.evidence["gate_review_type"] == "tasks"
-    assert accepted.ok.evidence["branch"] == "main"
-
-
-def test_a_gate_read_about_another_slice_has_no_result(world: World) -> None:
-    world.status("in_implementation", index=999)
-    candidate = world.candidate()
-    reads = world.read(candidate)
-    assert isinstance(reads, DispatchReads)
-
-    assert check_candidate(candidate, reads, accepted=False) is None
+    assert isinstance(check_candidate(candidate, reads), Ok)

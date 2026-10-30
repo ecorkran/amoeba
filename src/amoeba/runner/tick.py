@@ -168,7 +168,6 @@ class ProjectTick:
             dispatch_checks=dispatch.checks,
             merge_observations=merges.observations,
         )
-        self.wrote = dispatch.wrote or self.wrote
         decided = self._decide(view)
         acted = self._act.run(decided, budget, faults)
         self.wrote = acted.wrote or self.wrote

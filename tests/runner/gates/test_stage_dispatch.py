@@ -8,13 +8,14 @@ from pathlib import Path
 
 import pytest
 from cf_stub import write_cf_stub
-from cf_stub_gates import STATUS_MODE_ENV, GateMode
+from cf_stub_gates import CONFIG_MODE_ENV, GateMode
 
 from amoeba.runner.decide import ProjectView
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind, NodeContext, TickFaults
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.gates.stage import GateStage
+from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import Store
 from runner.dispatch.dispatch_support import facts, view_of
@@ -89,7 +90,7 @@ def test_a_pointed_step_on_a_dirty_checkout_puts_a_block(setup: Setup) -> None:
 def test_a_failed_read_puts_nothing_and_raises_checkout_read_failed(
     setup: Setup,
 ) -> None:
-    setup.monkeypatch.setenv(STATUS_MODE_ENV, GateMode.FAIL.value)
+    setup.monkeypatch.setenv(CONFIG_MODE_ENV, GateMode.FAIL.value)
     faults = TickFaults()
 
     result = setup.stage.check_dispatch(setup.view(), generous_budget(), faults)
@@ -100,7 +101,7 @@ def test_a_failed_read_puts_nothing_and_raises_checkout_read_failed(
     assert fault.node_id == "a"
     assert fault.extra is not None
     assert fault.extra["checkout"] == str(setup.checkout)
-    assert fault.extra["command"] == "cf status --json"
+    assert fault.extra["command"] == f"cf config get {CF_KEY_INTEGRATION_BRANCH}"
     assert "reason" in fault.extra
 
 
@@ -116,13 +117,3 @@ def test_a_step_that_is_not_a_candidate_is_not_read(setup: Setup) -> None:
     result = setup.stage.check_dispatch(view, generous_budget(), TickFaults())
 
     assert result.checks == {} and result.cut_off is False
-
-
-def test_slice_design_is_checked_without_a_gate_read(setup: Setup) -> None:
-    setup.monkeypatch.setenv(STATUS_MODE_ENV, GateMode.FAIL.value)
-
-    result = setup.stage.check_dispatch(
-        setup.view(LifecycleStep.SLICE_DESIGN), generous_budget(), TickFaults()
-    )
-
-    assert isinstance(result.checks["a"], Ok), "a failing gate read is never made"

@@ -15,7 +15,6 @@ from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.dispatch.params import pipeline_for
 from amoeba.runner.dispatch.state import DispatchState
-from amoeba.runner.gates.cf_status import ENTRY_GATE
 from amoeba.runner.launch import PARAM_PIPELINE, text_parameter
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import PARAM_CHECKOUT, JournalEntry, Node
@@ -40,12 +39,6 @@ class Candidate:
     def resume(self) -> bool:
         """Whether this continues a stopped run rather than starting one."""
         return self.state in _RESUMING
-
-    @property
-    def needs_gate(self) -> bool:
-        """Whether CF's entry gate is read: a fresh or reissued ``tasks`` or
-        ``implementation`` launch. A resume continues work already past its gate."""
-        return not self.resume and self.step in ENTRY_GATE
 
 
 def launch_candidates(
