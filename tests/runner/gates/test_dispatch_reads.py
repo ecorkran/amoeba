@@ -114,7 +114,6 @@ def test_a_resume_never_needs_the_gate() -> None:
         DispatchState.NEEDS_POINTER,
         DispatchState.REOBSERVE,
         DispatchState.IN_FLIGHT,
-        DispatchState.AWAITING_ROUTING,
     ],
 )
 def test_other_states_are_never_candidates(state: DispatchState) -> None:

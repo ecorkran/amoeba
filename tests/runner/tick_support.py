@@ -266,6 +266,7 @@ class Rig:
         self.pointers = PointerStage(self.cf, 8.0, GRACE, self.clock.wall)
         self.planner = Planner(tmp_path)
         self.routing_table = small_table()
+        self.auto_resume_limit = ProcessSettings().auto_resume_limit
         self.project_settings = PROJECT_DEFAULTS
         self.planners: tuple[Any, ...] = (self.planner,)
         self.popen = Popen(store)
@@ -296,11 +297,11 @@ class Rig:
             now=self.clock.wall,
             context=self.context,
             version_label=TEST_VERSION_LABEL,
-            routing_table=self.routing_table,
             project_settings=self.project_settings,
             cf_run=self.gate_run,
             call_timeout_seconds=8.0,
             amoeba_version=TEST_AMOEBA_VERSION,
+            auto_resume_limit=self.auto_resume_limit,
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
         return tick.run(budget), tick

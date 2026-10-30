@@ -6,7 +6,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from amoeba.process import RunCheckpoint, RunOutcome, RunOutcomeDocument
+from amoeba.process import (
+    ProcessSettings,
+    RunCheckpoint,
+    RunOutcome,
+    RunOutcomeDocument,
+)
 from amoeba.runner.faults import LaunchFailure
 from amoeba.runner.finish import RESULT_RUN_ID
 from amoeba.runner.finish import record as finish_record
@@ -32,16 +37,16 @@ from amoeba.store import (
     NodeStatus,
     Store,
 )
-from runner.gate_rig import failed_reads
 from runner.observe_support import document
 
 PROJECT = "demo"
 RUN_ID = "run-1"
+AUTO_RESUME_LIMIT = ProcessSettings().auto_resume_limit
 VERSION_LABEL = "sq-test-label"
 
 
 def record(store: Store, entry: JournalEntry, finished: Finished) -> None:
-    finish_record(store, entry, finished, VERSION_LABEL, failed_reads(entry))
+    finish_record(store, entry, finished, VERSION_LABEL, AUTO_RESUME_LIMIT)
 
 
 @pytest.fixture
@@ -126,13 +131,13 @@ def test_paused_blocks_on_the_checkpoint_and_keeps_the_document_in_the_result(
     assert _open_blocks(store, node) == [BlockedKind.SQ_CHECKPOINT]
 
 
-def test_orphaned_blocks_and_resolves_failed(
+def test_orphaned_resolves_failed_and_blocks_nothing_under_the_bound(
     store: Store, node: Node, entry: JournalEntry
 ) -> None:
     record(store, entry, RunEnded(document(RUN_ID, RunOutcome.ORPHANED)))
 
     assert _resolved(store, entry).outcome is JournalOutcome.FAILED
-    assert _open_blocks(store, node) == [BlockedKind.HUMAN]
+    assert _open_blocks(store, node) == []
 
 
 def test_a_vanished_run_blocks_and_resolves_failed(

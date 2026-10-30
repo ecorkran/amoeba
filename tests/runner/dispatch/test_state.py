@@ -90,24 +90,6 @@ def test_any_unresolved_entry_is_in_flight(entries: list[JournalEntry]) -> None:
     )
 
 
-def test_a_resolved_run_with_the_flag_awaits_routing() -> None:
-    entries = [_pointer(), _run(awaits_routing=True)]
-
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=True)
-        is DispatchState.AWAITING_ROUTING
-    )
-
-
-def test_a_failed_run_with_the_flag_awaits_routing_too() -> None:
-    entries = [_pointer(), _run(JournalOutcome.FAILED, awaits_routing=True)]
-
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=False)
-        is DispatchState.AWAITING_ROUTING
-    )
-
-
 def test_a_run_recovery_found_never_started_is_reissued() -> None:
     entries = [
         _pointer(),
@@ -227,16 +209,6 @@ def test_once_an_entry_names_it_the_older_rules_apply(decision: str) -> None:
     assert state is DispatchState.POINTED
 
 
-def test_a_continuation_that_names_the_resolution_is_awaiting_routing_when_done() -> (
-    None
-):
-    entries = [_run(), _naming(_run(awaits_routing=True))]
-
-    state = dispatch_state(entries, _decided("retry"), pointer_confirmed=True)
-
-    assert state is DispatchState.AWAITING_ROUTING
-
-
 def test_rerun_after_a_not_applied_entry_is_not_a_reissue() -> None:
     not_applied = _run(JournalOutcome.NOT_APPLIED, resolved_by=JournalResolver.RECOVERY)
 
@@ -274,11 +246,3 @@ def test_an_unresolved_continuation_is_in_flight() -> None:
     state = dispatch_state(entries, _decided("retry"), pointer_confirmed=True)
 
     assert state is DispatchState.IN_FLIGHT
-
-
-def test_an_unrouted_outcome_waits_for_routing_before_a_decision_applies() -> None:
-    entries = [_run(awaits_routing=True)]
-
-    state = dispatch_state(entries, _decided("rerun"), pointer_confirmed=True)
-
-    assert state is DispatchState.AWAITING_ROUTING

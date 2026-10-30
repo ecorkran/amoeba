@@ -10,8 +10,7 @@ state                     action
 ``POINTED``               ``LaunchRun`` (the step already holds its checkout)
 ``REISSUE``               ``LaunchRun`` repeating the attempt that never started
 ``NEEDS_POINTER``         ``WriteSlicePointer``
-``IN_FLIGHT``,
-``AWAITING_ROUTING``      nothing
+``IN_FLIGHT``              nothing
 ========================  =====================================================
 
 A held checkout offers nothing to a step that is not ``POINTED``: a pointed step's

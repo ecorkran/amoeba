@@ -15,7 +15,7 @@ from amoeba.runner.finish import (
     PAYLOAD_EXIT_CODE,
     PAYLOAD_STDERR_TAIL,
     RESULT_RESUME_FAILURE,
-    record,
+    record_unstarted,
 )
 from amoeba.runner.ingest.record import RESULT_OUTCOME, RESULT_OUTCOME_DOCUMENT
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
@@ -87,7 +87,7 @@ def _fail(
 ) -> JournalEntry:
     document = RunOutcomeDocument(run_id=RUN_ID, outcome=RunOutcome.NOT_FOUND)
     last = document if failure is ResumeFailure.RUN_MISSING else _paused()
-    record(store, entry, ResumeFailed(failure, exit_code, "boom", last), "sq-label")
+    record_unstarted(store, entry, ResumeFailed(failure, exit_code, "boom", last))
     return _resolved(store, entry)
 
 
@@ -152,7 +152,9 @@ def test_after_a_missing_run_the_hold_is_released_and_the_run_has_ended(
 def test_the_node_is_blocked_once_even_if_recorded_again(
     store: Store, node: Node, entry: JournalEntry
 ) -> None:
-    record(store, entry, ResumeFailed(ResumeFailure.REFUSED, 2, "x", _paused()), "l")
+    record_unstarted(
+        store, entry, ResumeFailed(ResumeFailure.REFUSED, 2, "x", _paused())
+    )
     reloaded = _resolved(store, entry)
     assert reloaded.is_resolved
 

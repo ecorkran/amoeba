@@ -77,12 +77,6 @@ def test_the_latest_entry_decides_not_an_older_one() -> None:
     assert classify(PIPELINE, entries) is Situation.BEFORE_RUN
 
 
-def test_an_unrouted_pause_is_unresolvable_not_a_paused_run() -> None:
-    paused = _entry(result={RESULT_OUTCOME: "paused"}, awaits_routing=True)
-
-    assert classify(PIPELINE, [paused]) is Situation.UNRESOLVABLE
-
-
 def test_unresolvable_wins_over_a_human_step() -> None:
     assert classify(Executor.HUMAN, [_entry(outcome=None)]) is Situation.UNRESOLVABLE
 

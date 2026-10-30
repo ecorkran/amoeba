@@ -74,7 +74,9 @@ def test_the_second_slice_is_dispatched_the_tick_the_first_run_fails(
     rig.tick()
 
     rig.end_run(
-        first, RunOutcome.FAILED, failure={"kind": "stall", "step": "s", "message": "m"}
+        first,
+        RunOutcome.FAILED,
+        failure={"kind": "cost_cap", "step": "s", "message": "m"},
     )
 
     assert rig.status(first) is NodeStatus.BLOCKED_ON_HUMAN

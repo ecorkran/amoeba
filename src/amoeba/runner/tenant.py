@@ -173,11 +173,11 @@ class RunnerTenant:
             now=self._now,
             context=context,
             version_label=self._version_label,
-            routing_table=self._routing_table,
             project_settings=self._project_config.for_project(project_id),
             cf_run=self._cf_run,
             call_timeout_seconds=self._settings.tick_call_timeout_seconds,
             amoeba_version=self._amoeba_version,
+            auto_resume_limit=self._settings.auto_resume_limit,
         )
         try:
             return tick.run(budget), tick.wrote

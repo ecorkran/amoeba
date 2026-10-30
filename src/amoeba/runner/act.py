@@ -186,6 +186,6 @@ class ActStage:
         started = launch(entry, self._supervisor_dir, self._popen)
         if isinstance(started, LaunchError):
             failed = LaunchFailed(started.failure, None, started.detail)
-            finish.record(self._store, entry, failed, self._version_label)
+            finish.record_unstarted(self._store, entry, failed)
             return
         self._tracker.track(entry.id, started)

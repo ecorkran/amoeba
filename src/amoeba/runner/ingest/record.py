@@ -8,23 +8,23 @@ each verdict id is the review's parsed-content digest, so recording it again is
 
 Reviews that cannot be recorded (D7's :class:`ReviewUnknown`) never fail the run's
 ingestion. They add a block, or a ``review_fault`` to the block the outcome already
-needs, and the entry still resolves and is left for routing.
+needs, and the entry still resolves.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
-from amoeba.process import RunOutcome, RunOutcomeDocument
+from amoeba.process import RunOutcomeDocument
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.ingest.outcome import (
     PAYLOAD_REASON,
     BlockPlan,
     OutcomePlan,
     cut_to_bound,
-    plan_outcome,
+    plan_supervised,
 )
 from amoeba.runner.ingest.reviews import (
     ReviewFiles,
@@ -33,20 +33,17 @@ from amoeba.runner.ingest.reviews import (
     select_review_files,
 )
 from amoeba.runner.observed import RunEnded, RunVanished
-from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
+from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT, resume_count, step_of
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
     BlockedKind,
+    CommandKind,
     JournalEntry,
     NodeKind,
     RunnerReview,
     Store,
 )
-
-if TYPE_CHECKING:
-    # Only for the annotation: the gates package imports this module's keys.
-    from amoeba.runner.gates.outcome_record import OutcomeObservation
 
 #: Keys of the ``sq_run`` entry's result: 126's input for the run, and 127's source
 #: for resuming a paused run.
@@ -73,24 +70,17 @@ def ingest(
     entry: JournalEntry,
     finished: RunEnded | RunVanished,
     version_label: str,
-    observation: OutcomeObservation | None = None,
+    auto_resume_limit: int,
 ) -> None:
     """Block the node if needed, record the run's reviews, resolve the entry.
 
-    A ``completed`` run needs its outcome observation (slice 128, D2): its two hatch
-    checks are recorded first, then the block, then the report, whose result carries
-    the observation and the check ids. Check ids are fixed by the entry, so a repeat
-    after a crash between the writes keeps the first records. Other outcomes ignore
-    ``observation``.
-
-    Raises:
-        ValueError: The run completed and no observation was given.
+    The outcome map (D4) decides the block. A completed run also marks the node
+    ``done`` in the same transaction as the resolution.
     """
     run_id = entry_run_id(entry)
-    plan = plan_outcome(finished, run_id)
-    completed = _completed(finished)
-    if completed and observation is None:
-        raise ValueError(f"entry {entry.id} completed without an outcome observation")
+    plan = plan_supervised(
+        finished, run_id, _resume_count(store, entry, finished), auto_resume_limit
+    )
     reviews = _reviews(store, entry, finished, run_id, version_label)
     unknown: ReviewUnknown | None = None
     recorded: tuple[RunnerReview, ...] = ()
@@ -99,23 +89,33 @@ def ingest(
     else:
         recorded = reviews.reviews
     result = _result(finished, run_id, [r.verdict.id for r in recorded], unknown)
-    if completed and observation is not None:
-        for check in observation.checks:
-            store.record_check(check, project_id=entry.project_id)
-        result = {**result, **observation.to_result()}
     block = _block_with(plan, unknown)
     if block is not None:
         block_once(store, entry.node_id, block)
     store.record_runner_report(
-        entry.id, recorded, outcome=plan.entry_outcome, result=result
+        entry.id,
+        recorded,
+        outcome=plan.entry_outcome,
+        result=result,
+        # An unknown review blocks the node, and a blocked node is not completed.
+        complete_node_id=entry.node_id
+        if plan.complete_node and block is None
+        else None,
     )
 
 
-def _completed(finished: RunEnded | RunVanished) -> bool:
-    return (
-        isinstance(finished, RunEnded)
-        and finished.document.outcome is RunOutcome.COMPLETED
-    )
+def _resume_count(
+    store: Store, entry: JournalEntry, finished: RunEnded | RunVanished
+) -> int:
+    """The automatic resumes already spent at the step this outcome stopped at."""
+    if isinstance(finished, RunVanished):
+        return 0
+    runs = [
+        e
+        for e in store.journal_entries(entry.project_id, node_id=entry.node_id)
+        if e.kind is CommandKind.SQ_RUN
+    ]
+    return resume_count(runs[::-1], step_of(finished.document))
 
 
 def block_once(store: Store, node_id: str, block: BlockPlan) -> None:

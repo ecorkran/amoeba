@@ -166,7 +166,7 @@ class ContinuationActs:
             failed = ResumeFailed(
                 ResumeFailure.SPAWN_ERROR, None, started.detail, document
             )
-            finish.record(self._store, entry, failed, self._version_label)
+            finish.record_unstarted(self._store, entry, failed)
             return
         self._tracker.track(entry.id, started)
 
@@ -186,7 +186,7 @@ class ContinuationActs:
         )
         document = poll if isinstance(poll, RunOutcomeDocument) else None
         finished = ResumeFailed(ResumeFailure.RUN_MISSING, None, "", document)
-        finish.record(self._store, entry, finished, self._version_label)
+        finish.record_unstarted(self._store, entry, finished)
 
 
 def _continuation_of(action: ContinuationAction) -> Continuation:

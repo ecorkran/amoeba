@@ -31,6 +31,7 @@ from amoeba.store import (
     JournalEntry,
     JournalOutcome,
     Node,
+    NodeStatus,
     Store,
 )
 from runner.tick_support import drive_project, ready_step, runnable_unbusy
@@ -143,8 +144,8 @@ def test_the_normal_path_records_run_id_outcome_and_status(scenario: Scenario) -
     assert entry.result[RESULT_OUTCOME] == "completed"
     assert entry.result[RESULT_STATUS] == "completed"
     assert entry.result[RESULT_VERDICT_IDS] == []
-    assert entry.awaits_routing is False, "routed in the tick that ingested it"
-    assert scenario.store.routing_decision_for_entry(entry.id) is not None
+    node = scenario.store.get_node(scenario.node.id)
+    assert node is not None and node.status is NodeStatus.DONE
     stderr = log_paths(scenario.supervisor_dir, entry.id).stderr.read_text()
     assert f"run_id={run_id}\n" in stderr, "confirmed by its own line"
     assert scenario.escalations() == []

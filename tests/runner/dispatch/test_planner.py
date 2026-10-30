@@ -175,11 +175,8 @@ def test_a_reissue_without_its_old_entry_is_refused() -> None:
         PLANNER.plan(view)
 
 
-@pytest.mark.parametrize(
-    "state", [DispatchState.IN_FLIGHT, DispatchState.AWAITING_ROUTING]
-)
-def test_in_flight_and_awaiting_routing_get_nothing(state: DispatchState) -> None:
-    assert PLANNER.plan(view_of({"a": facts(state)})) == []
+def test_in_flight_gets_nothing() -> None:
+    assert PLANNER.plan(view_of({"a": facts(DispatchState.IN_FLIGHT)})) == []
 
 
 def test_an_unresolved_checkout_gets_nothing() -> None:

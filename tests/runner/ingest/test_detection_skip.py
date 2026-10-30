@@ -18,8 +18,7 @@ from local_host_harness import LocalHost
 from routing_helpers import PROJECT as ROUTING_PROJECT
 from sq_stub_scripts import REVIEWS_DIR, RunScript, single_review
 
-from amoeba.process import RunOutcome, RunOutcomeDocument
-from amoeba.process.settings import ProcessSettings
+from amoeba.process import ProcessSettings, RunOutcome, RunOutcomeDocument
 from amoeba.runner.finish import record
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.observed import RunEnded
@@ -33,9 +32,9 @@ from amoeba.store import (
     JournalOutcome,
     NodeKind,
 )
-from runner.gate_rig import failed_reads
 
 RUN_ID = "amoeba-20261024T101500Z-0123456789ab"
+AUTO_RESUME_LIMIT = ProcessSettings().auto_resume_limit
 VERSION_LABEL = "sq-test-label"
 SETTLE_SCANS = 2
 
@@ -148,4 +147,10 @@ def _ingest(
             **extra,
         }
     )
-    record(rig.store, entry, RunEnded(document), VERSION_LABEL, failed_reads(entry))
+    record(
+        rig.store,
+        entry,
+        RunEnded(document),
+        VERSION_LABEL,
+        AUTO_RESUME_LIMIT,
+    )

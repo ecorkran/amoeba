@@ -1,4 +1,4 @@
-"""Ingestion end to end through the real tick: three outcomes, then routing.
+"""Ingestion end to end through the real tick: three outcomes, by the outcome map.
 
 The run's outcome document and its review files come from the stub ``sq`` scripts
 (real captured shapes); the launch is a fake that starts nothing.
@@ -23,16 +23,14 @@ from amoeba.store import (
     BlockedKind,
     Channel,
     CommandKind,
-    JournalEntry,
     JournalOutcome,
     Node,
     NodeStatus,
-    Route,
-    RoutingDecision,
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
-from runner.routing.table_support import ADVANCE_COMPLETED, small_table
+from runner.gate_rig import clear_gates
+from runner.resolutions.rig_support import tasks_step
 
 PROJECT = "demo"
 SLICE = "ingest-slice"
@@ -64,18 +62,6 @@ def _write(rig: DispatchRig, script: RunScript) -> None:
 def _open_blocks(rig: DispatchRig, node: Node) -> list[BlockedKind]:
     states = rig.store.all_blocked_states(node.id)
     return [state.kind for state in states if not state.is_resolved]
-
-
-def _unrouted_ids(rig: DispatchRig) -> list[str]:
-    return [entry.id for entry in rig.store.unrouted_outcomes(PROJECT)]
-
-
-def _routed(rig: DispatchRig, entry: JournalEntry) -> RoutingDecision:
-    """The one decision the same tick made for ``entry``, which cleared its flag."""
-    decision = rig.store.routing_decision_for_entry(entry.id)
-    assert decision is not None
-    assert _unrouted_ids(rig) == []
-    return decision
 
 
 def _no_new_work(rig: DispatchRig, node: Node) -> None:
@@ -112,16 +98,13 @@ def test_a_paused_run_blocks_on_the_checkpoint_and_keeps_it_in_the_result(
     assert isinstance(document, dict)
     assert document["checkpoint"]["kind"] == "awaits_human"  # pyright: ignore[reportUnknownVariableType]
     assert len(rig.store.verdicts(PROJECT)) == 1, "the review behind the checkpoint"
-    decision = _routed(rig, entry)
-    assert decision.route is Route.ESCALATE
     assert _open_blocks(rig, node) == [BlockedKind.SQ_CHECKPOINT], "no second block"
 
 
-def test_a_failed_run_blocks_on_a_human_and_is_routed_without_a_second_block(
+def test_a_failed_run_blocks_on_a_human_without_a_second_block(
     rig: DispatchRig,
 ) -> None:
     node = _launched(rig)
-    entry = rig.run_of(node)
 
     rig.end_run(
         node,
@@ -130,12 +113,11 @@ def test_a_failed_run_blocks_on_a_human_and_is_routed_without_a_second_block(
         reviews=[],
     )
 
-    assert _routed(rig, entry).route is Route.ESCALATE
     assert _open_blocks(rig, node) == [BlockedKind.HUMAN], "no second block"
     _no_new_work(rig, node)
 
 
-def test_a_completed_run_with_an_unknown_review_blocks_and_is_routed(
+def test_a_completed_run_with_an_unknown_review_blocks_and_is_not_completed(
     rig: DispatchRig,
 ) -> None:
     node = _launched(rig)
@@ -152,25 +134,38 @@ def test_a_completed_run_with_an_unknown_review_blocks_and_is_routed(
     assert done is not None and done.result is not None
     assert "missing" in str(done.result[RESULT_REVIEW_FAULT])
     assert done.result[RESULT_VERDICT_IDS] == []
-    decision = _routed(rig, entry)
-    assert decision.route is Route.ESCALATE
-    assert decision.inputs["verdict"] == "unknown"
     assert _open_blocks(rig, node) == [BlockedKind.HUMAN], "no second block"
+    assert rig.status(node) is not NodeStatus.DONE
 
 
-def test_a_clean_completed_run_is_routed_in_the_tick_that_ingests_it(
+def test_a_clean_completed_run_completes_the_node_in_the_tick_that_ingests_it(
     rig: DispatchRig,
 ) -> None:
-    rig.tick_rig.routing_table = small_table(ADVANCE_COMPLETED)
     node = _launched(rig)
     review = single_review(CF_SLUG)
     _write(rig, review)
-    entry = rig.run_of(node)
 
     rig.end_run(node, RunOutcome.COMPLETED, **review.document)
 
-    decision = _routed(rig, entry)
-    assert (decision.rule_id, decision.route) == ("advance-completed", Route.ADVANCE)
     assert rig.status(node) is NodeStatus.DONE
     assert _open_blocks(rig, node) == []
     _no_new_work(rig, node)
+
+
+def test_a_completed_runs_successor_is_dispatched_in_the_tick_that_completes_it(
+    rig: DispatchRig,
+) -> None:
+    slice_node, step = rig.slice_and_step("advance", INDEX)
+    clear_gates(rig, slice_node)
+    rig.tick()
+    rig.tick()
+    successor = tasks_step(rig, slice_node)
+    review = single_review(CF_SLUG)
+    _write(rig, review)
+
+    rig.end_run(step, RunOutcome.COMPLETED, **review.document)
+
+    # Ingest completes the node before the view is built, so the successor is
+    # already dispatchable in the same tick (routing used to cost a tick).
+    assert rig.status(step) is NodeStatus.DONE
+    assert len(rig.entries(CommandKind.CF_WRITE, successor)) == 1

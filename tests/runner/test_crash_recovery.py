@@ -23,6 +23,7 @@ from amoeba.store import (
     JournalEntry,
     JournalOutcome,
     JournalResolver,
+    NodeStatus,
 )
 from runner.crash_entry import KillPoint
 from runner.crash_harness import CrashHarness, RunSettings
@@ -154,7 +155,7 @@ def test_kill_between_block_and_report_finishes_once(
     review_harness: CrashHarness,
 ) -> None:
     split = split_review(REVIEW_SLICE)
-    script = RunScript(split.files, {**split.document, "failure": {"kind": "stall"}})
+    script = RunScript(split.files, {**split.document, "failure": {"kind": "cost_cap"}})
     run = _review_run(review_harness, script, "failed")
 
     first = review_harness.start(run, KillPoint.BETWEEN_BLOCK_AND_REPORT)
@@ -176,23 +177,41 @@ def test_kill_between_block_and_report_finishes_once(
     review_harness.stop(process)
 
 
-def test_kill_between_ingest_and_route_routes_the_outcome_once_after_restart(
+def test_kill_before_the_report_of_a_completed_run_completes_the_node_once(
+    review_harness: CrashHarness,
+) -> None:
+    run = _review_run(review_harness, single_review(REVIEW_SLICE))
+    first = review_harness.start(run, KillPoint.BETWEEN_BLOCK_AND_REPORT)
+    review_harness.wait_for_sigkill(first)
+    [journaled] = review_harness.entries()
+    assert not journaled.is_resolved, "the crash left the entry open"
+    assert review_harness.node(journaled.node_id).status is not NodeStatus.DONE
+    run_id = str(journaled.parameters[PARAM_RUN_ID])
+    process = review_harness.start(run)
+
+    entry = review_harness.wait_for_resolution()
+    review_harness.stop(process)
+
+    assert review_harness.node(entry.node_id).status is NodeStatus.DONE
+    assert review_harness.sq_run_calls(run_id) == 1, "nothing relaunched"
+    assert len(review_harness.verdict_ids()) == 1, "recorded once"
+
+
+def test_kill_after_the_report_of_a_completed_run_leaves_the_node_done(
     review_harness: CrashHarness,
 ) -> None:
     run = _review_run(review_harness, single_review(REVIEW_SLICE))
     first = review_harness.start(run, KillPoint.AFTER_INGEST)
     review_harness.wait_for_sigkill(first)
     [entry] = review_harness.entries()
-    assert entry.is_resolved and entry.awaits_routing, "ingested before the kill"
-    assert [e.id for e in review_harness.unrouted()] == [entry.id]
+    run_id = str(entry.parameters[PARAM_RUN_ID])
+    assert entry.is_resolved, "ingested before the kill"
+    assert review_harness.node(entry.node_id).status is NodeStatus.DONE
 
     second = review_harness.start(run)
-    decision = review_harness.wait_for_decision(entry)
     review_harness.stop(second)
 
-    assert decision.journal_entry_id == entry.id
-    assert review_harness.unrouted() == []
-    assert len(review_harness.decisions(entry)) == 1, "routed exactly once"
+    assert review_harness.sq_run_calls(run_id) == 1, "nothing relaunched"
     assert len(review_harness.verdict_ids()) == 1, "recorded once, not again"
 
 

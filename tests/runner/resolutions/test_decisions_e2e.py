@@ -17,8 +17,6 @@ from amoeba.runner.launch import PARAM_REISSUE_OF
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.resolutions.vocabulary import REASON_STOPPED
 from amoeba.store import (
-    PARAM_CONTINUATION,
-    PARAM_RESOLUTION,
     BlockedKind,
     Channel,
     CommandKind,
@@ -37,17 +35,14 @@ from runner.resolutions.rig_support import (
     PROJECT,
     answer_poll,
     launched_step,
-    tasks_step,
     write_review,
 )
-from runner.routing.table_support import small_table
 
 
 @pytest.fixture
 def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
     built = DispatchRig(tmp_path, store)
     built.tick_rig.planners = (DispatchPlanner(), ContinuationPlanner())
-    built.tick_rig.routing_table = small_table()  # the catch-all escalates everything
     yield built
 
 
@@ -57,51 +52,17 @@ def _resolve(rig: DispatchRig, step: Node, decision: str) -> str:
     return resolve_block(rig.store, blocked.id, decision, project_id=PROJECT)
 
 
-def _escalated_completion(rig: DispatchRig, name: str) -> tuple[Node, Node]:
-    """A step whose completed run, with a CONCERNS review, escalated to the PM."""
+def _blocked_failure(rig: DispatchRig, name: str) -> tuple[Node, Node]:
+    """A step whose run failed in a way only a person can answer: blocked on a human."""
     slice_node, step = launched_step(rig, name)
-    rig.end_run(step, RunOutcome.COMPLETED, **write_review(rig).document)
+    rig.end_run(
+        step,
+        RunOutcome.FAILED,
+        failure={"kind": "cost_cap", "step": "implement-6", "message": "cap hit"},
+        reviews=[],
+    )
     assert rig.status(step) is NodeStatus.BLOCKED_ON_HUMAN
     return slice_node, step
-
-
-def test_accept_of_an_escalated_completed_outcome_marks_the_step_done(
-    rig: DispatchRig,
-) -> None:
-    slice_node, step = _escalated_completion(rig, "accepted-outcome")
-    successor = tasks_step(rig, slice_node)
-    blocked_id = _resolve(rig, step, "accept")
-
-    rig.tick()
-
-    # The resolution stage runs before the view is built, so the successor is
-    # already dispatchable in the tick that accepted.
-    assert rig.status(step) is NodeStatus.DONE
-    assert len(rig.entries(CommandKind.CF_WRITE, successor)) == 1
-    # D7: the accept is identifiable from the blocked state and the latest entry.
-    state = rig.store.blocked_state(blocked_id)
-    assert state is not None
-    assert state.runner_outcome is ResolutionOutcome.APPLIED
-    assert state.resolution is not None and state.resolution.decision == "accept"
-    [run] = rig.entries(CommandKind.SQ_RUN, step)
-    assert run.result is not None and run.result["verdict_ids"]
-
-
-def test_rerun_after_a_routed_outcome_points_then_launches_a_fresh_run(
-    rig: DispatchRig,
-) -> None:
-    _, step = _escalated_completion(rig, "rerun-routed")
-    blocked_id = _resolve(rig, step, "rerun")
-
-    rig.tick()  # acknowledged; the pointer write carries the resolution
-    rig.tick()  # the fresh launch
-
-    pointers = rig.entries(CommandKind.CF_WRITE, step)
-    assert pointers[-1].parameters[PARAM_RESOLUTION] == blocked_id
-    first, second = rig.entries(CommandKind.SQ_RUN, step)
-    assert PARAM_CONTINUATION not in second.parameters
-    assert second.id != first.id and not second.is_resolved
-    assert "--resume" not in rig.popen.argvs[-1]
 
 
 def test_rerun_after_a_not_applied_launch_is_a_fresh_run_not_a_reissue(
@@ -129,7 +90,7 @@ def test_rerun_after_a_not_applied_launch_is_a_fresh_run_not_a_reissue(
 def test_stop_blocks_the_node_with_reason_stopped_and_issues_nothing(
     rig: DispatchRig,
 ) -> None:
-    _, step = _escalated_completion(rig, "stopped")
+    _, step = _blocked_failure(rig, "stopped")
     argvs_before = len(rig.popen.argvs)
     entries_before = len(rig.store.journal_entries(PROJECT, node_id=step.id))
     blocked_id = _resolve(rig, step, "stop")

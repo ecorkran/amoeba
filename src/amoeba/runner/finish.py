@@ -10,7 +10,7 @@ sequence.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
 from amoeba.process import RunOutcome
 from amoeba.runner.faults import ResumeFailure
@@ -38,9 +38,6 @@ from amoeba.store import (
     Store,
 )
 
-if TYPE_CHECKING:
-    from amoeba.runner.gates.outcome_record import OutcomeObservation
-
 #: Result and payload keys of a failed launch.
 RESULT_LAUNCH_FAILURE: Final = "launch_failure"
 #: The result key of a failed resume (slice 127, D6), beside the launch's.
@@ -54,17 +51,26 @@ def record(
     entry: JournalEntry,
     finished: Finished,
     version_label: str,
-    observation: OutcomeObservation | None = None,
+    auto_resume_limit: int,
 ) -> None:
     """Block the entry's node when a human must look, then resolve the entry.
 
     ``version_label`` is the ``sq --version`` label captured once at start-up; it
-    labels a recorded review whose file carries no stamp of its own. ``observation``
-    is the outcome observation a ``completed`` run needs (slice 128, D2).
+    labels a recorded review whose file carries no stamp of its own.
+    ``auto_resume_limit`` bounds the automatic resumes of a transient outcome.
     """
     match finished:
         case RunEnded() | RunVanished():
-            ingest(store, entry, finished, version_label, observation)
+            ingest(store, entry, finished, version_label, auto_resume_limit)
+        case LaunchFailed() | ResumeFailed():
+            record_unstarted(store, entry, finished)
+
+
+def record_unstarted(
+    store: Store, entry: JournalEntry, finished: LaunchFailed | ResumeFailed
+) -> None:
+    """Block on a human and resolve the entry of a launch or resume that failed."""
+    match finished:
         case LaunchFailed():
             _record_launch_failed(store, entry, finished)
         case ResumeFailed():

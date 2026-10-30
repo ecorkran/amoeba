@@ -21,7 +21,6 @@ from amoeba.store import (
     JournalOutcome,
     JournalResolver,
     ResolutionOutcome,
-    latest_run_entry,
 )
 
 
@@ -30,8 +29,6 @@ class DispatchState(StrEnum):
 
     #: Any unresolved entry. Nothing to do.
     IN_FLIGHT = "in_flight"
-    #: The latest run's outcome waits for a routing decision. 126 routes it.
-    AWAITING_ROUTING = "awaiting_routing"
     #: The latest run never started (recovery resolved it ``not_applied``).
     REISSUE = "reissue"
     #: The pointer write landed and CF still points at the slice: launch.
@@ -78,9 +75,6 @@ def dispatch_state(
     """
     if any(not entry.is_resolved for entry in entries):
         return DispatchState.IN_FLIGHT
-    latest_run = latest_run_entry(entries)
-    if latest_run is not None and latest_run.awaits_routing:
-        return DispatchState.AWAITING_ROUTING
     pending = _pending_decision(entries, resolution)
     if pending is not None:
         return pending

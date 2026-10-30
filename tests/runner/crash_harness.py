@@ -31,7 +31,6 @@ from amoeba.store import (
     BlockedState,
     JournalEntry,
     Node,
-    RoutingDecision,
     Store,
     project_store_path,
 )
@@ -252,37 +251,11 @@ class CrashHarness:
         ) as store:
             return [s for s in store.all_blocked_states(node_id) if not s.is_resolved]
 
-    def unrouted(self) -> list[JournalEntry]:
-        """The resolved entries still awaiting a routing decision."""
-        with Store.open_read_only(
-            project_store_path(self.supervisor_dir, PROJECT)
-        ) as store:
-            return store.unrouted_outcomes(PROJECT)
-
     def verdict_ids(self) -> list[str]:
         with Store.open_read_only(
             project_store_path(self.supervisor_dir, PROJECT)
         ) as store:
             return [verdict.id for verdict in store.verdicts(PROJECT)]
-
-    def decisions(self, entry: JournalEntry) -> list[RoutingDecision]:
-        """Every routing decision the entry's node has, oldest first."""
-        with Store.open_read_only(
-            project_store_path(self.supervisor_dir, PROJECT)
-        ) as store:
-            return store.routing_decisions(entry.node_id)
-
-    def wait_for_decision(self, entry: JournalEntry) -> RoutingDecision:
-        """Wait until the entry's outcome is routed, and return its decision."""
-
-        def routed() -> bool:
-            return any(d.journal_entry_id == entry.id for d in self.decisions(entry))
-
-        self.wait_until("the outcome to be routed", routed)
-        [decision] = [
-            d for d in self.decisions(entry) if d.journal_entry_id == entry.id
-        ]
-        return decision
 
     def node(self, node_id: str) -> Node:
         with Store.open_read_only(

@@ -162,20 +162,22 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 6.2: Take routing and the CF outcome read off the tick
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
 
-- [ ] `runner/tick.py`: remove `GateStage.observe_outcomes`, `route_outcomes` and `watch_overruns`. `ProjectTick` stops taking `routing_table`. `runner/ingest/record.py`: stop marking `awaits_routing`; drop the `observation` argument and the hatch-check writes; `record_finished` no longer takes outcome observations. The routing, outcome and overrun modules stay on disk, unused, until Section 10
-- [ ] Tick tests, file by file (unit tests of the unused modules stay until their modules go):
-  1. Delete `tests/runner/gates/test_tick_outcome.py` and `tests/runner/gates/test_tick_routing.py`: they prove the CF outcome read, the hatches and gate-based routing, which D9 removes
-  2. `tests/runner/routing/test_tick_routing.py`: delete the rerun, held-step and recompute tests (D9 removes them). Delete `test_advance_dispatches_successor_next_tick`; Task 6.3 replaces it
-  3. `tests/runner/resolutions/test_tick_accept_routing.py`: delete the two `accept` tests (D6 removes `accept`). Move `test_a_failed_resume_escalates_once_and_offers_the_pause_decisions_again` to `test_tick_resume.py`, dropping only an assertion about a routing decision if it makes one
-- [ ] **Success:** full suite green. Commit `refactor: take routing and the CF outcome read off the tick`
+- [x] `runner/tick.py`: remove `GateStage.observe_outcomes`, `route_outcomes` and `watch_overruns`. `ProjectTick` stops taking `routing_table`. `runner/ingest/record.py`: stop marking `awaits_routing`; drop the `observation` argument and the hatch-check writes; `record_finished` no longer takes outcome observations. The routing, outcome and overrun modules stay on disk, unused, until Section 10
+- [x] Tick tests, file by file (unit tests of the unused modules stay until their modules go):
+  1. [x] Delete `tests/runner/gates/test_tick_outcome.py` and `tests/runner/gates/test_tick_routing.py`: they prove the CF outcome read, the hatches and gate-based routing, which D9 removes
+  2. [x] `tests/runner/routing/test_tick_routing.py`: delete the rerun, held-step and recompute tests (D9 removes them). Delete `test_advance_dispatches_successor_next_tick`; Task 6.3 replaces it
+  3. [x] `tests/runner/resolutions/test_tick_accept_routing.py`: delete the two `accept` tests (D6 removes `accept`). Move `test_a_failed_resume_escalates_once_and_offers_the_pause_decisions_again` to `test_tick_resume.py`, dropping only an assertion about a routing decision if it makes one
+- [x] **Success:** full suite green. Commit `refactor: take routing and the CF outcome read off the tick`
 
 ### Task 6.3: Ingest by the outcome map
 **Owner**: Junior AI | **Dependencies**: 6.1, 6.2 | **Effort**: 3
 
-- [ ] `runner/ingest/record.py`: `ingest` uses `plan_supervised` with `supervise.resume_count` and passes `complete_node_id` for `COMPLETED`; remove `plan_outcome`. Pass `auto_resume_limit` from settings through the tick to `record_finished`
-- [ ] Tick test replacing Task 6.2's deleted advance test: a completed run's node is `done` and its successor launches on the next tick
-- [ ] Crash test with `tests/runner/crash_harness.py`: kill between ingest's writes of a completed run; after restart the node is `done` and nothing is relaunched (Success Criteria, "A crash between ingest's writes")
-- [ ] **Success:** full suite green. Commit `feat: ingest finished runs by the outcome map`
+- [x] `runner/ingest/record.py`: `ingest` uses `plan_supervised` with `supervise.resume_count` and passes `complete_node_id` for `COMPLETED`; remove `plan_outcome`. Pass `auto_resume_limit` from settings through the tick to `record_finished`
+- [x] Tick test replacing Task 6.2's deleted advance test: a completed run's node is `done` and its successor launches on the next tick
+- [x] Crash test with `tests/runner/crash_harness.py`: kill between ingest's writes of a completed run; after restart the node is `done` and nothing is relaunched (Success Criteria, "A crash between ingest's writes")
+- [x] **Success:** full suite green. Commit `feat: ingest finished runs by the outcome map`
+
+Note (20261029): 6.2 and 6.3 landed in one commit, `feat: ingest finished runs by the outcome map`, because routing off the tick leaves completed steps never marked done until ingest completes them, so 6.2 alone could not keep the suite green. Beyond the listed deletions: removed tests/runner/gates/test_tick_merge.py, test_tick_disagreement.py, tests/runner/routing/test_overrun.py, the gate-read budget test in test_budget_coverage.py, the accept and rerun tests in test_decisions_e2e.py, and four awaiting-routing state tests (their behaviour is gone). `awaits_routing` is still set by the store on every issuer resolution; the Runner no longer reads it (dispatch/state.py and resolutions/classify.py dropped it, and DispatchState.AWAITING_ROUTING is gone). Task 13.x store-contract wording must say 'not read by the Runner', not 'not written'. A completed run's successor now dispatches in the same tick that ingests it.
 
 ---
 

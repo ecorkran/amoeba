@@ -2,8 +2,6 @@
 
 The sequence is fixed code (D1): intents are applied first (124), then the PM's
 resolutions are answered (127), then the rest.
-Slots later slices fill are marked in comments only: the body of
-``finish.record`` (125). Routing (126) runs after record, on a view built before it.
 """
 
 from __future__ import annotations
@@ -42,9 +40,6 @@ from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.project_view import build_project_view
 from amoeba.runner.record_runs import record_finished
 from amoeba.runner.resolutions.stage import apply_pending_resolutions
-from amoeba.runner.routing.overrun import watch_overruns
-from amoeba.runner.routing.stage import route_outcomes
-from amoeba.runner.routing.table import RoutingTable
 from amoeba.store import CommandKind, JournalEntry, Store
 
 #: Who closes a project escalation that stopped recurring.
@@ -70,17 +65,17 @@ class ProjectTick:
         now: Callable[[], datetime],
         context: NodeContext,
         version_label: str,
-        routing_table: RoutingTable,
         project_settings: ProjectSettings,
         cf_run: CfRun,
         call_timeout_seconds: float,
         amoeba_version: str,
+        auto_resume_limit: int,
     ) -> None:
         self._project_id = project_id
         self._version_label = version_label
-        self._routing_table = routing_table
         self._project_settings = project_settings
         self._amoeba_version = amoeba_version
+        self._auto_resume_limit = auto_resume_limit
         self._store = store
         self._planners = planners
         self._observer = observer
@@ -136,25 +131,18 @@ class ProjectTick:
             probed = self._probes.check(links, budget, faults, self._project_id)
         if probed is TickResult.COMPLETE:
             probed = self._plan_reads(links, budget, faults)
-        # A completed run is recorded only with its outcome observation. One the
-        # budget cut off stays unresolved and tracked, and is observed next tick.
-        outcomes = self._gates.observe_outcomes(observed.runs, budget)
         runs = record_finished(
             self._store,
             self._context,
             self._tracker,
             self._version_label,
+            self._auto_resume_limit,
             observed.runs,
-            outcomes.observations,
         )
         self.wrote = runs.wrote or self.wrote
         shape_error = runs.shape_error
         in_flight = [o.run.entry for o in runs.pending if o.finished is None]
         watch_pointers(self._store, self._project_id, in_flight, faults)
-        # Beside the pointer watch, before the faults are raised, so the existing
-        # raise path records the overrun (slice 126, D7). It reads only in-flight
-        # entries, which routing never touches, so its place changes no result.
-        watch_overruns(in_flight, self._routing_table, self._now(), faults)
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )
@@ -169,8 +157,6 @@ class ProjectTick:
         if pointed.result is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         self._pointer_confirmed = pointed.confirmed
-        # The view is built before routing: what routing does is first seen by the
-        # next tick's view (slice 126, D8).
         # Reads, and the completion write of a merge git shows done; before the view.
         merges = self._gates.observe_merges(desired, budget, faults)
         self.wrote = merges.wrote or self.wrote
@@ -184,17 +170,6 @@ class ProjectTick:
             merge_observations=merges.observations,
         )
         self.wrote = dispatch.wrote or self.wrote
-        # Store reads and writes only, so no budget check: it starts no subprocess.
-        self.wrote = (
-            route_outcomes(
-                self._store,
-                self._project_id,
-                self._routing_table,
-                self._amoeba_version,
-                self._context,
-            )
-            or self.wrote
-        )
         decided = self._decide(view)
         acted = self._act.run(decided, budget, faults)
         self.wrote = acted.wrote or self.wrote

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
 
 import pytest
 from sq_stub_scripts import (
@@ -21,17 +20,14 @@ from sq_stub_scripts import (
     split_review,
 )
 
-from amoeba.process import RunOutcome, RunOutcomeDocument
+from amoeba.process import ProcessSettings, RunOutcome, RunOutcomeDocument
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.finish import record
-from amoeba.runner.gates.outcome_record import OutcomeObservation, unobservable
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON, REASON_FAILED
 from amoeba.runner.ingest.record import (
     PAYLOAD_PATH,
     PAYLOAD_REVIEW_FAULT,
-    RESULT_CHECK_IDS,
     RESULT_OUTCOME_DOCUMENT,
-    RESULT_OUTCOME_OBSERVATION,
     RESULT_REVIEW_FAULT,
     RESULT_VERDICT_IDS,
 )
@@ -52,7 +48,6 @@ from amoeba.store import (
     Store,
     StoreError,
 )
-from runner.gate_rig import failed_reads
 
 PROJECT = "demo"
 RUN_ID = "amoeba-20261024T101500Z-0123456789ab"
@@ -116,7 +111,7 @@ class Rig:
             self.entry,
             RunEnded(document),
             VERSION_LABEL,
-            failed_reads(self.entry),
+            ProcessSettings().auto_resume_limit,
         )
         return document
 
@@ -258,7 +253,7 @@ def test_a_failed_run_with_an_unknown_review_keeps_its_block_and_adds_the_fault(
     rig: Rig,
 ) -> None:
     script = RunScript(
-        {}, {**missing_file_review().document, "failure": {"kind": "stall"}}
+        {}, {**missing_file_review().document, "failure": {"kind": "cost_cap"}}
     )
 
     rig.finish(script, RunOutcome.FAILED)
@@ -304,7 +299,7 @@ def test_recording_again_after_a_crash_gives_one_block_and_one_verdict_per_part(
     rig: Rig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     split = split_review(SLICE_NAME)
-    script = RunScript(split.files, {**split.document, "failure": {"kind": "stall"}})
+    script = RunScript(split.files, {**split.document, "failure": {"kind": "cost_cap"}})
     original = Store.record_runner_report
     crash = {"armed": True}
 
@@ -327,102 +322,3 @@ def test_recording_again_after_a_crash_gives_one_block_and_one_verdict_per_part(
     assert len(rig.store.verdicts(PROJECT)) == 2, "one verdict per part"
     assert len(rig.store.detections(PROJECT)) == 2
     assert rig.resolved().is_resolved
-
-
-# -- slice 128, D2: the outcome observation -------------------------------------
-
-
-def _ingest_with(
-    rig: Rig, outcome: RunOutcome, observation: OutcomeObservation | None
-) -> None:
-    document = RunOutcomeDocument.model_validate(
-        {
-            "run_id": RUN_ID,
-            "outcome": outcome.value,
-            "status": outcome.value,
-        }
-    )
-    record(rig.store, rig.entry, RunEnded(document), VERSION_LABEL, observation)
-
-
-def test_a_completed_run_records_its_checks_and_the_observation(rig: Rig) -> None:
-    observation = unobservable(rig.entry, rig.slice_node.id, "no reads", "amoeba-test")
-
-    _ingest_with(rig, RunOutcome.COMPLETED, observation)
-
-    done = rig.resolved()
-    assert done.result is not None
-    assert done.result[RESULT_CHECK_IDS] == [c.id for c in observation.checks]
-    stored = done.result[RESULT_OUTCOME_OBSERVATION]
-    assert isinstance(stored, dict) and stored["gate"] == {"failure": "no reads"}
-    recorded = rig.store.checks(PROJECT, node_id=rig.slice_node.id)
-    assert [c.id for c in recorded] == [c.id for c in observation.checks]
-
-
-def test_the_checks_are_written_before_the_block_and_the_report(
-    rig: Rig, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    order: list[str] = []
-    for name in ("record_check", "block", "record_runner_report"):
-        original = getattr(rig.store, name)
-
-        def spy(
-            *args: Any, _name: str = name, _original: Any = original, **kw: Any
-        ) -> Any:
-            order.append(_name)
-            return _original(*args, **kw)
-
-        monkeypatch.setattr(rig.store, name, spy)
-    observation = unobservable(rig.entry, rig.slice_node.id, "no reads", "amoeba-test")
-    script = missing_file_review()  # an unknown review: the run needs a block
-    for relative, text in script.files.items():
-        (rig.checkout / relative).write_text(text, encoding="utf-8")
-    document = RunOutcomeDocument.model_validate(
-        {
-            "run_id": RUN_ID,
-            "outcome": "completed",
-            "status": "completed",
-            **script.document,
-        }
-    )
-
-    record(rig.store, rig.entry, RunEnded(document), VERSION_LABEL, observation)
-
-    assert order == ["record_check", "record_check", "block", "record_runner_report"]
-
-
-def test_a_repeat_after_a_crash_keeps_the_first_check_records(rig: Rig) -> None:
-    first = unobservable(rig.entry, rig.slice_node.id, "first reads", "amoeba-test")
-    for check in first.checks:  # the crash came after the checks were written
-        rig.store.record_check(check, project_id=PROJECT)
-    second = unobservable(rig.entry, rig.slice_node.id, "second reads", "amoeba-test")
-
-    _ingest_with(rig, RunOutcome.COMPLETED, second)
-
-    kept = {c.id: c.examined for c in rig.store.checks(PROJECT)}
-    assert kept == {c.id: c.examined for c in first.checks}
-    assert len(kept) == 2
-
-
-def test_a_completed_run_without_an_observation_is_refused_and_writes_nothing(
-    rig: Rig,
-) -> None:
-    with pytest.raises(ValueError, match="without an outcome observation"):
-        _ingest_with(rig, RunOutcome.COMPLETED, None)
-
-    assert rig.store.checks(PROJECT) == []
-    assert rig.store.journal_entry(rig.entry.id) is not None
-    assert not rig.resolved().is_resolved
-
-
-@pytest.mark.parametrize("outcome", [RunOutcome.FAILED, RunOutcome.ORPHANED])
-def test_other_outcomes_ignore_the_observation(rig: Rig, outcome: RunOutcome) -> None:
-    observation = unobservable(rig.entry, rig.slice_node.id, "no reads", "amoeba-test")
-
-    _ingest_with(rig, outcome, observation)
-
-    assert rig.store.checks(PROJECT) == []
-    done = rig.resolved()
-    assert done.result is not None
-    assert RESULT_OUTCOME_OBSERVATION not in done.result
-    assert RESULT_CHECK_IDS not in done.result
