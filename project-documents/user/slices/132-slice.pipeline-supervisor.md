@@ -104,6 +104,7 @@ After the cut, `src/amoeba/runner/` holds:
 | `dispatch/` | `checkout.py`, `hold.py`, `planner.py`, `params.py`, `build_view.py`, `reissue.py`, `state.py`, `facts.py` | pointer files go. `params.py` reads the project config (D2), and `state.py` loses `NEEDS_POINTER`. |
 | `resolutions/` | stage, act, confirm, prepoll, argv | vocabulary cut to `resume` and `stop`. Situations collapse (D6). |
 | `git_read.py`, `gates/predispatch.py` | the git half of the pre-dispatch check | the CF gate half goes. `predispatch.py` moves to `dispatch/checkout_check.py` once `gates/` is otherwise empty. |
+| `gates/candidates.py`, `gates/dispatch_reads.py`, `gates/cf_reads.py` (`read_target`, `read_config`, `DEFAULT_TARGET_BRANCH`), `gates/stage.py` (`GateStage.check_dispatch`) | the dispatch check needs them ("on the target") | CF gate parts removed. They move to `dispatch/` as `candidates.py`, `checkout_reads.py` and `check_stage.py` (Task 10.2). |
 | `project_config.py` | load, validate, defaults | `merge_policy` becomes `pipeline` and `params` (D2) |
 
 The deleted modules are listed in D9.
@@ -331,6 +332,8 @@ No new libraries. YAML and pydantic for the config, as in 128.
 
 This slice restructures the Runner in place. The resident process must start and pass its suite after every task.
 
+**Order in the task breakdown.** The steps below are covered, but the tasks run in a different order. Dispatch cannot move to slice nodes while routing, the CF outcome read and the step map are still on the tick, because each keys on a step. So the tasks add every new piece first (config and settings, Squadron shapes, atomic completion, `supervise.py`), take the post-completion policy off the tick, add automatic resume, cut the vocabularies, then switch dispatch to slice nodes in one sequence and delete what is left unused.
+
 1. **Config and dispatch first.** Add `pipeline` and `params` to the config, launch the configured pipeline on the slice node, and remove the pointer write. This is the step that changes what runs.
 2. **Slice nodes.** Stop creating step nodes, then retarget these to slice nodes:
    - governance
@@ -390,6 +393,26 @@ auto_resume_limit: int = 3          # --auto-resume-limit
 # sq_run journal parameters, resume (D5, D6)
 {"run_id": str, "continues": <entry id>, "resume_cause": "transient|resolution",
  "instructions"?: str, "dispatch_check": {...}}
+```
+
+```text
+# store: atomic completion (D4)
+Store.record_runner_report(entry_id, reviews, outcome=, result=, complete_node_id: str | None = None)
+    # when set, that node is marked done in the same transaction
+
+# supervise.py (pure; the only place the D5 rule is written)
+resume_count(entries, step) -> int      # trailing transient resumes at one step, newest first
+
+# dispatch state
+DispatchState.AUTO_RESUME               # beside RESUME; set by dispatch/state.py when the slice's
+                                        # latest resolved sq_run outcome classifies TRANSIENT and the
+                                        # slice is not blocked. resets_at is read by Decide, not state.
+
+# ResumeRun after the cut
+ResumeRun(node_id, run_id, continues, checkout, cause: ResumeCause,
+          instructions: str | None, resolution: str | None, journal_extra)
+    # ResumeCause = transient | resolution, PARAM_RESUME_CAUSE in resolutions/vocabulary.py
+    # resolution is set only for cause=resolution
 ```
 
 ```bash
