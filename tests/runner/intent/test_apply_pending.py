@@ -73,19 +73,13 @@ def test_each_outcome_is_stored_with_its_reason(builder: TreeBuilder) -> None:
     malformed = submit(store, {"intent": "launch"})
     not_target = submit(store, {"intent": "drive"}, node_id=step.id)
     unlinked = submit(store, {"intent": "drive"}, node_id=orphan.id)
-    until = submit(store, {"intent": "drive", "until": "architecture"}, node_id=None)
-    bad_until = submit(
-        store,
-        {"intent": "drive", "until": "slice_plan"},
-        node_id=builder.slice(initiative, 143).id,
-    )
+    with_until = submit(store, {"intent": "drive", "until": "tasks"}, node_id=None)
 
-    assert apply_pending_intents(store, PROJECT) == 7
+    assert apply_pending_intents(store, PROJECT) == 6
 
     expected = {
         applied: (APPLIED, None),
         no_op: (AcknowledgmentOutcome.NO_OP, None),
-        until: (APPLIED, None),
     }
     for message_id, (outcome, reason) in expected.items():
         message = _message(store, message_id)
@@ -98,7 +92,7 @@ def test_each_outcome_is_stored_with_its_reason(builder: TreeBuilder) -> None:
         malformed: IntentRejection.MALFORMED_BODY,
         not_target: IntentRejection.TARGET_NOT_INITIATIVE_OR_SLICE,
         unlinked: IntentRejection.TARGET_UNLINKED,
-        bad_until: IntentRejection.UNTIL_NOT_APPLICABLE,
+        with_until: IntentRejection.MALFORMED_BODY,
     }
     for message_id, code in rejected.items():
         message = _message(store, message_id)
@@ -109,14 +103,14 @@ def test_each_outcome_is_stored_with_its_reason(builder: TreeBuilder) -> None:
 
 def test_intents_for_one_target_apply_in_seq_order(builder: TreeBuilder) -> None:
     store = builder.store
-    submit(store, {"intent": "drive", "until": "tasks"})
-    submit(store, {"intent": "drive", "until": "implementation"})
+    submit(store, {"intent": "exclude"})
+    submit(store, {"intent": "drive"})
 
     apply_pending_intents(store, PROJECT)
 
     row = store.desired_state(PROJECT)
     assert row is not None
-    assert row.drive_until_step == "implementation"
+    assert row.drive is True and row.drive_until_step is None
 
 
 def test_the_row_names_the_intent_that_last_changed_it(builder: TreeBuilder) -> None:
@@ -167,10 +161,7 @@ def _seed_bodies(fields: dict[str, Any] | None) -> list[dict[str, Any]]:
     if fields.get("drive") is False:
         bodies.append({"intent": "exclude"})
     if fields.get("drive") is True:
-        body: dict[str, Any] = {"intent": "drive"}
-        if "drive_until_step" in fields:
-            body["until"] = fields["drive_until_step"]
-        bodies.append(body)
+        bodies.append({"intent": "drive"})
     if fields.get("hold"):
         bodies.append({"intent": "pause"})
     return bodies

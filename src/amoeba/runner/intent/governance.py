@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from amoeba.runner.lifecycle.steps import LifecycleStep, step_rank
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import DesiredState, Node
 
@@ -51,10 +50,6 @@ def _path_targets(tree: LifecycleTree, step: Node) -> list[Target]:
     return targets
 
 
-def _within_until(step: LifecycleStep, until: str | None) -> bool:
-    return until is None or step_rank(step) <= step_rank(LifecycleStep(until))
-
-
 def governing(tree: LifecycleTree, index: DesiredStateIndex, step: Node) -> Governance:
     """Resolve drive (nearest row that sets it) and hold (any row) for ``step``.
 
@@ -70,11 +65,7 @@ def governing(tree: LifecycleTree, index: DesiredStateIndex, step: Node) -> Gove
         if (row := index.row_for(target)) is not None
     ]
     driving = next((row for row in rows if row.drive is not None), None)
-    driven = (
-        driving is not None
-        and driving.drive is True
-        and _within_until(lifecycle_step, driving.drive_until_step)
-    )
+    driven = driving is not None and driving.drive is True
     return Governance(driven=driven, held=any(row.hold for row in rows))
 
 

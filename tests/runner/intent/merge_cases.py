@@ -1,4 +1,4 @@
-"""The merge table: current row crossed with each body form (D1, D5)."""
+"""The merge table: current row crossed with each body form (D1, D5; 132, D7)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ NODE = None  # the project target; the merge rules do not depend on the target
 
 NONE_ROW = None
 DRIVE_ONLY = {"drive": True}
-DRIVE_UNTIL = {"drive": True, "drive_until_step": "tasks"}
 HOLD_ONLY = {"hold": True}
 DRIVE_HOLD = {"drive": True, "hold": True}
 EXCLUDED = {"drive": False}
@@ -30,13 +29,6 @@ CASES = [
     ("drive/none", NONE_ROW, {"intent": "drive"}, APPLIED, set_row(drive=True)),
     ("drive/drive", DRIVE_ONLY, {"intent": "drive"}, NO_OP, None),
     (
-        "drive/until-clears",
-        DRIVE_UNTIL,
-        {"intent": "drive"},
-        APPLIED,
-        set_row(drive=True),
-    ),
-    (
         "drive/hold-kept",
         HOLD_ONLY,
         {"intent": "drive"},
@@ -50,51 +42,9 @@ CASES = [
         APPLIED,
         set_row(drive=True),
     ),
-    (
-        "drive-until/none",
-        NONE_ROW,
-        {"intent": "drive", "until": "tasks"},
-        APPLIED,
-        set_row(drive=True, drive_until_step="tasks"),
-    ),
-    (
-        "drive-until/same",
-        DRIVE_UNTIL,
-        {"intent": "drive", "until": "tasks"},
-        NO_OP,
-        None,
-    ),
-    (
-        "drive-until/replaces",
-        DRIVE_UNTIL,
-        {"intent": "drive", "until": "implementation"},
-        APPLIED,
-        set_row(drive=True, drive_until_step="implementation"),
-    ),
-    (
-        "drive-until/restricts-open-drive",
-        DRIVE_ONLY,
-        {"intent": "drive", "until": "slice_design"},
-        APPLIED,
-        set_row(drive=True, drive_until_step="slice_design"),
-    ),
-    (
-        "drive-until/hold-kept",
-        DRIVE_HOLD,
-        {"intent": "drive", "until": "tasks"},
-        APPLIED,
-        set_row(drive=True, drive_until_step="tasks", hold=True),
-    ),
     # exclude
     ("exclude/none", NONE_ROW, {"intent": "exclude"}, APPLIED, set_row(drive=False)),
     ("exclude/excluded", EXCLUDED, {"intent": "exclude"}, NO_OP, None),
-    (
-        "exclude/clears-until",
-        DRIVE_UNTIL,
-        {"intent": "exclude"},
-        APPLIED,
-        set_row(drive=False),
-    ),
     (
         "exclude/hold-kept",
         DRIVE_HOLD,
@@ -111,13 +61,6 @@ CASES = [
         {"intent": "pause"},
         APPLIED,
         set_row(drive=True, hold=True),
-    ),
-    (
-        "pause/until-kept",
-        DRIVE_UNTIL,
-        {"intent": "pause"},
-        APPLIED,
-        set_row(drive=True, drive_until_step="tasks", hold=True),
     ),
     # resume
     ("resume/none", NONE_ROW, {"intent": "resume"}, NO_OP, None),

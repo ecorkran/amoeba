@@ -16,10 +16,8 @@ from amoeba.runner.intent.merge import merge_intent
 from amoeba.runner.intent.vocabulary import (
     REASON_DETAIL_LIMIT,
     IntentBody,
-    IntentKind,
     IntentRejection,
     TargetKind,
-    until_applies,
 )
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import (
@@ -62,7 +60,7 @@ def _target_kind(node: Node) -> TargetKind | None:
 def interpret(
     message: Message, tree: LifecycleTree, current_row: DesiredState | None
 ) -> Interpretation:
-    """Decide what an intent does. Order: body, target kind, linked, ``until``."""
+    """Decide what an intent does. Order: body, target linked, target kind."""
     try:
         body = IntentBody.model_validate(message.payload)
     except ValidationError as error:
@@ -72,7 +70,6 @@ def interpret(
         detail = f"{where}: {first['msg']}" if where else str(first["msg"])
         return _rejected(IntentRejection.MALFORMED_BODY, detail)
 
-    kind = TargetKind.PROJECT
     if message.node_id is not None:
         node = tree.node(message.node_id)
         # The store guarantees the node exists; one the tree lacks has no link.
@@ -87,16 +84,6 @@ def interpret(
                 IntentRejection.TARGET_NOT_INITIATIVE_OR_SLICE,
                 f"node {message.node_id} is not an initiative or slice",
             )
-        kind = target_kind
-    if (
-        body.intent is IntentKind.DRIVE
-        and body.until is not None
-        and not until_applies(kind, body.until)
-    ):
-        return _rejected(
-            IntentRejection.UNTIL_NOT_APPLICABLE,
-            f"{body.until.value} is not a step of a {kind.value}",
-        )
     change = merge_intent(body, message.node_id, current_row)
     if change is None:
         return Interpretation(AcknowledgmentOutcome.NO_OP)

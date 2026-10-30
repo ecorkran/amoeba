@@ -112,34 +112,12 @@ def test_a_hold_only_row_does_not_decide_drive(world: World) -> None:
     )
 
 
-def test_an_initiative_drive_until_slice_design_stops_there(world: World) -> None:
-    rows = [row(world.initiative, drive=True, until=LifecycleStep.SLICE_DESIGN.value)]
-    driven = {
-        (step, owner is world.initiative): world.govern(rows, step, owner).driven
-        for step, owner in [
-            (LifecycleStep.ARCHITECTURE, world.initiative),
-            (LifecycleStep.SLICE_PLAN, world.initiative),
-            (LifecycleStep.SLICE_DESIGN, world.first),
-            (LifecycleStep.SLICE_DESIGN, world.second),
-            (LifecycleStep.TASKS, world.first),
-            (LifecycleStep.INTEGRATION, world.initiative),
-        ]
-    }
-    assert driven == {
-        (LifecycleStep.ARCHITECTURE, True): True,
-        (LifecycleStep.SLICE_PLAN, True): True,
-        (LifecycleStep.SLICE_DESIGN, False): True,
-        (LifecycleStep.TASKS, False): False,
-        (LifecycleStep.INTEGRATION, True): False,
-    }
-
-
-def test_a_slice_drive_until_tasks_leaves_implementation_undriven(
-    world: World,
-) -> None:
+def test_a_stored_drive_until_step_is_ignored(world: World) -> None:
+    """Rows written before slice 132 may still carry one; it no longer limits work."""
     rows = [row(world.first, drive=True, until=LifecycleStep.TASKS.value)]
+
     assert world.govern(rows, LifecycleStep.TASKS).driven is True
-    assert world.govern(rows, LifecycleStep.IMPLEMENTATION).driven is False
+    assert world.govern(rows, LifecycleStep.IMPLEMENTATION).driven is True
 
 
 def test_governing_a_node_that_is_not_a_step_raises(world: World) -> None:

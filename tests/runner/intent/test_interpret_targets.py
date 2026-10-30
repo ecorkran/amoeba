@@ -83,9 +83,10 @@ def test_an_unlinked_target_is_rejected(world: World) -> None:
     assert _code(result) is IntentRejection.TARGET_UNLINKED
 
 
-def test_an_initiative_level_step_on_a_slice_is_rejected(world: World) -> None:
-    result = world.ask({"intent": "drive", "until": "architecture"}, world.slice)
-    assert _code(result) is IntentRejection.UNTIL_NOT_APPLICABLE
+def test_an_until_is_a_malformed_body_on_any_target(world: World) -> None:
+    for target in (None, world.slice):
+        result = world.ask({"intent": "drive", "until": "tasks"}, target)
+        assert _code(result) is IntentRejection.MALFORMED_BODY
 
 
 def test_a_long_malformed_detail_is_cut(world: World) -> None:
@@ -101,5 +102,5 @@ def test_a_valid_body_on_a_linked_target_is_not_rejected(
     world: World, target: str
 ) -> None:
     node = {"project": None, "initiative": world.initiative, "slice": world.slice}
-    result = world.ask({"intent": "drive", "until": "tasks"}, node[target])
+    result = world.ask({"intent": "drive"}, node[target])
     assert result.outcome is not REJECTED
