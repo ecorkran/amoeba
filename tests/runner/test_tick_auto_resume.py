@@ -49,7 +49,6 @@ def _launched(rig: DispatchRig) -> Node:
     slice_node, step = rig.slice_and_step("auto-resume", INDEX)
     clear_gates(rig, slice_node)
     rig.tick()
-    rig.tick()
     assert rig.run_of(step)
     return step
 

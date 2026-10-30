@@ -58,7 +58,7 @@ class Setup:
         return view_of(
             {
                 "a": facts(
-                    DispatchState.POINTED, self.checkout, step=step, slice_index=SLICE
+                    DispatchState.READY, self.checkout, step=step, slice_index=SLICE
                 )
             }
         )

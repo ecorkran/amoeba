@@ -15,7 +15,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.gates.merge_observation import MergeObservation
 from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
@@ -76,16 +75,6 @@ class BlockHumanStep:
 
 
 @dataclass(frozen=True)
-class WriteSlicePointer:
-    """Point ``checkout``'s CF at a slice (D2); the launch follows on a later tick."""
-
-    node_id: str
-    cf_project_id: str
-    slice_index: int
-    checkout: Checkout
-
-
-@dataclass(frozen=True)
 class ResumeRun:
     """Resume a run: a PM's ``resume``, or an automatic retry (D5, D6).
 
@@ -123,7 +112,7 @@ class BlockDispatch:
 
 
 #: The closed set of things a planner may ask for.
-type Action = LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | BlockDispatch
+type Action = LaunchRun | BlockHumanStep | ResumeRun | BlockDispatch
 
 
 @dataclass(frozen=True)

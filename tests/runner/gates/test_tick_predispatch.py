@@ -78,9 +78,7 @@ def _dirty(rig: DispatchRig) -> None:
 def _step(
     rig: DispatchRig, step: LifecycleStep = LifecycleStep.TASKS, index: int = INDEX
 ) -> Node:
-    node = rig.step("checked", index, step)
-    rig.tick()  # the pointer write
-    return node
+    return rig.step("checked", index, step)
 
 
 def _block_payload(rig: DispatchRig) -> dict[str, object]:
@@ -171,7 +169,6 @@ def test_a_launch_on_a_foreign_or_a_slice_branch_blocks(rig: DispatchRig) -> Non
     assert _blocked_on_human(rig, node)
 
     other = rig.step("own", 126, LifecycleStep.IMPLEMENTATION)
-    rig.tick()  # its pointer write
     make_branch(rig.world.root, f"126-slice.{'own'}")
     rig.tick()
 
@@ -377,14 +374,3 @@ def test_a_resume_on_the_wrong_branch_blocks(rig: DispatchRig) -> None:
         if PARAM_CONTINUATION in e.parameters
     ] == []
     assert _block_payload(rig)[PAYLOAD_FAULT_KIND] == "checkout_branch"
-
-
-def test_a_pointer_write_is_not_checked(rig: DispatchRig) -> None:
-    _dirty(rig)
-    make_branch(rig.world.root, "feature-x")
-
-    node = rig.step("pointer-only", INDEX, LifecycleStep.SLICE_DESIGN)
-    rig.tick()
-
-    assert rig.entries(CommandKind.CF_WRITE, node), "the pointer write goes ahead"
-    assert not _blocked_on_human(rig, node)

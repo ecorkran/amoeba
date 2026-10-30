@@ -151,7 +151,6 @@ def _loop_paused_step(rig: DispatchRig) -> tuple[Node, str]:
     slice_node, step = rig.slice_and_step("failed-resume", INDEX)
     clear_gates(rig, slice_node)
     rig.tick()
-    rig.tick()
     rig.end_run(
         step,
         RunOutcome.PAUSED,

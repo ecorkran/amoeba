@@ -77,9 +77,7 @@ def _run(
 
 
 def test_no_entries_needs_a_pointer() -> None:
-    assert (
-        dispatch_state([], None, pointer_confirmed=True) is DispatchState.NEEDS_POINTER
-    )
+    assert dispatch_state([], None) is DispatchState.READY
 
 
 @pytest.mark.parametrize(
@@ -93,9 +91,7 @@ def test_no_entries_needs_a_pointer() -> None:
     ids=["open pointer", "open run", "pointed then open run", "open pointer after run"],
 )
 def test_any_unresolved_entry_is_in_flight(entries: list[JournalEntry]) -> None:
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=True) is DispatchState.IN_FLIGHT
-    )
+    assert dispatch_state(entries, None) is DispatchState.IN_FLIGHT
 
 
 def test_a_run_recovery_found_never_started_is_reissued() -> None:
@@ -104,48 +100,34 @@ def test_a_run_recovery_found_never_started_is_reissued() -> None:
         _run(JournalOutcome.NOT_APPLIED, resolved_by=JournalResolver.RECOVERY),
     ]
 
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=False) is DispatchState.REISSUE
-    )
+    assert dispatch_state(entries, None) is DispatchState.REISSUE
 
 
 @pytest.mark.parametrize("outcome", [JournalOutcome.COMPLETED, JournalOutcome.ADOPTED])
 def test_a_landed_pointer_write_confirmed_now_is_pointed(
     outcome: JournalOutcome,
 ) -> None:
-    assert (
-        dispatch_state([_pointer(outcome)], None, pointer_confirmed=True)
-        is DispatchState.POINTED
-    )
+    assert dispatch_state([_pointer(outcome)], None) is DispatchState.READY
 
 
 @pytest.mark.parametrize("outcome", [JournalOutcome.COMPLETED, JournalOutcome.ADOPTED])
 def test_a_landed_pointer_write_not_confirmed_now_needs_a_pointer(
     outcome: JournalOutcome,
 ) -> None:
-    assert (
-        dispatch_state([_pointer(outcome)], None, pointer_confirmed=False)
-        is DispatchState.NEEDS_POINTER
-    )
+    assert dispatch_state([_pointer(outcome)], None) is DispatchState.READY
 
 
 def test_a_failed_pointer_write_needs_a_pointer() -> None:
     entries = [_pointer(JournalOutcome.FAILED)]
 
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=True)
-        is DispatchState.NEEDS_POINTER
-    )
+    assert dispatch_state(entries, None) is DispatchState.READY
 
 
 def test_a_routed_run_needs_a_pointer_again() -> None:
     """The decision cleared the flag; the next attempt starts with the pointer."""
     entries = [_pointer(), _run(awaits_routing=False)]
 
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=True)
-        is DispatchState.NEEDS_POINTER
-    )
+    assert dispatch_state(entries, None) is DispatchState.READY
 
 
 @pytest.mark.parametrize("outcome", [JournalOutcome.UNKNOWN, JournalOutcome.ADOPTED])
@@ -154,18 +136,13 @@ def test_a_run_recovery_resolved_unknown_or_adopted_needs_a_pointer(
 ) -> None:
     entries = [_pointer(), _run(outcome, resolved_by=JournalResolver.RECOVERY)]
 
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=True)
-        is DispatchState.NEEDS_POINTER
-    )
+    assert dispatch_state(entries, None) is DispatchState.READY
 
 
 def test_a_pointer_write_after_a_routed_run_is_pointed() -> None:
     entries = [_pointer(), _run(), _pointer()]
 
-    assert (
-        dispatch_state(entries, None, pointer_confirmed=True) is DispatchState.POINTED
-    )
+    assert dispatch_state(entries, None) is DispatchState.READY
 
 
 # -- the latest applied resolution (slice 127, D5) ------------------------------
@@ -200,7 +177,7 @@ def test_an_applied_resume_of_a_run_nobody_carried_out_is_resume(
 ) -> None:
     entries = [_run_ended(outcome)]
 
-    state = dispatch_state(entries, _decided("resume"), pointer_confirmed=True)
+    state = dispatch_state(entries, _decided("resume"))
 
     assert state is DispatchState.RESUME
 
@@ -211,22 +188,22 @@ def test_an_applied_resume_with_no_run_to_resume_decides_nothing(
 ) -> None:
     entries = [_run_ended(outcome)]
 
-    state = dispatch_state(entries, _decided("resume"), pointer_confirmed=True)
+    state = dispatch_state(entries, _decided("resume"))
 
-    assert state is DispatchState.NEEDS_POINTER
+    assert state is DispatchState.READY
 
 
 def test_an_applied_resume_with_nothing_before_it_decides_nothing() -> None:
-    state = dispatch_state([], _decided("resume"), pointer_confirmed=True)
+    state = dispatch_state([], _decided("resume"))
 
-    assert state is DispatchState.NEEDS_POINTER
+    assert state is DispatchState.READY
 
 
 @pytest.mark.parametrize("decision", ["retry", "accept", "handled", "rerun"])
 def test_a_retired_decision_decides_nothing(decision: str) -> None:
     entries = [_run_ended("paused")]
 
-    state = dispatch_state(entries, _decided(decision), pointer_confirmed=True)
+    state = dispatch_state(entries, _decided(decision))
 
     assert state is not DispatchState.RESUME
 
@@ -235,9 +212,9 @@ def test_a_retired_decision_decides_nothing(decision: str) -> None:
 def test_once_an_entry_names_it_the_older_rules_apply(decision: str) -> None:
     entries = [_run(), _naming(_pointer())]
 
-    state = dispatch_state(entries, _decided(decision), pointer_confirmed=True)
+    state = dispatch_state(entries, _decided(decision))
 
-    assert state is DispatchState.POINTED
+    assert state is DispatchState.READY
 
 
 @pytest.mark.parametrize(
@@ -256,15 +233,15 @@ def test_a_rejected_undecided_or_stop_resolution_changes_nothing(
 ) -> None:
     entries = [_run(), _pointer()]
 
-    state = dispatch_state(entries, resolution, pointer_confirmed=True)
+    state = dispatch_state(entries, resolution)
 
-    assert state is DispatchState.POINTED
+    assert state is DispatchState.READY
 
 
 def test_an_unresolved_continuation_is_in_flight() -> None:
     entries = [_run(), _naming(_run(None))]
 
-    state = dispatch_state(entries, _decided("resume"), pointer_confirmed=True)
+    state = dispatch_state(entries, _decided("resume"))
 
     assert state is DispatchState.IN_FLIGHT
 
@@ -299,7 +276,7 @@ def test_a_transient_outcome_gives_auto_resume(name: str) -> None:
     document = _TRANSIENT_DOCUMENTS[name]
     entries = [_pointer(), _run_stopped_at(document)]
 
-    state = dispatch_state(entries, None, pointer_confirmed=True)
+    state = dispatch_state(entries, None)
 
     assert state is DispatchState.AUTO_RESUME
 
@@ -331,29 +308,29 @@ def test_an_outcome_that_is_not_transient_is_not_resumed(
 ) -> None:
     entries = [_pointer(), _run_stopped_at(document)]
 
-    state = dispatch_state(entries, None, pointer_confirmed=True)
+    state = dispatch_state(entries, None)
 
     assert state is not DispatchState.AUTO_RESUME
 
 
 def test_a_run_with_no_recorded_document_is_not_resumed() -> None:
-    state = dispatch_state([_pointer(), _run()], None, pointer_confirmed=True)
+    state = dispatch_state([_pointer(), _run()], None)
 
-    assert state is DispatchState.NEEDS_POINTER
+    assert state is DispatchState.READY
 
 
 def test_a_pointer_written_after_the_transient_run_starts_over() -> None:
     document = _TRANSIENT_DOCUMENTS["stall"]
     entries = [_run_stopped_at(document), _pointer()]
 
-    state = dispatch_state(entries, None, pointer_confirmed=True)
+    state = dispatch_state(entries, None)
 
-    assert state is DispatchState.POINTED
+    assert state is DispatchState.READY
 
 
 def test_an_unresolved_transient_resume_is_in_flight() -> None:
     entries = [_run_stopped_at(_TRANSIENT_DOCUMENTS["stall"]), _run(None)]
 
-    state = dispatch_state(entries, None, pointer_confirmed=True)
+    state = dispatch_state(entries, None)
 
     assert state is DispatchState.IN_FLIGHT

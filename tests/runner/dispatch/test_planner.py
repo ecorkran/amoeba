@@ -13,9 +13,8 @@ from amoeba.runner.decide import (
     LaunchRun,
     ProjectView,
     ResumeRun,
-    WriteSlicePointer,
 )
-from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
+from amoeba.runner.dispatch.checkout import CheckoutUnresolved
 from amoeba.runner.dispatch.params import (
     MERGE_DISABLED,
     PARAM_DISPATCH_CHECK,
@@ -39,7 +38,6 @@ from amoeba.store import (
     JournalResolver,
 )
 from runner.dispatch.dispatch_support import (
-    CF_PROJECT,
     FIRST,
     OK_EVIDENCE,
     SECOND,
@@ -51,8 +49,8 @@ from runner.dispatch.dispatch_support import (
 PLANNER = DispatchPlanner()
 
 
-def test_a_pointed_step_launches_its_pipeline() -> None:
-    view = view_of({"a": facts(DispatchState.POINTED, step=LifecycleStep.TASKS)})
+def test_a_ready_step_launches_its_pipeline() -> None:
+    view = view_of({"a": facts(DispatchState.READY, step=LifecycleStep.TASKS)})
 
     assert PLANNER.plan(view) == [
         LaunchRun(
@@ -77,7 +75,7 @@ def test_each_step_launches_its_pipeline_and_p6_never_merges(
     step: LifecycleStep, pipeline: str
 ) -> None:
     view = view_of(
-        {"a": facts(DispatchState.POINTED, step=step)},
+        {"a": facts(DispatchState.READY, step=step)},
         merge_policy=MergePolicy.HUMAN,
     )
 
@@ -92,11 +90,11 @@ def test_each_step_launches_its_pipeline_and_p6_never_merges(
 
 def test_p6_records_the_policy_it_launches_under_and_merges_only_under_auto() -> None:
     human = view_of(
-        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)},
+        {"a": facts(DispatchState.READY, step=LifecycleStep.IMPLEMENTATION)},
         merge_policy=MergePolicy.HUMAN,
     )
     auto = view_of(
-        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)},
+        {"a": facts(DispatchState.READY, step=LifecycleStep.IMPLEMENTATION)},
         merge_policy=MergePolicy.AUTO,
     )
 
@@ -116,20 +114,12 @@ def test_p6_records_the_policy_it_launches_under_and_merges_only_under_auto() ->
 
 @pytest.mark.parametrize("step", [LifecycleStep.SLICE_DESIGN, LifecycleStep.TASKS])
 def test_a_planning_launch_records_no_merge_policy(step: LifecycleStep) -> None:
-    view = view_of({"a": facts(DispatchState.POINTED, step=step)})
+    view = view_of({"a": facts(DispatchState.READY, step=step)})
 
     [action] = PLANNER.plan(view)
 
     assert isinstance(action, LaunchRun)
     assert action.journal_extra == {PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)}
-
-
-def test_a_step_that_needs_a_pointer_writes_it() -> None:
-    view = view_of({"a": facts(DispatchState.NEEDS_POINTER, SECOND, slice_index=130)})
-
-    [action] = PLANNER.plan(view)
-
-    assert action == WriteSlicePointer("a", CF_PROJECT, 130, Checkout(SECOND, None))
 
 
 def test_a_reissue_repeats_the_old_attempt_under_its_run_id() -> None:
@@ -186,7 +176,7 @@ def test_in_flight_gets_nothing() -> None:
 
 
 def test_an_unresolved_checkout_gets_nothing() -> None:
-    view = view_of({"a": facts(DispatchState.NEEDS_POINTER, CheckoutUnresolved("x"))})
+    view = view_of({"a": facts(DispatchState.READY, CheckoutUnresolved("x"))})
 
     assert PLANNER.plan(view) == []
 
@@ -198,13 +188,13 @@ def test_a_step_without_dispatch_facts_gets_nothing() -> None:
 
 
 def test_a_step_that_is_not_current_gets_nothing() -> None:
-    view = view_of({"a": facts(DispatchState.POINTED)}, current=[])
+    view = view_of({"a": facts(DispatchState.READY)}, current=[])
 
     assert PLANNER.plan(view) == []
 
 
-def test_a_held_checkout_gives_a_pointer_writer_nothing() -> None:
-    view = view_of({"a": facts(DispatchState.NEEDS_POINTER)}, held=[FIRST])
+def test_a_held_checkout_gives_a_ready_step_nothing() -> None:
+    view = view_of({"a": facts(DispatchState.READY)}, held=[FIRST])
 
     assert PLANNER.plan(view) == []
 
@@ -216,22 +206,10 @@ def test_a_held_checkout_gives_a_reissue_nothing() -> None:
     assert PLANNER.plan(view) == []
 
 
-def test_the_pointed_step_launches_in_the_checkout_its_claim_holds() -> None:
-    steps = {
-        "first": facts(DispatchState.POINTED, slice_index=125),
-        "second": facts(DispatchState.NEEDS_POINTER, slice_index=126),
-    }
-
-    actions = PLANNER.plan(view_of(steps, held=[FIRST]))
-
-    assert [a.node_id for a in actions] == ["first"]
-    assert isinstance(actions[0], LaunchRun)
-
-
 def test_the_second_slice_waits_while_the_first_runs_or_is_paused() -> None:
     """Hold (in flight, paused, or claimed) is in ``held_checkouts``: nothing starts."""
     view = view_of(
-        {"second": facts(DispatchState.NEEDS_POINTER, slice_index=126)}, held=[FIRST]
+        {"second": facts(DispatchState.READY, slice_index=126)}, held=[FIRST]
     )
 
     assert PLANNER.plan(view) == []
@@ -239,8 +217,8 @@ def test_the_second_slice_waits_while_the_first_runs_or_is_paused() -> None:
 
 def test_a_slice_in_another_worktree_is_planned_meanwhile() -> None:
     steps = {
-        "first": facts(DispatchState.NEEDS_POINTER, FIRST, slice_index=125),
-        "second": facts(DispatchState.NEEDS_POINTER, SECOND, slice_index=225),
+        "first": facts(DispatchState.READY, FIRST, slice_index=125),
+        "second": facts(DispatchState.READY, SECOND, slice_index=225),
     }
 
     actions = PLANNER.plan(view_of(steps, held=[FIRST]))
@@ -248,31 +226,17 @@ def test_a_slice_in_another_worktree_is_planned_meanwhile() -> None:
     assert [a.node_id for a in actions] == ["second"]
 
 
-def test_one_action_per_checkout_the_pointed_step_first() -> None:
-    steps = {
-        "early": facts(DispatchState.NEEDS_POINTER, slice_index=120),
-        "late": facts(DispatchState.POINTED, slice_index=130),
-    }
-
-    actions = PLANNER.plan(view_of(steps))
-
-    assert [a.node_id for a in actions] == ["late"]
-    assert isinstance(actions[0], LaunchRun)
-
-
 def test_otherwise_the_lowest_initiative_slice_and_step_goes_first() -> None:
     steps = {
-        "later-slice": facts(DispatchState.NEEDS_POINTER, slice_index=130),
+        "later-slice": facts(DispatchState.READY, slice_index=130),
         "later-step": facts(
-            DispatchState.NEEDS_POINTER,
+            DispatchState.READY,
             slice_index=125,
             step=LifecycleStep.IMPLEMENTATION,
         ),
-        "first": facts(
-            DispatchState.NEEDS_POINTER, slice_index=125, step=LifecycleStep.TASKS
-        ),
+        "first": facts(DispatchState.READY, slice_index=125, step=LifecycleStep.TASKS),
         "other-initiative": facts(
-            DispatchState.NEEDS_POINTER, slice_index=100, initiative_index=130
+            DispatchState.READY, slice_index=100, initiative_index=130
         ),
     }
 
@@ -283,8 +247,8 @@ def test_otherwise_the_lowest_initiative_slice_and_step_goes_first() -> None:
 
 def test_checkouts_are_planned_independently_and_in_order() -> None:
     steps = {
-        "b": facts(DispatchState.NEEDS_POINTER, SECOND, slice_index=225),
-        "a": facts(DispatchState.POINTED, FIRST, slice_index=125),
+        "b": facts(DispatchState.READY, SECOND, slice_index=225),
+        "a": facts(DispatchState.READY, FIRST, slice_index=125),
     }
 
     actions = PLANNER.plan(view_of(steps))
@@ -293,17 +257,9 @@ def test_checkouts_are_planned_independently_and_in_order() -> None:
 
 
 def test_a_checkout_path_is_compared_not_its_spelling() -> None:
-    steps = {"a": facts(DispatchState.NEEDS_POINTER, Path("/work/amoeba/"))}
+    steps = {"a": facts(DispatchState.READY, Path("/work/amoeba/"))}
 
     assert PLANNER.plan(view_of(steps, held=[Path("/work/amoeba")])) == []
-
-
-def test_a_pointer_write_carries_no_resolution() -> None:
-    view = view_of({"a": facts(DispatchState.NEEDS_POINTER)})
-
-    [action] = PLANNER.plan(view)
-
-    assert isinstance(action, WriteSlicePointer)
 
 
 # -- slice 128, D5: a launch goes ahead only on a passed check ------------------
@@ -322,14 +278,14 @@ def _old_for(state: DispatchState) -> JournalEntry | None:
     )
 
 
-@pytest.mark.parametrize("state", [DispatchState.POINTED, DispatchState.REISSUE])
+@pytest.mark.parametrize("state", [DispatchState.READY, DispatchState.REISSUE])
 def test_a_launch_with_no_result_does_nothing(state: DispatchState) -> None:
     view = view_of({"a": facts(state, reissue_of=_old_for(state))}, checks={})
 
     assert PLANNER.plan(view) == []
 
 
-@pytest.mark.parametrize("state", [DispatchState.POINTED, DispatchState.REISSUE])
+@pytest.mark.parametrize("state", [DispatchState.READY, DispatchState.REISSUE])
 def test_a_blocked_check_gives_block_dispatch_and_no_launch(
     state: DispatchState,
 ) -> None:
@@ -339,18 +295,10 @@ def test_a_blocked_check_gives_block_dispatch_and_no_launch(
     assert PLANNER.plan(view) == [BlockDispatch("a", block)]
 
 
-def test_a_pointer_write_needs_no_check() -> None:
-    view = view_of({"a": facts(DispatchState.NEEDS_POINTER, SECOND)}, checks={})
-
-    [action] = PLANNER.plan(view)
-
-    assert isinstance(action, WriteSlicePointer)
-
-
 def test_a_p6_launch_records_the_target_the_check_read() -> None:
     evidence = {**OK_EVIDENCE, "target": "dev/erik"}
     view = view_of(
-        {"a": facts(DispatchState.POINTED, step=LifecycleStep.IMPLEMENTATION)},
+        {"a": facts(DispatchState.READY, step=LifecycleStep.IMPLEMENTATION)},
         checks={"a": Ok(evidence)},
     )
 

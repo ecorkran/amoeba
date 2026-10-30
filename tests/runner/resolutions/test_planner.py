@@ -96,7 +96,7 @@ def test_one_action_per_eligible_step() -> None:
         {
             "a": _facts(DispatchState.RESUME, "resume", a),
             "b": _facts(DispatchState.RESUME, "resume", b, SECOND),
-            "c": facts(DispatchState.NEEDS_POINTER, FIRST),
+            "c": facts(DispatchState.READY, FIRST),
         },
         holders={FIRST: frozenset({"a"}), SECOND: frozenset({"b"})},
     )
@@ -134,8 +134,8 @@ def test_a_step_that_is_not_current_gets_nothing() -> None:
 
 def test_steps_in_other_states_get_nothing() -> None:
     states = [
-        DispatchState.POINTED,
-        DispatchState.NEEDS_POINTER,
+        DispatchState.READY,
+        DispatchState.READY,
         DispatchState.IN_FLIGHT,
     ]
     view = view_of({f"s{i}": facts(state) for i, state in enumerate(states)})
@@ -153,7 +153,7 @@ def test_a_resume_without_its_continued_entry_is_a_defect() -> None:
 def test_the_two_planners_never_act_on_the_same_step() -> None:
     states = {
         "a": _facts(DispatchState.RESUME, "resume", _continued("a")),
-        "b": facts(DispatchState.POINTED, SECOND),
+        "b": facts(DispatchState.READY, SECOND),
     }
     view = view_of(states)
 

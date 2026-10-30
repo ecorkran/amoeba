@@ -7,21 +7,17 @@ site that skips ``TickBudget.allows_call`` fails here.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from amoeba.process import RunOutcome
 from amoeba.runner.budget import TickResult
-from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.store import PARAM_RUN_ID, CommandKind, NodeKind, Store
-from runner.dispatch.tick_rig import DispatchRig
 from runner.observe_support import Child, document
 from runner.plan_tick_support import serve_plan
-from runner.tick_support import GRACE, PROJECT, Rig, link
+from runner.tick_support import PROJECT, Rig, link
 
 DEADLINE = 5.0
 CALL_COST = 2.0
@@ -129,30 +125,3 @@ def test_no_plan_read_call_starts_after_the_deadline_and_nothing_is_written(
     assert len(rig.cf.calls) == cf_calls
     assert store.nodes_for_project(PROJECT) == []
     assert store.open_project_escalations(PROJECT) == []
-
-
-def test_no_pointer_call_starts_after_the_deadline(
-    tmp_path: Path, store: Store
-) -> None:
-    """The dispatch path's ``cf`` calls (the write and its read-back) are budgeted."""
-    rig = DispatchRig(tmp_path, store)
-    rig.step("first", 125)
-    rig.step("second", 225)
-    clock = rig.tick_rig.clock
-    rig.tick_rig.deadline = DEADLINE
-    real = rig.world.run()
-    started: list[str] = []
-
-    def guarded(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        started.append(argv[1])
-        assert clock.seconds < DEADLINE, f"cf {argv[1]} started after the deadline"
-        clock.seconds += CALL_COST
-        return real(argv, **kwargs)
-
-    rig.tick_rig.pointers = PointerStage(guarded, 8.0, GRACE, clock.wall)
-
-    rig.tick_rig.tick()
-
-    assert started == ["set", "get", "set"], "the second write's read-back waited"
-    unresolved = [e for e in store.journal_entries(PROJECT) if not e.is_resolved]
-    assert len(unresolved) == 1, "left for the next tick's observe to read back"

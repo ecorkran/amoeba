@@ -49,7 +49,6 @@ def launched_step(rig: DispatchRig, name: str) -> tuple[Node, Node]:
     """``(slice, step)``: a slice design step with its run in flight."""
     slice_node, step = rig.slice_and_step(name, INDEX)
     rig.tick()
-    rig.tick()
     return slice_node, step
 
 

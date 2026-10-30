@@ -26,7 +26,6 @@ def _act(rig: Rig) -> ActStage:
     return ActStage(
         store=rig.store,
         supervisor_dir=rig.supervisor_dir,
-        pointers=rig.pointers,
         poll_run=rig.observer.poll_run,
         tracker=rig.tracker,
         popen=rig.popen,

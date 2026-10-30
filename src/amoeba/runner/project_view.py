@@ -41,15 +41,12 @@ def build_project_view(
     desired: DesiredStateIndex,
     *,
     dispatching: bool,
-    pointer_confirmed: frozenset[str],
     merge_policy: MergePolicy,
 ) -> BuiltView:
     """The facts the planners decide on, for ``project_id``."""
     tree = LifecycleTree(store.nodes_for_project(project_id))
     current = current_steps(tree, desired)
-    dispatch, wrote = _dispatch_view(
-        store, project_id, tree, current, dispatching, pointer_confirmed
-    )
+    dispatch, wrote = _dispatch_view(store, project_id, tree, current, dispatching)
     view = ProjectView(
         project_id=project_id,
         now=now,
@@ -73,7 +70,6 @@ def _dispatch_view(
     tree: LifecycleTree,
     current: Sequence[Node],
     dispatching: bool,
-    pointer_confirmed: frozenset[str],
 ) -> tuple[DispatchView, bool]:
     """The dispatch facts, only when a dispatch planner is registered (D1).
 
@@ -87,7 +83,6 @@ def _dispatch_view(
         project_id,
         tree,
         current,
-        pointer_confirmed,
         is_dir=Path.is_dir,
     )
     return dispatch, block_unresolved(store, dispatch.unresolved)

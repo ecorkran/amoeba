@@ -282,10 +282,12 @@ Note (20261029): `dispatch/state.py` had no CF pending-decision state, so nothin
 ### Task 9.2: Launch without the pointer write
 **Owner**: Junior AI | **Dependencies**: 9.1 | **Effort**: 3
 
-- [ ] `dispatch/state.py` loses `NEEDS_POINTER`; `dispatch/planner.py` issues `LaunchRun` on the first tick; `WriteSlicePointer` is removed from `decide.py`'s `Action`; `act.py` and `ActStage` stop handling pointers; `tick.py` drops `PointerStage`, `watch_pointers` and `_pointer_confirmed`. The pointer modules stay on disk, unused, until Task 10.3
-- [ ] The CF commands-defined-once test (`tests/runner/test_cf_commands_defined_once.py`) drops the write commands; no code path issues `cf set` (grep test)
-- [ ] Rewrite `tests/runner/dispatch/test_tick_dispatch.py`, `test_tick_checkout.py`, `test_tick_concurrency.py`: one `sq_run` entry and no `cf_write` entry per launch; delete `test_tick_pointer_moved.py`
-- [ ] **Success:** full suite green. Commit `feat: launch without moving CF's pointers`
+- [x] `dispatch/state.py` loses `NEEDS_POINTER`; `dispatch/planner.py` issues `LaunchRun` on the first tick; `WriteSlicePointer` is removed from `decide.py`'s `Action`; `act.py` and `ActStage` stop handling pointers; `tick.py` drops `PointerStage`, `watch_pointers` and `_pointer_confirmed`. The pointer modules stay on disk, unused, until Task 10.3
+- [x] The CF commands-defined-once test (`tests/runner/test_cf_commands_defined_once.py`) drops the write commands; no code path issues `cf set` (grep test)
+- [x] Rewrite `tests/runner/dispatch/test_tick_dispatch.py`, `test_tick_checkout.py`, `test_tick_concurrency.py`: one `sq_run` entry and no `cf_write` entry per launch; delete `test_tick_pointer_moved.py`
+- [x] **Success:** full suite green. Commit `feat: launch without moving CF's pointers`
+
+Note (20261029): the pointer modules and their tests were deleted here rather than left dead, because they could not compile once `NEEDS_POINTER`, `pointer_confirmed` and `WriteSlicePointer` went. `DispatchState.POINTED` and `NEEDS_POINTER` became one state, `READY` (nothing in flight, nothing to resume): a ready step launches only in a free checkout, so a checkout is held from its launch, not from a claim. `checkout_holders(entries, done)` lost its facts argument. `routing/overrun.py` and `tests/test_observer_cf_readback_checkout.py` went too. `plan_read.CF_SET_COMMAND`/`set_slice_argv` are gone; a test asserts nothing writes CF. DispatchRig names slice index 125 as CF does (`run-dispatch-and-outcome-ingestion`), since the pointer write used to rename it and reviews are attributed by that name.
 
 ### Task 9.3: Add the slice-level ready rule and initiative completion
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
@@ -357,7 +359,7 @@ Note (20261029): `dispatch/state.py` had no CF pending-decision state, so nothin
 ### Task 10.3: Delete the pointer modules
 **Owner**: Junior AI | **Dependencies**: 10.2b | **Effort**: 1
 
-- [ ] Delete `dispatch/pointer.py`, `pointer_apply.py`, `pointer_watch.py`, `observe_pointer.py`, their tests, `tests/runner/dispatch/pointer_support.py`, `tests/test_cf_stub_pointer.py` and the stub's pointer-write code
+- [ ] (Modules and their tests deleted in Task 9.2; still to do: `tests/test_cf_stub_pointer.py`, the stub's pointer-write code, and `pointer_support.py`'s leftover names are kept because `CfWorld` and the budget helpers live there.) Delete `dispatch/pointer.py`, `pointer_apply.py`, `pointer_watch.py`, `observe_pointer.py`, their tests, `tests/runner/dispatch/pointer_support.py`, `tests/test_cf_stub_pointer.py` and the stub's pointer-write code
 - [ ] **Success:** full suite green. Commit `refactor: delete the pointer modules`
 
 ### Task 10.4: Delete the step map, human steps and merge policy

@@ -47,7 +47,6 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
 def _launched(rig: DispatchRig) -> Node:
     node = rig.step(SLICE, INDEX)
     rig.tick()
-    rig.tick()
     assert rig.run_of(node)
     return node
 
@@ -158,7 +157,6 @@ def test_a_completed_runs_successor_is_dispatched_in_the_tick_that_completes_it(
     slice_node, step = rig.slice_and_step("advance", INDEX)
     clear_gates(rig, slice_node)
     rig.tick()
-    rig.tick()
     successor = tasks_step(rig, slice_node)
     review = single_review(CF_SLUG)
     _write(rig, review)
@@ -168,4 +166,4 @@ def test_a_completed_runs_successor_is_dispatched_in_the_tick_that_completes_it(
     # Ingest completes the node before the view is built, so the successor is
     # already dispatchable in the same tick (routing used to cost a tick).
     assert rig.status(step) is NodeStatus.DONE
-    assert len(rig.entries(CommandKind.CF_WRITE, successor)) == 1
+    assert len(rig.entries(CommandKind.SQ_RUN, successor)) == 1

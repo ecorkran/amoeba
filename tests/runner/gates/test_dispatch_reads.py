@@ -67,13 +67,15 @@ def _candidates(
     return launch_candidates([node("a")], {"a": step_facts}, holders or {})
 
 
-def test_a_pointed_step_is_a_candidate_even_in_the_checkout_it_holds() -> None:
-    held = {FIRST: frozenset({"a"})}
-
-    [candidate] = _candidates(DispatchState.POINTED, held)
+def test_a_ready_step_is_a_candidate_in_a_free_checkout() -> None:
+    [candidate] = _candidates(DispatchState.READY)
 
     assert candidate.pipeline == "P5"
     assert candidate.resume is False
+
+
+def test_a_ready_step_in_a_held_checkout_is_not_a_candidate() -> None:
+    assert _candidates(DispatchState.READY, {FIRST: frozenset({"other"})}) == ()
 
 
 def test_a_reissue_in_a_free_checkout_is_a_candidate_with_its_old_pipeline() -> None:
@@ -112,10 +114,7 @@ def test_a_resume_continues_a_run(state: DispatchState) -> None:
 
 @pytest.mark.parametrize(
     "state",
-    [
-        DispatchState.NEEDS_POINTER,
-        DispatchState.IN_FLIGHT,
-    ],
+    [DispatchState.IN_FLIGHT],
 )
 def test_other_states_are_never_candidates(state: DispatchState) -> None:
     assert _candidates(state) == ()
@@ -123,7 +122,7 @@ def test_other_states_are_never_candidates(state: DispatchState) -> None:
 
 def test_a_step_with_no_facts_or_no_checkout_is_skipped() -> None:
     assert launch_candidates([node("a")], {}, {}) == ()
-    unresolved = facts(DispatchState.POINTED, None)
+    unresolved = facts(DispatchState.READY, None)
     assert launch_candidates([node("a")], {"a": unresolved}, {}) == ()
 
 
@@ -160,7 +159,7 @@ class World:
         return Candidate(
             "a",
             step,
-            state if resume or automatic else DispatchState.POINTED,
+            state if resume or automatic else DispatchState.READY,
             Checkout(self.checkout, None),
             "P6",
             SLICE,

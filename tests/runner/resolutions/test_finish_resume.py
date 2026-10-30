@@ -135,7 +135,7 @@ def test_a_failed_resume_keeps_the_checkout_held_and_is_still_a_run_to_resume(
 ) -> None:
     done = _fail(store, entry, failure)
 
-    assert set(checkout_holders([done], set(), {})) == {CHECKOUT}
+    assert set(checkout_holders([done], set())) == {CHECKOUT}
     assert classify([_routed(done)]) is Situation.RUN_TO_RESUME
 
 
@@ -144,7 +144,7 @@ def test_after_a_missing_run_the_hold_is_released_and_there_is_no_run_to_resume(
 ) -> None:
     done = _fail(store, entry, ResumeFailure.RUN_MISSING)
 
-    assert set(checkout_holders([done], set(), {})) == frozenset()
+    assert set(checkout_holders([done], set())) == frozenset()
     assert classify([_routed(done)]) is Situation.NO_RUN
 
 

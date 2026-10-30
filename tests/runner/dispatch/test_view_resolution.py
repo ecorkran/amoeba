@@ -29,9 +29,7 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
 
 def _view(rig: DispatchRig, node: Node) -> DispatchView:
     tree = LifecycleTree(rig.store.nodes_for_project(PROJECT))
-    return build_dispatch_view(
-        rig.store, PROJECT, tree, [node], frozenset(), is_dir=Path.is_dir
-    )
+    return build_dispatch_view(rig.store, PROJECT, tree, [node], is_dir=Path.is_dir)
 
 
 def _answered(
@@ -74,7 +72,7 @@ def test_a_resume_with_no_run_needs_a_pointer_and_continues_nothing(
     _answered(rig, "resume", node, RunOutcome.COMPLETED)
     facts = _view(rig, node).facts[node.id]
 
-    assert facts.state is DispatchState.NEEDS_POINTER
+    assert facts.state is DispatchState.READY
     assert facts.continues is None
     assert facts.resolution is not None
 

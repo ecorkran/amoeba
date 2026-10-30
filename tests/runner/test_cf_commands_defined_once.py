@@ -21,7 +21,6 @@ COMMAND_WORDS: Final = frozenset(
         plan_read.CF_ALL_FLAG,
         "initiatives",
         "slices",
-        plan_read.CF_SET_COMMAND,
         "config",
         plan_read.CF_WORKTREE_FLAG,
         plan_read.CF_KEY_INTEGRATION_BRANCH,
@@ -36,3 +35,10 @@ def test_no_other_runner_module_spells_a_cf_command_word() -> None:
     for path in others:
         clashes = COMMAND_WORDS.intersection(string_constants(path))
         assert not clashes, f"{path.name} spells {sorted(clashes)}"
+
+
+def test_no_code_path_writes_to_cf() -> None:
+    """The Runner reads CF and never writes it (slice 132, D3): no ``cf set``."""
+    assert not hasattr(plan_read, "CF_SET_COMMAND")
+    for path in sorted(RUNNER.rglob("*.py")):
+        assert "set_slice_argv" not in path.read_text(encoding="utf-8"), path.name

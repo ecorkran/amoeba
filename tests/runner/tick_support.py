@@ -16,7 +16,6 @@ from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
-from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.faults import NodeContext, TickFaults
 from amoeba.runner.gates.predispatch import DispatchCheck, Ok
 from amoeba.runner.gates.stage import DispatchStageResult, GateStage
@@ -263,7 +262,6 @@ class Rig:
             run=self.cf,
             timeout_seconds=8.0,
         )
-        self.pointers = PointerStage(self.cf, 8.0, GRACE, self.clock.wall)
         self.planner = Planner(tmp_path)
         self.routing_table = small_table()
         self.auto_resume_limit = ProcessSettings().auto_resume_limit
@@ -291,7 +289,6 @@ class Rig:
             observer=self.observer,
             probes=self.probes,
             plans=self.plans,
-            pointers=self.pointers,
             tracker=self.tracker,
             popen=self.popen,
             now=self.clock.wall,

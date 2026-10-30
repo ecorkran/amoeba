@@ -48,9 +48,9 @@ def launch_candidates(
 ) -> tuple[Candidate, ...]:
     """The steps Observe checks: those that could launch or resume this tick.
 
-    A candidate is a ``POINTED`` step (its own claim is what holds its checkout); a
-    ``REISSUE`` step in a checkout no one holds; or a ``RESUME`` or ``AUTO_RESUME``
-    step whose checkout is held by no one or only by itself. This is the one
+    A candidate is a ``READY`` or ``REISSUE`` step in a checkout no one holds; or a
+    ``RESUME`` or ``AUTO_RESUME`` step whose checkout is held by no one or only by
+    itself. This is the one
     definition of the set, and the ``decide()`` guard relies on it. Nothing is
     recomputed from the store.
     """
@@ -65,7 +65,7 @@ def launch_candidates(
         elif step_facts.state in _RESUMING:
             checkout = _entry_checkout(step_facts.continues, checkout)
         held_by = holders.get(checkout.path, frozenset[str]())
-        if step_facts.state is DispatchState.POINTED:
+        if step_facts.state is DispatchState.READY and not held_by:
             pipeline = pipeline_for(step_facts.step)
         elif step_facts.state is DispatchState.REISSUE and not held_by:
             pipeline = _pipeline_of(step_facts.reissue_of)

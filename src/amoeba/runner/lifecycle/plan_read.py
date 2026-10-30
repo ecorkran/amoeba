@@ -60,23 +60,6 @@ def config_get_command(key: str) -> tuple[str, ...]:
     return ("config", "get", key, CF_JSON_FLAG)
 
 
-#: ``cf set -p <id> slice <index>``: the pointer write (slice 125, D2).
-CF_SET_COMMAND: Final = "set"
-CF_SET_FIELD_SLICE: Final = "slice"
-
-
-def set_slice_argv(cf_project_id: str, slice_index: int) -> list[str]:
-    """The full argument vector pointing a checkout's CF at a slice."""
-    return [
-        CF_EXECUTABLE,
-        CF_SET_COMMAND,
-        CF_PROJECT_FLAG,
-        cf_project_id,
-        CF_SET_FIELD_SLICE,
-        str(slice_index),
-    ]
-
-
 def cf_argv(command: Sequence[str], cf_project_id: str) -> list[str]:
     """The full argument vector: executable, command, then ``-p <id>``."""
     return [CF_EXECUTABLE, *command, CF_PROJECT_FLAG, cf_project_id]

@@ -18,10 +18,8 @@ from amoeba.runner.decide import (
     ProjectView,
     ResumeRun,
     RunState,
-    WriteSlicePointer,
     decide,
 )
-from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.steps import LifecycleStep
@@ -207,28 +205,28 @@ def test_a_view_with_no_rows_has_no_current_steps() -> None:
         builder.close()
 
 
-def _pointer(node_id: str) -> WriteSlicePointer:
-    return WriteSlicePointer(node_id, "cf-id", 125, Checkout(Path("/work"), None))
+def _block(node_id: str) -> BlockDispatch:
+    return BlockDispatch(node_id, Block(FaultKind.CHECKOUT_DIRTY, "dirty", {}))
 
 
-def test_a_pointer_write_for_a_current_step_passes(steps: Steps) -> None:
-    action = _pointer(steps.first.id)
+def test_a_block_for_a_current_step_passes(steps: Steps) -> None:
+    action = _block(steps.first.id)
 
     assert decide(steps.view(), (Fixed(action),)) == [action]
 
 
-def test_a_pointer_write_for_a_node_that_is_not_current_raises(steps: Steps) -> None:
+def test_a_block_for_a_node_that_is_not_current_raises(steps: Steps) -> None:
     held = steps.view(row(drive=True), row(steps.first_owner, hold=True))
 
     with pytest.raises(ValueError, match=f"node {steps.first.id}"):
-        decide(held, (Fixed(_pointer(steps.first.id)),))
+        decide(held, (Fixed(_block(steps.first.id)),))
 
 
-def test_a_pointer_write_and_a_launch_for_one_node_raise(steps: Steps) -> None:
+def test_a_block_and_a_launch_for_one_node_raise(steps: Steps) -> None:
     node_id = steps.first.id
 
     with pytest.raises(ValueError, match=f"node {node_id}"):
-        decide(steps.view(), (Fixed(_pointer(node_id)), Fixed(_launch(node_id))))
+        decide(steps.view(), (Fixed(_block(node_id)), Fixed(_launch(node_id))))
 
 
 def test_a_reissuing_launch_carries_the_old_run_id_and_entry() -> None:
@@ -281,12 +279,11 @@ def test_decide_refuses_a_launch_whose_check_blocked(steps: Steps) -> None:
         decide(view, (Fixed(_launch(steps.first.id)),))
 
 
-def test_a_block_dispatch_and_a_pointer_write_need_no_check(steps: Steps) -> None:
+def test_a_block_dispatch_needs_no_check(steps: Steps) -> None:
     view = replace(steps.view(), dispatch_checks={})
     block = BlockDispatch(steps.first.id, Block(FaultKind.CHECKOUT_DIRTY, "dirty", {}))
 
     assert decide(view, (Fixed(block),)) == [block]
-    assert decide(view, (Fixed(_pointer(steps.second.id)),)) != []
 
 
 def test_a_resolution_resume_without_its_resolution_is_refused() -> None:

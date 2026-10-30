@@ -17,9 +17,7 @@ from amoeba.runner.act import ActStage
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, Planner, ProjectView, decide
-from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
-from amoeba.runner.dispatch.pointer_watch import watch_pointers
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
     NodeContext,
@@ -58,7 +56,6 @@ class ProjectTick:
         observer: RunObserver,
         probes: LinkProbes,
         plans: PlanStage,
-        pointers: PointerStage,
         tracker: LaunchTracker,
         popen: PopenFactory,
         now: Callable[[], datetime],
@@ -80,8 +77,6 @@ class ProjectTick:
         self._observer = observer
         self._probes = probes
         self._plans = plans
-        self._pointers = pointers
-        self._pointer_confirmed: frozenset[str] = frozenset()
         self._dispatching = any(isinstance(p, DispatchPlanner) for p in planners)
         self._tracker = tracker
         self._now = now
@@ -89,7 +84,6 @@ class ProjectTick:
         self._act = ActStage(
             store=store,
             supervisor_dir=supervisor_dir,
-            pointers=pointers,
             poll_run=observer.poll_run,
             tracker=tracker,
             popen=popen,
@@ -140,8 +134,6 @@ class ProjectTick:
         )
         self.wrote = runs.wrote or self.wrote
         shape_error = runs.shape_error
-        in_flight = [o.run.entry for o in runs.pending if o.finished is None]
-        watch_pointers(self._store, self._project_id, in_flight, faults)
         self.wrote = (
             raise_expected_faults(self._store, self._project_id, faults) or self.wrote
         )
@@ -149,13 +141,6 @@ class ProjectTick:
             raise UpstreamShapeError(shape_error)
         if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
-        pointed = self._pointers.observe_project(
-            self._store, self._project_id, desired, budget, self._context
-        )
-        self.wrote = pointed.wrote or self.wrote
-        if pointed.result is TickResult.CUT_OFF:
-            return TickResult.CUT_OFF
-        self._pointer_confirmed = pointed.confirmed
         # Reads, and the completion write of a merge git shows done; before the view.
         merges = self._gates.observe_merges(desired, budget, faults)
         self.wrote = merges.wrote or self.wrote
@@ -250,7 +235,6 @@ class ProjectTick:
             link_probes,
             desired,
             dispatching=self._dispatching,
-            pointer_confirmed=self._pointer_confirmed,
             merge_policy=self._project_settings.merge_policy,
         )
         self.wrote = built.wrote or self.wrote

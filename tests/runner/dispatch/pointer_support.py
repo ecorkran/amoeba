@@ -1,4 +1,4 @@
-"""A stub ``cf`` rig for the pointer tests: state file, worktrees, step and budgets."""
+"""A stub ``cf`` world for the dispatch tests: state file, worktrees and budgets."""
 
 from __future__ import annotations
 
@@ -16,9 +16,7 @@ from cf_stub import STATE_ENV, write_cf_state, write_cf_stub
 
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
-from amoeba.runner.decide import WriteSlicePointer
-from amoeba.runner.dispatch.checkout import Checkout
-from amoeba.store import CFReference, CFSnapshotInput, NodeKind, Store
+from amoeba.store import CFSnapshotInput
 from amoeba.upstream.context_forge import (
     FIELD_PROJECT_PATH,
     STATE_PROJECT_KEY,
@@ -120,28 +118,3 @@ class CfWorld:
             )
 
         return call
-
-
-class Rig(CfWorld):
-    """The world, plus a step under a slice node, for the pointer-write tests."""
-
-    def __init__(self, tmp_path: Path, store: Store) -> None:
-        super().__init__(tmp_path)
-        self.store = store
-        self.slice_node = store.create_node(
-            project_id=PROJECT,
-            kind=NodeKind.SLICE,
-            title="slice",
-            cf=CFReference(project="cf-a", index=125),
-        )
-        self.node = store.create_node(
-            project_id=PROJECT,
-            kind=NodeKind.PHASE_OR_ARTIFACT,
-            title="tasks",
-            parent_id=self.slice_node.id,
-        )
-
-    def action(self, index: int = 125, where: str = "root") -> WriteSlicePointer:
-        path = self.root if where == "root" else self.second
-        worktree = "wt_a" if where == "root" else "wt_b"
-        return WriteSlicePointer(self.node.id, CF_ID, index, Checkout(path, worktree))

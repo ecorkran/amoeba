@@ -44,9 +44,8 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
 def _never_started(
     rig: DispatchRig, extra: dict[str, object] | None = None
 ) -> tuple[Node, JournalEntry]:
-    """A pointed step whose launch recovery resolved ``not_applied``."""
+    """A step whose launch recovery resolved ``not_applied``."""
     node = rig.step("reissue", 125)
-    rig.tick()  # the pointer write
     old = rig.store.journal_issue(
         node.id,
         kind=CommandKind.SQ_RUN,
@@ -138,16 +137,6 @@ def test_a_reissue_keeps_the_merge_policy_of_the_attempt_it_repeats(
 
     [new] = [e for e in rig.entries(CommandKind.SQ_RUN, node) if not e.is_resolved]
     assert new.parameters[PARAM_MERGE_POLICY] == "auto", "the config says human"
-
-
-def test_the_pointer_is_not_written_again(rig: DispatchRig) -> None:
-    node, _ = _never_started(rig)
-    before = len(rig.entries(CommandKind.CF_WRITE, node))
-    _nothing_running(rig)
-
-    rig.tick()
-
-    assert len(rig.entries(CommandKind.CF_WRITE, node)) == before
 
 
 def test_a_run_state_that_appeared_meanwhile_is_adopted_without_a_launch(

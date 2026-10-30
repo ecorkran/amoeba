@@ -1,4 +1,4 @@
-"""``DispatchPlanner``: point a checkout at a slice, then launch its pipeline (D3, D4).
+"""``DispatchPlanner``: launch or resume a pipeline in a free checkout (D3, D4).
 
 Pure: it reads only the view's dispatch facts and held checkouts. For each current
 pipeline step it proposes the one action its state calls for, and it proposes at most
@@ -7,20 +7,16 @@ one action per checkout per tick:
 ========================  =====================================================
 state                     action
 ========================  =====================================================
-``POINTED``               ``LaunchRun`` (the step already holds its checkout)
+``READY``                 ``LaunchRun``
 ``REISSUE``               ``LaunchRun`` repeating the attempt that never started
 ``AUTO_RESUME``           ``ResumeRun`` (transient), once the outcome is ready (D5)
-``NEEDS_POINTER``         ``WriteSlicePointer``
 ``IN_FLIGHT``             nothing
 ========================  =====================================================
 
-A held checkout offers nothing to a step that is not ``POINTED`` (or an
-``AUTO_RESUME`` held only by itself): a pointed step's own claim is what holds its
-checkout. Within a free checkout, ``POINTED`` and
-``REISSUE`` go before ``NEEDS_POINTER`` (a step that has written its pointer launches
-before another writes over it), then by ``(initiative index, slice index, step
-rank)``. A checkout the snapshot could not resolve gets nothing here: the tick blocks
-the step (D1).
+A held checkout offers nothing to a step, except an ``AUTO_RESUME`` held only by
+itself: its own stopped run is what holds the checkout. Within a free checkout the
+steps go by ``(initiative index, slice index, step rank)``. A checkout the snapshot
+could not resolve gets nothing here: the tick blocks the step (D1).
 """
 
 from __future__ import annotations
@@ -35,7 +31,6 @@ from amoeba.runner.decide import (
     LaunchRun,
     ProjectView,
     ResumeRun,
-    WriteSlicePointer,
 )
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import StepDispatchFacts
@@ -57,34 +52,27 @@ from amoeba.runner.resolutions.vocabulary import (
 from amoeba.runner.supervise import recorded_document, resume_ready
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
 
-#: The order states go in within a checkout: launches before pointer writes.
-_RANK_LAUNCH = 0
-_RANK_POINTER_WRITE = 1
-_LAUNCHES = frozenset({DispatchState.POINTED, DispatchState.REISSUE})
-_PRIORITY = {
-    DispatchState.POINTED: _RANK_LAUNCH,
-    DispatchState.REISSUE: _RANK_LAUNCH,
-    DispatchState.AUTO_RESUME: _RANK_LAUNCH,
-    DispatchState.NEEDS_POINTER: _RANK_POINTER_WRITE,
-}
+#: The states that start a pipeline; the others continue or wait.
+_LAUNCHES = frozenset({DispatchState.READY, DispatchState.REISSUE})
+_PLANNED = _LAUNCHES | {DispatchState.AUTO_RESUME}
 
 
 class DispatchPlanner:
-    """Plans pointer writes and launches for the current pipeline steps."""
+    """Plans launches and automatic resumes for the current pipeline steps."""
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
         """At most one action per checkout, the best candidate in each."""
-        best: dict[Path, tuple[tuple[int, tuple[int, int, int]], Node]] = {}
+        best: dict[Path, tuple[tuple[int, int, int], Node]] = {}
         for node in view.current_steps:
             facts = view.dispatch.get(node.id)
             if facts is None or not isinstance(facts.checkout, Checkout):
                 continue
-            if facts.state not in _PRIORITY:
+            if facts.state not in _PLANNED:
                 continue
             path = facts.checkout.path
             if _held_by_another(view, path, node, facts.state):
                 continue
-            rank = (_PRIORITY[facts.state], facts.sort_key)
+            rank = facts.sort_key
             if path not in best or rank < best[path][0]:
                 best[path] = (rank, node)
         ordered = sorted(best.values(), key=lambda pair: pair[0])
@@ -97,12 +85,10 @@ def _held_by_another(
 ) -> bool:
     """Whether the checkout is held in a way that leaves this step nothing to do.
 
-    A ``POINTED`` step's own claim is what holds its checkout, and an ``AUTO_RESUME``
-    step's stopped run holds it too, so those two are held against only by others.
+    An ``AUTO_RESUME`` step's stopped run holds the checkout itself, so it is held
+    against only by others.
     """
     holders = view.checkout_holders.get(path, frozenset[str]())
-    if state is DispatchState.POINTED:
-        return False
     if state is DispatchState.AUTO_RESUME:
         return bool(holders - {node.id})
     return bool(holders)
@@ -122,16 +108,7 @@ def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action |
         if isinstance(check, Block):
             return BlockDispatch(node.id, check)
         return _launch(node, facts, checkout, check, view.merge_policy)
-    match facts.state:
-        case DispatchState.NEEDS_POINTER:
-            return WriteSlicePointer(
-                node.id,
-                facts.cf_project_id,
-                facts.slice_index,
-                checkout,
-            )
-        case _:
-            raise ValueError(f"step {node.id} in state {facts.state} is not planned")
+    raise ValueError(f"step {node.id} in state {facts.state} is not planned")
 
 
 def _launch(

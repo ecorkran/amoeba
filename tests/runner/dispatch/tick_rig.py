@@ -7,6 +7,7 @@ records the command and working directory and starts nothing. Clocks do not slee
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,6 @@ from typing import Any
 from cf_stub_gates import STATUS_POINTER_ENV
 
 from amoeba.process import RunOutcome, RunOutcomeDocument
-from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import log_paths
 from amoeba.runner.lifecycle.steps import (
@@ -35,7 +35,6 @@ from runner.dispatch.pointer_support import CfWorld
 from runner.gate_rig import STATUS_FIXTURES, rig_checkout
 from runner.observe_support import Child
 from runner.tick_support import (
-    GRACE,
     PROJECT,
     Popen,
     Rig,
@@ -44,6 +43,9 @@ from runner.tick_support import (
 )
 
 CF_PROJECT = "cf-a"
+#: The slice index the stub CF names, and its name (a review file carries it).
+CF_SLICE_INDEX = 125
+CF_SLICE_NAME = "run-dispatch-and-outcome-ingestion"
 
 
 class RecordingPopen(Popen):
@@ -72,17 +74,10 @@ class DispatchRig:
         self.popen = RecordingPopen(store)
         self.tick_rig.popen = self.popen
         self.tick_rig.planners = (DispatchPlanner(),)
-        self.use_world()
         self.use_clean_checkouts()
         drive_project(store, PROJECT)
         if with_snapshot:
             self.snapshot()
-
-    def use_world(self, knobs: dict[str, str] | None = None) -> None:
-        """Run the pointer stage against the stub ``cf`` (with ``knobs``)."""
-        self.tick_rig.pointers = PointerStage(
-            self.world.run(knobs), 8.0, GRACE, self.tick_rig.clock.wall
-        )
 
     def use_clean_checkouts(self) -> None:
         """Make each checkout a clean git repository, and CF's gate one past the tasks.
@@ -131,9 +126,14 @@ class DispatchRig:
             for s in STEP_SEQUENCE[: STEP_SEQUENCE.index(step)]
             if STEP_MAP[s].level is StepLevel.SLICE
         )
-        return ready_slice_step(
+        slice_node, ready = ready_slice_step(
             self.store, name, PROJECT, step, CF_PROJECT, slice_index, done_steps=earlier
         )
+        if slice_index == CF_SLICE_INDEX:
+            # CF knows this index by its own name; reviews are attributed by it.
+            reference = replace(slice_node.cf, slice_name=CF_SLICE_NAME)
+            slice_node = self.store.update_cf_reference(slice_node.id, reference)
+        return slice_node, ready
 
     def tick(self) -> None:
         self.tick_rig.tick()

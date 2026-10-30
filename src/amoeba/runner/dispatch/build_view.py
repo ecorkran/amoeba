@@ -59,11 +59,10 @@ class DispatchView:
     unresolved: tuple[UnresolvedStep, ...]
 
 
-#: The states that write a pointer or launch a run, so need a checkout to act.
+#: The states that launch or resume a run, so need a checkout to act.
 _NEEDS_CHECKOUT: Final = frozenset(
     {
-        DispatchState.NEEDS_POINTER,
-        DispatchState.POINTED,
+        DispatchState.READY,
         DispatchState.REISSUE,
         DispatchState.RESUME,
         DispatchState.AUTO_RESUME,
@@ -79,7 +78,6 @@ def build_dispatch_view(
     project_id: str,
     tree: LifecycleTree,
     current: Sequence[Node],
-    confirmed: frozenset[str],
     *,
     is_dir: Callable[[Path], bool],
 ) -> DispatchView:
@@ -88,7 +86,7 @@ def build_dispatch_view(
     facts: dict[str, StepDispatchFacts] = {}
     unresolved: list[UnresolvedStep] = []
     for node in current:
-        found = _facts_for(store, project_id, tree, node, confirmed, observed, is_dir)
+        found = _facts_for(store, project_id, tree, node, observed, is_dir)
         if found is None:
             continue
         facts[node.id] = found
@@ -100,7 +98,7 @@ def build_dispatch_view(
             )
     entries = store.journal_entries(project_id)
     done = {n.id for n in tree.nodes if n.status is NodeStatus.DONE}
-    holders = checkout_holders(entries, done, facts)
+    holders = checkout_holders(entries, done)
     return DispatchView(facts, holders, tuple(unresolved))
 
 
@@ -129,7 +127,6 @@ def _facts_for(
     project_id: str,
     tree: LifecycleTree,
     node: Node,
-    confirmed: frozenset[str],
     observed: dict[str, CFSnapshot | None],
     is_dir: Callable[[Path], bool],
 ) -> StepDispatchFacts | None:
@@ -149,7 +146,7 @@ def _facts_for(
         observed[cf_project] = store.latest_cf_snapshots(project_id, cf_project)[1]
     entries = store.journal_entries(project_id, node_id=node.id)
     resolution = _applied_resolution(store, node.id)
-    state = dispatch_state(entries, resolution, pointer_confirmed=node.id in confirmed)
+    state = dispatch_state(entries, resolution)
     return StepDispatchFacts(
         step=step,
         state=state,

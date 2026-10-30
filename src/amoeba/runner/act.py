@@ -21,9 +21,7 @@ from amoeba.runner.decide import (
     BlockHumanStep,
     LaunchRun,
     ResumeRun,
-    WriteSlicePointer,
 )
-from amoeba.runner.dispatch.observe_pointer import PointerStage
 from amoeba.runner.dispatch.reissue import ReissueLaunch, begin_reissue
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, NodeContext, TickFaults
 from amoeba.runner.ingest.outcome import BlockPlan, cut_to_bound
@@ -86,7 +84,6 @@ class ActStage:
         *,
         store: Store,
         supervisor_dir: Path,
-        pointers: PointerStage,
         poll_run: Callable[[str], RunPoll],
         tracker: LaunchTracker,
         popen: PopenFactory,
@@ -96,7 +93,6 @@ class ActStage:
     ) -> None:
         self._store = store
         self._supervisor_dir = supervisor_dir
-        self._pointers = pointers
         self._poll_run = poll_run
         self._tracker = tracker
         self._popen = popen
@@ -139,10 +135,6 @@ class ActStage:
                     if not budget.allows_call():
                         return ActOutcome(TickResult.CUT_OFF, wrote)
                     self._launch(action)
-                case WriteSlicePointer():
-                    if not budget.allows_call():
-                        return ActOutcome(TickResult.CUT_OFF, wrote)
-                    self._pointers.write(self._store, action, budget)
                 case ResumeRun():
                     acted = self._continuations.act(action, budget, faults)
                     if acted is Acted.CUT_OFF:

@@ -2,9 +2,7 @@
 
 CF picks a worktree only by working directory, so every ``cf`` and ``sq`` call for a
 step must run in that worktree's path. The answer comes from the link's latest
-*observed* snapshot (a store read, no subprocess) and is checked again by the
-pointer write's read-back, so a stale snapshot cannot silently send a run to the
-wrong tree.
+*observed* snapshot (a store read, no subprocess).
 
 Anything the snapshot does not settle is :class:`CheckoutUnresolved`; no checkout
 is ever guessed.
