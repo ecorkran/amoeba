@@ -401,10 +401,10 @@ Note (20261030): five fault kinds are removed (`pointer_write_failed`, `pointer_
 ### Task 11.1: List blocked nodes across every project
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `inspection/__init__.py`, `inspection/core.py`: `blocked` has both row functions (Task-level additions). Columns `project_id`, `node_id`, `title`, `blocked_on`, `reason`, `context`, `blocked_state_id`; `reason` is the payload's `reason` or `fault_kind`, empty with neither. `--json` adds the full payload. Every store opens read-only
-- [ ] The network API's per-project blocked surface is unchanged
-- [ ] Tests in `tests/inspection/` and `tests/test_cli_inspect.py`: two projects each with a blocked slice, listed with no `--project`; `--project` narrows; an `agent_question` block's `--json` row carries the question; a block with neither key has empty `reason`
-- [ ] **Success:** tests pass. Commit `feat: list blocked slices across every project`
+- [x] `inspection/__init__.py`, `inspection/core.py`: `blocked` has both row functions (Task-level additions). Columns `project_id`, `node_id`, `title`, `blocked_on`, `reason`, `context`, `blocked_state_id`; `reason` is the payload's `reason` or `fault_kind`, empty with neither. `--json` adds the full payload. Every store opens read-only. Note (20261030): Listing now accepts rows and supervisor_rows together (project-scoped with project_optional=True; CLI --project is optional for it); read_listing uses supervisor_rows when no project is named. Rows for both modes now share one shape, which adds project_id, reason and payload fields to the per-project rows (additive). The payload comes from the escalation message keyed by blocked_state_id; a non-escalating block (judge) has an empty payload.
+- [x] The network API's per-project blocked surface is unchanged. Note (20261030): the server route is unchanged and still requires a project.
+- [x] Tests in `tests/inspection/` and `tests/test_cli_inspect.py`: two projects each with a blocked slice, listed with no `--project`; `--project` narrows; an `agent_question` block's `--json` row carries the question; a block with neither key has empty `reason`. Note (20261030): tests are in `tests/test_cli_inspect.py` and `tests/inspection/test_listing.py`.
+- [x] **Success:** tests pass. Commit `feat: list blocked slices across every project`. Note (20261030): commit made; full suite green, 3682 passed.
 
 ---
 
@@ -413,8 +413,8 @@ Note (20261030): five fault kinds are removed (`pointer_write_failed`, `pointer_
 ### Task 12.1: Rewrite the end-to-end test against a stub `p456`
 **Owner**: Junior AI | **Dependencies**: 10.5, 11.1 | **Effort**: 3
 
-- [ ] Rewrite `tests/runner/test_end_to_end.py` to drive one slice through a stub `p456`, with one run-state script per scenario in `tests/sq_stub_scripts.py` (LLD "Development Approach"): completion then the next slice launching; `-k agent_question` (block with the question, then a `resume` resolution with instructions resumes the run with them verbatim and the slice proceeds). The transient scenarios are Task 7.5's `tests/runner/test_tick_auto_resume.py`; Task 13.3 points walkthrough step 5 there
-- [ ] **Success:** tests pass and the full suite is green. Commit `test: drive a slice end to end through a stub p456`
+- [x] Rewrite `tests/runner/test_end_to_end.py` to drive one slice through a stub `p456`, with one run-state script per scenario in `tests/sq_stub_scripts.py` (LLD "Development Approach"): completion then the next slice launching; `-k agent_question` (block with the question, then a `resume` resolution with instructions resumes the run with them verbatim and the slice proceeds). The transient scenarios are Task 7.5's `tests/runner/test_tick_auto_resume.py`; Task 13.3 points walkthrough step 5 there. Note (20261030): tests/runner/test_end_to_end.py now runs the production tenant and planners (project config naming p456, a real git checkout, stub cf and sq on PATH); the existing launch/fault tests moved onto that path; new tests cover completion then the next slice launching, and agent_question (blocks with the question, then a resume resolution with instructions resumes the run with them verbatim, read from the stub's resume argv log). New script builder agent_question_run in tests/sq_stub_scripts.py. FOUND DEFECT, fixed in the same commit: the question block was SQ_CHECKPOINT, and the store keeps a block's payload only on a HUMAN block's escalation row (ESCALATING_KINDS), so the question and reason were silently dropped; the question block is now BlockedKind.HUMAN (ingest/outcome.py _question_block; test_plan_supervised updated). The LLD D4 table and the walkthrough/docs say SQ_CHECKPOINT and must be updated in 13.1/13.3 (node status is blocked_on_human, blocked_on shows human). OPEN: the other paused outcomes (BLOCKED row, reason paused) still build a payload on an SQ_CHECKPOINT block, which the store also drops; their checkpoint is in the entry's result (docs/process-contract.md says so). Full suite 3684 passed; ruff and pyright clean.
+- [x] **Success:** tests pass and the full suite is green. Commit `test: drive a slice end to end through a stub p456`
 
 ---
 
@@ -423,25 +423,58 @@ Note (20261030): five fault kinds are removed (`pointer_write_failed`, `pointer_
 ### Task 13.1: Update the contract docs and CHANGELOG
 **Owner**: Junior AI | **Dependencies**: 12.1 | **Effort**: 2
 
-- [ ] `docs/process-contract.md`: the config format, `auto_resume_limit`, the outcome map and auto-resume
-- [ ] `docs/store-contract.md`: the routing-decision, table-version and attempt-count tables, `awaits_routing` and `drive_until_step` marked unwritten by the Runner (D9)
-- [ ] `docs/context-forge-contract.md`: the Runner writes no pointers and reads no gates; it reads `git.integration_branch`
-- [ ] `docs/substrate-guide.md`: the 120 row
-- [ ] Confirm `docs/inbox-contract.md` was updated in Tasks 8.1b and 8.2
-- [ ] `CHANGELOG.md` under `[Unreleased]`: the supervisor (Added, Changed, Removed), naming the removed flags and resolution decisions
-- [ ] **Success:** every doc named in the LLD's Migration Plan is updated. Commit `docs: describe the pipeline supervisor in the contracts`
+- [x] `docs/process-contract.md`: the config format, `auto_resume_limit`, the outcome map and auto-resume
+- [x] `docs/store-contract.md`: the routing-decision, table-version and attempt-count tables, `awaits_routing` and `drive_until_step` marked unwritten by the Runner (D9)
+- [x] `docs/context-forge-contract.md`: the Runner writes no pointers and reads no gates; it reads `git.integration_branch`
+- [x] `docs/substrate-guide.md`: the 120 row
+- [x] Confirm `docs/inbox-contract.md` was updated in Tasks 8.1b and 8.2
+- [x] `CHANGELOG.md` under `[Unreleased]`: the supervisor (Added, Changed, Removed), naming the removed flags and resolution decisions
+- [x] **Success:** every doc named in the LLD's Migration Plan is updated. Commit `docs: describe the pipeline supervisor in the contracts`
 
 ### Task 13.2: Final validation
 **Owner**: Junior AI | **Dependencies**: 13.1 | **Effort**: 2
 
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. All clean. Record the pass count under this task
-- [ ] Check every LLD Success Criterion (Functional, Technical, Integration) against a named test or this task's run; write the test name beside each under this task. Any criterion with no proof gets a test now
-- [ ] Record the "after" line count of `src/amoeba/runner/` beside Task 1.1's "before"
-- [ ] **Success:** all green, every criterion mapped. If a test was added, commit `test: close the supervisor's success criteria`; otherwise no commit (the notes are committed with Task 13.3)
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. All clean. Record the pass count under this task
+- [x] Check every LLD Success Criterion (Functional, Technical, Integration) against a named test or this task's run; write the test name beside each under this task. Any criterion with no proof gets a test now
+- [x] Record the "after" line count of `src/amoeba/runner/` beside Task 1.1's "before"
+- [x] **Success:** all green, every criterion mapped. If a test was added, commit `test: close the supervisor's success criteria`; otherwise no commit (the notes are committed with Task 13.3)
+
+Note (20261030): pass count 3685 passed; ruff check, ruff format --check and pyright clean. Runner line count: 12057 before (Task 1.1), 7827 after. Commit `test: close the supervisor's success criteria` (77323db) added a tick-level node-scoped hold/release auto-resume test and a "no cf set" assertion (cf stub call log) to the end-to-end normal path.
+
+Criteria map (paths under `tests/`; PARTIAL marks a criterion not fully proven):
+**One launch, no `cf set`, done:** `runner/dispatch/test_tick_dispatch.py::test_a_driven_slice_launches_the_configured_pipeline_on_the_first_tick`; `runner/test_end_to_end.py::test_the_normal_path_records_run_id_outcome_and_status` (also asserts no `cf set`).
+**Params and bad config:** `test_tick_dispatch.py::test_the_projects_params_become_dash_p_arguments`; `runner/test_project_config.py::test_each_pipeline_or_params_failure_is_named` and `test_two_params_problems_in_one_file_are_both_named`; `runner/test_factory.py::test_an_invalid_project_config_fails_start_before_anything_is_created`.
+**Nonexistent pipeline blocks with not-found stderr:** `test_tick_dispatch.py::test_a_pipeline_squadron_does_not_have_blocks_only_that_slice`. PARTIAL: uses a fake Popen and a second worktree of the same project; no two-project test.
+**Unconfigured project:** `test_tick_dispatch.py::test_a_driven_slice_in_an_unconfigured_project_launches_nothing_and_escalates`, `test_the_escalation_closes_once_the_project_is_configured`, `test_the_escalation_closes_once_the_slice_is_no_longer_driven` (pause only).
+**Index order:** `test_tick_dispatch.py::test_the_next_slice_waits_for_its_predecessor_to_be_done`; `runner/test_end_to_end.py::test_a_completed_slice_is_followed_by_the_next_slice_launching`.
+**Dirty tree, off target, own-branch resume:** `runner/dispatch/test_tick_predispatch.py` (`test_a_dirty_tree_blocks_a_pointed_step_with_the_paths_and_launches_nothing`, `test_a_checkout_on_the_wrong_branch_blocks_a_planning_launch`, `test_a_resume_on_a_dirty_tree_resumes_and_names_the_dirty_paths`); `runner/dispatch/test_checkout_check.py::test_a_resume_is_allowed_on_this_slices_own_branch`; `runner/dispatch/test_checkout_reads.py::test_a_resume_on_the_slice_branch_with_a_dirty_tree_passes` (real git).
+**Each D4 row:** `runner/test_supervise.py::test_each_observation_has_its_class`; `runner/ingest/test_plan_supervised.py`; `runner/ingest/test_record.py`; `runner/ingest/test_tick_ingest.py`. **Atomic completion:** `contract/test_runner_report_completion.py` (rollback on injected failure) and `runner/test_crash_recovery.py::test_kill_before_the_report_of_a_completed_run_completes_the_node_once`. PARTIAL: the crash window between ingest's writes no longer exists (one transaction), so the proof is the contract rollback test, and the harness tests use a one-launch-per-node planner.
+**Transient resume and bound:** `runner/test_tick_auto_resume.py` (`test_two_transient_failures_then_completion_resume_twice_then_finish`, `test_four_failures_at_one_step_block_the_fourth_as_exhausted`, `test_three_steps_once_each_are_all_resumed`); `runner/dispatch/test_planner.py::test_an_orphaned_provider_error_or_stall_outcome_is_resumed`; `runner/test_supervise.py::test_a_different_step_restarts_the_count`. Tick level exercises stall only at the default limit of 3.
+**usage_limit `resets_at`:** `runner/test_tick_auto_resume.py::test_a_usage_limit_pause_waits_for_its_reset_time`; `runner/dispatch/test_planner.py` (same name, boundary).
+**Hold/release:** `runner/test_tick_auto_resume.py::test_releasing_a_hold_resumes` (project-wide) and `test_a_hold_on_the_slice_itself_blocks_its_resume_until_released` (node-scoped).
+**agent_question:** `runner/ingest/test_plan_supervised.py::test_an_agent_question_blocks_on_a_human_with_its_question` and `test_a_question_longer_than_the_bound_is_cut`; `runner/test_end_to_end.py::test_an_agent_question_blocks_with_the_question_then_resumes_with_instructions`.
+**Resume/stop and rejected decisions:** end-to-end test above (instructions verbatim from the stub's resume argv); `runner/resolutions/test_argv.py::test_instructions_are_one_element_byte_for_byte`; `runner/resolutions/test_decisions_e2e.py::test_resume_with_no_run_to_resume_launches_again` and `test_stop_blocks_the_node_with_reason_stopped_and_issues_nothing`; `runner/resolutions/test_judge.py::test_each_check_rejects_with_its_code`. PARTIAL: the count reset after a resolution resume is proven only at the pure level (`runner/test_supervise.py::test_a_resolution_resume_restarts_the_count`), not at tick level.
+**until rejected:** `runner/intent/test_interpret_targets.py::test_an_until_is_a_malformed_body_on_any_target`; `runner/intent/test_apply_pending.py::test_each_outcome_is_stored_with_its_reason`.
+**Inspect blocked across projects:** `test_cli_inspect.py::test_blocked_without_a_project_lists_every_projects_blocks`, `test_blocked_with_a_project_narrows_to_it`, `test_an_agent_question_block_carries_the_question_in_its_json_row`.
+**Import boundaries:** `test_import_boundaries.py::test_rule_12_the_removed_runner_paths_do_not_exist` and `test_rule_12_nothing_imports_a_removed_runner_module`.
+**No `cf set`:** `runner/test_cf_commands_defined_once.py` (write words gone; `test_no_code_path_writes_to_cf`) plus the end-to-end cf-log assertion.
+**supervise.py pure:** `runner/test_supervise.py::test_supervise_does_no_io`. No coverage tool is configured, so "fully covered" is by row/edge tests, not measured.
+**140 integration:** the CLI blocked tests plus the end-to-end agent_question test.
+**Docs updated:** commit `c099236`. Line counts: Task 1.1 and above.
 
 ### Task 13.3: Run the Verification Walkthrough
 **Owner**: Junior AI | **Dependencies**: 13.2 | **Effort**: 3
 
 - [ ] Run LLD "Verification Walkthrough" steps 1–8 as written: steps 5–7 against the stubs, steps 1–4 live against a real slice with `sq` (pre-authorized). Write each step's observed output under this task, and fix any step whose command or expectation differs from what the code does
-- [ ] Update the walkthrough in the LLD to what was run, with step 5 running `tests/runner/test_tick_auto_resume.py`, and remove its "Draft, to be refined after implementation" note
+- [x] Update the walkthrough in the LLD to what was run, with step 5 running `tests/runner/test_tick_auto_resume.py`, and remove its "Draft, to be refined after implementation" note
 - [ ] **Success:** every step passes as recorded. Commit the LLD and this task's notes as `docs: record the verified walkthrough`, with the before and after line counts of `src/amoeba/runner/` in the message body (LLD "Integration Requirements")
+
+Note (20261030): Observed so far (real CLI, throwaway AMOEBA_STORE_DIR and --cf-data-dir in the session scratchpad; real sq 0.24.9 and cf 0.19.23 installed):
+- Step 1: `amoeba start --project-config projects.yaml` logged `project config loaded from …projects.yaml` and `sq probe passed`; no routing-table line. `amoeba status` running, `amoeba stop` stopped it.
+- Step 2: with `params: {slice: "1"}` start refused: `projects.amoeba.params.slice: reserved, the Runner passes the slice`.
+- Step 5: `pytest tests/runner/test_tick_auto_resume.py` 6 passed (two transient resumes then done; four failures block auto_resume_exhausted).
+- Step 6: `pytest tests/runner/test_end_to_end.py -k agent_question` passed (block on a human with the question, resume with instructions verbatim, slice finishes). `amoeba inspect blocked --json` on a store with a HUMAN question block showed `reason: agent_question` and the payload with the question. The block's kind is human, not sq_checkpoint (see Task 12.1 note).
+- Step 7: two throwaway projects each with a blocked slice: `amoeba inspect blocked` listed both with project_id and reason; `--project alpha --json` narrowed to one and carried the payload.
+- Step 8: `amoeba start --routing-table x` -> `unrecognized arguments: --routing-table x`; `amoeba inspect routing-decisions` -> invalid listing choice.
+
+BLOCKED: steps 3 and 4 need a live run of the real p456 pipeline on a real slice. The only registered Context Forge projects are the PM's real ones (~/.config/context-forge/projects.json); a live run would mutate a real repo and branch, and a scratch CF project would write to the real registry. Needs the PM to name the project and slice to drive (or approve a scratch project).

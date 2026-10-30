@@ -478,7 +478,7 @@ amoeba inspect blocked [--project ID] [--json]     # D8: every project when --pr
 
 ### Verification Walkthrough
 
-Draft, to be refined after implementation. Uses the stub `sq` and `cf` from `tests/` through the existing end-to-end harness, plus one live run.
+Steps 5–7 use the stub `sq` and `cf` from `tests/`; steps 1–4 run against a real slice with `sq`.
 
 1. **Configure.** Write `~/.config/amoeba/projects.yaml`:
 
@@ -494,8 +494,8 @@ Draft, to be refined after implementation. Uses the stub `sq` and `cf` from `tes
    - `amoeba inspect journal --project amoeba` shows one `sq_run` entry with `pipeline: p456` and no `cf_write` entry.
    - `ps` shows `sq run p456 <index> --run-id …`.
 4. **Completion.** When the run completes, `amoeba inspect nodes --project amoeba` shows the slice `done`, and the next slice by index gets its launch on a following tick.
-5. **Transient resume (stub).** Run `pytest tests/runner/test_end_to_end.py -k transient`. The stub ends the run `failed` / `provider_error` twice, then `completed`. Expected: two `resume_cause: transient` entries, then `done`. With the stub failing four times, the fourth blocks with `auto_resume_exhausted`.
-6. **Question (stub).** Run `pytest … -k agent_question`. Then `amoeba inspect blocked --json` shows `reason: agent_question` and the question text. Run `amoeba submit resolution --project amoeba --by pm --blocked-state-id <id> --detail "answered" --decision resume --instructions "Use the target branch."`. Expected: a resume entry with those instructions, and the slice proceeds.
+5. **Transient resume (stub).** Run `pytest tests/runner/test_tick_auto_resume.py`. The scripted run stops transiently twice, then completes. Expected: two `resume_cause: transient` entries, then `done`; with four failures at one step the fourth blocks with `auto_resume_exhausted`.
+6. **Question (stub).** Run `pytest tests/runner/test_end_to_end.py -k agent_question` (it blocks the slice on a human with the question, resumes it with instructions verbatim, and the slice finishes). On a real store, `amoeba inspect blocked --json` shows `reason: agent_question` and the question text. Run `amoeba submit resolution --project amoeba --by pm --blocked-state-id <id> --detail "answered" --decision resume --instructions "Use the target branch."`. Expected: a resume entry with those instructions, and the slice proceeds.
 7. **One list.** With two stub projects each holding a blocked slice, `amoeba inspect blocked` with no `--project` shows both, with `project_id` and `reason`.
 8. **Gone.** `amoeba start --routing-table x` fails as an unknown flag. `amoeba inspect routing-decisions` is not a listing.
 
