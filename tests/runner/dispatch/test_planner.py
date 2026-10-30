@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-from amoeba.runner.decide import BlockDispatch, LaunchRun, WriteSlicePointer
+from amoeba.runner.decide import (
+    BlockDispatch,
+    LaunchRun,
+    ProjectView,
+    ResumeRun,
+    WriteSlicePointer,
+)
 from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
 from amoeba.runner.dispatch.params import (
     MERGE_DISABLED,
@@ -22,7 +29,10 @@ from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.project_config import MergePolicy
+from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
+from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import (
+    PARAM_RUN_ID,
     BlockedKind,
     BlockedState,
     CommandKind,
@@ -401,3 +411,109 @@ def test_a_reissue_keeps_the_old_target_and_records_this_ticks_check() -> None:
         PARAM_TARGET: "dev/old",
         PARAM_DISPATCH_CHECK: evidence,
     }
+
+
+# -- automatic resume (slice 132, D5) -------------------------------------------
+
+RESETS_AT = datetime(2026, 10, 29, 18, 0, tzinfo=UTC)
+
+
+def _stopped(document: dict[str, object], checkout: Path = FIRST) -> JournalEntry:
+    """A resolved run entry holding the outcome document it was resolved with."""
+    run = entry(
+        CommandKind.SQ_RUN, "a", checkout, JournalOutcome.COMPLETED, outcome_text="x"
+    )
+    return replace(run, result={RESULT_OUTCOME_DOCUMENT: document})
+
+
+_ORPHANED: dict[str, object] = {"run_id": "run-a", "outcome": "orphaned"}
+_PROVIDER_ERROR: dict[str, object] = {
+    "run_id": "run-a",
+    "outcome": "failed",
+    "failure": {"kind": "provider_error", "step": "design-0"},
+}
+_STALL: dict[str, object] = {
+    "run_id": "run-a",
+    "outcome": "failed",
+    "failure": {"kind": "stall", "step": "design-0"},
+}
+_USAGE_LIMIT: dict[str, object] = {
+    "run_id": "run-a",
+    "outcome": "paused",
+    "checkpoint": {
+        "kind": "usage_limit",
+        "step": "design-0",
+        "resets_at": RESETS_AT.isoformat(),
+    },
+}
+
+
+def _resume_view(
+    stopped: JournalEntry, now: datetime = RESETS_AT, **kw: object
+) -> ProjectView:
+    step_facts = facts(DispatchState.AUTO_RESUME, FIRST, continues=stopped)
+    return replace(view_of({"a": step_facts}, **kw), now=now)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("document", [_ORPHANED, _PROVIDER_ERROR, _STALL])
+def test_an_orphaned_provider_error_or_stall_outcome_is_resumed(
+    document: dict[str, object],
+) -> None:
+    stopped = _stopped(document)
+
+    [action] = PLANNER.plan(_resume_view(stopped))
+
+    assert action == ResumeRun(
+        "a",
+        stopped.parameters[PARAM_RUN_ID],  # type: ignore[arg-type]
+        Continuation.RETRY,
+        stopped.id,
+        None,
+        FIRST,
+        cause=ResumeCause.TRANSIENT,
+        journal_extra={PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)},
+    )
+
+
+def test_a_usage_limit_pause_waits_for_its_reset_time() -> None:
+    stopped = _stopped(_USAGE_LIMIT)
+
+    assert PLANNER.plan(_resume_view(stopped, RESETS_AT - timedelta(seconds=1))) == []
+    assert len(PLANNER.plan(_resume_view(stopped, RESETS_AT))) == 1
+
+
+def test_a_resume_in_a_checkout_held_by_another_node_waits() -> None:
+    stopped = _stopped(_STALL)
+
+    view = _resume_view(stopped, holders={FIRST: frozenset({"a", "other"})})
+
+    assert PLANNER.plan(view) == []
+
+
+def test_a_resume_in_a_checkout_held_only_by_itself_goes_ahead() -> None:
+    stopped = _stopped(_STALL)
+
+    view = _resume_view(stopped, holders={FIRST: frozenset({"a"})})
+
+    assert len(PLANNER.plan(view)) == 1
+
+
+def test_a_resume_that_is_not_current_gets_nothing() -> None:
+    stopped = _stopped(_STALL)
+    step_facts = facts(DispatchState.AUTO_RESUME, FIRST, continues=stopped)
+    view = replace(view_of({"a": step_facts}, current=[]), now=RESETS_AT)
+
+    assert PLANNER.plan(view) == []
+
+
+def test_a_failed_check_blocks_the_resume() -> None:
+    stopped = _stopped(_STALL)
+    block = Block(FaultKind.CHECKOUT_DIRTY, "dirty", {"path_count": 1})
+
+    view = _resume_view(stopped, checks={"a": block})
+
+    assert PLANNER.plan(view) == [BlockDispatch("a", block)]
+
+
+def test_a_resume_without_a_check_waits_for_it() -> None:
+    assert PLANNER.plan(_resume_view(_stopped(_STALL), checks={})) == []

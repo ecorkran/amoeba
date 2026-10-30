@@ -209,9 +209,9 @@ Note (20261029): `observed.py` now imports `InFlightRun` only under TYPE_CHECKIN
 ### Task 7.3: Issue `ResumeRun(cause=transient)` from Decide
 **Owner**: Junior AI | **Dependencies**: 7.2 | **Effort**: 2
 
-- [ ] The dispatch planner issues `ResumeRun(node, run_id, continues, checkout, cause=transient, instructions=None)` for an `AUTO_RESUME` candidate when `supervise.resume_ready(document, view.now)` and its pre-dispatch check is `Ok`. A held node is not current, so it gets nothing (D5 "Who resumes")
-- [ ] Tests in `tests/runner/dispatch/test_planner.py`: an orphaned, a `provider_error` and a `stall` outcome each resume; a `usage_limit` pause is not resumed before `resets_at` and is at it; a held node is not resumed; a failed check blocks rather than resumes
-- [ ] **Success:** tests pass. Commit `feat: resume transient run failures automatically`
+- [x] The dispatch planner issues `ResumeRun(node, run_id, continues, checkout, cause=transient, instructions=None)` for an `AUTO_RESUME` candidate when `supervise.resume_ready(document, view.now)` and its pre-dispatch check is `Ok`. A held node is not current, so it gets nothing (D5 "Who resumes")
+- [x] Tests in `tests/runner/dispatch/test_planner.py`: an orphaned, a `provider_error` and a `stall` outcome each resume; a `usage_limit` pause is not resumed before `resets_at` and is at it; a held node is not resumed; a failed check blocks rather than resumes
+- [x] **Success:** tests pass. Commit `feat: resume transient run failures automatically`
 
 ### Task 7.4: Confirm a resume against the state it left
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 3

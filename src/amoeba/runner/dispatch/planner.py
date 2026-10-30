@@ -9,12 +9,14 @@ state                     action
 ========================  =====================================================
 ``POINTED``               ``LaunchRun`` (the step already holds its checkout)
 ``REISSUE``               ``LaunchRun`` repeating the attempt that never started
+``AUTO_RESUME``           ``ResumeRun`` (transient), once the outcome is ready (D5)
 ``NEEDS_POINTER``         ``WriteSlicePointer``
-``IN_FLIGHT``              nothing
+``IN_FLIGHT``             nothing
 ========================  =====================================================
 
-A held checkout offers nothing to a step that is not ``POINTED``: a pointed step's
-own claim is what holds its checkout. Within a free checkout, ``POINTED`` and
+A held checkout offers nothing to a step that is not ``POINTED`` (or an
+``AUTO_RESUME`` held only by itself): a pointed step's own claim is what holds its
+checkout. Within a free checkout, ``POINTED`` and
 ``REISSUE`` go before ``NEEDS_POINTER`` (a step that has written its pointer launches
 before another writes over it), then by ``(initiative index, slice index, step
 rank)``. A checkout the snapshot could not resolve gets nothing here: the tick blocks
@@ -32,6 +34,7 @@ from amoeba.runner.decide import (
     BlockDispatch,
     LaunchRun,
     ProjectView,
+    ResumeRun,
     WriteSlicePointer,
 )
 from amoeba.runner.dispatch.checkout import Checkout
@@ -48,7 +51,12 @@ from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.project_config import MergePolicy
-from amoeba.runner.resolutions.vocabulary import ResolutionDecision
+from amoeba.runner.resolutions.vocabulary import (
+    Continuation,
+    ResolutionDecision,
+    ResumeCause,
+)
+from amoeba.runner.supervise import recorded_document, resume_ready
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
 
 #: The order states go in within a checkout: launches before pointer writes.
@@ -58,6 +66,7 @@ _LAUNCHES = frozenset({DispatchState.POINTED, DispatchState.REISSUE})
 _PRIORITY = {
     DispatchState.POINTED: _RANK_LAUNCH,
     DispatchState.REISSUE: _RANK_LAUNCH,
+    DispatchState.AUTO_RESUME: _RANK_LAUNCH,
     DispatchState.NEEDS_POINTER: _RANK_POINTER_WRITE,
 }
 
@@ -75,10 +84,7 @@ class DispatchPlanner:
             if facts.state not in _PRIORITY:
                 continue
             path = facts.checkout.path
-            if (
-                path in view.checkout_holders
-                and facts.state is not DispatchState.POINTED
-            ):
+            if _held_by_another(view, path, node, facts.state):
                 continue
             rank = (_PRIORITY[facts.state], facts.sort_key)
             if path not in best or rank < best[path][0]:
@@ -88,10 +94,28 @@ class DispatchPlanner:
         return [action for action in actions if action is not None]
 
 
+def _held_by_another(
+    view: ProjectView, path: Path, node: Node, state: DispatchState
+) -> bool:
+    """Whether the checkout is held in a way that leaves this step nothing to do.
+
+    A ``POINTED`` step's own claim is what holds its checkout, and an ``AUTO_RESUME``
+    step's stopped run holds it too, so those two are held against only by others.
+    """
+    holders = view.checkout_holders.get(path, frozenset[str]())
+    if state is DispatchState.POINTED:
+        return False
+    if state is DispatchState.AUTO_RESUME:
+        return bool(holders - {node.id})
+    return bool(holders)
+
+
 def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action | None:
     checkout = facts.checkout
     if not isinstance(checkout, Checkout):
         raise ValueError(f"step {node.id} has no resolved checkout")
+    if facts.state is DispatchState.AUTO_RESUME:
+        return _auto_resume(node, facts, view)
     if facts.state in _LAUNCHES:
         # A launch or reissue goes ahead only on a passed pre-dispatch check (D5).
         check = view.dispatch_checks.get(node.id)
@@ -133,6 +157,33 @@ def _launch(
         dispatch_params(facts.step, facts.slice_index, policy),
         checkout.path,
         journal_extra=extra,
+    )
+
+
+def _auto_resume(
+    node: Node, facts: StepDispatchFacts, view: ProjectView
+) -> Action | None:
+    """Resume a run that stopped in a transient way, once ready and checked (D5)."""
+    stopped = facts.continues
+    if stopped is None:
+        raise ValueError(f"step {node.id} is to be resumed but has no stopped run")
+    document = recorded_document(stopped)
+    if document is None or not resume_ready(document, view.now):
+        return None
+    check = view.dispatch_checks.get(node.id)
+    if check is None:
+        return None
+    if isinstance(check, Block):
+        return BlockDispatch(node.id, check)
+    return ResumeRun(
+        node.id,
+        text_parameter(stopped, PARAM_RUN_ID),
+        Continuation.RETRY,
+        stopped.id,
+        None,
+        Path(text_parameter(stopped, PARAM_CHECKOUT)),
+        cause=ResumeCause.TRANSIENT,
+        journal_extra={PARAM_DISPATCH_CHECK: dict(check.evidence)},
     )
 
 
