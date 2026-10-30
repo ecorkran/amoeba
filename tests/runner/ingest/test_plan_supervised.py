@@ -97,13 +97,13 @@ def test_a_question_longer_than_the_bound_is_cut() -> None:
         {"kind": "a_kind_from_the_future", "step": "design-0"},
     ],
 )
-def test_any_other_pause_blocks_on_the_checkpoint_with_it_in_the_payload(
+def test_any_other_pause_blocks_a_human_with_the_checkpoint_in_the_payload(
     checkpoint: dict[str, str],
 ) -> None:
     plan = _plan(_ended("paused", checkpoint=checkpoint))
 
     assert plan.entry_outcome is JournalOutcome.COMPLETED
-    assert plan.block is not None and plan.block.kind is BlockedKind.SQ_CHECKPOINT
+    assert plan.block is not None and plan.block.kind is BlockedKind.HUMAN
     payload = _payload(plan)
     assert payload[PAYLOAD_REASON] == REASON_PAUSED
     reported = cast("dict[str, object]", payload[PAYLOAD_CHECKPOINT])

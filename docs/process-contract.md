@@ -519,13 +519,13 @@ resumable → resume; question → answer; anything else → a person".
 | `failed`, `failure.kind` `provider_error` or `stall` | `TRANSIENT` | Auto-resume |
 | `paused`, `checkpoint.kind` `usage_limit` with `resets_at` | `TRANSIENT` | Auto-resume, once `resets_at` has passed |
 | `paused`, `checkpoint.kind` `agent_question` | `QUESTION` | `block(HUMAN)`, payload `{run_id, reason: agent_question, step, question}` |
-| any other `paused` (`loop_exhausted`, `awaits_human`, `interactive_checkpoint`, `usage_limit` without `resets_at`, `other`, an unknown kind) | `BLOCKED` | `block(SQ_CHECKPOINT)`; the checkpoint is in the entry's `outcome_document` |
+| any other `paused` (`loop_exhausted`, `awaits_human`, `interactive_checkpoint`, `usage_limit` without `resets_at`, `other`, an unknown kind) | `BLOCKED` | `block(HUMAN)`, payload `{run_id, reason: paused, checkpoint}`; the checkpoint is also in the entry's `outcome_document` |
 | any other `failed` (`artifact_missing`, `cost_cap`, an unknown kind) | `BLOCKED` | `block(HUMAN)`, payload `{run_id, reason: failed, failure}`; `failure` carries `agent_text` when Squadron sent it |
 | vanished, launch failed, resume failed | `BLOCKED` | `block(HUMAN)` as slices 122, 125 and 127 write them |
 
-- **The question block is `HUMAN`, not `SQ_CHECKPOINT`.** The store keeps a block's
-  payload only on the escalation row of a `HUMAN` block, so a question blocked as
-  `SQ_CHECKPOINT` would lose its text. The slice's node status is `blocked_on_human`.
+- **Every pause block is `HUMAN`, not `SQ_CHECKPOINT`.** The store keeps a block's
+  payload only on the escalation row of a `HUMAN` block, so a question or checkpoint
+  blocked as `SQ_CHECKPOINT` would lose its text. The slice's node status is `blocked_on_human`.
   A later answerer (slice 140) finds these blocks by `reason == "agent_question"` and
   answers with one `resume` resolution. An `agent_question` with no `question` is
   still a question; the payload's `question` is `null`.

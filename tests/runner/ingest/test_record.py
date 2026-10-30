@@ -227,7 +227,7 @@ def test_a_paused_run_with_a_good_review_blocks_on_the_checkpoint(rig: Rig) -> N
 
     rig.finish(paused, RunOutcome.PAUSED)
 
-    assert rig.open_blocks() == [BlockedKind.SQ_CHECKPOINT]
+    assert rig.open_blocks() == [BlockedKind.HUMAN]
     assert len(rig.store.verdicts(PROJECT)) == 1
     assert rig.resolved().outcome is JournalOutcome.COMPLETED
 

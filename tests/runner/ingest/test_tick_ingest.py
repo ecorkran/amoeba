@@ -88,7 +88,7 @@ def test_a_paused_run_blocks_on_the_checkpoint_and_keeps_it_in_the_result(
         **review.document,
     )
 
-    assert _open_blocks(rig, node) == [BlockedKind.SQ_CHECKPOINT]
+    assert _open_blocks(rig, node) == [BlockedKind.HUMAN]
     done = rig.store.journal_entry(entry.id)
     assert done is not None and done.outcome is JournalOutcome.COMPLETED
     assert done.result is not None
@@ -96,7 +96,7 @@ def test_a_paused_run_blocks_on_the_checkpoint_and_keeps_it_in_the_result(
     assert isinstance(document, dict)
     assert document["checkpoint"]["kind"] == "awaits_human"  # pyright: ignore[reportUnknownVariableType]
     assert len(rig.store.verdicts(PROJECT)) == 1, "the review behind the checkpoint"
-    assert _open_blocks(rig, node) == [BlockedKind.SQ_CHECKPOINT], "no second block"
+    assert _open_blocks(rig, node) == [BlockedKind.HUMAN], "no second block"
 
 
 def test_a_failed_run_blocks_on_a_human_without_a_second_block(

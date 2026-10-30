@@ -75,7 +75,8 @@ def _step(rig: DispatchRig, index: int = INDEX) -> Node:
 
 
 def _block_payload(rig: DispatchRig) -> dict[str, object]:
-    [message] = rig.store.messages(PROJECT, channel=Channel.ESCALATION)
+    # The newest escalation: a paused run's own block escalates before a fault does.
+    message = rig.store.messages(PROJECT, channel=Channel.ESCALATION)[-1]
     return dict(message.payload or {})
 
 

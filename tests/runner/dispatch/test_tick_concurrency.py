@@ -81,7 +81,7 @@ def test_a_paused_run_keeps_its_checkout(rig: DispatchRig) -> None:
     rig.tick()
 
     assert _launches(rig, second) == 0
-    assert rig.status(first) is NodeStatus.BLOCKED_ON_SQ_CHECKPOINT
+    assert rig.status(first) is NodeStatus.BLOCKED_ON_HUMAN
 
 
 def test_a_paused_run_with_an_unknown_review_still_holds_its_checkout(

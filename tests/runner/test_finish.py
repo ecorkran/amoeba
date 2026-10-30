@@ -128,7 +128,7 @@ def test_paused_blocks_on_the_checkpoint_and_keeps_the_document_in_the_result(
     stored = done.result[RESULT_OUTCOME_DOCUMENT]
     assert isinstance(stored, dict)
     assert stored["checkpoint"]["kind"] == "awaits_human"  # pyright: ignore[reportUnknownVariableType]
-    assert _open_blocks(store, node) == [BlockedKind.SQ_CHECKPOINT]
+    assert _open_blocks(store, node) == [BlockedKind.HUMAN]
 
 
 def test_orphaned_resolves_failed_and_blocks_nothing_under_the_bound(

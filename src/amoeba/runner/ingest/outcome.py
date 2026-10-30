@@ -243,13 +243,15 @@ def _blocked(finished: RunEnded, run_id: str, resolved: JournalOutcome) -> Outco
     document = finished.document
     if document.outcome is RunOutcome.FAILED:
         return _failed(finished, run_id)
-    block = _checkpoint_block(finished, run_id)
     payload = {
         PAYLOAD_RUN_ID: run_id,
         PAYLOAD_REASON: REASON_PAUSED,
         PAYLOAD_CHECKPOINT: _checkpoint_payload(document.checkpoint),
     }
-    return OutcomePlan(BlockPlan(block.kind, block.context, payload), resolved)
+    # A HUMAN block, like the question: the store keeps a payload only on a human
+    # block's escalation, and the checkpoint must reach the person with the block.
+    context = _checkpoint_block(finished, run_id).context
+    return OutcomePlan(BlockPlan(BlockedKind.HUMAN, context, payload), resolved)
 
 
 def _exhausted_block(finished: RunEnded, run_id: str, count: int) -> BlockPlan:
