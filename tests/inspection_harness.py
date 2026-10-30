@@ -12,8 +12,6 @@ from pathlib import Path
 
 from cf_harness import observed
 from evidence_harness import check_input, finding, verdict_input
-from runner.routing.inputs_support import make_inputs
-from runner.routing.table_support import ADVANCE_COMPLETED, table_text
 from sq_run_fixtures import sq_run_parameters
 
 from amoeba.inbox import submit
@@ -25,9 +23,6 @@ from amoeba.store import (
     DetectionOutcome,
     JournalOutcome,
     NodeKind,
-    Route,
-    RoutingDecisionInput,
-    RoutingTableVersion,
     SetDesiredState,
     Store,
     SubmissionKind,
@@ -157,24 +152,6 @@ def seed_every_listing(supervisor_dir: Path) -> SeededStore:
                 WATCH_REVIEWS_DIR: str(supervisor_dir / "reviews"),
                 WATCH_ACTIVE: True,
             },
-        )
-        # Slice 126: one routing decision, under a stored table version.
-        store.record_routing_decision(
-            RoutingDecisionInput(
-                project_id=PROJECT,
-                node_id=runnable.id,
-                inputs=make_inputs(attempt=1).to_record(),
-                rule_id="advance-completed",
-                table_version="sha256:fixture-table",
-                amoeba_version="fixture",
-                route=Route.ADVANCE,
-                route_parameters={},
-            ),
-            table=RoutingTableVersion(
-                "sha256:fixture-table", table_text(ADVANCE_COMPLETED)
-            ),
-            effect=None,
-            attempt_step="slice_design",
         )
         store.record_detection(
             DetectionInput(

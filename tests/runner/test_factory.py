@@ -18,11 +18,7 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy, ProjectConfig
 from amoeba.runner.resolutions.planner import ContinuationPlanner
-from amoeba.runner.routing.table import parse_table
 from amoeba.store import Store
-from runner.routing.table_support import table_text
-
-ONE_RULE = "- id: a\n  when: {outcome: completed}\n  route: advance\n"
 
 
 @pytest.fixture
@@ -152,15 +148,9 @@ def test_passed_planners_are_consulted_by_a_tick(
     assert planner.seen == ["demo"]
 
 
-def _settings_with_table(path: Path) -> ProcessSettings:
-    return dataclasses.replace(ProcessSettings(), routing_table_path=path)
-
-
-def test_a_valid_table_starts_and_the_tenant_holds_it_and_the_version(
-    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path, tmp_path: Path
+def test_the_tenant_holds_the_installed_version(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path
 ) -> None:
-    table_file = tmp_path / "table.yaml"
-    table_file.write_text(table_text(), encoding="utf-8")
     captured: list[dict[str, Any]] = []
 
     def spy(**tenant_kwargs: Any) -> RunnerTenant:
@@ -169,41 +159,10 @@ def test_a_valid_table_starts_and_the_tenant_holds_it_and_the_version(
 
     monkeypatch.setattr(factory, "RunnerTenant", spy)
 
-    runner_tenant(_settings_with_table(table_file), healthy_sq)
-
-    [kwargs] = captured
-    assert kwargs["routing_table"] == parse_table(table_text())
-    assert kwargs["amoeba_version"] == version("amoeba")
-
-
-def test_the_shipped_table_is_the_default(healthy_sq: Path) -> None:
-    assert ProcessSettings().routing_table_path.is_file()
     runner_tenant(ProcessSettings(), healthy_sq)
 
-
-def test_a_broken_table_fails_start_listing_its_problems(
-    healthy_sq: Path, tmp_path: Path
-) -> None:
-    table_file = tmp_path / "table.yaml"
-    table_file.write_text(
-        table_text(ONE_RULE, catch_all=False, bounds={"P4": 240}), encoding="utf-8"
-    )
-
-    with pytest.raises(StartupFailedError) as raised:
-        runner_tenant(_settings_with_table(table_file), healthy_sq)
-
-    message = str(raised.value)
-    assert "catch-all" in message
-    assert "P5" in message and "P6" in message
-    assert str(table_file) in message
-    assert not healthy_sq.exists(), "nothing was created before the table loaded"
-
-
-def test_a_missing_table_file_names_the_path(healthy_sq: Path, tmp_path: Path) -> None:
-    missing = tmp_path / "nope.yaml"
-
-    with pytest.raises(StartupFailedError, match=str(missing)):
-        runner_tenant(_settings_with_table(missing), healthy_sq)
+    [kwargs] = captured
+    assert kwargs["amoeba_version"] == version("amoeba")
 
 
 def test_an_unreadable_package_version_fails_start(

@@ -14,7 +14,6 @@ from pathlib import Path
 
 from amoeba.process.settings import (
     DEFAULT_CF_DATA_DIR,
-    DEFAULT_ROUTING_TABLE_PATH,
     DEFAULT_SQ_RUNS_DIR,
     ProcessSettings,
 )
@@ -158,13 +157,6 @@ def add_start_flags(parser: argparse.ArgumentParser) -> None:
         help="The Context Forge data directory holding projects.json.",
     )
     parser.add_argument(
-        "--routing-table",
-        type=Path,
-        default=DEFAULT_ROUTING_TABLE_PATH,
-        metavar="PATH",
-        help="The routing table file (default: the table shipped with Amoeba).",
-    )
-    parser.add_argument(
         "--project-config",
         type=Path,
         default=defaults.project_config_path,
@@ -211,7 +203,6 @@ def start_settings(args: argparse.Namespace) -> ProcessSettings:
         run_poll_interval_seconds=args.run_poll_interval,
         plan_read_interval_seconds=args.plan_read_interval,
         auto_resume_limit=args.auto_resume_limit,
-        routing_table_path=args.routing_table,
         project_config_path=args.project_config,
     )
 

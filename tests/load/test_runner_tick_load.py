@@ -22,8 +22,7 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
-from runner.observe_support import FakeCf, document
-from runner.routing.table_support import TEST_AMOEBA_VERSION, small_table
+from runner.observe_support import TEST_AMOEBA_VERSION, FakeCf, document
 
 from amoeba.process import ProcessSettings, RunOutcome
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
@@ -91,7 +90,6 @@ def test_the_tick_is_bounded_fair_and_rate_limited(tmp_path: Path) -> None:
         now=lambda: datetime.now(UTC),
         monotonic=time.monotonic,
         version_label="sq-test-label",
-        routing_table=small_table(),
         project_config=ProjectConfig(
             {project: ProjectSettings(pipeline="p456") for project in stores}
         ),

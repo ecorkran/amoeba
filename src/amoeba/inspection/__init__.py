@@ -23,7 +23,6 @@ from amoeba.inspection import (
     evidence,
     feed,
     inbox,
-    routing,
 )
 from amoeba.inspection.listing import (
     NODE_OPTION,
@@ -175,13 +174,6 @@ LISTINGS: tuple[Listing, ...] = (
         help_text="Descriptive judge-sample counts by review type and model.",
         columns=checks.CALIBRATION_LISTING_COLUMNS,
         rows=checks.calibration_rows,
-    ),
-    Listing(
-        name="routing-decisions",
-        help_text="Routing decisions, oldest first, and whether each recomputes.",
-        columns=routing.ROUTING_DECISION_COLUMNS,
-        rows=routing.routing_decision_rows,
-        value_options=(NODE_OPTION,),
     ),
     Listing(
         name="watches",

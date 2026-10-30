@@ -29,6 +29,9 @@ from amoeba.store import PARAM_RUN_ID, CommandKind, JournalEntry
 
 NOW = datetime(2026, 10, 23, 12, 0, 0, tzinfo=UTC)
 GRACE = 60.0
+
+#: The Amoeba package version a test tenant is given; not a real release.
+TEST_AMOEBA_VERSION = "0.0.0-test"
 INTERVAL = 15.0
 
 

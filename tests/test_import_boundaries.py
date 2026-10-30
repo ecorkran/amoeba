@@ -14,8 +14,7 @@ errors, takes ``SubmissionKind`` from its defining module, and never calls
 ``Store.open``.
 Rule 9: ``process/run_pruning.py`` is pure: it imports only the standard library
 and the outcome-document model it shares with the ``sq_run`` observer.
-Rule 10: only ``amoeba.cli`` imports ``amoeba.runner``, except that inspection
-may import the pure routing modules in ``INSPECTION_RUNNER_IMPORTS``.
+Rule 10: only ``amoeba.cli`` imports ``amoeba.runner``.
 Rule 11: ``amoeba.runner`` takes from ``amoeba.store``, ``amoeba.process`` and
 ``amoeba.upstream`` only names those packages export.
 """
@@ -329,37 +328,11 @@ def test_the_run_file_read_check_reports_both_imports(tmp_path: Path) -> None:
     ]
 
 
-#: The pure routing modules inspection may import to recompute a decision.
-#: Nothing else under ``amoeba.runner`` is open to it (Rule 10 exemption).
-INSPECTION_RUNNER_IMPORTS = frozenset(
-    {
-        "amoeba.runner.routing.inputs",
-        "amoeba.runner.routing.recompute",
+def _runner_imports(path: Path) -> set[str]:
+    """The ``amoeba.runner`` modules ``path`` imports."""
+    return {
+        name for name in _imported_names(path) if _mentions({name}, "amoeba.runner")
     }
-)
-
-
-def _runner_imports(path: Path, root: Path = SRC) -> set[str]:
-    """The ``amoeba.runner`` modules ``path`` imports and may not.
-
-    A ``from package import module`` is judged as the module it imports, so a
-    parent package of an allowed module is never itself a free pass.
-    """
-    in_inspection = path.relative_to(root).parts[0] == "inspection"
-    targets: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.Import):
-            targets.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            for alias in node.names:
-                submodule = f"{node.module}.{alias.name}"
-                targets.add(
-                    submodule if submodule in INSPECTION_RUNNER_IMPORTS else node.module
-                )
-    runner = {name for name in targets if _mentions({name}, "amoeba.runner")}
-    if not in_inspection:
-        return runner
-    return {name for name in runner if name not in INSPECTION_RUNNER_IMPORTS}
 
 
 def test_rule_10_only_the_cli_imports_the_runner() -> None:
@@ -398,20 +371,3 @@ def test_rule_11_the_runner_imports_only_public_names() -> None:
                         if alias.name not in exported
                     )
     assert problems == []
-
-
-def test_rule_10_exemption_does_not_free_the_rest_of_the_runner(tmp_path: Path) -> None:
-    allowed = tmp_path / "inspection" / "allowed.py"
-    allowed.parent.mkdir()
-    allowed.write_text(
-        "from amoeba.runner.routing import inputs\n"
-        "from amoeba.runner.routing.recompute import recompute\n",
-        encoding="utf-8",
-    )
-    stage = tmp_path / "inspection" / "stage.py"
-    stage.write_text("from amoeba.runner.routing import stage\n", encoding="utf-8")
-    whole = tmp_path / "inspection" / "whole.py"
-    whole.write_text("import amoeba.runner\n", encoding="utf-8")
-    assert _runner_imports(allowed, tmp_path) == set()
-    assert _runner_imports(stage, tmp_path) == {"amoeba.runner.routing"}
-    assert _runner_imports(whole, tmp_path) == {"amoeba.runner"}

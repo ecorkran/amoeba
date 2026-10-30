@@ -45,13 +45,13 @@ from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
 from runner.intent.intent_support import submit
 from runner.observe_support import (
     GRACE,
+    TEST_AMOEBA_VERSION,
     Child,
     Clock,
     FakeCf,
     Host,
     ScriptedPoll,
 )
-from runner.routing.table_support import TEST_AMOEBA_VERSION, small_table
 
 PROJECT = "demo"
 PLAN_READ_INTERVAL = 30.0
@@ -210,7 +210,6 @@ class Rig:
             timeout_seconds=8.0,
         )
         self.planner = Planner(tmp_path)
-        self.routing_table = small_table()
         self.auto_resume_limit = ProcessSettings().auto_resume_limit
         self.project_settings = ProjectSettings(pipeline="p456")
         self.planners: tuple[Any, ...] = (self.planner,)
@@ -284,7 +283,6 @@ def tenant_for(rig: Rig) -> RunnerTenant:
         now=rig.clock.wall,
         monotonic=rig.clock.monotonic,
         version_label=TEST_VERSION_LABEL,
-        routing_table=rig.routing_table,
         project_config=ProjectConfig({PROJECT: rig.project_settings}),
         amoeba_version=TEST_AMOEBA_VERSION,
     )

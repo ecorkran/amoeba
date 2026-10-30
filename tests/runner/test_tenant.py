@@ -19,9 +19,15 @@ from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import PARAM_RUN_ID, Store, StoreBusyError
 from amoeba.store.inbox_models import Channel
 from runner.lifecycle.crash_support import fail_nth_write, restore_writes
-from runner.observe_support import Child, Clock, FakeCf, ScriptedPoll, document
+from runner.observe_support import (
+    TEST_AMOEBA_VERSION,
+    Child,
+    Clock,
+    FakeCf,
+    ScriptedPoll,
+    document,
+)
 from runner.plan_tick_support import serve_plan
-from runner.routing.table_support import TEST_AMOEBA_VERSION, small_table
 from runner.tick_support import drive_project, link, ready_slice, runnable_unbusy
 
 SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
@@ -82,7 +88,6 @@ class Rig:
             now=self.clock.wall,
             monotonic=self.clock.monotonic,
             version_label="sq-test-label",
-            routing_table=small_table(),
             project_config=ProjectConfig(
                 {p: ProjectSettings(pipeline="p456") for p in project_ids}
             ),

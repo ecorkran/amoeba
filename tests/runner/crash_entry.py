@@ -42,11 +42,7 @@ from amoeba.runner.project_config import ProjectConfig, ProjectSettings
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
-from runner.routing.table_support import (
-    ADVANCE_COMPLETED,
-    TEST_AMOEBA_VERSION,
-    small_table,
-)
+from runner.observe_support import TEST_AMOEBA_VERSION
 from runner.tick_support import PassingGates, runnable_unbusy
 
 KILL_AT_ENV = "PROOF_KILL_AT"
@@ -242,7 +238,6 @@ def main(argv: Sequence[str]) -> None:
         now=partial(datetime.now, UTC),
         monotonic=time.monotonic,
         version_label="sq-test-label",
-        routing_table=small_table(ADVANCE_COMPLETED),
         project_config=ProjectConfig({CRASH_PROJECT: ProjectSettings(pipeline="p456")}),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
