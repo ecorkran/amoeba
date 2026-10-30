@@ -154,10 +154,10 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 6.1: Add the supervised outcome plan
 **Owner**: Junior AI | **Dependencies**: 2.2, 4.1, 5.2 | **Effort**: 3
 
-- [ ] `runner/ingest/outcome.py`: add `plan_supervised(finished, run_id, count, limit) -> OutcomePlan` beside `plan_outcome`, built on `supervise.classify`; nothing calls it yet. Each class gives its D4 effect: `COMPLETED` resolves and completes the node; `QUESTION` blocks `SQ_CHECKPOINT` with `{run_id, reason, step, question}`; `BLOCKED` keeps the payloads D4 lists, with `agent_text` inside `failure` when sent; vanished, launch failed and resume failed are as today. Every text field passes through `cut_to_bound`
-- [ ] `TRANSIENT`: with `count` below `limit`, resolve the entry with its outcome document and do not block. At the bound, block `HUMAN` with `{reason: auto_resume_exhausted, step, count, checkpoint | failure}`
-- [ ] Tests in `tests/runner/ingest/`: one per D4 row's plan; `TRANSIENT` under and at the bound; a question longer than the bound is cut
-- [ ] **Success:** tests pass and the full suite is green. Commit `feat: add the supervised outcome plan`
+- [x] `runner/ingest/outcome.py`: add `plan_supervised(finished, run_id, count, limit) -> OutcomePlan` beside `plan_outcome`, built on `supervise.classify`; nothing calls it yet. Each class gives its D4 effect: `COMPLETED` resolves and completes the node; `QUESTION` blocks `SQ_CHECKPOINT` with `{run_id, reason, step, question}`; `BLOCKED` keeps the payloads D4 lists, with `agent_text` inside `failure` when sent; vanished, launch failed and resume failed are as today. Every text field passes through `cut_to_bound`
+- [x] `TRANSIENT`: with `count` below `limit`, resolve the entry with its outcome document and do not block. At the bound, block `HUMAN` with `{reason: auto_resume_exhausted, step, count, checkpoint | failure}`
+- [x] Tests in `tests/runner/ingest/`: one per D4 row's plan; `TRANSIENT` under and at the bound; a question longer than the bound is cut
+- [x] **Success:** tests pass and the full suite is green. Commit `feat: add the supervised outcome plan`
 
 ### Task 6.2: Take routing and the CF outcome read off the tick
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 3
