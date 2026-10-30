@@ -23,7 +23,11 @@ from amoeba.store import (
 )
 from runner.crash_entry import KillPoint
 from runner.crash_harness import PROJECT, CrashHarness, RunSettings
-from runner.crash_resume import StagedResume, stage_paused_retry
+from runner.crash_resume import (
+    StagedResume,
+    stage_paused_retry,
+    stage_transient_failure,
+)
 
 
 @pytest.fixture
@@ -99,6 +103,42 @@ def test_kill_after_the_resume_is_journaled_is_never_launched(
 
     [failed] = _continuations(harness)
     assert failed.outcome is JournalOutcome.FAILED
+    assert failed.result is not None
+    assert failed.result["resume_failure"] == "no_claim_within_grace"
+    assert _resume_calls(harness) == 0, "recovery never launches a resume"
+    assert harness.node(staged.node_id).status is NodeStatus.BLOCKED_ON_HUMAN
+
+
+def _transient_resumes(harness: CrashHarness) -> list[JournalEntry]:
+    return [
+        e
+        for e in _continuations(harness)
+        if e.parameters.get("resume_cause") == "transient"
+    ]
+
+
+def test_kill_after_an_automatic_resume_is_journaled_never_issues_a_second(
+    harness: CrashHarness,
+) -> None:
+    staged = stage_transient_failure(harness)
+    run = RunSettings(run_seconds=0.2)
+
+    first = harness.start(run, KillPoint.BEFORE_RESUME_LAUNCH)
+    harness.wait_for_sigkill(first)
+
+    [journaled] = _transient_resumes(harness)
+    assert not journaled.is_resolved, "the crash left the resume open"
+    assert _resume_calls(harness) == 0
+
+    second = harness.start(run)
+    harness.wait_until(
+        "the resume to fail with no claim",
+        lambda: any(e.is_resolved for e in _transient_resumes(harness)),
+    )
+    harness.stop(second)
+
+    [failed] = _transient_resumes(harness)
+    assert failed.id == journaled.id, "the same resume, never a second one"
     assert failed.result is not None
     assert failed.result["resume_failure"] == "no_claim_within_grace"
     assert _resume_calls(harness) == 0, "recovery never launches a resume"

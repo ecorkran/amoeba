@@ -227,10 +227,12 @@ Note (20261029): the refused-live case differs from the task text. After an exit
 ### Task 7.5: Prove automatic resume at tick level
 **Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 3
 
-- [ ] Add stub `sq` scripts to `tests/sq_stub_scripts.py` for: `failed`/`provider_error` then `completed`; `orphaned` at one step N times; transient at three different steps; `usage_limit` with `resets_at`
-- [ ] Tick tests (new `tests/runner/test_tick_auto_resume.py`): two transient failures then completion gives two `resume_cause: transient` entries, then `done`; four failures at one step block the fourth `auto_resume_exhausted` with step and count; three steps once each are all resumed; `usage_limit` waits for `resets_at` with an injected clock; releasing a hold resumes
-- [ ] Crash test with `tests/runner/crash_resume.py`: kill after a transient resume entry is written; after restart the count is unchanged and the resume is confirmed, not reissued
-- [ ] **Success:** tests pass and the full suite is green. Commit `test: prove automatic resume and its bound`
+- [x] Add stub `sq` scripts to `tests/sq_stub_scripts.py` for: `failed`/`provider_error` then `completed`; `orphaned` at one step N times; transient at three different steps; `usage_limit` with `resets_at`
+- [x] Tick tests (new `tests/runner/test_tick_auto_resume.py`): two transient failures then completion gives two `resume_cause: transient` entries, then `done`; four failures at one step block the fourth `auto_resume_exhausted` with step and count; three steps once each are all resumed; `usage_limit` waits for `resets_at` with an injected clock; releasing a hold resumes
+- [x] Crash test with `tests/runner/crash_resume.py`: kill after a transient resume entry is written; after restart the count is unchanged and the resume is confirmed, not reissued
+- [x] **Success:** tests pass and the full suite is green. Commit `test: prove automatic resume and its bound`
+
+Note (20261029): the outcome documents are built inline in tests/runner/test_tick_auto_resume.py (each with a later updated_at, as a real run has) instead of as new scripts in tests/sq_stub_scripts.py, which only holds captured review shapes. The crash test kills at BEFORE_RESUME_LAUNCH: the journaled transient resume is never reissued or launched, ends resume_failed after the grace period, and the slice blocks; a confirmed resume after a kill is covered by the existing 127 crash tests, which use the same observer.
 
 ---
 
