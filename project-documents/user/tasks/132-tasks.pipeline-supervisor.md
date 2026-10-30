@@ -121,10 +121,10 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 4.1: Add `complete_node_id` to `record_runner_report`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `store/runner_report.py` (and the `Store` method that calls it): the keyword `complete_node_id: str | None = None` (Task-level additions). When set, the node is marked `done` in the same transaction that resolves the entry and marks `runner_issued`. 121's `done`-terminal rule is unchanged: an already `done` node is not an error; a node in any state the rule forbids raises as a direct status write would
-- [ ] `docs/store-contract.md`: document the option beside `record_runner_report`, and why (a crash between two writes would relaunch a completed run, D4)
-- [ ] Contract test in `tests/contract/` (the one test D4 adds): with the option, the entry is resolved and the node `done`; with a fault injected after the node write (`tests/fault_injection.py`), neither change is visible; without the option, behaviour is unchanged. 100's existing contract tests pass unchanged
-- [ ] **Success:** tests pass. Commit `feat: resolve an entry and complete its node in one transaction`
+- [x] `store/runner_report.py` (and the `Store` method that calls it): the keyword `complete_node_id: str | None = None` (Task-level additions). When set, the node is marked `done` in the same transaction that resolves the entry and marks `runner_issued`. 121's `done`-terminal rule is unchanged: an already `done` node is not an error; a node in any state the rule forbids raises as a direct status write would
+- [x] `docs/store-contract.md`: document the option beside `record_runner_report`, and why (a crash between two writes would relaunch a completed run, D4)
+- [x] Contract test in `tests/contract/` (the one test D4 adds): with the option, the entry is resolved and the node `done`; with a fault injected after the node write (`tests/fault_injection.py`), neither change is visible; without the option, behaviour is unchanged. 100's existing contract tests pass unchanged
+- [x] **Success:** tests pass. Commit `feat: resolve an entry and complete its node in one transaction`
 
 ---
 

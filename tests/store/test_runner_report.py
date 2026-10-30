@@ -16,10 +16,13 @@ from amoeba.store import (
     JournalEntry,
     JournalOutcome,
     JournalResolver,
+    NodeNotFoundError,
+    NodeStatus,
     RunnerReview,
     Store,
     StoreError,
     VerdictRecord,
+    sql,
 )
 
 RUN_RESULT = {"run_id": "run-20261019-review-aaaa1111"}
@@ -343,5 +346,65 @@ def test_an_sq_run_result_without_a_run_id_is_refused(store: Store) -> None:
 
     with pytest.raises(ValueError, match="run_id"):
         _report(store, entry, [_review(node_id)], result={})
+
+    assert _snapshot(store, entry.id) == before
+
+
+def test_an_already_done_node_is_left_done(store: Store) -> None:
+    node_id = seed_node(store)
+    entry = _issue(store, node_id)
+    # No public path marks a node done under an open entry, so write it directly.
+    with store._connection:  # pyright: ignore[reportPrivateUsage]
+        store._execute(  # pyright: ignore[reportPrivateUsage]
+            sql.UPDATE_NODE_STATUS,
+            (NodeStatus.DONE.value, "2026-10-29T00:00:00Z", node_id),
+        )
+
+    store.record_runner_report(
+        entry.id,
+        [],
+        outcome=JournalOutcome.COMPLETED,
+        result=RUN_RESULT,
+        complete_node_id=node_id,
+    )
+
+    node = store.get_node(node_id)
+    assert node is not None and node.status is NodeStatus.DONE
+
+
+def test_a_node_in_another_project_is_refused_and_nothing_is_written(
+    store: Store,
+) -> None:
+    node_id = seed_node(store)
+    entry = _issue(store, node_id)
+    other = seed_node(store, OTHER_PROJECT)
+    before = _snapshot(store, entry.id)
+
+    with pytest.raises(InvalidTransitionError):
+        store.record_runner_report(
+            entry.id,
+            [],
+            outcome=JournalOutcome.COMPLETED,
+            result=RUN_RESULT,
+            complete_node_id=other,
+        )
+
+    assert _snapshot(store, entry.id) == before
+
+
+def test_an_unknown_completion_node_is_refused_and_nothing_is_written(
+    store: Store,
+) -> None:
+    entry = _issue(store, seed_node(store))
+    before = _snapshot(store, entry.id)
+
+    with pytest.raises(NodeNotFoundError):
+        store.record_runner_report(
+            entry.id,
+            [],
+            outcome=JournalOutcome.COMPLETED,
+            result=RUN_RESULT,
+            complete_node_id="no-such-node",
+        )
 
     assert _snapshot(store, entry.id) == before

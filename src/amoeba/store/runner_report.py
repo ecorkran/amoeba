@@ -16,6 +16,7 @@ import dataclasses
 from collections.abc import Mapping, Sequence
 
 from amoeba.store import sql_inbox
+from amoeba.store._base import isoformat, now
 from amoeba.store.evidence_models import VerdictRecord
 from amoeba.store.feed import FeedOperations
 from amoeba.store.feed_models import DetectionOutcome
@@ -26,7 +27,7 @@ from amoeba.store.journal_models import (
     JournalOutcome,
     JournalResolver,
 )
-from amoeba.store.models import InvalidTransitionError, StoreIntegrityError
+from amoeba.store.models import InvalidTransitionError, NodeStatus, StoreIntegrityError
 from amoeba.store.runner_models import RunnerReview
 
 #: The outcomes a Runner report may resolve its entry with. A paused run is not
@@ -44,6 +45,7 @@ class RunnerReportOperations(JournalOperations, FeedOperations):
         *,
         outcome: JournalOutcome,
         result: Mapping[str, object],
+        complete_node_id: str | None = None,
     ) -> list[VerdictRecord]:
         """Record a run's reviews and resolve its journal entry.
 
@@ -52,6 +54,14 @@ class RunnerReportOperations(JournalOperations, FeedOperations):
         ``runner_issued`` ledger row carrying the verdict's id and node, then the
         entry resolved by ``issuer`` with ``outcome`` and ``result``. The
         resolution marks the entry as awaiting routing.
+
+        With ``complete_node_id`` the node is marked ``done`` in the same
+        transaction, after the resolution (a node with an unresolved entry
+        cannot be marked done). A crash between a resolution and a separate
+        completion would relaunch a run that already finished (slice 132, D4).
+        A node that is already ``done`` is left alone. Any other state the
+        status rules forbid (a blocked node) raises, as a direct status write
+        would.
 
         A ledger key already present (detection got there first) keeps its
         existing row and inserts nothing; the entry is still resolved. A verdict
@@ -68,7 +78,10 @@ class RunnerReportOperations(JournalOperations, FeedOperations):
                 written.
             InvalidTransitionError: The entry does not exist, is already
                 resolved, is not a review-producing kind, or belongs to
-                another project than a review's ``detection``. Nothing is
+                another project than a review's ``detection``; or
+                ``complete_node_id`` names a node in another project or one
+                the status rules refuse to complete. Nothing is written.
+            NodeNotFoundError: ``complete_node_id`` names no node. Nothing is
                 written.
             StoreIntegrityError: A verdict is recorded in another project.
                 Nothing is written.
@@ -94,7 +107,20 @@ class RunnerReportOperations(JournalOperations, FeedOperations):
             self._resolve_entry_within(
                 entry_id, outcome, result, JournalResolver.ISSUER
             )
+            if complete_node_id is not None:
+                self._complete_node_within(complete_node_id, entry)
         return records
+
+    def _complete_node_within(self, node_id: str, entry: JournalEntry) -> None:
+        """Mark the node ``done`` inside the report's transaction; ``done`` stays."""
+        node = self._require_node(node_id)
+        if node.project_id != entry.project_id:
+            raise InvalidTransitionError(
+                f"node {node_id!r} belongs to project {node.project_id!r}, "
+                f"not {entry.project_id!r}"
+            )
+        if node.status is not NodeStatus.DONE:
+            self._write_status(node_id, NodeStatus.DONE, isoformat(now()))
 
     def _record_review(
         self, review: RunnerReview, entry: JournalEntry

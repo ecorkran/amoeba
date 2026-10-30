@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 import pytest
 
-from amoeba.store import Store
+from amoeba.store import Store, sql
 
 
 class InjectedFailureError(RuntimeError):
@@ -30,3 +30,8 @@ def fail_on_statement(
         return real_execute(sql_text, parameters)
 
     monkeypatch.setattr(store, "_execute", execute)
+
+
+def fail_on_node_status_write(monkeypatch: pytest.MonkeyPatch, store: Store) -> None:
+    """Make ``store`` raise when it writes a node's status."""
+    fail_on_statement(monkeypatch, store, sql.UPDATE_NODE_STATUS)
