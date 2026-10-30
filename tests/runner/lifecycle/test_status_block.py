@@ -9,7 +9,6 @@ import pytest
 from amoeba.runner.faults import TickFaults
 from amoeba.runner.lifecycle.plan_read import PlanRead
 from amoeba.runner.lifecycle.reconcile import reconcile
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import Store
 from amoeba.store.inbox_models import Channel
@@ -60,7 +59,7 @@ def _payloads(store: Store, node: Node) -> list[dict[str, object]]:
     ]
 
 
-def test_a_new_degraded_slice_gets_four_steps_and_is_blocked_once(
+def test_a_new_degraded_slice_is_blocked_once(
     store: Store,
 ) -> None:
     wrote, faults = _run(store, _read((121, "degraded")))
@@ -69,8 +68,7 @@ def test_a_new_degraded_slice_gets_four_steps_and_is_blocked_once(
     assert wrote and len(faults) == 0, "no plan_read_failed"
     assert node.status is NodeStatus.BLOCKED_ON_HUMAN
     assert _block_count(store, node) == 1
-    steps = [c for c in store.children_of(node.id) if c.cf.phase]
-    assert len(steps) == 4 and all(s.status is NodeStatus.RUNNABLE for s in steps)
+    assert not [c for c in store.children_of(node.id) if c.cf.phase], "no steps"
     assert _payloads(store, node) == [
         {"fault_kind": "plan_status_unknown", "index": 121, "status": "degraded"}
     ]
@@ -134,27 +132,15 @@ def test_an_out_of_vocabulary_status_blocks_with_its_raw_text(store: Store) -> N
     assert payload["fault_kind"] == "plan_status_unknown"
 
 
-def test_the_next_slices_implementation_waits_for_the_unknown_slices_merge(
-    store: Store,
-) -> None:
+def test_the_next_slice_waits_for_the_unknown_slice_to_be_done(store: Store) -> None:
     _run(store, _read((121, "degraded"), (122, "not_started")))
-    second = _slice(store, 122)
-    for child in store.children_of(second.id):
-        if child.cf.phase in {LifecycleStep.SLICE_DESIGN, LifecycleStep.TASKS}:
-            store.update_node_status(child.id, NodeStatus.DONE)
 
     tree = LifecycleTree(store.nodes_for_project(PROJECT))
-    ready = {
-        ((tree.parent(n) or n).cf.index, tree.step_of(n)) for n in tree.ready_steps()
-    }
+    ready = {n.cf.index for n in tree.ready_slices()}
+    assert ready == set(), "121 is blocked and 122 waits for it"
 
-    assert not {pair for pair in ready if pair[0] == 121}, "its steps are not ready"
-    assert (122, LifecycleStep.IMPLEMENTATION) not in ready
-    # Not vacuous: with the unknown slice done, the implementation is ready.
-    for child in tree.children(_slice(store, 121)):
-        store.update_node_status(child.id, NodeStatus.DONE)
+    # Not vacuous: with the unknown slice resolved and done, 122 is ready.
     store.resolve(_slice(store, 121).id, resolved_by="pm", detail="skip it")
+    store.update_node_status(_slice(store, 121).id, NodeStatus.DONE)
     after = LifecycleTree(store.nodes_for_project(PROJECT))
-    assert any(
-        after.step_of(n) is LifecycleStep.IMPLEMENTATION for n in after.ready_steps()
-    )
+    assert {n.cf.index for n in after.ready_slices()} == {122}

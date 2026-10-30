@@ -10,7 +10,8 @@ import pytest
 from amoeba.runner.faults import FaultKind, TickFaults
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
 from amoeba.runner.lifecycle.reconcile import reconcile
-from amoeba.runner.lifecycle.steps import LifecycleStep, StepLevel, steps_at
+from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import Store
 from amoeba.store.inbox_models import Channel
 from amoeba.store.models import CFReference, Node, NodeKind, NodeStatus
@@ -42,14 +43,6 @@ def _linked(store: Store, kind: NodeKind, index: int) -> Node:
     return node
 
 
-def _steps_of(store: Store, node: Node) -> dict[str, Node]:
-    return {
-        child.cf.phase or "": child
-        for child in store.children_of(node.id)
-        if child.kind is NodeKind.PHASE_OR_ARTIFACT
-    }
-
-
 def _fixture_plan(
     *,
     slices_100: tuple[CFSliceEntry, ...] | None = None,
@@ -78,19 +71,18 @@ def _fixture_plan(
     )
 
 
-def test_linking_a_project_creates_every_node_and_its_steps(store: Store) -> None:
+def test_linking_a_project_creates_initiative_and_slice_nodes_and_no_steps(
+    store: Store,
+) -> None:
     wrote, faults = _run(store, _fixture_plan())
 
     assert wrote and len(faults) == 0
     assert len(_nodes(store, NodeKind.INITIATIVE)) == 3
-    assert len(_nodes(store, NodeKind.SLICE)) == 4
-    initiative_steps = len(steps_at(StepLevel.INITIATIVE))
-    slice_steps = len(steps_at(StepLevel.SLICE))
-    expected_steps = 3 * initiative_steps + 3 * slice_steps  # 123 is deferred
-    assert len(_nodes(store, NodeKind.PHASE_OR_ARTIFACT)) == expected_steps
+    assert len(_nodes(store, NodeKind.SLICE)) == 3, "123 is deferred: no node"
+    assert _nodes(store, NodeKind.PHASE_OR_ARTIFACT) == []
 
 
-def test_every_container_carries_its_index_and_every_step_a_phase(
+def test_every_container_carries_its_project_and_index(
     store: Store,
 ) -> None:
     _run(store, _fixture_plan())
@@ -98,43 +90,22 @@ def test_every_container_carries_its_index_and_every_step_a_phase(
     for node in _nodes(store, NodeKind.INITIATIVE) + _nodes(store, NodeKind.SLICE):
         assert node.cf.project == CF_PROJECT and node.cf.index is not None
         assert node.status in {NodeStatus.RUNNABLE, NodeStatus.DONE}
-    for step in _nodes(store, NodeKind.PHASE_OR_ARTIFACT):
-        assert step.cf.project == CF_PROJECT and step.cf.index is None
-        assert step.cf.phase == step.title
-        assert LifecycleStep(step.cf.phase)
 
 
 def test_the_checked_initiatives_subtree_is_created_done(store: Store) -> None:
     _run(store, _fixture_plan())
 
-    initiative = _linked(store, NodeKind.INITIATIVE, 100)
-    slice_node = _linked(store, NodeKind.SLICE, 101)
-    steps = [
-        *_steps_of(store, initiative).values(),
-        *_steps_of(store, slice_node).values(),
-    ]
-    assert len(steps) == 7
-    assert all(step.status is NodeStatus.DONE for step in steps)
+    assert _linked(store, NodeKind.INITIATIVE, 100).status is NodeStatus.DONE
+    assert _linked(store, NodeKind.SLICE, 101).status is NodeStatus.DONE
 
 
-def test_an_initiative_without_an_arch_file_gets_a_runnable_architecture(
+def test_an_incomplete_slice_is_runnable_and_so_is_its_initiative(
     store: Store,
 ) -> None:
     _run(store, _fixture_plan())
 
-    steps = _steps_of(store, _linked(store, NodeKind.INITIATIVE, 140))
-
-    assert steps[LifecycleStep.ARCHITECTURE].status is NodeStatus.RUNNABLE
-    assert steps[LifecycleStep.SLICE_PLAN].status is NodeStatus.RUNNABLE
-
-
-def test_an_in_progress_slice_gets_four_runnable_steps(store: Store) -> None:
-    _run(store, _fixture_plan())
-
-    steps = _steps_of(store, _linked(store, NodeKind.SLICE, 121))
-
-    assert set(steps) == {step.value for step in steps_at(StepLevel.SLICE)}
-    assert all(step.status is NodeStatus.RUNNABLE for step in steps.values())
+    assert _linked(store, NodeKind.SLICE, 121).status is NodeStatus.RUNNABLE
+    assert _linked(store, NodeKind.INITIATIVE, 120).status is NodeStatus.RUNNABLE
 
 
 def test_initiative_display_data_comes_from_cf(store: Store) -> None:
@@ -182,12 +153,11 @@ def test_no_design_file_leaves_slice_name_null_without_a_warning(
     assert not [r for r in caplog.records if "design file" in r.getMessage()]
 
 
-def test_a_deferred_slice_has_no_steps_and_gains_them_on_a_later_status(
+def test_a_deferred_slice_has_no_node_and_gains_one_on_a_later_status(
     store: Store,
 ) -> None:
     _run(store, _fixture_plan())
-    deferred = _linked(store, NodeKind.SLICE, 123)
-    assert _steps_of(store, deferred) == {}
+    assert [n for n in _nodes(store, NodeKind.SLICE) if n.cf.index == 123] == []
 
     revived = _fixture_plan(
         slices_120=(
@@ -199,10 +169,12 @@ def test_a_deferred_slice_has_no_steps_and_gains_them_on_a_later_status(
     wrote, _ = _run(store, revived)
 
     assert wrote
-    assert len(_steps_of(store, deferred)) == 4
+    assert _linked(store, NodeKind.SLICE, 123).status is NodeStatus.RUNNABLE
 
 
-def test_a_slice_with_steps_keeps_them_when_later_deferred(store: Store) -> None:
+def test_a_slice_that_is_later_deferred_keeps_its_node_untouched(
+    store: Store,
+) -> None:
     _run(store, _fixture_plan())
     wrote, _ = _run(
         store,
@@ -216,7 +188,7 @@ def test_a_slice_with_steps_keeps_them_when_later_deferred(store: Store) -> None
     )
 
     assert not wrote
-    assert len(_steps_of(store, _linked(store, NodeKind.SLICE, 122))) == 4
+    assert _linked(store, NodeKind.SLICE, 122).status is NodeStatus.RUNNABLE
 
 
 def test_rerunning_the_same_read_writes_nothing(store: Store) -> None:
@@ -229,30 +201,30 @@ def test_rerunning_the_same_read_writes_nothing(store: Store) -> None:
     assert store.nodes_for_project(PROJECT) == before
 
 
-def test_a_linked_node_missing_steps_gets_only_those_steps(store: Store) -> None:
-    partial = store.create_node(
+def test_step_nodes_from_an_older_store_are_left_alone_and_never_ready(
+    store: Store,
+) -> None:
+    initiative = store.create_node(
         project_id=PROJECT,
         kind=NodeKind.INITIATIVE,
         title="Initiative 140",
         cf=CFReference(project=CF_PROJECT, index=140),
     )
-    store.create_node(
+    old_step = store.create_node(
         project_id=PROJECT,
         kind=NodeKind.PHASE_OR_ARTIFACT,
         title="architecture",
-        parent_id=partial.id,
+        parent_id=initiative.id,
         cf=CFReference(project=CF_PROJECT, phase=LifecycleStep.ARCHITECTURE.value),
     )
 
-    wrote, _ = _run(store, plan(cf_initiative(140)))
+    _run(store, plan(cf_initiative(140)))
 
-    assert wrote
     assert len(_nodes(store, NodeKind.INITIATIVE)) == 1, "no second initiative"
-    assert set(_steps_of(store, partial)) == {
-        step.value for step in steps_at(StepLevel.INITIATIVE)
-    }
-    architecture = _steps_of(store, partial)[LifecycleStep.ARCHITECTURE]
-    assert architecture.status is NodeStatus.RUNNABLE, "the existing step is untouched"
+    kept = store.get_node(old_step.id)
+    assert kept is not None and kept.status is NodeStatus.RUNNABLE
+    tree = LifecycleTree(store.nodes_for_project(PROJECT))
+    assert all(node.kind is NodeKind.SLICE for node in tree.ready_slices())
 
 
 def test_renumber_yields_one_orphan_and_one_new_node(store: Store) -> None:
@@ -277,7 +249,6 @@ def test_renumber_yields_one_orphan_and_one_new_node(store: Store) -> None:
     assert len(store.messages(PROJECT, channel=Channel.ESCALATION)) == 1
     created = _linked(store, NodeKind.SLICE, 124)
     assert created.id != old.id and created.cf.slice_name == "the-design"
-    assert len(_steps_of(store, created)) == 4
 
 
 def test_a_slice_listed_under_another_initiative_is_orphaned_and_recreated(

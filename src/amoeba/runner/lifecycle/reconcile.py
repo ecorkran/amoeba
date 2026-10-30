@@ -4,10 +4,11 @@
 before it writes so a crash at any point is repaired by the next read:
 
 1. orphan: unlink nodes CF no longer reports (``orphaning.py``);
-2. create: initiative, slice and step nodes CF reports and the tree lacks (here);
+2. create: initiative and slice nodes CF reports and the tree lacks (here);
 3. block: slices whose CF status is unknown (``status_block.py``);
 4. update: keep ``slice_name`` and ``artifact_path`` equal to CF's (``references.py``);
-5. complete: mark steps CF shows complete as done (``completion.py``).
+5. complete: mark slices CF shows complete, and initiatives whose slices are all
+   done, as done (``completion.py``).
 
 This module is the only caller of ``Store.create_node`` in ``src/amoeba``; a guard
 test enforces it (D10). The read checks (``read_checks.py``) run first and decide
@@ -31,15 +32,8 @@ from amoeba.runner.lifecycle.read_checks import ReadScope, checked_scope, observ
 from amoeba.runner.lifecycle.references import update_references
 from amoeba.runner.lifecycle.slugs import slice_name_from_design_file
 from amoeba.runner.lifecycle.status_block import block_unknown_status
-from amoeba.runner.lifecycle.steps import (
-    LifecycleStep,
-    PlanObservation,
-    StepLevel,
-    step_complete,
-    steps_at,
-)
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import CFReference, Node, NodeKind, NodeStatus, Store
+from amoeba.store import CFReference, Node, NodeKind, Store
 from amoeba.upstream.context_forge import (
     CFInitiative,
     CFSliceEntry,
@@ -49,8 +43,11 @@ from amoeba.upstream.context_forge import (
 
 logger = logging.getLogger(__name__)
 
-#: Statuses CF uses to take a slice out of the plan; such a slice gets no new steps.
-_STEPLESS_STATUSES = frozenset({PlanEntryStatus.DEFERRED, PlanEntryStatus.DEPRECATED})
+#: Statuses CF uses to take a slice out of the plan; such a slice gets no node, so it
+#: is never driven and never a predecessor (slice 132, D1).
+_OUT_OF_PLAN_STATUSES = frozenset(
+    {PlanEntryStatus.DEFERRED, PlanEntryStatus.DEPRECATED}
+)
 
 
 def reconcile(
@@ -134,7 +131,6 @@ class _Creator:
             node = self._tree.find_linked(
                 NodeKind.INITIATIVE, self._cf_project_id, initiative.index
             ) or self._create_initiative(initiative)
-            self._ensure_initiative_steps(node, initiative)
             slices = self._read.slices[initiative.index]
             if isinstance(slices, CFSliceList) and (
                 initiative.index in self._scope.slice_initiatives
@@ -158,20 +154,14 @@ class _Creator:
             ),
         )
 
-    def _ensure_initiative_steps(self, node: Node, initiative: CFInitiative) -> None:
-        observation = self._observations[(NodeKind.INITIATIVE, initiative.index)]
-        self._ensure_steps(node, StepLevel.INITIATIVE, observation)
-
     # -- slices ----------------------------------------------------------------
 
     def _ensure_slice(self, initiative_node: Node, entry: CFSliceEntry) -> None:
-        node = self._tree.find_linked(
+        linked = self._tree.find_linked(
             NodeKind.SLICE, self._cf_project_id, entry.index
-        ) or self._create_slice(initiative_node, entry)
-        if entry.status in _STEPLESS_STATUSES:
-            return
-        observation = self._observations[(NodeKind.SLICE, entry.index)]
-        self._ensure_steps(node, StepLevel.SLICE, observation)
+        )
+        if linked is None and entry.status not in _OUT_OF_PLAN_STATUSES:
+            self._create_slice(initiative_node, entry)
 
     def _create_slice(self, initiative_node: Node, entry: CFSliceEntry) -> Node:
         self._wrote = True
@@ -198,31 +188,3 @@ class _Creator:
                 entry.design_file,
             )
         return name
-
-    # -- steps -----------------------------------------------------------------
-
-    def _ensure_steps(
-        self, node: Node, level: StepLevel, observation: PlanObservation
-    ) -> None:
-        """Create the steps of ``level`` that ``node`` lacks, each with the status
-        its completion predicate gives."""
-        have = {self._tree.step_of(child) for child in self._tree.children(node)}
-        for step in steps_at(level):
-            if step not in have:
-                self._create_step(node, step, observation)
-
-    def _create_step(
-        self, parent: Node, step: LifecycleStep, observation: PlanObservation
-    ) -> None:
-        self._wrote = True
-        status = (
-            NodeStatus.DONE if step_complete(step, observation) else NodeStatus.RUNNABLE
-        )
-        self._store.create_node(
-            project_id=self._project_id,
-            kind=NodeKind.PHASE_OR_ARTIFACT,
-            title=step.value,
-            parent_id=parent.id,
-            status=status,
-            cf=CFReference(project=self._cf_project_id, phase=step.value),
-        )

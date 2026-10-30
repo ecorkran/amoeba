@@ -326,9 +326,11 @@ Note (20261030): 9.5 and 9.5b are one commit, `feat: drive slices with the proje
 ### Task 9.6: Stop creating step nodes
 **Owner**: Junior AI | **Dependencies**: 9.5b | **Effort**: 2
 
-- [ ] `lifecycle/reconcile.py creates initiative and slice nodes only. Step nodes in an older store are never candidates (LLD "State Management")
-- [ ] Tests in `tests/runner/lifecycle/test_reconcile_create.py` and `test_reconcile_update.py`: a slice gets no step children; a store holding step nodes from before still ticks and never launches them
-- [ ] **Success:** full suite green. Commit `refactor: stop creating step nodes`
+- [x] `lifecycle/reconcile.py creates initiative and slice nodes only. Step nodes in an older store are never candidates (LLD "State Management")
+- [x] Tests in `tests/runner/lifecycle/test_reconcile_create.py` and `test_reconcile_update.py`: a slice gets no step children; a store holding step nodes from before still ticks and never launches them
+- [x] **Success:** full suite green. Commit `refactor: stop creating step nodes`
+
+Note (20261030): a deferred or deprecated slice now gets no node at all (it used to get a node with no steps), so it is never driven and never a predecessor; a node that already exists is not retired when CF later defers it. Step-completion tests in `test_completion.py` and the step cases in `test_status_block.py`/`test_reconcile_crash.py` were deleted or rewritten with their subject; the step rules in `completion.py`, `tree.py` and `predecessors.py` have nothing left to act on and are deleted in Task 10.4. `test_tenant.py` fails writes 1-3 now (three nodes are written, not nine).
 
 ### Task 9.7: Raise `pipeline_unconfigured`
 **Owner**: Junior AI | **Dependencies**: 9.5b | **Effort**: 1

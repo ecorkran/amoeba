@@ -97,7 +97,7 @@ EXPECTED, TOTAL_WRITES = _uninterrupted()
 
 
 def test_the_uninterrupted_run_has_work_for_every_kind_of_write() -> None:
-    assert TOTAL_WRITES > 20
+    assert TOTAL_WRITES > 5
     statuses = {row[3] for row in EXPECTED}
     assert {"done", "runnable", "blocked_on_human"} <= statuses
 

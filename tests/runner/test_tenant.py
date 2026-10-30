@@ -270,7 +270,7 @@ def _linked_indexes(rig: Rig, project_id: str) -> list[int]:
     )
 
 
-@pytest.mark.parametrize("fail_at", [1, 4, 9])
+@pytest.mark.parametrize("fail_at", [1, 2, 3])
 def test_a_reconcile_exception_is_one_project_fault_and_the_next_tick_completes_it(
     make_rig: Any, fail_at: int
 ) -> None:
