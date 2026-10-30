@@ -183,7 +183,7 @@ the reason `"<code>: <detail>"`; branch on the code, never on the detail (at mos
 | Code | When |
 | --- | --- |
 | `malformed_body` | The body is not one of the forms above: unknown key (`until` included), unknown `intent`, or not an object. |
-| `target_not_initiative_or_slice` | The `node_id` names a step node or any other kind of node. |
+| `target_not_initiative_or_slice` | The `node_id` names a node that is neither an initiative nor a slice (an old store's step node, for example). |
 | `target_unlinked` | The node is orphaned or otherwise not linked to Context Forge. |
 
 **`no_op`** means the target's settings would not change: the same intent twice,

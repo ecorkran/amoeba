@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: findings-verdicts-and-provenance
 dateCreated: 20260927
-dateUpdated: 20261015
+dateUpdated: 20261030
 status: complete
 ---
 
@@ -603,25 +603,16 @@ standing, baseline_ref, upstream_version`; `--json` rows also carry `upstream`,
 [`inbox-contract.md`](inbox-contract.md); on the feed,
 [`feed-contract.md`](feed-contract.md).
 
-### The Runner's own checks (slice 128)
+### The Runner's own checks (slice 128; no longer written, slice 132)
 
-The Runner records three checks about a slice, on the slice node, with provenance
-upstream `amoeba` (the version label is Amoeba's), and ids `chk-<journal entry id>-<name>`
-so a repeat is the retry rule and keeps the first record. Names are data; no rule
-branches on them.
-
-| Name | Outcome | Source | Examined |
-| --- | --- | --- | --- |
-| `ungate_review_none` | `failed` when the design's frontmatter `review` is `none` (trimmed, lower-cased); `errored` when the frontmatter is missing or unparseable; else `passed` | `document` (the design path) | `{design_path, review}` |
-| `ungate_effective_date` | `failed` when `dateCreated` sorts before CF's `workflow.review_gate_effective_date`; `errored` when the date is not eight digits, the config read failed, or `dateCreated` is missing while a date is set; else `passed` | `document` | `{design_path, effective_date, date_created}` |
-| `cf_gate_accept_disagreement` | `failed`: the PM accepted a completed outcome in the store and CF's gate for it still fails | `command_output` | `{step, cf_status, review_type, rationale, accepted_by, verdict_ids}` |
-
-`examined_count` is 1 for a design that was read and 0 when its path is unknown or the
-file is missing, so the standing is `vacuous` and a missing design is never a pass. The
-disagreement check has `examined_count` 1 and is keyed by the accepted entry, so it is
-recorded once however many times the gate is read. `check_standing` in the routing
-table is the worst of an outcome's check standings (`failed`, `errored`, `vacuous`,
-`unattested`, `passed`).
+Slice 128 had the Runner record three checks on a slice node when a run completed:
+`ungate_review_none`, `ungate_effective_date` and `cf_gate_accept_disagreement`, with
+provenance upstream `amoeba` and ids `chk-<journal entry id>-<name>`. **Since slice 132
+the Runner writes none of them**: they only guarded the Runner's own reads of CF's
+review gate, and those reads are gone (each Squadron pipeline owns its gates). Stores
+that hold such checks keep them; they are ordinary checks, listed by `amoeba inspect
+checks`, and no rule branches on their names. A later user of this contract may record
+checks of its own the same way (the retry rule keeps the first record of an id).
 
 ## Progress records
 

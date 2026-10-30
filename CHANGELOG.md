@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Slice 132: the pipeline supervisor. For each driven slice the Runner launches one run of the pipeline its project is configured to run (`sq run <pipeline> <index>`, in the slice's checkout) and watches it. `completed` marks the slice `done` in the same transaction that resolves the run's entry; any other outcome is classified by a fixed map (`runner/supervise.py`) instead of a table. The slice, not the step, is the unit of work, and slices of an initiative run in index order.
+- Slice 132: `--project-config` now names, per project, `pipeline` (required, no default) and optional `params` (each becomes `-p key=value`). A driven slice in a project with no pipeline launches nothing and raises the project-scoped `pipeline_unconfigured` escalation.
+- Slice 132: automatic resume. `orphaned`, `failed` with `provider_error` or `stall`, and a `usage_limit` pause with `resets_at` (after it) are resumed with `sq run --resume`, up to `--auto-resume-limit N` (setting `auto_resume_limit`, default 3) consecutive resumes of one run at one step; the next blocks the slice `auto_resume_exhausted`. A resumed entry records `resume_cause` (`transient` or `resolution`).
+- Slice 132: an `agent_question` pause blocks the slice on a human with `{run_id, reason: agent_question, step, question}` in the escalation payload (the question for slice 140), and `checkpoint.question`, `checkpoint.resets_at` and `failure.agent_text` are read from `sq runs wait --json`.
+- Slice 132: `amoeba inspect blocked` without `--project` lists the blocked nodes of every project (each store opened read-only). Rows gain `project_id`, `reason` and, in `--json`, the escalation `payload`; `--project` narrows as before.
+- Slice 132: `Store.record_runner_report(..., complete_node_id=)` marks a node `done` in the transaction that resolves the entry.
+
 - **Behavior change:** the shipped routing table keeps going instead of asking the PM. A completed CONCERNS review that CF's gate clears advances (`advance-on-accepted-concerns`); a FAIL reruns up to 2 attempts (`rerun-failed-review`) before escalating. The recurrence-based `rerun-new-concerns` rule is gone. `merge_policy` now defaults to `auto`, so `P6` merges the slice into its target.
 - Slice 128: gates, git and human steps. Before every launch, reissue and resume the Runner reads the checkout and blocks the node on the PM when it is detached, on a branch the pipeline may not start on (`P4` and `P5` on the target, `P6` on the target or the slice's own `{index}-slice.*` branch) or, for a launch, not clean (`checkout_branch`, `checkout_dirty`); a resume is checked for its branch only. For `tasks` and `implementation` it also reads CF's gate (`cf status --json`) and blocks `cf_gate_blocks` or `pending_decision`. A read that fails raises the project-scoped `checkout_read_failed` and blocks nothing. Launch and resume entries record the evidence as `dispatch_check`.
 - Slice 128: when a run completes the Runner reads CF's gate, the design and (for `implementation`) git's branch and head, stores them as the result's `outcome_observation`, and records the two ungate hatches (`review: none`, a `dateCreated` before CF's effective date) as checks on the slice node. Routing gains the inputs `gate_state` and `check_standing`. **Behavior change:** the shipped table advances a completed outcome only with a clear gate and passed checks, so a design with a hatch, a failed gate read or a gate CF still fails now escalates where it advanced. Decisions recorded before this slice no longer recompute.
@@ -129,6 +136,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Slice 132: **behavior change.** A resolution's decision is `resume` (optional `instructions`, passed verbatim) or `stop`. `resume` resumes the slice's run, or relaunches the slice when there is no run to resume. The intent body loses `until`; a body that carries it is `malformed_body`.
+- Slice 132: **behavior change.** The pre-dispatch check is git only: a fresh launch must be on the target and clean, a resume on the target or the slice's own branch (the tree is not checked). The same rule applies to every pipeline, and the check reads only `git.integration_branch` from Context Forge.
+- Slice 132: a held or blocked slice with a `paused`, `failed` or `orphaned` run keeps its checkout until the PM acts (the hold widened from `paused`).
+- Slice 132: the reconcile rules create initiative and slice nodes only and mark a slice `done` when CF reports it complete and an initiative when all its slices are `done`. Step nodes in an older store are ignored.
+
 - Slice 124: `ProjectView` gains `desired` and `current_steps`; `decide()` raises `ValueError` for an action on a step that is not current (ready, driven, not held); planners see `current_steps`. `LifecycleTree.node(id)` added. Test planners that launched on plain slice nodes now use `ready_step` and `drive_project` in `tests/runner/tick_support.py`.
 
 - Slice 109: the `inspect` listings moved from `amoeba.cli` to `amoeba.inspection` (typed `ListingRequest`, `read_listing`); `discover_project_ids` to `amoeba.store.discovery`; `review_sources` to `amoeba.store`; `change_record` to `amoeba.feed.wire`. `inspect` output and `--help` are byte-identical.
@@ -144,6 +156,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Slice 103: `amoeba start` registers `InboxTenant` first, where slice 102 registered no tenants.
 - Slice 103: `host.project_ids` grows at runtime and must not be cached.
 - Slice 103: read-write store opening moved from `process/host.py` to `process/project_stores.py`; the writer guard's one permitted module moved with it.
+
+### Removed
+
+- Slice 132: the routing engine: `--routing-table`, the setting `routing_table_path`, the shipped table, `amoeba inspect routing-decisions`, the run time bounds and the `run_overrun` escalation. The store keeps the routing-decision, table-version and attempt-count tables, `awaits_routing` and `drive_until_step`, unwritten by the Runner.
+- Slice 132: the resolution decisions `retry`, `accept`, `handled` and `rerun` (rejected `unknown_decision`), and the rejection codes `not_at_loop`, `usage_limit_pause`, `checkpoint_unknown`, `interactive_checkpoint` and `decision_not_applicable`.
+- Slice 132: the `merge_policy` key of the project config (an entry with any key beside `pipeline` and `params` fails to load), the `-p merge=false` launch parameter, and merge observation. A pipeline that merges is a pipeline that merges.
+- Slice 132: the CF pointer write (`cf set slice`), its read-back and `pointer_moved`; CF gate reads (`cf status`), the ungate hatch checks and the `cf_gate_accept_disagreement` check; the lifecycle step map, human steps and step completion.
+- Slice 132: the fault kinds `pointer_write_failed`, `pointer_moved`, `run_overrun`, `cf_gate_blocks` and `pending_decision`.
 
 ### Fixed
 

@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: context-forge-event-seam
 dateCreated: 20261016
-dateUpdated: 20261023
+dateUpdated: 20261030
 status: complete
 ---
 
@@ -224,85 +224,46 @@ what the Runner relies on.
   detect this from the read. **Upstream ask:** expose `indexSource` (or refuse
   counter indexes) in `cf list slices --json`. Until then, give every entry an
   explicit index.
-- **`cf status` is not read in slice 123.** Nothing here uses pointers or gates.
-  For slices 125 and 128, observed 2026-10-20: `cf status -p <id>` without
-  `--worktree` reports only project-level pointers, which are empty on a
-  worktree-scoped project, and `--worktree` accepts the worktree id. Slice 125's
-  pointer read-back is `cf get --json` run in the checkout.
+- **`cf status` is not read.** The plan read uses neither pointers nor gates, and since
+  slice 132 no Runner stage reads `cf status`.
 
-## Where a write lands, and the pointer-move rule (slice 125)
+## What the Runner does with Context Forge (slices 125, 128, 132)
 
-*Observed on CF 0.19.17 on 2026-10-24; a dated observation, not a version
-dependency. The capture is `tests/fixtures/cf/cf_get_worktree.json`.*
+*Slice 132: the Runner writes no pointers and reads no gates.* Squadron's phase steps
+run `cf set slice`, `cf set phase` and `cf build` themselves, and each pipeline owns
+its review gates, so Amoeba issues no `cf set` or other CF write, and reads neither
+`cf status` nor the review-gate configuration. What it still reads:
 
-- **CF chooses a worktree by working directory alone.** A project with worktrees
-  has no flag that names one for `cf set` or `cf get`; the command acts on the
-  worktree whose directory contains the process's working directory. So the Runner
-  runs every pointer command with `cwd` set to the step's checkout, which it resolves
-  from the link's latest *observed* snapshot: the worktree whose `indexRange` contains
-  the slice index (exactly one), or the project's `projectPath` when it has none.
-- **`cf set -p <id> slice <index>`** points that worktree (or the project) at the
-  slice. The Runner writes only the slice; Squadron's phase step sets the phase when
-  a run starts.
-- **`cf get --json -p <id>`** run in a worktree reports that worktree's active
-  slice as `fileSlice` and adds a `worktree` object with its `id` (observed in this
-  repository's default worktree, where `projectPath` is also the worktree's path).
-  The Runner's read-back requires the index parsed from `fileSlice` to be the
-  one it wrote, `projectPath` to be the checkout it ran in, and `worktree.id` to be
-  the resolved worktree's (absent when the project has none). A mismatch is a
-  failed pointer write, so a stale snapshot cannot send a run to the wrong tree.
-- **Slice names come from CF.** The read-back's `fileSlice` is `NNN-slice.{name}`;
-  the Runner sets the slice node's `slice_name` from that stem and never builds a
-  slug itself.
-- **The pointer-move rule (D11).** For each run in flight, a snapshot observed after
-  the run's pointer write resolved that reads another slice index at the run's
-  worktree (`activeSlice`, or the project's `fileSlice` when it has no worktrees) means
-  someone else moved the pointer. It raises one project-scoped `pointer_moved`
-  escalation listing every moved run, which stays open while the condition holds and
-  closes on the first complete tick without it. The Runner never matches its own
-  writes by `cf_updated_at`: it writes a pointer only into a free checkout, so its
-  own writes never move a pointer away from a run, and Squadron's `cf set slice`
-  during the run writes the same index.
+- **The plan**: `cf list initiatives` and `cf list slices` (see [Plan
+  reads](#plan-reads-slice-123)).
+- **The CF project file**, as snapshots, for the checkout a slice runs in.
+- **`cf config get git.integration_branch --json -p <id>`**, run in the slice's
+  checkout, before each launch, reissue and resume. It reports `{key, value, source,
+  description}`; empty means `main`, by the key's own description. An answer without a
+  string `value` is a failed read, never a default: the pre-dispatch check then raises
+  `checkout_read_failed` and blocks nothing (see [Git and the pre-dispatch
+  check](process-contract.md#git-and-the-pre-dispatch-check)). The target matters
+  because a fresh launch must start on it and Squadron's merge step merges only into it.
 
-## Gate state and config reads (slice 128)
+**Where a command runs.** CF chooses a worktree by working directory alone: a project
+with worktrees has no flag that names one, and the command acts on the worktree whose
+directory contains the process's working directory. So the Runner runs `cf config get`
+with `cwd` set to the slice's checkout, which it resolves from the link's latest
+*observed* snapshot: the worktree whose `indexRange` contains the slice index (exactly
+one), or the project's `projectPath` when it has none. No checkout is guessed; an
+unresolvable one blocks the slice `checkout_unresolved`. `slice_name` comes from the
+design file in `cf list slices`; the Runner never builds a slug itself.
 
-*Observed on CF 0.19.19 on 2026-10-26; a dated observation, not a version
-dependency. The captures are `tests/fixtures/cf/status/` and
-`tests/fixtures/cf/config/`, with a README naming how each state was reached.*
+**Whose writes.** A CF write changes the file and is recorded as a snapshot whoever
+made it, and nothing is attributed. Since slice 132 the Runner makes none, so a pointer
+move in a snapshot is Squadron's or the PM's.
 
-- **`cf status --json -p <id> [--worktree <id>]`**, run in the checkout, reports
-  `activeSlice: {name, index, status, gateInfo?, pendingDecisions?, gateExempt?}`.
-  `status` is `needs-design`, `needs-tasks`, `in-implementation`, `complete`,
-  `no-active-slice`, `pending-review`, `review-failed` or `pending-decision`;
-  `gateInfo: {reviewType, rationale}` (`reviewType` `slice`, `tasks` or `code`) is
-  present with the two review statuses; `pendingDecisions` is `[{heading, line}]`.
-  `--worktree` takes a worktree id as well as its name. CF evaluates only the boundary
-  at the slice's current position, so the gate a step creates can be read only just
-  after it and the gate a step must cross only just before it.
-- **The position.** The Runner maps status and review type onto one ordered scale:
-  `NEEDS_DESIGN` (0), `AT_SLICE_GATE` (1), `PAST_SLICE_GATE` (2), `AT_TASKS_GATE` (3),
-  `PAST_TASKS_GATE` (4), `AT_CODE_GATE` (5), `PAST_CODE_GATE` (6), and two positions
-  off the scale: `PENDING_DECISION` and `UNKNOWN` (anything else). Status text is
-  trimmed and lower-cased; keys CF adds are ignored; `rationale` and
-  `pendingDecisions` are shown to people and never matched. The read must be about the
-  slice's own index; another index is a failed read.
-- **`cf config get <key> --json`**, run in the checkout, reports `{key, value, source,
-  description}`. The Runner reads `git.integration_branch` (empty means `main`, by the
-  key's own description) and `workflow.review_gate_effective_date` (empty, or
-  `YYYYMMDD`). An answer without a string `value` is a failed read, never a default.
-- **CF's two ungate hatches** are a design whose frontmatter `dateCreated` sorts before
-  a non-empty effective date, and one whose `review` is `none`. CF reports `gateExempt`
-  for the second only. The Runner reads both from the design and records them as checks
-  (see [The Runner's own checks](evidence-contract.md#the-runners-own-checks-slice-128)).
-
-## The Runner's own writes (D8)
-
-A CF write the Runner issues (102's `cf_write` journal kind) also changes the
-file, and is also recorded as a snapshot. That is not double recording: the
-journal records the command and its result, the snapshot records what CF now
-holds. Nothing is deferred or skipped, because nothing is attributed. To match
-its own write to a snapshot, the Runner compares `cf_updated_at`, which both its
-read-back adoption and the snapshot record.
+*Removed by slice 132:* the pointer write (`cf set -p <id> slice <index>`) and its
+read-back (`cf get --json`), the pointer-move rule and its `pointer_moved` escalation,
+and the gate reads (`cf status --json`, the gate position scale, `pending_decision` and
+the entry-gate blocks, the effective-date and `gateExempt` hatch checks); the captures
+that only they used are deleted. The `cf_write` journal kind stays in the store so
+recovery can still adjudicate old entries.
 
 ## Reading it
 

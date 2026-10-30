@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: resident-process-and-recovery
 dateCreated: 20260921
-dateUpdated: 20261023
+dateUpdated: 20261030
 status: complete
 ---
 
@@ -142,8 +142,7 @@ the wait ends the moment stop is requested.
    so a `link_cf_project` submission is applied before the tenant looks.
 4. `RunnerTenant` (slice 122). Observes the project's in-flight `sq_run` entries,
    records the finished ones, and launches what its planners ask for. It is the
-   only tenant that starts a subprocess in a tick. No production planner exists
-   yet, so nothing launches until slice 125. See "The Runner tenant" below.
+   only tenant that starts a subprocess in a tick. See "The Runner tenant" below.
 
 What a tenant may use on `host`:
 
@@ -331,12 +330,16 @@ P` show the links and the recorded snapshots.
 
 *Slice 122.* `RunnerTenant` (`amoeba.runner`, imported only by `amoeba.cli`) is
 composed by `amoeba start` after the shipped tenants. Each tick, for every
-project, it runs: **observe** the unresolved `sq_run` entries, **record** each
-finished run, **route** each unrouted outcome (slice 126), **decide** (pure: a `Planner` sees a frozen `ProjectView` and
-returns actions), **act** (journal a command, then launch it), and **close** any
-project escalation whose fault did not recur. The production planner tuple is
-`HumanStepPlanner` then `DispatchPlanner` (slice 125); tests supply their own
-planner.
+project, it runs: **apply** the PM's intents and **answer** its resolutions,
+**observe** the unresolved `sq_run` entries, **record** each finished run (the
+[outcome map](#the-outcome-map) decides its effect), build the view, **check** each
+launch candidate's checkout, **decide** (pure: a `Planner` sees a frozen
+`ProjectView` and returns actions), **act** (journal a command, then launch it), and
+**close** any project escalation whose fault did not recur. The production planner
+tuple is `DispatchPlanner` then `ContinuationPlanner`; tests supply their own
+planner. Since slice 132 the Runner is a supervisor: it launches the pipeline the
+project config names, and watches the run. Squadron's pipeline owns the policy
+between phases, the reviews and the merge.
 
 - **The only control command is `sq_run`.** The entry is journaled with
   `pipeline`, `params`, a minted `run_id` and the `checkout` directory before
@@ -355,8 +358,7 @@ planner.
   reported an outcome, including a `failed` or `paused` run (see
   [Dispatch and ingestion](#dispatch-and-ingestion) for the block each outcome
   writes). It resolves `failed` when the command could not finish: an `orphaned`
-  or vanished run, or a launch that failed. An `issuer` resolution of an `sq_run`
-  entry marks it as awaiting routing.
+  or vanished run, or a launch that failed.
 - **Observation** is by run id with `poll_run`, at most once per tick per run and
   no more often than `--run-poll-interval`, least recently polled first.
 - **Faults.** One `except Exception` per project, in `tenant.py`. A store failure
@@ -383,7 +385,7 @@ planner.
 ### The plan read
 
 *Slice 123.* The Runner projects each linked Context Forge project's plan into the
-node tree: initiative and slice nodes, each with its step nodes, linked to CF by
+node tree: initiative and slice nodes, linked to CF by
 index (see [Lifecycle nodes and the CF
 index](store-contract.md#lifecycle-nodes-and-the-cf-index) and [Plan
 reads](context-forge-contract.md#plan-reads-slice-123)).
@@ -403,9 +405,11 @@ reads](context-forge-contract.md#plan-reads-slice-123)).
   the link is due again on the next tick. A read is never retried within a tick.
 - **Reconcile** applies a complete read in a fixed order, each rule checking the
   store before it writes so a crash anywhere is repaired by the next read: orphan
-  nodes CF no longer reports; create missing initiative, slice and step nodes; block
-  slices with an unknown status; update `slice_name` and `artifact_path`; mark steps
-  CF shows complete as `done`. A failed or partial read never orphans: an empty list
+  nodes CF no longer reports; create missing initiative and slice nodes (no step
+  nodes: the slice is the unit of work); block slices with an unknown status; update
+  `slice_name` and `artifact_path`; mark slices CF shows complete as `done`; mark an
+  initiative `done` when every linked slice under it is `done`. Step nodes in an older
+  store are left alone and never ready. A failed or partial read never orphans: an empty list
   while linked nodes exist, a duplicate index and a failed read each raise
   `plan_read_failed` and apply nothing for what they cover.
 - **Failure and closure.** A link whose last read failed raises `plan_read_failed`
@@ -413,16 +417,12 @@ reads](context-forge-contract.md#plan-reads-slice-123)).
   across ticks that do not read. An exception in reconcile reaches the tenant's one
   catch as a project-scoped `unexpected_fault`, leaves the link due, and the next
   tick resumes.
-- **Human steps.** `HumanStepPlanner` (`amoeba.runner.lifecycle.human_steps`)
-  blocks each current human step on a person with one store write that is not
-  journaled (a single transaction has no side effect to recover). Since slice 124
-  it is in the production planner tuple and plans only over current steps (see
-  [Intents and current steps](#intents-and-current-steps)).
 
-### Intents and current steps
+### Intents and current slices
 
-*Slice 124.* The PM steers the Runner with intents (the body format, targets and
-rejection codes are in the [inbox contract](inbox-contract.md#intent-bodies)).
+*Slice 124; the unit of work is the slice from slice 132.* The PM steers the Runner
+with intents (the body format, targets and rejection codes are in the [inbox
+contract](inbox-contract.md#intent-bodies)).
 
 - **The apply stage** runs first in each project's tick, before Observe.
   `apply_pending_intents` acknowledges each pending intent in `seq` order, one
@@ -436,311 +436,249 @@ rejection codes are in the [inbox contract](inbox-contract.md#intent-bodies)).
   run, intents already acknowledged stay so, and the failing one stays pending.
 - **The index.** Each tick reads the project's desired-state rows once, after the
   apply stage, into a `DesiredStateIndex`. It is never cached across ticks.
-- **Governance.** A step's drive comes from the nearest row on its path (its slice
-  or initiative, the initiative, then the project) that sets it; no row means not
-  driven. Its `until` must reach the step. A step is held when any row on the path
-  holds. A *current* step is a ready step that is driven and not held; the view
-  exposes them as `current_steps`.
+- **Ready slices.** A slice is *ready* when it is `runnable`, linked, has no blocked
+  ancestor, and its predecessor is `done`. The predecessor is the linked slice with
+  the next lower CF index in the same initiative (`predecessors.py`, the one place a
+  later slice adds cross-project edges). A slice CF reports `complete` is marked
+  `done` by reconcile, so it is not ready.
+- **Governance.** A slice's drive comes from the nearest row on its path (the slice,
+  its initiative, then the project) that sets it; no row means not driven. A slice
+  is held when any row on the path holds. A *current* slice is a ready slice that is
+  driven and not held; the view exposes them as `current_slices`. Intents carry no
+  `until`: it named a lifecycle step, and there are none.
 - **The guard.** `decide()` raises `ValueError` for an action on a node that is not
-  a current step, so a held or undriven target issues nothing new whichever planner
+  a current slice, so a held or undriven target issues nothing new whichever planner
   asks. The error faults the project like any planner bug.
-- **What hold does not stop.** Observe, recording finished runs, routing and
-  reconcile do not read desired state: a held target's runs are still polled and
-  recorded, and a block written before the hold stays.
+- **What hold does not stop.** Observe, recording finished runs and reconcile do not
+  read desired state: a held slice's runs are still polled and recorded, and a block
+  written before the hold stays.
 - **Inspection.** `amoeba inspect desired-states --project P` lists the stored rows.
 
 ### Dispatch and ingestion
 
-*Slice 125.* `DispatchPlanner` points a checkout at a slice, then launches the
-pipeline for the step. Both halves are plain `Action`s the tick performs; nothing
-is stored beyond the journal.
+*Slice 125, cut down by slice 132.* `DispatchPlanner` launches the project's
+configured pipeline on each current slice. Nothing is stored beyond the journal.
 
-- **Two ticks per step.** A current pipeline step (`slice_design` runs `P4`,
-  `tasks` `P5`, `implementation` `P6`) is `NEEDS_POINTER` until its pointer is
-  written. On the first tick Act journals a `cf_write` (the CF project, the
-  `checkout`, `expected` `{}`, `expected_slice_index`, the expected worktree),
-  runs `cf set -p <id> slice <index>` in the checkout, and reads it back. On a
-  later tick the step is `POINTED` and launches `sq run <pipeline> <index> --run-id
-  <id>` in that checkout (Squadron takes a pipeline's primary required parameter,
-  `slice`, as the positional target and rejects it as `-p slice=<index>`; observed
-  squadron-ai 0.23.7); `P6` also gets `-p merge=false`, always, in this slice. There is **no `started` status**: a step stays `runnable` while its
-  run is in flight, and "in flight" is an unresolved entry.
+- **One launch per slice.** A current slice with no run in flight and no
+  unresolved entry launches `sq run <pipeline> <index> --run-id <id> [-p k=v …]` in
+  its checkout: the pipeline and the `-p` parameters come from the [project
+  config](#the-project-config) and Squadron takes the slice index as the pipeline's
+  positional target. The Runner issues **no `cf set` and no other Context Forge
+  write**; every Squadron phase step sets its own slice and phase. There is no
+  `started` status: a slice stays `runnable` while its run is in flight, and "in
+  flight" is an unresolved entry. A slice in a project whose config names no
+  pipeline launches nothing; the project raises the `pipeline_unconfigured`
+  escalation, closed on the first complete tick without it.
 - **Where it runs.** The checkout comes from the link's latest *observed*
   snapshot: the worktree whose `indexRange` contains the slice index, or the
   project's `projectPath` when it has none. No snapshot, no range, several ranges,
-  a missing path or a path that is not a directory blocks the step on a human with
-  `{fault_kind: checkout_unresolved, index, reason}`; no checkout is guessed. The
-  read-back must answer for that same path and worktree, so a stale snapshot cannot
-  send a run to the wrong tree.
-- **The pointer's read-back** runs in the checkout (`cf get --json`, same
-  working directory). Observe finishes every open pointer write, and reads once
-  more each current step whose journal says `POINTED`: it counts as pointed only
-  while CF still points at its slice. A confirmed write resolves `completed`
-  and sets the slice node's `slice_name` from CF's own stem. Another index, path or
-  worktree, or a failed `cf set`, blocks the step with `pointer_write_failed` and
-  resolves the entry `failed`. A record that cannot be judged escalates the entry
-  at once. A read that fails stays open, and escalates once `--launch-grace` has
-  passed since the write was issued. A `cf set` that times out is a cut-off: the
-  write may have landed, so the next tick reads back.
-- **One pipeline per checkout.** A checkout is held by an unresolved `sq_run`, by a
-  node that is not done whose latest run's recorded outcome is `paused` (the
-  recorded outcome, not the block kind), and from the pointer write by a current
-  step that is `POINTED` or has a pointer write in flight. The planner emits at most
-  one action per checkout per tick, launches before pointer writes, then by
-  `(initiative index, slice index, step rank)`. A pointer claim lapses when its step
-  stops being current.
-- **Ingestion** replaces the minimal body of `finish.record`. For a run that ended it
-  blocks the node (skipped if already blocked), then records the run's reviews and
-  resolves the entry in one transaction (`record_runner_report`):
-
-  | Outcome | Block | Entry |
-  | --- | --- | --- |
-  | `completed` | none | `completed` |
-  | `paused` | `SQ_CHECKPOINT` (no payload; the checkpoint is in the entry's result) | `completed` |
-  | `failed` | `HUMAN` `{reason: failed, run_id, failure}` | `completed` |
-  | `orphaned`, vanished | `HUMAN` `{reason: orphaned or vanished, run_id}` | `failed` |
-
+  a missing path or a path that is not a directory blocks the slice on a human with
+  `{fault_kind: checkout_unresolved, index, reason}`; no checkout is guessed.
+- **One pipeline per checkout.** A checkout is held by an unresolved `sq_run`, and by
+  a node that is not done whose latest run's recorded outcome is `paused`, `failed`
+  or `orphaned` (each leaves work in the checkout for a resume). A blocked slice,
+  including one at `auto_resume_exhausted` or stopped, therefore holds its checkout
+  until the PM acts. The planner emits at most one action per checkout per tick, by
+  `(initiative index, slice index)`.
+- **Ingestion** (`ingest/`). For a run that ended, `supervise.classify` gives an
+  outcome class (see [The outcome map](#the-outcome-map)), and the effect is written
+  in one transaction (`record_runner_report`): the block, the run's reviews, the
+  entry's resolution and, for a completed run, the slice's `done` (`complete_node_id`,
+  so a crash can never leave a completed run's slice `runnable` to be launched again).
   The entry's `result` is `{run_id, outcome, status, outcome_document, verdict_ids,
-  review_fault}`. The run's *last* `reviews` entry is recorded: its `paths` in order
-  if split, else its `path`; each file is read once, parsed, and attributed to the
-  step's parent slice node, keyed in the detection ledger by `detection_key` so
-  detection skips it. A review that cannot be read, parsed or attributed makes the
-  whole run's review unknown: nothing is recorded, the step blocks on a human with
-  `review_unknown` (on a paused run a `HUMAN` block, not `SQ_CHECKPOINT`, because a
-  checkpoint block posts no message), and the entry still resolves. Squadron text
-  that reaches a block is cut to the 4 KiB tail bound.
-- **Awaiting routing.** The resolution marks the entry (`awaits_routing`); routing
-  (slice 126, see [Routing](#routing)) reads `unrouted_outcomes` and its decision clears the mark. A step
-  with an unrouted outcome gets no further action.
-- **Reissue (issue #9).** A step whose latest entry is an `sq_run` recovery
-  resolved `not_applied` launches again under the same run id: the old launch log
-  is checked first (an exact `run_id=<id>` line means the run began, so the step
-  blocks `started_before_crash`; an unreadable log blocks too), a new entry is
-  journaled with `reissue_of`, the id is polled once (a state that appeared is
-  adopted, nothing launched), and otherwise it is launched. The pointer is not
-  written again.
-- **Pointer moved.** While a run is in flight, a snapshot observed after its pointer
-  write resolved that reads another slice at the run's worktree raises one
-  project-scoped `pointer_moved` escalation (every moved run in its payload),
-  which stays open while the condition holds and closes on the first complete tick
-  without it. The run is observed and ingested as usual.
-- **Fault kinds** added: `review_unknown`, `pointer_write_failed` and
-  `checkout_unresolved` (node-scoped: the `fault_kind` of a block's payload) and
-  `pointer_moved` (project-scoped).
+  review_fault}`; `outcome_document` is what the supervisor acted on. The run's
+  *last* `reviews` entry is recorded: its `paths` in order if split, else its `path`;
+  each file is read once, parsed, and attributed to the slice node, keyed in the
+  detection ledger by `detection_key` so detection skips it. A review that cannot be
+  read, parsed or attributed makes the whole run's review unknown: nothing is
+  recorded, the slice blocks on a human with `review_unknown`, and the entry still
+  resolves. Squadron text that reaches a block is cut to the 4 KiB tail bound.
+  Ingestion no longer marks `awaits_routing`; nothing routes.
+- **Reissue (issue #9).** A slice whose latest entry is an `sq_run` recovery resolved
+  `not_applied` launches again under the same run id: the old launch log is checked
+  first (an exact `run_id=<id>` line means the run began, so the slice blocks
+  `started_before_crash`; an unreadable log blocks too), a new entry is journaled
+  with `reissue_of`, the id is polled once (a state that appeared is adopted,
+  nothing launched), and otherwise it is launched.
+- **Fault kinds.** Node-scoped (the `fault_kind` of a block's payload): `review_unknown`,
+  `checkout_unresolved`, `checkout_dirty`, `checkout_branch`. Project-scoped:
+  `pipeline_unconfigured`, `checkout_read_failed`. `pointer_write_failed`,
+  `pointer_moved`, `run_overrun`, `cf_gate_blocks` and `pending_decision` no longer
+  exist.
 
-### Routing
+### The outcome map
 
-*Slice 126.* Every finished run gets one recorded route, chosen by a table. The
-route stage (`amoeba.runner.routing`) reads `unrouted_outcomes`, reduces each
-entry's stored evidence to named inputs, evaluates the table, and records the
-decision with `record_routing_decision`. That one transaction stores the table
-version on first use, the decision, the attempt count and the node's effect.
+*Slice 132, D4.* `runner/supervise.py` is pure and is the only module that names an
+outcome class. It replaces the routing table: the policy is "completed → done;
+resumable → resume; question → answer; anything else → a person".
 
-- **Tick order.** apply intents, observe, record finished runs, the overrun
-  check, the pointer observe, **build the view**, **route**, decide, act, close.
-  The view is built before routing, so a step routing advances is first seen by
-  the next tick, which then plans its successor. Routing starts no subprocess and
-  adds no budget check. A store write failure exits the process; recovery and
-  `unrouted_outcomes` route the outcome after restart.
-- **The table** is one YAML file for every project, loaded and validated once at
-  start. `--routing-table PATH` (setting `routing_table_path`) selects it; the
-  default is the table shipped in the package. A table that fails validation
-  stops `amoeba start` with `STARTUP_FAILED`, listing every problem. Changing the
-  table takes a restart. **No secrets go in the table**: its text is stored
-  verbatim with every decision and shown by `inspect`.
+| Observed | Class | Effect at ingest |
+| --- | --- | --- |
+| `completed` | `COMPLETED` | Entry resolved and slice `done`, one transaction |
+| `orphaned` | `TRANSIENT` | [Auto-resume](#automatic-resume) |
+| `failed`, `failure.kind` `provider_error` or `stall` | `TRANSIENT` | Auto-resume |
+| `paused`, `checkpoint.kind` `usage_limit` with `resets_at` | `TRANSIENT` | Auto-resume, once `resets_at` has passed |
+| `paused`, `checkpoint.kind` `agent_question` | `QUESTION` | `block(HUMAN)`, payload `{run_id, reason: agent_question, step, question}` |
+| any other `paused` (`loop_exhausted`, `awaits_human`, `interactive_checkpoint`, `usage_limit` without `resets_at`, `other`, an unknown kind) | `BLOCKED` | `block(SQ_CHECKPOINT)`; the checkpoint is in the entry's `outcome_document` |
+| any other `failed` (`artifact_missing`, `cost_cap`, an unknown kind) | `BLOCKED` | `block(HUMAN)`, payload `{run_id, reason: failed, failure}`; `failure` carries `agent_text` when Squadron sent it |
+| vanished, launch failed, resume failed | `BLOCKED` | `block(HUMAN)` as slices 122, 125 and 127 write them |
 
-  ```yaml
-  format: 1
-  time_bounds_minutes: {P4: 240, P5: 240, P6: 720}
-  rules:
-    - id: advance-on-stated-pass
-      when: {outcome: completed, verdict: pass, standing: stated}
-      route: advance
-    - id: escalate-everything-else
-      when: {}
-      route: escalate
-      judge_eligible: false
-  ```
+- **The question block is `HUMAN`, not `SQ_CHECKPOINT`.** The store keeps a block's
+  payload only on the escalation row of a `HUMAN` block, so a question blocked as
+  `SQ_CHECKPOINT` would lose its text. The slice's node status is `blocked_on_human`.
+  A later answerer (slice 140) finds these blocks by `reason == "agent_question"` and
+  answers with one `resume` resolution. An `agent_question` with no `question` is
+  still a question; the payload's `question` is `null`.
+- **Squadron shapes.** `checkpoint.question`, `checkpoint.resets_at` and
+  `failure.agent_text` are optional fields of `sq runs wait --json` (Squadron 0.24.9);
+  an absent field is `None`, and an older `sq` degrades to the `BLOCKED` row, never to
+  a resume.
+- **Text bounds.** `question`, `agent_text` and every checkpoint and failure text
+  field are cut to the 4 KiB tail bound.
 
-- **Version.** `sha256:<hex>` of the file's bytes, so any edit is a new version.
-  `format` is required; `1` is the only supported value.
-- **Inputs** are defined in code (`amoeba.runner.routing.inputs`), each with a
-  closed value set that includes `unknown`: `outcome`, `checkpoint_kind`,
-  `at_loop`, `failure_kind`, `verdict`, `standing`, `severity`, `recurrence`,
-  `step`, `node_state`. `none` means the input does not apply to this outcome;
-  `unknown` means it should apply and could not be read. A condition's value is
-  one value or a list, compared after trimming and lower-casing. A table naming
-  any other input or value refuses to load. `attempt` is recorded with each
-  decision but is not matchable; `max_attempts` bounds it.
-- **Matching.** Rules are tried in file order. A rule matches when every input it
-  names has one of its listed values; an unnamed input is unconstrained, and
-  `unknown` matches only a condition that names it. A matching rule whose route
-  is not eligible is passed over: `advance` needs `node_state` `runnable`;
-  `rerun` needs `runnable`, a known `step`, and `attempt < max_attempts`;
-  `escalate` is always eligible. First eligible match wins.
-- **Routes and effects.** `advance` marks the step `done`. `rerun` writes nothing:
-  the step stays `runnable` and the next tick re-points and relaunches the same
-  pipeline. `escalate` blocks the node on a human with context
-  `routed by <rule id>` and payload `{reason: routed, rule_id, table_version,
-  run_id, judge_eligible}`, unless the node is already blocked or done. Every
-  decision on a known step counts one attempt.
-- **Validation** collects every problem, naming the rule id: a supported
-  `format`; unique non-empty rule ids; known inputs and values; a known route;
-  `rerun` needs `max_attempts` (integer, at least 1), `escalate` needs
-  `judge_eligible` (boolean), `advance` takes none; `advance` and `rerun` rules
-  must name `outcome: completed`; the last rule is an empty-`when` `escalate` and
-  no earlier rule is empty; `time_bounds_minutes` has one positive integer per
-  pipeline (`P4`, `P5`, `P6`) and no other key.
-- **Recompute.** `amoeba inspect routing-decisions --project P [--node ID]
-  [--json]` lists decisions oldest first, with a `recomputes` column: `yes` or
-  `no` from evaluating the decision's stored table version on its recorded
-  inputs, or `error: <reason>` when that version is missing or unreadable.
-- **Overrun.** An unresolved `sq_run` older than its pipeline's bound raises one
-  project-scoped `run_overrun` escalation, payload `{runs: [{node_id, run_id,
-  pipeline, issued_at, bound_minutes}], table_version}`. It closes on the first
-  complete tick with no overrun. The check runs beside the pointer watch, before
-  the expected faults are raised and before the route stage. The run is never
-  killed, and no decision is recorded. An in-flight entry whose pipeline has no
-  bound faults the project (a programming error).
+### Automatic resume
+
+*Slice 132, D5.* A `TRANSIENT` outcome under the bound leaves the slice `runnable`
+(its entry resolved with the outcome document). The view lists it as a resume
+candidate (`DispatchState.AUTO_RESUME`), and Decide issues `ResumeRun` with cause
+`transient` for a current slice whose pre-dispatch check passed. A held slice is
+not resumed until released.
+
+- **Command.** `sq run --resume <run_id>` in the checkout, with no `--decision` and no
+  instructions. The entry carries `resume_cause: transient`, `continues` (the entry
+  resumed) and `run_id` (the continued one, never minted).
+- **When.** At once, except a `usage_limit` pause, which waits until `now >=
+  checkpoint.resets_at`. A `usage_limit` pause with no `resets_at` is `BLOCKED`.
+- **The bound.** `--auto-resume-limit N` (setting `auto_resume_limit`, default 3, at
+  least 1) is the most consecutive automatic resumes of one run **at one step**. The
+  count is derived from the slice's `sq_run` entries, so a restart cannot reset it:
+  trailing entries whose `resume_cause` is `transient` and whose resumed-from outcome
+  stopped at the same step (the document's `checkpoint.step` or `failure.step`; an
+  `orphaned` outcome with neither counts as the step of the entry before it). A fresh
+  launch, a PM `resume` or a different step ends the count. At the bound the slice
+  blocks `HUMAN` with `{run_id, reason: auto_resume_exhausted, step, count, failure
+  or checkpoint}`.
+- **Confirmation.** A resume is confirmed when the run leaves the state it was
+  resumed from: the resumed-from entry's recorded outcome and `updated_at` (for a
+  pause, its `paused_at`). A resumed run prints no line, so it is polled on
+  `--run-poll-interval` from the start. Until confirmed, a poll still showing the old
+  state is never ingested, so it neither counts toward the bound nor triggers a second
+  resume.
+- **A resume that never takes.** A tracked child that exited 2 is `refused`; any other
+  exit code is `exited_before_claim`; after `--launch-grace` since `issued_at` it is
+  `no_claim_within_grace` (the only rule after a restart, when no child is tracked);
+  `not_found` is `run_missing`; a `Popen` error is `spawn_error`. The slice blocks
+  `HUMAN` with `{reason: resume_failed, resume_failure, run_id, exit_code,
+  stderr_tail}` and the entry resolves `failed` with the run's real outcome. No
+  further automatic resume is issued.
+- **The act-time pre-poll.** Act polls the run once before resuming. A failed or
+  timed-out poll writes nothing (a `run_observation_failed` fault; decided again next
+  tick). A run with no state journals the entry and records a failed resume
+  `run_missing`; it is never relaunched. A run no longer in the state that was
+  classified (for example resumed by hand) is withheld: the entry is journaled as an
+  observation with `resume_skipped: run_not_at_pause`, and nothing is launched.
+- **Crash safety.** A crash after the entry is journaled and before the launch leaves
+  an entry recovery keeps in flight; Observe fails it `no_claim_within_grace`, and
+  recovery never launches a resume.
 
 ### Resolutions and resumption
 
-*Slice 127.* A PM's `resolution` of a blocked pipeline step carries a decision
-(`retry`, `accept`, `handled`, `rerun`, `stop`) and optional instructions (see
-[A resolution's decision](inbox-contract.md#a-resolutions-decision)). The Runner
-answers each one and carries out what it decided.
+*Slice 127, cut to `resume` and `stop` by slice 132.* A PM's `resolution` of a blocked
+slice carries a decision, `resume` or `stop`, and optional instructions (see [A
+resolution's decision](inbox-contract.md#a-resolutions-decision)). Any other decision
+(`retry`, `accept`, `handled`, `rerun`) is rejected `unknown_decision`. The intent
+`resume` (release a hold) and the resolution `resume` (resume a run) are on different
+channels with different bodies.
 
 - **The resolution stage.** Each project tick, right after the intents are applied
   and before Observe, `apply_pending_resolutions` reads `pending_resolutions`, and for
-  each one, oldest first, classifies the step (`paused_run`, `completed_outcome`,
-  `ended_run`, `before_run`, `no_decision`, `unresolvable`) from its executor and its
-  journal, judges the decision against it, and writes the answer with
-  `acknowledge_resolution`: the outcome, the rejection code, and the effect (`done`
-  for an accept of a completed outcome, a `HUMAN` block for a rejection or a stop),
-  in one transaction. Every problem in the inputs is a rejection, which blocks only
-  its own node; a poisoned outcome document is `checkpoint_unknown`, not a fault.
-  The stage starts no subprocess and so takes no budget check. A tick that
-  acknowledges anything counts as a write.
-- **What carries a decision out.** The next action comes from the journal and the
-  step's latest applied resolution: while no entry on the step names that resolution
-  in its `resolution` key, `retry` and `accept` are `RESUME`, `handled` is
-  `REOBSERVE`, and `rerun` is `NEEDS_POINTER` (even where the older rules would say
-  `REISSUE`). `ContinuationPlanner` (after `DispatchPlanner`) turns the first two
-  into `ResumeRun` and `ObserveRun`; a `rerun`'s pointer write carries the
-  `resolution`. They are actions on current steps, so a held or undriven step's
-  resolution is acknowledged and its continuation waits. A paused run's checkout
-  stays held; the continuation may act in a checkout held only by its own step.
-- **Continuation entries.** A continuation is an `sq_run` entry on the step with the
-  continued entry's `pipeline`, `params`, `run_id` and `checkout`, plus `continuation`
-  (`retry`, `accept` or `observe`), `continues` and `resolution`. The run id is the
-  continued one, never minted. The instructions are not copied into the journal: Act
-  reads them from the resolution slot. Act polls the run once first. A failed or
-  timed-out poll writes nothing (a `run_observation_failed` fault, and the step is
-  decided again next tick). A run with no state journals the entry and records a
-  failed resume `run_missing`; it is never relaunched. A resume whose run is no longer
-  at the pause the PM decided on (for example because the PM resumed it by hand) is
-  withheld: the entry is journaled as an observation, `continuation` `observe`, with
-  the parameter `resume_skipped` set to `run_not_at_pause`, and nothing is launched.
-  Otherwise the entry is journaled and `sq run --resume <run_id> --decision <retry|accept>`
-  (plus `--instructions <text>` as one argument) is started detached in the checkout,
-  with no pipeline, `-p` or `--run-id`. `handled` always journals an observation and
-  launches nothing; the entry owns the run while it is observed, so detection defers
-  and ingestion can record its review.
-- **Resume confirmation.** A resumed run prints no line, so it is polled on
-  `--run-poll-interval` from the start. It is confirmed when a poll shows any outcome
-  other than `paused`, or `paused` with a `checkpoint.paused_at` different from the one
-  the continued entry recorded. While it still shows the old pause: a tracked child
-  that exited 2 is `refused`; any other exit code is `exited_before_claim`; after
-  `--launch-grace` since `issued_at` it is `no_claim_within_grace` (the only rule after
-  a restart, when no child is tracked); `not_found` is `run_missing`; a `Popen` error is
-  `spawn_error`. A failed resume blocks the step on `HUMAN` with `{reason: resume_failed,
-  resume_failure, run_id, exit_code, stderr_tail}` and resolves the entry `failed` with
-  the run's real outcome (`paused`, so the checkout stays held and the step offers the
-  paused-run decisions again; `not_found` for `run_missing`, which releases it) and a
-  `resume_failure` key. A confirmed continuation is observed, ingested and routed by
-  the usual rules.
-- **Routing.** `outcome` gains `resume_failed`, reduced from `resume_failure` and
-  winning over the recorded outcome, so a failed resume can only escalate. A new
-  input, `review_accepted`, is `none` unless the entry's `continuation` is `accept`,
-  `true` when its `verdict_ids` equal the continued entry's (the loop ended on the
-  review the PM accepted) and `false` otherwise. The shipped table gains
-  `advance-on-accepted-review` after `advance-on-stated-pass`.
+  each one, oldest first, classifies the slice from its journal (`run_to_resume`: the
+  latest `sq_run` entry is resolved and its recorded outcome is `paused`, `failed` or
+  `orphaned`; `no_run`: a launch failed, the run vanished or the block came before any
+  run; `unresolvable`), judges the decision against it, and writes the answer with
+  `acknowledge_resolution`: the outcome, the rejection code and the effect (a `HUMAN`
+  block for a rejection or a stop), in one transaction. Rejection codes:
+  `unknown_decision`, `decision_required`, `instructions_not_applicable` (instructions
+  with no run to resume) and `unresolvable`. A rejection blocks only its own node. The
+  stage starts no subprocess and takes no budget check.
+- **`resume`.** With a run to resume, `ContinuationPlanner` (after `DispatchPlanner`)
+  issues `ResumeRun` with cause `resolution`: `sq run --resume <run_id>
+  [--instructions <text>]` in the checkout, instructions passed verbatim as one
+  argument (Act reads them from the resolution slot; they are not copied into the
+  journal). The entry carries `resume_cause: resolution`, `continues` and `resolution`,
+  and resets the automatic-resume count. With no run to resume, the block is resolved
+  and the slice launches afresh when next current. `--decision accept` and `--decision
+  retry` are never passed. The pre-dispatch check runs first. A resume whose run is
+  missing is a failed command, never relaunched.
+- **`stop`.** The node stays blocked with reason `stopped`.
+- **Confirmation and failure** are the same as for an automatic resume (see above); a
+  confirmed continuation is observed and ingested by the usual rules, so a resumed run
+  that completes marks its slice `done`.
 - **Crash safety.** The acknowledgment is durable. A crash after it and before the
-  continuation is journaled leaves `RESUME`, and the next tick issues it once. A crash
-  after the entry is journaled and before the launch leaves an entry recovery keeps
-  in flight (below); Observe fails it `no_claim_within_grace`, and no resume is ever
-  launched by recovery.
-- **Spend.** Only a PM decision resumes a run, and a `retry` of an exhausted loop is
-  one paid review round. No route in the table resumes a run.
+  continuation is journaled leaves a `RESUME` state, and the next tick issues it once.
 
-### Gates, git and human steps
+### The project config
 
-*Slice 128.* The Runner works in a checkout the PM also uses, so it looks before it
-dispatches, and it never changes a branch. All git the Runner runs goes through one
-function, `git_read`, which allows `status` and `merge-base` only (stdin closed,
-prompts off, `--no-optional-locks`); nothing in `amoeba.runner` merges, commits,
-checks out, resets, stashes, deletes a branch or pushes, under any policy.
+*Slice 128, reshaped by slice 132 (D2).* `--project-config PATH` (setting
+`project_config_path`, default none) names a static YAML file, loaded and validated
+once at start. A change needs a restart. The file holds no secrets: `params` are
+pipeline parameters, passed to `sq run -p` and journaled verbatim.
 
-- **The per-project config.** `--project-config PATH` (setting `project_config_path`,
-  default none) names a YAML file, loaded and validated once at start like the routing
-  table:
+```yaml
+projects:
+  amoeba:
+    pipeline: p456
+    params:              # optional; each becomes -p key=value
+      model: opus
+  trading-engine:
+    pipeline: p4567      # a user pipeline that also merges
+```
 
-  ```yaml
-  projects:
-    amoeba:
-      merge_policy: human
-    scratch:
-      merge_policy: auto
-  ```
+- Keys under `projects` are Amoeba project ids. `pipeline` is required for each named
+  project; there is **no default pipeline**, because a default could merge code nobody
+  chose to merge. A project the file does not name (or no file at all) has no pipeline
+  and launches nothing (`pipeline_unconfigured`).
+- `params` is a string-to-string mapping. Load fails, listing every problem, on a key
+  `slice` (the target the Runner passes), a key containing `,` or `=`, a value
+  containing `,`, a non-string value, or any key beside `pipeline` and `params`
+  (`merge_policy` is one: whether a pipeline merges is the pipeline's business).
+  A missing or unreadable file or invalid YAML exits `STARTUP_FAILED`.
+- The pipeline name is not validated at load. An unknown pipeline makes `sq run` exit 1
+  before the `run_id=` line, which takes the launch-failure path and blocks only that
+  slice, with Squadron's stderr.
 
-  Keys under `projects` are Amoeba project ids; values are trimmed and lower-cased;
-  an unknown key or value, a missing or unreadable file or invalid YAML exits
-  `STARTUP_FAILED` listing every problem. With no file every project takes the
-  defaults (`merge_policy: auto`, defined once in `runner/project_config.py`). The
-  file holds no secrets. A change needs a restart.
-- **The merge policy.** Under `human`, `P6` runs with `-p merge=false` and the PM
-  merges. Under `auto`, `P6` runs without the parameter and merges. A `P6` entry
-  records `merge_policy` and `target` in its parameters. The Runner never merges
-  itself, and nothing merges to `main` while CF's `git.integration_branch` is set,
-  because the target is read from CF in the run's checkout.
-- **Pre-dispatch checks.** Before every launch, reissue and resume (not before a
-  pointer write or an observation) the Runner reads the checkout and decides, in this
-  order: a detached HEAD blocks `checkout_branch`; a branch outside the pipeline's
-  allowed set blocks `checkout_branch` (`P4` and `P5` only on the target, `P6` on the
-  target or the slice's own `{index}-slice.*` branch); a launch or reissue with any
-  changed, staged, unmerged or untracked path blocks `checkout_dirty` (first 20 paths
-  and the count). **A resume is not checked for a clean tree**: a paused run can leave
-  uncommitted work. For a fresh or reissued `tasks` or `implementation` launch CF's
-  gate is read as well: `pending-decision` blocks `pending_decision`; CF at or before
-  the step's entry gate blocks `cf_gate_blocks`, unless the PM accepted the
-  predecessor in the store, in which case the disagreement is recorded as a check
-  (below) and the launch goes ahead; past it launches. A block is a `HUMAN` block with
-  `fault_kind` in the payload and no journal entry. The PM's answer is 127's: `rerun`
-  (or `retry`/`accept` for a resume) after fixing the checkout, and the check runs
-  again.
+### Git and the pre-dispatch check
+
+*Slice 128, git half kept by slice 132 (D3).* The Runner works in a checkout the PM
+also uses, so it looks before it dispatches, and it never changes a branch. All git
+the Runner runs goes through one function, `git_read`, which allows `status` and
+`merge-base` only (stdin closed, prompts off, `--no-optional-locks`); nothing in
+`amoeba.runner` merges, commits, checks out, resets, stashes, deletes a branch or
+pushes. A pipeline the PM configures may merge; Squadron's merge step merges only into
+the target CF names (`git.integration_branch`), so nothing merges to `main` while one
+is set.
+
+- **The target** is `git.integration_branch`, read with `cf config get` in the
+  checkout; empty means `main`. It is the Runner's only Context Forge read before a
+  launch, and it reads **no CF gate** (`cf status`): each pipeline owns its gates.
+- **The check.** Before every launch, reissue and resume (not before an observation)
+  the Runner reads `git status` and the target and decides, in this order: a detached
+  HEAD blocks `checkout_branch`; a fresh launch or reissue on any branch but the
+  target blocks `checkout_branch`; a resume on a branch that is neither the target nor
+  the slice's own `{index}-slice.*` branch blocks `checkout_branch`; a fresh launch or
+  reissue with any changed, staged, unmerged or untracked path blocks `checkout_dirty`
+  (first 20 paths and the count). **A resume is not checked for a clean tree**: a
+  crashed or paused run leaves uncommitted work. A block is a `HUMAN` block with
+  `fault_kind` in the payload and no journal entry. A pipeline that does not merge
+  leaves its checkout on the slice branch, so the next slice there blocks
+  `checkout_branch` until the PM merges or the pipeline merges itself.
 - **Evidence on the entry.** A launch or resume entry records `dispatch_check`:
-  `branch`, `head`, `target`, `gate_status`, `gate_review_type` (and for a resume
-  `dirty_paths` and `dirty_count`, and when a disagreement was recorded
-  `disagreement_check`). `decide()` refuses a launch or resume for a node whose check
-  did not pass.
-- **A read that fails** (a `git` or `cf` call before a dispatch or a merge
-  observation) blocks nothing and raises the project-scoped `checkout_read_failed`
-  escalation `{checkout, command, reason}`, which closes on the first complete tick
-  without it. A `TickBudget` cut-off defers the reads to the next tick.
-- **The outcome observation.** When a run completes, the Runner reads CF's gate
-  (`cf status --json`), the slice's design file, the review gate's effective date and,
-  for `implementation`, git's branch and head, and stores them in the entry result as
-  `outcome_observation` with the ids of the two hatch checks in `check_ids`. Routing
-  reads two new inputs from it: `gate_state` (`clear`, `pending_review`,
-  `review_failed`, `pending_decision`, `misplaced`, `unknown`, `none`) and
-  `check_standing` (the worst standing of the outcome's checks, or `unknown`, `none`).
-  The shipped table advances a stated pass only with `gate_state: clear` and
-  `check_standing: passed`; a failed read, an unreadable design or a hatch escalates.
-- **The merge.** For each slice whose `implementation` is done and `merge` is not,
-  the Runner runs `git merge-base --is-ancestor <head> <target>` with the head `P6`
-  recorded. Reachable completes the `merge` step (a blocked human step is resolved by
-  `runner`); not reachable, or not observable, blocks it on the PM. A squash merge is
-  not observed. Only local refs are read.
+  `branch`, `head`, `target` (and for a resume `dirty_paths` and `dirty_count`).
+  `decide()` refuses a launch or resume for a node whose check did not pass.
+- **A read that fails** (a `git` or `cf config get` call before a dispatch) blocks
+  nothing and raises the project-scoped `checkout_read_failed` escalation `{checkout,
+  command, reason}`, which closes on the first complete tick without it. A
+  `TickBudget` cut-off defers the reads to the next tick.
 
 ## Lifecycle failure modes
 
@@ -933,7 +871,8 @@ provenance and never parsed, ordered, or branched on.
 | `amoeba stop` | Confirms the lock is held, sends `SIGTERM` to the recorded pid, waits for release. **Never escalates to `SIGKILL`.** |
 | `amoeba status` | `running` (pid, start time, version), `running (pid unknown)`, `stopped (stale pid file)`, or `stopped`. |
 | `amoeba inspect projects\|inbox` | Supervisor-level: project ids with a store; inbox files pending, quarantined, or failed. Open no store. |
-| `amoeba inspect nodes\|blocked\|journal\|submissions\|messages --project ID` | Read-only listings. `journal` accepts `--unresolved`; `messages` accepts `--channel`. All accept `--json`. |
+| `amoeba inspect nodes\|journal\|submissions\|messages --project ID` | Read-only listings. `journal` accepts `--unresolved`; `messages` accepts `--channel`. All accept `--json`. |
+| `amoeba inspect blocked [--project ID]` | Blocked nodes with `project_id`, `reason` (the payload's `reason` or `fault_kind`, empty with neither) and `blocked_state_id`; every project when `--project` is omitted, each store opened read-only. `--json` adds the full escalation `payload`, which holds an agent's question. *(Slice 132.)* |
 | `amoeba submit create-project\|resolution\|intent ...` | Write one submission to the inbox and print its id. Opens no store; works whether or not the process runs. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
 | `amoeba prune sq-runs [--yes]` | Previews the paused Squadron runs Amoeba may prune; with `--yes`, asks `sq runs prune` to delete them. Read-only on every store. See "Pruning paused runs". *(Slice 110.)* |
 | `amoeba serve [--host] [--port] [--tls-cert --tls-key]` | A second, foreground process serving reads, submissions, and the feed over HTTP. Independent of the resident process: no lock, no PID file, works with it stopped. See [`network-contract.md`](network-contract.md). *(Slice 109.)* |
@@ -943,7 +882,7 @@ provenance and never parsed, ordered, or branched on.
 `--sq-runs-dir`, `--inbox-batch-size`, `--inbox-max-attempts`,
 `--review-scan-interval`, `--sq-timeout`, `--cf-data-dir`, `--launch-grace`,
 `--tick-deadline`, `--tick-call-timeout`, `--run-poll-interval`,
-`--plan-read-interval`.
+`--plan-read-interval`, `--project-config`, `--auto-resume-limit`.
 `--clock-tolerance` and `--sq-runs-dir` are used only by legacy matching.
 `--launch-grace SECONDS` (slice 120) is how long after a launch Squadron may still
 be creating the run; recovery reads it, and the Runner reads the same value to
@@ -954,7 +893,11 @@ after a tick starts the Runner may still begin a subprocess call;
 between two polls of one run. *(Slice 123.)* `--plan-read-interval SECONDS`
 (default 30) is the least time between two plan reads of one linked CF project
 (see [The plan read](#the-plan-read)). All four must be positive, or `start` exits
-`STARTUP_FAILED`. `--sq-timeout` also bounds the `sq` probe at start. `stop` exposes the one tunable it consumes: `--stop-timeout`.
+`STARTUP_FAILED`. `--project-config PATH` names the per-project pipeline file (see
+[The project config](#the-project-config)). *(Slice 132.)* `--auto-resume-limit N`
+(default 3, at least 1) bounds consecutive automatic resumes at one step (see
+[Automatic resume](#automatic-resume)); `--routing-table` no longer exists.
+`--sq-timeout` also bounds the `sq` probe at start. `stop` exposes the one tunable it consumes: `--stop-timeout`.
 
 ### Exit codes
 

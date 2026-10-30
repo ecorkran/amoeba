@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: store-foundation-and-node-model
 dateCreated: 20260917
-dateUpdated: 20261023
+dateUpdated: 20261030
 status: complete
 ---
 
@@ -296,7 +296,7 @@ field was never recorded is the failure this prevents.
 | `journal_escalate(entry_id, *, reason)` | **One transaction:** sets outcome `unknown`, blocks the node on `HUMAN` with a context naming the entry, and writes an escalation row carrying the entry id. If the node is already blocked, marks the entry, writes no second blocked state, and writes one escalation row pointing at the existing open block. |
 | `journal_entry(entry_id)` | One entry, or `None`. |
 | `unresolved_journal_entries(project_id)` | Entries still in flight, oldest first. What recovery consumes. |
-| `unrouted_outcomes(project_id)` | Entries with `awaits_routing` set, oldest `issued_at` first (slice 125). What the routing engine consumes. Served by the partial index `idx_journal_awaits_routing`, so its cost follows unrouted work, not history. |
+| `unrouted_outcomes(project_id)` | Entries with `awaits_routing` set, oldest `issued_at` first (slice 125). The routing engine consumed it; since slice 132 the Runner does not read it (see "Unrouted outcomes"). Served by the partial index `idx_journal_awaits_routing`, so its cost follows unrouted work, not history. |
 | `journal_entries(project_id, *, node_id=None, include_resolved=True)` | What inspection consumes. |
 | `recorded_result_run_ids(project_id)` | Run ids already recorded in some entry's result, mapped to that entry's id. The Squadron matcher's fourth candidate condition reads this. |
 | `recorded_result_run_nodes(project_id)` | The same run ids, mapped to the id of the *node* that owns the recording entry (slice 127). A continuation shares its run id with the entry it continues, and the observer's claimed-id guard uses this to tell its own node's claim from another node's. |
@@ -692,7 +692,8 @@ holds `id, project_id, node_id, drive, drive_until_step, hold, message_id,
 updated_at`, where `message_id` is the intent that last set the row. `drive` and
 `hold` are nullable booleans; `None` means "not set at this target". Shape
 rules, each a `ValueError`: `drive` and `hold` cannot both be `None` (use clear);
-`drive_until_step` needs `drive is True` and non-empty text. A non-null
+`drive_until_step` needs `drive is True` and non-empty text. Since slice 132 the Runner
+writes `drive_until_step` as `NULL` (intents carry no `until`) and ignores the column. A non-null
 `node_id` must name a node in the intent's project, else `NodeNotFoundError`.
 Merging a new intent with a target's earlier settings is the Runner's job; the
 store stores what it is given. A row on an orphaned node is still returned.
@@ -712,6 +713,12 @@ open per `(project_id, fault_kind)`, enforced by a partial unique index.
 | `close_project_escalation(message_id, *, closed_by)` | Records `closed_at` and `closed_by`, and returns the row. Raises `InvalidTransitionError` if the row is missing, is not a project-scoped escalation, or is already closed; `ValueError` for an empty `closed_by`. A later fault of the same kind opens a new row. Only the Runner closes one. |
 
 ### Routing decisions, table versions and attempt counts
+
+*Slice 132: not written by the Runner.* The routing engine is gone, so nothing calls
+`record_routing_decision` outside tests. The tables, the types and the methods below
+stay in this contract for stores that hold rows and for any later user; retiring them
+needs a migration, which is a separate slice. Likewise the Runner no longer writes
+`attempt_counts`.
 
 | Vocabulary | Members |
 | --- | --- |
@@ -782,8 +789,10 @@ the rules that project CF's plan into nodes are the Runner's
   (step nodes, unlinked nodes) never collide.
 - **Step nodes** are `phase_or_artifact` nodes whose `cf.phase` holds the step
   (`architecture`, `slice_plan`, `slice_design`, `tasks`, `implementation`,
-  `merge`, `integration`) and whose `cf.index` is `None`; they are linked through
-  their parent.
+  `merge`, `integration`) and whose `cf.index` is `None`; they were linked through
+  their parent. *Since slice 132 the Runner creates none*: the slice is the unit of
+  work. Step nodes in an older store are ignored (never ready), and their journal
+  entries still recover.
 - **Orphaning clears `cf.index` and `cf.slice_name`** and leaves the rest. The
   node is kept, never deleted, and a new node can then take its index.
 - **Only the Runner's reconcile creates nodes.** A guard test
@@ -813,7 +822,7 @@ costs.
   Runner's.
 - **Set by the inbox, never by `resolve()`.** An inbox `resolution` stores the
   decision and instructions and sets `awaits_runner` in the same transaction. The
-  Runner's own `resolve()` calls (for example the completion of a human step) pass
+  Runner's own `resolve()` calls (for example the completion of a step) pass
   neither and never set the flag.
 
 | Method | Effect |
@@ -822,17 +831,24 @@ costs.
 | `acknowledge_resolution(blocked_state_id, *, outcome, code=None, reason=None, effect=None)` | **One transaction:** records the outcome, code and reason, clears the flag, and applies `effect` (a `StatusEffect` or `BlockEffect`, written through the same writers a routing decision uses). `rejected` requires a code and a reason; `applied` takes neither (`ValueError`). A block that does not exist, is unresolved, or is not flagged raises `InvalidTransitionError`. An effect the node refuses rolls everything back, so the flag stays set. |
 | `blocked_state(blocked_state_id)` | One blocked state by id, open or resolved, or `None`. Works through a read-only handle. |
 
-The journal gains three optional `sq_run` parameter keys, `continuation`
-(`retry`, `accept` or `observe`), `continues` (the entry whose run it continues) and
-`resolution` (the blocked state id whose decision it carries out), and `resolution`
-also on a `cf_write` (the `rerun` whose pointer write it is). None is required, and
-the recovery observer checks only that `continuation` is present. See
+The journal gains optional `sq_run` parameter keys, `continuation` (`resume`, marking
+a resume entry), `continues` (the entry whose run it continues), `resolution` (the
+blocked state id whose decision it carries out) and, since slice 132, `resume_cause`
+(`transient` for an automatic resume, `resolution` for a PM's). None is required, and
+the recovery observer checks only that `continuation` is present. Since slice 132 a
+resolution's decision is `resume` or `stop`; the store still holds any decision text,
+and the Runner rejects the others (`unknown_decision`). See
 [`process-contract.md`](process-contract.md#resolutions-and-resumption).
 
 ### Unrouted outcomes
 
-*Added by slice 125. Schema version 11 (migration `011`).* A run the Runner
-observed to its end leaves evidence that the routing engine must decide on. The
+*Added by slice 125. Schema version 11 (migration `011`).* **Since slice 132 the Runner
+does not read the flag** (`dispatch/state.py` and the resolution classifier dropped
+it), and no routing decision clears it; the store still sets it on every `issuer`
+resolution of an `sq_run` entry, so a flagged entry no longer means "waiting for
+routing". The column, the index and `unrouted_outcomes` stay for 100's contract.
+A run the Runner
+observed to its end left evidence that the routing engine had to decide on. The
 store records that as a flag on the journal entry rather than as a query over
 decisions, so finding the work costs what the work costs, not what the history
 costs.
