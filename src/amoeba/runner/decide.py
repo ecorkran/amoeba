@@ -22,7 +22,7 @@ from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
-from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
+from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import JournalEntry, Node
 
 
@@ -83,13 +83,11 @@ class WriteSlicePointer:
     cf_project_id: str
     slice_index: int
     checkout: Checkout
-    #: The blocked state id of the ``rerun`` this write carries out (slice 127, D5).
-    resolution: str | None = None
 
 
 @dataclass(frozen=True)
 class ResumeRun:
-    """Resume a run: a PM's ``retry`` or ``accept``, or an automatic retry (D4, D5).
+    """Resume a run: a PM's ``resume``, or an automatic retry (D5, D6).
 
     ``continues`` is the entry whose run it resumes. For ``cause`` ``resolution``,
     ``resolution`` is the blocked state whose decision it carries out; a ``transient``
@@ -100,7 +98,6 @@ class ResumeRun:
 
     node_id: str
     run_id: str
-    decision: Continuation
     continues: str
     resolution: str | None
     checkout: Path
@@ -115,17 +112,6 @@ class ResumeRun:
 
 
 @dataclass(frozen=True)
-class ObserveRun:
-    """Observe a run the PM moved by hand, after an applied ``handled`` (D4)."""
-
-    node_id: str
-    run_id: str
-    continues: str
-    resolution: str
-    checkout: Path
-
-
-@dataclass(frozen=True)
 class BlockDispatch:
     """Block a step on a human because its pre-dispatch check said not to go ahead.
 
@@ -137,14 +123,7 @@ class BlockDispatch:
 
 
 #: The closed set of things a planner may ask for.
-type Action = (
-    LaunchRun
-    | BlockHumanStep
-    | WriteSlicePointer
-    | ResumeRun
-    | ObserveRun
-    | BlockDispatch
-)
+type Action = LaunchRun | BlockHumanStep | WriteSlicePointer | ResumeRun | BlockDispatch
 
 
 @dataclass(frozen=True)

@@ -26,7 +26,7 @@ OLD = datetime(2026, 10, 23, 11, 0, tzinfo=UTC)
 NEW = OLD + timedelta(minutes=45)
 
 
-def _resume_entry(continuation: str = "retry") -> JournalEntry:
+def _resume_entry(continuation: str = "resume") -> JournalEntry:
     base = entry()
     parameters = {
         **base.parameters,
@@ -209,17 +209,6 @@ def test_a_resume_whose_pause_could_not_be_read_cannot_be_confirmed(
     assert observed.runs[0].run.state is RunState.LAUNCHING
 
 
-def test_an_observe_continuation_takes_the_confirmed_path_unchanged(
-    tmp_path: Path,
-) -> None:
-    rig = Rig(tmp_path, _paused())
-    handled = _resume_entry("observe")
-
-    observed = rig.observe(handled)
-
-    assert isinstance(observed.runs[0].finished, RunEnded)
-
-
 def test_the_mapping_comes_from_the_continued_entries(store: Store) -> None:
     node = design_step(store)
     paused = finished_run(
@@ -236,7 +225,7 @@ def test_the_mapping_comes_from_the_continued_entries(store: Store) -> None:
             id=f"resume-{continues[:6]}",
             node_id=node_id,
             parameters={
-                PARAM_CONTINUATION: "retry",
+                PARAM_CONTINUATION: "resume",
                 PARAM_CONTINUES: continues,
             },
         )

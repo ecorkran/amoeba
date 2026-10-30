@@ -52,8 +52,6 @@ from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.project_config import MergePolicy
 from amoeba.runner.resolutions.vocabulary import (
-    Continuation,
-    ResolutionDecision,
     ResumeCause,
 )
 from amoeba.runner.supervise import recorded_document, resume_ready
@@ -131,7 +129,6 @@ def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action |
                 facts.cf_project_id,
                 facts.slice_index,
                 checkout,
-                _carried_resolution(facts),
             )
         case _:
             raise ValueError(f"step {node.id} in state {facts.state} is not planned")
@@ -178,22 +175,12 @@ def _auto_resume(
     return ResumeRun(
         node.id,
         text_parameter(stopped, PARAM_RUN_ID),
-        Continuation.RETRY,
         stopped.id,
         None,
         Path(text_parameter(stopped, PARAM_CHECKOUT)),
         cause=ResumeCause.TRANSIENT,
         journal_extra={PARAM_DISPATCH_CHECK: dict(check.evidence)},
     )
-
-
-def _carried_resolution(facts: StepDispatchFacts) -> str | None:
-    """The blocked state id of the ``rerun`` this pointer write carries out."""
-    blocked = facts.resolution
-    if blocked is None or blocked.resolution is None:
-        return None
-    rerun = blocked.resolution.decision == ResolutionDecision.RERUN.value
-    return blocked.id if rerun else None
 
 
 def _reissue(node: Node, facts: StepDispatchFacts, check: Ok) -> LaunchRun:

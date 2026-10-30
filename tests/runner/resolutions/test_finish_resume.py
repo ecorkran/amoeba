@@ -19,7 +19,6 @@ from amoeba.runner.finish import (
 )
 from amoeba.runner.ingest.record import RESULT_OUTCOME, RESULT_OUTCOME_DOCUMENT
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
-from amoeba.runner.lifecycle.steps import Executor
 from amoeba.runner.observed import ResumeFailed
 from amoeba.runner.resolutions.classify import classify
 from amoeba.runner.resolutions.vocabulary import REASON_RESUME_FAILED, Situation
@@ -131,22 +130,22 @@ def test_a_missing_run_resolves_not_found(
         ResumeFailure.SPAWN_ERROR,
     ],
 )
-def test_a_failed_resume_keeps_the_checkout_held_and_reads_paused_run(
+def test_a_failed_resume_keeps_the_checkout_held_and_is_still_a_run_to_resume(
     store: Store, node: Node, entry: JournalEntry, failure: ResumeFailure
 ) -> None:
     done = _fail(store, entry, failure)
 
     assert set(checkout_holders([done], set(), {})) == {CHECKOUT}
-    assert classify(Executor.PIPELINE, [_routed(done)]) is Situation.PAUSED_RUN
+    assert classify([_routed(done)]) is Situation.RUN_TO_RESUME
 
 
-def test_after_a_missing_run_the_hold_is_released_and_the_run_has_ended(
+def test_after_a_missing_run_the_hold_is_released_and_there_is_no_run_to_resume(
     store: Store, node: Node, entry: JournalEntry
 ) -> None:
     done = _fail(store, entry, ResumeFailure.RUN_MISSING)
 
     assert set(checkout_holders([done], set(), {})) == frozenset()
-    assert classify(Executor.PIPELINE, [_routed(done)]) is Situation.ENDED_RUN
+    assert classify([_routed(done)]) is Situation.NO_RUN
 
 
 def test_the_node_is_blocked_once_even_if_recorded_again(

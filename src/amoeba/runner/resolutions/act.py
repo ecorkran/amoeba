@@ -17,7 +17,7 @@ from pathlib import Path
 from amoeba.process import RunOutcomeDocument, RunPoll
 from amoeba.runner import finish
 from amoeba.runner.budget import TickBudget
-from amoeba.runner.decide import ObserveRun, ResumeRun
+from amoeba.runner.decide import ResumeRun
 from amoeba.runner.faults import Fault, FaultKind, ResumeFailure, TickFaults
 from amoeba.runner.launch import (
     PARAM_PARAMS,
@@ -49,8 +49,6 @@ from amoeba.store import (
     Store,
 )
 
-type ContinuationAction = ResumeRun | ObserveRun
-
 #: Parameters a continuation copies from the entry it continues.
 _COPIED: tuple[str, ...] = (PARAM_PIPELINE, PARAM_PARAMS, PARAM_RUN_ID, PARAM_CHECKOUT)
 
@@ -68,25 +66,29 @@ class Acted(StrEnum):
 
 def journal_continuation(
     store: Store,
-    action: ContinuationAction,
+    action: ResumeRun,
     continued: JournalEntry,
-    continuation: Continuation,
+    continuation: Continuation | None,
     resume_skipped: str | None = None,
 ) -> JournalEntry:
-    """Journal the continuation entry. Raises if the continued entry lacks a key."""
+    """Journal the continuation entry. Raises if the continued entry lacks a key.
+
+    ``continuation`` is ``None`` for an observation: a resume skipped because the run
+    had moved on, which is polled and ingested like any other entry.
+    """
     missing = [key for key in _COPIED if key not in continued.parameters]
     if missing:
         raise ValueError(f"entry {continued.id} lacks {missing} to be continued")
     parameters: dict[str, object] = {key: continued.parameters[key] for key in _COPIED}
-    parameters[PARAM_CONTINUATION] = continuation.value
+    if continuation is not None:
+        parameters[PARAM_CONTINUATION] = continuation.value
     parameters[PARAM_CONTINUES] = continued.id
     if action.resolution is not None:
         parameters[PARAM_RESOLUTION] = action.resolution
     if resume_skipped is not None:
         parameters[PARAM_RESUME_SKIPPED] = resume_skipped
-    if isinstance(action, ResumeRun):
-        parameters[PARAM_RESUME_CAUSE] = action.cause.value
-        parameters.update(action.journal_extra)
+    parameters[PARAM_RESUME_CAUSE] = action.cause.value
+    parameters.update(action.journal_extra)
     return store.journal_issue(
         action.node_id, kind=CommandKind.SQ_RUN, parameters=parameters
     )
@@ -112,9 +114,7 @@ class ContinuationActs:
         self._popen = popen
         self._version_label = version_label
 
-    def act(
-        self, action: ContinuationAction, budget: TickBudget, faults: TickFaults
-    ) -> Acted:
+    def act(self, action: ResumeRun, budget: TickBudget, faults: TickFaults) -> Acted:
         """Poll once, then wait, record a missing run, observe, or launch."""
         if not budget.allows_call():
             return Acted.CUT_OFF
@@ -139,7 +139,7 @@ class ContinuationActs:
                     self._store,
                     action,
                     continued,
-                    Continuation.OBSERVE,
+                    None,
                     decision.resume_skipped,
                 )
                 return Acted.WROTE
@@ -150,17 +150,17 @@ class ContinuationActs:
                 return Acted.WROTE
 
     def _launch(
-        self, action: ContinuationAction, continued: JournalEntry, poll: RunPoll
+        self, action: ResumeRun, continued: JournalEntry, poll: RunPoll
     ) -> None:
         """Journal the entry, then start ``sq run --resume`` detached (D4 step 3).
 
         Only the journal write, a store call, runs between the budget check and the
         spawn. A spawn that fails is recorded as a failed resume, never retried.
         """
-        if not isinstance(action, ResumeRun):
-            raise ValueError(f"{action.node_id}: only a resume launches")
-        entry = journal_continuation(self._store, action, continued, action.decision)
-        argv = resume_argv(action.run_id, action.decision, self._instructions(action))
+        entry = journal_continuation(
+            self._store, action, continued, Continuation.RESUME
+        )
+        argv = resume_argv(action.run_id, self._instructions(action))
         started = spawn(
             argv,
             str(action.checkout),
@@ -193,23 +193,18 @@ class ContinuationActs:
         return blocked.resolution.instructions
 
     def _record_missing(
-        self, action: ContinuationAction, continued: JournalEntry, poll: RunPoll
+        self, action: ResumeRun, continued: JournalEntry, poll: RunPoll
     ) -> None:
         """The run is gone: journal the entry, then record the failed resume."""
         entry = journal_continuation(
-            self._store, action, continued, _continuation_of(action)
+            self._store, action, continued, Continuation.RESUME
         )
         document = poll if isinstance(poll, RunOutcomeDocument) else None
         finished = ResumeFailed(ResumeFailure.RUN_MISSING, None, "", document)
         finish.record_unstarted(self._store, entry, finished)
 
 
-def _continuation_of(action: ContinuationAction) -> Continuation:
-    """What the entry for this action is: a resume's decision, or an observation."""
-    return Continuation.OBSERVE if isinstance(action, ObserveRun) else action.decision
-
-
-def _poll_fault(action: ContinuationAction, detail: str) -> Fault:
+def _poll_fault(action: ResumeRun, detail: str) -> Fault:
     return Fault(
         FaultKind.RUN_OBSERVATION_FAILED,
         f"continuation of {action.run_id}: {detail}",

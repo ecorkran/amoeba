@@ -35,17 +35,14 @@ from amoeba.runner.resolutions.confirm import (
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import PARAM_CONTINUATION, PARAM_CONTINUES, JournalEntry, Store
 
-#: The continuations that resume a run; an ``observe`` continuation does not.
-_RESUMING = frozenset({Continuation.RETRY.value, Continuation.ACCEPT.value})
-
 type Classify = Callable[[JournalEntry, str, RunPoll, TickFaults], ObservedRun]
 type Ended = Callable[[JournalEntry, str, Finished], ObservedRun]
 type RaiseFault = Callable[[JournalEntry, str, str, TickFaults], ObservedRun]
 
 
 def is_resume(entry: JournalEntry) -> bool:
-    """Whether the entry resumes a paused run (``retry`` or ``accept``)."""
-    return entry.parameters.get(PARAM_CONTINUATION) in _RESUMING
+    """Whether the entry resumes an earlier run."""
+    return entry.parameters.get(PARAM_CONTINUATION) == Continuation.RESUME.value
 
 
 def resume_pending(entry: JournalEntry, tracked: TrackedLaunch | None) -> bool:

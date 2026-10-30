@@ -29,18 +29,14 @@ from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.project_config import MergePolicy
-from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
+from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import (
     PARAM_RUN_ID,
-    BlockedKind,
-    BlockedState,
     CommandKind,
     JournalEntry,
     JournalOutcome,
     JournalResolver,
-    Resolution,
-    ResolutionOutcome,
 )
 from runner.dispatch.dispatch_support import (
     CF_PROJECT,
@@ -302,37 +298,12 @@ def test_a_checkout_path_is_compared_not_its_spelling() -> None:
     assert PLANNER.plan(view_of(steps, held=[Path("/work/amoeba")])) == []
 
 
-def _decided(decision: str) -> BlockedState:
-    return BlockedState(
-        id="b-9",
-        node_id="a",
-        kind=BlockedKind.HUMAN,
-        context="decide",
-        resolution=Resolution(resolved_by="pm", detail="go", decision=decision),
-        runner_outcome=ResolutionOutcome.APPLIED,
-    )
-
-
-def test_a_pointer_write_after_a_rerun_names_the_resolution() -> None:
-    view = view_of(
-        {"a": facts(DispatchState.NEEDS_POINTER, resolution=_decided("rerun"))}
-    )
+def test_a_pointer_write_carries_no_resolution() -> None:
+    view = view_of({"a": facts(DispatchState.NEEDS_POINTER)})
 
     [action] = PLANNER.plan(view)
 
-    assert isinstance(action, WriteSlicePointer) and action.resolution == "b-9"
-
-
-@pytest.mark.parametrize("resolution", [None, "stop", "retry"])
-def test_a_pointer_write_otherwise_carries_no_resolution(
-    resolution: str | None,
-) -> None:
-    carried = None if resolution is None else _decided(resolution)
-    view = view_of({"a": facts(DispatchState.NEEDS_POINTER, resolution=carried)})
-
-    [action] = PLANNER.plan(view)
-
-    assert isinstance(action, WriteSlicePointer) and action.resolution is None
+    assert isinstance(action, WriteSlicePointer)
 
 
 # -- slice 128, D5: a launch goes ahead only on a passed check ------------------
@@ -466,7 +437,6 @@ def test_an_orphaned_provider_error_or_stall_outcome_is_resumed(
     assert action == ResumeRun(
         "a",
         stopped.parameters[PARAM_RUN_ID],  # type: ignore[arg-type]
-        Continuation.RETRY,
         stopped.id,
         None,
         FIRST,

@@ -26,7 +26,7 @@ from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
+from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import DesiredState, Node
 from runner.intent.rows_support import row
 from runner.lifecycle.tree_support import TreeBuilder
@@ -252,7 +252,6 @@ def _resume(node_id: str) -> ResumeRun:
     return ResumeRun(
         node_id,
         "run-1",
-        Continuation.RETRY,
         "entry-1",
         "b-1",
         Path("/w"),
@@ -295,7 +294,6 @@ def test_a_resolution_resume_without_its_resolution_is_refused() -> None:
         ResumeRun(
             "n",
             "run-1",
-            Continuation.RETRY,
             "entry-1",
             None,
             Path("/w"),
@@ -307,7 +305,6 @@ def test_a_transient_resume_needs_no_resolution() -> None:
     resume = ResumeRun(
         "n",
         "run-1",
-        Continuation.RETRY,
         "entry-1",
         None,
         Path("/w"),

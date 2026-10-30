@@ -1,10 +1,9 @@
-"""The resolution vocabulary is exactly what the design's tables say (D2, D3)."""
+"""The resolution vocabulary is exactly what the design's tables say (D6)."""
 
 from __future__ import annotations
 
 import pytest
 
-from amoeba.process import CheckpointKind
 from amoeba.runner.faults import ResumeFailure
 from amoeba.runner.resolutions.vocabulary import (
     ALLOWED,
@@ -13,7 +12,6 @@ from amoeba.runner.resolutions.vocabulary import (
     ResolutionRejection,
     Situation,
 )
-from amoeba.runner.routing.inputs import VALUE_SETS, RoutingInput
 
 D = ResolutionDecision
 
@@ -21,11 +19,8 @@ D = ResolutionDecision
 @pytest.mark.parametrize(
     ("situation", "allowed"),
     [
-        (Situation.NO_DECISION, set[D]()),
-        (Situation.PAUSED_RUN, {D.RETRY, D.ACCEPT, D.HANDLED, D.STOP}),
-        (Situation.COMPLETED_OUTCOME, {D.ACCEPT, D.RERUN, D.STOP}),
-        (Situation.ENDED_RUN, {D.RERUN, D.STOP}),
-        (Situation.BEFORE_RUN, {D.RERUN, D.STOP}),
+        (Situation.RUN_TO_RESUME, {D.RESUME, D.STOP}),
+        (Situation.NO_RUN, {D.RESUME, D.STOP}),
         (Situation.UNRESOLVABLE, set[D]()),
     ],
 )
@@ -39,20 +34,16 @@ def test_every_situation_has_a_row() -> None:
     assert set(ALLOWED) == set(Situation)
 
 
-@pytest.mark.parametrize("situation", [Situation.UNRESOLVABLE, Situation.NO_DECISION])
-def test_unresolvable_and_no_decision_allow_nothing(situation: Situation) -> None:
-    assert ALLOWED[situation] == frozenset()
-
-
 def test_the_vocabularies_hold_exactly_the_documented_values() -> None:
-    assert {d.value for d in ResolutionDecision} == {
-        "retry",
-        "accept",
-        "handled",
-        "rerun",
-        "stop",
+    assert {d.value for d in ResolutionDecision} == {"resume", "stop"}
+    assert {s.value for s in Situation} == {"run_to_resume", "no_run", "unresolvable"}
+    assert {c.value for c in Continuation} == {"resume"}
+    assert {r.value for r in ResolutionRejection} == {
+        "unknown_decision",
+        "decision_required",
+        "instructions_not_applicable",
+        "unresolvable",
     }
-    assert {c.value for c in Continuation} == {"retry", "accept", "observe"}
     assert {f.value for f in ResumeFailure} == {
         "refused",
         "exited_before_claim",
@@ -60,9 +51,3 @@ def test_the_vocabularies_hold_exactly_the_documented_values() -> None:
         "spawn_error",
         "run_missing",
     }
-    assert len(ResolutionRejection) == 9
-
-
-def test_routing_knows_the_usage_limit_checkpoint() -> None:
-    assert CheckpointKind.USAGE_LIMIT.value == "usage_limit"
-    assert "usage_limit" in VALUE_SETS[RoutingInput.CHECKPOINT_KIND]

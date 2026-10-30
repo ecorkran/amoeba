@@ -114,7 +114,6 @@ def test_a_resume_never_needs_the_gate(state: DispatchState) -> None:
     "state",
     [
         DispatchState.NEEDS_POINTER,
-        DispatchState.REOBSERVE,
         DispatchState.IN_FLIGHT,
     ],
 )

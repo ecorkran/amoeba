@@ -163,13 +163,17 @@ def test_a_run_that_is_not_paused_exits_one(rig: Rig) -> None:
 @pytest.mark.parametrize(
     "arguments",
     [
-        [RUN_ID],
+        [],
         [RUN_ID, "--decision", "handled"],
         [RUN_ID, "--decision", "retry", "--bogus", "x"],
     ],
 )
 def test_bad_arguments_exit_two(rig: Rig, arguments: list[str]) -> None:
     assert rig.resume(*arguments).returncode == 2
+
+
+def test_a_plain_resume_is_a_retry(rig: Rig) -> None:
+    assert rig.resume(RUN_ID).returncode == 0
 
 
 def test_the_argv_log_holds_the_instructions_element_unchanged(rig: Rig) -> None:

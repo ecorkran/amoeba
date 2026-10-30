@@ -33,7 +33,12 @@ from amoeba.runner.ingest.reviews import (
     select_review_files,
 )
 from amoeba.runner.observed import RunEnded, RunVanished
-from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT, resume_count, step_of
+from amoeba.runner.supervise import (
+    RESULT_OUTCOME,
+    RESULT_OUTCOME_DOCUMENT,
+    resume_count,
+    step_of,
+)
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -48,7 +53,6 @@ from amoeba.store import (
 #: Keys of the ``sq_run`` entry's result: 126's input for the run, and 127's source
 #: for resuming a paused run.
 RESULT_RUN_ID: Final = PARAM_RUN_ID
-RESULT_OUTCOME: Final = "outcome"
 RESULT_STATUS: Final = "status"
 RESULT_VERDICT_IDS: Final = "verdict_ids"
 #: Slice 128 (D2): the gate, design and git reads taken when a run completes, and the

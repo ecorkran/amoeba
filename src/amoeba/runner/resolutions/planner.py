@@ -1,11 +1,11 @@
-"""``ContinuationPlanner``: resume or observe the run an applied resolution names.
+"""``ContinuationPlanner``: resume the run an applied ``resume`` resolution names.
 
 Pure, like ``DispatchPlanner``: it reads only the view's dispatch facts and checkout
-holders. For each current pipeline step in ``RESUME`` or ``REOBSERVE`` it proposes
-one action. It acts when the run's checkout is held by no one or only by the step
-itself, because the paused run it continues is that step's own; any other holder
-makes it wait, like any launch (slice 127, D5). The two planners never act on the
-same step, since a step is in one dispatch state.
+holders. For each current pipeline step in ``RESUME`` it proposes a ``ResumeRun``. It
+acts when the run's checkout is held by no one or only by the step itself, because
+the run it continues is that step's own; any other holder makes it wait, like any
+launch (slice 127, D5). The two planners never act on the same step, since a step is
+in one dispatch state.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from pathlib import Path
 from amoeba.runner.decide import (
     Action,
     BlockDispatch,
-    ObserveRun,
     ProjectView,
     ResumeRun,
 )
@@ -26,7 +25,7 @@ from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.gates.predispatch import Block
 from amoeba.runner.launch import text_parameter
-from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
+from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, Node
 
 
@@ -46,7 +45,7 @@ class ContinuationPlanner:
         return actions
 
 
-_STATES = frozenset({DispatchState.RESUME, DispatchState.REOBSERVE})
+_STATES = frozenset({DispatchState.RESUME})
 
 
 def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action | None:
@@ -62,19 +61,15 @@ def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action |
     if view.checkout_holders.get(checkout, frozenset()) - {node.id}:
         return None
     run_id = text_parameter(continued, PARAM_RUN_ID)
-    if facts.state is DispatchState.REOBSERVE:
-        return ObserveRun(node.id, run_id, continued.id, resolution.id, checkout)
     # A resume goes ahead only on a passed pre-dispatch check (slice 128, D5).
     check = view.dispatch_checks.get(node.id)
     if check is None:
         return None
     if isinstance(check, Block):
         return BlockDispatch(node.id, check)
-    decision = Continuation(resolution.resolution.decision)
     return ResumeRun(
         node.id,
         run_id,
-        decision,
         continued.id,
         resolution.id,
         checkout,

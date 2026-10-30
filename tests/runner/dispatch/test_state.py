@@ -8,7 +8,7 @@ from dataclasses import replace
 import pytest
 
 from amoeba.runner.dispatch.state import DispatchState, dispatch_state
-from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
+from amoeba.runner.supervise import RESULT_OUTCOME, RESULT_OUTCOME_DOCUMENT
 from amoeba.store import (
     PARAM_RESOLUTION,
     BlockedKind,
@@ -189,26 +189,49 @@ def _naming(entry: JournalEntry, resolution_id: str = "b-1") -> JournalEntry:
     return replace(entry, parameters={PARAM_RESOLUTION: resolution_id})
 
 
-@pytest.mark.parametrize(
-    ("decision", "expected"),
-    [
-        ("retry", DispatchState.RESUME),
-        ("accept", DispatchState.RESUME),
-        ("handled", DispatchState.REOBSERVE),
-        ("rerun", DispatchState.NEEDS_POINTER),
-    ],
-)
-def test_an_applied_decision_nobody_carried_out_decides(
-    decision: str, expected: DispatchState
-) -> None:
-    entries = [_run(awaits_routing=False)]
+def _run_ended(outcome: str) -> JournalEntry:
+    """A resolved run entry whose recorded outcome is ``outcome``."""
+    return replace(_run(), result={RESULT_OUTCOME: outcome})
 
-    assert (
-        dispatch_state(entries, _decided(decision), pointer_confirmed=True) is expected
-    )
+
+@pytest.mark.parametrize("outcome", ["paused", "failed", "orphaned"])
+def test_an_applied_resume_of_a_run_nobody_carried_out_is_resume(
+    outcome: str,
+) -> None:
+    entries = [_run_ended(outcome)]
+
+    state = dispatch_state(entries, _decided("resume"), pointer_confirmed=True)
+
+    assert state is DispatchState.RESUME
+
+
+@pytest.mark.parametrize("outcome", ["completed", "not_found", "vanished"])
+def test_an_applied_resume_with_no_run_to_resume_decides_nothing(
+    outcome: str,
+) -> None:
+    entries = [_run_ended(outcome)]
+
+    state = dispatch_state(entries, _decided("resume"), pointer_confirmed=True)
+
+    assert state is DispatchState.NEEDS_POINTER
+
+
+def test_an_applied_resume_with_nothing_before_it_decides_nothing() -> None:
+    state = dispatch_state([], _decided("resume"), pointer_confirmed=True)
+
+    assert state is DispatchState.NEEDS_POINTER
 
 
 @pytest.mark.parametrize("decision", ["retry", "accept", "handled", "rerun"])
+def test_a_retired_decision_decides_nothing(decision: str) -> None:
+    entries = [_run_ended("paused")]
+
+    state = dispatch_state(entries, _decided(decision), pointer_confirmed=True)
+
+    assert state is not DispatchState.RESUME
+
+
+@pytest.mark.parametrize("decision", ["resume"])
 def test_once_an_entry_names_it_the_older_rules_apply(decision: str) -> None:
     entries = [_run(), _naming(_pointer())]
 
@@ -217,21 +240,11 @@ def test_once_an_entry_names_it_the_older_rules_apply(decision: str) -> None:
     assert state is DispatchState.POINTED
 
 
-def test_rerun_after_a_not_applied_entry_is_not_a_reissue() -> None:
-    not_applied = _run(JournalOutcome.NOT_APPLIED, resolved_by=JournalResolver.RECOVERY)
-
-    older = dispatch_state([not_applied], None, pointer_confirmed=True)
-    rerun = dispatch_state([not_applied], _decided("rerun"), pointer_confirmed=True)
-
-    assert older is DispatchState.REISSUE
-    assert rerun is DispatchState.NEEDS_POINTER
-
-
 @pytest.mark.parametrize(
     "resolution",
     [
-        _decided("retry", ResolutionOutcome.REJECTED),
-        _decided("retry", None),
+        _decided("resume", ResolutionOutcome.REJECTED),
+        _decided("resume", None),
         _decided(None),
         _decided("stop"),
         BlockedState(id="b", node_id="n", kind=BlockedKind.HUMAN, context="c"),
@@ -251,7 +264,7 @@ def test_a_rejected_undecided_or_stop_resolution_changes_nothing(
 def test_an_unresolved_continuation_is_in_flight() -> None:
     entries = [_run(), _naming(_run(None))]
 
-    state = dispatch_state(entries, _decided("retry"), pointer_confirmed=True)
+    state = dispatch_state(entries, _decided("resume"), pointer_confirmed=True)
 
     assert state is DispatchState.IN_FLIGHT
 

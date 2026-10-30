@@ -49,8 +49,7 @@ def _answered(
         checkout=str(rig.world.root),
     )
     blocked_id = block_and_resolve(rig.store, node, decision)
-    tree = LifecycleTree(rig.store.nodes_for_project(PROJECT))
-    apply_pending_resolutions(rig.store, PROJECT, tree, NodeContext())
+    apply_pending_resolutions(rig.store, PROJECT, NodeContext())
     return blocked_id
 
 
@@ -58,7 +57,7 @@ def test_an_applied_retry_is_resume_with_the_continued_entry(
     rig: DispatchRig,
 ) -> None:
     node = rig.step("resumable", 150)
-    blocked_id = _answered(rig, "retry", node)
+    blocked_id = _answered(rig, "resume", node)
     [paused] = rig.entries(CommandKind.SQ_RUN, node)
 
     facts = _view(rig, node).facts[node.id]
@@ -68,19 +67,11 @@ def test_an_applied_retry_is_resume_with_the_continued_entry(
     assert facts.resolution is not None and facts.resolution.id == blocked_id
 
 
-def test_an_applied_handled_is_reobserve(rig: DispatchRig) -> None:
-    node = rig.step("handled", 150)
-    _answered(rig, "handled", node)
-
-    facts = _view(rig, node).facts[node.id]
-
-    assert facts.state is DispatchState.REOBSERVE
-    assert facts.continues is not None
-
-
-def test_a_rerun_needs_a_pointer_and_continues_nothing(rig: DispatchRig) -> None:
+def test_a_resume_with_no_run_needs_a_pointer_and_continues_nothing(
+    rig: DispatchRig,
+) -> None:
     node = rig.step("rerun", 150)
-    _answered(rig, "rerun", node, RunOutcome.FAILED)
+    _answered(rig, "resume", node, RunOutcome.COMPLETED)
     facts = _view(rig, node).facts[node.id]
 
     assert facts.state is DispatchState.NEEDS_POINTER
@@ -90,7 +81,7 @@ def test_a_rerun_needs_a_pointer_and_continues_nothing(rig: DispatchRig) -> None
 
 def test_a_paused_runs_checkout_is_held_by_its_own_node(rig: DispatchRig) -> None:
     node = rig.step("holder", 150)
-    _answered(rig, "retry", node)
+    _answered(rig, "resume", node)
 
     view = _view(rig, node)
 

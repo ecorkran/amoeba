@@ -17,7 +17,6 @@ from amoeba.runner.gates.cf_status import CFActiveSlice
 from amoeba.runner.gates.checks import RunnerCheck, check_id, runner_provenance
 from amoeba.runner.ingest.record import RESULT_OUTCOME, RESULT_VERDICT_IDS
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.runner.resolutions.vocabulary import ResolutionDecision
 from amoeba.store import (
     PARAM_CONTINUATION,
     BlockedState,
@@ -28,6 +27,10 @@ from amoeba.store import (
     ResolutionOutcome,
     latest_run_entry,
 )
+
+#: The decision 127 wrote for an accepted loop. Nothing writes it since 132, and this
+#: module goes with the hatches (D9); the vocabulary no longer names it.
+ACCEPT_DECISION = "accept"
 
 
 @dataclass(frozen=True)
@@ -51,7 +54,7 @@ def accepted_by_pm(
         return None
     if latest_blocked.runner_outcome is not ResolutionOutcome.APPLIED:
         return None
-    if latest_blocked.resolution.decision != ResolutionDecision.ACCEPT.value:
+    if latest_blocked.resolution.decision != ACCEPT_DECISION:
         return None
     entry = latest_run_entry(entries)
     if entry is None or PARAM_CONTINUATION in entry.parameters:

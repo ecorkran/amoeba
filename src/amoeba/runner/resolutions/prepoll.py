@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from amoeba.process import PollFailure, RunOutcome, RunPoll
-from amoeba.runner.decide import ObserveRun, ResumeRun
+from amoeba.runner.decide import ResumeRun
 from amoeba.runner.resolutions.confirm import STOPPED_OUTCOMES, ResumedFrom, is_at
 from amoeba.runner.resolutions.vocabulary import RESUME_SKIPPED_RUN_NOT_AT_PAUSE
 
@@ -43,7 +43,7 @@ class PrepollDecision:
 
 
 def prepoll_decision(
-    action: ResumeRun | ObserveRun, poll: RunPoll, resumed_from: ResumedFrom | None
+    action: ResumeRun, poll: RunPoll, resumed_from: ResumedFrom | None
 ) -> PrepollDecision:
     """Decide the act from the one pre-poll.
 
@@ -56,8 +56,6 @@ def prepoll_decision(
         return PrepollDecision(Act.WAIT, detail=poll.reason)
     if poll.outcome is RunOutcome.NOT_FOUND:
         return PrepollDecision(Act.RUN_MISSING)
-    if isinstance(action, ObserveRun):
-        return PrepollDecision(Act.OBSERVE)
     if (
         poll.outcome in STOPPED_OUTCOMES
         and resumed_from is not None

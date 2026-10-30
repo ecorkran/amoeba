@@ -1,6 +1,6 @@
 """The stub ``sq``'s ``run --resume`` mode (slice 127, D4 and D6).
 
-``sq run --resume <id> --decision retry|accept [--instructions T]``: resumes a paused
+``sq run --resume <id> [--decision retry|accept] [--instructions T]``: resumes a paused
 run. The stub keeps no more of Squadron than the Runner reads. A run that does not
 exist exits 1; a run that is not paused exits 1; a bad flag or decision exits 2.
 Otherwise it claims the run (its document goes to ``timed_out``, as a running run's
@@ -65,8 +65,12 @@ _BRANCH = textwrap.dedent(
             else:
                 print("stub sq: unknown flag", argument, file=sys.stderr)
                 sys.exit(2)
-        if resume_id is None or options.get("--decision") not in ("retry", "accept"):
-            print("stub sq: need a run id and --decision", file=sys.stderr)
+        # A plain --resume is Squadron's retry; a given --decision must be one it knows.
+        if resume_id is None or options.get("--decision", "retry") not in (
+            "retry",
+            "accept",
+        ):
+            print("stub sq: need a run id and a known decision", file=sys.stderr)
             sys.exit(2)
         resume_mode = os.environ.get({mode_env!r})
         if resume_mode == {refuse!r}:

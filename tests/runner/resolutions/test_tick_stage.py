@@ -15,7 +15,6 @@ from runner.observe_support import Child, document
 from runner.resolutions.resolution_support import (
     block_and_resolve,
     design_step,
-    finished_run,
 )
 from runner.tick_support import PROJECT, Rig
 
@@ -31,7 +30,7 @@ def test_a_resolution_is_acknowledged_in_the_next_tick_before_any_planner_sees_i
     rig: Rig, store: Store
 ) -> None:
     node = design_step(store)
-    state_id = block_and_resolve(store, node, "rerun")
+    state_id = block_and_resolve(store, node, "resume")
     seen: list[bool] = []
 
     class Spy:
@@ -52,15 +51,9 @@ def test_a_resolution_is_acknowledged_in_the_next_tick_before_any_planner_sees_i
 def test_poisoned_resolution_is_contained(
     rig: Rig, store: Store, tmp_path: Path
 ) -> None:
-    """A resolution naming a poisoned document is rejected; the others go on."""
-    poisoned = design_step(store)
-    finished_run(
-        store,
-        poisoned,
-        RunOutcome.PAUSED,
-        document={"run_id": "r", "outcome": "nonsense"},
-    )
-    rejected_id = block_and_resolve(store, poisoned, "retry")
+    """A rejected resolution does not stop the others; the tick goes on."""
+    stale = design_step(store)
+    rejected_id = block_and_resolve(store, stale, "retry")
     running = design_step(store)
     entry = store.journal_issue(
         running.id,
@@ -79,6 +72,6 @@ def test_poisoned_resolution_is_contained(
     assert result is TickResult.COMPLETE
     rejected = store.blocked_state(rejected_id)
     assert rejected is not None
-    assert rejected.runner_code == ResolutionRejection.CHECKPOINT_UNKNOWN
+    assert rejected.runner_code == ResolutionRejection.UNKNOWN_DECISION
     ingested = store.journal_entry(entry.id)
     assert ingested is not None and ingested.outcome is JournalOutcome.COMPLETED

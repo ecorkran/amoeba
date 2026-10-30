@@ -1,7 +1,7 @@
 """Each resolution decision through the real tick, for those no earlier task proves.
 
-Retry, accept of a pause and handled are proven in test_tick_resume.py. Here: accept
-of an escalated completed outcome, rerun, stop, and a resolution on a held step.
+Resuming a paused run is proven in test_tick_resume.py. Here: a resume with no run to
+resume, stop, and a resolution on a held step.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def _blocked_failure(rig: DispatchRig, name: str) -> tuple[Node, Node]:
     return slice_node, step
 
 
-def test_rerun_after_a_not_applied_launch_is_a_fresh_run_not_a_reissue(
+def test_resume_with_no_run_to_resume_launches_again(
     rig: DispatchRig,
 ) -> None:
     _, step = launched_step(rig, "rerun-not-applied")
@@ -76,15 +76,18 @@ def test_rerun_after_a_not_applied_launch_is_a_fresh_run_not_a_reissue(
         resolved_by=JournalResolver.RECOVERY,
     )
     rig.store.block(step.id, kind=BlockedKind.HUMAN, context="never started")
-    _resolve(rig, step, "rerun")
+    _resolve(rig, step, "resume")
+    run_id = str(first.parameters["run_id"])
+    answer_poll(rig, run_id, RunOutcome.NOT_FOUND)  # the reissue looks for the run
 
     rig.tick()
     rig.tick()
 
+    # The launch never started, so launching afresh repeats it under the same run id.
     second = rig.entries(CommandKind.SQ_RUN, step)[-1]
-    assert second.id != first.id
-    assert PARAM_REISSUE_OF not in second.parameters
-    assert second.parameters["run_id"] != first.parameters["run_id"]
+    assert second.id != first.id and not second.is_resolved
+    assert second.parameters[PARAM_REISSUE_OF] == first.id
+    assert "--resume" not in rig.popen.argvs[-1]
 
 
 def test_stop_blocks_the_node_with_reason_stopped_and_issues_nothing(
@@ -124,7 +127,7 @@ def test_a_held_steps_resolution_is_acknowledged_and_its_resume_waits(
     )
     run_id = str(rig.entries(CommandKind.SQ_RUN, step)[0].parameters["run_id"])
     submit(rig.store, {"intent": "pause"}, project_id=PROJECT)
-    blocked_id = _resolve(rig, step, "retry")
+    blocked_id = _resolve(rig, step, "resume")
     argvs_before = len(rig.popen.argvs)
 
     rig.tick()

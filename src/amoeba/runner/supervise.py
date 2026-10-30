@@ -25,11 +25,19 @@ from amoeba.process import (
 )
 from amoeba.runner.observed import Finished, RunEnded
 from amoeba.runner.resolutions.vocabulary import PARAM_RESUME_CAUSE, ResumeCause
-from amoeba.store import JournalEntry
+from amoeba.store import CommandKind, JournalEntry
 
 #: The key of a resolved ``sq_run`` entry's result that holds the outcome document it
 #: was resolved with: the supervisor's record of where the run stopped (D4).
 RESULT_OUTCOME_DOCUMENT: Final = "outcome_document"
+#: The key that holds the run outcome's name (``paused``, ``failed``, ...), kept apart
+#: from the document so a failed resume can record that the run is gone.
+RESULT_OUTCOME: Final = "outcome"
+
+#: The recorded outcomes of a run Squadron still has and can resume.
+RESUMABLE_OUTCOMES: Final = frozenset(
+    {RunOutcome.PAUSED.value, RunOutcome.FAILED.value, RunOutcome.ORPHANED.value}
+)
 
 #: The ``reason`` a block payload carries (D4). ``agent_question`` is 140's input.
 REASON_AGENT_QUESTION: Final = "agent_question"
@@ -175,3 +183,22 @@ def resume_ready(document: RunOutcomeDocument, now: datetime) -> bool:
     if document.outcome is RunOutcome.PAUSED and checkpoint and checkpoint.resets_at:
         return now >= checkpoint.resets_at
     return True
+
+
+def run_to_resume(entries: Sequence[JournalEntry]) -> JournalEntry | None:
+    """The run entry a ``resume`` resolution would resume, or ``None``.
+
+    ``entries`` are the slice's, oldest first. It is the latest entry, when that is a
+    resolved ``sq_run`` whose recorded outcome is one Squadron can resume. A failed
+    launch, a vanished run, a run whose resume found it gone, and anything after a
+    pointer write give ``None``: there is no run to resume (D6).
+    """
+    latest = entries[-1] if entries else None
+    if (
+        latest is None
+        or latest.kind is not CommandKind.SQ_RUN
+        or not latest.is_resolved
+    ):
+        return None
+    recorded = None if latest.result is None else latest.result.get(RESULT_OUTCOME)
+    return latest if recorded in RESUMABLE_OUTCOMES else None

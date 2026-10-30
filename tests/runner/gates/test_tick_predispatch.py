@@ -353,7 +353,7 @@ def test_a_clean_reissue_launches_and_records_the_check(rig: DispatchRig) -> Non
     assert _evidence(new)["branch"] == "main"
 
 
-def test_a_blocked_launch_resolved_with_rerun_is_checked_again(
+def test_a_blocked_launch_resolved_with_resume_is_checked_again(
     rig: DispatchRig,
 ) -> None:
     node = _step(rig)
@@ -363,7 +363,7 @@ def test_a_blocked_launch_resolved_with_rerun_is_checked_again(
     (rig.world.root / "README.md").write_text("seed\n")  # the PM cleans up
     blocked = rig.store.blocked_state_for(node.id)
     assert blocked is not None
-    resolve_block(rig.store, blocked.id, "rerun", project_id=PROJECT)
+    resolve_block(rig.store, blocked.id, "resume", project_id=PROJECT)
 
     rig.tick()  # acknowledged: the pointer is written again
     rig.tick()  # pointed: checked, and launched
@@ -406,14 +406,14 @@ def test_a_resume_on_a_dirty_tree_resumes_and_names_the_dirty_paths(
     rig: DispatchRig,
 ) -> None:
     node, run_id = _paused_loop(rig)
-    _resolve(rig, node, "retry")
+    _resolve(rig, node, "resume")
     answer_poll(rig, run_id, RunOutcome.PAUSED, checkpoint=LOOP_CHECKPOINT)
     _dirty(rig)
 
     rig.tick()
 
     resumed = _continuation(rig, node)
-    assert resumed.parameters[PARAM_CONTINUATION] == "retry"
+    assert resumed.parameters[PARAM_CONTINUATION] == "resume"
     evidence = _evidence(resumed)
     assert evidence["dirty_paths"] == ["README.md"] and evidence["dirty_count"] == 1
     assert evidence["gate_status"] is None, "a resume does not read the gate"
@@ -421,7 +421,7 @@ def test_a_resume_on_a_dirty_tree_resumes_and_names_the_dirty_paths(
 
 def test_a_resume_on_the_wrong_branch_blocks(rig: DispatchRig) -> None:
     node, run_id = _paused_loop(rig)
-    _resolve(rig, node, "retry")
+    _resolve(rig, node, "resume")
     answer_poll(rig, run_id, RunOutcome.PAUSED, checkpoint=LOOP_CHECKPOINT)
     make_branch(rig.world.root, "feature-x")
 
@@ -433,21 +433,6 @@ def test_a_resume_on_the_wrong_branch_blocks(rig: DispatchRig) -> None:
         if PARAM_CONTINUATION in e.parameters
     ] == []
     assert _block_payload(rig)[PAYLOAD_FAULT_KIND] == "checkout_branch"
-
-
-def test_an_observation_is_not_checked(rig: DispatchRig) -> None:
-    node, run_id = _paused_loop(rig)
-    _resolve(rig, node, "handled")
-    answer_poll(
-        rig, run_id, RunOutcome.COMPLETED, **write_review(rig, "verdict: PASS").document
-    )
-    _dirty(rig)
-    make_branch(rig.world.root, "feature-x")
-
-    rig.tick()
-
-    assert _continuation(rig, node).parameters[PARAM_CONTINUATION] == "observe"
-    assert rig.store.messages(PROJECT, channel=Channel.ESCALATION) == []
 
 
 def test_a_pointer_write_is_not_checked(rig: DispatchRig) -> None:

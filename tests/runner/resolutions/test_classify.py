@@ -1,4 +1,4 @@
-"""``classify``: every D2 row, and the order the rows are tested in."""
+"""``classify``: a blocked slice is either holding a run to resume or it is not."""
 
 from __future__ import annotations
 
@@ -7,10 +7,9 @@ from collections.abc import Mapping
 import pytest
 
 from amoeba.runner.finish import RESULT_RESUME_FAILURE
-from amoeba.runner.ingest.record import RESULT_OUTCOME
-from amoeba.runner.lifecycle.steps import Executor
 from amoeba.runner.resolutions.classify import classify
 from amoeba.runner.resolutions.vocabulary import Situation
+from amoeba.runner.supervise import RESULT_OUTCOME
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
 
 
@@ -19,7 +18,6 @@ def _entry(
     *,
     outcome: JournalOutcome | None = JournalOutcome.COMPLETED,
     result: Mapping[str, object] | None = None,
-    awaits_routing: bool = False,
     resolved_by: JournalResolver | None = JournalResolver.ISSUER,
 ) -> JournalEntry:
     return JournalEntry(
@@ -29,7 +27,6 @@ def _entry(
         kind=kind,
         outcome=outcome,
         result=result,
-        awaits_routing=awaits_routing,
         resolved_by=resolved_by if outcome is not None else None,
     )
 
@@ -41,62 +38,48 @@ def _run(outcome: str | None, **extra: object) -> JournalEntry:
     return _entry(result=result)
 
 
-PIPELINE = Executor.PIPELINE
-
-
 @pytest.mark.parametrize(
-    ("executor", "entries", "expected"),
+    ("entries", "expected"),
     [
-        (PIPELINE, [], Situation.BEFORE_RUN),
-        (PIPELINE, [_entry(CommandKind.CF_WRITE)], Situation.BEFORE_RUN),
-        (PIPELINE, [_run("paused")], Situation.PAUSED_RUN),
-        (PIPELINE, [_run("completed")], Situation.COMPLETED_OUTCOME),
-        (PIPELINE, [_run("failed")], Situation.ENDED_RUN),
-        (PIPELINE, [_run("orphaned")], Situation.ENDED_RUN),
-        (PIPELINE, [_run("vanished")], Situation.ENDED_RUN),
-        (PIPELINE, [_run(None)], Situation.ENDED_RUN),
-        (
-            PIPELINE,
-            [_entry(result={RESULT_RESUME_FAILURE: "spawn_error"})],
-            Situation.ENDED_RUN,
-        ),
-        (PIPELINE, [_entry(outcome=None)], Situation.UNRESOLVABLE),
-        (None, [], Situation.NO_DECISION),
-        (Executor.HUMAN, [], Situation.NO_DECISION),
+        ([], Situation.NO_RUN),
+        ([_entry(CommandKind.CF_WRITE)], Situation.NO_RUN),
+        ([_run("paused")], Situation.RUN_TO_RESUME),
+        ([_run("failed")], Situation.RUN_TO_RESUME),
+        ([_run("orphaned")], Situation.RUN_TO_RESUME),
+        ([_run("completed")], Situation.NO_RUN),
+        ([_run("vanished")], Situation.NO_RUN),
+        ([_run("not_found")], Situation.NO_RUN),
+        ([_run(None)], Situation.NO_RUN),
+        ([_entry(result={RESULT_RESUME_FAILURE: "spawn_error"})], Situation.NO_RUN),
+        ([_entry(outcome=None)], Situation.UNRESOLVABLE),
     ],
 )
-def test_each_row(
-    executor: Executor | None, entries: list[JournalEntry], expected: Situation
-) -> None:
-    assert classify(executor, entries) is expected
+def test_each_row(entries: list[JournalEntry], expected: Situation) -> None:
+    assert classify(entries) is expected
 
 
 def test_the_latest_entry_decides_not_an_older_one() -> None:
     entries = [_run("paused"), _entry(CommandKind.CF_WRITE)]
 
-    assert classify(PIPELINE, entries) is Situation.BEFORE_RUN
+    assert classify(entries) is Situation.NO_RUN
 
 
-def test_unresolvable_wins_over_a_human_step() -> None:
-    assert classify(Executor.HUMAN, [_entry(outcome=None)]) is Situation.UNRESOLVABLE
-
-
-def test_a_failed_resume_stays_a_paused_run() -> None:
-    """Outcome stays ``paused`` with ``resume_failure``, so ``rerun`` is not offered."""
+def test_a_failed_resume_of_a_live_run_is_still_a_run_to_resume() -> None:
+    """The recorded outcome stays ``paused`` with ``resume_failure``."""
     failed = _run("paused", **{RESULT_RESUME_FAILURE: "refused"})
 
-    assert classify(PIPELINE, [failed]) is Situation.PAUSED_RUN
+    assert classify([failed]) is Situation.RUN_TO_RESUME
 
 
-def test_a_resume_with_a_missing_run_is_an_ended_run() -> None:
+def test_a_resume_whose_run_was_missing_has_no_run_to_resume() -> None:
     missing = _run("not_found", **{RESULT_RESUME_FAILURE: "run_missing"})
 
-    assert classify(PIPELINE, [missing]) is Situation.ENDED_RUN
+    assert classify([missing]) is Situation.NO_RUN
 
 
-def test_a_recovery_resolved_entry_is_an_ended_run() -> None:
+def test_a_recovery_resolved_entry_has_no_run_to_resume() -> None:
     recovered = _entry(
         outcome=JournalOutcome.NOT_APPLIED, resolved_by=JournalResolver.RECOVERY
     )
 
-    assert classify(PIPELINE, [recovered]) is Situation.ENDED_RUN
+    assert classify([recovered]) is Situation.NO_RUN

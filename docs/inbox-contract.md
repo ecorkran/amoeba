@@ -65,10 +65,10 @@ amoeba submit create-project --project demo --by operator
 amoeba submit resolution --project demo --by operator \
     --blocked-state-id <id> --detail "approved"
 amoeba submit resolution --project amoeba --by operator --blocked-state-id <id> \
-    --detail "loop is close; one more round" --decision retry \
+    --detail "loop is close; one more round" --decision resume \
     --instructions "Address the two schema concerns only."
 amoeba submit intent --project demo --by operator \
-    --body '{"intent": "drive", "until": "slice_design"}' [--node-id <id>]
+    --body '{"intent": "drive"}' [--node-id <id>]
 amoeba submit check --project demo --by ci --node-id <id> --name <name> \
     --outcome passed --examined-count 412 --upstream <tool> \
     --upstream-version <label> --source command_output [--examined '{…}'] \
@@ -103,31 +103,31 @@ resolved block and is `rejected` — it is never redirected to the new one.
 
 ### A resolution's decision
 
-*Slice 127.* A resolution of a blocked pipeline step names what the Runner should do
-about it. The inbox stores the decision and the instructions as submitted and checks
-only their shape; the Runner judges them.
+*Slice 127; reduced to `resume` and `stop` in slice 132.* A resolution of a blocked
+slice names what the Runner should do about it. The inbox stores the decision and the
+instructions as submitted and checks only their shape; the Runner judges them.
 
 | Field | Rule |
 | --- | --- |
-| `decision` | Optional text, non-blank when present. `retry`, `accept`, `handled`, `rerun` or `stop`, checked by the Runner, not the inbox. |
-| `instructions` | Optional text, non-blank when present. Allowed only with `retry` or `accept`, and passed to Squadron verbatim as one argument. **No secrets**: the text is stored in the store as written and shown in the process list while the resume runs, the same rule as every payload. |
+| `decision` | Optional text, non-blank when present. `resume` or `stop`, checked by the Runner, not the inbox. `retry`, `accept`, `handled` and `rerun` are rejected `unknown_decision`, so a stale client fails loudly. |
+| `instructions` | Optional text, non-blank when present. Allowed only with `resume` of a run Squadron still has, and passed to Squadron verbatim as one argument. **No secrets**: the text is stored in the store as written and shown in the process list while the resume runs, the same rule as every payload. |
 
-**What each decision does**, by where the step stands:
+**What each decision does**, by where the slice stands:
 
-| Step stands at | Allowed decisions |
-| --- | --- |
-| A paused run (its latest `sq_run` recorded `paused`) | `retry` (resume with `--decision retry`), `accept` (resume with `--decision accept`; only when the pause is at a loop), `handled` (you dealt with the run yourself; the Runner re-observes it and routes what it finds), `stop` |
-| A completed run whose outcome was escalated | `accept` (the step is done; nothing in CF or the review is edited), `rerun`, `stop` |
-| A failed, orphaned or vanished run, a launch that never started, a run Squadron no longer has, or no run yet | `rerun`, `stop` |
-| A human step | none: a bare resolution only |
+| Slice stands at | `resume` | `stop` |
+| --- | --- | --- |
+| Its latest `sq_run` names a run Squadron still has (recorded `paused`, `failed` or `orphaned`) | The Runner issues `sq run --resume <id>` (a plain resume, Squadron's retry; `--decision` is never passed) with the instructions, if any. The entry carries `resume_cause: resolution`, and the automatic-resume count starts again | Parks the slice as a block |
+| No run to resume: a launch that never started, a run Squadron no longer has, a completed run that was blocked, or a block before any run | The block is resolved and the slice is launched afresh when it is next current. `instructions` here are rejected `instructions_not_applicable`, because a fresh launch cannot carry them | Parks the slice as a block |
 
-`stop` parks the step as a block; resolving that block with any decision allowed for
-where it stands starts it again.
+The pre-dispatch check (branch and tree) runs before either. `stop` parks the slice
+as a block; resolving that block with `resume` starts it again.
 
-**A bare resolution of a pipeline step is rejected `decision_required`.** This is a
-change for existing submitters. Before slice 127 a resolution returned the node to
-`runnable` and the Runner's dispatch rules then relaunched the step; now the Runner
-answers it, and a pipeline step needs a decision. Name `rerun` for the old behavior.
+**A bare resolution is rejected `decision_required`.** Name `resume` to start the
+slice again.
+
+**The name clash.** The intent `resume` (release a hold) and the resolution decision
+`resume` (resume a run) are on different channels with different bodies; neither
+changes the other.
 
 **The Runner's answer** is on the blocked state, not the submission: the submission
 record is the inbox's answer and is written once. The Runner answers each flagged
@@ -137,40 +137,36 @@ so no planner sees a resolved node before its resolution is checked. See
 
 | `runner_code` (rejected) | Meaning |
 | --- | --- |
-| `unresolvable` | The step's latest command is still in flight, or its outcome is not routed yet. Try again after the next tick. |
-| `unknown_decision` | The decision is not one of the five words. |
-| `decision_required` | A pipeline step was resolved without a decision. |
-| `decision_not_applicable` | A decision on a human step, or one not allowed where the step stands. |
-| `not_at_loop` | `accept` on a pause that is not at a loop. |
-| `usage_limit_pause` | `accept` on a usage-limit pause, whose round never ran. `retry` after the limit resets. |
-| `checkpoint_unknown` | `retry` or `accept` on a pause whose kind or time the Runner cannot read. |
-| `interactive_checkpoint` | `retry` at an interactive checkpoint, which a non-interactive resume cannot pass. Resume it by hand, then submit `handled`. |
-| `instructions_not_applicable` | `instructions` with a decision other than `retry` or `accept`. |
+| `unresolvable` | The slice's latest command is still in flight. Try again after the next tick. |
+| `unknown_decision` | The decision is not `resume` or `stop`. |
+| `decision_required` | The resolution named no decision. |
+| `instructions_not_applicable` | `instructions` with `stop`, or with `resume` when there is no run to resume. |
 
-A rejection blocks the step again on a human; its escalation payload lists the
-decisions `allowed` where the step stands.
+A rejection blocks the slice again on a human; its escalation payload lists the
+decisions `allowed` where the slice stands.
 
 ### Intent bodies
 
 *Slice 124.* The inbox stores an intent's `body` without reading it. The Runner
 validates it when it applies the intent, and answers every intent with exactly one
 acknowledgment. The body is a JSON object with a closed `intent` field and no other
-keys except `until`; an unknown key is rejected, so a misspelled `"untill"` cannot
-silently drive everything.
+keys; an unknown key is rejected, so a misspelled key cannot silently drive
+everything. *Slice 132:* `until` is gone with the lifecycle steps it named, so a body
+that still carries it is `malformed_body`. A stored `drive_until_step` is written
+`NULL` and ignored.
 
 | Body | Meaning |
 | --- | --- |
 | `{"intent": "drive"}` | Advance all work under the target. |
-| `{"intent": "drive", "until": "<step>"}` | Advance work under the target up to and including `<step>` (`architecture`, `slice_plan`, `slice_design`, `tasks`, `implementation`, `merge`, `integration`, in that order). |
 | `{"intent": "exclude"}` | Do not advance work under the target, unless a narrower target drives it. |
 | `{"intent": "pause"}` | Issue nothing new under the target. A narrower target cannot override a pause. |
 | `{"intent": "resume"}` | Remove the target's own pause. |
 | `{"intent": "clear"}` | Remove all of the target's own settings, so the next one up applies. |
 
 ```
-# drive initiative 120 through slice design
+# drive initiative 120
 amoeba submit intent --project amoeba --by operator --node-id <initiative-120-node> \
-    --body '{"intent": "drive", "until": "slice_design"}'
+    --body '{"intent": "drive"}'
 # stop everything new in the project
 amoeba submit intent --project amoeba --by operator --body '{"intent": "pause"}'
 ```
@@ -186,10 +182,9 @@ the reason `"<code>: <detail>"`; branch on the code, never on the detail (at mos
 
 | Code | When |
 | --- | --- |
-| `malformed_body` | The body is not one of the forms above: unknown key, unknown `intent` or `until`, `until` with anything but `drive`, or not an object. |
+| `malformed_body` | The body is not one of the forms above: unknown key (`until` included), unknown `intent`, or not an object. |
 | `target_not_initiative_or_slice` | The `node_id` names a step node or any other kind of node. |
 | `target_unlinked` | The node is orphaned or otherwise not linked to Context Forge. |
-| `until_not_applicable` | `until` on a slice names an initiative-level step (`architecture`, `slice_plan`, `integration`). |
 
 **`no_op`** means the target's settings would not change: the same intent twice,
 `resume` with no pause, `clear` with no settings. Nothing is written, and the

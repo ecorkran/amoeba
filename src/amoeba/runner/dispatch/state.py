@@ -10,11 +10,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import StrEnum
-from typing import Final
 
 from amoeba.runner.observed import RunEnded
 from amoeba.runner.resolutions.vocabulary import ResolutionDecision
-from amoeba.runner.supervise import OutcomeClass, classify, recorded_document
+from amoeba.runner.supervise import (
+    OutcomeClass,
+    classify,
+    recorded_document,
+    run_to_resume,
+)
 from amoeba.store import (
     PARAM_RESOLUTION,
     BlockedState,
@@ -37,25 +41,14 @@ class DispatchState(StrEnum):
     POINTED = "pointed"
     #: Anything else: write the pointer.
     NEEDS_POINTER = "needs_pointer"
-    #: An applied ``retry`` or ``accept`` nobody has carried out: resume the paused run.
+    #: An applied ``resume`` nobody has carried out, with a run to resume.
     RESUME = "resume"
     #: The latest run ended in a transient way (D4): resume it, within the bound.
     AUTO_RESUME = "auto_resume"
-    #: An applied ``handled`` nobody has carried out: observe the run the PM moved.
-    REOBSERVE = "reobserve"
 
 
 #: What a pointer write may be resolved as, for the step to count as pointed.
 _POINTED_OUTCOMES = frozenset({JournalOutcome.COMPLETED, JournalOutcome.ADOPTED})
-
-
-#: What an applied, not yet carried-out decision makes of the step (slice 127, D5).
-_DECISION_STATES: Final = {
-    ResolutionDecision.RETRY.value: DispatchState.RESUME,
-    ResolutionDecision.ACCEPT.value: DispatchState.RESUME,
-    ResolutionDecision.HANDLED.value: DispatchState.REOBSERVE,
-    ResolutionDecision.RERUN.value: DispatchState.NEEDS_POINTER,
-}
 
 
 def dispatch_state(
@@ -79,7 +72,7 @@ def dispatch_state(
     """
     if any(not entry.is_resolved for entry in entries):
         return DispatchState.IN_FLIGHT
-    pending = _pending_decision(entries, resolution)
+    pending = _pending_resume(entries, resolution)
     if pending is not None:
         return pending
     latest = entries[-1] if entries else None
@@ -94,20 +87,25 @@ def dispatch_state(
     return DispatchState.NEEDS_POINTER
 
 
-def _pending_decision(
+def _pending_resume(
     entries: Sequence[JournalEntry], resolution: BlockedState | None
 ) -> DispatchState | None:
-    """The state an applied decision nobody has carried out sets, or ``None``."""
+    """``RESUME`` for an applied ``resume`` nobody has carried out, or ``None``.
+
+    A ``resume`` with no run to resume sets no state: the block is resolved and the
+    step is launched afresh by its ordinary state (D6).
+    """
     if resolution is None or resolution.resolution is None:
         return None
     if resolution.runner_outcome is not ResolutionOutcome.APPLIED:
         return None
-    decision = resolution.resolution.decision
-    if decision is None or any(
+    if resolution.resolution.decision != ResolutionDecision.RESUME.value:
+        return None
+    if any(
         entry.parameters.get(PARAM_RESOLUTION) == resolution.id for entry in entries
     ):
         return None
-    return _DECISION_STATES.get(decision)
+    return DispatchState.RESUME if run_to_resume(entries) is not None else None
 
 
 def _ended_transiently(entry: JournalEntry) -> bool:

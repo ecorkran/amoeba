@@ -124,6 +124,8 @@ def test_the_slice_end_to_end_through_the_real_cli(
         blocked_state_id,
         "--detail",
         "proceed",
+        "--decision",
+        "resume",
     )
     assert _outcome(supervisor_dir, resolution) is None
     process = start_running(supervisor_dir, runs_dir)

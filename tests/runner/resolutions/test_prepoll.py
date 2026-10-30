@@ -14,22 +14,18 @@ from amoeba.process import (
     RunOutcomeDocument,
     RunPoll,
 )
-from amoeba.runner.decide import ObserveRun, ResumeRun
+from amoeba.runner.decide import ResumeRun
 from amoeba.runner.resolutions.confirm import ResumedFrom
 from amoeba.runner.resolutions.prepoll import Act, PrepollDecision, prepoll_decision
 from amoeba.runner.resolutions.vocabulary import (
     RESUME_SKIPPED_RUN_NOT_AT_PAUSE,
-    Continuation,
     ResumeCause,
 )
 
 PAUSED_AT = datetime(2026, 10, 25, 9, 0, tzinfo=UTC)
 PAUSED = ResumedFrom(RunOutcome.PAUSED, paused_at=PAUSED_AT)
 CHECKOUT = Path("/work/a")
-RESUME = ResumeRun(
-    "n", "r", Continuation.RETRY, "e", "b", CHECKOUT, cause=ResumeCause.RESOLUTION
-)
-OBSERVE = ObserveRun("n", "r", "e", "b", CHECKOUT)
+RESUME = ResumeRun("n", "r", "e", "b", CHECKOUT, cause=ResumeCause.RESOLUTION)
 
 
 def _poll(outcome: RunOutcome, paused_at: datetime | None = None) -> RunPoll:
@@ -43,9 +39,8 @@ def test_a_failed_poll_waits_and_says_why() -> None:
     assert decision == PrepollDecision(Act.WAIT, detail="sq timed out")
 
 
-@pytest.mark.parametrize("action", [RESUME, OBSERVE])
-def test_no_run_state_is_run_missing(action: ResumeRun | ObserveRun) -> None:
-    decision = prepoll_decision(action, _poll(RunOutcome.NOT_FOUND), PAUSED)
+def test_no_run_state_is_run_missing() -> None:
+    decision = prepoll_decision(RESUME, _poll(RunOutcome.NOT_FOUND), PAUSED)
 
     assert decision.act is Act.RUN_MISSING
 
@@ -79,17 +74,6 @@ def test_a_resume_with_no_recorded_pause_cannot_be_matched() -> None:
     decision = prepoll_decision(RESUME, _poll(RunOutcome.PAUSED, PAUSED_AT), None)
 
     assert decision.act is Act.OBSERVE and decision.resume_skipped is not None
-
-
-@pytest.mark.parametrize(
-    "outcome", [RunOutcome.PAUSED, RunOutcome.COMPLETED, RunOutcome.TIMED_OUT]
-)
-def test_observe_with_a_run_state_observes_without_a_skip_reason(
-    outcome: RunOutcome,
-) -> None:
-    decision = prepoll_decision(OBSERVE, _poll(outcome, PAUSED_AT), PAUSED)
-
-    assert decision == PrepollDecision(Act.OBSERVE)
 
 
 # -- slice 132, D5: an automatic resume from a failed or orphaned run -------------

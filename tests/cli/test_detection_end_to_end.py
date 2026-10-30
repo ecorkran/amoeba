@@ -95,6 +95,7 @@ def test_a_follow_reply_and_detect(e2e: DetectionE2E, reviews_dir: Path) -> None
     result = e2e.run(
         "submit", "resolution", "--project", PROJECT, "--by", "pm",
         "--blocked-state-id", str(escalation["blocked_state_id"]), "--detail", "go",
+        "--decision", "resume",
     )  # fmt: skip
     assert result.returncode == 0, result.stderr
     follower.wait_for(

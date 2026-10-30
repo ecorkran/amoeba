@@ -15,7 +15,7 @@ from amoeba.process import (
     RunOutcomeDocument,
     RunPoll,
 )
-from amoeba.runner.decide import ObserveRun, ResumeRun
+from amoeba.runner.decide import ResumeRun
 from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.faults import FaultKind, TickFaults
 from amoeba.runner.finish import RESULT_RESUME_FAILURE
@@ -25,7 +25,6 @@ from amoeba.runner.resolutions.vocabulary import (
     PARAM_RESUME_CAUSE,
     PARAM_RESUME_SKIPPED,
     RESUME_SKIPPED_RUN_NOT_AT_PAUSE,
-    Continuation,
     ResumeCause,
 )
 from amoeba.store import (
@@ -106,20 +105,14 @@ class Rig:
         )
         self.faults = TickFaults()
 
-    def resume(self, decision: Continuation = Continuation.RETRY) -> ResumeRun:
+    def resume(self) -> ResumeRun:
         return ResumeRun(
             self.node.id,
             self.run_id,
-            decision,
             self.entry.id,
             "b-1",
             Path(CHECKOUT),
             cause=ResumeCause.RESOLUTION,
-        )
-
-    def observe(self) -> ObserveRun:
-        return ObserveRun(
-            self.node.id, self.run_id, self.entry.id, "b-1", Path(CHECKOUT)
         )
 
     def answer(self, *polls: RunPoll) -> None:
@@ -167,7 +160,7 @@ def test_missing_run_launches_nothing(rig: Rig) -> None:
 
     assert result is Acted.WROTE
     continuation = rig.entries()[-1]
-    assert continuation.parameters[PARAM_CONTINUATION] == "retry"
+    assert continuation.parameters[PARAM_CONTINUATION] == "resume"
     assert continuation.outcome is JournalOutcome.FAILED
     assert continuation.result is not None
     assert continuation.result[RESULT_RESUME_FAILURE] == "run_missing"
@@ -175,7 +168,7 @@ def test_missing_run_launches_nothing(rig: Rig) -> None:
     assert node is not None and node.status is NodeStatus.BLOCKED_ON_HUMAN
 
 
-def test_run_moved_by_hand_is_observed(rig: Rig) -> None:
+def test_a_run_that_moved_on_is_observed_not_resumed(rig: Rig) -> None:
     rig.answer(rig.paused(offset=30))
 
     result = rig.acts.act(rig.resume(), generous_budget(), rig.faults)
@@ -183,32 +176,22 @@ def test_run_moved_by_hand_is_observed(rig: Rig) -> None:
     assert result is Acted.WROTE
     observation = rig.entries()[-1]
     assert not observation.is_resolved
-    assert observation.parameters[PARAM_CONTINUATION] == "observe"
+    assert PARAM_CONTINUATION not in observation.parameters, "not a resume"
     assert observation.parameters[PARAM_RESUME_SKIPPED] == (
         RESUME_SKIPPED_RUN_NOT_AT_PAUSE
     )
+    assert rig.popen.argvs == []
 
 
-def test_handled_journals_an_observation_and_launches_nothing(rig: Rig) -> None:
-    rig.answer(rig.paused())
-
-    result = rig.acts.act(rig.observe(), generous_budget(), rig.faults)
-
-    assert result is Acted.WROTE
-    observation = rig.entries()[-1]
-    assert observation.kind is CommandKind.SQ_RUN and not observation.is_resolved
-    assert PARAM_RESUME_SKIPPED not in observation.parameters
-    assert observation.parameters[PARAM_CONTINUATION] == "observe"
-
-
-def test_the_continuation_carries_the_continued_run_and_names_both_ends(
+def test_the_observation_carries_the_continued_run_and_names_both_ends(
     rig: Rig,
 ) -> None:
-    rig.answer(rig.paused())
+    rig.answer(rig.paused(offset=30))
 
-    rig.acts.act(rig.observe(), generous_budget(), rig.faults)
+    rig.acts.act(rig.resume(), generous_budget(), rig.faults)
 
     observation = rig.entries()[-1]
+    assert observation.kind is CommandKind.SQ_RUN
     assert observation.parameters[PARAM_RUN_ID] == rig.run_id
     assert observation.parameters[PARAM_CHECKOUT] == CHECKOUT
     assert observation.parameters[PARAM_CONTINUES] == rig.entry.id
@@ -231,7 +214,6 @@ def test_a_continued_entry_that_is_gone_is_a_defect(rig: Rig) -> None:
     action = ResumeRun(
         rig.node.id,
         rig.run_id,
-        Continuation.RETRY,
         "no-such",
         "b-1",
         Path(CHECKOUT),
@@ -262,7 +244,6 @@ def _launch(
     action = ResumeRun(
         rig.node.id,
         rig.run_id,
-        Continuation(decision),
         rig.entry.id,
         resolution,
         Path(CHECKOUT),
@@ -273,56 +254,45 @@ def _launch(
 
 
 def test_a_resume_records_the_evidence_it_was_checked_on(rig: Rig) -> None:
-    _launch(rig, "retry", None, {PARAM_DISPATCH_CHECK: {"branch": "main"}})
+    _launch(rig, "resume", None, {PARAM_DISPATCH_CHECK: {"branch": "main"}})
 
     continuation = rig.entries()[-1]
-    assert continuation.parameters[PARAM_CONTINUATION] == "retry"
+    assert continuation.parameters[PARAM_CONTINUATION] == "resume"
     assert continuation.parameters[PARAM_DISPATCH_CHECK] == {"branch": "main"}
 
 
-def test_a_retry_resumes_the_run_with_its_decision_and_instructions(rig: Rig) -> None:
-    result = _launch(rig, "retry", INSTRUCTIONS)
+def test_a_resume_passes_the_instructions_and_no_decision(rig: Rig) -> None:
+    result = _launch(rig, "resume", INSTRUCTIONS)
 
     assert result is Acted.WROTE
     [argv] = rig.popen.argvs
-    assert argv[1:] == [
-        "run",
-        "--resume",
-        rig.run_id,
-        "--decision",
-        "retry",
-        "--instructions",
-        INSTRUCTIONS,
-    ]
+    assert argv[1:] == ["run", "--resume", rig.run_id, "--instructions", INSTRUCTIONS]
     assert "--run-id" not in argv and "-p" not in argv and "P4" not in argv
     assert rig.popen.kwargs[0]["cwd"] == CHECKOUT
 
 
-def test_an_accept_passes_its_decision_and_no_instructions_when_there_are_none(
-    rig: Rig,
-) -> None:
-    _launch(rig, "accept")
+def test_a_resume_without_instructions_passes_none(rig: Rig) -> None:
+    _launch(rig, "resume")
 
     [argv] = rig.popen.argvs
-    assert argv[argv.index("--decision") + 1] == "accept"
-    assert "--instructions" not in argv
+    assert "--instructions" not in argv and "--decision" not in argv
 
 
 def test_the_entry_is_journaled_before_the_spawn_and_the_child_is_tracked(
     rig: Rig,
 ) -> None:
-    _launch(rig, "retry")
+    _launch(rig, "resume")
 
     assert rig.popen.open_entries == [1]
     entry = rig.entries()[-1]
     assert not entry.is_resolved
-    assert entry.parameters[PARAM_CONTINUATION] == "retry"
+    assert entry.parameters[PARAM_CONTINUATION] == "resume"
     assert rig.tracker.get(entry.id) is not None
     assert log_paths(rig.supervisor_dir, entry.id).stderr.exists()
 
 
 def test_the_instructions_are_not_copied_into_the_journal(rig: Rig) -> None:
-    _launch(rig, "retry", INSTRUCTIONS)
+    _launch(rig, "resume", INSTRUCTIONS)
 
     entry = rig.entries()[-1]
     assert INSTRUCTIONS not in str(entry.parameters)
@@ -331,7 +301,7 @@ def test_the_instructions_are_not_copied_into_the_journal(rig: Rig) -> None:
 def test_a_spawn_error_blocks_with_spawn_error_and_launches_nothing(rig: Rig) -> None:
     rig.popen.error = FileNotFoundError("sq")
 
-    result = _launch(rig, "retry")
+    result = _launch(rig, "resume")
 
     assert result is Acted.WROTE
     entry = rig.entries()[-1]
@@ -343,16 +313,8 @@ def test_a_spawn_error_blocks_with_spawn_error_and_launches_nothing(rig: Rig) ->
     assert node is not None and node.status is NodeStatus.BLOCKED_ON_HUMAN
 
 
-def test_an_observe_action_never_launches(rig: Rig) -> None:
-    rig.answer(rig.paused())
-
-    rig.acts.act(rig.observe(), generous_budget(), rig.faults)
-
-    assert rig.popen.argvs == []
-
-
 def test_a_resolution_resume_journals_its_cause(rig: Rig) -> None:
-    _launch(rig, "retry")
+    _launch(rig, "resume")
 
     entry = rig.entries()[-1]
     assert entry.parameters[PARAM_RESUME_CAUSE] == ResumeCause.RESOLUTION.value
@@ -363,7 +325,6 @@ def _transient(rig: Rig, instructions: str | None) -> Acted:
     action = ResumeRun(
         rig.node.id,
         rig.run_id,
-        Continuation.RETRY,
         rig.entry.id,
         None,
         Path(CHECKOUT),

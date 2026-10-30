@@ -1,4 +1,4 @@
-"""The resolution vocabulary, defined once (slice 127, D2 and D3).
+"""The resolution vocabulary, defined once (slice 127, D2 and D3; slice 132, D6).
 
 Every value a PM's resolution can name, every situation it is judged in, every
 reason it can be rejected for, and the payload keys a rejection or a stop writes.
@@ -13,23 +13,20 @@ from typing import Final
 
 
 class ResolutionDecision(StrEnum):
-    """What a PM can decide when resolving a blocked pipeline step."""
+    """What a PM can decide when resolving a blocked slice (slice 132, D6)."""
 
-    RETRY = "retry"
-    ACCEPT = "accept"
-    HANDLED = "handled"
-    RERUN = "rerun"
+    RESUME = "resume"
     STOP = "stop"
 
 
 class Situation(StrEnum):
-    """Where a blocked step stands, which sets the decisions it can take."""
+    """Where a blocked slice stands, which is all a resolution is judged on."""
 
-    NO_DECISION = "no_decision"
-    PAUSED_RUN = "paused_run"
-    COMPLETED_OUTCOME = "completed_outcome"
-    ENDED_RUN = "ended_run"
-    BEFORE_RUN = "before_run"
+    #: The latest run is one Squadron still has: paused, failed or orphaned.
+    RUN_TO_RESUME = "run_to_resume"
+    #: No run to resume: a launch failed, the run vanished, or the block came
+    #: before any run.
+    NO_RUN = "no_run"
     UNRESOLVABLE = "unresolvable"
 
 
@@ -38,37 +35,23 @@ class ResolutionRejection(StrEnum):
 
     UNKNOWN_DECISION = "unknown_decision"
     DECISION_REQUIRED = "decision_required"
-    DECISION_NOT_APPLICABLE = "decision_not_applicable"
-    NOT_AT_LOOP = "not_at_loop"
-    USAGE_LIMIT_PAUSE = "usage_limit_pause"
-    CHECKPOINT_UNKNOWN = "checkpoint_unknown"
-    INTERACTIVE_CHECKPOINT = "interactive_checkpoint"
     INSTRUCTIONS_NOT_APPLICABLE = "instructions_not_applicable"
     UNRESOLVABLE = "unresolvable"
 
 
 class Continuation(StrEnum):
-    """What a continuation journal entry does with an earlier run (D4)."""
+    """What marks a journal entry as a resume of an earlier run (D5)."""
 
-    RETRY = "retry"
-    ACCEPT = "accept"
-    OBSERVE = "observe"
+    RESUME = "resume"
 
 
 _DECISIONS = ResolutionDecision
 
-#: The decisions each situation allows (D2). A situation absent of decisions
-#: rejects every one that names one.
+#: The decisions each situation allows. A situation absent of decisions rejects
+#: every resolution that names one.
 ALLOWED: Final[Mapping[Situation, frozenset[ResolutionDecision]]] = {
-    Situation.NO_DECISION: frozenset(),
-    Situation.PAUSED_RUN: frozenset(
-        {_DECISIONS.RETRY, _DECISIONS.ACCEPT, _DECISIONS.HANDLED, _DECISIONS.STOP}
-    ),
-    Situation.COMPLETED_OUTCOME: frozenset(
-        {_DECISIONS.ACCEPT, _DECISIONS.RERUN, _DECISIONS.STOP}
-    ),
-    Situation.ENDED_RUN: frozenset({_DECISIONS.RERUN, _DECISIONS.STOP}),
-    Situation.BEFORE_RUN: frozenset({_DECISIONS.RERUN, _DECISIONS.STOP}),
+    Situation.RUN_TO_RESUME: frozenset({_DECISIONS.RESUME, _DECISIONS.STOP}),
+    Situation.NO_RUN: frozenset({_DECISIONS.RESUME, _DECISIONS.STOP}),
     Situation.UNRESOLVABLE: frozenset(),
 }
 
@@ -96,7 +79,7 @@ class ResumeCause(StrEnum):
     RESOLUTION = "resolution"
 
 
-#: A resume skipped because its run was no longer at the pause the PM resolved
+#: A resume skipped because its run was no longer in the state it was resumed from
 #: (D4). Journaled as a parameter of the observation entry.
 PARAM_RESUME_SKIPPED: Final = "resume_skipped"
 RESUME_SKIPPED_RUN_NOT_AT_PAUSE: Final = "run_not_at_pause"

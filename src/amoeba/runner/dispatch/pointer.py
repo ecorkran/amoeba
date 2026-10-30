@@ -39,7 +39,6 @@ from amoeba.store import (
     PARAM_EXPECTED,
     PARAM_EXPECTED_SLICE_INDEX,
     PARAM_PROJECT,
-    PARAM_RESOLUTION,
     CommandKind,
     JournalEntry,
     Store,
@@ -137,10 +136,6 @@ def issue_pointer_write(
         PARAM_EXPECTED_SLICE_INDEX: action.slice_index,
         PARAM_EXPECTED_WORKTREE_ID: action.checkout.worktree_id,
     }
-    if action.resolution is not None:
-        # Names the rerun this write carries out, so dispatch state stops
-        # treating the resolution as pending (slice 127, D5).
-        parameters[PARAM_RESOLUTION] = action.resolution
     entry = store.journal_issue(
         action.node_id, kind=CommandKind.CF_WRITE, parameters=parameters
     )

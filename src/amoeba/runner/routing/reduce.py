@@ -21,7 +21,6 @@ from amoeba.process import (
 from amoeba.runner.gates.cf_status import EXIT_GATE
 from amoeba.runner.gates.outcome_record import gate_state_at_exit
 from amoeba.runner.lifecycle.steps import LifecycleStep
-from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.runner.routing.inputs import (
     CLEAR,
     FALSE,
@@ -51,6 +50,10 @@ from amoeba.store import (
     ReviewVerdict,
     VerdictStanding,
 )
+
+#: The continuation 127 wrote for an accepted loop. Routing is unwritten since 132 and
+#: this module goes with it (D9); the vocabulary no longer names it.
+ACCEPT_CONTINUATION = "accept"
 
 
 @dataclass(frozen=True)
@@ -162,7 +165,7 @@ def _check_standing(evidence: OutcomeEvidence) -> str:
 
 def _review_accepted(evidence: OutcomeEvidence) -> str:
     """``true`` when an accepted loop ended on the review the PM accepted (D8)."""
-    if evidence.continuation != Continuation.ACCEPT.value:
+    if evidence.continuation != ACCEPT_CONTINUATION:
         return NONE
     if evidence.continued_verdict_ids is None:
         return UNKNOWN

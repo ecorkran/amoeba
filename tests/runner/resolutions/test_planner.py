@@ -10,7 +10,6 @@ from amoeba.runner.decide import (
     Action,
     BlockDispatch,
     LaunchRun,
-    ObserveRun,
     Planner,
     ResumeRun,
     decide,
@@ -21,7 +20,7 @@ from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block
 from amoeba.runner.resolutions.planner import ContinuationPlanner
-from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
+from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import (
     PARAM_CHECKOUT,
     BlockedKind,
@@ -64,21 +63,14 @@ def _facts(
     return facts(state, checkout, resolution=_resolution(decision), continues=continued)
 
 
-@pytest.mark.parametrize(
-    ("decision", "expected"),
-    [("retry", Continuation.RETRY), ("accept", Continuation.ACCEPT)],
-)
-def test_retry_and_accept_resume_the_continued_run(
-    decision: str, expected: Continuation
-) -> None:
+def test_resume_resumes_the_continued_run() -> None:
     continued = _continued()
-    view = view_of({"a": _facts(DispatchState.RESUME, decision, continued)})
+    view = view_of({"a": _facts(DispatchState.RESUME, "resume", continued)})
 
     assert PLANNER.plan(view) == [
         ResumeRun(
             "a",
             "run-a",
-            expected,
             continued.id,
             "b-1",
             FIRST,
@@ -88,16 +80,9 @@ def test_retry_and_accept_resume_the_continued_run(
     ]
 
 
-def test_handled_observes_the_continued_run() -> None:
-    continued = _continued()
-    view = view_of({"a": _facts(DispatchState.REOBSERVE, "handled", continued)})
-
-    assert PLANNER.plan(view) == [ObserveRun("a", "run-a", continued.id, "b-1", FIRST)]
-
-
 def test_the_runs_own_checkout_is_used() -> None:
     continued = _continued(checkout=SECOND)
-    view = view_of({"a": _facts(DispatchState.RESUME, "retry", continued, SECOND)})
+    view = view_of({"a": _facts(DispatchState.RESUME, "resume", continued, SECOND)})
 
     [action] = PLANNER.plan(view)
 
@@ -109,8 +94,8 @@ def test_one_action_per_eligible_step() -> None:
     a, b = _continued("a", FIRST), _continued("b", SECOND)
     view = view_of(
         {
-            "a": _facts(DispatchState.RESUME, "retry", a),
-            "b": _facts(DispatchState.REOBSERVE, "handled", b, SECOND),
+            "a": _facts(DispatchState.RESUME, "resume", a),
+            "b": _facts(DispatchState.RESUME, "resume", b, SECOND),
             "c": facts(DispatchState.NEEDS_POINTER, FIRST),
         },
         holders={FIRST: frozenset({"a"}), SECOND: frozenset({"b"})},
@@ -118,12 +103,12 @@ def test_one_action_per_eligible_step() -> None:
 
     actions = PLANNER.plan(view)
 
-    assert [type(action) for action in actions] == [ResumeRun, ObserveRun]
+    assert [type(action) for action in actions] == [ResumeRun, ResumeRun]
 
 
 def test_a_checkout_held_only_by_the_step_itself_does_not_wait() -> None:
     view = view_of(
-        {"a": _facts(DispatchState.RESUME, "retry", _continued())},
+        {"a": _facts(DispatchState.RESUME, "resume", _continued())},
         holders={FIRST: frozenset({"a"})},
     )
 
@@ -132,7 +117,7 @@ def test_a_checkout_held_only_by_the_step_itself_does_not_wait() -> None:
 
 def test_a_checkout_held_by_another_node_waits() -> None:
     view = view_of(
-        {"a": _facts(DispatchState.RESUME, "retry", _continued())},
+        {"a": _facts(DispatchState.RESUME, "resume", _continued())},
         holders={FIRST: frozenset({"a", "other"})},
     )
 
@@ -141,7 +126,7 @@ def test_a_checkout_held_by_another_node_waits() -> None:
 
 def test_a_step_that_is_not_current_gets_nothing() -> None:
     view = view_of(
-        {"a": _facts(DispatchState.RESUME, "retry", _continued())}, current=[]
+        {"a": _facts(DispatchState.RESUME, "resume", _continued())}, current=[]
     )
 
     assert PLANNER.plan(view) == []
@@ -159,7 +144,7 @@ def test_steps_in_other_states_get_nothing() -> None:
 
 
 def test_a_resume_without_its_continued_entry_is_a_defect() -> None:
-    view = view_of({"a": facts(DispatchState.RESUME, resolution=_resolution("retry"))})
+    view = view_of({"a": facts(DispatchState.RESUME, resolution=_resolution("resume"))})
 
     with pytest.raises(ValueError, match="without its entry or decision"):
         PLANNER.plan(view)
@@ -167,7 +152,7 @@ def test_a_resume_without_its_continued_entry_is_a_defect() -> None:
 
 def test_the_two_planners_never_act_on_the_same_step() -> None:
     states = {
-        "a": _facts(DispatchState.RESUME, "retry", _continued("a")),
+        "a": _facts(DispatchState.RESUME, "resume", _continued("a")),
         "b": facts(DispatchState.POINTED, SECOND),
     }
     view = view_of(states)
@@ -180,7 +165,7 @@ def test_the_two_planners_never_act_on_the_same_step() -> None:
 
 
 def test_decide_accepts_the_new_actions_for_current_steps() -> None:
-    view = view_of({"a": _facts(DispatchState.RESUME, "retry", _continued())})
+    view = view_of({"a": _facts(DispatchState.RESUME, "resume", _continued())})
 
     actions: list[Action] = decide(view, [PLANNER, DispatchPlanner()])
 
@@ -190,7 +175,9 @@ def test_decide_accepts_the_new_actions_for_current_steps() -> None:
 def test_decide_refuses_a_continuation_for_a_step_that_is_not_current() -> None:
     class Stray:
         def plan(self, view: object) -> list[Action]:
-            return [ObserveRun("a", "run-a", "e", "b", FIRST)]
+            return [
+                ResumeRun("a", "run-a", "e", "b", FIRST, cause=ResumeCause.RESOLUTION)
+            ]
 
     view = view_of({"a": facts(DispatchState.RESUME)}, current=[])
 
@@ -199,7 +186,7 @@ def test_decide_refuses_a_continuation_for_a_step_that_is_not_current() -> None:
 
 
 def test_launch_runs_are_not_continuations() -> None:
-    assert not issubclass(LaunchRun, (ResumeRun, ObserveRun))
+    assert not issubclass(LaunchRun, ResumeRun)
 
 
 # -- slice 128, D5: a resume goes ahead only on a passed check -------------------
@@ -207,7 +194,7 @@ def test_launch_runs_are_not_continuations() -> None:
 
 def test_a_resume_with_no_result_waits() -> None:
     continued = _continued()
-    view = view_of({"a": _facts(DispatchState.RESUME, "retry", continued)}, checks={})
+    view = view_of({"a": _facts(DispatchState.RESUME, "resume", continued)}, checks={})
 
     assert ContinuationPlanner().plan(view) == []
 
@@ -216,18 +203,7 @@ def test_a_blocked_resume_gives_block_dispatch() -> None:
     continued = _continued()
     block = Block(FaultKind.CHECKOUT_BRANCH, "wrong branch", {"branch": "x"})
     view = view_of(
-        {"a": _facts(DispatchState.RESUME, "retry", continued)}, checks={"a": block}
+        {"a": _facts(DispatchState.RESUME, "resume", continued)}, checks={"a": block}
     )
 
     assert ContinuationPlanner().plan(view) == [BlockDispatch("a", block)]
-
-
-def test_an_observation_needs_no_check() -> None:
-    continued = _continued()
-    view = view_of(
-        {"a": _facts(DispatchState.REOBSERVE, "handled", continued)}, checks={}
-    )
-
-    [action] = ContinuationPlanner().plan(view)
-
-    assert isinstance(action, ObserveRun)

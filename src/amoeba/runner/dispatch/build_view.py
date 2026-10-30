@@ -67,14 +67,11 @@ _NEEDS_CHECKOUT: Final = frozenset(
         DispatchState.REISSUE,
         DispatchState.RESUME,
         DispatchState.AUTO_RESUME,
-        DispatchState.REOBSERVE,
     }
 )
 
 #: The states that continue the step's latest run rather than start one.
-_CONTINUING: Final = frozenset(
-    {DispatchState.RESUME, DispatchState.AUTO_RESUME, DispatchState.REOBSERVE}
-)
+_CONTINUING: Final = frozenset({DispatchState.RESUME, DispatchState.AUTO_RESUME})
 
 
 def build_dispatch_view(

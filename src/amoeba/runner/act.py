@@ -20,7 +20,6 @@ from amoeba.runner.decide import (
     BlockDispatch,
     BlockHumanStep,
     LaunchRun,
-    ObserveRun,
     ResumeRun,
     WriteSlicePointer,
 )
@@ -144,7 +143,7 @@ class ActStage:
                     if not budget.allows_call():
                         return ActOutcome(TickResult.CUT_OFF, wrote)
                     self._pointers.write(self._store, action, budget)
-                case ResumeRun() | ObserveRun():
+                case ResumeRun():
                     acted = self._continuations.act(action, budget, faults)
                     if acted is Acted.CUT_OFF:
                         return ActOutcome(TickResult.CUT_OFF, wrote)

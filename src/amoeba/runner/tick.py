@@ -31,7 +31,6 @@ from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.lifecycle.plan_stage import PlanStage
-from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.observe_resume import resumed_from_states
 from amoeba.runner.observed import ObservedRun
@@ -203,9 +202,8 @@ class ProjectTick:
         whose resolution has not been acknowledged (slice 127, D1). The context is
         cleared afterwards: an exception past this stage is not about that node.
         """
-        tree = LifecycleTree(self._store.nodes_for_project(self._project_id))
         answered = apply_pending_resolutions(
-            self._store, self._project_id, tree, self._context
+            self._store, self._project_id, self._context
         )
         self._context.clear()
         self.wrote = answered or self.wrote

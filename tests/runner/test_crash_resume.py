@@ -77,7 +77,7 @@ def test_kill_after_acknowledgment_resumes_once_after_restart(
 
     [continuation] = _continuations(harness)
     assert continuation.outcome is JournalOutcome.COMPLETED
-    assert continuation.parameters[PARAM_CONTINUATION] == "retry"
+    assert continuation.parameters[PARAM_CONTINUATION] == "resume"
     assert _resume_calls(harness) == 1, "issued once, not again"
 
 

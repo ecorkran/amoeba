@@ -241,27 +241,29 @@ Note (20261029): the outcome documents are built inline in tests/runner/test_tic
 ### Task 8.1: Cut the resolution vocabulary and judgement to `resume` and `stop`
 **Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 2
 
-- [ ] `resolutions/vocabulary.py`: `ResolutionDecision` `{RESUME, STOP}`; `Situation` `{RUN_TO_RESUME, NO_RUN, UNRESOLVABLE}`; `ResolutionRejection` `{UNKNOWN_DECISION, DECISION_REQUIRED, INSTRUCTIONS_NOT_APPLICABLE, UNRESOLVABLE}`; `Continuation` `{RESUME}`; `ALLOWED` rewritten
-- [ ] `classify.py` and `judge.py` per D6 and the vocabulary
-- [ ] Tests for `vocabulary`, `classify` and `judge` in `tests/runner/resolutions/`: `retry`, `accept`, `handled` and `rerun` are each rejected `unknown_decision`; `resume` with instructions and no run is rejected `instructions_not_applicable`
-- [ ] **Success:** those tests pass. The planner, act, argv and prepoll tests are red until Task 8.1b, so this task makes no commit; Task 8.1b commits both
+- [x] `resolutions/vocabulary.py`: `ResolutionDecision` `{RESUME, STOP}`; `Situation` `{RUN_TO_RESUME, NO_RUN, UNRESOLVABLE}`; `ResolutionRejection` `{UNKNOWN_DECISION, DECISION_REQUIRED, INSTRUCTIONS_NOT_APPLICABLE, UNRESOLVABLE}`; `Continuation` `{RESUME}`; `ALLOWED` rewritten
+- [x] `classify.py` and `judge.py` per D6 and the vocabulary
+- [x] Tests for `vocabulary`, `classify` and `judge` in `tests/runner/resolutions/`: `retry`, `accept`, `handled` and `rerun` are each rejected `unknown_decision`; `resume` with instructions and no run is rejected `instructions_not_applicable`
+- [x] **Success:** those tests pass. The planner, act, argv and prepoll tests are red until Task 8.1b, so this task makes no commit; Task 8.1b commits both
 
 ### Task 8.1b: Cut the resolution planner, act, argv and prepoll to `resume` and `stop`
 **Owner**: Junior AI | **Dependencies**: 8.1 | **Effort**: 3
 
-- [ ] Remove `ResumeRun.decision` (Task 7.1 kept it) and the `ObserveRun` action
-- [ ] `planner.py`, `act.py`, `argv.py`, `prepoll.py` per D6: `resume` with a run Squadron still has issues `ResumeRun(cause=resolution, instructions)`; `resume` with no run resolves the block and the node launches afresh when next current; instructions there are rejected `instructions_not_applicable`; `stop` is 127's D3. The pre-dispatch check runs before either. The missing-run and exit-2 rules of 127 stand. `--decision` is never passed
-- [ ] `docs/inbox-contract.md`: the resolution vocabulary, and one line on the intent `resume` versus resolution `resume` name clash
-- [ ] Rewrite the remaining resolution tests (`tests/runner/resolutions/`) to the new vocabulary: `resume` with instructions passes them verbatim and resets the D5 count; `resume` with no run relaunches; `stop` keeps the block with reason `stopped`. Delete tests whose only subject was a removed decision
-- [ ] **Success:** full suite green. Commit Tasks 8.1 and 8.1b together as `feat: reduce resolutions to resume and stop`
+- [x] Remove `ResumeRun.decision` (Task 7.1 kept it) and the `ObserveRun` action
+- [x] `planner.py`, `act.py`, `argv.py`, `prepoll.py` per D6: `resume` with a run Squadron still has issues `ResumeRun(cause=resolution, instructions)`; `resume` with no run resolves the block and the node launches afresh when next current; instructions there are rejected `instructions_not_applicable`; `stop` is 127's D3. The pre-dispatch check runs before either. The missing-run and exit-2 rules of 127 stand. `--decision` is never passed
+- [x] `docs/inbox-contract.md`: the resolution vocabulary, and one line on the intent `resume` versus resolution `resume` name clash
+- [x] Rewrite the remaining resolution tests (`tests/runner/resolutions/`) to the new vocabulary: `resume` with instructions passes them verbatim and resets the D5 count; `resume` with no run relaunches; `stop` keeps the block with reason `stopped`. Delete tests whose only subject was a removed decision
+- [x] **Success:** full suite green. Commit Tasks 8.1 and 8.1b together as `feat: reduce resolutions to resume and stop`
 
 ### Task 8.2: Remove `until` from intents
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `intent/vocabulary.py`: `IntentBody` drops `until`; a body carrying it is rejected `malformed_body`; `UNTIL_NOT_APPLICABLE` goes. `intent/apply.py` writes `drive_until_step` as `NULL`; `DesiredStateIndex` ignores it (D7)
-- [ ] `docs/inbox-contract.md`: the intent body
-- [ ] Tests in `tests/runner/intent/`: an intent with `until` is rejected `malformed_body`; `drive`, `exclude`, `pause`, `resume`, `clear` unchanged
-- [ ] **Success:** tests pass. Commit `feat: drop until from the intent body`
+- [x] `intent/vocabulary.py`: `IntentBody` drops `until`; a body carrying it is rejected `malformed_body`; `UNTIL_NOT_APPLICABLE` goes. `intent/apply.py` writes `drive_until_step` as `NULL`; `DesiredStateIndex` ignores it (D7)
+- [x] `docs/inbox-contract.md`: the intent body
+- [x] Tests in `tests/runner/intent/`: an intent with `until` is rejected `malformed_body`; `drive`, `exclude`, `pause`, `resume`, `clear` unchanged
+- [x] **Success:** tests pass. Commit `feat: drop until from the intent body`
+
+Note (20261029): 8.1/8.1b are one commit (`feat: reduce resolutions to resume and stop`) and 8.2 another (`feat: drop until from the intent body`), the 8.2 commit made first by path. Beyond the task text: (1) `ObserveRun` and `DispatchState.REOBSERVE` are gone; a resume skipped because the run moved on journals an entry with no `continuation` key, which the observer polls and ingests like any entry. `Continuation` is `{RESUME}` and marks resumes. (2) `WriteSlicePointer.resolution` is gone (no `rerun` to carry). (3) A bare resolution is now always `decision_required`, so the two CLI end-to-end tests submit `--decision resume`. (4) `resume` on a never-started launch takes the existing REISSUE path (same run id), which is a launch afresh. (5) `routing/reduce.py` and `gates/accepted.py` keep local `accept` constants until Task 10 deletes them. (6) The sq stub accepts a plain `--resume` (Squadron's retry) and `--decision` only if given. (7) `run_to_resume` and `RESULT_OUTCOME` live in supervise.py beside the other result keys.
 
 ---
 

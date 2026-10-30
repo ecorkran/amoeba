@@ -1,7 +1,7 @@
-"""Stage a paused run and a PM's ``retry`` for the resume crash proofs (slice 127).
+"""Stage a paused run and a PM's ``resume`` for the resume crash proofs (slice 127).
 
 Before any process starts, the dispatch harness's one step gets a finished, routed,
-paused run in the stub's state and a ``retry`` resolution the Runner has yet to
+paused run in the stub's state and a ``resume`` resolution the Runner has yet to
 answer, so the first tick of the first process acknowledges it and resumes the run.
 """
 
@@ -34,7 +34,7 @@ class StagedResume:
 
 
 def stage_paused_retry(harness: CrashHarness) -> StagedResume:
-    """A paused run in the stub, a routed entry for it, and a ``retry`` resolution."""
+    """A paused run in the stub, a routed entry for it, and a ``resume`` resolution."""
     [node_id] = harness.node_ids
     with Store.open(project_store_path(harness.supervisor_dir, PROJECT)) as store:
         node = store.get_node(node_id)
@@ -48,7 +48,7 @@ def stage_paused_retry(harness: CrashHarness) -> StagedResume:
         )
         run_id = str(entry.parameters["run_id"])
         blocked_id = block_and_resolve(
-            store, node, "retry", INSTRUCTIONS, project_id=PROJECT
+            store, node, "resume", INSTRUCTIONS, project_id=PROJECT
         )
     write_outcome_document(harness.home, paused_document(run_id))
     return StagedResume(node_id, run_id, entry.id, blocked_id)
