@@ -27,10 +27,26 @@ from amoeba.runner.lifecycle.plan_read import (
     PlanReadFailed,
     SliceReadFailed,
 )
-from amoeba.runner.lifecycle.steps import PlanObservation
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import NodeKind
-from amoeba.upstream.context_forge import CFSliceList
+from amoeba.upstream.context_forge import CFSliceList, PlanStatus
+
+
+@dataclass(frozen=True)
+class PlanObservation:
+    """What the plan read says about one initiative or slice.
+
+    Attributes:
+        is_checked: CF's ``isChecked`` for the entry.
+        status: CF's status, or ``None`` when CF reported none.
+        arch_file: The initiative's ``archFile``; ``None`` for a slice or none set.
+        slice_list_read: Whether the initiative's slice list was read successfully.
+    """
+
+    is_checked: bool
+    status: PlanStatus | None = None
+    arch_file: str | None = None
+    slice_list_read: bool = False
 
 
 @dataclass(frozen=True)

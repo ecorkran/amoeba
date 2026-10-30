@@ -1,6 +1,6 @@
 """The per-project config: a static YAML file naming each project's pipeline (D2).
 
-Loaded once at start, like the routing table, and never mutated; a change needs a
+Loaded once at start and never mutated; a change needs a
 restart. A named project carries its ``pipeline`` and optional ``params``; a project the
 file does not name has no pipeline (:data:`PROJECT_DEFAULTS`), and there is no default
 pipeline to fall back on. A bad file raises :class:`StartupFailedError` listing every
@@ -12,32 +12,15 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
 
 import yaml
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    StrictStr,
-    ValidationError,
-    field_validator,
-)
+from pydantic import BaseModel, ConfigDict, StrictStr, ValidationError
 from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
 from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
-
-
-class MergePolicy(StrEnum):
-    """Who merges a slice into its target after its code review passes."""
-
-    #: The PM merges; ``P6`` runs with ``-p merge=false``.
-    HUMAN = "human"
-    #: ``P6`` merges the slice itself.
-    AUTO = "auto"
 
 
 class ProjectSettings(BaseModel):
@@ -49,12 +32,6 @@ class ProjectSettings(BaseModel):
     pipeline: StrictStr | None = None
     #: Extra ``-p key=value`` pipeline parameters, passed through verbatim.
     params: dict[str, StrictStr] = {}
-    merge_policy: MergePolicy = MergePolicy.AUTO
-
-    @field_validator("merge_policy", mode="before")
-    @classmethod
-    def _normalise(cls, value: Any) -> Any:
-        return value.strip().lower() if isinstance(value, str) else value
 
 
 class ProjectConfigFile(BaseModel):

@@ -10,7 +10,6 @@ import pytest
 from amoeba.runner.faults import FaultKind, TickFaults
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
 from amoeba.runner.lifecycle.reconcile import reconcile
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import Store
 from amoeba.store.inbox_models import Channel
@@ -215,7 +214,7 @@ def test_step_nodes_from_an_older_store_are_left_alone_and_never_ready(
         kind=NodeKind.PHASE_OR_ARTIFACT,
         title="architecture",
         parent_id=initiative.id,
-        cf=CFReference(project=CF_PROJECT, phase=LifecycleStep.ARCHITECTURE.value),
+        cf=CFReference(project=CF_PROJECT, phase="architecture"),
     )
 
     _run(store, plan(cf_initiative(140)))

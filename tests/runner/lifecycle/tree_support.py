@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from amoeba.runner.lifecycle.steps import STEP_MAP, LifecycleStep, StepLevel
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import Store
 from amoeba.store.inbox_models import Channel
@@ -19,7 +18,7 @@ CF_PROJECT = "cf-a"
 
 
 class TreeBuilder:
-    """Creates linked initiatives, slices and steps, then the tree over them."""
+    """Creates linked initiatives and slices, then the tree over them."""
 
     def __init__(self, project_id: str = PROJECT) -> None:
         self.store = Store.open_temporary()
@@ -29,48 +28,33 @@ class TreeBuilder:
         self.store.close()
 
     def initiative(self, index: int, *, cf_project: str = CF_PROJECT) -> Node:
-        """A linked initiative with its three initiative-level steps."""
-        node = self.store.create_node(
+        """A linked initiative."""
+        return self.store.create_node(
             project_id=self.project_id,
             kind=NodeKind.INITIATIVE,
             title=f"initiative {index}",
             cf=CFReference(project=cf_project, index=index),
         )
-        self.steps(node, StepLevel.INITIATIVE)
-        return node
 
-    def slice(self, parent: Node, index: int, *, with_steps: bool = True) -> Node:
-        """A linked slice under ``parent``, with its four steps unless asked not to."""
-        node = self.store.create_node(
+    def slice(self, parent: Node, index: int) -> Node:
+        """A linked slice under ``parent``."""
+        return self.store.create_node(
             project_id=self.project_id,
             kind=NodeKind.SLICE,
             title=f"slice {index}",
             parent_id=parent.id,
             cf=CFReference(project=parent.cf.project, index=index),
         )
-        if with_steps:
-            self.steps(node, StepLevel.SLICE)
-        return node
 
-    def steps(self, parent: Node, level: StepLevel) -> None:
-        for step in (s for s, spec in STEP_MAP.items() if spec.level is level):
-            self.step(parent, step)
-
-    def step(self, parent: Node, step: LifecycleStep) -> Node:
+    def phase_node(self, parent: Node) -> Node:
+        """A linked node that is neither an initiative nor a slice (an old step)."""
         return self.store.create_node(
             project_id=self.project_id,
             kind=NodeKind.PHASE_OR_ARTIFACT,
-            title=step.value,
+            title="phase",
             parent_id=parent.id,
-            cf=CFReference(project=parent.cf.project, phase=step.value),
+            cf=CFReference(project=parent.cf.project, index=1, phase="phase"),
         )
-
-    def step_node(self, parent: Node, step: LifecycleStep) -> Node:
-        """The existing step child of ``parent``, read back from the store."""
-        for child in self.store.children_of(parent.id):
-            if child.cf.phase == step.value:
-                return child
-        raise LookupError(f"{parent.title} has no {step.value} step")
 
     def fresh(self, node: Node) -> Node:
         """The node as the store holds it now (nodes are immutable snapshots)."""

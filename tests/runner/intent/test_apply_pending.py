@@ -12,7 +12,6 @@ from amoeba.runner.faults import RUNNER_ACTOR
 from amoeba.runner.intent import apply as apply_module
 from amoeba.runner.intent.apply import Interpretation, apply_pending_intents
 from amoeba.runner.intent.vocabulary import IntentRejection
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import (
     AcknowledgmentOutcome,
     Channel,
@@ -67,7 +66,7 @@ def test_each_outcome_is_stored_with_its_reason(builder: TreeBuilder) -> None:
     initiative = builder.initiative(140)
     orphan = builder.slice(initiative, 142)
     builder.orphan(orphan)
-    step = builder.step_node(initiative, LifecycleStep.ARCHITECTURE)
+    step = builder.phase_node(initiative)
     applied = submit(store, {"intent": "drive"})
     no_op = submit(store, {"intent": "drive"})
     malformed = submit(store, {"intent": "launch"})

@@ -62,18 +62,6 @@ class LaunchRun:
 
 
 @dataclass(frozen=True)
-class BlockHumanStep:
-    """Block a ready human step on a person (D9). Store-only: no journal entry.
-
-    ``payload_extra`` is merged into the block's payload (slice 128, D9: why a merge
-    could not be observed).
-    """
-
-    node_id: str
-    payload_extra: Mapping[str, object] = field(default_factory=dict[str, object])
-
-
-@dataclass(frozen=True)
 class ResumeRun:
     """Resume a run: a PM's ``resume``, or an automatic retry (D5, D6).
 
@@ -103,7 +91,7 @@ class ResumeRun:
 class BlockDispatch:
     """Block a step on a human because its pre-dispatch check said not to go ahead.
 
-    Store-only, like :class:`BlockHumanStep` (slice 128, D5).
+    Store-only: no journal entry (slice 128, D5).
     """
 
     node_id: str
@@ -111,7 +99,7 @@ class BlockDispatch:
 
 
 #: The closed set of things a planner may ask for.
-type Action = LaunchRun | BlockHumanStep | ResumeRun | BlockDispatch
+type Action = LaunchRun | ResumeRun | BlockDispatch
 
 
 @dataclass(frozen=True)

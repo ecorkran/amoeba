@@ -46,8 +46,8 @@ def world() -> Iterator[World]:
     yield World(
         builder,
         initiative,
-        builder.slice(initiative, 141, with_steps=False),
-        builder.slice(initiative, 142, with_steps=False),
+        builder.slice(initiative, 141),
+        builder.slice(initiative, 142),
     )
     builder.close()
 
@@ -123,7 +123,7 @@ def test_a_driven_unheld_ready_slice_is_current(world: World) -> None:
 
 
 def test_held_and_undriven_ready_slices_are_not_current(world: World) -> None:
-    plain = world.builder.slice(world.builder.initiative(150), 151, with_steps=False)
+    plain = world.builder.slice(world.builder.initiative(150), 151)
     rows = [
         row(drive=True),
         row(world.first, hold=True),
@@ -138,7 +138,7 @@ def test_nothing_is_current_without_a_drive(world: World) -> None:
 
 
 def test_an_orphans_row_never_affects_a_current_slice(world: World) -> None:
-    orphan = world.builder.slice(world.initiative, 143, with_steps=False)
+    orphan = world.builder.slice(world.initiative, 143)
     world.builder.orphan(orphan)
     baseline = _current(world, [row(drive=True)])
     with_orphan_row = _current(

@@ -18,7 +18,6 @@ from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import (
     Action,
     BlockDispatch,
-    BlockHumanStep,
     LaunchRun,
     ResumeRun,
 )
@@ -36,7 +35,6 @@ from amoeba.runner.launch import (
     launch,
     mint_run_id,
 )
-from amoeba.runner.lifecycle.human_steps import block_human_step
 from amoeba.runner.observed import LaunchFailed
 from amoeba.runner.resolutions.act import Acted, ContinuationActs
 from amoeba.store import (
@@ -120,12 +118,10 @@ class ActStage:
         for action in actions:
             self._context.set(action.node_id)
             match action:
-                case BlockHumanStep():
-                    # Store-only actions are applied in one transaction and not
-                    # journaled: there is no external side effect to recover (D9).
-                    block_human_step(self._store, action)
                 case BlockDispatch():
-                    # Store-only, and idempotent: a step already blocked is left be.
+                    # Store-only actions are applied in one transaction and not
+                    # journaled: there is no external side effect to recover. This
+                    # one is idempotent: a step already blocked is left be.
                     block_dispatch(self._store, action)
                 case LaunchRun(reissue_of=str()):
                     if not budget.allows_call():

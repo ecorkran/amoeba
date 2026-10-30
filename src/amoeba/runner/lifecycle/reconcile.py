@@ -24,7 +24,6 @@ from amoeba.runner.faults import TickFaults
 from amoeba.runner.lifecycle.completion import (
     complete_initiatives,
     complete_observed_slices,
-    complete_observed_steps,
 )
 from amoeba.runner.lifecycle.orphaning import orphan_unlisted
 from amoeba.runner.lifecycle.plan_read import PlanRead, PlanReadFailed
@@ -84,9 +83,6 @@ def reconcile(
         lambda t: _Creator(store, project_id, cf_project_id, t, read, scope).run(),
         lambda t: block_unknown_status(store, t, cf_project_id, read, scope),
         lambda t: update_references(store, t, cf_project_id, read, scope),
-        lambda t: complete_observed_steps(
-            store, t, project_id, cf_project_id, read, scope
-        ),
         lambda t: complete_observed_slices(
             store, t, project_id, cf_project_id, read, scope
         ),
@@ -106,7 +102,7 @@ def _tree(store: Store, project_id: str) -> LifecycleTree:
 
 
 class _Creator:
-    """The create rule: nodes and steps CF reports that the tree lacks."""
+    """The create rule: nodes CF reports that the tree lacks."""
 
     def __init__(
         self,

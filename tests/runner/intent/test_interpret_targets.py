@@ -10,7 +10,6 @@ import pytest
 
 from amoeba.runner.intent.apply import Interpretation, interpret
 from amoeba.runner.intent.vocabulary import REASON_DETAIL_LIMIT, IntentRejection
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import AcknowledgmentOutcome, Channel, Message, Node
 from runner.lifecycle.tree_support import PROJECT, TreeBuilder
 
@@ -44,7 +43,7 @@ def world() -> Iterator[World]:
     sliced = builder.slice(initiative, 141)
     orphan = builder.slice(initiative, 142)
     builder.orphan(orphan)
-    step = builder.step_node(sliced, LifecycleStep.TASKS)
+    step = builder.phase_node(sliced)
     yield World(builder, initiative, sliced, orphan, step)
     builder.close()
 

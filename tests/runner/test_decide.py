@@ -75,8 +75,8 @@ def steps() -> Iterator[Steps]:
     second = builder.initiative(101)
     yield Steps(
         builder,
-        builder.slice(first, 110, with_steps=False),
-        builder.slice(second, 111, with_steps=False),
+        builder.slice(first, 110),
+        builder.slice(second, 111),
         first,
         second,
     )
@@ -168,7 +168,7 @@ def test_ready_unbusy_offers_only_ready_steps_without_a_run_in_flight() -> None:
     builder = TreeBuilder()
     try:
         initiative = builder.initiative(100)
-        architecture = builder.slice(initiative, 101, with_steps=False)
+        architecture = builder.slice(initiative, 101)
         view = view_for(builder.tree())
         assert view.ready_unbusy() == [architecture], "no blocked slices"
 
@@ -185,7 +185,7 @@ def test_a_driven_project_view_exposes_its_current_slices() -> None:
     builder = TreeBuilder()
     try:
         initiative = builder.initiative(100)
-        architecture = builder.slice(initiative, 101, with_steps=False)
+        architecture = builder.slice(initiative, 101)
         driven = view_for(builder.tree(), [row(drive=True)])
         assert list(driven.current_slices) == [architecture]
         assert driven.desired.drives_anything()

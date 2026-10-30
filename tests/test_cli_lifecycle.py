@@ -498,11 +498,13 @@ def test_a_failing_sq_probe_fails_the_start_naming_the_shape(
     assert "runs wait" in result.stderr and "--timeout 0 --json" in result.stderr
 
 
-def test_a_bad_merge_policy_fails_the_start_naming_the_key_and_value(
+def test_a_removed_merge_policy_key_fails_the_start_naming_the_key(
     supervisor_dir: Path, runs_dir: Path, tmp_path: Path
 ) -> None:
     config = tmp_path / "projects.yaml"
-    config.write_text("projects:\n  scratch:\n    merge_policy: sometimes\n")
+    config.write_text(
+        "projects:\n  scratch:\n    pipeline: p456\n    merge_policy: auto\n"
+    )
 
     result = run_cli(
         ["start", *_start_arguments(runs_dir), "--project-config", str(config)],
@@ -511,7 +513,6 @@ def test_a_bad_merge_policy_fails_the_start_naming_the_key_and_value(
 
     assert result.returncode == ExitCode.STARTUP_FAILED == 7
     assert "merge_policy" in result.stderr
-    assert "sometimes" in result.stderr
 
 
 def test_the_removed_routing_table_flag_is_an_unknown_flag(

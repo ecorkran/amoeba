@@ -9,7 +9,6 @@ import pytest
 from amoeba.process import StartupFailedError
 from amoeba.runner.project_config import (
     PROJECT_DEFAULTS,
-    MergePolicy,
     load_project_config,
 )
 
@@ -24,46 +23,12 @@ def test_no_path_gives_every_project_the_defaults() -> None:
     config = load_project_config(None)
 
     assert config.for_project("anything") == PROJECT_DEFAULTS
-    assert PROJECT_DEFAULTS.merge_policy is MergePolicy.AUTO
-
-
-def test_a_named_project_takes_its_own_policy(tmp_path: Path) -> None:
-    path = _write(
-        tmp_path,
-        "projects:\n"
-        "  amoeba:\n    pipeline: p456\n    merge_policy: human\n"
-        "  scratch:\n    pipeline: p456\n    merge_policy: auto\n",
-    )
-
-    config = load_project_config(path)
-
-    assert config.for_project("scratch").merge_policy is MergePolicy.AUTO
-    assert config.for_project("amoeba").merge_policy is MergePolicy.HUMAN
 
 
 def test_a_project_the_file_does_not_name_takes_the_defaults(tmp_path: Path) -> None:
     path = _write(tmp_path, "projects:\n  scratch:\n    pipeline: p456\n")
 
     assert load_project_config(path).for_project("other") == PROJECT_DEFAULTS
-
-
-def test_a_key_a_project_entry_omits_takes_the_default(tmp_path: Path) -> None:
-    path = _write(tmp_path, "projects:\n  scratch:\n    pipeline: p456\n")
-
-    settings = load_project_config(path).for_project("scratch")
-
-    assert settings.merge_policy is PROJECT_DEFAULTS.merge_policy
-
-
-def test_a_value_is_trimmed_and_lower_cased(tmp_path: Path) -> None:
-    path = _write(
-        tmp_path,
-        'projects:\n  scratch:\n    pipeline: p456\n    merge_policy: " Auto "\n',
-    )
-
-    assert load_project_config(path).for_project("scratch").merge_policy is (
-        MergePolicy.AUTO
-    )
 
 
 def test_a_missing_file_is_a_startup_failure_naming_the_path(tmp_path: Path) -> None:
@@ -83,39 +48,27 @@ def test_a_file_that_is_not_a_mapping_is_a_startup_failure(tmp_path: Path) -> No
         load_project_config(_write(tmp_path, "- just\n- a list\n"))
 
 
-def test_an_unknown_value_names_the_key_and_the_value(tmp_path: Path) -> None:
+@pytest.mark.parametrize("key", ["merge_policy", "merge_polcy"])
+def test_an_unknown_key_is_refused(tmp_path: Path, key: str) -> None:
     path = _write(
-        tmp_path,
-        "projects:\n  scratch:\n    pipeline: p456\n    merge_policy: sometimes\n",
+        tmp_path, f"projects:\n  scratch:\n    pipeline: p456\n    {key}: auto\n"
     )
 
-    with pytest.raises(StartupFailedError) as raised:
-        load_project_config(path)
-
-    assert "merge_policy" in str(raised.value)
-    assert "sometimes" in str(raised.value)
-
-
-def test_an_unknown_key_is_refused(tmp_path: Path) -> None:
-    path = _write(
-        tmp_path, "projects:\n  scratch:\n    pipeline: p456\n    merge_polcy: auto\n"
-    )
-
-    with pytest.raises(StartupFailedError, match="merge_polcy"):
+    with pytest.raises(StartupFailedError, match=key):
         load_project_config(path)
 
 
 def test_every_problem_in_one_file_is_named(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
-        "projects:\n  a:\n    pipeline: p456\n    merge_policy: sometimes\n"
+        "projects:\n  a:\n    pipeline: p456\n    merge_policy: auto\n"
         "  b:\n    pipeline: p456\n    colour: red\n",
     )
 
     with pytest.raises(StartupFailedError) as raised:
         load_project_config(path)
 
-    assert "sometimes" in str(raised.value)
+    assert "merge_policy" in str(raised.value)
     assert "colour" in str(raised.value)
 
 
@@ -144,7 +97,7 @@ def test_a_project_the_file_does_not_name_has_no_pipeline(tmp_path: Path) -> Non
 @pytest.mark.parametrize(
     ("entry", "expected"),
     [
-        ("    merge_policy: auto\n", "projects.a.pipeline"),
+        ("    params: {k: v}\n", "projects.a.pipeline"),
         ("    pipeline: ''\n", "projects.a.pipeline"),
         ("    pipeline: p456\n    params: {slice: '1'}\n", "projects.a.params.slice"),
         ("    pipeline: p456\n    params: {'a,b': x}\n", "projects.a.params.a,b"),
@@ -169,7 +122,7 @@ def test_two_params_problems_in_one_file_are_both_named(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
         "projects:\n  a:\n    pipeline: p456\n    params: {slice: '1'}\n"
-        "  b:\n    merge_policy: auto\n",
+        "  b:\n    params: {k: v}\n",
     )
 
     with pytest.raises(StartupFailedError) as raised:

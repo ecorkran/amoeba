@@ -1,4 +1,4 @@
-"""The complete rule: steps CF shows complete become done."""
+"""The complete rules: slices CF shows complete become done, then their initiative."""
 
 from __future__ import annotations
 
@@ -10,20 +10,12 @@ from amoeba.runner.faults import TickFaults
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.lifecycle.plan_read import NoSlicePlan, PlanRead
 from amoeba.runner.lifecycle.reconcile import reconcile
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import PARAM_RUN_ID, Store
 from amoeba.store.journal_models import CommandKind
 from amoeba.store.models import BlockedKind, Node, NodeKind, NodeStatus
 
 from .reconcile_support import cf_initiative, cf_slice, plan, slice_list
 from .tree_support import CF_PROJECT, PROJECT
-
-ARCH = LifecycleStep.ARCHITECTURE
-SLICE_PLAN = LifecycleStep.SLICE_PLAN
-DESIGN = LifecycleStep.SLICE_DESIGN
-IMPLEMENTATION = LifecycleStep.IMPLEMENTATION
-MERGE = LifecycleStep.MERGE
-INTEGRATION = LifecycleStep.INTEGRATION
 
 
 @pytest.fixture
@@ -50,16 +42,13 @@ def _status(store: Store, node: Node) -> NodeStatus:
     return current.status
 
 
-def test_a_done_step_is_untouched_and_a_rerun_writes_nothing(store: Store) -> None:
+def test_a_done_slice_is_untouched_and_a_rerun_writes_nothing(store: Store) -> None:
     _run(store, _slice_read("complete"))
     before = store.nodes_for_project(PROJECT)
 
     wrote, _ = _run(store, _slice_read("complete"))
 
     assert not wrote and store.nodes_for_project(PROJECT) == before
-
-
-# -- the slice level (slice 132, D1) --------------------------------------------
 
 
 def _slice_node(store: Store, index: int) -> Node:

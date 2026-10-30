@@ -34,8 +34,8 @@ def test_the_first_slice_of_an_initiative_is_ready_and_the_next_waits(
     builder: TreeBuilder,
 ) -> None:
     initiative = builder.initiative(100)
-    builder.slice(initiative, 101, with_steps=False)
-    builder.slice(initiative, 102, with_steps=False)
+    builder.slice(initiative, 101)
+    builder.slice(initiative, 102)
 
     assert _ready(builder) == {101}
 
@@ -44,8 +44,8 @@ def test_the_next_slice_is_ready_once_its_predecessor_is_done(
     builder: TreeBuilder,
 ) -> None:
     initiative = builder.initiative(100)
-    first = builder.slice(initiative, 101, with_steps=False)
-    builder.slice(initiative, 102, with_steps=False)
+    first = builder.slice(initiative, 101)
+    builder.slice(initiative, 102)
 
     builder.done(first)
 
@@ -56,9 +56,9 @@ def test_the_predecessor_is_the_next_lower_index_not_the_next_created(
     builder: TreeBuilder,
 ) -> None:
     initiative = builder.initiative(100)
-    high = builder.slice(initiative, 130, with_steps=False)
-    low = builder.slice(initiative, 110, with_steps=False)
-    mid = builder.slice(initiative, 120, with_steps=False)
+    high = builder.slice(initiative, 130)
+    low = builder.slice(initiative, 110)
+    mid = builder.slice(initiative, 120)
     tree = builder.tree()
 
     assert slice_predecessor(tree, high) == mid
@@ -71,8 +71,8 @@ def test_slices_of_another_initiative_are_not_predecessors(
 ) -> None:
     first = builder.initiative(100)
     other = builder.initiative(200)
-    builder.slice(first, 101, with_steps=False)
-    only = builder.slice(other, 201, with_steps=False)
+    builder.slice(first, 101)
+    only = builder.slice(other, 201)
 
     assert slice_predecessor(builder.tree(), only) is None
     assert slice_predecessor_done(builder.tree(), only)
@@ -83,8 +83,8 @@ def test_an_orphaned_slice_is_neither_ready_nor_a_predecessor(
     builder: TreeBuilder,
 ) -> None:
     initiative = builder.initiative(100)
-    gone = builder.slice(initiative, 101, with_steps=False)
-    follower = builder.slice(initiative, 102, with_steps=False)
+    gone = builder.slice(initiative, 101)
+    follower = builder.slice(initiative, 102)
     builder.orphan(gone)
 
     assert slice_predecessor(builder.tree(), follower) is None
@@ -93,7 +93,7 @@ def test_an_orphaned_slice_is_neither_ready_nor_a_predecessor(
 
 def test_a_blocked_slice_is_not_ready(builder: TreeBuilder) -> None:
     initiative = builder.initiative(100)
-    first = builder.slice(initiative, 101, with_steps=False)
+    first = builder.slice(initiative, 101)
 
     builder.block(first)
 
@@ -104,7 +104,7 @@ def test_a_slice_under_a_blocked_initiative_is_not_ready(
     builder: TreeBuilder,
 ) -> None:
     initiative = builder.initiative(100)
-    builder.slice(initiative, 101, with_steps=False)
+    builder.slice(initiative, 101)
 
     builder.block(initiative)
 
@@ -113,7 +113,7 @@ def test_a_slice_under_a_blocked_initiative_is_not_ready(
 
 def test_a_done_slice_is_not_ready(builder: TreeBuilder) -> None:
     initiative = builder.initiative(100)
-    first = builder.slice(initiative, 101, with_steps=False)
+    first = builder.slice(initiative, 101)
 
     builder.done(first)
 

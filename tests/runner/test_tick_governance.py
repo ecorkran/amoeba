@@ -67,7 +67,7 @@ def builder() -> Iterator[TreeBuilder]:
 
 def _ready_slice(builder: TreeBuilder) -> Node:
     """A ready slice: the first of its initiative."""
-    return builder.slice(builder.initiative(140), 141, with_steps=False)
+    return builder.slice(builder.initiative(140), 141)
 
 
 def _status(builder: TreeBuilder, node: Node) -> NodeStatus:

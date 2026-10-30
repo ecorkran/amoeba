@@ -22,8 +22,6 @@ from amoeba.runner.project_config import ProjectSettings
 PARAM_SLICE: Final = TARGET_PARAM_KEY
 
 #: The journal parameter key a launch's entry records beside its ``-p`` params (D5).
-#: ``PARAM_MERGE_POLICY`` is read only by the unused merge module (Task 10.2b).
-PARAM_MERGE_POLICY: Final = "merge_policy"
 PARAM_DISPATCH_CHECK: Final = "dispatch_check"
 
 
