@@ -16,9 +16,9 @@ from amoeba.process import ProcessSettings
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, InFlightRun, LaunchRun, ProjectView
+from amoeba.runner.dispatch.check_stage import CheckStage, DispatchStageResult
+from amoeba.runner.dispatch.checkout_check import DispatchCheck, Ok
 from amoeba.runner.faults import NodeContext, TickFaults
-from amoeba.runner.gates.predispatch import DispatchCheck, Ok
-from amoeba.runner.gates.stage import DispatchStageResult, GateStage
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex, current_slices
 from amoeba.runner.launch import (
@@ -141,7 +141,7 @@ class Planner:
         ]
 
 
-class PassingGates(GateStage):
+class PassingChecks(CheckStage):
     """A gate stage whose pre-dispatch check passes every current step.
 
     For rigs whose planner is a test double that launches without dispatch facts: they
@@ -168,8 +168,8 @@ class PassingGates(GateStage):
 
 
 def install_passing_gates(patch: pytest.MonkeyPatch) -> None:
-    """Make every ``ProjectTick`` built from now on use :class:`PassingGates`."""
-    patch.setattr(tick_module, "GateStage", PassingGates)
+    """Make every ``ProjectTick`` built from now on use :class:`PassingChecks`."""
+    patch.setattr(tick_module, "CheckStage", PassingChecks)
 
 
 class Popen:

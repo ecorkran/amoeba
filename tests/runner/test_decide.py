@@ -20,8 +20,8 @@ from amoeba.runner.decide import (
     RunState,
     decide,
 )
+from amoeba.runner.dispatch.checkout_check import Block, Ok
 from amoeba.runner.faults import FaultKind
-from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import DesiredState, Node

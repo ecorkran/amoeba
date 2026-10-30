@@ -10,8 +10,8 @@ import pytest
 from amoeba.runner.act import ActStage
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.decide import BlockDispatch
+from amoeba.runner.dispatch.checkout_check import Block
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind, TickFaults
-from amoeba.runner.gates.predispatch import Block
 from amoeba.store import BlockedKind, Channel, Node, Store
 from runner.observe_support import Host
 from runner.tick_support import PROJECT, Rig, ready_slice

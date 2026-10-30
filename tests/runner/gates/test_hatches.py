@@ -16,7 +16,7 @@ from amoeba.runner.gates.hatches import (
 )
 from amoeba.store import CheckOutcome, CheckStanding, RecordSource
 from amoeba.store.check_models import check_standing
-from runner.gates.purity import io_use
+from runner.purity import io_use
 
 PATH = "project-documents/user/slices/128-slice.x.md"
 ENTRY = "entry-1"

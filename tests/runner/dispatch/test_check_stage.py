@@ -1,4 +1,4 @@
-"""D5: GateStage.check_dispatch reads for the candidates and returns their results."""
+"""D5: CheckStage.check_dispatch reads for the candidates and returns their results."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ from cf_stub import write_cf_stub
 from cf_stub_gates import CONFIG_MODE_ENV, GateMode
 
 from amoeba.runner.decide import ProjectView
+from amoeba.runner.dispatch.check_stage import CheckStage
+from amoeba.runner.dispatch.checkout_check import Block, Ok
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind, NodeContext, TickFaults
-from amoeba.runner.gates.predispatch import Block, Ok
-from amoeba.runner.gates.stage import GateStage
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
 from amoeba.store import Store
 from runner.dispatch.dispatch_support import facts, view_of
@@ -44,13 +44,10 @@ class Setup:
             **config_knobs(tmp_path, {}),
         }.items():
             monkeypatch.setenv(name, value)
-        self.stage = GateStage(
-            store=store,
-            project_id="demo",
+        self.stage = CheckStage(
             context=NodeContext(),
             cf_run=subprocess.run,
             call_timeout_seconds=20.0,
-            amoeba_version="amoeba-test",
         )
 
     def view(self) -> ProjectView:

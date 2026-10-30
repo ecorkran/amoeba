@@ -9,9 +9,9 @@ import pytest
 
 from amoeba.process import RunOutcome
 from amoeba.runner.decide import Action, BlockDispatch, ProjectView
+from amoeba.runner.dispatch.checkout_check import Block
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.faults import FaultKind
-from amoeba.runner.gates.predispatch import Block
 from amoeba.store import (
     BLOCKED_STATUSES,
     PARAM_RUN_ID,

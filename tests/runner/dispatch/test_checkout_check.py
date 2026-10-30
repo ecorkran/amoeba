@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from amoeba.runner.faults import FaultKind
-from amoeba.runner.gates.predispatch import (
+from amoeba.runner.dispatch.checkout_check import (
     DIRTY_PATHS_SHOWN,
     Block,
     allowed_branches,
     branch_rule,
 )
+from amoeba.runner.faults import FaultKind
 from amoeba.runner.git_read import GitStatus
-from runner.gates.purity import io_use
+from runner.purity import io_use
 
 TARGET = "main"
 SLICE = 128
@@ -117,6 +117,6 @@ def test_allowed_branches_by_launch_or_resume() -> None:
 
 
 def test_the_module_does_no_io() -> None:
-    import amoeba.runner.gates.predispatch as module
+    import amoeba.runner.dispatch.checkout_check as module
 
     assert io_use(module) == []

@@ -14,11 +14,11 @@ from amoeba.runner.decide import (
     ResumeRun,
     decide,
 )
+from amoeba.runner.dispatch.checkout_check import Block
 from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
-from amoeba.runner.gates.predispatch import Block
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import (

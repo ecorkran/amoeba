@@ -9,9 +9,9 @@ from pathlib import Path
 
 from amoeba.runner.decide import ProjectView
 from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
+from amoeba.runner.dispatch.checkout_check import DispatchCheck, Ok
 from amoeba.runner.dispatch.facts import SliceDispatchFacts, SortKey
 from amoeba.runner.dispatch.state import DispatchState
-from amoeba.runner.gates.predispatch import DispatchCheck, Ok
 from amoeba.runner.ingest.record import RESULT_OUTCOME
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.lifecycle.tree import LifecycleTree

@@ -15,13 +15,13 @@ from amoeba.runner.decide import (
     ResumeRun,
 )
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved
+from amoeba.runner.dispatch.checkout_check import Block, Ok
 from amoeba.runner.dispatch.params import (
     PARAM_DISPATCH_CHECK,
 )
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
-from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT

@@ -28,7 +28,7 @@ from amoeba.runner.supervise import (
     step_of,
 )
 from amoeba.store import CommandKind, JournalEntry
-from runner.gates.purity import io_use
+from runner.purity import io_use
 
 RESETS_AT = "2026-10-29T18:00:00+00:00"
 

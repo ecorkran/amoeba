@@ -17,6 +17,7 @@ from amoeba.runner.act import ActStage
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, Planner, ProjectView, decide
+from amoeba.runner.dispatch.check_stage import CheckStage
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.faults import (
     RUNNER_ACTOR,
@@ -26,7 +27,6 @@ from amoeba.runner.faults import (
     TickFaults,
     raise_expected_faults,
 )
-from amoeba.runner.gates.stage import GateStage
 from amoeba.runner.intent.apply import apply_pending_intents
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.launch import LaunchTracker, PopenFactory
@@ -93,13 +93,10 @@ class ProjectTick:
             context=context,
             version_label=version_label,
         )
-        self._gates = GateStage(
-            store=store,
-            project_id=project_id,
+        self._checks = CheckStage(
             context=context,
             cf_run=cf_run,
             call_timeout_seconds=call_timeout_seconds,
-            amoeba_version=amoeba_version,
         )
         self.wrote = False
         """Whether this tick wrote to the store or issued a command."""
@@ -147,7 +144,7 @@ class ProjectTick:
         self._flag_unconfigured(view, faults)
         # Reads only, so a cut-off just defers them: a candidate with no result
         # cannot launch this tick (D5).
-        dispatch = self._gates.check_dispatch(view, budget, faults)
+        dispatch = self._checks.check_dispatch(view, budget, faults)
         view = replace(view, dispatch_checks=dispatch.checks)
         decided = self._decide(view)
         acted = self._act.run(decided, budget, faults)

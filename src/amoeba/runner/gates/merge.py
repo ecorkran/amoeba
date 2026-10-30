@@ -18,6 +18,7 @@ from typing import Final, cast
 from amoeba.process import RunOutcome
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
+from amoeba.runner.dispatch.checkout_check import is_slice_branch
 from amoeba.runner.dispatch.params import PARAM_MERGE_POLICY
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
 from amoeba.runner.gates.cf_reads import ReadFailure, read_target
@@ -28,7 +29,6 @@ from amoeba.runner.gates.merge_observation import (
     Unobservable,
 )
 from amoeba.runner.gates.outcome_record import GIT_BRANCH, GIT_HEAD, OBS_GIT
-from amoeba.runner.gates.predispatch import is_slice_branch
 from amoeba.runner.git_read import GitReadFailure, git_read, is_ancestor_args
 from amoeba.runner.ingest.record import RESULT_OUTCOME, RESULT_OUTCOME_OBSERVATION
 from amoeba.runner.launch import text_parameter

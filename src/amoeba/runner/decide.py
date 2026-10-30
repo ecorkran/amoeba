@@ -15,8 +15,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from amoeba.runner.dispatch.checkout_check import Block, DispatchCheck, Ok
 from amoeba.runner.dispatch.facts import SliceDispatchFacts
-from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.project_config import PROJECT_DEFAULTS, ProjectSettings

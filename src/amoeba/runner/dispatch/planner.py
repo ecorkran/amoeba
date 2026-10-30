@@ -33,13 +33,13 @@ from amoeba.runner.decide import (
     ResumeRun,
 )
 from amoeba.runner.dispatch.checkout import Checkout
+from amoeba.runner.dispatch.checkout_check import Block, Ok
 from amoeba.runner.dispatch.facts import SliceDispatchFacts, SortKey
 from amoeba.runner.dispatch.params import (
     PARAM_DISPATCH_CHECK,
     launch_params,
 )
 from amoeba.runner.dispatch.state import DispatchState
-from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
 from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.resolutions.vocabulary import (

@@ -43,7 +43,7 @@ from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
 from runner.observe_support import TEST_AMOEBA_VERSION
-from runner.tick_support import PassingGates, runnable_unbusy
+from runner.tick_support import PassingChecks, runnable_unbusy
 
 KILL_AT_ENV = "PROOF_KILL_AT"
 
@@ -227,7 +227,7 @@ def main(argv: Sequence[str]) -> None:
     if not arguments.dispatch:
         # The proof planner launches without dispatch facts, so it has no checks to
         # pass; this process tests crash recovery, not the pre-dispatch checks.
-        tick_module.GateStage = PassingGates  # type: ignore[misc]
+        tick_module.CheckStage = PassingChecks  # type: ignore[misc]
     runner = RunnerTenant(
         settings=settings,
         supervisor_dir=supervisor_dir,

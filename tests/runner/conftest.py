@@ -9,5 +9,5 @@ from runner.tick_support import install_passing_gates
 
 @pytest.fixture
 def passing_checks(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pass every current step's pre-dispatch check (see ``PassingGates``)."""
+    """Pass every current step's pre-dispatch check (see ``PassingChecks``)."""
     install_passing_gates(monkeypatch)
