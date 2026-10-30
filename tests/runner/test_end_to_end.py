@@ -15,6 +15,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+from cf_stub import LOG_ENV as CF_LOG_ENV
 from sq_stub import (
     RUN_LATE_SECONDS_ENV,
     RUN_MODE_ENV,
@@ -202,7 +203,11 @@ def scenario(
     yield Scenario(tmp_path, store, monkeypatch)
 
 
-def test_the_normal_path_records_run_id_outcome_and_status(scenario: Scenario) -> None:
+def test_the_normal_path_records_run_id_outcome_and_status(
+    scenario: Scenario, tmp_path: Path
+) -> None:
+    cf_log = tmp_path / "cf.log"
+    scenario.monkeypatch.setenv(CF_LOG_ENV, str(cf_log))
     scenario.tick_until("the entry to be resolved", scenario.resolved)
 
     entry = scenario.entry()
@@ -218,6 +223,9 @@ def test_the_normal_path_records_run_id_outcome_and_status(scenario: Scenario) -
     stderr = log_paths(scenario.supervisor_dir, entry.id).stderr.read_text()
     assert f"run_id={run_id}\n" in stderr, "confirmed by its own line"
     assert scenario.escalations() == []
+    cf_calls = cf_log.read_text().splitlines()
+    assert any(call.startswith("config get ") for call in cf_calls), "the log works"
+    assert [call for call in cf_calls if call.startswith("set ")] == [], "no cf set"
 
 
 def test_exit_before_the_line_fails_the_launch_and_blocks_the_node(

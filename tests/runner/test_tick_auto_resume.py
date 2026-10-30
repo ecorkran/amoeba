@@ -192,3 +192,23 @@ def test_releasing_a_hold_resumes(rig: DispatchRig) -> None:
     rig.tick()
 
     assert len(_resumes(rig, step)) == 1
+
+
+def test_a_hold_on_the_slice_itself_blocks_its_resume_until_released(
+    rig: DispatchRig,
+) -> None:
+    step = _launched(rig)
+    submit(rig.store, {"intent": "pause"}, node_id=step.id)
+
+    _fail(rig, step, 1, FIRST_STEP, resumed=False)
+    assert _resumes(rig, step) == [], "a held slice resumes nothing"
+
+    run_id = str(rig.entries(CommandKind.SQ_RUN, step)[0].parameters[PARAM_RUN_ID])
+    failure = {"kind": "stall", "step": FIRST_STEP, "message": "no progress"}
+    submit(rig.store, {"intent": "resume"}, node_id=step.id)
+    rig.tick_rig.poll.answers.append(
+        _document(run_id, 1, outcome="failed", failure=failure)
+    )
+    rig.tick()
+
+    assert len(_resumes(rig, step)) == 1
