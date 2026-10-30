@@ -24,6 +24,7 @@ from amoeba.runner.launch import (
     log_paths,
 )
 from amoeba.runner.observe import RunObserver
+from amoeba.runner.resolutions.confirm import ResumedFrom
 from amoeba.store import PARAM_RUN_ID, CommandKind, JournalEntry
 
 NOW = datetime(2026, 10, 23, 12, 0, 0, tzinfo=UTC)
@@ -162,7 +163,7 @@ class Rig:
         self.faults = TickFaults()
         self.context = NodeContext()
         #: Entry id to the pause a resume was decided on (slice 127, D6).
-        self.resumed_from: dict[str, datetime | None] = {}
+        self.resumed_from: dict[str, ResumedFrom | None] = {}
         self.deadline = 1_000_000.0
         self.observer = RunObserver(
             supervisor_dir=tmp_path,

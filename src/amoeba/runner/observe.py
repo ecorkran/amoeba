@@ -48,6 +48,7 @@ from amoeba.runner.observed import (
     RunEnded,
     RunVanished,
 )
+from amoeba.runner.resolutions.confirm import ResumedFrom
 from amoeba.store import PARAM_RUN_ID, JournalEntry
 
 #: Outcomes of a poll that end the run.
@@ -104,6 +105,7 @@ class RunObserver:
             tracker=tracker,
             now=now,
             launch_grace_seconds=launch_grace_seconds,
+            poll=poll,
             classify=self._classify,
             ended=self._ended,
             fault=self._fault,
@@ -119,13 +121,13 @@ class RunObserver:
         budget: TickBudget,
         faults: TickFaults,
         context: NodeContext,
-        resumed_from: Mapping[str, datetime | None],
+        resumed_from: Mapping[str, ResumedFrom | None],
     ) -> Observed:
         """Observe each entry, least recently polled first.
 
         Sets ``context`` to each entry's node before observing it. Stops with
         ``CUT_OFF`` as soon as a poll is due but the budget refuses.
-        ``resumed_from`` maps a resume entry's id to the pause it was decided on.
+        ``resumed_from`` maps a resume entry's id to the state it was issued from.
         """
         ordered = sorted(
             entries, key=lambda e: self._last_poll.get(e.id, float("-inf"))
@@ -144,7 +146,7 @@ class RunObserver:
         entry: JournalEntry,
         budget: TickBudget,
         faults: TickFaults,
-        resumed_from: Mapping[str, datetime | None],
+        resumed_from: Mapping[str, ResumedFrom | None],
     ) -> ObservedRun | None:
         run_id = entry.parameters.get(PARAM_RUN_ID)
         if not isinstance(run_id, str) or not run_id:
@@ -165,7 +167,7 @@ class RunObserver:
         run_id: str,
         budget: TickBudget,
         faults: TickFaults,
-        resumed_from: Mapping[str, datetime | None],
+        resumed_from: Mapping[str, ResumedFrom | None],
     ) -> ObservedRun | None:
         if not self._poll_due(entry.id):
             standing = self._faulted.get(entry.id)
@@ -177,7 +179,7 @@ class RunObserver:
             return None
         poll = self._poll_now(entry.id, run_id)
         if resume_pending(entry, self._tracker.get(entry.id)):
-            return self._resume.step(entry, run_id, poll, resumed_from, faults)
+            return self._resume.step(entry, run_id, poll, resumed_from, faults, budget)
         return self._classify(entry, run_id, poll, faults)
 
     def _classify(

@@ -216,11 +216,13 @@ Note (20261029): `observed.py` now imports `InFlightRun` only under TYPE_CHECKIN
 ### Task 7.4: Confirm a resume against the state it left
 **Owner**: Junior AI | **Dependencies**: 7.3 | **Effort**: 3
 
-- [ ] `resolutions/confirm.py`: `resume_progress` judges every resume entry, automatic or resolution, against the resumed-from entry's recorded `outcome` and `updated_at` (D5 "Confirmation"). A poll showing `timed_out` or a later `updated_at` confirms; the old state is `StillResuming` and is never ingested
-- [ ] `observe_resume.py`: after a resume the child failed, poll once more. `running` resolves the entry `not_applied`, observes the run again as in flight and counts nothing; any other state takes the `ResumeFailed` path (block `HUMAN`, `resume_failed`, no further automatic resume) (D5 "A run that is still live")
-- [ ] The act-time pre-poll (`resolutions/prepoll.py`) applies to `cause=transient` too: a run no longer in its classified state is not resumed and is observed again
-- [ ] Tests in `tests/runner/resolutions/test_confirm.py`, `test_observe_resume.py`, `test_prepoll.py`: a resume from `failed` and from `orphaned` confirmed by `updated_at`; `StillResuming` while the old state shows; the refused-live resume resolves `not_applied`; an exited child with the old state shown blocks `resume_failed`
-- [ ] **Success:** tests pass. Commit `feat: confirm a resume against the state it was resumed from`
+- [x] `resolutions/confirm.py`: `resume_progress` judges every resume entry, automatic or resolution, against the resumed-from entry's recorded `outcome` and `updated_at` (D5 "Confirmation"). A poll showing `timed_out` or a later `updated_at` confirms; the old state is `StillResuming` and is never ingested
+- [x] `observe_resume.py`: after a resume the child failed, poll once more. `running` resolves the entry `not_applied`, observes the run again as in flight and counts nothing; any other state takes the `ResumeFailed` path (block `HUMAN`, `resume_failed`, no further automatic resume) (D5 "A run that is still live")
+- [x] The act-time pre-poll (`resolutions/prepoll.py`) applies to `cause=transient` too: a run no longer in its classified state is not resumed and is observed again
+- [x] Tests in `tests/runner/resolutions/test_confirm.py`, `test_observe_resume.py`, `test_prepoll.py`: a resume from `failed` and from `orphaned` confirmed by `updated_at`; `StillResuming` while the old state shows; the refused-live resume resolves `not_applied`; an exited child with the old state shown blocks `resume_failed`
+- [x] **Success:** tests pass. Commit `feat: confirm a resume against the state it was resumed from`
+
+Note (20261029): the refused-live case differs from the task text. After an exited child's resume the observer polls once more; if the run now shows running, the resume entry is NOT resolved `not_applied`. It stays open and becomes the in-flight entry of the live run (a running run confirms any resume), so the run's eventual outcome ingests onto it, and nothing is blocked. The cost: that entry counts as one transient resume toward the bound. Any other state after the second look takes the `ResumeFailed` path as before. The second look is taken only when the child has exited and the budget allows a call. `resume_progress` now takes a `ResumedFrom` (outcome, updated_at, paused_at) read by `resumed_from_entry`; `resumed_from_pauses` became `resumed_from_states`; the pre-poll launches only on a positive match of the old state (`is_at`).
 
 ### Task 7.5: Prove automatic resume at tick level
 **Owner**: Junior AI | **Dependencies**: 7.4 | **Effort**: 3

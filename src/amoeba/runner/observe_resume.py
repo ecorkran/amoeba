@@ -2,8 +2,10 @@
 
 A resumed run prints no ``run_id=`` line, so there is nothing to wait for: the run
 is polled on ``run_poll_interval_seconds`` and judged by :func:`resume_progress`. It
-is confirmed when the run leaves the pause the PM decided on, and failed on observed
-state and the tracked child's exit code, never on message text. This holds whether or
+is confirmed when the run leaves the state it was resumed from (a pause, or a
+transient failure), and failed on observed state and the tracked child's exit code,
+never on message text. A resume the child failed is polled once more before it is
+called failed: a run whose owner came back is simply running (D5). This holds whether or
 not the child is tracked: after a restart no child is tracked, and the grace rule is
 the only one that can fire.
 
@@ -18,12 +20,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from amoeba.process import PollFailure, RunOutcomeDocument, RunPoll
+from amoeba.runner.budget import TickBudget
 from amoeba.runner.decide import InFlightRun, RunState
 from amoeba.runner.faults import ResumeFailure, TickFaults
 from amoeba.runner.launch import LaunchTracker, TrackedLaunch, log_paths, stderr_tail
 from amoeba.runner.observed import Finished, ObservedRun, ResumeFailed
-from amoeba.runner.resolutions.confirm import Confirmed, StillResuming, resume_progress
-from amoeba.runner.resolutions.judge import checkpoint_of
+from amoeba.runner.resolutions.confirm import (
+    Confirmed,
+    ResumedFrom,
+    StillResuming,
+    resume_progress,
+    resumed_from_entry,
+)
 from amoeba.runner.resolutions.vocabulary import Continuation
 from amoeba.store import PARAM_CONTINUATION, PARAM_CONTINUES, JournalEntry, Store
 
@@ -45,16 +53,16 @@ def resume_pending(entry: JournalEntry, tracked: TrackedLaunch | None) -> bool:
     return is_resume(entry) and (tracked is None or not tracked.confirmed)
 
 
-def resumed_from_pauses(
+def resumed_from_states(
     store: Store, entries: Sequence[JournalEntry]
-) -> dict[str, datetime | None]:
-    """The ``paused_at`` each unresolved resume was decided on, by entry id.
+) -> dict[str, ResumedFrom | None]:
+    """The state each unresolved resume was issued from, by entry id.
 
     A missing continued entry or an unparseable outcome document maps to ``None``,
     which the confirmation rule treats as "cannot confirm": the resume waits out the
     grace period and fails ``no_claim_within_grace``.
     """
-    pauses: dict[str, datetime | None] = {}
+    states: dict[str, ResumedFrom | None] = {}
     for entry in entries:
         if not is_resume(entry):
             continue
@@ -62,9 +70,8 @@ def resumed_from_pauses(
         continued = (
             store.journal_entry(continues) if isinstance(continues, str) else None
         )
-        checkpoint = checkpoint_of(continued)
-        pauses[entry.id] = None if checkpoint is None else checkpoint.paused_at
-    return pauses
+        states[entry.id] = resumed_from_entry(continued)
+    return states
 
 
 class ResumeObserver:
@@ -77,10 +84,12 @@ class ResumeObserver:
         tracker: LaunchTracker,
         now: Callable[[], datetime],
         launch_grace_seconds: float,
+        poll: Callable[[str], RunPoll],
         classify: Classify,
         ended: Ended,
         fault: RaiseFault,
     ) -> None:
+        self._poll = poll
         self._supervisor_dir = supervisor_dir
         self._tracker = tracker
         self._now = now
@@ -94,8 +103,9 @@ class ResumeObserver:
         entry: JournalEntry,
         run_id: str,
         poll: RunPoll,
-        resumed_from: Mapping[str, datetime | None],
+        resumed_from: Mapping[str, ResumedFrom | None],
         faults: TickFaults,
+        budget: TickBudget,
     ) -> ObservedRun:
         """Confirm, keep waiting, or end the entry with a ``ResumeFailed``."""
         if isinstance(poll, PollFailure):
@@ -106,12 +116,19 @@ class ResumeObserver:
             return self._fault(entry, run_id, reason, faults)
         tracked = self._tracker.get(entry.id)
         exit_code = None if tracked is None else tracked.child.poll()
-        progress = resume_progress(
-            poll,
-            resumed_from.get(entry.id),
-            exit_code,
-            self._now() >= issued_at + self._grace,
-        )
+        origin = resumed_from.get(entry.id)
+        past_grace = self._now() >= issued_at + self._grace
+        progress = resume_progress(poll, origin, exit_code, past_grace)
+        if exit_code is not None and isinstance(progress, ResumeFailure):
+            # Squadron refuses a resume of a run that is live. That is a poll away
+            # from looking failed, so look again before calling it one (D5).
+            if progress is not ResumeFailure.RUN_MISSING:
+                if not budget.allows_call():
+                    return ObservedRun(InFlightRun(entry, run_id, RunState.LAUNCHING))
+                poll = self._poll(run_id)
+                if isinstance(poll, PollFailure):
+                    return self._classify(entry, run_id, poll, faults)
+                progress = resume_progress(poll, origin, exit_code, past_grace)
         if isinstance(progress, StillResuming):
             return ObservedRun(InFlightRun(entry, run_id, RunState.LAUNCHING))
         if isinstance(progress, Confirmed):
@@ -146,6 +163,6 @@ __all__ = [
     "ResumeObserver",
     "is_resume",
     "resume_pending",
-    "resumed_from_pauses",
+    "resumed_from_states",
     "tail_or_error",
 ]

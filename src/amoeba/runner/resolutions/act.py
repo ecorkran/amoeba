@@ -11,7 +11,6 @@ behind it.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -31,7 +30,7 @@ from amoeba.runner.launch import (
 )
 from amoeba.runner.observed import ResumeFailed
 from amoeba.runner.resolutions.argv import resume_argv
-from amoeba.runner.resolutions.judge import checkpoint_of
+from amoeba.runner.resolutions.confirm import resumed_from_entry
 from amoeba.runner.resolutions.prepoll import Act, prepoll_decision
 from amoeba.runner.resolutions.vocabulary import (
     PARAM_RESUME_CAUSE,
@@ -123,7 +122,7 @@ class ContinuationActs:
         if continued is None:
             raise ValueError(f"entry {action.continues} to continue does not exist")
         poll = self._poll_run(action.run_id)
-        decision = prepoll_decision(action, poll, _paused_at(continued))
+        decision = prepoll_decision(action, poll, resumed_from_entry(continued))
         match decision.act:
             case Act.WAIT:
                 if decision.detail is None:
@@ -208,11 +207,6 @@ class ContinuationActs:
 def _continuation_of(action: ContinuationAction) -> Continuation:
     """What the entry for this action is: a resume's decision, or an observation."""
     return Continuation.OBSERVE if isinstance(action, ObserveRun) else action.decision
-
-
-def _paused_at(continued: JournalEntry) -> datetime | None:
-    checkpoint = checkpoint_of(continued)
-    return None if checkpoint is None else checkpoint.paused_at
 
 
 def _poll_fault(action: ContinuationAction, detail: str) -> Fault:

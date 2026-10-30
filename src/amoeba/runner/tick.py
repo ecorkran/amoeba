@@ -33,7 +33,7 @@ from amoeba.runner.launch import LaunchTracker, PopenFactory
 from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
-from amoeba.runner.observe_resume import resumed_from_pauses
+from amoeba.runner.observe_resume import resumed_from_states
 from amoeba.runner.observed import ObservedRun
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.project_config import ProjectSettings
@@ -122,7 +122,7 @@ class ProjectTick:
             budget,
             faults,
             self._context,
-            resumed_from_pauses(self._store, entries),
+            resumed_from_states(self._store, entries),
         )
         # [reconciliation reads - slice 123: the plan stage, after the probes]
         links = [link.cf_project_id for link in self._store.cf_links(self._project_id)]

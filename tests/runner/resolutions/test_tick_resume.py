@@ -220,6 +220,9 @@ def test_a_failed_resume_escalates_once_and_offers_the_pause_decisions_again(
     entry = _continuation(rig, step)
     rig.tick_rig.tracker.track(entry.id, Child(exit_code))
     answer_poll(rig, run_id, RunOutcome.PAUSED, checkpoint=LOOP_CHECKPOINT)
+    if exit_code is not None:
+        # The look taken again before an exited child's resume is called failed.
+        answer_poll(rig, run_id, RunOutcome.PAUSED, checkpoint=LOOP_CHECKPOINT)
     _issued_long_ago(rig, entry, seconds)
     rig.tick_rig.clock.seconds += STEP_INTERVAL
 
