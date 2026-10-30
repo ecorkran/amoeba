@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cf_stub import STATE_ENV
-from cf_stub_gates import STATUS_POINTER_ENV
 from contract.launched import LaunchedProcess
 from sq_stub import (
     LOG_ENV,
@@ -36,7 +35,7 @@ from amoeba.store import (
 )
 from runner.crash_entry import CRASH_PROJECT, KILL_AT_ENV, KillPoint
 from runner.dispatch.pointer_support import CfWorld
-from runner.gate_rig import STATUS_FIXTURES, rig_checkout
+from runner.gate_rig import rig_checkout
 from runner.tick_support import drive_project, ready_slice
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
@@ -134,9 +133,6 @@ class CrashHarness:
                 f"{self.world.bin_dir}{os.pathsep}{environment['PATH']}"
             )
             environment[STATE_ENV] = str(self.world.state_path)
-            environment[STATUS_POINTER_ENV] = str(
-                STATUS_FIXTURES / "in_implementation.json"
-            )
         if kill_at is not None:
             environment[KILL_AT_ENV] = kill_at.value
         return environment

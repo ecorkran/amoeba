@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from cf_stub_gates import CONFIG_MODE_ENV, STATUS_POINTER_ENV, GateMode
+from cf_stub_gates import CONFIG_MODE_ENV, GateMode
 
 from amoeba.process import RunOutcome
 from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
@@ -30,7 +30,7 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
-from runner.gate_rig import STATUS_FIXTURES, config_knobs
+from runner.gate_rig import config_knobs
 from runner.git_repo import commit_file, detach_head, head_of, make_branch
 from runner.observe_support import document
 from runner.resolutions.resolution_support import resolve_block
@@ -56,15 +56,11 @@ def _gates(
     rig: DispatchRig,
     tmp_path: Path,
     *,
-    status: str = "in_implementation",
     config: dict[str, str] | None = None,
     config_mode: GateMode | None = None,
 ) -> None:
-    """Point the tick's gate reads at the stub: where CF stands, and its config."""
-    knobs = {
-        STATUS_POINTER_ENV: str(STATUS_FIXTURES / f"{status}.json"),
-        **config_knobs(tmp_path, config or {}),
-    }
+    """Point the tick's target read at the stub's config."""
+    knobs = config_knobs(tmp_path, config or {})
     if config_mode is not None:
         knobs[CONFIG_MODE_ENV] = config_mode.value
     rig.tick_rig.gate_run = rig.world.run(knobs)

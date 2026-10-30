@@ -22,8 +22,6 @@ from runner.dispatch.pointer_support import budget_allowing, generous_budget
 from runner.gate_rig import (
     config_knobs,
     git_checkout,
-    single_status_knobs,
-    status_fixture,
 )
 
 SLICE = 125
@@ -38,11 +36,7 @@ class Setup:
         self.checkout = git_checkout(tmp_path / "checkout")
         bin_dir = write_cf_stub(tmp_path / "bin")
         monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
-        fixture = status_fixture(tmp_path / "s.json", "in_implementation", SLICE)
-        for name, value in {
-            **single_status_knobs(fixture),
-            **config_knobs(tmp_path, {}),
-        }.items():
+        for name, value in config_knobs(tmp_path, {}).items():
             monkeypatch.setenv(name, value)
         self.stage = CheckStage(
             context=NodeContext(),

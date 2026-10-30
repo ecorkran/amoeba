@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from cf_stub import write_cf_stub
-from cf_stub_gates import CONFIG_MODE_ENV, STATUS_MODE_ENV, GateMode
+from cf_stub_gates import CONFIG_MODE_ENV, GateMode
 
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.dispatch.candidates import Candidate, launch_candidates
@@ -29,8 +29,6 @@ from runner.dispatch.pointer_support import budget_allowing, generous_budget
 from runner.gate_rig import (
     config_knobs,
     git_checkout,
-    single_status_knobs,
-    status_fixture,
 )
 from runner.git_repo import commit_file, head_of, make_branch
 
@@ -134,13 +132,7 @@ class World:
         self.checkout = git_checkout(tmp_path / "checkout")
         bin_dir = write_cf_stub(tmp_path / "bin")
         monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
-        self.status("in_implementation_no_task_done")
         self.config({})
-
-    def status(self, captured: str, index: int = SLICE) -> None:
-        fixture = status_fixture(self.tmp_path / "s.json", captured, index)
-        for name, value in single_status_knobs(fixture).items():
-            self.monkeypatch.setenv(name, value)
 
     def config(self, values: dict[str, str]) -> None:
         for name, value in config_knobs(self.tmp_path, values).items():
@@ -188,15 +180,6 @@ def test_the_target_is_the_integration_branch_when_one_is_set(world: World) -> N
     reads = world.read(world.candidate())
 
     assert isinstance(reads, DispatchReads) and reads.target == "dev/erik"
-
-
-def test_cf_s_gate_is_not_read(world: World) -> None:
-    """A failing ``cf status`` changes nothing: the pipeline owns its gates (132)."""
-    world.monkeypatch.setenv(STATUS_MODE_ENV, GateMode.FAIL.value)
-
-    result = world.read(world.candidate())
-
-    assert isinstance(result, DispatchReads)
 
 
 def test_a_failed_target_read_is_a_read_failure(world: World) -> None:

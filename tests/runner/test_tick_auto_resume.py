@@ -31,7 +31,6 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
-from runner.gate_rig import clear_gates
 from runner.intent.intent_support import submit
 from runner.resolutions.rig_support import INDEX
 
@@ -46,8 +45,7 @@ def rig(tmp_path: Path, store: Store) -> Iterator[DispatchRig]:
 
 
 def _launched(rig: DispatchRig) -> Node:
-    slice_node, step = rig.slice_and_step("auto-resume", INDEX)
-    clear_gates(rig, slice_node)
+    _, step = rig.slice_and_step("auto-resume", INDEX)
     rig.tick()
     assert rig.run_of(step)
     return step

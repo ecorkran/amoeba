@@ -13,8 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from cf_stub_gates import STATUS_POINTER_ENV
-
 from amoeba.process import RunOutcome, RunOutcomeDocument
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import log_paths
@@ -28,7 +26,7 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.pointer_support import CfWorld
-from runner.gate_rig import STATUS_FIXTURES, rig_checkout
+from runner.gate_rig import rig_checkout
 from runner.observe_support import Child
 from runner.tick_support import (
     PROJECT,
@@ -83,17 +81,14 @@ class DispatchRig:
             self.snapshot()
 
     def use_clean_checkouts(self) -> None:
-        """Make each checkout a clean git repository, and CF's gate one past the tasks.
+        """Make each checkout a clean git repository, with a stub ``cf`` for config.
 
-        The pre-dispatch checks (slice 128) read both. The stub reports the slice the
-        pointer holds, standing past the slice and tasks gates, so a pointed step may
-        launch; tests of a blocked launch change the repository or the knobs.
+        The pre-dispatch check reads the checkout's git state and the target branch;
+        tests of a blocked launch change the repository or the knobs.
         """
         rig_checkout(self.world.root)
         rig_checkout(self.world.second)
-        self.tick_rig.gate_run = self.world.run(
-            {STATUS_POINTER_ENV: str(STATUS_FIXTURES / "in_implementation.json")}
-        )
+        self.tick_rig.gate_run = self.world.run({})
 
     def snapshot(
         self,

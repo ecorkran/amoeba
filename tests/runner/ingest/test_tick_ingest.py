@@ -29,7 +29,6 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
-from runner.gate_rig import clear_gates
 from runner.resolutions.rig_support import successor_slice
 
 PROJECT = "demo"
@@ -155,7 +154,6 @@ def test_a_completed_runs_successor_is_dispatched_in_the_tick_that_completes_it(
     rig: DispatchRig,
 ) -> None:
     slice_node, step = rig.slice_and_step("advance", INDEX)
-    clear_gates(rig, slice_node)
     rig.tick()
     successor = successor_slice(rig, slice_node)
     review = single_review(CF_SLUG)

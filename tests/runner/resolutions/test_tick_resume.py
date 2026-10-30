@@ -27,7 +27,6 @@ from amoeba.store import (
     Store,
 )
 from runner.dispatch.tick_rig import DispatchRig
-from runner.gate_rig import clear_gates
 from runner.observe_support import GRACE, Child
 from runner.resolutions.resolution_support import (
     PAUSED_AT,
@@ -148,8 +147,7 @@ def test_a_resolution_is_acknowledged_before_the_resume_in_the_same_tick(
 
 def _loop_paused_step(rig: DispatchRig) -> tuple[Node, str]:
     """A step whose run paused at a loop with a CONCERNS review, ingested."""
-    slice_node, step = rig.slice_and_step("failed-resume", INDEX)
-    clear_gates(rig, slice_node)
+    _, step = rig.slice_and_step("failed-resume", INDEX)
     rig.tick()
     rig.end_run(
         step,
