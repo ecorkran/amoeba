@@ -490,10 +490,10 @@ Steps 5–7 use the stub `sq` and `cf` from `tests/`; steps 1–4 run against a 
 
    Start with `amoeba start --project-config ~/.config/amoeba/projects.yaml`. Expected: the log line `project config loaded from …`. No routing-table line.
 2. **Bad config refuses.** Add `params: {slice: "1"}` and restart. Expected: start fails, naming `projects.amoeba.params.slice`. Revert.
-3. **Drive a slice.** `amoeba submit intent --project amoeba --by pm --node-id <slice-node> --body '{"intent": "drive"}'`. On the next tick:
+3. **Drive a slice.** `amoeba submit intent --project amoeba --by pm --node-id <slice-node> --body '{"intent": "drive"}'`. Run it on a scratch project (a throwaway `CONTEXT_FORGE_DATA_DIR` and `--cf-data-dir`, a throwaway checkout whose `.env` carries the provider keys, and a throwaway `AMOEBA_STORE_DIR`) so no real repo is touched. On the next tick:
    - `amoeba inspect journal --project amoeba` shows one `sq_run` entry with `pipeline: p456` and no `cf_write` entry.
    - `ps` shows `sq run p456 <index> --run-id …`.
-4. **Completion.** When the run completes, `amoeba inspect nodes --project amoeba` shows the slice `done`, and the next slice by index gets its launch on a following tick.
+4. **Completion.** When the run completes, `amoeba inspect nodes --project amoeba` shows the slice `done`. The next slice by index gets its launch on a following tick once it is driven too: submit the same intent on the initiative node, so it covers every slice under it.
 5. **Transient resume (stub).** Run `pytest tests/runner/test_tick_auto_resume.py`. The scripted run stops transiently twice, then completes. Expected: two `resume_cause: transient` entries, then `done`; with four failures at one step the fourth blocks with `auto_resume_exhausted`.
 6. **Question (stub).** Run `pytest tests/runner/test_end_to_end.py -k agent_question` (it blocks the slice on a human with the question, resumes it with instructions verbatim, and the slice finishes). On a real store, `amoeba inspect blocked --json` shows `reason: agent_question` and the question text. Run `amoeba submit resolution --project amoeba --by pm --blocked-state-id <id> --detail "answered" --decision resume --instructions "Use the target branch."`. Expected: a resume entry with those instructions, and the slice proceeds.
 7. **One list.** With two stub projects each holding a blocked slice, `amoeba inspect blocked` with no `--project` shows both, with `project_id` and `reason`.
