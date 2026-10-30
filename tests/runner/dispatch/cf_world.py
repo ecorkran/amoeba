@@ -1,4 +1,4 @@
-"""A stub ``cf`` world for the dispatch tests: state file, worktrees and budgets."""
+"""A stub ``cf`` world for the dispatch tests: worktrees, snapshots and budgets."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from cf_harness import observed
-from cf_stub import STATE_ENV, write_cf_state, write_cf_stub
+from cf_stub import write_cf_stub
 
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
@@ -24,9 +24,6 @@ from amoeba.upstream.context_forge import (
 )
 
 PROJECT = "demo"
-CF_ID = "project_1_abc"
-STEM = "125-slice.run-dispatch-and-outcome-ingestion"
-TIMEOUT = 30.0
 
 
 class Host:
@@ -45,29 +42,14 @@ def budget_allowing(calls: int) -> TickBudget:
 
 
 class CfWorld:
-    """Two worktrees (indexes 100-199 and 200-299), a stub ``cf`` over their state."""
+    """Two worktrees (indexes 100-199 and 200-299) and a stub ``cf`` on ``PATH``."""
 
     def __init__(self, tmp_path: Path) -> None:
         self.root = tmp_path / "main"
         self.second = tmp_path / "second"
         self.root.mkdir(parents=True)
         self.second.mkdir(parents=True)
-        self.state_path = tmp_path / "cf-state.json"
         self.bin_dir = write_cf_stub(tmp_path / "bin")
-        write_cf_state(
-            self.state_path,
-            cf_project_id=CF_ID,
-            project_path=self.root,
-            worktrees=[
-                self.worktree_entry("wt_a", self.root, 100, 199),
-                self.worktree_entry("wt_b", self.second, 200, 299),
-            ],
-            slices={
-                125: STEM,
-                126: "126-slice.next-in-root",
-                225: "225-slice.second",
-            },
-        )
 
     def snapshot_input(
         self,
@@ -104,7 +86,6 @@ class CfWorld:
         env = {
             **os.environ,
             "PATH": f"{self.bin_dir}{os.pathsep}{os.environ['PATH']}",
-            STATE_ENV: str(self.state_path),
             **(knobs or {}),
         }
 

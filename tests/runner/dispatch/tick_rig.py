@@ -25,7 +25,7 @@ from amoeba.store import (
     NodeStatus,
     Store,
 )
-from runner.dispatch.pointer_support import CfWorld
+from runner.dispatch.cf_world import CfWorld
 from runner.gate_rig import rig_checkout
 from runner.observe_support import Child
 from runner.tick_support import (

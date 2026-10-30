@@ -16,7 +16,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from cf_stub import STATE_ENV
 from contract.launched import LaunchedProcess
 from sq_stub import (
     LOG_ENV,
@@ -34,7 +33,7 @@ from amoeba.store import (
     project_store_path,
 )
 from runner.crash_entry import CRASH_PROJECT, KILL_AT_ENV, KillPoint
-from runner.dispatch.pointer_support import CfWorld
+from runner.dispatch.cf_world import CfWorld
 from runner.gate_rig import rig_checkout
 from runner.tick_support import drive_project, ready_slice
 
@@ -132,7 +131,6 @@ class CrashHarness:
             environment["PATH"] = (
                 f"{self.world.bin_dir}{os.pathsep}{environment['PATH']}"
             )
-            environment[STATE_ENV] = str(self.world.state_path)
         if kill_at is not None:
             environment[KILL_AT_ENV] = kill_at.value
         return environment

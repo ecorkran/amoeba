@@ -24,8 +24,8 @@ from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
+from runner.dispatch.cf_world import budget_allowing, generous_budget
 from runner.dispatch.dispatch_support import FIRST, SECOND, entry, facts, node
-from runner.dispatch.pointer_support import budget_allowing, generous_budget
 from runner.gate_rig import (
     config_knobs,
     git_checkout,

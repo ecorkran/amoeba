@@ -16,8 +16,6 @@ from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
 
-#: The pointer state file; ``cf_stub.py`` re-exports it for the pointer commands.
-STATE_ENV = "CF_STUB_STATE"
 CONFIG_ENV = "CF_STUB_CONFIG"
 CONFIG_MODE_ENV = "CF_STUB_CONFIG_MODE"
 

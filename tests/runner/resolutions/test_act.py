@@ -39,7 +39,7 @@ from amoeba.store import (
     NodeStatus,
     Store,
 )
-from runner.dispatch.pointer_support import budget_allowing, generous_budget
+from runner.dispatch.cf_world import budget_allowing, generous_budget
 from runner.observe_support import Child, ScriptedPoll
 from runner.resolutions.resolution_support import (
     PAUSED_AT,

@@ -19,25 +19,7 @@ Plan reads (slice 123) answer from the directory ``CF_STUB_PLAN_DIR``:
   successive calls in order, the last repeating, so a test can change the plan
   between reads. A ``<name>.count`` file in the directory holds the call count.
 
-Pointer commands (slice 125) read and write the project state file named by
-``CF_STUB_STATE`` (see ``write_cf_state``), shaped like one ``projects.json`` entry
-with ``worktrees`` (``worktreePath``, ``indexRange``, ``activeSlice``) and a
-``slices`` map of index to ``NNN-slice.{name}``. CF chooses a worktree by working
-directory, and so does the stub: the worktree whose ``worktreePath`` is the longest
-prefix of the process's cwd, else the project level.
-
-* ``cf set -p <id> slice <index>`` stores the slice's stem on that worktree
-  (``activeSlice``) or on the project (``fileSlice``) and bumps ``updatedAt``. An
-  index with no ``slices`` entry exits 1 with ``ARTIFACT_NOT_FOUND`` on stderr. A
-  value already stored writes nothing.
-* ``cf get --json -p <id>`` prints the project's fields; for a worktree, its path
-  as ``projectPath``, its ``activeSlice`` as ``fileSlice`` and a ``worktree`` object,
-  as the real ``cf`` does (``tests/fixtures/cf/cf_get_worktree.json``).
-
-``CF_STUB_SET_MODE`` and ``CF_STUB_GET_MODE`` make those commands ``fail`` (exit 1)
-or ``sleep``; ``CF_STUB_GET_QUIRK`` bends what ``get`` reports (see ``GetQuirk``).
-
-``status`` fixtures and ``config get`` (slice 128) are in ``cf_stub_gates.py``.
+``config get`` (slice 128) is in ``cf_stub_gates.py``.
 
 ``CF_STUB_MODE`` selects a failure; ``CF_STUB_LOG`` appends each invocation's
 arguments. ``write_cf_stub`` is the only definition; a test puts the returned
@@ -46,15 +28,12 @@ directory first on ``PATH``.
 
 from __future__ import annotations
 
-import json
 import sys
 import textwrap
-from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
-from cf_stub_gates import STATE_ENV, gate_commands_script
+from cf_stub_gates import gate_commands_script
 
 INITIATIVES_FIXTURE = (
     Path(__file__).parent / "fixtures" / "cf" / "list_initiatives_a.json"
@@ -65,16 +44,7 @@ SLICE_ERROR_FIXTURE = (
 MODE_ENV = "CF_STUB_MODE"
 LOG_ENV = "CF_STUB_LOG"
 PLAN_DIR_ENV = "CF_STUB_PLAN_DIR"
-SET_MODE_ENV = "CF_STUB_SET_MODE"
-GET_MODE_ENV = "CF_STUB_GET_MODE"
-GET_QUIRK_ENV = "CF_STUB_GET_QUIRK"
 STUB_NAME = "cf"
-
-#: What the ``cf set`` error says on stderr when the index has no slice-plan entry.
-ARTIFACT_NOT_FOUND = "ARTIFACT_NOT_FOUND"
-#: A path and a worktree id the ``get`` quirks report instead of the real ones.
-QUIRK_PROJECT_PATH = "/elsewhere/not-this-checkout"
-QUIRK_WORKTREE_ID = "wt_not_this_worktree"
 
 
 class CfMode(StrEnum):
@@ -92,26 +62,6 @@ class CfMode(StrEnum):
     SLEEP = "sleep"
 
 
-class PointerMode(StrEnum):
-    """How ``cf set`` or ``cf get`` misbehaves; absent means it works."""
-
-    #: Exit 1 with a message on stderr.
-    FAIL = "fail"
-    #: Sleep far past any timeout a test sets.
-    SLEEP = "sleep"
-
-
-class GetQuirk(StrEnum):
-    """What ``cf get`` reports wrongly; absent means the truth."""
-
-    #: No ``fileSlice`` field at all.
-    OMIT_FILE_SLICE = "omit_file_slice"
-    #: A ``projectPath`` that is not the checkout the call ran in.
-    OTHER_PROJECT_PATH = "other_project_path"
-    #: A ``worktree.id`` that is not the worktree the call ran in.
-    OTHER_WORKTREE_ID = "other_worktree_id"
-
-
 _SCRIPT = textwrap.dedent(
     """\
     #!{python}
@@ -126,74 +76,6 @@ _SCRIPT = textwrap.dedent(
 
     arguments = sys.argv[1:]
     mode = os.environ.get({mode_env!r}, {good!r})
-
-    if arguments[:1] in (["set"], ["get"]):
-        import datetime
-        import json
-
-        command = arguments[0]
-        pointer_mode = os.environ.get(
-            {set_mode_env!r} if command == "set" else {get_mode_env!r}
-        )
-        if pointer_mode == {pointer_fail!r}:
-            print("stub cf: " + command + " failed", file=sys.stderr)
-            sys.exit(1)
-        if pointer_mode == {pointer_sleep!r}:
-            time.sleep(600)
-        state_path = os.environ[{state_env!r}]
-        with open(state_path, encoding="utf-8") as handle:
-            entry = json.load(handle)
-
-        # CF chooses a worktree by working directory alone: the longest prefix wins.
-        cwd = os.path.realpath(os.getcwd())
-        worktree = None
-        for candidate in entry.get("worktrees", []):
-            root = os.path.realpath(candidate["worktreePath"])
-            if cwd == root or cwd.startswith(root + os.sep):
-                if worktree is None or len(root) > len(
-                    os.path.realpath(worktree["worktreePath"])
-                ):
-                    worktree = candidate
-
-        if command == "set":
-            if len(arguments) != 5 or arguments[3] != "slice":
-                print("stub cf: unexpected arguments", arguments, file=sys.stderr)
-                sys.exit(2)
-            stem = entry.get("slices", dict()).get(arguments[4])
-            if stem is None:
-                print({not_found!r} + ": no slice " + arguments[4], file=sys.stderr)
-                sys.exit(1)
-            target = entry if worktree is None else worktree
-            field = "fileSlice" if worktree is None else "activeSlice"
-            if target.get(field) != stem:
-                target[field] = stem
-                entry["updatedAt"] = datetime.datetime.now(
-                    datetime.timezone.utc
-                ).isoformat()
-                with open(state_path, "w", encoding="utf-8") as handle:
-                    json.dump(entry, handle)
-            print("slice " + stem)
-            sys.exit(0)
-
-        document = dict(
-            (key, value)
-            for key, value in entry.items()
-            if key not in ("worktrees", "slices")
-        )
-        if worktree is not None:
-            document["projectPath"] = worktree["worktreePath"]
-            if "activeSlice" in worktree:
-                document["fileSlice"] = worktree["activeSlice"]
-            document["worktree"] = worktree
-        quirk = os.environ.get({quirk_env!r})
-        if quirk == {omit_file_slice!r}:
-            document.pop("fileSlice", None)
-        if quirk == {other_project_path!r}:
-            document["projectPath"] = {quirk_path!r}
-        if quirk == {other_worktree_id!r} and worktree is not None:
-            document["worktree"] = dict(worktree, id={quirk_worktree!r})
-        print(json.dumps(document))
-        sys.exit(0)
 
     {gate_commands}
     if len(arguments) < 3 or arguments[-2] != "-p" or "--json" not in arguments:
@@ -275,56 +157,8 @@ def write_cf_stub(bin_dir: Path) -> Path:
             fixture=str(INITIATIVES_FIXTURE),
             error_fixture=str(SLICE_ERROR_FIXTURE),
             plan_env=PLAN_DIR_ENV,
-            set_mode_env=SET_MODE_ENV,
-            get_mode_env=GET_MODE_ENV,
-            pointer_fail=PointerMode.FAIL.value,
-            pointer_sleep=PointerMode.SLEEP.value,
-            state_env=STATE_ENV,
-            not_found=ARTIFACT_NOT_FOUND,
-            quirk_env=GET_QUIRK_ENV,
-            omit_file_slice=GetQuirk.OMIT_FILE_SLICE.value,
-            other_project_path=GetQuirk.OTHER_PROJECT_PATH.value,
-            other_worktree_id=GetQuirk.OTHER_WORKTREE_ID.value,
-            quirk_path=QUIRK_PROJECT_PATH,
-            quirk_worktree=QUIRK_WORKTREE_ID,
         ),
         encoding="utf-8",
     )
     script.chmod(0o755)
     return bin_dir
-
-
-def write_cf_state(
-    path: Path,
-    *,
-    cf_project_id: str,
-    project_path: Path,
-    worktrees: Sequence[Mapping[str, object]] = (),
-    slices: Mapping[int, str] | None = None,
-    file_slice: str | None = None,
-) -> Path:
-    """Write the state file ``STATE_ENV`` names: one ``projects.json``-shaped entry.
-
-    ``worktrees`` are entries with ``id``, ``name``, ``worktreePath``, ``indexRange``
-    and, once pointed, ``activeSlice``. ``slices`` maps an index to its
-    ``NNN-slice.{name}`` stem: what ``cf set`` can point at.
-    """
-    entry: dict[str, object] = {
-        "id": cf_project_id,
-        "name": "stub-project",
-        "projectPath": str(project_path),
-        "updatedAt": "2026-10-24T00:00:00.000Z",
-        "slices": {str(index): stem for index, stem in (slices or {}).items()},
-    }
-    if file_slice is not None:
-        entry["fileSlice"] = file_slice
-    if worktrees:
-        entry["worktrees"] = [dict(worktree) for worktree in worktrees]
-    path.write_text(json.dumps(entry), encoding="utf-8")
-    return path
-
-
-def read_cf_state(path: Path) -> dict[str, Any]:
-    """The state file as ``cf set`` left it."""
-    state: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return state
