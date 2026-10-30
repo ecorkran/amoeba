@@ -17,12 +17,7 @@ from cf_stub_gates import STATUS_POINTER_ENV
 from amoeba.process import RunOutcome, RunOutcomeDocument
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import log_paths
-from amoeba.runner.lifecycle.steps import (
-    STEP_MAP,
-    STEP_SEQUENCE,
-    LifecycleStep,
-    StepLevel,
-)
+from amoeba.runner.project_config import ProjectSettings
 from amoeba.store import (
     PARAM_RUN_ID,
     CommandKind,
@@ -39,10 +34,12 @@ from runner.tick_support import (
     Popen,
     Rig,
     drive_project,
-    ready_slice_step,
+    ready_slice,
 )
 
 CF_PROJECT = "cf-a"
+#: The pipeline the rig's project is configured with.
+PIPELINE = "p456"
 #: The slice index the stub CF names, and its name (a review file carries it).
 CF_SLICE_INDEX = 125
 CF_SLICE_NAME = "run-dispatch-and-outcome-ingestion"
@@ -74,6 +71,7 @@ class DispatchRig:
         self.popen = RecordingPopen(store)
         self.tick_rig.popen = self.popen
         self.tick_rig.planners = (DispatchPlanner(),)
+        self.tick_rig.project_settings = ProjectSettings(pipeline=PIPELINE)
         self.use_clean_checkouts()
         drive_project(store, PROJECT)
         if with_snapshot:
@@ -105,35 +103,20 @@ class DispatchRig:
             )
         )
 
-    def step(
-        self,
-        name: str,
-        slice_index: int,
-        step: LifecycleStep = LifecycleStep.SLICE_DESIGN,
-    ) -> Node:
-        """A ready slice-level step under a new slice of that index."""
-        return self.slice_and_step(name, slice_index, step)[1]
+    def step(self, name: str, slice_index: int) -> Node:
+        """A ready slice, the unit of work (named ``step`` for the tests' sake)."""
+        return self.slice_and_step(name, slice_index)[1]
 
-    def slice_and_step(
-        self,
-        name: str,
-        slice_index: int,
-        step: LifecycleStep = LifecycleStep.SLICE_DESIGN,
-    ) -> tuple[Node, Node]:
-        """``(slice node, ready step node)``; earlier steps of the slice are done."""
-        earlier = tuple(
-            s
-            for s in STEP_SEQUENCE[: STEP_SEQUENCE.index(step)]
-            if STEP_MAP[s].level is StepLevel.SLICE
-        )
-        slice_node, ready = ready_slice_step(
-            self.store, name, PROJECT, step, CF_PROJECT, slice_index, done_steps=earlier
+    def slice_and_step(self, name: str, slice_index: int) -> tuple[Node, Node]:
+        """``(slice node, the same node)``: the slice is the unit of work (132, D1)."""
+        node = ready_slice(
+            self.store, PROJECT, name, CF_PROJECT, slice_index=slice_index
         )
         if slice_index == CF_SLICE_INDEX:
             # CF knows this index by its own name; reviews are attributed by it.
-            reference = replace(slice_node.cf, slice_name=CF_SLICE_NAME)
-            slice_node = self.store.update_cf_reference(slice_node.id, reference)
-        return slice_node, ready
+            reference = replace(node.cf, slice_name=CF_SLICE_NAME)
+            node = self.store.update_cf_reference(node.id, reference)
+        return node, node
 
     def tick(self) -> None:
         self.tick_rig.tick()

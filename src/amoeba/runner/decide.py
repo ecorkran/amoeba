@@ -15,10 +15,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.dispatch.facts import SliceDispatchFacts
 from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.runner.project_config import PROJECT_DEFAULTS, ProjectSettings
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import JournalEntry, Node
 
@@ -119,7 +120,7 @@ class ProjectView:
 
     ``tree`` is the project's lifecycle tree, built after reconcile; it holds every
     node. ``desired`` is the project's desired-state rows, read once for the tick.
-    ``current_steps`` are the ready steps the PM drives and has not held (D6);
+    ``current_slices`` are the ready slices the PM drives and has not held (D6);
     :func:`decide` refuses an action on any other node. ``ready_unbusy`` is the
     wider ready set, kept for slice 125 to narrow.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
@@ -129,6 +130,7 @@ class ProjectView:
     can act in a checkout held only by itself (slice 127). Both are empty for a view
     that dispatches nothing. ``dispatch_checks`` holds this tick's pre-dispatch result
     for each candidate, by node id (D5); a node with no entry has no result.
+    ``settings`` are the project's: its pipeline and parameters (slice 132, D2).
     """
 
     project_id: str
@@ -137,9 +139,9 @@ class ProjectView:
     in_flight: tuple[InFlightRun, ...]
     link_probes: Mapping[str, bool]
     desired: DesiredStateIndex
-    current_steps: Sequence[Node]
-    dispatch: Mapping[str, StepDispatchFacts] = field(
-        default_factory=dict[str, StepDispatchFacts]
+    current_slices: Sequence[Node]
+    dispatch: Mapping[str, SliceDispatchFacts] = field(
+        default_factory=dict[str, SliceDispatchFacts]
     )
     checkout_holders: Mapping[Path, frozenset[str]] = field(
         default_factory=dict[Path, frozenset[str]]
@@ -147,16 +149,17 @@ class ProjectView:
     dispatch_checks: Mapping[str, DispatchCheck] = field(
         default_factory=dict[str, DispatchCheck]
     )
+    settings: ProjectSettings = PROJECT_DEFAULTS
 
     def ready_unbusy(self) -> list[Node]:
-        """Ready steps (``tree.ready_steps()``) with no run in flight.
+        """Ready slices (``tree.ready_slices()``) with no run in flight.
 
         What a planner may start. "In flight" is an unresolved ``sq_run`` entry:
         ``in_flight`` holds every such entry the tick has not finished and
         resolved, which is the only kind of unresolved entry the Runner issues.
         """
         busy = {run.entry.node_id for run in self.in_flight}
-        return [node for node in self.tree.ready_steps() if node.id not in busy]
+        return [node for node in self.tree.ready_slices() if node.id not in busy]
 
 
 class Planner(Protocol):
@@ -172,7 +175,7 @@ def decide(view: ProjectView, planners: Sequence[Planner]) -> list[Action]:
 
     Raises:
         ValueError: If an action names a node that is not one of
-            ``view.current_steps`` (not driven, held, not ready, or unknown): the
+            ``view.current_slices`` (not driven, held, not ready, or unknown): the
             guard that makes drive and hold bind every planner (D7). Or if two
             actions name the same node: a node gets at most one action per tick.
             Neither is ever silently dropped; both are programming errors. Or if a
@@ -182,13 +185,13 @@ def decide(view: ProjectView, planners: Sequence[Planner]) -> list[Action]:
     """
     actions: list[Action] = []
     claimed: set[str] = set()
-    current = {node.id for node in view.current_steps}
+    current = {node.id for node in view.current_slices}
     for planner in planners:
         for action in planner.plan(view):
             if action.node_id not in current:
                 raise ValueError(
                     f"action for node {action.node_id} in project "
-                    f"{view.project_id} is not a current step"
+                    f"{view.project_id} is not a current slice"
                 )
             if action.node_id in claimed:
                 raise ValueError(

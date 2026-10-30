@@ -22,7 +22,7 @@ from runner.lifecycle.crash_support import fail_nth_write, restore_writes
 from runner.observe_support import Child, Clock, FakeCf, ScriptedPoll, document
 from runner.plan_tick_support import serve_plan
 from runner.routing.table_support import TEST_AMOEBA_VERSION, small_table
-from runner.tick_support import drive_project, link, ready_step, runnable_unbusy
+from runner.tick_support import drive_project, link, ready_slice, runnable_unbusy
 
 SETTINGS = ProcessSettings(tick_deadline_seconds=5.0, run_poll_interval_seconds=15.0)
 
@@ -63,7 +63,7 @@ class Rig:
         (supervisor_dir / LAUNCH_LOGS_DIRNAME).mkdir(parents=True)
         self.stores = {p: Store.open(tmp_path / f"{p}.sqlite3") for p in project_ids}
         for project_id, store in self.stores.items():
-            ready_step(store, project_id)
+            ready_slice(store, project_id)
             drive_project(store, project_id)
         self.host = Host(self.stores)
         self.clock = Clock()
@@ -165,7 +165,7 @@ def test_a_project_the_budget_did_not_reach_goes_first_next_tick(
 def test_a_cut_off_project_is_ticked_first_next_time(make_rig: Any) -> None:
     rig: Rig = make_rig("a", "b")
     rig.launch_cost = 10.0
-    second = ready_step(rig.stores["a"], "a")
+    second = ready_slice(rig.stores["a"], "a")
 
     rig.tenant.tick(rig.host)  # a launches one node, the budget is spent, a is cut off
     assert rig.launches == 1 and second.id

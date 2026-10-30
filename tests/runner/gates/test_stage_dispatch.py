@@ -16,7 +16,6 @@ from amoeba.runner.faults import FaultKind, NodeContext, TickFaults
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.gates.stage import GateStage
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import Store
 from runner.dispatch.dispatch_support import facts, view_of
 from runner.dispatch.pointer_support import budget_allowing, generous_budget
@@ -54,13 +53,9 @@ class Setup:
             amoeba_version="amoeba-test",
         )
 
-    def view(self, step: LifecycleStep = LifecycleStep.TASKS) -> ProjectView:
+    def view(self) -> ProjectView:
         return view_of(
-            {
-                "a": facts(
-                    DispatchState.READY, self.checkout, step=step, slice_index=SLICE
-                )
-            }
+            {"a": facts(DispatchState.READY, self.checkout, slice_index=SLICE)}
         )
 
 

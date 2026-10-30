@@ -33,15 +33,15 @@ from amoeba.runner.decide import (
     ResumeRun,
 )
 from amoeba.runner.dispatch.checkout import Checkout
-from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.dispatch.facts import SliceDispatchFacts, SortKey
 from amoeba.runner.dispatch.params import (
     PARAM_DISPATCH_CHECK,
-    dispatch_params,
-    pipeline_for,
+    launch_params,
 )
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE, text_parameter
+from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.resolutions.vocabulary import (
     ResumeCause,
 )
@@ -58,8 +58,8 @@ class DispatchPlanner:
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
         """At most one action per checkout, the best candidate in each."""
-        best: dict[Path, tuple[tuple[int, int, int], Node]] = {}
-        for node in view.current_steps:
+        best: dict[Path, tuple[SortKey, Node]] = {}
+        for node in view.current_slices:
             facts = view.dispatch.get(node.id)
             if facts is None or not isinstance(facts.checkout, Checkout):
                 continue
@@ -90,12 +90,14 @@ def _held_by_another(
     return bool(holders)
 
 
-def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action | None:
+def _action(node: Node, facts: SliceDispatchFacts, view: ProjectView) -> Action | None:
     checkout = facts.checkout
     if not isinstance(checkout, Checkout):
         raise ValueError(f"step {node.id} has no resolved checkout")
     if facts.state is DispatchState.AUTO_RESUME:
         return _auto_resume(node, facts, view)
+    if facts.state is DispatchState.READY and view.settings.pipeline is None:
+        return None  # no pipeline configured: nothing to launch (D2)
     if facts.state in _LAUNCHES:
         # A launch or reissue goes ahead only on a passed pre-dispatch check (D5).
         check = view.dispatch_checks.get(node.id)
@@ -103,30 +105,33 @@ def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action |
             return None
         if isinstance(check, Block):
             return BlockDispatch(node.id, check)
-        return _launch(node, facts, checkout, check)
-    raise ValueError(f"step {node.id} in state {facts.state} is not planned")
+        return _launch(node, facts, checkout, check, view.settings)
+    raise ValueError(f"slice {node.id} in state {facts.state} is not planned")
 
 
 def _launch(
     node: Node,
-    facts: StepDispatchFacts,
+    facts: SliceDispatchFacts,
     checkout: Checkout,
     check: Ok,
+    settings: ProjectSettings,
 ) -> LaunchRun:
     """The launch or reissue, with the evidence it was based on (D5)."""
     if facts.state is DispatchState.REISSUE:
         return _reissue(node, facts, check)
+    if settings.pipeline is None:
+        raise ValueError(f"slice {node.id} has no configured pipeline to launch")
     return LaunchRun(
         node.id,
-        pipeline_for(facts.step),
-        dispatch_params(facts.step, facts.slice_index),
+        settings.pipeline,
+        launch_params(settings, facts.slice_index),
         checkout.path,
         journal_extra={PARAM_DISPATCH_CHECK: dict(check.evidence)},
     )
 
 
 def _auto_resume(
-    node: Node, facts: StepDispatchFacts, view: ProjectView
+    node: Node, facts: SliceDispatchFacts, view: ProjectView
 ) -> Action | None:
     """Resume a run that stopped in a transient way, once ready and checked (D5)."""
     stopped = facts.continues
@@ -151,7 +156,7 @@ def _auto_resume(
     )
 
 
-def _reissue(node: Node, facts: StepDispatchFacts, check: Ok) -> LaunchRun:
+def _reissue(node: Node, facts: SliceDispatchFacts, check: Ok) -> LaunchRun:
     """The attempt that never started, repeated under its own run id (D9)."""
     old = facts.reissue_of
     if old is None:

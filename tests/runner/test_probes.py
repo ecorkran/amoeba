@@ -31,7 +31,7 @@ from amoeba.runner.probes import (
 )
 from amoeba.store import Store
 from runner.observe_support import Clock, FakeCf, Host, document
-from runner.tick_support import PROJECT, Rig, drive_project, link, ready_step
+from runner.tick_support import PROJECT, Rig, drive_project, link, ready_slice
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "cf"
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
@@ -303,7 +303,7 @@ def test_a_cut_off_probe_records_nothing_and_restarts_from_the_first_command() -
 def test_a_failed_link_raises_one_escalation_and_the_tick_carries_on(
     tmp_path: Path, store: Store
 ) -> None:
-    ready_step(store)
+    ready_slice(store)
     drive_project(store)
     link(store, "s-1", "cf-dead", PROJECT)
     rig = Rig(tmp_path, store)

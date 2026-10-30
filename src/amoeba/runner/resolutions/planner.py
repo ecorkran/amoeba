@@ -20,7 +20,7 @@ from amoeba.runner.decide import (
     ResumeRun,
 )
 from amoeba.runner.dispatch.checkout import Checkout
-from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.dispatch.facts import SliceDispatchFacts
 from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.gates.predispatch import Block
@@ -35,7 +35,7 @@ class ContinuationPlanner:
     def plan(self, view: ProjectView) -> Sequence[Action]:
         """One action per eligible step, in the view's step order."""
         actions: list[Action] = []
-        for node in view.current_steps:
+        for node in view.current_slices:
             facts = view.dispatch.get(node.id)
             if facts is None or facts.state not in _STATES:
                 continue
@@ -48,7 +48,7 @@ class ContinuationPlanner:
 _STATES = frozenset({DispatchState.RESUME})
 
 
-def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action | None:
+def _action(node: Node, facts: SliceDispatchFacts, view: ProjectView) -> Action | None:
     """The step's action, or ``None`` while it waits or cannot be placed."""
     continued, resolution = facts.continues, facts.resolution
     if not isinstance(facts.checkout, Checkout):

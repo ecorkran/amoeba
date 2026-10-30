@@ -1,9 +1,9 @@
-"""The pipeline and parameters a step is launched with (D5), defined once.
+"""The parameters a slice is launched with, defined once (D2, slice 132).
 
-The pipeline comes from ``STEP_MAP``. Every pipeline step gets the slice index and
-nothing else: whether a pipeline merges is the pipeline's own business (slice 132, D2).
-Other parameters (models, revision limits) are not passed: Squadron's pipeline
-defaults apply.
+The pipeline is the project's configured one and every launch gets the slice index
+plus the project's own ``params``: whether a pipeline merges, or which models it
+uses, is the pipeline's business. Config validation refuses a ``slice`` key in
+``params``, so the slice index cannot be overridden here.
 
 The journal key that records the pre-dispatch check on a launch's entry is defined
 here too; it is evidence, not a ``-p`` parameter.
@@ -15,11 +15,7 @@ from collections.abc import Mapping
 from typing import Final
 
 from amoeba.runner.launch import TARGET_PARAM_KEY
-from amoeba.runner.lifecycle.steps import (
-    STEP_MAP,
-    Executor,
-    LifecycleStep,
-)
+from amoeba.runner.project_config import ProjectSettings
 
 #: ``slice`` is the pipeline's primary parameter, which ``build_argv`` passes as the
 #: target.
@@ -31,23 +27,6 @@ PARAM_MERGE_POLICY: Final = "merge_policy"
 PARAM_DISPATCH_CHECK: Final = "dispatch_check"
 
 
-def pipeline_for(step: LifecycleStep) -> str:
-    """The pipeline that runs ``step``.
-
-    Raises:
-        ValueError: ``step`` is a human step, which no pipeline runs.
-    """
-    spec = STEP_MAP[step]
-    if spec.executor is not Executor.PIPELINE or spec.pipeline is None:
-        raise ValueError(f"step {step.value} is not run by a pipeline")
-    return spec.pipeline
-
-
-def dispatch_params(step: LifecycleStep, slice_index: int) -> Mapping[str, str]:
-    """The ``-p`` parameters for launching ``step``'s pipeline on a slice.
-
-    Raises:
-        ValueError: ``step`` is a human step.
-    """
-    pipeline_for(step)
-    return {PARAM_SLICE: str(slice_index)}
+def launch_params(settings: ProjectSettings, slice_index: int) -> Mapping[str, str]:
+    """The ``-p`` parameters for launching the project's pipeline on a slice."""
+    return {PARAM_SLICE: str(slice_index), **settings.params}

@@ -9,13 +9,13 @@ from pathlib import Path
 
 from amoeba.runner.decide import ProjectView
 from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
-from amoeba.runner.dispatch.facts import SortKey, StepDispatchFacts
+from amoeba.runner.dispatch.facts import SliceDispatchFacts, SortKey
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.gates.predispatch import DispatchCheck, Ok
 from amoeba.runner.ingest.record import RESULT_OUTCOME
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
-from amoeba.runner.lifecycle.steps import LifecycleStep, step_rank
 from amoeba.runner.lifecycle.tree import LifecycleTree
+from amoeba.runner.project_config import ProjectSettings
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_RUN_ID,
@@ -94,20 +94,18 @@ def facts(
     state: DispatchState,
     checkout: Path | CheckoutUnresolved | None = FIRST,
     *,
-    step: LifecycleStep = LifecycleStep.TASKS,
     slice_index: int = 125,
     initiative_index: int = 120,
     reissue_of: JournalEntry | None = None,
     resolution: BlockedState | None = None,
     continues: JournalEntry | None = None,
-) -> StepDispatchFacts:
-    """Dispatch facts for a step; the sort key follows the LLD's order."""
+) -> SliceDispatchFacts:
+    """Dispatch facts for a slice; the sort key follows the LLD's order."""
     resolved = (
         Checkout(checkout, None) if isinstance(checkout, Path) else checkout
     ) or CheckoutUnresolved("test")
-    sort_key: SortKey = (initiative_index, slice_index, step_rank(step))
-    return StepDispatchFacts(
-        step=step,
+    sort_key: SortKey = (initiative_index, slice_index)
+    return SliceDispatchFacts(
         state=state,
         checkout=resolved,
         slice_index=slice_index,
@@ -119,26 +117,35 @@ def facts(
     )
 
 
+#: The pipeline the test projects are configured with.
+TEST_PIPELINE = "p456"
+
+
 def view_of(
-    steps: dict[str, StepDispatchFacts],
+    steps: dict[str, SliceDispatchFacts],
     held: Iterable[Path] = (),
     current: Iterable[str] | None = None,
     holders: Mapping[Path, frozenset[str]] | None = None,
     checks: Mapping[str, DispatchCheck] | None = None,
+    settings: ProjectSettings | None = None,
 ) -> ProjectView:
-    """A view whose current steps are ``current`` (default: all of ``steps``).
+    """A view whose current slices are ``current`` (default: all of ``steps``).
 
     ``held`` checkouts are held by an unnamed node; ``holders`` names who holds each.
     ``checks`` are the pre-dispatch results; by default every current step has passed
-    (``OK``), so a planner test sees a launch unless it says otherwise.
+    (``OK``), so a planner test sees a launch unless it says otherwise. ``settings``
+    default to a project configured with ``TEST_PIPELINE``.
     """
     names = list(steps) if current is None else list(current)
     named = {path: frozenset({"unnamed-holder"}) for path in held}
     named.update(holders or {})
     return replace(
         view_for(LifecycleTree(())),
-        current_steps=tuple(node(name) for name in names),
+        current_slices=tuple(node(name) for name in names),
         dispatch=steps,
         checkout_holders=named,
         dispatch_checks={name: OK for name in names} if checks is None else checks,
+        settings=ProjectSettings(pipeline=TEST_PIPELINE)
+        if settings is None
+        else settings,
     )

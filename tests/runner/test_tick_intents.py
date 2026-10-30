@@ -10,19 +10,13 @@ import pytest
 from amoeba.runner.budget import TickResult
 from amoeba.runner.faults import RUNNER_ACTOR
 from amoeba.runner.intent import apply as apply_module
-from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import (
     AcknowledgmentOutcome,
     Channel,
-    NodeKind,
-    NodeStatus,
     Store,
     StoreBusyError,
 )
-from runner.observe_support import CfReply
-from runner.plan_tick_support import INITIATIVES_KEY, initiatives_json, slices_key
-from runner.tick_support import PROJECT, Rig, StoreHost, link, tenant_for
+from runner.tick_support import PROJECT, Rig, StoreHost, tenant_for
 
 from .intent.intent_support import submit
 
@@ -64,27 +58,6 @@ def test_a_tick_that_only_applied_an_intent_reports_a_write(
     submit(store, {"intent": "pause"}, project_id=PROJECT)
     assert tenant_for(rig).tick(StoreHost(store)) is True
     assert tenant_for(rig).tick(StoreHost(store)) is False
-
-
-def test_a_driven_initiative_without_arch_file_is_blocked_in_the_same_tick(
-    rig: Rig, store: Store
-) -> None:
-    rig.planners = (HumanStepPlanner(),)
-    link(store, "s-1", LINK, PROJECT)
-    rig.cf.replies[INITIATIVES_KEY] = CfReply(initiatives_json(140, arch_file=None))
-    rig.cf.replies[slices_key(140)] = CfReply("", 1, '{"error":true,"code":"UNKNOWN"}')
-    submit(store, {"intent": "drive"}, project_id=PROJECT)
-
-    rig.tick()
-
-    [architecture] = [
-        n
-        for n in store.nodes_for_project(PROJECT)
-        if n.kind is NodeKind.PHASE_OR_ARTIFACT
-        and n.cf.phase == LifecycleStep.ARCHITECTURE.value
-    ]
-    stored = store.get_node(architecture.id)
-    assert stored is not None and stored.status is NodeStatus.BLOCKED_ON_HUMAN
 
 
 def _break_interpret(monkeypatch: pytest.MonkeyPatch, fail_for: str | None) -> None:

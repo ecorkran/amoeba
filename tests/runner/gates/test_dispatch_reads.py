@@ -23,7 +23,6 @@ from amoeba.runner.gates.dispatch_reads import (
 )
 from amoeba.runner.gates.predispatch import Block, Ok
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
 from runner.dispatch.dispatch_support import FIRST, SECOND, entry, facts, node
 from runner.dispatch.pointer_support import budget_allowing, generous_budget
@@ -70,7 +69,6 @@ def _candidates(
 def test_a_ready_step_is_a_candidate_in_a_free_checkout() -> None:
     [candidate] = _candidates(DispatchState.READY)
 
-    assert candidate.pipeline == "P5"
     assert candidate.resume is False
 
 
@@ -78,10 +76,10 @@ def test_a_ready_step_in_a_held_checkout_is_not_a_candidate() -> None:
     assert _candidates(DispatchState.READY, {FIRST: frozenset({"other"})}) == ()
 
 
-def test_a_reissue_in_a_free_checkout_is_a_candidate_with_its_old_pipeline() -> None:
+def test_a_reissue_in_a_free_checkout_is_a_candidate() -> None:
     [candidate] = _candidates(DispatchState.REISSUE)
 
-    assert candidate.pipeline == "P5"
+    assert candidate.resume is False
 
 
 def test_a_reissue_in_a_held_checkout_is_not_a_candidate() -> None:
@@ -150,7 +148,6 @@ class World:
 
     def candidate(
         self,
-        step: LifecycleStep = LifecycleStep.IMPLEMENTATION,
         *,
         resume: bool = False,
         automatic: bool = False,
@@ -158,10 +155,8 @@ class World:
         state = DispatchState.AUTO_RESUME if automatic else DispatchState.RESUME
         return Candidate(
             "a",
-            step,
             state if resume or automatic else DispatchState.READY,
             Checkout(self.checkout, None),
-            "P6",
             SLICE,
             "cf-a",
         )
@@ -220,10 +215,8 @@ def test_a_checkout_that_is_not_a_repository_is_a_read_failure(world: World) -> 
     candidate = world.candidate()
     candidate = Candidate(
         candidate.node_id,
-        candidate.step,
         candidate.state,
         Checkout(bare, None),
-        candidate.pipeline,
         candidate.slice_index,
         candidate.cf_project_id,
     )

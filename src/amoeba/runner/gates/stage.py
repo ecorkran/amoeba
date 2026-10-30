@@ -130,7 +130,7 @@ class GateStage:
         """
         checks: dict[str, DispatchCheck] = {}
         for candidate in launch_candidates(
-            view.current_steps, view.dispatch, view.checkout_holders
+            view.current_slices, view.dispatch, view.checkout_holders
         ):
             self._context.set(candidate.node_id)
             reads = read_dispatch_facts(

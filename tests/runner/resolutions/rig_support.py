@@ -5,7 +5,6 @@ from __future__ import annotations
 from sq_stub_scripts import RunScript, single_review
 
 from amoeba.process import RunOutcome, RunOutcomeDocument
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import CFReference, Node, NodeKind
 from runner.dispatch.tick_rig import CF_PROJECT, DispatchRig
 from runner.resolutions.resolution_support import PAUSED_AT
@@ -52,12 +51,15 @@ def launched_step(rig: DispatchRig, name: str) -> tuple[Node, Node]:
     return slice_node, step
 
 
-def tasks_step(rig: DispatchRig, slice_node: Node) -> Node:
-    """The successor of the slice design step."""
+def successor_slice(rig: DispatchRig, slice_node: Node) -> Node:
+    """The slice after ``slice_node`` in its initiative: it waits for it to be done."""
+    assert slice_node.parent_id is not None and slice_node.cf.index is not None
     return rig.store.create_node(
         project_id=PROJECT,
-        kind=NodeKind.PHASE_OR_ARTIFACT,
-        title=LifecycleStep.TASKS.value,
-        parent_id=slice_node.id,
-        cf=CFReference(project=CF_PROJECT, phase=LifecycleStep.TASKS.value),
+        kind=NodeKind.SLICE,
+        title="successor",
+        parent_id=slice_node.parent_id,
+        cf=CFReference(
+            project=CF_PROJECT, slice_name="successor", index=slice_node.cf.index + 1
+        ),
     )

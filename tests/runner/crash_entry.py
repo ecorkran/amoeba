@@ -38,7 +38,7 @@ from amoeba.runner.decide import Action, LaunchRun, Planner, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.probes import probe_sq
-from amoeba.runner.project_config import ProjectConfig
+from amoeba.runner.project_config import ProjectConfig, ProjectSettings
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.store import Store
@@ -60,6 +60,10 @@ CALL_TIMEOUT_SECONDS = 4.0
 RUN_POLL_INTERVAL_SECONDS = 0.2
 #: Short, so a restart that finds a stateless entry waits at most this long.
 LAUNCH_GRACE_SECONDS = 2.0
+
+
+#: The project the crash proofs run, and the pipeline it is configured with.
+CRASH_PROJECT = "crash-proof"
 
 
 class KillPoint(StrEnum):
@@ -239,7 +243,7 @@ def main(argv: Sequence[str]) -> None:
         monotonic=time.monotonic,
         version_label="sq-test-label",
         routing_table=small_table(ADVANCE_COMPLETED),
-        project_config=ProjectConfig(),
+        project_config=ProjectConfig({CRASH_PROJECT: ProjectSettings(pipeline="p456")}),
         amoeba_version=TEST_AMOEBA_VERSION,
     )
     process = ResidentProcess(

@@ -181,7 +181,7 @@ def test_decide_refuses_a_continuation_for_a_step_that_is_not_current() -> None:
 
     view = view_of({"a": facts(DispatchState.RESUME)}, current=[])
 
-    with pytest.raises(ValueError, match="not a current step"):
+    with pytest.raises(ValueError, match="not a current slice"):
         decide(view, [Stray()])
 
 

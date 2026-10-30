@@ -15,7 +15,6 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND
 from amoeba.runner.launch import PARAM_PARAMS, PARAM_PIPELINE
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.resolutions.planner import ContinuationPlanner
 from amoeba.store import (
     PARAM_CHECKOUT,
@@ -75,10 +74,8 @@ def _dirty(rig: DispatchRig) -> None:
     (rig.world.root / "README.md").write_text("changed\n")
 
 
-def _step(
-    rig: DispatchRig, step: LifecycleStep = LifecycleStep.TASKS, index: int = INDEX
-) -> Node:
-    return rig.step("checked", index, step)
+def _step(rig: DispatchRig, index: int = INDEX) -> Node:
+    return rig.step("checked", index)
 
 
 def _block_payload(rig: DispatchRig) -> dict[str, object]:
@@ -124,7 +121,7 @@ def test_a_dirty_tree_blocks_a_pointed_step_with_the_paths_and_launches_nothing(
 def test_a_checkout_on_the_wrong_branch_blocks_a_planning_launch(
     rig: DispatchRig,
 ) -> None:
-    node = _step(rig, LifecycleStep.SLICE_DESIGN)
+    node = _step(rig)
     make_branch(rig.world.root, "feature-x")
 
     rig.tick()
@@ -137,7 +134,7 @@ def test_a_checkout_on_the_wrong_branch_blocks_a_planning_launch(
 
 
 def test_a_detached_head_blocks(rig: DispatchRig) -> None:
-    node = _step(rig, LifecycleStep.SLICE_DESIGN)
+    node = _step(rig)
     detach_head(rig.world.root)
 
     rig.tick()
@@ -151,7 +148,7 @@ def test_a_detached_head_blocks(rig: DispatchRig) -> None:
 def test_an_integration_branch_in_cf_config_makes_main_block_a_planning_launch(
     rig: DispatchRig, tmp_path: Path
 ) -> None:
-    node = _step(rig, LifecycleStep.SLICE_DESIGN)
+    node = _step(rig)
     _gates(rig, tmp_path, config={CF_KEY_INTEGRATION_BRANCH: "dev/erik"})
 
     rig.tick()
@@ -163,12 +160,12 @@ def test_an_integration_branch_in_cf_config_makes_main_block_a_planning_launch(
 
 
 def test_a_launch_on_a_foreign_or_a_slice_branch_blocks(rig: DispatchRig) -> None:
-    node = _step(rig, LifecycleStep.IMPLEMENTATION)
+    node = _step(rig)
     make_branch(rig.world.root, "feature-x")
     rig.tick()
     assert _blocked_on_human(rig, node)
 
-    other = rig.step("own", 126, LifecycleStep.IMPLEMENTATION)
+    other = rig.step("own", 126)
     make_branch(rig.world.root, f"126-slice.{'own'}")
     rig.tick()
 
@@ -194,7 +191,7 @@ def test_a_launch_entry_records_what_the_check_found(rig: DispatchRig) -> None:
 
 
 def test_a_launch_records_main_as_its_target(rig: DispatchRig) -> None:
-    node = _step(rig, LifecycleStep.IMPLEMENTATION)
+    node = _step(rig)
 
     rig.tick()
 
@@ -204,7 +201,7 @@ def test_a_launch_records_main_as_its_target(rig: DispatchRig) -> None:
 def test_a_launch_records_the_integration_branch_when_one_is_set(
     rig: DispatchRig, tmp_path: Path
 ) -> None:
-    node = _step(rig, LifecycleStep.IMPLEMENTATION)
+    node = _step(rig)
     make_branch(rig.world.root, "dev/erik")
     commit_file(rig.world.root, "README.md", "dev\n", "dev work")
     _gates(rig, tmp_path, config={CF_KEY_INTEGRATION_BRANCH: "dev/erik"})
@@ -246,7 +243,7 @@ def test_a_failed_read_blocks_nothing_raises_a_fault_and_closes_when_it_stops(
 
 def _never_started(rig: DispatchRig) -> Node:
     """A pointed step whose launch recovery resolved ``not_applied``."""
-    node = _step(rig, LifecycleStep.SLICE_DESIGN)
+    node = _step(rig)
     old = rig.store.journal_issue(
         node.id,
         kind=CommandKind.SQ_RUN,
@@ -309,7 +306,7 @@ def test_a_blocked_launch_resolved_with_resume_is_checked_again(
 
 
 def _paused_loop(rig: DispatchRig) -> tuple[Node, str]:
-    node = _step(rig, LifecycleStep.SLICE_DESIGN)
+    node = _step(rig)
     rig.tick()
     rig.end_run(
         node,

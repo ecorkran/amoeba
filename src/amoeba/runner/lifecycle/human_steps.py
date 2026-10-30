@@ -38,7 +38,7 @@ class HumanStepPlanner:
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
         actions: list[Action] = []
-        for node in view.current_steps:
+        for node in view.current_slices:
             step = view.tree.step_of(node)
             if step is None or STEP_MAP[step].executor is not Executor.HUMAN:
                 continue

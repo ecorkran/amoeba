@@ -29,7 +29,7 @@ from runner.tick_support import (
     PROJECT,
     Rig,
     drive_project,
-    ready_step,
+    ready_slice,
     runnable_unbusy,
 )
 
@@ -38,7 +38,7 @@ pytestmark = pytest.mark.usefixtures("passing_checks")
 
 @pytest.fixture
 def node(store: Store) -> Node:
-    step = ready_step(store)
+    step = ready_slice(store)
     drive_project(store)
     return step
 

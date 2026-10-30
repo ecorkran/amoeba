@@ -310,16 +310,18 @@ Note (20261030): beyond the task text, a launch no longer carries `merge=false`,
 ### Task 9.5: Dispatch slice nodes with the configured pipeline
 **Owner**: Junior AI | **Dependencies**: 2.1, 8.1b, 8.2, 9.3, 9.4 | **Effort**: 2
 
-- [ ] `ProjectView.current_steps` becomes `current_slices` from `ready_slices()`; `ready_unbusy` follows; governance (`intent/governance.py`) resolves on slice nodes; the `decide` guard names slices. Reconcile still creates step nodes until Task 9.6; they are never current
-- [ ] `dispatch/planner.py` launches `LaunchRun(slice_node, settings.pipeline, {slice: <index>, **settings.params}, checkout)`; the per-checkout order is `(initiative index, slice index)`; reissue (125, D9) is kept. `dispatch/params.py` reads the project settings, not the step. A slice whose project has no `pipeline` launches nothing (its fault arrives in Task 9.7)
-- [ ] New tick tests: `pipeline: p456` gives `sq run p456 <index> --run-id <id>` with each param as `-p k=v`; the next slice waits for its predecessor `done`
-- [ ] **Success:** the new tests pass. Tick tests that drove step nodes are red until Task 9.5b, so this task makes no commit; Task 9.5b commits both
+- [x] `ProjectView.current_steps` becomes `current_slices` from `ready_slices()`; `ready_unbusy` follows; governance (`intent/governance.py`) resolves on slice nodes; the `decide` guard names slices. Reconcile still creates step nodes until Task 9.6; they are never current
+- [x] `dispatch/planner.py` launches `LaunchRun(slice_node, settings.pipeline, {slice: <index>, **settings.params}, checkout)`; the per-checkout order is `(initiative index, slice index)`; reissue (125, D9) is kept. `dispatch/params.py` reads the project settings, not the step. A slice whose project has no `pipeline` launches nothing (its fault arrives in Task 9.7)
+- [x] New tick tests: `pipeline: p456` gives `sq run p456 <index> --run-id <id>` with each param as `-p k=v`; the next slice waits for its predecessor `done`
+- [x] **Success:** the new tests pass. Tick tests that drove step nodes are red until Task 9.5b, so this task makes no commit; Task 9.5b commits both
 
 ### Task 9.5b: Migrate the step-node tick tests to slice nodes
 **Owner**: Junior AI | **Dependencies**: 9.5 | **Effort**: 3
 
-- [ ] Rewrite the tick tests that drove step nodes against slice nodes, one directory at a time, re-running that directory after each: `tests/runner/test_tick*.py`, then `tests/runner/dispatch/`, then `tests/runner/resolutions/test_tick_*.py`. A test whose only subject was a step is deleted
-- [ ] **Success:** full suite green; 122's crash tests and 125's ingestion tests pass against the slice node. Commit Tasks 9.5 and 9.5b together as `feat: drive slices with the project's configured pipeline`
+- [x] Rewrite the tick tests that drove step nodes against slice nodes, one directory at a time, re-running that directory after each: `tests/runner/test_tick*.py`, then `tests/runner/dispatch/`, then `tests/runner/resolutions/test_tick_*.py`. A test whose only subject was a step is deleted
+- [x] **Success:** full suite green; 122's crash tests and 125's ingestion tests pass against the slice node. Commit Tasks 9.5 and 9.5b together as `feat: drive slices with the project's configured pipeline`
+
+Note (20261030): 9.5 and 9.5b are one commit, `feat: drive slices with the project's configured pipeline`. The dispatch facts record is now `SliceDispatchFacts` (no `step`; sort key is (initiative index, slice index)); `ProjectView` has `current_slices` and a `settings` field; the planner launches `settings.pipeline` with `launch_params(settings, index)` and nothing when the project has no pipeline; `Candidate` lost `step` and `pipeline`. Governance resolves on the slice itself (its own row, its initiative's, the project's). Ingest attributes reviews to the entry's node, which must be a slice. Test rigs: `ready_slice` replaces `ready_step`/`ready_slice_step`; `DispatchRig.step` and `slice_and_step` return the slice itself and configure the project with pipeline `p456`; `successor_slice` replaces `tasks_step`; the crash harness configures its project with `p456` through `CRASH_PROJECT`. Deleted with their subjects: `merge_support.py`, `test_human_steps.py`, `test_tick_human_steps.py`, the arch-file human-step intent test, and step-based governance/params cases.
 
 ### Task 9.6: Stop creating step nodes
 **Owner**: Junior AI | **Dependencies**: 9.5b | **Effort**: 2

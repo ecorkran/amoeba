@@ -22,7 +22,7 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block, Ok
-from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import (
@@ -36,6 +36,7 @@ from runner.dispatch.dispatch_support import (
     FIRST,
     OK_EVIDENCE,
     SECOND,
+    TEST_PIPELINE,
     entry,
     facts,
     view_of,
@@ -44,13 +45,13 @@ from runner.dispatch.dispatch_support import (
 PLANNER = DispatchPlanner()
 
 
-def test_a_ready_step_launches_its_pipeline() -> None:
-    view = view_of({"a": facts(DispatchState.READY, step=LifecycleStep.TASKS)})
+def test_a_ready_slice_launches_the_configured_pipeline() -> None:
+    view = view_of({"a": facts(DispatchState.READY, slice_index=125)})
 
     assert PLANNER.plan(view) == [
         LaunchRun(
             "a",
-            "P5",
+            TEST_PIPELINE,
             {"slice": "125"},
             FIRST,
             journal_extra={PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)},
@@ -58,36 +59,20 @@ def test_a_ready_step_launches_its_pipeline() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    ("step", "pipeline"),
-    [
-        (LifecycleStep.SLICE_DESIGN, "P4"),
-        (LifecycleStep.TASKS, "P5"),
-        (LifecycleStep.IMPLEMENTATION, "P6"),
-    ],
-)
-def test_each_step_launches_its_pipeline_with_only_the_slice(
-    step: LifecycleStep, pipeline: str
-) -> None:
-    view = view_of({"a": facts(DispatchState.READY, step=step, slice_index=125)})
+def test_the_projects_params_ride_along_after_the_slice() -> None:
+    settings = ProjectSettings(pipeline="p4567", params={"model": "opus"})
+    view = view_of({"a": facts(DispatchState.READY, slice_index=7)}, settings=settings)
 
     [action] = PLANNER.plan(view)
 
-    assert isinstance(action, LaunchRun) and action.pipeline == pipeline
-    assert action.params == {"slice": "125"}
+    assert isinstance(action, LaunchRun) and action.pipeline == "p4567"
+    assert action.params == {"slice": "7", "model": "opus"}
 
 
-@pytest.mark.parametrize(
-    "step",
-    [LifecycleStep.SLICE_DESIGN, LifecycleStep.TASKS, LifecycleStep.IMPLEMENTATION],
-)
-def test_a_launch_records_only_the_check(step: LifecycleStep) -> None:
-    view = view_of({"a": facts(DispatchState.READY, step=step)})
+def test_a_project_with_no_pipeline_launches_nothing() -> None:
+    view = view_of({"a": facts(DispatchState.READY)}, settings=ProjectSettings())
 
-    [action] = PLANNER.plan(view)
-
-    assert isinstance(action, LaunchRun)
-    assert action.journal_extra == {PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)}
+    assert PLANNER.plan(view) == []
 
 
 def test_a_reissue_repeats_the_old_attempt_under_its_run_id() -> None:
@@ -193,15 +178,10 @@ def test_a_slice_in_another_worktree_is_planned_meanwhile() -> None:
     assert [a.node_id for a in actions] == ["second"]
 
 
-def test_otherwise_the_lowest_initiative_slice_and_step_goes_first() -> None:
+def test_the_lowest_initiative_and_slice_goes_first() -> None:
     steps = {
         "later-slice": facts(DispatchState.READY, slice_index=130),
-        "later-step": facts(
-            DispatchState.READY,
-            slice_index=125,
-            step=LifecycleStep.IMPLEMENTATION,
-        ),
-        "first": facts(DispatchState.READY, slice_index=125, step=LifecycleStep.TASKS),
+        "first": facts(DispatchState.READY, slice_index=125),
         "other-initiative": facts(
             DispatchState.READY, slice_index=100, initiative_index=130
         ),

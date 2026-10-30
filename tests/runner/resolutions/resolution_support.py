@@ -20,7 +20,6 @@ from amoeba.runner.ingest.record import (
     RESULT_RUN_ID,
     RESULT_STATUS,
 )
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import (
     BlockedKind,
@@ -38,7 +37,7 @@ from amoeba.store.inbox_models import (
     RESOLUTION_DETAIL,
     RESOLUTION_INSTRUCTIONS,
 )
-from runner.tick_support import PROJECT, ready_slice_step
+from runner.tick_support import PROJECT, ready_slice
 
 PAUSED_AT = datetime(2026, 10, 25, 12, 0, tzinfo=UTC)
 _RUN_PARAMETERS: Mapping[str, object] = {
@@ -53,15 +52,9 @@ _counter = [0]
 
 
 def design_step(store: Store) -> Node:
-    """A ready pipeline step (slice design) under a fresh slice."""
+    """A ready slice under a fresh initiative (the unit of work, slice 132)."""
     _counter[0] += 1
-    return ready_slice_step(store, f"slice-{_counter[0]}")[1]
-
-
-def human_step(store: Store) -> Node:
-    """A ready human step (the merge) under a fresh slice."""
-    _counter[0] += 1
-    return ready_slice_step(store, f"slice-{_counter[0]}", step=LifecycleStep.MERGE)[1]
+    return ready_slice(store, PROJECT, f"slice-{_counter[0]}")
 
 
 def paused_document(

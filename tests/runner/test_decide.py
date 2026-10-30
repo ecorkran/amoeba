@@ -22,7 +22,6 @@ from amoeba.runner.decide import (
 )
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block, Ok
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import DesiredState, Node
@@ -54,7 +53,7 @@ class Fixed:
 
 @dataclass
 class Steps:
-    """Two initiatives' ready architecture steps, with the project driven."""
+    """Two initiatives' first slices, ready, with the project driven."""
 
     builder: TreeBuilder
     first: Node
@@ -65,7 +64,7 @@ class Steps:
     def view(self, *rows: DesiredState) -> ProjectView:
         """A driven view whose current steps have passed their pre-dispatch check."""
         view = view_for(self.builder.tree(), rows or (row(drive=True),))
-        passed = {node.id: Ok({"target": "main"}) for node in view.current_steps}
+        passed = {node.id: Ok({"target": "main"}) for node in view.current_slices}
         return replace(view, dispatch_checks=passed)
 
 
@@ -76,8 +75,8 @@ def steps() -> Iterator[Steps]:
     second = builder.initiative(101)
     yield Steps(
         builder,
-        builder.step_node(first, LifecycleStep.ARCHITECTURE),
-        builder.step_node(second, LifecycleStep.ARCHITECTURE),
+        builder.slice(first, 110, with_steps=False),
+        builder.slice(second, 111, with_steps=False),
         first,
         second,
     )
@@ -129,9 +128,9 @@ def test_an_action_on_a_ready_step_that_is_not_current_raises(
     steps: Steps, rows: tuple[DesiredState, ...]
 ) -> None:
     view = view_for(steps.builder.tree(), rows)
-    everything = Fixed(*(_launch(n.id) for n in view.tree.ready_steps()))
+    everything = Fixed(*(_launch(n.id) for n in view.tree.ready_slices()))
 
-    with pytest.raises(ValueError, match="not a current step"):
+    with pytest.raises(ValueError, match="not a current slice"):
         decide(view, (everything,))
 
 
@@ -141,7 +140,7 @@ def test_an_action_on_an_excluded_step_raises(steps: Steps) -> None:
         decide(excluded, (Fixed(_launch(steps.first.id)),))
 
 
-def test_a_planner_acting_only_on_current_steps_passes(steps: Steps) -> None:
+def test_a_planner_acting_only_on_current_slices_passes(steps: Steps) -> None:
     view = steps.view(row(drive=True), row(steps.second_owner, hold=True))
     action = _launch(steps.first.id)
 
@@ -169,9 +168,9 @@ def test_ready_unbusy_offers_only_ready_steps_without_a_run_in_flight() -> None:
     builder = TreeBuilder()
     try:
         initiative = builder.initiative(100)
-        architecture = builder.step_node(initiative, LifecycleStep.ARCHITECTURE)
+        architecture = builder.slice(initiative, 101, with_steps=False)
         view = view_for(builder.tree())
-        assert view.ready_unbusy() == [architecture], "no containers, no blocked steps"
+        assert view.ready_unbusy() == [architecture], "no blocked slices"
 
         running = InFlightRun(
             replace(entry(), node_id=architecture.id), "run-1", RunState.RUNNING
@@ -182,24 +181,24 @@ def test_ready_unbusy_offers_only_ready_steps_without_a_run_in_flight() -> None:
         builder.close()
 
 
-def test_a_driven_project_view_exposes_its_current_steps() -> None:
+def test_a_driven_project_view_exposes_its_current_slices() -> None:
     builder = TreeBuilder()
     try:
         initiative = builder.initiative(100)
-        architecture = builder.step_node(initiative, LifecycleStep.ARCHITECTURE)
+        architecture = builder.slice(initiative, 101, with_steps=False)
         driven = view_for(builder.tree(), [row(drive=True)])
-        assert list(driven.current_steps) == [architecture]
+        assert list(driven.current_slices) == [architecture]
         assert driven.desired.drives_anything()
     finally:
         builder.close()
 
 
-def test_a_view_with_no_rows_has_no_current_steps() -> None:
+def test_a_view_with_no_rows_has_no_current_slices() -> None:
     builder = TreeBuilder()
     try:
         builder.initiative(100)
         undriven = view_for(builder.tree())
-        assert list(undriven.current_steps) == []
+        assert list(undriven.current_slices) == []
         assert not undriven.desired.drives_anything()
     finally:
         builder.close()

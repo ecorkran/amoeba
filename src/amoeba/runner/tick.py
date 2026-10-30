@@ -228,6 +228,7 @@ class ProjectTick:
             link_probes,
             desired,
             dispatching=self._dispatching,
+            settings=self._project_settings,
         )
         self.wrote = built.wrote or self.wrote
         return built.view

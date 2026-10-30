@@ -56,18 +56,13 @@ VERSION_LABEL = "sq-test-label"
 
 
 class Rig:
-    """A slice node with a step under it, a journaled run, and a checkout."""
+    """A slice node with a journaled run, and a checkout."""
 
     def __init__(self, store: Store, checkout: Path) -> None:
         self.store = store
         self.checkout = checkout
         self.slice_node = self.add_slice(SLICE_NAME)
-        self.step = store.create_node(
-            project_id=PROJECT,
-            kind=NodeKind.PHASE_OR_ARTIFACT,
-            title="tasks",
-            parent_id=self.slice_node.id,
-        )
+        self.step = self.slice_node
         self.entry = self.journal(self.step)
 
     def add_slice(self, slice_name: str) -> Node:
@@ -279,11 +274,11 @@ def test_a_missing_checkout_makes_a_listed_review_unknown(rig: Rig) -> None:
     assert "no checkout" in str(payload[PAYLOAD_REASON])
 
 
-def test_a_step_with_no_slice_parent_makes_a_listed_review_unknown(
+def test_a_node_that_is_not_a_slice_makes_a_listed_review_unknown(
     rig: Rig,
 ) -> None:
     orphan = rig.store.create_node(
-        project_id=PROJECT, kind=NodeKind.PHASE_OR_ARTIFACT, title="orphan step"
+        project_id=PROJECT, kind=NodeKind.INITIATIVE, title="not a slice"
     )
     rig.step = orphan
     rig.entry = rig.journal(orphan)
@@ -292,7 +287,7 @@ def test_a_step_with_no_slice_parent_makes_a_listed_review_unknown(
 
     assert rig.open_blocks() == [BlockedKind.HUMAN]
     [payload] = rig.escalation_payloads()
-    assert "has no slice" in str(payload[PAYLOAD_REASON])
+    assert "is not a slice" in str(payload[PAYLOAD_REASON])
 
 
 def test_recording_again_after_a_crash_gives_one_block_and_one_verdict_per_part(

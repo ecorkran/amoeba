@@ -186,18 +186,13 @@ def _refusal(
 def _scope(
     store: Store, entry: JournalEntry, run_id: str, version_label: str
 ) -> ReviewScope | ReviewUnknown:
-    """What attribution needs: the checkout and the step's parent slice node."""
+    """What attribution needs: the checkout and the slice node the run belongs to."""
     checkout = entry.parameters.get(PARAM_CHECKOUT)
     if not isinstance(checkout, str) or not checkout:
         return ReviewUnknown(None, f"entry {entry.id} carries no checkout")
-    step = store.get_node(entry.node_id)
-    parent = (
-        None
-        if step is None or step.parent_id is None
-        else store.get_node(step.parent_id)
-    )
+    parent = store.get_node(entry.node_id)
     if parent is None or parent.kind is not NodeKind.SLICE:
-        return ReviewUnknown(None, f"the step node of entry {entry.id} has no slice")
+        return ReviewUnknown(None, f"the node of entry {entry.id} is not a slice")
     return ReviewScope(
         project_id=entry.project_id,
         run_id=run_id,

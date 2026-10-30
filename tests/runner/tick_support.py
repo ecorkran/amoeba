@@ -20,14 +20,13 @@ from amoeba.runner.faults import NodeContext, TickFaults
 from amoeba.runner.gates.predispatch import DispatchCheck, Ok
 from amoeba.runner.gates.stage import DispatchStageResult, GateStage
 from amoeba.runner.intent.apply import apply_pending_intents
-from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
+from amoeba.runner.intent.governance import DesiredStateIndex, current_slices
 from amoeba.runner.launch import (
     LAUNCH_LOGS_DIRNAME,
     LaunchTracker,
 )
 from amoeba.runner.lifecycle.cadence import PlanReadSchedule
 from amoeba.runner.lifecycle.plan_stage import PlanStage
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
@@ -39,7 +38,6 @@ from amoeba.store import (
     DesiredState,
     Node,
     NodeKind,
-    NodeStatus,
     Store,
     SubmissionKind,
 )
@@ -65,7 +63,7 @@ def view_for(
     rows: Sequence[DesiredState] = (),
     in_flight: tuple[InFlightRun, ...] = (),
 ) -> ProjectView:
-    """A view over ``tree`` and hand-built desired-state rows, with current steps."""
+    """A view over ``tree`` and hand-built desired-state rows, with current slices."""
     index = DesiredStateIndex(rows)
     return ProjectView(
         project_id=PROJECT,
@@ -74,50 +72,25 @@ def view_for(
         in_flight=in_flight,
         link_probes={},
         desired=index,
-        current_steps=current_steps(tree, index),
+        current_slices=current_slices(tree, index),
     )
 
 
 _INITIATIVE_INDEXES = count(100)
-
-
-def ready_step(store: Store, project_id: str = PROJECT) -> Node:
-    """A ready lifecycle step: the architecture step of a new linked initiative.
-
-    Launch-path tests need a node a planner may act on, and only a ready step
-    can be a current step. Each call makes a new initiative.
-    """
-    initiative = store.create_node(
-        project_id=project_id,
-        kind=NodeKind.INITIATIVE,
-        title="initiative",
-        cf=CFReference(project="cf-a", index=next(_INITIATIVE_INDEXES)),
-    )
-    return store.create_node(
-        project_id=project_id,
-        kind=NodeKind.PHASE_OR_ARTIFACT,
-        title="architecture",
-        parent_id=initiative.id,
-        cf=CFReference(project="cf-a", phase=LifecycleStep.ARCHITECTURE.value),
-    )
-
-
 _SLICE_INDEXES = count(200)
 
 
-def ready_slice_step(
+def ready_slice(
     store: Store,
-    slice_name: str,
     project_id: str = PROJECT,
-    step: LifecycleStep = LifecycleStep.SLICE_DESIGN,
+    slice_name: str = "slice",
     cf_project: str = "cf-a",
     slice_index: int | None = None,
-    done_steps: Sequence[LifecycleStep] = (),
-) -> tuple[Node, Node]:
-    """A ready slice-level step under a linked slice: ``(slice node, step node)``.
+) -> Node:
+    """A ready linked slice under a new initiative (slice 132: the unit of work).
 
-    Its initiative has the architecture and slice-plan steps done, which is what a
-    slice design waits for. Each call makes a new initiative and slice.
+    Launch-path tests need a node a planner may act on, and only a ready slice can
+    be a current slice. Each call makes a new initiative and slice.
     """
     initiative = store.create_node(
         project_id=project_id,
@@ -125,16 +98,7 @@ def ready_slice_step(
         title="initiative",
         cf=CFReference(project=cf_project, index=next(_INITIATIVE_INDEXES)),
     )
-    for done in (LifecycleStep.ARCHITECTURE, LifecycleStep.SLICE_PLAN):
-        store.create_node(
-            project_id=project_id,
-            kind=NodeKind.PHASE_OR_ARTIFACT,
-            title=done.value,
-            parent_id=initiative.id,
-            status=NodeStatus.DONE,
-            cf=CFReference(project=cf_project, phase=done.value),
-        )
-    slice_node = store.create_node(
+    return store.create_node(
         project_id=project_id,
         kind=NodeKind.SLICE,
         title=slice_name,
@@ -145,23 +109,6 @@ def ready_slice_step(
             index=next(_SLICE_INDEXES) if slice_index is None else slice_index,
         ),
     )
-    for done in done_steps:
-        store.create_node(
-            project_id=project_id,
-            kind=NodeKind.PHASE_OR_ARTIFACT,
-            title=done.value,
-            parent_id=slice_node.id,
-            status=NodeStatus.DONE,
-            cf=CFReference(project=cf_project, phase=done.value),
-        )
-    step_node = store.create_node(
-        project_id=project_id,
-        kind=NodeKind.PHASE_OR_ARTIFACT,
-        title=step.value,
-        parent_id=slice_node.id,
-        cf=CFReference(project=cf_project, phase=step.value),
-    )
-    return slice_node, step_node
 
 
 def drive_project(store: Store, project_id: str = PROJECT) -> None:
@@ -174,9 +121,9 @@ def drive_project(store: Store, project_id: str = PROJECT) -> None:
 
 
 def runnable_unbusy(view: ProjectView) -> list[Node]:
-    """Current steps with no run in flight: what a launch-path test planner acts on."""
+    """Current slices with no run in flight: what a launch-path test planner acts on."""
     busy = {run.entry.node_id for run in view.in_flight}
-    return [node for node in view.current_steps if node.id not in busy]
+    return [node for node in view.current_slices if node.id not in busy]
 
 
 class Planner:
@@ -215,7 +162,7 @@ class PassingGates(GateStage):
                     "gate_review_type": None,
                 }
             )
-            for node in view.current_steps
+            for node in view.current_slices
         }
         return DispatchStageResult({**passed, **real.checks}, real.cut_off)
 

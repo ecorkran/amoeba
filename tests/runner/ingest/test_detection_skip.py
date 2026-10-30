@@ -30,7 +30,6 @@ from amoeba.store import (
     DetectionOutcome,
     JournalEntry,
     JournalOutcome,
-    NodeKind,
 )
 
 RUN_ID = "amoeba-20261024T101500Z-0123456789ab"
@@ -66,14 +65,8 @@ def _open_run(
     slice_id = rig.seed_slice_node()
     rig.watch()
     rig.run_scans()  # baselines the empty directory
-    step = rig.store.create_node(
-        project_id=PROJECT,
-        kind=NodeKind.PHASE_OR_ARTIFACT,
-        title="tasks",
-        parent_id=slice_id,
-    )
     entry = rig.store.journal_issue(
-        step.id,
+        slice_id,
         kind=CommandKind.SQ_RUN,
         parameters={
             PARAM_PIPELINE: "p5",

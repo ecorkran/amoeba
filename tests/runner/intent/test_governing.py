@@ -10,10 +10,9 @@ import pytest
 from amoeba.runner.intent.governance import (
     DesiredStateIndex,
     Governance,
-    current_steps,
+    current_slices,
     governing,
 )
-from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import DesiredState, Node
 from runner.lifecycle.tree_support import TreeBuilder
 
@@ -32,14 +31,11 @@ class World:
     first: Node  # a slice of the initiative
     second: Node  # its sibling
 
-    def at(self, step: LifecycleStep, owner: Node | None = None) -> Node:
-        return self.builder.step_node(owner or self.first, step)
-
     def govern(
-        self, rows: list[DesiredState], step: LifecycleStep, owner: Node | None = None
+        self, rows: list[DesiredState], slice_node: Node | None = None
     ) -> Governance:
         return governing(
-            self.builder.tree(), DesiredStateIndex(rows), self.at(step, owner)
+            self.builder.tree(), DesiredStateIndex(rows), slice_node or self.first
         )
 
 
@@ -50,133 +46,109 @@ def world() -> Iterator[World]:
     yield World(
         builder,
         initiative,
-        builder.slice(initiative, 141),
-        builder.slice(initiative, 142),
+        builder.slice(initiative, 141, with_steps=False),
+        builder.slice(initiative, 142, with_steps=False),
     )
     builder.close()
 
 
 def test_nothing_is_driven_by_default(world: World) -> None:
-    for step in LifecycleStep:
-        owner = world.initiative if step in _INITIATIVE_STEPS else None
-        assert world.govern([], step, owner) == UNDRIVEN
+    assert world.govern([]) == UNDRIVEN
 
 
-_INITIATIVE_STEPS = {
-    LifecycleStep.ARCHITECTURE,
-    LifecycleStep.SLICE_PLAN,
-    LifecycleStep.INTEGRATION,
-}
-
-
-def test_a_project_drive_drives_every_step(world: World) -> None:
+def test_a_project_drive_drives_every_slice(world: World) -> None:
     rows = [row(drive=True)]
-    assert world.govern(rows, LifecycleStep.ARCHITECTURE, world.initiative) == DRIVEN
-    assert world.govern(rows, LifecycleStep.TASKS) == DRIVEN
+    assert world.govern(rows) == DRIVEN
+    assert world.govern(rows, world.second) == DRIVEN
 
 
-def test_an_initiative_exclude_undrives_its_steps_and_a_slice_drive_restores(
+def test_an_initiative_exclude_undrives_its_slices_and_a_slice_drive_restores(
     world: World,
 ) -> None:
     rows = [row(drive=True), row(world.initiative, drive=False)]
-    assert world.govern(rows, LifecycleStep.SLICE_PLAN, world.initiative) == UNDRIVEN
-    assert world.govern(rows, LifecycleStep.TASKS) == UNDRIVEN
+    assert world.govern(rows) == UNDRIVEN
 
     rows.append(row(world.first, drive=True))
-    assert world.govern(rows, LifecycleStep.TASKS) == DRIVEN
-    assert world.govern(rows, LifecycleStep.TASKS, world.second) == UNDRIVEN
+    assert world.govern(rows) == DRIVEN
+    assert world.govern(rows, world.second) == UNDRIVEN
 
 
 def test_project_pause_wins_over_a_slice_resume(world: World) -> None:
     # A slice "resume" removes the slice's own hold; it cannot lift the project's.
     rows = [row(drive=True, hold=True), row(world.first, drive=True)]
-    assert world.govern(rows, LifecycleStep.TASKS) == DRIVEN_HELD
+    assert world.govern(rows) == DRIVEN_HELD
 
 
 def test_no_project_pause_leaves_the_slice_unheld(world: World) -> None:
     rows = [row(drive=True), row(world.first, drive=True)]
-    assert world.govern(rows, LifecycleStep.TASKS).held is False
+    assert world.govern(rows).held is False
 
 
 def test_a_slice_pause_does_not_hold_its_sibling(world: World) -> None:
     rows = [row(drive=True), row(world.first, hold=True)]
-    assert world.govern(rows, LifecycleStep.TASKS).held is True
-    assert world.govern(rows, LifecycleStep.TASKS, world.second).held is False
+    assert world.govern(rows).held is True
+    assert world.govern(rows, world.second).held is False
 
 
 def test_a_hold_only_row_does_not_decide_drive(world: World) -> None:
     rows = [row(drive=True), row(world.first, hold=True)]
-    assert world.govern(rows, LifecycleStep.TASKS) == DRIVEN_HELD
-    assert world.govern([row(world.first, hold=True)], LifecycleStep.TASKS) == (
-        HELD_UNDRIVEN
-    )
+    assert world.govern(rows) == DRIVEN_HELD
+    assert world.govern([row(world.first, hold=True)]) == HELD_UNDRIVEN
 
 
 def test_a_stored_drive_until_step_is_ignored(world: World) -> None:
     """Rows written before slice 132 may still carry one; it no longer limits work."""
-    rows = [row(world.first, drive=True, until=LifecycleStep.TASKS.value)]
+    rows = [row(world.first, drive=True, until="tasks")]
 
-    assert world.govern(rows, LifecycleStep.TASKS).driven is True
-    assert world.govern(rows, LifecycleStep.IMPLEMENTATION).driven is True
-
-
-def test_governing_a_node_that_is_not_a_step_raises(world: World) -> None:
-    with pytest.raises(ValueError, match="not a step"):
-        governing(world.builder.tree(), DesiredStateIndex([]), world.first)
+    assert world.govern(rows).driven is True
 
 
-def _finish_planning(world: World) -> None:
-    """Done architecture and slice plan, so both slices' design steps are ready."""
-    for step in (LifecycleStep.ARCHITECTURE, LifecycleStep.SLICE_PLAN):
-        world.builder.done(world.at(step, world.initiative))
+def test_governing_a_node_that_is_not_a_slice_raises(world: World) -> None:
+    with pytest.raises(ValueError, match="not a slice"):
+        governing(world.builder.tree(), DesiredStateIndex([]), world.initiative)
 
 
 def _current(world: World, rows: list[DesiredState]) -> list[Node]:
-    return list(current_steps(world.builder.tree(), DesiredStateIndex(rows)))
+    return list(current_slices(world.builder.tree(), DesiredStateIndex(rows)))
 
 
-def test_only_ready_steps_can_be_current(world: World) -> None:
+def test_only_ready_slices_can_be_current(world: World) -> None:
     current = _current(world, [row(drive=True)])
-    ready = list(world.builder.tree().ready_steps())
-    assert current == ready
-    assert world.at(LifecycleStep.IMPLEMENTATION) not in current
+    ready = list(world.builder.tree().ready_slices())
+    assert current == ready == [world.first], "the second waits for the first"
 
 
-def test_a_driven_unheld_ready_step_is_current(world: World) -> None:
-    _finish_planning(world)
-    assert world.at(LifecycleStep.SLICE_DESIGN) in _current(world, [row(drive=True)])
+def test_a_driven_unheld_ready_slice_is_current(world: World) -> None:
+    assert world.first in _current(world, [row(drive=True)])
 
 
-def test_held_and_undriven_ready_steps_are_not_current(world: World) -> None:
-    _finish_planning(world)
+def test_held_and_undriven_ready_slices_are_not_current(world: World) -> None:
+    plain = world.builder.slice(world.builder.initiative(150), 151, with_steps=False)
     rows = [
         row(drive=True),
         row(world.first, hold=True),
         row(world.second, drive=False),
     ]
-    plain = world.builder.slice(world.initiative, 143)
-    current = _current(world, rows)
-    assert current == [world.at(LifecycleStep.SLICE_DESIGN, plain)]
+
+    assert _current(world, rows) == [plain]
 
 
 def test_nothing_is_current_without_a_drive(world: World) -> None:
     assert _current(world, [row(world.first, hold=True)]) == []
 
 
-def test_an_orphans_row_never_affects_a_current_step(world: World) -> None:
-    _finish_planning(world)
-    orphan = world.builder.slice(world.initiative, 143)
+def test_an_orphans_row_never_affects_a_current_slice(world: World) -> None:
+    orphan = world.builder.slice(world.initiative, 143, with_steps=False)
     world.builder.orphan(orphan)
     baseline = _current(world, [row(drive=True)])
     with_orphan_row = _current(
         world, [row(drive=True), row(orphan, drive=False, hold=True)]
     )
     assert with_orphan_row == baseline
-    assert world.at(LifecycleStep.SLICE_DESIGN, orphan) not in with_orphan_row
+    assert orphan not in with_orphan_row
 
 
-def test_current_steps_keep_ready_steps_order(world: World) -> None:
-    _finish_planning(world)
+def test_current_slices_keep_ready_slices_order(world: World) -> None:
     current = _current(world, [row(drive=True)])
-    ready = [node.id for node in world.builder.tree().ready_steps()]
+    ready = [node.id for node in world.builder.tree().ready_slices()]
     assert [node.id for node in current] == ready

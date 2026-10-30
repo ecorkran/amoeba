@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 from amoeba.process import RunOutcome
-from amoeba.runner.decide import Action, BlockHumanStep, ProjectView
+from amoeba.runner.decide import Action, BlockDispatch, ProjectView
 from amoeba.runner.factory import PRODUCTION_PLANNERS
-from amoeba.runner.lifecycle.human_steps import HumanStepPlanner
-from amoeba.runner.lifecycle.steps import LifecycleStep
+from amoeba.runner.faults import FaultKind
+from amoeba.runner.gates.predispatch import Block
 from amoeba.store import (
     BLOCKED_STATUSES,
     PARAM_RUN_ID,
@@ -31,7 +31,7 @@ from runner.tick_support import (
     StoreHost,
     drive_project,
     link,
-    ready_step,
+    ready_slice,
     tenant_for,
 )
 
@@ -40,11 +40,22 @@ from .intent.intent_support import submit
 pytestmark = pytest.mark.usefixtures("passing_checks")
 
 
+def _block(node_id: str) -> BlockDispatch:
+    return BlockDispatch(node_id, Block(FaultKind.CHECKOUT_DIRTY, "dirty", {}))
+
+
 class Everything:
-    """A faulty planner: acts on every ready step, current or not."""
+    """A faulty planner: acts on every ready slice, current or not."""
 
     def plan(self, view: ProjectView) -> list[Action]:
-        return [BlockHumanStep(n.id) for n in view.tree.ready_steps()]
+        return [_block(n.id) for n in view.tree.ready_slices()]
+
+
+class BlocksCurrent:
+    """A probe planner: blocks each current slice, so a test can see which are."""
+
+    def plan(self, view: ProjectView) -> list[Action]:
+        return [_block(n.id) for n in view.current_slices]
 
 
 @pytest.fixture
@@ -54,19 +65,9 @@ def builder() -> Iterator[TreeBuilder]:
     built.close()
 
 
-def _ready_merge(builder: TreeBuilder) -> tuple[Node, Node]:
-    """A slice whose human ``merge`` step is ready. Returns the slice and the step."""
-    initiative = builder.initiative(140)
-    sliced = builder.slice(initiative, 141)
-    for step in (LifecycleStep.ARCHITECTURE, LifecycleStep.SLICE_PLAN):
-        builder.done(builder.step_node(initiative, step))
-    for step in (
-        LifecycleStep.SLICE_DESIGN,
-        LifecycleStep.TASKS,
-        LifecycleStep.IMPLEMENTATION,
-    ):
-        builder.done(builder.step_node(sliced, step))
-    return sliced, builder.step_node(sliced, LifecycleStep.MERGE)
+def _ready_slice(builder: TreeBuilder) -> Node:
+    """A ready slice: the first of its initiative."""
+    return builder.slice(builder.initiative(140), 141, with_steps=False)
 
 
 def _status(builder: TreeBuilder, node: Node) -> NodeStatus:
@@ -82,8 +83,8 @@ def _rig(tmp_path: Path, builder: TreeBuilder, *planners: object) -> Rig:
 def test_project_pause_wins_over_slice_resume(
     tmp_path: Path, builder: TreeBuilder
 ) -> None:
-    sliced, merge = _ready_merge(builder)
-    rig = _rig(tmp_path, builder, HumanStepPlanner())
+    sliced = _ready_slice(builder)
+    rig = _rig(tmp_path, builder, BlocksCurrent())
     store = builder.store
     for body in ({"intent": "drive"}, {"intent": "pause"}):
         submit(store, body)
@@ -91,17 +92,17 @@ def test_project_pause_wins_over_slice_resume(
         submit(store, body, node_id=sliced.id)
 
     rig.tick()
-    assert _status(builder, merge) is NodeStatus.RUNNABLE, "the project pause holds it"
+    assert _status(builder, sliced) is NodeStatus.RUNNABLE, "the project pause holds it"
 
     submit(store, {"intent": "resume"})
     rig.tick()
-    assert _status(builder, merge) is NodeStatus.BLOCKED_ON_HUMAN
+    assert _status(builder, sliced) is NodeStatus.BLOCKED_ON_HUMAN
 
 
 def test_a_planner_that_acts_on_a_held_step_faults_the_project_once(
     tmp_path: Path, builder: TreeBuilder
 ) -> None:
-    _, merge = _ready_merge(builder)
+    sliced = _ready_slice(builder)
     rig = _rig(tmp_path, builder, Everything())
     store = builder.store
     submit(store, {"intent": "drive"})
@@ -115,13 +116,13 @@ def test_a_planner_that_acts_on_a_held_step_faults_the_project_once(
         "unexpected_fault"
     ]
     assert len(store.messages(PROJECT, channel=Channel.ESCALATION)) == 1
-    assert _status(builder, merge) is NodeStatus.RUNNABLE
+    assert _status(builder, sliced) is NodeStatus.RUNNABLE
 
 
-def test_the_production_tuple_blocks_nothing_under_a_held_human_step(
+def test_the_production_tuple_blocks_nothing_under_a_held_project(
     tmp_path: Path, builder: TreeBuilder
 ) -> None:
-    _, merge = _ready_merge(builder)
+    sliced = _ready_slice(builder)
     rig = _rig(tmp_path, builder, *PRODUCTION_PLANNERS)
     submit(builder.store, {"intent": "drive"})
     submit(builder.store, {"intent": "pause"})
@@ -129,14 +130,14 @@ def test_the_production_tuple_blocks_nothing_under_a_held_human_step(
     rig.tick()
     rig.tick()
 
-    assert _status(builder, merge) is NodeStatus.RUNNABLE
+    assert _status(builder, sliced) is NodeStatus.RUNNABLE
     assert builder.store.messages(PROJECT, channel=Channel.ESCALATION) == []
 
 
 def test_a_run_under_a_held_step_is_still_polled_and_a_block_stays(
     tmp_path: Path, store: Store
 ) -> None:
-    step = ready_step(store)
+    step = ready_slice(store)
     drive_project(store)
     rig = Rig(tmp_path, store)
     rig.tick()  # launches the step's run
@@ -144,7 +145,7 @@ def test_a_run_under_a_held_step_is_still_polled_and_a_block_stays(
     run_id = str(entry.parameters[PARAM_RUN_ID])
     rig.tracker.confirm(entry.id)
     rig.poll.answers.append(document(run_id, RunOutcome.TIMED_OUT))
-    waiting = ready_step(store)
+    waiting = ready_slice(store)
     store.block(waiting.id, kind=BlockedKind.HUMAN, context="blocked before the hold")
 
     submit(store, {"intent": "pause"})

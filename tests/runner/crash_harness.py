@@ -34,13 +34,13 @@ from amoeba.store import (
     Store,
     project_store_path,
 )
-from runner.crash_entry import KILL_AT_ENV, KillPoint
+from runner.crash_entry import CRASH_PROJECT, KILL_AT_ENV, KillPoint
 from runner.dispatch.pointer_support import CfWorld
 from runner.gate_rig import STATUS_FIXTURES, rig_checkout
-from runner.tick_support import drive_project, ready_slice_step, ready_step
+from runner.tick_support import drive_project, ready_slice
 
 TESTS_DIR = Path(__file__).resolve().parent.parent
-PROJECT = "crash-proof"
+PROJECT = CRASH_PROJECT
 WAIT_TIMEOUT_SECONDS = 30.0
 POLL_INTERVAL_SECONDS = 0.05
 
@@ -102,15 +102,13 @@ class CrashHarness:
         """Create the project and its test nodes before any process starts."""
         with Store.open(project_store_path(self.supervisor_dir, PROJECT)) as store:
             if self.world is not None:
-                step = ready_slice_step(
-                    store, "dispatch-slice", PROJECT, slice_index=125
-                )
-                node_ids = [step[1].id]
+                node = ready_slice(store, PROJECT, "dispatch-slice", slice_index=125)
+                node_ids = [node.id]
                 store.record_cf_snapshot(self.world.snapshot_input(PROJECT, "cf-a"))
             elif self.slice_name is not None:
-                node_ids = [ready_slice_step(store, self.slice_name, PROJECT)[1].id]
+                node_ids = [ready_slice(store, PROJECT, self.slice_name).id]
             else:
-                node_ids = [ready_step(store, PROJECT).id for _ in range(count)]
+                node_ids = [ready_slice(store, PROJECT).id for _ in range(count)]
             drive_project(store, PROJECT)
             return node_ids
 

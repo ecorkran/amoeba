@@ -14,7 +14,7 @@ from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind, TickFaults
 from amoeba.runner.gates.predispatch import Block
 from amoeba.store import BlockedKind, Channel, Node, Store
 from runner.observe_support import Host
-from runner.tick_support import PROJECT, Rig, ready_step
+from runner.tick_support import PROJECT, Rig, ready_slice
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def _dirty(node: Node, context: str = "the tree is dirty") -> BlockDispatch:
 
 
 def test_a_block_dispatch_writes_one_block_and_no_journal_entry(rig: Rig) -> None:
-    node = ready_step(rig.store)
+    node = ready_slice(rig.store)
 
     outcome = _act(rig).run([_dirty(node)], budget=_budget(rig), faults=TickFaults())
 
@@ -63,7 +63,7 @@ def test_a_block_dispatch_writes_one_block_and_no_journal_entry(rig: Rig) -> Non
 
 
 def test_a_second_block_dispatch_for_a_blocked_step_is_skipped(rig: Rig) -> None:
-    node = ready_step(rig.store)
+    node = ready_slice(rig.store)
     act = _act(rig)
 
     act.run([_dirty(node)], budget=_budget(rig), faults=TickFaults())

@@ -17,9 +17,10 @@ from amoeba.runner.dispatch.build_view import (
     block_unresolved,
     build_dispatch_view,
 )
-from amoeba.runner.intent.governance import DesiredStateIndex, current_steps
+from amoeba.runner.intent.governance import DesiredStateIndex, current_slices
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observed import ObservedRun
+from amoeba.runner.project_config import ProjectSettings
 from amoeba.store import Node, Store
 
 
@@ -40,10 +41,11 @@ def build_project_view(
     desired: DesiredStateIndex,
     *,
     dispatching: bool,
+    settings: ProjectSettings,
 ) -> BuiltView:
     """The facts the planners decide on, for ``project_id``."""
     tree = LifecycleTree(store.nodes_for_project(project_id))
-    current = current_steps(tree, desired)
+    current = current_slices(tree, desired)
     dispatch, wrote = _dispatch_view(store, project_id, tree, current, dispatching)
     view = ProjectView(
         project_id=project_id,
@@ -54,9 +56,10 @@ def build_project_view(
         in_flight=tuple(o.run for o in runs if o.finished is None),
         link_probes=link_probes,
         desired=desired,
-        current_steps=current,
+        current_slices=current,
         dispatch=dispatch.facts,
         checkout_holders=dispatch.holders,
+        settings=settings,
     )
     return BuiltView(view, wrote)
 

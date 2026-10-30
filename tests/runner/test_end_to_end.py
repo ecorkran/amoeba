@@ -34,7 +34,7 @@ from amoeba.store import (
     NodeStatus,
     Store,
 )
-from runner.tick_support import drive_project, ready_step, runnable_unbusy
+from runner.tick_support import drive_project, ready_slice, runnable_unbusy
 
 PROJECT = "demo"
 GRACE_SECONDS = 0.5
@@ -90,7 +90,7 @@ class Scenario:
         self.monkeypatch = monkeypatch
         self.store = store
         self.host = Host(store)
-        self.node: Node = ready_step(store)
+        self.node: Node = ready_slice(store)
         drive_project(store)
         self.planner = OncePerNode(checkout)
         self._tenant: RunnerTenant | None = None

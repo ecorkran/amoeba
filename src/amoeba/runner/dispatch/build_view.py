@@ -17,13 +17,12 @@ from pathlib import Path
 from typing import Final
 
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved, resolve_checkout
-from amoeba.runner.dispatch.facts import StepDispatchFacts
+from amoeba.runner.dispatch.facts import SliceDispatchFacts
 from amoeba.runner.dispatch.hold import checkout_holders
 from amoeba.runner.dispatch.state import DispatchState, dispatch_state
 from amoeba.runner.faults import PAYLOAD_FAULT_KIND, FaultKind
 from amoeba.runner.ingest.outcome import PAYLOAD_REASON, BlockPlan, cut_to_bound
 from amoeba.runner.ingest.record import block_once
-from amoeba.runner.lifecycle.steps import STEP_MAP, Executor, step_rank
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.store import (
     BlockedKind,
@@ -54,7 +53,7 @@ class UnresolvedStep:
 class DispatchView:
     """What the view carries for dispatch."""
 
-    facts: Mapping[str, StepDispatchFacts]
+    facts: Mapping[str, SliceDispatchFacts]
     holders: Mapping[Path, frozenset[str]]
     unresolved: tuple[UnresolvedStep, ...]
 
@@ -83,7 +82,7 @@ def build_dispatch_view(
 ) -> DispatchView:
     """The dispatch facts of ``current``'s pipeline steps, and the held checkouts."""
     observed: dict[str, CFSnapshot | None] = {}
-    facts: dict[str, StepDispatchFacts] = {}
+    facts: dict[str, SliceDispatchFacts] = {}
     unresolved: list[UnresolvedStep] = []
     for node in current:
         found = _facts_for(store, project_id, tree, node, observed, is_dir)
@@ -129,15 +128,11 @@ def _facts_for(
     node: Node,
     observed: dict[str, CFSnapshot | None],
     is_dir: Callable[[Path], bool],
-) -> StepDispatchFacts | None:
-    step = tree.step_of(node)
-    if step is None or STEP_MAP[step].executor is not Executor.PIPELINE:
+) -> SliceDispatchFacts | None:
+    if node.kind is not NodeKind.SLICE:
         return None
-    slice_node = tree.parent(node)
-    if slice_node is None or slice_node.kind is not NodeKind.SLICE:
-        return None
-    index, cf_project = slice_node.cf.index, slice_node.cf.project
-    initiative = tree.parent(slice_node)
+    index, cf_project = node.cf.index, node.cf.project
+    initiative = tree.parent(node)
     if index is None or cf_project is None or initiative is None:
         return None
     if initiative.cf.index is None:
@@ -147,13 +142,12 @@ def _facts_for(
     entries = store.journal_entries(project_id, node_id=node.id)
     resolution = _applied_resolution(store, node.id)
     state = dispatch_state(entries, resolution)
-    return StepDispatchFacts(
-        step=step,
+    return SliceDispatchFacts(
         state=state,
         checkout=resolve_checkout(observed[cf_project], index, is_dir=is_dir),
         slice_index=index,
         cf_project_id=cf_project,
-        sort_key=(initiative.cf.index, index, step_rank(step)),
+        sort_key=(initiative.cf.index, index),
         reissue_of=latest_run_entry(entries)
         if state is DispatchState.REISSUE
         else None,
