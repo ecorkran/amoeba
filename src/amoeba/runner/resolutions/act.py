@@ -33,7 +33,12 @@ from amoeba.runner.observed import ResumeFailed
 from amoeba.runner.resolutions.argv import resume_argv
 from amoeba.runner.resolutions.judge import checkpoint_of
 from amoeba.runner.resolutions.prepoll import Act, prepoll_decision
-from amoeba.runner.resolutions.vocabulary import PARAM_RESUME_SKIPPED, Continuation
+from amoeba.runner.resolutions.vocabulary import (
+    PARAM_RESUME_CAUSE,
+    PARAM_RESUME_SKIPPED,
+    Continuation,
+    ResumeCause,
+)
 from amoeba.store import (
     PARAM_CHECKOUT,
     PARAM_CONTINUATION,
@@ -76,10 +81,12 @@ def journal_continuation(
     parameters: dict[str, object] = {key: continued.parameters[key] for key in _COPIED}
     parameters[PARAM_CONTINUATION] = continuation.value
     parameters[PARAM_CONTINUES] = continued.id
-    parameters[PARAM_RESOLUTION] = action.resolution
+    if action.resolution is not None:
+        parameters[PARAM_RESOLUTION] = action.resolution
     if resume_skipped is not None:
         parameters[PARAM_RESUME_SKIPPED] = resume_skipped
     if isinstance(action, ResumeRun):
+        parameters[PARAM_RESUME_CAUSE] = action.cause.value
         parameters.update(action.journal_extra)
     return store.journal_issue(
         action.node_id, kind=CommandKind.SQ_RUN, parameters=parameters
@@ -171,7 +178,16 @@ class ContinuationActs:
         self._tracker.track(entry.id, started)
 
     def _instructions(self, action: ResumeRun) -> str | None:
-        """The PM's instructions, read from the resolution slot (never journaled)."""
+        """The instructions for the resume.
+
+        A resolution resume reads the PM's text from the resolution slot, here and
+        nowhere else, so it is never journaled or held in an action. An automatic
+        resume carries its own, if any.
+        """
+        if action.cause is ResumeCause.TRANSIENT:
+            return action.instructions
+        if action.resolution is None:
+            raise ValueError(f"a resolution resume of {action.node_id} names none")
         blocked = self._store.blocked_state(action.resolution)
         if blocked is None or blocked.resolution is None:
             raise ValueError(f"resolution {action.resolution} has no resolution slot")

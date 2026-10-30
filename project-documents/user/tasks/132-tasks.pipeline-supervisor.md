@@ -186,11 +186,13 @@ Note (20261029): 6.2 and 6.3 landed in one commit, `feat: ingest finished runs b
 ### Task 7.1: Add the resume cause and reshape `ResumeRun`
 **Owner**: Junior AI | **Dependencies**: 6.3 | **Effort**: 2
 
-- [ ] `resolutions/vocabulary.py`: `ResumeCause` (`transient`, `resolution`) and `PARAM_RESUME_CAUSE = "resume_cause"` (Task-level additions) (already added in Task 5.2; verify only)
-- [ ] `decide.py`: `ResumeRun` gains `cause` and `instructions`; `resolution` becomes optional, required when `cause` is `resolution` (raise `ValueError` in `__post_init__` otherwise). `decision` stays until Task 8.1b
-- [ ] The act stage writes `resume_cause` into every resume entry's parameters, and `--instructions` only when `instructions` is set. Today's resolution resumes write `resume_cause: resolution`
-- [ ] Tests: `tests/runner/resolutions/test_act.py` and `test_argv.py` for both causes, with and without instructions
-- [ ] **Success:** tests pass. Commit `feat: record why each resume was issued`
+- [x] `resolutions/vocabulary.py`: `ResumeCause` (`transient`, `resolution`) and `PARAM_RESUME_CAUSE = "resume_cause"` (Task-level additions) (already added in Task 5.2; verify only)
+- [x] `decide.py`: `ResumeRun` gains `cause` and `instructions`; `resolution` becomes optional, required when `cause` is `resolution` (raise `ValueError` in `__post_init__` otherwise). `decision` stays until Task 8.1b
+- [x] The act stage writes `resume_cause` into every resume entry's parameters, and `--instructions` only when `instructions` is set. Today's resolution resumes write `resume_cause: resolution`
+- [x] Tests: `tests/runner/resolutions/test_act.py` and `test_argv.py` for both causes, with and without instructions
+- [x] **Success:** tests pass. Commit `feat: record why each resume was issued`
+
+Note (20261029): a resolution resume reads the PM's instructions from the resolution slot in the act stage only (tests/runner/resolutions/test_instructions_flow.py requires act.py to be the one reader), so `ResumeRun.instructions` is set only for a transient resume. `ResumeRun` takes `cause` and `instructions` as keyword-only fields. test_argv.py is unchanged: the argv builder did not change.
 
 ### Task 7.2: List transient outcomes as resume candidates and widen the hold
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 3

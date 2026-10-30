@@ -26,7 +26,7 @@ from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.gates.predispatch import Block
 from amoeba.runner.launch import text_parameter
-from amoeba.runner.resolutions.vocabulary import Continuation
+from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, Node
 
 
@@ -78,5 +78,6 @@ def _action(node: Node, facts: StepDispatchFacts, view: ProjectView) -> Action |
         continued.id,
         resolution.id,
         checkout,
+        cause=ResumeCause.RESOLUTION,
         journal_extra={PARAM_DISPATCH_CHECK: dict(check.evidence)},
     )

@@ -21,7 +21,7 @@ from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.gates.predispatch import Block
 from amoeba.runner.resolutions.planner import ContinuationPlanner
-from amoeba.runner.resolutions.vocabulary import Continuation
+from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
 from amoeba.store import (
     PARAM_CHECKOUT,
     BlockedKind,
@@ -82,6 +82,7 @@ def test_retry_and_accept_resume_the_continued_run(
             continued.id,
             "b-1",
             FIRST,
+            cause=ResumeCause.RESOLUTION,
             journal_extra={PARAM_DISPATCH_CHECK: dict(OK_EVIDENCE)},
         )
     ]

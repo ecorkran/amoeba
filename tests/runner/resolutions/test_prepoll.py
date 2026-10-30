@@ -19,11 +19,14 @@ from amoeba.runner.resolutions.prepoll import Act, PrepollDecision, prepoll_deci
 from amoeba.runner.resolutions.vocabulary import (
     RESUME_SKIPPED_RUN_NOT_AT_PAUSE,
     Continuation,
+    ResumeCause,
 )
 
 PAUSED_AT = datetime(2026, 10, 25, 9, 0, tzinfo=UTC)
 CHECKOUT = Path("/work/a")
-RESUME = ResumeRun("n", "r", Continuation.RETRY, "e", "b", CHECKOUT)
+RESUME = ResumeRun(
+    "n", "r", Continuation.RETRY, "e", "b", CHECKOUT, cause=ResumeCause.RESOLUTION
+)
 OBSERVE = ObserveRun("n", "r", "e", "b", CHECKOUT)
 
 

@@ -22,9 +22,11 @@ from amoeba.runner.finish import RESULT_RESUME_FAILURE
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME, LaunchTracker, log_paths
 from amoeba.runner.resolutions.act import Acted, ContinuationActs
 from amoeba.runner.resolutions.vocabulary import (
+    PARAM_RESUME_CAUSE,
     PARAM_RESUME_SKIPPED,
     RESUME_SKIPPED_RUN_NOT_AT_PAUSE,
     Continuation,
+    ResumeCause,
 )
 from amoeba.store import (
     PARAM_CHECKOUT,
@@ -106,7 +108,13 @@ class Rig:
 
     def resume(self, decision: Continuation = Continuation.RETRY) -> ResumeRun:
         return ResumeRun(
-            self.node.id, self.run_id, decision, self.entry.id, "b-1", Path(CHECKOUT)
+            self.node.id,
+            self.run_id,
+            decision,
+            self.entry.id,
+            "b-1",
+            Path(CHECKOUT),
+            cause=ResumeCause.RESOLUTION,
         )
 
     def observe(self) -> ObserveRun:
@@ -221,7 +229,13 @@ def test_the_second_budget_check_cuts_off_before_anything_is_journaled(
 
 def test_a_continued_entry_that_is_gone_is_a_defect(rig: Rig) -> None:
     action = ResumeRun(
-        rig.node.id, rig.run_id, Continuation.RETRY, "no-such", "b-1", Path(CHECKOUT)
+        rig.node.id,
+        rig.run_id,
+        Continuation.RETRY,
+        "no-such",
+        "b-1",
+        Path(CHECKOUT),
+        cause=ResumeCause.RESOLUTION,
     )
 
     with pytest.raises(ValueError, match="does not exist"):
@@ -252,6 +266,7 @@ def _launch(
         rig.entry.id,
         resolution,
         Path(CHECKOUT),
+        cause=ResumeCause.RESOLUTION,
         journal_extra=journal_extra or {},
     )
     return rig.acts.act(action, generous_budget(), rig.faults)
@@ -334,3 +349,38 @@ def test_an_observe_action_never_launches(rig: Rig) -> None:
     rig.acts.act(rig.observe(), generous_budget(), rig.faults)
 
     assert rig.popen.argvs == []
+
+
+def test_a_resolution_resume_journals_its_cause(rig: Rig) -> None:
+    _launch(rig, "retry")
+
+    entry = rig.entries()[-1]
+    assert entry.parameters[PARAM_RESUME_CAUSE] == ResumeCause.RESOLUTION.value
+
+
+def _transient(rig: Rig, instructions: str | None) -> Acted:
+    rig.answer(rig.paused())
+    action = ResumeRun(
+        rig.node.id,
+        rig.run_id,
+        Continuation.RETRY,
+        rig.entry.id,
+        None,
+        Path(CHECKOUT),
+        cause=ResumeCause.TRANSIENT,
+        instructions=instructions,
+    )
+    return rig.acts.act(action, generous_budget(), rig.faults)
+
+
+@pytest.mark.parametrize("instructions", [None, INSTRUCTIONS])
+def test_a_transient_resume_journals_its_cause_and_names_no_resolution(
+    rig: Rig, instructions: str | None
+) -> None:
+    assert _transient(rig, instructions) is Acted.WROTE
+
+    entry = rig.entries()[-1]
+    assert entry.parameters[PARAM_RESUME_CAUSE] == ResumeCause.TRANSIENT.value
+    assert PARAM_RESOLUTION not in entry.parameters
+    [argv] = rig.popen.argvs
+    assert ("--instructions" in argv) is (instructions is not None)

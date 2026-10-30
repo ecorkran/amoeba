@@ -22,7 +22,7 @@ from amoeba.runner.gates.predispatch import Block, DispatchCheck, Ok
 from amoeba.runner.intent.governance import DesiredStateIndex
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.project_config import PROJECT_DEFAULTS, MergePolicy
-from amoeba.runner.resolutions.vocabulary import Continuation
+from amoeba.runner.resolutions.vocabulary import Continuation, ResumeCause
 from amoeba.store import JournalEntry, Node
 
 
@@ -89,20 +89,29 @@ class WriteSlicePointer:
 
 @dataclass(frozen=True)
 class ResumeRun:
-    """Resume a paused run for an applied ``retry`` or ``accept`` (slice 127, D4).
+    """Resume a run: a PM's ``retry`` or ``accept``, or an automatic retry (D4, D5).
 
-    ``continues`` is the entry whose run it resumes, and ``resolution`` the blocked
-    state whose decision it carries out. The run id is the continued one.
+    ``continues`` is the entry whose run it resumes. For ``cause`` ``resolution``,
+    ``resolution`` is the blocked state whose decision it carries out; a ``transient``
+    resume has none. ``instructions`` are an automatic resume's own text, passed to
+    Squadron when set; a resolution resume's text stays in the resolution slot. The
+    run id is the continued one.
     """
 
     node_id: str
     run_id: str
     decision: Continuation
     continues: str
-    resolution: str
+    resolution: str | None
     checkout: Path
+    cause: ResumeCause = field(kw_only=True)
+    instructions: str | None = field(default=None, kw_only=True)
     #: Evidence written into the continuation entry's parameters (slice 128, D5).
     journal_extra: Mapping[str, object] = field(default_factory=dict[str, object])
+
+    def __post_init__(self) -> None:
+        if self.cause is ResumeCause.RESOLUTION and self.resolution is None:
+            raise ValueError("a resolution resume names the resolution it carries out")
 
 
 @dataclass(frozen=True)
