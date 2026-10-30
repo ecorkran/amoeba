@@ -45,7 +45,7 @@ from amoeba.runner.lifecycle.plan_read import (
     config_get_command,
 )
 
-#: ``Ok`` evidence keys that the gate half does not set (D5).
+#: ``Ok`` evidence keys (D5).
 EVIDENCE_BRANCH: Final = "branch"
 EVIDENCE_HEAD: Final = "head"
 EVIDENCE_TARGET: Final = "target"

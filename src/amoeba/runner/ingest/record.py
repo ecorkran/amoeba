@@ -55,10 +55,6 @@ from amoeba.store import (
 RESULT_RUN_ID: Final = PARAM_RUN_ID
 RESULT_STATUS: Final = "status"
 RESULT_VERDICT_IDS: Final = "verdict_ids"
-#: Slice 128 (D2): the gate, design and git reads taken when a run completes, and the
-#: ids of the two hatch checks recorded with them.
-RESULT_OUTCOME_OBSERVATION: Final = "outcome_observation"
-RESULT_CHECK_IDS: Final = "check_ids"
 RESULT_REVIEW_FAULT: Final = "review_fault"
 
 #: Block payload keys added by an unknown review.

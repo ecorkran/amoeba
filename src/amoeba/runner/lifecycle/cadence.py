@@ -1,4 +1,4 @@
-"""When a CF link's plan is read (D7): on an interval, or early on a pointer change.
+"""When a CF link's plan is read (D7): on an interval, or early on a snapshot change.
 
 Plan documents change without ``projects.json`` changing, so each link is read on
 an interval. A change in the link's CF snapshot also makes it due now. State is

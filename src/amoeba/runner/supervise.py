@@ -190,8 +190,8 @@ def run_to_resume(entries: Sequence[JournalEntry]) -> JournalEntry | None:
 
     ``entries`` are the slice's, oldest first. It is the latest entry, when that is a
     resolved ``sq_run`` whose recorded outcome is one Squadron can resume. A failed
-    launch, a vanished run, a run whose resume found it gone, and anything after a
-    pointer write give ``None``: there is no run to resume (D6).
+    launch, a vanished run and a run whose resume found it gone give ``None``: there
+    is no run to resume (D6).
     """
     latest = entries[-1] if entries else None
     if (

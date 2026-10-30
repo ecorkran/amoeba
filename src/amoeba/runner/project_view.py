@@ -1,7 +1,7 @@
 """Build one tick's :class:`ProjectView` from the store and the observed runs.
 
-Built after record and before routing (slice 126, D8), so what routing does is
-first seen by the next tick's view. Held apart from ``tick.py`` to keep it short.
+Built after ingest, so it already shows the runs ingest just recorded. Held apart
+from ``tick.py`` to keep it short.
 """
 
 from __future__ import annotations

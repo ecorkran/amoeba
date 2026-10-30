@@ -20,9 +20,6 @@ was later removed, which would repeat work. So, in order:
 4. Otherwise the caller launches it, as for any launch. Should Squadron refuse the id
    because a run appeared in between, the child exits without the line and the
    observer's single poll finds the state, so the run is observed, not failed.
-
-The pointer is not re-written: the relaunch repeats the same command, and Squadron's
-phase step sets the slice pointer itself.
 """
 
 from __future__ import annotations

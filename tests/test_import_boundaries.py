@@ -17,6 +17,9 @@ and the outcome-document model it shares with the ``sq_run`` observer.
 Rule 10: only ``amoeba.cli`` imports ``amoeba.runner``.
 Rule 11: ``amoeba.runner`` takes from ``amoeba.store``, ``amoeba.process`` and
 ``amoeba.upstream`` only names those packages export.
+Rule 12: the routing engine, the CF gate reads and the pointer modules are gone
+(slice 132): their paths do not exist and no module under ``amoeba.runner`` imports
+them.
 """
 
 from __future__ import annotations
@@ -371,3 +374,50 @@ def test_rule_11_the_runner_imports_only_public_names() -> None:
                         if alias.name not in exported
                     )
     assert problems == []
+
+
+#: Paths under ``src/amoeba`` that slice 132 deleted, and the module prefixes that
+#: would import them back.
+REMOVED_RUNNER_PATHS = (
+    "runner/routing",
+    "runner/gates",
+    "runner/dispatch/pointer.py",
+    "runner/dispatch/pointer_apply.py",
+    "runner/dispatch/pointer_watch.py",
+    "runner/dispatch/observe_pointer.py",
+    "runner/lifecycle/steps.py",
+    "runner/lifecycle/human_steps.py",
+    "inspection/routing.py",
+)
+REMOVED_RUNNER_MODULES = (
+    "amoeba.runner.routing",
+    "amoeba.runner.gates",
+    "amoeba.runner.dispatch.pointer",
+    "amoeba.runner.dispatch.observe_pointer",
+    "amoeba.runner.lifecycle.steps",
+    "amoeba.runner.lifecycle.human_steps",
+    "amoeba.inspection.routing",
+)
+
+
+def test_rule_12_the_removed_runner_paths_do_not_exist() -> None:
+    # A directory counts only for the source it holds, not a stale ``__pycache__``.
+    survivors = [
+        path
+        for path in REMOVED_RUNNER_PATHS
+        if (SRC / path).is_file() or any((SRC / path).rglob("*.py"))
+    ]
+    assert survivors == []
+
+
+def test_rule_12_nothing_imports_a_removed_runner_module() -> None:
+    offenders = [
+        f"{path.relative_to(SRC)} imports {name}"
+        for path in sorted(SRC.rglob("*.py"))
+        for name in _imported_names(path)
+        if any(
+            name == module or name.startswith(module + ".")
+            for module in REMOVED_RUNNER_MODULES
+        )
+    ]
+    assert offenders == []

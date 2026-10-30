@@ -28,8 +28,7 @@ from amoeba.store import (
     StoreSchemaError,
 )
 
-#: Who the Runner signs its own store writes as (closing an escalation, resolving a
-#: human step's block).
+#: Who the Runner signs its own store writes as (closing an escalation).
 RUNNER_ACTOR: Final = "runner"
 
 
@@ -43,18 +42,13 @@ class FaultKind(StrEnum):
     project. They are closed by resolving the block, not by the project rule.
     ``REVIEW_UNKNOWN`` is node-scoped in the same way: a run's review could not be
     read, parsed or attributed, and the step's block names it. So is
-    ``POINTER_WRITE_FAILED``: the CF slice pointer write failed or read back wrong.
-    And ``CHECKOUT_UNRESOLVED``: no checkout can be named for a step's slice.
-    ``RUN_OVERRUN`` is project-scoped: a run in flight is older than its pipeline's
-    time bound, so its node cannot be blocked (it blocks only when its run ends).
+    ``CHECKOUT_UNRESOLVED``: no checkout can be named for a step's slice.
 
-    Slice 128 (D11) adds four node blocks, each named in the block's ``fault_kind``:
-    ``CHECKOUT_DIRTY`` and ``CHECKOUT_BRANCH`` (the checkout is not fit for a launch),
-    ``CF_GATE_BLOCKS`` (CF's gate for the step has not cleared) and
-    ``PENDING_DECISION`` (the design holds a decision the PM owes). And one
-    project-scoped kind: ``CHECKOUT_READ_FAILED``, a ``git`` or ``cf`` read before a
-    dispatch or a merge observation gave no usable answer. It blocks no step, because
-    the step is not at fault, and closes on the first complete tick without it.
+    Slice 128 (D11) adds two node blocks, each named in the block's ``fault_kind``:
+    ``CHECKOUT_DIRTY`` and ``CHECKOUT_BRANCH`` (the checkout is not fit for a launch).
+    And one project-scoped kind: ``CHECKOUT_READ_FAILED``, a ``git`` or ``cf`` read
+    before a dispatch gave no usable answer. It blocks no step, because the step is
+    not at fault, and closes on the first complete tick without it.
 
     Slice 132 (D11) adds the project-scoped ``PIPELINE_UNCONFIGURED``: a project has a
     current slice and the project config names no pipeline for it. Nothing launches
@@ -69,14 +63,9 @@ class FaultKind(StrEnum):
     LIFECYCLE_ORPHAN = "lifecycle_orphan"
     PLAN_STATUS_UNKNOWN = "plan_status_unknown"
     REVIEW_UNKNOWN = "review_unknown"
-    POINTER_WRITE_FAILED = "pointer_write_failed"
     CHECKOUT_UNRESOLVED = "checkout_unresolved"
-    POINTER_MOVED = "pointer_moved"
-    RUN_OVERRUN = "run_overrun"
     CHECKOUT_DIRTY = "checkout_dirty"
     CHECKOUT_BRANCH = "checkout_branch"
-    CF_GATE_BLOCKS = "cf_gate_blocks"
-    PENDING_DECISION = "pending_decision"
     CHECKOUT_READ_FAILED = "checkout_read_failed"
     PIPELINE_UNCONFIGURED = "pipeline_unconfigured"
 
@@ -217,13 +206,12 @@ PAYLOAD_FAULT_KIND: Final = "fault_kind"
 PAYLOAD_ERROR: Final = "error"
 PAYLOAD_RUN_IDS: Final = "run_ids"
 
-#: Keys of a lifecycle block's payload (orphan, unknown status, human step).
+#: Keys of a lifecycle block's payload (orphan, unknown status).
 PAYLOAD_CF_PROJECT_ID: Final = "cf_project_id"
 PAYLOAD_INDEX: Final = "index"
 PAYLOAD_FORMER_INDEX: Final = "former_index"
 PAYLOAD_FORMER_SLICE_NAME: Final = "former_slice_name"
 PAYLOAD_STATUS: Final = "status"
-PAYLOAD_STEP: Final = "step"
 
 
 def escalate(

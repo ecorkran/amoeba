@@ -177,7 +177,6 @@ def test_the_new_fault_kinds_have_their_exact_values(
         (faults.PAYLOAD_FORMER_INDEX, "former_index"),
         (faults.PAYLOAD_FORMER_SLICE_NAME, "former_slice_name"),
         (faults.PAYLOAD_STATUS, "status"),
-        (faults.PAYLOAD_STEP, "step"),
     ],
 )
 def test_the_lifecycle_payload_keys_have_their_exact_values(

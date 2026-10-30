@@ -7,8 +7,7 @@ never updated (issue #11).
 
 CF supplying no value (no ``archFile``, no ``designFile``) is "no information", not
 a change: the existing value stays. A slice's ``slice_name`` is set from CF's design
-file here, and by slice 125 from the pointer it reads back before launching a design
-run; clearing it because the list has no design file yet would undo that.
+file here; clearing it because the list has no design file yet would undo that.
 """
 
 from __future__ import annotations

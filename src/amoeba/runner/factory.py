@@ -31,12 +31,12 @@ from amoeba.runner.tenant import RunnerTenant
 
 logger = logging.getLogger(__name__)
 
-#: The installed distribution whose version labels each routing decision.
+#: The installed distribution whose version the tenant records.
 AMOEBA_DISTRIBUTION: Final = "amoeba"
 
-#: The planners production runs, over current steps only: human steps (slice 124),
-#: then dispatch (slice 125), which points a checkout and launches a pipeline, then
-#: continuations (slice 127), which resume or observe the run a resolution names.
+#: The planners production runs, over current slices only: dispatch, which launches
+#: the project's pipeline in a checkout, then continuations (slice 127), which resume
+#: the run a resolution names.
 PRODUCTION_PLANNERS: Final[tuple[Planner, ...]] = (
     DispatchPlanner(),
     ContinuationPlanner(),
