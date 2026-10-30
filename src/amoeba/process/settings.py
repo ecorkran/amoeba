@@ -97,6 +97,9 @@ class ProcessSettings:
         plan_read_interval_seconds: The least time between two plan reads of the
             same linked Context Forge project. A change in the project's CF
             snapshot triggers an earlier read.
+        auto_resume_limit: The most consecutive automatic resumes of one run
+            at one step before the slice is blocked (D5). At least 1; the CLI
+            flag refuses less.
         routing_table_path: The routing table file, loaded and validated once at
             start-up. Defaults to the table shipped in the package.
         project_config_path: The per-project config file (the merge policy),
@@ -121,5 +124,6 @@ class ProcessSettings:
     tick_call_timeout_seconds: float = 8.0
     run_poll_interval_seconds: float = 15.0
     plan_read_interval_seconds: float = 30.0
+    auto_resume_limit: int = 3
     routing_table_path: Path = DEFAULT_ROUTING_TABLE_PATH
     project_config_path: Path | None = None

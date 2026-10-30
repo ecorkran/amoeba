@@ -118,6 +118,22 @@ def test_a_non_numeric_runner_flag_is_a_usage_error(flag: str) -> None:
     assert raised.value.code == 2
 
 
+def test_auto_resume_limit_defaults_to_three_and_the_flag_sets_it() -> None:
+    assert ProcessSettings().auto_resume_limit == 3
+    assert start_settings(build_parser().parse_args(["start"])).auto_resume_limit == 3
+
+    args = build_parser().parse_args(["start", "--auto-resume-limit", "5"])
+
+    assert start_settings(args).auto_resume_limit == 5
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "many"])
+def test_an_auto_resume_limit_below_one_is_a_usage_error(value: str) -> None:
+    with pytest.raises(SystemExit) as raised:
+        build_parser().parse_args(["start", "--auto-resume-limit", value])
+    assert raised.value.code == 2
+
+
 def test_help_lists_the_runner_flags(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         build_parser().parse_args(["start", "--help"])

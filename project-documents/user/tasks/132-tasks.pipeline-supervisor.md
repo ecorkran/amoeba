@@ -97,10 +97,10 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 2.2: Add the `auto_resume_limit` setting and flag
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 1
 
-- [ ] `process/settings.py`: `auto_resume_limit: int = 3`, defined once there, documented as the most consecutive automatic resumes of one run at one step (D5). Reject a value below 1 at load with the existing validation style
-- [ ] `cli/settings_flags.py`: `--auto-resume-limit N`
-- [ ] Tests in `tests/test_settings_flags.py`: default 3; the flag sets it; 0 is refused
-- [ ] **Success:** tests pass. Commit `feat: add the auto-resume limit setting`
+- [x] `process/settings.py`: `auto_resume_limit: int = 3`, defined once there, documented as the most consecutive automatic resumes of one run at one step (D5). Reject a value below 1 at load with the existing validation style
+- [x] `cli/settings_flags.py`: `--auto-resume-limit N`
+- [x] Tests in `tests/test_settings_flags.py`: default 3; the flag sets it; 0 is refused
+- [x] **Success:** tests pass. Commit `feat: add the auto-resume limit setting`
 
 ---
 
