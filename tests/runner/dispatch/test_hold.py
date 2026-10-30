@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 
+import pytest
+
 from amoeba.runner.dispatch.checkout import CheckoutUnresolved
 from amoeba.runner.dispatch.facts import StepDispatchFacts
 from amoeba.runner.dispatch.hold import checkout_holders
@@ -66,15 +68,27 @@ def test_a_later_run_on_the_node_releases_a_paused_one() -> None:
 def test_the_recorded_outcome_decides_not_the_block() -> None:
     """A paused run whose review was unknown is blocked on a human, and still holds."""
     paused = entry(RUN, "a", outcome=JournalOutcome.COMPLETED, outcome_text="paused")
-    failed = entry(
+    completed = entry(
         RUN,
         "b",
         outcome=JournalOutcome.COMPLETED,
-        outcome_text="failed",
+        outcome_text="completed",
         checkout=SECOND,
     )
 
-    assert _held([paused, failed], set(), {}) == {FIRST}
+    assert _held([paused, completed], set(), {}) == {FIRST}
+
+
+@pytest.mark.parametrize("outcome_text", ["failed", "orphaned"])
+def test_a_failed_or_orphaned_run_of_a_node_that_is_not_done_holds_its_checkout(
+    outcome_text: str,
+) -> None:
+    stopped = entry(
+        RUN, "a", outcome=JournalOutcome.COMPLETED, outcome_text=outcome_text
+    )
+
+    assert _held([stopped], set(), {}) == {FIRST}
+    assert _held([stopped], {"a"}, {}) == frozenset()
 
 
 def test_a_recovery_resolved_run_holds_nothing() -> None:

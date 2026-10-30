@@ -197,12 +197,14 @@ Note (20261029): a resolution resume reads the PM's instructions from the resolu
 ### Task 7.2: List transient outcomes as resume candidates and widen the hold
 **Owner**: Junior AI | **Dependencies**: 7.1 | **Effort**: 3
 
-- [ ] `dispatch/state.py`: `DispatchState.AUTO_RESUME` (Task-level additions): the latest `sq_run` entry is resolved, its outcome classifies `TRANSIENT` (call `supervise.classify`, do not re-derive), and the node is not blocked
-- [ ] `dispatch/hold.py`: `_paused` becomes "recorded `paused`, `failed` or `orphaned`" (D3); rename it to match. Release is unchanged
-- [ ] `gates/candidates.py`: an `AUTO_RESUME` node is a candidate on the same terms as `RESUME` (its checkout held by no one or only by itself; pipeline and checkout from the resumed entry)
-- [ ] The pre-dispatch check treats an `AUTO_RESUME` candidate as a resume: it calls `gates/predispatch.py`'s `branch_rule` with `resume=True`, which already skips the clean-tree check. The branch rule itself is Task 9.1's
-- [ ] Tests in `tests/runner/dispatch/test_state.py`, `test_hold.py` and `tests/runner/gates/test_dispatch_reads.py`: each transient outcome gives `AUTO_RESUME`; a blocked node does not; a `failed` and an `orphaned` entry hold the checkout; an `AUTO_RESUME` candidate with a dirty tree on the target passes
-- [ ] **Success:** tests pass and the full suite is green. Commit `feat: list transient outcomes as resume candidates`
+- [x] `dispatch/state.py`: `DispatchState.AUTO_RESUME` (Task-level additions): the latest `sq_run` entry is resolved, its outcome classifies `TRANSIENT` (call `supervise.classify`, do not re-derive), and the node is not blocked
+- [x] `dispatch/hold.py`: `_paused` becomes "recorded `paused`, `failed` or `orphaned`" (D3); rename it to match. Release is unchanged
+- [x] `gates/candidates.py`: an `AUTO_RESUME` node is a candidate on the same terms as `RESUME` (its checkout held by no one or only by itself; pipeline and checkout from the resumed entry)
+- [x] The pre-dispatch check treats an `AUTO_RESUME` candidate as a resume: it calls `gates/predispatch.py`'s `branch_rule` with `resume=True`, which already skips the clean-tree check. The branch rule itself is Task 9.1's
+- [x] Tests in `tests/runner/dispatch/test_state.py`, `test_hold.py` and `tests/runner/gates/test_dispatch_reads.py`: each transient outcome gives `AUTO_RESUME`; a blocked node does not; a `failed` and an `orphaned` entry hold the checkout; an `AUTO_RESUME` candidate with a dirty tree on the target passes
+- [x] **Success:** tests pass and the full suite is green. Commit `feat: list transient outcomes as resume candidates`
+
+Note (20261029): `observed.py` now imports `InFlightRun` only under TYPE_CHECKING, to break the cycle decide -> dispatch.state -> supervise -> observed -> decide. A failed run now holds its checkout (D3), so test_a_failed_run_keeps_its_checkout_until_released replaced the old test that dispatched the second slice at once. `Candidate.resume` is true for `AUTO_RESUME` as well, so the existing `branch_rule(resume=True)` path covers it.
 
 ### Task 7.3: Issue `ResumeRun(cause=transient)` from Decide
 **Owner**: Junior AI | **Dependencies**: 7.2 | **Effort**: 2

@@ -66,7 +66,7 @@ def test_the_second_slice_is_dispatched_the_tick_the_first_run_completes(
     assert len(rig.entries(CommandKind.CF_WRITE, first)) == 1
 
 
-def test_the_second_slice_is_dispatched_the_tick_the_first_run_fails(
+def test_a_failed_run_keeps_its_checkout_until_released(
     rig: DispatchRig,
 ) -> None:
     first, second = _two_in_one_checkout(rig)
@@ -80,7 +80,7 @@ def test_the_second_slice_is_dispatched_the_tick_the_first_run_fails(
     )
 
     assert rig.status(first) is NodeStatus.BLOCKED_ON_HUMAN
-    assert _pointers(rig, second) == 1
+    assert _pointers(rig, second) == 0, "the failed run may be resumed, so it holds"
 
 
 def test_a_paused_run_keeps_its_checkout(rig: DispatchRig) -> None:

@@ -12,7 +12,9 @@ from collections.abc import Sequence
 from enum import StrEnum
 from typing import Final
 
+from amoeba.runner.observed import RunEnded
 from amoeba.runner.resolutions.vocabulary import ResolutionDecision
+from amoeba.runner.supervise import OutcomeClass, classify, recorded_document
 from amoeba.store import (
     PARAM_RESOLUTION,
     BlockedState,
@@ -37,6 +39,8 @@ class DispatchState(StrEnum):
     NEEDS_POINTER = "needs_pointer"
     #: An applied ``retry`` or ``accept`` nobody has carried out: resume the paused run.
     RESUME = "resume"
+    #: The latest run ended in a transient way (D4): resume it, within the bound.
+    AUTO_RESUME = "auto_resume"
     #: An applied ``handled`` nobody has carried out: observe the run the PM moved.
     REOBSERVE = "reobserve"
 
@@ -81,6 +85,8 @@ def dispatch_state(
     latest = entries[-1] if entries else None
     if latest is None:
         return DispatchState.NEEDS_POINTER
+    if _ended_transiently(latest):
+        return DispatchState.AUTO_RESUME
     if _recovery_found_no_run(latest):
         return DispatchState.REISSUE
     if _pointed(latest) and pointer_confirmed:
@@ -102,6 +108,20 @@ def _pending_decision(
     ):
         return None
     return _DECISION_STATES.get(decision)
+
+
+def _ended_transiently(entry: JournalEntry) -> bool:
+    """Whether this is a run entry whose recorded outcome the supervisor resumes.
+
+    A node that is blocked is not current, so it never reaches here: a transient
+    outcome at the bound blocks instead (D5).
+    """
+    if entry.kind is not CommandKind.SQ_RUN:
+        return False
+    document = recorded_document(entry)
+    return (
+        document is not None and classify(RunEnded(document)) is OutcomeClass.TRANSIENT
+    )
 
 
 def _recovery_found_no_run(entry: JournalEntry) -> bool:

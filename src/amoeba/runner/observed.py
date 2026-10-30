@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from amoeba.process import RunOutcomeDocument
 from amoeba.runner.budget import TickResult
-from amoeba.runner.decide import InFlightRun
 from amoeba.runner.faults import LaunchFailure, ResumeFailure
+
+if TYPE_CHECKING:
+    # Only the annotation of ``ObservedRun.run``; ``supervise`` imports this module
+    # and ``decide`` reaches ``supervise``, so a runtime import would be a cycle.
+    from amoeba.runner.decide import InFlightRun
 
 
 @dataclass(frozen=True)

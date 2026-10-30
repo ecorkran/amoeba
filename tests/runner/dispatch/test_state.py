@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 
 import pytest
 
 from amoeba.runner.dispatch.state import DispatchState, dispatch_state
+from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import (
     PARAM_RESOLUTION,
     BlockedKind,
@@ -43,6 +45,12 @@ def _entry(
         ),
         awaits_routing=awaits_routing,
     )
+
+
+def _run_stopped_at(document: Mapping[str, object]) -> JournalEntry:
+    """A resolved run entry holding the outcome document it was resolved with."""
+    entry = _run()
+    return replace(entry, result={RESULT_OUTCOME_DOCUMENT: document})
 
 
 def _pointer(outcome: JournalOutcome | None = JournalOutcome.COMPLETED) -> JournalEntry:
@@ -244,5 +252,95 @@ def test_an_unresolved_continuation_is_in_flight() -> None:
     entries = [_run(), _naming(_run(None))]
 
     state = dispatch_state(entries, _decided("retry"), pointer_confirmed=True)
+
+    assert state is DispatchState.IN_FLIGHT
+
+
+_RUN_ID = "run-1"
+_TRANSIENT_DOCUMENTS: dict[str, dict[str, object]] = {
+    "orphaned": {"run_id": _RUN_ID, "outcome": "orphaned"},
+    "provider_error": {
+        "run_id": _RUN_ID,
+        "outcome": "failed",
+        "failure": {"kind": "provider_error", "step": "design-0"},
+    },
+    "stall": {
+        "run_id": _RUN_ID,
+        "outcome": "failed",
+        "failure": {"kind": "stall", "step": "design-0"},
+    },
+    "usage_limit": {
+        "run_id": _RUN_ID,
+        "outcome": "paused",
+        "checkpoint": {
+            "kind": "usage_limit",
+            "step": "design-0",
+            "resets_at": "2026-10-29T18:00:00+00:00",
+        },
+    },
+}
+
+
+@pytest.mark.parametrize("name", list(_TRANSIENT_DOCUMENTS))
+def test_a_transient_outcome_gives_auto_resume(name: str) -> None:
+    document = _TRANSIENT_DOCUMENTS[name]
+    entries = [_pointer(), _run_stopped_at(document)]
+
+    state = dispatch_state(entries, None, pointer_confirmed=True)
+
+    assert state is DispatchState.AUTO_RESUME
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"run_id": _RUN_ID, "outcome": "completed"},
+        {
+            "run_id": _RUN_ID,
+            "outcome": "failed",
+            "failure": {"kind": "cost_cap", "step": "design-0"},
+        },
+        {
+            "run_id": _RUN_ID,
+            "outcome": "paused",
+            "checkpoint": {"kind": "usage_limit", "step": "design-0"},
+        },
+        {
+            "run_id": _RUN_ID,
+            "outcome": "paused",
+            "checkpoint": {"kind": "agent_question", "step": "design-0"},
+        },
+    ],
+    ids=["completed", "cost_cap", "usage_limit_without_resets_at", "agent_question"],
+)
+def test_an_outcome_that_is_not_transient_is_not_resumed(
+    document: Mapping[str, object],
+) -> None:
+    entries = [_pointer(), _run_stopped_at(document)]
+
+    state = dispatch_state(entries, None, pointer_confirmed=True)
+
+    assert state is not DispatchState.AUTO_RESUME
+
+
+def test_a_run_with_no_recorded_document_is_not_resumed() -> None:
+    state = dispatch_state([_pointer(), _run()], None, pointer_confirmed=True)
+
+    assert state is DispatchState.NEEDS_POINTER
+
+
+def test_a_pointer_written_after_the_transient_run_starts_over() -> None:
+    document = _TRANSIENT_DOCUMENTS["stall"]
+    entries = [_run_stopped_at(document), _pointer()]
+
+    state = dispatch_state(entries, None, pointer_confirmed=True)
+
+    assert state is DispatchState.POINTED
+
+
+def test_an_unresolved_transient_resume_is_in_flight() -> None:
+    entries = [_run_stopped_at(_TRANSIENT_DOCUMENTS["stall"]), _run(None)]
+
+    state = dispatch_state(entries, None, pointer_confirmed=True)
 
     assert state is DispatchState.IN_FLIGHT

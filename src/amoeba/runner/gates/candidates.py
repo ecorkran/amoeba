@@ -20,6 +20,9 @@ from amoeba.runner.launch import PARAM_PIPELINE, text_parameter
 from amoeba.runner.lifecycle.steps import LifecycleStep
 from amoeba.store import PARAM_CHECKOUT, JournalEntry, Node
 
+#: The states that continue a run: a PM's resolution, or an automatic retry.
+_RESUMING = frozenset({DispatchState.RESUME, DispatchState.AUTO_RESUME})
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -35,8 +38,8 @@ class Candidate:
 
     @property
     def resume(self) -> bool:
-        """Whether this continues a paused run rather than starting one."""
-        return self.state is DispatchState.RESUME
+        """Whether this continues a stopped run rather than starting one."""
+        return self.state in _RESUMING
 
     @property
     def needs_gate(self) -> bool:
@@ -53,9 +56,10 @@ def launch_candidates(
     """The steps Observe checks: those that could launch or resume this tick.
 
     A candidate is a ``POINTED`` step (its own claim is what holds its checkout); a
-    ``REISSUE`` step in a checkout no one holds; or a ``RESUME`` step whose checkout
-    is held by no one or only by itself. This is the one definition of the set, and
-    the ``decide()`` guard relies on it. Nothing is recomputed from the store.
+    ``REISSUE`` step in a checkout no one holds; or a ``RESUME`` or ``AUTO_RESUME``
+    step whose checkout is held by no one or only by itself. This is the one
+    definition of the set, and the ``decide()`` guard relies on it. Nothing is
+    recomputed from the store.
     """
     found: list[Candidate] = []
     for node in current:
@@ -65,14 +69,14 @@ def launch_candidates(
         checkout = step_facts.checkout
         if step_facts.state is DispatchState.REISSUE:
             checkout = _entry_checkout(step_facts.reissue_of, checkout)
-        elif step_facts.state is DispatchState.RESUME:
+        elif step_facts.state in _RESUMING:
             checkout = _entry_checkout(step_facts.continues, checkout)
         held_by = holders.get(checkout.path, frozenset[str]())
         if step_facts.state is DispatchState.POINTED:
             pipeline = pipeline_for(step_facts.step)
         elif step_facts.state is DispatchState.REISSUE and not held_by:
             pipeline = _pipeline_of(step_facts.reissue_of)
-        elif step_facts.state is DispatchState.RESUME and held_by <= {node.id}:
+        elif step_facts.state in _RESUMING and held_by <= {node.id}:
             pipeline = _pipeline_of(step_facts.continues)
         else:
             continue

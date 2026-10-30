@@ -61,7 +61,7 @@ def _candidates(
     entry_kwargs: dict[str, object] = {}
     if state is DispatchState.REISSUE:
         entry_kwargs["reissue_of"] = _never_started()
-    if state is DispatchState.RESUME:
+    if state in (DispatchState.RESUME, DispatchState.AUTO_RESUME):
         entry_kwargs["continues"] = entry(CommandKind.SQ_RUN, "a", FIRST)
     step_facts = facts(state, FIRST, **entry_kwargs, **kw)  # type: ignore[arg-type]
     return launch_candidates([node("a")], {"a": step_facts}, holders or {})
@@ -96,14 +96,16 @@ def test_a_reissue_in_a_held_checkout_is_not_a_candidate() -> None:
         ({SECOND: frozenset({"other"})}, 1),
     ],
 )
+@pytest.mark.parametrize("state", [DispatchState.RESUME, DispatchState.AUTO_RESUME])
 def test_a_resume_is_a_candidate_only_when_held_by_no_one_or_itself(
-    holders: dict[Path, frozenset[str]], expected: int
+    state: DispatchState, holders: dict[Path, frozenset[str]], expected: int
 ) -> None:
-    assert len(_candidates(DispatchState.RESUME, holders)) == expected
+    assert len(_candidates(state, holders)) == expected
 
 
-def test_a_resume_never_needs_the_gate() -> None:
-    [candidate] = _candidates(DispatchState.RESUME)
+@pytest.mark.parametrize("state", [DispatchState.RESUME, DispatchState.AUTO_RESUME])
+def test_a_resume_never_needs_the_gate(state: DispatchState) -> None:
+    [candidate] = _candidates(state)
 
     assert candidate.resume is True and candidate.needs_gate is False
 
@@ -159,11 +161,13 @@ class World:
         step: LifecycleStep = LifecycleStep.IMPLEMENTATION,
         *,
         resume: bool = False,
+        automatic: bool = False,
     ) -> Candidate:
+        state = DispatchState.AUTO_RESUME if automatic else DispatchState.RESUME
         return Candidate(
             "a",
             step,
-            DispatchState.RESUME if resume else DispatchState.POINTED,
+            state if resume or automatic else DispatchState.POINTED,
             Checkout(self.checkout, None),
             "P6",
             SLICE,
@@ -282,11 +286,12 @@ def test_the_evidence_for_a_launch_names_branch_head_target_and_the_gate(
     }
 
 
+@pytest.mark.parametrize("automatic", [False, True])
 def test_a_resume_s_evidence_names_its_dirty_paths_and_it_launches(
-    world: World,
+    world: World, automatic: bool
 ) -> None:
     (world.checkout / "work.txt").write_text("w\n")
-    candidate = world.candidate(resume=True)
+    candidate = world.candidate(resume=not automatic, automatic=automatic)
     reads = world.read(candidate)
     assert isinstance(reads, DispatchReads)
 

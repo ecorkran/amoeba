@@ -4,9 +4,10 @@ A checkout is held while any of these is true:
 
 - an unresolved ``sq_run`` entry in the project has that checkout;
 - a node that is not ``done`` has a latest ``sq_run`` entry with that checkout whose
-  recorded outcome is ``paused`` (a paused run still has its branch checked out; the
-  rule reads the run's recorded outcome, never the block kind, so a paused run whose
-  review was unknown and which is blocked on ``HUMAN`` still holds it);
+  recorded outcome is ``paused``, ``failed`` or ``orphaned`` (a stopped run still has
+  its branch checked out and may be resumed; the rule reads the run's recorded
+  outcome, never the block kind, so a stopped run that is blocked on ``HUMAN`` still
+  holds it until the block is released);
 - a current step in that checkout is ``POINTED``, or has an unresolved pointer write
   in flight: its claim starts with the pointer write.
 
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
+from typing import Final
 
 from amoeba.process import RunOutcome
 from amoeba.runner.dispatch.checkout import Checkout
@@ -56,7 +58,7 @@ def checkout_holders(
             holders.setdefault(checkout, set()).add(entry.node_id)
     for node_id, entry in latest_run.items():
         checkout = _checkout_of(entry)
-        if checkout is not None and node_id not in done_node_ids and _paused(entry):
+        if checkout is not None and node_id not in done_node_ids and _stopped(entry):
             holders.setdefault(checkout, set()).add(node_id)
     for node_id, facts in current.items():
         if facts.state is DispatchState.POINTED and isinstance(
@@ -78,10 +80,16 @@ def _claimant_is_current(
     return entry.node_id in current
 
 
-def _paused(entry: JournalEntry) -> bool:
-    """Whether the run's recorded outcome is ``paused``."""
+#: The recorded outcomes of a run that stopped but can be resumed, so keeps its tree.
+_STOPPED_OUTCOMES: Final = frozenset(
+    {RunOutcome.PAUSED.value, RunOutcome.FAILED.value, RunOutcome.ORPHANED.value}
+)
+
+
+def _stopped(entry: JournalEntry) -> bool:
+    """Whether the run's recorded outcome is ``paused``, ``failed`` or ``orphaned``."""
     return (
         entry.is_resolved
         and entry.result is not None
-        and entry.result.get(RESULT_OUTCOME) == RunOutcome.PAUSED.value
+        and entry.result.get(RESULT_OUTCOME) in _STOPPED_OUTCOMES
     )
