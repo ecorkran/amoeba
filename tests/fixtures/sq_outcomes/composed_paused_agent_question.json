@@ -1,0 +1,24 @@
+{
+  "run_id": "run-20261029-p4-0a1b2c3d",
+  "outcome": "paused",
+  "status": "paused",
+  "pipeline": "p4",
+  "started_at": "2026-10-16T01:25:09.158262+00:00",
+  "updated_at": "2026-10-16T02:20:27.563338+00:00",
+  "checkpoint": {
+    "kind": "agent_question",
+    "step": "design-0",
+    "step_type": "phase",
+    "is_loop": false,
+    "round": null,
+    "max_rounds": null,
+    "verdict": null,
+    "review_file": null,
+    "reason": "checkpoint",
+    "paused_at": "2026-10-16T02:20:27.561691+00:00",
+    "resets_at": null,
+    "question": "Which slice should I design, 178 or 179? If it is 178 I will set the cf slice field and go ahead."
+  },
+  "failure": null,
+  "reviews": []
+}

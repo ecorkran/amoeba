@@ -109,10 +109,10 @@ Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clea
 ### Task 3.1: Read `question`, `resets_at` and `agent_text`
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `process/sq_outcome.py`: `RunCheckpoint` gains `question: str | None` and `resets_at: datetime | None`; `RunFailure` gains `agent_text: str | None`; `CheckpointKind` gains `AGENT_QUESTION = "agent_question"`. All optional; an absent field is `None`; extra keys are still ignored
-- [ ] Capture one `sq runs wait <id> --timeout 0 --json` document per new shape from the installed `sq` if one is reachable without a paid run; otherwise build the fixtures from the LLD's field list and say so in the fixtures README. Add them to the existing sq run fixtures (`tests/sq_run_fixtures.py` or its fixture directory) with the `sq` version and date
-- [ ] Tests in `tests/test_observer_sq_outcome_fields.py`: each new field parsed; each absent gives `None`; `agent_question` with no `question`; a `resets_at` with a timezone offset; an unknown checkpoint kind still parses as unknown
-- [ ] **Success:** tests pass; the existing shape probe still passes. Commit `feat: read Squadron's question, resets_at and agent_text`
+- [x] `process/sq_outcome.py`: `RunCheckpoint` gains `question: str | None` and `resets_at: datetime | None`; `RunFailure` gains `agent_text: str | None`; `CheckpointKind` gains `AGENT_QUESTION = "agent_question"`. All optional; an absent field is `None`; extra keys are still ignored
+- [x] Capture one `sq runs wait <id> --timeout 0 --json` document per new shape from the installed `sq` if one is reachable without a paid run; otherwise build the fixtures from the LLD's field list and say so in the fixtures README. Add them to the existing sq run fixtures (`tests/sq_run_fixtures.py` or its fixture directory) with the `sq` version and date
+- [x] Tests in `tests/test_observer_sq_outcome_fields.py`: each new field parsed; each absent gives `None`; `agent_question` with no `question`; a `resets_at` with a timezone offset; an unknown checkpoint kind still parses as unknown
+- [x] **Success:** tests pass; the existing shape probe still passes. Commit `feat: read Squadron's question, resets_at and agent_text`
 
 ---
 

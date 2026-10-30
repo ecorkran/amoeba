@@ -80,6 +80,9 @@ class CheckpointKind(StrEnum):
     #: squadron#248: a pause for a usage limit. Its round never ran, so accept is
     #: refused and the answer is retry after ``resets_at`` (slice 127, D2).
     USAGE_LIMIT = "usage_limit"
+    #: squadron#249: the agent ended on a question instead of an artifact. The
+    #: answer is a resume carrying instructions (slice 132, D10).
+    AGENT_QUESTION = "agent_question"
     OTHER = "other"
 
 
@@ -146,12 +149,18 @@ class RunCheckpoint(BaseModel):
     review_file: str | None = None
     reason: str | None = None
     paused_at: datetime | None = None
+    #: A ``usage_limit`` pause: when the limit resets (timezone-aware).
+    resets_at: datetime | None = None
+    #: An ``agent_question`` pause: the end of the agent's reply (up to 400 chars).
+    question: str | None = None
 
 
 class RunFailure(BaseModel):
     """A failed run's failure. The kind stays raw; :func:`parse_failure_kind` reads it.
 
-    ``message`` is Squadron's text, so anything that quotes it bounds it first.
+    ``message`` and ``agent_text`` are Squadron's and the agent's text, so anything
+    that quotes them bounds them first. ``agent_text`` is the agent's reply on
+    ``artifact_missing``.
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
@@ -159,6 +168,7 @@ class RunFailure(BaseModel):
     kind: str | None = None
     step: str | None = None
     message: str | None = None
+    agent_text: str | None = None
 
 
 class RunReview(BaseModel):

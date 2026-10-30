@@ -105,6 +105,22 @@ run text, no credentials. The exit code is the outcome's (`completed` 0, `failed
 | `failed_artifact_missing.json` | `run-20261017-p4-256e7396` | A failed run with `failure` (`artifact_missing`, step `design-0`, a long `message`) and an empty `reviews` list |
 | `paused_awaits_human.json` | `run-20261016-p56-6f6dfbbb` | A paused run with `checkpoint` (`awaits_human`, step `branch-10`, null `round` and `review_file`) and three `reviews` |
 
+### Composed `sq_outcomes/` fixtures (not captures)
+
+The three `composed_*` files are **not** byte-real. They carry the shapes added in
+Squadron 0.24.9 (`checkpoint.question`, `checkpoint.resets_at`, `failure.agent_text`),
+and no run that produced them could be captured without a paid run. Composed
+**2026-10-29** from the producer, `src/squadron/pipeline/run_outcome.py`
+(`_checkpoint`, `_agent_question`, `_usage_limit_resets_at`, `_failure`), on top of
+the real `paused_awaits_human.json` and `failed_artifact_missing.json`. Recapture
+them from a real run when one pauses or fails this way.
+
+| File | What it shows |
+| --- | --- |
+| `composed_paused_agent_question.json` | `checkpoint.kind` `agent_question` with a `question` |
+| `composed_paused_usage_limit.json` | `checkpoint.kind` `usage_limit` with a UTC-offset `resets_at` |
+| `composed_failed_agent_text.json` | `failure` `artifact_missing` with `agent_text` |
+
 ## `sq_reviews/` — Squadron review output
 
 ### Review files

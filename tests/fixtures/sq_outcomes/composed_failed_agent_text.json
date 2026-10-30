@@ -1,0 +1,16 @@
+{
+  "run_id": "run-20261029-p4-2c3d4e5f",
+  "outcome": "failed",
+  "status": "failed",
+  "pipeline": "p4",
+  "started_at": "2026-10-17T03:20:49.518974+00:00",
+  "updated_at": "2026-10-17T03:21:04.961724+00:00",
+  "checkpoint": null,
+  "failure": {
+    "kind": "artifact_missing",
+    "step": "design-0",
+    "message": "phase dispatch completed but no design artifact was written for slice 178",
+    "agent_text": "I could not find a plan entry for slice 178. Which initiative is it in?"
+  },
+  "reviews": []
+}

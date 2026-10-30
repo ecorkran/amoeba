@@ -197,3 +197,65 @@ def test_every_real_capture_survives_a_poll(
     monkeypatch.setattr("amoeba.process.sq_outcome.subprocess.run", fake_run)
 
     assert poll_run(document.run_id, timeout_seconds=5.0) == document
+
+
+def test_an_agent_question_pause_carries_its_question() -> None:
+    checkpoint = _fixture("composed_paused_agent_question.json").checkpoint
+
+    assert checkpoint is not None
+    assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.AGENT_QUESTION
+    assert checkpoint.question is not None and "178" in checkpoint.question
+    assert checkpoint.resets_at is None
+
+
+def test_an_agent_question_with_no_question_reads_none() -> None:
+    raw = json.loads(
+        (FIXTURES / "composed_paused_agent_question.json").read_text(encoding="utf-8")
+    )
+    del raw["checkpoint"]["question"]
+
+    checkpoint = RunOutcomeDocument.model_validate(raw).checkpoint
+
+    assert checkpoint is not None
+    assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.AGENT_QUESTION
+    assert checkpoint.question is None
+
+
+def test_a_usage_limit_pause_carries_a_timezone_aware_resets_at() -> None:
+    checkpoint = _fixture("composed_paused_usage_limit.json").checkpoint
+
+    assert checkpoint is not None
+    assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.USAGE_LIMIT
+    assert checkpoint.resets_at == datetime(2026, 10, 29, 18, 0, tzinfo=UTC)
+
+
+def test_a_resets_at_with_an_offset_keeps_its_instant() -> None:
+    raw = json.loads(
+        (FIXTURES / "composed_paused_usage_limit.json").read_text(encoding="utf-8")
+    )
+    raw["checkpoint"]["resets_at"] = "2026-10-29T20:00:00+02:00"
+
+    checkpoint = RunOutcomeDocument.model_validate(raw).checkpoint
+
+    assert checkpoint is not None
+    assert checkpoint.resets_at == datetime(2026, 10, 29, 18, 0, tzinfo=UTC)
+
+
+def test_a_failure_carries_the_agent_text_when_present_and_none_when_absent() -> None:
+    with_text = _fixture("composed_failed_agent_text.json").failure
+    without_text = _fixture("failed_artifact_missing.json").failure
+
+    assert with_text is not None and without_text is not None
+    assert with_text.agent_text is not None and "slice 178" in with_text.agent_text
+    assert without_text.agent_text is None
+
+
+def test_a_checkpoint_without_the_new_fields_reads_none() -> None:
+    checkpoint = _fixture("paused_awaits_human.json").checkpoint
+
+    assert checkpoint is not None
+    assert (checkpoint.question, checkpoint.resets_at) == (None, None)
+
+
+def test_an_unknown_checkpoint_kind_still_parses_as_unknown() -> None:
+    assert parse_checkpoint_kind("agent_shrug") == UnknownKind("agent_shrug")
