@@ -180,12 +180,19 @@ def build_argv(pipeline: str, run_id: str, params: Mapping[str, str]) -> list[st
     for key, value in params.items():
         if key == TARGET_PARAM_KEY:
             continue
-        if PARAM_VALUE_SEPARATOR in key or PARAM_KEY_VALUE_SEPARATOR in key:
-            raise ValueError(f"parameter key {key!r} may not contain ',' or '='")
-        if PARAM_VALUE_SEPARATOR in value:
-            raise ValueError(f"parameter {key!r} has a value containing ','")
+        if problem := param_problem(key, value):
+            raise ValueError(problem)
         argv += [SQ_PARAM_FLAG, f"{key}{PARAM_KEY_VALUE_SEPARATOR}{value}"]
     return argv
+
+
+def param_problem(key: str, value: str) -> str | None:
+    """Why Squadron would split this ``-p`` parameter, or ``None`` if it would not."""
+    if PARAM_VALUE_SEPARATOR in key or PARAM_KEY_VALUE_SEPARATOR in key:
+        return f"parameter key {key!r} may not contain ',' or '='"
+    if PARAM_VALUE_SEPARATOR in value:
+        return f"parameter {key!r} has a value containing ','"
+    return None
 
 
 def text_parameter(entry: JournalEntry, key: str) -> str:

@@ -228,7 +228,9 @@ def test_the_tenant_holds_the_project_config_the_file_gives(
     monkeypatch: pytest.MonkeyPatch, healthy_sq: Path, tmp_path: Path
 ) -> None:
     config_file = tmp_path / "projects.yaml"
-    config_file.write_text("projects:\n  scratch:\n    merge_policy: auto\n")
+    config_file.write_text(
+        "projects:\n  scratch:\n    pipeline: p456\n    merge_policy: auto\n"
+    )
     captured: list[dict[str, Any]] = []
 
     def spy(**tenant_kwargs: Any) -> RunnerTenant:

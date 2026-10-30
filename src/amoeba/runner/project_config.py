@@ -1,14 +1,16 @@
-"""The per-project config: a static YAML file holding the merge policy (slice 128, D8).
+"""The per-project config: a static YAML file naming each project's pipeline (D2).
 
 Loaded once at start, like the routing table, and never mutated; a change needs a
-restart. With no file, every project takes :data:`PROJECT_DEFAULTS`, the one place a
-default lives. A bad file raises :class:`StartupFailedError` listing every problem.
-The file holds no secrets.
+restart. A named project carries its ``pipeline`` and optional ``params``; a project the
+file does not name has no pipeline (:data:`PROJECT_DEFAULTS`), and there is no default
+pipeline to fall back on. A bad file raises :class:`StartupFailedError` listing every
+problem it can find in one pass. ``params`` are pipeline parameters and hold no
+secrets: they are passed to ``sq run -p`` and journaled verbatim.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -16,10 +18,17 @@ from types import MappingProxyType
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    StrictStr,
+    ValidationError,
+    field_validator,
+)
 from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
+from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
 
 
 class MergePolicy(StrEnum):
@@ -36,6 +45,10 @@ class ProjectSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    #: The Squadron pipeline run per slice; ``None`` for a project the file omits.
+    pipeline: StrictStr | None = None
+    #: Extra ``-p key=value`` pipeline parameters, passed through verbatim.
+    params: dict[str, StrictStr] = {}
     merge_policy: MergePolicy = MergePolicy.AUTO
 
     @field_validator("merge_policy", mode="before")
@@ -105,7 +118,22 @@ def _problems_or_config(path: Path) -> ProjectConfig | tuple[str, ...]:
     except ValidationError as error:
         # Expected: a wrong key or value. Each error becomes a problem.
         return tuple(_describe(item) for item in error.errors())
-    return ProjectConfig(projects=parsed.projects)
+    problems = tuple(_semantic_problems(parsed.projects))
+    return problems or ProjectConfig(projects=parsed.projects)
+
+
+def _semantic_problems(projects: Mapping[str, ProjectSettings]) -> Iterator[str]:
+    """What the field types cannot say: a named project needs a pipeline, and its
+    params must be ones ``sq run`` can take."""
+    for project_id, settings in projects.items():
+        where = f"projects.{project_id}"
+        if not (settings.pipeline or "").strip():
+            yield f"{where}.pipeline: required for a named project"
+        for key, value in settings.params.items():
+            if key == TARGET_PARAM_KEY:
+                yield f"{where}.params.{key}: reserved, the Runner passes the slice"
+            elif problem := param_problem(key, value):
+                yield f"{where}.params.{key}: {problem}"
 
 
 def _describe(item: ErrorDetails) -> str:

@@ -13,7 +13,7 @@ projectState: Slices 120–128 are merged. The Runner (`src/amoeba/runner/`, 120
   built.
 dateCreated: 20261029
 dateUpdated: 20261029
-status: not_started
+status: in_progress
 turns: 54
 promptTokens: 4789658
 cachedTokens: 4635143
@@ -70,14 +70,16 @@ revision_number: 2
 ### Task 1.1: Create the branch and record the starting point
 **Owner**: Junior AI | **Dependencies**: None | **Effort**: 1
 
-- [ ] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
-- [ ] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
-- [ ] Fold this file's "Task-level additions" and "Order versus the LLD's Migration Plan" into the LLD, so the code review compares against one design: the surviving `gates/` modules and their new homes in "Component Structure"; `complete_node_id`, `DispatchState.AUTO_RESUME`, `resume_count` and the `ResumeRun` fields in "API Contracts"; the order note under "Migration Plan". Commit to the target as `docs:`
-- [ ] Confirm issue #22 exists and is open (`gh issue view 22`)
-- [ ] Create `132-slice.pipeline-supervisor` from the target and switch to it
-- [ ] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. If any fails, write `BLOCKED:` with the failure and stop
-- [ ] Record under this task: the pass count, and `find src/amoeba/runner -name '*.py' | xargs wc -l | tail -1` (the "before" line count for the final commit message)
-- [ ] **Success:** the planning edits are committed to the target; on the slice branch, the suite is green and both numbers are recorded. No commit on the slice branch
+- [x] Confirm `pwd` is the amoeba repo root. Read the target with `cf config get git.integration_branch` (empty means `main`)
+- [x] Run `git status --short`. Uncommitted edits to planning documents (the arch, the initiative plan, the slice or these tasks) are committed to the target first as `docs:`, each file by name. If any other file is dirty, write `BLOCKED:` naming it and stop
+- [x] Fold this file's "Task-level additions" and "Order versus the LLD's Migration Plan" into the LLD, so the code review compares against one design: the surviving `gates/` modules and their new homes in "Component Structure"; `complete_node_id`, `DispatchState.AUTO_RESUME`, `resume_count` and the `ResumeRun` fields in "API Contracts"; the order note under "Migration Plan". Commit to the target as `docs:`
+- [x] Confirm issue #22 exists and is open (`gh issue view 22`)
+- [x] Create `132-slice.pipeline-supervisor` from the target and switch to it
+- [x] Run `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .` and `uv run pyright`. If any fails, write `BLOCKED:` with the failure and stop
+- [x] Record under this task: the pass count, and `find src/amoeba/runner -name '*.py' | xargs wc -l | tail -1` (the "before" line count for the final commit message)
+- [x] **Success:** the planning edits are committed to the target; on the slice branch, the suite is green and both numbers are recorded. No commit on the slice branch
+
+Baseline (20261029): 4419 tests passed; ruff check, ruff format and pyright clean; runner 12057 lines.
 
 ---
 
@@ -86,11 +88,11 @@ revision_number: 2
 ### Task 2.1: Add `pipeline` and `params` to the project config
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 2
 
-- [ ] `runner/project_config.py`: each project entry gains `pipeline: str | None` and `params: Mapping[str, str]` (empty by default). `merge_policy` stays for now; Task 10.4 removes it. `ProjectSettings` carries both. A project the file does not name has `pipeline` `None` (no default pipeline, D2)
-- [ ] Load-time validation per D2, every problem listed in one `StartupFailedError`: a key `slice`; a key containing `,` or `=`; a value containing `,`; a non-string value; an entry naming a project with no `pipeline`; any key beside `pipeline`, `params` and `merge_policy` (Task 10.4 removes `merge_policy` from that list). The pipeline name itself is not validated. Reuse the forbidden-character rule `build_argv` enforces (import it, do not copy it)
-- [ ] Update the loader's docstring: `params` are pipeline parameters and hold no secrets (LLD "Special Considerations")
-- [ ] `tests/runner/test_project_config.py`: a named project with and without `params`; an unnamed project gives `pipeline` `None`; each failure; two problems in one file both named, the `slice` one as `projects.<id>.params.slice`
-- [ ] **Success:** tests pass, existing config tests pass. Commit `feat: name the pipeline and its parameters per project`
+- [x] `runner/project_config.py`: each project entry gains `pipeline: str | None` and `params: Mapping[str, str]` (empty by default). `merge_policy` stays for now; Task 10.4 removes it. `ProjectSettings` carries both. A project the file does not name has `pipeline` `None` (no default pipeline, D2)
+- [x] Load-time validation per D2, every problem listed in one `StartupFailedError`: a key `slice`; a key containing `,` or `=`; a value containing `,`; a non-string value; an entry naming a project with no `pipeline`; any key beside `pipeline`, `params` and `merge_policy` (Task 10.4 removes `merge_policy` from that list). The pipeline name itself is not validated. Reuse the forbidden-character rule `build_argv` enforces (import it, do not copy it)
+- [x] Update the loader's docstring: `params` are pipeline parameters and hold no secrets (LLD "Special Considerations")
+- [x] `tests/runner/test_project_config.py`: a named project with and without `params`; an unnamed project gives `pipeline` `None`; each failure; two problems in one file both named, the `slice` one as `projects.<id>.params.slice`
+- [x] **Success:** tests pass, existing config tests pass. Commit `feat: name the pipeline and its parameters per project`
 
 ### Task 2.2: Add the `auto_resume_limit` setting and flag
 **Owner**: Junior AI | **Dependencies**: 1.1 | **Effort**: 1
