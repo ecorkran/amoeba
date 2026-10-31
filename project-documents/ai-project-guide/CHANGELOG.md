@@ -12,6 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.12] - 2026-10-29
+
+### Changed
+- The Task Breakdown (Phase 5) prompt now tells the agent to take no action when the task file already exists: no regenerating, revising or reviewing, just stop and report the existing path. Failsafe for a re-dispatched create step (Context Forge #134).
+
+## [0.22.11] - 2026-10-28
+
+### Changed
+- The `architecture-phase-2`, `slice-planning-phase-3` and `slice-design-phase-4` context profiles now include `fileComprehension` and `fileDocsMap`. Both are absent unless the project has the document; cf emits a Codebase Reference section only when the active profile lists one of them. Context Forge slice 274.
+
+## [0.22.10] - 2026-10-27
+
+### Changed
+- The `slice-design-phase-4` context profile now includes `fileArch`, so a slice design starts with the architecture (`[fileArch, fileSlicePlan, fileSlice]`). Found in a live adoption run, where the Phase 4 context named the slice plan and slice but not the derived architecture.
+
+## [0.22.9] - 2026-10-27
+
+### Changed
+- `rules/fixes.md`: a feature gets its own slice only when it is a vertical slice of functionality (it needs design, spans several components or steps, or changes a file or state format others depend on). Smaller features, such as a new flag, a behavior change or a few dozen lines, take the small-fix path and are committed as `feat:` with no slice, branch, task file or review. The small-fix step now covers small features and no longer requires an issue.
+
 ## [0.22.8] - 2026-10-26
 
 ### Changed

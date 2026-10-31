@@ -23,9 +23,9 @@ Order: concept → hld → arch → plan → slice → tasks.  Note that not all
 context_profiles:
   concept-phase-0:                   []
   initiative-plan-phase-1:           [fileConcept]
-  architecture-phase-2:              [fileConcept, fileArch]
-  slice-planning-phase-3:            [fileArch, fileSlicePlan]
-  slice-design-phase-4:              [fileSlicePlan, fileSlice]
+  architecture-phase-2:              [fileConcept, fileArch, fileComprehension, fileDocsMap]
+  slice-planning-phase-3:            [fileArch, fileSlicePlan, fileComprehension, fileDocsMap]
+  slice-design-phase-4:              [fileArch, fileSlicePlan, fileSlice, fileComprehension, fileDocsMap]
   task-breakdown-phase-5:            [fileSlice, fileTasks]
   implementation-phase-6:            [fileSlice, fileTasks]
   slice-integration-phase-7:         [fileArch, fileSlicePlan, fileSlice, fileTasks]
@@ -326,6 +326,7 @@ Your role is Senior AI. Use the following as input:
 - The slice design document `user/slices/{slice}.md`.
 
 Create task file at `user/tasks/{sliceindex}-tasks.{slicename}.md` (where `{sliceindex}` matches the parent slice's index, preserving lineage per `file-naming-conventions.md`). 
+If that task file already exists, take no action: do not regenerate, revise, or review it. Stop and report that the task file already exists, giving its path.
 Use `guide.ai-project.005-task-breakdown` for detailed guidance on this phase.
 
 Include:
