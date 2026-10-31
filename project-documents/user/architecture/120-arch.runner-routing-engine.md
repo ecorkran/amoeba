@@ -12,8 +12,8 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba's Runner — the deterministic loop that runs as a tenant of the resident process, launches each project's Squadron pipeline, watches and resumes its runs, and records what comes back. Revised 20261028 to supervise Squadron pipelines rather than route between phases; slices 120–128 were built under the original design, and slice 132 cuts it down.
 dateCreated: 20261020
-dateUpdated: 20261028
-status: in_progress
+dateUpdated: 20261031
+status: complete
 ---
 
 # Architecture: Runner & Routing Engine

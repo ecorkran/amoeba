@@ -12,8 +12,8 @@ projectState: Slices 120–128 are merged. The Runner (`src/amoeba/runner/`, 120
   policy and observes merges. Squadron 0.24.9 is installed. Nothing of slice 132 is
   built.
 dateCreated: 20261029
-dateUpdated: 20261029
-status: in_progress
+dateUpdated: 20261031
+status: complete
 turns: 54
 promptTokens: 4789658
 cachedTokens: 4635143
