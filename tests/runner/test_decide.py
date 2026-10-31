@@ -13,11 +13,9 @@ import pytest
 from amoeba.runner.decide import (
     Action,
     BlockDispatch,
-    InFlightRun,
     LaunchRun,
     ProjectView,
     ResumeRun,
-    RunState,
     decide,
 )
 from amoeba.runner.dispatch.checkout_check import Block, Ok
@@ -27,7 +25,6 @@ from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import DesiredState, Node
 from runner.intent.rows_support import row
 from runner.lifecycle.tree_support import TreeBuilder
-from runner.observe_support import entry
 from runner.tick_support import view_for
 
 NOW = datetime(2026, 10, 23, tzinfo=UTC)
@@ -162,23 +159,6 @@ def test_the_message_names_the_node_and_the_project(steps: Steps) -> None:
 def test_the_view_is_immutable() -> None:
     with pytest.raises(dataclasses.FrozenInstanceError):
         _view().project_id = "other"  # type: ignore[misc]  # pyright: ignore[reportAttributeAccessIssue]
-
-
-def test_ready_unbusy_offers_only_ready_steps_without_a_run_in_flight() -> None:
-    builder = TreeBuilder()
-    try:
-        initiative = builder.initiative(100)
-        architecture = builder.slice(initiative, 101)
-        view = view_for(builder.tree())
-        assert view.ready_unbusy() == [architecture], "no blocked slices"
-
-        running = InFlightRun(
-            replace(entry(), node_id=architecture.id), "run-1", RunState.RUNNING
-        )
-        busy = replace(view, in_flight=(running,))
-        assert busy.ready_unbusy() == []
-    finally:
-        builder.close()
 
 
 def test_a_driven_project_view_exposes_its_current_slices() -> None:

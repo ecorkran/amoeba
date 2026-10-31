@@ -7,6 +7,7 @@ directory and opens no store; the rest receive a **read-only** store.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 from amoeba.inspection.listing import FlagOption, ListingRequest, Row
 from amoeba.store import Channel, Store, paths
@@ -37,6 +38,11 @@ def blocked_rows(store: Store, request: ListingRequest) -> list[Row]:
     return _blocked_rows(store, request.require_project_id())
 
 
+#: The ``reason`` of a block whose escalation recorded none (a judge or
+#: checkpoint block, or a human block without a payload reason).
+NO_REASON_RECORDED: Final = "(no reason recorded)"
+
+
 def all_blocked_rows(store_dir: Path) -> list[Row]:
     """Every blocked node in every project, each store opened read-only."""
     rows: list[Row] = []
@@ -65,7 +71,9 @@ def _blocked_rows(store: Store, project_id: str) -> list[Row]:
                 "node_id": blocked.node.id,
                 "title": blocked.node.title,
                 "blocked_on": blocked.blocked_state.kind.value,
-                "reason": payload.get("reason") or payload.get("fault_kind") or "",
+                "reason": payload.get("reason")
+                or payload.get("fault_kind")
+                or NO_REASON_RECORDED,
                 "context": blocked.blocked_state.context,
                 # The id a resolution names (slice 127).
                 "blocked_state_id": blocked.blocked_state.id,

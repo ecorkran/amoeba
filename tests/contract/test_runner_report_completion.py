@@ -7,7 +7,7 @@ relaunch a run that had already finished.
 from __future__ import annotations
 
 import pytest
-from evidence_harness import PROJECT, seed_node
+from evidence_harness import seed_node
 from fault_injection import InjectedFailureError, fail_on_node_status_write
 from sq_run_fixtures import sq_run_parameters
 
@@ -75,4 +75,3 @@ def test_without_the_option_the_node_status_is_untouched(store: Store) -> None:
     _report(store, entry)
 
     assert _status(store, node_id) is before
-    assert PROJECT == store.get_node(node_id).project_id  # type: ignore[union-attr]

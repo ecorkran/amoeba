@@ -1,6 +1,6 @@
 """Build the per-tick dispatch facts for the decide stage (D1, D3, D4).
 
-For each current pipeline step: its own journal entries, its slice's latest observed
+For each current slice: its own journal entries, its slice's latest observed
 CF snapshot, the checkout that owns the slice, and the resulting dispatch state. And,
 across the whole project, the checkouts already held. Built each tick from the store
 and never cached: nothing here is state.
@@ -80,7 +80,7 @@ def build_dispatch_view(
     *,
     is_dir: Callable[[Path], bool],
 ) -> DispatchView:
-    """The dispatch facts of ``current``'s pipeline steps, and the held checkouts."""
+    """The dispatch facts of ``current``'s slices, and the held checkouts."""
     observed: dict[str, CFSnapshot | None] = {}
     facts: dict[str, SliceDispatchFacts] = {}
     unresolved: list[UnresolvedStep] = []

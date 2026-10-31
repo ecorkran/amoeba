@@ -14,9 +14,17 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
+from typing import Annotated
 
 import yaml
-from pydantic import BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictStr,
+    StringConstraints,
+    ValidationError,
+)
 from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
@@ -28,10 +36,13 @@ class ProjectSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    #: The Squadron pipeline run per slice; ``None`` for a project the file omits.
-    pipeline: StrictStr | None = None
+    #: The Squadron pipeline run per slice, stored stripped; ``None`` for a project
+    #: the file omits.
+    pipeline: Annotated[StrictStr, StringConstraints(strip_whitespace=True)] | None = (
+        None
+    )
     #: Extra ``-p key=value`` pipeline parameters, passed through verbatim.
-    params: dict[str, StrictStr] = {}
+    params: dict[str, StrictStr] = Field(default_factory=dict[str, StrictStr])
 
 
 class ProjectConfigFile(BaseModel):
@@ -104,7 +115,7 @@ def _semantic_problems(projects: Mapping[str, ProjectSettings]) -> Iterator[str]
     params must be ones ``sq run`` can take."""
     for project_id, settings in projects.items():
         where = f"projects.{project_id}"
-        if not (settings.pipeline or "").strip():
+        if not settings.pipeline:
             yield f"{where}.pipeline: required for a named project"
         for key, value in settings.params.items():
             if key == TARGET_PARAM_KEY:

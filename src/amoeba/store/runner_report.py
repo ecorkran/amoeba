@@ -53,7 +53,8 @@ class RunnerReportOperations(JournalOperations, FeedOperations):
         order its verdict (with ``record_verdict``'s retry rule) and its
         ``runner_issued`` ledger row carrying the verdict's id and node, then the
         entry resolved by ``issuer`` with ``outcome`` and ``result``. The
-        resolution marks the entry as awaiting routing.
+        resolution marks the entry as awaiting routing (the store still sets the flag;
+        nothing has read it since slice 132).
 
         With ``complete_node_id`` the node is marked ``done`` in the same
         transaction, after the resolution (a node with an unresolved entry

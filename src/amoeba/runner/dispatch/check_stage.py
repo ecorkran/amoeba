@@ -60,7 +60,7 @@ class CheckStage:
         """
         checks: dict[str, DispatchCheck] = {}
         for candidate in launch_candidates(
-            view.current_slices, view.dispatch, view.checkout_holders
+            view.current_slices, view.dispatch, view.checkout_holders, view.now
         ):
             self._context.set(candidate.node_id)
             reads = read_dispatch_facts(

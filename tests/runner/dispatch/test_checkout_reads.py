@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import subprocess
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,7 @@ from amoeba.runner.dispatch.checkout_reads import (
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.faults import FaultKind
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
+from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
 from runner.dispatch.cf_world import budget_allowing, generous_budget
 from runner.dispatch.dispatch_support import FIRST, SECOND, entry, facts, node
@@ -49,6 +52,31 @@ def _never_started() -> JournalEntry:
 
 # -- launch_candidates ---------------------------------------------------------
 
+NOW = datetime(2026, 10, 29, 18, 0, tzinfo=UTC)
+_STALL: dict[str, object] = {
+    "run_id": "run-a",
+    "outcome": "failed",
+    "failure": {"kind": "stall", "step": "design-0"},
+}
+
+
+def _usage_limit(resets_at: datetime) -> dict[str, object]:
+    return {
+        "run_id": "run-a",
+        "outcome": "paused",
+        "checkpoint": {
+            "kind": "usage_limit",
+            "step": "design-0",
+            "resets_at": resets_at.isoformat(),
+        },
+    }
+
+
+def _stopped(document: dict[str, object]) -> JournalEntry:
+    """A resolved run entry holding the outcome document it was resolved with."""
+    run = entry(CommandKind.SQ_RUN, "a", FIRST, JournalOutcome.COMPLETED)
+    return replace(run, result={RESULT_OUTCOME_DOCUMENT: document})
+
 
 def _candidates(
     state: DispatchState,
@@ -58,10 +86,12 @@ def _candidates(
     entry_kwargs: dict[str, object] = {}
     if state is DispatchState.REISSUE:
         entry_kwargs["reissue_of"] = _never_started()
-    if state in (DispatchState.RESUME, DispatchState.AUTO_RESUME):
+    if state is DispatchState.RESUME:
         entry_kwargs["continues"] = entry(CommandKind.SQ_RUN, "a", FIRST)
+    if state is DispatchState.AUTO_RESUME:
+        entry_kwargs["continues"] = _stopped(_STALL)
     step_facts = facts(state, FIRST, **entry_kwargs, **kw)  # type: ignore[arg-type]
-    return launch_candidates([node("a")], {"a": step_facts}, holders or {})
+    return launch_candidates([node("a")], {"a": step_facts}, holders or {}, NOW)
 
 
 def test_a_ready_step_is_a_candidate_in_a_free_checkout() -> None:
@@ -117,9 +147,25 @@ def test_other_states_are_never_candidates(state: DispatchState) -> None:
 
 
 def test_a_step_with_no_facts_or_no_checkout_is_skipped() -> None:
-    assert launch_candidates([node("a")], {}, {}) == ()
+    assert launch_candidates([node("a")], {}, {}, NOW) == ()
     unresolved = facts(DispatchState.READY, None)
-    assert launch_candidates([node("a")], {"a": unresolved}, {}) == ()
+    assert launch_candidates([node("a")], {"a": unresolved}, {}, NOW) == ()
+
+
+@pytest.mark.parametrize(
+    ("resets_at", "candidates"),
+    [(NOW + timedelta(hours=1), 0), (NOW, 1)],
+)
+def test_a_usage_limit_pause_is_a_candidate_only_once_its_reset_has_passed(
+    resets_at: datetime, candidates: int
+) -> None:
+    waiting = facts(
+        DispatchState.AUTO_RESUME, FIRST, continues=_stopped(_usage_limit(resets_at))
+    )
+
+    found = launch_candidates([node("a")], {"a": waiting}, {}, NOW)
+
+    assert len(found) == candidates
 
 
 # -- read_dispatch_facts -------------------------------------------------------

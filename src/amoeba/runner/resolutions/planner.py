@@ -1,7 +1,7 @@
 """``ContinuationPlanner``: resume the run an applied ``resume`` resolution names.
 
 Pure, like ``DispatchPlanner``: it reads only the view's dispatch facts and checkout
-holders. For each current pipeline step in ``RESUME`` it proposes a ``ResumeRun``. It
+holders. For each current slice in ``RESUME`` it proposes a ``ResumeRun``. It
 acts when the run's checkout is held by no one or only by the step itself, because
 the run it continues is that step's own; any other holder makes it wait, like any
 launch (slice 127, D5). The two planners never act on the same step, since a step is

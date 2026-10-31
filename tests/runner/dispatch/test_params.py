@@ -11,7 +11,6 @@ from amoeba.runner.dispatch.params import PARAM_SLICE, launch_params
 from amoeba.runner.project_config import ProjectSettings
 
 RUNNER_SRC = Path(runner_package.__file__).parent
-PARAMS_FILE = RUNNER_SRC / "dispatch" / "params.py"
 
 
 def test_a_launch_gets_the_slice_and_nothing_else_by_default() -> None:
@@ -29,7 +28,7 @@ def test_no_runner_module_passes_a_merge_parameter() -> None:
     spellers = {
         path.name
         for path in RUNNER_SRC.rglob("*.py")
-        if "merge" in string_constants(path) and path.name != "steps.py"
+        if "merge" in string_constants(path)
     }
 
     assert spellers == set()

@@ -109,11 +109,10 @@ class ProjectView:
     ``tree`` is the project's lifecycle tree, built after reconcile; it holds every
     node. ``desired`` is the project's desired-state rows, read once for the tick.
     ``current_slices`` are the ready slices the PM drives and has not held (D6);
-    :func:`decide` refuses an action on any other node. ``ready_unbusy`` is the
-    wider ready set, kept for slice 125 to narrow.
+    :func:`decide` refuses an action on any other node.
     ``link_probes`` maps a Context Forge link to whether its probe passed in
     this process lifetime. ``dispatch`` holds the dispatch facts of each current
-    pipeline step, by node id, and ``checkout_holders`` names, for each checkout a
+    slice, by node id, and ``checkout_holders`` names, for each checkout a
     pipeline already holds (D4), the nodes that hold it, so a step's own continuation
     can act in a checkout held only by itself (slice 127). Both are empty for a view
     that dispatches nothing. ``dispatch_checks`` holds this tick's pre-dispatch result
@@ -138,16 +137,6 @@ class ProjectView:
         default_factory=dict[str, DispatchCheck]
     )
     settings: ProjectSettings = PROJECT_DEFAULTS
-
-    def ready_unbusy(self) -> list[Node]:
-        """Ready slices (``tree.ready_slices()``) with no run in flight.
-
-        What a planner may start. "In flight" is an unresolved ``sq_run`` entry:
-        ``in_flight`` holds every such entry the tick has not finished and
-        resolved, which is the only kind of unresolved entry the Runner issues.
-        """
-        busy = {run.entry.node_id for run in self.in_flight}
-        return [node for node in self.tree.ready_slices() if node.id not in busy]
 
 
 class Planner(Protocol):

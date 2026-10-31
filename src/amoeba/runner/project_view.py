@@ -51,8 +51,8 @@ def build_project_view(
         project_id=project_id,
         now=now,
         tree=tree,
-        # Unresolved sq_run entries the tick did not finish: what ``ready_unbusy``
-        # excludes (finished ones were resolved by ``finish.record`` above).
+        # Unresolved sq_run entries the tick did not finish (finished ones were
+        # resolved by ``finish.record`` above).
         in_flight=tuple(o.run for o in runs if o.finished is None),
         link_probes=link_probes,
         desired=desired,

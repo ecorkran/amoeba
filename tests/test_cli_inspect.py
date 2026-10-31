@@ -20,6 +20,7 @@ from inspection_harness import FIXTURE_VERDICT, PROJECT, seed_every_listing
 
 from amoeba.cli.main import ExitCode
 from amoeba.inspection import LISTINGS, LISTINGS_BY_NAME, PROJECTS_LISTING
+from amoeba.inspection.core import NO_REASON_RECORDED
 from amoeba.inspection.listing import ListingScope
 from amoeba.store import BlockedKind, NodeKind, Store
 from amoeba.store.migrations import (
@@ -217,13 +218,15 @@ def test_an_agent_question_block_carries_the_question_in_its_json_row(
     assert row["reason"] == "agent_question"
 
 
-def test_a_block_with_neither_key_has_an_empty_reason(supervisor_dir: Path) -> None:
+def test_a_block_with_neither_key_says_no_reason_was_recorded(
+    supervisor_dir: Path,
+) -> None:
     _block_a_slice(supervisor_dir, "alpha", {"step": "tasks"})
     _block_a_slice(supervisor_dir, "beta", None, kind=BlockedKind.JUDGE)
 
     rows = json.loads(run_cli(["inspect", "blocked", "--json"], supervisor_dir).stdout)
 
-    assert [row["reason"] for row in rows] == ["", ""]
+    assert [row["reason"] for row in rows] == [NO_REASON_RECORDED] * 2
 
 
 def test_blocked_with_no_projects_prints_none(supervisor_dir: Path) -> None:

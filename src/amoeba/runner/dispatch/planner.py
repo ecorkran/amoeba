@@ -1,7 +1,7 @@
 """``DispatchPlanner``: launch or resume a pipeline in a free checkout (D3, D4).
 
 Pure: it reads only the view's dispatch facts and held checkouts. For each current
-pipeline step it proposes the one action its state calls for, and it proposes at most
+slice it proposes the one action its state calls for, and it proposes at most
 one action per checkout per tick:
 
 ========================  =====================================================
@@ -15,8 +15,8 @@ state                     action
 
 A held checkout offers nothing to a step, except an ``AUTO_RESUME`` held only by
 itself: its own stopped run is what holds the checkout. Within a free checkout the
-steps go by ``(initiative index, slice index, step rank)``. A checkout the snapshot
-could not resolve gets nothing here: the tick blocks the step (D1).
+slices go by ``(initiative index, slice index)``. A checkout the snapshot could not
+resolve gets nothing here: the tick blocks the slice (D1).
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ _PLANNED = _LAUNCHES | {DispatchState.AUTO_RESUME}
 
 
 class DispatchPlanner:
-    """Plans launches and automatic resumes for the current pipeline steps."""
+    """Plans launches and automatic resumes for the current slices."""
 
     def plan(self, view: ProjectView) -> Sequence[Action]:
         """At most one action per checkout, the best candidate in each."""

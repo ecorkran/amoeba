@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import SliceDispatchFacts
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.launch import text_parameter
+from amoeba.runner.supervise import recorded_document, resume_ready
 from amoeba.store import PARAM_CHECKOUT, JournalEntry, Node
 
 #: The states that continue a run: a PM's resolution, or an automatic retry.
@@ -43,13 +45,16 @@ def launch_candidates(
     current: Sequence[Node],
     facts: Mapping[str, SliceDispatchFacts],
     holders: Mapping[Path, frozenset[str]],
+    now: datetime,
 ) -> tuple[Candidate, ...]:
     """The slices Observe checks: those that could launch or resume this tick.
 
     A candidate is a ``READY`` or ``REISSUE`` slice in a checkout no one holds; or a
     ``RESUME`` or ``AUTO_RESUME`` slice whose checkout is held by no one or only by
-    itself. This is the one definition of the set, and the ``decide()`` guard relies
-    on it. Nothing is recomputed from the store.
+    itself. An ``AUTO_RESUME`` slice whose resume is not ready at ``now`` (a
+    ``usage_limit`` pause before its ``resets_at``) is not a candidate, so waiting costs
+    no subprocess calls. This is the one definition of the set, and the ``decide()``
+    guard relies on it. Nothing is recomputed from the store.
     """
     found: list[Candidate] = []
     for node in current:
@@ -61,6 +66,10 @@ def launch_candidates(
             checkout = _entry_checkout(slice_facts.reissue_of, checkout)
         elif slice_facts.state in _RESUMING:
             checkout = _entry_checkout(slice_facts.continues, checkout)
+        if slice_facts.state is DispatchState.AUTO_RESUME and not _resume_ready(
+            slice_facts.continues, now
+        ):
+            continue
         held_by = holders.get(checkout.path, frozenset[str]())
         starting = slice_facts.state in _STARTING and not held_by
         resuming = slice_facts.state in _RESUMING and held_by <= {node.id}
@@ -87,3 +96,8 @@ def _entry_checkout(entry: JournalEntry | None, resolved: Checkout) -> Checkout:
         raise ValueError("a reissue or resume step has no entry to take its checkout")
     path = Path(text_parameter(entry, PARAM_CHECKOUT))
     return Checkout(path, resolved.worktree_id if path == resolved.path else None)
+
+
+def _resume_ready(entry: JournalEntry | None, now: datetime) -> bool:
+    document = None if entry is None else recorded_document(entry)
+    return document is not None and resume_ready(document, now)

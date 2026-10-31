@@ -140,7 +140,10 @@ def resume_count(entries: Sequence[JournalEntry], step: str | None) -> int:
     ``entries`` are the slice's ``sq_run`` entries, newest first, starting with the
     entry whose outcome is being ingested. It counts the trailing entries that are
     transient resumes of an outcome that stopped at ``step``; a fresh launch, a
-    resolution resume or a different step ends the count. A ``step`` of ``None``
+    resolution resume or a different step ends the count. An observation (a resume
+    skipped because the run had moved on) carries the cause too and counts: a run that
+    then stops again is nearer its limit, which errs toward blocking, never toward
+    spending. A ``step`` of ``None``
     (an orphaned run reports none) is the step the newest entry resumed from.
     """
     if step is None:
