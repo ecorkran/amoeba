@@ -76,6 +76,7 @@ def run_pipeline(
             stdout=log,
             stderr=subprocess.STDOUT,
             text=True,
+            start_new_session=True,
         )
         deadline = time.monotonic() + timeout_seconds
         poll: RunPoll = PollFailure(f"run {run_id} not polled")
@@ -84,7 +85,14 @@ def run_pipeline(
                 poll = poll_run(run_id, timeout_seconds=POLL_CALL_TIMEOUT_SECONDS)
                 if isinstance(poll, PollFailure):
                     break
-                if poll.outcome not in _NOT_YET or process.poll() is not None:
+                exit_code = process.poll()
+                if poll.outcome not in _NOT_YET:
+                    break
+                if exit_code is not None:
+                    poll = PollFailure(
+                        f"sq (argv {argv!r}) exited {exit_code} before run "
+                        f"{run_id} was found"
+                    )
                     break
                 time.sleep(POLL_INTERVAL_SECONDS)
             else:

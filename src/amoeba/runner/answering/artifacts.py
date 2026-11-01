@@ -7,11 +7,12 @@ extraction (D8); here the file is parsed as one JSON object, nothing more.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final, cast
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
 
 from amoeba.runner.answering.pipeline_file import ANSWER_REPLY_FILE, CHECK_REPLY_FILE
 
@@ -35,12 +36,17 @@ class Verdict(StrEnum):
     NO = "no"
 
 
-# Reply key names, defined once.
-KIND_KEY: Final = "kind"
-ANSWER_KEY: Final = "answer"
-CITED_KEY: Final = "cited"
-REASON_KEY: Final = "reason"
-VERDICT_KEY: Final = "verdict"
+_NonEmptyStr = Annotated[str, Field(min_length=1)]
+_MODEL_CONFIG = ConfigDict(extra="ignore", frozen=True, str_strip_whitespace=True)
+
+
+def _trimmed_lower(value: object) -> object:
+    """Trim and lowercase a string before enum matching; other types pass through."""
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+_LenientAnswerKind = Annotated[AnswerKind, BeforeValidator(_trimmed_lower)]
+_LenientVerdict = Annotated[Verdict, BeforeValidator(_trimmed_lower)]
 
 
 @dataclass(frozen=True)
@@ -69,10 +75,29 @@ class ArtifactProblem:
 AnswerReply = ProposedAnswer | AnswererDecline
 
 
-def _read_object(path: Path) -> dict[str, object] | ArtifactProblem:
-    """The file's single JSON object, or the problem that prevents reading it."""
+class _AnswerReplyModel(BaseModel):
+    """The answer step's reply file, in the shape it must take on disk."""
+
+    model_config = _MODEL_CONFIG
+
+    kind: _LenientAnswerKind
+    answer: _NonEmptyStr | None = None
+    cited: tuple[str, ...] | None = None  # required when kind is 'answer'
+    reason: _NonEmptyStr | None = None
+
+
+class _CheckReplyModel(BaseModel):
+    """The check step's reply file, in the shape it must take on disk."""
+
+    model_config = _MODEL_CONFIG
+
+    verdict: _LenientVerdict
+    reason: str | None = None
+
+
+def _read_bytes(path: Path) -> bytes | ArtifactProblem:
     try:
-        raw = path.read_bytes()
+        return path.read_bytes()
     except FileNotFoundError:
         return ArtifactProblem(ProblemKind.MISSING, f"{path.name} was not written")
     except OSError as error:
@@ -80,95 +105,39 @@ def _read_object(path: Path) -> dict[str, object] | ArtifactProblem:
         return ArtifactProblem(
             ProblemKind.MALFORMED, f"{path.name} is unreadable: {error}"
         )
-    try:
-        parsed: object = json.loads(raw.decode("utf-8"))
-    except UnicodeDecodeError as error:
-        return ArtifactProblem(
-            ProblemKind.MALFORMED, f"{path.name} is not UTF-8: {error}"
-        )
-    except json.JSONDecodeError as error:
-        return ArtifactProblem(
-            ProblemKind.MALFORMED, f"{path.name} is not JSON: {error}"
-        )
-    if not isinstance(parsed, dict):
-        return ArtifactProblem(
-            ProblemKind.MALFORMED,
-            f"{path.name} holds {type(parsed).__name__}, not one JSON object",
-        )
-    # JSON object keys are always strings.
-    return cast("dict[str, object]", parsed)
 
 
 def _malformed(file_name: str, detail: str) -> ArtifactProblem:
     return ArtifactProblem(ProblemKind.MALFORMED, f"{file_name}: {detail}")
 
 
-def _enum_value[E: StrEnum](enum: type[E], value: object) -> E | None:
-    """Match a string to an enum member, trimmed and case-insensitive."""
-    if not isinstance(value, str):
-        return None
-    try:
-        return enum(value.strip().lower())
-    except ValueError:
-        return None
-
-
-def _non_empty_text(value: object) -> str | None:
-    return value if isinstance(value, str) and value.strip() else None
-
-
-def _string_list(value: object) -> tuple[str, ...] | None:
-    if not isinstance(value, list):
-        return None
-    items = cast("list[object]", value)
-    strings = tuple(item for item in items if isinstance(item, str))
-    return strings if len(strings) == len(items) else None
-
-
 def read_answer(directory: Path) -> AnswerReply | ArtifactProblem:
     """Parse the answer step's reply file in ``directory``."""
-    document = _read_object(directory / ANSWER_REPLY_FILE)
-    if isinstance(document, ArtifactProblem):
-        return document
-    kind = _enum_value(AnswerKind, document.get(KIND_KEY))
-    if kind is None:
-        return _malformed(
-            ANSWER_REPLY_FILE,
-            f"'{KIND_KEY}' must be one of {[k.value for k in AnswerKind]}, "
-            f"got {document.get(KIND_KEY)!r}",
-        )
-    if kind is AnswerKind.DECLINE:
-        reason = _non_empty_text(document.get(REASON_KEY))
-        if reason is None:
-            return _malformed(
-                ANSWER_REPLY_FILE, f"a decline needs a non-empty '{REASON_KEY}'"
-            )
-        return AnswererDecline(reason=reason)
-    text = _non_empty_text(document.get(ANSWER_KEY))
-    if text is None:
-        return _malformed(
-            ANSWER_REPLY_FILE, f"an answer needs non-empty '{ANSWER_KEY}' text"
-        )
-    cited = _string_list(document.get(CITED_KEY))
-    if cited is None:
-        return _malformed(ANSWER_REPLY_FILE, f"'{CITED_KEY}' must be a list of strings")
-    return ProposedAnswer(answer=text, cited=cited)
+    raw = _read_bytes(directory / ANSWER_REPLY_FILE)
+    if isinstance(raw, ArtifactProblem):
+        return raw
+    try:
+        document = _AnswerReplyModel.model_validate_json(raw)
+    except ValidationError as error:
+        return _malformed(ANSWER_REPLY_FILE, str(error))
+    if document.kind is AnswerKind.DECLINE:
+        if document.reason is None:
+            return _malformed(ANSWER_REPLY_FILE, "a decline needs a non-empty 'reason'")
+        return AnswererDecline(reason=document.reason)
+    if document.answer is None:
+        return _malformed(ANSWER_REPLY_FILE, "an answer needs non-empty 'answer' text")
+    if document.cited is None:
+        return _malformed(ANSWER_REPLY_FILE, "'cited' must be a list of strings")
+    return ProposedAnswer(answer=document.answer, cited=document.cited)
 
 
 def read_check(directory: Path) -> CheckReply | ArtifactProblem:
     """Parse the check step's reply file in ``directory``."""
-    document = _read_object(directory / CHECK_REPLY_FILE)
-    if isinstance(document, ArtifactProblem):
-        return document
-    verdict = _enum_value(Verdict, document.get(VERDICT_KEY))
-    if verdict is None:
-        return _malformed(
-            CHECK_REPLY_FILE,
-            f"'{VERDICT_KEY}' must be one of {[v.value for v in Verdict]}, "
-            f"got {document.get(VERDICT_KEY)!r}",
-        )
-    reason = document.get(REASON_KEY)
-    # 'reason' is optional, but a present value of the wrong type is malformed.
-    if reason is not None and not isinstance(reason, str):
-        return _malformed(CHECK_REPLY_FILE, f"'{REASON_KEY}' must be a string")
-    return CheckReply(verdict=verdict, reason=reason)
+    raw = _read_bytes(directory / CHECK_REPLY_FILE)
+    if isinstance(raw, ArtifactProblem):
+        return raw
+    try:
+        document = _CheckReplyModel.model_validate_json(raw)
+    except ValidationError as error:
+        return _malformed(CHECK_REPLY_FILE, str(error))
+    return CheckReply(verdict=document.verdict, reason=document.reason)
