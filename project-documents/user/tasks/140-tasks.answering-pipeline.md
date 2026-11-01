@@ -46,20 +46,27 @@ revision_number: 2
 
 ## 1. Squadron capability request and slice plan
 
-- [ ] **1.1 Check what the installed `sq` can do** (effort 1)
-  - [ ] Read the LLD D8 (five capabilities). In a temporary directory outside the repo, write a one-step dispatch pipeline using a file-content key, and run `sq run <file> --validate`.
-  - [ ] Note under this task, as a dated observation with the `sq --version` output, which capabilities the installed `sq` lacks. Task 1.2 copies it into the issue. Do not branch on the version anywhere in code.
-  - [ ] Success: the observation names each of the five capabilities as present or missing, from a command run in this task.
+- [x] **1.1 Check what the installed `sq` can do** (effort 1)
+  - [x] Read the LLD D8 (five capabilities). In a temporary directory outside the repo, write a one-step dispatch pipeline using a file-content key, and run `sq run <file> --validate`.
+  - [x] Note under this task, as a dated observation with the `sq --version` output, which capabilities the installed `sq` lacks. Task 1.2 copies it into the issue. Do not branch on the version anywhere in code.
+  - [x] Success: the observation names each of the five capabilities as present or missing, from a command run in this task.
+  - **Observation (20261101, `sq --version` printed `squadron 0.24.12`).** Command run: `sq run <tmp>/t.yaml --validate` on a one-step dispatch pipeline carrying `allowed_tools: []`, `prompt_file: question.md` and `reply_file: out.json`; it printed `Pipeline 't' is valid.` and exited 0. Reading the installed dispatch step (`pipeline/steps/dispatch.py`), `expand` forwards only `prompt`, `model`, `pre_emption_fragment`, `allowed_tools`, `feedback`.
+    - 1 file content in a prompt: **missing** (no such key; `prompt_file` was accepted but ignored).
+    - 2 earlier step's reply in a later prompt: **missing** (no such key forwarded).
+    - 3 reply and delivered prompt to files: **missing** (no such keys forwarded).
+    - 4 hard no-tools guarantee: **missing**. Command run: a one-step dispatch with `allowed_tools: []`, model alias `haiku` (SDK session mode), prompt asking it to read `pyproject.toml` with a tool. `sq run <file> haiku -vv` completed (`profile: sdk-session`, project rules loaded) and the reply gave the file's real first line, `[project]`. The step ran with file access instead of failing.
+    - 5 strict step validation: **missing** (unknown keys `prompt_file` and `reply_file` validate).
 
-- [ ] **1.2 File the Squadron issue** (effort 2)
-  - [ ] Repository: `ecorkran/squadron` (its package metadata names `https://github.com/ecorkran/squadron/issues`).
-  - [ ] Title: "Isolated file-in, file-out dispatch steps (for Amoeba's answering pipeline)". Body: the five capabilities of LLD D8 as requirements, each with its acceptance behavior as written there, and the note that the syntax is Squadron's to choose. Include Task 1.1's observation. Include no secrets or local paths.
-  - [ ] File it with `gh issue create --repo ecorkran/squadron`.
-  - [ ] Success: `gh issue view <n> --repo ecorkran/squadron` shows all five capabilities. The issue number is noted in the task file under this task.
+- [x] **1.2 File the Squadron issue** (effort 2)
+  - [x] Repository: `ecorkran/squadron` (its package metadata names `https://github.com/ecorkran/squadron/issues`).
+  - [x] Title: "Isolated file-in, file-out dispatch steps (for Amoeba's answering pipeline)". Body: the five capabilities of LLD D8 as requirements, each with its acceptance behavior as written there, and the note that the syntax is Squadron's to choose. Include Task 1.1's observation. Include no secrets or local paths.
+  - [x] File it with `gh issue create --repo ecorkran/squadron`.
+  - [x] Success: `gh issue view <n> --repo ecorkran/squadron` shows all five capabilities. The issue number is noted in the task file under this task.
+  - Filed 20261101: `ecorkran/squadron#284` (https://github.com/ecorkran/squadron/issues/284); `gh issue view` shows all five capabilities.
 
-- [ ] **1.3 Name the issue in the slice plan** (effort 1)
-  - [ ] In `user/architecture/140-slices.question-answerer.md`, replace "(Squadron issue: not yet filed)" on entry 140 with the issue number, and name it as a dependency on entry 144 beside "Any Squadron issue 140 files".
-  - [ ] Success: the issue number appears on entries 140 and 144 of the slice plan.
+- [x] **1.3 Name the issue in the slice plan** (effort 1)
+  - [x] In `user/architecture/140-slices.question-answerer.md`, replace "(Squadron issue: not yet filed)" on entry 140 with the issue number, and name it as a dependency on entry 144 beside "Any Squadron issue 140 files".
+  - [x] Success: the issue number appears on entries 140 and 144 of the slice plan.
 
 **Commit**: `docs: file squadron capability request and name it in the 140 slice plan`
 

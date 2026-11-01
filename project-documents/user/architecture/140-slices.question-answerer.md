@@ -41,7 +41,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - With a fixed passage set where a later PM answer contradicts an older rule, the check says yes; where a later rule contradicts an older PM answer, it says no. Run against the real pipeline, not a stub.
    - The minimum `sq` version is recorded in the process contract, and the start-up probe fails on an `sq` that cannot run the pipeline.
    - Any capability `sq` lacks is filed as a Squadron issue and named in this plan as a dependency of 144.
-   **Dependencies:** None inside Amoeba (100 and 120 complete). External: a Squadron release with the capabilities in the slice design's D8 (Squadron issue: not yet filed). The real-run criteria wait on it.
+   **Dependencies:** None inside Amoeba (100 and 120 complete). External: a Squadron release with the capabilities in the slice design's D8 (Squadron issue: ecorkran/squadron#284). The real-run criteria wait on it.
    **Interfaces:** Provides the pipeline file, its artifact shapes and the readers that parse them to 144, so 144 does not parse artifacts itself. Extends the `sq` shape probes (120's slice 122) with an answering-pipeline probe that 142 wires into start-up.
    **Risk Level:** Medium. It depends on Squadron features not yet used by Amoeba, and on a model following the precedence rule.
    **Relative Effort:** 2
@@ -105,7 +105,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - A burst of questions never starts more answering runs than the configured cap.
    - The answering pipeline is the file Amoeba ships (144's design, D1). Its models, the concurrency cap and the cost cap come from per-project configuration with no defaults; Squadron's `max_cost_usd` is set on every answering run.
    - A PM answer that lands while the run is in flight wins, and the run's later result changes nothing but the record.
-   **Dependencies:** 140, 142, 143. Any Squadron issue 140 files.
+   **Dependencies:** 140, 142, 143. Any Squadron issue 140 files (ecorkran/squadron#284).
    **Interfaces:** Adds `sq_answer` to the journal's command kinds with its required parameters and recovery observer (`docs/process-contract.md`, `docs/store-contract.md`). Changes 132-owned readers of a slice's latest journal entry to use the shared reader (`resolutions/classify.py`, `supervise.run_to_resume`, `dispatch/hold.py`, `dispatch/state.py`, `ingest/record.py`). Extends `projects.yaml` (models, concurrency cap, cost cap).
    **Risk Level:** High. First LLM decision that resumes real runs without the PM, and the second change to 132's code.
    **Relative Effort:** 4
