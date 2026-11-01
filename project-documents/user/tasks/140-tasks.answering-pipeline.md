@@ -166,15 +166,15 @@ Squadron's syntax for the D8 keys is not final. This section drafts the file wit
 
 ## 7. Live tier scaffolding
 
-- [ ] **7.1 `tests/live/` and its exclusion** (effort 2)
-  - [ ] Add `--ignore=tests/live` to `addopts` in `pyproject.toml`, beside `tests/load`, and extend the comment there.
-  - [ ] `tests/live/conftest.py`: session fixtures reading `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL` and `AMOEBA_LIVE_MAX_COST_USD`, read by one pure function `read_live_settings(environ)`. If any is unset, it raises `pytest.UsageError` at collection naming the variable; no skip, no default. A cost value that is not a positive number fails the same way. A fourth variable, `AMOEBA_LIVE_SDK_MODEL`, is read only by Task 9.4's own test, which fails naming it when unset; the other live tests do not need it (an addition to LLD D10's three variables, recorded in Task 8.1).
-  - [ ] A helper `run_pipeline(directory, ...)` that mints a run id (reuse `mint_run_id`), launches `sq run <answering_pipeline_path()> <a> --run-id <id> -p check-model=<c>` (the positional target binds to the first required param, `answer-model`; see the slice design's launch contract) with the scratch directory as working directory, and waits with `sq runs wait <id> --json` and a bounded timeout, returning the parsed outcome. Prefer the existing `poll_run` from `amoeba.process` over a second parser.
-  - [ ] Success: `uv run pytest` (bare) collects nothing from `tests/live`; `uv run pytest tests/live` with the variables unset fails naming the first missing one.
+- [x] **7.1 `tests/live/` and its exclusion** (effort 2)
+  - [x] Add `--ignore=tests/live` to `addopts` in `pyproject.toml`, beside `tests/load`, and extend the comment there.
+  - [x] `tests/live/conftest.py`: session fixtures reading `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL` and `AMOEBA_LIVE_MAX_COST_USD`, read by one pure function `read_live_settings(environ)`. If any is unset, it raises `pytest.UsageError` at collection naming the variable; no skip, no default. A cost value that is not a positive number fails the same way. A fourth variable, `AMOEBA_LIVE_SDK_MODEL`, is read only by Task 9.4's own test, which fails naming it when unset; the other live tests do not need it (an addition to LLD D10's three variables, recorded in Task 8.1).
+  - [x] A helper `run_pipeline(directory, ...)` that mints a run id (reuse `mint_run_id`), launches `sq run <answering_pipeline_path()> <a> --run-id <id> -p check-model=<c>` (the positional target binds to the first required param, `answer-model`; see the slice design's launch contract) with the scratch directory as working directory, and waits with `sq runs wait <id> --json` and a bounded timeout, returning the parsed outcome. Prefer the existing `poll_run` from `amoeba.process` over a second parser.
+  - [x] Success: `uv run pytest` (bare) collects nothing from `tests/live`; `uv run pytest tests/live` with the variables unset fails naming the first missing one.
 
-- [ ] **7.2 Tests for the tier's own rules** (effort 2)
-  - [ ] `tests/runner/answering/test_live_tier_rules.py`: call `read_live_settings` with plain dicts: all three set returns the values; each one missing raises naming that variable; a non-numeric or non-positive cost raises naming the cost variable.
-  - [ ] Success: tests pass without a real `sq` or any spend.
+- [x] **7.2 Tests for the tier's own rules** (effort 2)
+  - [x] `tests/runner/answering/test_live_tier_rules.py`: call `read_live_settings` with plain dicts: all three set returns the values; each one missing raises naming that variable; a non-numeric or non-positive cost raises naming the cost variable.
+  - [x] Success: tests pass without a real `sq` or any spend.
 
 **Commit**: `test: add the live test tier scaffolding`
 

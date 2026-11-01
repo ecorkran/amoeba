@@ -60,5 +60,7 @@ testpaths = ["tests"]
 # The load tier is never collected by a bare `uv run pytest`: it drives real
 # processes through crash loops and takes far longer than the default suite.
 # An explicit `uv run pytest tests/load` still collects it, because a path
-# named on the command line is collected regardless of --ignore.
-addopts = ["--ignore=tests/load"]
+# named on the command line is collected regardless of --ignore. The live tier
+# (real sq, real models, real spend) is excluded the same way: run it with
+# `uv run pytest tests/live` and the AMOEBA_LIVE_* variables set.
+addopts = ["--ignore=tests/load", "--ignore=tests/live"]
