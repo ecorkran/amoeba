@@ -8,7 +8,7 @@ interfaces:
 - 144
 dateCreated: 20261101
 dateUpdated: 20261101
-status: not_started
+status: in_progress
 turns: 75
 promptTokens: 6625803
 cachedTokens: 6474040
@@ -330,29 +330,30 @@ sq run <answering_pipeline_path()> <answer-model alias> --run-id <id> -p check-m
 
 ### Verification Walkthrough
 
-Draft; refined after Phase 6. Steps 3 and 4 need an `sq` with D8's capabilities. On 0.24.11, step 3 passes without proving anything, because that `sq` accepts any step key.
+Verified 20261101 on `squadron 0.24.12` for steps 1, 2, 3 (caveat below) and 5. Step 4 has not run: it needs an `sq` with D8's capabilities (ecorkran/squadron#284). On the `sq` checked, step 3 passes without proving anything, because that `sq` accepts any step key.
 
 1. **Unit tier, no `sq`, no spend.**
    ```bash
    uv run pytest tests/runner/answering -q
    ```
-   Expect every test to pass. This covers the input rendering, the scratch preparation and the reply parsers.
+   Expect every test to pass (69 passed on 20261101): the input rendering, the scratch preparation, the reply parsers, the pipeline names-match test, the wheel contents, and the live tier's settings rules. The wheel test runs `uv build`, so it needs `uv` on `PATH` and takes a few seconds.
 
 2. **The shipped pipeline is in the package.**
    ```bash
    uv run python -c "from amoeba.runner.answering.pipeline_file import answering_pipeline_path as p; print(p())"
    ```
-   Expect an absolute path ending in `amoeba/runner/answering/answering.yaml`.
+   Expect an absolute path ending in `amoeba/runner/answering/answering.yaml`. Output on 20261101: `/Users/manta/source/repos/manta/amoeba/src/amoeba/runner/answering/answering.yaml`.
 
 3. **Squadron validates it.**
    ```bash
    sq run "$(uv run python -c 'from amoeba.runner.answering.pipeline_file import answering_pipeline_path as p; print(p())')" --validate
    ```
-   Expect `Pipeline 'answering' is valid.` and exit 0. On an `sq` without capability 5, or without capabilities 1 to 4 once 5 exists, expect a validation error naming the unknown keys.
+   Expect `Pipeline 'answering' is valid.` and exit 0 (observed on 0.24.12, which accepts the proposed keys because it validates no step keys). On an `sq` with capability 5, or without capabilities 1 to 4 once 5 exists, expect a validation error naming the unknown keys.
 
 4. **Live tier: real runs, real spend.**
    ```bash
    export AMOEBA_LIVE_ANSWER_MODEL=<non-SDK alias> AMOEBA_LIVE_CHECK_MODEL=<non-SDK alias> AMOEBA_LIVE_MAX_COST_USD=<cap>
+   export AMOEBA_LIVE_SDK_MODEL=<SDK alias>   # read only by the SDK-alias refusal test
    uv run pytest tests/live/answering -v --basetemp=/tmp/answering-live
    ```
    Expect tests for the answered case, the no-files case, the check input, both precedence cases, both matching cases and the SDK-alias refusal to pass. Then look at one run's files:
@@ -365,9 +366,9 @@ Draft; refined after Phase 6. Steps 3 and 4 need an `sq` with D8's capabilities.
 
 5. **The start-up probe.**
    ```bash
-   uv run pytest tests/runner/test_probes.py -k answering -v
+   uv run pytest tests/runner/test_probes_answering.py -v
    ```
-   Expect the stub-`sq` cases to pass: a validate that exits 0 passes, and a validate that exits 1, times out or finds no `sq` raises `StartupFailedError`. These stub cases are the proof of the failure paths. On 0.24.11 the real `sq` validates the pipeline even though it cannot run it, so a real-`sq` pass proves nothing until capability 5 ships. From 142 on, the probe runs at start only when a project has an answerer section.
+   Expect 6 passed (20261101). The stub-`sq` cases pass: a validate that exits 0 passes, and a validate that exits 1, times out or finds no `sq` raises `StartupFailedError`. These stub cases are the proof of the failure paths. On 0.24.11 the real `sq` validates the pipeline even though it cannot run it, so a real-`sq` pass proves nothing until capability 5 ships. From 142 on, the probe runs at start only when a project has an answerer section.
 
 ## Risk Assessment
 

@@ -10,7 +10,7 @@ projectState: Initiatives 100 and 120 are complete (the Runner supervises one Sq
   until Task 1.1 checks it.
 dateCreated: 20261101
 dateUpdated: 20261101
-status: not_started
+status: in_progress
 turns: 44
 promptTokens: 1621448
 cachedTokens: 1533710
@@ -180,18 +180,18 @@ Squadron's syntax for the D8 keys is not final. This section drafts the file wit
 
 ## 8. Process contract text
 
-- [ ] **8.1 Document the pipeline in `docs/process-contract.md`** (effort 2)
-  - [ ] Add a section after "Resolutions and resumption" (or beside "Squadron shapes") covering: the shipped pipeline and its path function; the launch argv shape and working directory; the input files and the `question.md` and `passages.md` formats (copy the formats from LLD D3); the output files and the reply JSON shapes (D6); the scratch directory contents including `.squadron.toml` and why `rules_dir` is set (D7); the probe and that it runs at start only when a project has an answerer section, wired by 142 (D9); the live tier and its variables (D10's three, plus `AMOEBA_LIVE_SDK_MODEL` for the SDK-alias test).
-  - [ ] Do not write the dated `sq` observation yet; Task 9.5 adds it.
-  - [ ] Success: each item above is present; the section links to the LLD rather than restating its rationale.
+- [x] **8.1 Document the pipeline in `docs/process-contract.md`** (effort 2)
+  - [x] Add a section after "Resolutions and resumption" (or beside "Squadron shapes") covering: the shipped pipeline and its path function; the launch argv shape and working directory; the input files and the `question.md` and `passages.md` formats (copy the formats from LLD D3); the output files and the reply JSON shapes (D6); the scratch directory contents including `.squadron.toml` and why `rules_dir` is set (D7); the probe and that it runs at start only when a project has an answerer section, wired by 142 (D9); the live tier and its variables (D10's three, plus `AMOEBA_LIVE_SDK_MODEL` for the SDK-alias test).
+  - [x] Do not write the dated `sq` observation yet; Task 9.5 adds it.
+  - [x] Success: each item above is present; the section links to the LLD rather than restating its rationale.
 
-- [ ] **8.2 CHANGELOG** (effort 1)
-  - [ ] Add an `### Added` entry under `[Unreleased]` in `CHANGELOG.md`, one or two lines in the style of the existing slice entries: the shipped answering pipeline file, input and reply contracts, the probe and the live tier, naming that real runs need a Squadron with the D8 capabilities.
-  - [ ] Success: entry present.
+- [x] **8.2 CHANGELOG** (effort 1)
+  - [x] Add an `### Added` entry under `[Unreleased]` in `CHANGELOG.md`, one or two lines in the style of the existing slice entries: the shipped answering pipeline file, input and reply contracts, the probe and the live tier, naming that real runs need a Squadron with the D8 capabilities.
+  - [x] Success: entry present.
 
-- [ ] **8.3 Verify the Amoeba side** (effort 1)
-  - [ ] Run once each: `uv run ruff format .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest -q`. Walk the LLD "Verification Walkthrough" steps 1, 2 and 5.
-  - [ ] Success: the commands exit 0. Section 9 holds the criteria gated on Squadron; its tasks stay unchecked until unblocked.
+- [x] **8.3 Verify the Amoeba side** (effort 1)
+  - [x] Run once each: `uv run ruff format .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest -q`. Walk the LLD "Verification Walkthrough" steps 1, 2 and 5.
+  - [x] Success: the commands exit 0. Section 9 holds the criteria gated on Squadron; its tasks stay unchecked until unblocked.
 
 **Commit**: `docs: document the answering pipeline contract`
 

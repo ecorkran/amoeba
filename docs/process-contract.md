@@ -3,7 +3,7 @@ docType: reference
 project: amoeba
 slice: resident-process-and-recovery
 dateCreated: 20260921
-dateUpdated: 20261030
+dateUpdated: 20261101
 status: complete
 ---
 
@@ -616,6 +616,85 @@ channels with different bodies.
   that completes marks its slice `done`.
 - **Crash safety.** The acknowledgment is durable. A crash after it and before the
   continuation is journaled leaves a `RESUME` state, and the next tick issues it once.
+
+### The answering pipeline
+
+*Slice 140.* The pipeline the answering run (slice 144) launches. Rationale and
+decisions D1 to D10 are in `project-documents/user/slices/140-slice.answering-pipeline.md`;
+this section is the contract.
+
+- **The shipped file.** `src/amoeba/runner/answering/answering.yaml`, shipped in the
+  wheel as package data. `answering_pipeline_path()` returns its absolute path and
+  raises `FileNotFoundError` when it is absent. Two `dispatch` steps with no tools,
+  `answer` then `check`, and two required params, `answer-model` and `check-model`. Every
+  step, param and file name is defined once in `runner/answering/pipeline_file.py`.
+- **Launch.** From the scratch directory as working directory:
+  `sq run <answering_pipeline_path()> <answer-model> --run-id <id> -p check-model=<alias>`.
+  `sq` binds the positional target to the first `required` param, and `-p` does not
+  satisfy a `required` param, so `answer-model` is the positional argument (observed with
+  the `sq` of the dated note below).
+- **Inputs, written by `prepare_scratch(directory, question, passages_markdown,
+  max_cost_usd)`** into an existing, empty directory (anything else is a `ValueError`):
+  `question.md`, `passages.md` (byte for byte as given), an empty `rules/` directory and
+  `.squadron.toml` holding `"pipeline.max_cost_usd"` (a positive cap, for this run alone)
+  and `rules_dir` (the absolute path of `rules/`). `rules_dir` points at an empty
+  directory so that no rule text Amoeba did not supply (for example from
+  `~/.config/squadron/rules`) enters a non-SDK prompt (D7).
+- **`question.md`** (D3), the question text verbatim with nothing added after it:
+
+  ```markdown
+  # Question
+
+  slice: <slice index> <slice name>
+
+  <question text, verbatim>
+  ```
+
+- **`passages.md`** (D3), one section per passage in the order supplied, ids `P1` to `Pn`,
+  rendered by slice 143:
+
+  ```markdown
+  ## Passage P<n>
+
+  kind: <rule|plan|pm_answer>
+  source: <repo-relative path>        # rule and plan passages
+  date: <ISO 8601 UTC, seconds>
+  question: <question the PM answered> # pm_answer only
+  slice: <slice index> <slice name>    # pm_answer only
+
+  <passage text, verbatim>
+  ```
+
+- **Outputs, written by Squadron** (D5): `answer.json`, `answer.prompt.md`, `check.json`,
+  `check.prompt.md`. Amoeba never reads Squadron's run state.
+- **Reply shapes** (D6), parsed by `read_answer` and `read_check` in
+  `runner/answering/artifacts.py`, which return a typed value or an `ArtifactProblem`
+  (`missing` or `malformed`) and never raise for file content. `kind` and `verdict` are
+  matched case-insensitively after trimming; unknown keys are ignored; nothing defaults.
+
+  ```json
+  {"kind": "answer", "answer": "<text>", "cited": ["P3", "P7"]}
+  {"kind": "decline", "reason": "<why the passages do not settle it>"}
+  {"verdict": "yes", "reason": "<one or two sentences>"}
+  ```
+
+  Cited ids are not checked against the passages here; that is slice 143's citation
+  check.
+- **The probe.** `probe_answering_pipeline(settings, run)` runs
+  `sq run <answering.yaml> --validate` once from a temporary directory and raises
+  `StartupFailedError` on a non-zero exit, a timeout or a missing `sq`. Slice 142 calls it
+  at start, only when a project has an answerer section. It does not compare `sq`
+  versions.
+- **Squadron capabilities.** Real runs need five capabilities the `sq` checked when this
+  slice was written does not have (D8); they are requested in `ecorkran/squadron#284`.
+  Until a release has them, `answering.yaml` uses proposed key names (marked in the file)
+  and the live tier cannot pass.
+- **The live tier.** `tests/live/` runs the real `sq` and real models. A bare
+  `uv run pytest` ignores it; run `uv run pytest tests/live`. It fails at collection,
+  naming the variable, when any of `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL`
+  or `AMOEBA_LIVE_MAX_COST_USD` is unset or invalid. A fourth variable,
+  `AMOEBA_LIVE_SDK_MODEL`, is read only by the SDK-alias refusal test and fails that
+  test, naming it, when unset (an addition to D10's three).
 
 ### The project config
 
