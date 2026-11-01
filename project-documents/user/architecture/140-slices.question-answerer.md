@@ -103,10 +103,10 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - A restart with an answering run in flight adopts it by run id through journal recovery and never launches a second one.
    - No answering run starts for a question whose block the PM has already resolved.
    - A burst of questions never starts more answering runs than the configured cap.
-   - The answering pipeline, its models and the concurrency cap come from per-project configuration with no defaults; Squadron's `max_cost_usd` is set on every answering run.
+   - The answering pipeline is the file Amoeba ships (144's design, D1). Its models, the concurrency cap and the cost cap come from per-project configuration with no defaults; Squadron's `max_cost_usd` is set on every answering run.
    - A PM answer that lands while the run is in flight wins, and the run's later result changes nothing but the record.
    **Dependencies:** 140, 142, 143. Any Squadron issue 140 files.
-   **Interfaces:** Adds `sq_answer` to the journal's command kinds with its required parameters and recovery observer (`docs/process-contract.md`, `docs/store-contract.md`). Changes 132-owned readers of a slice's latest journal entry to use the shared reader (`resolutions/classify.py`, `supervise.run_to_resume`, `dispatch/hold.py`, `dispatch/state.py`, `ingest/record.py`). Extends `projects.yaml` (answering pipeline, models, concurrency cap).
+   **Interfaces:** Adds `sq_answer` to the journal's command kinds with its required parameters and recovery observer (`docs/process-contract.md`, `docs/store-contract.md`). Changes 132-owned readers of a slice's latest journal entry to use the shared reader (`resolutions/classify.py`, `supervise.run_to_resume`, `dispatch/hold.py`, `dispatch/state.py`, `ingest/record.py`). Extends `projects.yaml` (models, concurrency cap, cost cap).
    **Risk Level:** High. First LLM decision that resumes real runs without the PM, and the second change to 132's code.
    **Relative Effort:** 4
 
@@ -137,7 +137,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 - **Migration order.** 141 adds the question record table; 142 adds the submission operation over it. Slice design assigns migration numbers in build order.
 - **Behavior between slices.** After 141 every question still reaches the PM exactly as before, with a record beside it. 142 and 143 change nothing a PM sees. After 144 the answering run answers what it can ground and confirm.
 - **Changes to 132-owned code.** Three, as the arch lists: the ingest of a `QUESTION` outcome writes the record (141), the readers of a slice's latest journal entry skip `sq_answer` (144), and the control surface gains the `sq_answer` kind (144).
-- **Configuration lands where it is first read.** 142 adds the answer limit and reserved terms, 143 the rules paths and size limit, 144 the pipeline, models and concurrency cap, all in one `projects.yaml` answerer section. A project with no section has the answerer off.
+- **Configuration lands where it is first read.** 142 adds the answer limit and reserved terms, 143 the rules paths and size limit, 144 the models, concurrency cap and cost cap, all in one `projects.yaml` answerer section. A project with no section has the answerer off.
 - **No backfill.** The question record starts empty; questions and answers already in the journal are left behind (arch, Current State).
 - **160 notifies on the declined state.** 141 is where a question gets its record and a declined state, so it is the point 160's notification bridge attaches to.
 
