@@ -41,11 +41,6 @@ def test_verdict_is_trimmed_and_case_insensitive(tmp_path: Path) -> None:
     assert read_check(tmp_path) == CheckReply(verdict=Verdict.YES, reason=None)
 
 
-def test_non_string_reason_is_carried_as_none(tmp_path: Path) -> None:
-    _write(tmp_path, {"verdict": "yes", "reason": 7})
-    assert read_check(tmp_path) == CheckReply(verdict=Verdict.YES, reason=None)
-
-
 def test_extra_keys_are_ignored(tmp_path: Path) -> None:
     _write(tmp_path, {"verdict": "no", "reason": "r", "extra": True})
     assert read_check(tmp_path) == CheckReply(verdict=Verdict.NO, reason="r")
@@ -72,3 +67,11 @@ def test_missing_file(tmp_path: Path) -> None:
     result = read_check(tmp_path)
     assert isinstance(result, ArtifactProblem)
     assert result.kind is ProblemKind.MISSING
+
+
+@pytest.mark.parametrize("reason", [123, ["x"]])
+def test_non_string_reason_is_malformed(tmp_path: Path, reason: object) -> None:
+    _write(tmp_path, {"verdict": "no", "reason": reason})
+    result = read_check(tmp_path)
+    assert isinstance(result, ArtifactProblem)
+    assert result.kind is ProblemKind.MALFORMED

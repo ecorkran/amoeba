@@ -59,7 +59,7 @@ def test_non_empty_directory_is_refused_and_unchanged(tmp_path: Path) -> None:
     assert _listing(tmp_path) == ["keep.txt"]
 
 
-@pytest.mark.parametrize("cap", [0, -1.0])
+@pytest.mark.parametrize("cap", [0, -1.0, float("nan"), float("inf")])
 def test_non_positive_cap_is_refused_and_unchanged(tmp_path: Path, cap: float) -> None:
     with pytest.raises(ValueError, match="max_cost_usd"):
         prepare_scratch(tmp_path, QUESTION, PASSAGES, cap)

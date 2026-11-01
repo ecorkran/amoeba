@@ -168,6 +168,7 @@ def read_check(directory: Path) -> CheckReply | ArtifactProblem:
             f"got {document.get(VERDICT_KEY)!r}",
         )
     reason = document.get(REASON_KEY)
-    return CheckReply(
-        verdict=verdict, reason=reason if isinstance(reason, str) else None
-    )
+    # 'reason' is optional, but a present value of the wrong type is malformed.
+    if reason is not None and not isinstance(reason, str):
+        return _malformed(CHECK_REPLY_FILE, f"'{REASON_KEY}' must be a string")
+    return CheckReply(verdict=verdict, reason=reason)

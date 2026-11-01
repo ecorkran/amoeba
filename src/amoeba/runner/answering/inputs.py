@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,10 +29,10 @@ def render_question(question: QuestionInput) -> str:
     Raises:
         ValueError: For an empty slice label or an empty question.
     """
-    if not question.slice_label:
-        raise ValueError("slice_label must not be empty")
-    if not question.question:
-        raise ValueError("question must not be empty")
+    if not question.slice_label.strip() or "\n" in question.slice_label:
+        raise ValueError("slice_label must be a non-blank single line")
+    if not question.question.strip():
+        raise ValueError("question must not be blank")
     return f"# Question\n\nslice: {question.slice_label}\n\n{question.question}"
 
 
@@ -61,7 +62,7 @@ def prepare_scratch(
         raise ValueError(f"scratch directory does not exist: {directory}")
     if any(directory.iterdir()):
         raise ValueError(f"scratch directory is not empty: {directory}")
-    if max_cost_usd <= 0:
+    if not math.isfinite(max_cost_usd) or max_cost_usd <= 0:
         raise ValueError(f"max_cost_usd must be positive, got {max_cost_usd}")
     if not passages_markdown:
         raise ValueError("passages_markdown must not be empty")

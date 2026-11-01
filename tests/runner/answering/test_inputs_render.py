@@ -36,3 +36,16 @@ def test_empty_slice_label_is_refused() -> None:
 def test_empty_question_is_refused() -> None:
     with pytest.raises(ValueError, match="question"):
         render_question(QuestionInput("140 x", ""))
+
+
+@pytest.mark.parametrize(
+    ("label", "text", "match"),
+    [
+        (" ", "q", "slice_label"),
+        ("140\nx", "q", "slice_label"),
+        ("140 x", "\n ", "question"),
+    ],
+)
+def test_blank_or_multiline_input_is_refused(label: str, text: str, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        render_question(QuestionInput(label, text))
