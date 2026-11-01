@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from typing import Final
 
 from amoeba.process import (
@@ -23,6 +25,7 @@ from amoeba.process import (
     RunPoll,
     StartupFailedError,
 )
+from amoeba.runner.answering.pipeline_file import answering_pipeline_path
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfCallFailed, CfRun, output_head, run_cf
 from amoeba.runner.faults import Fault, FaultKind, TickFaults
@@ -59,6 +62,30 @@ def probe_sq(
         raise StartupFailedError(
             f"sq probe failed: {shape} answered outcome {answer.outcome.value} "
             f"for run {answer.run_id}, expected not_found for {run_id}"
+        )
+
+
+def probe_answering_pipeline(settings: ProcessSettings, run: CfRun) -> None:
+    """Check that ``sq run <answering.yaml> --validate`` exits 0 (slice 140, D9).
+
+    Run once from a temporary directory, so no project config of the caller's
+    directory is read. Start-up wiring is slice 142's; this does not compare
+    ``sq`` versions.
+
+    Raises:
+        StartupFailedError: On a non-zero exit, a timeout or a missing ``sq``,
+            naming the command, the exit code and the head of its output.
+    """
+    argv = [SQ_EXECUTABLE, "run", str(answering_pipeline_path()), "--validate"]
+    shown = " ".join(argv)
+    with tempfile.TemporaryDirectory() as scratch:
+        completed = run_cf(argv, partial(run, cwd=scratch), settings.sq_timeout_seconds)
+    if isinstance(completed, CfCallFailed):
+        raise StartupFailedError(f"answering pipeline probe failed: {completed.detail}")
+    if completed.returncode != 0:
+        raise StartupFailedError(
+            f"answering pipeline probe failed: `{shown}` exited "
+            f"{completed.returncode}: {output_head(completed)}"
         )
 
 

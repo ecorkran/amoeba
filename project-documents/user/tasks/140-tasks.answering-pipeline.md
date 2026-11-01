@@ -151,16 +151,16 @@ Squadron's syntax for the D8 keys is not final. This section drafts the file wit
 
 ## 6. The start-up probe
 
-- [ ] **6.1 `probe_answering_pipeline`** (effort 3)
-  - [ ] In `runner/probes.py`, add `probe_answering_pipeline(settings, run)` per LLD D9. It runs `sq run <answering_pipeline_path()> --validate` once with the same detached-stdin, captured-output, timeout-bounded call as other `sq` and `cf` commands (reuse `run_cf` from `cf_call.py`; do not duplicate its timeout and error handling), with `ProcessSettings.sq_timeout_seconds` and a temporary working directory.
-  - [ ] Exit 0 returns. Any other exit, a timeout or a missing `sq` raises `StartupFailedError` naming the command, the exit code and `output_head` of the output. Build the argv from `SQ_EXECUTABLE`.
-  - [ ] Do not call it from start-up; 142 does (LLD D9). Do not compare `sq` versions.
-  - [ ] If `probes.py` would pass about 300 lines, put the new function in `runner/answering/probe.py` and re-export nothing; callers import it from where it lives.
-  - [ ] Success: pyright strict passes.
+- [x] **6.1 `probe_answering_pipeline`** (effort 3)
+  - [x] In `runner/probes.py`, add `probe_answering_pipeline(settings, run)` per LLD D9. It runs `sq run <answering_pipeline_path()> --validate` once with the same detached-stdin, captured-output, timeout-bounded call as other `sq` and `cf` commands (reuse `run_cf` from `cf_call.py`; do not duplicate its timeout and error handling), with `ProcessSettings.sq_timeout_seconds` and a temporary working directory.
+  - [x] Exit 0 returns. Any other exit, a timeout or a missing `sq` raises `StartupFailedError` naming the command, the exit code and `output_head` of the output. Build the argv from `SQ_EXECUTABLE`.
+  - [x] Do not call it from start-up; 142 does (LLD D9). Do not compare `sq` versions.
+  - [x] If `probes.py` would pass about 300 lines, put the new function in `runner/answering/probe.py` and re-export nothing; callers import it from where it lives.
+  - [x] Success: pyright strict passes.
 
-- [ ] **6.2 Tests for the probe** (effort 2)
-  - [ ] Add to `tests/runner/test_probes.py` (or a new file beside it, selectable with `-k answering`): a stub `run` that exits 0 passes; exit 1 raises and the message holds the command, `1` and the output head; a `TimeoutExpired` raises naming the timeout; `FileNotFoundError` raises naming `sq`. Assert the argv, the timeout value and the temporary working directory.
-  - [ ] Success: `uv run pytest tests/runner/test_probes.py -k answering -v` passes.
+- [x] **6.2 Tests for the probe** (effort 2)
+  - [x] Add to `tests/runner/test_probes.py` (or a new file beside it, selectable with `-k answering`): a stub `run` that exits 0 passes; exit 1 raises and the message holds the command, `1` and the output head; a `TimeoutExpired` raises naming the timeout; `FileNotFoundError` raises naming `sq`. Assert the argv, the timeout value and the temporary working directory.
+  - [x] Success: `uv run pytest tests/runner/test_probes_answering.py -v` passes.
 
 **Commit**: `feat: add the answering pipeline start-up probe`
 
