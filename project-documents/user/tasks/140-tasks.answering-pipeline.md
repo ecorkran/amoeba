@@ -72,30 +72,31 @@ revision_number: 2
 
 ## 2. The constants module
 
-- [ ] **2.1 Create `runner/answering/__init__.py` and `pipeline_file.py`** (effort 2)
-  - [ ] Define once, as `Final` constants: the pipeline file name, the step names, the param names (`answer-model`, `check-model`), and every input and output file name (`question.md`, `passages.md`, `rules`, `.squadron.toml`, `answer.json`, `answer.prompt.md`, `check.json`, `check.prompt.md`).
-  - [ ] `answering_pipeline_path()` returns the absolute `Path` of the shipped YAML via `importlib.resources`. It raises `FileNotFoundError` when the file is absent; no fallback path.
-  - [ ] Success: pyright strict passes. The constants hold no behavior to test; the names-match test (Task 5.2) and the path test (Task 5.2) exercise them. Later tasks import the names from here.
+- [x] **2.1 Create `runner/answering/__init__.py` and `pipeline_file.py`** (effort 2)
+  - [x] Define once, as `Final` constants: the pipeline file name, the step names, the param names (`answer-model`, `check-model`), and every input and output file name (`question.md`, `passages.md`, `rules`, `.squadron.toml`, `answer.json`, `answer.prompt.md`, `check.json`, `check.prompt.md`).
+  - [x] `answering_pipeline_path()` returns the absolute `Path` of the shipped YAML via `importlib.resources`. It raises `FileNotFoundError` when the file is absent; no fallback path.
+  - [x] Success: pyright strict passes. The constants hold no behavior to test; the names-match test (Task 5.2) and the path test (Task 5.2) exercise them. Later tasks import the names from here.
+  - **Note (20261101):** `answering_pipeline_path()` is untested until Task 5.2.
 
 ## 3. Input contract
 
-- [ ] **3.1 `QuestionInput` and `question.md` rendering** (effort 2)
-  - [ ] In `runner/answering/inputs.py`: frozen dataclass `QuestionInput(slice_label, question)` as in LLD "API Contracts". `render_question(question) -> str` produces the exact `question.md` format of LLD D3: heading, `slice:` line, blank line, question text verbatim.
-  - [ ] Raise `ValueError` for an empty `slice_label` or an empty `question`. Text is never trimmed or escaped.
-  - [ ] Success: rendering a question containing blank lines, `{model}` and a leading `#` returns it unchanged after the header.
+- [x] **3.1 `QuestionInput` and `question.md` rendering** (effort 2)
+  - [x] In `runner/answering/inputs.py`: frozen dataclass `QuestionInput(slice_label, question)` as in LLD "API Contracts". `render_question(question) -> str` produces the exact `question.md` format of LLD D3: heading, `slice:` line, blank line, question text verbatim.
+  - [x] Raise `ValueError` for an empty `slice_label` or an empty `question`. Text is never trimmed or escaped.
+  - [x] Success: rendering a question containing blank lines, `{model}` and a leading `#` returns it unchanged after the header.
 
-- [ ] **3.2 Tests for rendering** (effort 1)
-  - [ ] `tests/runner/answering/test_inputs_render.py`: exact-string assertion against the D3 format; multi-line question verbatim; braces and markdown headings preserved; both `ValueError` cases.
-  - [ ] Success: tests pass.
+- [x] **3.2 Tests for rendering** (effort 1)
+  - [x] `tests/runner/answering/test_inputs_render.py`: exact-string assertion against the D3 format; multi-line question verbatim; braces and markdown headings preserved; both `ValueError` cases.
+  - [x] Success: tests pass.
 
-- [ ] **3.3 `prepare_scratch`** (effort 3)
-  - [ ] Add `prepare_scratch(directory, question, passages_markdown, max_cost_usd)` per LLD D7 and "API Contracts". Writes `question.md`, `passages.md` (as given, byte for byte), an empty `rules/` directory and `.squadron.toml` with `"pipeline.max_cost_usd"` and `rules_dir` set to the absolute `rules` path, using the constants.
-  - [ ] Raise `ValueError` (programming error, not a model outcome) for: a directory that does not exist, a directory that is not empty, `max_cost_usd <= 0`, an empty `passages_markdown`. No default for any argument.
-  - [ ] Success: the directory listing after a call is exactly the four entries.
+- [x] **3.3 `prepare_scratch`** (effort 3)
+  - [x] Add `prepare_scratch(directory, question, passages_markdown, max_cost_usd)` per LLD D7 and "API Contracts". Writes `question.md`, `passages.md` (as given, byte for byte), an empty `rules/` directory and `.squadron.toml` with `"pipeline.max_cost_usd"` and `rules_dir` set to the absolute `rules` path, using the constants.
+  - [x] Raise `ValueError` (programming error, not a model outcome) for: a directory that does not exist, a directory that is not empty, `max_cost_usd <= 0`, an empty `passages_markdown`. No default for any argument.
+  - [x] Success: the directory listing after a call is exactly the four entries.
 
-- [ ] **3.4 Tests for `prepare_scratch`** (effort 2)
-  - [ ] `tests/runner/answering/test_prepare_scratch.py`: the four entries exist and `rules/` is empty; `passages.md` equals the input bytes including trailing newline and non-ASCII text; `.squadron.toml` parses with `tomllib` to the expected cap and an absolute `rules_dir` equal to `<directory>/rules`; each refusal raises and leaves the directory unchanged.
-  - [ ] Success: tests pass.
+- [x] **3.4 Tests for `prepare_scratch`** (effort 2)
+  - [x] `tests/runner/answering/test_prepare_scratch.py`: the four entries exist and `rules/` is empty; `passages.md` equals the input bytes including trailing newline and non-ASCII text; `.squadron.toml` parses with `tomllib` to the expected cap and an absolute `rules_dir` equal to `<directory>/rules`; each refusal raises and leaves the directory unchanged.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: add answering constants, input contract and scratch preparation`
 
