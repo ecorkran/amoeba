@@ -102,28 +102,28 @@ revision_number: 2
 
 ## 4. Artifact contract
 
-- [ ] **4.1 Reply types** (effort 2)
-  - [ ] In `runner/answering/artifacts.py`: frozen dataclasses `ProposedAnswer(answer, cited)`, `AnswererDecline(reason)`, `CheckReply(verdict, reason: str | None)`, `ArtifactProblem(kind, detail)`; a `ProblemKind` enum (`missing`, `malformed`) and a `Verdict` enum (`yes`, `no`). `AnswerReply` is the union of the first two. Shapes per LLD D6.
-  - [ ] Success: pyright strict passes; no string literal for `answer`, `decline`, `yes` or `no` outside the enum or one parse table.
+- [x] **4.1 Reply types** (effort 2)
+  - [x] In `runner/answering/artifacts.py`: frozen dataclasses `ProposedAnswer(answer, cited)`, `AnswererDecline(reason)`, `CheckReply(verdict, reason: str | None)`, `ArtifactProblem(kind, detail)`; a `ProblemKind` enum (`missing`, `malformed`) and a `Verdict` enum (`yes`, `no`). `AnswerReply` is the union of the first two. Shapes per LLD D6.
+  - [x] Success: pyright strict passes; no string literal for `answer`, `decline`, `yes` or `no` outside the enum or one parse table.
 
-- [ ] **4.2 `read_answer`** (effort 3)
-  - [ ] `read_answer(directory) -> AnswerReply | ArtifactProblem` reads the answer reply file (name from the constants) and parses it as one JSON object. No extraction of its own (LLD D6).
-  - [ ] `kind` matched case-insensitively after trimming. Unknown keys ignored. Malformed (with a detail naming the cause) for: not one JSON object; `kind` not `answer` or `decline`; empty answer text; `cited` not a list of strings; decline with no or empty reason. A missing file is `missing`.
-  - [ ] Never raises for bad file content (unreadable bytes included). Does not check cited ids against anything and does not require `cited` to be non-empty.
-  - [ ] Success: each rule above returns the named problem; a valid answer and a valid decline return the typed value.
+- [x] **4.2 `read_answer`** (effort 3)
+  - [x] `read_answer(directory) -> AnswerReply | ArtifactProblem` reads the answer reply file (name from the constants) and parses it as one JSON object. No extraction of its own (LLD D6).
+  - [x] `kind` matched case-insensitively after trimming. Unknown keys ignored. Malformed (with a detail naming the cause) for: not one JSON object; `kind` not `answer` or `decline`; empty answer text; `cited` not a list of strings; decline with no or empty reason. A missing file is `missing`.
+  - [x] Never raises for bad file content (unreadable bytes included). Does not check cited ids against anything and does not require `cited` to be non-empty.
+  - [x] Success: each rule above returns the named problem; a valid answer and a valid decline return the typed value.
 
-- [ ] **4.3 Tests for `read_answer`** (effort 2)
-  - [ ] `tests/runner/answering/test_read_answer.py`, one test per rule above plus: array instead of object, `kind: " ANSWER "`, extra keys ignored, empty `cited` list accepted, `cited: "P1"` rejected, a non-UTF-8 file returns `malformed`.
-  - [ ] Add one fixture file in `tests/fixtures/answering/` in the real production shape of D6, so the parser is also tested on the format it consumes. Task 9.5 replaces it with captured live output.
-  - [ ] Success: tests pass.
+- [x] **4.3 Tests for `read_answer`** (effort 2)
+  - [x] `tests/runner/answering/test_read_answer.py`, one test per rule above plus: array instead of object, `kind: " ANSWER "`, extra keys ignored, empty `cited` list accepted, `cited: "P1"` rejected, a non-UTF-8 file returns `malformed`.
+  - [x] Add one fixture file in `tests/fixtures/answering/` in the real production shape of D6, so the parser is also tested on the format it consumes. Task 9.5 replaces it with captured live output.
+  - [x] Success: tests pass.
 
-- [ ] **4.4 `read_check`** (effort 2)
-  - [ ] `read_check(directory) -> CheckReply | ArtifactProblem` on the check reply file. `verdict` matched case-insensitively after trimming; only `yes` and `no`. An absent or other `verdict` is `malformed`, never `no`. `reason` has no validation rule in LLD D6: carry it as `str | None` (the text when it is a string, otherwise `None`) and never reject on it.
-  - [ ] Success: valid yes and no return `CheckReply`; every other case returns the named problem.
+- [x] **4.4 `read_check`** (effort 2)
+  - [x] `read_check(directory) -> CheckReply | ArtifactProblem` on the check reply file. `verdict` matched case-insensitively after trimming; only `yes` and `no`. An absent or other `verdict` is `malformed`, never `no`. `reason` has no validation rule in LLD D6: carry it as `str | None` (the text when it is a string, otherwise `None`) and never reject on it.
+  - [x] Success: valid yes and no return `CheckReply`; every other case returns the named problem.
 
-- [ ] **4.5 Tests for `read_check`** (effort 2)
-  - [ ] `tests/runner/answering/test_read_check.py`: yes, no, ` Yes `, absent verdict, `"maybe"`, not an object, missing file, extra keys.
-  - [ ] Success: tests pass.
+- [x] **4.5 Tests for `read_check`** (effort 2)
+  - [x] `tests/runner/answering/test_read_check.py`: yes, no, ` Yes `, absent verdict, `"maybe"`, not an object, missing file, extra keys.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: add answering reply parsers`
 
