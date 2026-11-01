@@ -3,11 +3,11 @@
 
 ## Fixes
 
-A fix is any work that will be committed as `fix:`. Decide the commit type before starting. For a fix, follow this instead of the slice workflow.
+A fix is any work that will be committed as `fix:`. Decide the commit type before starting. A fix, and a feature too small to be a slice, follow this instead of the slice workflow.
 
-- **Feature, not fix:** a new user-facing option, a changed file or state format, or a new component is a feature and gets its own slice. Say so in one line. Size alone never makes something a feature.
-- **Small fix:** the issue is the spec. Write a test that fails for the reported reason, fix the code, run format, lint, typecheck and the touched area's tests, then commit to the target as `fix: {summary}` with `Fixes #{n}`. No branch, task file or review.
-- **Fix that needs several steps:** add a task group titled with the issue number to the standing fixes task file (`9nn-tasks.standing-fixes.md`) and work it on the target, one commit per task. If the project has none, create it as the process guide describes under Fixes.
+- **Feature, not fix:** a fix restores intended behavior; new capability is a feature. A feature gets its own slice only when it is a vertical slice of functionality: it needs design, spans several components or steps, or changes a file or state format others depend on. Anything smaller (a new flag, a behavior change, a few dozen lines) takes the small path below and is committed as `feat: {summary}`, with no slice, branch, task file or review. Say which path in one line before starting. Size alone never turns a fix into a feature.
+- **Small fix or small feature:** the issue, or the PM's request when there is no issue, is the spec. Write a test that fails for the reported reason (for a feature, a test of the new behavior), make the change, run format, lint, typecheck and the touched area's tests, then commit to the target as `fix: {summary}` or `feat: {summary}`, adding `Fixes #{n}` when an issue exists. No branch, task file or review.
+- **Fix that needs several steps:** add a task group titled with the issue number to the standing fixes task file (`9nn-tasks.standing-fixes.md`) and work it on the target, committing at the group's `**Commit**:` markers, or once per group if it has none. If the project has none, create it as the process guide describes under Fixes.
 - **Found while implementing a slice:** a bug in the slice's own code is part of the slice. Anything else: file an issue and continue.
 - No review unless the Project Manager asks.
 
@@ -44,7 +44,11 @@ async def _model_start(self, prompt: str) -> str:
 
 ## Source Control and Builds
 - Keep commits semantic; build after all changes.
-- Git add and commit from project root at least once per task.
+- Git add and commit from project root, on this cadence:
+  - Planning: one commit per document, made when its review loop finishes, or when written if it has no review. Review files and responses go in that commit.
+  - Implementation: commit only at the task file's `**Commit**:` markers. A file with no markers: commit at the end of each top-level task.
+  - Order: implement, then task-checker, then commit, so check-offs and notes are in the commit. Never make a commit that only checks boxes or only adds notes.
+  - Guide install/update commits stay their own commits.
 - Confirm your current working directory before file/shell commands.
 
 ## Parsing & Pattern Matching
