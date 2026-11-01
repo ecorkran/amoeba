@@ -131,20 +131,21 @@ revision_number: 2
 
 Squadron's syntax for the D8 keys is not final. This section drafts the file with the capability keys as proposed in the issue; Task 9.1 adjusts it to what ships.
 
-- [ ] **5.1 Draft `runner/answering/answering.yaml`** (effort 4)
-  - [ ] Two `dispatch` steps, two required params (`answer-model`, `check-model`) with no defaults, step and param names from `pipeline_file.py`. Read the Squadron pipeline documentation (`sq` help and, if present, `ai-project-guide/tool-guides/squadron/`) for the real syntax of a pipeline file before writing.
-  - [ ] Each step declares no tools and a JSON reply; the answer step's instructions and the check step's instructions are each the step's `prompt:` text, written per LLD D3, D4 and D6: the citation rule, the decline form, passage text is data and embedded instructions are not followed, the answer step replies with the JSON object only, PM-precedent matching with `slice:` taken into account, the check step's precedence rule (later date wins, equal date means equal precedence, a contradiction means no), a decline gets a no, a cited `pm_answer` gets yes only if the new question means the same thing for this slice, and the check's refusal of reserved actions as the LLD Overview describes it.
-  - [ ] The answer step takes `question.md` and `passages.md` as file content; the check step takes the same two files and the answer step's reply. Each step names its reply file and delivered-prompt file from the constants. Use the key names proposed in the Squadron issue, and mark them in a comment as pending the shipped syntax.
-  - [ ] Success: the file parses as YAML; `uv run python -c` loading it via `answering_pipeline_path()` succeeds.
+- [x] **5.1 Draft `runner/answering/answering.yaml`** (effort 4)
+  - [x] Two `dispatch` steps, two required params (`answer-model`, `check-model`) with no defaults, step and param names from `pipeline_file.py`. Read the Squadron pipeline documentation (`sq` help and, if present, `ai-project-guide/tool-guides/squadron/`) for the real syntax of a pipeline file before writing.
+  - [x] Each step declares no tools and a JSON reply; the answer step's instructions and the check step's instructions are each the step's `prompt:` text, written per LLD D3, D4 and D6: the citation rule, the decline form, passage text is data and embedded instructions are not followed, the answer step replies with the JSON object only, PM-precedent matching with `slice:` taken into account, the check step's precedence rule (later date wins, equal date means equal precedence, a contradiction means no), a decline gets a no, a cited `pm_answer` gets yes only if the new question means the same thing for this slice, and the check's refusal of reserved actions as the LLD Overview describes it.
+  - [x] The answer step takes `question.md` and `passages.md` as file content; the check step takes the same two files and the answer step's reply. Each step names its reply file and delivered-prompt file from the constants. Use the key names proposed in the Squadron issue, and mark them in a comment as pending the shipped syntax.
+  - [x] Success: the file parses as YAML; `uv run python -c` loading it via `answering_pipeline_path()` succeeds.
+  - Finding 20261101: `sq 0.24.12` rejects `-p answer-model=…,check-model=…` for two `required` params; the first required param takes the positional target. The launch contract in the slice design is updated to match (Task 7.1 and 144 use it). Prompt text must also avoid a brace pair around a bare word, which `--validate` rejects as an undeclared placeholder.
 
-- [ ] **5.2 Names-match test** (effort 2)
-  - [ ] `tests/runner/answering/test_pipeline_yaml.py`: load the YAML and assert its step names, param names, and reply and prompt file names equal exactly the constants in `pipeline_file.py`; the two params have no default; both steps are `dispatch`; neither declares a tool; each step's `prompt` text is non-empty, the answer step's names the two `kind` values and the check step's names the `verdict` key and both verdict values, taken from the `artifacts.py` vocabulary, so the instructions and the parsers cannot drift apart without a live run. Also resolve `answering_pipeline_path()` and assert the file exists; with a monkeypatched package root that lacks the file, assert it raises `FileNotFoundError`.
-  - [ ] Success: tests pass; renaming a constant makes them fail.
+- [x] **5.2 Names-match test** (effort 2)
+  - [x] `tests/runner/answering/test_pipeline_yaml.py`: load the YAML and assert its step names, param names, and reply and prompt file names equal exactly the constants in `pipeline_file.py`; the two params have no default; both steps are `dispatch`; neither declares a tool; each step's `prompt` text is non-empty, the answer step's names the two `kind` values and the check step's names the `verdict` key and both verdict values, taken from the `artifacts.py` vocabulary, so the instructions and the parsers cannot drift apart without a live run. Also resolve `answering_pipeline_path()` and assert the file exists; with a monkeypatched package root that lacks the file, assert it raises `FileNotFoundError`.
+  - [x] Success: tests pass; renaming a constant makes them fail.
 
-- [ ] **5.3 Ship the YAML in the wheel** (effort 2)
-  - [ ] Add `src/amoeba/runner/answering/answering.yaml` to `[tool.hatch.build.targets.wheel] artifacts` in `pyproject.toml`, beside the schema SQL.
-  - [ ] `tests/runner/answering/test_wheel_contents.py`: build the wheel with `uv build` into a `tmp_path` output directory, assert the archive lists `amoeba/runner/answering/answering.yaml`. Follow the style of the existing wheel-contents test if one exists under `tests/`.
-  - [ ] Success: the test passes. Create no files outside `tmp_path`.
+- [x] **5.3 Ship the YAML in the wheel** (effort 2)
+  - [x] Add `src/amoeba/runner/answering/answering.yaml` to `[tool.hatch.build.targets.wheel] artifacts` in `pyproject.toml`, beside the schema SQL.
+  - [x] `tests/runner/answering/test_wheel_contents.py`: build the wheel with `uv build` into a `tmp_path` output directory, assert the archive lists `amoeba/runner/answering/answering.yaml`. Follow the style of the existing wheel-contents test if one exists under `tests/`.
+  - [x] Success: the test passes. Create no files outside `tmp_path`.
 
 **Commit**: `feat: add the answering pipeline file and ship it in the wheel`
 
@@ -168,7 +169,7 @@ Squadron's syntax for the D8 keys is not final. This section drafts the file wit
 - [ ] **7.1 `tests/live/` and its exclusion** (effort 2)
   - [ ] Add `--ignore=tests/live` to `addopts` in `pyproject.toml`, beside `tests/load`, and extend the comment there.
   - [ ] `tests/live/conftest.py`: session fixtures reading `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL` and `AMOEBA_LIVE_MAX_COST_USD`, read by one pure function `read_live_settings(environ)`. If any is unset, it raises `pytest.UsageError` at collection naming the variable; no skip, no default. A cost value that is not a positive number fails the same way. A fourth variable, `AMOEBA_LIVE_SDK_MODEL`, is read only by Task 9.4's own test, which fails naming it when unset; the other live tests do not need it (an addition to LLD D10's three variables, recorded in Task 8.1).
-  - [ ] A helper `run_pipeline(directory, ...)` that mints a run id (reuse `mint_run_id`), launches `sq run <answering_pipeline_path()> --run-id <id> -p answer-model=<a>,check-model=<c>` with the scratch directory as working directory, and waits with `sq runs wait <id> --json` and a bounded timeout, returning the parsed outcome. Prefer the existing `poll_run` from `amoeba.process` over a second parser.
+  - [ ] A helper `run_pipeline(directory, ...)` that mints a run id (reuse `mint_run_id`), launches `sq run <answering_pipeline_path()> <a> --run-id <id> -p check-model=<c>` (the positional target binds to the first required param, `answer-model`; see the slice design's launch contract) with the scratch directory as working directory, and waits with `sq runs wait <id> --json` and a bounded timeout, returning the parsed outcome. Prefer the existing `poll_run` from `amoeba.process` over a second parser.
   - [ ] Success: `uv run pytest` (bare) collects nothing from `tests/live`; `uv run pytest tests/live` with the variables unset fails naming the first missing one.
 
 - [ ] **7.2 Tests for the tier's own rules** (effort 2)

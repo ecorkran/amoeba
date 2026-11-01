@@ -276,10 +276,10 @@ def read_check(directory: Path) -> CheckReply | ArtifactProblem: ...
 Launch contract for 144, run from the scratch directory as its working directory:
 
 ```
-sq run <answering_pipeline_path()> --run-id <id> -p answer-model=<alias>,check-model=<alias>
+sq run <answering_pipeline_path()> <answer-model alias> --run-id <id> -p check-model=<alias>
 ```
 
-Model aliases cannot contain commas, so the comma-joined `-p` form is safe.
+`sq` binds the positional target to the pipeline's first `required` param, and `-p` does not satisfy a `required` param (observed 20261101 on `sq run <file> --dry-run -p answer-model=a,check-model=b`: "requires a 'answer-model' argument"). So `answer-model` is the positional target and `check-model` goes in `-p`. Squadron's shipped syntax may change this; Task 9.1 rechecks it.
 
 ## Integration Points
 
