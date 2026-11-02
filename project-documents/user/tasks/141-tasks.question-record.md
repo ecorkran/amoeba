@@ -119,27 +119,27 @@ revision_number: 2
 
 ## 4. PM answer rule in `acknowledge_resolution`
 
-- [ ] **4.1 `_settle_question_on_acknowledgment`** (`store/questions.py`, called from `acknowledge_resolution` inside its existing transaction)
-  - [ ] Change `_apply_effect` (`store/blocking.py`) to return the id of the block it wrote, or `None`. No public signature changes.
-  - [ ] Per LLD D2: find the record by `question_for_block`-style lookup on the acknowledged block. No record, or state `answered`: do nothing.
-  - [ ] If the effect wrote a new block: set the record's `blocked_state_id` to it and keep its state; emit no state change.
-  - [ ] If the acknowledgment is applied with no effect: set `answered`, `answered_by=pm`, `answer=` the slot's `resolution_instructions` verbatim (may be null). Check `QUESTION_TRANSITIONS`; keep `decline_reason`.
-  - [ ] Any other acknowledgment (including an applied `StatusEffect`): leave the record unchanged.
-  - [ ] Never read `submitted_by`/`resolved_by` or the decision text.
-  - [ ] Success: `acknowledge_resolution` keeps its signature and is still one transaction.
+- [x] **4.1 `_settle_question_on_acknowledgment`** (`store/questions.py`, called from `acknowledge_resolution` inside its existing transaction)
+  - [x] Change `_apply_effect` (`store/blocking.py`) to return the id of the block it wrote, or `None`. No public signature changes.
+  - [x] Per LLD D2: find the record by `question_for_block`-style lookup on the acknowledged block. No record, or state `answered`: do nothing.
+  - [x] If the effect wrote a new block: set the record's `blocked_state_id` to it and keep its state; emit no state change.
+  - [x] If the acknowledgment is applied with no effect: set `answered`, `answered_by=pm`, `answer=` the slot's `resolution_instructions` verbatim (may be null). Check `QUESTION_TRANSITIONS`; keep `decline_reason`.
+  - [x] Any other acknowledgment (including an applied `StatusEffect`): leave the record unchanged.
+  - [x] Never read `submitted_by`/`resolved_by` or the decision text.
+  - [x] Success: `acknowledge_resolution` keeps its signature and is still one transaction.
 
-- [ ] **4.2 Acknowledgment-shape and transition tests** (`tests/store/test_question_acknowledgment.py`, `tests/store/test_question_records.py`)
-  - [ ] Applied resume with instructions on a `pending` record and on a `declined` record: `answered`, `pm`, answer verbatim.
-  - [ ] Applied resume without instructions: `answered`, `pm`, null answer.
-  - [ ] Applied `stop`: `blocked_state_id` moves to the new block, state unchanged. A rejection (`unknown_decision`) does the same. A later resume with instructions on the new block then answers the question.
-  - [ ] Applied acknowledgment with a `StatusEffect`: record unchanged.
-  - [ ] A record already `answered` (answerer) is untouched by an applied resume.
-  - [ ] A resume submitted with `submitted_by` set to the answerer's name, on a `declined` record, is recorded as `pm`.
-  - [ ] A block with no record behaves exactly as before.
-  - [ ] Transition walk (`-k transition`): seed a record in each `QuestionState` through the test helper, then drive every writer 141 provides (`decline_question`, and the acknowledgment's applied resume) from it. Each result either matches `QUESTION_TRANSITIONS` or raises `InvalidTransitionError` and leaves the row unchanged. Pairs whose writers belong to 142 and 144 are covered by asserting the table itself.
-  - [ ] The list of judge acknowledgment shapes (applied resume, applied stop, rejection) is asserted in one place so a new shape fails the test (LLD Mitigation Strategies).
-  - [ ] Feed trigger tests (`tests/store/test_feed_triggers.py`, `test_mapping_feed.py`; triggers and `ChangeKind` members from Task 2.2): recording a question emits `question_recorded`; a decline emits one `question_state_changed` (`pending → declined`); a PM answer emits `declined → answered`; a re-point (stop or rejection) emits nothing. Payloads contain no `question` or `answer` keys.
-  - [ ] Success: all cases pass, and `tests/store/test_resolutions.py`, the resolution tests under `tests/runner/resolutions/` and `tests/feed/` pass unchanged.
+- [x] **4.2 Acknowledgment-shape and transition tests** (`tests/store/test_question_acknowledgment.py`, `tests/store/test_question_records.py`)
+  - [x] Applied resume with instructions on a `pending` record and on a `declined` record: `answered`, `pm`, answer verbatim.
+  - [x] Applied resume without instructions: `answered`, `pm`, null answer.
+  - [x] Applied `stop`: `blocked_state_id` moves to the new block, state unchanged. A rejection (`unknown_decision`) does the same. A later resume with instructions on the new block then answers the question.
+  - [x] Applied acknowledgment with a `StatusEffect`: record unchanged.
+  - [x] A record already `answered` (answerer) is untouched by an applied resume.
+  - [x] A resume submitted with `submitted_by` set to the answerer's name, on a `declined` record, is recorded as `pm`.
+  - [x] A block with no record behaves exactly as before.
+  - [x] Transition walk (`-k transition`): seed a record in each `QuestionState` through the test helper, then drive every writer 141 provides (`decline_question`, and the acknowledgment's applied resume) from it. Each result either matches `QUESTION_TRANSITIONS` or raises `InvalidTransitionError` and leaves the row unchanged. Pairs whose writers belong to 142 and 144 are covered by asserting the table itself.
+  - [x] The list of judge acknowledgment shapes (applied resume, applied stop, rejection) is asserted in one place so a new shape fails the test (LLD Mitigation Strategies).
+  - [x] Feed trigger tests (`tests/store/test_feed_triggers.py`, `test_mapping_feed.py`; triggers and `ChangeKind` members from Task 2.2): recording a question emits `question_recorded`; a decline emits one `question_state_changed` (`pending → declined`); a PM answer emits `declined → answered`; a re-point (stop or rejection) emits nothing. Payloads contain no `question` or `answer` keys.
+  - [x] Success: all cases pass, and `tests/store/test_resolutions.py`, the resolution tests under `tests/runner/resolutions/` and `tests/feed/` pass unchanged.
 
 **Commit**: `feat: record the PM's answer on the question record at acknowledgment`
 

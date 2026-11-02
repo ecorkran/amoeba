@@ -18,10 +18,12 @@ from amoeba.store.mapping_questions import map_question_record
 from amoeba.store.models import (
     BLOCKED_STATUSES,
     BlockedKind,
+    BlockedState,
     InvalidTransitionError,
 )
 from amoeba.store.question_models import (
     QUESTION_TRANSITIONS,
+    AnsweredBy,
     DeclineReason,
     QuestionCatch,
     QuestionRecord,
@@ -182,6 +184,50 @@ class QuestionOperations(BlockWriter):
                 ),
             )
         return self._require_question(question_id)
+
+    def _settle_question_on_acknowledgment(
+        self,
+        state: BlockedState,
+        *,
+        applied_without_effect: bool,
+        new_block_id: str | None,
+        timestamp: str,
+    ) -> None:
+        """Settle the question on an acknowledged block, if it has one (D2).
+
+        Runs inside ``acknowledge_resolution``'s transaction. Reads only store
+        facts: whether the acknowledgment wrote a new block and whether it was
+        applied with no effect, never who submitted it or what it decided.
+        """
+        row = self._execute(
+            sql_questions.SELECT_QUESTION_BY_BLOCK, (state.id,)
+        ).fetchone()
+        if row is None:
+            return
+        record = map_question_record(row)
+        if record.state is QuestionState.ANSWERED:
+            return
+        if new_block_id is not None:
+            # A stop or a rejection re-blocked the node: the question follows.
+            self._execute(
+                sql_questions.UPDATE_QUESTION_BLOCK,
+                (new_block_id, timestamp, record.id),
+            )
+        elif applied_without_effect:
+            require_transition(record, QuestionState.ANSWERED)
+            instructions = (
+                None if state.resolution is None else state.resolution.instructions
+            )
+            self._execute(
+                sql_questions.UPDATE_QUESTION_ANSWERED,
+                (
+                    QuestionState.ANSWERED.value,
+                    AnsweredBy.PM.value,
+                    instructions,
+                    timestamp,
+                    record.id,
+                ),
+            )
 
     def _require_question(self, question_id: str) -> QuestionRecord:
         record = self.question(question_id)

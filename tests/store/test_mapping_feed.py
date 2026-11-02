@@ -42,6 +42,18 @@ def test_a_change_row_maps() -> None:
     assert change.recorded_at.isoformat() == AT
 
 
+@pytest.mark.parametrize(
+    ("literal", "kind"),
+    [
+        ("question_recorded", ChangeKind.QUESTION_RECORDED),
+        ("question_state_changed", ChangeKind.QUESTION_STATE_CHANGED),
+    ],
+)
+def test_the_question_kinds_map(literal: str, kind: ChangeKind) -> None:
+    row = (8, "demo", literal, "n-1", "q-1", '{"state": "pending"}', AT)
+    assert map_change(row).kind is kind
+
+
 def test_a_watch_row_maps() -> None:
     watch = map_watch(WATCH_ROW)
     assert watch.active is True

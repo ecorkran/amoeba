@@ -15,7 +15,6 @@ from collections.abc import Iterator, Mapping
 
 from amoeba.store import sql, sql_inbox
 from amoeba.store._base import isoformat, now
-from amoeba.store._block_writer import BlockWriter
 from amoeba.store.mapping import map_blocked_state, map_node
 from amoeba.store.models import (
     BLOCKED_STATUSES,
@@ -27,10 +26,11 @@ from amoeba.store.models import (
     NodeStatus,
     ResolutionOutcome,
 )
+from amoeba.store.questions import QuestionOperations
 from amoeba.store.runner_models import BlockEffect, StatusEffect
 
 
-class BlockingOperations(BlockWriter):
+class BlockingOperations(QuestionOperations):
     """Blocking, resolution, and the queries the Runner's loop consumes."""
 
     def block(
@@ -256,10 +256,18 @@ class BlockingOperations(BlockWriter):
                 sql.ACKNOWLEDGE_RESOLUTION,
                 (outcome.value, code, reason, timestamp, blocked_state_id),
             )
-            self._apply_effect(
+            new_block_id = self._apply_effect(
                 node.id,
                 project_id=node.project_id,
                 effect=effect,
                 timestamp=timestamp,
                 journal_entry_id=None,
+            )
+            self._settle_question_on_acknowledgment(
+                state,
+                applied_without_effect=(
+                    outcome is ResolutionOutcome.APPLIED and effect is None
+                ),
+                new_block_id=new_block_id,
+                timestamp=timestamp,
             )

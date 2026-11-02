@@ -20,13 +20,18 @@ from feed_harness import (
     resolve_by_submission,
 )
 from legacy_nodes import LEGACY_INSERT_NODE
+from question_harness import catch_for, submit_resolution
 
 from amoeba.store import (
     BlockedKind,
+    BlockEffect,
     CFReference,
     Channel,
+    DeclineReason,
     NodeKind,
     NodeStatus,
+    QuestionState,
+    ResolutionOutcome,
     Store,
     SubmissionKind,
     SubmissionOutcome,
@@ -296,3 +301,91 @@ def test_a_repeated_record_detection_emits_nothing(store: Store) -> None:
     _detect(store, DetectionOutcome.UNPARSEABLE)
     _detect(store, DetectionOutcome.UNPARSEABLE)
     assert len(raw_changes(store, PROJECT)) == 1
+
+
+# --------------------------------------------------------------------------
+# Question records (slice 141, D7)
+# --------------------------------------------------------------------------
+
+
+def _asked(store: Store) -> tuple[str, str]:
+    """A recorded question: (record id, its block id)."""
+    node_id = _node(store)
+    record = store.record_question(
+        catch_for(store, node_id), block_context="ctx", block_payload=None
+    )
+    assert record.blocked_state_id is not None
+    return record.id, record.blocked_state_id
+
+
+def _state_changes(store: Store) -> list[dict[str, object]]:
+    return _of_kind(store, ChangeKind.QUESTION_STATE_CHANGED)
+
+
+def test_recording_a_question_emits_question_recorded(store: Store) -> None:
+    record_id, _ = _asked(store)
+
+    recorded = [
+        c for c in raw_changes(store, PROJECT) if c.kind is ChangeKind.QUESTION_RECORDED
+    ]
+    assert [c.subject_id for c in recorded] == [record_id]
+    assert dict(recorded[0].payload) == {"state": "pending", "decline_reason": None}
+
+
+def test_a_decline_emits_one_state_change(store: Store) -> None:
+    record_id, _ = _asked(store)
+
+    store.decline_question(record_id, reason=DeclineReason.NO_ANSWER_ON_FILE)
+
+    assert _state_changes(store) == [
+        {
+            "from": "pending",
+            "to": "declined",
+            "answered_by": None,
+            "decline_reason": "no_answer_on_file",
+        }
+    ]
+
+
+def test_a_pm_answer_after_a_decline_emits_declined_to_answered(
+    store: Store,
+) -> None:
+    record_id, block_id = _asked(store)
+    store.decline_question(record_id, reason=DeclineReason.NO_ANSWER_ON_FILE)
+
+    submit_resolution(store, block_id, "resume", instructions="go")
+    store.acknowledge_resolution(block_id, outcome=ResolutionOutcome.APPLIED)
+
+    changes = _state_changes(store)
+    assert [(c["from"], c["to"]) for c in changes] == [
+        ("pending", "declined"),
+        ("declined", "answered"),
+    ]
+    assert changes[1]["answered_by"] == "pm"
+
+
+def test_a_re_point_emits_nothing(store: Store) -> None:
+    record_id, block_id = _asked(store)
+    submit_resolution(store, block_id, "stop")
+
+    store.acknowledge_resolution(
+        block_id,
+        outcome=ResolutionOutcome.APPLIED,
+        effect=BlockEffect("re-blocked", None),
+    )
+
+    assert _state_changes(store) == []
+    record = store.question(record_id)
+    assert record is not None and record.state is QuestionState.PENDING
+
+
+def test_question_payloads_carry_no_question_or_answer_text(store: Store) -> None:
+    record_id, block_id = _asked(store)
+    store.decline_question(record_id, reason=DeclineReason.NO_ANSWER_ON_FILE)
+    submit_resolution(store, block_id, "resume", instructions="secret words")
+    store.acknowledge_resolution(block_id, outcome=ResolutionOutcome.APPLIED)
+
+    for kind in (ChangeKind.QUESTION_RECORDED, ChangeKind.QUESTION_STATE_CHANGED):
+        for payload in _of_kind(store, kind):
+            assert "question" not in payload and "answer" not in payload
+            assert "secret words" not in str(payload)

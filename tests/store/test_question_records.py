@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from question_harness import PROJECT, make_slice, seed_question
+from question_harness import PROJECT, make_slice, seed_question, submit_resolution
 
 from amoeba.store import (
     QUESTION_TRANSITIONS,
@@ -15,6 +15,7 @@ from amoeba.store import (
     DeclineReason,
     InvalidTransitionError,
     QuestionState,
+    ResolutionOutcome,
     Store,
     UnknownVocabularyValueError,
     sql_questions,
@@ -132,3 +133,66 @@ def test_a_read_only_handle_can_call_the_reads(store_file: Path) -> None:
         assert reader.question_for_block("none") is None
         with pytest.raises(sqlite3.OperationalError):
             reader.decline_question(record.id, reason=DeclineReason.QUESTION_MISSING)
+
+
+def _walk_start(store: Store, state: QuestionState) -> str:
+    """A record in ``state``, linked to an open block, and its block id."""
+    node_id = make_slice(store)
+    block = store.block(node_id, kind=BlockedKind.HUMAN, context="q")
+    answered = state is QuestionState.ANSWERED
+    seed_question(
+        store,
+        node_id,
+        state=state,
+        blocked_state_id=block.id,
+        answered_by=AnsweredBy.ANSWERER if answered else None,
+        answer="earlier" if answered else None,
+        decline_reason=(
+            DeclineReason.NO_ANSWER_ON_FILE if state is QuestionState.DECLINED else None
+        ),
+    )
+    return block.id
+
+
+@pytest.mark.parametrize("start", list(QuestionState))
+def test_transition_decline_matches_the_table(
+    store: Store, start: QuestionState
+) -> None:
+    block_id = _walk_start(store, start)
+    before = store.question_for_block(block_id)
+    assert before is not None
+
+    if QuestionState.DECLINED in QUESTION_TRANSITIONS[start]:
+        store.decline_question(before.id, reason=DeclineReason.QUESTION_MISSING)
+        after = store.question(before.id)
+        assert after is not None and after.state is QuestionState.DECLINED
+    else:
+        with pytest.raises(InvalidTransitionError):
+            store.decline_question(before.id, reason=DeclineReason.QUESTION_MISSING)
+        assert store.question(before.id) == before
+
+
+@pytest.mark.parametrize("start", list(QuestionState))
+def test_transition_pm_resume_matches_the_table(
+    store: Store, start: QuestionState
+) -> None:
+    """The acknowledgment answers where the table allows it, else leaves the row.
+
+    ``answered`` is skipped by the rule rather than refused, so its row is
+    unchanged. The writers of the other pairs belong to 142 and 144; the table
+    itself is asserted above.
+    """
+    block_id = _walk_start(store, start)
+    before = store.question_for_block(block_id)
+    assert before is not None
+    submit_resolution(store, block_id, "resume", instructions="pm words")
+
+    store.acknowledge_resolution(block_id, outcome=ResolutionOutcome.APPLIED)
+
+    after = store.question(before.id)
+    assert after is not None
+    if QuestionState.ANSWERED in QUESTION_TRANSITIONS[start]:
+        assert after.state is QuestionState.ANSWERED
+        assert after.answered_by is AnsweredBy.PM
+    else:
+        assert after == before

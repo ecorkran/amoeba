@@ -6,6 +6,8 @@ so tests of the reads and of the writers can stage any state they need.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sq_run_fixtures import sq_run_parameters
 
 from amoeba.store import (
@@ -19,9 +21,17 @@ from amoeba.store import (
 )
 from amoeba.store import sql_questions as sql_q
 from amoeba.store._base import isoformat, new_id, now
+from amoeba.store.inbox_models import (
+    RESOLUTION_BLOCKED_STATE_ID,
+    RESOLUTION_DECISION,
+    RESOLUTION_DETAIL,
+    RESOLUTION_INSTRUCTIONS,
+    SubmissionKind,
+)
 from amoeba.store.journal_models import CommandKind
 
 PROJECT = "demo"
+SUBMITTED_AT = datetime(2026, 11, 2, 12, 0, tzinfo=UTC)
 
 
 def make_slice(store: Store, project_id: str = PROJECT) -> str:
@@ -108,3 +118,28 @@ def seed_question(
     stored = store.question(str(values[sql_q.COL_QUESTION_ID]))
     assert stored is not None
     return stored
+
+
+def submit_resolution(
+    store: Store,
+    blocked_state_id: str,
+    decision: str,
+    *,
+    instructions: str | None = None,
+    submitted_by: str = "pm",
+) -> None:
+    payload: dict[str, object] = {
+        RESOLUTION_BLOCKED_STATE_ID: blocked_state_id,
+        RESOLUTION_DETAIL: "answered",
+        RESOLUTION_DECISION: decision,
+    }
+    if instructions is not None:
+        payload[RESOLUTION_INSTRUCTIONS] = instructions
+    store.apply_submission(
+        submission_id=f"s-{blocked_state_id}",
+        project_id=PROJECT,
+        kind=SubmissionKind.RESOLUTION,
+        submitted_by=submitted_by,
+        submitted_at=SUBMITTED_AT,
+        payload=payload,
+    )
