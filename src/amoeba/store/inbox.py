@@ -31,6 +31,7 @@ from amoeba.store import sql, sql_feed, sql_inbox
 from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter
 from amoeba.store._check_writer import CheckWriter
+from amoeba.store._submission_writer import SubmissionWriter
 from amoeba.store._verdict_writer import VerdictWriter
 from amoeba.store.cf_snapshots import CFWriter
 from amoeba.store.inbox_models import (
@@ -95,7 +96,9 @@ def _payload_mapping(payload: Mapping[str, object], key: str) -> dict[str, objec
     return narrowed
 
 
-class InboxOperations(BlockWriter, VerdictWriter, CheckWriter, CFWriter):
+class InboxOperations(
+    BlockWriter, SubmissionWriter, VerdictWriter, CheckWriter, CFWriter
+):
     """Apply a submission exactly once, and read back what was applied."""
 
     def apply_submission(
@@ -147,19 +150,16 @@ class InboxOperations(BlockWriter, VerdictWriter, CheckWriter, CFWriter):
                 if reason is None
                 else SubmissionOutcome.REJECTED
             )
-            self._execute(
-                sql_inbox.INSERT_SUBMISSION,
-                (
-                    submission_id,
-                    project_id,
-                    kind.value,
-                    submitted_by,
-                    isoformat(submitted_at),
-                    json.dumps(dict(payload)),
-                    outcome.value,
-                    reason,
-                    timestamp,
-                ),
+            self._insert_submission(
+                submission_id=submission_id,
+                project_id=project_id,
+                kind=kind,
+                submitted_by=submitted_by,
+                submitted_at=isoformat(submitted_at),
+                payload=payload,
+                outcome=outcome,
+                reason=reason,
+                applied_at=timestamp,
             )
 
         record = self.submission(submission_id)

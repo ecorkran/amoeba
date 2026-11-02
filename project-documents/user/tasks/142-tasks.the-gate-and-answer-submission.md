@@ -12,7 +12,7 @@ projectState: Slices 120–132 and 141 are merged. 140 (answering pipeline) is b
   yet) exist. Nothing of slice 142 is built.
 dateCreated: 20261102
 dateUpdated: 20261102
-status: not_started
+status: in_progress
 turns: 33
 promptTokens: 1199949
 cachedTokens: 1127108
@@ -56,25 +56,25 @@ revision_number: 2
 
 ## 1. Branch and baseline
 
-- [ ] **1.1 Create the slice branch and record the baseline**
-  - [ ] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
-  - [ ] Run `git checkout -b 142-slice.the-gate-and-answer-submission {target}`.
-  - [ ] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
-  - [ ] Success: on branch `142-slice.the-gate-and-answer-submission`, and the baseline result is known.
+- [x] **1.1 Create the slice branch and record the baseline**
+  - [x] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
+  - [x] Run `git checkout -b 142-slice.the-gate-and-answer-submission {target}`.
+  - [x] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
+  - [x] Success: on branch `142-slice.the-gate-and-answer-submission`, and the baseline result is known.
 
 ---
 
 ## 2. Extract the submission insert
 
-- [ ] **2.1 `SubmissionWriter._insert_submission`** (`store/_submission_writer.py`, new)
-  - [ ] Create base class `SubmissionWriter(StoreBase)` (follow `BlockWriter`'s shape) with `_insert_submission(...)` taking the 9 values the inline statement binds and executing `sql_inbox.INSERT_SUBMISSION`. It opens no transaction; the caller's does.
-  - [ ] Make `InboxOperations` also inherit `SubmissionWriter`, and replace the inline `INSERT_SUBMISSION` execute in `apply_submission` with `self._insert_submission(...)`. Per LLD "Component Structure".
-  - [ ] Change no behavior: the payload JSON, outcome and reason are written exactly as before.
-  - [ ] Success: module imports; typecheck passes.
+- [x] **2.1 `SubmissionWriter._insert_submission`** (`store/_submission_writer.py`, new)
+  - [x] Create base class `SubmissionWriter(StoreBase)` (follow `BlockWriter`'s shape) with `_insert_submission(...)` taking the 9 values the inline statement binds and executing `sql_inbox.INSERT_SUBMISSION`. It opens no transaction; the caller's does.
+  - [x] Make `InboxOperations` also inherit `SubmissionWriter`, and replace the inline `INSERT_SUBMISSION` execute in `apply_submission` with `self._insert_submission(...)`. Per LLD "Component Structure".
+  - [x] Change no behavior: the payload JSON, outcome and reason are written exactly as before.
+  - [x] Success: module imports; typecheck passes.
 
-- [ ] **2.2 Run the inbox suite unchanged**
-  - [ ] Run `uv run pytest tests/store tests/inbox -q`. `test_inbox_apply.py` and every other existing test pass with no edits (replay and rejection cases included).
-  - [ ] Success: all pass; no existing test was modified.
+- [x] **2.2 Run the inbox suite unchanged**
+  - [x] Run `uv run pytest tests/store tests/inbox -q`. `test_inbox_apply.py` and every other existing test pass with no edits (replay and rejection cases included).
+  - [x] Success: all pass; no existing test was modified.
 
 **Commit**: `refactor: extract the inbox submission insert into a shared writer`
 
