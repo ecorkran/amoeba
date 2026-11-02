@@ -91,25 +91,25 @@ revision_number: 2
 
 ## 3. Passages: types and cutting
 
-- [ ] **3.1 Types** (`runner/answering/passages.py`, new)
-  - [ ] Define per LLD API Contracts and D9: `PassageKind` (`rule`, `plan`, `pm_answer`), frozen `Passage`, frozen `PassageSet` with the `ids` property, `SourceFile` (path, kind, date, text), `PmAnswer` (record id, question, answer, date, node id, slice label), `SourcesProblemKind` (`sources_too_large`, `sources_missing`, `sources_unreadable`), frozen `SourcesProblem(kind, detail)`, `CitationKind` (`uncited`, `unknown_ids`) and frozen `CitationProblem(kind, ids)`.
-  - [ ] The module does no I/O: import nothing from `pathlib`, `os`, `subprocess`. Use `PurePosixPath` only if pure matching needs it (check `io_use` allows it; it flags `pathlib` imports, so prefer plain string handling).
-  - [ ] Success: imports; typecheck passes.
+- [x] **3.1 Types** (`runner/answering/passages.py`, new)
+  - [x] Define per LLD API Contracts and D9: `PassageKind` (`rule`, `plan`, `pm_answer`), frozen `Passage`, frozen `PassageSet` with the `ids` property, `SourceFile` (path, kind, date, text), `PmAnswer` (record id, question, answer, date, node id, slice label), `SourcesProblemKind` (`sources_too_large`, `sources_missing`, `sources_unreadable`), frozen `SourcesProblem(kind, detail)`, `CitationKind` (`uncited`, `unknown_ids`) and frozen `CitationProblem(kind, ids)`.
+  - [x] The module does no I/O: import nothing from `pathlib`, `os`, `subprocess`. Use `PurePosixPath` only if pure matching needs it (check `io_use` allows it; it flags `pathlib` imports, so prefer plain string handling).
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **3.2 `cut_passages`** (`runner/answering/passages.py`)
-  - [ ] `cut_passages(text) -> tuple[str, ...]` per LLD D4: new passage at every ATX heading of level 1–3 (up to three leading spaces, `#`..`###`, then a space or end of line), outside ``` and `~~~` fenced blocks; deeper headings stay inside; a non-blank preamble (front matter included) is its own passage; a blank preamble is dropped; no headings gives one passage; empty text gives none. Text is never rewritten.
-  - [ ] Success: `"".join(cut_passages(text)) == text` for any text without a blank preamble.
+- [x] **3.2 `cut_passages`** (`runner/answering/passages.py`)
+  - [x] `cut_passages(text) -> tuple[str, ...]` per LLD D4: new passage at every ATX heading of level 1–3 (up to three leading spaces, `#`..`###`, then a space or end of line), outside ``` and `~~~` fenced blocks; deeper headings stay inside; a non-blank preamble (front matter included) is its own passage; a blank preamble is dropped; no headings gives one passage; empty text gives none. Text is never rewritten.
+  - [x] Success: `"".join(cut_passages(text)) == text` for any text without a blank preamble.
 
-- [ ] **3.3 Fixture files** (`tests/runner/answering/fixtures/sources/`)
-  - [ ] Copy, at their real relative paths and frozen: `CLAUDE.md`, two rules files, `python.md` and `git.md`, from `project-documents/ai-project-guide/project-guides/rules/` (both exist there), the project concept and initiative plan from `project-documents/user/project-guides/` (`000-concept.*`, `001-initiative-plan.*`), `120-arch.*` and `120-slices.*` from `project-documents/user/architecture/`, `132-slice.*` from `user/slices/` and `132-tasks.*` from `user/tasks/`. Slice 132 is used because all its plan files exist (LLD D11).
-  - [ ] Check `ls` for each; if a named file does not exist under that exact name, stop and report which, rather than substituting a different slice.
-  - [ ] Success: all files present; none edited after copying.
+- [x] **3.3 Fixture files** (`tests/runner/answering/fixtures/sources/`)
+  - [x] Copy, at their real relative paths and frozen: `CLAUDE.md`, two rules files, `python.md` and `git.md`, from `project-documents/ai-project-guide/project-guides/rules/` (both exist there), the project concept and initiative plan from `project-documents/user/project-guides/` (`000-concept.*`, `001-initiative-plan.*`), `120-arch.*` and `120-slices.*` from `project-documents/user/architecture/`, `132-slice.*` from `user/slices/` and `132-tasks.*` from `user/tasks/`. Slice 132 is used because all its plan files exist (LLD D11).
+  - [x] Check `ls` for each; if a named file does not exist under that exact name, stop and report which, rather than substituting a different slice.
+  - [x] Success: all files present; none edited after copying.
 
-- [ ] **3.4 Tests for cutting** (`tests/runner/answering/test_passages.py`, new)
-  - [ ] Cases: a heading inside a code fence (both fence styles) does not cut; a level-4 heading does not cut; front matter is its own passage; a file with no headings is one passage; an empty file gives none; a blank preamble is dropped; a heading with three leading spaces cuts and four does not; `#` with no following space (`#tag`) does not cut.
-  - [ ] Property test: for every file under `tests/runner/answering/fixtures/sources/`, joining its passages gives back the file exactly, and each passage after the first starts with a heading line.
-  - [ ] Purity: add `passages` to the module list checked by `tests/runner/purity.py` (follow how existing pure modules such as `gate.py` are checked, in `tests/runner/test_answer_gate.py`).
-  - [ ] Success: `uv run pytest tests/runner/answering/test_passages.py -q` passes.
+- [x] **3.4 Tests for cutting** (`tests/runner/answering/test_passages.py`, new)
+  - [x] Cases: a heading inside a code fence (both fence styles) does not cut; a level-4 heading does not cut; front matter is its own passage; a file with no headings is one passage; an empty file gives none; a blank preamble is dropped; a heading with three leading spaces cuts and four does not; `#` with no following space (`#tag`) does not cut.
+  - [x] Property test: for every file under `tests/runner/answering/fixtures/sources/`, joining its passages gives back the file exactly, and each passage after the first starts with a heading line.
+  - [x] Purity: add `passages` to the module list checked by `tests/runner/purity.py` (follow how existing pure modules such as `gate.py` are checked, in `tests/runner/test_answer_gate.py`).
+  - [x] Success: `uv run pytest tests/runner/answering/test_passages.py -q` passes.
 
 **Commit**: `feat: add passage types and heading-based cutting with frozen source fixtures`
 
