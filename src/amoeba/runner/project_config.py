@@ -24,11 +24,21 @@ from pydantic import (
     StrictStr,
     StringConstraints,
     ValidationError,
+    field_validator,
 )
 from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
 from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
+
+
+class AnswererSettings(BaseModel):
+    """The ``answerer`` section. Its presence turns the answerer on (slice 141, D6).
+
+    It has no keys yet: 142 to 144 add them where they are first read.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class ProjectSettings(BaseModel):
@@ -43,6 +53,16 @@ class ProjectSettings(BaseModel):
     )
     #: Extra ``-p key=value`` pipeline parameters, passed through verbatim.
     params: dict[str, StrictStr] = Field(default_factory=dict[str, StrictStr])
+    #: Present (``answerer: {}``) turns the question answerer on; ``None`` is off.
+    answerer: AnswererSettings | None = None
+
+    @field_validator("answerer", mode="before")
+    @classmethod
+    def _answerer_is_a_mapping(cls, value: object) -> object:
+        """A written-but-empty section must not quietly turn the answerer off."""
+        if value is None:
+            raise ValueError("answerer must be a mapping; write `{}`")
+        return value
 
 
 class ProjectConfigFile(BaseModel):

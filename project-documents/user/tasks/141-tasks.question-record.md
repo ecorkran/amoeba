@@ -176,15 +176,15 @@ revision_number: 2
 
 ## 6. Project config
 
-- [ ] **6.1 `AnswererSettings` and `ProjectSettings.answerer`** (`runner/project_config.py`)
-  - [ ] Add frozen pydantic `AnswererSettings` with `extra="forbid"` and no fields, and `ProjectSettings.answerer: AnswererSettings | None`, per LLD D6.
-  - [ ] `answerer: {}` loads as configured. A missing key leaves `None`. An explicit null raises the load error "answerer must be a mapping; write `{}`", naming `projects.<id>.answerer`.
-  - [ ] Success: a project not named in the file has `answerer` of `None`.
+- [x] **6.1 `AnswererSettings` and `ProjectSettings.answerer`** (`runner/project_config.py`)
+  - [x] Add frozen pydantic `AnswererSettings` with `extra="forbid"` and no fields, and `ProjectSettings.answerer: AnswererSettings | None`, per LLD D6.
+  - [x] `answerer: {}` loads as configured. A missing key leaves `None`. An explicit null raises the load error "answerer must be a mapping; write `{}`", naming `projects.<id>.answerer`.
+  - [x] Success: a project not named in the file has `answerer` of `None`.
 
-- [ ] **6.2 Tests for the section** (`tests/runner/test_project_config.py`)
-  - [ ] `answerer: {}` configured; absent key `None`; null value fails and the message names the project path; an unknown key inside `answerer` fails (`extra="forbid"`).
-  - [ ] Parse a fixture in the real `projects.yaml` layout (per CLAUDE.md parsing rule), not only dict literals.
-  - [ ] Success: tests pass.
+- [x] **6.2 Tests for the section** (`tests/runner/test_project_config.py`)
+  - [x] `answerer: {}` configured; absent key `None`; null value fails and the message names the project path; an unknown key inside `answerer` fails (`extra="forbid"`).
+  - [x] Parse a fixture in the real `projects.yaml` layout (per CLAUDE.md parsing rule), not only dict literals.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: add the optional answerer project config section`
 
