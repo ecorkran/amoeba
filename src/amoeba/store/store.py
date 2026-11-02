@@ -21,6 +21,7 @@ from types import TracebackType
 from typing import Self
 
 from amoeba.store import paths, sql
+from amoeba.store.answer_submission import AnswerSubmissionOperations
 from amoeba.store.blocking import BlockingOperations
 from amoeba.store.calibration import CalibrationOperations
 from amoeba.store.cf_snapshots import CFOperations
@@ -65,6 +66,7 @@ class Store(
     DesiredStateOperations,
     ProjectEscalationOperations,
     RoutingDecisionOperations,
+    AnswerSubmissionOperations,
     QuestionOperations,
     InboxOperations,
     VerdictOperations,

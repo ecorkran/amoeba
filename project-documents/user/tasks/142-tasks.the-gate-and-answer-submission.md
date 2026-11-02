@@ -147,47 +147,47 @@ revision_number: 2
 
 ## 5. `submit_answer`
 
-- [ ] **5.1 SQL for the new reads and writes** (`store/sql_questions.py`)
-  - [ ] Add a count statement: records with the same `project_id` and `run_id`, `state = answered`, `answered_by = answerer`, excluding a given record id (LLD D3).
-  - [ ] Reuse `UPDATE_QUESTION_ANSWERED` for the answerer's `answered` write if its columns already cover state, answered_by, answer and updated_at; otherwise add `UPDATE_QUESTION_ANSWERED_BY_ANSWERER`. The declined update already carries `reserved_term` (Task 3.2).
-  - [ ] Add a statement to read whether a block is resolved (reuse an existing `sql` constant if one already selects a blocked state by id).
-  - [ ] Success: all SQL and column names live in `sql_questions.py` or `sql_inbox.py`; typecheck passes.
+- [x] **5.1 SQL for the new reads and writes** (`store/sql_questions.py`)
+  - [x] Add a count statement: records with the same `project_id` and `run_id`, `state = answered`, `answered_by = answerer`, excluding a given record id (LLD D3).
+  - [x] Reuse `UPDATE_QUESTION_ANSWERED` for the answerer's `answered` write if its columns already cover state, answered_by, answer and updated_at; otherwise add `UPDATE_QUESTION_ANSWERED_BY_ANSWERER`. The declined update already carries `reserved_term` (Task 3.2).
+  - [x] Add a statement to read whether a block is resolved (reuse an existing `sql` constant if one already selects a blocked state by id).
+  - [x] Success: all SQL and column names live in `sql_questions.py` or `sql_inbox.py`; typecheck passes.
 
-- [ ] **5.2 `submit_answer`: validation, early outcomes and decline** (`store/answer_submission.py`, new; mixin `AnswerSubmissionOperations` on `QuestionOperations` and `SubmissionWriter`; not yet added to `Store`)
-  - [ ] Signature `submit_answer(question_id, *, answer, instructions, detail, gate) -> AnswerSubmission`. No `decision` or submitter parameter.
-  - [ ] Validate before the transaction: blank `answer`, `instructions` or `detail` raise `ValueError`; unknown id raises `QuestionNotFoundError` (add it next to the other store errors if absent; keep 141's `InvalidTransitionError` for `decline_question` unchanged); a record with no question text raises `ValueError`.
-  - [ ] Under one `BEGIN IMMEDIATE`, in this order: read the record; state not `pending`/`answering` → `settled`; block already resolved → `block_resolved`; count prior answers (record excluded); call `gate(record.question, prior)` once.
-  - [ ] Refusal: `require_transition` to `declined`, then execute `UPDATE_QUESTION_DECLINED` (extended in Task 3.2) directly with the refusal's reason and `reserved_term` inside this transaction. Do not call `decline_question`; it opens its own transaction. Return `declined`.
-  - [ ] Do not catch exceptions from `gate`; the `with self._connection` block rolls back and they propagate (LLD D4).
-  - [ ] Success: imports; typecheck passes.
+- [x] **5.2 `submit_answer`: validation, early outcomes and decline** (`store/answer_submission.py`, new; mixin `AnswerSubmissionOperations` on `QuestionOperations` and `SubmissionWriter`; not yet added to `Store`)
+  - [x] Signature `submit_answer(question_id, *, answer, instructions, detail, gate) -> AnswerSubmission`. No `decision` or submitter parameter.
+  - [x] Validate before the transaction: blank `answer`, `instructions` or `detail` raise `ValueError`; unknown id raises `QuestionNotFoundError` (add it next to the other store errors if absent; keep 141's `InvalidTransitionError` for `decline_question` unchanged); a record with no question text raises `ValueError`.
+  - [x] Under one `BEGIN IMMEDIATE`, in this order: read the record; state not `pending`/`answering` → `settled`; block already resolved → `block_resolved`; count prior answers (record excluded); call `gate(record.question, prior)` once.
+  - [x] Refusal: `require_transition` to `declined`, then execute `UPDATE_QUESTION_DECLINED` (extended in Task 3.2) directly with the refusal's reason and `reserved_term` inside this transaction. Do not call `decline_question`; it opens its own transaction. Return `declined`.
+  - [x] Do not catch exceptions from `gate`; the `with self._connection` block rolls back and they propagate (LLD D4).
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **5.3 `submit_answer`: the submitted path and `Store` wiring** (`store/answer_submission.py`, `store/store.py`)
-  - [ ] Pass (gate returned `None`): `_write_resolution` with `ANSWER_DECISION`, `instructions`, `detail`, `resolved_by = AnsweredBy.ANSWERER.value`, `awaits_runner=True`; `_insert_submission` with kind `resolution`, outcome `applied`, new id, `submitted_by = AnsweredBy.ANSWERER.value` and the same payload keys a PM resolution carries; `require_transition` to `answered`, write `answered_by = answerer` and `answer`; return `submitted`. If `_write_resolution` returns `False`, treat as `block_resolved` and write nothing (roll back).
-  - [ ] Add `AnswerSubmissionOperations` to `Store`'s bases in `store/store.py`.
-  - [ ] Return the record as it stands after the transaction.
-  - [ ] Success: imports; typecheck passes; file near 300 lines.
+- [x] **5.3 `submit_answer`: the submitted path and `Store` wiring** (`store/answer_submission.py`, `store/store.py`)
+  - [x] Pass (gate returned `None`): `_write_resolution` with `ANSWER_DECISION`, `instructions`, `detail`, `resolved_by = AnsweredBy.ANSWERER.value`, `awaits_runner=True`; `_insert_submission` with kind `resolution`, outcome `applied`, new id, `submitted_by = AnsweredBy.ANSWERER.value` and the same payload keys a PM resolution carries; `require_transition` to `answered`, write `answered_by = answerer` and `answer`; return `submitted`. If `_write_resolution` returns `False`, treat as `block_resolved` and write nothing (roll back).
+  - [x] Add `AnswerSubmissionOperations` to `Store`'s bases in `store/store.py`.
+  - [x] Return the record as it stands after the transaction.
+  - [x] Success: imports; typecheck passes; file near 300 lines.
 
-- [ ] **5.4 Outcome tests** (`tests/store/test_answer_submission.py`)
-  - [ ] `submitted`: asserts together the slot (`ANSWER_DECISION`, instructions, `resolved_by = answerer`, awaits the Runner), one `applied` resolution submission row with `submitted_by = answerer` and the caller's `detail`, and the record `answered`, `answered_by = answerer`, `answer` set.
-  - [ ] `declined` for each reason (a fake gate returning each `GateRefusal`): record `declined` with reason, `reserved_term` set only for the term decline, slot still open, no submission row.
-  - [ ] `block_resolved`: PM resolution submitted first → nothing written, record unchanged.
-  - [ ] `settled`: records already `answered`, already `declined` with `node_already_blocked` (no linked block) and in a terminal state return `settled` and write nothing.
-  - [ ] Errors: unknown id, blank `answer`/`instructions`/`detail`, no question text; signature has no `decision` or submitter parameter (inspect the signature).
-  - [ ] A test asserts `ANSWER_DECISION == ResolutionDecision.RESUME.value`.
-  - [ ] Success: `uv run pytest tests/store/test_answer_submission.py -v` passes.
+- [x] **5.4 Outcome tests** (`tests/store/test_answer_submission.py`)
+  - [x] `submitted`: asserts together the slot (`ANSWER_DECISION`, instructions, `resolved_by = answerer`, awaits the Runner), one `applied` resolution submission row with `submitted_by = answerer` and the caller's `detail`, and the record `answered`, `answered_by = answerer`, `answer` set.
+  - [x] `declined` for each reason (a fake gate returning each `GateRefusal`): record `declined` with reason, `reserved_term` set only for the term decline, slot still open, no submission row.
+  - [x] `block_resolved`: PM resolution submitted first → nothing written, record unchanged.
+  - [x] `settled`: records already `answered`, already `declined` with `node_already_blocked` (no linked block) and in a terminal state return `settled` and write nothing.
+  - [x] Errors: unknown id, blank `answer`/`instructions`/`detail`, no question text; signature has no `decision` or submitter parameter (inspect the signature).
+  - [x] A test asserts `ANSWER_DECISION == ResolutionDecision.RESUME.value`.
+  - [x] Success: `uv run pytest tests/store/test_answer_submission.py -v` passes.
 
-- [ ] **5.5 Race, count and Runner-rejection tests** (`tests/store/test_answer_submission.py`, names containing `race`, `count`, `rejected`)
-  - [ ] PM first: after `block_resolved`, run the Runner's acknowledgment of the PM resume; the record is `answered` with `answered_by = pm` and the PM's instructions as `answer`.
-  - [ ] Answerer first: `submitted`, then a PM resolution via `apply_submission` is rejected as already resolved; the record keeps `answered_by = answerer`.
-  - [ ] Count: two records on one run submitted one after the other give prior counts 0 then 1 (capture via a recording gate); a replay of the first returns `settled` and the count stays 2; a PM-answered record, a declined record and a pending record do not count.
-  - [ ] Limit scenario (LLD Success Criteria): with `answer_limit: 2` bound through `evaluate_gate` and two answerer-answered records on a run, a third returns `declined` with `answer_limit_reached`, no slot is filled, and the node's existing `HUMAN` block stays open.
-  - [ ] Runner rejects the answerer's resolution: drive `acknowledge_resolution` to reject it; the record stays `answered` (answerer), still counts toward the limit, the node's new `HUMAN` block carries the rejection code, and a PM resume of that block is not recorded as precedent (LLD D6).
-  - [ ] Success: `uv run pytest tests/store/test_answer_submission.py -k "race or count or rejected" -v` passes.
+- [x] **5.5 Race, count and Runner-rejection tests** (`tests/store/test_answer_submission.py`, names containing `race`, `count`, `rejected`)
+  - [x] PM first: after `block_resolved`, run the Runner's acknowledgment of the PM resume; the record is `answered` with `answered_by = pm` and the PM's instructions as `answer`.
+  - [x] Answerer first: `submitted`, then a PM resolution via `apply_submission` is rejected as already resolved; the record keeps `answered_by = answerer`.
+  - [x] Count: two records on one run submitted one after the other give prior counts 0 then 1 (capture via a recording gate); a replay of the first returns `settled` and the count stays 2; a PM-answered record, a declined record and a pending record do not count.
+  - [x] Limit scenario (LLD Success Criteria): with `answer_limit: 2` bound through `evaluate_gate` and two answerer-answered records on a run, a third returns `declined` with `answer_limit_reached`, no slot is filled, and the node's existing `HUMAN` block stays open.
+  - [x] Runner rejects the answerer's resolution: drive `acknowledge_resolution` to reject it; the record stays `answered` (answerer), still counts toward the limit, the node's new `HUMAN` block carries the rejection code, and a PM resume of that block is not recorded as precedent (LLD D6).
+  - [x] Success: `uv run pytest tests/store/test_answer_submission.py -k "race or count or rejected" -v` passes.
 
-- [ ] **5.6 Crash-safety tests** (`tests/store/test_answer_submission.py`, names containing `crash`)
-  - [ ] With `fail_on_statement`, fail in turn the slot write, the submission insert and the record update; each run leaves the slot open, no submission row and the record unchanged.
-  - [ ] A gate that raises leaves the same state and its exception reaches the caller.
-  - [ ] Success: `uv run pytest tests/store/test_answer_submission.py -k crash -v` passes.
+- [x] **5.6 Crash-safety tests** (`tests/store/test_answer_submission.py`, names containing `crash`)
+  - [x] With `fail_on_statement`, fail in turn the slot write, the submission insert and the record update; each run leaves the slot open, no submission row and the record unchanged.
+  - [x] A gate that raises leaves the same state and its exception reaches the caller.
+  - [x] Success: `uv run pytest tests/store/test_answer_submission.py -k crash -v` passes.
 
 **Commit**: `feat: add submit_answer, the one gated answer submission`
 

@@ -83,6 +83,16 @@ WHERE {COL_QUESTION_PROJECT_ID} = ? AND {COL_QUESTION_STATE} = ?
 ORDER BY {COL_QUESTION_CREATED_AT}, {COL_QUESTION_ID}
 """
 
+#: Parameters: project, run, state, answered_by, excluded record id. The answers
+#: the answerer already gave this run, not counting the record being submitted
+#: (slice 142, D3).
+COUNT_ANSWERER_ANSWERS_IN_RUN: Final = f"""
+SELECT COUNT(*) FROM {TABLE_QUESTION_RECORDS}
+WHERE {COL_QUESTION_PROJECT_ID} = ? AND {COL_QUESTION_RUN_ID} = ?
+  AND {COL_QUESTION_STATE} = ? AND {COL_QUESTION_ANSWERED_BY} = ?
+  AND {COL_QUESTION_ID} != ?
+"""
+
 #: Parameters: state, decline reason, reserved term (null unless the gate
 #: declined on a reserved term), updated_at, id.
 UPDATE_QUESTION_DECLINED: Final = f"""

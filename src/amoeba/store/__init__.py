@@ -101,6 +101,7 @@ from amoeba.store.models import (
     NodeKind,
     NodeNotFoundError,
     NodeStatus,
+    QuestionNotFoundError,
     Resolution,
     ResolutionOutcome,
     SQReference,
@@ -257,5 +258,6 @@ __all__ = [
     "StorePermissionError",
     "StoreSchemaError",
     "UnknownVocabularyValueError",
+    "QuestionNotFoundError",
     "VerdictNotFoundError",
 ]

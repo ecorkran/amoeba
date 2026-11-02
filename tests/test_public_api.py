@@ -131,6 +131,7 @@ EXPECTED_EXPORTS = {
     "StorePermissionError",
     "StoreSchemaError",
     "UnknownVocabularyValueError",
+    "QuestionNotFoundError",
     "VerdictNotFoundError",
 }
 
