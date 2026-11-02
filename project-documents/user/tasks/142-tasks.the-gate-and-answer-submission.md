@@ -6,13 +6,14 @@ lld: user/slices/142-slice.the-gate-and-answer-submission.md
 dependencies:
 - 140
 - 141
-projectState: Slices 120–132 and 141 are merged. 140 (answering pipeline) is built,
-  with only its probe needed here. The store is at schema version 13. question_records,
-  QUESTION_TRANSITIONS, DeclineReason, decline_question and AnswererSettings (no keys
-  yet) exist. Nothing of slice 142 is built.
+projectState: Slices 120–132 and 141 are merged. 140 (answering pipeline) is built.
+  Slice 142 is built on its branch and is not merged. The store is at schema version 14;
+  submit_answer, the answer gate, the two required answerer keys (answer_limit and
+  reserved_terms), the start-up probe and the reserved_term listing column are in place.
+  Nothing calls submit_answer outside tests; slice 144 is the first caller.
 dateCreated: 20261102
 dateUpdated: 20261102
-status: in_progress
+status: complete
 turns: 33
 promptTokens: 1199949
 cachedTokens: 1127108
@@ -233,12 +234,12 @@ revision_number: 2
 
 ## 8. Final validation
 
-- [ ] **8.1 Full validation**
-  - [ ] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each. All pass.
-  - [ ] LLD Verification Walkthrough steps 1–4 (the new test modules) pass as written.
-  - [ ] Walkthrough step 5 with a throwaway `AMOEBA_STORE_DIR` and scratch `projects.yaml`: `answerer: {}` fails naming both keys; `answer_limit: 0` fails; `answer_limit: 2` runs the answering probe or fails `STARTUP_FAILED` naming `sq run … --validate`; with the section removed the probe does not run.
-  - [ ] Walkthrough step 6: with the stub-driven scratch slice from 141's walkthrough, `amoeba inspect questions --project scratch` still shows `declined` with `no_answer_on_file`.
-  - [ ] Confirm no source file added or changed exceeds about 300 lines.
-  - [ ] Success: all checks pass; the branch holds the committed work and is not merged.
+- [x] **8.1 Full validation**
+  - [x] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each. All pass.
+  - [x] LLD Verification Walkthrough steps 1–4 (the new test modules) pass as written.
+  - [x] Walkthrough step 5 with a throwaway `AMOEBA_STORE_DIR` and scratch `projects.yaml`: `answerer: {}` fails naming both keys; `answer_limit: 0` fails; `answer_limit: 2` runs the answering probe or fails `STARTUP_FAILED` naming `sq run … --validate`; with the section removed the probe does not run.
+  - [x] Walkthrough step 6: with the stub-driven scratch slice from 141's walkthrough, `amoeba inspect questions --project scratch` still shows `declined` with `no_answer_on_file`.
+  - [x] Confirm no source file added or changed exceeds about 300 lines.
+  - [x] Success: all checks pass; the branch holds the committed work and is not merged.
 
 **Commit**: commit any changes verification required as `fix: {what was wrong}`; if verification changed nothing, there is no commit. If a walkthrough step fails, fix the cause, rerun Task 8.1 from the top, then commit.

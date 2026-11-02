@@ -9,8 +9,8 @@ dependencies:
 interfaces:
 - 144
 dateCreated: 20261101
-dateUpdated: 20261101
-status: not_started
+dateUpdated: 20261102
+status: complete
 turns: 24
 promptTokens: 1662516
 cachedTokens: 1562121
@@ -358,15 +358,38 @@ Nothing calls `submit_answer` outside tests in this slice, so steps 1–4 are te
 
    Expected: for each injected failure point, and for a gate that raises, neither the slot, the submission row nor the record change remains.
 
-5. **Configuration.** With a scratch `projects.yaml` whose project has `answerer: {}`:
+5. **Configuration.** Set `AMOEBA_STORE_DIR` to a throwaway directory. With a scratch `projects.yaml` whose project has `answerer: {}`:
 
    ```
    amoeba start --project-config ./projects.yaml
    ```
 
-   Expected: start fails, listing `projects.scratch.answerer.answer_limit` and `projects.scratch.answerer.reserved_terms` as missing. Add `answer_limit: 0` and `reserved_terms: []`. Expected: start fails on `answer_limit`. Set `answer_limit: 2`. Expected: start runs the answering probe and logs that it passed, or fails with `STARTUP_FAILED` naming `sq run … --validate` if the installed `sq` refuses the pipeline. Remove the `answerer` section. Expected: start does not run the answering probe.
+   Observed (exit 7, `STARTUP_FAILED`):
 
-6. **Nothing visible changed.** With `answer_limit: 2` and `reserved_terms: [merge to main]`, produce a question with the stub-driven scratch slice from 141's walkthrough. Expected: `amoeba inspect questions --project scratch` shows `declined` with `no_answer_on_file`, exactly as after 141. 142's operation has no caller yet.
+   ```
+   amoeba: project config <path> is invalid:
+     - projects.scratch.answerer.answer_limit: Field required (got {})
+     - projects.scratch.answerer.reserved_terms: Field required (got {})
+   ```
+
+   With `answer_limit: 0` and `reserved_terms: []`, the same command exits 7 with `projects.scratch.answerer.answer_limit: Input should be greater than or equal to 1 (got 0)`.
+
+   **Do not run `amoeba start` with a valid config here:** it starts the resident process and does not return. Build the Runner through the factory instead, with `answer_limit: 2` and then with the `answerer` section removed (`build.py` sets `project_config_path` and calls `runner_tenant(settings, supervisor_dir)` with INFO logging on):
+
+   ```
+   uv run python build.py with.yaml ./sup1      # answer_limit: 2, reserved_terms: [merge to main]
+   uv run python build.py without.yaml ./sup2   # no answerer section
+   ```
+
+   Observed with the installed `sq`: the first logs `sq probe passed: ...`, then `answering pipeline probe passed: `sq run --validate` exited 0`, then prints `BUILT`. The second logs only the `sq probe passed` line and prints `BUILT`: the answering probe does not run. If `sq` refuses the pipeline, the first prints `STARTUP_FAILED: answering pipeline probe failed: ...` instead.
+
+6. **Nothing visible changed.** `tests/runner/test_tick_answering.py` (which now configures `answer_limit: 3`) shows a tick still declines an asked question `no_answer_on_file`, as after 141; 142's operation has no caller yet. To see the listing, seed two declined records in a throwaway store (a `no_answer_on_file` decline and a `reserved_term` decline with term `merge to main`, through `tests/question_harness.py`) and run:
+
+   ```
+   amoeba inspect questions --project demo
+   ```
+
+   Observed: both rows `state declined`. The first has `outcome no_answer_on_file` and an empty `reserved_term`; the second has `outcome reserved_term` and `reserved_term merge to main`. `--json` carries `"reserved_term": ""` and `"reserved_term": "merge to main"`.
 
 ## Risk Assessment
 
