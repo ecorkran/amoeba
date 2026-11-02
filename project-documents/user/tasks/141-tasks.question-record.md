@@ -12,7 +12,7 @@ projectState: Slices 120–132 are merged, and 140 (answering pipeline) is built
   of slice 141 is built.
 dateCreated: 20261101
 dateUpdated: 20261102
-status: in_progress
+status: complete
 turns: 35
 promptTokens: 1315332
 cachedTokens: 1240107
@@ -260,10 +260,10 @@ revision_number: 2
 
 ## 10. Final verification
 
-- [ ] **10.1 Full validation**
-  - [ ] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each. All pass, apart from failures recorded in Task 1.1 as pre-existing.
-  - [ ] Check file sizes: no new or changed source file is far over 300 lines.
-  - [ ] Walk LLD Verification Walkthrough steps 5–7 (steps 1–4 are `pytest` runs the full suite above already covers) against a throwaway `AMOEBA_STORE_DIR` with a scratch project and the stub `sq` harness: the `blocked` and `questions` output, the `answerer: {}` and null-value config behaviour, and the PM resume with `amoeba feed` showing `question_recorded` and two `question_state_changed` lines.
-  - [ ] Success: all checks pass, and the walkthrough output matches the LLD's expected results.
+- [x] **10.1 Full validation**
+  - [x] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each. All pass, apart from failures recorded in Task 1.1 as pre-existing.
+  - [x] Check file sizes: no new or changed source file is far over 300 lines.
+  - [x] Walk LLD Verification Walkthrough steps 5–7 (steps 1–4 are `pytest` runs the full suite above already covers) against a throwaway `AMOEBA_STORE_DIR` with a scratch project and the stub `sq` harness: the `blocked` and `questions` output, the `answerer: {}` and null-value config behaviour, and the PM resume with `amoeba feed` showing `question_recorded` and two `question_state_changed` lines.
+  - [x] Success: all checks pass, and the walkthrough output matches the LLD's expected results.
 
 **Commit**: commit any changes verification required as `fix: {what was wrong}`; if verification changed nothing, there is no commit. If a walkthrough step fails, fix the cause, rerun Task 10.1 from the top, then commit.
