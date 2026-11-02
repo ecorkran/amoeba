@@ -161,9 +161,7 @@ def test_a_file_chosen_twice_appears_once_at_its_first_position(
     assert selection.files[3].kind is PassageKind.RULE
 
 
-def test_a_commit_added_after_the_first_call_is_not_mixed_in(
-    sources: SourcesRepo, tmp_path: Path
-) -> None:
+def test_a_commit_added_after_the_first_call_is_not_mixed_in(tmp_path: Path) -> None:
     repo = build_sources_repo(tmp_path / "repo")
     pinned = head_of(repo.path)
     calls: list[int] = []

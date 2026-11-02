@@ -91,6 +91,21 @@ def test_leading_spaces_and_a_missing_space_decide_whether_a_line_is_a_heading(
     assert (len(cut_passages(text)) == 2) is cuts
 
 
+def test_yaml_comments_inside_front_matter_are_not_headings() -> None:
+    text = "---\n# a comment\ndocType: x\n---\n\n# Title\nbody\n"
+
+    assert cut_passages(text) == (
+        "---\n# a comment\ndocType: x\n---\n\n",
+        "# Title\nbody\n",
+    )
+
+
+def test_a_leading_rule_line_without_a_closing_mark_is_not_front_matter() -> None:
+    text = "---\n# Title\nbody\n"
+
+    assert cut_passages(text) == ("---\n", "# Title\nbody\n")
+
+
 def test_a_bare_hash_line_is_a_heading() -> None:
     assert cut_passages("# Top\n#\nx\n") == ("# Top\n", "#\nx\n")
 

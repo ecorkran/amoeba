@@ -173,12 +173,20 @@ _DIRECTORY_SUFFIX: Final = "/"
 
 
 def _tree_entries(text: str) -> tuple[str, ...]:
-    """The entry lines of ``git show <commit>:<dir>`` output, without the header."""
+    """The entry lines of ``git show <commit>:<dir>`` output, without the header.
+
+    Only the first non-blank line can be the ``tree …`` header, so a file whose name
+    starts with ``tree `` is still listed.
+    """
     entries: list[str] = []
+    first = True
     for raw in text.splitlines():
         line = raw.strip()
-        if line and not line.startswith(_TREE_HEADER_PREFIX):
+        if not line:
+            continue
+        if not (first and line.startswith(_TREE_HEADER_PREFIX)):
             entries.append(line)
+        first = False
     return tuple(entries)
 
 

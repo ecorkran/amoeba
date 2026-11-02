@@ -31,9 +31,8 @@ from pydantic import (
 from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
+from amoeba.runner.answering.passages import GLOB_WILDCARD
 from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
-
-_GLOB = "*"
 
 
 def _checked_rules_path(entry: str) -> str:
@@ -47,7 +46,9 @@ def _checked_rules_path(entry: str) -> str:
         raise ValueError("must be relative to the repository, not absolute")
     if ".." in segments:
         raise ValueError("must not contain a `..` segment")
-    if any(_GLOB in segment for segment in segments[:-1]):
+    if not segments[-1]:
+        raise ValueError("must name a file, not a directory")
+    if any(GLOB_WILDCARD in segment for segment in segments[:-1]):
         raise ValueError("`*` is allowed in the last segment only")
     return entry
 

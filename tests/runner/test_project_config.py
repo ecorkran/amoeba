@@ -240,6 +240,7 @@ def _answerer_body(**changes: str | None) -> str:
         ({"rules_paths": "['a', '../up.md']"}, "answerer.rules_paths.1"),
         ({"rules_paths": "['a/../b.md']"}, "answerer.rules_paths.0"),
         ({"rules_paths": "['ok', 'a/*/b.md']"}, "answerer.rules_paths.1"),
+        ({"rules_paths": "['rules/']"}, "answerer.rules_paths.0"),
         ({"rules_paths": "['*/b.md']"}, "answerer.rules_paths.0"),
         ({"rules_paths": "[7]"}, "answerer.rules_paths.0"),
         ({"rules_paths": "rules.md"}, "answerer.rules_paths"),

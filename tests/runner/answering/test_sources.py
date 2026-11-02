@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from cf_harness import observed
@@ -89,14 +90,16 @@ def _snapshot(store: Store, project_path: Path) -> CFSnapshot:
     return store.record_cf_snapshot(observed(PROJECT, CF_ID, state=state, changed=[]))
 
 
-def _run(target: str = "main", cf_exit: int = 0) -> Any:
+def _run(
+    target: str = "main", cf_exit: int = 0
+) -> Callable[..., subprocess.CompletedProcess[str]]:
     """``cf`` answers with ``target`` (or fails); ``git`` runs for real."""
 
     def run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if argv[0] == "cf":
             body = f'{{"value": "{target}"}}' if cf_exit == 0 else "cf broke"
             return subprocess.CompletedProcess(argv, cf_exit, body, "")
-        return subprocess.run(argv, **kwargs)  # type: ignore[no-any-return]
+        return cast("subprocess.CompletedProcess[str]", subprocess.run(argv, **kwargs))
 
     return run
 

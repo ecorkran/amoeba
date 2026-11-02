@@ -25,6 +25,7 @@ from amoeba.runner.answering.passages import (
     match_rules_entry,
     parse_git_date,
     select_plan_files,
+    unreadable,
 )
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
@@ -99,16 +100,12 @@ class _Git:
         answer = git_read(args, self.repo, self.budget, self.run, self.timeout_seconds)
         shown = "git " + " ".join(args)
         if isinstance(answer, GitReadFailure):
-            return _unreadable(answer.detail)
+            return unreadable(answer.detail)
         if answer is not None and answer.exit_code != 0:
-            return _unreadable(
+            return unreadable(
                 f"`{shown}` exited {answer.exit_code}: {answer.stderr_head}"
             )
         return answer
-
-
-def _unreadable(detail: str) -> SourcesProblem:
-    return SourcesProblem(SourcesProblemKind.UNREADABLE, detail)
 
 
 def _parent_and_name(entry: str) -> tuple[str, str]:
@@ -172,7 +169,7 @@ def locate_sources(
         return resolved
     commit = resolved.stdout.strip()
     if not commit:
-        return _unreadable(f"target {target!r} resolved to no commit")
+        return unreadable(f"target {target!r} resolved to no commit")
     listings = _Listings(git, commit)
     rules = _select_rules(listings, rules_paths)
     if not isinstance(rules, tuple):
@@ -278,13 +275,13 @@ def _read_file(
         return _in_context(dated, chosen.path)
     date = parse_git_date(dated.stdout)
     if date is None:
-        return _unreadable(f"no usable commit date for {chosen.path}: {dated.stdout!r}")
+        return unreadable(f"no usable commit date for {chosen.path}: {dated.stdout!r}")
     try:
         shown = git.read(show_object_args(commit, chosen.path))
     except UnicodeDecodeError:
         # A binary file: run_cf decodes git's output as text. Reported by path, not
         # raised, because the repository (not a bug here) caused it.
-        return _unreadable(f"{chosen.path} is not UTF-8 text")
+        return unreadable(f"{chosen.path} is not UTF-8 text")
     if not isinstance(shown, GitReadResult):
         return _in_context(shown, chosen.path)
     return SourceFile(chosen.path, chosen.kind, date, shown.stdout)

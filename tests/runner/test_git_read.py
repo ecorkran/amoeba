@@ -279,6 +279,12 @@ def test_the_root_listing_names_root_level_files(tmp_path: Path) -> None:
     assert parse_tree_listing(listing) == ("README.md",)
 
 
+def test_a_file_named_like_the_tree_header_is_still_listed() -> None:
+    text = "tree abc:docs\n\ntree notes.md\nother.md\n"
+
+    assert parse_tree_listing(text) == ("tree notes.md", "other.md")
+
+
 def test_the_listing_parser_tolerates_crlf_and_trailing_blanks() -> None:
     text = "tree abc:docs\r\n\r\na.md  \r\nsub/\r\nb.md\r\n\r\n"
 

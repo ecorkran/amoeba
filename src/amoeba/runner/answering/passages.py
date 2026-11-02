@@ -12,7 +12,11 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Final
 
+#: The only wildcard in a rules entry or a plan file pattern.
+GLOB_WILDCARD: Final = "*"
+_FRONT_MATTER_MARK: Final = "---"
 #: ATX heading of level 1-3: up to three leading spaces, 1-3 ``#``, then a blank or EOL.
 _CUT_HEADING = re.compile(r"^ {0,3}#{1,3}(?:[ \t]|$)")
 _FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
@@ -97,6 +101,11 @@ class SourcesProblem:
     detail: str
 
 
+def unreadable(detail: str) -> SourcesProblem:
+    """A ``sources_unreadable`` problem, the one every read failure becomes."""
+    return SourcesProblem(SourcesProblemKind.UNREADABLE, detail)
+
+
 class CitationKind(StrEnum):
     UNCITED = "uncited"
     UNKNOWN_IDS = "unknown_ids"
@@ -120,9 +129,17 @@ def cut_passages(text: str) -> tuple[str, ...]:
     passages: list[str] = []
     current: list[str] = []
     fence: str | None = None
-    for line in _LINES.findall(text):
+    lines = _LINES.findall(text)
+    front_matter_end = _front_matter_end(lines)
+    for number, line in enumerate(lines):
         fence = _fence_after(line, fence)
-        if fence is None and _CUT_HEADING.match(line) and current:
+        in_front_matter = number <= front_matter_end
+        if (
+            not in_front_matter
+            and fence is None
+            and _CUT_HEADING.match(line)
+            and current
+        ):
             passages.append("".join(current))
             current = []
         current.append(line)
@@ -131,6 +148,20 @@ def cut_passages(text: str) -> tuple[str, ...]:
     if passages and not passages[0].strip():
         passages.pop(0)
     return tuple(passages)
+
+
+def _front_matter_end(lines: list[str]) -> int:
+    """The index of the line closing a leading ``---`` block, or ``-1`` for none.
+
+    Inside the block ``#`` lines are YAML comments, not headings. A file that opens
+    with ``---`` but never closes it has no front matter (it is a rule).
+    """
+    if not lines or lines[0].strip() != _FRONT_MATTER_MARK:
+        return -1
+    for number, line in enumerate(lines[1:], start=1):
+        if line.strip() == _FRONT_MATTER_MARK:
+            return number
+    return -1
 
 
 def _fence_after(line: str, fence: str | None) -> str | None:
@@ -164,7 +195,8 @@ class PlanRow:
 
 def glob_matches(pattern: str, names: Sequence[str]) -> tuple[str, ...]:
     """The ``names`` that match ``pattern``, sorted. ``*`` is the only wildcard."""
-    expression = ".*".join(re.escape(part) for part in pattern.split("*"))
+    parts = pattern.split(GLOB_WILDCARD)
+    expression = ".*".join(re.escape(part) for part in parts)
     return tuple(sorted(name for name in names if re.fullmatch(expression, name)))
 
 

@@ -15,8 +15,8 @@ from amoeba.runner.answering.passages import (
     PassageSet,
     PmAnswer,
     SourcesProblem,
-    SourcesProblemKind,
     assemble,
+    unreadable,
 )
 from amoeba.runner.answering.source_reads import (
     CommittedSources,
@@ -46,9 +46,14 @@ def slice_label(node: Node) -> str:
         ValueError: The node has no ``cf.index``. The Runner only launches runs on
             CF-linked slices, so this is a programming error.
     """
+    return f"{_cf_index(node)} {node.title}"
+
+
+def _cf_index(node: Node) -> int:
+    """The node's CF index; a node CF never indexed is a programming error."""
     if node.cf.index is None:
         raise ValueError(f"node {node.id} has no Context Forge index")
-    return f"{node.cf.index} {node.title}"
+    return node.cf.index
 
 
 def pm_precedent(store: Store, project_id: str) -> tuple[PmAnswer, ...]:
@@ -60,6 +65,7 @@ def pm_precedent(store: Store, project_id: str) -> tuple[PmAnswer, ...]:
         ValueError: A record's slice node is missing.
     """
     found: list[PmAnswer] = []
+    labels: dict[str, str] = {}  # one node read per slice, not per record
     for record in store.questions(project_id, state=QuestionState.ANSWERED):
         if record.answered_by is not AnsweredBy.PM:
             continue
@@ -67,9 +73,11 @@ def pm_precedent(store: Store, project_id: str) -> tuple[PmAnswer, ...]:
             continue
         if not (record.question and record.question.strip()):
             continue
-        node = store.get_node(record.node_id)
-        if node is None:
-            raise ValueError(f"question {record.id} names a missing node")
+        if record.node_id not in labels:
+            node = store.get_node(record.node_id)
+            if node is None:
+                raise ValueError(f"question {record.id} names a missing node")
+            labels[record.node_id] = slice_label(node)
         found.append(
             PmAnswer(
                 record_id=record.id,
@@ -77,7 +85,7 @@ def pm_precedent(store: Store, project_id: str) -> tuple[PmAnswer, ...]:
                 answer=record.answer,
                 date=record.updated_at,
                 node_id=record.node_id,
-                slice_label=slice_label(node),
+                slice_label=labels[record.node_id],
             )
         )
     return tuple(found)
@@ -85,18 +93,11 @@ def pm_precedent(store: Store, project_id: str) -> tuple[PmAnswer, ...]:
 
 def _slice_ref(store: Store, node: Node) -> SliceRef:
     """The slice's index and its initiative's, as CF indexes them (D1)."""
-    if node.cf.index is None:
-        raise ValueError(f"node {node.id} has no Context Forge index")
+    slice_index = _cf_index(node)
     parent = None if node.parent_id is None else store.get_node(node.parent_id)
     if parent is None or parent.kind is not NodeKind.INITIATIVE:
         raise ValueError(f"slice node {node.id} has no initiative parent")
-    if parent.cf.index is None:
-        raise ValueError(f"initiative node {parent.id} has no Context Forge index")
-    return SliceRef(slice_index=node.cf.index, initiative_index=parent.cf.index)
-
-
-def _unreadable(detail: str) -> SourcesProblem:
-    return SourcesProblem(SourcesProblemKind.UNREADABLE, detail)
+    return SliceRef(slice_index=slice_index, initiative_index=_cf_index(parent))
 
 
 def assemble_sources(
@@ -125,12 +126,12 @@ def assemble_sources(
     slice_ref = _slice_ref(store, node)
     checkout = resolve_checkout(snapshot, slice_ref.slice_index, is_dir=Path.is_dir)
     if isinstance(checkout, CheckoutUnresolved):
-        return _unreadable(checkout.reason)
+        return unreadable(checkout.reason)
     target = read_target(checkout.path, cf_project_id, budget, run, timeout_seconds)
     if target is None:
         return None
     if isinstance(target, ReadFailure):
-        return _unreadable(target.detail)
+        return unreadable(target.detail)
     committed = read_committed_sources(
         checkout.path,
         target,
