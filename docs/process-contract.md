@@ -651,6 +651,18 @@ this section is the contract.
   raises `FileNotFoundError` when it is absent. Two `dispatch` steps with no tools,
   `answer` then `check`, and two required params, `answer-model` and `check-model`. Every
   step, param and file name is defined once in `runner/answering/pipeline_file.py`.
+- **The passage set (slice 143).** `assemble_sources` builds the passages `passages.md`
+  carries: the project's `rules_paths` files and the slice's CF plan files, read with
+  `git show` at one commit of the target branch, cut at headings of levels 1 to 3, plus
+  the PM's recorded answers as precedent (an answerer's own answers never qualify).
+  Ids `P1` to `Pn` follow the rendered order. Rules and plan are never trimmed (over
+  `passages_max_chars` is `sources_too_large`); PM answers are kept same-slice first,
+  newest first, until one does not fit, and that one and every later one are dropped
+  and listed. `render_passages` writes the file in the format above and
+  `check_citations` is the one place "every cited id is in the set" is decided. A
+  problem is a `SourcesProblem` (`sources_too_large`, `sources_missing`,
+  `sources_unreadable`); only an exhausted tick budget returns `None`. Nothing calls
+  `assemble_sources` until slice 144.
 - **Launch.** From the scratch directory as working directory:
   `sq run <answering_pipeline_path()> <answer-model> --run-id <id> -p check-model=<alias>`.
   `sq` binds the positional target to the first `required` param, and `-p` does not
@@ -719,6 +731,30 @@ this section is the contract.
   `AMOEBA_LIVE_SDK_MODEL`, is read only by the SDK-alias refusal test and fails that
   test, naming it, when unset (an addition to D10's three).
 
+### Context Forge shapes
+
+*Slice 143.* Upstream layout knowledge the passage reads rely on. It is observed, not
+promised, and lives in one place, `runner/answering/source_reads.py`. Observed on CF
+0.19.24 on 20261102. The document paths are in no `cf` output (`archFile` is a bare file
+name, `designFile` is null until a design exists), so the plan files of a slice are
+found by listing CF's directories at the target commit and matching names. `{initiative}`
+is the `cf.index` of the slice node's parent initiative node, `{slice}` the slice's:
+
+| Plan file | Directory under `project-documents/user` | File name |
+| --- | --- | --- |
+| Concept | `project-guides` | `000-concept.*.md` |
+| Initiative plan | `project-guides` | `001-initiative-plan.*.md` |
+| Architecture | `architecture` | `{initiative}-arch.*.md` |
+| Slice plan | `architecture` | `{initiative}-slices.*.md` |
+| Slice design | `slices` | `{slice}-slice.*.md` |
+| Tasks | `tasks` | `{slice}-tasks.*.md` (split files all match) |
+
+Only the slice plan is required (`sources_missing` without it); every other row may
+match nothing, because there are no tasks before Phase 5 and no design before Phase 4.
+A directory absent from the `project-documents/user` listing matches nothing. A passage's
+date is the committer date of the last commit that changed its file, so a file edited on
+a slice branch keeps that commit's date after it merges.
+
 ### The project config
 
 *Slice 128, reshaped by slice 132 (D2).* `--project-config PATH` (setting
@@ -738,19 +774,32 @@ projects:
 
 - `answerer` (slice 141, keys from slice 142) is optional. Its presence turns the
   question answerer on; a missing key or an unnamed project leaves it off. When present
-  it needs both keys, with no defaults:
+  it needs all four keys, with no defaults:
   - `answer_limit`: an integer of at least 1, the most answers the answerer may give in
     one run. To turn the answerer off, remove the section; `0` is not an off switch.
   - `reserved_terms`: a list of strings, each stripped and non-blank. Any term found in
     a question or an answer (case-insensitive, any run of whitespace matching one
     space, no word boundaries) declines the answer and leaves the block for the PM.
     `reserved_terms: []` loads; a missing key fails.
+  - `rules_paths` (slice 143): a list of repo-relative paths to the project's rules
+    files, read from the target branch's committed content in the order written. Each
+    entry is stripped, non-blank, not absolute, and has no `..` segment. `*` is the only
+    glob character and only in the last segment; `?` and `[` are literal. Every entry
+    must match at least one file at the target commit, or assembly fails with
+    `sources_missing` naming the entry, so a typo is never silently dropped. A file
+    named twice appears once, at its first position. `rules_paths: []` loads; a missing
+    key fails.
+  - `passages_max_chars`: an integer of at least 1, the most characters of rendered
+    `passages.md` (headers included) an answering run is sent.
 
   Load fails, naming the key path (`projects.<id>.answerer.answer_limit`, for example),
-  for `answerer: {}`, a missing key, `answer_limit` of `0`, a negative, non-integer or
-  quoted value, a blank term or a non-string term, and any unknown key. An explicit
+  for `answerer: {}`, a missing key, `answer_limit` or `passages_max_chars` of `0`, a
+  negative, non-integer or quoted value, a blank term or a non-string term, a blank,
+  absolute or `..`-containing `rules_paths` entry (`...rules_paths.1`, for the second),
+  a `*` outside the last segment, and any unknown key. An explicit
   `answerer:` with a null value fails the load ("answerer must be a mapping with
-  answer_limit and reserved_terms", naming `projects.<id>.answerer`). Start-up runs
+  answer_limit, reserved_terms, rules_paths and passages_max_chars", naming
+  `projects.<id>.answerer`). Start-up runs
   the answering pipeline probe (`sq run <answering.yaml> --validate`) once when any
   project has an `answerer` section, and exits `STARTUP_FAILED` naming that command if
   it fails; with no section the probe does not run.
@@ -762,6 +811,10 @@ projects:
       answerer:
         answer_limit: 3
         reserved_terms: [push, merge to main, release, DROP, TRUNCATE, policy]
+        rules_paths:
+          - CLAUDE.md
+          - project-documents/ai-project-guide/project-guides/rules/*.md
+        passages_max_chars: 200000
   ```
 - Keys under `projects` are Amoeba project ids. `pipeline` is required for each named
   project; there is **no default pipeline**, because a default could merge code nobody
@@ -780,8 +833,10 @@ projects:
 
 *Slice 128, git half kept by slice 132 (D3).* The Runner works in a checkout the PM
 also uses, so it looks before it dispatches, and it never changes a branch. All git
-the Runner runs goes through one function, `git_read`, which allows `status` and
-`merge-base` only (stdin closed, prompts off, `--no-optional-locks`); nothing in
+the Runner runs goes through one function, `git_read`, which allows `status`,
+`merge-base`, `show` and `log` only (stdin closed, prompts off, `--no-optional-locks`).
+`show` and `log` read objects at a commit pinned by the first read, never the working
+tree or the index (slice 143); nothing in
 `amoeba.runner` merges, commits, checks out, resets, stashes, deletes a branch or
 pushes. A pipeline the PM configures may merge; Squadron's merge step merges only into
 the target CF names (`git.integration_branch`), so nothing merges to `main` while one

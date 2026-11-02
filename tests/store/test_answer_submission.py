@@ -373,7 +373,9 @@ def test_count_the_limit_declines_the_third_answer_and_keeps_the_block_open(
     gate = partial(
         evaluate_gate,
         answer=ANSWER,
-        settings=AnswererSettings(answer_limit=2, reserved_terms=()),
+        settings=AnswererSettings(
+            answer_limit=2, reserved_terms=(), rules_paths=(), passages_max_chars=1000
+        ),
     )
     for _ in range(2):
         seed_question(

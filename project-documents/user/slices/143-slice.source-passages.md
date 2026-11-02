@@ -8,8 +8,8 @@ dependencies:
 interfaces:
 - 144
 dateCreated: 20261101
-dateUpdated: 20261101
-status: not_started
+dateUpdated: 20261102
+status: complete
 turns: 30
 promptTokens: 3070203
 cachedTokens: 2927701
@@ -371,7 +371,7 @@ Process contract, "Squadron shapes" sibling section "Context Forge shapes": the 
 
 ### Verification Walkthrough
 
-Draft; refined after Phase 6. Nothing calls assembly outside tests in this slice, so every step is a test run. Every test module named here is new in this slice.
+Verified 20261102 on branch `143-slice.source-passages`. Nothing calls assembly outside tests in this slice, so every step is a test run from the repository root. Counts are those observed; a later slice that adds tests to these modules raises them.
 
 1. **Pure parts.**
 
@@ -379,7 +379,7 @@ Draft; refined after Phase 6. Nothing calls assembly outside tests in this slice
    uv run pytest tests/runner/answering/test_passages.py -v
    ```
 
-   Expected: cutting cases for headings inside code fences, deeper headings, front matter and a file with no headings, plus the join-gives-back-the-file property over every fixture file. Assembly cases for the ordering, the size limit (rules and plan over the limit, PM answers trimmed in order, the first-misfit rule), id numbering after trimming, the rendered-format comparison and every citation case. All pass.
+   Expected: 59 passed. Cutting (headings inside both fence styles, level 4, front matter, no headings, empty file, blank preamble, three versus four leading spaces, `#tag`, CRLF), the join-gives-back-the-file property over each of the nine frozen fixture files, plan and rules selection over hand-written listings, dates, assembly order and gap-free ids, the size limit and first-misfit rule, rendering against `tests/runner/answering/fixtures/expected_passages.md`, every citation case, and the purity check.
 
 2. **Git reads against the fixture repository.**
 
@@ -387,7 +387,7 @@ Draft; refined after Phase 6. Nothing calls assembly outside tests in this slice
    uv run pytest tests/runner/answering/test_source_reads.py -v
    ```
 
-   Expected: the committed-only case, the date case, the missing slice plan, the unmatched rules entry, a failing `show` on a listed file, the non-UTF-8 file, the target that does not resolve, the budget refusal at every call, the exact call count for the slice-132 fixture, and the early stop on an oversized set. All pass.
+   Expected: 45 passed. The nine files in offer order, a file chosen twice kept once, the pinned commit, committed-only reads, controlled dates, a missing slice plan, an unmatched rules entry, a failing `show`, a non-UTF-8 file, an unreadable date (non-zero, empty, garbage), an unresolvable target, 26 calls for the slice-132 fixture (`2 + 6 + 2 * 9`), `None` when any one of the 26 calls is refused, and the early stop on an oversized set.
 
 3. **Precedent and configuration.**
 
@@ -395,7 +395,23 @@ Draft; refined after Phase 6. Nothing calls assembly outside tests in this slice
    uv run pytest tests/runner/answering/test_sources.py tests/runner/test_project_config.py -k "precedent or answerer" -v
    ```
 
-   Expected: an answerer-answered record, a PM answer with no text and a PM answer with no question are all excluded; a PM answer with text is a passage carrying its question, its slice label and its answer time. An end-to-end case runs `assemble_sources` against the fixture repository and a throwaway store, and compares the rendered `passages.md` to an expected file. The load errors in D10 each name their key path.
+   Expected: 28 passed, 34 deselected. A PM answer with no text or no question and an answerer-answered record are excluded; a PM answer with text carries its question, slice label and answer time. Each load error in D10 names its key path (`...rules_paths.1`).
+
+   ```
+   uv run pytest tests/runner/answering/test_sources.py -v
+   ```
+
+   Expected: 13 passed. The end-to-end case runs `assemble_sources` against a small repository and a throwaway store and equals `tests/runner/answering/fixtures/expected_end_to_end.md`; a second case runs it against the frozen fixture repository and checks order, ids, kinds, dates and the commit.
+
+4. **Everything.**
+
+   ```
+   uv run ruff check . && uv run pyright && uv run pytest -q
+   ```
+
+   Expected: ruff and pyright clean; 4123 passed.
+
+Caveats found while implementing: the hand-written end-to-end file uses a small purpose-built repository because the frozen fixtures total about 270 KB. `render_passages` writes `date` before `question` and `slice` for a PM passage, following 140's template.
 
 ## Implementation Notes
 

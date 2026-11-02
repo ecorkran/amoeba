@@ -226,6 +226,8 @@ projects:
     answerer:
       answer_limit: 2
       reserved_terms: []
+      rules_paths: []
+      passages_max_chars: 1000
 """
 
 

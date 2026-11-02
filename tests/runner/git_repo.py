@@ -6,30 +6,46 @@ or writes the developer's global config.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 IDENTITY = ("-c", "user.name=Amoeba Test", "-c", "user.email=test@example.invalid")
 
 
-def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    """Run ``git`` in ``repo``; a non-zero exit raises unless ``check`` is False."""
+def git(
+    repo: Path,
+    *args: str,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run ``git`` in ``repo``; a non-zero exit raises unless ``check`` is False.
+
+    ``env`` adds variables to the inherited environment for this call only.
+    """
     return subprocess.run(
         ["git", *IDENTITY, *args],
         cwd=repo,
         capture_output=True,
         text=True,
         check=check,
+        env={**os.environ, **env} if env else None,
     )
 
 
-def commit_file(repo: Path, name: str, text: str, message: str) -> str:
-    """Write ``name``, commit it, and return the new head."""
+def commit_file(
+    repo: Path, name: str, text: str, message: str, *, date: str | None = None
+) -> str:
+    """Write ``name``, commit it, and return the new head.
+
+    ``date`` (ISO 8601) fixes both the author and the committer date of the commit.
+    """
     path = repo / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
     git(repo, "add", "-f", "--", name)  # -f: a rig checkout ignores everything
-    git(repo, "commit", "-q", "-m", message)
+    dated = {"GIT_COMMITTER_DATE": date, "GIT_AUTHOR_DATE": date} if date else None
+    git(repo, "commit", "-q", "-m", message, env=dated)
     return head_of(repo)
 
 

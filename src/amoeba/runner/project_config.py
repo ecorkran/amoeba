@@ -18,6 +18,7 @@ from typing import Annotated
 
 import yaml
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -30,15 +31,43 @@ from pydantic import (
 from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
+from amoeba.runner.answering.passages import GLOB_WILDCARD
 from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
+
+
+def _checked_rules_path(entry: str) -> str:
+    """The entry, when it is a usable ``rules_paths`` entry.
+
+    Raises:
+        ValueError: absolute, has a ``..`` segment, or ``*`` outside the last segment.
+    """
+    segments = entry.split("/")
+    if entry.startswith("/"):
+        raise ValueError("must be relative to the repository, not absolute")
+    if ".." in segments:
+        raise ValueError("must not contain a `..` segment")
+    if not segments[-1]:
+        raise ValueError("must name a file, not a directory")
+    if any(GLOB_WILDCARD in segment for segment in segments[:-1]):
+        raise ValueError("`*` is allowed in the last segment only")
+    return entry
+
+
+#: One ``rules_paths`` entry: stripped, non-blank, relative, contained (slice 143, D10).
+RulesPath = Annotated[
+    StrictStr,
+    StringConstraints(strip_whitespace=True, min_length=1),
+    AfterValidator(_checked_rules_path),
+]
 
 
 class AnswererSettings(BaseModel):
     """The ``answerer`` section. Its presence turns the answerer on (slice 141, D6).
 
-    Both keys are required with no defaults (slice 142, D7): the operator states
-    how many answers a run may take and which terms stay the PM's to decide, so
-    ``answerer: {}`` fails at load. The answer gate reads them.
+    All four keys are required with no defaults: the operator states how many
+    answers a run may take and which terms stay the PM's to decide (slice 142, D7),
+    which files are the project's rules and how large the rendered passages may be
+    (slice 143, D10), so ``answerer: {}`` fails at load.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -50,6 +79,11 @@ class AnswererSettings(BaseModel):
         Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)],
         ...,
     ]
+    #: Repo-relative rules files read at the target commit; ``*`` in the last segment
+    #: only. May be empty; an entry that matches nothing fails assembly.
+    rules_paths: tuple[RulesPath, ...]
+    #: Most characters of rendered ``passages.md`` an answering run is sent.
+    passages_max_chars: Annotated[StrictInt, Field(ge=1)]
 
 
 class ProjectSettings(BaseModel):
@@ -73,7 +107,8 @@ class ProjectSettings(BaseModel):
         """A written-but-empty section must not quietly turn the answerer off."""
         if value is None:
             raise ValueError(
-                "answerer must be a mapping with answer_limit and reserved_terms"
+                "answerer must be a mapping with answer_limit, reserved_terms, "
+                "rules_paths and passages_max_chars"
             )
         return value
 
