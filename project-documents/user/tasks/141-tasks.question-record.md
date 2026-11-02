@@ -12,7 +12,7 @@ projectState: Slices 120–132 are merged, and 140 (answering pipeline) is built
   of slice 141 is built.
 dateCreated: 20261101
 dateUpdated: 20261102
-status: not_started
+status: in_progress
 turns: 35
 promptTokens: 1315332
 cachedTokens: 1240107
@@ -55,43 +55,43 @@ revision_number: 2
 
 ## 1. Branch and baseline
 
-- [ ] **1.1 Create the slice branch and record the baseline**
-  - [ ] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
-  - [ ] Run `git checkout -b 141-slice.question-record {target}`.
-  - [ ] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
-  - [ ] Success: on branch `141-slice.question-record`, and the baseline result is known.
+- [x] **1.1 Create the slice branch and record the baseline**
+  - [x] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
+  - [x] Run `git checkout -b 141-slice.question-record {target}`.
+  - [x] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
+  - [x] Success: on branch `141-slice.question-record`, and the baseline result is known.
 
 ---
 
 ## 2. Models, migration and store reads
 
-- [ ] **2.1 Question vocabularies and models** (`store/question_models.py`)
-  - [ ] Add `StrEnum`s `QuestionState` (`pending`, `answering`, `answered`, `declined`), `AnsweredBy` (`answerer`, `pm`) and `DeclineReason` (`node_already_blocked`, `question_missing`, `answerer_not_configured`, `no_answer_on_file`), per LLD D3.
-  - [ ] Add `QUESTION_TRANSITIONS: Mapping[QuestionState, frozenset[QuestionState]]` encoding the LLD State Management table (`answered` terminal; `declined` reaches only `answered`).
-  - [ ] Add frozen models `QuestionCatch(project_id, node_id, source_entry_id, run_id, step, question, truncated)` and `QuestionRecord` with every column in the LLD schema table.
-  - [ ] Unknown stored values raise `UnknownVocabularyValueError`, as other store vocabularies do (follow an existing models module for the pattern).
-  - [ ] Success: module imports, and typecheck passes.
+- [x] **2.1 Question vocabularies and models** (`store/question_models.py`)
+  - [x] Add `StrEnum`s `QuestionState` (`pending`, `answering`, `answered`, `declined`), `AnsweredBy` (`answerer`, `pm`) and `DeclineReason` (`node_already_blocked`, `question_missing`, `answerer_not_configured`, `no_answer_on_file`), per LLD D3.
+  - [x] Add `QUESTION_TRANSITIONS: Mapping[QuestionState, frozenset[QuestionState]]` encoding the LLD State Management table (`answered` terminal; `declined` reaches only `answered`).
+  - [x] Add frozen models `QuestionCatch(project_id, node_id, source_entry_id, run_id, step, question, truncated)` and `QuestionRecord` with every column in the LLD schema table.
+  - [x] Unknown stored values raise `UnknownVocabularyValueError`, as other store vocabularies do (follow an existing models module for the pattern).
+  - [x] Success: module imports, and typecheck passes.
 
-- [ ] **2.2 Migration 013** (`store/schema/013_question_records.sql`)
-  - [ ] Create `question_records` with the LLD columns, the foreign keys and `source_entry_id UNIQUE`.
-  - [ ] Add the three indexes: unique partial on `blocked_state_id WHERE blocked_state_id IS NOT NULL`; `(project_id, state, created_at)`; `(node_id)`.
-  - [ ] Register schema version 13 wherever versions are listed (follow how `012` was registered in `store/migrations.py`).
-  - [ ] Add the feed triggers in the same file, so `013` is written once: `question_recorded` (on insert; `node_id` the slice, `subject_id` the record id; payload `state`, `decline_reason`) and `question_state_changed` (on update only when `state` changes; payload `from`, `to`, `answered_by`, `decline_reason`), per LLD D7. Add both to `ChangeKind`, following the trigger convention of earlier migrations; the literals must match. Payloads carry no question or answer text.
-  - [ ] Success: a fresh store opens at version 13 and has both triggers.
+- [x] **2.2 Migration 013** (`store/schema/013_question_records.sql`)
+  - [x] Create `question_records` with the LLD columns, the foreign keys and `source_entry_id UNIQUE`.
+  - [x] Add the three indexes: unique partial on `blocked_state_id WHERE blocked_state_id IS NOT NULL`; `(project_id, state, created_at)`; `(node_id)`.
+  - [x] Register schema version 13 wherever versions are listed (follow how `012` was registered in `store/migrations.py`).
+  - [x] Add the feed triggers in the same file, so `013` is written once: `question_recorded` (on insert; `node_id` the slice, `subject_id` the record id; payload `state`, `decline_reason`) and `question_state_changed` (on update only when `state` changes; payload `from`, `to`, `answered_by`, `decline_reason`), per LLD D7. Add both to `ChangeKind`, following the trigger convention of earlier migrations; the literals must match. Payloads carry no question or answer text.
+  - [x] Success: a fresh store opens at version 13 and has both triggers.
 
-- [ ] **2.3 Store reads and `decline_question`** (`store/sql_questions.py`, `store/mapping_questions.py`, `store/questions.py`, mixin `QuestionOperations`)
-  - [ ] Follow the `sql_*` and `mapping_*` pattern: every statement and column name in `sql_questions.py`, and row-to-`QuestionRecord` mapping (including `truncated` 0/1 to bool) in `mapping_questions.py`. Later tasks add the statements they need.
-  - [ ] Add reads `question`, `questions(project_id, *, state=None, node_id=None)`, `pending_questions` and `question_for_block`. All must work on a read-only handle.
-  - [ ] Add `decline_question(question_id, *, reason)`: one `BEGIN IMMEDIATE` transaction, checks `QUESTION_TRANSITIONS`, raises `InvalidTransitionError` for any other state and writes nothing, sets `decline_reason` and `updated_at`.
-  - [ ] Add the mixin to the `Store` class.
-  - [ ] Success: the operations are callable from `Store`, and no SQL text exists outside `sql_questions.py`.
+- [x] **2.3 Store reads and `decline_question`** (`store/sql_questions.py`, `store/mapping_questions.py`, `store/questions.py`, mixin `QuestionOperations`)
+  - [x] Follow the `sql_*` and `mapping_*` pattern: every statement and column name in `sql_questions.py`, and row-to-`QuestionRecord` mapping (including `truncated` 0/1 to bool) in `mapping_questions.py`. Later tasks add the statements they need.
+  - [x] Add reads `question`, `questions(project_id, *, state=None, node_id=None)`, `pending_questions` and `question_for_block`. All must work on a read-only handle.
+  - [x] Add `decline_question(question_id, *, reason)`: one `BEGIN IMMEDIATE` transaction, checks `QUESTION_TRANSITIONS`, raises `InvalidTransitionError` for any other state and writes nothing, sets `decline_reason` and `updated_at`.
+  - [x] Add the mixin to the `Store` class.
+  - [x] Success: the operations are callable from `Store`, and no SQL text exists outside `sql_questions.py`.
 
-- [ ] **2.4 Tests for models, migration, reads and decline**
-  - [ ] `tests/store/test_migration_013.py`, following `test_migration_012.py`: migrate 12 → 13 on a store that has blocked states; a read-only open of a version-12 store raises `StoreSchemaError`.
-  - [ ] Add the two new kinds to the feed invariant test (`tests/store/test_feed_invariant.py`) so it passes with the triggers from Task 2.2.
-  - [ ] `tests/store/test_question_records.py`: unknown vocabulary value raises; `decline_question` from `pending` succeeds and from `answered` raises `InvalidTransitionError` leaving the row unchanged (the full transition walk waits for Task 4.2, when all of 141's writers exist); the reads filter by state and node and return oldest first; a read-only handle can call the reads.
-  - [ ] Insert test rows through a small helper in the test module (not through `record_question`, which does not exist yet).
-  - [ ] Success: the new tests pass, and the store suite passes.
+- [x] **2.4 Tests for models, migration, reads and decline**
+  - [x] `tests/store/test_migration_013.py`, following `test_migration_012.py`: migrate 12 → 13 on a store that has blocked states; a read-only open of a version-12 store raises `StoreSchemaError`.
+  - [x] Add the two new kinds to the feed invariant test (`tests/store/test_feed_invariant.py`) so it passes with the triggers from Task 2.2.
+  - [x] `tests/store/test_question_records.py`: unknown vocabulary value raises; `decline_question` from `pending` succeeds and from `answered` raises `InvalidTransitionError` leaving the row unchanged (the full transition walk waits for Task 4.2, when all of 141's writers exist); the reads filter by state and node and return oldest first; a read-only handle can call the reads.
+  - [x] Insert test rows through a small helper in the test module (not through `record_question`, which does not exist yet).
+  - [x] Success: the new tests pass, and the store suite passes.
 
 **Commit**: `feat: add question_records table, models and store reads`
 

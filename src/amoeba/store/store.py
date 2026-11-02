@@ -42,6 +42,7 @@ from amoeba.store.models import (
 )
 from amoeba.store.nodes import NodeOperations
 from amoeba.store.project_escalations import ProjectEscalationOperations
+from amoeba.store.questions import QuestionOperations
 from amoeba.store.routing_decisions import RoutingDecisionOperations
 from amoeba.store.runner_report import RunnerReportOperations
 from amoeba.store.verdicts import VerdictOperations
@@ -64,6 +65,7 @@ class Store(
     DesiredStateOperations,
     ProjectEscalationOperations,
     RoutingDecisionOperations,
+    QuestionOperations,
     InboxOperations,
     VerdictOperations,
     CheckOperations,
