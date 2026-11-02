@@ -246,17 +246,18 @@ revision_number: 2
 
 ## 8. Documentation
 
-- [ ] **8.1 Process contract** (`docs/process-contract.md`)
-  - [ ] "The project config": document `rules_paths` and `passages_max_chars` with the load rules from LLD D10 and the example block (the example values appear only here).
-  - [ ] "Git and the pre-dispatch check": change `status` and `merge-base` only to include `show` and `log`; note they read objects at a pinned commit, never the working tree.
-  - [ ] New "Context Forge shapes" section next to the Squadron shapes bullet: the D1 layout table, an "observed on CF" line whose version is exactly what `cf --version` prints when you run it, with today's date, as a dated observation (if the command prints nothing, stop with an error; do not write a version from memory), and D5's note that a branch-edited file keeps its commit date.
-  - [ ] "The answering pipeline": a short paragraph naming the passage set, `passages.md`, the citation check and that nothing calls assembly until 144.
-  - [ ] Success: contract text matches the code; no mention of version numbers as dependencies.
+- [x] **8.1 Process contract** (`docs/process-contract.md`)
+  - [x] "The project config": document `rules_paths` and `passages_max_chars` with the load rules from LLD D10 and the example block (the example values appear only here).
+  - [x] "Git and the pre-dispatch check": change `status` and `merge-base` only to include `show` and `log`; note they read objects at a pinned commit, never the working tree.
+  - [x] New "Context Forge shapes" section next to the Squadron shapes bullet: the D1 layout table, an "observed on CF" line whose version is exactly what `cf --version` prints when you run it, with today's date, as a dated observation (if the command prints nothing, stop with an error; do not write a version from memory), and D5's note that a branch-edited file keeps its commit date.
+  - [x] "The answering pipeline": a short paragraph naming the passage set, `passages.md`, the citation check and that nothing calls assembly until 144.
+  - [x] Success: contract text matches the code; no mention of version numbers as dependencies.
 
-- [ ] **8.2 Final checks**
-  - [ ] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each. All pass; fix any failure.
-  - [ ] Confirm `passages.py` is in the purity check, no module outside `git_read.py` starts `git`, and nothing outside tests calls `assemble_sources`.
-  - [ ] Set the slice design's `status` and `dateUpdated` only if the process guide's Phase 6 close-out says to; otherwise leave them.
-  - [ ] Success: all green; branch is ready for code review (do not merge).
+- [x] **8.2 Final checks**
+  - [x] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each. All pass; fix any failure.
+  - [x] Confirm `passages.py` is in the purity check, no module outside `git_read.py` starts `git`, and nothing outside tests calls `assemble_sources`.
+  - [x] Set the slice design's `status` and `dateUpdated` only if the process guide's Phase 6 close-out says to; otherwise leave them.
+  - Note (20261102): done in the closing commit (Completion step 3).
+  - [x] Success: all green; branch is ready for code review (do not merge).
 
 **Commit**: `docs: document source passages, answerer keys and the Context Forge layout`
