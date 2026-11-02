@@ -200,9 +200,10 @@ Squadron's syntax for the D8 keys is not final. This section drafts the file wit
 Everything here needs an `sq` with the D8 capabilities (the Squadron issue from Task 1.2).
 
 - [ ] **9.1 Adjust `answering.yaml` to the shipped syntax** (effort 3)
-  - [ ] `BLOCKED:` no Squadron release with the D8 capabilities yet (Squadron issue from Task 1.2). Unblock check: run `sq run <answering.yaml> --validate` after installing a newer `sq`, and read its release notes for the five capabilities.
+  - [ ] `BLOCKED:` no Squadron release with the D8 capabilities yet (Squadron issue from Task 1.2). Unblock check: run `sq run <answering.yaml> --validate --strict` after installing a newer `sq`, and read its release notes for the five capabilities. Capability 5 is opt-in (`--strict`), per the 20261101 comment on the issue.
   - [ ] Replace the proposed keys with Squadron's shipped syntax. Keep names from the constants. Re-run Task 5.2's test.
-  - [ ] Success: `sq run "$(uv run python -c '...answering_pipeline_path()...')" --validate` prints `Pipeline 'answering' is valid.` and exits 0, and an `sq` with an unknown key in the same file rejects it (try one extra key in a temporary copy).
+  - [ ] Change `probe_answering_pipeline` in `runner/probes.py` to run `--validate --strict` (LLD D9), and update its stub-`sq` tests to expect the flag.
+  - [ ] Success: `sq run "$(uv run python -c '...answering_pipeline_path()...')" --validate --strict` prints `Pipeline 'answering' is valid.` and exits 0, and the same command rejects a temporary copy carrying one extra unknown step key.
 
 **Commit**: `feat: adjust the answering pipeline to the shipped squadron syntax`
 

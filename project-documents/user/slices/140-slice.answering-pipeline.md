@@ -228,16 +228,16 @@ One Squadron issue, "Isolated file-in, file-out dispatch steps (for Amoeba's ans
 2. **An earlier step's reply in a later step's prompt.** A dispatch step names an earlier step in the same run, and that step's final reply text is added to the prompt. The earlier step's prompt and conversation are not added. When the earlier step declares a JSON reply, only one JSON object from its reply is added. That object is found by a single rule, which Squadron documents: the first `{` that opens a span parsing as a JSON object, inside a code fence or not. A reply with no such object fails the earlier step.
 3. **Reply and delivered prompt to files.** A dispatch step names a file for its reply and a file for its delivered prompt, both written in the working directory. For a step that declares a JSON reply, the reply file holds the object extracted under capability 2, byte for byte what a later step receives. A failed step writes neither file, or leaves one already written as it is; it never writes partial reply text.
 4. **A hard no-tools guarantee.** A step that declares no tools fails before dispatch, with a named error, when its model would run with any tool, file access or persistent session (the SDK session path, a provider that reads files natively). Today `allowed_tools: []` passes the SDK-path guard because the guard tests truthiness.
-5. **Strict step validation.** `sq run <pipeline> --validate` fails on a step key that the step type does not know. Today any key is accepted (checked 20261101: `prompt_file:` on a dispatch step validates), so `--validate` cannot tell an `sq` that has capabilities 1 to 4 from one that lacks them.
+5. **Strict step validation, opt-in.** `sq run <pipeline> --validate --strict` fails on a step key that the step type does not know. Plain `--validate` and `sq run` keep accepting unknown keys, so existing pipelines with stray keys are not broken. Today any key is accepted (checked 20261101: `prompt_file:` on a dispatch step validates), so `--validate` cannot tell an `sq` that has capabilities 1 to 4 from one that lacks them. (Changed from default-strict to opt-in on 20261101, recorded as a comment on the issue.)
 
 - Following the project rule that no code compares upstream versions, Amoeba never checks `sq --version` for this. The probe (D9) checks behavior. The process contract records "first observed running the answering pipeline: squadron x.y.z, on date" as a dated note beside the existing 0.24.9 note. That note is the plan's "pin": it lives in `docs/process-contract.md`, "Squadron shapes", and only people read it. 144 relies on the probe, not the note.
 - The issue number is added to the slice plan as a dependency of 140 and 144 when it is filed.
 
 ### D9 — Start-up probe: the shipped pipeline must validate
 Status: decided
-- `probe_answering_pipeline(settings, run)` runs `sq run <answering.yaml> --validate` once, bounded by `--sq-timeout`, from a temporary directory. Exit 0 passes. Any other exit, a timeout or a missing `sq` raises `StartupFailedError` naming the command, the exit code and the head of its output, and `start` exits `STARTUP_FAILED` (7), as the existing probe does.
+- `probe_answering_pipeline(settings, run)` runs `sq run <answering.yaml> --validate --strict` once, bounded by `--sq-timeout`, from a temporary directory. Exit 0 passes. Any other exit, a timeout or a missing `sq` raises `StartupFailedError` naming the command, the exit code and the head of its output, and `start` exits `STARTUP_FAILED` (7), as the existing probe does.
 - **It runs at start, after `probe_sq`, only when at least one project has an answerer section.** The architecture says a project with no answerer section behaves as 132 does, so an `sq` that can't run the pipeline must not stop such an install. The answerer section is first loaded in 142, so 142 wires the call into start-up behind that condition (slice plan, entry 142). This slice provides the probe and its tests.
-- With capability 5, validation is a real shape check: an `sq` without capabilities 1 to 4 rejects the pipeline's keys. On 0.24.11, which accepts any step key, the probe passes even though the pipeline cannot run. The stub-`sq` tests are what prove the failure paths. Nothing in this slice claims the probe protects against 0.24.11.
+- With capability 5, strict validation is a real shape check: an `sq` without capabilities 1 to 4 rejects the pipeline's keys, and an `sq` without capability 5 rejects the `--strict` flag itself, so the probe fails on any `sq` that cannot run the pipeline. The probe built in sections 1 to 8 runs plain `--validate`, which passes on 0.24.12 even though the pipeline cannot run; Task 9.1 adds `--strict` once Squadron ships it. The stub-`sq` tests are what prove the failure paths.
 
 ### D10 — Live tier for real-pipeline tests
 Status: decided
@@ -307,7 +307,7 @@ sq run <answering_pipeline_path()> <answer-model alias> --run-id <id> -p check-m
 - With a PM answer dated after a rule it contradicts, the check replies `yes`. With the rule dated after the PM answer, it replies `no`. Both are real runs.
 - A question that repeats a PM answer's question in different wording, for the same slice, gets an answer citing that PM passage, and the check replies `yes`. The same wording for another slice, where the slice changes the answer, ends in a decline or a check `no`.
 - A pipeline step whose model would run with tools fails before dispatch, shown by a live test that sets `check-model` to an SDK alias.
-- The real, installed `sq` validates `answering.yaml`, and an `sq` without capability 5 or capabilities 1 to 4 rejects it.
+- The real, installed `sq` validates `answering.yaml` with `--validate --strict`, and strict validation rejects a copy carrying one unknown step key.
 
 **Met without Squadron changes.** These need the unit tier and the stub `sq` only:
 
@@ -346,9 +346,9 @@ Verified 20261101 on `squadron 0.24.12` for steps 1, 2, 3 (caveat below) and 5. 
 
 3. **Squadron validates it.**
    ```bash
-   sq run "$(uv run python -c 'from amoeba.runner.answering.pipeline_file import answering_pipeline_path as p; print(p())')" --validate
+   sq run "$(uv run python -c 'from amoeba.runner.answering.pipeline_file import answering_pipeline_path as p; print(p())')" --validate --strict
    ```
-   Expect `Pipeline 'answering' is valid.` and exit 0 (observed on 0.24.12, which accepts the proposed keys because it validates no step keys). On an `sq` with capability 5, or without capabilities 1 to 4 once 5 exists, expect a validation error naming the unknown keys.
+   Expect `Pipeline 'answering' is valid.` and exit 0. On 0.24.12 plain `--validate` passes without proving anything (it validates no step keys) and `--strict` does not exist yet. On an `sq` with capability 5 but not capabilities 1 to 4, expect a validation error naming the unknown keys.
 
 4. **Live tier: real runs, real spend.**
    ```bash
