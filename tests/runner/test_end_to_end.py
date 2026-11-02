@@ -46,6 +46,7 @@ from amoeba.store import (
     CFReference,
     Channel,
     CommandKind,
+    DeclineReason,
     JournalEntry,
     JournalOutcome,
     Node,
@@ -349,6 +350,9 @@ def test_an_agent_question_blocks_with_the_question_then_resumes_with_instructio
     # The question is on record, linked to the block (slice 141).
     asked = store.question_for_block(blocked.id)
     assert asked is not None and asked.question == question
+    # The same tick's answering stage declined it: no answerer is configured.
+    assert asked.state is QuestionState.DECLINED
+    assert asked.decline_reason is DeclineReason.ANSWERER_NOT_CONFIGURED
 
     scenario.script(empty_reviews())
     resolve_block(store, blocked.id, "resume", instructions)

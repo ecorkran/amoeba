@@ -192,29 +192,29 @@ revision_number: 2
 
 ## 7. Settle function and answering stage
 
-- [ ] **7.1 `settle_pending`** (`runner/answering/settle.py`)
-  - [ ] Pure function per LLD D5: a pending record, its block's state and whether the answerer is configured, to `Skip` or `Decline(reason)`.
-  - [ ] Check order: block resolved and awaiting the Runner → `Skip`; block resolved and not awaiting → raise `QuestionInvariantError` (define it in the answering package); question null or empty → `question_missing`; no answerer section → `answerer_not_configured`; otherwise `no_answer_on_file`.
-  - [ ] Compare only through enums; no literal strings. Import no store write.
-  - [ ] Success: the module is covered by `tests/runner/purity.py`'s check (add it to that list as other pure modules are).
+- [x] **7.1 `settle_pending`** (`runner/answering/settle.py`)
+  - [x] Pure function per LLD D5: a pending record, its block's state and whether the answerer is configured, to `Skip` or `Decline(reason)`.
+  - [x] Check order: block resolved and awaiting the Runner → `Skip`; block resolved and not awaiting → raise `QuestionInvariantError` (define it in the answering package); question null or empty → `question_missing`; no answerer section → `answerer_not_configured`; otherwise `no_answer_on_file`.
+  - [x] Compare only through enums; no literal strings. Import no store write.
+  - [x] Success: the module is covered by `tests/runner/purity.py`'s check (add it to that list as other pure modules are).
 
-- [ ] **7.2 Tests for `settle_pending`** (`tests/runner/answering/test_settle.py`)
-  - [ ] One case per branch, plus ordering cases: a resolved-and-awaiting block with a null question skips (does not decline); a resolved, not-awaiting block raises even when the question is null.
-  - [ ] Success: tests and the purity check pass.
+- [x] **7.2 Tests for `settle_pending`** (`tests/runner/answering/test_settle.py`)
+  - [x] One case per branch, plus ordering cases: a resolved-and-awaiting block with a null question skips (does not decline); a resolved, not-awaiting block raises even when the question is null.
+  - [x] Success: tests and the purity check pass.
 
-- [ ] **7.3 The answering stage and its place in the tick** (`runner/answering/stage.py`, `runner/tick.py`)
-  - [ ] Store-only stage: read `pending_questions(project_id)`, read each record's block state, call `settle_pending`, and call `decline_question` for a `Decline`. A `Skip` writes nothing.
-  - [ ] In `ProjectTick.run`, call it after `record_finished` and the `shape_error` check, before the `CUT_OFF` return. It takes no budget.
-  - [ ] The stage leaves the node context cleared, so an exception escalates per project (LLD D5, Fault isolation).
-  - [ ] Success: a question caught this tick is declined this tick, including a tick that ends cut off.
+- [x] **7.3 The answering stage and its place in the tick** (`runner/answering/stage.py`, `runner/tick.py`)
+  - [x] Store-only stage: read `pending_questions(project_id)`, read each record's block state, call `settle_pending`, and call `decline_question` for a `Decline`. A `Skip` writes nothing.
+  - [x] In `ProjectTick.run`, call it after `record_finished` and the `shape_error` check, before the `CUT_OFF` return. It takes no budget.
+  - [x] The stage leaves the node context cleared, so an exception escalates per project (LLD D5, Fault isolation).
+  - [x] Success: a question caught this tick is declined this tick, including a tick that ends cut off.
 
-- [ ] **7.4 Tick tests** (`tests/runner/test_tick_answering.py`, helpers from `tick_support.py`)
-  - [ ] Each decline reason is written: `question_missing`, `answerer_not_configured`, and `no_answer_on_file` with `answerer: {}`.
-  - [ ] A PM resolution submitted before the stage runs: the record is skipped, the next resolution stage applies it, and the record is `answered` by pm with no decline written.
-  - [ ] The invariant case: seed a `pending` record whose linked block is resolved with no resolution awaiting the Runner, using the existing helpers in `tests/store/test_resolutions.py` or `tick_support.py`; if none can express it, write one direct update in a test helper. The stage raises, and the failure escalates per project, once, deduplicated.
-  - [ ] A question caught in a tick that ends `CUT_OFF` is still declined.
-  - [ ] In the `agent_question` end-to-end test from Task 5.4, assert the record is `declined` (`answerer_not_configured`) after the question tick, before the resume.
-  - [ ] Success: tests pass, and the runner suite passes.
+- [x] **7.4 Tick tests** (`tests/runner/test_tick_answering.py`, helpers from `tick_support.py`)
+  - [x] Each decline reason is written: `question_missing`, `answerer_not_configured`, and `no_answer_on_file` with `answerer: {}`.
+  - [x] A PM resolution submitted before the stage runs: the record is skipped, the next resolution stage applies it, and the record is `answered` by pm with no decline written.
+  - [x] The invariant case: seed a `pending` record whose linked block is resolved with no resolution awaiting the Runner, using the existing helpers in `tests/store/test_resolutions.py` or `tick_support.py`; if none can express it, write one direct update in a test helper. The stage raises, and the failure escalates per project, once, deduplicated.
+  - [x] A question caught in a tick that ends `CUT_OFF` is still declined.
+  - [x] In the `agent_question` end-to-end test from Task 5.4, assert the record is `declined` (`answerer_not_configured`) after the question tick, before the resume.
+  - [x] Success: tests pass, and the runner suite passes.
 
 **Commit**: `feat: add the answering stage that declines pending questions`
 
