@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from cli_harness import COMMAND_TIMEOUT_SECONDS, cli_environment, run_cli
+from process_containment import contained_popen
 
 from amoeba.cli.main import ExitCode
 from amoeba.store import NodeKind, Store
@@ -36,7 +37,7 @@ class _Follower:
     """``amoeba feed --follow`` in the background, with its stdout as a queue."""
 
     def __init__(self, supervisor_dir: Path, *arguments: str) -> None:
-        self.process = subprocess.Popen(
+        self.process = contained_popen(
             [sys.executable, "-m", "amoeba.cli.main", "feed", "--follow", *arguments],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,

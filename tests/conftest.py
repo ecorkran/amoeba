@@ -8,14 +8,32 @@ store path — that property is checked mechanically by the guard test in
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from inbox_harness import RealSubmission, damaged_variants, write_real_submission
+from process_containment import reap_orphans
 from serve_harness import TlsFiles, write_tls_files
 
 from amoeba.store import Store
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Kill test processes an earlier, killed session left running.
+
+    Teardown fixtures do not run when pytest is killed, so its children keep
+    going. See ``process_containment``. Skipped on a worker of a parallel run,
+    which would otherwise race its siblings' children.
+    """
+    if hasattr(session.config, "workerinput"):
+        return
+    reaped = reap_orphans()
+    if reaped:
+        sys.stderr.write(
+            f"reaped leaked test processes from an earlier run: {list(reaped)}\n"
+        )
 
 
 @pytest.fixture

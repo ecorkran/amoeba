@@ -31,6 +31,7 @@ from amoeba.process.errors import (
     StartupFailedError,
     UpstreamShapeError,
 )
+from amoeba.process.log_limit import configure_logging
 from amoeba.store.models import StoreError, VerdictNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -275,11 +276,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     unexpected is logged with a traceback and reported as
     :attr:`ExitCode.FAILURE` rather than reaching the user raw.
     """
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        stream=sys.stderr,
-    )
+    configure_logging(sys.stderr)
 
     args = build_parser().parse_args(argv)
 

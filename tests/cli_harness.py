@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from process_containment import contained_popen
 from sq_stub import write_sq_stub
 
 from amoeba.serve.settings import TOKEN_ENV_VAR
@@ -148,7 +149,7 @@ def start_background(
 ) -> BackgroundCli:
     """Launch ``amoeba start`` in the background. ``environment`` as in run_cli."""
     return BackgroundCli(
-        subprocess.Popen(
+        contained_popen(
             [
                 sys.executable,
                 "-m",
@@ -240,7 +241,7 @@ def start_serve(
 ) -> BackgroundCli:
     """Launch ``amoeba serve`` in the background. ``environment`` as in run_cli."""
     return BackgroundCli(
-        subprocess.Popen(
+        contained_popen(
             [sys.executable, "-m", "amoeba.cli.main", "serve", *arguments],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,

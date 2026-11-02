@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
+from process_containment import contained_popen
+
 from amoeba.process import (
     SQ_EXECUTABLE,
     PollFailure,
@@ -69,7 +71,7 @@ def run_pipeline(
     run_id = mint_run_id(datetime.now(UTC))
     argv = launch_argv(run_id, answer_model, check_model)
     with tempfile.TemporaryFile("w+") as log:
-        process = subprocess.Popen(  # noqa: S603 - argv built here, no shell
+        process = contained_popen(  # noqa: S603 - argv built here, no shell
             argv,
             cwd=directory,
             stdin=subprocess.DEVNULL,

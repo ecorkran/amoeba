@@ -108,6 +108,8 @@ class RunnerTenant:
             timeout_seconds=settings.tick_call_timeout_seconds,
         )
         self._carried_over: tuple[str, ...] = ()
+        #: Per project: the last unexpected fault and how many ticks in a row met it.
+        self._repeating_faults: dict[str, tuple[str, int]] = {}
 
     @property
     def name(self) -> str:
@@ -169,7 +171,9 @@ class RunnerTenant:
             auto_resume_limit=self._settings.auto_resume_limit,
         )
         try:
-            return tick.run(budget), tick.wrote
+            outcome = tick.run(budget), tick.wrote
+            self._repeating_faults.pop(project_id, None)
+            return outcome
         except (*STORE_FAILURES, UpstreamShapeError):
             # The process exits; recovery on restart reconciles what is open.
             logger.exception(
@@ -177,7 +181,32 @@ class RunnerTenant:
             )
             raise
         except Exception as error:  # noqa: BLE001 - the Runner's one process boundary (D8)
-            logger.exception("runner tick failed for project %s", project_id)
+            self._log_fault(project_id, error)
             # Not caught again: a failing escalation write means a broken store.
             escalate(store, project_id, context, FaultKind.UNEXPECTED_FAULT, error)
-            return TickResult.COMPLETE, True
+            # Not work. The host loop skips its idle wait after a tick that
+            # reports work, so a fault that never clears would otherwise run it flat
+            # out, one traceback per pass.
+            return TickResult.COMPLETE, False
+
+    def _log_fault(self, project_id: str, error: Exception) -> None:
+        """Log a fault with its traceback at the 1st, 2nd, 4th, 8th... repeat only.
+
+        Every occurrence still logs one line, so the count stays visible; the
+        traceback of an identical fault adds nothing after the first few.
+        """
+        text = f"{type(error).__name__}: {error}"
+        last, count = self._repeating_faults.get(project_id, ("", 0))
+        count = count + 1 if text == last else 1
+        self._repeating_faults[project_id] = (text, count)
+        if count & (count - 1) == 0:
+            logger.exception(
+                "runner tick failed for project %s (%d in a row)", project_id, count
+            )
+        else:
+            logger.warning(
+                "runner tick failed for project %s (%d in a row): %s",
+                project_id,
+                count,
+                text,
+            )

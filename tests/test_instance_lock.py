@@ -23,6 +23,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from process_containment import contained_popen
 
 from amoeba.process.instance_lock import (
     LOCK_FILENAME,
@@ -69,7 +70,7 @@ def _spawn(script: str, tmp_path: Path, name: str) -> subprocess.Popen[str]:
     """Run a script as a real subprocess, with pipes for handshaking."""
     path = tmp_path / name
     path.write_text(script, encoding="utf-8")
-    return subprocess.Popen(
+    return contained_popen(
         [sys.executable, str(path)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,

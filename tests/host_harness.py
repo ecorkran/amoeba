@@ -24,6 +24,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from process_containment import contained_popen
+
 #: How long to wait for a subprocess to announce a state before giving up.
 READY_TIMEOUT_SECONDS = 20.0
 
@@ -314,7 +316,7 @@ def start_host(
     )
 
     return HostProcess(
-        subprocess.Popen(
+        contained_popen(
             [sys.executable, str(script)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,

@@ -26,6 +26,7 @@ from cli_harness import (
     run_cli,
     start_background,
 )
+from process_containment import contained_popen
 
 REPO_ROOT = Path(__file__).parents[1]
 DEMO_SCRIPT = REPO_ROOT / "scripts" / "demo_detection.py"
@@ -154,7 +155,7 @@ class DetectionE2E:
         if after is not None:
             arguments += ["--after", str(after)]
         follower = Follower(
-            subprocess.Popen(
+            contained_popen(
                 [sys.executable, "-m", "amoeba.cli.main", *arguments],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,

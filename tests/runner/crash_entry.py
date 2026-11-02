@@ -10,7 +10,6 @@ itself ``SIGKILL``; the restarted process is started without it.
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 import signal
 import subprocess
@@ -23,6 +22,7 @@ from functools import partial
 from pathlib import Path
 
 from contract.bootstrap import ReadyAnnouncer
+from process_containment import contained_popen
 
 import amoeba.runner.tick as tick_module
 from amoeba.process import (
@@ -34,6 +34,7 @@ from amoeba.process import (
     poll_run,
     standard_tenants,
 )
+from amoeba.process.log_limit import configure_logging
 from amoeba.runner.decide import Action, LaunchRun, Planner, ProjectView
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
@@ -117,7 +118,7 @@ def _hooked(kill_at: KillPoint | None) -> tuple[object, object]:
             die()
         if kill_at is KillPoint.BEFORE_RESUME_LAUNCH and "--resume" in argv:
             die()
-        return subprocess.Popen(argv, **kwargs)  # type: ignore[call-overload]
+        return contained_popen(argv, **kwargs)  # type: ignore[call-overload]
 
     def poll(run_id: str) -> RunPoll:
         answer = poll_run(run_id, timeout_seconds=CALL_TIMEOUT_SECONDS)
@@ -193,7 +194,7 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str]) -> None:
     arguments = parse_arguments(argv)
-    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+    configure_logging(sys.stderr)
     raw = os.environ.get(KILL_AT_ENV)
     kill_at = KillPoint(raw) if raw else None
     settings = ProcessSettings(

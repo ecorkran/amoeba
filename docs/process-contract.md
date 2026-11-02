@@ -126,7 +126,14 @@ class Tenant(Protocol):
 
 Tenants are ticked in registration order. When no tenant reports work, the loop
 waits on the stop event for `idle_interval_seconds` — it does not busy-loop, and
-the wait ends the moment stop is requested.
+the wait ends the moment stop is requested. **A tick that failed is not work.** A
+tenant that reports work on every tick, a failing one included, runs the loop flat out;
+one such loop wrote over 300 GB of log a day. The Runner tenant therefore returns
+`False` after an unexpected fault (the escalation is already written), and logs the
+fault with a traceback only at its 1st, 2nd, 4th, 8th... repeat. As a last line of
+defence, `amoeba start` sends its log through `BoundedStreamHandler`
+(`process/log_limit.py`): after 256 MiB in one process lifetime it writes one notice
+line and drops the rest until restart.
 
 **`amoeba start` registers four tenants, in this order** (the first three are
 `standard_tenants` in `process/tenants.py`; the fourth is `runner_tenant` in
@@ -1145,6 +1152,12 @@ slice 101. No new exposure is introduced.
   throwaway tenant. Both `tests/test_host.py` and `tests/load/` use it.
 - The load tier is excluded from the default suite; run it with
   `uv run pytest tests/load`.
+- **Start every process a test needs through `tests/process_containment.py`
+  (`contained_popen`).** It caps each child's files at 256 MiB (`RLIMIT_FSIZE`), kills
+  the live ones at interpreter exit, and `conftest.py` reaps, at every session start,
+  processes an earlier killed session left running (re-parented to `init`, older than
+  five minutes, command line naming this user's pytest temp directory). A guard test
+  fails the suite if a test module calls `subprocess.Popen` directly.
 
 ## Future work
 

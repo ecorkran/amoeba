@@ -25,6 +25,7 @@ from pathlib import Path
 
 from cli_harness import await_running, cli_environment, run_cli, start_background
 from host_harness import TenantSpec
+from process_containment import contained_popen
 
 from amoeba.inbox import pending
 
@@ -160,7 +161,7 @@ def launch_submitters(
         stdout_file, stderr_file = submitter_output(tmp_path, number)
         with stdout_file.open("wb") as stdout, stderr_file.open("wb") as stderr:
             submitters.append(
-                subprocess.Popen(
+                contained_popen(
                     [sys.executable, str(script), *argv],
                     stdin=subprocess.DEVNULL,
                     stdout=stdout,

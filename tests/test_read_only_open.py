@@ -33,6 +33,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from process_containment import contained_popen
 from sq_run_fixtures import sq_run_parameters
 
 from amoeba.store import (
@@ -130,7 +131,7 @@ def test_mode_ro_reads_a_wal_store_while_a_writer_is_alive(
         encoding="utf-8",
     )
 
-    writer = subprocess.Popen(
+    writer = contained_popen(
         [sys.executable, str(writer_script)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,

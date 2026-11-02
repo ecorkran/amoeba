@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+from process_containment import contained_popen
 from sq_stub import (
     LOG_ENV,
     RUN_LATE_SECONDS_ENV,
@@ -61,7 +62,7 @@ class Rig:
         }
 
     def start(self, *arguments: str, **extra: str) -> subprocess.Popen[str]:
-        return subprocess.Popen(
+        return contained_popen(
             [sys.executable, str(self.stub), *arguments],
             env=self.env(**extra),
             stdout=subprocess.PIPE,

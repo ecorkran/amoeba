@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from host_harness import READY_MARKER, HostProcess
+from process_containment import contained_popen
 
 
 class LaunchedProcess:
@@ -31,7 +32,7 @@ class LaunchedProcess:
         self.stdout_lines: list[str] = []
         self._stderr_path = stderr_path
         self._stderr_handle = stderr_path.open("w", encoding="utf-8")
-        process = subprocess.Popen(
+        process = contained_popen(
             list(command),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
