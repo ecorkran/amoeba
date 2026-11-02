@@ -124,21 +124,22 @@ revision_number: 2
 
 ## 4. The gate
 
-- [ ] **4.1 `evaluate_gate` and `compose_instructions`** (`runner/answering/gate.py`)
-  - [ ] `evaluate_gate(question, prior_answers, *, answer, settings: AnswererSettings) -> GateRefusal | None`, pure (no I/O, no clock, no store), per LLD D1/D2.
-  - [ ] Check 1: `prior_answers >= settings.answer_limit` returns `GateRefusal(ANSWER_LIMIT_REACHED, None)`.
-  - [ ] Check 2: for each term in configured order, test the question then the answer; first hit returns `GateRefusal(RESERVED_TERM, <term as configured>)`.
-  - [ ] Matching: casefold both sides, collapse every run of whitespace to one space, substring match with no word boundaries. Define the normalizer once in the module.
-  - [ ] `compose_instructions(question, answer) -> str` returns exactly two lines: `You asked: {question}` then `Answer: {answer}` (LLD D5).
-  - [ ] Success: module imports; typecheck passes.
+- [x] **4.1 `evaluate_gate` and `compose_instructions`** (`runner/answering/gate.py`)
+  - [x] `evaluate_gate(question, prior_answers, *, answer, settings: AnswererSettings) -> GateRefusal | None`, pure (no I/O, no clock, no store), per LLD D1/D2.
+  - [x] Check 1: `prior_answers >= settings.answer_limit` returns `GateRefusal(ANSWER_LIMIT_REACHED, None)`.
+  - [x] Check 2: for each term in configured order, test the question then the answer; first hit returns `GateRefusal(RESERVED_TERM, <term as configured>)`.
+  - [x] Matching: casefold both sides, collapse every run of whitespace to one space, substring match with no word boundaries. Define the normalizer once in the module.
+  - [x] `compose_instructions(question, answer) -> str` returns exactly two lines: `You asked: {question}` then `Answer: {answer}` (LLD D5).
+  - [x] Success: module imports; typecheck passes.
 
-- [ ] **4.2 Gate tests** (`tests/runner/test_answer_gate.py`; purity registration in `tests/runner/purity.py`)
-  - [ ] Limit: below, at and above `answer_limit`; the limit wins over a reserved hit when both apply.
-  - [ ] Reserved: a term in the question; a term in the answer; a mixed-case, newline-split variant of a multi-word term (for example `Drop\n Table` against the term `drop table`); `pushed` against `push`; configured order decides which term is reported; the returned term is as configured (case preserved).
-  - [ ] An empty `reserved_terms` list never refuses on terms.
-  - [ ] `compose_instructions` returns the exact two-line text.
-  - [ ] Add `gate.py` to the purity check and confirm it passes.
-  - [ ] Success: `uv run pytest tests/runner/test_answer_gate.py -v` passes.
+- [x] **4.2 Gate tests** (`tests/runner/test_answer_gate.py`; purity registration in `tests/runner/purity.py`)
+  - [x] Limit: below, at and above `answer_limit`; the limit wins over a reserved hit when both apply.
+  - [x] Reserved: a term in the question; a term in the answer; a mixed-case, newline-split variant of a multi-word term (for example `Drop\n Table` against the term `drop table`); `pushed` against `push`; configured order decides which term is reported; the returned term is as configured (case preserved).
+  - [x] An empty `reserved_terms` list never refuses on terms.
+  - [x] `compose_instructions` returns the exact two-line text.
+  - [x] Add `gate.py` to the purity check and confirm it passes.
+    - Note: purity.py has no registry; the check is the `io_use(gate) == []` test in `tests/runner/test_answer_gate.py`, which passes.
+  - [x] Success: `uv run pytest tests/runner/test_answer_gate.py -v` passes.
 
 **Commit**: `feat: add the pure answer gate and instruction composer`
 

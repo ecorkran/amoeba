@@ -110,7 +110,7 @@ class GateRefusal:
 
 #: The gate ``submit_answer`` calls under its write lock: the question text and
 #: the count of answers the answerer already gave this run. ``None`` passes.
-AnswerGate = Callable[[str, int], GateRefusal | None]
+type AnswerGate = Callable[[str, int], GateRefusal | None]
 
 
 class AnswerOutcome(StrEnum):

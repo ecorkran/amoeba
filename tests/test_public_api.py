@@ -110,6 +110,12 @@ EXPECTED_EXPORTS = {
     "QuestionCatch",
     "QuestionRecord",
     "QuestionState",
+    # The answer gate and submission types, added by slice 142
+    "ANSWER_DECISION",
+    "AnswerGate",
+    "AnswerOutcome",
+    "AnswerSubmission",
+    "GateRefusal",
     # Locating stores (read-only consumers), added by slice 110
     "project_store_path",
     "store_dir",
