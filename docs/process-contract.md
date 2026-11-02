@@ -705,9 +705,9 @@ this section is the contract.
   check.
 - **The probe.** `probe_answering_pipeline(settings, run)` runs
   `sq run <answering.yaml> --validate` once from a temporary directory and raises
-  `StartupFailedError` on a non-zero exit, a timeout or a missing `sq`. Slice 142 calls it
-  at start, only when a project has an answerer section. It does not compare `sq`
-  versions.
+  `StartupFailedError` on a non-zero exit, a timeout or a missing `sq`. `runner_tenant`
+  calls it at start (slice 142), only when a project has an answerer section. It does
+  not compare `sq` versions.
 - **Squadron capabilities.** Real runs need five capabilities the `sq` checked when this
   slice was written does not have (D8); they are requested in `ecorkran/squadron#284`.
   Until a release has them, `answering.yaml` uses proposed key names (marked in the file)
@@ -736,12 +736,33 @@ projects:
     pipeline: p4567      # a user pipeline that also merges
 ```
 
-- `answerer` (slice 141) is optional. Its presence turns the question answerer on:
-  `answerer: {}` is configured, a missing key or an unnamed project is not. It has no
-  keys yet (142 to 144 add them, and `answerer: {}` stops loading when they do). An
-  explicit `answerer:` with a null value fails the load ("answerer must be a mapping;
-  write `{}`", naming `projects.<id>.answerer`), so a section written but left empty
-  cannot quietly turn the answerer off.
+- `answerer` (slice 141, keys from slice 142) is optional. Its presence turns the
+  question answerer on; a missing key or an unnamed project leaves it off. When present
+  it needs both keys, with no defaults:
+  - `answer_limit`: an integer of at least 1, the most answers the answerer may give in
+    one run. To turn the answerer off, remove the section; `0` is not an off switch.
+  - `reserved_terms`: a list of strings, each stripped and non-blank. Any term found in
+    a question or an answer (case-insensitive, any run of whitespace matching one
+    space, no word boundaries) declines the answer and leaves the block for the PM.
+    `reserved_terms: []` loads; a missing key fails.
+
+  Load fails, naming the key path (`projects.<id>.answerer.answer_limit`, for example),
+  for `answerer: {}`, a missing key, `answer_limit` of `0`, a negative, non-integer or
+  quoted value, a blank term or a non-string term, and any unknown key. An explicit
+  `answerer:` with a null value fails the load ("answerer must be a mapping with
+  answer_limit and reserved_terms", naming `projects.<id>.answerer`). Start-up runs
+  the answering pipeline probe (`sq run <answering.yaml> --validate`) once when any
+  project has an `answerer` section, and exits `STARTUP_FAILED` naming that command if
+  it fails; with no section the probe does not run.
+
+  ```yaml
+  projects:
+    amoeba:
+      pipeline: p456
+      answerer:
+        answer_limit: 3
+        reserved_terms: [push, merge to main, release, DROP, TRUNCATE, policy]
+  ```
 - Keys under `projects` are Amoeba project ids. `pipeline` is required for each named
   project; there is **no default pipeline**, because a default could merge code nobody
   chose to merge. A project the file does not name (or no file at all) has no pipeline
@@ -980,7 +1001,7 @@ provenance and never parsed, ordered, or branched on.
 | `amoeba status` | `running` (pid, start time, version), `running (pid unknown)`, `stopped (stale pid file)`, or `stopped`. |
 | `amoeba inspect projects\|inbox` | Supervisor-level: project ids with a store; inbox files pending, quarantined, or failed. Open no store. |
 | `amoeba inspect nodes\|journal\|submissions\|messages --project ID` | Read-only listings. `journal` accepts `--unresolved`; `messages` accepts `--channel`. All accept `--json`. |
-| `amoeba inspect questions --project ID [--node ID] [--state STATE]` | Question records: `id`, `node_id`, `run_id`, `step`, `state`, `answered_by`, `question`, `outcome` (the answer, or the decline reason), `truncated`, `created_at`; `--json` and the server add `blocked_state_id`, `source_entry_id` and `updated_at`. *(Slice 141.)* |
+| `amoeba inspect questions --project ID [--node ID] [--state STATE]` | Question records: `id`, `node_id`, `run_id`, `step`, `state`, `answered_by`, `question`, `outcome` (the answer, or the decline reason), `reserved_term` (the configured term a `reserved_term` decline matched, else empty), `truncated`, `created_at`; `--json` and the server add `blocked_state_id`, `source_entry_id` and `updated_at`. *(Slice 141; `reserved_term` slice 142.)* |
 | `amoeba inspect blocked [--project ID]` | Blocked nodes with `question_state` and `decline_reason` (empty for a block with no question), `project_id`, `reason` (the payload's `reason` or `fault_kind`, empty with neither) and `blocked_state_id`; every project when `--project` is omitted, each store opened read-only. `--json` adds the full escalation `payload`, which holds an agent's question. *(Slice 132.)* |
 | `amoeba submit create-project\|resolution\|intent ...` | Write one submission to the inbox and print its id. Opens no store; works whether or not the process runs. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
 | `amoeba prune sq-runs [--yes]` | Previews the paused Squadron runs Amoeba may prune; with `--yes`, asks `sq runs prune` to delete them. Read-only on every store. See "Pruning paused runs". *(Slice 110.)* |

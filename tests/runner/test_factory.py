@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import subprocess
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
@@ -216,6 +217,67 @@ def test_with_no_project_config_every_project_takes_the_defaults(
     runner_tenant(ProcessSettings(), healthy_sq)
 
     assert captured[0]["project_config"] == ProjectConfig()
+
+
+ANSWERER_CONFIG = """\
+projects:
+  scratch:
+    pipeline: p456
+    answerer:
+      answer_limit: 2
+      reserved_terms: []
+"""
+
+
+def _spy_on_the_answering_probe(
+    monkeypatch: pytest.MonkeyPatch, *, fails: bool = False
+) -> list[tuple[ProcessSettings, object]]:
+    calls: list[tuple[ProcessSettings, object]] = []
+
+    def probe(settings: ProcessSettings, run: object) -> None:
+        calls.append((settings, run))
+        if fails:
+            raise StartupFailedError("answering pipeline probe failed: test")
+
+    monkeypatch.setattr(factory, "probe_answering_pipeline", probe)
+    return calls
+
+
+def test_an_answerer_section_runs_the_answering_probe_once(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path, tmp_path: Path
+) -> None:
+    calls = _spy_on_the_answering_probe(monkeypatch)
+    config_file = tmp_path / "projects.yaml"
+    config_file.write_text(ANSWERER_CONFIG)
+    settings = _settings_with_project_config(config_file)
+
+    runner_tenant(settings, healthy_sq)
+
+    assert calls == [(settings, subprocess.run)]
+
+
+def test_a_failing_answering_probe_fails_start(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path, tmp_path: Path
+) -> None:
+    _spy_on_the_answering_probe(monkeypatch, fails=True)
+    config_file = tmp_path / "projects.yaml"
+    config_file.write_text(ANSWERER_CONFIG)
+
+    with pytest.raises(StartupFailedError, match="answering pipeline probe"):
+        runner_tenant(_settings_with_project_config(config_file), healthy_sq)
+
+
+def test_no_answerer_section_never_runs_the_answering_probe(
+    monkeypatch: pytest.MonkeyPatch, healthy_sq: Path, tmp_path: Path
+) -> None:
+    calls = _spy_on_the_answering_probe(monkeypatch)
+    config_file = tmp_path / "projects.yaml"
+    config_file.write_text("projects:\n  scratch:\n    pipeline: p456\n")
+
+    runner_tenant(_settings_with_project_config(config_file), healthy_sq)
+    runner_tenant(ProcessSettings(), healthy_sq)
+
+    assert calls == []
 
 
 def test_an_invalid_project_config_fails_start_before_anything_is_created(

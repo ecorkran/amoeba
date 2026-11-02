@@ -101,6 +101,7 @@ from amoeba.store.models import (
     NodeKind,
     NodeNotFoundError,
     NodeStatus,
+    QuestionNotFoundError,
     Resolution,
     ResolutionOutcome,
     SQReference,
@@ -115,9 +116,14 @@ from amoeba.store.models import (
 )
 from amoeba.store.paths import project_store_path, store_dir
 from amoeba.store.question_models import (
+    ANSWER_DECISION,
     QUESTION_TRANSITIONS,
     AnsweredBy,
+    AnswerGate,
+    AnswerOutcome,
+    AnswerSubmission,
     DeclineReason,
+    GateRefusal,
     QuestionCatch,
     QuestionRecord,
     QuestionState,
@@ -231,6 +237,12 @@ __all__ = [
     "QuestionCatch",
     "QuestionRecord",
     "QuestionState",
+    # The answer gate and submission types, added by slice 142
+    "ANSWER_DECISION",
+    "AnswerGate",
+    "AnswerOutcome",
+    "AnswerSubmission",
+    "GateRefusal",
     # Locating stores (read-only consumers)
     "project_store_path",
     "store_dir",
@@ -246,5 +258,6 @@ __all__ = [
     "StorePermissionError",
     "StoreSchemaError",
     "UnknownVocabularyValueError",
+    "QuestionNotFoundError",
     "VerdictNotFoundError",
 ]

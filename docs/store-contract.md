@@ -842,7 +842,8 @@ and the Runner rejects the others (`unknown_decision`). See
 
 ### Question records
 
-*Added by slice 141. Schema version 13 (migration `013`).* Every agent question gets
+*Added by slice 141. Schema version 13 (migration `013`); slice 142 added
+`reserved_term` (migration `014`, schema version 14).* Every agent question gets
 one record in `question_records`, written in the same transaction as the `HUMAN` block
 the Runner writes for it. The PM's resolution of that block writes the PM's answer onto
 it. Nothing calls a model: the records are the memory that the answerer slices (142 to
@@ -851,8 +852,8 @@ it. Nothing calls a model: the records are the memory that the answerer slices (
 - **Vocabularies** (`StrEnum`s in `question_models.py`; an unknown stored value raises
   `UnknownVocabularyValueError`). `QuestionState`: `pending`, `answering`, `answered`,
   `declined`. `AnsweredBy`: `answerer`, `pm`. `DeclineReason`: `node_already_blocked`,
-  `question_missing`, `answerer_not_configured`, `no_answer_on_file` (later slices add
-  members).
+  `question_missing`, `answerer_not_configured`, `no_answer_on_file`,
+  `answer_limit_reached`, `reserved_term` (later slices may add members).
 - **Models.** `QuestionCatch(project_id, node_id, source_entry_id, run_id, step,
   question, truncated)` is what ingest knows; `QuestionRecord` has every column.
   `QUESTION_TRANSITIONS` is the one statement of the legal state changes.
@@ -861,16 +862,19 @@ it. Nothing calls a model: the records are the memory that the answerer slices (
   null only for a question declined `node_already_blocked`, and a block carries at most
   one question (a unique partial index). `answer` is the PM's instructions, or the
   answerer's answer (142), and may be null for a PM answer. `decline_reason` is kept if
-  the PM answers a declined question afterwards. Nothing is backfilled.
+  the PM answers a declined question afterwards. `reserved_term` (nullable, added by
+  `014`) holds the configured term the gate declined on, and is set only when
+  `decline_reason` is `reserved_term`. Nothing is backfilled.
 
 | From | To | Writer |
 | --- | --- | --- |
 | (insert) | `pending` | `record_question`, with a new block |
 | (insert) | `declined` | `record_question`, node already blocked |
 | `pending`, `answering` | `declined` | `decline_question` |
+| `pending`, `answering` | `declined` (`answer_limit_reached`, `reserved_term`) | `submit_answer`, gate refused |
 | `pending`, `declined`, `answering` | `answered` (`pm`) | `acknowledge_resolution` |
 | `pending` | `answering` | slice 144 |
-| `pending`, `answering` | `answered` (`answerer`) | slice 142 |
+| `pending`, `answering` | `answered` (`answerer`) | `submit_answer` |
 
 `answered` is terminal. Any other change raises `InvalidTransitionError` and writes
 nothing.
@@ -899,9 +903,39 @@ name in `submitted_by` is recorded as the PM's when the record is not already
 `answered`. A resume without instructions marks the record answered with a null answer;
 a null answer is not precedent.
 
+#### Submitting an answer
+
+*Added by slice 142.* One method submits the answerer's answer, or declines the
+question, behind one gate. Nothing in the store calls it yet (slice 144 is the first
+caller).
+
+| Method | Effect |
+| --- | --- |
+| `submit_answer(question_id, *, answer, instructions, detail, gate) -> AnswerSubmission` | In-process only. **One transaction** (`BEGIN IMMEDIATE`). The store writes `ANSWER_DECISION` (`"resume"`) as the decision and `AnsweredBy.ANSWERER.value` as `resolved_by` and `submitted_by`; the caller supplies neither. `instructions` and `detail` are plain strings written to the slot and the submission row as given, and the store reads neither. `gate: AnswerGate` (`Callable[[str, int], GateRefusal \| None]`) is called once, under the write lock, with the record's question and the number of answers the answerer already gave this run. Raises `QuestionNotFoundError` for an unknown id, `ValueError` for a blank `answer`, `instructions` or `detail` or a record with no question text, and `StoreBusyError` when the busy timeout is exhausted. An exception from `gate` rolls the transaction back and propagates. |
+
+Inside the transaction, in order: read the record; a state other than `pending` or
+`answering` returns `settled`; a block already resolved returns `block_resolved`; the
+prior count is read (records with the same project and run, `answered` by the answerer,
+the record itself excluded); the gate is called once.
+
+| Outcome | When | What was written |
+| --- | --- | --- |
+| `submitted` | The gate returned `None` and the slot was open | The block's resolution slot (decision `resume`, the given instructions, `resolved_by=answerer`, awaiting the Runner), one `applied` `resolution` row in `inbox_submissions` (`submitted_by=answerer`, the given `detail`), and the record `answered` (`answered_by=answerer`, `answer`) |
+| `declined` | The gate returned a `GateRefusal` | The record `declined` with the refusal's reason and, for `reserved_term`, the term as configured. The slot is untouched and the block stays open for the PM |
+| `block_resolved` | Someone resolved the block first (the PM) | Nothing. The Runner's acknowledgment of that resolution settles the record as the PM's |
+| `settled` | The record is already `answered` or `declined` | Nothing |
+
+`AnswerSubmission(outcome, record)` carries the record as it stands after the
+transaction. The answerer's answer counts toward the run's limit once submitted, even if
+the Runner later rejects the resolution: the record stays `answered`, the node gets the
+rejection's `HUMAN` block, and a PM resume of that block is not recorded as precedent
+(no unanswered record is linked to it). Exported with it: `GateRefusal`, `AnswerGate`,
+`AnswerOutcome`, `ANSWER_DECISION`, `QuestionNotFoundError`.
+
 **Feed and inspection.** The two triggers emit `question_recorded` and
 `question_state_changed` (see [`feed-contract.md`](feed-contract.md#kinds-and-payloads)).
-`amoeba inspect questions` lists the records, and `amoeba inspect blocked` gains
+`amoeba inspect questions` lists the records (with the `reserved_term` column since
+slice 142), and `amoeba inspect blocked` gains
 `question_state` and `decline_reason` for a block that carries a question.
 
 ### Unrouted outcomes
@@ -1024,8 +1058,10 @@ adding a table onto working machinery, not debugging both at once.
 **A store stamped newer than the code raises `StoreSchemaError`.** It is never
 silently downgraded.
 
-The latest migration is `013` (slice 141, schema version 13: the `question_records`
-table, its indexes and the two question feed triggers). Before it, `012` (slice 127,
+The latest migration is `014` (slice 142, schema version 14: the nullable
+`question_records.reserved_term` column). Before it, `013` (slice 141, schema version
+13: the `question_records` table, its indexes and the two question feed triggers).
+Before that, `012` (slice 127,
 schema version 12) added the resolution decision, instructions and the Runner's
 answer on `blocked_states`, and the partial index of unanswered ones. Before that,
 `011` (slice 125, schema version 11) added

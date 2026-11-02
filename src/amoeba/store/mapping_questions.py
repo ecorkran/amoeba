@@ -91,4 +91,5 @@ def map_question_record(row: Sequence[object]) -> QuestionRecord:
         ),
         created_at=_required_timestamp(row[13], sql_questions.COL_QUESTION_CREATED_AT),
         updated_at=_required_timestamp(row[14], sql_questions.COL_QUESTION_UPDATED_AT),
+        reserved_term=optional_text(row[15], sql_questions.COL_QUESTION_RESERVED_TERM),
     )

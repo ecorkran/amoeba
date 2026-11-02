@@ -67,6 +67,32 @@ def test_decline_from_pending_records_the_reason(store: Store) -> None:
     assert store.question(record.id) == declined
 
 
+def test_a_reserved_term_decline_reads_back_with_its_reason_and_term(
+    store: Store,
+) -> None:
+    seeded = seed_question(
+        store,
+        make_slice(store),
+        state=QuestionState.DECLINED,
+        decline_reason=DeclineReason.RESERVED_TERM,
+        reserved_term="Drop Table",
+    )
+
+    stored = store.question(seeded.id)
+
+    assert stored is not None
+    assert stored.decline_reason is DeclineReason.RESERVED_TERM
+    assert stored.reserved_term == "Drop Table"
+
+
+def test_decline_question_leaves_the_reserved_term_empty(store: Store) -> None:
+    record = seed_question(store, make_slice(store))
+
+    declined = store.decline_question(record.id, reason=DeclineReason.NO_ANSWER_ON_FILE)
+
+    assert declined.reserved_term is None
+
+
 def test_decline_from_answered_raises_and_leaves_the_row(store: Store) -> None:
     record = seed_question(
         store,

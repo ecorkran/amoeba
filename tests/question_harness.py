@@ -81,6 +81,7 @@ def seed_question(
     answer: str | None = None,
     decline_reason: DeclineReason | None = None,
     truncated: bool = False,
+    reserved_term: str | None = None,
 ) -> QuestionRecord:
     """Insert one record, with a journal entry of its own for the unique key."""
     entry = store.journal_issue(
@@ -109,6 +110,7 @@ def seed_question(
         ),
         sql_q.COL_QUESTION_CREATED_AT: stamp,
         sql_q.COL_QUESTION_UPDATED_AT: stamp,
+        sql_q.COL_QUESTION_RESERVED_TERM: reserved_term,
     }
     with store._connection:  # pyright: ignore[reportPrivateUsage]
         store._connection.execute(  # pyright: ignore[reportPrivateUsage]

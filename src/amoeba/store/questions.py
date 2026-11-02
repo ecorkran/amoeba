@@ -154,6 +154,7 @@ class QuestionOperations(BlockWriter):
             ),
             sql_questions.COL_QUESTION_CREATED_AT: timestamp,
             sql_questions.COL_QUESTION_UPDATED_AT: timestamp,
+            sql_questions.COL_QUESTION_RESERVED_TERM: None,
         }
         self._execute(
             sql_questions.INSERT_QUESTION,
@@ -179,6 +180,7 @@ class QuestionOperations(BlockWriter):
                 (
                     QuestionState.DECLINED.value,
                     reason.value,
+                    None,
                     isoformat(now()),
                     question_id,
                 ),

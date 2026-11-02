@@ -43,6 +43,7 @@ def _record(question: str | None = "which branch?") -> QuestionRecord:
         decline_reason=None,
         created_at=STAMP,
         updated_at=STAMP,
+        reserved_term=None,
     )
 
 
