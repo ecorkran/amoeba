@@ -16,13 +16,16 @@ from feed_harness import (
     raw_changes,
     resolve_by_submission,
 )
+from question_harness import seed_question
 
 from amoeba.store import (
     BlockedKind,
     CFSnapshotOutcome,
     Channel,
+    DeclineReason,
     NodeKind,
     NodeStatus,
+    QuestionState,
     Store,
 )
 from amoeba.store.feed_models import (
@@ -65,6 +68,14 @@ def _run_sequence(store: Store) -> None:
             )
         )
     _record_cf_snapshots(store)
+    _record_questions(store, root)
+
+
+def _record_questions(store: Store, node_id: str) -> None:
+    """One question declined, one left pending (slice 141, D7)."""
+    declined = seed_question(store, node_id)
+    seed_question(store, node_id)
+    store.decline_question(declined.id, reason=DeclineReason.NO_ANSWER_ON_FILE)
 
 
 def _record_cf_snapshots(store: Store) -> None:
@@ -137,6 +148,16 @@ def reconcile(store: Store, project_id: str) -> list[str]:
     snapshot_ids = [str(snapshot.id) for snapshot in store.cf_snapshots(project_id)]
     if _subjects(changes, ChangeKind.CF_PROJECT_CHANGED) != snapshot_ids:
         differences.append(f"cf snapshot ids differ from {snapshot_ids}")
+
+    question_ids = [question.id for question in store.questions(project_id)]
+    if _subjects(changes, ChangeKind.QUESTION_RECORDED) != question_ids:
+        differences.append(f"question ids differ from {question_ids}")
+    declined_ids = [
+        question.id
+        for question in store.questions(project_id, state=QuestionState.DECLINED)
+    ]
+    if _subjects(changes, ChangeKind.QUESTION_STATE_CHANGED) != declined_ids:
+        differences.append(f"question state changes differ from {declined_ids}")
 
     return differences
 

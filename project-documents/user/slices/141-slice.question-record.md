@@ -11,8 +11,8 @@ interfaces:
 - 143
 - 144
 dateCreated: 20261101
-dateUpdated: 20261101
-status: not_started
+dateUpdated: 20261102
+status: complete
 turns: 30
 promptTokens: 2591776
 cachedTokens: 2452996
@@ -368,28 +368,28 @@ Steps 1–4 use the stub `sq` harness in `tests/`. Steps 5–7 run against a thr
 2. **Crash retry (stub).** `pytest tests/runner/test_crash_recovery.py -k question`. Expected: after the kill between the record and the report, the restarted tick resolves the entry with one block and one record.
 3. **Rule from the record.** `pytest tests/store/test_question_acknowledgment.py`. Expected: cases for an applied resume with instructions, an applied resume without instructions, a stop, a rejection, an already-`answered` record and a resume submitted as the answerer's name, each passing.
 4. **Transitions.** `pytest tests/store/test_question_records.py -k transition`. Expected: every illegal pair raises.
-5. **Real store: a question appears.** With a stub-driven question-paused slice in the scratch project:
+5. **Real store: a question appears.** Drive a stub-run question-paused slice into a throwaway `AMOEBA_STORE_DIR` (the `Scenario` rig in `tests/runner/test_end_to_end.py` does this: stub `sq` and `cf`, a 430-character question, `tick_until` the node blocks). Then, with `AMOEBA_STORE_DIR` set to that directory:
 
    ```
-   amoeba inspect blocked --project scratch
+   amoeba inspect blocked --project demo
    ```
 
-   Expected: the row with `reason agent_question` and the same `context` as before, plus `question_state declined` and `decline_reason answerer_not_configured`.
+   Observed: one row, `blocked_on human`, `reason agent_question`, `context question at design-0, run <id>`, `question_state declined`, `decline_reason answerer_not_configured`.
 
    ```
-   amoeba inspect questions --project scratch
+   amoeba inspect questions --project demo
    ```
 
-   Expected: one row, `state declined`, `answered_by` empty, `outcome answerer_not_configured`, and `truncated` true when the question is 400 characters long.
-6. **Turn it on.** Add `answerer: {}` under the project in `projects.yaml` and restart. Make another question. Expected: `inspect questions` shows `outcome no_answer_on_file`. Set `answerer:` with no value and restart. Expected: start fails, naming `projects.scratch.answerer`.
-7. **PM answers.**
+   Observed: one row, `step design-0`, `state declined`, `answered_by` empty, `question` the full text, `outcome answerer_not_configured`, `truncated true` (the question is over 400 characters).
+6. **Turn it on.** `answerer: {}` under the project in `projects.yaml` loads as configured (`load_project_config(...).for_project("demo").answerer` is an `AnswererSettings`); the tick test `test_an_empty_answerer_section_declines_no_answer_on_file` (`tests/runner/test_tick_answering.py`) shows the record's `outcome no_answer_on_file`. With `answerer:` and no value, `amoeba start --project-config projects.yaml` exits 7 and prints `projects.demo.answerer: Value error, answerer must be a mapping; write `{}` (got None)`. Do not run `amoeba start` with a valid config in this walkthrough: it starts the resident process and does not return.
+7. **PM answers.** Submit the PM's resolution of the question's block, then let the Runner tick. The resolution is applied through `store.apply_submission` (the call the inbox makes), because `amoeba submit resolution` only writes an inbox file and needs the resident process running to apply it. With a running process, the same effect comes from:
 
    ```
-   amoeba submit resolution --project scratch --by pm --blocked-state-id <id> \
+   amoeba submit resolution --project demo --by pm --blocked-state-id <id> \
      --detail answered --decision resume --instructions "Use the target branch."
    ```
 
-   After the next tick, `amoeba inspect questions --project scratch --json` shows `state answered`, `answered_by pm`, `answer "Use the target branch."`. `amoeba feed --project scratch` shows `question_recorded`, then two `question_state_changed` lines (`pending → declined`, `declined → answered`).
+   After the next tick, `amoeba inspect questions --project demo --json` shows `state answered`, `answered_by pm`, `outcome "Use the target branch."`. (The listing's `outcome` carries the answer; the `answer` column of the store is the same text.) `amoeba feed --project demo` shows, in order: `question_recorded` (`state pending`), `question_state_changed` (`pending` to `declined`, `decline_reason answerer_not_configured`), then `question_state_changed` (`declined` to `answered`, `answered_by pm`, `decline_reason` kept).
 
 ## Risk Assessment
 

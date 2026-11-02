@@ -40,16 +40,19 @@ from amoeba.runner.ingest.record import (
 from amoeba.runner.launch import log_paths
 from amoeba.store import (
     PARAM_RUN_ID,
+    AnsweredBy,
     BlockedKind,
     BlockedState,
     CFReference,
     Channel,
     CommandKind,
+    DeclineReason,
     JournalEntry,
     JournalOutcome,
     Node,
     NodeKind,
     NodeStatus,
+    QuestionState,
     Store,
 )
 from runner.dispatch.cf_world import CfWorld
@@ -344,10 +347,22 @@ def test_an_agent_question_blocks_with_the_question_then_resumes_with_instructio
     assert message.payload is not None
     assert message.payload["reason"] == "agent_question"
     assert message.payload["question"] == question
+    # The question is on record, linked to the block (slice 141).
+    asked = store.question_for_block(blocked.id)
+    assert asked is not None and asked.question == question
+    # The same tick's answering stage declined it: no answerer is configured.
+    assert asked.state is QuestionState.DECLINED
+    assert asked.decline_reason is DeclineReason.ANSWERER_NOT_CONFIGURED
 
     scenario.script(empty_reviews())
     resolve_block(store, blocked.id, "resume", instructions)
     scenario.tick_until("the slice to finish", lambda: scenario.done(scenario.node))
+
+    answered = store.question(asked.id)
+    assert answered is not None
+    assert answered.state is QuestionState.ANSWERED
+    assert answered.answered_by is AnsweredBy.PM
+    assert answered.answer == instructions
 
     [resume_argv] = [json.loads(line) for line in argv_log.read_text().splitlines()]
     assert resume_argv[resume_argv.index("--instructions") + 1] == instructions

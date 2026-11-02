@@ -24,6 +24,7 @@ from amoeba.store import (
     AcknowledgmentOutcome,
     Channel,
     DetectionOutcome,
+    QuestionState,
     Store,
     StoreBusyError,
     sql,
@@ -34,8 +35,10 @@ from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 type ParityCase = tuple[str, str, list[str], dict[str, str]]
 
 
-def _seeded_value(option: ValueOption, seeded: SeededStore) -> str:
-    """The seeded id a value option names."""
+def _seeded_value(listing: str, option: ValueOption, seeded: SeededStore) -> str:
+    """The seeded id a value option of ``listing`` names."""
+    if (listing, option.name) == ("questions", "node"):
+        return seeded.blocked_node_id
     by_name = {
         "node": seeded.node_id,
         "judge_invocation_id": seeded.judge_invocation_id,
@@ -49,6 +52,7 @@ def _seeded_choice(option: ChoiceOption) -> str:
     by_name = {
         "channel": Channel.INTENT.value,
         "outcome": DetectionOutcome.UNPARSEABLE.value,
+        "state": QuestionState.DECLINED.value,
     }
     return by_name[option.name]
 
@@ -64,8 +68,8 @@ def _parity_cases(seeded: SeededStore) -> list[ParityCase]:
             query[reads.PROJECT_PARAMETER] = seeded.project_id
         for option in listing.value_options:
             if option.required:
-                cli += [option.flag, _seeded_value(option, seeded)]
-                query[option.name] = _seeded_value(option, seeded)
+                cli += [option.flag, _seeded_value(listing.name, option, seeded)]
+                query[option.name] = _seeded_value(listing.name, option, seeded)
         cases.append((listing.name, listing.name, cli, query))
         for flag in listing.flags:
             cases.append(
@@ -88,7 +92,7 @@ def _parity_cases(seeded: SeededStore) -> list[ParityCase]:
             )
         for option in listing.value_options:
             if not option.required:
-                value = _seeded_value(option, seeded)
+                value = _seeded_value(listing.name, option, seeded)
                 cases.append(
                     (
                         f"{listing.name}:{option.name}",

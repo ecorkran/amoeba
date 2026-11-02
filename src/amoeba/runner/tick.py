@@ -14,6 +14,7 @@ from typing import Final
 
 from amoeba.process import UpstreamShapeError
 from amoeba.runner.act import ActStage
+from amoeba.runner.answering.stage import settle_pending_questions
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, Planner, ProjectView, decide
@@ -138,6 +139,7 @@ class ProjectTick:
         )
         if shape_error is not None:
             raise UpstreamShapeError(shape_error)
+        self._answer_questions()
         if probed is TickResult.CUT_OFF:
             return TickResult.CUT_OFF
         view = self._build_view(runs.pending, self._probes.results(links), desired)
@@ -195,6 +197,22 @@ class ProjectTick:
         )
         self._context.clear()
         self.wrote = answered or self.wrote
+
+    def _answer_questions(self) -> None:
+        """Settle pending questions: this tick's catches are declined this tick.
+
+        Store only, so no budget check, and it runs before the ``CUT_OFF`` return.
+        The context is cleared, so an exception escalates per project: with a node
+        in context, 122's ``escalate`` would see a node already blocked on a human
+        and write nothing (slice 141, D5).
+        """
+        self._context.clear()
+        settled = settle_pending_questions(
+            self._store,
+            self._project_id,
+            configured=self._project_settings.answerer is not None,
+        )
+        self.wrote = settled or self.wrote
 
     def _plan_reads(
         self, links: Sequence[str], budget: TickBudget, faults: TickFaults

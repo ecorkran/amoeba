@@ -29,6 +29,7 @@ from amoeba.store import (
     BlockedState,
     JournalEntry,
     Node,
+    QuestionRecord,
     Store,
     project_store_path,
 )
@@ -242,6 +243,12 @@ class CrashHarness:
             project_store_path(self.supervisor_dir, PROJECT)
         ) as store:
             return [s for s in store.all_blocked_states(node_id) if not s.is_resolved]
+
+    def questions(self) -> list[QuestionRecord]:
+        with Store.open_read_only(
+            project_store_path(self.supervisor_dir, PROJECT)
+        ) as store:
+            return store.questions(PROJECT)
 
     def verdict_ids(self) -> list[str]:
         with Store.open_read_only(

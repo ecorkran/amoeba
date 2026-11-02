@@ -65,6 +65,8 @@ a default.
 | `review_detected` | the node, or null | detection ledger id | `outcome`, `path` |
 | `check_recorded` | the node | check id | `name`, `outcome`, `examined_count` (integer or null) |
 | `cf_project_changed` | null | snapshot id | `cf_project_id`, `outcome`, `changed` (a list of field changes, or null for a failure) |
+| `question_recorded` | the slice | question record id | `state`, `decline_reason` (null unless born declined) |
+| `question_state_changed` | the slice | question record id | `from`, `to`, `answered_by`, `decline_reason` |
 
 - `node_created` carries the initial status, so replaying from `seq` 0 rebuilds
   every node's current status without reading the store.
@@ -80,6 +82,11 @@ a default.
   failure (`changed` null; read `detail` by `subject_id`) and a recovery with
   `changed: []`. Its payload is defined in
   [`context-forge-contract.md`](context-forge-contract.md#the-feed-entry).
+- `question_recorded` is emitted when a record is inserted, and
+  `question_state_changed` only when its `state` actually changes. Re-pointing a
+  record to a new block (a PM `stop` or a rejected resolution) changes no state and
+  emits nothing. Neither payload carries the question or the answer text; read the
+  record by `subject_id`.
 - `review_detected` is emitted for the `ingested`, `unattributed`, and
   `unparseable` outcomes. `baseline` and `runner_issued` ledger rows emit
   nothing.
@@ -88,8 +95,8 @@ a default.
 
 ## Coverage
 
-The feed announces node, verdict, message, detection, check, and Context Forge
-snapshot changes only. It does
+The feed announces node, verdict, message, detection, check, question-record, and
+Context Forge snapshot changes only. It does
 **not** announce:
 
 - progress records (write-only; no reader yet);

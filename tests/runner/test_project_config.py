@@ -9,6 +9,7 @@ import pytest
 from amoeba.process import StartupFailedError
 from amoeba.runner.project_config import (
     PROJECT_DEFAULTS,
+    AnswererSettings,
     load_project_config,
 )
 
@@ -130,3 +131,52 @@ def test_two_params_problems_in_one_file_are_both_named(tmp_path: Path) -> None:
 
     assert "projects.a.params.slice" in str(raised.value)
     assert "projects.b.pipeline" in str(raised.value)
+
+
+# --------------------------------------------------------------------------
+# The answerer section (slice 141, D6)
+# --------------------------------------------------------------------------
+
+# The real projects.yaml layout, as an operator writes it.
+ANSWERER_FILE = """\
+projects:
+  scratch:
+    pipeline: p456
+    answerer: {}
+  plain:
+    pipeline: p456
+"""
+
+
+def test_an_empty_answerer_mapping_is_configured_and_an_absent_key_is_not(
+    tmp_path: Path,
+) -> None:
+    config = load_project_config(_write(tmp_path, ANSWERER_FILE))
+
+    assert config.for_project("scratch").answerer == AnswererSettings()
+    assert config.for_project("plain").answerer is None
+    assert config.for_project("unnamed").answerer is None
+
+
+def test_a_null_answerer_fails_naming_the_project_path(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path, "projects:\n  scratch:\n    pipeline: p456\n    answerer:\n"
+    )
+
+    with pytest.raises(StartupFailedError) as raised:
+        load_project_config(path)
+
+    assert "projects.scratch.answerer" in str(raised.value)
+    assert "write `{}`" in str(raised.value)
+
+
+def test_an_unknown_key_inside_answerer_fails(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "projects:\n  scratch:\n    pipeline: p456\n    answerer: {limit: 3}\n",
+    )
+
+    with pytest.raises(StartupFailedError) as raised:
+        load_project_config(path)
+
+    assert "projects.scratch.answerer.limit" in str(raised.value)

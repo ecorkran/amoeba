@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from sq_stub_scripts import (
     RunScript,
+    agent_question_run,
     empty_reviews,
     missing_file_review,
     null_path_review,
@@ -40,11 +41,13 @@ from amoeba.store import (
     CFReference,
     Channel,
     CommandKind,
+    DeclineReason,
     DetectionOutcome,
     JournalEntry,
     JournalOutcome,
     Node,
     NodeKind,
+    QuestionState,
     Store,
     StoreError,
 )
@@ -317,3 +320,41 @@ def test_recording_again_after_a_crash_gives_one_block_and_one_verdict_per_part(
     assert len(rig.store.verdicts(PROJECT)) == 2, "one verdict per part"
     assert len(rig.store.detections(PROJECT)) == 2
     assert rig.resolved().is_resolved
+
+
+def test_a_question_outcome_writes_one_block_and_one_question_record(
+    rig: Rig,
+) -> None:
+    rig.finish(agent_question_run("Which slice?"), RunOutcome.PAUSED)
+
+    assert rig.open_blocks() == [BlockedKind.HUMAN]
+    [record] = rig.store.questions(PROJECT)
+    block = rig.store.blocked_state_for(rig.step.id)
+    assert block is not None
+    assert record.state is QuestionState.PENDING
+    assert record.blocked_state_id == block.id
+    assert record.source_entry_id == rig.entry.id
+    assert (record.run_id, record.question) == (RUN_ID, "Which slice?")
+    assert rig.resolved().is_resolved
+
+
+def test_a_question_on_an_already_blocked_node_is_declined_and_adds_no_block(
+    rig: Rig,
+) -> None:
+    rig.store.block(rig.step.id, kind=BlockedKind.HUMAN, context="earlier")
+
+    rig.finish(agent_question_run("Which slice?"), RunOutcome.PAUSED)
+
+    [record] = rig.store.questions(PROJECT)
+    assert record.state is QuestionState.DECLINED
+    assert record.decline_reason is DeclineReason.NODE_ALREADY_BLOCKED
+    assert record.blocked_state_id is None
+    assert rig.open_blocks() == [BlockedKind.HUMAN]
+    assert len(list(rig.store.all_blocked_states(rig.step.id))) == 1
+
+
+def test_a_non_question_block_writes_no_question_record(rig: Rig) -> None:
+    rig.finish(RunScript({}, {"failure": {"kind": "cost_cap"}}), RunOutcome.FAILED)
+
+    assert rig.open_blocks() == [BlockedKind.HUMAN]
+    assert rig.store.questions(PROJECT) == []

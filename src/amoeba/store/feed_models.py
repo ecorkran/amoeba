@@ -26,6 +26,8 @@ class ChangeKind(StrEnum):
     REVIEW_DETECTED = "review_detected"
     CHECK_RECORDED = "check_recorded"
     CF_PROJECT_CHANGED = "cf_project_changed"
+    QUESTION_RECORDED = "question_recorded"
+    QUESTION_STATE_CHANGED = "question_state_changed"
 
 
 class DetectionOutcome(StrEnum):

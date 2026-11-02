@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from amoeba.process import RunOutcomeDocument
+from amoeba.process import QUESTION_TAIL_CHARS, RunOutcomeDocument
 from amoeba.runner.ingest.outcome import (
     PAYLOAD_CHECKPOINT,
     PAYLOAD_COUNT,
@@ -16,6 +16,7 @@ from amoeba.runner.ingest.outcome import (
     PAYLOAD_RUN_ID,
     PAYLOAD_STEP,
     OutcomePlan,
+    PlannedQuestion,
     plan_supervised,
 )
 from amoeba.runner.launch import STDERR_TAIL_LIMIT_BYTES
@@ -86,6 +87,51 @@ def test_a_question_longer_than_the_bound_is_cut() -> None:
     assert len(cast("str", payload[PAYLOAD_QUESTION]).encode()) == (
         STDERR_TAIL_LIMIT_BYTES
     )
+
+
+@pytest.mark.parametrize(
+    ("length", "truncated"),
+    [
+        (QUESTION_TAIL_CHARS - 1, False),
+        (QUESTION_TAIL_CHARS, True),
+        (QUESTION_TAIL_CHARS + 1, True),
+    ],
+)
+def test_the_planned_question_is_truncated_from_the_tail_limit(
+    length: int, truncated: bool
+) -> None:
+    question = "q" * length
+    checkpoint = {"kind": "agent_question", "step": "design-0", "question": question}
+
+    plan = _plan(_ended("paused", checkpoint=checkpoint))
+
+    assert plan.question == PlannedQuestion(RUN_ID, "design-0", question, truncated)
+
+
+def test_a_planned_question_with_no_text_is_null_and_not_truncated() -> None:
+    plan = _plan(
+        _ended("paused", checkpoint={"kind": "agent_question", "step": "design-0"})
+    )
+
+    assert plan.question == PlannedQuestion(RUN_ID, "design-0", None, False)
+
+
+def test_the_question_block_context_and_payload_are_unchanged() -> None:
+    checkpoint = {"kind": "agent_question", "step": "design-0", "question": "Which?"}
+
+    plan = _plan(_ended("paused", checkpoint=checkpoint))
+
+    assert plan.block is not None
+    assert plan.block.context == f"question at design-0, run {RUN_ID}"
+
+
+def test_only_a_question_outcome_carries_a_question() -> None:
+    assert _plan(_ended("completed")).question is None
+    assert (
+        _plan(_ended("failed", failure={"kind": "boom", "step": "s"})).question is None
+    )
+    paused = _ended("paused", checkpoint={"kind": "awaits_human", "step": "s"})
+    assert _plan(paused).question is None
 
 
 @pytest.mark.parametrize(

@@ -114,6 +114,14 @@ from amoeba.store.models import (
     VerdictNotFoundError,
 )
 from amoeba.store.paths import project_store_path, store_dir
+from amoeba.store.question_models import (
+    QUESTION_TRANSITIONS,
+    AnsweredBy,
+    DeclineReason,
+    QuestionCatch,
+    QuestionRecord,
+    QuestionState,
+)
 from amoeba.store.runner_models import (
     BlockEffect,
     ClearDesiredState,
@@ -216,6 +224,13 @@ __all__ = [
     "RunnerReview",
     "SetDesiredState",
     "StatusEffect",
+    # Question records, added by slice 141
+    "QUESTION_TRANSITIONS",
+    "AnsweredBy",
+    "DeclineReason",
+    "QuestionCatch",
+    "QuestionRecord",
+    "QuestionState",
     # Locating stores (read-only consumers)
     "project_store_path",
     "store_dir",

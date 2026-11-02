@@ -124,14 +124,18 @@ class BlockWriter(StoreBase):
         effect: StatusEffect | BlockEffect | None,
         timestamp: str,
         journal_entry_id: str | None,
-    ) -> None:
-        """Apply a decision's or a resolution's effect in the caller's transaction."""
+    ) -> str | None:
+        """Apply a decision's or a resolution's effect in the caller's transaction.
+
+        Returns:
+            The id of the block the effect wrote, or ``None`` when it wrote none.
+        """
         if isinstance(effect, StatusEffect):
             self._write_status(node_id, NodeStatus(effect.status), timestamp)
         elif isinstance(effect, BlockEffect):
             # The refusal block() makes, checked here under the write lock.
             self._refuse_if_blocked(self._require_node(node_id))
-            self._write_block(
+            return self._write_block(
                 node_id,
                 project_id=project_id,
                 kind=BlockedKind.HUMAN,
@@ -140,6 +144,7 @@ class BlockWriter(StoreBase):
                 payload=effect.payload,
                 journal_entry_id=journal_entry_id,
             )
+        return None
 
     def _write_block(
         self,

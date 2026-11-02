@@ -539,7 +539,23 @@ resumable → resume; question → answer; anything else → a person".
 - **Squadron shapes.** `checkpoint.question`, `checkpoint.resets_at` and
   `failure.agent_text` are optional fields of `sq runs wait --json` (Squadron 0.24.9);
   an absent field is `None`, and an older `sq` degrades to the `BLOCKED` row, never to
-  a resume.
+  a resume. Squadron reports `checkpoint.question` as the last 400 characters of the
+  agent's reply: `QUESTION_TAIL_CHARS` in `process/sq_outcome.py`. A question that
+  long was probably cut at its start, so the question record's `truncated` flag is
+  `len(question) >= QUESTION_TAIL_CHARS`, measured before the text bound below.
+- **The question record (slice 141).** A `QUESTION` plan carries the question
+  (`OutcomePlan.question`), and ingest writes the block through `record_question`
+  instead of `block_once`, so the block and the record land together or not at all
+  (see [`store-contract.md`](store-contract.md#question-records)). Its errors are not
+  caught: they reach the tenant boundary, and the unresolved entry is ingested again
+  on the next tick. **The answering stage** runs in every tick after the finished runs
+  are recorded, before the cut-off return, store only and without budget. It declines
+  each `pending` record: `question_missing` for a null or empty question,
+  `answerer_not_configured` for a project with no `answerer` section,
+  `no_answer_on_file` otherwise. A record whose block the PM has already resolved
+  is skipped; the acknowledgment of that resolution marks it answered by the PM. A
+  pending record whose block is resolved with nothing awaiting the Runner breaks an
+  invariant and raises, which escalates per project.
 - **Text bounds.** `question`, `agent_text` and every checkpoint and failure text
   field are cut to the 4 KiB tail bound.
 
@@ -720,13 +736,19 @@ projects:
     pipeline: p4567      # a user pipeline that also merges
 ```
 
+- `answerer` (slice 141) is optional. Its presence turns the question answerer on:
+  `answerer: {}` is configured, a missing key or an unnamed project is not. It has no
+  keys yet (142 to 144 add them, and `answerer: {}` stops loading when they do). An
+  explicit `answerer:` with a null value fails the load ("answerer must be a mapping;
+  write `{}`", naming `projects.<id>.answerer`), so a section written but left empty
+  cannot quietly turn the answerer off.
 - Keys under `projects` are Amoeba project ids. `pipeline` is required for each named
   project; there is **no default pipeline**, because a default could merge code nobody
   chose to merge. A project the file does not name (or no file at all) has no pipeline
   and launches nothing (`pipeline_unconfigured`).
 - `params` is a string-to-string mapping. Load fails, listing every problem, on a key
   `slice` (the target the Runner passes), a key containing `,` or `=`, a value
-  containing `,`, a non-string value, or any key beside `pipeline` and `params`
+  containing `,`, a non-string value, or any key beside `pipeline`, `params` and `answerer`
   (`merge_policy` is one: whether a pipeline merges is the pipeline's business).
   A missing or unreadable file or invalid YAML exits `STARTUP_FAILED`.
 - The pipeline name is not validated at load. An unknown pipeline makes `sq run` exit 1
@@ -958,7 +980,8 @@ provenance and never parsed, ordered, or branched on.
 | `amoeba status` | `running` (pid, start time, version), `running (pid unknown)`, `stopped (stale pid file)`, or `stopped`. |
 | `amoeba inspect projects\|inbox` | Supervisor-level: project ids with a store; inbox files pending, quarantined, or failed. Open no store. |
 | `amoeba inspect nodes\|journal\|submissions\|messages --project ID` | Read-only listings. `journal` accepts `--unresolved`; `messages` accepts `--channel`. All accept `--json`. |
-| `amoeba inspect blocked [--project ID]` | Blocked nodes with `project_id`, `reason` (the payload's `reason` or `fault_kind`, empty with neither) and `blocked_state_id`; every project when `--project` is omitted, each store opened read-only. `--json` adds the full escalation `payload`, which holds an agent's question. *(Slice 132.)* |
+| `amoeba inspect questions --project ID [--node ID] [--state STATE]` | Question records: `id`, `node_id`, `run_id`, `step`, `state`, `answered_by`, `question`, `outcome` (the answer, or the decline reason), `truncated`, `created_at`; `--json` and the server add `blocked_state_id`, `source_entry_id` and `updated_at`. *(Slice 141.)* |
+| `amoeba inspect blocked [--project ID]` | Blocked nodes with `question_state` and `decline_reason` (empty for a block with no question), `project_id`, `reason` (the payload's `reason` or `fault_kind`, empty with neither) and `blocked_state_id`; every project when `--project` is omitted, each store opened read-only. `--json` adds the full escalation `payload`, which holds an agent's question. *(Slice 132.)* |
 | `amoeba submit create-project\|resolution\|intent ...` | Write one submission to the inbox and print its id. Opens no store; works whether or not the process runs. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
 | `amoeba prune sq-runs [--yes]` | Previews the paused Squadron runs Amoeba may prune; with `--yes`, asks `sq runs prune` to delete them. Read-only on every store. See "Pruning paused runs". *(Slice 110.)* |
 | `amoeba serve [--host] [--port] [--tls-cert --tls-key]` | A second, foreground process serving reads, submissions, and the feed over HTTP. Independent of the resident process: no lock, no PID file, works with it stopped. See [`network-contract.md`](network-contract.md). *(Slice 109.)* |

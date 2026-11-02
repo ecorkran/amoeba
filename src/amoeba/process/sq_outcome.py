@@ -129,6 +129,12 @@ def _parse_kind[KindT: StrEnum](
         return UnknownKind(raw)
 
 
+#: Squadron's tail limit on ``RunCheckpoint.question``: the last this-many
+#: characters of the agent's reply. A question this long was probably cut at its
+#: start (slice 141, D4).
+QUESTION_TAIL_CHARS: Final = 400
+
+
 class RunCheckpoint(BaseModel):
     """A paused run's checkpoint. Every field is optional; ``None`` means unknown.
 
@@ -151,7 +157,8 @@ class RunCheckpoint(BaseModel):
     paused_at: datetime | None = None
     #: A ``usage_limit`` pause: when the limit resets (timezone-aware).
     resets_at: datetime | None = None
-    #: An ``agent_question`` pause: the end of the agent's reply (up to 400 chars).
+    #: An ``agent_question`` pause: the end of the agent's reply, at most
+    #: ``QUESTION_TAIL_CHARS`` long.
     question: str | None = None
 
 
