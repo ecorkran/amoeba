@@ -222,22 +222,22 @@ revision_number: 2
 
 ## 8. Inspection
 
-- [ ] **8.1 `questions` listing** (`inspection/questions.py`, registered in `inspection/core.py`)
-  - [ ] Project-scoped listing with columns `id`, `node_id`, `run_id`, `step`, `state`, `answered_by`, `question`, `outcome`, `truncated`, `created_at`. `outcome` is the answer when `answered`, the decline reason when `declined`, otherwise empty.
-  - [ ] Options: `--node` (the shared `NODE_OPTION`) and `--state` (a `ChoiceOption` over `QuestionState`).
-  - [ ] JSON rows also carry `blocked_state_id`, `source_entry_id` and `updated_at`.
-  - [ ] Success: `amoeba inspect questions --project P` runs, and `GET /v1/listings/questions?project=P` comes from the registry with no server change.
+- [x] **8.1 `questions` listing** (`inspection/questions.py`, registered in `inspection/core.py`)
+  - [x] Project-scoped listing with columns `id`, `node_id`, `run_id`, `step`, `state`, `answered_by`, `question`, `outcome`, `truncated`, `created_at`. `outcome` is the answer when `answered`, the decline reason when `declined`, otherwise empty.
+  - [x] Options: `--node` (the shared `NODE_OPTION`) and `--state` (a `ChoiceOption` over `QuestionState`).
+  - [x] JSON rows also carry `blocked_state_id`, `source_entry_id` and `updated_at`.
+  - [x] Success: `amoeba inspect questions --project P` runs, and `GET /v1/listings/questions?project=P` comes from the registry with no server change.
 
-- [ ] **8.2 `blocked` gains `question_state` and `decline_reason`** (`inspection/core.py`)
-  - [ ] Join on `blocked_state_id`. Both columns are empty for a block with no question. The JSON row also carries `question_id`.
-  - [ ] Existing columns and `payload` unchanged. Add the columns in `_blocked_rows`, which `blocked_rows` and `all_blocked_rows` share, so no second code path is written.
-  - [ ] Success: the existing `blocked` tests pass unchanged.
+- [x] **8.2 `blocked` gains `question_state` and `decline_reason`** (`inspection/core.py`)
+  - [x] Join on `blocked_state_id`. Both columns are empty for a block with no question. The JSON row also carries `question_id`.
+  - [x] Existing columns and `payload` unchanged. Add the columns in `_blocked_rows`, which `blocked_rows` and `all_blocked_rows` share, so no second code path is written.
+  - [x] Success: the existing `blocked` tests pass unchanged.
 
-- [ ] **8.3 Inspection tests** (`tests/inspection/test_questions.py`, `test_listing.py`, `tests/serve/` for the route)
-  - [ ] `questions` rows for each state; `--state declined` and `--node` filter; `outcome` rules; `truncated` shown.
-  - [ ] `blocked` shows `question_state` and `decline_reason` for a question block and empties for another block.
-  - [ ] The server lists the `questions` listing (follow how other listings are covered in `tests/serve/`).
-  - [ ] Success: inspection and serve suites pass.
+- [x] **8.3 Inspection tests** (`tests/inspection/test_questions.py`, `test_listing.py`, `tests/serve/` for the route)
+  - [x] `questions` rows for each state; `--state declined` and `--node` filter; `outcome` rules; `truncated` shown.
+  - [x] `blocked` shows `question_state` and `decline_reason` for a question block and empties for another block.
+  - [x] The server lists the `questions` listing (follow how other listings are covered in `tests/serve/`).
+  - [x] Success: inspection and serve suites pass.
 
 **Commit**: `feat: add the questions listing and question columns on blocked`
 

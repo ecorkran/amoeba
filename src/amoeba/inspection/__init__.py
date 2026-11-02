@@ -23,6 +23,7 @@ from amoeba.inspection import (
     evidence,
     feed,
     inbox,
+    questions,
 )
 from amoeba.inspection.listing import (
     NODE_OPTION,
@@ -91,6 +92,8 @@ LISTINGS: tuple[Listing, ...] = (
             "reason",
             "context",
             "blocked_state_id",
+            "question_state",
+            "decline_reason",
         ),
         rows=core.blocked_rows,
         supervisor_rows=core.all_blocked_rows,
@@ -177,6 +180,14 @@ LISTINGS: tuple[Listing, ...] = (
         columns=checks.CHECK_COLUMNS,
         rows=checks.check_rows,
         value_options=(NODE_OPTION,),
+    ),
+    Listing(
+        name="questions",
+        help_text="Agent questions for a project, with what became of each.",
+        columns=questions.QUESTION_COLUMNS,
+        rows=questions.question_rows,
+        value_options=(NODE_OPTION,),
+        choice_options=(questions.STATE_OPTION,),
     ),
     Listing(
         name="calibration",

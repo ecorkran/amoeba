@@ -103,6 +103,13 @@ EXPECTED_EXPORTS = {
     "RunnerReview",
     "SetDesiredState",
     "StatusEffect",
+    # Question records, added by slice 141
+    "QUESTION_TRANSITIONS",
+    "AnsweredBy",
+    "DeclineReason",
+    "QuestionCatch",
+    "QuestionRecord",
+    "QuestionState",
     # Locating stores (read-only consumers), added by slice 110
     "project_store_path",
     "store_dir",

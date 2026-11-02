@@ -62,9 +62,15 @@ def _blocked_rows(store: Store, project_id: str) -> list[Row]:
         for message in store.messages(project_id, channel=Channel.ESCALATION)
         if message.blocked_state_id is not None
     }
+    asked = {
+        record.blocked_state_id: record
+        for record in store.questions(project_id)
+        if record.blocked_state_id is not None
+    }
     rows: list[Row] = []
     for blocked in store.blocked(project_id):
         payload = payloads.get(blocked.blocked_state.id, {})
+        question = asked.get(blocked.blocked_state.id)
         rows.append(
             {
                 "project_id": project_id,
@@ -77,6 +83,14 @@ def _blocked_rows(store: Store, project_id: str) -> list[Row]:
                 "context": blocked.blocked_state.context,
                 # The id a resolution names (slice 127).
                 "blocked_state_id": blocked.blocked_state.id,
+                # The question this block carries, if any (slice 141).
+                "question_state": "" if question is None else question.state.value,
+                "decline_reason": (
+                    ""
+                    if question is None or question.decline_reason is None
+                    else question.decline_reason.value
+                ),
+                "question_id": "" if question is None else question.id,
                 "payload": payload,
             }
         )

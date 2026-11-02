@@ -23,6 +23,7 @@ from amoeba.store import (
     DetectionOutcome,
     JournalOutcome,
     NodeKind,
+    QuestionCatch,
     SetDesiredState,
     Store,
     SubmissionKind,
@@ -51,6 +52,8 @@ class SeededStore:
     project_id: str
     store_file: Path
     node_id: str
+    #: The node the seeded question belongs to (it was already blocked).
+    blocked_node_id: str
     verdict_id: str
     judge_invocation_id: str
 
@@ -114,6 +117,22 @@ def seed_every_listing(supervisor_dir: Path) -> SeededStore:
             outcome=AcknowledgmentOutcome.APPLIED,
             desired_state=SetDesiredState(hold=True),
         )
+        # Slice 141: one question, declined because the node was already blocked.
+        # It borrows the resolved run entry as its source, so no listing the other
+        # tests count gains a row.
+        store.record_question(
+            QuestionCatch(
+                project_id=PROJECT,
+                node_id=blocked.id,
+                source_entry_id=resolved.id,
+                run_id="run-20260921-p6-abcd1234",
+                step="implement",
+                question="Which branch?",
+                truncated=False,
+            ),
+            block_context="question at implement",
+            block_payload={"reason": "agent_question"},
+        )
         # Slice 104: one review verdict with one finding.
         store.record_verdict(
             verdict_input(FIXTURE_VERDICT, runnable.id, finding("x", "a.py:1")),
@@ -174,6 +193,7 @@ def seed_every_listing(supervisor_dir: Path) -> SeededStore:
         project_id=PROJECT,
         store_file=project_store_file,
         node_id=runnable.id,
+        blocked_node_id=blocked.id,
         verdict_id=FIXTURE_VERDICT,
         judge_invocation_id=FIXTURE_JUDGE_INVOCATION,
     )
