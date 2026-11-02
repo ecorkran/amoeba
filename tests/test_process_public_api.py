@@ -29,6 +29,8 @@ EXPECTED_EXPORTS = {
     "RunOutcome",
     "OUTCOME_EXIT_CODES",
     "RunCheckpoint",
+    # Slice 141: Squadron's tail limit on a question, read by the Runner.
+    "QUESTION_TAIL_CHARS",
     "RunOutcomeDocument",
     "PollFailure",
     "RunPoll",
