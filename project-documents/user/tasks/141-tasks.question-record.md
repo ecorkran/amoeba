@@ -245,14 +245,14 @@ revision_number: 2
 
 ## 9. Contract docs
 
-- [ ] **9.1 Update the contract docs**
-  - [ ] `docs/store-contract.md`: a new "Question records" section from the LLD API Contracts table, with the states, the transition table, and D2's rule. Move the latest-migration paragraph to `013`.
-  - [ ] `docs/feed-contract.md`: add both kinds to the kinds table and the coverage list, with payload fields.
-  - [ ] `docs/process-contract.md`: the `answerer` section under "The project config", with the empty-mapping rule and null-value error; `QUESTION_TAIL_CHARS` in the "Squadron shapes" section.
-  - [ ] `docs/substrate-guide.md`: the 120 row mentions the question record.
-  - [ ] Update the answering-stage steps 2 and 7 in `project-documents/user/architecture/140-slices.question-answerer.md` as LLD D2 says (the stage skips a resolved block; the acknowledgment settles it).
-  - [ ] Add a `CHANGELOG.md` entry under the unreleased heading.
-  - [ ] Success: every contract statement matches the code; the latest-migration paragraph in `docs/store-contract.md` names `013`, not `012`.
+- [x] **9.1 Update the contract docs**
+  - [x] `docs/store-contract.md`: a new "Question records" section from the LLD API Contracts table, with the states, the transition table, and D2's rule. Move the latest-migration paragraph to `013`.
+  - [x] `docs/feed-contract.md`: add both kinds to the kinds table and the coverage list, with payload fields.
+  - [x] `docs/process-contract.md`: the `answerer` section under "The project config", with the empty-mapping rule and null-value error; `QUESTION_TAIL_CHARS` in the "Squadron shapes" section.
+  - [x] `docs/substrate-guide.md`: the 120 row mentions the question record.
+  - [x] Update the answering-stage steps 2 and 7 in `project-documents/user/architecture/140-slices.question-answerer.md` as LLD D2 says (the stage skips a resolved block; the acknowledgment settles it).
+  - [x] Add a `CHANGELOG.md` entry under the unreleased heading.
+  - [x] Success: every contract statement matches the code; the latest-migration paragraph in `docs/store-contract.md` names `013`, not `012`.
 
 **Commit**: `docs: document question records, the answerer section and the new feed kinds`
 

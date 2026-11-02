@@ -840,6 +840,70 @@ resolution's decision is `resume` or `stop`; the store still holds any decision 
 and the Runner rejects the others (`unknown_decision`). See
 [`process-contract.md`](process-contract.md#resolutions-and-resumption).
 
+### Question records
+
+*Added by slice 141. Schema version 13 (migration `013`).* Every agent question gets
+one record in `question_records`, written in the same transaction as the `HUMAN` block
+the Runner writes for it. The PM's resolution of that block writes the PM's answer onto
+it. Nothing calls a model: the records are the memory that the answerer slices (142 to
+144) read and write.
+
+- **Vocabularies** (`StrEnum`s in `question_models.py`; an unknown stored value raises
+  `UnknownVocabularyValueError`). `QuestionState`: `pending`, `answering`, `answered`,
+  `declined`. `AnsweredBy`: `answerer`, `pm`. `DeclineReason`: `node_already_blocked`,
+  `question_missing`, `answerer_not_configured`, `no_answer_on_file` (later slices add
+  members).
+- **Models.** `QuestionCatch(project_id, node_id, source_entry_id, run_id, step,
+  question, truncated)` is what ingest knows; `QuestionRecord` has every column.
+  `QUESTION_TRANSITIONS` is the one statement of the legal state changes.
+- **Table `question_records`.** `source_entry_id` (the `sq_run` journal entry whose run
+  ended on the question) is `UNIQUE`: it is the idempotency key. `blocked_state_id` is
+  null only for a question declined `node_already_blocked`, and a block carries at most
+  one question (a unique partial index). `answer` is the PM's instructions, or the
+  answerer's answer (142), and may be null for a PM answer. `decline_reason` is kept if
+  the PM answers a declined question afterwards. Nothing is backfilled.
+
+| From | To | Writer |
+| --- | --- | --- |
+| (insert) | `pending` | `record_question`, with a new block |
+| (insert) | `declined` | `record_question`, node already blocked |
+| `pending`, `answering` | `declined` | `decline_question` |
+| `pending`, `declined`, `answering` | `answered` (`pm`) | `acknowledge_resolution` |
+| `pending` | `answering` | slice 144 |
+| `pending`, `answering` | `answered` (`answerer`) | slice 142 |
+
+`answered` is terminal. Any other change raises `InvalidTransitionError` and writes
+nothing.
+
+| Method | Effect |
+| --- | --- |
+| `record_question(catch, *, block_context, block_payload) -> QuestionRecord` | In-process only. **One transaction:** writes the `HUMAN` block (with its escalation) and inserts the record `pending`, linked to the block. On a node that is already blocked it writes no block and inserts the record `declined` (`node_already_blocked`), linked to none. A record that already exists for `catch.source_entry_id` is returned and nothing is written. A missing node raises `NodeNotFoundError`; a done node raises `InvalidTransitionError`. |
+| `decline_question(question_id, *, reason) -> QuestionRecord` | In-process only. Record-only: `pending` or `answering` to `declined`. Any other state raises `InvalidTransitionError`. |
+| `question(question_id)` | One record, or `None`. |
+| `questions(project_id, *, state=None, node_id=None)` | Records, oldest first. |
+| `pending_questions(project_id)` | The `pending` records, oldest first, through the `(project_id, state, created_at)` index. |
+| `question_for_block(blocked_state_id)` | The record linked to a block, or `None`. |
+
+The reads work through a read-only handle.
+
+**The PM's answer (D2).** `acknowledge_resolution` keeps its signature and settles the
+question inside its own transaction, from store facts only. Find the record whose
+`blocked_state_id` is the acknowledged block. With none, or one already `answered`,
+nothing happens. If the acknowledgment's effect wrote a new block (a `stop`, or any
+rejection), the record follows to the new block and keeps its state. If it was applied
+with no effect (an applied `resume`), the record becomes `answered`, `answered_by=pm`,
+`answer=` the resolution's instructions verbatim (null without any). Any other
+acknowledgment, including an applied `StatusEffect`, leaves the record unchanged. The
+rule never reads who submitted the resolution or the decision text, so an answerer
+name in `submitted_by` is recorded as the PM's when the record is not already
+`answered`. A resume without instructions marks the record answered with a null answer;
+a null answer is not precedent.
+
+**Feed and inspection.** The two triggers emit `question_recorded` and
+`question_state_changed` (see [`feed-contract.md`](feed-contract.md#kinds-and-payloads)).
+`amoeba inspect questions` lists the records, and `amoeba inspect blocked` gains
+`question_state` and `decline_reason` for a block that carries a question.
+
 ### Unrouted outcomes
 
 *Added by slice 125. Schema version 11 (migration `011`).* **Since slice 132 the Runner
@@ -960,9 +1024,11 @@ adding a table onto working machinery, not debugging both at once.
 **A store stamped newer than the code raises `StoreSchemaError`.** It is never
 silently downgraded.
 
-The latest migration is `012` (slice 127, schema version 12: the resolution
-decision, instructions and the Runner's answer on `blocked_states`, and the partial
-index of unanswered ones). Before it, `011` (slice 125, schema version 11) added
+The latest migration is `013` (slice 141, schema version 13: the `question_records`
+table, its indexes and the two question feed triggers). Before it, `012` (slice 127,
+schema version 12) added the resolution decision, instructions and the Runner's
+answer on `blocked_states`, and the partial index of unanswered ones. Before that,
+`011` (slice 125, schema version 11) added
 `command_journal.awaits_routing` and its partial index, and `010` (slice 123, schema
 version 10) added `nodes.cf_index` and its partial unique link index. Before them, `009` (slice 121, schema version 9)
 added the five new `messages` columns, the open-project-escalation index, and the
