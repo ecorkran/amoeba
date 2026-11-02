@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +18,11 @@ from amoeba.runner.git_read import (
     GitStatus,
     git_read,
     is_ancestor_args,
+    last_change_args,
     parse_porcelain_v2,
+    parse_tree_listing,
+    resolve_commit_args,
+    show_object_args,
     status_args,
 )
 from runner.git_repo import (
@@ -193,3 +199,91 @@ def test_a_spent_budget_starts_nothing(tmp_path: Path) -> None:
 
     assert result is None
     assert calls == []
+
+
+# Slice 143, D2: show and log read objects at a pinned commit.
+
+
+def test_the_allowlist_holds_the_four_read_commands() -> None:
+    assert GIT_SUBCOMMANDS == {"status", "merge-base", "show", "log"}
+
+
+def test_the_object_read_builders_give_exact_arguments() -> None:
+    assert resolve_commit_args("main") == ("log", "-1", "--format=%H", "main")
+    assert show_object_args("abc123", "docs/a.md") == ("show", "abc123:docs/a.md")
+    assert show_object_args("abc123", "") == ("show", "abc123:")
+    assert last_change_args("abc123", "docs/a.md") == (
+        "log",
+        "-1",
+        "--format=%cI",
+        "abc123",
+        "--",
+        "docs/a.md",
+    )
+
+
+def test_a_commit_or_target_that_looks_like_an_option_is_refused() -> None:
+    option = "--output=x"
+    for build in (
+        resolve_commit_args,
+        partial(show_object_args, path="a.md"),
+        partial(last_change_args, path="a.md"),
+    ):
+        with pytest.raises(ValueError, match="--output"):
+            build(option)
+
+
+def _object_repo(tmp_path: Path) -> Path:
+    repo = make_repo(tmp_path / "repo")
+    commit_file(repo, "docs/top.md", "top\n", "top")
+    commit_file(repo, "docs/nested/deep.md", "deep\n", "deep")
+    return repo
+
+
+def _read(repo: Path, args: tuple[str, ...]) -> GitReadResult:
+    result = git_read(args, repo, _budget(), subprocess.run, TIMEOUT)
+    assert isinstance(result, GitReadResult)
+    return result
+
+
+def test_a_directory_listing_keeps_files_and_drops_subdirectories(
+    tmp_path: Path,
+) -> None:
+    repo = _object_repo(tmp_path)
+    commit = head_of(repo)
+
+    listing = _read(repo, show_object_args(commit, "docs")).stdout
+
+    assert listing.startswith("tree ")
+    assert parse_tree_listing(listing) == ("top.md",)
+
+
+def test_the_root_listing_names_root_level_files(tmp_path: Path) -> None:
+    repo = _object_repo(tmp_path)
+    commit = head_of(repo)
+
+    listing = _read(repo, show_object_args(commit, "")).stdout
+
+    assert parse_tree_listing(listing) == ("README.md",)
+
+
+def test_the_listing_parser_tolerates_crlf_and_trailing_blanks() -> None:
+    text = "tree abc:docs\r\n\r\na.md  \r\nsub/\r\nb.md\r\n\r\n"
+
+    assert parse_tree_listing(text) == ("a.md", "b.md")
+
+
+def test_show_prints_a_blob_and_log_prints_one_date_and_the_commit(
+    tmp_path: Path,
+) -> None:
+    repo = _object_repo(tmp_path)
+    commit = head_of(repo)
+
+    blob = _read(repo, show_object_args(commit, "docs/top.md"))
+    resolved = _read(repo, resolve_commit_args("main"))
+    changed = _read(repo, last_change_args(commit, "docs/top.md"))
+
+    assert blob.stdout == "top\n"
+    assert resolved.stdout.strip() == commit
+    assert len(changed.stdout.strip().splitlines()) == 1
+    assert datetime.fromisoformat(changed.stdout.strip()).tzinfo is not None

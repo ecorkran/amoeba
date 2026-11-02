@@ -58,32 +58,32 @@ revision_number: 2
 
 ## 1. Branch and baseline
 
-- [ ] **1.1 Create the slice branch and record the baseline**
-  - [ ] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
-  - [ ] Run `git checkout -b 143-slice.source-passages {target}`.
-  - [ ] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
-  - [ ] Success: on branch `143-slice.source-passages`, and the baseline result is known.
+- [x] **1.1 Create the slice branch and record the baseline**
+  - [x] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
+  - [x] Run `git checkout -b 143-slice.source-passages {target}`.
+  - [x] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
+  - [x] Success: on branch `143-slice.source-passages`, and the baseline result is known.
 
 ---
 
 ## 2. Git reads: `show` and `log`
 
-- [ ] **2.1 Allowlist and argument builders** (`runner/git_read.py`)
-  - [ ] Add `SUBCOMMAND_SHOW` and `SUBCOMMAND_LOG` constants and add both to `GIT_SUBCOMMANDS`. Update the module docstring (four read commands).
-  - [ ] Add `resolve_commit_args(target)` → `("log", "-1", "--format=%H", target)`; `show_object_args(commit, path)` → `("show", f"{commit}:{path}")` (an empty `path` gives `<commit>:`); `last_change_args(commit, path)` → `("log", "-1", "--format=%cI", commit, "--", path)`. Each refuses a `commit`/`target` that starts with `-` with `ValueError`, as `is_ancestor_args` does; a `path` is safe after `--` and inside `<commit>:<path>`. Per LLD D2.
-  - [ ] Success: imports; typecheck passes.
+- [x] **2.1 Allowlist and argument builders** (`runner/git_read.py`)
+  - [x] Add `SUBCOMMAND_SHOW` and `SUBCOMMAND_LOG` constants and add both to `GIT_SUBCOMMANDS`. Update the module docstring (four read commands).
+  - [x] Add `resolve_commit_args(target)` → `("log", "-1", "--format=%H", target)`; `show_object_args(commit, path)` → `("show", f"{commit}:{path}")` (an empty `path` gives `<commit>:`); `last_change_args(commit, path)` → `("log", "-1", "--format=%cI", commit, "--", path)`. Each refuses a `commit`/`target` that starts with `-` with `ValueError`, as `is_ancestor_args` does; a `path` is safe after `--` and inside `<commit>:<path>`. Per LLD D2.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **2.2 `parse_tree_listing`** (`runner/git_read.py`)
-  - [ ] `parse_tree_listing(text) -> tuple[str, ...]`: skip a `tree …` header line and blank lines; keep file entries; drop entries ending in `/`. Lenient about trailing whitespace and CRLF. Per LLD D2.
-  - [ ] Success: returns names in the order git printed them.
+- [x] **2.2 `parse_tree_listing`** (`runner/git_read.py`)
+  - [x] `parse_tree_listing(text) -> tuple[str, ...]`: skip a `tree …` header line and blank lines; keep file entries; drop entries ending in `/`. Lenient about trailing whitespace and CRLF. Per LLD D2.
+  - [x] Success: returns names in the order git printed them.
 
-- [ ] **2.3 Tests for the git reads** (`tests/runner/test_git_read.py`)
-  - [ ] Builders: exact tuples for the three builders (root path case included); each refuses a value starting with `-`.
-  - [ ] `GIT_SUBCOMMANDS` holds all four; the refused-subcommand test still passes unchanged.
-  - [ ] `parse_tree_listing` on real `git show <commit>:<dir>` output from a temporary repository (`make_repo`, `commit_file`) with a file, a nested file and a subdirectory: files kept, the subdirectory dropped, the header skipped. Also the root listing (`<commit>:`).
-  - [ ] Real `git_read` runs of `resolve_commit_args`, `show_object_args` (blob content) and `last_change_args` (one ISO line) against that repository.
-  - [ ] Update the "two read commands" wording in `test_git_read_only_place.py` or elsewhere if a test or doc pins it.
-  - [ ] Success: `uv run pytest tests/runner/test_git_read.py tests/runner/test_git_read_only_place.py -q` passes.
+- [x] **2.3 Tests for the git reads** (`tests/runner/test_git_read.py`)
+  - [x] Builders: exact tuples for the three builders (root path case included); each refuses a value starting with `-`.
+  - [x] `GIT_SUBCOMMANDS` holds all four; the refused-subcommand test still passes unchanged.
+  - [x] `parse_tree_listing` on real `git show <commit>:<dir>` output from a temporary repository (`make_repo`, `commit_file`) with a file, a nested file and a subdirectory: files kept, the subdirectory dropped, the header skipped. Also the root listing (`<commit>:`).
+  - [x] Real `git_read` runs of `resolve_commit_args`, `show_object_args` (blob content) and `last_change_args` (one ISO line) against that repository.
+  - [x] Update the "two read commands" wording in `test_git_read_only_place.py` or elsewhere if a test or doc pins it.
+  - [x] Success: `uv run pytest tests/runner/test_git_read.py tests/runner/test_git_read_only_place.py -q` passes.
 
 **Commit**: `feat: allow git show and log reads with argument builders and tree listing parser`
 

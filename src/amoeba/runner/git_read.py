@@ -3,8 +3,9 @@
 ``git_read`` checks the tick budget, runs under the call timeout with stdin closed and
 prompts disabled, and refuses any subcommand outside :data:`GIT_SUBCOMMANDS`. The
 Runner never merges, commits, checks out, resets, stashes, deletes a branch or pushes,
-so the allowlist is two read commands. ``--no-optional-locks`` keeps even ``status``
-from rewriting the index.
+so the allowlist is four read commands: ``status`` and ``merge-base`` for checkouts,
+``show`` and ``log`` for objects at a pinned commit (never the working tree).
+``--no-optional-locks`` keeps even ``status`` from rewriting the index.
 """
 
 from __future__ import annotations
@@ -22,9 +23,13 @@ from amoeba.runner.cf_call import CfCallFailed, CfRun, output_head, run_cf
 GIT_EXECUTABLE: Final = "git"
 SUBCOMMAND_STATUS: Final = "status"
 SUBCOMMAND_MERGE_BASE: Final = "merge-base"
+SUBCOMMAND_SHOW: Final = "show"
+SUBCOMMAND_LOG: Final = "log"
 
 #: The only subcommands the Runner may run; anything else is a programming error.
-GIT_SUBCOMMANDS: Final = frozenset({SUBCOMMAND_STATUS, SUBCOMMAND_MERGE_BASE})
+GIT_SUBCOMMANDS: Final = frozenset(
+    {SUBCOMMAND_STATUS, SUBCOMMAND_MERGE_BASE, SUBCOMMAND_SHOW, SUBCOMMAND_LOG}
+)
 
 #: Keeps git from waiting on credentials: with stdin closed it fails instead.
 _ENV_NO_PROMPT: Final = {"GIT_TERMINAL_PROMPT": "0"}
@@ -84,10 +89,37 @@ def status_args() -> tuple[str, ...]:
 
 def is_ancestor_args(head: str, target: str) -> tuple[str, ...]:
     """``merge-base --is-ancestor``: exit 0 when ``head`` is in ``target``."""
-    for value in (head, target):
+    _refuse_option(head, target)
+    return (SUBCOMMAND_MERGE_BASE, "--is-ancestor", head, target)
+
+
+def _refuse_option(*values: str) -> None:
+    """Raise when a commit or branch name could be read by git as an option."""
+    for value in values:
         if value.startswith("-"):
             raise ValueError(f"not a commit or branch name: {value!r}")
-    return (SUBCOMMAND_MERGE_BASE, "--is-ancestor", head, target)
+
+
+def resolve_commit_args(target: str) -> tuple[str, ...]:
+    """``log -1 --format=%H``: the commit a branch name points at."""
+    _refuse_option(target)
+    return (SUBCOMMAND_LOG, "-1", "--format=%H", target)
+
+
+def show_object_args(commit: str, path: str) -> tuple[str, ...]:
+    """``show <commit>:<path>``: a blob's content, or a tree's entries.
+
+    An empty ``path`` names the root tree. A path cannot be read as an option here,
+    because it follows the colon.
+    """
+    _refuse_option(commit)
+    return (SUBCOMMAND_SHOW, f"{commit}:{path}")
+
+
+def last_change_args(commit: str, path: str) -> tuple[str, ...]:
+    """``log -1 --format=%cI``: committer date of the last commit on ``path``."""
+    _refuse_option(commit)
+    return (SUBCOMMAND_LOG, "-1", "--format=%cI", commit, "--", path)
 
 
 def _subcommand(args: tuple[str, ...]) -> str:
@@ -134,6 +166,27 @@ def _result(completed: subprocess.CompletedProcess[str]) -> GitReadResult:
         stdout=completed.stdout,
         stderr_head=output_head(completed),
     )
+
+
+_TREE_HEADER_PREFIX: Final = "tree "
+_DIRECTORY_SUFFIX: Final = "/"
+
+
+def parse_tree_listing(text: str) -> tuple[str, ...]:
+    """The file names in ``git show <commit>:<dir>`` output, in git's order.
+
+    Skips the ``tree …`` header and blank lines and drops subdirectories (names ending
+    in ``/``); directories are not walked. Trailing whitespace and CRLF are tolerated.
+    """
+    names: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith(_TREE_HEADER_PREFIX):
+            continue
+        if line.endswith(_DIRECTORY_SUFFIX):
+            continue
+        names.append(line)
+    return tuple(names)
 
 
 def _entry_path(line: str) -> str:
