@@ -95,6 +95,11 @@ class ProjectConfig:
 
     projects: Mapping[str, ProjectSettings] = MappingProxyType({})
 
+    @property
+    def answerer_configured(self) -> bool:
+        """Whether any named project turns the question answerer on."""
+        return any(settings.answerer is not None for settings in self.projects.values())
+
     def for_project(self, project_id: str) -> ProjectSettings:
         """The settings for ``project_id``; a project the file omits gets defaults."""
         return self.projects.get(project_id, PROJECT_DEFAULTS)

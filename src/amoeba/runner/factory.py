@@ -20,7 +20,7 @@ from amoeba.process import (
 from amoeba.runner.decide import Planner
 from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
-from amoeba.runner.probes import probe_sq
+from amoeba.runner.probes import probe_answering_pipeline, probe_sq
 from amoeba.runner.project_config import (
     PROJECT_DEFAULTS,
     ProjectConfig,
@@ -117,8 +117,9 @@ def runner_tenant(
             (tests, later slices) is used as given.
 
     Raises:
-        StartupFailedError: For a bad bound, a refused project config, or a failed
-            ``sq`` probe.
+        StartupFailedError: For a bad bound, a refused project config, a failed
+            ``sq`` probe, or, when a project configures an answerer, a failed
+            answering pipeline probe.
     """
     validate_settings(settings)
     amoeba_version = installed_version()
@@ -126,6 +127,10 @@ def runner_tenant(
     (supervisor_dir / LAUNCH_LOGS_DIRNAME).mkdir(parents=True, exist_ok=True)
     probe_sq(settings, _now(), poll_run)
     logger.info("sq probe passed: `sq runs wait` has the shape the Runner needs")
+    if project_config.answerer_configured:
+        # Only a start that will answer questions needs the answering pipeline.
+        probe_answering_pipeline(settings, subprocess.run)
+        logger.info("answering pipeline probe passed: `sq run --validate` exited 0")
     # Once, at start: a recorded review whose file has no stamp is labelled with it.
     version_label = capture_sq_version_label(settings.sq_timeout_seconds)
     return RunnerTenant(

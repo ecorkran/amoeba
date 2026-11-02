@@ -195,16 +195,17 @@ revision_number: 2
 
 ## 6. Start-up probe
 
-- [ ] **6.1 Start-up probe wiring** (`runner/factory.py`)
-  - [ ] In `runner_tenant`, after `probe_sq`: if any configured project has `answerer` set, call `probe_answering_pipeline(settings, poll_run)` and log that it passed. With none, do not call it (LLD D8).
-  - [ ] A failure surfaces as `StartupFailedError`, so `start` exits `STARTUP_FAILED` as for `probe_sq`.
-  - [ ] Update the stale "Start-up wiring is slice 142's" note in `probe_answering_pipeline`'s docstring.
-  - [ ] Success: imports; typecheck passes.
+- [x] **6.1 Start-up probe wiring** (`runner/factory.py`)
+  - [x] In `runner_tenant`, after `probe_sq`: if any configured project has `answerer` set, call `probe_answering_pipeline(settings, poll_run)` and log that it passed. With none, do not call it (LLD D8).
+    - Note: the probe takes a subprocess.run-style runner (CfRun), so runner_tenant passes subprocess.run, not poll_run.
+  - [x] A failure surfaces as `StartupFailedError`, so `start` exits `STARTUP_FAILED` as for `probe_sq`.
+  - [x] Update the stale "Start-up wiring is slice 142's" note in `probe_answering_pipeline`'s docstring.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **6.2 Factory tests** (`tests/runner/test_factory.py`)
-  - [ ] With an answerer section the probe is called once; a failing probe raises `StartupFailedError`.
-  - [ ] With no answerer section the probe is not called.
-  - [ ] Success: `uv run pytest tests/runner -q` passes.
+- [x] **6.2 Factory tests** (`tests/runner/test_factory.py`)
+  - [x] With an answerer section the probe is called once; a failing probe raises `StartupFailedError`.
+  - [x] With no answerer section the probe is not called.
+  - [x] Success: `uv run pytest tests/runner -q` passes.
 
 **Commit**: `feat: run the answering pipeline probe at start when an answerer is configured`
 
