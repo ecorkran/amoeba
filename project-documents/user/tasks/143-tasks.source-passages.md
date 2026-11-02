@@ -221,23 +221,24 @@ revision_number: 2
 
 ## 7. Entry point: `assemble_sources`
 
-- [ ] **7.1 `slice_label` and `pm_precedent`** (`runner/answering/sources.py`, new)
-  - [ ] `slice_label(node) -> str`: `"<cf.index> <title>"`; a node without `cf.index` raises `ValueError` (LLD D6). Read how `Node` exposes `cf.index` and `title` before writing.
-  - [ ] `pm_precedent(store, project_id) -> tuple[PmAnswer, ...]`: from `store.questions(project_id, state=QuestionState.ANSWERED)` keep records with `answered_by = AnsweredBy.PM`, a non-blank `answer` and a non-blank `question`. Each carries the record id, question, answer, `updated_at` as its date, the slice node id and its label (via `store.get_node`; a record whose node is missing raises, as a programming error). Use the exact enum names 141 defines (open `store/question_models.py`).
-  - [ ] Success: typecheck passes.
+- [x] **7.1 `slice_label` and `pm_precedent`** (`runner/answering/sources.py`, new)
+  - [x] `slice_label(node) -> str`: `"<cf.index> <title>"`; a node without `cf.index` raises `ValueError` (LLD D6). Read how `Node` exposes `cf.index` and `title` before writing.
+  - [x] `pm_precedent(store, project_id) -> tuple[PmAnswer, ...]`: from `store.questions(project_id, state=QuestionState.ANSWERED)` keep records with `answered_by = AnsweredBy.PM`, a non-blank `answer` and a non-blank `question`. Each carries the record id, question, answer, `updated_at` as its date, the slice node id and its label (via `store.get_node`; a record whose node is missing raises, as a programming error). Use the exact enum names 141 defines (open `store/question_models.py`).
+  - [x] Success: typecheck passes.
 
-- [ ] **7.2 `assemble_sources`** (`runner/answering/sources.py`)
-  - [ ] Signature per LLD API Contracts: `(store, project_id, record, snapshot, cf_project_id, settings, budget, run, timeout_seconds) -> PassageSet | SourcesProblem | None`.
-  - [ ] Steps per LLD Data Flow and D3/D9: `store.get_node(record.node_id)`; derive `SliceRef` from the node's `cf.index` and its parent's `cf.index`; a node with no parent, a parent that is not an initiative, or a parent without `cf.index` raises `ValueError`. `resolve_checkout(snapshot, slice_index, is_dir=Path.is_dir)`; `CheckoutUnresolved` → `sources_unreadable` with its reason. `read_target`; `ReadFailure` → `sources_unreadable` with its detail; `None` → `None`. Then `read_committed_sources`, `pm_precedent`, `assemble`.
-  - [ ] `None` from any budgeted call returns `None`. Problems are returned, never raised.
-  - [ ] Success: typecheck passes; no new store operation or write.
+- [x] **7.2 `assemble_sources`** (`runner/answering/sources.py`)
+  - [x] Signature per LLD API Contracts: `(store, project_id, record, snapshot, cf_project_id, settings, budget, run, timeout_seconds) -> PassageSet | SourcesProblem | None`.
+  - [x] Steps per LLD Data Flow and D3/D9: `store.get_node(record.node_id)`; derive `SliceRef` from the node's `cf.index` and its parent's `cf.index`; a node with no parent, a parent that is not an initiative, or a parent without `cf.index` raises `ValueError`. `resolve_checkout(snapshot, slice_index, is_dir=Path.is_dir)`; `CheckoutUnresolved` → `sources_unreadable` with its reason. `read_target`; `ReadFailure` → `sources_unreadable` with its detail; `None` → `None`. Then `read_committed_sources`, `pm_precedent`, `assemble`.
+  - [x] `None` from any budgeted call returns `None`. Problems are returned, never raised.
+  - [x] Success: typecheck passes; no new store operation or write.
 
-- [ ] **7.3 Tests for the entry point** (`tests/runner/answering/test_sources.py`, new)
-  - [ ] Precedent (real store via `tests/question_harness.py`): an `answered_by = answerer` record, a PM answer with blank text, and a PM answer with no question are excluded; a PM answer with text is a passage with its question, slice label and `updated_at` as UTC.
-  - [ ] `slice_label` returns e.g. `143 Source Passages` shape for a node with index and title; raises `ValueError` without `cf.index`. A slice node with no parent, a non-initiative parent, or a parent without an index raises `ValueError`.
-  - [ ] `CheckoutUnresolved` and a failed target read give `sources_unreadable` with their detail; a budget refusal at each step gives `None`.
-  - [ ] End to end: against the fixture repository and a throwaway store, `assemble_sources` followed by `render_passages` equals an expected file (`tests/runner/answering/fixtures/expected_end_to_end.md`), including one same-slice and one other-slice PM answer and a rules glob. If the repository cannot be reached through `resolve_checkout` with a hand-built snapshot, follow how `tests/runner/dispatch/test_checkout.py` builds one.
-  - [ ] Success: `uv run pytest tests/runner/answering -q` passes.
+- [x] **7.3 Tests for the entry point** (`tests/runner/answering/test_sources.py`, new)
+  - [x] Precedent (real store via `tests/question_harness.py`): an `answered_by = answerer` record, a PM answer with blank text, and a PM answer with no question are excluded; a PM answer with text is a passage with its question, slice label and `updated_at` as UTC.
+  - [x] `slice_label` returns e.g. `143 Source Passages` shape for a node with index and title; raises `ValueError` without `cf.index`. A slice node with no parent, a non-initiative parent, or a parent without an index raises `ValueError`.
+  - [x] `CheckoutUnresolved` and a failed target read give `sources_unreadable` with their detail; a budget refusal at each step gives `None`.
+  - [x] End to end: against the fixture repository and a throwaway store, `assemble_sources` followed by `render_passages` equals an expected file (`tests/runner/answering/fixtures/expected_end_to_end.md`), including one same-slice and one other-slice PM answer and a rules glob. If the repository cannot be reached through `resolve_checkout` with a hand-built snapshot, follow how `tests/runner/dispatch/test_checkout.py` builds one.
+  - [x] Success: `uv run pytest tests/runner/answering -q` passes.
+  - Note (20261102): the hand-written end-to-end file uses a small purpose-built repository (the frozen fixtures total about 270 KB); the frozen fixture repository is checked for passage order, ids, kinds, dates and commit instead. `seed_question` in tests/question_harness.py gained an optional `updated_at`.
 
 **Commit**: `feat: add assemble_sources with PM precedent and slice labels`
 

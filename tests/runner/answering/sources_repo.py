@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from amoeba.runner.budget import TickBudget
 from runner.git_repo import commit_file, git
+from runner.observe_support import Clock, Host
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "sources"
 
@@ -34,3 +36,16 @@ def build_sources_repo(path: Path) -> SourcesRepo:
         commit_file(path, relative, file.read_text(), f"add {relative}", date=stamp)
         dates[relative] = datetime.fromisoformat(stamp)
     return SourcesRepo(path, dates)
+
+
+class CountingBudget(TickBudget):
+    """Counts the calls asked of it and refuses every call after ``allowed``."""
+
+    def __init__(self, allowed: int | None = None) -> None:
+        super().__init__(1_000.0, Host(), Clock().monotonic)
+        self.asked = 0
+        self._allowed = allowed
+
+    def allows_call(self) -> bool:
+        self.asked += 1
+        return self._allowed is None or self.asked <= self._allowed

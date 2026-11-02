@@ -22,7 +22,12 @@ from amoeba.runner.answering.source_reads import (
     read_committed_sources,
 )
 from amoeba.runner.budget import TickBudget
-from runner.answering.sources_repo import FIXTURE_ROOT, SourcesRepo, build_sources_repo
+from runner.answering.sources_repo import (
+    FIXTURE_ROOT,
+    CountingBudget,
+    SourcesRepo,
+    build_sources_repo,
+)
 from runner.git_repo import commit_file, git, head_of
 from runner.observe_support import Clock, Host
 
@@ -47,19 +52,6 @@ SLICE_132_PATHS = [
 #: 2 + L + 2F for the fixture: L = 6 listings (root, rules directory, four plan
 #: directories), F = 9 files, so 2 + 6 + 2 * 9.
 SLICE_132_CALLS = 26
-
-
-class CountingBudget(TickBudget):
-    """Counts the calls asked of it and refuses every call after ``allowed``."""
-
-    def __init__(self, allowed: int | None = None) -> None:
-        super().__init__(1_000.0, Host(), Clock().monotonic)
-        self.asked = 0
-        self._allowed = allowed
-
-    def allows_call(self) -> bool:
-        self.asked += 1
-        return self._allowed is None or self.asked <= self._allowed
 
 
 def _budget() -> TickBudget:
