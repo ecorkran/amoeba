@@ -32,6 +32,7 @@ from runner.resolutions.resolution_support import (
 from runner.tick_support import PROJECT, Rig, StoreHost, drive_project, tenant_for
 
 LINK = "cf-1"
+ANSWERER = AnswererSettings(answer_limit=3, reserved_terms=[])
 
 
 @pytest.fixture
@@ -117,7 +118,7 @@ def test_no_answerer_section_declines_not_configured(rig: Rig, store: Store) -> 
 def test_an_empty_answerer_section_declines_no_answer_on_file(
     rig: Rig, store: Store
 ) -> None:
-    rig.project_settings = ProjectSettings(pipeline="p456", answerer=AnswererSettings())
+    rig.project_settings = ProjectSettings(pipeline="p456", answerer=ANSWERER)
     record = _ask(store)
 
     rig.tick()

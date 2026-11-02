@@ -82,41 +82,41 @@ revision_number: 2
 
 ## 3. Migration, decline reasons and gate types
 
-- [ ] **3.1 Migration 014** (`store/schema/014_answer_submission.sql`)
-  - [ ] Add `reserved_term TEXT` to `question_records` (nullable, no default), per LLD D9.
-  - [ ] Set `EXPECTED_SCHEMA_VERSION` to 14 and register `014` the way `013` was registered in `store/migrations.py`.
-  - [ ] Add `COL_QUESTION_RESERVED_TERM` to `sql_questions.py` and append it to `QUESTION_COLUMNS`; update `INSERT_QUESTION` only if it depends on the column list (the new column is null on insert).
-  - [ ] Success: a fresh store opens at version 14; existing 13 → 14 upgrade works.
+- [x] **3.1 Migration 014** (`store/schema/014_answer_submission.sql`)
+  - [x] Add `reserved_term TEXT` to `question_records` (nullable, no default), per LLD D9.
+  - [x] Set `EXPECTED_SCHEMA_VERSION` to 14 and register `014` the way `013` was registered in `store/migrations.py`.
+  - [x] Add `COL_QUESTION_RESERVED_TERM` to `sql_questions.py` and append it to `QUESTION_COLUMNS`; update `INSERT_QUESTION` only if it depends on the column list (the new column is null on insert).
+  - [x] Success: a fresh store opens at version 14; existing 13 → 14 upgrade works.
 
-- [ ] **3.2 `DeclineReason` members and record field** (`store/question_models.py`, `store/mapping_questions.py`)
-  - [ ] Add `ANSWER_LIMIT_REACHED = "answer_limit_reached"` and `RESERVED_TERM = "reserved_term"` to `DeclineReason`.
-  - [ ] Add `reserved_term: str | None` to `QuestionRecord` and map it in `map_question_record`.
-  - [ ] Update `UPDATE_QUESTION_DECLINED` to also set `reserved_term`, and make `decline_question` pass `None` for it (existing callers unchanged).
-  - [ ] Success: existing question tests pass; typecheck passes.
+- [x] **3.2 `DeclineReason` members and record field** (`store/question_models.py`, `store/mapping_questions.py`)
+  - [x] Add `ANSWER_LIMIT_REACHED = "answer_limit_reached"` and `RESERVED_TERM = "reserved_term"` to `DeclineReason`.
+  - [x] Add `reserved_term: str | None` to `QuestionRecord` and map it in `map_question_record`.
+  - [x] Update `UPDATE_QUESTION_DECLINED` to also set `reserved_term`, and make `decline_question` pass `None` for it (existing callers unchanged).
+  - [x] Success: existing question tests pass; typecheck passes.
 
-- [ ] **3.3 Gate types and `ANSWER_DECISION`** (`store/question_models.py`)
-  - [ ] Add frozen `GateRefusal(reason: DeclineReason, reserved_term: str | None)`.
-  - [ ] Add `AnswerGate = Callable[[str, int], GateRefusal | None]`.
-  - [ ] Add `AnswerOutcome` `StrEnum` (`submitted`, `declined`, `block_resolved`, `settled`) and frozen `AnswerSubmission(outcome, record)`.
-  - [ ] Add `ANSWER_DECISION: Final = "resume"` beside `AnsweredBy`, with a comment that the store defines the string because no store module imports the Runner (LLD D5).
-  - [ ] Success: imports; typecheck passes.
+- [x] **3.3 Gate types and `ANSWER_DECISION`** (`store/question_models.py`)
+  - [x] Add frozen `GateRefusal(reason: DeclineReason, reserved_term: str | None)`.
+  - [x] Add `AnswerGate = Callable[[str, int], GateRefusal | None]`.
+  - [x] Add `AnswerOutcome` `StrEnum` (`submitted`, `declined`, `block_resolved`, `settled`) and frozen `AnswerSubmission(outcome, record)`.
+  - [x] Add `ANSWER_DECISION: Final = "resume"` beside `AnsweredBy`, with a comment that the store defines the string because no store module imports the Runner (LLD D5).
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **3.4 Tests for migration and models** (`tests/store/test_migration_014.py`, `tests/store/test_question_records.py`)
-  - [ ] Migration test following `test_migration_013.py`: 13 → 14 adds the nullable `reserved_term` column and keeps existing rows.
-  - [ ] A `declined` record written with a `DeclineReason.RESERVED_TERM` reads back with the new reason; an unknown reason value still raises `UnknownVocabularyValueError`.
-  - [ ] Any existing test pinning the schema version, column list or `DeclineReason` members is updated to match.
-  - [ ] Success: `uv run pytest tests/store -q` passes.
+- [x] **3.4 Tests for migration and models** (`tests/store/test_migration_014.py`, `tests/store/test_question_records.py`)
+  - [x] Migration test following `test_migration_013.py`: 13 → 14 adds the nullable `reserved_term` column and keeps existing rows.
+  - [x] A `declined` record written with a `DeclineReason.RESERVED_TERM` reads back with the new reason; an unknown reason value still raises `UnknownVocabularyValueError`.
+  - [x] Any existing test pinning the schema version, column list or `DeclineReason` members is updated to match.
+  - [x] Success: `uv run pytest tests/store -q` passes.
 
-- [ ] **3.5 `AnswererSettings` keys** (`runner/project_config.py`)
-  - [ ] Add `answer_limit: StrictInt` (at least 1) and `reserved_terms: list[str]` (each stripped and non-blank), both required, no defaults; keep `extra="forbid"` (LLD D7). The gate in Task 4 reads them.
-  - [ ] Update the class docstring (it says "no keys yet").
-  - [ ] In the same task, update every existing test or fixture that wrote `answerer: {}` to carry both keys, so the suite keeps passing.
-  - [ ] Success: `answerer: {}` fails at load naming both missing keys with their paths; `reserved_terms: []` loads; `uv run pytest -q` passes.
+- [x] **3.5 `AnswererSettings` keys** (`runner/project_config.py`)
+  - [x] Add `answer_limit: StrictInt` (at least 1) and `reserved_terms: list[str]` (each stripped and non-blank), both required, no defaults; keep `extra="forbid"` (LLD D7). The gate in Task 4 reads them.
+  - [x] Update the class docstring (it says "no keys yet").
+  - [x] In the same task, update every existing test or fixture that wrote `answerer: {}` to carry both keys, so the suite keeps passing.
+  - [x] Success: `answerer: {}` fails at load naming both missing keys with their paths; `reserved_terms: []` loads; `uv run pytest -q` passes.
 
-- [ ] **3.6 Config tests** (`tests/runner/test_project_config.py`)
-  - [ ] `answerer: {}`, a missing `answer_limit`, a missing `reserved_terms`, `answer_limit: 0`, a negative or non-integer limit and a blank term each fail with the key path.
-  - [ ] `reserved_terms: []` with a valid limit loads; no `answerer` section still loads as before.
-  - [ ] Success: `uv run pytest tests/runner -q` passes.
+- [x] **3.6 Config tests** (`tests/runner/test_project_config.py`)
+  - [x] `answerer: {}`, a missing `answer_limit`, a missing `reserved_terms`, `answer_limit: 0`, a negative or non-integer limit and a blank term each fail with the key path.
+  - [x] `reserved_terms: []` with a valid limit loads; no `answerer` section still loads as before.
+  - [x] Success: `uv run pytest tests/runner -q` passes.
 
 **Commit**: `feat: add migration 014, answer decline reasons, gate types and answerer keys`
 

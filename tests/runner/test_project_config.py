@@ -142,18 +142,26 @@ ANSWERER_FILE = """\
 projects:
   scratch:
     pipeline: p456
-    answerer: {}
+    answerer:
+      answer_limit: 3
+      reserved_terms: [drop table, "  force push  "]
   plain:
     pipeline: p456
 """
 
 
-def test_an_empty_answerer_mapping_is_configured_and_an_absent_key_is_not(
+def _answerer_file(answerer_body: str) -> str:
+    return f"projects:\n  scratch:\n    pipeline: p456\n    answerer: {answerer_body}\n"
+
+
+def test_a_configured_answerer_is_on_and_an_absent_key_is_not(
     tmp_path: Path,
 ) -> None:
     config = load_project_config(_write(tmp_path, ANSWERER_FILE))
 
-    assert config.for_project("scratch").answerer == AnswererSettings()
+    assert config.for_project("scratch").answerer == AnswererSettings(
+        answer_limit=3, reserved_terms=["drop table", "force push"]
+    )
     assert config.for_project("plain").answerer is None
     assert config.for_project("unnamed").answerer is None
 
@@ -167,16 +175,58 @@ def test_a_null_answerer_fails_naming_the_project_path(tmp_path: Path) -> None:
         load_project_config(path)
 
     assert "projects.scratch.answerer" in str(raised.value)
-    assert "write `{}`" in str(raised.value)
+    assert "answerer must be a mapping" in str(raised.value)
 
 
 def test_an_unknown_key_inside_answerer_fails(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
-        "projects:\n  scratch:\n    pipeline: p456\n    answerer: {limit: 3}\n",
+        _answerer_file("{answer_limit: 3, reserved_terms: [], limit: 3}"),
     )
 
     with pytest.raises(StartupFailedError) as raised:
         load_project_config(path)
 
     assert "projects.scratch.answerer.limit" in str(raised.value)
+
+
+def test_an_empty_answerer_fails_naming_both_missing_keys(tmp_path: Path) -> None:
+    with pytest.raises(StartupFailedError) as raised:
+        load_project_config(_write(tmp_path, _answerer_file("{}")))
+
+    assert "projects.scratch.answerer.answer_limit" in str(raised.value)
+    assert "projects.scratch.answerer.reserved_terms" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("body", "failing_path"),
+    [
+        ("{reserved_terms: []}", "answerer.answer_limit"),
+        ("{answer_limit: 2}", "answerer.reserved_terms"),
+        ("{answer_limit: 0, reserved_terms: []}", "answerer.answer_limit"),
+        ("{answer_limit: -1, reserved_terms: []}", "answerer.answer_limit"),
+        ("{answer_limit: 1.5, reserved_terms: []}", "answerer.answer_limit"),
+        ("{answer_limit: '2', reserved_terms: []}", "answerer.answer_limit"),
+        ("{answer_limit: 2, reserved_terms: ['  ']}", "answerer.reserved_terms.0"),
+        ("{answer_limit: 2, reserved_terms: ['ok', '']}", "answerer.reserved_terms.1"),
+        ("{answer_limit: 2, reserved_terms: [7]}", "answerer.reserved_terms.0"),
+        ("{answer_limit: 2, reserved_terms: drop}", "answerer.reserved_terms"),
+    ],
+)
+def test_a_bad_answerer_value_fails_with_its_key_path(
+    tmp_path: Path, body: str, failing_path: str
+) -> None:
+    with pytest.raises(StartupFailedError) as raised:
+        load_project_config(_write(tmp_path, _answerer_file(body)))
+
+    assert f"projects.scratch.{failing_path}" in str(raised.value)
+
+
+def test_an_empty_reserved_terms_list_loads(tmp_path: Path) -> None:
+    config = load_project_config(
+        _write(tmp_path, _answerer_file("{answer_limit: 1, reserved_terms: []}"))
+    )
+
+    assert config.for_project("scratch").answerer == AnswererSettings(
+        answer_limit=1, reserved_terms=[]
+    )

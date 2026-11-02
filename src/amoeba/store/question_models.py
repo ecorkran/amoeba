@@ -9,7 +9,7 @@ lock.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -32,6 +32,12 @@ class AnsweredBy(StrEnum):
     PM = "pm"
 
 
+#: The decision every answerer resolution carries. The store spells the string
+#: itself because no store module imports the Runner, where ``ResolutionDecision``
+#: lives; a test pins the two together (slice 142, D5).
+ANSWER_DECISION: Final = "resume"
+
+
 class DeclineReason(StrEnum):
     """Why a question was not answered by the answerer."""
 
@@ -39,6 +45,8 @@ class DeclineReason(StrEnum):
     QUESTION_MISSING = "question_missing"
     ANSWERER_NOT_CONFIGURED = "answerer_not_configured"
     NO_ANSWER_ON_FILE = "no_answer_on_file"
+    ANSWER_LIMIT_REACHED = "answer_limit_reached"
+    RESERVED_TERM = "reserved_term"
 
 
 #: Legal state changes. ``answered`` is terminal. ``declined`` reaches only
@@ -87,3 +95,36 @@ class QuestionRecord:
     decline_reason: DeclineReason | None
     created_at: datetime
     updated_at: datetime
+    #: The configured term the gate declined on; set only for ``RESERVED_TERM``.
+    reserved_term: str | None
+
+
+@dataclass(frozen=True)
+class GateRefusal:
+    """Why the answer gate refused an answer."""
+
+    reason: DeclineReason
+    #: The term as configured; set only when ``reason`` is ``RESERVED_TERM``.
+    reserved_term: str | None
+
+
+#: The gate ``submit_answer`` calls under its write lock: the question text and
+#: the count of answers the answerer already gave this run. ``None`` passes.
+AnswerGate = Callable[[str, int], GateRefusal | None]
+
+
+class AnswerOutcome(StrEnum):
+    """What ``submit_answer`` did."""
+
+    SUBMITTED = "submitted"
+    DECLINED = "declined"
+    BLOCK_RESOLVED = "block_resolved"
+    SETTLED = "settled"
+
+
+@dataclass(frozen=True)
+class AnswerSubmission:
+    """The outcome of one ``submit_answer`` and the record as it then stands."""
+
+    outcome: AnswerOutcome
+    record: QuestionRecord

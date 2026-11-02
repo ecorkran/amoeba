@@ -21,6 +21,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictInt,
     StrictStr,
     StringConstraints,
     ValidationError,
@@ -35,10 +36,19 @@ from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
 class AnswererSettings(BaseModel):
     """The ``answerer`` section. Its presence turns the answerer on (slice 141, D6).
 
-    It has no keys yet: 142 to 144 add them where they are first read.
+    Both keys are required with no defaults (slice 142, D7): the operator states
+    how many answers a run may take and which terms stay the PM's to decide, so
+    ``answerer: {}`` fails at load. The answer gate reads them.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: Most answers the answerer may give in one run, from one up.
+    answer_limit: Annotated[StrictInt, Field(ge=1)]
+    #: Terms whose presence in a question or answer declines it. May be empty.
+    reserved_terms: list[
+        Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
+    ]
 
 
 class ProjectSettings(BaseModel):
@@ -53,7 +63,7 @@ class ProjectSettings(BaseModel):
     )
     #: Extra ``-p key=value`` pipeline parameters, passed through verbatim.
     params: dict[str, StrictStr] = Field(default_factory=dict[str, StrictStr])
-    #: Present (``answerer: {}``) turns the question answerer on; ``None`` is off.
+    #: Present turns the question answerer on; ``None`` is off.
     answerer: AnswererSettings | None = None
 
     @field_validator("answerer", mode="before")
@@ -61,7 +71,9 @@ class ProjectSettings(BaseModel):
     def _answerer_is_a_mapping(cls, value: object) -> object:
         """A written-but-empty section must not quietly turn the answerer off."""
         if value is None:
-            raise ValueError("answerer must be a mapping; write `{}`")
+            raise ValueError(
+                "answerer must be a mapping with answer_limit and reserved_terms"
+            )
         return value
 
 
