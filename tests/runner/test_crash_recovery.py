@@ -13,7 +13,12 @@ from pathlib import Path
 import pytest
 from contract.launched import LaunchedProcess
 from sq_stub import write_run_script
-from sq_stub_scripts import RunScript, single_review, split_review
+from sq_stub_scripts import (
+    RunScript,
+    agent_question_run,
+    single_review,
+    split_review,
+)
 
 from amoeba.runner.finish import RESULT_RUN_ID
 from amoeba.runner.launch import PARAM_REISSUE_OF
@@ -257,3 +262,50 @@ def test_kill_before_launch_is_reissued_once_under_the_same_run_id(
 
 def _sq_runs(harness: CrashHarness) -> list[JournalEntry]:
     return [e for e in harness.entries() if e.kind is CommandKind.SQ_RUN]
+
+
+# --------------------------------------------------------------------------
+# Question records (slice 141): block and record land together, once
+# --------------------------------------------------------------------------
+
+
+def _question_run(harness: CrashHarness) -> RunSettings:
+    return _review_run(harness, agent_question_run("Which slice?"), "paused")
+
+
+def test_kill_between_question_record_and_report_finishes_once(
+    harness: CrashHarness,
+) -> None:
+    run = _question_run(harness)
+    first = harness.start(run, KillPoint.BETWEEN_BLOCK_AND_REPORT)
+    harness.wait_for_sigkill(first)
+    [journaled] = harness.entries()
+    assert not journaled.is_resolved, "the crash left the entry open"
+    assert len(harness.open_blocks(journaled.node_id)) == 1, "blocked first"
+    assert len(harness.questions()) == 1, "recorded with the block"
+    process = harness.start(run)
+
+    entry = harness.wait_for_resolution()
+
+    assert entry.outcome is JournalOutcome.COMPLETED
+    assert len(harness.open_blocks(entry.node_id)) == 1, "one blocked state"
+    assert len(harness.questions()) == 1, "one record"
+    harness.stop(process)
+
+
+def test_kill_inside_question_record_leaves_neither_then_retries(
+    harness: CrashHarness,
+) -> None:
+    run = _question_run(harness)
+    first = harness.start(run, KillPoint.INSIDE_RECORD_QUESTION)
+    harness.wait_for_sigkill(first)
+    [journaled] = harness.entries()
+    assert harness.open_blocks(journaled.node_id) == [], "no block landed"
+    assert harness.questions() == [], "no record landed"
+    process = harness.start(run)
+
+    entry = harness.wait_for_resolution()
+
+    assert len(harness.open_blocks(entry.node_id)) == 1, "the retry blocked once"
+    assert len(harness.questions()) == 1, "and recorded once"
+    harness.stop(process)

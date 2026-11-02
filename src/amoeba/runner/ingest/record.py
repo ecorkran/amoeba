@@ -46,6 +46,7 @@ from amoeba.store import (
     CommandKind,
     JournalEntry,
     NodeKind,
+    QuestionCatch,
     RunnerReview,
     Store,
 )
@@ -91,7 +92,7 @@ def ingest(
     result = _result(finished, run_id, [r.verdict.id for r in recorded], unknown)
     block = _block_with(plan, unknown)
     if block is not None:
-        block_once(store, entry.node_id, block)
+        _write_block(store, entry, plan, block)
     store.record_runner_report(
         entry.id,
         recorded,
@@ -116,6 +117,31 @@ def _resume_count(
         if e.kind is CommandKind.SQ_RUN
     ]
     return resume_count(runs[::-1], step_of(finished.document))
+
+
+def _write_block(
+    store: Store, entry: JournalEntry, plan: OutcomePlan, block: BlockPlan
+) -> None:
+    """Write the outcome's block; a question's goes in with its record (141, D1)."""
+    asked = plan.question
+    if asked is None:
+        block_once(store, entry.node_id, block)
+        return
+    # record_question's errors are not caught: they reach the tenant boundary and
+    # the unresolved entry is ingested again next tick.
+    store.record_question(
+        QuestionCatch(
+            project_id=entry.project_id,
+            node_id=entry.node_id,
+            source_entry_id=entry.id,
+            run_id=asked.run_id,
+            step=asked.step,
+            question=asked.question,
+            truncated=asked.truncated,
+        ),
+        block_context=block.context,
+        block_payload=block.payload,
+    )
 
 
 def block_once(store: Store, node_id: str, block: BlockPlan) -> None:

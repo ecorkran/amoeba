@@ -76,6 +76,9 @@ class KillPoint(StrEnum):
     #: After the node is blocked, as the run's reviews are about to be recorded
     #: and the entry resolved together (``record_runner_report``).
     BETWEEN_BLOCK_AND_REPORT = "between_block_and_report"
+    #: Inside ``record_question``: the block is written, the record is not, and
+    #: nothing has committed (slice 141).
+    INSIDE_RECORD_QUESTION = "inside_record_question"
     #: After ingestion committed (reviews recorded, entry resolved and flagged),
     #: before anything routed it.
     AFTER_INGEST = "after_ingest"
@@ -170,6 +173,16 @@ def _arm_report_kill(*, after: bool) -> None:
     Store.record_runner_report = report  # type: ignore[method-assign]
 
 
+def _arm_record_question_kill() -> None:
+    """Make ``record_question`` die after its block write, before its commit."""
+
+    def insert(self: Store, *args: object, **kwargs: object) -> str:
+        die()
+        raise AssertionError("unreachable: the process is gone")
+
+    Store._insert_question = insert  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+
+
 def _arm_acknowledge_kill() -> None:
     """Make the next acknowledgment die once it has committed."""
     original = Store.acknowledge_resolution
@@ -212,6 +225,8 @@ def main(argv: Sequence[str]) -> None:
         _arm_report_kill(after=False)
     if kill_at is KillPoint.AFTER_INGEST:
         _arm_report_kill(after=True)
+    if kill_at is KillPoint.INSIDE_RECORD_QUESTION:
+        _arm_record_question_kill()
     if kill_at is KillPoint.AFTER_ACKNOWLEDGE:
         _arm_acknowledge_kill()
     planners: tuple[Planner, ...] = (

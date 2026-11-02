@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from amoeba.process import RunCheckpoint, RunFailure, RunOutcome
+from amoeba.process.sq_outcome import QUESTION_TAIL_CHARS
 from amoeba.runner.launch import STDERR_TAIL_LIMIT_BYTES
 from amoeba.runner.observed import RunEnded, RunVanished
 from amoeba.runner.supervise import (
@@ -57,6 +58,20 @@ class BlockPlan:
 
 
 @dataclass(frozen=True)
+class PlannedQuestion:
+    """A question the run ended on, ready for ingest to record (slice 141).
+
+    ``step`` and ``question`` are bounded like the block payload's copies;
+    ``truncated`` is measured on the raw text, before that bound.
+    """
+
+    run_id: str
+    step: str | None
+    question: str | None
+    truncated: bool
+
+
+@dataclass(frozen=True)
 class OutcomePlan:
     """What to do for a finished run: an optional block and the entry's outcome."""
 
@@ -64,6 +79,8 @@ class OutcomePlan:
     entry_outcome: JournalOutcome
     #: The run completed: mark the slice ``done`` in the same transaction (D4).
     complete_node: bool = False
+    #: Set only for a question outcome; ingest records it with the block.
+    question: PlannedQuestion | None = None
 
 
 def cut_to_bound(text: str) -> str:
@@ -210,7 +227,11 @@ def plan_supervised(
                 return OutcomePlan(None, resolved)
             return OutcomePlan(_exhausted_block(finished, run_id, count), resolved)
         case OutcomeClass.QUESTION:
-            return OutcomePlan(_question_block(finished, run_id), resolved)
+            return OutcomePlan(
+                _question_block(finished, run_id),
+                resolved,
+                question=_planned_question(finished, run_id),
+            )
         case OutcomeClass.BLOCKED:
             return _blocked(finished, run_id, resolved)
 
@@ -237,6 +258,18 @@ def _question_block(finished: RunEnded, run_id: str) -> BlockPlan:
     # A HUMAN block: the store keeps a payload only on a human block's escalation, and
     # the question must reach the person (and 140) with it.
     return BlockPlan(BlockedKind.HUMAN, context, payload)
+
+
+def _planned_question(finished: RunEnded, run_id: str) -> PlannedQuestion:
+    checkpoint = finished.document.checkpoint
+    step = checkpoint.step if checkpoint else None
+    question = checkpoint.question if checkpoint else None
+    return PlannedQuestion(
+        run_id=run_id,
+        step=None if step is None else cut_to_bound(step),
+        question=None if question is None else cut_to_bound(question),
+        truncated=question is not None and len(question) >= QUESTION_TAIL_CHARS,
+    )
 
 
 def _blocked(finished: RunEnded, run_id: str, resolved: JournalOutcome) -> OutcomePlan:

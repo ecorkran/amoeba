@@ -147,28 +147,28 @@ revision_number: 2
 
 ## 5. Outcome plan and ingest
 
-- [ ] **5.1 `QUESTION_TAIL_CHARS` and `OutcomePlan.question`** (`process/sq_outcome.py`, `runner/ingest/outcome.py`)
-  - [ ] Add `QUESTION_TAIL_CHARS: Final = 400` in `process/sq_outcome.py` beside the `question` field, with a comment that it is Squadron's tail limit (LLD D4). Defined once; no literal `400` for this purpose elsewhere.
-  - [ ] On the `QUESTION` branch of `plan_supervised`, set `OutcomePlan.question` to a `QuestionCatch`-ready value: `run_id`, `step`, text, and `truncated = len(question) >= QUESTION_TAIL_CHARS` computed on the raw text before 132's byte bound. A null question gives `truncated = false`.
-  - [ ] Keep the block context and payload byte-identical to today.
-  - [ ] Success: other outcome classes carry no question.
+- [x] **5.1 `QUESTION_TAIL_CHARS` and `OutcomePlan.question`** (`process/sq_outcome.py`, `runner/ingest/outcome.py`)
+  - [x] Add `QUESTION_TAIL_CHARS: Final = 400` in `process/sq_outcome.py` beside the `question` field, with a comment that it is Squadron's tail limit (LLD D4). Defined once; no literal `400` for this purpose elsewhere.
+  - [x] On the `QUESTION` branch of `plan_supervised`, set `OutcomePlan.question` to a `QuestionCatch`-ready value: `run_id`, `step`, text, and `truncated = len(question) >= QUESTION_TAIL_CHARS` computed on the raw text before 132's byte bound. A null question gives `truncated = false`.
+  - [x] Keep the block context and payload byte-identical to today.
+  - [x] Success: other outcome classes carry no question.
 
-- [ ] **5.2 Tests for the plan** (`tests/runner/ingest/test_plan_supervised.py`, `test_outcome.py`)
-  - [ ] A question below, at and above 400 characters: `truncated` false, true, true. A null question: `truncated` false and the catch's text null.
-  - [ ] The block context and payload equal the pre-change values (compare to the existing expected bytes).
-  - [ ] Non-question outcomes have `question` unset.
-  - [ ] Success: new and existing outcome tests pass.
+- [x] **5.2 Tests for the plan** (`tests/runner/ingest/test_plan_supervised.py`, `test_outcome.py`)
+  - [x] A question below, at and above 400 characters: `truncated` false, true, true. A null question: `truncated` false and the catch's text null.
+  - [x] The block context and payload equal the pre-change values (compare to the existing expected bytes).
+  - [x] Non-question outcomes have `question` unset.
+  - [x] Success: new and existing outcome tests pass.
 
-- [ ] **5.3 Ingest routes a question plan through `record_question`** (`runner/ingest/record.py`)
-  - [ ] When the plan carries a question, call `store.record_question(...)` with the plan's block context and payload instead of `block_once`. Other plans keep `block_once`. `record_runner_report` is unchanged and still follows.
-  - [ ] Do not catch `record_question`'s errors (LLD D1).
-  - [ ] Success: non-question blocks are written exactly as before.
+- [x] **5.3 Ingest routes a question plan through `record_question`** (`runner/ingest/record.py`)
+  - [x] When the plan carries a question, call `store.record_question(...)` with the plan's block context and payload instead of `block_once`. Other plans keep `block_once`. `record_runner_report` is unchanged and still follows.
+  - [x] Do not catch `record_question`'s errors (LLD D1).
+  - [x] Success: non-question blocks are written exactly as before.
 
-- [ ] **5.4 Tests for ingest, end to end and crash** (`tests/runner/ingest/test_record.py`, `tests/runner/test_end_to_end.py`, `tests/runner/test_crash_recovery.py`)
-  - [ ] Ingest test: a question outcome produces one block and one record; a question on an already-blocked node produces a declined record and no block.
-  - [ ] Extend the existing `agent_question` end-to-end test: the existing assertions pass unchanged, plus one record found by `question_for_block` on the question's block after the question tick (its state is not asserted here, since Task 7.3 changes it within the same tick), and `answered` (pm) with `answer` equal to the instructions after the resume. (Task 7.4 adds the `declined` (`answerer_not_configured`) assertion between the two.)
-  - [ ] Crash case (`-k question`): kill between `record_question` and `record_runner_report`; the restarted tick resolves the entry with exactly one block and one record. A kill inside `record_question` leaves neither.
-  - [ ] Success: the new cases pass, and the runner suite passes.
+- [x] **5.4 Tests for ingest, end to end and crash** (`tests/runner/ingest/test_record.py`, `tests/runner/test_end_to_end.py`, `tests/runner/test_crash_recovery.py`)
+  - [x] Ingest test: a question outcome produces one block and one record; a question on an already-blocked node produces a declined record and no block.
+  - [x] Extend the existing `agent_question` end-to-end test: the existing assertions pass unchanged, plus one record found by `question_for_block` on the question's block after the question tick (its state is not asserted here, since Task 7.3 changes it within the same tick), and `answered` (pm) with `answer` equal to the instructions after the resume. (Task 7.4 adds the `declined` (`answerer_not_configured`) assertion between the two.)
+  - [x] Crash case (`-k question`): kill between `record_question` and `record_runner_report`; the restarted tick resolves the entry with exactly one block and one record. A kill inside `record_question` leaves neither.
+  - [x] Success: the new cases pass, and the runner suite passes.
 
 **Commit**: `feat: write the question record when a question block is ingested`
 
