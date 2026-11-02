@@ -46,8 +46,9 @@ class AnswererSettings(BaseModel):
     #: Most answers the answerer may give in one run, from one up.
     answer_limit: Annotated[StrictInt, Field(ge=1)]
     #: Terms whose presence in a question or answer declines it. May be empty.
-    reserved_terms: list[
-        Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
+    reserved_terms: tuple[
+        Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)],
+        ...,
     ]
 
 

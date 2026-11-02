@@ -252,6 +252,20 @@ def test_a_record_with_no_question_text_raises(store: Store) -> None:
         _submit(store, record)
 
 
+def test_a_settled_record_with_no_question_text_settles_instead_of_raising(
+    store: Store,
+) -> None:
+    record = seed_question(
+        store,
+        make_slice(store),
+        state=QuestionState.DECLINED,
+        decline_reason=DeclineReason.QUESTION_MISSING,
+        question=None,
+    )
+
+    assert _submit(store, record).outcome is AnswerOutcome.SETTLED
+
+
 def test_the_signature_takes_no_decision_or_submitter() -> None:
     parameters = set(inspect.signature(Store.submit_answer).parameters) - {"self"}
 
@@ -359,7 +373,7 @@ def test_count_the_limit_declines_the_third_answer_and_keeps_the_block_open(
     gate = partial(
         evaluate_gate,
         answer=ANSWER,
-        settings=AnswererSettings(answer_limit=2, reserved_terms=[]),
+        settings=AnswererSettings(answer_limit=2, reserved_terms=()),
     )
     for _ in range(2):
         seed_question(

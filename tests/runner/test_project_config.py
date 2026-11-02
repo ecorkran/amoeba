@@ -160,7 +160,7 @@ def test_a_configured_answerer_is_on_and_an_absent_key_is_not(
     config = load_project_config(_write(tmp_path, ANSWERER_FILE))
 
     assert config.for_project("scratch").answerer == AnswererSettings(
-        answer_limit=3, reserved_terms=["drop table", "force push"]
+        answer_limit=3, reserved_terms=("drop table", "force push")
     )
     assert config.for_project("plain").answerer is None
     assert config.for_project("unnamed").answerer is None
@@ -228,5 +228,5 @@ def test_an_empty_reserved_terms_list_loads(tmp_path: Path) -> None:
     )
 
     assert config.for_project("scratch").answerer == AnswererSettings(
-        answer_limit=1, reserved_terms=[]
+        answer_limit=1, reserved_terms=()
     )

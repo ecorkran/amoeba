@@ -99,10 +99,10 @@ class AnswerSubmissionOperations(QuestionOperations, SubmissionWriter):
         record = self.question(question_id)
         if record is None:
             raise QuestionNotFoundError(f"no question record {question_id!r}")
-        if record.question is None:
-            raise ValueError(f"question {question_id!r} has no question text")
         if record.state not in _OPEN_STATES:
             return AnswerOutcome.SETTLED
+        if record.question is None:
+            raise ValueError(f"question {question_id!r} has no question text")
         if self._block_is_resolved(record):
             return AnswerOutcome.BLOCK_RESOLVED
         refusal = gate(record.question, self._prior_answers(record))
