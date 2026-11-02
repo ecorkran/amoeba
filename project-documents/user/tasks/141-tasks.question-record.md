@@ -99,19 +99,19 @@ revision_number: 2
 
 ## 3. `record_question`
 
-- [ ] **3.1 Implement `record_question`** (`store/questions.py`)
-  - [ ] Signature per the LLD API Contracts: `record_question(catch, *, block_context, block_payload) -> QuestionRecord`.
-  - [ ] Under one `BEGIN IMMEDIATE`: if a record exists for `source_entry_id`, return it and write nothing. If the node is not blocked, write the `HUMAN` block through `_write_block` (so the escalation message is written with it) and insert the record `pending` with `blocked_state_id` set to the new block. If the node is already blocked, insert the record `declined` with `node_already_blocked` and a null `blocked_state_id`, writing no block.
-  - [ ] A missing node raises `NodeNotFoundError`; a done node raises `InvalidTransitionError` (the same errors `block_once` raises). Do not catch them.
-  - [ ] Success: one method, one transaction, no SQL outside `sql_questions.py`.
+- [x] **3.1 Implement `record_question`** (`store/questions.py`)
+  - [x] Signature per the LLD API Contracts: `record_question(catch, *, block_context, block_payload) -> QuestionRecord`.
+  - [x] Under one `BEGIN IMMEDIATE`: if a record exists for `source_entry_id`, return it and write nothing. If the node is not blocked, write the `HUMAN` block through `_write_block` (so the escalation message is written with it) and insert the record `pending` with `blocked_state_id` set to the new block. If the node is already blocked, insert the record `declined` with `node_already_blocked` and a null `blocked_state_id`, writing no block.
+  - [x] A missing node raises `NodeNotFoundError`; a done node raises `InvalidTransitionError` (the same errors `block_once` raises). Do not catch them.
+  - [x] Success: one method, one transaction, no SQL outside `sql_questions.py`.
 
-- [ ] **3.2 Tests for `record_question`** (`tests/store/test_question_record_catch.py`)
-  - [ ] Unblocked node: one `HUMAN` block, one `pending` record linked to it, and the block's context and payload stored exactly as passed.
-  - [ ] Already-blocked node: a `declined` record with `node_already_blocked`, null `blocked_state_id`, and no second block.
-  - [ ] Retry with the same `source_entry_id`: returns the existing record, with no second record and no second block, including after the first block has been resolved.
-  - [ ] Missing node raises `NodeNotFoundError`; done node raises `InvalidTransitionError`; in both cases nothing is written.
-  - [ ] Failure inside the transaction (use `tests/fault_injection.py` as other store tests do) leaves neither block nor record.
-  - [ ] Success: all cases pass.
+- [x] **3.2 Tests for `record_question`** (`tests/store/test_question_record_catch.py`)
+  - [x] Unblocked node: one `HUMAN` block, one `pending` record linked to it, and the block's context and payload stored exactly as passed.
+  - [x] Already-blocked node: a `declined` record with `node_already_blocked`, null `blocked_state_id`, and no second block.
+  - [x] Retry with the same `source_entry_id`: returns the existing record, with no second record and no second block, including after the first block has been resolved.
+  - [x] Missing node raises `NodeNotFoundError`; done node raises `InvalidTransitionError`; in both cases nothing is written.
+  - [x] Failure inside the transaction (use `tests/fault_injection.py` as other store tests do) leaves neither block nor record.
+  - [x] Success: all cases pass.
 
 **Commit**: `feat: add record_question writing block and record in one transaction`
 

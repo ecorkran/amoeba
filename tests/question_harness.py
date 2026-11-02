@@ -12,6 +12,7 @@ from amoeba.store import (
     AnsweredBy,
     DeclineReason,
     NodeKind,
+    QuestionCatch,
     QuestionRecord,
     QuestionState,
     Store,
@@ -28,6 +29,34 @@ def make_slice(store: Store, project_id: str = PROJECT) -> str:
     return store.create_node(
         project_id=project_id, kind=NodeKind.SLICE, title="slice"
     ).id
+
+
+def issue_entry(store: Store, node_id: str) -> str:
+    """Journal an ``sq_run`` on the node, and return the entry id."""
+    return store.journal_issue(
+        node_id,
+        kind=CommandKind.SQ_RUN,
+        parameters=sq_run_parameters({"pipeline": "p6", "params": {}}),
+    ).id
+
+
+def catch_for(
+    store: Store,
+    node_id: str,
+    *,
+    question: str | None = "which branch?",
+    truncated: bool = False,
+) -> QuestionCatch:
+    """A catch on a fresh journal entry of the node."""
+    return QuestionCatch(
+        project_id=PROJECT,
+        node_id=node_id,
+        source_entry_id=issue_entry(store, node_id),
+        run_id="run-test",
+        step="implement",
+        question=question,
+        truncated=truncated,
+    )
 
 
 def seed_question(
