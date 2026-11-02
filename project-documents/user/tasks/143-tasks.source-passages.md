@@ -179,39 +179,41 @@ revision_number: 2
 
 ## 6. Committed source reads
 
-- [ ] **6.1 CF layout constants** (`runner/answering/source_reads.py`, new)
-  - [ ] Define once the D1 table as `PlanRow` values (directory, pattern with `{initiative}`/`{slice}` placeholders, `required` flag; only the slice plan row is required), the `project-documents/user` root constant, and `SliceRef(slice_index, initiative_index)`. No other module spells a directory or file-name pattern.
-  - [ ] Success: imports; typecheck passes.
+- [x] **6.1 CF layout constants** (`runner/answering/source_reads.py`, new)
+  - [x] Define once the D1 table as `PlanRow` values (directory, pattern with `{initiative}`/`{slice}` placeholders, `required` flag; only the slice plan row is required), the `project-documents/user` root constant, and `SliceRef(slice_index, initiative_index)`. No other module spells a directory or file-name pattern.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **6.2 Fixture repository helper** (`tests/runner/git_repo.py` or `tests/runner/answering/sources_repo.py`)
-  - [ ] Build a temporary repository from the frozen fixtures at their real relative paths on branch `main`, each commit with a controlled `GIT_COMMITTER_DATE` (extend `commit_file` with an optional `date` parameter without changing existing callers). Return the repo path and a mapping of path → expected committer date.
-  - [ ] Success: the repository contains every fixture file and `git log` shows the controlled dates.
+- [x] **6.2 Fixture repository helper** (`tests/runner/git_repo.py` or `tests/runner/answering/sources_repo.py`)
+  - [x] Build a temporary repository from the frozen fixtures at their real relative paths on branch `main`, each commit with a controlled `GIT_COMMITTER_DATE` (extend `commit_file` with an optional `date` parameter without changing existing callers). Return the repo path and a mapping of path → expected committer date.
+  - [x] Success: the repository contains every fixture file and `git log` shows the controlled dates.
 
-- [ ] **6.3 Locate and select** (`runner/answering/source_reads.py`)
-  - [ ] `locate_sources(checkout, target, slice_ref, rules_paths, budget, run, timeout_seconds) -> SourceSelection | SourcesProblem | None`: resolves the commit, lists directories and selects the ordered file paths (rules in configured order, then plan in D1 order), per LLD D1, D2 and D10. A path already selected is skipped, so it is read once at its first position.
-  - [ ] Problems per LLD D2 and D9: any failed git call or non-zero exit is `sources_unreadable` (command and stderr head); an unmatched rules entry or no slice plan is `sources_missing`; `None` from `git_read` returns `None`. Absence comes only from listings.
-  - [ ] Success: typecheck passes.
+- [x] **6.3 Locate and select** (`runner/answering/source_reads.py`)
+  - [x] `locate_sources(checkout, target, slice_ref, rules_paths, budget, run, timeout_seconds) -> SourceSelection | SourcesProblem | None`: resolves the commit, lists directories and selects the ordered file paths (rules in configured order, then plan in D1 order), per LLD D1, D2 and D10. A path already selected is skipped, so it is read once at its first position.
+  - [x] Problems per LLD D2 and D9: any failed git call or non-zero exit is `sources_unreadable` (command and stderr head); an unmatched rules entry or no slice plan is `sources_missing`; `None` from `git_read` returns `None`. Absence comes only from listings.
+  - [x] Success: typecheck passes.
+  - Note (20261102): the first parameter is the checkout path (`repo: Path`).
+  - Note (20261102): the plan-directory check needed subdirectory names from the `project-documents/user` listing, so git_read.py gained `parse_tree_directories`.
 
-- [ ] **6.4 Tests for locate and select** (`tests/runner/answering/test_source_reads.py`, new)
-  - [ ] Slice 132 / initiative 120: paths in the order rules, concept, initiative plan, `120-arch`, `120-slices`, `132-slice`, `132-tasks`.
-  - [ ] A file matched by two rules entries, or by a rules entry and a plan row, appears once at its first position.
-  - [ ] Pinned commit: a commit added to the target after the first call is not mixed in (a `run` wrapper commits after the first call); the returned commit is the first one.
-  - [ ] No slice plan → `sources_missing`; no design and no tasks yields the rest; an unmatched rules entry → `sources_missing` naming it; a root-level entry (`CLAUDE.md`) is found through the root listing; an absent plan directory matches nothing; a target that does not resolve → `sources_unreadable`.
-  - [ ] Success: `uv run pytest tests/runner/answering/test_source_reads.py -q` passes.
+- [x] **6.4 Tests for locate and select** (`tests/runner/answering/test_source_reads.py`, new)
+  - [x] Slice 132 / initiative 120: paths in the order rules, concept, initiative plan, `120-arch`, `120-slices`, `132-slice`, `132-tasks`.
+  - [x] A file matched by two rules entries, or by a rules entry and a plan row, appears once at its first position.
+  - [x] Pinned commit: a commit added to the target after the first call is not mixed in (a `run` wrapper commits after the first call); the returned commit is the first one.
+  - [x] No slice plan → `sources_missing`; no design and no tasks yields the rest; an unmatched rules entry → `sources_missing` naming it; a root-level entry (`CLAUDE.md`) is found through the root listing; an absent plan directory matches nothing; a target that does not resolve → `sources_unreadable`.
+  - [x] Success: `uv run pytest tests/runner/answering/test_source_reads.py -q` passes.
 
-- [ ] **6.5 `read_committed_sources`** (`runner/answering/source_reads.py`)
-  - [ ] `(checkout, target, slice_ref, rules_paths, max_chars, budget, run, timeout_seconds) -> CommittedSources | SourcesProblem | None`: calls `locate_sources`, then for each selected file reads its date (`last_change_args`, parsed with `parse_git_date`) and its text (`show_object_args`), per LLD D2, D5 and D7. `CommittedSources` holds the commit and the ordered `SourceFile`s.
-  - [ ] Failures per LLD D2, D5 and D9: a failed or non-zero read, or an empty or unparseable date, is `sources_unreadable` (never a fallback); `UnicodeDecodeError` is caught around the file `show` only, with a comment saying why (binary file; `run_cf` decodes text), and is `sources_unreadable` naming the path; the running text total exceeding `max_chars` returns `sources_too_large` ("at least" the total) without reading the rest.
-  - [ ] Keep functions near 50 lines.
-  - [ ] Success: typecheck passes; file near 300 lines or less.
+- [x] **6.5 `read_committed_sources`** (`runner/answering/source_reads.py`)
+  - [x] `(checkout, target, slice_ref, rules_paths, max_chars, budget, run, timeout_seconds) -> CommittedSources | SourcesProblem | None`: calls `locate_sources`, then for each selected file reads its date (`last_change_args`, parsed with `parse_git_date`) and its text (`show_object_args`), per LLD D2, D5 and D7. `CommittedSources` holds the commit and the ordered `SourceFile`s.
+  - [x] Failures per LLD D2, D5 and D9: a failed or non-zero read, or an empty or unparseable date, is `sources_unreadable` (never a fallback); `UnicodeDecodeError` is caught around the file `show` only, with a comment saying why (binary file; `run_cf` decodes text), and is `sources_unreadable` naming the path; the running text total exceeding `max_chars` returns `sources_too_large` ("at least" the total) without reading the rest.
+  - [x] Keep functions near 50 lines.
+  - [x] Success: typecheck passes; file near 300 lines or less.
 
-- [ ] **6.6 Tests for file reads** (`tests/runner/answering/test_source_reads.py`)
-  - [ ] Each file has its controlled committer date and committed text; an uncommitted edit to a rules file and an untracked file matching the glob are absent.
-  - [ ] A `run` wrapper making the `show` of one listed file exit non-zero → `sources_unreadable`, not a set without it; a non-UTF-8 file matched by a glob → `sources_unreadable` naming the path, no exception.
-  - [ ] Date read never falls back (LLD D5): a `run` wrapper making the date read (`log`) for one listed file exit non-zero → `sources_unreadable`; the same wrapper returning an empty line, and again a garbage line, → `sources_unreadable`. In each case the result is not a set that carries the commit date or the current time for that file.
-  - [ ] Budget: for every N from the first call to the last, a budget refusing the Nth call returns `None`. A recording budget shows exactly `2 + L + 2F` calls for the slice-132 fixture (state the expected number as a literal beside the formula), and the read completes under a budget allowing exactly that many.
-  - [ ] Early stop: with a small `max_chars`, `sources_too_large` after fewer calls than the full set.
-  - [ ] Success: `uv run pytest tests/runner/answering/test_source_reads.py -q` passes; `tests/runner/test_git_read_only_place.py` still passes.
+- [x] **6.6 Tests for file reads** (`tests/runner/answering/test_source_reads.py`)
+  - [x] Each file has its controlled committer date and committed text; an uncommitted edit to a rules file and an untracked file matching the glob are absent.
+  - [x] A `run` wrapper making the `show` of one listed file exit non-zero → `sources_unreadable`, not a set without it; a non-UTF-8 file matched by a glob → `sources_unreadable` naming the path, no exception.
+  - [x] Date read never falls back (LLD D5): a `run` wrapper making the date read (`log`) for one listed file exit non-zero → `sources_unreadable`; the same wrapper returning an empty line, and again a garbage line, → `sources_unreadable`. In each case the result is not a set that carries the commit date or the current time for that file.
+  - [x] Budget: for every N from the first call to the last, a budget refusing the Nth call returns `None`. A recording budget shows exactly `2 + L + 2F` calls for the slice-132 fixture (state the expected number as a literal beside the formula), and the read completes under a budget allowing exactly that many.
+  - [x] Early stop: with a small `max_chars`, `sources_too_large` after fewer calls than the full set.
+  - [x] Success: `uv run pytest tests/runner/answering/test_source_reads.py -q` passes; `tests/runner/test_git_read_only_place.py` still passes.
 
 **Commit**: `feat: read rules and plan sources from one committed target commit`
 

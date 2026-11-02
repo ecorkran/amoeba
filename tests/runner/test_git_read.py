@@ -20,6 +20,7 @@ from amoeba.runner.git_read import (
     is_ancestor_args,
     last_change_args,
     parse_porcelain_v2,
+    parse_tree_directories,
     parse_tree_listing,
     resolve_commit_args,
     show_object_args,
@@ -256,6 +257,17 @@ def test_a_directory_listing_keeps_files_and_drops_subdirectories(
 
     assert listing.startswith("tree ")
     assert parse_tree_listing(listing) == ("top.md",)
+
+
+def test_a_directory_listing_names_its_subdirectories_without_the_slash(
+    tmp_path: Path,
+) -> None:
+    repo = _object_repo(tmp_path)
+    commit = head_of(repo)
+
+    listing = _read(repo, show_object_args(commit, "docs")).stdout
+
+    assert parse_tree_directories(listing) == ("nested",)
 
 
 def test_the_root_listing_names_root_level_files(tmp_path: Path) -> None:

@@ -172,21 +172,32 @@ _TREE_HEADER_PREFIX: Final = "tree "
 _DIRECTORY_SUFFIX: Final = "/"
 
 
+def _tree_entries(text: str) -> tuple[str, ...]:
+    """The entry lines of ``git show <commit>:<dir>`` output, without the header."""
+    entries: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line and not line.startswith(_TREE_HEADER_PREFIX):
+            entries.append(line)
+    return tuple(entries)
+
+
 def parse_tree_listing(text: str) -> tuple[str, ...]:
     """The file names in ``git show <commit>:<dir>`` output, in git's order.
 
     Skips the ``tree …`` header and blank lines and drops subdirectories (names ending
     in ``/``); directories are not walked. Trailing whitespace and CRLF are tolerated.
     """
-    names: list[str] = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith(_TREE_HEADER_PREFIX):
-            continue
-        if line.endswith(_DIRECTORY_SUFFIX):
-            continue
-        names.append(line)
-    return tuple(names)
+    return tuple(e for e in _tree_entries(text) if not e.endswith(_DIRECTORY_SUFFIX))
+
+
+def parse_tree_directories(text: str) -> tuple[str, ...]:
+    """The subdirectory names in the same output, without their trailing ``/``."""
+    return tuple(
+        e.removesuffix(_DIRECTORY_SUFFIX)
+        for e in _tree_entries(text)
+        if e.endswith(_DIRECTORY_SUFFIX)
+    )
 
 
 def _entry_path(line: str) -> str:
