@@ -161,17 +161,17 @@ revision_number: 2
 
 ## 5. Configuration keys
 
-- [ ] **5.1 `AnswererSettings.rules_paths` and `passages_max_chars`** (`runner/project_config.py`)
-  - [ ] Add `rules_paths: tuple[str, ...]`, required, no default. Each entry is stripped, non-blank, not absolute, has no `..` segment, and `*` appears only in the last segment. Validate with a field validator whose error names the entry's index, so the load error reads like `projects.amoeba.answerer.rules_paths.1: …` (per LLD D10; look at how the existing validators here produce key-path errors and follow them).
-  - [ ] Add `passages_max_chars: Annotated[StrictInt, Field(ge=1)]`, required, no default.
-  - [ ] Update the class docstring (it names two keys; now four).
-  - [ ] Update every existing test or fixture that writes an `answerer` section (`ANSWERER_FILE`, `_answerer_file` callers, factory, tick and answering tests; search with `grep -rn "answer_limit" tests src`) so each carries both new keys.
-  - [ ] Success: `uv run pytest -q` passes.
+- [x] **5.1 `AnswererSettings.rules_paths` and `passages_max_chars`** (`runner/project_config.py`)
+  - [x] Add `rules_paths: tuple[str, ...]`, required, no default. Each entry is stripped, non-blank, not absolute, has no `..` segment, and `*` appears only in the last segment. Validate with a field validator whose error names the entry's index, so the load error reads like `projects.amoeba.answerer.rules_paths.1: …` (per LLD D10; look at how the existing validators here produce key-path errors and follow them).
+  - [x] Add `passages_max_chars: Annotated[StrictInt, Field(ge=1)]`, required, no default.
+  - [x] Update the class docstring (it names two keys; now four).
+  - [x] Update every existing test or fixture that writes an `answerer` section (`ANSWERER_FILE`, `_answerer_file` callers, factory, tick and answering tests; search with `grep -rn "answer_limit" tests src`) so each carries both new keys.
+  - [x] Success: `uv run pytest -q` passes.
 
-- [ ] **5.2 Config tests** (`tests/runner/test_project_config.py`)
-  - [ ] Each fails at load with its key path: missing `rules_paths`; missing `passages_max_chars`; a blank entry; an absolute entry; an entry with a `..` segment; `*` outside the last segment; `passages_max_chars: 0`; a non-integer `passages_max_chars`.
-  - [ ] `rules_paths: []` loads; entries are stripped; `?`, `[` and a trailing-segment `*` are accepted; the two keys are read back from a real YAML file.
-  - [ ] Success: `uv run pytest tests/runner -q` passes.
+- [x] **5.2 Config tests** (`tests/runner/test_project_config.py`)
+  - [x] Each fails at load with its key path: missing `rules_paths`; missing `passages_max_chars`; a blank entry; an absolute entry; an entry with a `..` segment; `*` outside the last segment; `passages_max_chars: 0`; a non-integer `passages_max_chars`.
+  - [x] `rules_paths: []` loads; entries are stripped; `?`, `[` and a trailing-segment `*` are accepted; the two keys are read back from a real YAML file.
+  - [x] Success: `uv run pytest tests/runner -q` passes.
 
 **Commit**: `feat: add rules_paths and passages_max_chars answerer keys`
 

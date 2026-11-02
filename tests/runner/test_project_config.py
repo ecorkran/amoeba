@@ -145,6 +145,10 @@ projects:
     answerer:
       answer_limit: 3
       reserved_terms: [drop table, "  force push  "]
+      rules_paths:
+        - CLAUDE.md
+        - "  project-documents/ai-project-guide/project-guides/rules/*.md  "
+      passages_max_chars: 200000
   plain:
     pipeline: p456
 """
@@ -160,7 +164,13 @@ def test_a_configured_answerer_is_on_and_an_absent_key_is_not(
     config = load_project_config(_write(tmp_path, ANSWERER_FILE))
 
     assert config.for_project("scratch").answerer == AnswererSettings(
-        answer_limit=3, reserved_terms=("drop table", "force push")
+        answer_limit=3,
+        reserved_terms=("drop table", "force push"),
+        rules_paths=(
+            "CLAUDE.md",
+            "project-documents/ai-project-guide/project-guides/rules/*.md",
+        ),
+        passages_max_chars=200000,
     )
     assert config.for_project("plain").answerer is None
     assert config.for_project("unnamed").answerer is None
@@ -181,7 +191,7 @@ def test_a_null_answerer_fails_naming_the_project_path(tmp_path: Path) -> None:
 def test_an_unknown_key_inside_answerer_fails(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
-        _answerer_file("{answer_limit: 3, reserved_terms: [], limit: 3}"),
+        _answerer_file(_answerer_body(limit="3")),
     )
 
     with pytest.raises(StartupFailedError) as raised:
@@ -198,24 +208,51 @@ def test_an_empty_answerer_fails_naming_both_missing_keys(tmp_path: Path) -> Non
     assert "projects.scratch.answerer.reserved_terms" in str(raised.value)
 
 
+def _answerer_body(**changes: str | None) -> str:
+    """A valid answerer mapping with ``changes`` applied; ``None`` drops a key."""
+    keys: dict[str, str | None] = {
+        "answer_limit": "2",
+        "reserved_terms": "[]",
+        "rules_paths": "[]",
+        "passages_max_chars": "1000",
+        **changes,
+    }
+    return "{" + ", ".join(f"{k}: {v}" for k, v in keys.items() if v is not None) + "}"
+
+
 @pytest.mark.parametrize(
-    ("body", "failing_path"),
+    ("changes", "failing_path"),
     [
-        ("{reserved_terms: []}", "answerer.answer_limit"),
-        ("{answer_limit: 2}", "answerer.reserved_terms"),
-        ("{answer_limit: 0, reserved_terms: []}", "answerer.answer_limit"),
-        ("{answer_limit: -1, reserved_terms: []}", "answerer.answer_limit"),
-        ("{answer_limit: 1.5, reserved_terms: []}", "answerer.answer_limit"),
-        ("{answer_limit: '2', reserved_terms: []}", "answerer.answer_limit"),
-        ("{answer_limit: 2, reserved_terms: ['  ']}", "answerer.reserved_terms.0"),
-        ("{answer_limit: 2, reserved_terms: ['ok', '']}", "answerer.reserved_terms.1"),
-        ("{answer_limit: 2, reserved_terms: [7]}", "answerer.reserved_terms.0"),
-        ("{answer_limit: 2, reserved_terms: drop}", "answerer.reserved_terms"),
+        ({"answer_limit": None}, "answerer.answer_limit"),
+        ({"reserved_terms": None}, "answerer.reserved_terms"),
+        ({"rules_paths": None}, "answerer.rules_paths"),
+        ({"passages_max_chars": None}, "answerer.passages_max_chars"),
+        ({"answer_limit": "0"}, "answerer.answer_limit"),
+        ({"answer_limit": "-1"}, "answerer.answer_limit"),
+        ({"answer_limit": "1.5"}, "answerer.answer_limit"),
+        ({"answer_limit": "'2'"}, "answerer.answer_limit"),
+        ({"reserved_terms": "['  ']"}, "answerer.reserved_terms.0"),
+        ({"reserved_terms": "['ok', '']"}, "answerer.reserved_terms.1"),
+        ({"reserved_terms": "[7]"}, "answerer.reserved_terms.0"),
+        ({"reserved_terms": "drop"}, "answerer.reserved_terms"),
+        ({"rules_paths": "['ok', '  ']"}, "answerer.rules_paths.1"),
+        ({"rules_paths": "['/etc/rules.md']"}, "answerer.rules_paths.0"),
+        ({"rules_paths": "['a', '../up.md']"}, "answerer.rules_paths.1"),
+        ({"rules_paths": "['a/../b.md']"}, "answerer.rules_paths.0"),
+        ({"rules_paths": "['ok', 'a/*/b.md']"}, "answerer.rules_paths.1"),
+        ({"rules_paths": "['*/b.md']"}, "answerer.rules_paths.0"),
+        ({"rules_paths": "[7]"}, "answerer.rules_paths.0"),
+        ({"rules_paths": "rules.md"}, "answerer.rules_paths"),
+        ({"passages_max_chars": "0"}, "answerer.passages_max_chars"),
+        ({"passages_max_chars": "1.5"}, "answerer.passages_max_chars"),
+        ({"passages_max_chars": "'1000'"}, "answerer.passages_max_chars"),
     ],
 )
 def test_a_bad_answerer_value_fails_with_its_key_path(
-    tmp_path: Path, body: str, failing_path: str
+    tmp_path: Path, changes: dict[str, str | None], failing_path: str
 ) -> None:
+    body = _answerer_body(**changes)
+
     with pytest.raises(StartupFailedError) as raised:
         load_project_config(_write(tmp_path, _answerer_file(body)))
 
@@ -224,9 +261,34 @@ def test_a_bad_answerer_value_fails_with_its_key_path(
 
 def test_an_empty_reserved_terms_list_loads(tmp_path: Path) -> None:
     config = load_project_config(
-        _write(tmp_path, _answerer_file("{answer_limit: 1, reserved_terms: []}"))
+        _write(
+            tmp_path,
+            _answerer_file(_answerer_body(answer_limit="1", passages_max_chars="1")),
+        )
     )
 
     assert config.for_project("scratch").answerer == AnswererSettings(
-        answer_limit=1, reserved_terms=()
+        answer_limit=1, reserved_terms=(), rules_paths=(), passages_max_chars=1
     )
+
+
+def test_an_empty_rules_paths_list_loads(tmp_path: Path) -> None:
+    config = load_project_config(
+        _write(tmp_path, _answerer_file(_answerer_body(rules_paths="[]")))
+    )
+
+    settings = config.for_project("scratch").answerer
+    assert settings is not None
+    assert settings.rules_paths == ()
+
+
+def test_rules_paths_entries_are_stripped_and_keep_other_glob_characters(
+    tmp_path: Path,
+) -> None:
+    body = _answerer_body(rules_paths="['  a?.md  ', 'dir/[ab].md', 'rules/*.md']")
+
+    config = load_project_config(_write(tmp_path, _answerer_file(body)))
+
+    settings = config.for_project("scratch").answerer
+    assert settings is not None
+    assert settings.rules_paths == ("a?.md", "dir/[ab].md", "rules/*.md")

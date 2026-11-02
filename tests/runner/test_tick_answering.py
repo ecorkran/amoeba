@@ -32,7 +32,9 @@ from runner.resolutions.resolution_support import (
 from runner.tick_support import PROJECT, Rig, StoreHost, drive_project, tenant_for
 
 LINK = "cf-1"
-ANSWERER = AnswererSettings(answer_limit=3, reserved_terms=())
+ANSWERER = AnswererSettings(
+    answer_limit=3, reserved_terms=(), rules_paths=(), passages_max_chars=1000
+)
 
 
 @pytest.fixture

@@ -16,7 +16,10 @@ ANSWER = "Use main."
 
 def _settings(limit: int = 3, terms: list[str] | None = None) -> AnswererSettings:
     return AnswererSettings(
-        answer_limit=limit, reserved_terms=() if terms is None else tuple(terms)
+        answer_limit=limit,
+        reserved_terms=() if terms is None else tuple(terms),
+        rules_paths=(),
+        passages_max_chars=1000,
     )
 
 
