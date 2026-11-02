@@ -20,6 +20,7 @@ QUESTION_COLUMNS: Final = (
     "answered_by",
     "question",
     "outcome",
+    "reserved_term",
     "truncated",
     "created_at",
 )
@@ -53,6 +54,7 @@ def question_rows(store: Store, request: ListingRequest) -> list[Row]:
             "answered_by": record.answered_by.value if record.answered_by else "",
             "question": record.question or "",
             "outcome": _outcome(record),
+            "reserved_term": record.reserved_term or "",
             "truncated": record.truncated,
             "created_at": record.created_at.isoformat(),
             "blocked_state_id": record.blocked_state_id,

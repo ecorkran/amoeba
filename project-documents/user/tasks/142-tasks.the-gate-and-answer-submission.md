@@ -213,19 +213,19 @@ revision_number: 2
 
 ## 7. Listing and contract docs
 
-- [ ] **7.1 `reserved_term` in the `questions` listing** (`inspection/questions.py`)
-  - [ ] Add the `reserved_term` column to the row, following how `decline_reason` is shown.
-  - [ ] Success: imports; typecheck passes.
+- [x] **7.1 `reserved_term` in the `questions` listing** (`inspection/questions.py`)
+  - [x] Add the `reserved_term` column to the row, following how `decline_reason` is shown.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **7.2 Listing tests** (`tests/inspection/`, the existing questions listing tests; `tests/serve/` if the route's shape is pinned)
-  - [ ] A `reserved_term` decline shows the term as configured; other rows show it empty.
-  - [ ] With three records on one node (two answered by the answerer, one declined), `inspect questions --node` lists all three and both answers.
-  - [ ] Success: `uv run pytest tests/inspection tests/serve -q` passes.
+- [x] **7.2 Listing tests** (`tests/inspection/`, the existing questions listing tests; `tests/serve/` if the route's shape is pinned)
+  - [x] A `reserved_term` decline shows the term as configured; other rows show it empty.
+  - [x] With three records on one node (two answered by the answerer, one declined), `inspect questions --node` lists all three and both answers.
+  - [x] Success: `uv run pytest tests/inspection tests/serve -q` passes.
 
-- [ ] **7.3 Update the contract docs**
-  - [ ] `docs/store-contract.md`: add the "Submitting an answer" subsection under "Question records" with the `submit_answer` row and outcomes from the LLD API Contracts; move the latest-migration paragraph to `014` and describe `reserved_term`.
-  - [ ] `docs/process-contract.md`, "The project config": the `answerer` section with `answer_limit` and `reserved_terms`, the load errors from D7, the example config, and the probe condition.
-  - [ ] Success: both docs match the code names; no stale "no keys yet" text remains.
+- [x] **7.3 Update the contract docs**
+  - [x] `docs/store-contract.md`: add the "Submitting an answer" subsection under "Question records" with the `submit_answer` row and outcomes from the LLD API Contracts; move the latest-migration paragraph to `014` and describe `reserved_term`.
+  - [x] `docs/process-contract.md`, "The project config": the `answerer` section with `answer_limit` and `reserved_terms`, the load errors from D7, the example config, and the probe condition.
+  - [x] Success: both docs match the code names; no stale "no keys yet" text remains.
 
 **Commit**: `feat: list the reserved term and document answer submission and the answerer keys`
 

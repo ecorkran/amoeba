@@ -66,6 +66,55 @@ def test_rows_show_state_answerer_and_outcome_for_each_state(store: Store) -> No
     assert by_state["answered"]["answered_by"] == "pm"
 
 
+def test_a_reserved_term_decline_shows_the_term_as_configured(store: Store) -> None:
+    node_id = make_slice(store)
+    seed_question(
+        store,
+        node_id,
+        state=QuestionState.DECLINED,
+        decline_reason=DeclineReason.RESERVED_TERM,
+        reserved_term="Force Push",
+    )
+    seed_question(
+        store,
+        node_id,
+        state=QuestionState.DECLINED,
+        decline_reason=DeclineReason.ANSWER_LIMIT_REACHED,
+    )
+    seed_question(store, node_id)
+
+    rows = question_rows(store, _request())
+
+    assert sorted(str(row["reserved_term"]) for row in rows) == ["", "", "Force Push"]
+    [term_row] = [row for row in rows if row["reserved_term"]]
+    assert term_row["outcome"] == "reserved_term"
+
+
+def test_a_node_lists_every_record_and_both_answerer_answers(store: Store) -> None:
+    node_id = make_slice(store)
+    for answer in ("use main", "squash"):
+        seed_question(
+            store,
+            node_id,
+            state=QuestionState.ANSWERED,
+            answered_by=AnsweredBy.ANSWERER,
+            answer=answer,
+        )
+    seed_question(
+        store,
+        node_id,
+        state=QuestionState.DECLINED,
+        decline_reason=DeclineReason.ANSWER_LIMIT_REACHED,
+    )
+
+    rows = question_rows(store, _request(node=node_id))
+
+    assert len(rows) == 3
+    answered = [row for row in rows if row["state"] == "answered"]
+    assert {row["outcome"] for row in answered} == {"use main", "squash"}
+    assert {row["answered_by"] for row in answered} == {"answerer"}
+
+
 def test_the_row_carries_the_json_only_fields_after_the_columns(
     store: Store,
 ) -> None:
