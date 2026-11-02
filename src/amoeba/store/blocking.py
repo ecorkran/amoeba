@@ -263,6 +263,10 @@ class BlockingOperations(QuestionOperations):
                 timestamp=timestamp,
                 journal_entry_id=None,
             )
+            # D2 (slice 141): an applied acknowledgment with no effect answers the
+            # question; a new block moves it; a StatusEffect leaves it unchanged. A
+            # new producer of StatusEffect needs its own rule (see the guard test
+            # in tests/store/test_question_acknowledgment.py).
             self._settle_question_on_acknowledgment(
                 state,
                 applied_without_effect=(

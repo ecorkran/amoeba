@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
+
 import pytest
 from question_harness import PROJECT, catch_for, make_slice, submit_resolution
 
@@ -197,3 +200,22 @@ def test_the_judge_produces_only_these_acknowledgment_shapes() -> None:
         ResolutionOutcome.APPLIED,
         ResolutionOutcome.REJECTED,
     }
+
+
+def test_no_runner_module_produces_a_status_effect() -> None:
+    """A StatusEffect can unblock a node, and D2 leaves the question unchanged.
+
+    The judge makes none today. A producer added later must be given a rule in
+    ``_settle_question_on_acknowledgment`` before this test is allowed to pass.
+    """
+    runner = Path(__file__).resolve().parents[2] / "src" / "amoeba" / "runner"
+    producers = [
+        f"{path.relative_to(runner)}:{node.lineno}"
+        for path in sorted(runner.rglob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "StatusEffect"
+    ]
+
+    assert producers == []
