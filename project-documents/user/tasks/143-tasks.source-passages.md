@@ -117,42 +117,43 @@ revision_number: 2
 
 ## 4. Passages: selection, assembly, rendering, citations
 
-- [ ] **4.1 Selection from listings** (`runner/answering/passages.py`)
-  - [ ] `match_rules_entry(entry, listing) -> tuple[str, ...]`: given a rules entry and its parent directory's file listing, return matching file names. Only the entry's last path segment is compared, against each listed name; the parent directory is not part of the comparison. Glob rules per LLD D10 and Technology Choices; sorted by name.
-  - [ ] `select_plan_files(listings, slice_index, initiative_index) -> tuple[str, ...]`: given a mapping of directory → file listing and the D1 layout rows, return matches in the table's order, then by file name. The layout rows (directories and patterns) are passed in, not spelled here; they live in `source_reads.py` (Task 6.1). Define a small `PlanRow` dataclass in `passages.py` that `source_reads.py` fills.
-  - [ ] Success: no I/O; typecheck passes.
+- [x] **4.1 Selection from listings** (`runner/answering/passages.py`)
+  - [x] `match_rules_entry(entry, listing) -> tuple[str, ...]`: given a rules entry and its parent directory's file listing, return matching file names. Only the entry's last path segment is compared, against each listed name; the parent directory is not part of the comparison. Glob rules per LLD D10 and Technology Choices; sorted by name.
+  - [x] `select_plan_files(listings, slice_index, initiative_index) -> tuple[str, ...]`: given a mapping of directory → file listing and the D1 layout rows, return matches in the table's order, then by file name. The layout rows (directories and patterns) are passed in, not spelled here; they live in `source_reads.py` (Task 6.1). Define a small `PlanRow` dataclass in `passages.py` that `source_reads.py` fills.
+  - [x] Success: no I/O; typecheck passes.
 
-- [ ] **4.2 Tests for selection** (`tests/runner/answering/test_passages.py`)
-  - [ ] Rules: literal hit and miss, `*.md` match, `*` in the middle of a segment, `?` and `[` treated literally, a name with regex metacharacters.
-  - [ ] Plan: over a small synthetic `PlanRow` set built in the test (the real rows are Task 6.1's, and Task 6.4 checks them against the fixture repository, so this test spells no real layout), with a hand-written listing: split task files (`132-tasks.x-1.md`, `-2.md`) match one row; a row with no match gives nothing for that row; an absent directory (no listing) matches nothing; `{initiative}` and `{slice}` substitution does not match `1320-…` for `132`; rows are returned in table order, then by file name.
-  - [ ] Success: tests pass.
+- [x] **4.2 Tests for selection** (`tests/runner/answering/test_passages.py`)
+  - [x] Rules: literal hit and miss, `*.md` match, `*` in the middle of a segment, `?` and `[` treated literally, a name with regex metacharacters.
+  - [x] Plan: over a small synthetic `PlanRow` set built in the test (the real rows are Task 6.1's, and Task 6.4 checks them against the fixture repository, so this test spells no real layout), with a hand-written listing: split task files (`132-tasks.x-1.md`, `-2.md`) match one row; a row with no match gives nothing for that row; an absent directory (no listing) matches nothing; `{initiative}` and `{slice}` substitution does not match `1320-…` for `132`; rows are returned in table order, then by file name.
+  - [x] Success: tests pass.
 
-- [ ] **4.3 `render_passages` and dates** (`runner/answering/passages.py`)
-  - [ ] One date formatter `format_utc(datetime) -> str` producing `YYYY-MM-DDTHH:MM:SSZ` (converts offsets to UTC, drops sub-seconds), per D5. `parse_git_date(text) -> datetime | None` via `datetime.fromisoformat`; `None` for empty or unparseable (callers turn that into `sources_unreadable`; no fallback).
-  - [ ] Write 140's D3 format exactly: one `## Passage P<n>` section per passage; `kind`, then `source` (rule/plan) or `question` and `slice` (pm_answer), then `date`; a blank line; the text verbatim; one blank line between sections. Open 140's slice design (`user/slices/140-slice.answering-pipeline.md`, D3) and copy the line shapes from it; if it is unclear, stop and report. Use `PassageKind` values, never literal strings.
-  - [ ] Success: output for an empty set is defined and tested (state what it is in the test).
+- [x] **4.3 `render_passages` and dates** (`runner/answering/passages.py`)
+  - [x] One date formatter `format_utc(datetime) -> str` producing `YYYY-MM-DDTHH:MM:SSZ` (converts offsets to UTC, drops sub-seconds), per D5. `parse_git_date(text) -> datetime | None` via `datetime.fromisoformat`; `None` for empty or unparseable (callers turn that into `sources_unreadable`; no fallback).
+  - [x] Write 140's D3 format exactly: one `## Passage P<n>` section per passage; `kind`, then `source` (rule/plan) or `question` and `slice` (pm_answer), then `date`; a blank line; the text verbatim; one blank line between sections. Open 140's slice design (`user/slices/140-slice.answering-pipeline.md`, D3) and copy the line shapes from it; if it is unclear, stop and report. Use `PassageKind` values, never literal strings.
+  - [x] Success: output for an empty set is defined and tested (state what it is in the test).
+  - Note (20261102): line order follows 140's D3 template (kind, source, date, then question and slice for pm_answer), which differs from the wording above.
 
-- [ ] **4.4 `assemble`** (`runner/answering/passages.py`)
-  - [ ] `assemble(committed, pm_answers, *, question_node_id, max_chars, source_commit) -> PassageSet | SourcesProblem` per LLD D7. `committed` is the ordered list of `SourceFile`s (rules in configured order, then plan in D1 order). `source_reads` has already dropped a repeated path (Task 6.3), so `assemble` does not deduplicate.
-  - [ ] Cut each file; if the rendered rules and plan alone exceed `max_chars`, return `sources_too_large` with the measured size and the limit in `detail`.
-  - [ ] Order PM answers: same `node_id` as `question_node_id` first, newest first, then others newest first, ties by record id. Add each while the rendered set (`len(render_passages(...))`) stays within the limit; at the first that does not fit, drop it and every later one, listing record ids in `dropped_pm_answers`.
-  - [ ] Number `P1`..`Pn` after trimming, in rendered order.
-  - [ ] Success: typecheck passes.
+- [x] **4.4 `assemble`** (`runner/answering/passages.py`)
+  - [x] `assemble(committed, pm_answers, *, question_node_id, max_chars, source_commit) -> PassageSet | SourcesProblem` per LLD D7. `committed` is the ordered list of `SourceFile`s (rules in configured order, then plan in D1 order). `source_reads` has already dropped a repeated path (Task 6.3), so `assemble` does not deduplicate.
+  - [x] Cut each file; if the rendered rules and plan alone exceed `max_chars`, return `sources_too_large` with the measured size and the limit in `detail`.
+  - [x] Order PM answers: same `node_id` as `question_node_id` first, newest first, then others newest first, ties by record id. Add each while the rendered set (`len(render_passages(...))`) stays within the limit; at the first that does not fit, drop it and every later one, listing record ids in `dropped_pm_answers`.
+  - [x] Number `P1`..`Pn` after trimming, in rendered order.
+  - [x] Success: typecheck passes.
 
-- [ ] **4.5 Tests for assembly and rendering** (`tests/runner/answering/test_passages.py`)
-  - [ ] Order: rules, plan, then PM answers; ids `P1..Pn` gap-free after trimming.
-  - [ ] Size: rules+plan over the limit gives `sources_too_large` with both numbers in `detail`; under the limit, same-slice PM answers come before others, newest first; the first misfit drops itself and every later answer even if a later one is smaller; `dropped_pm_answers` lists them in order and none appear in the set; ties on date order by record id.
-  - [ ] Dates: `format_utc` converts `+02:00` to UTC and drops sub-seconds; `parse_git_date("")` and garbage give `None`.
-  - [ ] Render: a fixed set equals a hand-written expected file (`tests/runner/answering/fixtures/expected_passages.md`) containing all three kinds; a passage text containing a line `## Passage P9` does not add an id to `PassageSet.ids` (LLD "Special Considerations").
-  - [ ] Success: tests pass.
+- [x] **4.5 Tests for assembly and rendering** (`tests/runner/answering/test_passages.py`)
+  - [x] Order: rules, plan, then PM answers; ids `P1..Pn` gap-free after trimming.
+  - [x] Size: rules+plan over the limit gives `sources_too_large` with both numbers in `detail`; under the limit, same-slice PM answers come before others, newest first; the first misfit drops itself and every later answer even if a later one is smaller; `dropped_pm_answers` lists them in order and none appear in the set; ties on date order by record id.
+  - [x] Dates: `format_utc` converts `+02:00` to UTC and drops sub-seconds; `parse_git_date("")` and garbage give `None`.
+  - [x] Render: a fixed set equals a hand-written expected file (`tests/runner/answering/fixtures/expected_passages.md`) containing all three kinds; a passage text containing a line `## Passage P9` does not add an id to `PassageSet.ids` (LLD "Special Considerations").
+  - [x] Success: tests pass.
 
-- [ ] **4.6 `check_citations`** (`runner/answering/passages.py`)
-  - [ ] `check_citations(cited, passage_ids) -> CitationProblem | None` per LLD D8: trim and upper-case each id; an empty list after trimming is `uncited`; ids not in the set, in cited order, once each, are `unknown_ids`; otherwise `None`.
-  - [ ] Success: no I/O.
+- [x] **4.6 `check_citations`** (`runner/answering/passages.py`)
+  - [x] `check_citations(cited, passage_ids) -> CitationProblem | None` per LLD D8: trim and upper-case each id; an empty list after trimming is `uncited`; ids not in the set, in cited order, once each, are `unknown_ids`; otherwise `None`.
+  - [x] Success: no I/O.
 
-- [ ] **4.7 Tests for the citation check** (`tests/runner/answering/test_passages.py`)
-  - [ ] `[]` and `["  "]` → `uncited`; `["p3"]` and `[" P3"]` with `P3` in the set → `None`; two unknown ids → `unknown_ids` in cited order; a duplicate unknown id is reported once; a known plus an unknown id reports only the unknown; accepts a `frozenset` and a `set` for the ids.
-  - [ ] Success: `uv run pytest tests/runner/answering -q` passes; the purity test covers `passages`.
+- [x] **4.7 Tests for the citation check** (`tests/runner/answering/test_passages.py`)
+  - [x] `[]` and `["  "]` → `uncited`; `["p3"]` and `[" P3"]` with `P3` in the set → `None`; two unknown ids → `unknown_ids` in cited order; a duplicate unknown id is reported once; a known plus an unknown id reports only the unknown; accepts a `frozenset` and a `set` for the ids.
+  - [x] Success: `uv run pytest tests/runner/answering -q` passes; the purity test covers `passages`.
 
 **Commit**: `feat: assemble, render and citation-check source passages`
 

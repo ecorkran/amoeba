@@ -8,14 +8,17 @@ here so it is tested without a repository.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 #: ATX heading of level 1-3: up to three leading spaces, 1-3 ``#``, then a blank or EOL.
 _CUT_HEADING = re.compile(r"^ {0,3}#{1,3}(?:[ \t]|$)")
 _FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _LINES = re.compile(r"[^\n]*\n|[^\n]+")
+#: Each section ends in a newline, so one more newline is the blank line between them.
+_SECTION_SEPARATOR = "\n"
 
 
 class PassageKind(StrEnum):
@@ -144,3 +147,182 @@ def _fence_after(line: str, fence: str | None) -> str | None:
         if not line.strip().strip(fence[0]):
             return None
     return fence
+
+
+@dataclass(frozen=True)
+class PlanRow:
+    """One row of CF's document layout: where a plan file lives and what it is named.
+
+    ``pattern`` may hold ``{initiative}``, ``{slice}`` and ``*``; the rest is literal.
+    """
+
+    directory: str
+    pattern: str
+    #: Finding no file for a required row is a problem; any other row may be empty.
+    required: bool
+
+
+def glob_matches(pattern: str, names: Sequence[str]) -> tuple[str, ...]:
+    """The ``names`` that match ``pattern``, sorted. ``*`` is the only wildcard."""
+    expression = ".*".join(re.escape(part) for part in pattern.split("*"))
+    return tuple(sorted(name for name in names if re.fullmatch(expression, name)))
+
+
+def match_rules_entry(entry: str, listing: Sequence[str]) -> tuple[str, ...]:
+    """The files in the entry's parent directory that the entry names.
+
+    Only the entry's last path segment is compared, against each listed name; the
+    parent directory is the caller's concern (it produced ``listing``).
+    """
+    return glob_matches(entry.rsplit("/", 1)[-1], listing)
+
+
+def select_plan_files(
+    rows: Sequence[PlanRow],
+    listings: Mapping[str, Sequence[str]],
+    slice_index: int,
+    initiative_index: int,
+) -> tuple[str, ...]:
+    """Repo-relative plan file paths: table order, then file name within a row.
+
+    A directory with no listing matches nothing.
+    """
+    paths: list[str] = []
+    for row in rows:
+        pattern = row.pattern.replace("{slice}", str(slice_index)).replace(
+            "{initiative}", str(initiative_index)
+        )
+        names = glob_matches(pattern, listings.get(row.directory, ()))
+        paths.extend(f"{row.directory}/{name}" for name in names)
+    return tuple(paths)
+
+
+def format_utc(moment: datetime) -> str:
+    """``YYYY-MM-DDTHH:MM:SSZ``: UTC, to the second (140's ``passages.md`` date)."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_git_date(text: str) -> datetime | None:
+    """A git ISO 8601 date, or ``None`` when empty, unparseable or without an offset.
+
+    The caller turns ``None`` into ``sources_unreadable``; there is no fallback date.
+    """
+    try:
+        moment = datetime.fromisoformat(text.strip())
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else None
+
+
+def _render_section(passage: Passage) -> str:
+    """One ``## Passage`` section, ending in a newline."""
+    lines = [f"## Passage {passage.id}", "", f"kind: {passage.kind}"]
+    if passage.source is not None:
+        lines.append(f"source: {passage.source}")
+    lines.append(f"date: {format_utc(passage.date)}")
+    if passage.question is not None:
+        lines.append(f"question: {passage.question}")
+    if passage.slice_label is not None:
+        lines.append(f"slice: {passage.slice_label}")
+    head = "\n".join([*lines, "", ""])
+    return head + passage.text + ("" if passage.text.endswith("\n") else "\n")
+
+
+def render_passages(passage_set: PassageSet) -> str:
+    """140's ``passages.md``: sections a blank line apart; empty for no passages."""
+    return _SECTION_SEPARATOR.join(_render_section(p) for p in passage_set.passages)
+
+
+def _pm_passage(answer: PmAnswer, number: int) -> Passage:
+    return Passage(
+        id=f"P{number}",
+        kind=PassageKind.PM_ANSWER,
+        source=None,
+        date=answer.date,
+        text=answer.answer,
+        question=answer.question,
+        slice_label=answer.slice_label,
+        question_id=answer.record_id,
+    )
+
+
+def _committed_passages(committed: Sequence[SourceFile]) -> list[Passage]:
+    found: list[Passage] = []
+    for source in committed:
+        for piece in cut_passages(source.text):
+            found.append(
+                Passage(
+                    id=f"P{len(found) + 1}",
+                    kind=source.kind,
+                    source=source.path,
+                    date=source.date,
+                    text=piece,
+                    question=None,
+                    slice_label=None,
+                    question_id=None,
+                )
+            )
+    return found
+
+
+def _pm_order(answers: Sequence[PmAnswer], node_id: str) -> list[PmAnswer]:
+    """Same-slice answers first, newest first; ties (to the second) by record id."""
+    return sorted(
+        answers,
+        key=lambda a: (a.node_id != node_id, -int(a.date.timestamp()), a.record_id),
+    )
+
+
+def assemble(
+    committed: Sequence[SourceFile],
+    pm_answers: Sequence[PmAnswer],
+    *,
+    question_node_id: str,
+    max_chars: int,
+    source_commit: str,
+) -> PassageSet | SourcesProblem:
+    """Number the passages and fit PM precedent into ``max_chars`` of rendered text.
+
+    Rules and plan are never trimmed: if they alone exceed the limit the result is
+    ``sources_too_large``. PM answers are added in priority order until one does not
+    fit; that one and every later one are dropped, so a smaller, lower-priority answer
+    never jumps a dropped one.
+    """
+    kept = _committed_passages(committed)
+    size = _rendered_size(kept)
+    if size > max_chars:
+        return SourcesProblem(
+            SourcesProblemKind.TOO_LARGE,
+            f"rules and plan passages are {size} characters; the limit is {max_chars}",
+        )
+    ordered = _pm_order(pm_answers, question_node_id)
+    for position, answer in enumerate(ordered):
+        passage = _pm_passage(answer, len(kept) + 1)
+        grown = (
+            size + len(_SECTION_SEPARATOR) * bool(kept) + len(_render_section(passage))
+        )
+        if grown > max_chars:
+            dropped = tuple(a.record_id for a in ordered[position:])
+            return PassageSet(tuple(kept), source_commit, dropped)
+        kept.append(passage)
+        size = grown
+    return PassageSet(tuple(kept), source_commit, ())
+
+
+def _rendered_size(kept: Sequence[Passage]) -> int:
+    return len(render_passages(PassageSet(tuple(kept), "", ())))
+
+
+def check_citations(
+    cited: Sequence[str], passage_ids: Collection[str]
+) -> CitationProblem | None:
+    """The one place "every cited id is in the set" is decided (slice 143, D8).
+
+    Ids are trimmed and upper-cased first. Blank entries are ignored; nothing left is
+    ``uncited``. Unknown ids are reported once each, in cited order.
+    """
+    normalized = [item.strip().upper() for item in cited if item.strip()]
+    if not normalized:
+        return CitationProblem(CitationKind.UNCITED, ())
+    unknown = tuple(dict.fromkeys(i for i in normalized if i not in passage_ids))
+    return CitationProblem(CitationKind.UNKNOWN_IDS, unknown) if unknown else None
