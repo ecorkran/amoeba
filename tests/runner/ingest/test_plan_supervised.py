@@ -6,8 +6,7 @@ from typing import cast
 
 import pytest
 
-from amoeba.process import RunOutcomeDocument
-from amoeba.process.sq_outcome import QUESTION_TAIL_CHARS
+from amoeba.process import QUESTION_TAIL_CHARS, RunOutcomeDocument
 from amoeba.runner.ingest.outcome import (
     PAYLOAD_CHECKPOINT,
     PAYLOAD_COUNT,

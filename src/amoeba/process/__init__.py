@@ -43,6 +43,7 @@ from amoeba.process.review_scan import detection_key, ledger_key
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.sq_outcome import (
     OUTCOME_EXIT_CODES,
+    QUESTION_TAIL_CHARS,
     SQ_EXECUTABLE,
     SQ_USAGE_ERROR_EXIT_CODE,
     CheckpointKind,
@@ -87,6 +88,7 @@ __all__ = [
     "ProcessError",
     "ProcessSettings",
     "ResidentProcess",
+    "QUESTION_TAIL_CHARS",
     "RunCheckpoint",
     "RunFailure",
     "RunOutcome",

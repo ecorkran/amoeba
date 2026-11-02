@@ -16,8 +16,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
-from amoeba.process import RunCheckpoint, RunFailure, RunOutcome
-from amoeba.process.sq_outcome import QUESTION_TAIL_CHARS
+from amoeba.process import (
+    QUESTION_TAIL_CHARS,
+    RunCheckpoint,
+    RunFailure,
+    RunOutcome,
+)
 from amoeba.runner.launch import STDERR_TAIL_LIMIT_BYTES
 from amoeba.runner.observed import RunEnded, RunVanished
 from amoeba.runner.supervise import (
