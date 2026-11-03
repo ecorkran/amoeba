@@ -7,8 +7,8 @@ dependencies: []
 interfaces:
 - 144
 dateCreated: 20261101
-dateUpdated: 20261101
-status: in_progress
+dateUpdated: 20261103
+status: complete
 turns: 75
 promptTokens: 6625803
 cachedTokens: 6474040
@@ -330,13 +330,13 @@ sq run <answering_pipeline_path()> <answer-model alias> --run-id <id> -p check-m
 
 ### Verification Walkthrough
 
-Verified 20261101 on `squadron 0.24.12` for steps 1, 2, 3 (caveat below) and 5. Step 4 has not run: it needs an `sq` with D8's capabilities (ecorkran/squadron#284). On the `sq` checked, step 3 passes without proving anything, because that `sq` accepts any step key.
+Verified 20261103 on `squadron 0.24.14`, which ships D8's capabilities (ecorkran/squadron#284), for every step. Step 4 spends a few cents on OpenRouter models; export the provider key from `.env` first.
 
 1. **Unit tier, no `sq`, no spend.**
    ```bash
    uv run pytest tests/runner/answering -q
    ```
-   Expect every test to pass (69 passed on 20261101): the input rendering, the scratch preparation, the reply parsers, the pipeline names-match test, the wheel contents, and the live tier's settings rules. The wheel test runs `uv build`, so it needs `uv` on `PATH` and takes a few seconds.
+   Expect every test to pass (203 passed on 20261103): the input rendering, the scratch preparation, the reply parsers, the pipeline names-match test, the wheel contents, and the live tier's settings rules. The wheel test runs `uv build`, so it needs `uv` on `PATH` and takes a few seconds.
 
 2. **The shipped pipeline is in the package.**
    ```bash
@@ -348,19 +348,20 @@ Verified 20261101 on `squadron 0.24.12` for steps 1, 2, 3 (caveat below) and 5. 
    ```bash
    sq run "$(uv run python -c 'from amoeba.runner.answering.pipeline_file import answering_pipeline_path as p; print(p())')" --validate --strict
    ```
-   Expect `Pipeline 'answering' is valid.` and exit 0. On 0.24.12 plain `--validate` passes without proving anything (it validates no step keys) and `--strict` does not exist yet. On an `sq` with capability 5 but not capabilities 1 to 4, expect a validation error naming the unknown keys.
+   Expect `Pipeline 'answering' is valid.` and exit 0. A copy of the file with one extra step key is rejected, naming the key and the keys the step accepts. On an `sq` without the five capabilities, expect a validation error naming the unknown keys.
 
 4. **Live tier: real runs, real spend.**
    ```bash
+   set -a; . ./.env; set +a   # provider keys (OPENROUTER_API_KEY for openrouter aliases)
    export AMOEBA_LIVE_ANSWER_MODEL=<non-SDK alias> AMOEBA_LIVE_CHECK_MODEL=<non-SDK alias> AMOEBA_LIVE_MAX_COST_USD=<cap>
    export AMOEBA_LIVE_SDK_MODEL=<SDK alias>   # read only by the SDK-alias refusal test
    uv run pytest tests/live/answering -v --basetemp=/tmp/answering-live
    ```
-   Expect tests for the answered case, the no-files case, the check input, both precedence cases, both matching cases and the SDK-alias refusal to pass. Then look at one run's files:
+   Expect 8 passed (20261103, with `glm-flash` answering, `deepseek4-flash` checking, `sonnet` as the SDK alias, a 0.50 cap; about 60 s): the answered case, the no-files case, the check input, both precedence cases, both matching cases and the SDK-alias refusal. Each run's scratch directory is a child of a throwaway Context Forge project (`sq run` refuses to start outside one). Then look at one run's files:
    ```bash
-   ls -a /tmp/answering-live/<test>/            # prepared files plus the four outputs, nothing else
-   cat /tmp/answering-live/<test>/check.json    # {"verdict": "yes", ...}
-   grep -c "## Passage P" /tmp/answering-live/<test>/check.prompt.md   # equals the number of passages supplied
+   ls -a /tmp/answering-live/answering-live0/<test>/            # prepared files plus the four outputs, nothing else
+   cat /tmp/answering-live/answering-live0/<test>/check.json    # {"verdict": "yes", ...}
+   grep -c "## Passage P" /tmp/answering-live/answering-live0/<test>/check.prompt.md   # equals the number of passages supplied
    ```
    Then confirm that `check.prompt.md` holds the answer reply and none of the answer step's instructions.
 

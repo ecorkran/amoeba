@@ -9,8 +9,8 @@ projectState: Initiatives 100 and 120 are complete (the Runner supervises one Sq
   does not exist. `sq` is installed; whether it has the D8 capabilities is not known
   until Task 1.1 checks it.
 dateCreated: 20261101
-dateUpdated: 20261101
-status: in_progress
+dateUpdated: 20261103
+status: complete
 turns: 44
 promptTokens: 1621448
 cachedTokens: 1533710
