@@ -225,10 +225,12 @@ Note 20261103: the rule-dated-after case is tested as: if the answer cites the n
 
 **Commit**: `test: add live precedence and matching tests`
 
-- [ ] **9.4 Live test: SDK alias refusal** (effort 2)
-  - [ ] `BLOCKED:` depends on 9.1 and on capability 4.
-  - [ ] Run with `check-model` set to the `AMOEBA_LIVE_SDK_MODEL` alias (Task 7.1). Assert the run fails before the check step dispatches, with no `check.json`.
-  - [ ] Success: the test passes.
+- [x] **9.4 Live test: SDK alias refusal** (effort 2)
+  - [x] `BLOCKED:` depends on 9.1 and on capability 4. Unblocked 20261103 (9.1 done; squadron 0.24.14 ships capability 4).
+  - [x] Run with `check-model` set to the `AMOEBA_LIVE_SDK_MODEL` alias (Task 7.1). Assert the run fails before the check step dispatches, with no `check.json`.
+  - [x] Success: the test passes.
+
+Note 20261103: with check-model set to the sonnet SDK alias the answer step completes and the check step fails with the no-tools guard (error names allowed_tools); no check.json or check.prompt.md is written. tests/live/answering/test_sdk_refusal.py passes (all 8 live tests pass, 60 s).
 
 **Commit**: `test: add live SDK alias refusal test`
 
