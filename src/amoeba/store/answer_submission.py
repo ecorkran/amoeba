@@ -28,6 +28,7 @@ from amoeba.store.question_models import (
     ANSWER_DECISION,
     AnsweredBy,
     AnswerGate,
+    AnsweringEvidence,
     AnswerOutcome,
     AnswerSubmission,
     GateRefusal,
@@ -56,6 +57,7 @@ class AnswerSubmissionOperations(QuestionOperations, SubmissionWriter):
         instructions: str,
         detail: str,
         gate: AnswerGate,
+        evidence: AnsweringEvidence | None = None,
     ) -> AnswerSubmission:
         """Gate and submit one answer, or decline the question, in one transaction.
 
@@ -70,7 +72,8 @@ class AnswerSubmissionOperations(QuestionOperations, SubmissionWriter):
             written), ``declined`` (the gate refused; slot untouched),
             ``block_resolved`` (someone resolved the block first; nothing
             written) or ``settled`` (the record is no longer open; nothing
-            written).
+            written). ``evidence`` (slice 144) is written in the same transaction
+            on ``submitted`` and ``declined``.
 
         Raises:
             ValueError: A blank ``answer``, ``instructions`` or ``detail``, or a
@@ -83,7 +86,7 @@ class AnswerSubmissionOperations(QuestionOperations, SubmissionWriter):
         with self._connection:
             self._execute(sql_inbox.BEGIN_IMMEDIATE, ())
             outcome = self._gate_and_write(
-                question_id, answer, instructions, detail, gate
+                question_id, answer, instructions, detail, gate, evidence
             )
         return AnswerSubmission(outcome, self._require_question(question_id))
 
@@ -94,6 +97,7 @@ class AnswerSubmissionOperations(QuestionOperations, SubmissionWriter):
         instructions: str,
         detail: str,
         gate: AnswerGate,
+        evidence: AnsweringEvidence | None,
     ) -> AnswerOutcome:
         """The transaction body: decide, then write the one outcome."""
         record = self.question(question_id)
@@ -108,8 +112,12 @@ class AnswerSubmissionOperations(QuestionOperations, SubmissionWriter):
         refusal = gate(record.question, self._prior_answers(record))
         if refusal is not None:
             self._write_decline(record, refusal)
+            self._write_evidence(question_id, None, evidence)
             return AnswerOutcome.DECLINED
-        return self._write_answer(record, answer, instructions, detail)
+        written = self._write_answer(record, answer, instructions, detail)
+        if written is AnswerOutcome.SUBMITTED:
+            self._write_evidence(question_id, None, evidence)
+        return written
 
     def _block_is_resolved(self, record: QuestionRecord) -> bool:
         """Whether the record's block has been resolved by anyone."""

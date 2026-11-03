@@ -123,12 +123,37 @@ WHERE {COL_QUESTION_PROJECT_ID} = ? AND {COL_QUESTION_RUN_ID} = ?
   AND {COL_QUESTION_ID} != ?
 """
 
+SELECT_QUESTION_BY_ANSWERING_ENTRY: Final = (
+    f"{_SELECT_FROM} WHERE {COL_QUESTION_ANSWERING_ENTRY_ID} = ?"
+)
+
+#: Parameters: state, answering entry id, source commit, passage index (JSON),
+#: dropped PM answers (JSON), updated_at, id (slice 144, D5).
+UPDATE_QUESTION_BEGIN_ANSWERING: Final = f"""
+UPDATE {TABLE_QUESTION_RECORDS}
+SET {COL_QUESTION_STATE} = ?, {COL_QUESTION_ANSWERING_ENTRY_ID} = ?,
+    {COL_QUESTION_SOURCE_COMMIT} = ?, {COL_QUESTION_PASSAGE_INDEX} = ?,
+    {COL_QUESTION_DROPPED_PM_ANSWERS} = ?, {COL_QUESTION_UPDATED_AT} = ?
+WHERE {COL_QUESTION_ID} = ?
+"""
+
 #: Parameters: state, decline reason, reserved term (null unless the gate
 #: declined on a reserved term), updated_at, id.
 UPDATE_QUESTION_DECLINED: Final = f"""
 UPDATE {TABLE_QUESTION_RECORDS}
 SET {COL_QUESTION_STATE} = ?, {COL_QUESTION_DECLINE_REASON} = ?,
     {COL_QUESTION_RESERVED_TERM} = ?, {COL_QUESTION_UPDATED_AT} = ?
+WHERE {COL_QUESTION_ID} = ?
+"""
+
+#: Parameters: decline detail, proposed answer, cited passages (JSON), check
+#: verdict, check reason, id. Run inside the transaction of the writer that
+#: settles the record (slice 144, D9).
+UPDATE_QUESTION_EVIDENCE: Final = f"""
+UPDATE {TABLE_QUESTION_RECORDS}
+SET {COL_QUESTION_DECLINE_DETAIL} = ?, {COL_QUESTION_PROPOSED_ANSWER} = ?,
+    {COL_QUESTION_CITED_PASSAGES} = ?, {COL_QUESTION_CHECK_VERDICT} = ?,
+    {COL_QUESTION_CHECK_REASON} = ?
 WHERE {COL_QUESTION_ID} = ?
 """
 

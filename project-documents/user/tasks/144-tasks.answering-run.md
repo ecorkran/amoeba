@@ -139,32 +139,35 @@ revision_number: 2
 
 ## 4. Store operations (D5, D9, D14)
 
-- [ ] **4.1 Extract `_insert_entry_within`** (`store/journal.py`)
-  - [ ] Pull the insert and required-key check out of `journal_issue` into `_insert_entry_within(connection, …)`, called by `journal_issue` unchanged in behaviour.
-  - [ ] Success: the journal suite passes unchanged.
+- [x] **4.1 Extract `_insert_entry_within`** (`store/journal.py`)
+  - [x] Pull the insert and required-key check out of `journal_issue` into `_insert_entry_within(connection, …)`, called by `journal_issue` unchanged in behaviour.
+  - [x] Success: the journal suite passes unchanged.
 
-- [ ] **4.2 `begin_answering` and `question_for_answering_entry`** (new `store/answering.py`, mixin `AnsweringOperations`, wired into `Store`)
-  - [ ] `begin_answering(question_id, launch)`: one `BEGIN IMMEDIATE`. Read the record and its block. Not `pending` → `settled`; block resolved → `block_resolved`; both write nothing. Otherwise insert the `sq_answer` entry via `_insert_entry_within` and move the record to `answering` (checked against `QUESTION_TRANSITIONS`), setting `answering_entry_id`, `source_commit`, `passage_index`, `dropped_pm_answers`. Emit the same feed event the other transitions emit. Raises `QuestionNotFoundError`; a missing required parameter key raises `ValueError` before any write.
-  - [ ] `question_for_answering_entry(entry_id) -> QuestionRecord | None`.
-  - [ ] Success: imports; typecheck passes.
+- [x] **4.2 `begin_answering` and `question_for_answering_entry`** (new `store/answering.py`, mixin `AnsweringOperations`, wired into `Store`)
+  - [x] `begin_answering(question_id, launch)`: one `BEGIN IMMEDIATE`. Read the record and its block. Not `pending` → `settled`; block resolved → `block_resolved`; both write nothing. Otherwise insert the `sq_answer` entry via `_insert_entry_within` and move the record to `answering` (checked against `QUESTION_TRANSITIONS`), setting `answering_entry_id`, `source_commit`, `passage_index`, `dropped_pm_answers`. Emit the same feed event the other transitions emit. Raises `QuestionNotFoundError`; a missing required parameter key raises `ValueError` before any write.
+  - [x] `question_for_answering_entry(entry_id) -> QuestionRecord | None`.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **4.3 Tests for the answering operations** (`tests/store/test_begin_answering.py`)
-  - [ ] `begun`: entry journaled with the four required keys, record `answering` and linked, feed event present, passage index stored without text.
-  - [ ] `settled` (record already answered by the PM) and `block_resolved`: nothing written, no entry.
-  - [ ] Missing parameter key: `ValueError`, nothing written. Unknown id: `QuestionNotFoundError`.
-  - [ ] Crash safety: inject a failure after the entry insert and before the state update; afterwards no entry exists and the record is `pending`.
-  - [ ] `question_for_answering_entry` returns the record, `None` for an unrelated entry.
-  - [ ] Success: tests pass.
+- [x] **4.3 Tests for the answering operations** (`tests/store/test_begin_answering.py`)
+  - [x] `begun`: entry journaled with the four required keys, record `answering` and linked, feed event present, passage index stored without text.
+  - [x] `settled` (record already answered by the PM) and `block_resolved`: nothing written, no entry.
+  - [x] Missing parameter key: `ValueError`, nothing written. Unknown id: `QuestionNotFoundError`.
+  - [x] Crash safety: inject a failure after the entry insert and before the state update; afterwards no entry exists and the record is `pending`.
+  - [x] `question_for_answering_entry` returns the record, `None` for an unrelated entry.
+  - [x] Success: tests pass.
 
-- [ ] **4.4 `evidence` and `detail` on the writers** (D9, D14)
-  - [ ] `decline_question(..., detail=None, evidence=None)` and `submit_answer(..., evidence=None)`: write `decline_detail` (bounded by the existing 132 bound; find it, do not invent one), `proposed_answer`, `cited_passages` (JSON), `check_verdict`, `check_reason` inside the operation's own transaction, on `submitted` and `declined` for `submit_answer`. Both keywords optional.
-  - [ ] Success: 141's and 142's suites pass unchanged.
+- [x] **4.4 `evidence` and `detail` on the writers** (D9, D14)
+  - [x] `decline_question(..., detail=None, evidence=None)` and `submit_answer(..., evidence=None)`: write `decline_detail` (bounded by the existing 132 bound; find it, do not invent one), `proposed_answer`, `cited_passages` (JSON), `check_verdict`, `check_reason` inside the operation's own transaction, on `submitted` and `declined` for `submit_answer`. Both keywords optional.
+  - [x] Success: 141's and 142's suites pass unchanged.
+  - Note: Deviation from the bound above. The store does not cut `detail` to the 132 bound. That bound (`STDERR_TAIL_LIMIT_BYTES` / `cut_to_bound`) is a Runner constant, and no store module imports the Runner. The store writes `detail` as given, and the Runner callers (`decide.py`, Task 6) cut it. The over-long-detail assertion moves to Task 6.2.
 
-- [ ] **4.5 Tests for the extended writers** (beside the 141/142 tests)
-  - [ ] Decline with detail and evidence stores all fields in one transaction; an over-long detail is cut to the bound; no evidence leaves the columns null.
-  - [ ] `submit_answer` with evidence on `submitted` stores `cited_passages` and the verdict while `answer` holds what was submitted; on the gate's `declined` outcome the evidence is also stored.
-  - [ ] A PM answer to an `answering` or `declined` record leaves the D11 columns as they were.
-  - [ ] Success: tests pass; `uv run pytest -q` passes.
+- [x] **4.5 Tests for the extended writers** (beside the 141/142 tests)
+  - [x] Decline with detail and evidence stores all fields in one transaction; no evidence leaves the columns null.
+  - [ ] An over-long detail is cut to the bound. Not checked: the cut happens in the Runner, not the store (see the 4.4 note). The assertion moves to Task 6.2.
+  - [x] `submit_answer` with evidence on `submitted` stores `cited_passages` and the verdict while `answer` holds what was submitted; on the gate's `declined` outcome the evidence is also stored.
+  - [x] A PM answer to an `answering` or `declined` record leaves the D11 columns as they were.
+  - [x] Success: tests pass; `uv run pytest -q` passes.
+  - Note: The over-long-detail subitem is left unchecked on purpose. See the deviation note under 4.4.
 
 **Commit**: `feat: add begin_answering and evidence on answer and decline writes`
 

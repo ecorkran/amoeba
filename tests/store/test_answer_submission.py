@@ -240,7 +240,13 @@ def test_a_blank_field_raises_and_writes_nothing(store: Store, field: str) -> No
     fields[field] = "   "
 
     with pytest.raises(ValueError, match=field):
-        store.submit_answer(record.id, gate=_pass, **fields)
+        store.submit_answer(
+            record.id,
+            gate=_pass,
+            answer=fields["answer"],
+            instructions=fields["instructions"],
+            detail=fields["detail"],
+        )
 
     _assert_nothing_written(store, node_id, record)
 
@@ -269,7 +275,14 @@ def test_a_settled_record_with_no_question_text_settles_instead_of_raising(
 def test_the_signature_takes_no_decision_or_submitter() -> None:
     parameters = set(inspect.signature(Store.submit_answer).parameters) - {"self"}
 
-    assert parameters == {"question_id", "answer", "instructions", "detail", "gate"}
+    assert parameters == {
+        "question_id",
+        "answer",
+        "instructions",
+        "detail",
+        "gate",
+        "evidence",
+    }
 
 
 def test_the_answer_decision_is_the_runners_resume() -> None:

@@ -103,6 +103,21 @@ class JournalOperations(BlockWriter):
                 Raised before any write, so the table is left untouched.
             InvalidTransitionError: If the node is done (D1). Nothing is written.
         """
+        with self._connection:
+            return self._insert_entry_within(node_id, kind, parameters)
+
+    def _insert_entry_within(
+        self, node_id: str, kind: CommandKind, parameters: Mapping[str, object]
+    ) -> JournalEntry:
+        """``journal_issue``'s checks and insert, inside the caller's transaction.
+
+        Never commits. ``begin_answering`` calls it so the entry and a question's
+        state change land together (slice 144, D5).
+
+        Raises:
+            NodeNotFoundError, ValueError, InvalidTransitionError: As
+                :meth:`journal_issue`; all are raised before the insert.
+        """
         missing = REQUIRED_PARAMETER_KEYS[kind] - set(parameters)
         if missing:
             raise ValueError(
@@ -122,20 +137,17 @@ class JournalOperations(BlockWriter):
             parameters=dict(parameters),
             issued_at=issued,
         )
-
-        with self._connection:
-            self._execute(
-                sql_journal.INSERT_JOURNAL_ENTRY,
-                (
-                    entry.id,
-                    entry.project_id,
-                    entry.node_id,
-                    entry.kind.value,
-                    json.dumps(entry.parameters),
-                    isoformat(issued),
-                ),
-            )
-
+        self._execute(
+            sql_journal.INSERT_JOURNAL_ENTRY,
+            (
+                entry.id,
+                entry.project_id,
+                entry.node_id,
+                entry.kind.value,
+                json.dumps(entry.parameters),
+                isoformat(issued),
+            ),
+        )
         return entry
 
     def journal_resolve(

@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from amoeba.store import sql_inbox, sql_questions
 from amoeba.store._base import isoformat, new_id, now
 from amoeba.store._block_writer import BlockWriter
-from amoeba.store.mapping_questions import map_question_record
+from amoeba.store.mapping_questions import encode_text_list, map_question_record
 from amoeba.store.models import (
     BLOCKED_STATUSES,
     BlockedKind,
@@ -24,6 +24,7 @@ from amoeba.store.models import (
 from amoeba.store.question_models import (
     QUESTION_TRANSITIONS,
     AnsweredBy,
+    AnsweringEvidence,
     DeclineReason,
     QuestionCatch,
     QuestionRecord,
@@ -165,9 +166,17 @@ class QuestionOperations(BlockWriter):
         return question_id
 
     def decline_question(
-        self, question_id: str, *, reason: DeclineReason
+        self,
+        question_id: str,
+        *,
+        reason: DeclineReason,
+        detail: str | None = None,
+        evidence: AnsweringEvidence | None = None,
     ) -> QuestionRecord:
         """Mark a record ``declined``. Record-only: no block, no node change.
+
+        ``detail`` and ``evidence`` (slice 144) are written in the same
+        transaction. The store keeps them as given: the caller bounds the text.
 
         Raises:
             InvalidTransitionError: The record does not exist, or its state does
@@ -187,7 +196,31 @@ class QuestionOperations(BlockWriter):
                     question_id,
                 ),
             )
+            self._write_evidence(question_id, detail, evidence)
         return self._require_question(question_id)
+
+    def _write_evidence(
+        self,
+        question_id: str,
+        detail: str | None,
+        evidence: AnsweringEvidence | None,
+    ) -> None:
+        """Record why and on what a question was settled, inside the caller's
+        transaction. Writes nothing when there is neither detail nor evidence."""
+        if detail is None and evidence is None:
+            return
+        found = evidence or AnsweringEvidence()
+        self._execute(
+            sql_questions.UPDATE_QUESTION_EVIDENCE,
+            (
+                detail,
+                found.proposed_answer,
+                encode_text_list(found.cited),
+                found.verdict,
+                found.reason,
+                question_id,
+            ),
+        )
 
     def _settle_question_on_acknowledgment(
         self,

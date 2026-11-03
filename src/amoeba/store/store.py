@@ -22,6 +22,7 @@ from typing import Self
 
 from amoeba.store import paths, sql
 from amoeba.store.answer_submission import AnswerSubmissionOperations
+from amoeba.store.answering import AnsweringOperations
 from amoeba.store.blocking import BlockingOperations
 from amoeba.store.calibration import CalibrationOperations
 from amoeba.store.cf_snapshots import CFOperations
@@ -56,9 +57,11 @@ IN_MEMORY_PATH = Path(":memory:")
 
 
 class Store(
-    # First: it extends JournalOperations and FeedOperations, and a subclass
-    # must precede its bases in the method resolution order.
+    # First: they extend JournalOperations, FeedOperations and
+    # AnswerSubmissionOperations, and a subclass must precede its bases in the
+    # method resolution order.
     RunnerReportOperations,
+    AnsweringOperations,
     NodeOperations,
     BlockingOperations,
     JournalOperations,
