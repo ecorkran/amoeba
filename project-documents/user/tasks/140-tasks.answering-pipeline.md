@@ -216,10 +216,12 @@ Everything here needs an `sq` with the D8 capabilities (the Squadron issue from 
 
 **Commit**: `test: add live answering pipeline run tests`
 
-- [ ] **9.3 Live tests: precedence and matching** (effort 4)
-  - [ ] `BLOCKED:` depends on 9.1.
-  - [ ] Tests per LLD D10: a PM answer dated after the rule it contradicts gives check `yes`; the rule dated after gives `no`; a PM answer's question repeated in different words for the same slice is answered citing that PM passage and the check says `yes`; the same wording for another slice where the slice changes the answer ends in a decline or check `no`. One real run each, no retries; a wrong verdict fails.
-  - [ ] Success: the four tests pass. If one fails, record the failing model aliases and replies as a finding in the task notes; do not loosen the test.
+- [x] **9.3 Live tests: precedence and matching** (effort 4)
+  - [x] `BLOCKED:` depends on 9.1. Unblocked 20261103 (9.1 done).
+  - [x] Tests per LLD D10: a PM answer dated after the rule it contradicts gives check `yes`; the rule dated after gives `no`; a PM answer's question repeated in different words for the same slice is answered citing that PM passage and the check says `yes`; the same wording for another slice where the slice changes the answer ends in a decline or check `no`. One real run each, no retries; a wrong verdict fails.
+  - [x] Success: the four tests pass. If one fails, record the failing model aliases and replies as a finding in the task notes; do not loosen the test.
+
+Note 20261103: the rule-dated-after case is tested as: if the answer cites the newer rule the check says yes; if it rests on the older PM answer alone the check says no; a decline fails. The pipeline cannot feed the check a stale answer on purpose, so 'check says no' holds only when the answer step errs. Models: answer glm-flash, check deepseek4-flash; all four tests passed on the first run (tests/live/answering/test_precedence.py, 42 s).
 
 **Commit**: `test: add live precedence and matching tests`
 

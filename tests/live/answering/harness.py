@@ -68,9 +68,20 @@ class LiveHarness:
         return AnsweringRun(directory=directory, completed=completed)
 
 
-def passage(number: int, kind: str, date: str, text: str, **extra: str) -> str:
+def passage(  # noqa: PLR0913 - one argument per line of the D3 format
+    number: int,
+    kind: str,
+    date: str,
+    text: str,
+    *,
+    source: str | None = None,
+    question: str | None = None,
+    slice_label: str | None = None,
+) -> str:
     """One ``passages.md`` section in the D3 format (hand-written for the tests)."""
-    lines = [f"## Passage P{number}", "", f"kind: {kind}"]
-    lines += [f"{key}: {value}" for key, value in extra.items()]
-    lines += [f"date: {date}", "", text, ""]
+    header = [("kind", kind), ("source", source), ("date", date)]
+    header += [("question", question), ("slice", slice_label)]
+    lines = [f"## Passage P{number}", ""]
+    lines += [f"{key}: {value}" for key, value in header if value is not None]
+    lines += ["", text, ""]
     return "\n".join(lines) + "\n"
