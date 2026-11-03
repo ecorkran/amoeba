@@ -17,7 +17,7 @@ projectState: Slices 120–132 and 140–144 are merged. `scripts/` holds demo s
   `question_tails.py`. Nothing is added under `src/` by this slice.
 dateCreated: 20261103
 dateUpdated: 20261103
-status: not_started
+status: in_progress
 turns: 21
 promptTokens: 1220325
 cachedTokens: 1151928
@@ -249,11 +249,13 @@ Per the LLD, D8. 144 designed `tests/live/answering/fixtures/question_tails.json
 
 ## 11. Close the walkthrough (effort 2)
 
-- [ ] **11.1 Final checks** from the doc's last section: `cf project list` with `CONTEXT_FORGE_DATA_DIR` unset does not list the scratch project; no file outside `D` was written (`git status` in the repository shows only this slice's files).
-  - [ ] Result: (observed output here)
-- [ ] **11.2 Update the doc** to what was run: correct any command, flag or field name that differed, and add each case's recorded outcome as "Observed on {date}".
-  - [ ] Success: someone following the doc from its first case meets no command that fails.
-- [ ] **11.3 Full validation:** `uv run ruff format .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest`.
-  - [ ] Success: all pass. Every case passed or is marked `BLOCKED:` on an open issue linked in its Result.
+- [x] **11.1 Final checks** from the doc's last section: `cf project list` with `CONTEXT_FORGE_DATA_DIR` unset does not list the scratch project; no file outside `D` was written (`git status` in the repository shows only this slice's files).
+  - [x] Result: with CONTEXT_FORGE_DATA_DIR unset, cf project list does not list the scratch project (the only names containing scratch are two unrelated existing projects); git status shows only this slice files.
+- [x] **11.2 Update the doc** to what was run: correct any command, flag or field name that differed, and add each case's recorded outcome as "Observed on {date}".
+  - [x] Success: someone following the doc from its first case meets no command that fails.
+  - [x] Result: `docs/answerer-walkthrough.md` was rewritten to what was run, with an Observed line per case.
+- [x] **11.3 Full validation:** `uv run ruff format .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest`.
+  - [x] Success: all pass. Every case passed or is marked `BLOCKED:` on an open issue linked in its Result.
+  - [x] Result: ruff format, ruff check, pyright strict clean; uv run pytest: 4390 passed. Every case passed or is marked BLOCKED on open issues #23 (case 2) and #24 (case 4 last step).
 
 **Commit**: `docs: record answerer walkthrough results`

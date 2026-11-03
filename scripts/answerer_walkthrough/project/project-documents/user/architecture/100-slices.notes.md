@@ -46,13 +46,13 @@ status: in_progress
    **Dependencies:** 102
    **Relative Effort:** 1
 
-5. [ ] **(104) Export Notes** — The `export` command writes all notes to a file. Before you design anything, write no design and end your reply with one question asking which storage format notes are kept in. If your prompt already begins with an answer to that question, instead write no design and end your reply with one question asking whether new source files carry a license header. If your prompt also holds an answer to that second question, write the design.
+5. [ ] **(104) Export Notes** — The `export` command writes all notes to a file. Before you design anything, write no design and end your reply with one question asking which storage format notes are kept in. If your prompt already begins with an answer to that question, instead write no design and end your reply with one question asking whether new source files carry a license header. If your prompt already begins with answers to both questions, write the design.
    **Success Criteria:**
    - `notes export path` writes every note to `path`.
    **Dependencies:** 103
    **Relative Effort:** 1
 
-6. [ ] **(105) Import Notes** — The `import` command reads notes from a file and adds them. If your instructions do not already say what copyright notice each new file should open with, write no design and end your reply with one question asking what copyright notice each new file should open with.
+6. [ ] **(105) Import Notes** — The `import` command reads notes from a file and adds them. Before you design anything, write no design and end your reply with one question asking what license header text each new source file opens with; if your prompt already begins with an answer to that question, write the design instead.
    **Success Criteria:**
    - `notes import path` adds every note found in `path`.
    **Dependencies:** 104

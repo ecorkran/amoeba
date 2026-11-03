@@ -8,8 +8,8 @@ dependencies:
 - 144
 interfaces: []
 dateCreated: 20261101
-dateUpdated: 20261101
-status: not_started
+dateUpdated: 20261103
+status: in_progress
 turns: 21
 promptTokens: 1747072
 cachedTokens: 1635205
@@ -128,6 +128,7 @@ Status: decided
 - The condition ends the loop. The rerun after a resume has the answer prepended to its prompt (004-direction), so it writes the design instead of asking again. If an agent asks again anyway, 142's answer limit sends the repeat to the PM.
 - The instruction says "asking", never "ask the PM". The entry is itself a passage, and wording that reserves the question for the PM could lead the answer or check step to decline for that reason alone.
 - Each question's wording is set by its entry, so cases 3 and 4 get a second question with the same meaning in different words. The agent still writes the actual text, which is why the tails are real (D8).
+- **Revised 20261103 after the live run.** The conditional form ("if your instructions do not already say X") fails when the concept, the architecture or the rules already say X: the agent writes a design without asking. Slices 100, 101 and 104 therefore say "Before you design anything, write no design and end your reply with one question asking X; if your prompt already begins with an answer to that question, write the design instead", and slice 105 asks what license header text each new file opens with. The wording must not say that documents do not count: the entry is a passage, and the answerer declined on it.
 
 ### D3 — The merge question is grounded in the plan, so the screen is what declines it
 
@@ -278,11 +279,13 @@ Forcing sentences (D2). Each follows the pattern "If your instructions do not al
 
 ### Verification Walkthrough
 
-Draft. The full walkthrough, with each case's commands, PM answers and records to check, is `docs/answerer-walkthrough.md` (D6). The expected outcomes are the Success Criteria above.
+Run on 20261103 with squadron 0.24.16. The full walkthrough, with each case's commands, PM answers, records to check and what was observed, is `docs/answerer-walkthrough.md` (D6). The expected outcomes are the Success Criteria above.
 
-1. **Fixture test.** Needs neither `sq` nor a model. `uv run pytest tests/runner/answering/test_walkthrough_fixture.py -v` passes.
-2. **Set up and start.** Needs a Squadron release with 140's D8, provider keys and the three live variables. Run `uv run python scripts/answerer_walkthrough.py setup --dir <D> --env-file <path to your .env>`, run the `export` lines it prints, then `amoeba start --project-config <D>/projects.yaml --cf-data-dir <D>/cf`. The start-up log shows the `sq` probe and the answering-pipeline probe passing.
-3. **The cases.** Follow `docs/answerer-walkthrough.md` from its first case.
+1. **Fixture test.** Needs neither `sq` nor a model. `uv run pytest tests/runner/answering/test_walkthrough_fixture.py -v` passes (3 cases).
+2. **Set up and start.** Needs a Squadron release with 140's D8, provider keys and the three live variables. Run `uv run python scripts/answerer_walkthrough.py setup --dir <D> --env-file <path to your .env>`, run the `export` lines it prints, export the keys in the shell that starts Amoeba, then `amoeba start --project-config <D>/projects.yaml --cf-data-dir <D>/cf`. The start-up log shows the `sq` probe and the answering-pipeline probe passing. Observed: both passed, and `amoeba inspect nodes --project scratch --json` lists initiative 100 and slices 100 to 105.
+3. **The cases.** Follow `docs/answerer-walkthrough.md` from its first case. Observed: case 1 and case 3 as expected; case 2 declined by the answer step, not the screen (#23); case 4's first half as expected and its last step not shown (#24).
+
+**Corrections found live:** the setup script also registers the concept, architecture and plan with Context Forge (`cf set`) and installs the project guide (`cf init --no-ide`), which `sq`'s design step needs. A slice is ready only when the next-lower index is `done`, so a rerun slice goes at the end of the plan. A forcing sentence must not say documents do not count (the answerer reads it as a passage).
 
 ## Implementation Notes
 
