@@ -135,12 +135,13 @@ Per the LLD, D5 and D6 "Script", "Script failures", "Registry isolation". File: 
 
 Per Development Approach step 2. Runs the setup for real, up to `amoeba start`. Needs `cf`, `git` and `amoeba`; no keys are used until a run is driven.
 
-- [ ] **4.1 Run setup** against a fresh directory under `$(mktemp -d)` with a placeholder `.env` file and the three live variables set to the values 140's live tier uses.
-  - [ ] Success: the script prints its exports and exits 0. `cf project list` with `CONTEXT_FORGE_DATA_DIR=D/cf` lists the scratch project.
-- [ ] **4.2 Start Amoeba** with the printed command, observe the start-up log, then stop it.
-  - [ ] Success: either the log shows the `sq` probe and the answering-pipeline probe passing, or it fails the probe. Record which, with the log line, as a "Result" sub-item. A probe failure caused by a Squadron release without D8 is expected here and is not a defect.
-  - [ ] Find the slice nodes with `amoeba inspect nodes --project <id> --json`, matching on `cf_index` 100–105. Success: all six are listed. If not, the link or the tree's naming is wrong: fix task 3 or task 1 before continuing. Task 5.1 puts this command in the doc.
-  - [ ] Success: a probe failure that names anything other than the missing capabilities (for example a config load error) is a defect in task 3; fix it there before continuing.
+- [x] **4.1 Run setup** against a fresh directory under `$(mktemp -d)` with a placeholder `.env` file and the three live variables set to the values 140's live tier uses.
+  - [x] Success: the script prints its exports and exits 0. `cf project list` with `CONTEXT_FORGE_DATA_DIR=D/cf` lists the scratch project.
+- [x] **4.2 Start Amoeba** with the printed command, observe the start-up log, then stop it.
+  - [x] Success: either the log shows the `sq` probe and the answering-pipeline probe passing, or it fails the probe. Record which, with the log line, as a "Result" sub-item. A probe failure caused by a Squadron release without D8 is expected here and is not a defect.
+  - [x] Find the slice nodes with `amoeba inspect nodes --project <id> --json`, matching on `cf_index` 100–105. Success: all six are listed. If not, the link or the tree's naming is wrong: fix task 3 or task 1 before continuing. Task 5.1 puts this command in the doc.
+  - [x] Success: a probe failure that names anything other than the missing capabilities (for example a config load error) is a defect in task 3; fix it there before continuing.
+  - Result: Observed 20261103 with squadron 0.24.16: log shows "sq probe passed: `sq runs wait` has the shape the Runner needs", "answering pipeline probe passed: `sq run --validate` exited 0", then "CF link project_1793729039820_z9wwl4avj passed its two shape probes". `amoeba inspect nodes --project scratch --json` listed the initiative 100 and slices 100-105 (7 nodes). The checkout stayed clean after setup (git status empty, one commit); `cf project list` without CONTEXT_FORGE_DATA_DIR does not list the scratch project.
 
 No commit marker: this task changes no files when it passes. A fix to task 1 or task 3 made here is committed on its own as `fix: {summary}` before task 5 starts.
 
@@ -150,15 +151,15 @@ No commit marker: this task changes no files when it passes. A fix to task 1 or 
 
 Per the LLD, D6 "Doc". `docs/answerer-walkthrough.md` is the only full walkthrough. Include YAML front matter if other files in `docs/` have it (check one first).
 
-- [ ] **5.1 Draft the doc**
-  - [ ] Sections: purpose; prerequisites (D8 Squadron release, keys in a `.env`, the three live variables, `cf`, `git`); set up and start; one section per case 1–4; final checks.
-  - [ ] Each case section holds: the slice to drive, the exact `submit intent drive` command, the expected pause, the PM answer text (case 2: a resume with instructions; case 3 slice 102: nothing on file, so a resume; case 4 slice 104: "every new source file starts with the MIT license header; this replaces the rules file for this project"), the records and journal entries to check (`amoeba inspect questions --json`, `inspect blocked`, `inspect journal`) with the field values from the LLD's Functional Requirements.
-  - [ ] Case 4 includes the rule step before slice 104: append "Source files carry no license header." to the scratch `CLAUDE.md` and commit it on `main`.
-  - [ ] Final checks: with `CONTEXT_FORGE_DATA_DIR` unset, `cf project list` does not list the scratch project; nothing was written outside `D`.
-  - [ ] Use the column and flag names 144 ships. Read `docs/process-contract.md` and the output of `uv run amoeba inspect questions --help` first.
-  - [ ] Success: every command in the doc has been checked with `--help` or run in task 4; the doc states that its results are filled in during task 11.
-- [ ] **5.2 Link it** from the answerer section of `docs/process-contract.md` with one sentence.
-  - [ ] Success: the link resolves to the file.
+- [x] **5.1 Draft the doc**
+  - [x] Sections: purpose; prerequisites (D8 Squadron release, keys in a `.env`, the three live variables, `cf`, `git`); set up and start; one section per case 1–4; final checks.
+  - [x] Each case section holds: the slice to drive, the exact `submit intent drive` command, the expected pause, the PM answer text (case 2: a resume with instructions; case 3 slice 102: nothing on file, so a resume; case 4 slice 104: "every new source file starts with the MIT license header; this replaces the rules file for this project"), the records and journal entries to check (`amoeba inspect questions --json`, `inspect blocked`, `inspect journal`) with the field values from the LLD's Functional Requirements.
+  - [x] Case 4 includes the rule step before slice 104: append "Source files carry no license header." to the scratch `CLAUDE.md` and commit it on `main`.
+  - [x] Final checks: with `CONTEXT_FORGE_DATA_DIR` unset, `cf project list` does not list the scratch project; nothing was written outside `D`.
+  - [x] Use the column and flag names 144 ships. Read `docs/process-contract.md` and the output of `uv run amoeba inspect questions --help` first.
+  - [x] Success: every command in the doc has been checked with `--help` or run in task 4; the doc states that its results are filled in during task 11.
+- [x] **5.2 Link it** from the answerer section of `docs/process-contract.md` with one sentence.
+  - [x] Success: the link resolves to the file.
 
 **Commit**: `docs: add answerer walkthrough`
 

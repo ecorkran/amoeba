@@ -896,7 +896,9 @@ projects:
   `projects.<id>.answerer`). Start-up runs
   the answering pipeline probe (`sq run <answering.yaml> --validate`) once when any
   project has an `answerer` section, and exits `STARTUP_FAILED` naming that command if
-  it fails; with no section the probe does not run.
+  it fails; with no section the probe does not run. To see the answerer work on a
+  throwaway project, follow [`answerer-walkthrough.md`](answerer-walkthrough.md)
+  *(slice 145)*.
 
   ```yaml
   projects:
