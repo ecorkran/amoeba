@@ -206,33 +206,35 @@ revision_number: 2
 
 ## 7. The stub `sq` as the answering pipeline (D13)
 
-- [ ] **7.1 Teach the stub** (`tests/sq_stub.py`, `tests/sq_stub_scripts.py`)
-  - [ ] Read both files and the existing run modes. Add an answering mode: on `sq run <answering.yaml>` it writes scripted `answer.json` and `check.json` (or none, or malformed text) into its working directory, and reports a scripted outcome (completed, failed with a failure kind, paused, orphaned, never appearing) to `sq runs wait`. Reply shapes come from 140's parsers (`read_answer`, `read_check`); read `artifacts.py` for the exact file names and fields. Scripts are selectable per test without changing existing modes.
-  - [ ] Success: existing stub tests (`tests/test_sq_stub_run.py`, `tests/test_sq_stub_resume.py`) pass unchanged. The stub has no tests of its own: Tasks 8–11 drive it, and it commits with Task 8's tests.
+- [x] **7.1 Teach the stub** (`tests/sq_stub.py`, `tests/sq_stub_scripts.py`)
+  - [x] Read both files and the existing run modes. Add an answering mode: on `sq run <answering.yaml>` it writes scripted `answer.json` and `check.json` (or none, or malformed text) into its working directory, and reports a scripted outcome (completed, failed with a failure kind, paused, orphaned, never appearing) to `sq runs wait`. Reply shapes come from 140's parsers (`read_answer`, `read_check`); read `artifacts.py` for the exact file names and fields. Scripts are selectable per test without changing existing modes.
+  - [x] Success: existing stub tests (`tests/test_sq_stub_run.py`, `tests/test_sq_stub_resume.py`) pass unchanged. The stub has no tests of its own: Tasks 8–11 drive it, and it commits with Task 8's tests.
 
 ---
 
 ## 8. Finish (D9)
 
-- [ ] **8.1 Record settlement** (new `runner/answering/finish.py`)
-  - [ ] `settle_run_result(record, entry, finished, …) -> question_outcome`: record not `answering`, or linked to another entry → `discarded`, record untouched. `answering` → read the reply files only if the run completed (`read_answer`, `read_check`), `decide_answer(..., record's passage ids)`. `Confirmed` → `submit_answer(..., instructions=compose_instructions(record.question, answer), detail=ANSWERER_DETAIL, evidence=…, gate=partial(evaluate_gate, answer=answer, settings=project.answerer))`; read 142's signature first. `Declined` → `decline_question(id, reason, detail, evidence)`. `submit_answer` outcomes `settled` and `block_resolved` write nothing further to the record. `ANSWERER_DETAIL` is a module constant; `question_outcome` values (`submitted`, `declined`, `block_resolved`, `settled`, `discarded`) are an enum.
-  - [ ] Success: imports; typecheck passes.
+- [x] **8.1 Record settlement** (new `runner/answering/finish.py`)
+  - [x] `settle_run_result(record, entry, finished, …) -> question_outcome`: record not `answering`, or linked to another entry → `discarded`, record untouched. `answering` → read the reply files only if the run completed (`read_answer`, `read_check`), `decide_answer(..., record's passage ids)`. `Confirmed` → `submit_answer(..., instructions=compose_instructions(record.question, answer), detail=ANSWERER_DETAIL, evidence=…, gate=partial(evaluate_gate, answer=answer, settings=project.answerer))`; read 142's signature first. `Declined` → `decline_question(id, reason, detail, evidence)`. `submit_answer` outcomes `settled` and `block_resolved` write nothing further to the record. `ANSWERER_DETAIL` is a module constant; `question_outcome` values (`submitted`, `declined`, `block_resolved`, `settled`, `discarded`) are an enum.
+  - [x] Success: imports; typecheck passes.
+    Note: when a record is already settled for this very entry (crash re-entry), `settle_run_result` reports the earlier outcome (`submitted` or `declined`) instead of `discarded`. `discarded` is for a PM answer or for another entry.
 
-- [ ] **8.2 Tests for record settlement** (`tests/runner/answering/test_finish_answering.py`; seed an `answering` record through `begin_answering`, with the stub's paused run)
-  - [ ] Confirmed → record `answered` by the answerer with answer, `cited_passages`, verdict; the paused run is resumed (stub).
-  - [ ] Gate decline (answer limit / reserved term) → record `declined` with the gate's reason and evidence kept.
-  - [ ] One `Declined` case (check `no`) proves reason, `decline_detail` and evidence are stored. The reason mapping is covered by Task 6.2.
-  - [ ] PM answered first → record unchanged (`answered` by PM), outcome `discarded`. `block_resolved` and `settled` outcomes leave the record as the LLD says.
-  - [ ] Success: tests pass.
+- [x] **8.2 Tests for record settlement** (`tests/runner/answering/test_finish_answering.py`; seed an `answering` record through `begin_answering`, with the stub's paused run)
+  - [x] Confirmed → record `answered` by the answerer with answer, `cited_passages`, verdict; the paused run is resumed (stub).
+    Note: this task asserts the record, answer and evidence. The paused slice run actually being resumed is the Runner's later tick, asserted end-to-end in Task 11.1.
+  - [x] Gate decline (answer limit / reserved term) → record `declined` with the gate's reason and evidence kept.
+  - [x] One `Declined` case (check `no`) proves reason, `decline_detail` and evidence are stored. The reason mapping is covered by Task 6.2.
+  - [x] PM answered first → record unchanged (`answered` by PM), outcome `discarded`. `block_resolved` and `settled` outcomes leave the record as the LLD says.
+  - [x] Success: tests pass.
 
-- [ ] **8.3 `finish_answering`** (same module)
-  - [ ] `finish_answering(entry, finished, …)`: call `settle_run_result`, then `journal_resolve` with the result: run outcome, decision (`confirmed` or the decline reason) and `question_outcome`; `JournalOutcome` is `completed` when the run completed, else `failed`. Result keys are constants. Settle the record first, then resolve the entry.
-  - [ ] Success: imports; typecheck passes.
+- [x] **8.3 `finish_answering`** (same module)
+  - [x] `finish_answering(entry, finished, …)`: call `settle_run_result`, then `journal_resolve` with the result: run outcome, decision (`confirmed` or the decline reason) and `question_outcome`; `JournalOutcome` is `completed` when the run completed, else `failed`. Result keys are constants. Settle the record first, then resolve the entry.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **8.4 Tests for `finish_answering`** (same test file)
-  - [ ] Entry resolved with the expected outcome and result keys for a submitted, a declined and a discarded case.
-  - [ ] Crash between settling and `journal_resolve`: finish again → no second submission or decline, entry resolved.
-  - [ ] Success: tests pass.
+- [x] **8.4 Tests for `finish_answering`** (same test file)
+  - [x] Entry resolved with the expected outcome and result keys for a submitted, a declined and a discarded case.
+  - [x] Crash between settling and `journal_resolve`: finish again → no second submission or decline, entry resolved.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: finish an answering run into a submission or a decline` (includes the stub `sq` answering mode from Task 7)
 

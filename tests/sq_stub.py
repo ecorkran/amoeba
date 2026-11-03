@@ -27,6 +27,8 @@ exits 0. ``RUN_MODE_ENV`` forces a failure case; see :class:`RunMode`.
 ``RUN_SCRIPT_ENV`` (slice 125) names a script: files the run writes under its
 working directory (its reviews) and fields merged into the final document
 (``reviews``, ``checkpoint``, ``failure``); see :func:`write_run_script`.
+A run of the answering pipeline reads ``ANSWER_SCRIPT_ENV`` and
+``ANSWER_OUTCOME_ENV`` instead (slice 144); see ``sq_stub_scripts.answering_run``.
 
 ``sq run --resume <id> --decision D [--instructions T]`` (slice 127): see
 ``sq_stub_resume``, which holds that code.
@@ -63,6 +65,14 @@ RUN_LATE_SECONDS_ENV = "SQ_STUB_RUN_LATE_SECONDS"
 #: A JSON file (see :func:`write_run_script`) naming the files the run writes under
 #: its working directory and the fields it adds to its final document.
 RUN_SCRIPT_ENV = "SQ_STUB_RUN_SCRIPT"
+#: The same two settings for a run of the answering pipeline (slice 144, D13): a run
+#: whose pipeline file is ``ANSWER_PIPELINE_NAME`` reads these instead, so one test
+#: can script a slice run and an answering run apart. ``RUN_SECONDS_ENV`` is shared.
+ANSWER_SCRIPT_ENV = "SQ_STUB_ANSWER_SCRIPT"
+ANSWER_OUTCOME_ENV = "SQ_STUB_ANSWER_OUTCOME"
+#: The shipped answering pipeline's file name, restated because the stub is a
+#: separate program; ``tests/runner/answering/test_stub_answering.py`` pins it.
+ANSWER_PIPELINE_NAME = "answering.yaml"
 
 STUB_NAME = "sq"
 
@@ -178,6 +188,7 @@ _SCRIPT = textwrap.dedent(
         if not re.fullmatch({run_id_pattern!r}, run_id):
             print("stub sq: invalid run id", repr(run_id), file=sys.stderr)
             sys.exit(2)
+        is_answering = Path(pipelines[0]).name == {answer_pipeline_name!r}
         if run_mode == {exit_before_line!r}:
             sys.exit(1)
         if run_mode == {late_line!r}:
@@ -198,7 +209,9 @@ _SCRIPT = textwrap.dedent(
             print("run_id=" + run_id, file=sys.stderr, flush=True)
         time.sleep(float(os.environ[{run_seconds_env!r}]))
         extra = dict()
-        script_path = os.environ.get({run_script_env!r})
+        script_path = os.environ.get(
+            {answer_script_env!r} if is_answering else {run_script_env!r}
+        )
         if script_path:
             # The run's results: files written under the working directory, as a
             # real run writes its reviews, and fields merged into the document.
@@ -208,7 +221,8 @@ _SCRIPT = textwrap.dedent(
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(text, encoding="utf-8")
             extra = script["document"]
-        write_state(os.environ.get({run_outcome_env!r}, "completed"), extra)
+        outcome_env = {answer_outcome_env!r} if is_answering else {run_outcome_env!r}
+        write_state(os.environ.get(outcome_env, "completed"), extra)
         sys.exit(0)
 
     mode = os.environ[{mode_env!r}]
@@ -259,6 +273,9 @@ def write_sq_stub(bin_dir: Path) -> Path:
             run_outcome_env=RUN_OUTCOME_ENV,
             run_late_env=RUN_LATE_SECONDS_ENV,
             run_script_env=RUN_SCRIPT_ENV,
+            answer_script_env=ANSWER_SCRIPT_ENV,
+            answer_outcome_env=ANSWER_OUTCOME_ENV,
+            answer_pipeline_name=ANSWER_PIPELINE_NAME,
             run_id_pattern=STUB_RUN_ID_PATTERN,
             usage_error=RunMode.USAGE_ERROR.value,
             exit_before_line=RunMode.EXIT_BEFORE_LINE.value,

@@ -18,6 +18,8 @@ from typing import Final
 
 from review_fixtures import PAIR_ARTIFACT, ROUND_2_PART_1, ROUND_2_PART_2
 
+from amoeba.runner.answering.pipeline_file import ANSWER_REPLY_FILE, CHECK_REPLY_FILE
+
 SQ_OUTCOMES: Final = Path(__file__).parent / "fixtures" / "sq_outcomes"
 
 #: Where a run writes its reviews, relative to its working directory.
@@ -126,3 +128,39 @@ def _captured_checkpoint(name: str) -> dict[str, object]:
     checkpoint = _captured(name, "checkpoint")
     assert isinstance(checkpoint, dict)
     return dict(checkpoint)  # pyright: ignore[reportUnknownArgumentType]
+
+
+def answering_run(
+    answer: Mapping[str, object] | str | None,
+    check: Mapping[str, object] | str | None = None,
+    *,
+    document: Mapping[str, object] | None = None,
+) -> RunScript:
+    """An answering run's reply files, for ``ANSWER_SCRIPT_ENV`` (slice 144, D13).
+
+    ``answer`` and ``check`` are the content of ``answer.json`` and ``check.json``:
+    a mapping is written as JSON, a string verbatim (for malformed text), and
+    ``None`` writes no file. ``document`` adds fields to the final outcome document
+    (a ``failure`` or ``checkpoint`` for a run that does not complete). The file
+    names are 140's, imported from the answering package.
+    """
+    files: dict[str, str] = {}
+    for name, content in ((ANSWER_REPLY_FILE, answer), (CHECK_REPLY_FILE, check)):
+        if content is not None:
+            files[name] = content if isinstance(content, str) else json.dumps(content)
+    return RunScript(files, dict(document or {}))
+
+
+def proposed_answer_reply(answer: str, cited: list[str]) -> dict[str, object]:
+    """An ``answer.json`` that answers, citing ``cited``."""
+    return {"kind": "answer", "answer": answer, "cited": cited}
+
+
+def declining_answer_reply(reason: str) -> dict[str, object]:
+    """An ``answer.json`` that declines."""
+    return {"kind": "decline", "reason": reason}
+
+
+def check_reply(verdict: str, reason: str | None = None) -> dict[str, object]:
+    """A ``check.json``."""
+    return {"verdict": verdict, "reason": reason}

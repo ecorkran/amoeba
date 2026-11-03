@@ -27,6 +27,7 @@ EXPECTED_EXPORTS = {
     "PARAM_PROJECT",
     "PARAM_RESOLUTION",
     "PARAM_RUN_ID",
+    "PARAM_SCRATCH",
     "AcknowledgmentOutcome",
     "BlockedKind",
     "Channel",
