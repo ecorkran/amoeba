@@ -29,8 +29,14 @@ from typing import cast
 
 TREE = Path(__file__).parent / "answerer_walkthrough" / "project"
 PROJECT_ID = "scratch"
-#: Where the tree's slice plan lives; `sq` reads the plan through `cf list slices`.
-SLICE_PLAN = "project-documents/user/architecture/100-slices.notes.md"
+#: The tree's plan files as `cf set <field> <path>` pairs. `sq` reads them through
+#: `cf`: the slice plan for `cf list slices`, the architecture as the design
+#: review's `against` input.
+CF_ARTIFACTS = (
+    ("concept", "project-documents/user/project-guides/000-concept.notes.md"),
+    ("arch", "project-documents/user/architecture/100-arch.notes.md"),
+    ("plan", "project-documents/user/architecture/100-slices.notes.md"),
+)
 SUBMITTER = "walkthrough"
 #: git identity for the scratch checkout; passed with -c so no global config is read.
 GIT_IDENTITY = (
@@ -157,13 +163,14 @@ def build_checkout(layout: Layout, env_file: Path, env: Mapping[str, str]) -> No
         env=env,
         root=root,
     )
-    run_step(
-        "cf set plan",
-        ["cf", "set", "plan", SLICE_PLAN],
-        cwd=checkout,
-        env=env,
-        root=root,
-    )
+    for field, path in CF_ARTIFACTS:
+        run_step(
+            f"cf set {field}",
+            ["cf", "set", field, path],
+            cwd=checkout,
+            env=env,
+            root=root,
+        )
     run_step("git add", ["git", "add", "-A"], cwd=checkout, env=env, root=root)
     run_step(
         "git commit",

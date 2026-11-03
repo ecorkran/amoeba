@@ -20,7 +20,7 @@ status: in_progress
 
 ## Foundation Work
 
-1. [ ] **(100) Add a Note** — The `add` command appends one note, with its text, to the notes file. If your instructions do not already say which storage format notes are kept in, write no design and end your reply with one question asking which storage format notes are kept in.
+1. [ ] **(100) Add a Note** — The `add` command appends one note, with its text, to the notes file. Before you design anything, write no design and end your reply with one question asking which storage format notes are kept in; if your prompt already begins with an answer to that question, write the design instead.
    **Success Criteria:**
    - `notes add "text"` writes one note and prints nothing else.
    **Dependencies:** None
@@ -28,7 +28,7 @@ status: in_progress
 
 ## Feature Slices
 
-2. [ ] **(101) List Notes** — The `list` command prints every note, one per line, oldest first. If your instructions do not already say whether this slice's branch should merge to `main` once its review passes, write no design and end your reply with one question asking whether this slice's branch should merge to `main` once its review passes.
+2. [ ] **(101) List Notes** — The `list` command prints every note, one per line, oldest first. Before you design anything, write no design and end your reply with one question asking whether this slice's branch should merge to `main` once its review passes; if your prompt already begins with an answer to that question, write the design instead.
    **Success Criteria:**
    - `notes list` prints each note on its own line.
    **Dependencies:** 100
@@ -46,7 +46,7 @@ status: in_progress
    **Dependencies:** 102
    **Relative Effort:** 1
 
-5. [ ] **(104) Export Notes** — The `export` command writes all notes to a file. If your instructions do not already say which storage format notes are kept in, write no design and end your reply with one question asking which storage format notes are kept in; once that is answered, if your instructions do not already say whether new source files carry a license header, write no design and end your reply with one question asking whether new source files carry a license header.
+5. [ ] **(104) Export Notes** — The `export` command writes all notes to a file. Before you design anything, write no design and end your reply with one question asking which storage format notes are kept in. If your prompt already begins with an answer to that question, instead write no design and end your reply with one question asking whether new source files carry a license header. If your prompt also holds an answer to that second question, write the design.
    **Success Criteria:**
    - `notes export path` writes every note to `path`.
    **Dependencies:** 103
