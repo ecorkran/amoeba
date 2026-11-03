@@ -112,7 +112,7 @@ Per the LLD, D5 and D6 "Script", "Script failures", "Registry isolation". File: 
 - [x] **3.3 Build the checkout**
   - [x] Copy the tree to `D/checkout`, run `git init -b main`, commit everything as the first commit, then copy `F` to `D/checkout/.env` after the commit so it is never in history. The tree's `.gitignore` excludes it.
   - [x] Success: `git -C D/checkout status` is clean and `git log` has one commit.
-  - Note: cf init --lite runs before the first commit, because cf init appends .context-forge.local.toml to .gitignore and would otherwise leave the checkout dirty. --lite skips guide, command and IDE installs, which would otherwise write to ~/.claude/commands.
+  - Note: cf init --no-ide runs before our commit, because cf init installs the AI project guide (the p4 design step's `cf build` fails without it; found in task 6.1) and edits .gitignore, and would otherwise leave the checkout dirty. cf commits the guide itself, so `git log` holds that commit first. --no-ide keeps cf from writing IDE commands to ~/.claude/commands. `cf set plan` points the scratch project at the slice plan; without it the design step fails with "No slice plan configured".
 - [x] **3.4 Registry and project**
   - [x] Run `cf init` in the checkout with `CONTEXT_FORGE_DATA_DIR=D/cf`. Read the Context Forge project id from `cf get`'s output. Stop with an error naming the step when the id is absent; never fill one in.
   - [x] With `AMOEBA_STORE_DIR=D/store` and `--cf-data-dir D/cf`, run `amoeba submit create-project` and `amoeba submit link-cf-project` with that id. Use 144's and 132's actual flag names: read `uv run amoeba submit create-project --help` first.

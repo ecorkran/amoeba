@@ -136,8 +136,10 @@ def run_step(
 def build_checkout(layout: Layout, env_file: Path, env: Mapping[str, str]) -> None:
     """Copy the tree, register it with Context Forge, commit it, then add `.env`.
 
-    `cf init` edits `.gitignore`, so it runs before the commit to leave the checkout
-    clean. The `.env` is copied last so it is never in history.
+    `cf init` installs the AI project guide (the `p4` design step's `cf build` needs
+    it) and edits `.gitignore`, so it runs before our commit to leave the checkout
+    clean. `--no-ide` keeps it from writing IDE commands outside `D`. The `.env` is
+    copied last so it is never in history.
     """
     shutil.copytree(TREE, layout.checkout)
     checkout, root = layout.checkout, layout.root
@@ -150,7 +152,7 @@ def build_checkout(layout: Layout, env_file: Path, env: Mapping[str, str]) -> No
     )
     run_step(
         "cf init",
-        ["cf", "init", "--lite", "--name", PROJECT_ID],
+        ["cf", "init", "--no-ide", "--name", PROJECT_ID],
         cwd=checkout,
         env=env,
         root=root,

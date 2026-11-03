@@ -165,7 +165,7 @@ def test_setup_builds_the_directory_and_submits_the_project(
     script.setup(target, env_file, environ)
 
     calls = Path(environ["STUB_LOG"]).read_text().splitlines()
-    assert "cf init --lite --name scratch" in calls
+    assert "cf init --no-ide --name scratch" in calls
     assert (
         "cf set plan project-documents/user/architecture/100-slices.notes.md" in calls
     )
