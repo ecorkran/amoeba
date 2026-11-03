@@ -102,28 +102,30 @@ Per the LLD, D6 "Fixture test". Proves 143's naming-convention lookup finds the 
 
 Per the LLD, D5 and D6 "Script", "Script failures", "Registry isolation". File: `scripts/answerer_walkthrough.py`, stdlib only (`argparse`, `subprocess`, `shutil`, `pathlib`). Read `scripts/demo_evidence.py` for the house style, and `tests/test_writer_guard.py` to confirm the script needs no allow-list entry (it never opens the store; it calls the `amoeba` CLI).
 
-- [ ] **3.1 Arguments and refusals**
-  - [ ] `setup --dir D --env-file F`. Refuse a `D` that already exists, naming it. Refuse a missing `F`, naming it.
-  - [ ] Read `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL` and `AMOEBA_LIVE_MAX_COST_USD`. Exit with a message naming the first one that is unset or empty. No defaults.
-  - [ ] Success: each refusal exits non-zero with its message and creates nothing.
-- [ ] **3.2 A step runner**
-  - [ ] One function runs a subprocess with an explicit environment and a step name. On a non-zero exit it reports the step, the command and its stderr, names the partly built `D`, never deletes it, and exits non-zero.
-  - [ ] Success: used by every later subprocess call; no other `subprocess` call in the file.
-- [ ] **3.3 Build the checkout**
-  - [ ] Copy the tree to `D/checkout`, run `git init -b main`, commit everything as the first commit, then copy `F` to `D/checkout/.env` after the commit so it is never in history. The tree's `.gitignore` excludes it.
-  - [ ] Success: `git -C D/checkout status` is clean and `git log` has one commit.
-- [ ] **3.4 Registry and project**
-  - [ ] Run `cf init` in the checkout with `CONTEXT_FORGE_DATA_DIR=D/cf`. Read the Context Forge project id from `cf get`'s output. Stop with an error naming the step when the id is absent; never fill one in.
-  - [ ] With `AMOEBA_STORE_DIR=D/store` and `--cf-data-dir D/cf`, run `amoeba submit create-project` and `amoeba submit link-cf-project` with that id. Use 144's and 132's actual flag names: read `uv run amoeba submit create-project --help` first.
-  - [ ] Success: `uv run amoeba inspect` against `D/store` lists the project linked to the id read from `cf`.
-- [ ] **3.5 Config and exports**
-  - [ ] Write `D/projects.yaml` as in D5: pipeline `p4`, and the eight-key `answerer` section with literal values (the loader does not expand variables). Use the key names 144 ships; read `docs/process-contract.md` section on `answerer` first.
-  - [ ] Print what was created and the `export` lines (`AMOEBA_STORE_DIR` and `CONTEXT_FORGE_DATA_DIR`), then the `amoeba start --project-config D/projects.yaml --cf-data-dir D/cf` command.
-  - [ ] Success: `D/projects.yaml` is written with the D5 keys; task 3.6 checks that it loads.
-- [ ] **3.6 Tests** `tests/test_answerer_walkthrough_script.py`
-  - [ ] Existing directory refused; each missing live variable refused by name; a stub `cf` on `PATH` that prints no project id stops the script naming the step; a stub `git` or `cf` that exits non-zero reports step, command and stderr and leaves `D`.
-  - [ ] The config writer's output loads through Amoeba's real project-config loader and carries the three live values literally.
-  - [ ] Success: tests pass without a real `cf`, `sq` or model. `uv run ruff check`, `uv run pyright` clean on the script and the test.
+- [x] **3.1 Arguments and refusals**
+  - [x] `setup --dir D --env-file F`. Refuse a `D` that already exists, naming it. Refuse a missing `F`, naming it.
+  - [x] Read `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL` and `AMOEBA_LIVE_MAX_COST_USD`. Exit with a message naming the first one that is unset or empty. No defaults.
+  - [x] Success: each refusal exits non-zero with its message and creates nothing.
+- [x] **3.2 A step runner**
+  - [x] One function runs a subprocess with an explicit environment and a step name. On a non-zero exit it reports the step, the command and its stderr, names the partly built `D`, never deletes it, and exits non-zero.
+  - [x] Success: used by every later subprocess call; no other `subprocess` call in the file.
+- [x] **3.3 Build the checkout**
+  - [x] Copy the tree to `D/checkout`, run `git init -b main`, commit everything as the first commit, then copy `F` to `D/checkout/.env` after the commit so it is never in history. The tree's `.gitignore` excludes it.
+  - [x] Success: `git -C D/checkout status` is clean and `git log` has one commit.
+  - Note: cf init --lite runs before the first commit, because cf init appends .context-forge.local.toml to .gitignore and would otherwise leave the checkout dirty. --lite skips guide, command and IDE installs, which would otherwise write to ~/.claude/commands.
+- [x] **3.4 Registry and project**
+  - [x] Run `cf init` in the checkout with `CONTEXT_FORGE_DATA_DIR=D/cf`. Read the Context Forge project id from `cf get`'s output. Stop with an error naming the step when the id is absent; never fill one in.
+  - [x] With `AMOEBA_STORE_DIR=D/store` and `--cf-data-dir D/cf`, run `amoeba submit create-project` and `amoeba submit link-cf-project` with that id. Use 144's and 132's actual flag names: read `uv run amoeba submit create-project --help` first.
+  - [x] Success: `uv run amoeba inspect` against `D/store` lists the project linked to the id read from `cf`.
+  - Note: amoeba submit takes no --cf-data-dir (only start does), and a submission is applied only when the resident process runs, so amoeba inspect lists the project after task 4.2 starts Amoeba, not at the end of setup. The cf project id is read from cf get --json.
+- [x] **3.5 Config and exports**
+  - [x] Write `D/projects.yaml` as in D5: pipeline `p4`, and the eight-key `answerer` section with literal values (the loader does not expand variables). Use the key names 144 ships; read `docs/process-contract.md` section on `answerer` first.
+  - [x] Print what was created and the `export` lines (`AMOEBA_STORE_DIR` and `CONTEXT_FORGE_DATA_DIR`), then the `amoeba start --project-config D/projects.yaml --cf-data-dir D/cf` command.
+  - [x] Success: `D/projects.yaml` is written with the D5 keys; task 3.6 checks that it loads.
+- [x] **3.6 Tests** `tests/test_answerer_walkthrough_script.py`
+  - [x] Existing directory refused; each missing live variable refused by name; a stub `cf` on `PATH` that prints no project id stops the script naming the step; a stub `git` or `cf` that exits non-zero reports step, command and stderr and leaves `D`.
+  - [x] The config writer's output loads through Amoeba's real project-config loader and carries the three live values literally.
+  - [x] Success: tests pass without a real `cf`, `sq` or model. `uv run ruff check`, `uv run pyright` clean on the script and the test.
 
 **Commit**: `feat: add answerer walkthrough setup script`
 
