@@ -78,14 +78,15 @@ revision_number: 2
   - [ ] Success: imports; typecheck passes.
 
 - [ ] **2.2 Switch the five readers to `supervision_entries`** (D3)
-  - [ ] `classify` (via the resolution stage's `_answer`, or inside `classify`: choose the one place that covers every caller; read both), `run_to_resume`, `_facts_for` (filter before `dispatch_state` and `latest_run_entry`), `checkout_holders`, `_resume_count`. One line each.
+  - [ ] `classify`: filter in the resolution stage's `_answer`, where it builds the `classify` input (D3). Deviate (filter inside `classify`) only if you find another `classify` caller, and say so in the commit message. Then `run_to_resume`, `_facts_for` (filter before `dispatch_state` and `latest_run_entry`), `checkout_holders`, `_resume_count`. One line each.
   - [ ] Success: no other code changes; the existing suites for these readers pass unchanged (`uv run pytest tests/runner -q`).
 
 - [ ] **2.3 D3 acceptance test: reader cases** (`tests/runner/test_sq_answer_readers.py`)
   - [ ] Build one slice journal: a paused `sq_run` with an open question block, plus an `sq_answer` in flight; then the same `sq_answer` resolved. For each of the two cases assert: `classify` is `RUN_TO_RESUME`; `run_to_resume` returns the `sq_run`; the checkout is held by that node; `dispatch_state` with an applied resume is `RESUME`; the resume count is unchanged.
   - [ ] Add a test that an issuer's resolution of an `sq_answer` entry sets no `awaits_routing`, and that `tests/runner` code that builds `_run_entries` ignores `sq_answer` (never reaches `record_finished`).
   - [ ] Add a test of `supervision_entries` itself (order kept, only `sq_answer` removed, empty input).
-  - [ ] Success: tests pass; confirm they fail with the filters removed from two of the readers (temporarily, then restore).
+  - [ ] Each reader has its own assertion, so a missing filter in any one reader fails a test that names that reader.
+  - [ ] Success: tests pass.
 
 - [ ] **2.4 Done-guard ignores `sq_answer`** (D4, `store/sql_journal.py`)
   - [ ] `SELECT_UNRESOLVED_ENTRY_FOR_NODE` gains `AND kind != '<sq_answer value>'`, with the value taken from `CommandKind` (build the SQL from the enum value, as neighbouring statements do for other kinds).
@@ -261,6 +262,7 @@ revision_number: 2
 ## 10. The stage and the tick (D10)
 
 - [ ] **10.1 Observe pass** (`runner/answering/stage.py`, grown; put the passes in a second module if the file passes ~300 lines)
+  - [ ] Add one helper, `unresolved_answering_entries(store, project_id)`, in `runner/answering/stage.py`: `Store.unresolved_journal_entries(project_id)` (`store/journal.py` ~line 289) filtered to `CommandKind.SQ_ANSWER`. The observe pass (here) and the concurrency cap (10.5) both call it, so the cap always counts the set being observed.
   - [ ] `AnsweringStage` with the observe pass: unresolved `sq_answer` entries go to `RunObserver.observe` (polls take the budget; node context set per entry); each finished → `finish_answering`. Returns whether it was cut off. Nothing calls it yet; `settle_pending_questions` stays in place.
   - [ ] Success: imports; typecheck passes.
 
@@ -351,12 +353,12 @@ revision_number: 2
 ## 14. Live tier (D13)
 
 - [ ] **14.1 Real-tail fixture** (`tests/live/answering/fixtures/question_tails.json`)
-  BLOCKED: needs real `checkpoint.question` values copied from `sq runs wait --json` output of question-paused runs, and a Squadron release with 140's D8 capabilities (Squadron issue per 140's record). Leave this task and 14.2 unchecked until both exist.
+  BLOCKED: needs real `checkpoint.question` values copied from `sq runs wait --json` output of question-paused runs. Squadron 0.24.14 already ships 140's D8 capabilities, so only the tails are missing. Leave this task and 14.2 unchecked until they exist.
   - [ ] Each entry holds the tail, the run id and the capture date. Amoeba never reads run-state files.
   - [ ] Success: the file loads; every entry has the three fields.
 
 - [ ] **14.2 Live cases** (`tests/live/answering/test_answering_run.py`, using `harness.py` and 140's opt-in variables `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL`, `AMOEBA_LIVE_MAX_COST_USD`)
-  BLOCKED: same precondition as 14.1.
+  BLOCKED: same precondition as 14.1 (the tails).
   - [ ] Plan passage: a question answered from a plan passage resumes a stub-paused run; record `answered` by the answerer.
   - [ ] PM precedent: a real tail repeating a PM answer in other words resumes on the same slice; asked for a slice where the answer differs it is declined; another slice with the same meaning resumes.
   - [ ] Each case runs the real stage from `assemble_sources` against 143's fixture repository and a throwaway store to the record's final state; runs once; a wrong result fails the test, nothing retries.
