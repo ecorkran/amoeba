@@ -673,10 +673,12 @@ this section is the contract.
   satisfy a `required` param, so `answer-model` is the positional argument (observed with
   the `sq` of the dated note below). `sq run` first runs `cf get` and exits 1 when the
   working directory is not inside a registered Context Forge project, even for a pipeline
-  that uses none (observed on squadron 0.24.14, 20261103). `cf` finds a registration in
-  a parent directory, so the scratch directory must sit under a registered one; the live
-  tests register a throwaway parent with `cf init --lite` and a throwaway
-  `CONTEXT_FORGE_DATA_DIR`. Slice 144 chooses where production scratch directories live.
+  that uses none (observed on squadron 0.24.14, 20261103). Squadron 0.24.16 (#288) checks
+  Context Forge only when some step needs it, and a `dispatch` without an `artifact` key
+  does not, so the answering pipeline runs from any directory (verified on 0.24.16,
+  20261103, from an unregistered directory). Production scratch directories need no
+  registration and require squadron 0.24.16 or later. The older live tests still register a
+  throwaway parent with `cf init --lite` and a throwaway `CONTEXT_FORGE_DATA_DIR`.
 - **Inputs, written by `prepare_scratch(directory, question, passages_markdown,
   max_cost_usd)`** into an existing, empty directory (anything else is a `ValueError`):
   `question.md`, `passages.md` (byte for byte as given), an empty `rules/` directory and

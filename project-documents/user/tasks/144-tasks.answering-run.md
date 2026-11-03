@@ -55,6 +55,7 @@ revision_number: 2
 - `process/supervisor.py::build_observer_registry(settings, claimed_run_ids, claimed_run_nodes)` returns `{CommandKind.SQ_RUN: …, CommandKind.CF_WRITE: …}`; the `SquadronRunIdObserver(...)` built inside `SquadronRunObserver` is the model for `SQ_ANSWER`.
 - Questions: `store/questions.py::decline_question` (~165), `store/answer_submission.py::submit_answer` (~51), `store/question_models.py` (`DeclineReason`, `QUESTION_TRANSITIONS`), `store/sql_questions.py`, `store/mapping_questions.py`. Migrations are `store/schema/NNN_*.sql`, latest `014_answer_submission.sql`; `tests/test_migrations.py` covers them.
 - Answering code: `runner/answering/{settle,stage,gate,inputs,artifacts,sources,passages,pipeline_file}.py`. `stage.py::settle_pending_questions(store, project_id, *, configured)` is called from `runner/tick.py` (~line 210) and from `tests/runner/test_tick_answering.py`. `settle.py::settle_pending` returns `Skip | Decline`; its last branch declines `NO_ANSWER_ON_FILE`.
+- Scratch directories sit under the supervisor directory, outside any Context Forge project. That works only on squadron 0.24.16 or later (ecorkran/squadron#288: `sq run` checks Context Forge only when a step needs it). Earlier versions exit 1 from `cf get`. Verified 20261103 by running `answering.yaml` from an unregistered directory.
 - Launch code to reuse: `runner/launch.py` (`spawn`, `build_argv`, `mint_run_id`, `log_paths`, `LaunchTracker`, `LaunchError`) and `runner/observe*.py` (`RunObserver`, `Finished`). Read them before Task 9.
 - Tests: `tests/question_harness.py` (`seed_question`, `make_slice`), `tests/sq_stub.py` + `tests/sq_stub_scripts.py` (stub `sq`), `tests/runner/test_end_to_end.py`, `tests/runner/purity.py::io_use(module)`, `tests/runner/answering/` (sources repo fixture `sources_repo.py`), `tests/live/answering/` (`harness.py`, `conftest.py`, `test_precedence.py`).
 
@@ -353,7 +354,7 @@ revision_number: 2
 ## 14. Live tier (D13)
 
 - [ ] **14.1 Real-tail fixture** (`tests/live/answering/fixtures/question_tails.json`)
-  BLOCKED: needs real `checkpoint.question` values copied from `sq runs wait --json` output of question-paused runs. Squadron 0.24.14 already ships 140's D8 capabilities, so only the tails are missing. Leave this task and 14.2 unchecked until they exist.
+  BLOCKED: needs real `checkpoint.question` values copied from `sq runs wait --json` output of question-paused runs. Squadron 0.24.16 ships 140's D8 capabilities and the Context Forge skip, so only the tails are missing. Leave this task and 14.2 unchecked until they exist.
   - [ ] Each entry holds the tail, the run id and the capture date. Amoeba never reads run-state files.
   - [ ] Success: the file loads; every entry has the three fields.
 
