@@ -5,10 +5,8 @@
 # this file uses exactly them. Prompt text must not contain a brace pair around a
 # bare word: Squadron reads it as a param placeholder and rejects the file.
 #
-# PENDING SHIPPED SYNTAX: the keys input_files, input_replies, reply_format,
-# reply_file and delivered_prompt_file are Amoeba's proposal for the capabilities
-# of the Squadron issue (ecorkran/squadron#284), not keys the installed sq knows.
-# Task 9.1 replaces them with whatever ships.
+# Keys prompt_files, reply_from, reply_format, reply_file and delivered_prompt_file
+# are Squadron's dispatch file-in, file-out contract (squadron 0.24.14 and later).
 name: answering
 description: Answer a question from supplied passages, then check the answer independently
 
@@ -21,7 +19,7 @@ steps:
       name: answer
       model: "{answer-model}"
       allowed_tools: []
-      input_files: [question.md, passages.md]
+      prompt_files: [question.md, passages.md]
       reply_format: json
       reply_file: answer.json
       delivered_prompt_file: answer.prompt.md
@@ -60,8 +58,8 @@ steps:
       name: check
       model: "{check-model}"
       allowed_tools: []
-      input_files: [question.md, passages.md]
-      input_replies: [answer]
+      prompt_files: [question.md, passages.md]
+      reply_from: answer
       reply_format: json
       reply_file: check.json
       delivered_prompt_file: check.prompt.md

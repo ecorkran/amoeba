@@ -1,4 +1,4 @@
-"""The answering pipeline start probe (slice 140, D9): sq run --validate, once."""
+"""The answering pipeline start probe (slice 140, D9): validate --strict, once."""
 
 from __future__ import annotations
 
@@ -55,7 +55,13 @@ def test_answering_probe_call_shape() -> None:
     stub = StubSq()
     probe_answering_pipeline(_settings(), stub)
     argv, kwargs = stub.calls[0]
-    assert argv == [SQ_EXECUTABLE, "run", str(answering_pipeline_path()), "--validate"]
+    assert argv == [
+        SQ_EXECUTABLE,
+        "run",
+        str(answering_pipeline_path()),
+        "--validate",
+        "--strict",
+    ]
     assert kwargs["timeout"] == SQ_TIMEOUT
     assert kwargs["stdin"] == subprocess.DEVNULL
     assert kwargs["capture_output"] is True

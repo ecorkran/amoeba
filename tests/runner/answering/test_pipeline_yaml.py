@@ -68,13 +68,13 @@ def test_reply_and_prompt_files() -> None:
     assert steps[CHECK_STEP]["delivered_prompt_file"] == CHECK_PROMPT_FILE
 
 
-def test_input_files_and_reply_chaining() -> None:
+def test_prompt_files_and_reply_chaining() -> None:
     steps = _steps()
     both = [QUESTION_FILE, PASSAGES_FILE]
-    assert steps[ANSWER_STEP]["input_files"] == both
-    assert steps[CHECK_STEP]["input_files"] == both
-    assert steps[CHECK_STEP]["input_replies"] == [ANSWER_STEP]
-    assert "input_replies" not in steps[ANSWER_STEP]
+    assert steps[ANSWER_STEP]["prompt_files"] == both
+    assert steps[CHECK_STEP]["prompt_files"] == both
+    assert steps[CHECK_STEP]["reply_from"] == ANSWER_STEP
+    assert "reply_from" not in steps[ANSWER_STEP]
 
 
 def test_no_tools_and_json_reply() -> None:

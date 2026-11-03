@@ -66,7 +66,7 @@ def probe_sq(
 
 
 def probe_answering_pipeline(settings: ProcessSettings, run: CfRun) -> None:
-    """Check that ``sq run <answering.yaml> --validate`` exits 0 (slice 140, D9).
+    """Check that `sq run <answering.yaml> --validate --strict` exits 0 (D9).
 
     Run once from a temporary directory, so no project config of the caller's
     directory is read. ``runner_tenant`` calls it at start when any project
@@ -76,7 +76,13 @@ def probe_answering_pipeline(settings: ProcessSettings, run: CfRun) -> None:
         StartupFailedError: On a non-zero exit, a timeout or a missing ``sq``,
             naming the command, the exit code and the head of its output.
     """
-    argv = [SQ_EXECUTABLE, "run", str(answering_pipeline_path()), "--validate"]
+    argv = [
+        SQ_EXECUTABLE,
+        "run",
+        str(answering_pipeline_path()),
+        "--validate",
+        "--strict",
+    ]
     shown = " ".join(argv)
     with tempfile.TemporaryDirectory() as scratch:
         completed = run_cf(argv, partial(run, cwd=scratch), settings.sq_timeout_seconds)
