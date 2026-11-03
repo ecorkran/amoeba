@@ -193,6 +193,11 @@ _SCRIPT = textwrap.dedent(
             print("stub sq: invalid run id", repr(run_id), file=sys.stderr)
             sys.exit(2)
         is_answering = Path(pipelines[0]).name == {answer_pipeline_name!r}
+        if is_answering and len(pipelines) != 2:
+            # Squadron takes the first required param (the answer model) only as the
+            # positional target, never from -p: observed on squadron 0.24.16.
+            print("stub sq: requires an answer-model argument", file=sys.stderr)
+            sys.exit(2)
         if run_mode == {exit_before_line!r}:
             sys.exit(1)
         if run_mode == {late_line!r}:

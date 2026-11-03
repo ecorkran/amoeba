@@ -18,7 +18,6 @@ from amoeba.runner.answering.launch import (
 )
 from amoeba.runner.answering.passages import SourcesProblem, SourcesProblemKind
 from amoeba.runner.answering.pipeline_file import (
-    ANSWER_MODEL_PARAM,
     CHECK_MODEL_PARAM,
     PIPELINE_FILE_NAME,
     SQUADRON_CONFIG_FILE,
@@ -61,14 +60,18 @@ def test_the_command_line_names_the_pipeline_run_id_and_both_models(
 
     prepared = _prepared(prepare_launch(rig.context, rig.record, budget()))
 
-    argv = list(prepared.argv)
-    assert argv[1:3] == ["run", prepared.launch.parameters["pipeline"]]
-    assert Path(argv[2]).name == PIPELINE_FILE_NAME
-    assert argv[3:5] == ["--run-id", prepared.launch.run_id]
-    assert f"{ANSWER_MODEL_PARAM}={ANSWER_MODEL}" in argv
-    assert f"{CHECK_MODEL_PARAM}={CHECK_MODEL}" in argv
-    # Nothing is positional: the argument after the pipeline is the run id flag.
-    assert argv[3] == "--run-id"
+    # The answer model is the positional target: Squadron takes a pipeline's first
+    # required param only that way, never from -p (squadron 0.24.16).
+    assert list(prepared.argv)[1:] == [
+        "run",
+        str(prepared.launch.parameters["pipeline"]),
+        ANSWER_MODEL,
+        "--run-id",
+        prepared.launch.run_id,
+        "-p",
+        f"{CHECK_MODEL_PARAM}={CHECK_MODEL}",
+    ]
+    assert Path(prepared.argv[2]).name == PIPELINE_FILE_NAME
 
 
 def test_the_launch_records_the_passages_without_their_text(
@@ -194,5 +197,5 @@ def test_settings_other_than_the_default_reach_the_command(
 
     prepared = _prepared(prepare_launch(rig.context, rig.record, budget()))
 
-    assert f"{ANSWER_MODEL_PARAM}=glm-flash" in prepared.argv
+    assert prepared.argv[3] == "glm-flash"
     assert f"{CHECK_MODEL_PARAM}=ds-flash" in prepared.argv

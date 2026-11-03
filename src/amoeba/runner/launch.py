@@ -162,8 +162,18 @@ class LaunchError:
 TARGET_PARAM_KEY: Final = "slice"
 
 
-def build_argv(pipeline: str, run_id: str, params: Mapping[str, str]) -> list[str]:
+def build_argv(
+    pipeline: str,
+    run_id: str,
+    params: Mapping[str, str],
+    *,
+    target_key: str = TARGET_PARAM_KEY,
+) -> list[str]:
     """The ``sq run`` command line: the target, then a ``-p key=value`` per other param.
+
+    ``target_key`` names the param passed positionally: the pipeline's first
+    ``required`` param (``slice`` for the dispatched pipelines, ``answer-model`` for
+    the answering pipeline).
 
     Raises:
         ValueError: If a value contains ``,`` or a key contains ``,`` or ``=``
@@ -171,14 +181,14 @@ def build_argv(pipeline: str, run_id: str, params: Mapping[str, str]) -> list[st
             this before journaling.
     """
     argv = [SQ_EXECUTABLE, SQ_RUN_COMMAND, pipeline]
-    target = params.get(TARGET_PARAM_KEY)
+    target = params.get(target_key)
     if target is not None:
         if not target or target.startswith("-"):
             raise ValueError(f"the target {target!r} is not a usable argument")
         argv.append(target)
     argv += [SQ_RUN_ID_FLAG, run_id]
     for key, value in params.items():
-        if key == TARGET_PARAM_KEY:
+        if key == target_key:
             continue
         if problem := param_problem(key, value):
             raise ValueError(problem)

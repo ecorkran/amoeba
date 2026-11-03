@@ -161,7 +161,9 @@ def prepare_launch(
         CHECK_MODEL_PARAM: context.settings.check_model,
     }
     pipeline = str(answering_pipeline_path())
-    argv = build_argv(pipeline, run_id, params)
+    # Squadron binds the positional target to the first required param and does not
+    # take a required param from ``-p``, so the answer model is the target.
+    argv = build_argv(pipeline, run_id, params, target_key=ANSWER_MODEL_PARAM)
     launch = AnsweringLaunch(
         node_id=record.node_id,
         run_id=run_id,
