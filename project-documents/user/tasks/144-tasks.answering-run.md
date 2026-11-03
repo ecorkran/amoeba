@@ -163,11 +163,10 @@ revision_number: 2
 
 - [x] **4.5 Tests for the extended writers** (beside the 141/142 tests)
   - [x] Decline with detail and evidence stores all fields in one transaction; no evidence leaves the columns null.
-  - [ ] An over-long detail is cut to the bound. Not checked: the cut happens in the Runner, not the store (see the 4.4 note). The assertion moves to Task 6.2.
+  - [x] An over-long detail is cut to the bound. The cut happens in the Runner, not the store (see the 4.4 note); asserted in `test_a_detail_is_cut_to_the_bound` (Task 6.2).
   - [x] `submit_answer` with evidence on `submitted` stores `cited_passages` and the verdict while `answer` holds what was submitted; on the gate's `declined` outcome the evidence is also stored.
   - [x] A PM answer to an `answering` or `declined` record leaves the D11 columns as they were.
   - [x] Success: tests pass; `uv run pytest -q` passes.
-  - Note: The over-long-detail subitem is left unchecked on purpose. See the deviation note under 4.4.
 
 **Commit**: `feat: add begin_answering and evidence on answer and decline writes`
 
@@ -190,16 +189,16 @@ revision_number: 2
 
 ## 6. The decide function (D7, D8)
 
-- [ ] **6.1 `decide.py`** (new `runner/answering/decide.py`, pure)
-  - [ ] `RunSummary` built from a `Finished` value: launch failed, vanished, or ended with an outcome and its failure or checkpoint kind. Read `Finished` and `FailureKind` first; compare kinds only through the enums; an `UnknownKind` maps to `answering_run_failed` with the raw kind in the detail.
-  - [ ] `Confirmed(answer, cited, evidence)` and `Declined(reason, detail, evidence)`.
-  - [ ] `decide_answer(run, answer, check, passage_ids)` applies D7's six checks in order, first failure decides; every result carries the `AnsweringEvidence` gathered so far. Citations use 143's `check_citations(cited, passage_ids)`. The problem-to-reason maps (`ArtifactProblem` kinds, `CitationProblem` kinds, `SourcesProblemKind`, run outcomes) are each defined once, here. Details are cut to the bound from Task 4.4.
-  - [ ] Success: imports; typecheck passes.
+- [x] **6.1 `decide.py`** (new `runner/answering/decide.py`, pure)
+  - [x] `RunSummary` built from a `Finished` value: launch failed, vanished, or ended with an outcome and its failure or checkpoint kind. Read `Finished` and `FailureKind` first; compare kinds only through the enums; an `UnknownKind` maps to `answering_run_failed` with the raw kind in the detail.
+  - [x] `Confirmed(answer, cited, evidence)` and `Declined(reason, detail, evidence)`.
+  - [x] `decide_answer(run, answer, check, passage_ids)` applies D7's six checks in order, first failure decides; every result carries the `AnsweringEvidence` gathered so far. Citations use 143's `check_citations(cited, passage_ids)`. The problem-to-reason maps (`ArtifactProblem` kinds, `CitationProblem` kinds, `SourcesProblemKind`, run outcomes) are each defined once, here. Details are cut to the bound from Task 4.4.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **6.2 Table test and purity** (`tests/runner/answering/test_decide.py`)
-  - [ ] One parametrized row per D7 check and per D8 reason that `decide.py` produces: completed + all passes → `Confirmed`; failed with each failure kind (`provider_error`, `stall`, `cost_cap`, `artifact_missing`, unknown, absent); `paused`; `orphaned`; vanished; launch failed; each `ArtifactProblem` kind for each of the two files; answerer decline (even when the check said yes); `uncited`; `unknown_citation`; check `no`.
-  - [ ] Evidence is populated as far as the run got. Add `decide` to the purity check (`io_use` finds nothing).
-  - [ ] Success: tests pass.
+- [x] **6.2 Table test and purity** (`tests/runner/answering/test_decide.py`)
+  - [x] One parametrized row per D7 check and per D8 reason that `decide.py` produces: completed + all passes → `Confirmed`; failed with each failure kind (`provider_error`, `stall`, `cost_cap`, `artifact_missing`, unknown, absent); `paused`; `orphaned`; vanished; launch failed; each `ArtifactProblem` kind for each of the two files; answerer decline (even when the check said yes); `uncited`; `unknown_citation`; check `no`.
+  - [x] Evidence is populated as far as the run got. Add `decide` to the purity check (`io_use` finds nothing).
+  - [x] Success: tests pass.
 
 **Commit**: `feat: add decide_answer`
 
