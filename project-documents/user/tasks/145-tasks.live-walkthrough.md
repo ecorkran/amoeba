@@ -60,21 +60,21 @@ revision_number: 2
 
 Build the files that become the scratch checkout's first commit (LLD D6, "Scratch Project Contents"). A tiny command-line notes tool. Nothing in the tree may name a real project, a credential or a model alias.
 
-- [ ] **1.1 Rules, ignore file and concept** under `scripts/answerer_walkthrough/project/`
-  - [ ] `CLAUDE.md`: exactly two short rules (keep slices small; tests beside code). No rule on storage, dates, merging or license headers.
-  - [ ] `.gitignore` containing `.env`.
-  - [ ] `project-documents/user/project-guides/000-concept.notes.md`: the tool's purpose, including the sentence "All notes are stored as JSON Lines files, one note per line" (case 1). Include YAML front matter as `file-naming-conventions.md` requires.
-  - [ ] `project-documents/user/project-guides/001-initiative-plan.notes.md`: one initiative, index 100.
-  - [ ] Success: the files exist at those paths and the concept holds the quoted sentence.
-- [ ] **1.2 Architecture** `project-documents/user/architecture/100-arch.notes.md`
-  - [ ] Lists the tool's components and carries, word for word, the automatic-merge sentence from the LLD's "Scratch Project Contents" table (case 2). This is scratch-project text for the answerer to find, not a step for this slice.
-  - [ ] Success: the sentence is present word for word.
-- [ ] **1.3 Slice plan** `project-documents/user/architecture/100-slices.notes.md`
-  - [ ] Six slice entries, 100 Add a note, 101 List notes, 102 Show note dates, 103 Sort by date, 104 Export notes, 105 Import notes, each with a short description.
-  - [ ] Each entry ends with its forcing sentence in the pattern "If your instructions do not already say X, write no design and end your reply with one question asking Y" (D2), using the Asks column of the LLD's forcing-sentence table. Slice 104's entry names its two questions in order.
-  - [ ] The sentences say "asking", never "ask the PM". Slices 102 and 103 ask the same thing in different words. Slice 105 asks only what copyright notice each new file opens with.
-  - [ ] Nothing in the tree says how dates are formatted or whether files carry a license header.
-  - [ ] Success: six entries, each ending with a forcing sentence; a search of the tree for "license" and "date format" finds only the forcing sentences.
+- [x] **1.1 Rules, ignore file and concept** under `scripts/answerer_walkthrough/project/`
+  - [x] `CLAUDE.md`: exactly two short rules (keep slices small; tests beside code). No rule on storage, dates, merging or license headers.
+  - [x] `.gitignore` containing `.env`.
+  - [x] `project-documents/user/project-guides/000-concept.notes.md`: the tool's purpose, including the sentence "All notes are stored as JSON Lines files, one note per line" (case 1). Include YAML front matter as `file-naming-conventions.md` requires.
+  - [x] `project-documents/user/project-guides/001-initiative-plan.notes.md`: one initiative, index 100.
+  - [x] Success: the files exist at those paths and the concept holds the quoted sentence.
+- [x] **1.2 Architecture** `project-documents/user/architecture/100-arch.notes.md`
+  - [x] Lists the tool's components and carries, word for word, the automatic-merge sentence from the LLD's "Scratch Project Contents" table (case 2). This is scratch-project text for the answerer to find, not a step for this slice.
+  - [x] Success: the sentence is present word for word.
+- [x] **1.3 Slice plan** `project-documents/user/architecture/100-slices.notes.md`
+  - [x] Six slice entries, 100 Add a note, 101 List notes, 102 Show note dates, 103 Sort by date, 104 Export notes, 105 Import notes, each with a short description.
+  - [x] Each entry ends with its forcing sentence in the pattern "If your instructions do not already say X, write no design and end your reply with one question asking Y" (D2), using the Asks column of the LLD's forcing-sentence table. Slice 104's entry names its two questions in order.
+  - [x] The sentences say "asking", never "ask the PM". Slices 102 and 103 ask the same thing in different words. Slice 105 asks only what copyright notice each new file opens with.
+  - [x] Nothing in the tree says how dates are formatted or whether files carry a license header.
+  - [x] Success: six entries, each ending with a forcing sentence; a search of the tree for "license" and "date format" finds only the forcing sentences.
 
 **Commit**: `feat: add answerer walkthrough scratch project tree`
 
