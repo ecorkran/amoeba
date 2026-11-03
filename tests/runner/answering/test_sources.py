@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import subprocess
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
 
 import pytest
-from answerer_settings import answerer_settings
-from cf_harness import observed
 from question_harness import PROJECT, seed_question
 
 from amoeba.runner.answering.passages import (
@@ -21,87 +16,30 @@ from amoeba.runner.answering.passages import (
     render_passages,
 )
 from amoeba.runner.answering.sources import (
-    assemble_sources,
     pm_precedent,
     slice_label,
 )
-from amoeba.runner.budget import TickBudget
-from amoeba.runner.project_config import AnswererSettings
 from amoeba.store import (
     AnsweredBy,
-    CFReference,
-    CFSnapshot,
-    Node,
     NodeKind,
     QuestionRecord,
     QuestionState,
     Store,
 )
-from amoeba.upstream.context_forge import (
-    FIELD_PROJECT_PATH,
-    STATE_PROJECT_KEY,
-    STATE_WORKTREES_KEY,
-)
+from runner.answering.sources_assembly import assemble as _assemble
+from runner.answering.sources_assembly import node as _node
+from runner.answering.sources_assembly import run as _run
+from runner.answering.sources_assembly import settings as _settings
+from runner.answering.sources_assembly import slice_node as _slice
+from runner.answering.sources_assembly import snapshot as _snapshot
 from runner.answering.sources_repo import (
     CountingBudget,
     build_sources_repo,
 )
 from runner.git_repo import commit_file, git
-from runner.observe_support import Clock, Host
 
-CF_ID = "project_1_abc"
-TIMEOUT = 8.0
 RULES_DIR = "project-documents/ai-project-guide/project-guides/rules"
 EXPECTED = Path(__file__).parent / "fixtures" / "expected_end_to_end.md"
-
-
-def _settings(*rules: str, max_chars: int = 1_000_000) -> AnswererSettings:
-    return answerer_settings(rules_paths=rules, passages_max_chars=max_chars)
-
-
-def _node(
-    store: Store, kind: NodeKind, title: str, index: int | None, parent: str | None
-) -> Node:
-    return store.create_node(
-        project_id=PROJECT,
-        kind=kind,
-        title=title,
-        parent_id=parent,
-        cf=CFReference(index=index),
-    )
-
-
-def _slice(
-    store: Store, index: int = 132, title: str = "Demo Slice", initiative: int = 120
-) -> Node:
-    parent = _node(store, NodeKind.INITIATIVE, "Initiative", initiative, None)
-    return _node(store, NodeKind.SLICE, title, index, parent.id)
-
-
-def _snapshot(store: Store, project_path: Path) -> CFSnapshot:
-    state = {
-        STATE_PROJECT_KEY: {FIELD_PROJECT_PATH: str(project_path)},
-        STATE_WORKTREES_KEY: {},
-    }
-    return store.record_cf_snapshot(observed(PROJECT, CF_ID, state=state, changed=[]))
-
-
-def _run(
-    target: str = "main", cf_exit: int = 0
-) -> Callable[..., subprocess.CompletedProcess[str]]:
-    """``cf`` answers with ``target`` (or fails); ``git`` runs for real."""
-
-    def run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        if argv[0] == "cf":
-            body = f'{{"value": "{target}"}}' if cf_exit == 0 else "cf broke"
-            return subprocess.CompletedProcess(argv, cf_exit, body, "")
-        return cast("subprocess.CompletedProcess[str]", subprocess.run(argv, **kwargs))
-
-    return run
-
-
-def _budget() -> TickBudget:
-    return TickBudget(1_000.0, Host(), Clock().monotonic)
 
 
 def _pm_answer(
@@ -161,21 +99,6 @@ def test_slice_label_without_an_index_is_a_programming_error(store: Store) -> No
 
 
 # The slice's place in the tree (D1)
-
-
-def _assemble(store: Store, node: Node, snapshot: CFSnapshot | None, **kw: Any) -> Any:
-    record = seed_question(store, node.id)
-    return assemble_sources(
-        store,
-        PROJECT,
-        record,
-        snapshot,
-        CF_ID,
-        kw.get("settings", _settings("CLAUDE.md")),
-        kw.get("budget", _budget()),
-        kw.get("run", _run()),
-        TIMEOUT,
-    )
 
 
 def test_a_slice_without_a_parent_raises(store: Store) -> None:

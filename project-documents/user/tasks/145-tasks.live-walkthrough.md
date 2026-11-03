@@ -84,15 +84,15 @@ Build the files that become the scratch checkout's first commit (LLD D6, "Scratc
 
 Per the LLD, D6 "Fixture test". Proves 143's naming-convention lookup finds the tree, with no `sq` and no model.
 
-- [ ] **2.1 Share the assembly helpers**
-  - [ ] Read `tests/runner/answering/test_sources.py` and `tests/runner/answering/sources_repo.py`. The helpers `_assemble`, `_snapshot`, `_slice`, `_run` and `_settings` are private to `test_sources.py`.
-  - [ ] Move them to a shared helper module beside `sources_repo.py`, import them back into `test_sources.py`, and leave their behavior unchanged.
-  - [ ] Success: `uv run pytest tests/runner/answering/test_sources.py` passes with no test edited beyond its imports.
-- [ ] **2.2 Test** `tests/runner/answering/test_walkthrough_fixture.py`
-  - [ ] Build a repo by committing every file under `scripts/answerer_walkthrough/project/` at its relative path on `main`.
-  - [ ] For slices 100, 101 and 105 (initiative 100, rules path `CLAUDE.md`), run `assemble_sources` and assert the concept, initiative plan, architecture and slice plan are all among the passage sources.
-  - [ ] Assert one passage contains "JSON Lines" and one contains the automatic-merge sentence.
-  - [ ] Success: `uv run pytest tests/runner/answering/test_walkthrough_fixture.py -v` passes. Temporarily renaming the architecture file makes it fail, and renaming it back makes it pass.
+- [x] **2.1 Share the assembly helpers**
+  - [x] Read `tests/runner/answering/test_sources.py` and `tests/runner/answering/sources_repo.py`. The helpers `_assemble`, `_snapshot`, `_slice`, `_run` and `_settings` are private to `test_sources.py`.
+  - [x] Move them to a shared helper module beside `sources_repo.py`, import them back into `test_sources.py`, and leave their behavior unchanged.
+  - [x] Success: `uv run pytest tests/runner/answering/test_sources.py` passes with no test edited beyond its imports.
+- [x] **2.2 Test** `tests/runner/answering/test_walkthrough_fixture.py`
+  - [x] Build a repo by committing every file under `scripts/answerer_walkthrough/project/` at its relative path on `main`.
+  - [x] For slices 100, 101 and 105 (initiative 100, rules path `CLAUDE.md`), run `assemble_sources` and assert the concept, initiative plan, architecture and slice plan are all among the passage sources.
+  - [x] Assert one passage contains "JSON Lines" and one contains the automatic-merge sentence.
+  - [x] Success: `uv run pytest tests/runner/answering/test_walkthrough_fixture.py -v` passes. Temporarily renaming the architecture file makes it fail, and renaming it back makes it pass.
 
 **Commit**: `test: add walkthrough scratch tree assembly test`
 
