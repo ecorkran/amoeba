@@ -242,25 +242,27 @@ revision_number: 2
 
 ## 9. Launch (D6, D8, D10)
 
-- [ ] **9.1 Pre-journal steps** (new `runner/answering/launch.py`)
-  - [ ] `prepare_launch(record, …)` per the LLD data flow: `assemble_sources` (a budget refusal returns "stop launching this tick"; a `SourcesProblem` → `decline_question(reason=sources_*, detail)`), mint the run id, make `<supervisor_dir>/answering/<run_id>/` (exclusive `mkdir`), `prepare_scratch(scratch, QuestionInput(slice_label, question), render_passages, max_cost_usd)`, build the argv with `build_argv(str(answering_pipeline_path()), run_id, {answer-model, check-model})` using 140's param-name constants. `OSError` from `mkdir` or `prepare_scratch` is caught at those two calls, with a comment saying why, and declines `answering_launch_failed` with the error as detail on the still-`pending` record. `prepare_scratch`'s `ValueError` is not caught.
-  - [ ] Success: imports; typecheck passes.
+- [x] **9.1 Pre-journal steps** (new `runner/answering/launch.py`)
+  - [x] `prepare_launch(record, …)` per the LLD data flow: `assemble_sources` (a budget refusal returns "stop launching this tick"; a `SourcesProblem` → `decline_question(reason=sources_*, detail)`), mint the run id, make `<supervisor_dir>/answering/<run_id>/` (exclusive `mkdir`), `prepare_scratch(scratch, QuestionInput(slice_label, question), render_passages, max_cost_usd)`, build the argv with `build_argv(str(answering_pipeline_path()), run_id, {answer-model, check-model})` using 140's param-name constants. `OSError` from `mkdir` or `prepare_scratch` is caught at those two calls, with a comment saying why, and declines `answering_launch_failed` with the error as detail on the still-`pending` record. `prepare_scratch`'s `ValueError` is not caught.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **9.2 Tests for the pre-journal steps** (`tests/runner/answering/test_launch_prepare.py`, with a real throwaway store and 143's sources repo fixture)
-  - [ ] Scratch directory exists under the supervisor directory and holds the prepared inputs; `.squadron.toml` carries the configured `max_cost_usd`; argv has the pipeline path, run id and both models and no positional slice.
-  - [ ] Each `SourcesProblemKind` → matching decline reason, no directory, no entry. A budget refusal → record stays `pending`, no directory.
-  - [ ] `OSError` on `mkdir` and on `prepare_scratch` (read-only parent / monkeypatched) → `answering_launch_failed`, no entry, no relaunch on a second call.
-  - [ ] Success: tests pass.
+- [x] **9.2 Tests for the pre-journal steps** (`tests/runner/answering/test_launch_prepare.py`, with a real throwaway store and 143's sources repo fixture)
+  - [x] Scratch directory exists under the supervisor directory and holds the prepared inputs; `.squadron.toml` carries the configured `max_cost_usd`; argv has the pipeline path, run id and both models and no positional slice.
+    Note: the argv has no positional. There is no `slice` key; the models are passed as `-p answer-model=…` and `-p check-model=…`.
+  - [x] Each `SourcesProblemKind` → matching decline reason, no directory, no entry. A budget refusal → record stays `pending`, no directory.
+  - [x] `OSError` on `mkdir` and on `prepare_scratch` (read-only parent / monkeypatched) → `answering_launch_failed`, no entry, no relaunch on a second call.
+    Note: "no relaunch on a second call" is asserted as the declined question no longer being in `pending_questions`, which is what the stage iterates, rather than by calling launch twice with a stale record.
+  - [x] Success: tests pass.
 
-- [ ] **9.3 `launch_answering`** (same module)
-  - [ ] `launch_answering(record, …)`: `prepare_launch`, then `begin_answering`; outcomes `block_resolved` and `settled` write nothing and end this record's launch. Then `spawn(argv, scratch, log_paths(supervisor_dir, entry.id), popen)` with no checkout lookup, branch check or hold. A `LaunchError` from `spawn` goes to Task 8's `finish_answering` with a launch-failed value (use the `Finished` form the observer already has for a failed launch). On success, `tracker.track(entry.id, child)`.
-  - [ ] Success: imports; typecheck passes.
+- [x] **9.3 `launch_answering`** (same module)
+  - [x] `launch_answering(record, …)`: `prepare_launch`, then `begin_answering`; outcomes `block_resolved` and `settled` write nothing and end this record's launch. Then `spawn(argv, scratch, log_paths(supervisor_dir, entry.id), popen)` with no checkout lookup, branch check or hold. A `LaunchError` from `spawn` goes to Task 8's `finish_answering` with a launch-failed value (use the `Finished` form the observer already has for a failed launch). On success, `tracker.track(entry.id, child)`.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **9.4 Tests for `launch_answering`** (`tests/runner/answering/test_launch_answering.py`)
-  - [ ] Happy path: one `sq_answer` entry with the four keys; record `answering` and linked; the spawn's cwd is the scratch directory; the child is tracked.
-  - [ ] Spawn failure → entry resolved and question declined `answering_launch_failed`, never relaunched.
-  - [ ] Block resolved between the read and `begin_answering` → no entry, no process, record unchanged.
-  - [ ] Success: tests pass.
+- [x] **9.4 Tests for `launch_answering`** (`tests/runner/answering/test_launch_answering.py`)
+  - [x] Happy path: one `sq_answer` entry with the four keys; record `answering` and linked; the spawn's cwd is the scratch directory; the child is tracked.
+  - [x] Spawn failure → entry resolved and question declined `answering_launch_failed`, never relaunched.
+  - [x] Block resolved between the read and `begin_answering` → no entry, no process, record unchanged.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: launch an answering run from a scratch directory`
 
