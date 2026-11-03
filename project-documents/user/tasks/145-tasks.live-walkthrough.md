@@ -50,7 +50,7 @@ revision_number: 2
 
 **Commit cadence:** commit only at the `**Commit**:` markers. Run `uv run ruff format .` before each commit, and `uv run ruff check .` and `uv run pyright` before markers that follow Python changes.
 
-**D7 recovery applies to every live case task:** fixture cause, product cause, model judgement and environment (LLD D7). Each case runs once; a rerun uses a fresh slice index added to the scratch plan and committed on `main`; both runs are recorded; a product defect is filed as an issue and the case is marked `BLOCKED:` on it.
+**D7 recovery applies to every live case task:** fixture cause, product cause, model judgement and environment (LLD D7). Each case runs once; a rerun uses a fresh slice index added to the scratch plan and committed on `main`; both runs are recorded; a product defect is filed as an issue and the case is marked `BLOCKED:` on it. Any slice entry added or corrected in the scratch checkout (a fresh rerun index, or a fixed forcing sentence) is also made in the repository tree `scripts/answerer_walkthrough/project/`, so a later walkthrough starts from the same plan; re-run `test_walkthrough_fixture.py` after the change. These tree changes ride in the task 11 commit.
 
 **Live-result notes:** each live task writes what was observed (record fields, journal entries, outcome, run ids) in a "Result" sub-item under that task. Write only what was seen.
 
@@ -140,7 +140,7 @@ Per Development Approach step 2. Runs the setup for real, up to `amoeba start`. 
   - [ ] Find the slice nodes with `amoeba inspect nodes --project <id> --json`, matching on `cf_index` 100–105. Success: all six are listed. If not, the link or the tree's naming is wrong: fix task 3 or task 1 before continuing. Task 5.1 puts this command in the doc.
   - [ ] Success: a probe failure that names anything other than the missing capabilities (for example a config load error) is a defect in task 3; fix it there before continuing.
 
-No commit: this task changes no files.
+No commit marker: this task changes no files when it passes. A fix to task 1 or task 3 made here is committed on its own as `fix: {summary}` before task 5 starts.
 
 ---
 
