@@ -104,6 +104,7 @@ class Scenario:
         self.supervisor_dir = tmp_path / "supervisor"
         monkeypatch.setenv("HOME", str(home))
         world = CfWorld(tmp_path / "world")
+        self.world = world
         rig_checkout(world.root)
         rig_checkout(world.second)
         bin_dir = write_sq_stub(tmp_path / "bin")

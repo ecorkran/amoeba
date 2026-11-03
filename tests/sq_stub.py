@@ -27,7 +27,8 @@ exits 0. ``RUN_MODE_ENV`` forces a failure case; see :class:`RunMode`.
 ``RUN_SCRIPT_ENV`` (slice 125) names a script: files the run writes under its
 working directory (its reviews) and fields merged into the final document
 (``reviews``, ``checkpoint``, ``failure``); see :func:`write_run_script`.
-A run of the answering pipeline reads ``ANSWER_SCRIPT_ENV`` and
+``sq run <pipeline> --validate --strict`` (the start-up probe) exits 0 and starts
+nothing. A run of the answering pipeline reads ``ANSWER_SCRIPT_ENV`` and
 ``ANSWER_OUTCOME_ENV`` instead (slice 144); see ``sq_stub_scripts.answering_run``.
 
 ``sq run --resume <id> --decision D [--instructions T]`` (slice 127): see
@@ -164,6 +165,9 @@ _SCRIPT = textwrap.dedent(
     state_dir = Path.home().joinpath(*{state_parts!r})
     {resume_branch}
     if arguments[:1] == ["run"]:
+        if "--validate" in arguments:
+            # The start-up probe of the answering pipeline (slice 144): valid.
+            sys.exit(0)
         run_mode = os.environ.get({run_mode_env!r})
         if run_mode == {usage_error!r}:
             print("stub sq: usage error", file=sys.stderr)

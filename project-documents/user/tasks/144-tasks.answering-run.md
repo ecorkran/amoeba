@@ -309,17 +309,21 @@ revision_number: 2
 
 ## 11. End to end on the stub tier (D3, D13)
 
-- [ ] **11.1 Answered and decline cases** (`tests/runner/test_end_to_end.py`, `-k answering`)
-  - [ ] A question-paused slice gets one `sq_answer` and a resume with `sq run --resume` whose instructions restate the question; the record is `answered` by the answerer with `cited_passages`, `passage_index`, `source_commit`, `check_verdict yes`, `answering_entry_id`; the entry's `run_id` is the launched run.
-  - [ ] One decline (check `no`) end to end: declined once, never relaunched on a later tick, and the block shows `question_state declined` and the reason. Other reasons are covered by Tasks 6.2, 8.2 and 9.2.
-  - [ ] Success: tests pass.
+- [x] **11.1 Answered and decline cases** (`tests/runner/test_end_to_end_answering.py`, `-k answering`)
+  - [x] A question-paused slice gets one `sq_answer` and a resume with `sq run --resume` whose instructions restate the question; the record is `answered` by the answerer with `cited_passages`, `passage_index`, `source_commit`, `check_verdict yes`, `answering_entry_id`; the entry's `run_id` is the launched run.
+  - [x] One decline (check `no`) end to end: declined once, never relaunched on a later tick, and the block shows `question_state declined` and the reason. Other reasons are covered by Tasks 6.2, 8.2 and 9.2.
+  - [x] Success: tests pass.
 
-- [ ] **11.2 Race and recovery cases** (same file)
-  - [ ] PM answers while the run is in flight → PM's resolution accepted (D3), the run resumes by the PM's answer; the run's later result resolves the entry and the record stays `answered` by the PM. Answerer's resolution accepted after the run ends. PM answers before `begin_answering` → no run starts. PM answers between the read and `begin_answering` → no run starts.
-  - [ ] A resumed run completes while the slice's `sq_answer` is still in flight → node marked done without a fault (D4).
-  - [ ] Restart with a run in flight → adopted by run id, polled to its end, no second launch. Crash between `begin_answering` and the spawn → after recovery the question is declined `answering_run_failed`.
-  - [ ] No answerer section → no `sq_answer` ever journaled.
-  - [ ] Success: tests pass; 132's, 127's and 141–143's suites pass.
+- [x] **11.2 Race and recovery cases** (same file)
+  - [x] PM answers while the run is in flight → PM's resolution accepted (D3), the run resumes by the PM's answer; the run's later result resolves the entry and the record stays `answered` by the PM. Answerer's resolution accepted after the run ends. PM answers before `begin_answering` → no run starts. PM answers between the read and `begin_answering` → no run starts.
+  - [x] A resumed run completes while the slice's `sq_answer` is still in flight → node marked done without a fault (D4).
+  - [x] Restart with a run in flight → adopted by run id, polled to its end, no second launch. Crash between `begin_answering` and the spawn → after recovery the question is declined `answering_run_failed`.
+  - [x] No answerer section → no `sq_answer` ever journaled.
+  - [x] Success: tests pass; 132's, 127's and 141–143's suites pass.
+
+  Note: the tests live in `tests/runner/test_end_to_end_answering.py` rather than `tests/runner/test_end_to_end.py`, which is already over 300 lines. Select them with `-k answering`.
+  Note: the e2e fixture commits a rules file and a plan file into the world checkout, because the sources reader needs `project-documents/user` at the target commit.
+  Note: stable over three repeated runs; full suite 4343 passed; ruff and pyright clean.
 
 **Commit**: `test: add answering end-to-end, race and recovery cases on the stub`
 
