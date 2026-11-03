@@ -8,10 +8,13 @@ are the stubs on ``PATH``. The slice's own run pauses on a question
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
+from cli_harness import run_cli
 from sq_stub import (
     ANSWER_OUTCOME_ENV,
     ANSWER_SCRIPT_ENV,
@@ -52,6 +55,7 @@ from amoeba.store import (
     QuestionState,
     Store,
 )
+from amoeba.store.paths import project_store_path
 from runner.git_repo import commit_file
 from runner.resolutions.resolution_support import resolve_block
 from runner.test_end_to_end import GRACE_SECONDS, PROJECT, Scenario
@@ -400,3 +404,76 @@ def test_with_no_answerer_section_no_sq_answer_is_ever_journaled(
     assert record is not None
     assert record.decline_reason is DeclineReason.ANSWERER_NOT_CONFIGURED
     assert _answer_entries(plain) == []
+
+
+# --------------------------------------------------------------------------
+# The operator's view: the walkthrough's `amoeba inspect` steps (slice 144)
+# --------------------------------------------------------------------------
+
+
+def _inspect(scenario: Scenario, *arguments: str) -> list[dict[str, Any]]:
+    """Run ``amoeba inspect <arguments> --json`` over a copy of the scenario's store."""
+    supervisor = scenario.tmp_path / "cli" / "supervisor"
+    supervisor.mkdir(parents=True, exist_ok=True)
+    target = project_store_path(supervisor, PROJECT)
+    with (
+        sqlite3.connect(scenario.store.path) as source,
+        sqlite3.connect(target) as copy,
+    ):
+        source.backup(copy)
+    result = run_cli(
+        ["inspect", *arguments, "--project", PROJECT, "--json"], supervisor
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_the_operator_sees_the_answered_question_through_inspect(
+    scenario: Scenario,
+) -> None:
+    _script_answering(
+        scenario, proposed_answer_reply(ANSWER, ["P1"]), check_reply("yes", "ok")
+    )
+    scenario.tick_until("the question to be answered", lambda: _settled(scenario))
+    scenario.script(empty_reviews())
+    scenario.tick_until("the slice to finish", lambda: scenario.done(scenario.node))
+
+    journal = _inspect(scenario, "journal")
+    [question] = _inspect(scenario, "questions")
+
+    kinds = [row["kind"] for row in journal]
+    assert kinds.count("sq_answer") == 1
+    assert kinds.count("sq_run") >= 1
+    assert question["state"] == "answered"
+    assert question["answered_by"] == "answerer"
+    assert question["check_verdict"] == "yes"
+    assert question["cited_passages"] == ["P1"]
+    assert question["passage_index"][0]["source"]
+    assert question["answering_run_id"].startswith("amoeba-")
+
+
+def test_the_operator_sees_a_declined_question_then_the_pm_answers_it(
+    scenario: Scenario,
+) -> None:
+    _script_answering(
+        scenario,
+        proposed_answer_reply(ANSWER, ["P1"]),
+        check_reply("no", "P1 does not say that"),
+    )
+    scenario.tick_until("the question to be declined", lambda: _settled(scenario))
+
+    [block] = _inspect(scenario, "blocked")
+    [declined] = _inspect(scenario, "questions")
+
+    assert block["question_state"] == "declined"
+    assert block["decline_reason"] == "check_said_no"
+    assert declined["decline_detail"] == "P1 does not say that"
+    assert declined["proposed_answer"] == ANSWER
+
+    _pm_answers(scenario, "The PM says: dev.")
+    scenario.script(empty_reviews())
+    scenario.tick_until("the slice to finish", lambda: scenario.done(scenario.node))
+
+    [answered] = _inspect(scenario, "questions")
+    assert answered["state"] == "answered"
+    assert answered["answered_by"] == "pm"

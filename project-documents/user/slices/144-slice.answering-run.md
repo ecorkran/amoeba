@@ -11,8 +11,8 @@ dependencies:
 interfaces:
 - 145
 dateCreated: 20261101
-dateUpdated: 20261101
-status: not_started
+dateUpdated: 20261103
+status: in_progress
 turns: 31
 promptTokens: 3341553
 cachedTokens: 3161445
@@ -442,17 +442,17 @@ Inspection: `questions` gains `answering_run_id` (joined from the entry), `check
 
 ### Verification Walkthrough
 
-Draft; refined after Phase 6. The unit tests for decide, settle, the shared reader, the store operations and crash recovery are in Success Criteria and Technical Requirements; the steps here are the ones an operator can see. Step 1 needs no Squadron changes and no spend. Step 2 needs a Squadron release with 140's D8 and real models. Steps 3–4 use a throwaway `AMOEBA_STORE_DIR` and the stub-driven scratch project from 141's walkthrough. `test_end_to_end.py` exists and gains cases.
+Steps 1, 3 and 4 were run on 20261103 against the stub `sq` and pass. Step 2 (the live tier) is not run: it waits on real `checkpoint.question` tails (task file, Task 14). The unit tests for decide, settle, the shared reader, the store operations and crash recovery are in Success Criteria and Technical Requirements; the steps here are the ones an operator can see. Step 1 needs no Squadron changes and no spend. Step 2 needs squadron 0.24.16 or later and real models. The stage runs against squadron 0.24.16 only: earlier versions exit 1 from `cf get` in a scratch directory.
 
 1. **The stage end to end, stub `sq`.**
 
    ```
-   uv run pytest tests/runner/test_end_to_end.py -k answering -v
+   uv run pytest tests/runner -k answering -v
    ```
 
-   Expected: a question-paused slice gets one `sq_answer` and a resume with instructions that restate the question. The record is `answered` by the answerer, with citations and verdict. The race cases pass: PM during the run, PM before `begin_answering`, answerer first. So do the cap case (three questions, cap 2) and every decline case.
+   Expected: 322 tests pass (the answering suites and the tick and end-to-end cases; the end-to-end ones are in `tests/runner/test_end_to_end_answering.py`). A question-paused slice gets one `sq_answer` and a resume with instructions that restate the question (`You asked: <question>` then `Answer: <answer>`). The record is `answered` by the answerer, with citations and verdict. The race cases pass: PM during the run, PM before `begin_answering`, PM between the read and `begin_answering`, restart with a run in flight, and a crash between `begin_answering` and the spawn. So do the cap case (three questions, cap 2) and every decline case.
 
-2. **Live tier, real models.**
+2. **Live tier, real models.** Not run; waits on Task 14.
 
    ```
    export AMOEBA_LIVE_ANSWER_MODEL=<non-SDK alias> AMOEBA_LIVE_CHECK_MODEL=<non-SDK alias> AMOEBA_LIVE_MAX_COST_USD=<cap>
@@ -465,21 +465,29 @@ Draft; refined after Phase 6. The unit tests for decide, settle, the shared read
    ls /tmp/answering-run-live/<test>/store/answering/        # one directory per run id
    ```
 
-3. **A real store with the stub.** Add the four D12 keys to the scratch project's `answerer` section, beside 142's and 143's, and start Amoeba with the stub `sq` on `PATH`, scripted to answer `yes` citing `P1`. Produce a question.
+3. **A real store with the stub.** The test `test_the_operator_sees_the_answered_question_through_inspect` copies the scenario's store into a throwaway supervisor directory and runs the real CLI over it. By hand: add the eight `answerer` keys to the scratch project (see the process contract, "The project config"), start Amoeba with the stub `sq` on `PATH` scripted to answer `yes` citing `P1` (`ANSWER_SCRIPT_ENV`), and produce a question.
 
    ```
-   amoeba inspect journal --project scratch
+   amoeba inspect journal --project scratch --json
    ```
 
-   Expected: an `sq_answer` entry on the slice node, then a resumed `sq_run`.
+   Expected: exactly one `sq_answer` entry on the slice node and at least one `sq_run`.
 
    ```
    amoeba inspect questions --project scratch --json
    ```
 
-   Expected: `state answered`, `answered_by answerer`, `check_verdict yes`, `cited_passages ["P1"]`, and `passage_index` naming P1's source path.
+   Expected: `state answered`, `answered_by answerer`, `check_verdict yes`, `cited_passages ["P1"]`, `passage_index` whose first element names P1's source path, and `answering_run_id` starting `amoeba-`.
 
-4. **A decline.** Script the stub's check to reply `no` and produce another question. Expected: `amoeba inspect blocked --project scratch` shows the question block with `question_state declined` and `decline_reason check_said_no`. `inspect questions` shows `decline_detail` with the check's reason and the `proposed_answer`. Then answer it as the PM (141's step 7). Expected: the run resumes and the record becomes `answered` by the PM.
+4. **A decline.** `test_the_operator_sees_a_declined_question_then_the_pm_answers_it`. Script the stub's check to reply `no` and produce another question.
+
+   ```
+   amoeba inspect blocked --project scratch --json
+   ```
+
+   Expected: the question block shows `question_state declined` and `decline_reason check_said_no`. `amoeba inspect questions --project scratch --json` shows `decline_detail` with the check's reason and the `proposed_answer`. Then answer it as the PM (141's step 7). Expected: the run resumes and the record becomes `answered` by `pm`.
+
+**Caveat found in implementation.** `sq run` takes the pipeline's first `required` param only as the positional target, so the launch is `sq run <answering.yaml> <answer-model> --run-id <id> -p check-model=<alias>`. Passing `answer-model` with `-p` exits 2 ("requires a 'answer-model' argument"; checked against squadron 0.24.16). The stub refuses the same shape.
 
 ## Risk Assessment
 

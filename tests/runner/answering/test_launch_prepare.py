@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from answerer_settings import ANSWER_MODEL, CHECK_MODEL, MAX_COST_USD, answerer_settings
+from live_harness import launch_argv
 
 from amoeba.runner.answering import launch as launch_module
 from amoeba.runner.answering.launch import (
@@ -72,6 +73,18 @@ def test_the_command_line_names_the_pipeline_run_id_and_both_models(
         f"{CHECK_MODEL_PARAM}={CHECK_MODEL}",
     ]
     assert Path(prepared.argv[2]).name == PIPELINE_FILE_NAME
+
+
+def test_the_command_line_is_the_one_the_live_tier_runs_against_real_sq(
+    store: Store, tmp_path: Path
+) -> None:
+    rig = build_launch_rig(tmp_path, store)
+
+    prepared = _prepared(prepare_launch(rig.context, rig.record, budget()))
+
+    assert list(prepared.argv) == launch_argv(
+        prepared.launch.run_id, ANSWER_MODEL, CHECK_MODEL
+    )
 
 
 def test_the_launch_records_the_passages_without_their_text(

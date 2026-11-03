@@ -15,7 +15,7 @@ projectState: Slices 120–132 and 140–143 are merged. The answering stage onl
   143).
 dateCreated: 20261103
 dateUpdated: 20261103
-status: not_started
+status: in_progress
 turns: 20
 promptTokens: 1440889
 cachedTokens: 1339771
@@ -356,11 +356,11 @@ revision_number: 2
 
 ## 13. Final validation
 
-- [ ] **13.1 Full validation pass**
-  - [ ] Run `uv run ruff format .`, then `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each and read the output.
-  - [ ] Confirm against the LLD's Success Criteria: the purity check covers `decide` and `settle`; the migration test covers 14 → 15; the feed invariant test passes; no source file is far over 300 lines.
-  - [ ] Walk the LLD's Verification Walkthrough steps 1, 3 and 4 with the stub (step 2 waits on Task 14).
-  - [ ] Success: all checks pass.
+- [x] **13.1 Full validation pass**
+  - [x] Run `uv run ruff format .`, then `uv run ruff check .`, `uv run pyright` and `uv run pytest -q` once each and read the output.
+  - [x] Confirm against the LLD's Success Criteria: the purity check covers `decide` and `settle`; the migration test covers 14 → 15; the feed invariant test passes; no source file is far over 300 lines.
+  - [x] Walk the LLD's Verification Walkthrough steps 1, 3 and 4 with the stub (step 2 waits on Task 14).
+  - [x] Success: all checks pass.
 
 **Commit**: `fix: resolve issues found in slice 144 validation` (only if the pass changed files; otherwise no commit)
 
