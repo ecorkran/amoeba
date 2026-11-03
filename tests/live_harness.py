@@ -7,9 +7,12 @@ The live tests spend real money; this helper adds nothing but a bounded wait.
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import tempfile
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,12 +64,18 @@ def launch_argv(run_id: str, answer_model: str, check_model: str) -> list[str]:
 
 
 def run_pipeline(
-    directory: Path, answer_model: str, check_model: str, timeout_seconds: float
+    directory: Path,
+    answer_model: str,
+    check_model: str,
+    timeout_seconds: float,
+    environ: Mapping[str, str] | None = None,
 ) -> PipelineRun:
     """Launch the pipeline in ``directory`` and wait at most ``timeout_seconds``.
 
-    On the deadline the launch process is killed and the poll is a
-    :class:`PollFailure`; the caller's assertion fails with it.
+    ``environ`` replaces the launch process's environment when given. On the
+    deadline the launch process's whole session is killed, so no child keeps
+    spending, and the poll is a :class:`PollFailure`; the caller's assertion
+    fails with it.
     """
     run_id = mint_run_id(datetime.now(UTC))
     argv = launch_argv(run_id, answer_model, check_model)
@@ -78,6 +87,7 @@ def run_pipeline(
             stdout=log,
             stderr=subprocess.STDOUT,
             text=True,
+            env=None if environ is None else dict(environ),
             start_new_session=True,
         )
         deadline = time.monotonic() + timeout_seconds
@@ -101,7 +111,8 @@ def run_pipeline(
                 poll = PollFailure(f"run {run_id} did not finish in {timeout_seconds}s")
         finally:
             if process.poll() is None:
-                process.kill()
+                # The launcher leads its own session; kill every member of it.
+                os.killpg(process.pid, signal.SIGKILL)
             process.wait()
         log.seek(0)
         return PipelineRun(run_id, poll, log.read()[:OUTPUT_HEAD_CHARS])

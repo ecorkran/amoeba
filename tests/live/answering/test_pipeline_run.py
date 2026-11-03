@@ -48,9 +48,7 @@ RULE_PASSAGE = passage(
 
 def _run_ok(harness: LiveHarness, name: str, passages: str) -> AnsweringRun:
     result = harness.run(name, QUESTION, passages)
-    assert result.completed.returncode == 0, (
-        result.completed.stdout + result.completed.stderr
-    )
+    assert result.succeeded, result.report
     return result
 
 

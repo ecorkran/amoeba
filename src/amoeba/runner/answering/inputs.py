@@ -14,6 +14,8 @@ from amoeba.runner.answering.pipeline_file import (
     SQUADRON_CONFIG_FILE,
 )
 
+_LINE_BREAKS = frozenset("\r\n")
+
 
 @dataclass(frozen=True)
 class QuestionInput:
@@ -29,7 +31,7 @@ def render_question(question: QuestionInput) -> str:
     Raises:
         ValueError: For an empty slice label or an empty question.
     """
-    if not question.slice_label.strip() or "\n" in question.slice_label:
+    if not question.slice_label.strip() or _LINE_BREAKS & set(question.slice_label):
         raise ValueError("slice_label must be a non-blank single line")
     if not question.question.strip():
         raise ValueError("question must not be blank")
@@ -37,7 +39,13 @@ def render_question(question: QuestionInput) -> str:
 
 
 def render_squadron_config(directory: Path, max_cost_usd: float) -> str:
-    """The ``.squadron.toml`` of D7: a per-run cost cap and an empty rules directory."""
+    """The ``.squadron.toml`` of D7: a per-run cost cap and an empty rules directory.
+
+    Raises:
+        ValueError: When the cap is not a positive, finite number.
+    """
+    if not math.isfinite(max_cost_usd) or max_cost_usd <= 0:
+        raise ValueError(f"max_cost_usd must be positive, got {max_cost_usd}")
     rules_dir = directory.resolve() / RULES_DIRECTORY
     # A JSON string is a valid TOML basic string, so quoting and escapes stay correct.
     return (
@@ -62,15 +70,13 @@ def prepare_scratch(
         raise ValueError(f"scratch directory does not exist: {directory}")
     if any(directory.iterdir()):
         raise ValueError(f"scratch directory is not empty: {directory}")
-    if not math.isfinite(max_cost_usd) or max_cost_usd <= 0:
-        raise ValueError(f"max_cost_usd must be positive, got {max_cost_usd}")
     if not passages_markdown:
         raise ValueError("passages_markdown must not be empty")
-    question_text = render_question(question)  # validates before anything is written
+    # Both render before anything is written, so a bad input leaves no file.
+    question_text = render_question(question)
+    config_text = render_squadron_config(directory, max_cost_usd)
     (directory / QUESTION_FILE).write_text(question_text, encoding="utf-8")
     # Bytes, so no newline translation touches the passages.
     (directory / PASSAGES_FILE).write_bytes(passages_markdown.encode("utf-8"))
     (directory / RULES_DIRECTORY).mkdir()
-    (directory / SQUADRON_CONFIG_FILE).write_text(
-        render_squadron_config(directory, max_cost_usd), encoding="utf-8"
-    )
+    (directory / SQUADRON_CONFIG_FILE).write_text(config_text, encoding="utf-8")

@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.runner.answering.inputs import QuestionInput, prepare_scratch
+from amoeba.runner.answering.inputs import (
+    QuestionInput,
+    prepare_scratch,
+    render_squadron_config,
+)
 
 QUESTION = QuestionInput("140 answering-pipeline", "Which base branch?")
 PASSAGES = "## Passage P1\n\nkind: rule\n\nCafé rule text — verbatim.\n"
@@ -76,3 +80,11 @@ def test_invalid_question_is_refused_and_unchanged(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="question"):
         prepare_scratch(tmp_path, QuestionInput("140 x", ""), PASSAGES, 1.0)
     assert _listing(tmp_path) == []
+
+
+@pytest.mark.parametrize("cap", [0, -1.0, float("nan"), float("inf")])
+def test_render_squadron_config_refuses_a_bad_cap_itself(
+    tmp_path: Path, cap: float
+) -> None:
+    with pytest.raises(ValueError, match="max_cost_usd"):
+        render_squadron_config(tmp_path, cap)

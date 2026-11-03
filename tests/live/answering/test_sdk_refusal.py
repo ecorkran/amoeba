@@ -35,9 +35,8 @@ def test_sdk_alias_for_the_check_step_is_refused_before_dispatch(
         rule,
         check_model=sdk_alias,
     )
-    output = result.completed.stdout + result.completed.stderr
-    assert result.completed.returncode != 0, output
+    assert not result.succeeded, result.report
     # The refusal is the no-tools guard, not some other failure of the step.
-    assert "allowed_tools" in output, output
+    assert "allowed_tools" in result.report, result.report
     assert not (result.directory / CHECK_REPLY_FILE).exists()
     assert not (result.directory / CHECK_PROMPT_FILE).exists()

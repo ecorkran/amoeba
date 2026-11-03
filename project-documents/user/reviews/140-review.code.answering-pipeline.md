@@ -36,31 +36,37 @@ findings:
     category: performance-resource
     summary: "Live harness kills only the launcher, so a timed-out run may keep spending"
     location: "tests/live_harness.py:88-93"
+    resolution: fixed
   - id: F002
     severity: concern
     category: test-debt
     summary: "A unit-tier test shells out to `uv build`"
     location: "tests/runner/answering/test_wheel_contents.py:16-26"
+    resolution: deferred
   - id: F003
     severity: concern
     category: error-handling-observability
     summary: "`probe_answering_pipeline` can raise an exception outside its documented contract"
     location: "src/amoeba/runner/probes.py:68-90"
+    resolution: fixed
   - id: F004
     severity: concern
     category: correctness
     summary: "`render_squadron_config` trusts its caller to validate the cap"
     location: "src/amoeba/runner/answering/inputs.py:42-49"
+    resolution: fixed
   - id: F005
     severity: note
     category: error-handling-observability
     summary: "`prepare_scratch` is not atomic on I/O failure"
     location: "src/amoeba/runner/answering/inputs.py:70-76"
+    resolution: deferred
   - id: F006
     severity: note
     category: consistency-rot
     summary: "Test imports depend on `sys.path` manipulation"
     location: "tests/live/conftest.py:15-20"
+    resolution: deferred
   - id: F007
     severity: pass
     category: other

@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from live_harness import PipelineRun, run_pipeline
 from live_settings import LiveSettings
 
+from amoeba.process import RunOutcome, RunOutcomeDocument
 from amoeba.runner.answering.inputs import QuestionInput, prepare_scratch
-from amoeba.runner.answering.pipeline_file import (
-    CHECK_MODEL_PARAM,
-    answering_pipeline_path,
-)
 
 SQ_RUN_TIMEOUT_SECONDS = 600
 CF_TIMEOUT_SECONDS = 60
@@ -20,10 +17,22 @@ CF_TIMEOUT_SECONDS = 60
 
 @dataclass(frozen=True)
 class AnsweringRun:
-    """One finished ``sq run`` of the answering pipeline."""
+    """One finished run of the answering pipeline, in its scratch directory."""
 
     directory: Path
-    completed: subprocess.CompletedProcess[str]
+    pipeline: PipelineRun
+
+    @property
+    def succeeded(self) -> bool:
+        poll = self.pipeline.poll
+        return isinstance(poll, RunOutcomeDocument) and (
+            poll.outcome is RunOutcome.COMPLETED
+        )
+
+    @property
+    def report(self) -> str:
+        """What a failed assertion shows: the poll and the head of ``sq``'s output."""
+        return f"{self.pipeline.poll}\n{self.pipeline.sq_output}"
 
 
 @dataclass(frozen=True)
@@ -47,25 +56,14 @@ class LiveHarness:
         prepare_scratch(
             directory, question, passages_markdown, self.settings.max_cost_usd
         )
-        argv = [
-            "sq",
-            "run",
-            str(answering_pipeline_path()),
+        pipeline = run_pipeline(
+            directory,
             self.settings.answer_model,
-            "-p",
-            f"{CHECK_MODEL_PARAM}={check_model or self.settings.check_model}",
-        ]
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-            argv,
-            cwd=directory,
-            env=self.environ,
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-            timeout=SQ_RUN_TIMEOUT_SECONDS,
-            check=False,
+            check_model or self.settings.check_model,
+            SQ_RUN_TIMEOUT_SECONDS,
+            self.environ,
         )
-        return AnsweringRun(directory=directory, completed=completed)
+        return AnsweringRun(directory=directory, pipeline=pipeline)
 
 
 def passage(  # noqa: PLR0913 - one argument per line of the D3 format

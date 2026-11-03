@@ -102,3 +102,16 @@ def test_answering_probe_fails_when_sq_is_missing() -> None:
     stub = StubSq(raises=FileNotFoundError(2, "No such file or directory"))
     with pytest.raises(StartupFailedError, match=f"{SQ_EXECUTABLE}.*could not run"):
         probe_answering_pipeline(_settings(), stub)
+
+
+def test_answering_probe_reports_a_missing_pipeline_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing() -> Path:
+        raise FileNotFoundError("answering pipeline file is missing: /x/answering.yaml")
+
+    monkeypatch.setattr("amoeba.runner.probes.answering_pipeline_path", missing)
+    stub = StubSq()
+    with pytest.raises(StartupFailedError, match="answering.yaml"):
+        probe_answering_pipeline(_settings(), stub)
+    assert stub.calls == []

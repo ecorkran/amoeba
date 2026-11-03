@@ -51,9 +51,7 @@ def _run(
     harness: LiveHarness, name: str, question: QuestionInput, passages: str
 ) -> AnsweringRun:
     result = harness.run(name, question, passages)
-    assert result.completed.returncode == 0, (
-        result.completed.stdout + result.completed.stderr
-    )
+    assert result.succeeded, result.report
     return result
 
 

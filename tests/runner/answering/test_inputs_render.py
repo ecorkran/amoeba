@@ -43,6 +43,7 @@ def test_empty_question_is_refused() -> None:
     [
         (" ", "q", "slice_label"),
         ("140\nx", "q", "slice_label"),
+        ("140\rx", "q", "slice_label"),
         ("140 x", "\n ", "question"),
     ],
 )

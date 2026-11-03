@@ -76,13 +76,12 @@ def probe_answering_pipeline(settings: ProcessSettings, run: CfRun) -> None:
         StartupFailedError: On a non-zero exit, a timeout or a missing ``sq``,
             naming the command, the exit code and the head of its output.
     """
-    argv = [
-        SQ_EXECUTABLE,
-        "run",
-        str(answering_pipeline_path()),
-        "--validate",
-        "--strict",
-    ]
+    try:
+        pipeline_path = answering_pipeline_path()
+    except FileNotFoundError as error:
+        # A broken install is a start-up failure like any other probe failure.
+        raise StartupFailedError(f"answering pipeline probe failed: {error}") from error
+    argv = [SQ_EXECUTABLE, "run", str(pipeline_path), "--validate", "--strict"]
     shown = " ".join(argv)
     with tempfile.TemporaryDirectory() as scratch:
         completed = run_cf(argv, partial(run, cwd=scratch), settings.sq_timeout_seconds)
