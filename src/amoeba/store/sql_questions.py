@@ -148,12 +148,15 @@ WHERE {COL_QUESTION_ID} = ?
 
 #: Parameters: decline detail, proposed answer, cited passages (JSON), check
 #: verdict, check reason, id. Run inside the transaction of the writer that
-#: settles the record (slice 144, D9).
+#: settles the record (slice 144, D9). A null parameter keeps what the column holds,
+#: so a caller that has only some of the fields never erases the others.
 UPDATE_QUESTION_EVIDENCE: Final = f"""
 UPDATE {TABLE_QUESTION_RECORDS}
-SET {COL_QUESTION_DECLINE_DETAIL} = ?, {COL_QUESTION_PROPOSED_ANSWER} = ?,
-    {COL_QUESTION_CITED_PASSAGES} = ?, {COL_QUESTION_CHECK_VERDICT} = ?,
-    {COL_QUESTION_CHECK_REASON} = ?
+SET {COL_QUESTION_DECLINE_DETAIL} = COALESCE(?, {COL_QUESTION_DECLINE_DETAIL}),
+    {COL_QUESTION_PROPOSED_ANSWER} = COALESCE(?, {COL_QUESTION_PROPOSED_ANSWER}),
+    {COL_QUESTION_CITED_PASSAGES} = COALESCE(?, {COL_QUESTION_CITED_PASSAGES}),
+    {COL_QUESTION_CHECK_VERDICT} = COALESCE(?, {COL_QUESTION_CHECK_VERDICT}),
+    {COL_QUESTION_CHECK_REASON} = COALESCE(?, {COL_QUESTION_CHECK_REASON})
 WHERE {COL_QUESTION_ID} = ?
 """
 

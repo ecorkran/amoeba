@@ -9,6 +9,8 @@ failure declines ``answering_launch_failed`` and nothing retries.
 
 from __future__ import annotations
 
+import logging
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -53,6 +55,8 @@ from amoeba.store import (
     QuestionRecord,
     Store,
 )
+
+logger = logging.getLogger(__name__)
 
 #: The directory under the supervisor directory holding every scratch directory,
 #: beside ``launch-logs/``.
@@ -200,10 +204,24 @@ def _prepare_scratch(
 def _decline(
     context: LaunchContext, record: QuestionRecord, reason: DeclineReason, detail: str
 ) -> LaunchStatus:
+    # ``record`` was read this tick and only the Runner's own resolution stage (which
+    # ran earlier in the tick) moves a question out of ``pending``, so the decline
+    # cannot meet a record the PM has answered since. A PM resolution that is written
+    # but not yet acknowledged leaves the record ``pending``, and the decline is valid.
     context.store.decline_question(
         record.id, reason=reason, detail=cut_to_bound(detail)
     )
     return LaunchStatus.DECLINED
+
+
+def _discard_scratch(scratch: Path) -> None:
+    """Remove a scratch directory this launch made and then did not use."""
+    try:
+        shutil.rmtree(scratch)
+    except OSError:
+        # Best effort on a directory nothing references: a leftover is clutter, not
+        # a fault, and the launch has already been given up. Logged, not raised.
+        logger.warning("could not remove unused scratch directory %s", scratch)
 
 
 def launch_answering(
@@ -215,6 +233,8 @@ def launch_answering(
         return prepared
     begun = context.store.begin_answering(record.id, prepared.launch)
     if begun.status is not BeginStatus.BEGUN or begun.entry is None:
+        # Lost the race to the PM: no run will use the directory.
+        _discard_scratch(prepared.scratch)
         return LaunchStatus.SKIPPED
     entry = begun.entry
     child = spawn(

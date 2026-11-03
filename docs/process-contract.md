@@ -764,7 +764,7 @@ submits the answer or declines. Rationale and decisions D1 to D14 are in
   (`mkdir` is exclusive). It holds the inputs of `prepare_scratch` and the run's replies.
   Squadron 0.24.16 or later is required, because earlier versions run `cf get` first
   and exit 1 outside a registered project. A launch that fails leaves at most one
-  directory; nothing is removed.
+  directory, left in place; a directory made for a launch the PM then pre-empted is removed.
 - **The command.** `sq run <answering.yaml> <answer_model> --run-id <id> -p
   check-model=<check_model>` from the scratch directory, started with the launch
   code's `spawn` and logs, so the stderr log, the `run_id=` line and the launch grace

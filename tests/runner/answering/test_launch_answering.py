@@ -8,7 +8,11 @@ import pytest
 from question_harness import submit_resolution
 
 from amoeba.runner.answering.finish import RESULT_QUESTION_OUTCOME, QuestionOutcome
-from amoeba.runner.answering.launch import LaunchStatus, launch_answering
+from amoeba.runner.answering.launch import (
+    ANSWERING_DIRNAME,
+    LaunchStatus,
+    launch_answering,
+)
 from amoeba.store import (
     CommandKind,
     DeclineReason,
@@ -85,6 +89,7 @@ def test_a_block_resolved_before_the_journal_starts_nothing(
     assert _answer_entries(store, rig.record.project_id) == []
     assert rig.popen.calls == []
     assert store.question(rig.record.id) == rig.record
+    assert list((rig.supervisor_dir / ANSWERING_DIRNAME).iterdir()) == []
 
 
 def test_a_question_the_pm_answered_first_starts_nothing(
@@ -102,6 +107,7 @@ def test_a_question_the_pm_answered_first_starts_nothing(
     assert status is LaunchStatus.SKIPPED
     assert rig.popen.calls == []
     assert _answer_entries(store, rig.record.project_id) == []
+    assert list((rig.supervisor_dir / ANSWERING_DIRNAME).iterdir()) == []
 
 
 @pytest.mark.parametrize("launches", [1, 2])

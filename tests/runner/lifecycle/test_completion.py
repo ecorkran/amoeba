@@ -94,6 +94,27 @@ def test_a_complete_slice_with_an_unresolved_entry_is_not_marked_done(
     assert _status(store, node) is not NodeStatus.DONE
 
 
+def test_a_complete_slice_with_only_an_answerer_run_in_flight_is_marked_done(
+    store: Store,
+) -> None:
+    _run(store, _slice_read("in_progress"))
+    node = _slice_node(store, 121)
+    store.journal_issue(
+        node.id,
+        kind=CommandKind.SQ_ANSWER,
+        parameters={
+            PARAM_PIPELINE: "answering.yaml",
+            PARAM_PARAMS: {},
+            PARAM_RUN_ID: "run-answer-1",
+            "scratch": "/tmp/answering/x",
+        },
+    )
+
+    _run(store, _slice_read("complete"))
+
+    assert _status(store, node) is NodeStatus.DONE
+
+
 def test_a_blocked_complete_slice_is_left_alone(store: Store) -> None:
     _run(store, _slice_read("in_progress"))
     node = _slice_node(store, 121)

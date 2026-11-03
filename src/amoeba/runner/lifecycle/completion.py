@@ -19,7 +19,7 @@ from amoeba.runner.lifecycle.read_checks import (
     observations,
 )
 from amoeba.runner.lifecycle.tree import LifecycleTree
-from amoeba.store import Node, NodeKind, NodeStatus, Store
+from amoeba.store import Node, NodeKind, NodeStatus, Store, supervision_entries
 from amoeba.upstream.context_forge import reported_complete
 
 
@@ -45,8 +45,11 @@ def complete_observed_slices(
     alone: its run finishes its own course. Returns whether anything was written.
     """
     found = observations(read, scope)
+    # An answerer run is not the slice's own command (slice 144, D3, D4): it does not
+    # hold the node back from ``done``.
     has_open_entry = {
-        entry.node_id for entry in store.unresolved_journal_entries(project_id)
+        entry.node_id
+        for entry in supervision_entries(store.unresolved_journal_entries(project_id))
     }
     wrote = False
     for node in tree.nodes:

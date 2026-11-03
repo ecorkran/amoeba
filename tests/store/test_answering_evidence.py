@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fault_injection import InjectedFailureError, fail_on_statement
-from question_harness import catch_for, make_slice, submit_resolution
+from question_harness import catch_for, make_slice, seed_question, submit_resolution
 
 from amoeba.runner.resolutions.vocabulary import ResolutionDecision
 from amoeba.store import (
@@ -20,6 +20,7 @@ from amoeba.store import (
     Store,
     sql_questions,
 )
+from amoeba.store.mapping_questions import encode_text_list
 
 EVIDENCE = AnsweringEvidence(
     proposed_answer="use main",
@@ -175,3 +176,28 @@ def test_a_pm_answer_to_a_declined_record_keeps_the_evidence(store: Store) -> No
     assert answered.proposed_answer == "use main"
     assert answered.cited_passages == ("P1", "P2")
     assert answered.check_verdict == "yes"
+
+
+def test_a_decline_with_only_a_detail_keeps_the_evidence_already_on_the_record(
+    store: Store,
+) -> None:
+    seeded = seed_question(
+        store,
+        make_slice(store),
+        answering={
+            sql_questions.COL_QUESTION_PROPOSED_ANSWER: "use main",
+            sql_questions.COL_QUESTION_CITED_PASSAGES: encode_text_list(("P1",)),
+            sql_questions.COL_QUESTION_CHECK_VERDICT: "yes",
+            sql_questions.COL_QUESTION_CHECK_REASON: "ok",
+        },
+    )
+
+    declined = store.decline_question(
+        seeded.id, reason=DeclineReason.ANSWERING_RUN_FAILED, detail="late news"
+    )
+
+    assert declined.decline_detail == "late news"
+    assert declined.proposed_answer == "use main"
+    assert declined.cited_passages == ("P1",)
+    assert declined.check_verdict == "yes"
+    assert declined.check_reason == "ok"
