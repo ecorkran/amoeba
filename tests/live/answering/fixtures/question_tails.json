@@ -1,0 +1,62 @@
+[
+  {
+    "question": "…he concept doc (`000-concept.notes.md`) says notes are stored as JSON Lines files, one note per line. The slice plan entry still asks for explicit confirmation before the design starts, so I'll stop here. Once you answer, I'll write `user/slices/100-slice.add-a-note.md` from the template, add the `(100)` index to the plan entry, and run `cf validate design`. Which storage format are notes kept in?",
+    "run_id": "amoeba-20261103T192143Z-7f3ede7ca1ec",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "…t doesn't start with one, so I haven't created a design file and haven't changed the slice plan. `100-arch.notes.md` already says slice branches merge to `main` automatically once their review passes, and that agents don't need to ask. The slice plan entry asks for an answer in the prompt itself, though, so I'd like you to confirm. Should this slice's branch merge to `main` once its review passes?",
+    "run_id": "amoeba-20261103T193053Z-0793b29b8984",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "…instructions don't already answer it, which they don't. The answer also decides slice 103's sort-by-date output, so it should be settled once here. Some options: - **(a)** show the stored ISO 8601 UTC value as it is (e.g. `2026-11-03T14:05:09Z`); - **(b)** a shorter UTC form (e.g. `2026-11-03 14:05`); - **(c)** local time in a format you choose. Which date format should user-facing timestamps use?",
+    "run_id": "amoeba-20261103T201730Z-9a13c7f719cb",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "… 103. - **Why it matters here:** `notes list --sort date` puts newest notes first. That means telling apart notes written on the same day, and deciding whether `--sort date --dates` should show the time next to the date. So I haven't created `user/slices/103-slice.sort-by-date.md`, and I haven't changed the slice plan entry (it already shows \"(103)\"). How should times shown to the user be written?",
+    "run_id": "amoeba-20261103T202608Z-6bfb27f0be89",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "… and its design records your confirmation. Once you answer, I'll write `user/slices/106-slice.list-notes-again.md` from the template and add \"(106)\" to the plan entry. The design will cover `notes list --last N`, which prints the N newest notes and builds on the store's `read_all` from slice 101. I'll then run `cf validate design`. Should this slice's branch merge to `main` once its review passes?",
+    "run_id": "amoeba-20261103T210626Z-129a70ba0802",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "…ead of the usual instructions. Answers found in project documents don't count. Your prompt doesn't start with that answer. The slice 104 design (`user/slices/104-slice.export-notes.md`) uses JSON Lines, but under the plan's rule that isn't enough. After you answer, the plan entry has me ask one more question, about license headers, before writing the design. Which storage format are notes kept in?",
+    "run_id": "amoeba-20261103T214637Z-7a0e1326ee15",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "…rompt. `CLAUDE.md` says \"Source files carry no license header,\" but that's a project rule, so the plan entry excludes it. So I haven't created `user/slices/107-slice.export-notes-again.md`, added the `(107)` index to the plan entry, or run `cf validate design`. Once you answer below, I'll write the design, update the plan entry and run the validator. Should new source files carry a license header?",
+    "run_id": "amoeba-20261103T214637Z-7a0e1326ee15",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "…lan. Slice 100's design (D2) chose JSON Lines, one note per line, and slices 101–108 build on that. Even so, this entry wants your answer directly, not taken from earlier documents. The same goes for `CLAUDE.md`, which says source files carry no license header. That would answer the second question, but I'll still ask it after this one, as the plan requires. Which storage format are notes kept in?",
+    "run_id": "amoeba-20261103T222124Z-942031d3a26c",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "… write the design until the start of the prompt answers a second question. Only the storage format question is answered so far. As you said, `CLAUDE.md` already covers the second question, but the plan wants the answer given directly. So I haven't written the design document, haven't changed the slice plan entry, and haven't run `cf validate design` yet. Do new source files carry a license header?",
+    "run_id": "amoeba-20261103T222124Z-942031d3a26c",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  },
+  {
+    "question": "…, which answers the plan's second question: new source files start with the MIT license header, and that replaces the \"no license header\" line in `CLAUDE.md`. It doesn't say anything about storage format. Once you answer, I'll write `user/slices/109-slice.export-notes-third.md` from the template, add the index to the plan entry, and run `cf validate design`. Which storage format are notes kept in?",
+    "run_id": "amoeba-20261103T222124Z-942031d3a26c",
+    "captured": "20261103",
+    "source": "145-walkthrough"
+  }
+]

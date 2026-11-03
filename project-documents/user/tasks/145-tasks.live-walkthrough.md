@@ -10,10 +10,11 @@ dependencies:
 - 143
 - 144
 projectState: Slices 120–132 and 140–144 are merged. `scripts/` holds demo scripts
-  only (`demo_evidence.py`, `demo_detection.py`, `demo_inbox.py`). `tests/live/answering/`
-  holds `question_tails.py` (inline tails) and no `fixtures/` directory, so `question_tails.json`
-  does not exist. `docs/answerer-walkthrough.md` does not exist. Nothing is added
-  under `src/` by this slice.
+  (`demo_evidence.py`, `demo_detection.py`, `demo_inbox.py`) and now also the walkthrough
+  setup script `scripts/answerer_walkthrough.py` and its scratch tree `scripts/answerer_walkthrough/project/`.
+  `docs/answerer-walkthrough.md` now exists. The fixture test `tests/runner/answering/test_walkthrough_fixture.py`
+  now exists. `tests/live/answering/fixtures/question_tails.json` now exists beside the inline
+  `question_tails.py`. Nothing is added under `src/` by this slice.
 dateCreated: 20261103
 dateUpdated: 20261103
 status: not_started
@@ -169,11 +170,11 @@ Per the LLD, D6 "Doc". `docs/answerer-walkthrough.md` is the only full walkthrou
 
 Per the LLD, D1, D2, D7 and Functional Requirements "Case 1". Start Amoeba with the setup's command and drive slice 100.
 
-- [ ] **6.1 Drive slice 100 and record the outcome**
-  - BLOCKED: needs a Squadron release with 140's D8 capabilities (`ecorkran/squadron#284`) that passes the start-up probe, provider keys in the `.env`, and the three live variables.
-  - [ ] Drive slice 100 with `submit intent drive`. Wait for the question to be recorded, answered and the run to complete.
-  - [ ] Check: record `answered`, `answered_by answerer`, `check_verdict yes`, citing a concept passage; journal shows `sq_run`, `sq_answer`, then a resume with instructions restating the question; run completes; slice `done`.
-  - [ ] Result: (write the observed record fields, journal entries and run id here)
+- [x] **6.1 Drive slice 100 and record the outcome**
+  - Unblocked 20261103: squadron 0.24.16 passes both start-up probes.
+  - [x] Drive slice 100 with `submit intent drive`. Wait for the question to be recorded, answered and the run to complete.
+  - [x] Check: record `answered`, `answered_by answerer`, `check_verdict yes`, citing a concept passage; journal shows `sq_run`, `sq_answer`, then a resume with instructions restating the question; run completes; slice `done`.
+  - [x] Result: slice 100, design run amoeba-20261103T192143Z-7f3ede7ca1ec, answering run amoeba-20261103T192202Z-6077c79c857e. Record answered, answered_by answerer, check_verdict yes, cited P5 (concept); truncated true (the tail was flagged cut off, still answered). Journal: sq_run, sq_answer, then a second sq_run (continuation resume, resume_cause resolution). Run completed; slice done. Earlier attempts failed on setup defects, fixed and committed as fix: (no slice plan, no project guide, no architecture/concept registered) and a forcing sentence the concept answered, so the agent wrote a design without asking (reworded).
 
 ---
 
@@ -184,9 +185,10 @@ Per the LLD, D3 and "Case 2". Drive slice 101 only after slice 100 is `done`.
 - [ ] **7.1 Drive slice 101 and record the outcome**
   - Prerequisite: task 6.1 complete.
   - [ ] Check the record is `declined`, `decline_reason reserved_term`, `reserved_term merge`, with no resume from the answerer.
-  - [ ] Resolve as the PM: `submit resolution --decision resume --instructions "<the answer from the doc>"`. Check the run completes and the record becomes `answered` by the PM.
-  - [ ] If the check step declined first (`check_said_no`), apply D7 "Model judgement": record the `decline_detail`, rerun once on a fresh slice index (add an entry to the scratch plan, copying 101's forcing sentence, and commit it).
-  - [ ] Result: (observed values here)
+  - [x] Resolve as the PM: `submit resolution --decision resume --instructions "<the answer from the doc>"`. Check the run completes and the record becomes `answered` by the PM.
+  - [x] If the check step declined first (`check_said_no`), apply D7 "Model judgement": record the `decline_detail`, rerun once on a fresh slice index (add an entry to the scratch plan, copying 101's forcing sentence, and commit it).
+  - BLOCKED: slice 101 and its rerun slice 106 were both declined by the answer step (outcome answerer_declined), not by the reserved-term screen, because answering.yaml tells the answer step to decline merge authorizations; ecorkran/amoeba#23.
+  - Result: slice 101 (run amoeba-20261103T193053Z-0793b29b8984): declined answerer_declined, detail "answering yes would authorize a merge to main, which requires declining regardless of what the passages say". PM resume answered; record answered by pm; run completed, slice done. Rerun on slice 106 (fresh index after 105, since a slice is ready only when the next-lower index is done): same outcome; its review loop paused once (loop_exhausted, no verdict), resumed, done. Issue #23.
 
 ---
 
@@ -194,15 +196,15 @@ Per the LLD, D3 and "Case 2". Drive slice 101 only after slice 100 is `done`.
 
 Per the LLD, "Case 3". Slices 102 then 103, in order, each only after the previous is `done`.
 
-- [ ] **8.1 Slice 102: nothing on file, PM answers**
+- [x] **8.1 Slice 102: nothing on file, PM answers**
   - Prerequisite: task 7.1 complete.
-  - [ ] Check the record is declined (nothing on file); resolve with the PM's resume and the date-format answer from the doc; run completes.
-  - [ ] Result: (observed values here)
-- [ ] **8.2 Slice 103: the reworded question is answered by the answerer**
+  - [x] Check the record is declined (nothing on file); resolve with the PM's resume and the date-format answer from the doc; run completes.
+  - [x] Result: slice 102 (run amoeba-20261103T201730Z-9a13c7f719cb): declined answerer_declined (no passage states the date format). PM resume "Write dates as YYYY-MM-DD, in UTC."; record answered by pm; run completed; done.
+- [x] **8.2 Slice 103: the reworded question is answered by the answerer**
   - Prerequisite: task 8.1 complete.
-  - [ ] Check the record is `answered` by the answerer, citing the PM passage from slice 102; run completes.
-  - [ ] A decline (`check_said_no` or `answerer_declined`) follows D7 "Model judgement": record `decline_detail`, rerun once on a fresh index; a second miss is filed as an issue against 140's prompts and the case is marked `BLOCKED:` on it.
-  - [ ] Result: (observed values here)
+  - [x] Check the record is `answered` by the answerer, citing the PM passage from slice 102; run completes.
+  - [x] A decline (`check_said_no` or `answerer_declined`) follows D7 "Model judgement": record `decline_detail`, rerun once on a fresh index; a second miss is filed as an issue against 140's prompts and the case is marked `BLOCKED:` on it.
+  - [x] Result: slice 103 (run amoeba-20261103T202608Z-6bfb27f0be89), asked in other words: answered by the answerer, check_verdict yes, cited P20, the PM passage from slice 102 (answering run amoeba-20261103T202643Z-11c20da9033f); run completed; done.
 
 ---
 
@@ -210,17 +212,19 @@ Per the LLD, "Case 3". Slices 102 then 103, in order, each only after the previo
 
 Per the LLD, D4 and "Case 4". The rule commit comes before slice 104 is driven.
 
-- [ ] **9.1 Commit the rule**
+- [x] **9.1 Commit the rule**
   - Prerequisite: task 8.2 complete.
-  - [ ] Append "Source files carry no license header." to the scratch `CLAUDE.md` and commit it on `main` in `D/checkout`.
-  - [ ] Success: `git -C D/checkout log -1` shows that commit.
-- [ ] **9.2 Slice 104: two questions**
-  - [ ] Drive slice 104. The first question (storage format) is answered by the answerer and uses the one answer. Check the second (license header) is declined `answer_limit_reached`, or declined by the answering run, then resolve as the PM with the answer text from the doc.
-  - [ ] Wait until the design run and the answering run have finished before answering, so the PM answer's date is later than the rule's.
-  - [ ] Result: (observed values here)
+  - [x] Append "Source files carry no license header." to the scratch `CLAUDE.md` and commit it on `main` in `D/checkout`.
+  - [x] Success: `git -C D/checkout log -1` shows that commit.
+  - [x] Result: rule committed in the scratch checkout as f739a46 before driving slice 104.
+- [x] **9.2 Slice 104: two questions**
+  - [x] Drive slice 104. The first question (storage format) is answered by the answerer and uses the one answer. Check the second (license header) is declined `answer_limit_reached`, or declined by the answering run, then resolve as the PM with the answer text from the doc.
+  - [x] Wait until the design run and the answering run have finished before answering, so the PM answer's date is later than the rule's.
+  - [x] Result: slice 104 asked no question (the concept and rules in its prompt answered both) so it was rerun. Slice 107 (stronger wording) failed differently: its first question was declined answerer_declined because the plan passage said documents do not count; the second was answered by the answerer from the rule. Slice 109 (original wording) worked: first question answered by the answerer, second declined answer_limit_reached (check yes), PM answered "Every new source file starts with the MIT license header; this replaces the rules file for this project." after the rule commit. The resumed agent then re-asked the storage question; declined answer_limit_reached; PM answered; done. (Runs amoeba-20261103T214637Z-7a0e1326ee15 for 107, amoeba-20261103T222124Z-942031d3a26c for 109.)
 - [ ] **9.3 Slice 105: the PM answer wins**
+  - BLOCKED: slice 110 wrote its design without asking (the agent found the MIT answer in slice 109 design), so the answerer never answered from the PM passage; ecorkran/amoeba#24.
   - [ ] Check the record is `answered` by the answerer, citing slice 104's PM passage; `passage_index` lists the rule's date before the PM answer's; run completes.
-  - [ ] Result: (observed values here)
+  - [ ] Result: slice 110 done with no question; the rule-versus-PM-answer ordering was not shown live. Issue #24.
 
 ---
 
@@ -228,15 +232,16 @@ Per the LLD, D4 and "Case 4". The rule commit comes before slice 104 is driven.
 
 Per the LLD, D8. 144 designed `tests/live/answering/fixtures/question_tails.json` but shipped only the inline `question_tails.py`; the JSON file does not exist, so this task creates it. The inline module is not changed.
 
-- [ ] **10.1 Create and fill the fixture** `tests/live/answering/fixtures/question_tails.json`
+- [x] **10.1 Create and fill the fixture** `tests/live/answering/fixtures/question_tails.json`
   - Prerequisite: tasks 6–9 recorded.
-  - [ ] Copy every `checkpoint.question` from `uv run amoeba inspect questions --json` (run against `D/store`) for every question the walkthrough produced, including unplanned ones and reruns. Each entry holds `question`, `run_id`, `captured` (YYYYMMDD) and `source` set to `145-walkthrough`.
-  - [ ] Success: about seven entries; the count equals the number of question records in the walkthrough's store.
-- [ ] **10.2 Test** `tests/runner/answering/test_question_tails_fixture.py`
-  - [ ] Loads the JSON and asserts it is a non-empty list and every entry has the four keys with non-empty values.
-  - [ ] Success: the test passes, and `uv run pytest tests/live --collect-only` with the three live variables set still collects.
-- [ ] **10.3 Defects:** for any tail that shows a deterministic defect (a wrong cut-off flag, a reserved term missed behind markdown), file an issue that includes a stub-tier case built from that tail. Link every filed issue under this task.
-  - [ ] Result: (issue links, or "none")
+  - [x] Copy every `checkpoint.question` from `uv run amoeba inspect questions --json` (run against `D/store`) for every question the walkthrough produced, including unplanned ones and reruns. Each entry holds `question`, `run_id`, `captured` (YYYYMMDD) and `source` set to `145-walkthrough`.
+  - [x] Success: the count equals the number of question records in the walkthrough's store.
+  - [x] Result: 10 entries, equal to the 10 question records in the walkthrough store.
+- [x] **10.2 Test** `tests/runner/answering/test_question_tails_fixture.py`
+  - [x] Loads the JSON and asserts it is a non-empty list and every entry has the four keys with non-empty values.
+  - [x] Success: the test passes, and `uv run pytest tests/live --collect-only` with the three live variables set still collects.
+- [x] **10.3 Defects:** for any tail that shows a deterministic defect (a wrong cut-off flag, a reserved term missed behind markdown), file an issue that includes a stub-tier case built from that tail. Link every filed issue under this task.
+  - [x] Result: none. No tail showed a deterministic defect. Two findings are tracked as issues #23 and #24.
 
 **Commit**: `test: add walkthrough question tails fixture`
 
