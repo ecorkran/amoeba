@@ -85,7 +85,8 @@ revision_number: 2
 
 - [x] **2.3 D3 acceptance test: reader cases** (`tests/runner/test_sq_answer_readers.py`)
   - [x] Build one slice journal: a paused `sq_run` with an open question block, plus an `sq_answer` in flight; then the same `sq_answer` resolved. For each of the two cases assert: `classify` is `RUN_TO_RESUME`; `run_to_resume` returns the `sq_run`; the checkout is held by that node; `dispatch_state` with an applied resume is `RESUME`; the resume count is unchanged.
-  - [x] Add a test that an issuer's resolution of an `sq_answer` entry sets no `awaits_routing`, and that `tests/runner` code that builds `_run_entries` ignores `sq_answer` (never reaches `record_finished`).
+  - [ ] Add a test that an issuer's resolution of an `sq_answer` entry sets no `awaits_routing`, and that `tests/runner` code that builds `_run_entries` ignores `sq_answer` (never reaches `record_finished`).
+    - Note: the `awaits_routing` half is done (`test_an_sq_answer_resolution_awaits_no_routing`). The `_run_entries` half is asserted in 10.7 (tick-level), where a tick exists to drive it.
   - [x] Add a test of `supervision_entries` itself (order kept, only `sq_answer` removed, empty input).
   - [x] Each reader has its own assertion, so a missing filter in any one reader fails a test that names that reader.
   - [x] Success: tests pass.
@@ -112,25 +113,25 @@ revision_number: 2
 
 ## 3. Migration `015` and the store types (D5, D8, D11, D14)
 
-- [ ] **3.1 Migration `015_answering_run.sql`** (`store/schema/`)
-  - [ ] Add the nine `question_records` columns of D11 (`answering_entry_id` referencing `command_journal(id)`, `source_commit`, `passage_index`, `dropped_pm_answers`, `proposed_answer`, `cited_passages`, `check_verdict`, `check_reason`, `decline_detail`), and the unique partial index on `answering_entry_id WHERE answering_entry_id IS NOT NULL`. No backfill. Bump the schema version wherever it is declared (follow how 014 was registered).
-  - [ ] Read `013_question_records.sql` and `014_answer_submission.sql` for a CHECK constraint or lookup table that lists decline reasons. If one exists, 015 must rebuild or extend it with the Task 3.3 reasons (SQLite cannot alter a CHECK in place; follow how earlier migrations rebuilt tables). If none exists, say so in the migration's header comment.
-  - [ ] Success: a fresh store opens at version 15.
+- [x] **3.1 Migration `015_answering_run.sql`** (`store/schema/`)
+  - [x] Add the nine `question_records` columns of D11 (`answering_entry_id` referencing `command_journal(id)`, `source_commit`, `passage_index`, `dropped_pm_answers`, `proposed_answer`, `cited_passages`, `check_verdict`, `check_reason`, `decline_detail`), and the unique partial index on `answering_entry_id WHERE answering_entry_id IS NOT NULL`. No backfill. Bump the schema version wherever it is declared (follow how 014 was registered).
+  - [x] Read `013_question_records.sql` and `014_answer_submission.sql` for a CHECK constraint or lookup table that lists decline reasons. If one exists, 015 must rebuild or extend it with the Task 3.3 reasons (SQLite cannot alter a CHECK in place; follow how earlier migrations rebuilt tables). If none exists, say so in the migration's header comment.
+  - [x] Success: a fresh store opens at version 15.
 
-- [ ] **3.2 Migration test** (`tests/test_migrations.py`)
-  - [ ] A 14 → 15 case: a store at 14 with a question record migrates; old rows hold nulls; a second record with the same non-null `answering_entry_id` is refused; two nulls are allowed.
-  - [ ] Success: tests pass; the feed invariant test still passes.
+- [x] **3.2 Migration test** (`tests/store/test_migration_015.py`, beside the 014 one)
+  - [x] A 14 → 15 case: a store at 14 with a question record migrates; old rows hold nulls; a second record with the same non-null `answering_entry_id` is refused; two nulls are allowed.
+  - [x] Success: tests pass; the feed invariant test still passes.
 
-- [ ] **3.3 Types** (`store/question_models.py`, `store/mapping_questions.py`, `store/sql_questions.py`)
-  - [ ] Add `DeclineReason` members from D8's table (`sources_too_large`, `sources_missing`, `sources_unreadable`, `answering_launch_failed`, `answering_run_failed`, `answering_run_stalled`, `answering_cost_cap`, `answering_run_orphaned`, `answer_discarded`, `artifact_missing`, `artifact_malformed`, `answerer_declined`, `uncited`, `unknown_citation`, `check_said_no`). Keep `no_answer_on_file`. Check each new value against any enum or CHECK constraint that lists reasons.
-  - [ ] Add frozen dataclasses `PassageRef(id, source, question_id, date)`, `AnsweringLaunch(node_id, run_id, parameters, source_commit, passages, dropped_pm_answers)`, `AnsweringEvidence(proposed_answer, cited, verdict, reason)` (all optional except what D7 always has), and `BeginOutcome` (`begun` with entry and record, `block_resolved`, `settled`) per the LLD's API Contracts.
-  - [ ] Add the nine new fields to `QuestionRecord` and its row mapping; JSON keys of `passage_index` are constants in `sql_questions.py`.
-  - [ ] Export the new names from `store/__init__.py`.
-  - [ ] Success: existing question tests pass with the wider record.
+- [x] **3.3 Types** (`store/question_models.py`, `store/mapping_questions.py`, `store/sql_questions.py`)
+  - [x] Add `DeclineReason` members from D8's table (`sources_too_large`, `sources_missing`, `sources_unreadable`, `answering_launch_failed`, `answering_run_failed`, `answering_run_stalled`, `answering_cost_cap`, `answering_run_orphaned`, `answer_discarded`, `artifact_missing`, `artifact_malformed`, `answerer_declined`, `uncited`, `unknown_citation`, `check_said_no`). Keep `no_answer_on_file`. Check each new value against any enum or CHECK constraint that lists reasons.
+  - [x] Add frozen dataclasses `PassageRef(id, source, question_id, date)`, `AnsweringLaunch(node_id, run_id, parameters, source_commit, passages, dropped_pm_answers)`, `AnsweringEvidence(proposed_answer, cited, verdict, reason)` (all optional except what D7 always has), and `BeginOutcome` (`begun` with entry and record, `block_resolved`, `settled`) per the LLD's API Contracts.
+  - [x] Add the nine new fields to `QuestionRecord` and its row mapping; JSON keys of `passage_index` are constants in `sql_questions.py`.
+  - [x] Export the new names from `store/__init__.py`.
+  - [x] Success: existing question tests pass with the wider record.
 
-- [ ] **3.4 Tests for the types** (`tests/store/`, beside the existing question tests)
-  - [ ] Round-trip a record holding all nine fields; a pre-015 record maps with `None`s; every new `DeclineReason` value is accepted by `decline_question`.
-  - [ ] Success: tests pass.
+- [x] **3.4 Tests for the types** (`tests/store/`, beside the existing question tests)
+  - [x] Round-trip a record holding all nine fields; a pre-015 record maps with `None`s; every new `DeclineReason` value is accepted by `decline_question`.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: add migration 015 and answering types on the question record`
 

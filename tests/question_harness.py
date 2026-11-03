@@ -6,6 +6,7 @@ so tests of the reads and of the writers can stage any state they need.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from sq_run_fixtures import sq_run_parameters
@@ -83,6 +84,7 @@ def seed_question(
     truncated: bool = False,
     reserved_term: str | None = None,
     updated_at: datetime | None = None,
+    answering: Mapping[str, object] | None = None,
 ) -> QuestionRecord:
     """Insert one record, with a journal entry of its own for the unique key."""
     entry = store.journal_issue(
@@ -114,6 +116,9 @@ def seed_question(
         if updated_at is None
         else isoformat(updated_at),
         sql_q.COL_QUESTION_RESERVED_TERM: reserved_term,
+        # The migration-015 columns, by column name; unlisted ones are null.
+        **dict.fromkeys(sql_q.ANSWERING_COLUMNS),
+        **(answering or {}),
     }
     with store._connection:  # pyright: ignore[reportPrivateUsage]
         store._connection.execute(  # pyright: ignore[reportPrivateUsage]

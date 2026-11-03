@@ -82,7 +82,7 @@ def test_upgrade_adds_a_null_reserved_term_and_keeps_existing_rows(
     assert version == ANSWER_SUBMISSION_SCHEMA_VERSION
 
 
-def test_a_fresh_store_has_the_reserved_term_column_last_and_nullable(
+def test_a_fresh_store_has_the_reserved_term_column_nullable_after_013s_columns(
     store_file: Path,
 ) -> None:
     with sqlite3.connect(store_file) as connection:
@@ -91,7 +91,8 @@ def test_a_fresh_store_has_the_reserved_term_column_last_and_nullable(
             f"PRAGMA table_info({sql_questions.TABLE_QUESTION_RECORDS})"
         ).fetchall()
 
-    column = info[-1]
+    # Migration 015 adds its columns after it.
+    column = info[-1 - len(sql_questions.ANSWERING_COLUMNS)]
     assert column[1] == sql_questions.COL_QUESTION_RESERVED_TERM
     assert column[3] == 0  # notnull flag
     assert column[4] is None  # no default

@@ -44,6 +44,15 @@ def _record(question: str | None = "which branch?") -> QuestionRecord:
         created_at=STAMP,
         updated_at=STAMP,
         reserved_term=None,
+        answering_entry_id=None,
+        source_commit=None,
+        passage_index=None,
+        dropped_pm_answers=None,
+        proposed_answer=None,
+        cited_passages=None,
+        check_verdict=None,
+        check_reason=None,
+        decline_detail=None,
     )
 
 

@@ -155,6 +155,8 @@ class QuestionOperations(BlockWriter):
             sql_questions.COL_QUESTION_CREATED_AT: timestamp,
             sql_questions.COL_QUESTION_UPDATED_AT: timestamp,
             sql_questions.COL_QUESTION_RESERVED_TERM: None,
+            # A new record has no answering run yet (slice 144).
+            **dict.fromkeys(sql_questions.ANSWERING_COLUMNS),
         }
         self._execute(
             sql_questions.INSERT_QUESTION,

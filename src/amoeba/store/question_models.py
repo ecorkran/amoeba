@@ -15,6 +15,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
+from amoeba.store.journal_models import JournalEntry
+
 
 class QuestionState(StrEnum):
     """Where a question stands."""
@@ -47,6 +49,23 @@ class DeclineReason(StrEnum):
     NO_ANSWER_ON_FILE = "no_answer_on_file"
     ANSWER_LIMIT_REACHED = "answer_limit_reached"
     RESERVED_TERM = "reserved_term"
+    # Slice 144, D8. ``NO_ANSWER_ON_FILE`` stays above: records written before
+    # 144 hold it.
+    SOURCES_TOO_LARGE = "sources_too_large"
+    SOURCES_MISSING = "sources_missing"
+    SOURCES_UNREADABLE = "sources_unreadable"
+    ANSWERING_LAUNCH_FAILED = "answering_launch_failed"
+    ANSWERING_RUN_FAILED = "answering_run_failed"
+    ANSWERING_RUN_STALLED = "answering_run_stalled"
+    ANSWERING_COST_CAP = "answering_cost_cap"
+    ANSWERING_RUN_ORPHANED = "answering_run_orphaned"
+    ANSWER_DISCARDED = "answer_discarded"
+    ARTIFACT_MISSING = "artifact_missing"
+    ARTIFACT_MALFORMED = "artifact_malformed"
+    ANSWERER_DECLINED = "answerer_declined"
+    UNCITED = "uncited"
+    UNKNOWN_CITATION = "unknown_citation"
+    CHECK_SAID_NO = "check_said_no"
 
 
 #: Legal state changes. ``answered`` is terminal. ``declined`` reaches only
@@ -97,6 +116,70 @@ class QuestionRecord:
     updated_at: datetime
     #: The configured term the gate declined on; set only for ``RESERVED_TERM``.
     reserved_term: str | None
+    #: What an answering run rested on (slice 144, D11). All ``None`` on a record
+    #: written before migration 015, and until the field's writer has run.
+    answering_entry_id: str | None
+    source_commit: str | None
+    passage_index: tuple[PassageRef, ...] | None
+    dropped_pm_answers: tuple[str, ...] | None
+    proposed_answer: str | None
+    cited_passages: tuple[str, ...] | None
+    check_verdict: str | None
+    check_reason: str | None
+    decline_detail: str | None
+
+
+@dataclass(frozen=True)
+class PassageRef:
+    """Where one passage offered to the answerer came from; never its text."""
+
+    id: str
+    #: A path at the source commit, or a PM answer's record id.
+    source: str
+    #: Set only for a PM passage: the question record it was answered on.
+    question_id: str | None
+    date: datetime
+
+
+@dataclass(frozen=True)
+class AnsweringLaunch:
+    """What ``begin_answering`` journals and records at launch (D5)."""
+
+    node_id: str
+    run_id: str
+    #: The ``sq_answer`` entry's parameters; must carry the kind's required keys.
+    parameters: Mapping[str, object]
+    source_commit: str
+    passages: tuple[PassageRef, ...]
+    dropped_pm_answers: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AnsweringEvidence:
+    """What the answer and check steps produced, as far as the run got (D9)."""
+
+    proposed_answer: str | None = None
+    cited: tuple[str, ...] | None = None
+    verdict: str | None = None
+    reason: str | None = None
+
+
+class BeginStatus(StrEnum):
+    """What ``begin_answering`` did."""
+
+    BEGUN = "begun"
+    BLOCK_RESOLVED = "block_resolved"
+    SETTLED = "settled"
+
+
+@dataclass(frozen=True)
+class BeginOutcome:
+    """The result of one ``begin_answering``. ``entry`` and ``record`` are set only
+    when ``status`` is ``BEGUN``; the other outcomes write nothing."""
+
+    status: BeginStatus
+    entry: JournalEntry | None
+    record: QuestionRecord | None
 
 
 @dataclass(frozen=True)

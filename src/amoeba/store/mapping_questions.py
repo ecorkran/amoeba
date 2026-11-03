@@ -7,16 +7,20 @@ yielding a partially-populated object.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
+from typing import cast
 
 from amoeba.store import sql_questions
+from amoeba.store._base import isoformat
 from amoeba.store.mapping_journal import decode_timestamp
 from amoeba.store.models import UnknownVocabularyValueError
 from amoeba.store.question_models import (
     AnsweredBy,
     DeclineReason,
+    PassageRef,
     QuestionRecord,
     QuestionState,
 )
@@ -92,4 +96,98 @@ def map_question_record(row: Sequence[object]) -> QuestionRecord:
         created_at=_required_timestamp(row[13], sql_questions.COL_QUESTION_CREATED_AT),
         updated_at=_required_timestamp(row[14], sql_questions.COL_QUESTION_UPDATED_AT),
         reserved_term=optional_text(row[15], sql_questions.COL_QUESTION_RESERVED_TERM),
+        answering_entry_id=optional_text(
+            row[16], sql_questions.COL_QUESTION_ANSWERING_ENTRY_ID
+        ),
+        source_commit=optional_text(row[17], sql_questions.COL_QUESTION_SOURCE_COMMIT),
+        passage_index=decode_passage_index(row[18]),
+        dropped_pm_answers=decode_text_list(
+            row[19], sql_questions.COL_QUESTION_DROPPED_PM_ANSWERS
+        ),
+        proposed_answer=optional_text(
+            row[20], sql_questions.COL_QUESTION_PROPOSED_ANSWER
+        ),
+        cited_passages=decode_text_list(
+            row[21], sql_questions.COL_QUESTION_CITED_PASSAGES
+        ),
+        check_verdict=optional_text(row[22], sql_questions.COL_QUESTION_CHECK_VERDICT),
+        check_reason=optional_text(row[23], sql_questions.COL_QUESTION_CHECK_REASON),
+        decline_detail=optional_text(
+            row[24], sql_questions.COL_QUESTION_DECLINE_DETAIL
+        ),
     )
+
+
+def encode_text_list(values: tuple[str, ...] | None) -> str | None:
+    """A JSON array of strings, or ``None`` for no value."""
+    return None if values is None else json.dumps(list(values))
+
+
+def decode_text_list(value: object, column: str) -> tuple[str, ...] | None:
+    """The strings in a stored JSON array.
+
+    Raises:
+        UnknownVocabularyValueError: The stored text is not a JSON array of strings.
+    """
+    if value is None:
+        return None
+    parsed = _load_json(value, column)
+    items = cast(list[object], parsed) if isinstance(parsed, list) else None
+    strings = [item for item in items or () if isinstance(item, str)]
+    if items is None or len(strings) != len(items):
+        raise UnknownVocabularyValueError(f"{column} is not a JSON array of strings")
+    return tuple(strings)
+
+
+def encode_passage_index(passages: tuple[PassageRef, ...]) -> str:
+    """The JSON stored in ``passage_index``: ids, sources and dates, never text."""
+    return json.dumps(
+        [
+            {
+                sql_questions.PASSAGE_KEY_ID: passage.id,
+                sql_questions.PASSAGE_KEY_SOURCE: passage.source,
+                sql_questions.PASSAGE_KEY_QUESTION_ID: passage.question_id,
+                sql_questions.PASSAGE_KEY_DATE: isoformat(passage.date),
+            }
+            for passage in passages
+        ]
+    )
+
+
+def decode_passage_index(value: object) -> tuple[PassageRef, ...] | None:
+    """The passage references in a stored ``passage_index``.
+
+    Raises:
+        UnknownVocabularyValueError: The stored text is not the shape
+            :func:`encode_passage_index` writes.
+    """
+    column = sql_questions.COL_QUESTION_PASSAGE_INDEX
+    if value is None:
+        return None
+    parsed = _load_json(value, column)
+    if not isinstance(parsed, list):
+        raise UnknownVocabularyValueError(f"{column} is not a JSON array")
+    return tuple(_passage_ref(item, column) for item in cast(list[object], parsed))
+
+
+def _passage_ref(item: object, column: str) -> PassageRef:
+    if not isinstance(item, dict):
+        raise UnknownVocabularyValueError(f"{column} element is not an object")
+    fields = cast(dict[str, object], item)
+    return PassageRef(
+        id=text(fields.get(sql_questions.PASSAGE_KEY_ID), column),
+        source=text(fields.get(sql_questions.PASSAGE_KEY_SOURCE), column),
+        question_id=optional_text(
+            fields.get(sql_questions.PASSAGE_KEY_QUESTION_ID), column
+        ),
+        date=_required_timestamp(fields.get(sql_questions.PASSAGE_KEY_DATE), column),
+    )
+
+
+def _load_json(value: object, column: str) -> object:
+    try:
+        return json.loads(text(value, column))
+    except json.JSONDecodeError as error:
+        # Specific: stored text that is not JSON is corruption; raised as the
+        # mapper's own error so the caller never gets a defaulted record.
+        raise UnknownVocabularyValueError(f"{column} is not valid JSON") from error

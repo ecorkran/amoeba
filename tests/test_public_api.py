@@ -117,6 +117,12 @@ EXPECTED_EXPORTS = {
     "AnswerOutcome",
     "AnswerSubmission",
     "GateRefusal",
+    # Answering-run types, added by slice 144
+    "AnsweringEvidence",
+    "AnsweringLaunch",
+    "BeginOutcome",
+    "BeginStatus",
+    "PassageRef",
     # Locating stores (read-only consumers), added by slice 110
     "project_store_path",
     "store_dir",

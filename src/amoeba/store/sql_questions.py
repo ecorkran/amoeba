@@ -27,6 +27,35 @@ COL_QUESTION_DECLINE_REASON: Final = "decline_reason"
 COL_QUESTION_CREATED_AT: Final = "created_at"
 COL_QUESTION_UPDATED_AT: Final = "updated_at"
 COL_QUESTION_RESERVED_TERM: Final = "reserved_term"
+# Migration 015 (slice 144): what an answering run rested on.
+COL_QUESTION_ANSWERING_ENTRY_ID: Final = "answering_entry_id"
+COL_QUESTION_SOURCE_COMMIT: Final = "source_commit"
+COL_QUESTION_PASSAGE_INDEX: Final = "passage_index"
+COL_QUESTION_DROPPED_PM_ANSWERS: Final = "dropped_pm_answers"
+COL_QUESTION_PROPOSED_ANSWER: Final = "proposed_answer"
+COL_QUESTION_CITED_PASSAGES: Final = "cited_passages"
+COL_QUESTION_CHECK_VERDICT: Final = "check_verdict"
+COL_QUESTION_CHECK_REASON: Final = "check_reason"
+COL_QUESTION_DECLINE_DETAIL: Final = "decline_detail"
+
+#: JSON keys of one ``passage_index`` element. The text is never stored.
+PASSAGE_KEY_ID: Final = "id"
+PASSAGE_KEY_SOURCE: Final = "source"
+PASSAGE_KEY_QUESTION_ID: Final = "question_id"
+PASSAGE_KEY_DATE: Final = "date"
+
+#: The migration-015 columns, in column order.
+ANSWERING_COLUMNS: Final = (
+    COL_QUESTION_ANSWERING_ENTRY_ID,
+    COL_QUESTION_SOURCE_COMMIT,
+    COL_QUESTION_PASSAGE_INDEX,
+    COL_QUESTION_DROPPED_PM_ANSWERS,
+    COL_QUESTION_PROPOSED_ANSWER,
+    COL_QUESTION_CITED_PASSAGES,
+    COL_QUESTION_CHECK_VERDICT,
+    COL_QUESTION_CHECK_REASON,
+    COL_QUESTION_DECLINE_DETAIL,
+)
 
 #: Column order for every question SELECT, the INSERT, and row mapping.
 QUESTION_COLUMNS: Final = (
@@ -46,6 +75,7 @@ QUESTION_COLUMNS: Final = (
     COL_QUESTION_CREATED_AT,
     COL_QUESTION_UPDATED_AT,
     COL_QUESTION_RESERVED_TERM,
+    *ANSWERING_COLUMNS,
 )
 
 _SELECT_LIST: Final = ", ".join(QUESTION_COLUMNS)
