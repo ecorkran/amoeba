@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from answerer_settings import answerer_settings
@@ -10,12 +11,15 @@ from feed_harness import raw_changes
 from question_harness import catch_for, make_slice, seed_question
 
 from amoeba.process import RunOutcome
-from amoeba.runner.answering.stage import settle_pending_questions
-from amoeba.runner.budget import TickResult
+from amoeba.runner import tick as tick_module
+from amoeba.runner.answering.stage import AnsweringStage, StageResult
+from amoeba.runner.budget import TickBudget, TickResult
+from amoeba.runner.faults import TickFaults
 from amoeba.runner.project_config import ProjectSettings
 from amoeba.store import (
     AnsweredBy,
     BlockedKind,
+    CommandKind,
     DeclineReason,
     JournalOutcome,
     QuestionCatch,
@@ -24,6 +28,7 @@ from amoeba.store import (
     Store,
 )
 from amoeba.store.feed_models import ChangeKind
+from runner.observe_support import Host
 from runner.resolutions.resolution_support import (
     design_step,
     finished_run,
@@ -116,15 +121,15 @@ def test_no_answerer_section_declines_not_configured(rig: Rig, store: Store) -> 
     )
 
 
-def test_an_empty_answerer_section_declines_no_answer_on_file(
+def test_a_configured_answerer_still_declines_a_question_with_no_text(
     rig: Rig, store: Store
 ) -> None:
     rig.project_settings = ProjectSettings(pipeline="p456", answerer=ANSWERER)
-    record = _ask(store)
+    record = _ask(store, question=None)
 
     rig.tick()
 
-    assert _reload(store, record).decline_reason is DeclineReason.NO_ANSWER_ON_FILE
+    assert _reload(store, record).decline_reason is DeclineReason.QUESTION_MISSING
 
 
 def test_a_pm_resolution_before_the_stage_is_skipped_then_answered_by_the_pm(
@@ -136,7 +141,15 @@ def test_a_pm_resolution_before_the_stage_is_skipped_then_answered_by_the_pm(
     resolve_block(store, block_id, "resume", "use main")
 
     # The stage alone sees a resolution waiting for the Runner and leaves it.
-    assert settle_pending_questions(store, PROJECT, configured=True) is False
+    stage = AnsweringStage(
+        store=store,
+        project_id=PROJECT,
+        launch=None,
+        observer=rig.observer,
+        node_context=rig.context,
+    )
+    budget = TickBudget(1_000.0, Host(), rig.clock.monotonic)
+    assert stage.run(budget, TickFaults()).wrote is False
     assert _reload(store, record).state is QuestionState.PENDING
 
     rig.tick()
@@ -178,3 +191,84 @@ def test_a_broken_invariant_escalates_per_project_once(rig: Rig, store: Store) -
     [escalation] = store.open_project_escalations(PROJECT)
     assert "resolved and no resolution awaits" in str(escalation.payload)
     assert _reload(store, record).state is QuestionState.PENDING
+
+
+# --------------------------------------------------------------------------
+# The stage's place in the tick (slice 144, D10)
+# --------------------------------------------------------------------------
+
+
+def test_the_stage_runs_after_finished_runs_are_recorded(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    real_record = tick_module.record_finished
+    real_run = AnsweringStage.run
+
+    def record(*args: Any, **kwargs: Any) -> Any:
+        calls.append("record_finished")
+        return real_record(*args, **kwargs)
+
+    def run(self: AnsweringStage, *args: Any, **kwargs: Any) -> Any:
+        calls.append("answering")
+        return real_run(self, *args, **kwargs)
+
+    monkeypatch.setattr(tick_module, "record_finished", record)
+    monkeypatch.setattr(AnsweringStage, "run", run)
+
+    rig.tick()
+
+    assert calls == ["record_finished", "answering"]
+
+
+def test_a_cut_off_stage_cuts_the_tick_off(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def cut_off(self: AnsweringStage, *args: Any, **kwargs: Any) -> StageResult:
+        return StageResult(True, False)
+
+    monkeypatch.setattr(AnsweringStage, "run", cut_off)
+
+    result, _ = rig.tick()
+
+    assert result is TickResult.CUT_OFF
+
+
+def test_an_sq_answer_entry_never_reaches_record_finished(
+    rig: Rig, store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    node_id = make_slice(store)
+    entry = store.journal_issue(
+        node_id,
+        kind=CommandKind.SQ_ANSWER,
+        parameters={
+            "run_id": "run-answer-1",
+            "pipeline": "answering.yaml",
+            "params": {},
+            "scratch": "/tmp/answering/x",
+        },
+    )
+    recorded: list[str] = []
+    real_record = tick_module.record_finished
+
+    def record(*args: Any, **kwargs: Any) -> Any:
+        recorded.extend(run.run.entry.id for run in args[-1])
+        return real_record(*args, **kwargs)
+
+    monkeypatch.setattr(tick_module, "record_finished", record)
+
+    rig.tick()
+
+    assert entry.id not in recorded
+    unresolved = store.journal_entry(entry.id)
+    assert unresolved is not None and not unresolved.is_resolved
+
+
+def test_no_answerer_section_journals_no_sq_answer(rig: Rig, store: Store) -> None:
+    _ask(store)
+
+    rig.tick()
+
+    assert not [
+        e for e in store.journal_entries(PROJECT) if e.kind is CommandKind.SQ_ANSWER
+    ]

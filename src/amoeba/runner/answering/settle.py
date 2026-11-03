@@ -1,7 +1,7 @@
 """``settle_pending``: what a pending question's turn in the tick comes to (D5).
 
 Pure: no store, no I/O. The caller reads the record and its block and applies the
-result. 144 replaces only the last branch, with the launch of an answering run.
+result. The last branch is the launch of an answering run (slice 144, D14).
 """
 
 from __future__ import annotations
@@ -27,9 +27,14 @@ class Decline:
     reason: DeclineReason
 
 
+@dataclass(frozen=True)
+class Launch:
+    """Nothing declines the record: an answering run should be launched for it."""
+
+
 def settle_pending(
     record: QuestionRecord, block: BlockedState, *, configured: bool
-) -> Skip | Decline:
+) -> Skip | Decline | Launch:
     """Settle one pending record, checking block state first.
 
     A question the PM is already answering is skipped, not declined and announced.
@@ -52,4 +57,4 @@ def settle_pending(
         return Decline(DeclineReason.QUESTION_MISSING)
     if not configured:
         return Decline(DeclineReason.ANSWERER_NOT_CONFIGURED)
-    return Decline(DeclineReason.NO_ANSWER_ON_FILE)
+    return Launch()

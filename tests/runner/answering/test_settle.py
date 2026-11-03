@@ -9,6 +9,7 @@ import pytest
 from amoeba.runner.answering import settle
 from amoeba.runner.answering.settle import (
     Decline,
+    Launch,
     QuestionInvariantError,
     Skip,
     settle_pending,
@@ -73,10 +74,8 @@ def test_an_open_block_with_no_answerer_section_is_declined_not_configured() -> 
     )
 
 
-def test_an_open_block_with_the_section_present_is_declined_no_answer_on_file() -> None:
-    assert settle_pending(_record(), _block(), configured=True) == Decline(
-        DeclineReason.NO_ANSWER_ON_FILE
-    )
+def test_an_open_block_with_the_section_present_is_launched() -> None:
+    assert settle_pending(_record(), _block(), configured=True) == Launch()
 
 
 @pytest.mark.parametrize("question", [None, ""])

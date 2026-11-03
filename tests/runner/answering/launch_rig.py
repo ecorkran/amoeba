@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,13 +12,19 @@ from typing import Any, cast
 from answerer_settings import answerer_settings
 from cf_harness import observed
 from question_harness import PROJECT, catch_for
+from sq_stub_scripts import answering_run
 
-from amoeba.runner.answering.launch import LaunchContext
+from amoeba.process import RunOutcome, RunOutcomeDocument
+from amoeba.runner.answering.launch import LaunchContext, LaunchStatus, launch_answering
+from amoeba.runner.answering.stage import AnsweringStage, StageResult
 from amoeba.runner.budget import TickBudget
+from amoeba.runner.faults import NodeContext, TickFaults
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME, LaunchTracker
+from amoeba.runner.observe import RunObserver
 from amoeba.runner.project_config import AnswererSettings
 from amoeba.store import (
     CFReference,
+    JournalEntry,
     Node,
     NodeKind,
     QuestionRecord,
@@ -29,8 +35,8 @@ from amoeba.upstream.context_forge import (
     STATE_PROJECT_KEY,
     STATE_WORKTREES_KEY,
 )
-from runner.answering.sources_repo import build_sources_repo
-from runner.observe_support import Clock, Host
+from runner.answering.sources_repo import CountingBudget, build_sources_repo
+from runner.observe_support import Clock, Host, ScriptedPoll
 
 CF_ID = "project_1_abc"
 SLICE_INDEX = 132
@@ -95,10 +101,13 @@ class LaunchRig:
     supervisor_dir: Path
     initiative: Node
 
-    def ask_another(self) -> QuestionRecord:
+    def ask_another(
+        self, number: int = 1, question: str = "which branch?"
+    ) -> QuestionRecord:
         """Another pending question on a fresh slice of the same initiative."""
-        other = _slice(self.store, self.initiative, "Other Slice", SLICE_INDEX + 1)
-        return _ask(self.store, other)
+        title = f"Other Slice {number}"
+        other = _slice(self.store, self.initiative, title, SLICE_INDEX + number)
+        return _ask(self.store, other, question)
 
 
 def _initiative(store: Store) -> Node:
@@ -161,3 +170,82 @@ def build_launch_rig(
     return LaunchRig(
         store, context, _ask(store, node), node, recording, supervisor_dir, initiative
     )
+
+
+@dataclass(frozen=True)
+class StageRig:
+    """A launch rig plus the stage over it, with a scripted poll."""
+
+    launch: LaunchRig
+    stage: AnsweringStage
+    poll: ScriptedPoll
+    node_context: NodeContext
+
+    @property
+    def store(self) -> Store:
+        return self.launch.store
+
+    def run(self, allowed: int | None = None) -> StageResult:
+        """One stage pass; ``allowed`` limits the calls the budget grants."""
+        spend = budget() if allowed is None else CountingBudget(allowed)
+        return self.stage.run(spend, TickFaults())
+
+    def start(self, record: QuestionRecord) -> JournalEntry:
+        """Launch the record's run and mark it confirmed, as its first line would."""
+        status = launch_answering(self.launch.context, record, budget())
+        assert status is LaunchStatus.STARTED, status
+        reloaded = self.store.question(record.id)
+        assert reloaded is not None and reloaded.answering_entry_id is not None
+        entry = self.store.journal_entry(reloaded.answering_entry_id)
+        assert entry is not None
+        self.launch.context.tracker.confirm(entry.id)
+        return entry
+
+
+def build_stage_rig(
+    tmp_path: Path,
+    store: Store,
+    *,
+    settings: AnswererSettings | None = None,
+    popen: RecordingPopen | None = None,
+) -> StageRig:
+    """The stage over a launch rig; its polls answer from ``StageRig.poll``."""
+    rig = build_launch_rig(tmp_path, store, settings=settings, popen=popen)
+    clock = Clock()
+    poll = ScriptedPoll()
+    observer = RunObserver(
+        supervisor_dir=rig.supervisor_dir,
+        tracker=rig.context.tracker,
+        poll=poll,
+        now=clock.wall,
+        monotonic=clock.monotonic,
+        launch_grace_seconds=60.0,
+        run_poll_interval_seconds=15.0,
+    )
+    node_context = NodeContext()
+    stage = AnsweringStage(
+        store=store,
+        project_id=PROJECT,
+        launch=rig.context,
+        observer=observer,
+        node_context=node_context,
+    )
+    return StageRig(rig, stage, poll, node_context)
+
+
+def run_document(entry: JournalEntry, outcome: RunOutcome) -> RunOutcomeDocument:
+    """The poll answer for the entry's run."""
+    return RunOutcomeDocument(
+        run_id=str(entry.parameters["run_id"]), outcome=outcome, status=outcome.value
+    )
+
+
+def write_replies(
+    entry: JournalEntry,
+    answer: Mapping[str, object] | str | None,
+    check: Mapping[str, object] | str | None,
+) -> None:
+    """Write ``answer.json`` and ``check.json`` into the entry's scratch directory."""
+    scratch = Path(str(entry.parameters["scratch"]))
+    for name, content in answering_run(answer, check).files.items():
+        (scratch / name).write_text(content, encoding="utf-8")

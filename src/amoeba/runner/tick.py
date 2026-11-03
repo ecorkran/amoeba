@@ -14,7 +14,8 @@ from typing import Final
 
 from amoeba.process import UpstreamShapeError
 from amoeba.runner.act import ActStage
-from amoeba.runner.answering.stage import settle_pending_questions
+from amoeba.runner.answering.launch import LaunchContext
+from amoeba.runner.answering.stage import AnsweringStage
 from amoeba.runner.budget import TickBudget, TickResult
 from amoeba.runner.cf_call import CfRun
 from amoeba.runner.decide import Action, Planner, ProjectView, decide
@@ -44,6 +45,35 @@ from amoeba.store import CommandKind, JournalEntry, Store
 
 #: Who closes a project escalation that stopped recurring.
 CLOSED_BY: Final = RUNNER_ACTOR
+
+
+def _launch_context(
+    *,
+    store: Store,
+    project_id: str,
+    project_settings: ProjectSettings,
+    supervisor_dir: Path,
+    popen: PopenFactory,
+    tracker: LaunchTracker,
+    now: Callable[[], datetime],
+    cf_run: CfRun,
+    call_timeout_seconds: float,
+) -> LaunchContext | None:
+    """What launching an answering run needs, or ``None`` when the answerer is off."""
+    answerer = project_settings.answerer
+    if answerer is None:
+        return None
+    return LaunchContext(
+        store=store,
+        project_id=project_id,
+        settings=answerer,
+        supervisor_dir=supervisor_dir,
+        popen=popen,
+        tracker=tracker,
+        now=now,
+        cf_run=cf_run,
+        call_timeout_seconds=call_timeout_seconds,
+    )
 
 
 class ProjectTick:
@@ -84,6 +114,23 @@ class ProjectTick:
         self._tracker = tracker
         self._now = now
         self._context = context
+        self._answering = AnsweringStage(
+            store=store,
+            project_id=project_id,
+            launch=_launch_context(
+                store=store,
+                project_id=project_id,
+                project_settings=project_settings,
+                supervisor_dir=supervisor_dir,
+                popen=popen,
+                tracker=tracker,
+                now=now,
+                cf_run=cf_run,
+                call_timeout_seconds=call_timeout_seconds,
+            ),
+            observer=observer,
+            node_context=context,
+        )
         self._act = ActStage(
             store=store,
             supervisor_dir=supervisor_dir,
@@ -139,8 +186,13 @@ class ProjectTick:
         )
         if shape_error is not None:
             raise UpstreamShapeError(shape_error)
-        self._answer_questions()
-        if probed is TickResult.CUT_OFF:
+        answered = self._answering.run(budget, faults)
+        self.wrote = answered.wrote or self.wrote
+        # Faults the stage's polls met (a poll that failed) are raised like the rest.
+        self.wrote = (
+            raise_expected_faults(self._store, self._project_id, faults) or self.wrote
+        )
+        if probed is TickResult.CUT_OFF or answered.cut_off:
             return TickResult.CUT_OFF
         view = self._build_view(runs.pending, self._probes.results(links), desired)
         self._flag_unconfigured(view, faults)
@@ -197,22 +249,6 @@ class ProjectTick:
         )
         self._context.clear()
         self.wrote = answered or self.wrote
-
-    def _answer_questions(self) -> None:
-        """Settle pending questions: this tick's catches are declined this tick.
-
-        Store only, so no budget check, and it runs before the ``CUT_OFF`` return.
-        The context is cleared, so an exception escalates per project: with a node
-        in context, 122's ``escalate`` would see a node already blocked on a human
-        and write nothing (slice 141, D5).
-        """
-        self._context.clear()
-        settled = settle_pending_questions(
-            self._store,
-            self._project_id,
-            configured=self._project_settings.answerer is not None,
-        )
-        self.wrote = settled or self.wrote
 
     def _plan_reads(
         self, links: Sequence[str], budget: TickBudget, faults: TickFaults

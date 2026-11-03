@@ -85,8 +85,8 @@ revision_number: 2
 
 - [x] **2.3 D3 acceptance test: reader cases** (`tests/runner/test_sq_answer_readers.py`)
   - [x] Build one slice journal: a paused `sq_run` with an open question block, plus an `sq_answer` in flight; then the same `sq_answer` resolved. For each of the two cases assert: `classify` is `RUN_TO_RESUME`; `run_to_resume` returns the `sq_run`; the checkout is held by that node; `dispatch_state` with an applied resume is `RESUME`; the resume count is unchanged.
-  - [ ] Add a test that an issuer's resolution of an `sq_answer` entry sets no `awaits_routing`, and that `tests/runner` code that builds `_run_entries` ignores `sq_answer` (never reaches `record_finished`).
-    - Note: the `awaits_routing` half is done (`test_an_sq_answer_resolution_awaits_no_routing`). The `_run_entries` half is asserted in 10.7 (tick-level), where a tick exists to drive it.
+  - [x] Add a test that an issuer's resolution of an `sq_answer` entry sets no `awaits_routing`, and that `tests/runner` code that builds `_run_entries` ignores `sq_answer` (never reaches `record_finished`).
+    - Note: the `awaits_routing` half is done (`test_an_sq_answer_resolution_awaits_no_routing`). The `_run_entries` half is covered by `test_an_sq_answer_entry_never_reaches_record_finished` in `tests/runner/test_tick_answering.py`.
   - [x] Add a test of `supervision_entries` itself (order kept, only `sq_answer` removed, empty input).
   - [x] Each reader has its own assertion, so a missing filter in any one reader fails a test that names that reader.
   - [x] Success: tests pass.
@@ -270,37 +270,38 @@ revision_number: 2
 
 ## 10. The stage and the tick (D10)
 
-- [ ] **10.1 Observe pass** (`runner/answering/stage.py`, grown; put the passes in a second module if the file passes ~300 lines)
-  - [ ] Add one helper, `unresolved_answering_entries(store, project_id)`, in `runner/answering/stage.py`: `Store.unresolved_journal_entries(project_id)` (`store/journal.py` ~line 289) filtered to `CommandKind.SQ_ANSWER`. The observe pass (here) and the concurrency cap (10.5) both call it, so the cap always counts the set being observed.
-  - [ ] `AnsweringStage` with the observe pass: unresolved `sq_answer` entries go to `RunObserver.observe` (polls take the budget; node context set per entry); each finished → `finish_answering`. Returns whether it was cut off. Nothing calls it yet; `settle_pending_questions` stays in place.
-  - [ ] Success: imports; typecheck passes.
+- [x] **10.1 Observe pass** (`runner/answering/stage.py`, grown; put the passes in a second module if the file passes ~300 lines)
+  - [x] Add one helper, `unresolved_answering_entries(store, project_id)`, in `runner/answering/stage.py`: `Store.unresolved_journal_entries(project_id)` (`store/journal.py` ~line 289) filtered to `CommandKind.SQ_ANSWER`. The observe pass (here) and the concurrency cap (10.5) both call it, so the cap always counts the set being observed.
+  - [x] `AnsweringStage` with the observe pass: unresolved `sq_answer` entries go to `RunObserver.observe` (polls take the budget; node context set per entry); each finished → `finish_answering`. Returns whether it was cut off. Nothing calls it yet; `settle_pending_questions` stays in place.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **10.2 Tests for the observe pass** (`tests/runner/answering/test_stage_observe.py`, stub `sq`)
-  - [ ] A finished run is finished; an in-flight run is left; budget spent → no poll, `CUT_OFF` reported, but an already-observed finished run is still finished; a poll fault is raised against its node.
-  - [ ] Success: tests pass.
+- [x] **10.2 Tests for the observe pass** (`tests/runner/answering/test_stage_observe.py`, stub `sq`)
+  - [x] A finished run is finished; an in-flight run is left; budget spent → no poll, `CUT_OFF` reported, but an already-observed finished run is still finished; a poll fault is raised against its node.
+  - [x] Success: tests pass.
 
-- [ ] **10.3 Stranded pass** (same module)
-  - [ ] `answering` records whose entry is resolved and whose block does not await the Runner are declined by the entry's outcome: `not_applied`/`unknown` → `answering_run_failed` with the outcome in the detail; stage-resolved/discarded → `answer_discarded`. A block awaiting the Runner is skipped. Runs with the node context cleared (141 D5; read how `tick.py` sets this up).
-  - [ ] Success: imports; typecheck passes.
+- [x] **10.3 Stranded pass** (same module)
+  - [x] `answering` records whose entry is resolved and whose block does not await the Runner are declined by the entry's outcome: `not_applied`/`unknown` → `answering_run_failed` with the outcome in the detail; stage-resolved/discarded → `answer_discarded`. A block awaiting the Runner is skipped. Runs with the node context cleared (141 D5; read how `tick.py` sets this up).
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **10.4 Tests for the stranded pass** (`tests/runner/answering/test_stage_stranded.py`)
-  - [ ] Entry resolved `not_applied` → `answering_run_failed`; entry resolved by the stage → `answer_discarded`; block awaiting the Runner → skipped.
-  - [ ] Success: tests pass.
+- [x] **10.4 Tests for the stranded pass** (`tests/runner/answering/test_stage_stranded.py`)
+  - [x] Entry resolved `not_applied` → `answering_run_failed`; entry resolved by the stage → `answer_discarded`; block awaiting the Runner → skipped.
+  - [x] Success: tests pass.
 
-- [ ] **10.5 Pending pass, `Launch` branch and tick wiring** (`runner/answering/settle.py`, `stage.py`, `runner/tick.py` ~line 210). These change together so the suite stays green.
-  - [ ] `settle.py`: add a `Launch` dataclass; the last branch returns `Launch()` instead of `Decline(NO_ANSWER_ON_FILE)` (D14). Update the docstring. Keep `no_answer_on_file` in the enum. Update 141's settle tests in `tests/runner/answering/test_settle.py`.
-  - [ ] `stage.py`: the pending pass replaces `settle_pending_questions`. For each pending record, oldest first, `settle_pending` → `Skip` | `Decline` | `Launch`. A `Launch` runs `launch_answering` only while unresolved `sq_answer` entries < `max_concurrent_runs` and the budget allows; a budget refusal stops the pass. Store-only declines run even when the budget is spent. Settling and launching run with the node context cleared. Stage order: observe, stranded, pending. Returns whether it cut off and whether it wrote.
-  - [ ] `tick.py`: call the stage where `settle_pending_questions` was called (after `record_finished` and the `shape_error` check). The tick returns `CUT_OFF` if the probes or the stage cut off. Update `tests/runner/test_tick_answering.py`'s import, call and any `no_answer_on_file` expectation.
-  - [ ] Success: imports; typecheck passes; `uv run pytest -q` passes.
+- [x] **10.5 Pending pass, `Launch` branch and tick wiring** (`runner/answering/settle.py`, `stage.py`, `runner/tick.py` ~line 210). These change together so the suite stays green.
+  - [x] `settle.py`: add a `Launch` dataclass; the last branch returns `Launch()` instead of `Decline(NO_ANSWER_ON_FILE)` (D14). Update the docstring. Keep `no_answer_on_file` in the enum. Update 141's settle tests in `tests/runner/answering/test_settle.py`.
+  - [x] `stage.py`: the pending pass replaces `settle_pending_questions`. For each pending record, oldest first, `settle_pending` → `Skip` | `Decline` | `Launch`. A `Launch` runs `launch_answering` only while unresolved `sq_answer` entries < `max_concurrent_runs` and the budget allows; a budget refusal stops the pass. Store-only declines run even when the budget is spent. Settling and launching run with the node context cleared. Stage order: observe, stranded, pending. Returns whether it cut off and whether it wrote.
+  - [x] `tick.py`: call the stage where `settle_pending_questions` was called (after `record_finished` and the `shape_error` check). The tick returns `CUT_OFF` if the probes or the stage cut off. Update `tests/runner/test_tick_answering.py`'s import, call and any `no_answer_on_file` expectation.
+  - Note: test_tick_answering's `no_answer_on_file` test became a configured-answerer question-missing test, since an empty answerer section now launches. It is `test_a_configured_answerer_still_declines_a_question_with_no_text`.
+  - [x] Success: imports; typecheck passes; `uv run pytest -q` passes.
 
-- [ ] **10.6 Tests for the pending pass** (`tests/runner/answering/test_stage_pending.py`, stub `sq`)
-  - [ ] Cap: three pending questions, `max_concurrent_runs` 2 → two `sq_answer` entries, one record still `pending`; once a run finishes, the third launches on a later tick (in the same tick if the observe pass frees the slot first).
-  - [ ] Order: oldest first. Budget spent: no spawn, a declinable pending record is still declined, `CUT_OFF` reported. A finish fault or launch fault escalates per project, not per node.
-  - [ ] Success: tests pass.
+- [x] **10.6 Tests for the pending pass** (`tests/runner/answering/test_stage_pending.py`, stub `sq`)
+  - [x] Cap: three pending questions, `max_concurrent_runs` 2 → two `sq_answer` entries, one record still `pending`; once a run finishes, the third launches on a later tick (in the same tick if the observe pass frees the slot first).
+  - [x] Order: oldest first. Budget spent: no spawn, a declinable pending record is still declined, `CUT_OFF` reported. A finish fault or launch fault escalates per project, not per node.
+  - [x] Success: tests pass.
 
-- [ ] **10.7 Tick-level tests** (`tests/runner/test_tick_answering.py`)
-  - [ ] Stage runs after `record_finished`; `CUT_OFF` propagates; a project with no `answerer` section still declines `answerer_not_configured` and journals no `sq_answer`; `sq_answer` is never passed to `record_finished`.
-  - [ ] Success: tests pass; `uv run pytest -q` passes.
+- [x] **10.7 Tick-level tests** (`tests/runner/test_tick_answering.py`)
+  - [x] Stage runs after `record_finished`; `CUT_OFF` propagates; a project with no `answerer` section still declines `answerer_not_configured` and journals no `sq_answer`; `sq_answer` is never passed to `record_finished`.
+  - [x] Success: tests pass; `uv run pytest -q` passes.
 
 **Commit**: `feat: run the answering stage in the tick with a concurrency cap`
 
