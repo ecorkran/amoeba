@@ -12,7 +12,7 @@ interfaces:
 - 145
 dateCreated: 20261101
 dateUpdated: 20261103
-status: in_progress
+status: complete
 turns: 31
 promptTokens: 3341553
 cachedTokens: 3161445
@@ -442,7 +442,7 @@ Inspection: `questions` gains `answering_run_id` (joined from the entry), `check
 
 ### Verification Walkthrough
 
-Steps 1, 3 and 4 were run on 20261103 against the stub `sq` and pass. Step 2 (the live tier) is not run: it waits on real `checkpoint.question` tails (task file, Task 14). The unit tests for decide, settle, the shared reader, the store operations and crash recovery are in Success Criteria and Technical Requirements; the steps here are the ones an operator can see. Step 1 needs no Squadron changes and no spend. Step 2 needs squadron 0.24.16 or later and real models. The stage runs against squadron 0.24.16 only: earlier versions exit 1 from `cf get` in a scratch directory.
+Steps 1, 3 and 4 were run on 20261103 against the stub `sq` and pass. Step 2 (the live tier) was run on 20261103 against squadron 0.24.16 with glm-flash and deepseek4-flash and passes (four cases, 59 seconds). The unit tests for decide, settle, the shared reader, the store operations and crash recovery are in Success Criteria and Technical Requirements; the steps here are the ones an operator can see. Step 1 needs no Squadron changes and no spend. Step 2 needs squadron 0.24.16 or later and real models. The stage runs against squadron 0.24.16 only: earlier versions exit 1 from `cf get` in a scratch directory.
 
 1. **The stage end to end, stub `sq`.**
 
@@ -452,17 +452,17 @@ Steps 1, 3 and 4 were run on 20261103 against the stub `sq` and pass. Step 2 (th
 
    Expected: 322 tests pass (the answering suites and the tick and end-to-end cases; the end-to-end ones are in `tests/runner/test_end_to_end_answering.py`). A question-paused slice gets one `sq_answer` and a resume with instructions that restate the question (`You asked: <question>` then `Answer: <answer>`). The record is `answered` by the answerer, with citations and verdict. The race cases pass: PM during the run, PM before `begin_answering`, PM between the read and `begin_answering`, restart with a run in flight, and a crash between `begin_answering` and the spawn. So do the cap case (three questions, cap 2) and every decline case.
 
-2. **Live tier, real models.** Not run; waits on Task 14.
+2. **Live tier, real models.**
 
    ```
    export AMOEBA_LIVE_ANSWER_MODEL=<non-SDK alias> AMOEBA_LIVE_CHECK_MODEL=<non-SDK alias> AMOEBA_LIVE_MAX_COST_USD=<cap>
-   uv run pytest tests/live/answering -k answering_run -v --basetemp=/tmp/answering-run-live
+   uv run pytest tests/live/answering/test_answering_run.py -v --basetemp=/tmp/answering-run-live
    ```
 
-   Expected: the plan-passage question resumes. The reworded PM-answer tail resumes on the same slice and on the other same-meaning slice, and is declined for the slice where the answer differs. Then look at one run:
+   Expected: four passed. The rules-passage question is answered. The reworded PM-answer question is answered on the same slice and on the other slice where the PM's answer was given for every slice, and is declined for the slice where the answer differs. Provider keys must be in the environment. Then look at one run:
 
    ```
-   ls /tmp/answering-run-live/<test>/store/answering/        # one directory per run id
+   ls /tmp/answering-run-live/<test>/supervisor/answering/    # one directory per run id
    ```
 
 3. **A real store with the stub.** The test `test_the_operator_sees_the_answered_question_through_inspect` copies the scenario's store into a throwaway supervisor directory and runs the real CLI over it. By hand: add the eight `answerer` keys to the scratch project (see the process contract, "The project config"), start Amoeba with the stub `sq` on `PATH` scripted to answer `yes` citing `P1` (`ANSWER_SCRIPT_ENV`), and produce a question.

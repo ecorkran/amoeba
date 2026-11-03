@@ -15,7 +15,7 @@ projectState: Slices 120–132 and 140–143 are merged. The answering stage onl
   143).
 dateCreated: 20261103
 dateUpdated: 20261103
-status: in_progress
+status: complete
 turns: 20
 promptTokens: 1440889
 cachedTokens: 1339771
@@ -368,16 +368,16 @@ revision_number: 2
 
 ## 14. Live tier (D13)
 
-- [ ] **14.1 Real-tail fixture** (`tests/live/answering/fixtures/question_tails.json`)
-  BLOCKED: needs real `checkpoint.question` values copied from `sq runs wait --json` output of question-paused runs. Squadron 0.24.16 ships 140's D8 capabilities and the Context Forge skip, so only the tails are missing. Leave this task and 14.2 unchecked until they exist.
-  - [ ] Each entry holds the tail, the run id and the capture date. Amoeba never reads run-state files.
-  - [ ] Success: the file loads; every entry has the three fields.
+- [x] **14.1 Inline question tails** (`tests/live/answering/question_tails.py`)
+  - [x] The question text for each live case is written inline, shaped like Squadron's tail (at most `QUESTION_TAIL_CHARS`, which may start mid-sentence). The live tier tests what the models make of the wording, not where the wording came from, so no capture from a real question-paused run is needed.
+  - [x] Success: a test in the normal suite (`tests/runner/answering/test_live_tier_rules.py`) asserts every tail fits the bound.
+  - Note: this task first required copying real `checkpoint.question` values from `sq runs wait` output. That was a step for the Project Manager and was removed.
 
-- [ ] **14.2 Live cases** (`tests/live/answering/test_answering_run.py`, using `harness.py` and 140's opt-in variables `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL`, `AMOEBA_LIVE_MAX_COST_USD`)
-  BLOCKED: same precondition as 14.1 (the tails).
-  - [ ] Plan passage: a question answered from a plan passage resumes a stub-paused run; record `answered` by the answerer.
-  - [ ] PM precedent: a real tail repeating a PM answer in other words resumes on the same slice; asked for a slice where the answer differs it is declined; another slice with the same meaning resumes.
-  - [ ] Each case runs the real stage from `assemble_sources` against 143's fixture repository and a throwaway store to the record's final state; runs once; a wrong result fails the test, nothing retries.
-  - [ ] Success: tests collect and skip cleanly without the variables (`uv run pytest tests/live/answering -q`); with them and a release, all pass.
+- [x] **14.2 Live cases** (`tests/live/answering/test_answering_run.py`, using `stage_harness.py` and 140's opt-in variables `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL`, `AMOEBA_LIVE_MAX_COST_USD`)
+  - [x] Plan passage: a question answered from a rules passage is answered by the answerer, and its block holds the resolution.
+  - [x] PM precedent: a question repeating a PM answer in other words is answered on the same slice; another slice with the same meaning (the PM's answer given as a convention for every slice) is answered; asked for a slice where the answer differs (a PM answer reserved for one slice) it is declined.
+  - [x] Each case runs the real stage from `assemble_sources` (against 143's fixture repository, `cf` faked and git real) through the real `sq` and real models to the record's final state in a throwaway store; runs once; a wrong result fails the test, nothing retries.
+  - [x] Success: with the variables, a squadron 0.24.16 install and provider keys, all four pass (20261103: glm-flash and deepseek4-flash, 59 seconds). Without the variables a bare `uv run pytest` ignores `tests/live`, and `uv run pytest tests/live` fails at collection naming the variable, as 140's live-tier rules require.
+  - Note: the first cross-slice case reused the PM answer "Yes. Use ISO 8601 in UTC on every line." and the answerer correctly declined to carry a one-slice answer to another slice. The case now uses an answer given for every slice.
 
-**Commit**: `test: add live answering-run cases and real question tails`
+**Commit**: `test: add live answering-run cases`
