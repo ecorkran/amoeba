@@ -553,13 +553,15 @@ resumable → resume; question → answer; anything else → a person".
   (see [`store-contract.md`](store-contract.md#question-records)). Its errors are not
   caught: they reach the tenant boundary, and the unresolved entry is ingested again
   on the next tick. **The answering stage** runs in every tick after the finished runs
-  are recorded, before the cut-off return, store only and without budget. It declines
-  each `pending` record: `question_missing` for a null or empty question,
-  `answerer_not_configured` for a project with no `answerer` section,
-  `no_answer_on_file` otherwise. A record whose block the PM has already resolved
+  are recorded and their faults raised, before the cut-off return (see
+  [The answering run](#the-answering-run)). It declines
+  each `pending` record that cannot be answered: `question_missing` for a null or
+  empty question, `answerer_not_configured` for a project with no `answerer` section.
+  A record whose block the PM has already resolved
   is skipped; the acknowledgment of that resolution marks it answered by the PM. A
   pending record whose block is resolved with nothing awaiting the Runner breaks an
-  invariant and raises, which escalates per project.
+  invariant and raises, which escalates per project. Every other record gets an
+  answering run.
 - **Text bounds.** `question`, `agent_text` and every checkpoint and failure text
   field are cut to the 4 KiB tail bound.
 
@@ -666,8 +668,9 @@ this section is the contract.
   `check_citations` is the one place "every cited id is in the set" is decided. A
   problem is a `SourcesProblem` (`sources_too_large`, `sources_missing`,
   `sources_unreadable`); only an exhausted tick budget returns `None`. Nothing calls
-  `assemble_sources` until slice 144.
-- **Launch.** From the scratch directory as working directory:
+  `assemble_sources` until slice 144, whose launch is its first caller.
+- **Launch.** From the scratch directory as working directory (slice 144 launches it
+  this way; see [The answering run](#the-answering-run)):
   `sq run <answering_pipeline_path()> <answer-model> --run-id <id> -p check-model=<alias>`.
   `sq` binds the positional target to the first `required` param, and `-p` does not
   satisfy a `required` param, so `answer-model` is the positional argument (observed with
@@ -742,6 +745,73 @@ this section is the contract.
   `AMOEBA_LIVE_SDK_MODEL`, is read only by the SDK-alias refusal test and fails that
   test, naming it, when unset (an addition to D10's three).
 
+### The answering run
+
+*Slice 144.* The answering stage answers a question the way the PM would: it runs the
+answering pipeline over the project's rules, plan and the PM's earlier answers, and
+submits the answer or declines. Rationale and decisions D1 to D14 are in
+`project-documents/user/slices/144-slice.answering-run.md`; this section is the contract.
+
+- **The journal kind.** An `sq_answer` entry records one answering run: the required
+  keys are `pipeline`, `params`, `run_id` and `scratch`
+  (see [`store-contract.md`](store-contract.md#required-parameter-keys)). It is not one
+  of the slice's commands: `supervision_entries` removes it from every reader of the
+  slice's journal (the resolution classifier, `run_to_resume`, the dispatch facts), the
+  store's done-guard ignores it, and it is never passed to `record_finished`.
+  Recovery observes it by run id like an `sq_run`, with no legacy matcher.
+- **The scratch directory.** `<supervisor_dir>/answering/<run_id>/`, beside
+  `launch-logs/`, outside any Context Forge project and made fresh for each run
+  (`mkdir` is exclusive). It holds the inputs of `prepare_scratch` and the run's replies.
+  Squadron 0.24.16 or later is required, because earlier versions run `cf get` first
+  and exit 1 outside a registered project. A launch that fails leaves at most one
+  directory; nothing is removed.
+- **The command.** `sq run <answering.yaml> <answer_model> --run-id <id> -p
+  check-model=<check_model>` from the scratch directory, started with the launch
+  code's `spawn` and logs, so the stderr log, the `run_id=` line and the launch grace
+  work unchanged. The answer model is the positional target because Squadron takes a
+  pipeline's first `required` param only that way. There is no checkout lookup, no
+  branch or clean-tree check and no checkout hold.
+- **The stage**, once a tick, in this order:
+  1. *Observe.* Each in-flight `sq_answer` entry goes to the run observer (polls take
+     the tick budget). A finished one is finished: the question is settled first, then
+     the entry is resolved with `run_id`, `run_outcome`, `decision` and
+     `question_outcome` (`submitted`, `declined`, `block_resolved`, `settled`,
+     `discarded`). A finish that crashes in between is finished again without a second
+     submission or decline.
+  2. *Stranded.* An `answering` question whose entry is resolved and whose block awaits
+     nothing from the Runner is declined: `answering_run_failed` when recovery resolved
+     the entry `not_applied` or `unknown`, otherwise `answer_discarded`.
+  3. *Pending.* Oldest first, each `pending` question is declined (store only, even
+     with the budget spent) or launched while fewer than `max_concurrent_runs` entries
+     are in flight and the budget allows. A budget refusal stops the launches, not
+     the declines, and the question stays `pending` for the next tick.
+- **Before the journal.** The sources are assembled first, then the scratch directory
+  and the command. A `SourcesProblem` declines `sources_too_large`, `sources_missing`
+  or `sources_unreadable`; an `OSError` making the directory or writing its inputs
+  declines `answering_launch_failed`. Either way no entry is journaled and nothing is
+  retried. `begin_answering` then journals the entry and moves the record in one
+  transaction. A spawn that fails resolves the entry and declines
+  `answering_launch_failed` in the same tick.
+- **The decision**, `decide_answer` (pure), applies six checks in order and the first
+  failure decides: the run completed; the answer reply parsed; the answer step
+  answered (`answerer_declined` otherwise, whatever the check said); the citations pass
+  `check_citations` against the ids recorded at launch (`uncited`, `unknown_citation`);
+  the check reply parsed; the verdict is `yes` (`check_said_no`). A run that did not
+  complete declines `answering_run_failed` (a failure of kind `provider_error` or
+  `artifact_missing`, an unknown or absent kind, a pause, a vanished run or an entry
+  recovery could not resolve), `answering_run_stalled` (`stall`),
+  `answering_cost_cap` (`cost_cap`) or `answering_run_orphaned` (`orphaned`). Each
+  decline stores `decline_detail` (bounded) and the evidence gathered so far.
+- **The submission.** A confirmed answer goes through the answer gate and
+  `submit_answer`. The resume that follows is the Runner's usual one: the resolution
+  carries `You asked: <question>\nAnswer: <answer>` as instructions.
+- **The PM always wins.** A PM's resolution while a run is in flight is accepted; the
+  run's later result finds the question no longer `answering` and changes nothing.
+  Nothing retries: a declined question stays with the PM.
+- **Faults.** A failure while finishing or launching escalates per project, not per
+  node. A poll that cannot read a run is the usual `run_observation_failed` fault of
+  the entry's node.
+
 ### Context Forge shapes
 
 *Slice 143.* Upstream layout knowledge the passage reads rely on. It is observed, not
@@ -785,7 +855,7 @@ projects:
 
 - `answerer` (slice 141, keys from slice 142) is optional. Its presence turns the
   question answerer on; a missing key or an unnamed project leaves it off. When present
-  it needs all four keys, with no defaults:
+  it needs all eight keys, with no defaults:
   - `answer_limit`: an integer of at least 1, the most answers the answerer may give in
     one run. To turn the answerer off, remove the section; `0` is not an off switch.
   - `reserved_terms`: a list of strings, each stripped and non-blank. Any term found in
@@ -802,14 +872,27 @@ projects:
     key fails.
   - `passages_max_chars`: an integer of at least 1, the most characters of rendered
     `passages.md` (headers included) an answering run is sent.
+  - `answer_model` and `check_model` (slice 144): Squadron model aliases for the answer
+    and the check step, each stripped, non-blank and without a `,`. They must name
+    different models in practice (the check is independent), but the load does not
+    compare them.
+  - `max_concurrent_runs` (slice 144): an integer of at least 1, the most answering
+    runs in flight at once in this project.
+  - `max_cost_usd` (slice 144): a number above zero, the cost cap of one answering run,
+    written into the scratch directory's `.squadron.toml`.
+
+  **An `answerer` section written before slice 144 fails at load** until it adds the
+  four new keys; there are no defaults.
 
   Load fails, naming the key path (`projects.<id>.answerer.answer_limit`, for example),
-  for `answerer: {}`, a missing key, `answer_limit` or `passages_max_chars` of `0`, a
+  for `answerer: {}`, a missing key, `answer_limit`, `passages_max_chars` or
+  `max_concurrent_runs` of `0`, a `max_cost_usd` of zero or less, a model with a comma, a
   negative, non-integer or quoted value, a blank term or a non-string term, a blank,
   absolute or `..`-containing `rules_paths` entry (`...rules_paths.1`, for the second),
   a `*` outside the last segment, and any unknown key. An explicit
   `answerer:` with a null value fails the load ("answerer must be a mapping with
-  answer_limit, reserved_terms, rules_paths and passages_max_chars", naming
+  answer_limit, reserved_terms, rules_paths, passages_max_chars, answer_model,
+  check_model, max_concurrent_runs and max_cost_usd", naming
   `projects.<id>.answerer`). Start-up runs
   the answering pipeline probe (`sq run <answering.yaml> --validate`) once when any
   project has an `answerer` section, and exits `STARTUP_FAILED` naming that command if
@@ -826,6 +909,10 @@ projects:
           - CLAUDE.md
           - project-documents/ai-project-guide/project-guides/rules/*.md
         passages_max_chars: 200000
+        answer_model: glm-flash
+        check_model: deepseek4-flash
+        max_concurrent_runs: 2
+        max_cost_usd: 0.5
   ```
 - Keys under `projects` are Amoeba project ids. `pipeline` is required for each named
   project; there is **no default pipeline**, because a default could merge code nobody
@@ -1067,7 +1154,7 @@ provenance and never parsed, ordered, or branched on.
 | `amoeba status` | `running` (pid, start time, version), `running (pid unknown)`, `stopped (stale pid file)`, or `stopped`. |
 | `amoeba inspect projects\|inbox` | Supervisor-level: project ids with a store; inbox files pending, quarantined, or failed. Open no store. |
 | `amoeba inspect nodes\|journal\|submissions\|messages --project ID` | Read-only listings. `journal` accepts `--unresolved`; `messages` accepts `--channel`. All accept `--json`. |
-| `amoeba inspect questions --project ID [--node ID] [--state STATE]` | Question records: `id`, `node_id`, `run_id`, `step`, `state`, `answered_by`, `question`, `outcome` (the answer, or the decline reason), `reserved_term` (the configured term a `reserved_term` decline matched, else empty), `truncated`, `created_at`; `--json` and the server add `blocked_state_id`, `source_entry_id` and `updated_at`. *(Slice 141; `reserved_term` slice 142.)* |
+| `amoeba inspect questions --project ID [--node ID] [--state STATE]` | Question records: `id`, `node_id`, `run_id`, `step`, `state`, `answered_by`, `question`, `outcome` (the answer, or the decline reason), `reserved_term` (the configured term a `reserved_term` decline matched, else empty), `truncated`, `created_at`, `answering_run_id` (the run id of the answering entry), `check_verdict`, `decline_detail`; `--json` and the server add `blocked_state_id`, `source_entry_id`, `updated_at` and every answering-run column (`answering_entry_id`, `source_commit`, `passage_index` with each passage's source and date, `dropped_pm_answers`, `proposed_answer`, `cited_passages`, `check_reason`). *(Slice 141; `reserved_term` slice 142; the answering columns slice 144.)* |
 | `amoeba inspect blocked [--project ID]` | Blocked nodes with `question_state` and `decline_reason` (empty for a block with no question), `project_id`, `reason` (the payload's `reason` or `fault_kind`, empty with neither) and `blocked_state_id`; every project when `--project` is omitted, each store opened read-only. `--json` adds the full escalation `payload`, which holds an agent's question. *(Slice 132.)* |
 | `amoeba submit create-project\|resolution\|intent ...` | Write one submission to the inbox and print its id. Opens no store; works whether or not the process runs. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
 | `amoeba prune sq-runs [--yes]` | Previews the paused Squadron runs Amoeba may prune; with `--yes`, asks `sq runs prune` to delete them. Read-only on every store. See "Pruning paused runs". *(Slice 110.)* |

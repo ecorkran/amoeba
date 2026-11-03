@@ -258,7 +258,7 @@ All `StrEnum`, all defined once, exported from `amoeba.store`.
 
 | Vocabulary | Members |
 | --- | --- |
-| `CommandKind` | `cf_write`, `sq_run` |
+| `CommandKind` | `cf_write`, `sq_run`, `sq_answer` (slice 144) |
 | `JournalOutcome` | `completed`, `failed` (written by the issuer); `adopted`, `not_applied`, `unknown` (written only by recovery) |
 | `JournalResolver` | `issuer`, `recovery` |
 
@@ -274,7 +274,14 @@ and is distinct from an unmappable stored string, which raises
 | Kind | Required keys |
 | --- | --- |
 | `sq_run` | `pipeline`, `params`, `run_id` |
+| `sq_answer` | `pipeline`, `params`, `run_id`, `scratch` (the absolute path of the answering run's scratch directory; slice 144, exported as `PARAM_SCRATCH`) |
 | `cf_write` | `project`, `expected` (a mapping of CF field name to the value the write should leave behind), `checkout` (the absolute path the write and every read-back of it run in; slice 125) |
+
+An `sq_answer` entry is an answerer run (slice 144), not one of the slice's commands:
+`supervision_entries(entries)` returns entries without it, and every reader of a
+slice's commands uses it. The done-guard ignores it too: a node with an unresolved
+`sq_answer` entry can still be marked `done`. An issuer's resolution of an `sq_answer`
+entry never sets `awaits_routing`.
 
 `cf_write` also takes an optional `expected_slice_index` (an integer, exported as
 `PARAM_EXPECTED_SLICE_INDEX`): the slice index a pointer write sets. The read-back
@@ -843,7 +850,8 @@ and the Runner rejects the others (`unknown_decision`). See
 ### Question records
 
 *Added by slice 141. Schema version 13 (migration `013`); slice 142 added
-`reserved_term` (migration `014`, schema version 14).* Every agent question gets
+`reserved_term` (migration `014`, schema version 14); slice 144 added the answering-run
+columns (migration `015`, schema version 15).* Every agent question gets
 one record in `question_records`, written in the same transaction as the `HUMAN` block
 the Runner writes for it. The PM's resolution of that block writes the PM's answer onto
 it. Nothing calls a model: the records are the memory that the answerer slices (142 to
@@ -853,7 +861,13 @@ it. Nothing calls a model: the records are the memory that the answerer slices (
   `UnknownVocabularyValueError`). `QuestionState`: `pending`, `answering`, `answered`,
   `declined`. `AnsweredBy`: `answerer`, `pm`. `DeclineReason`: `node_already_blocked`,
   `question_missing`, `answerer_not_configured`, `no_answer_on_file`,
-  `answer_limit_reached`, `reserved_term` (later slices may add members).
+  `answer_limit_reached`, `reserved_term`, and (slice 144) `sources_too_large`,
+  `sources_missing`, `sources_unreadable`, `answering_launch_failed`,
+  `answering_run_failed`, `answering_run_stalled`, `answering_cost_cap`,
+  `answering_run_orphaned`, `answer_discarded`, `artifact_missing`,
+  `artifact_malformed`, `answerer_declined`, `uncited`, `unknown_citation`,
+  `check_said_no`. `no_answer_on_file` is no longer written; records from before slice
+  144 hold it.
 - **Models.** `QuestionCatch(project_id, node_id, source_entry_id, run_id, step,
   question, truncated)` is what ingest knows; `QuestionRecord` has every column.
   `QUESTION_TRANSITIONS` is the one statement of the legal state changes.
@@ -865,6 +879,12 @@ it. Nothing calls a model: the records are the memory that the answerer slices (
   the PM answers a declined question afterwards. `reserved_term` (nullable, added by
   `014`) holds the configured term the gate declined on, and is set only when
   `decline_reason` is `reserved_term`. Nothing is backfilled.
+  Migration `015` adds nine nullable columns, all null on a record from before it:
+  `answering_entry_id` (the `sq_answer` entry that ran the answerer; a unique partial
+  index), `source_commit`, `passage_index` (JSON: id, source, question id and date of
+  each passage, never its text), `dropped_pm_answers` (JSON), `proposed_answer`,
+  `cited_passages` (JSON), `check_verdict`, `check_reason` and `decline_detail`. A PM
+  answer leaves them as they were.
 
 | From | To | Writer |
 | --- | --- | --- |
@@ -873,7 +893,7 @@ it. Nothing calls a model: the records are the memory that the answerer slices (
 | `pending`, `answering` | `declined` | `decline_question` |
 | `pending`, `answering` | `declined` (`answer_limit_reached`, `reserved_term`) | `submit_answer`, gate refused |
 | `pending`, `declined`, `answering` | `answered` (`pm`) | `acknowledge_resolution` |
-| `pending` | `answering` | slice 144 |
+| `pending` | `answering` | `begin_answering` |
 | `pending`, `answering` | `answered` (`answerer`) | `submit_answer` |
 
 `answered` is terminal. Any other change raises `InvalidTransitionError` and writes
@@ -882,7 +902,7 @@ nothing.
 | Method | Effect |
 | --- | --- |
 | `record_question(catch, *, block_context, block_payload) -> QuestionRecord` | In-process only. **One transaction:** writes the `HUMAN` block (with its escalation) and inserts the record `pending`, linked to the block. On a node that is already blocked it writes no block and inserts the record `declined` (`node_already_blocked`), linked to none. A record that already exists for `catch.source_entry_id` is returned and nothing is written. A missing node raises `NodeNotFoundError`; a done node raises `InvalidTransitionError`. |
-| `decline_question(question_id, *, reason) -> QuestionRecord` | In-process only. Record-only: `pending` or `answering` to `declined`. Any other state raises `InvalidTransitionError`. |
+| `decline_question(question_id, *, reason, detail=None, evidence=None) -> QuestionRecord` | In-process only. Record-only: `pending` or `answering` to `declined`. Any other state raises `InvalidTransitionError`. `detail` (`decline_detail`) and `evidence` (`AnsweringEvidence`: proposed answer, cited ids, check verdict and reason) are written in the same transaction, as given; the caller bounds the text (slice 144). |
 | `question(question_id)` | One record, or `None`. |
 | `questions(project_id, *, state=None, node_id=None)` | Records, oldest first. |
 | `pending_questions(project_id)` | The `pending` records, oldest first, through the `(project_id, state, created_at)` index. |
@@ -906,12 +926,11 @@ a null answer is not precedent.
 #### Submitting an answer
 
 *Added by slice 142.* One method submits the answerer's answer, or declines the
-question, behind one gate. Nothing in the store calls it yet (slice 144 is the first
-caller).
+question, behind one gate. Slice 144's answering stage is its caller.
 
 | Method | Effect |
 | --- | --- |
-| `submit_answer(question_id, *, answer, instructions, detail, gate) -> AnswerSubmission` | In-process only. **One transaction** (`BEGIN IMMEDIATE`). The store writes `ANSWER_DECISION` (`"resume"`) as the decision and `AnsweredBy.ANSWERER.value` as `resolved_by` and `submitted_by`; the caller supplies neither. `instructions` and `detail` are plain strings written to the slot and the submission row as given, and the store reads neither. `gate: AnswerGate` (`Callable[[str, int], GateRefusal \| None]`) is called once, under the write lock, with the record's question and the number of answers the answerer already gave this run. Raises `QuestionNotFoundError` for an unknown id, `ValueError` for a blank `answer`, `instructions` or `detail` or a record with no question text, and `StoreBusyError` when the busy timeout is exhausted. An exception from `gate` rolls the transaction back and propagates. |
+| `submit_answer(question_id, *, answer, instructions, detail, gate, evidence=None) -> AnswerSubmission` | In-process only. **One transaction** (`BEGIN IMMEDIATE`). The store writes `ANSWER_DECISION` (`"resume"`) as the decision and `AnsweredBy.ANSWERER.value` as `resolved_by` and `submitted_by`; the caller supplies neither. `instructions` and `detail` are plain strings written to the slot and the submission row as given, and the store reads neither. `gate: AnswerGate` (`Callable[[str, int], GateRefusal \| None]`) is called once, under the write lock, with the record's question and the number of answers the answerer already gave this run. Raises `QuestionNotFoundError` for an unknown id, `ValueError` for a blank `answer`, `instructions` or `detail` or a record with no question text, and `StoreBusyError` when the busy timeout is exhausted. An exception from `gate` rolls the transaction back and propagates. `evidence` (slice 144) is written in the same transaction on `submitted` and `declined`. |
 
 Inside the transaction, in order: read the record; a state other than `pending` or
 `answering` returns `settled`; a block already resolved returns `block_resolved`; the
@@ -932,10 +951,32 @@ rejection's `HUMAN` block, and a PM resume of that block is not recorded as prec
 (no unanswered record is linked to it). Exported with it: `GateRefusal`, `AnswerGate`,
 `AnswerOutcome`, `ANSWER_DECISION`, `QuestionNotFoundError`.
 
+#### Answering runs
+
+*Added by slice 144. Schema version 15 (migration `015`).* One method starts an
+answering run, and one finds the record a run belongs to.
+
+| Method | Effect |
+| --- | --- |
+| `begin_answering(question_id, launch: AnsweringLaunch) -> BeginOutcome` | In-process only. **One transaction** (`BEGIN IMMEDIATE`): journals the `sq_answer` entry (`journal_issue`'s checks and insert, without its own commit) and moves the record `pending` to `answering`, setting `answering_entry_id`, `source_commit`, `passage_index` and `dropped_pm_answers`. A crash leaves both or neither, so a pending record never sits beside an in-flight `sq_answer`. `AnsweringLaunch(node_id, run_id, parameters, source_commit, passages, dropped_pm_answers)`; `passages` are `PassageRef(id, source, question_id, date)`, never text. Raises `QuestionNotFoundError`, and `ValueError` for a missing required parameter key or a `node_id` that is not the record's, before any write. |
+| `question_for_answering_entry(entry_id)` | The record linked to an `sq_answer` entry, or `None`. |
+
+| Outcome | When | What was written |
+| --- | --- | --- |
+| `begun` | The record was `pending` and its block open | The `sq_answer` entry and the `answering` state (the feed emits `question_state_changed`); the outcome carries both |
+| `settled` | The record is no longer `pending` | Nothing |
+| `block_resolved` | Someone resolved the block first | Nothing |
+
+Exported with them: `AnsweringLaunch`, `AnsweringEvidence`, `PassageRef`,
+`BeginOutcome`, `BeginStatus`. A PM answer to an `answering` record sets only `state`,
+`answered_by` and `answer`; the run's later result finds the record no longer
+`answering` and writes nothing to it.
+
 **Feed and inspection.** The two triggers emit `question_recorded` and
 `question_state_changed` (see [`feed-contract.md`](feed-contract.md#kinds-and-payloads)).
 `amoeba inspect questions` lists the records (with the `reserved_term` column since
-slice 142), and `amoeba inspect blocked` gains
+slice 142, and `answering_run_id`, `check_verdict` and `decline_detail` since slice
+144), and `amoeba inspect blocked` gains
 `question_state` and `decline_reason` for a block that carries a question.
 
 ### Unrouted outcomes
@@ -1058,8 +1099,10 @@ adding a table onto working machinery, not debugging both at once.
 **A store stamped newer than the code raises `StoreSchemaError`.** It is never
 silently downgraded.
 
-The latest migration is `014` (slice 142, schema version 14: the nullable
-`question_records.reserved_term` column). Before it, `013` (slice 141, schema version
+The latest migration is `015` (slice 144, schema version 15: nine nullable
+`question_records` columns for the answering run, and a unique partial index on
+`answering_entry_id`). Before it, `014` (slice 142, schema version 14: the nullable
+`question_records.reserved_term` column). Before that, `013` (slice 141, schema version
 13: the `question_records` table, its indexes and the two question feed triggers).
 Before that, `012` (slice 127,
 schema version 12) added the resolution decision, instructions and the Runner's

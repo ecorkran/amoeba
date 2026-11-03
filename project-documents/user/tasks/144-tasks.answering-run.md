@@ -248,7 +248,8 @@ revision_number: 2
 
 - [x] **9.2 Tests for the pre-journal steps** (`tests/runner/answering/test_launch_prepare.py`, with a real throwaway store and 143's sources repo fixture)
   - [x] Scratch directory exists under the supervisor directory and holds the prepared inputs; `.squadron.toml` carries the configured `max_cost_usd`; argv has the pipeline path, run id and both models and no positional slice.
-    Note: the argv has no positional. There is no `slice` key; the models are passed as `-p answer-model=…` and `-p check-model=…`.
+    Note: there is no `slice` key and no positional slice. The argv is `sq run <pipeline> <answer-model> --run-id <id> -p check-model=<alias>`: the answer model is the positional target (see the next note).
+    Note: the real `sq` rejects a required param given by `-p`, so the answer model is the positional target of the answering run and the check model stays `-p check-model=…` (fix commit "fix: pass the answer model as the positional target of the answering run"). The "no positional slice" text above still holds: the positional is the answer model, not a slice.
   - [x] Each `SourcesProblemKind` → matching decline reason, no directory, no entry. A budget refusal → record stays `pending`, no directory.
   - [x] `OSError` on `mkdir` and on `prepare_scratch` (read-only parent / monkeypatched) → `answering_launch_failed`, no entry, no relaunch on a second call.
     Note: "no relaunch on a second call" is asserted as the declined question no longer being in `pending_questions`, which is what the stage iterates, rather than by calling launch twice with a stale record.
@@ -342,11 +343,12 @@ revision_number: 2
 
 **Commit**: `feat: add answering columns to the question listing`
 
-- [ ] **12.3 Docs** (`docs/store-contract.md`, `docs/process-contract.md`)
-  - [ ] Store contract: new "Answering runs" subsection under "Question records" (the methods table from the LLD), the `sq_answer` kind and its required keys in the journal section, the done-guard exclusion, and the latest migration moved to `015`.
-  - [ ] Process contract: the `sq_answer` kind, the scratch layout under the supervisor directory, the four answerer keys with their example values (and the note that existing answerer sections fail at load until they add them), and the stage's place in the tick. Remove or amend text saying the answering stage starts no subprocess.
-  - [ ] Amend the architecture's "Cost and configuration" and the slice plan's 144 entry per D1 (the pipeline is not a configuration key): edit `user/architecture/140-slices.question-answerer.md` and the slice plan file that lists 144, changing only that sentence.
-  - [ ] Success: the docs describe the shipped behaviour; `uv run pytest -q` passes (including any docs/contract tests).
+- [x] **12.3 Docs** (`docs/store-contract.md`, `docs/process-contract.md`)
+  - [x] Store contract: new "Answering runs" subsection under "Question records" (the methods table from the LLD), the `sq_answer` kind and its required keys in the journal section, the done-guard exclusion, and the latest migration moved to `015`.
+  - [x] Process contract: the `sq_answer` kind, the scratch layout under the supervisor directory, the four answerer keys with their example values (and the note that existing answerer sections fail at load until they add them), and the stage's place in the tick. Remove or amend text saying the answering stage starts no subprocess.
+  - [x] Amend the architecture's "Cost and configuration" and the slice plan's 144 entry per D1 (the pipeline is not a configuration key): edit `user/architecture/140-slices.question-answerer.md` and the slice plan file that lists 144, changing only that sentence.
+    Note: the architecture's "Cost and configuration" (`user/architecture/140-arch.question-answerer.md`, line ~126) and the slice plan's 144 entry (`user/architecture/140-slices.question-answerer.md`, line ~106) already carried the D1 sentence (the pipeline is not a configuration key), so no edit was needed there.
+  - [x] Success: the docs describe the shipped behaviour; `uv run pytest -q` passes (including any docs/contract tests).
 
 **Commit**: `docs: document answering runs`
 
