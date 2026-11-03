@@ -167,6 +167,9 @@ def test_setup_builds_the_directory_and_submits_the_project(
     calls = Path(environ["STUB_LOG"]).read_text().splitlines()
     assert "cf init --lite --name scratch" in calls
     assert (
+        "cf set plan project-documents/user/architecture/100-slices.notes.md" in calls
+    )
+    assert (
         "amoeba submit link-cf-project --project scratch --by walkthrough "
         "--cf-project-id project_stub_1"
     ) in calls

@@ -29,6 +29,8 @@ from typing import cast
 
 TREE = Path(__file__).parent / "answerer_walkthrough" / "project"
 PROJECT_ID = "scratch"
+#: Where the tree's slice plan lives; `sq` reads the plan through `cf list slices`.
+SLICE_PLAN = "project-documents/user/architecture/100-slices.notes.md"
 SUBMITTER = "walkthrough"
 #: git identity for the scratch checkout; passed with -c so no global config is read.
 GIT_IDENTITY = (
@@ -149,6 +151,13 @@ def build_checkout(layout: Layout, env_file: Path, env: Mapping[str, str]) -> No
     run_step(
         "cf init",
         ["cf", "init", "--lite", "--name", PROJECT_ID],
+        cwd=checkout,
+        env=env,
+        root=root,
+    )
+    run_step(
+        "cf set plan",
+        ["cf", "set", "plan", SLICE_PLAN],
         cwd=checkout,
         env=env,
         root=root,
