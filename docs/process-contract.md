@@ -543,6 +543,10 @@ resumable → resume; question → answer; anything else → a person".
   agent's reply: `QUESTION_TAIL_CHARS` in `process/sq_outcome.py`. A question that
   long was probably cut at its start, so the question record's `truncated` flag is
   `len(question) >= QUESTION_TAIL_CHARS`, measured before the text bound below.
+  The answering pipeline's dispatch keys (`prompt_files`, `reply_from`, `reply_format`,
+  `reply_file`, `delivered_prompt_file`) and `sq run --validate --strict` were first
+  observed running the answering pipeline: squadron 0.24.14, on 20261103. The captured
+  `answer.json` and `check.json` in `tests/fixtures/answering/` come from that run.
 - **The question record (slice 141).** A `QUESTION` plan carries the question
   (`OutcomePlan.question`), and ingest writes the block through `record_question`
   instead of `block_once`, so the block and the record land together or not at all

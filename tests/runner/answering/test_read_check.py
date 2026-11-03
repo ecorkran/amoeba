@@ -27,7 +27,12 @@ def _write(directory: Path, content: object) -> None:
 def test_fixture_in_production_shape(tmp_path: Path) -> None:
     (tmp_path / CHECK_REPLY_FILE).write_bytes((FIXTURES / "check.json").read_bytes())
     assert read_check(tmp_path) == CheckReply(
-        verdict=Verdict.YES, reason="P5 is dated after P2 and agrees with the answer."
+        verdict=Verdict.YES,
+        reason=(
+            "The proposed answer matches and is supported by passage P1, which "
+            "specifies the required commit message form. No later or contradictory "
+            "passage applies."
+        ),
     )
 
 

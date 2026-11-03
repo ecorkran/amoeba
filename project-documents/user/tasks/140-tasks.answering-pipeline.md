@@ -234,10 +234,12 @@ Note 20261103: with check-model set to the sonnet SDK alias the answer step comp
 
 **Commit**: `test: add live SDK alias refusal test`
 
-- [ ] **9.5 Capture real replies and record the observation** (effort 2)
-  - [ ] `BLOCKED:` depends on 9.2.
-  - [ ] Copy one real `answer.json` and one real `check.json` from a passing run into `tests/fixtures/answering/`, replace Task 4.3's hand-written fixture in the parser tests with them (keep the hand-written edge cases), and rerun the unit tier.
-  - [ ] Add a dated note under "Squadron shapes" in `docs/process-contract.md`: "first observed running the answering pipeline: squadron x.y.z, on <date>", with the version from `sq --version` as run in this task.
-  - [ ] Success: unit tier passes on the captured files; the note is present with a real version and date.
+- [x] **9.5 Capture real replies and record the observation** (effort 2)
+  - [x] `BLOCKED:` depends on 9.2. Unblocked 20261103 (9.2 done).
+  - [x] Copy one real `answer.json` and one real `check.json` from a passing run into `tests/fixtures/answering/`, replace Task 4.3's hand-written fixture in the parser tests with them (keep the hand-written edge cases), and rerun the unit tier.
+  - [x] Add a dated note under "Squadron shapes" in `docs/process-contract.md`: "first observed running the answering pipeline: squadron x.y.z, on <date>", with the version from `sq --version` as run in this task.
+  - [x] Success: unit tier passes on the captured files; the note is present with a real version and date.
+
+Note 20261103: captured from a live run (answer glm-flash, check deepseek4-flash, squadron 0.24.14). Parser tests now assert the real replies; unit tier 4133 passed. One earlier full-suite run failed tests/contract/test_harness.py::test_start_submit_build_a_tree_and_stop_cleanly; it passed alone and in the next full run, no cause found.
 
 **Commit**: `feat: capture real answering replies and record the squadron observation`

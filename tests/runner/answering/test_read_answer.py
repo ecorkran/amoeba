@@ -34,10 +34,10 @@ def test_fixture_in_production_shape(tmp_path: Path) -> None:
     (tmp_path / ANSWER_REPLY_FILE).write_bytes((FIXTURES / "answer.json").read_bytes())
     assert read_answer(tmp_path) == ProposedAnswer(
         answer=(
-            "Branch from main and merge back into main; "
-            "no integration branch is configured."
+            "Commit messages must use the form `type: short imperative summary`, "
+            "for example `fix: handle empty input`."
         ),
-        cited=("P2", "P5"),
+        cited=("P1",),
     )
 
 

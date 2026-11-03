@@ -1,1 +1,1 @@
-{"kind": "answer", "answer": "Branch from main and merge back into main; no integration branch is configured.", "cited": ["P2", "P5"]}
+{"kind": "answer", "answer": "Commit messages must use the form `type: short imperative summary`, for example `fix: handle empty input`.", "cited": ["P1"]}
