@@ -10,6 +10,7 @@ import pytest
 from cli_harness import run_cli
 from evidence_harness import provider_failure
 from inspection_harness import PROJECT, SeededStore
+from question_harness import seed_question
 from serve_harness import ClientFactory
 
 from amoeba.inspection import (
@@ -22,13 +23,19 @@ from amoeba.inspection import (
 from amoeba.serve import reads
 from amoeba.store import (
     AcknowledgmentOutcome,
+    AnsweredBy,
     Channel,
+    CommandKind,
+    DeclineReason,
     DetectionOutcome,
+    NodeKind,
     QuestionState,
     Store,
     StoreBusyError,
     sql,
+    sql_questions,
 )
+from amoeba.store.mapping_questions import encode_text_list
 from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION
 
 #: (case id, listing name, CLI arguments after the listing name, query string)
@@ -327,3 +334,57 @@ def test_a_busy_store_is_503_with_retry_after(
     assert response.status_code == 503
     assert _error(response.json()) == "store_busy"
     assert "retry-after" in response.headers
+
+
+def test_questions_listing_serves_the_answering_columns(
+    seeded: SeededStore, make_client: ClientFactory
+) -> None:
+    with Store.open(seeded.store_file) as store:
+        node_id = store.create_node(
+            project_id=PROJECT, kind=NodeKind.SLICE, title="asked"
+        ).id
+        entry = store.journal_issue(
+            node_id,
+            kind=CommandKind.SQ_ANSWER,
+            parameters={
+                "run_id": "run-served-0001",
+                "pipeline": "answering.yaml",
+                "params": {},
+                "scratch": "/tmp/answering/x",
+            },
+        )
+        answered = seed_question(
+            store,
+            node_id,
+            state=QuestionState.ANSWERED,
+            answered_by=AnsweredBy.ANSWERER,
+            answer="use main",
+            answering={
+                sql_questions.COL_QUESTION_ANSWERING_ENTRY_ID: entry.id,
+                sql_questions.COL_QUESTION_CHECK_VERDICT: "yes",
+                sql_questions.COL_QUESTION_CITED_PASSAGES: encode_text_list(("P1",)),
+            },
+        )
+        declined = seed_question(
+            store,
+            node_id,
+            state=QuestionState.DECLINED,
+            decline_reason=DeclineReason.CHECK_SAID_NO,
+            answering={
+                sql_questions.COL_QUESTION_DECLINE_DETAIL: "the check disagreed",
+                sql_questions.COL_QUESTION_PROPOSED_ANSWER: "use dev",
+            },
+        )
+
+    rows = (
+        make_client()
+        .get("/v1/listings/questions", params={"project": PROJECT})
+        .json()["rows"]
+    )
+
+    by_id = {row["id"]: row for row in rows}
+    assert by_id[answered.id]["answering_run_id"] == "run-served-0001"
+    assert by_id[answered.id]["check_verdict"] == "yes"
+    assert by_id[answered.id]["cited_passages"] == ["P1"]
+    assert by_id[declined.id]["decline_detail"] == "the check disagreed"
+    assert by_id[declined.id]["proposed_answer"] == "use dev"

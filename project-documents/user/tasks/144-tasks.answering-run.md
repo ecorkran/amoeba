@@ -331,14 +331,14 @@ revision_number: 2
 
 ## 12. Inspection and contracts (D11)
 
-- [ ] **12.1 Listing columns** (`inspection/questions.py`, and the server route if it shares the model)
-  - [ ] `questions` gains `answering_run_id` (joined through the entry), `check_verdict`, `decline_detail`; `--json` and the server carry every D11 column. Read the module first and follow how current columns are added.
-  - [ ] Success: imports; typecheck passes.
+- [x] **12.1 Listing columns** (`inspection/questions.py`, and the server route if it shares the model)
+  - [x] `questions` gains `answering_run_id` (joined through the entry), `check_verdict`, `decline_detail`; `--json` and the server carry every D11 column. Read the module first and follow how current columns are added.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **12.2 Tests for the listing** (`tests/inspection/`, beside the existing questions tests)
-  - [ ] An answered record shows the run id, verdict and citations; a declined record shows `decline_detail` and `proposed_answer`; a pre-015 record lists with empty values; `--json` holds the passage index with source and date.
-  - [ ] The server's questions response (beside the existing tests in `tests/serve/`) carries the same columns for an answered and a declined record.
-  - [ ] Success: tests pass.
+- [x] **12.2 Tests for the listing** (`tests/inspection/`, beside the existing questions tests)
+  - [x] An answered record shows the run id, verdict and citations; a declined record shows `decline_detail` and `proposed_answer`; a pre-015 record lists with empty values; `--json` holds the passage index with source and date.
+  - [x] The server's questions response (beside the existing tests in `tests/serve/`) carries the same columns for an answered and a declined record.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: add answering columns to the question listing`
 

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
+
 from question_harness import PROJECT, catch_for, make_slice, seed_question
 
 from amoeba.inspection import LISTINGS_BY_NAME
@@ -11,11 +14,15 @@ from amoeba.inspection.questions import QUESTION_COLUMNS, question_rows
 from amoeba.store import (
     AnsweredBy,
     BlockedKind,
+    CommandKind,
     DeclineReason,
+    PassageRef,
     QuestionRecord,
     QuestionState,
     Store,
+    sql_questions,
 )
+from amoeba.store.mapping_questions import encode_passage_index, encode_text_list
 
 
 def _request(**options: str | None) -> ListingRequest:
@@ -164,3 +171,141 @@ def test_the_blocked_listing_declares_the_new_columns_last() -> None:
     columns = LISTINGS_BY_NAME["blocked"].columns
 
     assert columns[-2:] == ("question_state", "decline_reason")
+
+
+# --------------------------------------------------------------------------
+# The answering-run columns (slice 144, D11)
+# --------------------------------------------------------------------------
+
+RUN_ID = "run-20261103-listing-0001"
+PASSAGES = (
+    PassageRef("P1", "docs/rules.md", None, datetime(2026, 11, 1, tzinfo=UTC)),
+    PassageRef("P2", "q-7", "q-7", datetime(2026, 10, 30, tzinfo=UTC)),
+)
+
+
+def _answering_entry_id(store: Store, node_id: str) -> str:
+    return store.journal_issue(
+        node_id,
+        kind=CommandKind.SQ_ANSWER,
+        parameters={
+            "run_id": RUN_ID,
+            "pipeline": "answering.yaml",
+            "params": {},
+            "scratch": "/tmp/answering/x",
+        },
+    ).id
+
+
+def _answering_columns(entry_id: str, **extra: str | None) -> dict[str, object]:
+    base: dict[str, object] = {
+        sql_questions.COL_QUESTION_ANSWERING_ENTRY_ID: entry_id,
+        sql_questions.COL_QUESTION_SOURCE_COMMIT: "abc123",
+        sql_questions.COL_QUESTION_PASSAGE_INDEX: encode_passage_index(PASSAGES),
+        sql_questions.COL_QUESTION_DROPPED_PM_ANSWERS: encode_text_list(("q-3",)),
+        sql_questions.COL_QUESTION_PROPOSED_ANSWER: "use main",
+        sql_questions.COL_QUESTION_CITED_PASSAGES: encode_text_list(("P1", "P2")),
+        sql_questions.COL_QUESTION_CHECK_VERDICT: "yes",
+        sql_questions.COL_QUESTION_CHECK_REASON: "matches P1",
+    }
+    return {**base, **extra}
+
+
+def test_the_table_columns_include_the_run_the_verdict_and_the_detail() -> None:
+    assert QUESTION_COLUMNS[-3:] == (
+        "answering_run_id",
+        "check_verdict",
+        "decline_detail",
+    )
+
+
+def test_an_answered_record_shows_the_run_id_verdict_and_citations(
+    store: Store,
+) -> None:
+    node_id = make_slice(store)
+    entry_id = _answering_entry_id(store, node_id)
+    seed_question(
+        store,
+        node_id,
+        state=QuestionState.ANSWERED,
+        answered_by=AnsweredBy.ANSWERER,
+        answer="use main",
+        answering=_answering_columns(entry_id),
+    )
+
+    [row] = question_rows(store, _request())
+
+    assert row["answering_run_id"] == RUN_ID
+    assert row["check_verdict"] == "yes"
+    assert row["cited_passages"] == ["P1", "P2"]
+    assert row["check_reason"] == "matches P1"
+    assert row["decline_detail"] == ""
+
+
+def test_a_declined_record_shows_the_detail_and_the_proposed_answer(
+    store: Store,
+) -> None:
+    node_id = make_slice(store)
+    entry_id = _answering_entry_id(store, node_id)
+    seed_question(
+        store,
+        node_id,
+        state=QuestionState.DECLINED,
+        decline_reason=DeclineReason.CHECK_SAID_NO,
+        answering=_answering_columns(
+            entry_id,
+            **{
+                sql_questions.COL_QUESTION_DECLINE_DETAIL: "the check disagreed",
+                sql_questions.COL_QUESTION_CHECK_VERDICT: "no",
+            },
+        ),
+    )
+
+    [row] = question_rows(store, _request())
+
+    assert row["decline_detail"] == "the check disagreed"
+    assert row["proposed_answer"] == "use main"
+    assert row["check_verdict"] == "no"
+    assert row["outcome"] == "check_said_no"
+
+
+def test_a_record_written_before_015_lists_with_empty_values(store: Store) -> None:
+    seed_question(store, make_slice(store))
+
+    [row] = question_rows(store, _request())
+
+    assert row["answering_run_id"] == ""
+    assert row["check_verdict"] == ""
+    assert row["decline_detail"] == ""
+    assert row["passage_index"] is None
+    assert row["cited_passages"] is None
+    assert row["dropped_pm_answers"] is None
+
+
+def test_json_rows_hold_the_passage_index_with_source_and_date(store: Store) -> None:
+    node_id = make_slice(store)
+    seed_question(
+        store,
+        node_id,
+        answering=_answering_columns(_answering_entry_id(store, node_id)),
+    )
+
+    [row] = question_rows(store, _request())
+
+    assert row["source_commit"] == "abc123"
+    assert row["dropped_pm_answers"] == ["q-3"]
+    assert row["passage_index"] == [
+        {
+            "id": "P1",
+            "source": "docs/rules.md",
+            "question_id": None,
+            "date": "2026-11-01T00:00:00+00:00",
+        },
+        {
+            "id": "P2",
+            "source": "q-7",
+            "question_id": "q-7",
+            "date": "2026-10-30T00:00:00+00:00",
+        },
+    ]
+    assert json.dumps(row)  # the row is plain JSON
