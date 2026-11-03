@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from amoeba.store import sql, sql_inbox, sql_journal
 from amoeba.store._base import StoreBase, new_id
 from amoeba.store.inbox_models import Channel
+from amoeba.store.journal_models import CommandKind
 from amoeba.store.models import (
     BLOCKED_KIND_TO_STATUS,
     BLOCKED_STATUSES,
@@ -107,7 +108,7 @@ class BlockWriter(StoreBase):
         if status is NodeStatus.DONE:
             entry = self._execute(
                 sql_journal.SELECT_UNRESOLVED_ENTRY_FOR_NODE,
-                (current.project_id, node_id),
+                (current.project_id, node_id, CommandKind.SQ_ANSWER.value),
             ).fetchone()
             if entry is not None:
                 raise InvalidTransitionError(

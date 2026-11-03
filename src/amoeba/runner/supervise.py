@@ -25,7 +25,7 @@ from amoeba.process import (
 )
 from amoeba.runner.observed import Finished, RunEnded
 from amoeba.runner.resolutions.vocabulary import PARAM_RESUME_CAUSE, ResumeCause
-from amoeba.store import CommandKind, JournalEntry
+from amoeba.store import CommandKind, JournalEntry, supervision_entries
 
 #: The key of a resolved ``sq_run`` entry's result that holds the outcome document it
 #: was resolved with: the supervisor's record of where the run stopped (D4).
@@ -196,7 +196,8 @@ def run_to_resume(entries: Sequence[JournalEntry]) -> JournalEntry | None:
     launch, a vanished run and a run whose resume found it gone give ``None``: there
     is no run to resume (D6).
     """
-    latest = entries[-1] if entries else None
+    own = supervision_entries(entries)
+    latest = own[-1] if own else None
     if (
         latest is None
         or latest.kind is not CommandKind.SQ_RUN

@@ -57,16 +57,23 @@ def build_observer_registry(
         claimed_run_nodes: The same run ids mapped to the node that owns the
             recording entry, for a continuation's claimed-id guard.
     """
+
+    def by_run_id() -> SquadronRunIdObserver:
+        return SquadronRunIdObserver(
+            launch_grace_seconds=settings.launch_grace_seconds,
+            poll_timeout_seconds=settings.sq_timeout_seconds,
+            claimed_run_ids=claimed_run_ids,
+            claimed_run_nodes=claimed_run_nodes,
+            now=lambda: datetime.now(UTC),
+            sleep=time.sleep,
+        )
+
     return {
+        # An answerer run is observed by run id like any other; it never had a
+        # pre-120 shape, so it has no legacy matcher (slice 144, D2).
+        CommandKind.SQ_ANSWER: by_run_id(),
         CommandKind.SQ_RUN: SquadronRunObserver(
-            by_id=SquadronRunIdObserver(
-                launch_grace_seconds=settings.launch_grace_seconds,
-                poll_timeout_seconds=settings.sq_timeout_seconds,
-                claimed_run_ids=claimed_run_ids,
-                claimed_run_nodes=claimed_run_nodes,
-                now=lambda: datetime.now(UTC),
-                sleep=time.sleep,
-            ),
+            by_id=by_run_id(),
             legacy=SquadronRunsObserver(
                 settings.sq_runs_dir,
                 clock_tolerance_seconds=settings.clock_tolerance_seconds,

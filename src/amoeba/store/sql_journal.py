@@ -149,13 +149,16 @@ ORDER BY {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ISSUED_AT},
 
 #: Whether a node has an entry still in flight (D1's refusal to mark it done).
 #: Served by the partial index ``idx_command_journal_unresolved`` on
-#: ``(project_id, issued_at) WHERE outcome IS NULL``; the WHERE repeats it.
+#: ``(project_id, issued_at) WHERE outcome IS NULL``; the WHERE repeats it. The
+#: third parameter is a kind that does not count: an ``sq_answer`` run answers a
+#: question and never blocks its slice's node from being marked done (slice 144, D4).
 SELECT_UNRESOLVED_ENTRY_FOR_NODE: Final = f"""
 SELECT {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_ID}
 FROM {TABLE_COMMAND_JOURNAL}
 WHERE {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_PROJECT_ID} = ?
   AND {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_OUTCOME} IS NULL
   AND {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_NODE_ID} = ?
+  AND {TABLE_COMMAND_JOURNAL}.{COL_JOURNAL_KIND} != ?
 LIMIT 1
 """
 

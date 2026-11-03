@@ -11,7 +11,7 @@ from __future__ import annotations
 from amoeba.runner.faults import NodeContext
 from amoeba.runner.resolutions.classify import classify
 from amoeba.runner.resolutions.judge import judge_resolution
-from amoeba.store import BlockedState, Store
+from amoeba.store import BlockedState, Store, supervision_entries
 
 
 def apply_pending_resolutions(
@@ -32,7 +32,9 @@ def apply_pending_resolutions(
 
 
 def _answer(store: Store, project_id: str, blocked: BlockedState) -> None:
-    entries = store.journal_entries(project_id, node_id=blocked.node_id)
+    entries = supervision_entries(
+        store.journal_entries(project_id, node_id=blocked.node_id)
+    )
     answer = judge_resolution(blocked, classify(entries))
     store.acknowledge_resolution(
         blocked.id,

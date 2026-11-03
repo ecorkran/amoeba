@@ -133,6 +133,42 @@ def test_an_unresolved_entry_on_another_node_does_not_block_done(
     assert store.update_node_status(idle, NodeStatus.DONE).status is NodeStatus.DONE
 
 
+def test_an_unresolved_sq_answer_does_not_block_done(store: Store) -> None:
+    node_id = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="x").id
+    store.journal_issue(
+        node_id,
+        kind=CommandKind.SQ_ANSWER,
+        parameters=_parameters(CommandKind.SQ_ANSWER),
+    )
+
+    node = store.update_node_status(node_id, NodeStatus.DONE)
+
+    assert node.status is NodeStatus.DONE
+
+
+def test_an_unresolved_sq_answer_does_not_block_a_runner_report_completion(
+    store: Store,
+) -> None:
+    node_id = store.create_node(project_id=PROJECT, kind=NodeKind.SLICE, title="x").id
+    run_id = _issue(store, node_id)
+    store.journal_issue(
+        node_id,
+        kind=CommandKind.SQ_ANSWER,
+        parameters=_parameters(CommandKind.SQ_ANSWER),
+    )
+
+    store.record_runner_report(
+        run_id,
+        [],
+        outcome=JournalOutcome.COMPLETED,
+        result={"run_id": "value"},
+        complete_node_id=node_id,
+    )
+
+    node = store.get_node(node_id)
+    assert node is not None and node.status is NodeStatus.DONE
+
+
 def test_create_node_as_done_still_works(store: Store) -> None:
     node_id = _done_node(store)
 

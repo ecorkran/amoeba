@@ -27,7 +27,11 @@ from amoeba.store.journal_models import (
 
 def test_command_kind_members_are_exactly_the_closed_set() -> None:
     """The command vocabulary is closed; a new kind is a deliberate change."""
-    assert {kind.value for kind in CommandKind} == {"cf_write", "sq_run"}
+    assert {kind.value for kind in CommandKind} == {
+        "cf_write",
+        "sq_run",
+        "sq_answer",
+    }
 
 
 def test_journal_outcome_members_are_exactly_the_closed_set() -> None:

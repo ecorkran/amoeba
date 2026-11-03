@@ -75,6 +75,7 @@ EXPECTED_EXPORTS = {
     "SQReference",
     "SubmissionRecord",
     "latest_run_entry",
+    "supervision_entries",
     "FindingChanges",
     "FindingInput",
     "FindingObservation",

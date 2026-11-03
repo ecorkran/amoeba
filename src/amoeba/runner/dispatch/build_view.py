@@ -34,6 +34,7 @@ from amoeba.store import (
     ResolutionOutcome,
     Store,
     latest_run_entry,
+    supervision_entries,
 )
 
 #: A block's payload key for the slice index the checkout could not be found for.
@@ -139,7 +140,7 @@ def _facts_for(
         return None
     if cf_project not in observed:
         observed[cf_project] = store.latest_cf_snapshots(project_id, cf_project)[1]
-    entries = store.journal_entries(project_id, node_id=node.id)
+    entries = supervision_entries(store.journal_entries(project_id, node_id=node.id))
     resolution = _applied_resolution(store, node.id)
     state = dispatch_state(entries, resolution)
     return SliceDispatchFacts(

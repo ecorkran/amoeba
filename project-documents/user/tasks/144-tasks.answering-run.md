@@ -63,47 +63,48 @@ revision_number: 2
 
 ## 1. Branch and baseline
 
-- [ ] **1.1 Create the slice branch and record the baseline**
-  - [ ] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
-  - [ ] Run `git checkout -b 144-slice.answering-run {target}`.
-  - [ ] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
-  - [ ] Success: on branch `144-slice.answering-run`, and the baseline result is known.
+- [x] **1.1 Create the slice branch and record the baseline**
+  - [x] Run `cf config get git.integration_branch`. The result (or `main` if empty) is the target. Confirm you are on the target.
+  - [x] Run `git checkout -b 144-slice.answering-run {target}`.
+  - [x] Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright` once. Note any failures that exist before this slice.
+  - [x] Success: on branch `144-slice.answering-run`, and the baseline result is known.
 
 ---
 
 ## 2. The `sq_answer` kind and the shared reader (D2, D3)
 
-- [ ] **2.1 `SQ_ANSWER` and `supervision_entries`** (`store/journal_models.py`)
-  - [ ] Add `CommandKind.SQ_ANSWER = "sq_answer"`. Add its required parameter keys `run_id`, `pipeline`, `params`, `scratch` wherever the other kinds' required keys are defined (follow how `sq_run` does it); add a `PARAM_SCRATCH` constant if the other keys have constants.
-  - [ ] Add `supervision_entries(entries) -> list[JournalEntry]`: the entries, in order, without `sq_answer`. Docstring: the single statement that answerer entries are not the slice's commands. Do not add `SQ_ANSWER` to `REVIEW_PRODUCING_KINDS`.
-  - [ ] Success: imports; typecheck passes.
+- [x] **2.1 `SQ_ANSWER` and `supervision_entries`** (`store/journal_models.py`)
+  - [x] Add `CommandKind.SQ_ANSWER = "sq_answer"`. Add its required parameter keys `run_id`, `pipeline`, `params`, `scratch` wherever the other kinds' required keys are defined (follow how `sq_run` does it); add a `PARAM_SCRATCH` constant if the other keys have constants.
+  - [x] Add `supervision_entries(entries) -> list[JournalEntry]`: the entries, in order, without `sq_answer`. Docstring: the single statement that answerer entries are not the slice's commands. Do not add `SQ_ANSWER` to `REVIEW_PRODUCING_KINDS`.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **2.2 Switch the five readers to `supervision_entries`** (D3)
-  - [ ] `classify`: filter in the resolution stage's `_answer`, where it builds the `classify` input (D3). Deviate (filter inside `classify`) only if you find another `classify` caller, and say so in the commit message. Then `run_to_resume`, `_facts_for` (filter before `dispatch_state` and `latest_run_entry`), `checkout_holders`, `_resume_count`. One line each.
-  - [ ] Success: no other code changes; the existing suites for these readers pass unchanged (`uv run pytest tests/runner -q`).
+- [x] **2.2 Switch the five readers to `supervision_entries`** (D3)
+  - [x] `classify`: filter in the resolution stage's `_answer`, where it builds the `classify` input (D3). Deviate (filter inside `classify`) only if you find another `classify` caller, and say so in the commit message. Then `run_to_resume`, `_facts_for` (filter before `dispatch_state` and `latest_run_entry`), `checkout_holders`, `_resume_count`. One line each.
+  - [x] Success: no other code changes; the existing suites for these readers pass unchanged (`uv run pytest tests/runner -q`).
+  - Note: `checkout_holders` and `_resume_count` already filter by `kind == SQ_RUN`, so they needed no change; both are covered by assertions in `tests/runner/test_sq_answer_readers.py`.
 
-- [ ] **2.3 D3 acceptance test: reader cases** (`tests/runner/test_sq_answer_readers.py`)
-  - [ ] Build one slice journal: a paused `sq_run` with an open question block, plus an `sq_answer` in flight; then the same `sq_answer` resolved. For each of the two cases assert: `classify` is `RUN_TO_RESUME`; `run_to_resume` returns the `sq_run`; the checkout is held by that node; `dispatch_state` with an applied resume is `RESUME`; the resume count is unchanged.
-  - [ ] Add a test that an issuer's resolution of an `sq_answer` entry sets no `awaits_routing`, and that `tests/runner` code that builds `_run_entries` ignores `sq_answer` (never reaches `record_finished`).
-  - [ ] Add a test of `supervision_entries` itself (order kept, only `sq_answer` removed, empty input).
-  - [ ] Each reader has its own assertion, so a missing filter in any one reader fails a test that names that reader.
-  - [ ] Success: tests pass.
+- [x] **2.3 D3 acceptance test: reader cases** (`tests/runner/test_sq_answer_readers.py`)
+  - [x] Build one slice journal: a paused `sq_run` with an open question block, plus an `sq_answer` in flight; then the same `sq_answer` resolved. For each of the two cases assert: `classify` is `RUN_TO_RESUME`; `run_to_resume` returns the `sq_run`; the checkout is held by that node; `dispatch_state` with an applied resume is `RESUME`; the resume count is unchanged.
+  - [x] Add a test that an issuer's resolution of an `sq_answer` entry sets no `awaits_routing`, and that `tests/runner` code that builds `_run_entries` ignores `sq_answer` (never reaches `record_finished`).
+  - [x] Add a test of `supervision_entries` itself (order kept, only `sq_answer` removed, empty input).
+  - [x] Each reader has its own assertion, so a missing filter in any one reader fails a test that names that reader.
+  - [x] Success: tests pass.
 
-- [ ] **2.4 Done-guard ignores `sq_answer`** (D4, `store/sql_journal.py`)
-  - [ ] `SELECT_UNRESOLVED_ENTRY_FOR_NODE` gains `AND kind != '<sq_answer value>'`, with the value taken from `CommandKind` (build the SQL from the enum value, as neighbouring statements do for other kinds).
-  - [ ] Success: imports; existing journal tests pass.
+- [x] **2.4 Done-guard ignores `sq_answer`** (D4, `store/sql_journal.py`)
+  - [x] `SELECT_UNRESOLVED_ENTRY_FOR_NODE` gains `AND kind != '<sq_answer value>'`, with the value taken from `CommandKind` (build the SQL from the enum value, as neighbouring statements do for other kinds).
+  - [x] Success: imports; existing journal tests pass.
 
-- [ ] **2.5 Tests for the done-guard** (`tests/test_journal.py` or the file that tests the guard today)
-  - [ ] Unresolved `sq_answer` on a node: `update_node_status(done)` succeeds and `record_runner_report(complete_node_id=…)` succeeds. Unresolved `sq_run` on the same node still refuses (existing behaviour kept).
-  - [ ] Success: tests pass.
+- [x] **2.5 Tests for the done-guard** (`tests/test_journal.py` or the file that tests the guard today)
+  - [x] Unresolved `sq_answer` on a node: `update_node_status(done)` succeeds and `record_runner_report(complete_node_id=…)` succeeds. Unresolved `sq_run` on the same node still refuses (existing behaviour kept).
+  - [x] Success: tests pass.
 
-- [ ] **2.6 Recovery observer** (D2, `process/supervisor.py`)
-  - [ ] Register `CommandKind.SQ_ANSWER: SquadronRunIdObserver(...)` in `build_observer_registry` with the same settings as the `sq_run` one and no legacy matcher.
-  - [ ] Success: imports; typecheck passes.
+- [x] **2.6 Recovery observer** (D2, `process/supervisor.py`)
+  - [x] Register `CommandKind.SQ_ANSWER: SquadronRunIdObserver(...)` in `build_observer_registry` with the same settings as the `sq_run` one and no legacy matcher.
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **2.7 Tests for recovery** (`tests/test_recovery.py` or a new `tests/test_recovery_sq_answer.py`)
-  - [ ] An `sq_answer` entry whose run state is any in-flight state stays unresolved; `not_found` past the launch grace resolves it `not_applied`; an unreadable answer escalates `unknown` and writes no second block. Use the stub `sq` modes the existing `sq_run` recovery tests use.
-  - [ ] Success: tests pass; `uv run pytest -q` passes.
+- [x] **2.7 Tests for recovery** (`tests/test_recovery.py` or a new `tests/test_recovery_sq_answer.py`)
+  - [x] An `sq_answer` entry whose run state is any in-flight state stays unresolved; `not_found` past the launch grace resolves it `not_applied`; an unreadable answer escalates `unknown` and writes no second block. Use the stub `sq` modes the existing `sq_run` recovery tests use.
+  - [x] Success: tests pass; `uv run pytest -q` passes.
 
 **Commit**: `feat: add sq_answer kind, shared supervision reader and recovery observer`
 

@@ -35,6 +35,7 @@ class CommandKind(StrEnum):
 
     CF_WRITE = "cf_write"
     SQ_RUN = "sq_run"
+    SQ_ANSWER = "sq_answer"
 
 
 class JournalOutcome(StrEnum):
@@ -77,6 +78,10 @@ PARAM_RESOLUTION: Final = "resolution"
 #: does, because its read-back must run ``cf`` in the same checkout.
 PARAM_CHECKOUT: Final = "checkout"
 
+#: The ``sq_answer`` parameter key naming the scratch directory its run executes in
+#: (slice 144). Required, so recovery and inspection can find the run's files.
+PARAM_SCRATCH: Final = "scratch"
+
 #: The optional ``cf_write`` parameter key naming the slice index the write sets
 #: (slice 125). The read-back compares it with the index parsed from ``fileSlice``.
 PARAM_EXPECTED_SLICE_INDEX: Final = "expected_slice_index"
@@ -98,6 +103,9 @@ PARAM_EXPECTED: Final = "expected"
 REQUIRED_PARAMETER_KEYS: Final[Mapping[CommandKind, frozenset[str]]] = {
     CommandKind.CF_WRITE: frozenset({PARAM_PROJECT, PARAM_EXPECTED, PARAM_CHECKOUT}),
     CommandKind.SQ_RUN: frozenset({"pipeline", "params", PARAM_RUN_ID}),
+    CommandKind.SQ_ANSWER: frozenset(
+        {"pipeline", "params", PARAM_RUN_ID, PARAM_SCRATCH}
+    ),
 }
 
 
@@ -143,6 +151,16 @@ class JournalEntry:
         never disagree.
         """
         return self.outcome is not None
+
+
+def supervision_entries(entries: Sequence[JournalEntry]) -> list[JournalEntry]:
+    """``entries`` in order, without ``sq_answer`` entries.
+
+    An answerer run is not one of the slice's commands: it answers a question the
+    slice's own run is paused on. Every reader that reasons about the slice's
+    commands goes through this single statement of that fact.
+    """
+    return [e for e in entries if e.kind is not CommandKind.SQ_ANSWER]
 
 
 def latest_run_entry(entries: Sequence[JournalEntry]) -> JournalEntry | None:
