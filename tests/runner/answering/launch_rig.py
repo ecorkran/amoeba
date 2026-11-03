@@ -19,7 +19,7 @@ from amoeba.runner.answering.launch import LaunchContext, LaunchStatus, launch_a
 from amoeba.runner.answering.stage import AnsweringStage, StageResult
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.faults import NodeContext, TickFaults
-from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME, LaunchTracker
+from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME, LaunchTracker, PopenFactory
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.project_config import AnswererSettings
 from amoeba.store import (
@@ -101,6 +101,10 @@ class LaunchRig:
     supervisor_dir: Path
     initiative: Node
 
+    def other_slice(self, title: str, number: int) -> Node:
+        """A second slice of the same initiative, with no question yet."""
+        return _slice(self.store, self.initiative, title, SLICE_INDEX + number)
+
     def ask_another(
         self, number: int = 1, question: str = "which branch?"
     ) -> QuestionRecord:
@@ -143,8 +147,14 @@ def build_launch_rig(
     *,
     popen: RecordingPopen | None = None,
     settings: AnswererSettings | None = None,
+    popen_factory: PopenFactory | None = None,
+    question: str = "which branch?",
 ) -> LaunchRig:
-    """A pending question on slice 132 of the fixture repository."""
+    """A pending question on slice 132 of the fixture repository.
+
+    ``popen_factory`` replaces the recording fake (the live tier starts real
+    ``sq``); ``popen`` is then unused.
+    """
     repo = build_sources_repo(tmp_path / "repo")
     state = {
         STATE_PROJECT_KEY: {FIELD_PROJECT_PATH: str(repo.path)},
@@ -161,14 +171,20 @@ def build_launch_rig(
         project_id=PROJECT,
         settings=settings or default_settings(),
         supervisor_dir=supervisor_dir,
-        popen=recording,
+        popen=popen_factory or recording,
         tracker=LaunchTracker(),
         now=lambda: NOW,
         cf_run=cf_run(),
         call_timeout_seconds=CALL_TIMEOUT,
     )
     return LaunchRig(
-        store, context, _ask(store, node), node, recording, supervisor_dir, initiative
+        store,
+        context,
+        _ask(store, node, question),
+        node,
+        recording,
+        supervisor_dir,
+        initiative,
     )
 
 

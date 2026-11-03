@@ -46,3 +46,17 @@ def test_bad_cost_names_the_cost_variable(cost: str) -> None:
 def test_require_variable_names_an_unset_variable() -> None:
     with pytest.raises(pytest.UsageError, match="SOME_OTHER_VARIABLE"):
         require_variable({}, "SOME_OTHER_VARIABLE")
+
+
+def test_every_inline_question_fits_squadrons_tail_bound() -> None:
+    from live.answering import question_tails
+
+    from amoeba.process.sq_outcome import QUESTION_TAIL_CHARS
+
+    texts = [
+        value
+        for name, value in vars(question_tails).items()
+        if name.isupper() and isinstance(value, str)
+    ]
+    assert texts
+    assert all(len(text) <= QUESTION_TAIL_CHARS for text in texts)
