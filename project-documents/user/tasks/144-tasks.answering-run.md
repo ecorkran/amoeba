@@ -175,14 +175,14 @@ revision_number: 2
 
 ## 5. Settings (D12)
 
-- [ ] **5.1 Four keys on `AnswererSettings`** (`runner/project_config.py`)
-  - [ ] Add required, default-free `answer_model` and `check_model` (stripped, non-blank, no `,`), `max_concurrent_runs` (`StrictInt`, ≥ 1) and `max_cost_usd` (positive number). Load errors name the key path. Update the class docstring ("eight keys").
-  - [ ] Success: imports; typecheck passes.
+- [x] **5.1 Four keys on `AnswererSettings`** (`runner/project_config.py`)
+  - [x] Add required, default-free `answer_model` and `check_model` (stripped, non-blank, no `,`), `max_concurrent_runs` (`StrictInt`, ≥ 1) and `max_cost_usd` (positive number). Load errors name the key path. Update the class docstring ("eight keys").
+  - [x] Success: imports; typecheck passes.
 
-- [ ] **5.2 Update fixtures and add config tests** (`tests/runner/test_project_config.py` and every test or helper that builds an `answerer` section; find them with `grep -rn "rules_paths" tests`)
-  - [ ] Add the four keys to every existing answerer fixture so existing suites pass.
-  - [ ] New cases: each key missing fails naming its path; blank model, model with a comma, `max_concurrent_runs` 0 or a float, `max_cost_usd` 0 or negative all fail; a valid section loads.
-  - [ ] Success: tests pass; `uv run pytest -q` passes.
+- [x] **5.2 Update fixtures and add config tests** (`tests/runner/test_project_config.py` and every test or helper that builds an `answerer` section; find them with `grep -rn "rules_paths" tests`)
+  - [x] Add the four keys to every existing answerer fixture so existing suites pass.
+  - [x] New cases: each key missing fails naming its path; blank model, model with a comma, `max_concurrent_runs` 0 or a float, `max_cost_usd` 0 or negative all fail; a valid section loads.
+  - [x] Success: tests pass; `uv run pytest -q` passes.
 
 **Commit**: `feat: require answer_model, check_model, max_concurrent_runs and max_cost_usd`
 

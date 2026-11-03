@@ -5,13 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from answerer_settings import answerer_settings
 from feed_harness import raw_changes
 from question_harness import catch_for, make_slice, seed_question
 
 from amoeba.process import RunOutcome
 from amoeba.runner.answering.stage import settle_pending_questions
 from amoeba.runner.budget import TickResult
-from amoeba.runner.project_config import AnswererSettings, ProjectSettings
+from amoeba.runner.project_config import ProjectSettings
 from amoeba.store import (
     AnsweredBy,
     BlockedKind,
@@ -32,9 +33,7 @@ from runner.resolutions.resolution_support import (
 from runner.tick_support import PROJECT, Rig, StoreHost, drive_project, tenant_for
 
 LINK = "cf-1"
-ANSWERER = AnswererSettings(
-    answer_limit=3, reserved_terms=(), rules_paths=(), passages_max_chars=1000
-)
+ANSWERER = answerer_settings()
 
 
 @pytest.fixture

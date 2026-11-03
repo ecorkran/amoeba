@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from answerer_settings import answerer_settings
 
 from amoeba.runner.answering import gate
 from amoeba.runner.answering.gate import compose_instructions, evaluate_gate
@@ -15,11 +16,8 @@ ANSWER = "Use main."
 
 
 def _settings(limit: int = 3, terms: list[str] | None = None) -> AnswererSettings:
-    return AnswererSettings(
-        answer_limit=limit,
-        reserved_terms=() if terms is None else tuple(terms),
-        rules_paths=(),
-        passages_max_chars=1000,
+    return answerer_settings(
+        answer_limit=limit, reserved_terms=() if terms is None else tuple(terms)
     )
 
 

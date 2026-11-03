@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from answerer_settings import answerer_settings
 from cf_harness import observed
 from question_harness import PROJECT, seed_question
 
@@ -55,12 +56,7 @@ EXPECTED = Path(__file__).parent / "fixtures" / "expected_end_to_end.md"
 
 
 def _settings(*rules: str, max_chars: int = 1_000_000) -> AnswererSettings:
-    return AnswererSettings(
-        answer_limit=3,
-        reserved_terms=(),
-        rules_paths=rules,
-        passages_max_chars=max_chars,
-    )
+    return answerer_settings(rules_paths=rules, passages_max_chars=max_chars)
 
 
 def _node(

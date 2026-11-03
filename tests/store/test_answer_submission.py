@@ -7,6 +7,7 @@ from dataclasses import replace
 from functools import partial
 
 import pytest
+from answerer_settings import answerer_settings
 from fault_injection import InjectedFailureError, fail_on_statement
 from question_harness import (
     PROJECT,
@@ -17,7 +18,6 @@ from question_harness import (
 )
 
 from amoeba.runner.answering.gate import evaluate_gate
-from amoeba.runner.project_config import AnswererSettings
 from amoeba.runner.resolutions.vocabulary import ResolutionDecision
 from amoeba.store import (
     ANSWER_DECISION,
@@ -386,9 +386,7 @@ def test_count_the_limit_declines_the_third_answer_and_keeps_the_block_open(
     gate = partial(
         evaluate_gate,
         answer=ANSWER,
-        settings=AnswererSettings(
-            answer_limit=2, reserved_terms=(), rules_paths=(), passages_max_chars=1000
-        ),
+        settings=answerer_settings(answer_limit=2),
     )
     for _ in range(2):
         seed_question(

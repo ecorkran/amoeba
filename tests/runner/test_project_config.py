@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from answerer_settings import answerer_settings
 
 from amoeba.process import StartupFailedError
 from amoeba.runner.project_config import (
@@ -149,6 +150,10 @@ projects:
         - CLAUDE.md
         - "  project-documents/ai-project-guide/project-guides/rules/*.md  "
       passages_max_chars: 200000
+      answer_model: glm-flash
+      check_model: "  deepseek4-flash  "
+      max_concurrent_runs: 3
+      max_cost_usd: 0.75
   plain:
     pipeline: p456
 """
@@ -171,6 +176,10 @@ def test_a_configured_answerer_is_on_and_an_absent_key_is_not(
             "project-documents/ai-project-guide/project-guides/rules/*.md",
         ),
         passages_max_chars=200000,
+        answer_model="glm-flash",
+        check_model="deepseek4-flash",
+        max_concurrent_runs=3,
+        max_cost_usd=0.75,
     )
     assert config.for_project("plain").answerer is None
     assert config.for_project("unnamed").answerer is None
@@ -200,12 +209,15 @@ def test_an_unknown_key_inside_answerer_fails(tmp_path: Path) -> None:
     assert "projects.scratch.answerer.limit" in str(raised.value)
 
 
-def test_an_empty_answerer_fails_naming_both_missing_keys(tmp_path: Path) -> None:
+def test_an_empty_answerer_fails_naming_every_missing_key(tmp_path: Path) -> None:
     with pytest.raises(StartupFailedError) as raised:
         load_project_config(_write(tmp_path, _answerer_file("{}")))
 
     assert "projects.scratch.answerer.answer_limit" in str(raised.value)
     assert "projects.scratch.answerer.reserved_terms" in str(raised.value)
+    for key in ("answer_model", "check_model", "max_cost_usd"):
+        assert f"projects.scratch.answerer.{key}" in str(raised.value)
+    assert "projects.scratch.answerer.max_concurrent_runs" in str(raised.value)
 
 
 def _answerer_body(**changes: str | None) -> str:
@@ -215,6 +227,10 @@ def _answerer_body(**changes: str | None) -> str:
         "reserved_terms": "[]",
         "rules_paths": "[]",
         "passages_max_chars": "1000",
+        "answer_model": "m1",
+        "check_model": "m2",
+        "max_concurrent_runs": "2",
+        "max_cost_usd": "0.5",
         **changes,
     }
     return "{" + ", ".join(f"{k}: {v}" for k, v in keys.items() if v is not None) + "}"
@@ -227,6 +243,21 @@ def _answerer_body(**changes: str | None) -> str:
         ({"reserved_terms": None}, "answerer.reserved_terms"),
         ({"rules_paths": None}, "answerer.rules_paths"),
         ({"passages_max_chars": None}, "answerer.passages_max_chars"),
+        ({"answer_model": None}, "answerer.answer_model"),
+        ({"check_model": None}, "answerer.check_model"),
+        ({"max_concurrent_runs": None}, "answerer.max_concurrent_runs"),
+        ({"max_cost_usd": None}, "answerer.max_cost_usd"),
+        ({"answer_model": "'  '"}, "answerer.answer_model"),
+        ({"check_model": "''"}, "answerer.check_model"),
+        ({"answer_model": "'a,b'"}, "answerer.answer_model"),
+        ({"check_model": "'a,b'"}, "answerer.check_model"),
+        ({"answer_model": "7"}, "answerer.answer_model"),
+        ({"max_concurrent_runs": "0"}, "answerer.max_concurrent_runs"),
+        ({"max_concurrent_runs": "2.0"}, "answerer.max_concurrent_runs"),
+        ({"max_concurrent_runs": "'2'"}, "answerer.max_concurrent_runs"),
+        ({"max_cost_usd": "0"}, "answerer.max_cost_usd"),
+        ({"max_cost_usd": "-0.5"}, "answerer.max_cost_usd"),
+        ({"max_cost_usd": "'0.5'"}, "answerer.max_cost_usd"),
         ({"answer_limit": "0"}, "answerer.answer_limit"),
         ({"answer_limit": "-1"}, "answerer.answer_limit"),
         ({"answer_limit": "1.5"}, "answerer.answer_limit"),
@@ -268,8 +299,12 @@ def test_an_empty_reserved_terms_list_loads(tmp_path: Path) -> None:
         )
     )
 
-    assert config.for_project("scratch").answerer == AnswererSettings(
-        answer_limit=1, reserved_terms=(), rules_paths=(), passages_max_chars=1
+    assert config.for_project("scratch").answerer == answerer_settings(
+        answer_limit=1,
+        passages_max_chars=1,
+        answer_model="m1",
+        check_model="m2",
+        max_cost_usd=0.5,
     )
 
 

@@ -22,6 +22,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictFloat,
     StrictInt,
     StrictStr,
     StringConstraints,
@@ -61,13 +62,35 @@ RulesPath = Annotated[
 ]
 
 
+def _checked_model_alias(alias: str) -> str:
+    """The alias, when Squadron would not split it as a ``-p`` value.
+
+    Raises:
+        ValueError: it contains a ``,`` (the same refusal ``build_argv`` makes).
+    """
+    problem = param_problem("model", alias)
+    if problem is not None:
+        raise ValueError(problem)
+    return alias
+
+
+#: A Squadron model alias: stripped, non-blank, no ``,`` (slice 144, D12).
+ModelAlias = Annotated[
+    StrictStr,
+    StringConstraints(strip_whitespace=True, min_length=1),
+    AfterValidator(_checked_model_alias),
+]
+
+
 class AnswererSettings(BaseModel):
     """The ``answerer`` section. Its presence turns the answerer on (slice 141, D6).
 
-    All four keys are required with no defaults: the operator states how many
+    All eight keys are required with no defaults: the operator states how many
     answers a run may take and which terms stay the PM's to decide (slice 142, D7),
     which files are the project's rules and how large the rendered passages may be
-    (slice 143, D10), so ``answerer: {}`` fails at load.
+    (slice 143, D10), and which models run the answering pipeline, how many runs
+    may be in flight and what one may cost (slice 144, D12), so ``answerer: {}``
+    fails at load.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -84,6 +107,14 @@ class AnswererSettings(BaseModel):
     rules_paths: tuple[RulesPath, ...]
     #: Most characters of rendered ``passages.md`` an answering run is sent.
     passages_max_chars: Annotated[StrictInt, Field(ge=1)]
+    #: Squadron model aliases for the answer step and the check step. A comma would
+    #: split a ``-p`` value, so none is allowed.
+    answer_model: ModelAlias
+    check_model: ModelAlias
+    #: Most answering runs in flight at once, from one up.
+    max_concurrent_runs: Annotated[StrictInt, Field(ge=1)]
+    #: Cost cap of one answering run, in US dollars; above zero.
+    max_cost_usd: Annotated[StrictInt | StrictFloat, Field(gt=0)]
 
 
 class ProjectSettings(BaseModel):
@@ -108,7 +139,8 @@ class ProjectSettings(BaseModel):
         if value is None:
             raise ValueError(
                 "answerer must be a mapping with answer_limit, reserved_terms, "
-                "rules_paths and passages_max_chars"
+                "rules_paths, passages_max_chars, answer_model, check_model, "
+                "max_concurrent_runs and max_cost_usd"
             )
         return value
 

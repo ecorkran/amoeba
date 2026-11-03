@@ -228,6 +228,10 @@ projects:
       reserved_terms: []
       rules_paths: []
       passages_max_chars: 1000
+      answer_model: answer-alias
+      check_model: check-alias
+      max_concurrent_runs: 2
+      max_cost_usd: 0.5
 """
 
 
