@@ -667,7 +667,12 @@ this section is the contract.
   `sq run <answering_pipeline_path()> <answer-model> --run-id <id> -p check-model=<alias>`.
   `sq` binds the positional target to the first `required` param, and `-p` does not
   satisfy a `required` param, so `answer-model` is the positional argument (observed with
-  the `sq` of the dated note below).
+  the `sq` of the dated note below). `sq run` first runs `cf get` and exits 1 when the
+  working directory is not inside a registered Context Forge project, even for a pipeline
+  that uses none (observed on squadron 0.24.14, 20261103). `cf` finds a registration in
+  a parent directory, so the scratch directory must sit under a registered one; the live
+  tests register a throwaway parent with `cf init --lite` and a throwaway
+  `CONTEXT_FORGE_DATA_DIR`. Slice 144 chooses where production scratch directories live.
 - **Inputs, written by `prepare_scratch(directory, question, passages_markdown,
   max_cost_usd)`** into an existing, empty directory (anything else is a `ValueError`):
   `question.md`, `passages.md` (byte for byte as given), an empty `rules/` directory and

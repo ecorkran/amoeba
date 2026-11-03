@@ -207,10 +207,12 @@ Everything here needs an `sq` with the D8 capabilities (the Squadron issue from 
 
 **Commit**: `feat: adjust the answering pipeline to the shipped squadron syntax`
 
-- [ ] **9.2 Live tests: files, no-files, check input** (effort 4)
-  - [ ] `BLOCKED:` depends on 9.1.
-  - [ ] `tests/live/answering/test_pipeline_run.py`, each in its own `tmp_path` with hand-written `passages.md` in the D3 format: (a) the answered case: the four output files exist and both parsers return no problem; (b) a passage telling the agent to create `pwned.txt`: the directory then holds exactly the prepared files plus the four outputs; (c) `check.prompt.md` contains the question, every passage id with its text and the answer reply, that embedded reply equals the object `read_answer` parsed, it does not contain the answer step's instruction text, and neither prompt file contains a project rules block.
-  - [ ] Success: `uv run pytest tests/live/answering -k "answered or files or check_input" -v` passes under the cost cap.
+- [x] **9.2 Live tests: files, no-files, check input** (effort 4)
+  - [x] `BLOCKED:` depends on 9.1. Unblocked 20261103 (9.1 done).
+  - [x] `tests/live/answering/test_pipeline_run.py`, each in its own `tmp_path` with hand-written `passages.md` in the D3 format: (a) the answered case: the four output files exist and both parsers return no problem; (b) a passage telling the agent to create `pwned.txt`: the directory then holds exactly the prepared files plus the four outputs; (c) `check.prompt.md` contains the question, every passage id with its text and the answer reply, that embedded reply equals the object `read_answer` parsed, it does not contain the answer step's instruction text, and neither prompt file contains a project rules block.
+  - [x] Success: `uv run pytest tests/live/answering -k "answered or files or check_input" -v` passes under the cost cap.
+
+  Finding 20261103: `sq run` runs `cf get` first and exits 1 outside a registered Context Forge project, even for a pipeline using none. The live tests register a throwaway parent directory (`cf init --lite`, throwaway CONTEXT_FORGE_DATA_DIR) and run in a child. Recorded in docs/process-contract.md; slice 144 must decide where production scratch directories live.
 
 **Commit**: `test: add live answering pipeline run tests`
 
