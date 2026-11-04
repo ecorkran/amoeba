@@ -129,11 +129,12 @@ program stage
   providing = provider-side edges -> node ids           (D5)
   waiting side, for each edge this project waits on, state open|satisfied,
   in edge_id order (D10):
-    block resolved?  resolved_by coordinator -> mark released   (finishes a crashed release)
+    block resolved?  resolved_by coordinator -> mark released   (finishes a crashed release; a satisfied edge. An open edge here cannot come from a release, so it is marked superseded)
                      anyone else             -> mark superseded (D9)
     open edge -> observe_edges -> Satisfied(commit) | Waiting(reason, detail)
                  -> write state or wait reason only when it changed
-  release.plan(...): for each waiting node whose edges are all satisfied:
+  release.plan(...): for each node among the edges read as open|satisfied (not the
+  `waiting` set, which holds only open edges) that has no open edge left:
     submit_release on the question block in own store, then mark its edges released
   -> ProgramView(program, waiting = node ids with an open edge, providing)
 plan reads -> head read for providing slices CF reports complete -> done + head, one txn (D6)
@@ -251,7 +252,7 @@ Status: decided
 Status: decided
 
 - In the stage, before observing, each `open` or `satisfied` edge whose question block is resolved is closed:
-  - **Resolved by `coordinator`:** this edge's own release, interrupted after step 2. Mark it `released`.
+  - **Resolved by `coordinator`:** this edge's own release, interrupted after step 2. A `satisfied` edge is marked `released`; an `open` edge cannot belong to a release (a release needs every edge satisfied), so it is marked `superseded`.
   - **Resolved by anyone else:** a PM resolution (resume or stop) supersedes. Mark it `superseded`.
 - The stage runs after resolutions are acknowledged, so a PM `resume` that arrives in the same tick closes the edges before readiness reads `waiting`, and the slice resumes this tick (architecture tick order).
 - Anything already done in the provider stays as ordinary work. 183 owns no provider-side state for an edge beyond `providing`, which drops the slice once its edge closes. 184 removes membership drive and request priority on the same signal.
