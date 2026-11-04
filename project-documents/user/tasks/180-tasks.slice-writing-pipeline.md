@@ -153,15 +153,15 @@ usageByModel:
 
 ## 6. Start-up probe
 
-- [ ] **6.1 `probe_slice_writing_pipeline`** (effort 2)
-  - [ ] In `runner/probes.py`, add `probe_slice_writing_pipeline(settings, run)` per LLD D9. Argv: `sq run <path> --validate --strict`, then the I/O-directory option with a temporary directory and the cost-cap option with the nominal cap (all from `pipeline_file.py`). Run once from another temporary directory, bounded by `settings.sq_timeout_seconds`, through `run_cf` as `probe_answering_pipeline` does.
-  - [ ] Raise `StartupFailedError` for a non-zero exit (naming the command, exit code and `output_head`), a timeout, a missing `sq`, and a missing pipeline file, each with its own "slice-writing pipeline probe failed" message. Do not refactor `probe_answering_pipeline` and do not compare versions.
-  - [ ] Do not wire it into start-up; 184 does.
-  - [ ] Success: `uv run pyright` passes; `probes.py` stays readable (split a helper only if it passes ~300 lines).
-- [ ] **6.2 Stub-`sq` tests** (effort 2)
-  - [ ] `tests/runner/test_probes_request_run.py`, mirroring `tests/runner/test_probes_answering.py` (reuse its stub approach; import the stub if it is importable, else copy only the small stub class).
-  - [ ] Cover: exit 0 passes with one call; the exact argv (path, `--validate`, `--strict`, I/O option with an existing temporary directory during the call, cost-cap option with the nominal value); `cwd` is a temporary directory, not the caller's; a non-zero exit raises `StartupFailedError` naming the exit code and output head; a timeout, a missing `sq` and a missing pipeline file each raise `StartupFailedError`.
-  - [ ] Success: the tests pass.
+- [x] **6.1 `probe_slice_writing_pipeline`** (effort 2)
+  - [x] In `runner/probes.py`, add `probe_slice_writing_pipeline(settings, run)` per LLD D9. Argv: `sq run <path> --validate --strict`, then the I/O-directory option with a temporary directory and the cost-cap option with the nominal cap (all from `pipeline_file.py`). Run once from another temporary directory, bounded by `settings.sq_timeout_seconds`, through `run_cf` as `probe_answering_pipeline` does.
+  - [x] Raise `StartupFailedError` for a non-zero exit (naming the command, exit code and `output_head`), a timeout, a missing `sq`, and a missing pipeline file, each with its own "slice-writing pipeline probe failed" message. Do not refactor `probe_answering_pipeline` and do not compare versions.
+  - [x] Do not wire it into start-up; 184 does.
+  - [x] Success: `uv run pyright` passes; `probes.py` stays readable (split a helper only if it passes ~300 lines).
+- [x] **6.2 Stub-`sq` tests** (effort 2)
+  - [x] `tests/runner/test_probes_request_run.py`, mirroring `tests/runner/test_probes_answering.py` (reuse its stub approach; import the stub if it is importable, else copy only the small stub class).
+  - [x] Cover: exit 0 passes with one call; the exact argv (path, `--validate`, `--strict`, I/O option with an existing temporary directory during the call, cost-cap option with the nominal value); `cwd` is a temporary directory, not the caller's; a non-zero exit raises `StartupFailedError` naming the exit code and output head; a timeout, a missing `sq` and a missing pipeline file each raise `StartupFailedError`.
+  - [x] Success: the tests pass.
 
 **Commit**: `feat: add slice-writing pipeline start-up probe`
 

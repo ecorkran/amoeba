@@ -35,6 +35,12 @@ from amoeba.runner.lifecycle.plan_read import (
     CF_STATUS_COMMAND,
     cf_argv,
 )
+from amoeba.runner.request_run.pipeline_file import (
+    IO_DIRECTORY_OPTION,
+    MAX_COST_OPTION,
+    PROBE_MAX_COST_USD,
+    slice_writing_pipeline_path,
+)
 from amoeba.upstream.context_forge import PlanParseError, parse_initiatives
 
 logger = logging.getLogger(__name__)
@@ -90,6 +96,54 @@ def probe_answering_pipeline(settings: ProcessSettings, run: CfRun) -> None:
     if completed.returncode != 0:
         raise StartupFailedError(
             f"answering pipeline probe failed: `{shown}` exited "
+            f"{completed.returncode}: {output_head(completed)}"
+        )
+
+
+def probe_slice_writing_pipeline(settings: ProcessSettings, run: CfRun) -> None:
+    """Check that `sq run <slice_writing.yaml> --validate --strict` exits 0 (D9).
+
+    The run I/O directory and cost cap options are included with a temporary
+    directory and a nominal cap, so an ``sq`` that lacks the guarded commit step or
+    either option rejects the call. Run once from another temporary directory; no
+    ``sq`` version is compared. Slice 184 calls it at start when any project
+    configures request runs.
+
+    Raises:
+        StartupFailedError: On a non-zero exit, a timeout, a missing ``sq`` or a
+            missing pipeline file, naming the command, the exit code and the head
+            of its output.
+    """
+    try:
+        pipeline_path = slice_writing_pipeline_path()
+    except FileNotFoundError as error:
+        # A broken install is a start-up failure like any other probe failure.
+        raise StartupFailedError(
+            f"slice-writing pipeline probe failed: {error}"
+        ) from error
+    with (
+        tempfile.TemporaryDirectory() as scratch,
+        tempfile.TemporaryDirectory() as io_directory,
+    ):
+        argv = [
+            SQ_EXECUTABLE,
+            "run",
+            str(pipeline_path),
+            "--validate",
+            "--strict",
+            IO_DIRECTORY_OPTION,
+            io_directory,
+            MAX_COST_OPTION,
+            str(PROBE_MAX_COST_USD),
+        ]
+        completed = run_cf(argv, partial(run, cwd=scratch), settings.sq_timeout_seconds)
+    if isinstance(completed, CfCallFailed):
+        raise StartupFailedError(
+            f"slice-writing pipeline probe failed: {completed.detail}"
+        )
+    if completed.returncode != 0:
+        raise StartupFailedError(
+            f"slice-writing pipeline probe failed: `{' '.join(argv)}` exited "
             f"{completed.returncode}: {output_head(completed)}"
         )
 
