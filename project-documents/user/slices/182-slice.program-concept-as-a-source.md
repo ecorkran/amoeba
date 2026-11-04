@@ -89,7 +89,7 @@ From 143 and 144, used unchanged except where a decision here says otherwise:
 | Component | Location | Role |
 | --- | --- | --- |
 | Program passages, pure | `runner/answering/program_passages.py` (new) | `member_list_text(program, members, asking_project)`; the `ProgramSources` value. Added to the purity check |
-| Concept read | `runner/answering/program_sources.py` (new) | `read_program_sources(...)`: member state, target, commit, listing, date, text. Every program-side read is here |
+| Concept read | `runner/answering/program_sources.py` (new) | `ProgramContext`, `AskerReads`, `read_program_sources(...)`: member state, target, commit, listing, date, text. Every program-side read is here |
 | Source reads | `runner/answering/source_reads.py` | `GitReads`, `Listings` and `read_file` made public; no behavior change |
 | Passages | `runner/answering/passages.py` | `PassageKind` gains `program_concept` and `program_members`; `SourceFile` and `Passage` gain `member`; rendering writes the `member:` line; `assemble` takes the program sources after the plan |
 | Entry point | `runner/answering/sources.py` | `assemble_sources` takes an optional `ProgramContext` and calls `read_program_sources` after the project's own reads |
@@ -197,7 +197,7 @@ Status: decided
 ### D7 — The launch passes a program context, built once per launch
 Status: decided
 
-- `ProgramContext(program: Program, members: tuple[Member, ...], store_dir: Path, asking_project: str)` is a frozen value in `program_passages.py`. `AnsweringStage` receives the tick's `program` and the host's `program_store`; `LaunchContext` gains `program: ProgramContext | None`, built per launch only when `program` is not `None`.
+- `ProgramContext(program: Program, members: tuple[Member, ...], store_dir: Path, asking_project: str)` is a frozen value in `program_sources.py` (not the pure module: it holds a `Path`, which the purity check forbids). `AnsweringStage` receives the tick's `program` and the host's `program_store`; `LaunchContext` gains `program: ProgramContext | None`, built per launch only when `program` is not `None`.
 - `assemble_sources` gains a keyword `program: ProgramContext | None` (no default; every caller says which). With `None` its body is 144's.
 - A program problem is a `SourcesProblem` like any other, mapped by the existing `SOURCES_REASONS`, so no `DeclineReason` is added and `decide.py` does not change.
 
@@ -233,13 +233,6 @@ class PassageKind(StrEnum):
 
 # runner/answering/program_passages.py (pure)
 @dataclass(frozen=True)
-class ProgramContext:
-    program: Program
-    members: tuple[Member, ...]
-    store_dir: Path
-    asking_project: str
-
-@dataclass(frozen=True)
 class ProgramSources:
     concept: SourceFile          # kind program_concept, member set
     members: SourceFile          # kind program_members; path is the program id, not rendered
@@ -247,8 +240,20 @@ class ProgramSources:
 def member_list_text(program: Program, members: Sequence[Member], asking_project: str) -> str: ...
 
 # runner/answering/program_sources.py
-def read_program_sources(context: ProgramContext, max_chars: int, budget: TickBudget,
-                         run: CfRun, timeout_seconds: float
+@dataclass(frozen=True)
+class ProgramContext:
+    program: Program
+    members: tuple[Member, ...]
+    store_dir: Path
+    asking_project: str
+
+@dataclass(frozen=True)
+class AskerReads:               # the asker's own reads, for D3's asker-is-the-concept-member case
+    repo: Path
+    committed: CommittedSources
+
+def read_program_sources(context: ProgramContext, asker: AskerReads, max_chars: int,
+                         budget: TickBudget, run: CfRun, timeout_seconds: float
                          ) -> ProgramSources | SourcesProblem | None: ...
 
 # runner/answering/sources.py
@@ -347,8 +352,8 @@ Seeing a member question answered from the concept against real scratch projects
 ### Development Approach
 
 1. Make `source_reads`' git helper, listings and file read public, with no behavior change.
-2. `program_passages.py`: `ProgramContext`, `ProgramSources`, `member_list_text`, purity check.
-3. `program_sources.py`: the concept read against a temporary repository and test-written member stores, every failure case, the call count and the budget refusals.
+2. `program_passages.py`: `ProgramSources`, `member_list_text`, purity check.
+3. `program_sources.py`: `ProgramContext`, `AskerReads`, the concept read against a temporary repository and test-written member stores, every failure case, the call count and the budget refusals.
 4. `passages.py`: the two kinds, the `member` field, the render line, program passages in `assemble`'s order and size rule. `sources.py`: the `program` keyword.
 5. `launch.py` and `stage.py`: the program context from the tick; the no-program regression test and the visibility test.
 6. `answering.yaml` instructions and their tests; contract docs; CHANGELOG.
