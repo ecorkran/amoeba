@@ -12,8 +12,8 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba's question answerer. A Squadron run whose agent stopped to ask a question is answered from what Amoeba holds about the project and resumed with the answer; a question that cannot be grounded in supplied sources and confirmed by an independent check goes on the blocked list. Replaces the original Judge (component 4) per the 20261028 direction. Revised 20261031 and 20261101 after its architecture reviews.
 dateCreated: 20261031
-dateUpdated: 20261101
-status: not_started
+dateUpdated: 20261103
+status: complete
 ---
 
 # Architecture: Question Answerer
