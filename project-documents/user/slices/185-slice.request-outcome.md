@@ -4,6 +4,7 @@ slice: request-outcome
 project: amoeba
 parent: user/architecture/180-slices.program-coordination.md
 dependencies:
+- 181-slice.program-record
 - 182-slice.program-concept-as-a-source
 - 183-slice.edges-and-release
 - 184-slice.request-runs
@@ -450,7 +451,7 @@ This is a draft, to be refined after implementation. Real models and real reques
 
 1. **The request path end to end.**
    ```bash
-   AMOEBA_KEEP_SCENARIO_DIR=1 uv run pytest tests/runner/answering/test_request_scenario.py -v -s
+   AMOEBA_KEEP_SCENARIO_DIR="$(mktemp -d)" uv run pytest tests/runner/answering/test_request_scenario.py -v -s
    ```
    The setup has two members, `asker` and `provider`, a scratch program store, and the stub answering run replying `kind: request` naming `provider` with `check: yes`. Expected, tick by tick:
    - The asker's answering run finishes. The entry result has `decision: request`, the program store has a `pending` request and an `open` unbound edge, and the record is `requested`.
