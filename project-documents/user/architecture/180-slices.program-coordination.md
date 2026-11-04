@@ -97,7 +97,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - A request written to the program store produces one request run in the provider, launched ahead of the provider's next planned slice and never overlapping another request run in the same checkout.
    - A request run launches in a checkout held by a paused node when the tree is clean and on the target, and waits when it is not.
    - A new-slice reply binds the edge only when the plan shows a new slice at that index; a reply naming an existing or absent index blocks with the binding reason.
-   - The bound slice is designed and built by the provider's configured pipeline, ahead of planned work, and with no implicit predecessor; a second request slice is not held up by a stopped first one.
+   - The bound slice is designed and built by the provider's configured pipeline, ahead of planned work, and with no implicit predecessor; a second request slice is not held up by a stopped first one's readiness (no implicit predecessor), though it still waits for a held checkout under 132's rule (slice 184, D13).
    - A PM hold on the request slice's path stops it.
    - An already-met reply leaves the edge waiting on the named commit, and the asker is released only when 183's observation passes.
    - A restart with a request run in flight adopts it through journal recovery and never launches a second.
