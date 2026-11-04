@@ -13,9 +13,17 @@ import subprocess
 from collections.abc import Iterator
 
 import pytest
-from live_settings import LiveSettings
+from live_settings import LiveSettings, read_live_settings
 
 from live.answering.harness import CF_TIMEOUT_SECONDS, LiveHarness
+
+# Read at collection: a missing variable fails the whole tier with its name.
+_SETTINGS = read_live_settings(os.environ)
+
+
+@pytest.fixture(scope="session")
+def live_settings() -> LiveSettings:
+    return _SETTINGS
 
 
 @pytest.fixture(scope="session")

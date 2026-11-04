@@ -167,17 +167,18 @@ usageByModel:
 
 ## 7. Live-tier settings
 
-- [ ] **7.1 Scope the answering settings to `tests/live/answering`** (effort 2)
-  - [ ] `tests/live/answering/conftest.py` already exists and holds the `live_harness` fixture, which takes a `live_settings` fixture. Move the collection-time `read_live_settings(os.environ)` call and the `live_settings` fixture from `tests/live/conftest.py` into that file, above `live_harness`, unchanged except for the imports it needs (`read_live_settings`). Keep in `tests/live/conftest.py` only what both tiers need (the `sys.path` entry for `tests/`).
-  - [ ] Success: `uv run pytest tests/live/answering --collect-only` with the answering variables set collects the same tests as before; with `AMOEBA_LIVE_ANSWER_MODEL` unset it still fails naming the variable. `tests/live/conftest.py` no longer reads any answering setting.
-- [ ] **7.2 Request live settings** (effort 2)
-  - [ ] Add a settings reader for `AMOEBA_LIVE_REQUEST_MODEL` and `AMOEBA_LIVE_REQUEST_MAX_COST_USD` beside `tests/live_settings.py` (a new module, reusing `require_variable`; make the private `_read_cost` take the variable name so both readers share the positive-finite cost rule, behavior unchanged; no defaults, no skips).
-  - [ ] Create `tests/live/request_run/__init__.py` and `tests/live/request_run/conftest.py` that reads them at collection and exposes a session fixture.
-  - [ ] Success: collecting `tests/live/request_run` with a variable unset fails with `pytest.UsageError` naming it.
-- [ ] **7.3 Tests for the settings rules** (effort 2)
-  - [ ] `tests/runner/request_run/test_live_tier_rules.py`, mirroring `tests/runner/answering/test_live_tier_rules.py`: all set returns the values; each missing variable is named; one invalid cost is rejected naming `AMOEBA_LIVE_REQUEST_MAX_COST_USD`. The shared blank, zero, negative, `nan` and `inf` rules are already tested by the answering tier's rule tests, which must still pass.
-  - [ ] Add one test that `tests/live/conftest.py` source no longer contains the answering variable names (read the file text).
-  - [ ] Success: the tests pass and the answering tier's own rule tests still pass.
+- [x] **7.1 Scope the answering settings to `tests/live/answering`** (effort 2)
+  - [x] `tests/live/answering/conftest.py` already exists and holds the `live_harness` fixture, which takes a `live_settings` fixture. Move the collection-time `read_live_settings(os.environ)` call and the `live_settings` fixture from `tests/live/conftest.py` into that file, above `live_harness`, unchanged except for the imports it needs (`read_live_settings`). Keep in `tests/live/conftest.py` only what both tiers need (the `sys.path` entry for `tests/`).
+  - [x] Success: `uv run pytest tests/live/answering --collect-only` with the answering variables set collects the same tests as before; with `AMOEBA_LIVE_ANSWER_MODEL` unset it still fails naming the variable. `tests/live/conftest.py` no longer reads any answering setting.
+- [x] **7.2 Request live settings** (effort 2)
+  - [x] Add a settings reader for `AMOEBA_LIVE_REQUEST_MODEL` and `AMOEBA_LIVE_REQUEST_MAX_COST_USD` beside `tests/live_settings.py` (a new module, reusing `require_variable`; make the private `_read_cost` take the variable name so both readers share the positive-finite cost rule, behavior unchanged; no defaults, no skips).
+  - [x] Create `tests/live/request_run/__init__.py` and `tests/live/request_run/conftest.py` that reads them at collection and exposes a session fixture.
+  - [x] Success: collecting `tests/live/request_run` with a variable unset fails with `pytest.UsageError` naming it.
+  - Note: `_read_cost` was made public as `read_cost(environ, name)` in `tests/live_settings.py`, since the new module imports it; behavior unchanged.
+- [x] **7.3 Tests for the settings rules** (effort 2)
+  - [x] `tests/runner/request_run/test_live_tier_rules.py`, mirroring `tests/runner/answering/test_live_tier_rules.py`: all set returns the values; each missing variable is named; one invalid cost is rejected naming `AMOEBA_LIVE_REQUEST_MAX_COST_USD`. The shared blank, zero, negative, `nan` and `inf` rules are already tested by the answering tier's rule tests, which must still pass.
+  - [x] Add one test that `tests/live/conftest.py` source no longer contains the answering variable names (read the file text).
+  - [x] Success: the tests pass and the answering tier's own rule tests still pass.
 
 **Commit**: `test: add request live-tier settings and scope answering settings`
 
