@@ -78,25 +78,25 @@ usageByModel:
 
 ## 2. Package and names
 
-- [ ] **2.1 Package and constants** (effort 2)
-  - [ ] Create `runner/request_run/__init__.py` (docstring only) and `runner/request_run/pipeline_file.py`, mirroring `runner/answering/pipeline_file.py`.
-  - [ ] Define once: the pipeline file name `slice_writing.yaml`; the param names `requests-index` and `model`; the step names (write, commit); the input file `need.md`; the output files `reply.json` and `write.prompt.md`; the commit paths per LLD D2 (the initiative-plan glob, and the slice-plan glob built from the `requests-index` param name); the fixed commit message `docs: add request slice to the requests initiative plan`; the proposed `sq run` option names for the run I/O directory (`--io-dir`) and the cost cap (`--max-cost`), provisional until Task 9.1; the probe's nominal cost cap, 1 (USD).
-  - [ ] Do not add `slice_writing_pipeline_path()` yet; Task 5.1 adds it beside the YAML.
-  - [ ] Success: `uv run pyright` passes. No Python file outside `pipeline_file.py` repeats these literals once later tasks land (each imports them); `slice_writing.yaml` repeats them, and Task 5.5 asserts the two agree.
+- [x] **2.1 Package and constants** (effort 2)
+  - [x] Create `runner/request_run/__init__.py` (docstring only) and `runner/request_run/pipeline_file.py`, mirroring `runner/answering/pipeline_file.py`.
+  - [x] Define once: the pipeline file name `slice_writing.yaml`; the param names `requests-index` and `model`; the step names (write, commit); the input file `need.md`; the output files `reply.json` and `write.prompt.md`; the commit paths per LLD D2 (the initiative-plan glob, and the slice-plan glob built from the `requests-index` param name); the fixed commit message `docs: add request slice to the requests initiative plan`; the proposed `sq run` option names for the run I/O directory (`--io-dir`) and the cost cap (`--max-cost`), provisional until Task 9.1; the probe's nominal cost cap, 1 (USD).
+  - [x] Do not add `slice_writing_pipeline_path()` yet; Task 5.1 adds it beside the YAML.
+  - [x] Success: `uv run pyright` passes. No Python file outside `pipeline_file.py` repeats these literals once later tasks land (each imports them); `slice_writing.yaml` repeats them, and Task 5.5 asserts the two agree.
 
 ## 3. Input contract
 
-- [ ] **3.1 `inputs.py`: `RequestInput`, rendering and directory preparation** (effort 3)
-  - [ ] `RequestInput` frozen dataclass with `asking_project_id`, `asking_slice_label`, `requests_index`, `need` (LLD "API Contracts").
-  - [ ] `render_need(request)` returns the `need.md` text in the LLD D4 format: heading `# Request`, the `requested by:` line, the `requests initiative:` line, a blank line, the need verbatim.
-  - [ ] `prepare_request_directory(directory, request)` requires an existing, empty directory and writes only `need.md`. It raises `ValueError` when the directory does not exist or is not empty (mirror `prepare_scratch`).
-  - [ ] Raise `ValueError` (as `answering/inputs.py` does) for: a blank need, a requests index below 1, and a project id or slice label that is blank or contains a newline.
-  - [ ] Success: `render_need` output matches the D4 layout exactly; after `prepare_request_directory` the directory holds exactly one file.
-- [ ] **3.2 Tests for rendering and preparation** (effort 2)
-  - [ ] Create `tests/runner/request_run/__init__.py`, `test_inputs_render.py` and `test_prepare_directory.py`, mirroring `tests/runner/answering/test_inputs_render.py` and `test_prepare_scratch.py`.
-  - [ ] Rendering: the exact rendered text; the need kept verbatim (multi-line, braces and markdown preserved); each `ValueError` case above.
-  - [ ] Preparation: only `need.md` is written, with `render_need` content; refusals for a missing directory, a non-empty directory (left as it was) and each invalid request field.
-  - [ ] Success: the tests pass.
+- [x] **3.1 `inputs.py`: `RequestInput`, rendering and directory preparation** (effort 3)
+  - [x] `RequestInput` frozen dataclass with `asking_project_id`, `asking_slice_label`, `requests_index`, `need` (LLD "API Contracts").
+  - [x] `render_need(request)` returns the `need.md` text in the LLD D4 format: heading `# Request`, the `requested by:` line, the `requests initiative:` line, a blank line, the need verbatim.
+  - [x] `prepare_request_directory(directory, request)` requires an existing, empty directory and writes only `need.md`. It raises `ValueError` when the directory does not exist or is not empty (mirror `prepare_scratch`).
+  - [x] Raise `ValueError` (as `answering/inputs.py` does) for: a blank need, a requests index below 1, and a project id or slice label that is blank or contains a newline.
+  - [x] Success: `render_need` output matches the D4 layout exactly; after `prepare_request_directory` the directory holds exactly one file.
+- [x] **3.2 Tests for rendering and preparation** (effort 2)
+  - [x] Create `tests/runner/request_run/__init__.py`, `test_inputs_render.py` and `test_prepare_directory.py`, mirroring `tests/runner/answering/test_inputs_render.py` and `test_prepare_scratch.py`.
+  - [x] Rendering: the exact rendered text; the need kept verbatim (multi-line, braces and markdown preserved); each `ValueError` case above.
+  - [x] Preparation: only `need.md` is written, with `render_need` content; refusals for a missing directory, a non-empty directory (left as it was) and each invalid request field.
+  - [x] Success: the tests pass.
 
 **Commit**: `feat: add slice-writing request input contract and directory preparation`
 
