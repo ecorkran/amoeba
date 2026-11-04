@@ -9,7 +9,7 @@ audience: [human, ai]
 description: Slice plan for Amoeba initiative 140 — the answering pipeline against Squadron, the question record, the gate and answer submission, source passages, the answering run, and a live walkthrough.
 dateCreated: 20261031
 dateUpdated: 20261101
-status: not_started
+status: complete
 ---
 
 # Slice Plan: Question Answerer
@@ -112,7 +112,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 
 ## Integration Work
 
-6. [ ] **(145) Live Walkthrough** — A real run end to end, as in slice 132's walkthrough: a scratch CF project in a throwaway registry, a scratch checkout with rules and a plan, and a throwaway store. A real pipeline run on a slice whose agent asks a question answered by the plan resumes with the answer and completes. A question asking to merge to `main` is declined by the reserved screen and handed to the PM. A PM answer is used when a question that means the same thing is asked again in different words. A PM answer given after a rule changed stands against that rule. The real registry is untouched.
+6. [x] **(145) Live Walkthrough** — A real run end to end, as in slice 132's walkthrough: a scratch CF project in a throwaway registry, a scratch checkout with rules and a plan, and a throwaway store. A real pipeline run on a slice whose agent asks a question answered by the plan resumes with the answer and completes. A question asking to merge to `main` is declined by the reserved screen and handed to the PM. A PM answer is used when a question that means the same thing is asked again in different words. A PM answer given after a rule changed stands against that rule. The real registry is untouched.
    **Value:** Verification that the stage works against real Squadron and real agent questions, not only fixtures.
    **Success Criteria:**
    - The four cases above happen as described, with records and journal entries that show each step.

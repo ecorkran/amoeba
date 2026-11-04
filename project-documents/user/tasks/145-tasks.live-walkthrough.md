@@ -17,7 +17,7 @@ projectState: Slices 120–132 and 140–144 are merged. `scripts/` holds demo s
   `question_tails.py`. Nothing is added under `src/` by this slice.
 dateCreated: 20261103
 dateUpdated: 20261103
-status: in_progress
+status: complete
 turns: 21
 promptTokens: 1220325
 cachedTokens: 1151928
