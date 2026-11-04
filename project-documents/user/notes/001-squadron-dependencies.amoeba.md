@@ -6,7 +6,7 @@ source: user/project-guides/000-concept.amoeba.md
 audience: [human, ai]
 description: Cross-repo dependencies Amoeba places on Squadron, with priority, blocking-status, and the Amoeba initiative each gates. Hand-off doc for the Squadron team to start work in parallel.
 dateCreated: 20260620
-dateUpdated: 20261020
+dateUpdated: 20261104
 status: not_started
 ---
 
@@ -37,8 +37,9 @@ The good news first: **most of what Amoeba needs already exists.** Programmatic-
 | S12 | `--decision accept\|retry` and `--instructions` on a plain (non-batch) `--resume` | No (a paused per-phase run is a human step) | Medium | 120 resolution of paused runs | **Delivered 2026-10-20, released in squadron-ai 0.23.5** (commit 3bb4a5d6, #246). <br>• `--decision accept` takes the paused loop's last review and continues with no round. It applies only to that loop. A run paused at a non-loop step exits 2: "needs a run paused at a loop step".<br>• `--decision retry` is the same as a plain resume.<br>• `--instructions` prepends its text to every dispatch of the resumed run.<br>• All three work without `--item`.<br>• Tests: `tests/cli/commands/test_run_resume_decision.py`. Docs: Squadron's `docs/PIPELINES.md`, "Deciding on resume". |
 | S14 | A supported sign that an item resume is in progress (for example `resumeStartedAt`, written when `--item` claims the record) | No (an unobservable resume escalates) | Low | 130 item resume recovery | Not requested yet. Proposed in slice 130 (D9, D11), 2026-10-20. Item resume changes neither the run state nor its status, and prints no `run_id=` line. After a restart, a resume that is still running cannot be told from one that died before it rewrote the report. |
 | S15 | An item filter on plan batches (for example `-p items=131,132`) | No (batching needs an exact selection) | Low | 130 batch eligibility | Not requested yet. Proposed in slice 130 (D3, D11), 2026-10-20. `slices-plan` selects every undesigned slice in the plan. Amoeba therefore batches only when that selection is exactly the driven set, and one held slice turns batching off for its initiative. |
+| S16 | A run I/O directory, a guarded `commit` step and a per-run cost cap (`sq run --max-cost`), so a pipeline can run in a provider's checkout without dirtying it | **Yes** (gates slice 184 request runs) | Medium | 180 slice-writing pipeline, 184 request runs | Requested 2026-11-04 in `ecorkran/squadron#292` (run I/O directory and guarded commit step); the cost cap is the open `ecorkran/squadron#241`. Observed on squadron 0.24.20: all three capabilities missing (`--io-dir` and `--max-cost` are unknown options; `commit` is an unknown step type). Syntax is Squadron's to choose; Amoeba finalizes its pipeline file and launch argv against what ships (slice 180, tasks 9.1 and 9.2). |
 
-Net: **nothing here blocks Amoeba.** S1 is still the highest-value quality item. S9 through S13 were released together in squadron-ai 0.23.5 (2026-10-20; 0.23.4 was tagged but never published).
+Net: **S16 gates slice 184 (request runs); nothing else here blocks Amoeba.** S1 is still the highest-value quality item. S9 through S13 were released together in squadron-ai 0.23.5 (2026-10-20; 0.23.4 was tagged but never published).
 
 ---
 

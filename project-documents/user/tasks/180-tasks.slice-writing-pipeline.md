@@ -70,9 +70,9 @@ usageByModel:
 
 **Commit**: `docs: name slice-writing squadron issues in the program slice plan`
 
-- [ ] **1.4 Add the register row** (effort 1)
-  - [ ] In `user/notes/001-squadron-dependencies.amoeba.md`, add row S16 in the table's style: the new issue and `#241`, blocking slice 184, with the observation date. Rewrite the "Net:" line below the table: its "nothing here blocks Amoeba" claim is false once S16 exists, so say that S16 gates slice 184 (request runs) and that nothing else here blocks Amoeba.
-  - [ ] Success: both numbers appear in row S16.
+- [x] **1.4 Add the register row** (effort 1)
+  - [x] In `user/notes/001-squadron-dependencies.amoeba.md`, add row S16 in the table's style: the new issue and `#241`, blocking slice 184, with the observation date. Rewrite the "Net:" line below the table: its "nothing here blocks Amoeba" claim is false once S16 exists, so say that S16 gates slice 184 (request runs) and that nothing else here blocks Amoeba.
+  - [x] Success: both numbers appear in row S16.
 
 **Commit**: `docs: add slice-writing squadron request to the dependency register`
 
