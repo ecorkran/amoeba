@@ -6,7 +6,7 @@ slice: live-walkthrough
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/186-tasks.live-walkthrough.md
 aiModel: claude-haiku-5-5
@@ -14,172 +14,216 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261104
 dateUpdated: 20261104
-reviewedSha: 97a2f674fd761bda547f7d6f83a352e02f834f6a
+reviewedSha: 6d7dda30a429bc3408a600d30d5970ffc2223188
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 12
+toolCallsMade: 13
 effort: xhigh
-turns: 13
-promptTokens: 516273
-cachedTokens: 360984
-cacheWriteTokens: 155279
-completionTokens: 63525
-durationSeconds: 279.1
-costUsd: 0.187528
+turns: 14
+promptTokens: 672319
+cachedTokens: 489561
+cacheWriteTokens: 182746
+completionTokens: 81989
+durationSeconds: 412.7
+costUsd: 0.278015
 costBasis: provider
 runId: run-20261104-tasks-plan-3bf84a0f
 squadronVersion: 0.24.20
 findings:
   - id: F001
-    severity: fail
-    category: sequencing
-    summary: "Rerun path is circular: Task 9.1 and Task 10.1 gate each other"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:231"
+    severity: pass
+    category: coverage
+    summary: "Functional criteria, decisions and scope items all have tasks"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md"
   - id: F002
     severity: concern
-    category: documentation
-    summary: "Dangling reference to Task 9.3"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:200"
+    category: safety
+    summary: "`register-program` is submitted without the isolated environment"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:141"
   - id: F003
     severity: concern
-    category: commit-cadence
-    summary: "Task 5's fix commit contradicts the commit cadence"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:163"
+    category: coverage
+    summary: "The design's \"real CF registry\" criterion conflicts with registry isolation"
+    location: "project-documents/user/slices/186-slice.live-walkthrough.md:305"
   - id: F004
     severity: concern
-    category: junior-completability
-    summary: "Branch name and block-resolution command have no stated source"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:216"
+    category: process
+    summary: "Task 4.3 amends the parent design inside an implementation commit"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:144"
   - id: F005
     severity: concern
-    category: safety
-    summary: "Isolation from the real registry is checked only at the end"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:158"
+    category: verifiability
+    summary: "Live-task waits name no listing, so the wait rule cannot be applied"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:215"
   - id: F006
     severity: concern
-    category: junior-completability
-    summary: "Tree documents are placed in the wrong directory by the literal text"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:93"
+    category: verifiability
+    summary: "Task 12.2's parser tests cannot all pass if a capture is a defect"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:306"
   - id: F007
     severity: concern
-    category: dependencies
-    summary: "Dependencies omit 144, which Task 12.1 writes into"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:6"
+    category: coverage
+    summary: "Reply captures carry no date, and the fixture format is unspecified"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:305"
   - id: F008
     severity: concern
-    category: commit-cadence
-    summary: "Commit markers leave the live evidence uncommitted until the end"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:283"
+    category: safety
+    summary: "Captures are committed verbatim with no secret or local-path check"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:302"
   - id: F009
-    severity: note
-    category: scope
-    summary: "Setup-time `applied` check is dropped, and the LLD still says the opposite"
-    location: "project-documents/user/slices/186-slice.live-walkthrough.md:214"
+    severity: concern
+    category: verifiability
+    summary: "`uv run pyright` does not check `scripts/`, so the pyright criteria are unverifiable as written"
+    location: "pyproject.toml:52"
   - id: F010
-    severity: note
-    category: duplication
-    summary: "Config write may duplicate 145's template"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:139"
+    severity: concern
+    category: scope
+    summary: "`answerer_walkthrough.py` is 292 lines, and `ProjectSpec` omits inputs the helpers need"
+    location: "scripts/answerer_walkthrough.py:142"
   - id: F011
-    severity: note
-    category: junior-completability
-    summary: "Some stop conditions are vague"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:193"
+    severity: concern
+    category: verifiability
+    summary: "Task 5.2's success criterion accepts a probe failure, so it cannot fail"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:164"
   - id: F012
-    severity: note
-    category: process-rule
-    summary: "The merge sub-item sits in a task file"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:216"
+    severity: concern
+    category: clarity
+    summary: "The 10.3 rerun trigger is undefined"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:273"
   - id: F013
-    severity: note
-    category: coverage
-    summary: "Coverage, test-with pattern and references check out"
-    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md"
+    severity: concern
+    category: convention
+    summary: "Prerequisite sub-items have no checkbox"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:196"
   - id: F014
     severity: note
-    category: nfr
-    summary: "No load test is needed, and the size is proportionate"
-    location: "project-documents/user/slices/186-slice.live-walkthrough.md"
+    category: granularity
+    summary: "Doc-update tasks and Task 11 are thin enough to fold"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:250"
+  - id: F015
+    severity: note
+    category: granularity
+    summary: "Tasks 5.2 and 7.1 both run the start-up probe"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:197"
+  - id: F016
+    severity: note
+    category: sequencing
+    summary: "Task 0.1 branches from the target while the planning file has uncommitted edits"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:72"
+  - id: F017
+    severity: note
+    category: convention
+    summary: "Commit types for 10.3 and 12 don't match their contents"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:315"
+  - id: F018
+    severity: note
+    category: scope
+    summary: "Task 8.3's merge sub-item needs its carve-out where it is used"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:227"
+  - id: F019
+    severity: note
+    category: verifiability
+    summary: "Search criteria need whole-word, case-insensitive matching"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:111"
+  - id: F020
+    severity: note
+    category: clarity
+    summary: "Some referenced helpers and paths are described, not named"
+    location: "project-documents/user/tasks/186-tasks.live-walkthrough.md:118"
 ---
 
 # Review: tasks — slice 186
 
-**Verdict:** FAIL
+**Verdict:** CONCERNS
 **Model:** claude-haiku-5-5
 
 ## Findings
 
-### [FAIL] Rerun path is circular: Task 9.1 and Task 10.1 gate each other
+### [PASS] Functional criteria, decisions and scope items all have tasks
 
-Task 9.1 says a model-judgement outcome in case 2 should be "record it and rerun once on a fresh notes-cli index" (line 231). Line 58 puts that rerun at the next index after 102, which is 103, and the slice design says "a slice is ready only when the next lower index is done" (slice design line 137). So the rerun cannot start until 102 is done. Task 10.1 is the step that drives 102, and it requires "Task 9.1 complete" (line 241). Task 9.1 cannot complete until its rerun does. The loop is 9.1 → 103 → 102 → 10.1 → 9.1.
+Cases 1 to 3 map to 8.1–10.2. The not-demonstrated path is covered by 8.4, 9.2, 10.4 and 12.3. The `readable` check is 7.1, the final registry check is 11.1, and the fixture test is 3.1. The refusals and subprocess stops are 4.1 and 4.4, the answerer parameter is 1.1 and 1.2, captures are 12.1 and 12.2, and the process-contract link is 6.2. D1 to D9 are all traced. The test-with pattern holds (3.1 follows the trees, 4.4 follows the script). The two parser tests in 12.2 are justified by the project rule for parsers, not scope creep.
 
-The same rule blocks a case 1 rerun. A rerun of 100 at index 103 waits on 102, which waits on 101, which waits on the failed 100. The slice design also says "Each case runs once" (slice design line 228) while its body allows a rerun, and the task file inherits that conflict.
+### [CONCERN] `register-program` is submitted without the isolated environment
 
-Fix: decide where a rerun sits in the order. For example, a rerun is driven after Task 10.2, and it does not gate 10.1. Restate the readiness rule for reruns.
+Task 4.2 sets `CONTEXT_FORGE_DATA_DIR=D/cf` and `AMOEBA_STORE_DIR=D/store` for the per-project steps. Task 4.3 submits `register-program` with no environment stated. The task-4.4 stubbed run (line 149) checks call order but not environment. The preamble (line 65) says the real registry and supervisor directory are never written, and the design requires both variables on every spawned `cf` and `sq` (slice design line 223). A literal reading of 4.3 could register the program in the real store. Name the variables for this call and make 4.4 assert them. `scripts/answerer_walkthrough.py:253-257` already builds that env once, so the program script can reuse the pattern.
 
-### [CONCERN] Dangling reference to Task 9.3
+### [CONCERN] The design's "real CF registry" criterion conflicts with registry isolation
 
-Line 200 says "drive 101 only after Task 9.3", and line 48 places the PM merge at "Task 9.3". The file has no Task 9.3. The merge is sub-item 8.3 (line 216), and Task 9.1's prerequisite is correctly 8.3 (line 228). A reader following the reference won't find the gate. Change both references to Task 8.3.
+Line 305 asks for `amoeba inspect program` to show all three members `readable` "against the real CF registry". The Overview (line 38), D6 registry isolation (line 223) and the task preamble (line 65) all keep the walkthrough in `D/cf`. Task 7.1 checks `readable` in the isolated registry, which is the only reading that keeps isolation. The criterion as written cannot hold alongside isolation. The PM should decide the wording, and the design should be corrected in planning before Task 7 runs.
 
-### [CONCERN] Task 5's fix commit contradicts the commit cadence
+### [CONCERN] Task 4.3 amends the parent design inside an implementation commit
 
-Line 163 says a fix to Task 2 or 4 found in Task 5 is "committed on its own as `fix: {summary}`". The project rules say implementation commits only at the task file's `**Commit**:` markers, and a bug in the slice's own code is part of the slice, not a separate fix. The change should ride the next marker, which is Task 6 (line 181). Remove the separate-commit clause.
+Task 4.3 edits the slice design's D5 (line 214), D6 "Script" (line 222) and Technical Requirements (line 311). The edit lands in `feat: add program walkthrough setup script` (marker at line 153). The commit cadence keeps planning documents in their own planning commit, made after review. The change also removes the "refuse a non-`applied` registration" requirement during implementation. The requirement is relocated, not dropped: Task 7.1 checks `applied` after start (line 198). The deviation is sound, but it should be a reviewed design revision made before Task 4 begins.
 
-### [CONCERN] Branch name and block-resolution command have no stated source
+### [CONCERN] Live-task waits name no listing, so the wait rule cannot be applied
 
-Line 216 tells the PM action to merge `700-slice.<name>` into `main`, but nothing says where `<name>` comes from. Notes-store's request run chooses that name. The 183 design gives the branch as `{cf.index}-slice.{cf.slice_name}` (183 design line 211). The step should say how to find the branch, for example with `git -C D/checkouts/notes-store branch --list '700-slice.*'`, and check that it is the head the done node recorded. Line 218 says "resolve it as the PM" without naming the command. Name the command and check its flags with `--help`.
+The Waiting rule (line 63) ends a wait when "the listing named in the check" shows the expected state. Three waits name no listing: "Wait for the design question and the answering run" (215), "Wait for `notes-store`'s request run" (221) and "Wait until `notes-store` slice 700 is `done`" (226). A session cannot tell when those waits end. Name the listing for each (for example `inspect questions --json`, `inspect nodes`, `inspect program-blocked --json`).
 
-### [CONCERN] Isolation from the real registry is checked only at the end
+### [CONCERN] Task 12.2's parser tests cannot all pass if a capture is a defect
 
-The slice design requires that the real registry and supervisor directory are never written (slice design line 38), and that nothing is written outside `D` (line 306). Task 5.1 checks only that the scratch registry lists three projects. Task 4.4's stubs do not assert that every spawned `cf`, `sq` or `amoeba` carries `CONTEXT_FORGE_DATA_DIR=D/cf` and `AMOEBA_STORE_DIR=D/store` (slice design line 223). The only real-registry check is 11.1 (line 257), which runs after all the live spend.
+Line 306 adds a parser test for each capture, says a non-parsing capture is a defect to file, and says "Do not change the parser." A deterministic defect would fail that test. Yet line 307 requires `uv run pytest tests/runner/answering tests/runner/request_run` to pass, and 12.4 (line 313) requires all tests to pass. Those cannot hold together. Say how a known-defect capture is held, for example an `xfail` tied to the issue number.
 
-Add to 5.1 a `cf project list` with `CONTEXT_FORGE_DATA_DIR` unset, confirming no scratch project is listed. Add to 4.4 an assertion over the stub call log that each call carries the scratch environment.
+### [CONCERN] Reply captures carry no date, and the fixture format is unspecified
 
-### [CONCERN] Tree documents are placed in the wrong directory by the literal text
+The integration requirement (slice design line 318) says every capture carries run id, date and `source: 186-walkthrough`. Task 12.1 gives the date (`captured`). Task 12.2 says only that each reply "keeps its run id and source", with no date. It also does not say how those fields sit in the reply-artifact and `reply.json` fixtures. Name the field and its carrier (sidecar, wrapper or in-file key) for each of the two kinds.
 
-Line 93 says the tree documents go "under `project-documents/user/` as in `scripts/answerer_walkthrough/project/`". In that tree, the concept and initiative plan are under `project-documents/user/project-guides/`, and the architecture and slice plan are under `project-documents/user/architecture/`. 145's `CF_ARTIFACTS` (`scripts/answerer_walkthrough.py:35-39`) uses the same layout. A junior following the literal text would put the concept directly under `user/`, and `cf set concept` would point at the wrong file. Name the two subdirectories.
+### [CONCERN] Captures are committed verbatim with no secret or local-path check
 
-### [CONCERN] Dependencies omit 144, which Task 12.1 writes into
+Tasks 12.1 and 12.2 copy question tails, reply artifacts and `reply.json` files from live run directories into committed fixtures. Those runs execute in checkouts that hold the provider `.env`, and their paths sit under the `$(mktemp -d)` directory. CLAUDE.md forbids committing credentials. The task has no step to scan captures for key material or machine-local paths before the commit at line 315. Add that step to 12.1 and 12.2.
 
-The frontmatter lists 145 and 180 to 185. Task 12.1 writes into 144's `tests/live/answering/fixtures/question_tails.json` and runs `test_question_tails_fixture.py`. The five live variables come from 140 and 144 (slice design line 79). Both files exist, and the entry schema (`question`, `run_id`, `captured`, `source`) matches what 12.1 says to write. Add 140 and 144 to the dependencies, and have Task 0.1 (lines 69 to 73) confirm the fixture file and the live variables.
+### [CONCERN] `uv run pyright` does not check `scripts/`, so the pyright criteria are unverifiable as written
 
-### [CONCERN] Commit markers leave the live evidence uncommitted until the end
+`[tool.pyright]` includes only `src` and `tests`. Task 1.1 (line 85) and Task 4.4 (line 151) require `uv run pyright` to be clean "on the script", but the script lives in `scripts/`, so the plain command reports nothing for it. Either name the files explicitly or widen the include, and say which. Also, the scratch trees' Python (`src/notes_store/jsonl.py`, `src/notes_export/text.py`) lives under `scripts/`, so repo-wide `uv run ruff check .` (line 312) lints it. Task 2 does not say those files must pass ruff.
 
-Markers sit at Tasks 1, 3, 4, 6 and 12. Tasks 7 to 11 (lines 185 to 259) produce the run ids, edge rows and journal evidence the slice exists to record, and none has a marker. That evidence stays uncommitted until Task 12. Task 12's commit also bundles fixes to the tree and script (line 58 says tree changes "ride in the Task 12 commit"), the LLD amendment (12.3), the captured fixtures and the results, all under `docs:`. Add a marker after Task 11 for the results, and commit code or tree fixes separately with their own type.
+### [CONCERN] `answerer_walkthrough.py` is 292 lines, and `ProjectSpec` omits inputs the helpers need
 
-### [NOTE] Setup-time `applied` check is dropped, and the LLD still says the opposite
+The file is already 292 lines. Task 1 adds a frozen `ProjectSpec` and splits `read_live_settings`, and the design forbids a new module (slice design line 221). The file will likely pass the project's ~300-line guideline (task file line 51), and the task has no plan for that. The spec as written (`ProjectSpec(project_id, tree, cf_artifacts, checkout)`, task line 83) also omits the env file that `build_checkout` copies as `.env` (`answerer_walkthrough.py:142`, `:182`) and the env mapping all three helpers take (`:185`, `:210`). Add both to the spec. Then decide where `ProjectSpec` and the live-variable helpers go if the file exceeds the guideline.
 
-Slice design line 214 (D5) and line 311 require setup to stop unless the registration is `applied`. The task file deviates (line 54), and 145's tasks already record that submissions are applied only by the resident process (`145-tasks` line 121). The deviation is correct, and Task 7.1 (line 193) checks `applied` after start, so the intent is covered. The LLD amendment sits in 12.3 (line 278), so the LLD disagrees with the build for its whole length. Move the amendment into Task 4.3.
+### [CONCERN] Task 5.2's success criterion accepts a probe failure, so it cannot fail
 
-### [NOTE] Config write may duplicate 145's template
+"the log shows the sq probe and the slice-writing and answering probes passing, or a probe failure" is met whatever the log says. Line 165 separately defines a defect. State the success as: the probes pass, or the only failure names 180's or 140's D8 capabilities.
 
-145's `CONFIG_TEMPLATE` (`scripts/answerer_walkthrough.py:55-68`) already writes the answerer block. Task 4.3 writes a three-project file and does not say whether to extend that template or copy it. Say which. Copying would duplicate the answerer block.
+### [CONCERN] The 10.3 rerun trigger is undefined
 
-### [NOTE] Some stop conditions are vague
+Line 59 says a case "that needs a rerun" gets one in 10.3, and 10.3 (line 273) gates it on "worth one more run". That is a judgment with no stated test, so a session cannot decide it. The design (slice design line 232) says only that a rerun goes on a new slice. State the rule: every case closed as shown in part gets one rerun, or a named condition triggers it.
 
-Task 7.1 stops on a member "not readable after a few ticks", which gives no number. Task 5.1 sets the five variables to "the values the earlier live tiers use" without saying where those values are. Give a tick count and name the source.
+### [CONCERN] Prerequisite sub-items have no checkbox
 
-### [NOTE] The merge sub-item sits in a task file
+Ten "Prerequisite:" sub-items (lines 196, 214, 220, 225, 244, 262, 267, 272, 289, 301) lack the `[ ]` that CLAUDE.md requires for every item and subitem. Add the checkbox, or move the prerequisite into the task heading.
 
-The project rules say never to write a merge as a task or sub-item. Task 8.3's merge runs in a throwaway checkout, and slice design D4 (line 163) mandates it, so the carve-out is reasonable. The Branch paragraph states the carve-out but cites the non-existent Task 9.3. Once that reference is fixed, the carve-out holds.
+### [NOTE] Doc-update tasks and Task 11 are thin enough to fold
 
-### [NOTE] Coverage, test-with pattern and references check out
+Tasks 9.2 and 10.4 are one line each ("As Task 8.4", lines 250 and 279). Fold each into its case's last sub-item and keep the case commit markers. Task 11 (effort 1) could join 12.4. Its prerequisite (line 289) names 10.2, but 10.4 should come first, so name 10.4.
 
-- Case 1 is covered by 8.1 to 8.3, case 2 by 9.1, and case 3 by 10.1 and 10.2.
-- `inspect program` readable is covered by 7.1, final checks by 11.1, docs and LLD by 6.1, 6.2 and 12.3, and captures and fixtures by 12.1 and 12.2.
-- D9's edge id is in 183's design (slice 183 line 292), and 0.1 checks it.
-- Test-with: 3.1 follows the trees, 4.4 follows the script, and 1.1 keeps 145's test green.
-- The cited files exist: `.claude/rules/python.md`, 145's helpers and tests, and the #241 and #284 references (180 and 140 designs).
-- Task 0.1 will stop now because 180 to 185 are designed but not merged (projectState, line 14). That is the intended gate.
+### [NOTE] Tasks 5.2 and 7.1 both run the start-up probe
 
-### [NOTE] No load test is needed, and the size is proportionate
+The first sub-item of 7.1 repeats 5.2. That is fine if re-running after the BLOCKED line is removed is the intent, but say so.
 
-The slice design restates no NFR, and the change touches no simulation, network, concurrency or environment-layer code. No `tests/load/` task or CI gate is needed. The test surfaces (the fixture test, the script test, and 145's test kept green) each map to a criterion. Twelve top-level tasks in one file is proportionate for three live cases.
+### [NOTE] Task 0.1 branches from the target while the planning file has uncommitted edits
+
+At session start, git status showed the 186 task file as modified. The planning commit should land on the target before 0.1 creates the slice branch, so the branch starts from the reviewed plan.
+
+### [NOTE] Commit types for 10.3 and 12 don't match their contents
+
+Marker 12 is `docs:` but adds parser tests and fixtures. Marker 10 (line 282) bundles tree edits under `scripts/program_walkthrough/` into a `docs:` commit. Use `test:` for the test and fixture changes.
+
+### [NOTE] Task 8.3's merge sub-item needs its carve-out where it is used
+
+AGENTS.md says a merge is never written as a task or sub-item. The carve-out (the merge happens only in the scratch checkout, per line 49) makes 8.3 legitimate. Repeat it in the sub-item and keep `git -C D/checkouts/notes-store` on the command so it cannot run in this repository.
+
+### [NOTE] Search criteria need whole-word, case-insensitive matching
+
+A plain search for "tag" also matches "stage". The "markdown" search in 2.2 (line 105) is also unstated for case. Specify whole-word, case-insensitive matching.
+
+### [NOTE] Some referenced helpers and paths are described, not named
+
+Task 3.1 refers to "the shared assembly helpers 145 added beside `sources_repo.py`" without naming them. Task 2.1 says "open 182's design" (line 101) without a path. I confirmed that `tests/runner/answering/sources_repo.py` and `test_walkthrough_fixture.py` exist. Name the helpers and the 182 design path.
 
 ### Run Digest
 
-- Response length: 10295 chars
+- Response length: 12187 chars
 - Response is newline-free: no
-- Tool calls made: 12
+- Tool calls made: 13
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -187,13 +231,13 @@ The slice design restates no NFR, and the change touches no simulation, network,
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 13
-- Tokens — prompt / cached / cache write / completion / reasoning: 516273 / 360984 / 155279 / 63525 / not computed
-- Duration: 279.1 s
-- Cost: $0.19 (provider)
+- Turns: 14
+- Tokens — prompt / cached / cache write / completion / reasoning: 672319 / 489561 / 182746 / 81989 / not computed
+- Duration: 412.7 s
+- Cost: $0.28 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 14
+- Finding-shaped matches — whole response: 20
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 14
-- Finding-shaped matches — surviving validation: 14
+- Finding-shaped matches — in findings section: 20
+- Finding-shaped matches — surviving validation: 20

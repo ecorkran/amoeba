@@ -4,6 +4,7 @@ slice: live-walkthrough
 project: amoeba
 lld: user/slices/186-slice.live-walkthrough.md
 dependencies:
+- 144
 - 145
 - 180
 - 181
@@ -41,23 +42,25 @@ usageByModel:
 
 - Working on the **live-walkthrough** slice (186), the last slice of initiative 180 (program coordination). It runs coordination end to end on real Squadron runs, real agents and real repos, in three cases: a new slice from source, an already-met request from source, and a request from release that waits for the PM's edge resolution.
 - **Current state:** see `projectState`.
-- **Dependencies:** 145 (the answerer walkthrough: scripts, helpers and doc this slice follows); 180 (request-run pipeline and its live variables); 181 (program store, `register-program`, `program` listings); 182 (program passages, `tests/runner/answering/program_rig.py`); 183 (edges, release, `resolve-edge`, edge rows on `program-blocked`); 184 (request runs, `requests` config); 185 (the `request` outcome of the answering run, `request_limit`).
+- **Dependencies:** 144 (`inspect questions`, the answering run directories, and `question_tails.json`, which Task 12.1 extends); 145 (the answerer walkthrough: scripts, helpers and doc this slice follows); 180 (request-run pipeline and its live variables); 181 (program store, `register-program`, `program` listings); 182 (program passages, `tests/runner/answering/program_rig.py`); 183 (edges, release, `resolve-edge`, edge rows on `program-blocked`); 184 (request runs, `requests` config); 185 (the `request` outcome of the answering run, `request_limit`).
 - **What this slice delivers:** a project parameter on three of 145's helpers; three scratch project trees; one deterministic fixture test; `scripts/program_walkthrough.py` (`setup`); `docs/program-walkthrough.md`; the three live cases recorded in this file; and every captured question tail, answer-step request reply and request-run reply added to the fixtures. No product code changes.
 - **Next planned work:** 160 (notification bridge) and 200 (program conversation), outside this slice.
 
-**Branch:** read the target (`cf config get git.integration_branch`; empty means `main`). Before Task 0.1, create `186-slice.live-walkthrough` from the target and work there. No task merges or pushes this slice's branch. Merging follows the code review. The only git merge in this file is a walkthrough PM action inside the throwaway checkout under `D` (Task 9.3, LLD D4 item 2); it never touches this repository.
+**Branch:** read the target (`cf config get git.integration_branch`; empty means `main`). Before Task 0.1, create `186-slice.live-walkthrough` from the target and work there. No task merges or pushes this slice's branch. Merging follows the code review. The walkthrough's PM action in Task 8.3 (LLD D4 item 2) happens inside the throwaway checkout under `D` and never touches this repository.
 
 **Reading note:** this file does not restate the LLD. "Per the LLD" means open `user/slices/186-slice.live-walkthrough.md` at the named decision (D1 to D9) or section. Paths are relative to the repository root. Follow `.claude/rules/python.md`: ruff and strict pyright, no silent fallbacks, every `try/except` justified. Read each file before editing it. Keep each file near 300 lines and each function near 50. A defect found in 180 to 185 is filed as an issue (D7), never fixed here. Where the code of 180 to 185 names a command, flag, column or state differently from their designs, follow the code and the `--help` output, and record `LLD name → code name` under Task 0.1.
 
 **Order and blocking:** work tasks in file order. Tasks 1 to 6 need no Squadron release, no model and no keys. Tasks 7 to 12 are live and follow one another. No `BLOCKED:` line is pre-written: Task 5.2 and Task 7.1 run the start-up probe, and only when it fails because the installed `sq` lacks 180's D8 capabilities (the run I/O directory, the guarded commit step, the per-run cost cap `ecorkran/squadron#241`) or 140's D8 (`ecorkran/squadron#284`) does Task 7.1 write a line starting `BLOCKED:` under itself naming the missing capability and those issues, leave itself unchecked and stop. A session that finds that line deletes it and runs the probe again; it continues only if the probe now passes. The release is decided by the probe, never by a version number. Later live tasks name their prerequisite task.
 
-**LLD deviations found while breaking this down (both record the same cause):** a submission is applied only by the resident process (181, 145's Task 3.4 note), so the setup script cannot read `applied` from `inspect program-submissions` (LLD D5, Technical Requirements) and cannot print the asker slices' node ids (D6): neither exists until Amoeba has started. Setup therefore submits the registration and stops; Task 7.1 reads the `applied` outcome and the node ids after start, and the doc carries both commands. Task 12.3 amends the LLD to say so.
+**LLD deviations found while breaking this down (both record the same cause):** a submission is applied only by the resident process (181, 145's Task 3.4 note), so the setup script cannot read `applied` from `inspect program-submissions` (LLD D5, Technical Requirements) and cannot print the asker slices' node ids (D6): neither exists until Amoeba has started. Setup therefore submits the registration and stops; Task 7.1 reads the `applied` outcome and the node ids after start, and the doc carries both commands. Task 4.3 amends the LLD to say so, in the commit that adds the script.
 
 **Commit cadence:** commit only at the `**Commit**:` markers. Run `uv run ruff format .` before each commit, and `uv run ruff check .` and `uv run pyright` before markers that follow Python changes.
 
-**D7 recovery applies to every live case task:** fixture cause, product cause, model judgement and environment, with the 186 additions (LLD D7). Each case runs once. A rerun goes on a new asker slice appended at the end of `notes-cli`'s plan (the next index after 102, since a slice is ready only when the next lower index is `done`), and both runs are recorded. A product defect (broken, or high severity and reasonably likely) is filed as an issue and the case marked `BLOCKED:` on it. A safe outcome that fails to show the case is recorded in the Result and does not block; the case is then closed as shown in part and marked not demonstrated. A failed request is left for the PM's resolution of the asker's block (184, D10); until that withdraws it, `request_limit: 1` blocks a new request to that provider. Any slice entry added or corrected in a scratch checkout is also made in the repository tree under `scripts/program_walkthrough/`, so a later run starts from the same plan; re-run the fixture test after the change. Those tree changes ride in the Task 12 commit.
+**D7 recovery applies to every live case task:** fixture cause, product cause, model judgement and environment, with the 186 additions (LLD D7). Each case runs once, in index order. An attempt that fails to show its case is closed by resolving the asker's block as the PM with `amoeba submit resolution` (flags per `--help`; 145 used `--decision resume --instructions "<text>"`). That withdraws a failed request (184, D10) and brings the slice to `done`, which frees the next index (a slice is ready only when the next lower index is `done`) and, for a provider, ends `request_limit: 1`'s hold on a new request. A case that needs a rerun gets it in Task 10.3, on a new asker slice appended after the last index, never earlier; both runs are recorded. A product defect (broken, or high severity and reasonably likely) is filed as an issue and the case marked `BLOCKED:` on it. A safe outcome that fails to show the case is recorded in the Result and does not block; the case is then closed as shown in part and marked not demonstrated. Any slice entry added or corrected in a scratch checkout is also made in the repository tree under `scripts/program_walkthrough/`, so a later run starts from the same plan; re-run the fixture test after the change. Those tree changes ride in the commit of the task that made them.
 
 **Live-result notes:** each live task writes what was observed (record fields, edge waits, journal entries, run ids, commits) in a "Result" sub-item under it. Write only what was seen.
+
+**Waiting:** a wait ends when the listing named in the check shows the expected state, or shows a terminal or `paused` state that is not the expected one. The second is an outcome to record under D7, not a reason to keep waiting. Each run is bounded by its configured cost cap.
 
 **Live environment:** the five variables `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL`, `AMOEBA_LIVE_MAX_COST_USD`, `AMOEBA_LIVE_REQUEST_MODEL` and `AMOEBA_LIVE_REQUEST_MAX_COST_USD` must be exported where setup runs. `D` is a new directory under `$(mktemp -d)`. The real registry and the real supervisor directory are never written.
 
@@ -90,7 +93,7 @@ Per the LLD, D6 "Per-project steps". 145's `build_checkout`, `read_cf_project_id
 
 ## 2. Scratch project trees (effort 3)
 
-Per the LLD, D1, D3 and "Scratch Project Contents". Three small trees under `scripts/program_walkthrough/`, each committed later as its checkout's first commit. Nothing in them may name a real project, a credential or a model alias. Each tree follows `file-naming-conventions.md` (front matter, names `000-concept.<name>.md`, `001-initiative-plan.<name>.md`, `architecture/100-arch.<name>.md`, `architecture/100-slices.<name>.md`, under `project-documents/user/` as in `scripts/answerer_walkthrough/project/`) and has a `.gitignore` holding `.env`. Use `cli`, `store` and `export` as the `<name>` of each tree's documents. No provider tree has an initiative in 700 to 709.
+Per the LLD, D1, D3 and "Scratch Project Contents". Three small trees under `scripts/program_walkthrough/`, each committed later as its checkout's first commit. Nothing in them may name a real project, a credential or a model alias. Each tree follows `file-naming-conventions.md` (front matter, and these paths inside the tree, as in `scripts/answerer_walkthrough/project/`: `project-documents/user/project-guides/000-concept.<name>.md`, `project-documents/user/project-guides/001-initiative-plan.<name>.md`, `project-documents/user/architecture/100-arch.<name>.md`, `project-documents/user/architecture/100-slices.<name>.md`) and has a `.gitignore` holding `.env`. Use `cli`, `store` and `export` as the `<name>` of each tree's documents. No provider tree has an initiative in 700 to 709.
 
 - [ ] **2.1 `notes-store/`**
   - [ ] `CLAUDE.md` with two short rules, `.gitignore`, concept, initiative plan (initiative 100), architecture, and a one-slice plan for itself (slice 100).
@@ -136,9 +139,10 @@ Per the LLD, D5 and D6 "Script", "Registry isolation". File: `scripts/program_wa
   - [ ] Success: `git -C D/checkouts/<project> status` is clean and `git log` shows the project's commits for each of the three.
 - [ ] **4.3 Register the program, write the config, print**
   - [ ] Submit `register-program` as in D5 (program `notes`, concept member `notes-store`, concept path `docs/program-concept.md`, members and consumption modes as listed there, each with `requests_initiative` 700). Do not read an outcome: it is applied after start (see deviations).
-  - [ ] Write `D/projects.yaml` as in D5 with the live values as literals: `notes-cli` on `p4` with the `answerer` section (`request_limit: 1`), `notes-store` and `notes-export` on `p456` with their `requests` section. Use the key names 184 and 185 ship.
+  - [ ] Write `D/projects.yaml` as in D5 with the live values as literals: `notes-cli` on `p4` with the `answerer` section (`request_limit: 1`), `notes-store` and `notes-export` on `p456` with their `requests` section. Use the key names 184 and 185 ship. 145's `CONFIG_TEMPLATE` is one project with eight keys and no `request_limit` or `requests`, so it is not reused; define this script's own template and quote values as 145's `write_config` does (`json.dumps`).
   - [ ] Print what was created, the two `export` lines (`AMOEBA_STORE_DIR`, `CONTEXT_FORGE_DATA_DIR`) and the `amoeba start --project-config D/projects.yaml --cf-data-dir D/cf` command.
-  - [ ] Success: `D/projects.yaml` is written; Task 4.4 checks that it loads.
+  - [ ] Amend the LLD (`user/slices/186-slice.live-walkthrough.md`) in D5 (the sentence on reading the submission's outcome), D6 "Script" (the printed node ids) and Technical Requirements (the refusal of a non-`applied` registration): the script submits the registration and neither reads `applied` nor prints node ids; both are read after start (Task 7.1). Change nothing else in it.
+  - [ ] Success: `D/projects.yaml` is written; Task 4.4 checks that it loads. The LLD no longer says the script reads `applied` or prints node ids.
 - [ ] **4.4 Tests** `tests/test_program_walkthrough_script.py`
   - [ ] Load the script as `tests/test_answerer_walkthrough_script.py` does, with `scripts/` on `sys.path` first so its import of `answerer_walkthrough` resolves. If pyright cannot resolve that import, add `scripts` to the pyright `extraPaths` in `pyproject.toml`.
   - [ ] Using Task 1.2's stubs, with a stub `cf get` that prints a project id derived from its working directory so the three ids differ: an existing `D`, a missing env file and each of the five variables unset are refused by name; a stub `git`, `cf` or `amoeba` exiting non-zero reports step, command and stderr and leaves `D`; a stub `cf` printing no id stops naming the step.
@@ -155,12 +159,14 @@ Per the LLD, D5 and D6 "Script", "Registry isolation". File: `scripts/program_wa
 Per Development Approach step 3. Needs `cf`, `git` and `amoeba`; no key is used until a run is driven.
 
 - [ ] **5.1 Run setup** against a new directory under `$(mktemp -d)`, a placeholder `.env` file and the five live variables set to the values the earlier live tiers use.
-  - [ ] Success: the script prints its exports and exits 0. `CONTEXT_FORGE_DATA_DIR=D/cf cf project list` lists three scratch projects. Each checkout is clean with its first commit, and `.env` is untracked.
+  - [ ] Success: the script prints its exports and exits 0. `CONTEXT_FORGE_DATA_DIR=D/cf cf project list` lists three scratch projects, and the same command with `CONTEXT_FORGE_DATA_DIR` unset lists none. Each checkout is clean with its first commit, and `.env` is untracked. Export the two variables setup prints in every shell that runs `cf`, `sq` or `amoeba` from here on.
 - [ ] **5.2 Start Amoeba** with the printed command, observe the start-up log, then stop it.
   - [ ] Success: the log shows the `sq` probe and the slice-writing and answering probes passing, or a probe failure. Record which, with the log line, as a "Result" sub-item. A failure that names only 180's or 140's D8 capabilities is expected here and is not a defect.
-  - [ ] A failure that names anything else (for example a config load error) is a defect in Task 4: fix it there before continuing.
+  - [ ] A failure that names anything else (for example a config load error) is a defect in Task 4: fix it there, remove `D`, and run Task 5.1 again on a new directory.
 
-No commit marker: this task changes no files when it passes. A fix to Task 2 or Task 4 made here is committed on its own as `fix: {summary}` before Task 6.
+This task changes no files when it passes. When a fix was made, this marker applies; otherwise skip it.
+
+**Commit**: `fix: correct the program walkthrough setup found at start-up`
 
 ---
 
@@ -190,14 +196,19 @@ Per the LLD, D5 and Success Criteria. First live task.
   - Prerequisite: Tasks 5 and 6 complete, and the five live variables exported.
   - [ ] Run the start-up probe by starting Amoeba as in Task 5.2. If it fails for a missing capability, write the `BLOCKED:` line (see Order and blocking) and stop.
   - [ ] Check `amoeba inspect program-submissions` shows the registration `applied` and `amoeba inspect program` shows all three members `readable`. Find the three asker nodes with `amoeba inspect nodes --project notes-cli --json` and record their ids.
-  - [ ] Success: the registration is `applied`, all three members are `readable`, and slices 100 to 102 are listed for `notes-cli`. If the registration is `rejected`, or a member is not `readable` after a few ticks, the cause is a defect in Task 4 or Task 2: fix it there before continuing.
+  - [ ] Re-run `amoeba inspect program` until each member shows `readable` or an unreadable reason. An unreadable reason, or a registration `rejected` with its reason, is the failure: it names the cause, which is a defect in Task 2 or Task 4. Fix it there, remove `D`, and run Tasks 5.1 and 7.1 again on a new directory.
+  - [ ] Success: the registration is `applied`, all three members are `readable`, and slices 100 to 102 are listed for `notes-cli`.
   - [ ] Result: write the probe lines, the submission outcome and the member rows.
+
+When a fix was made here, this marker applies; otherwise skip it.
+
+**Commit**: `fix: correct the program walkthrough trees or setup found at start`
 
 ---
 
 ## 8. Case 1: a new slice from source (effort 4)
 
-Per the LLD, D2, D3, D4 and Functional Requirements "Case 1". The asker's slices run one at a time: drive 100 only now, and drive 101 only after Task 9.3.
+Per the LLD, D2, D3, D4 and Functional Requirements "Case 1". The asker's slices run one at a time: drive 100 only now, and drive 101 only after Task 8.3.
 
 - [ ] **8.1 Drive slice 100 and record the request**
   - Prerequisite: Task 7.1 complete.
@@ -213,10 +224,15 @@ Per the LLD, D2, D3, D4 and Functional Requirements "Case 1". The asker's slices
 - [ ] **8.3 The provider builds undriven, the PM acts, the asker resumes**
   - Prerequisite: Task 8.2 complete.
   - [ ] Wait until `notes-store` slice 700 is `done` without any `submit intent`. Check the edge waits `not_on_target` (not `branch_head_missing`: that wait would mean no slice branch head was recorded).
-  - [ ] Carry out the PM's reserved action from the doc in `D/checkouts/notes-store`: the slice branch `700-slice.<name>` into `main` (D4 item 2). Check the working tree is clean on `main` afterwards.
+  - [ ] Carry out the PM's reserved action the doc gives for case 1 in `D/checkouts/notes-store` (D4 item 2: bring the provider's slice branch onto its `main`). Find the branch with `git -C D/checkouts/notes-store branch --list '700-slice.*'`; its name is `{index}-slice.{name}`, as 183's `slice_branch_name` builds it. Check the working tree is clean on `main` afterwards.
   - [ ] Check the edge is released, the asker's run resumes with instructions naming `notes-store`, the slice and the commit, the question record is `answered`, and slice 100 is `done`.
-  - [ ] A provider review loop that never passes ends in a `paused` block on slice 700, which holds `notes-store`'s checkout: resolve it as the PM and record it.
-  - [ ] Result: provider slice and branch, build run id, edge waits seen in order, the merge commit, the release instructions, journal entries, final states.
+  - [ ] A provider review loop that never passes ends in a `paused` block on slice 700, which holds `notes-store`'s checkout: resolve it with `amoeba submit resolution` as D7 describes, and record it.
+  - [ ] Result: provider slice and branch, build run id, edge waits seen in order, the resulting commit on `main`, the release instructions, journal entries, final states.
+- [ ] **8.4 Update the doc for case 1**
+  - [ ] In `docs/program-walkthrough.md` correct any command, flag or column name case 1 showed to be different, and add "Observed on {date}" with the recorded outcome. Mark the case "not demonstrated" if it was closed as shown in part.
+  - [ ] Success: the case 1 section matches what was run.
+
+**Commit**: `docs: record program walkthrough case 1`
 
 ---
 
@@ -228,8 +244,13 @@ Per the LLD, D3 and Functional Requirements "Case 2". Slice 101's capability, `r
   - Prerequisite: Task 8.3 complete, `notes-store` clean on `main` (`git status`), slice 100 `done`.
   - [ ] Drive slice 101. Check the question record is `requested`, `notes-store`'s request run ends `met` with a commit, `git merge-base --is-ancestor <commit> main` in `D/checkouts/notes-store` succeeds, and `git log` shows no commit added by the run.
   - [ ] Check no new node exists in `notes-store`, the edge is released through the same reachability observation, the asker's resume instructions name that commit, and slice 101 is `done`.
-  - [ ] A request run that writes a slice for this need is model judgement (D7); record it and rerun once on a fresh `notes-cli` index.
+  - [ ] A request run that writes a slice for this need is model judgement (D7): record it, close the attempt as D7 describes, and leave the rerun to Task 10.3.
   - [ ] Result: run ids, the commit, the edge row, the instructions, final states.
+- [ ] **9.2 Update the doc for case 2**
+  - [ ] As Task 8.4, for case 2.
+  - [ ] Success: the case 2 section matches what was run.
+
+**Commit**: `docs: record program walkthrough case 2`
 
 ---
 
@@ -238,7 +259,7 @@ Per the LLD, D3 and Functional Requirements "Case 2". Slice 101's capability, `r
 Per the LLD, D1, D4 and Functional Requirements "Case 3". `notes-export` is consumed `from_release`.
 
 - [ ] **10.1 Drive slice 102 and record the request and the build**
-  - Prerequisite: Task 9.1 complete.
+  - Prerequisite: Task 9.2 complete and slice 101 `done` (after a PM resolution if its attempt failed).
   - [ ] Drive slice 102. Check the question record is `requested` (not declined `reserved_term`), and `notes-export`'s request run adds slice 700 in a new requests initiative 700, committed to `main`; the slice runs undriven and goes `done`.
   - [ ] A `reserved_term: release` decline of this need is a product finding: file an issue against 185's request screen (D7).
   - [ ] Result: run ids, the request commit, the slice, final provider state.
@@ -247,6 +268,18 @@ Per the LLD, D1, D4 and Functional Requirements "Case 3". `notes-export` is cons
   - [ ] Check the edge waits `awaiting_release` after the slice is `done`, and the asker is still blocked. Read the edge id from the `context` of its `program-blocked --json` row.
   - [ ] Submit `amoeba submit resolve-edge` as the doc gives it. Check the edge is released, the asker's resume instructions name `notes-export`, the slice and the commit, and slice 102 is `done`.
   - [ ] Result: the edge rows before and after, the instructions, final states.
+- [ ] **10.3 Reruns, only for cases D7 closed as shown in part**
+  - Prerequisite: Task 10.2 complete, so slice 102 is `done`.
+  - [ ] For each case whose attempt was closed under D7 and is worth one more run: append one asker slice to `notes-cli`'s plan after the highest index, copying the failed slice's description and forcing sentence. Commit it on `main` in `D/checkouts/notes-cli` and make the same entry in `scripts/program_walkthrough/notes-cli/`. For a rerun of case 1 or 2 check first that `notes-store` is clean on `main`.
+  - [ ] Drive it and check it as that case's task does. Each case reruns at most once; a second miss is recorded and the case stays closed as shown in part.
+  - [ ] Update `docs/program-walkthrough.md` as Task 8.4 does, and re-run `tests/runner/program/test_walkthrough_fixture.py`.
+  - [ ] With no rerun needed, write "no rerun" under this task.
+  - [ ] Result: the rerun slices, their run ids and outcomes.
+- [ ] **10.4 Update the doc for case 3**
+  - [ ] As Task 8.4, for case 3.
+  - [ ] Success: the case 3 section matches what was run.
+
+**Commit**: `docs: record program walkthrough case 3 and reruns`
 
 ---
 
@@ -273,9 +306,8 @@ Per the LLD, D8 and Integration Requirements. Take every capture, so nobody judg
   - [ ] Add a parser test in each existing test file (`tests/runner/answering/test_read_answer.py`, `tests/runner/request_run/test_read_reply.py`) that reads the new captures. A capture that does not parse as its kind is a deterministic defect: file an issue that includes a stub-tier case built from it, linked under this task (D8). Do not change the parser.
   - [ ] Success: `uv run pytest tests/runner/answering tests/runner/request_run` passes, and the count of captured files equals the count of runs that produced them.
   - [ ] Result: counts, and any issue filed with its number.
-- [ ] **12.3 Update the doc and the LLD to what was run**
-  - [ ] Correct any command, flag or column name in `docs/program-walkthrough.md` that differed, and add each case's recorded outcome as "Observed on {date}". Mark any case closed as shown in part "not demonstrated", and state milestone 5's end-to-end claim only for the cases shown (D7).
-  - [ ] Amend the LLD (`user/slices/186-slice.live-walkthrough.md`) in D5, D6 and Technical Requirements: the setup script submits the registration and neither reads `applied` nor prints node ids; both are read after start. Change nothing else in it.
+- [ ] **12.3 Final pass on the doc**
+  - [ ] Read `docs/program-walkthrough.md` once against the Results above. State milestone 5's end-to-end claim only for the cases shown, and mark any case closed as shown in part "not demonstrated" (D7).
   - [ ] Success: someone following the doc from its first case meets no command that fails.
 - [ ] **12.4 Full validation:** `uv run ruff format .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest`.
   - [ ] Success: all pass, and `uv run pytest tests/live --collect-only` with the five live variables set still collects. Every case passed, or is marked `BLOCKED:` or not demonstrated with its issue linked in its Result.
