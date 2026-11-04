@@ -40,8 +40,8 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - Given a need the scratch project already meets, it reports already met with a commit that exists on the target.
    - The reader rejects a reply with neither shape, a new-slice reply with no index, and an already-met reply with no commit.
    - The minimum `sq` version that runs it is recorded in the process contract, and the start-up `sq` probe checks the shape it depends on.
-   - Any capability `sq` or `cf` lacks is filed as an issue upstream and named in this plan as a dependency of 184.
-   **Dependencies:** None inside Amoeba (100, 120 and 140 complete). External (slice design D8): Squadron #241 (per-run cost cap) and a new Squadron issue for a run I/O directory and a guarded commit step, filed at implementation. No Context Forge change.
+   - Any capability `sq` or `cf` lacks is filed as an issue upstream and named in this plan as a dependency of 184 (Squadron #292 and #241 for this slice).
+   **Dependencies:** None inside Amoeba (100, 120 and 140 complete). External (slice design D8): Squadron #241 (per-run cost cap) and Squadron #292 (run I/O directory and guarded commit step, filed 20261104). No Context Forge change.
    **Interfaces:** Provides the pipeline file, its reply shapes and the reader to 184. Extends 120's `sq` shape probes.
    **Risk Level:** Medium. It depends on an agent editing a shared plan file correctly and on a pipeline shape Amoeba has not used.
    **Relative Effort:** 3
@@ -103,7 +103,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - An already-met reply from a run that moved the target's head blocks the request with that reason.
    - A restart with a request run in flight adopts it through journal recovery and never launches a second.
    - The pipeline's models and cost cap come from per-project configuration with no defaults.
-   **Dependencies:** 180, 181, 183. External: Squadron #241 and the run I/O directory and guarded commit issue from 180's design (D8). 180's launch argv is provisional until 180 finalizes it against the shipped Squadron syntax.
+   **Dependencies:** 180, 181, 183. External: Squadron #241 and #292 (the run I/O directory and guarded commit issue from 180's design, D8). 180's launch argv is provisional until 180 finalizes it against the shipped Squadron syntax.
    **Interfaces:** Adds requests (`docs/store-contract.md`) and the request run's command kind with its recovery observer (`docs/process-contract.md`). Changes 120's governance (membership drive), dispatch order (request priority), the checkout-hold rule (the request-run exemption), and readiness (no implicit predecessor in the requests initiative); each goes in 120's contract documents.
    **Risk Level:** High. It changes 132's checkout hold and dispatch order, and it acts on a model's reply in another project.
    **Relative Effort:** 4

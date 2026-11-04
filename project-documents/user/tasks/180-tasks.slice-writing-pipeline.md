@@ -53,18 +53,20 @@ usageByModel:
 
 ## 1. Squadron capability request and slice plan
 
-- [ ] **1.1 Check what the installed `sq` can do** (effort 1)
-  - [ ] Read LLD D8 (three capabilities). In a temporary directory outside the repo, write a one-step pipeline and run `sq run <file> --validate --strict` on it: once with a `commit` step carrying `paths` and `message`, where one `paths` entry contains the run param written `{requests-index}` (as the slice-plan glob does; try this form first), and once with `--io-dir <dir>` and `--max-cost 1` added. Also run `sq run --help` and `sq --version`.
-  - [ ] Note under this task, as a dated observation with the `sq --version` output, which of the three capabilities are present or missing. Task 1.2 copies it into the issue. Do not branch on the version anywhere in code.
-  - [ ] Success: the observation names each capability as present or missing, from commands run in this task.
-- [ ] **1.2 File the Squadron issue** (effort 2)
-  - [ ] Repository `ecorkran/squadron`. Title: "Run a pipeline in a project checkout without dirtying it (for Amoeba's slice-writing pipeline)". Body: capabilities 1 and 2 of LLD D8 as requirements, each with the acceptance behavior written there; capability 3 is the open `ecorkran/squadron#241`, linked, not re-requested. Add that the commit step's `paths` must accept the run's params, because the slice-plan glob contains the requests index. State that the syntax is Squadron's to choose. Include Task 1.1's observation. No secrets or local paths.
-  - [ ] If Task 1.1 found a capability already present, request only the missing ones.
-  - [ ] File it with `gh issue create --repo ecorkran/squadron`.
-  - [ ] Success: `gh issue view <n> --repo ecorkran/squadron` shows the requested capabilities. Note the issue number in this file under this task.
-- [ ] **1.3 Name the issue in the slice plan** (effort 1)
-  - [ ] In `user/architecture/180-slices.program-coordination.md`, name the new issue and `#241` on entry 180 (beside "Any capability `sq` or `cf` lacks") and replace "the run I/O directory and guarded commit issue from 180's design (D8)" on entry 184's dependency line with the issue number.
-  - [ ] Success: both numbers appear on entries 180 and 184.
+- [x] **1.1 Check what the installed `sq` can do** (effort 1)
+  - [x] Read LLD D8 (three capabilities). In a temporary directory outside the repo, write a one-step pipeline and run `sq run <file> --validate --strict` on it: once with a `commit` step carrying `paths` and `message`, where one `paths` entry contains the run param written `{requests-index}` (as the slice-plan glob does; try this form first), and once with `--io-dir <dir>` and `--max-cost 1` added. Also run `sq run --help` and `sq --version`.
+  - [x] Note under this task, as a dated observation with the `sq --version` output, which of the three capabilities are present or missing. Task 1.2 copies it into the issue. Do not branch on the version anywhere in code.
+  - [x] Success: the observation names each capability as present or missing, from commands run in this task.
+  - **Observation (20261104, `sq --version`: `squadron 0.24.20`):** capability 1 (run I/O directory) missing: `--io-dir` exits 2, `No such option: --io-dir`. Capability 2 (guarded commit step) missing: `--validate --strict` exits 1, `Unknown step type 'commit'`; param substitution in `paths` could not be tested. Capability 3 (cost cap) missing: `--max-cost` exits 2, `No such option: --max-cost`; `ecorkran/squadron#241` is open.
+- [x] **1.2 File the Squadron issue** (effort 2)
+  - [x] Repository `ecorkran/squadron`. Title: "Run a pipeline in a project checkout without dirtying it (for Amoeba's slice-writing pipeline)". Body: capabilities 1 and 2 of LLD D8 as requirements, each with the acceptance behavior written there; capability 3 is the open `ecorkran/squadron#241`, linked, not re-requested. Add that the commit step's `paths` must accept the run's params, because the slice-plan glob contains the requests index. State that the syntax is Squadron's to choose. Include Task 1.1's observation. No secrets or local paths.
+  - [x] If Task 1.1 found a capability already present, request only the missing ones.
+  - [x] File it with `gh issue create --repo ecorkran/squadron`.
+  - [x] Success: `gh issue view <n> --repo ecorkran/squadron` shows the requested capabilities. Note the issue number in this file under this task.
+  - **Issue filed:** `ecorkran/squadron#292` (all three capabilities missing, so capabilities 1 and 2 requested, 3 linked to #241).
+- [x] **1.3 Name the issue in the slice plan** (effort 1)
+  - [x] In `user/architecture/180-slices.program-coordination.md`, name the new issue and `#241` on entry 180 (beside "Any capability `sq` or `cf` lacks") and replace "the run I/O directory and guarded commit issue from 180's design (D8)" on entry 184's dependency line with the issue number.
+  - [x] Success: both numbers appear on entries 180 and 184.
 
 **Commit**: `docs: name slice-writing squadron issues in the program slice plan`
 
