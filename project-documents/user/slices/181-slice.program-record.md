@@ -183,7 +183,7 @@ Status: decided
 ### D6 — Member readability is a closed vocabulary computed from store reads and one directory check
 Status: decided
 
-`read_member(store_dir, member) -> Readable | Unreadable(reason, detail)`, checked in this order, first failure wins:
+`read_member(store_dir, member) -> MemberState`, where `MemberState` is `Readable | Unreadable(reason, detail)`, checked in this order, first failure wins:
 
 | Reason | When |
 | --- | --- |
@@ -212,7 +212,7 @@ Status: decided
 Status: decided
 
 - `program`: one row per member of every program: `program_id`, `project_id`, `requests_initiative`, `consumed`, `overrides` (`dependent=mode`, comma-separated, empty when none), `concept_path` (on the concept member's row only), `state` (`readable` or the reason), `detail`.
-- `program-blocked`: the program blocked list. Columns are `program_id` followed by the `blocked` listing's columns. Each member's blocked rows come from `inspection/core.py`'s `_blocked_rows`, unchanged. An unreadable member adds one row with `blocked_on` = `member_unreadable`, `reason` = `"<reason>: <detail>"`, and the node columns empty. A member whose store opens is listed both ways when it is also unreadable (unlinked, for example).
+- `program-blocked`: the program blocked list. Columns are `program_id` followed by the `blocked` listing's columns. Each member's blocked rows come from `inspection/core.py`'s `_blocked_rows`, unchanged. An unreadable member adds one row with `blocked_on` = `member_unreadable`, `reason` = `"<reason>: <detail>"`, and the node columns empty. A member whose store opens is listed both ways when it is also unreadable (unlinked, for example). A `StoreError` from reading the blocked rows of a member whose store did open is reported the same way, as that member's `member_unreadable` row with `store_unreadable: <error>` and no node rows; only the program store's own failures raise.
 - `program-submissions`: applied and rejected program submissions in `applied_seq` order: `id`, `kind`, `submitted_by`, `submitted_at`, `outcome`, `reason`.
 - `inbox` gains a **last** column `queue` (`project` or `program`) and lists both roots. Existing columns keep their names and positions, so positional and by-name readers of project inbox rows are unaffected; JSON rows gain one key, and a supervisor with no program files lists exactly the rows it did before. The inbox listing tests that assert the full column tuple are updated. No other listing changes.
 - The slice plan names one command, `amoeba inspect program`. The listing registry is one table per listing, so members and the blocked list are two listings. Supervisor-level listings receive no options (`supervisor_rows(store_dir)`), so there is no `--program` filter; every row carries `program_id`, and programs are few. A filter needs a program listing scope and is deferred until a supervisor holds enough programs to need it.
