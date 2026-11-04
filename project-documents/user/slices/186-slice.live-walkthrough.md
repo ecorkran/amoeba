@@ -11,6 +11,7 @@ dependencies:
 - 184
 - 185
 - 145
+- 144
 interfaces: []
 dateCreated: 20261103
 dateUpdated: 20261104
@@ -89,7 +90,7 @@ The CLI commands, listings, config sections and reply shapes 181–185 define, a
 | Component | Location | Role |
 | --- | --- | --- |
 | Scratch trees | `scripts/program_walkthrough/{notes-store,notes-export,notes-cli}/` | Each committed as its checkout's first commit |
-| Setup script | `scripts/program_walkthrough.py` | `setup --dir D --env-file F`: builds three projects, registers the program, writes the config, prints exports and node ids |
+| Setup script | `scripts/program_walkthrough.py` | `setup --dir D --env-file F`: builds three projects, submits the program registration, writes the config, prints exports |
 | Fixture test | `tests/runner/program/test_walkthrough_fixture.py` | The asker's assembly over the trees has the concept and member passages |
 | Walkthrough doc | `docs/program-walkthrough.md` | The repeatable steps and the expected rows per case |
 | Fixtures | 144's `question_tails.json`, 180's reply parser fixtures, 185's answer reader fixtures | Gain the walkthrough's captures (D8) |
@@ -211,7 +212,7 @@ amoeba submit register-program --by operator --program-id notes \
                 {"project_id":"notes-cli","requests_initiative":700,"consumed":"from_source","overrides":{}}]'
 ```
 
-The script reads the submission's outcome from `inspect program-submissions` and stops unless it is `applied`.
+The script submits the registration and does not read its outcome: a submission is applied only by the resident process, which is not running during setup. After start, `inspect program-submissions` shows the outcome, and the walkthrough stops unless it is `applied`.
 
 ### D6 — Repeatable from the repository: trees, script, doc, one deterministic test
 
@@ -219,7 +220,7 @@ Status: decided
 
 - **Trees.** Committed in Amoeba's repository at their CF paths, so a later run uses the same plans and forcing wording. They hold no real project names, credentials or model aliases.
 - **Per-project steps.** 145's `build_checkout`, `read_cf_project_id` and `submit_project` already do every per-project step 186 needs (copy, `git init` and first commit, `.env` copy, `cf init --no-ide`, `cf set`, the CF project id read, `create-project` and `link-cf-project`). They read the module constants `TREE`, `PROJECT_ID` and `CF_ARTIFACTS` and the one-checkout `Layout`, so they cannot set up three projects as written. They gain one parameter carrying the project id, tree, plan-file pairs and checkout path, in place in `answerer_walkthrough.py`. 145's `setup` passes its constants, so its behavior and its test are unchanged. `program_walkthrough.py` imports them with `run_step`. No module is added. Copying them would duplicate the steps and their failure rules.
-- **Script.** `program_walkthrough.py setup --dir D --env-file F` refuses an existing `D`, builds the three projects with those helpers, submits the registration (D5), writes `D/projects.yaml`, and prints the `export` lines, the `amoeba start` command and each asker slice's node id. Script failures follow 145: any non-zero subprocess stops it, reporting the step, the command and its stderr, and leaving `D` in place.
+- **Script.** `program_walkthrough.py setup --dir D --env-file F` refuses an existing `D`, builds the three projects with those helpers, submits the registration (D5), writes `D/projects.yaml`, and prints the `export` lines, the `amoeba start` command. The asker slices' node ids are read after start from `inspect nodes`. Script failures follow 145: any non-zero subprocess stops it, reporting the step, the command and its stderr, and leaving `D` in place.
 - **Registry isolation.** `CONTEXT_FORGE_DATA_DIR=D/cf` exported for every spawned `cf` and `sq`, and `--cf-data-dir D/cf` for Amoeba. The doc's last step runs `cf project list` with the variable unset and confirms that no scratch project is listed.
 - **Doc.** `docs/program-walkthrough.md` is the only full walkthrough: commands, PM actions and the rows to check per case. It is updated to what was run in Phase 6. The Verification Walkthrough below points to it.
 - **Fixture test.** Using 182's fixture-repository helpers, it assembles sources for `notes-cli` slices 100–102 with a program context built from the three trees. It checks that the member list names all three members, that a `program_concept` passage from `notes-store` is present, and that it places tag lookup and file reading in `notes-store`'s part and Markdown export in `notes-export`'s part. A concept edit that dropped one would otherwise surface only as a live decline. No LLM, no `sq`.
@@ -302,13 +303,13 @@ No provider tree has an initiative in 700–709, so each provider's requests ban
 - **Case 2.** Slice 101's request to `notes-store` ends `met` with a commit reachable from `main`, no new slice in `notes-store`, and the asker released with instructions naming that commit.
 - **Case 3.** Slice 102's request to `notes-export` is built as slice 700 in its requests initiative. After `done` the edge waits `awaiting_release`; after the PM's `resolve-edge` the asker is released naming the slice and commit.
 - A case closed as shown in part under D7 meets its requirement as recorded, marked not demonstrated.
-- `amoeba inspect program` shows all three members `readable` against the real CF registry.
+- `amoeba inspect program` shows all three members `readable` with the real `cf`, in the throwaway registry `D/cf` (the user's own registry is never read or written).
 - At the end, the real registry lists no scratch project, and nothing is written outside `D`.
 
 ### Technical Requirements
 
 - The fixture test passes without `sq` or a model.
-- The setup script refuses an existing `D`, a missing live variable and a non-`applied` registration, each with a message naming it, and stops on any non-zero subprocess, reporting the step and leaving `D`.
+- The setup script refuses an existing `D`, and a missing live variable, each with a message naming it, and stops on any non-zero subprocess, reporting the step and leaving `D`.
 - `answerer_walkthrough.py` behaves as before with the project parameter; its test passes.
 - `ruff`, `pyright` strict and the existing suites pass.
 
