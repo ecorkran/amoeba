@@ -102,18 +102,18 @@ usageByModel:
 
 ## 4. Reply contract
 
-- [ ] **4.1 `reply.py`: types and `read_reply`** (effort 3)
-  - [ ] Define frozen dataclasses `NewSlice(index: int)`, `AlreadyMet(commit: str)` and `ReplyProblem(kind, detail)` with a two-value `StrEnum` kind (`missing`, `malformed`), and the `kind` values `new_slice` and `already_met` as a `StrEnum`. Model on `answering/artifacts.py`.
-  - [ ] `read_reply(directory)` reads `reply.json` (name from `pipeline_file.py`) and applies LLD D7 exactly. It raises `ValueError` when `directory` is not an existing directory (a programming error, as in Task 3.1; model output cannot cause it). Otherwise it never raises for file content: an existing directory with no `reply.json` is `missing`; anything else wrong is `malformed` with a detail naming the cause. Unknown keys are ignored; `kind` is trimmed and matched case-insensitively.
-  - [ ] `index`: an integer, or a string of decimal digits after trimming; positive; a boolean is rejected. `commit`: a string of 7 to 40 hexadecimal characters after trimming, returned lower case.
-  - [ ] `malformed` covers: not one JSON object (including undecodable bytes), a `kind` other than the two, a `new_slice` with no or bad `index`, an `already_met` with no or bad `commit`. Nothing defaults.
-  - [ ] Success: `uv run pyright` passes; the function checks shape only (no index-is-new or commit-exists check).
-- [ ] **4.2 Tests for `read_reply`** (effort 3)
-  - [ ] `tests/runner/request_run/test_read_reply.py`, mirroring `tests/runner/answering/test_read_answer.py`. Use the real reply format the parser will consume (the LLD D7 JSON), written as files. These fixtures are hand-written from D7; the live cases (Task 9.4) parse real replies with `read_reply`, and Task 9.5 adds captured ones.
-  - [ ] Valid: both shapes; `kind` with different case and surrounding spaces; unknown keys ignored; index as an integer and as a padded digit string; commit of 7 and of 40 characters, upper case normalized to lower.
-  - [ ] `missing`: an existing directory with no `reply.json`. `ValueError`: a directory that does not exist, and a path that is a file. `malformed`: empty file, invalid JSON, a JSON array, invalid UTF-8, no `kind`, unknown `kind`, `new_slice` with no index, index `0`, negative, `true`, a float, non-digit string; `already_met` with no commit, 6 characters, 41 characters, non-hex, a number.
-  - [ ] A `ReplyProblem` carries a non-empty `detail` in every case.
-  - [ ] Success: the tests pass.
+- [x] **4.1 `reply.py`: types and `read_reply`** (effort 3)
+  - [x] Define frozen dataclasses `NewSlice(index: int)`, `AlreadyMet(commit: str)` and `ReplyProblem(kind, detail)` with a two-value `StrEnum` kind (`missing`, `malformed`), and the `kind` values `new_slice` and `already_met` as a `StrEnum`. Model on `answering/artifacts.py`.
+  - [x] `read_reply(directory)` reads `reply.json` (name from `pipeline_file.py`) and applies LLD D7 exactly. It raises `ValueError` when `directory` is not an existing directory (a programming error, as in Task 3.1; model output cannot cause it). Otherwise it never raises for file content: an existing directory with no `reply.json` is `missing`; anything else wrong is `malformed` with a detail naming the cause. Unknown keys are ignored; `kind` is trimmed and matched case-insensitively.
+  - [x] `index`: an integer, or a string of decimal digits after trimming; positive; a boolean is rejected. `commit`: a string of 7 to 40 hexadecimal characters after trimming, returned lower case.
+  - [x] `malformed` covers: not one JSON object (including undecodable bytes), a `kind` other than the two, a `new_slice` with no or bad `index`, an `already_met` with no or bad `commit`. Nothing defaults.
+  - [x] Success: `uv run pyright` passes; the function checks shape only (no index-is-new or commit-exists check).
+- [x] **4.2 Tests for `read_reply`** (effort 3)
+  - [x] `tests/runner/request_run/test_read_reply.py`, mirroring `tests/runner/answering/test_read_answer.py`. Use the real reply format the parser will consume (the LLD D7 JSON), written as files. These fixtures are hand-written from D7; the live cases (Task 9.4) parse real replies with `read_reply`, and Task 9.5 adds captured ones.
+  - [x] Valid: both shapes; `kind` with different case and surrounding spaces; unknown keys ignored; index as an integer and as a padded digit string; commit of 7 and of 40 characters, upper case normalized to lower.
+  - [x] `missing`: an existing directory with no `reply.json`. `ValueError`: a directory that does not exist, and a path that is a file. `malformed`: empty file, invalid JSON, a JSON array, invalid UTF-8, no `kind`, unknown `kind`, `new_slice` with no index, index `0`, negative, `true`, a float, non-digit string; `already_met` with no commit, 6 characters, 41 characters, non-hex, a number.
+  - [x] A `ReplyProblem` carries a non-empty `detail` in every case.
+  - [x] Success: the tests pass.
 
 **Commit**: `feat: add slice-writing reply reader`
 
