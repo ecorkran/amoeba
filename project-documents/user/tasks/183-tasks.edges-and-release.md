@@ -15,14 +15,28 @@ dependencies:
 - 142
 projectState: Initiatives 100, 120 and 140 are complete and merged. The project store
   is at schema version 15 (`src/amoeba/store/schema/`). `ready_slices()` takes no
-  argument, `current_slices(tree, index)` takes two, and `record_runner_report` has no
-  `branch_head`. `AnsweredBy` has `answerer` and `pm` only. Slice 181 (program record)
-  is designed and tasked but not implemented when this file was written; its code being
-  on the target is the precondition checked in Task 0.1. Nothing under
+  argument, `current_slices(tree, index)` takes two, and `record_runner_report` has
+  no `branch_head`. `AnsweredBy` has `answerer` and `pm` only. Slice 181 (program
+  record) is designed and tasked but not implemented when this file was written; its
+  code being on the target is the precondition checked in Task 0.1. Nothing under
   `src/amoeba/program/`, `store/program_schema/` or `runner/program/` exists yet.
 dateCreated: 20261104
 dateUpdated: 20261104
 status: not_started
+turns: 23
+promptTokens: 1283031
+cachedTokens: 1164577
+cacheWriteTokens: 118422
+completionTokens: 26333
+durationSeconds: 191.4
+costUsd: 0.853838
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-sonnet-5-5:
+    rounds: 1
+    costUsd: 0.8538376
+    completionTokens: 26333
 ---
 
 ## Context Summary
