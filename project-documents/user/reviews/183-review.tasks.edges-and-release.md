@@ -6,7 +6,7 @@ slice: edges-and-release
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: CONCERNS
+verdict: FAIL
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/183-tasks.edges-and-release.md
 aiModel: claude-haiku-5-5
@@ -14,158 +14,189 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261104
 dateUpdated: 20261104
-reviewedSha: 1652ae13d2fc9211e4c83542f13c00d80b829ef0
-revision_number: 1
+reviewedSha: 90ad0c0185ada97640a4c9321301b459be78e29e
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 16
+toolCallsMade: 20
 effort: xhigh
-turns: 17
-promptTokens: 647013
-cachedTokens: 501177
-cacheWriteTokens: 145824
-completionTokens: 52424
-durationSeconds: 287.3
-costUsd: 0.166363
+turns: 21
+promptTokens: 561485
+cachedTokens: 384205
+cacheWriteTokens: 177270
+completionTokens: 79799
+durationSeconds: 405.8
+costUsd: 0.252909
 costBasis: provider
 runId: run-20261104-tasks-plan-a982fbc3
 squadronVersion: 0.24.19
 findings:
   - id: F001
-    severity: concern
-    category: coverage
-    summary: "Slice with no CF name has no test for branch_head_missing"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:154"
+    severity: fail
+    category: sequencing
+    summary: "Release loop iterates over a set that never holds satisfied-only nodes"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:218"
   - id: F002
     severity: concern
-    category: verification
-    summary: "Verification step 1 names a test file no task creates"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:267"
+    category: design-consistency
+    summary: "A coordinator-resolved block closes open edges, which the transition rule forbids"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:210"
   - id: F003
     severity: concern
-    category: sequencing
-    summary: "Readiness regression baseline is not captured before the change"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:142"
+    category: requirements-coverage
+    summary: "The release line for a from-release commit target is undefined"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:207"
   - id: F004
     severity: concern
-    category: sizing
-    summary: "Task 7.2 bundles too much for one pass"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:203"
+    category: requirements-coverage
+    summary: "Precedence of `read_failed` against `awaiting_release` is unstated for from-release edges"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:196"
   - id: F005
     severity: concern
-    category: proportionality
-    summary: "Task 7.7 is too large and repeats coverage from 7.3"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:226"
+    category: load-testing
+    summary: "No load test covers per-tick edge observation cost"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:273"
   - id: F006
-    severity: note
-    category: proportionality
-    summary: "Load test in 8.3 goes beyond the stated criteria; CI gating already exists"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:242"
+    severity: concern
+    category: verifiability
+    summary: "Walkthrough steps 1 and 2 omit files and selectors they claim to prove"
+    location: "project-documents/user/slices/183-slice.edges-and-release.md:439"
   - id: F007
-    severity: note
-    category: status
-    summary: "Task 0.1 will block until 181 merges"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:63"
+    severity: concern
+    category: verifiability
+    summary: "Step 4's crash variants are excluded, and step 5 has no setup"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:237"
   - id: F008
-    severity: note
-    category: accuracy
-    summary: "Two paths are imprecise"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:118"
+    severity: concern
+    category: sequencing
+    summary: "Three tasks ship an empty placeholder into `tick.py`"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:145"
   - id: F009
-    severity: note
-    category: accuracy
-    summary: "Exit code 9 for a missing flag is unverified"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:105"
+    severity: concern
+    category: task-scope
+    summary: "Two tasks are too large to review as one step"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:133"
   - id: F010
     severity: note
-    category: consistency
-    summary: "Design and task disagree on where release confirmation is written"
-    location: "project-documents/user/slices/183-slice.edges-and-release.md:106"
+    category: task-scope
+    summary: "Some test items duplicate others or go beyond the criteria"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:253"
   - id: F011
-    severity: pass
-    category: coverage
-    summary: "Success criteria are covered by tasks"
-    location: "project-documents/user/slices/183-slice.edges-and-release.md:402"
-  - id: F012
-    severity: pass
+    severity: note
     category: sequencing
-    summary: "Sequencing, dependencies, existing-code references and commit markers hold"
-    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:61"
+    summary: "181 is not on the target, so Task 0.1 will stop"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:63"
+  - id: F012
+    severity: note
+    category: task-scope
+    summary: "`tick.py` is already over the size guideline"
+    location: "src/amoeba/runner/tick.py:1"
+  - id: F013
+    severity: pass
+    category: requirements-coverage
+    summary: "Functional and technical criteria are covered by tasks"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:16"
+  - id: F014
+    severity: pass
+    category: verifiability
+    summary: "Code claims in the task file match the repository"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:16"
+  - id: F015
+    severity: pass
+    category: commit-cadence
+    summary: "Commit markers sit at working, tested points"
+    location: "project-documents/user/tasks/183-tasks.edges-and-release.md:72"
 ---
 
 # Review: tasks — slice 183
 
-**Verdict:** CONCERNS
+**Verdict:** FAIL
 **Model:** claude-haiku-5-5
 
 ## Findings
 
-### [CONCERN] Slice with no CF name has no test for branch_head_missing
+### [FAIL] Release loop iterates over a set that never holds satisfied-only nodes
 
-The design criterion (slice design line 417) says only a read that succeeds without the branch, or a slice with no name, waits `branch_head_missing`. Task 5.2 describes the no-name case as `missing` true with a detail, but none of its tests, and none in 5.3 or 5.4, exercise it. Task 3.2's round-trip covers three `BranchHead` shapes (commit, missing, failed read) and omits missing-with-no-name. Add a helper test in 5.2, and an edge test in 5.3 or 5.4 showing the row lands with `branch` null and the edge waits `branch_head_missing`.
+Task 7.3 (lines 214–215) defines `waiting` as the node ids with an `open` edge, and its test says `waiting` "holds only `open` edges". Task 7.4 (line 218) then says "for each waiting node whose edges are all `satisfied`: `submit_release`". A node whose edges are all satisfied has no open edge, so it is never in `waiting` and the loop body never runs. Criterion F5 (slice design line 410) cannot happen. The slice design has the same wording at line 136 beside `waiting = node ids with an open edge` at line 138. Fix: have 7.4 iterate over the nodes of `edges_waiting(project_id, {open, satisfied})`, grouped by node, and release a node when none of its edges is `open`. Keep `waiting` open-only for readiness (slice design line 182). Add a 7.4 test that fails if the loop reads `waiting`.
 
-### [CONCERN] Verification step 1 names a test file no task creates
+### [CONCERN] A coordinator-resolved block closes open edges, which the transition rule forbids
 
-Task 9.2 runs walkthrough steps 1 to 4 and 6. Step 1 (slice design line 440) cites `tests/process/test_program_inbox.py`. No 183 task creates or extends that file, and 181's tasks create `tests/process/test_program_inbox_tenant.py` (181 tasks line 179). As written, step 1 fails on a missing path. Step 2's `-k "waiting or external"` selects by test name, but no task names test functions with those words. Correct the walkthrough path to the real files, and have Task 4.1 name its tests so the `-k` filter selects them.
+Task 7.2 applies "resolved by coordinator: released" to every "open or satisfied" edge. Task 1.5 (line 94) makes "released straight from open" raise, following D1 (slice design line 173). So an open edge on a coordinator-resolved block makes the stage raise. The slice design's D9 (line 254) has the same contradiction. The coordinator branch exists only to finish a crash after step 2, and step 2 requires satisfied edges. Fix: limit the coordinator branch to `satisfied` edges, and make an `open` edge on a coordinator-resolved block an explicit error, not a guessed transition.
 
-### [CONCERN] Readiness regression baseline is not captured before the change
+### [CONCERN] The release line for a from-release commit target is undefined
 
-Task 4.1 requires the tick to match "a run recorded at the unchanged commit", but does not say to record it before editing `predecessors.py`. Once the readiness change is in, the baseline cannot be recorded from the same tree. The task should say to record the literals first. Task 7.4 also runs a no-edge regression over three configurations. Keep one baseline, or state that the two cover different things.
+Task 7.1 says "one line per satisfied edge by its target kind and mode" and asks for the text of "each of the three line shapes". Four combinations can be satisfied: ProvidingSlice × from_source, ProvidingSlice × from_release, ProvidingCommit × from_source, and ProvidingCommit × from_release. The slice design's D7 (lines 232–234) covers the first three. The fourth is reachable: task 6.2 tests "commit target with and without confirmation" (line 186). But shape 2 reads "now on its target <target>", and a from-release edge has no target (`satisfied_target` is None, D4). Fix: define the fourth line, or a rule for which shape applies.
 
-### [CONCERN] Task 7.2 bundles too much for one pass
+### [CONCERN] Precedence of `read_failed` against `awaiting_release` is unstated for from-release edges
 
-Effort 5. The task changes the stage's result type to `ProgramView`, adds the D9 closing pass, adds the observe loop with write-on-change and the budget stop, computes `waiting`, and carries seven tests. Split it into (a) `ProgramView`, the `waiting` and `providing` sets and the D9 closing pass, with its tests, and (b) the observation loop with writes, the budget stop and "unchanged writes nothing", with its tests.
+Task 6.4 says a failed head read makes the edge "wait `read_failed` meanwhile". Task 6.2 makes an unconfirmed from-release edge on a done slice wait `awaiting_release`. For an unconfirmed from-release edge whose head read failed, the D10 order (slice design line 262, with `awaiting_release` at line 269) puts `awaiting_release` first. The D10 row for `branch_head_missing` (line 268) reads "Done with no recorded commit", which also matches a failed read. Task 6.1 correctly adds "and missing". Fix: state the precedence in 6.4 and add a from-release case to 7.9. Line 240 says "with no PM step", which suggests only the from-source case was meant.
 
-### [CONCERN] Task 7.7 is too large and repeats coverage from 7.3
+### [CONCERN] No load test covers per-tick edge observation cost
 
-Effort 5, with nine variant bullets and about twelve scenario tests. The crash after each of release's three writes is tested in 7.3 (line 209) and again at scenario level in 7.7 (line 227). The "no change writes nothing" check appears in 7.2, 7.7 and 8.3. Keep the scenario-level crash tests, since they cover the integration criterion (slice design line 413), and drop the duplicate in 7.3. Alternatively, split 7.7 into a release-variants task and a head-read-and-by-hand task.
+The slice design restates a per-tick cost bound (slice design lines 508–509): one program-store read per member, plus one read-only open, one `cf` call and one git call per open edge after `done`, all under the tick budget. Task 9.1 runs three existing load tests, and none creates an edge, so none exercises this new cost. Add a task for `tests/load/test_program_edges_load.py` that runs a realistic number of open edges and bounds per-tick subprocess calls and elapsed time under the budget. CI needs no new wiring: `.github/workflows/ci.yml:54` runs `uv run pytest tests/load`, so the new file is gated. The task should say so rather than leave it implicit.
 
-### [NOTE] Load test in 8.3 goes beyond the stated criteria; CI gating already exists
+### [CONCERN] Walkthrough steps 1 and 2 omit files and selectors they claim to prove
 
-The slice design has no numeric load requirement. Its only cost statement is "Cost per tick" (slice design line 509). The 180 architecture documents do not restate a load NFR; the tick-deadline NFR is in the 120 documents and is already covered by `tests/load/test_runner_tick_load.py`, which 9.1 runs. The new case is gated by the existing CI step `uv run pytest tests/load` (`.github/workflows/ci.yml:53-54`), so no CI wiring task is needed. Decide whether slice design line 509 counts as the NFR. If it does, keep 8.3. If not, cut it and keep the no-change-writes assertion in 7.2.
+Step 1's expected output includes `resolve_edge` applied and each rejection, and `member_referenced` over edges. Those tests live in `tests/store/test_program_apply_resolve_edge.py` (task 2.2, line 115) and `tests/store/test_program_reject_program.py` (task 1.6, line 102). Neither is in step 1's path list. Step 2's expected output includes "an applied resume resolution produces no `ResumeRun`". Task 4.1 (line 149) puts that test in `tests/runner/resolutions/`, which step 2 does not run. Step 2's `-k "waiting or external"` depends on test names no task prescribes. If nothing matches, pytest runs no tests, and 9.2 shows nothing. Fix: add the two files to step 1, add `tests/runner/resolutions` to step 2, and have tasks 2.2 and 4.1 name their tests so the `-k` filter selects them. Task 9.2 (line 276) should state the file and selector lists.
 
-### [NOTE] Task 0.1 will block until 181 merges
+### [CONCERN] Step 4's crash variants are excluded, and step 5 has no setup
 
-181's code is not on the target. `src/amoeba/program/`, `store/program_schema/`, `inspection/program.py` and `tests/load/test_program_load.py` do not exist. Task 0.1 will write `BLOCKED:` as it directs. This is a dependency wait, not a defect in the breakdown.
+The slice design's step 4 (line 466) lists "a crash after each release write" among the variants in `test_release_scenario.py`. Task 7.8 (line 237) says the crash points "are not repeated here", so that file won't show them. Task 9.2 (line 276) runs step 5 against the directory the scenario keeps, but never says to run the scenario with `AMOEBA_KEEP_SCENARIO_DIR` set first, so there is no directory to inspect. Fix: add the crash variants to 7.8, or amend the walkthrough step. In 9.2, run `AMOEBA_KEEP_SCENARIO_DIR=$(mktemp -d) uv run pytest tests/runner/program/test_release_scenario.py` before step 5.
 
-### [NOTE] Two paths are imprecise
+### [CONCERN] Three tasks ship an empty placeholder into `tick.py`
 
-Task 3.1 says "mirror `test_migration_015.py` if present, else `test_migration_010.py`". `tests/store/test_migration_015.py` exists, so drop the hedge. Task 7.4 says "use `tick_rig.py`" with no path. The helper is `tests/runner/dispatch/tick_rig.py` (line 213), not under `tests/runner/`.
+Tasks 4.1 (line 145), 5.3 (line 165) and 5.4 (line 172) pass `frozenset()` from `tick.py` as a placeholder, to be replaced in 7.5. An empty set means "no providing slices", so head recording would be skipped without error if the placeholder were left in. CLAUDE.md forbids silent fallbacks. The cause is ordering: the `ProgramView` that yields `providing` (7.2) comes after the tasks that consume it. Fix: move the `ProgramView` skeleton (`program`, `waiting`, `providing`) from 7.2 to just before 4.1, so the tick reads a real view from the first commit that needs one.
 
-### [NOTE] Exit code 9 for a missing flag is unverified
+### [CONCERN] Two tasks are too large to review as one step
 
-181's task (line 162) sets exit 9 (`SUBMISSION_REFUSED`) for an invalid body. Task 2.1 extends that to a missing `--edge-id`, which may go through argparse's own path. Confirm against the 181 CLI when it lands, or state the code only for an invalid body.
+Task 3.3 (effort 4) bundles `submit_release`, the new `AnsweredBy` value, and three pins on 140 readers (the answer limit, the precedent source, and finish settlement). The reader pins touch three other modules and fail for different reasons. Split them into a task 3.4 after 3.3. Task 7.7 (line 232) is effort 5 and builds the two-store support module, the fake `sq` setup, the kept-directory hook and the whole main path in one step. Split the support module and the kept-directory hook into a step that ships first, so 7.8 and 7.9 reuse a verified fixture.
 
-### [NOTE] Design and task disagree on where release confirmation is written
+### [NOTE] Some test items duplicate others or go beyond the criteria
 
-The design's component table lists `confirm_release` in `store/program_edges.py`. No task creates it. Task 2.2 writes `release_confirmed_at` inside `apply_submission`, which matches D4 and the writer split in State Management. Remove `confirm_release` from the table, or add it to 2.2. Task 2.2 is the more specific instruction, so the table is the thing to change.
+- Task 3.2 (line 128) asserts `slice_heads` is absent from the program schema. Task 8.2 (line 252) adds the same check to the locality proof. Keep one.
+- Task 8.2 (line 253) adds negative tests of the oracle. Criterion-wise, the proof must cover `edges` and `slice_heads`, which a positive check covers. Cut these or keep them on purpose.
+- Task 4.1 (line 147) asks for a deliberate import to be reverted to show the boundary test fails. That checks the test, not a criterion.
+- Task 2.1 (line 111) repeats blank-value and missing-flag behavior that the generic submit flags already have. Keep only the `resolve-edge` command test unless the existing tests lack that coverage.
+- Task 5.1 (line 155) is effort 1 and one function. Merging it into 5.2 removes a group with no commit of its own.
 
-### [PASS] Success criteria are covered by tasks
+### [NOTE] 181 is not on the target, so Task 0.1 will stop
 
-Each functional criterion (lines 406 to 418), technical criterion (422 to 426) and integration criterion (430 to 431) maps to a task, except the no-name gap above. Specific traces: wait precedence (6.1), from-source reachability including squash and deleted-branch cases (6.3), release crash points (7.3, 7.7), `member_referenced` (1.6), `program-blocked` (8.1), the locality proof (8.2), and docs and CHANGELOG (8.4 to 8.6, 9.3). No task traces to nothing. The scope-adjacent items, the branch-name helper (5.1) and the import rule (4.1), trace to D5 and the architecture principle.
+`src/amoeba/**/*program*` matches no files, so `program/`, `store/program_schema/` and `runner/program/` are absent, as `projectState` says. Task 0.1 will write BLOCKED. That is correct behavior and not a defect in the file. It does mean every 181 name in this file is unverified, and the file cannot start until 181 merges. The slice design says 182 may merge first. If it lands before 0.2 (line 67), the pinned baseline literals may need re-pinning, so 0.1 should check 182's status too.
 
-### [PASS] Sequencing, dependencies, existing-code references and commit markers hold
+### [NOTE] `tick.py` is already over the size guideline
 
-Groups run 1 to 9 with no forward or circular references, apart from the planned `frozenset()` placeholders that Tasks 7.4 and 5.3 replace. Each implementation task carries its tests inline. The 16 `**Commit**:` markers sit at group ends, after tested code. The frontmatter dependency list matches the slice design, and 182 is correctly left out. These names and files exist as the tasks use them: `is_ancestor_args` (`src/amoeba/runner/git_read.py:90`), `SUBCOMMAND_LOG` (`git_read.py:27`), `read_target` (`src/amoeba/runner/dispatch/checkout_reads.py:128`), `parse_slice_stem`, `ANSWER_DECISION = "resume"` (`src/amoeba/store/question_models.py:40`), `COUNT_ANSWERER_ANSWERS_IN_RUN` (`src/amoeba/store/sql_questions.py:119`), `STORE_FAILURES` (`src/amoeba/runner/faults.py:93`), `tests/runner/git_repo.py`, `tests/runner/purity.py`, `tests/contract/oracle.py`, `tests/store/test_migration_015.py`, and `.claude/rules/python.md` and `sql.md`.
+`tick.py` is 311 lines against the ~300 guideline. Task 7.5 (line 222) extracts a helper only "if this grows `tick.py`", but 183 adds call sites in at least four tasks (4.1, 5.3, 5.4, 7.5). Make the extraction a required step in 7.5.
+
+### [PASS] Functional and technical criteria are covered by tasks
+
+Each of the 13 functional criteria (slice design lines 406–418) maps to a task: readiness and no-write resume (4.1, 7.5); `done` heads on both paths (3.2, 5.3, 5.4); from-source reachability (6.3); from-release confirmation (2.2, 6.2); release and `COORDINATOR` (3.3, 7.4, 7.7); supersession (7.2, 7.8); the resume-failed payload (7.6); crash points (7.4); `member_referenced` (1.6); `program-blocked` (8.1); write-on-change (1.5, 7.3, 7.9); `read_failed` retry (6.4, 7.9); no-program regression (0.2, 7.5). Technical criteria are covered too: call counts and budget refusals (6.3), git-backed fixtures (5.2, 6.3), purity (7.1), locality (8.2), and the three contract docs plus CHANGELOG (8.3–8.5, 9.3). Dependencies are acyclic.
+
+### [PASS] Code claims in the task file match the repository
+
+Verified: schema head is 015 (`store/schema/015_answering_run.sql`); `LifecycleTree.ready_slices` takes no argument (`runner/lifecycle/tree.py:96`); `current_slices(tree, index)` takes two (`runner/intent/governance.py:73`); `AnsweredBy` has only `ANSWERER` and `PM`; `record_runner_report` has no `branch_head`. These exist as the tasks use them: `COUNT_ANSWERER_ANSWERS_IN_RUN`, `ANSWER_DECISION`, `_write_resolution`, `SubmissionWriter`, `read_target`, `is_ancestor_args`, `PARAM_CHECKOUT`, `STORE_FAILURES`, `SUBMISSION_REFUSED = 9`, `add_payload_flags`, `log` in the git allowlist, `AMOEBA_STORE_DIR`. `resolve_checkout` is still in `runner/dispatch/checkout.py`, which 181 moves. The bare pytest run excludes `tests/load` (`pyproject.toml:66`), as 9.1 says. Task 7.5 names `tick_rig.py` without its path, which is `tests/runner/dispatch/tick_rig.py`.
+
+### [PASS] Commit markers sit at working, tested points
+
+Markers follow each working, tested group, and every top-level task is covered by one: 0.2, 1.5, 1.6, 2.2, 3.2, 3.3, 4.1, 5.3, 5.4, 6.2, 6.4, 7.5, 7.9, 8.2, 8.5, 9.2 (conditional), 9.3. Test steps directly follow their implementation. Line 255 has no blank line before its marker, so it renders inside the 8.2 bullet. Add a blank line.
 
 ### Run Digest
 
-- Response length: 9074 chars
+- Response length: 13209 chars
 - Response is newline-free: no
-- Tool calls made: 16
-- Tool calls failed: 0
+- Tool calls made: 20
+- Tool calls failed: 1
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 17
-- Tokens — prompt / cached / cache write / completion / reasoning: 647013 / 501177 / 145824 / 52424 / not computed
-- Duration: 287.3 s
-- Cost: $0.17 (provider)
+- Turns: 21
+- Tokens — prompt / cached / cache write / completion / reasoning: 561485 / 384205 / 177270 / 79799 / not computed
+- Duration: 405.8 s
+- Cost: $0.25 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 12
+- Finding-shaped matches — whole response: 15
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 12
-- Finding-shaped matches — surviving validation: 12
+- Finding-shaped matches — in findings section: 15
+- Finding-shaped matches — surviving validation: 15
