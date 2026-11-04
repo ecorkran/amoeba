@@ -3,8 +3,9 @@ docType: slice-design
 slice: slice-writing-pipeline
 project: amoeba
 parent: user/architecture/180-slices.program-coordination.md
-dependencies: []
+dependencies: [100, 120, 140]
 interfaces:
+- 183
 - 184
 dateCreated: 20261103
 dateUpdated: 20261104
@@ -40,7 +41,7 @@ Squadron 0.24.17 (checked 20261103 against its source) cannot run this pipeline 
 
 ## Value
 
-Architectural enablement. The pipeline is initiative 180's one external unknown, and this slice removes it before request runs are designed. Slice 184 gets four proven things: a pipeline file it can launch, an input directory it fills, a reply it parses, and the guarantee that a run changes nothing in the provider except one commit that touches only the plan files. That guarantee comes from Squadron and is proven against a real agent and a real repo. It is what lets Amoeba create work in another project on a model's output.
+Architectural enablement. The pipeline is initiative 180's one external unknown, and this slice removes it before request runs are designed. Slice 184 gets four proven things: a pipeline file it can launch, an input directory it fills, a reply it parses, and the guarantee that a completed run leaves at most one commit on the target, touching only the two plan files, with no tracked or untracked change left in the checkout. That guarantee comes from Squadron's commit guard and is proven against a real agent and a real repo. It is what lets Amoeba create work in another project on a model's output. It bounds the checkout and the target only: what the agent does outside the checkout or in gitignored files is limited by instructions, the same exposure as every run the Runner already launches there (D1).
 
 ## Technical Scope
 
@@ -267,7 +268,7 @@ sq run <slice_writing_pipeline_path()> <requests index> --run-id <id> --io-dir <
 
 ### Provides to Other Slices
 
-- **To 184:** the pipeline path, the launch argv shape, `RequestInput` and `prepare_request_directory`, `read_reply` with its three results, the rule that an `already_met` run must not move the target's HEAD (D3), the guarantee that a completed run left at most one commit touching only the two plan files, and the probe for start-up wiring. There is no wall-clock bound on a run; 184's observation owns a long or hung run (D6).
+- **To 184:** the pipeline path, the launch argv shape, `RequestInput` and `prepare_request_directory`, `read_reply` with its three results, the rule that an `already_met` run must not move the target's HEAD, which 184 enforces by recording the target HEAD at launch beside the slice set (D3), the guarantee that a completed run left at most one commit on the target touching only the two plan files and no tracked or untracked change in the checkout (bounded to the checkout and target, D1), and the probe for start-up wiring. There is no wall-clock bound on a run; 184's observation owns a long or hung run (D6).
 - **To 183:** `AlreadyMet.commit` as a lower-case hex string, possibly short, to resolve and observe.
 - **To the process contract:** the pipeline, its files, the launch shape, the probe and the dated `sq` observation.
 - **To the slice plan and the dependency register:** the new Squadron issue and #241 as dependencies of 184.
@@ -286,7 +287,7 @@ sq run <slice_writing_pipeline_path()> <requests index> --run-id <id> --io-dir <
 - Against a scratch CF project with no requests initiative, a run creates the initiative at the given index and writes one slice in it, committed to the target. `read_reply` returns `NewSlice` with that slice's index.
 - A second run with another need adds a second slice to the same initiative, and its commit touches no other slice or initiative.
 - Given a need the scratch project already meets, `read_reply` returns `AlreadyMet` with a commit reachable from the target, and the run makes no commit.
-- After every run the checkout is clean and on the target, and the run's input and output files are only in the I/O directory.
+- After every run the target has at most one new commit, touching only the two plan files, no tracked or untracked change is left in the checkout, it is on the target, and the run's input and output files are only in the I/O directory. Nothing here checks what the agent did outside the checkout (D1).
 - The real `sq` validates `slice_writing.yaml` with the probe's argv, and strict validation rejects a copy with one unknown step key.
 
 **Met without Squadron changes.** These need the unit tier and the stub `sq` only:

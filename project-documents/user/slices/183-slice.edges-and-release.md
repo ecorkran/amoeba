@@ -105,7 +105,7 @@ Nothing creates an edge in this slice except tests. 184 and 185 are the producer
 | Edge schema | `store/program_schema/002_edges.sql` | The `edges` table (program schema version 2) |
 | Edge operations | `store/program_edges.py` (mixed into `ProgramStore`) | `create_edge`, reads by waiting or providing project, state writes, `confirm_release` |
 | Edge vocabulary | `store/program_models.py` | `EdgeState`, `EdgeTarget` (`ProvidingSlice`, `ProvidingCommit`), `EdgeWait`, `Edge` |
-| Effective mode | `program/modes.py` | `effective_mode(members, provider, dependent)`, pure |
+| Effective mode | `program/modes.py` (181's `amoeba.program` package, beside `members.py`, not under `runner/`; 184 and 185 import it) | `effective_mode(members, provider, dependent)`, pure |
 | Slice heads | `store/schema/016_slice_heads.sql`, `store/runner_report.py` | `slice_heads` table. `record_runner_report` takes `branch_head` |
 | Release submission | `store/release_submission.py` (mixed into `Store`) | `submit_release(blocked_state_id, instructions, detail)` in one transaction |
 | Head read | `runner/program/heads.py` | Reads a providing slice's branch head before ingest or hand completion marks it `done` |
@@ -128,7 +128,7 @@ program stage
   program = program_of(project)                         (181)
   providing = provider-side edges -> node ids           (D5)
   waiting side, for each edge this project waits on, state open|satisfied,
-  least recently evaluated first (D10):
+  in edge_id order (D10):
     block resolved?  resolved_by coordinator -> mark released   (finishes a crashed release)
                      anyone else             -> mark superseded (D9)
     open edge -> observe_edges -> Satisfied(commit) | Waiting(reason, detail)
@@ -156,10 +156,10 @@ A crash after step 1 repeats nothing: satisfied edges are not observed again. A 
 
 ### State Management
 
-- **Program store** (written only by the resident process). An edge row has exactly two writers, on disjoint columns. The asker's tick owns everything except `release_confirmed_at`: state, wait reason, satisfied fields and release. `ProgramInboxTenant` writes only `release_confirmed_at`, and the stage only reads it. `docs/store-contract.md` states this split. 185 writes edges through the asker's tick. 184 adds one column-disjoint writer: the provider's tick sets `provider_node_id` or `provider_commit` once on an unbound edge, by compare-and-set (184, D10).
+- **Program store** (written only by the resident process, which hosts both writers). An edge row has exactly two writers, on disjoint columns. The asker's tick owns everything except `release_confirmed_at`: state, wait reason, satisfied fields, release and `updated_at`. `ProgramInboxTenant` writes only `release_confirmed_at` and does not touch `updated_at`; the stage only reads it. `docs/store-contract.md` states this split. 185 writes edges through the asker's tick. 184 adds one column-disjoint writer: the provider's tick sets `provider_node_id` or `provider_commit` once on an unbound edge, by compare-and-set (184, D10).
 - **Provider's project store.** `slice_heads`, written by the provider's tick. Waiting projects read it read-only (181's locality rule).
 - **Asker's project store.** The release resolution and the settled question record, through the same slot and submission path the answerer uses.
-- **Wait reasons are stored**, unlike 181's member readability, because they come from git and `cf` reads that inspection may not make (inspection does no subprocess and does not import the Runner). Each row carries `evaluated_at`, and `program-blocked` shows it in the reason, so a stale reason, for example while the process is stopped, reads as stale.
+- **Wait reasons are stored**, unlike 181's member readability, because they come from git and `cf` reads that inspection may not make (inspection does no subprocess and does not import the Runner). Each row carries `wait_since`, set when the wait last changed, and `program-blocked` shows it in the reason.
 
 ## Technical Decisions
 
@@ -167,7 +167,7 @@ A crash after step 1 repeats nothing: satisfied edges are not observed again. A 
 Status: decided
 
 - An edge holds the waiting project and node, and the **question block** the slice stopped on (required). It also holds the provider project, a **target**, the **mode**, the **need** text, a **state**, and observation fields.
-- **Target** is exactly one of `ProvidingSlice(node_id)` (a node in the provider's store) or `ProvidingCommit(sha)` (the slice plan's "named commit", which 184's already-met reply produces). A `CHECK` requires exactly one. An unbound edge (a request before binding) is 184's, added by 184's own migration with its producer.
+- **Target** is exactly one of `ProvidingSlice(node_id)` (a node in the provider's store) or `ProvidingCommit(sha)` (the slice plan's "named commit", which 184's already-met reply produces). A `CHECK` requires exactly one. An unbound edge (a request before binding) is 184's, added by 184's own migration with its producer. SQLite cannot alter a `CHECK` in place, so that migration rebuilds `edges` (create new, copy, drop, rename).
 - **Mode** is computed once at creation by `effective_mode` (the override for the pair if present, else the provider's `consumed`) and stored on the edge. Re-registering a member does not change an edge already open. The waiting slice was promised one observation, and the blocked list says which. Closes GitHub issue #25.
 - **The need lives on the edge**, because release consumes it. 184's request references its edge and reads the need from it rather than storing a second copy.
 - **States:** `open`, then `satisfied`, then `released`. `open` or `satisfied` can also go to `superseded`. `released` and `superseded` are closed. Nothing reopens an edge.
@@ -182,6 +182,8 @@ Status: decided
 - Only `open` edges wait. A `satisfied` edge whose slice is not yet released no longer counts as a predecessor. The slice is still blocked on its question, so it is not ready anyway, and release makes it ready through the normal resolution path.
 - Nothing is written to make a slice ready again: when the edge leaves `open`, the next view leaves it out of `waiting`. The coordinator writes no desired-state row.
 - `decide()` does not change. Its guard already refuses any action on a node outside `current_slices`, which covers launch and resume.
+- **The tick keeps the stage's result.** 181's stage returns a `Program` that the tick discards (181, D7). 183 keeps it on the tick and grows it into `ProgramView` (members, `MemberState`, `waiting`, `providing`) that readiness and the provider-side head reads use. 183 owns any extraction from `tick.py` this needs: the stage call and the view's hand-off to `build_project_view` go in a helper beside the stage if `tick.py` grows past where it is at 181's merge.
+- **Readiness is fed from a stage that runs before Observe.** So the project's own state behind its edges can be one tick old (a provider slice finished in this tick's Observe is seen as `done` next tick). That is acceptable: the architecture already accepts a one-loop lag on cross-project state, and an extra loop only delays a release, never lets a slice run early, because an open edge is the conservative state.
 
 ### D3 — From-source satisfaction is `merge-base --is-ancestor` against the target in the provider's checkout
 Status: decided
@@ -207,9 +209,9 @@ Status: decided
 - **Which slices:** node ids named by `open` edges whose provider is this project (`ProgramView.providing`). Every other slice completes exactly as before, with no extra git call. That keeps 183 invisible in live projects, where nothing creates an edge yet.
 - **Branch name:** `{cf.index}-slice.{cf.slice_name}`, built by one function beside `parse_slice_stem` in `amoeba.upstream.context_forge.slice_stem`. That module already owns the stem rule.
 - **The read:** one `git log --no-walk --branches --decorate-refs=refs/heads/ --format=%H%x09%D` in the run's checkout (`PARAM_CHECKOUT`; D6 for a slice completed by hand). Each line is a tip commit and its branch names. The head is the commit whose name list contains the branch exactly. Absence is a missing line, never an exit code (143, D2). `--branches=<name>` was rejected because git appends `/*` to a pattern with no glob character, so it never matches the branch itself (checked against git 2.50).
-- **The record:** `record_runner_report(..., branch_head=BranchHead(branch, commit | None))` writes one `slice_heads` row in the transaction that writes `done`. A missing branch or slice name records `commit` null, and the edge waits `branch_head_missing`, which only the PM's resolution of the question block ends. That happens only when the branch was deleted before `done` was observed, or the slice has no CF name.
+- **The record:** `record_runner_report(..., branch_head=BranchHead(branch, commit | None, missing, detail))` writes one `slice_heads` row in the transaction that writes `done`. A read that succeeds and shows no such branch, or a slice with no CF name, records `commit` null with `missing` = true, and the edge waits `branch_head_missing`, which only the PM's resolution of the question block ends. That happens only when the branch was deleted before `done` was observed, or the slice has no CF name.
 - **The edge must exist before the providing slice completes.** A head is recorded only for slices an `open` edge names at `done`. An edge created against an already-`done` slice would wait `branch_head_missing`. Request slices satisfy this, because 184 binds an edge before its slice can run. It is a contract for every producer: an already-done provider is referenced by `ProvidingCommit`, never by `ProvidingSlice`. A test pins the result of breaking it: an edge on an already-`done` slice waits `branch_head_missing`.
-- **A refused or failed read:** a budget refusal leaves that entry unfinished this tick. Observation repeats next tick, and finishing is idempotent on re-entry (125). A git failure records `commit` null with the failure as the row's `detail`. The run's outcome is not held back by a git problem in a rare case.
+- **A refused or failed read:** a budget refusal leaves that entry unfinished this tick. Observation repeats next tick, and finishing is idempotent on re-entry (125). A git failure records `commit` null, `missing` = false, with the failure as the row's `detail`, so the run's outcome is not held back by a git problem. A failure is usually transient (an `index.lock` collision, a checkout briefly unavailable), so it is not final: while a providing slice's row has `commit` null and `missing` false, `observe_edges.py` re-reads the head each tick with the same command, in the checkout `resolve_checkout` gives at the slice's initiative index, under the tick budget. The edge waits `read_failed` meanwhile. A read that finds the branch fills `commit`; one that succeeds without it sets `missing`, and the edge waits `branch_head_missing`. The provider's store stays written only by the provider's tick: the waiting tick's re-read feeds its own satisfaction check and is not written back to `slice_heads`.
 - **After `done`:** deleting the branch changes nothing. The commit is recorded, and reachability needs only the commit object, which the merge carried to the target.
 
 ### D6 — A slice completed by hand records its head the same way
@@ -239,7 +241,7 @@ Need: <need>
 ### D8 — `submit_release`: the answerer's submission path with the coordinator's name
 Status: decided
 
-- One `BEGIN IMMEDIATE` transaction in the asker's store. Read the block. If it is already resolved, return `block_resolved` and write nothing (the caller then applies D9). Otherwise fill the slot through `_write_resolution` (`decision` = `resume`, `awaits_runner` = true) and insert the submission row through `SubmissionWriter`. Settle the question record linked to the block when its state is in `RELEASABLE_STATES`.
+- One `BEGIN IMMEDIATE` transaction in the asker's store. Read the block. A missing block row raises: `question_block_id` is required (D1), so its absence is a programming error, not a wait reason. If it is already resolved, return `block_resolved` and write nothing (the caller then applies D9). Otherwise fill the slot through `_write_resolution` (`decision` = `resume`, `awaits_runner` = true) and insert the submission row through `SubmissionWriter`. Settle the question record linked to the block when its state is in `RELEASABLE_STATES`.
 - `RELEASABLE_STATES = {pending, answering}` in 183. 185 adds `requested`. The record goes to `answered` with `answered_by = coordinator` and `answer` = the instructions. A record already `declined` keeps its decline. The block resolution is what resumes the run. If an answering run was in flight, its finish finds the record no longer `answering` and discards, which is 144's existing path.
 - `AnsweredBy.COORDINATOR = "coordinator"` joins the vocabulary. `answered_by` is checked in code, not by a SQL `CHECK` (migration 013), so no migration is needed for it. Every 140 reader of `answered_by` treats it as a non-answerer, checked 20261103 against the code: the answer limit counts only `answerer` (`COUNT_ANSWERER_ANSWERS_IN_RUN`); PM precedent takes only `pm` (`sources.py`, so a release is never precedent); and a finishing answering run reports `submitted` only for `answerer`, otherwise `discarded` (`finish._already_settled`). A test pins each.
 - These 120 and 140 changes (`coordinator`, `RELEASABLE_STATES`, the release-only resume-failed payload in D12, and `branch_head` on the `done` writes) are listed in the architecture's "Changes to 120" and "Changes to 140", so that 184 and 185 have one source.
@@ -257,7 +259,7 @@ Status: decided
 ### D10 — Wait reasons: a closed vocabulary, written only on change
 Status: decided
 
-`EdgeWait` (StrEnum), stored with a detail and `evaluated_at`. The first matching reason wins, checked in this order:
+`EdgeWait` (StrEnum), stored with a detail and `wait_since`. The first matching reason wins, checked in this order:
 
 | Wait | When |
 | --- | --- |
@@ -266,16 +268,16 @@ Status: decided
 | `branch_head_missing` | Done with no recorded commit (D5, D6). Applies to from-source and from-release alike, since release names the commit. |
 | `awaiting_release` | From-release, not yet confirmed. |
 | `not_on_target` | From-source, commit not reachable from the target. |
-| `read_failed` | A git or `cf` read failed. The detail is the command and the stderr head. |
+| `read_failed` | A git or `cf` read failed, including a head read that failed at `done` and is being retried (D5). The detail is the command and the stderr head. Cleared by the next read that succeeds. |
 
 - A member store failure is a wait reason, never an exit (181, D6). A program store failure exits as a store failure (181, D7).
-- Edges are evaluated least recently evaluated first (`evaluated_at` ascending, never-evaluated first), and every evaluation sets `evaluated_at`, even when the wait is unchanged. A budget refusal stops evaluating the remaining edges this tick and leaves them as they are. The edges skipped are the oldest on the next tick, so no edge is starved behind another. Open edges still count in `waiting`, so a refusal is always safe.
-- Only a change of state or wait counts toward `tick.wrote`. The `evaluated_at` update alone does not.
+- Edges are evaluated in `edge_id` order. A budget refusal stops evaluating the remaining edges this tick and leaves them as they are; they are evaluated on a later tick. Open edges still count in `waiting`, so a refusal is always safe. No fairness ordering: a program has a handful of edges, and a refusal that recurs after the first edge on every tick is not a case the budget produces in practice.
+- A row is written only when its state or wait changes, and `wait_since` is set with it. Every such write counts toward `tick.wrote`.
 
 ### D11 — The member rule for `register_program`
 Status: decided
 
-`register_program` that would remove a member referenced as waiting or provider by an edge in state `open` or `satisfied` is rejected `member_has_live_edges` and writes nothing. Closed edges do not count. This is the rule 181, D3, left to 183. 184 extends it to requests.
+`ProgramStore.apply_submission` checks, inside the same submission transaction, whether a `register_program` replace would drop a member that any edge references as waiting or provider. If so it is rejected with 181's reserved code `member_referenced` and writes nothing. Any edge counts, closed ones included, so no edge row ever names a project that is no longer a member; removing a referenced member is deferred (181, Future Work "Member and program removal"). This implements for edges the rejection 181, D3, reserved. 184 adds the same check over requests.
 
 ### D12 — A failed resume of a release keeps the release's instructions on its block
 Status: decided
@@ -287,7 +289,7 @@ Status: decided
 Status: decided
 
 - `program-blocked` gains one row per edge in state `open` or `satisfied`: `program_id`, `project_id` (waiting), `node_id`, `title`, `blocked_on` = `edge`, `reason` = `"<wait>: <detail>"` (or `satisfied: awaiting release` for a satisfied edge), `blocked_state_id` = the question block, `context` = the edge id (what `resolve-edge` names; 186, D9), and the remaining columns empty. A satisfied edge whose release is pending is listed so that a release that fails to land is visible.
-- The reason ends with ` (evaluated <evaluated_at>)`, so a stale reason reads as stale.
+- The reason ends with ` (since <wait_since>)`, so a wait that has stood for a long time, for example while the process is stopped, reads as such.
 - No listing of closed edges: nothing in 183's plan needs one (GitHub issue #28).
 - With no program store, no edge rows are listed, as in 181.
 
@@ -345,7 +347,7 @@ class ProgramView:
 | --- | --- | --- |
 | `resolve_edge` | `edge_id` | Non-blank. Unknown keys refused. |
 
-New rejection codes: `unknown_edge`, `edge_not_from_release`, `edge_closed`, `member_has_live_edges`.
+New rejection codes: `unknown_edge`, `edge_not_from_release`, `edge_closed`. `member_referenced` (reserved by 181) is now produced for edges (D11).
 
 ### Database / Storage Schema
 
@@ -359,13 +361,13 @@ CREATE TABLE edges (
   mode TEXT NOT NULL CHECK (mode IN ('from_source', 'from_release')),
   need TEXT NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('open', 'satisfied', 'released', 'superseded')),
-  wait TEXT, wait_detail TEXT, evaluated_at TEXT,          -- wait CHECKed against EdgeWait
+  wait TEXT, wait_detail TEXT, wait_since TEXT,            -- wait CHECKed against EdgeWait
   release_confirmed_at TEXT,
   satisfied_commit TEXT, satisfied_target TEXT, satisfied_at TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT,
   CHECK (waiting_project <> provider_project),
   CHECK ((provider_node_id IS NULL) <> (provider_commit IS NULL)));
-CREATE INDEX edges_by_waiting ON edges (waiting_project, state, evaluated_at);
+CREATE INDEX edges_by_waiting ON edges (waiting_project, state);
 CREATE INDEX edges_by_provider ON edges (provider_project, state);
 ```
 
@@ -376,7 +378,9 @@ CREATE TABLE slice_heads (
   node_id TEXT PRIMARY KEY REFERENCES nodes(id),
   branch TEXT,                 -- null when the slice has no name
   head_commit TEXT,            -- null when absent or unreadable
-  detail TEXT, recorded_at TEXT NOT NULL);
+  missing INTEGER NOT NULL CHECK (missing IN (0, 1)),  -- 1: read succeeded, no branch (final); 0 with null commit: read failed, retried (D5)
+  detail TEXT, recorded_at TEXT NOT NULL,
+  CHECK (NOT (missing = 1 AND head_commit IS NOT NULL)));
 ```
 
 The locality rule's allowed program-store set gains `edges`, and the proof's table list follows. `slice_heads` is a project table. A test asserts it never appears in the program store.
@@ -385,7 +389,7 @@ The locality rule's allowed program-store set gains `edges`, and the proof's tab
 
 ### Provides to Other Slices
 
-- **184:** `create_edge` (an edge exists before its providing slice can complete, D5), the `edges` table for 184's own migration to extend with unbound edges and its `bind_edge`, `ProvidingCommit` for already-met replies satisfied by D3 and D4 unchanged, `ProgramView.providing` (184 adds membership drive and request priority from it), the need on the edge, `member_has_live_edges` to extend, and D9's supersession signal.
+- **184:** `create_edge` (an edge exists before its providing slice can complete, D5), the `edges` table for 184's own migration to extend with unbound edges and its `bind_edge`, `ProvidingCommit` for already-met replies satisfied by D3 and D4 unchanged, `ProgramView.providing` (184 adds membership drive and request priority from it), the need on the edge, the `member_referenced` check to extend over requests, and D9's supersession signal.
 - **185:** `create_edge` (the same D5 contract), `effective_mode`, `submit_release`'s `RELEASABLE_STATES` to extend with `requested`, and the edge rows the answerer's passages will show.
 - **186:** `program-blocked` edge rows, and the `edges` rows in the program store, as the evidence of each step.
 
@@ -407,9 +411,10 @@ The locality rule's allowed program-store set gains `edges`, and the proof's tab
 - A PM resolution on the question block before release supersedes every edge of that block. The provider's slice keeps running as planned work.
 - If the released run cannot be resumed, 120's missing-run block applies and carries `resume_instructions` with the restated need.
 - A crash between any two of release's three writes is finished by the next tick, with no second resolution (tests stop after each write).
-- `register_program` that would drop a member with a live edge is rejected `member_has_live_edges`.
-- `program-blocked` shows each open or satisfied edge with its wait reason and when it was evaluated.
-- With the budget refusing after the first edge on every tick, each of several open edges is still evaluated within as many ticks as there are edges.
+- `register_program` that would drop a member any edge references is rejected `member_referenced` in the same submission transaction and writes nothing; a test covers an open and a closed edge.
+- `program-blocked` shows each open or satisfied edge with its wait reason and since when it has stood.
+- An edge row is written only when its state or wait changes; a tick that observes no change writes nothing to the program store.
+- A head read that fails at `done` leaves the edge waiting `read_failed`, and the edge is satisfied once a later read finds the branch and its commit is on the target, with no PM step. Only a read that succeeds without the branch, or a slice with no name, waits `branch_head_missing`.
 - A project in no program, and a member with no edges, tick with the same writes, commands and journal as after 181 and 182.
 
 ### Technical Requirements
@@ -434,7 +439,7 @@ Draft; refined after implementation. Nothing in 183 creates an edge outside test
    uv run pytest tests/store/test_program_edges.py tests/store/test_release_submission.py \
        tests/store/test_slice_heads.py tests/process/test_program_inbox.py -k "edge or release or head" -v
    ```
-   Expected: `create_edge` validations; state transitions and `CHECK`s; `resolve_edge` applied and each rejection; `member_has_live_edges`; `submit_release` submitted, `block_resolved`, and record settling by state; the head written in the `done` transaction by `record_runner_report` and by `complete_slice`.
+   Expected: `create_edge` validations; state transitions and `CHECK`s; `resolve_edge` applied and each rejection; `member_referenced` over edges; `submit_release` submitted, `block_resolved`, and record settling by state; the head written in the `done` transaction by `record_runner_report` and by `complete_slice`.
 
 2. **Readiness.**
    ```bash
@@ -488,7 +493,7 @@ Draft; refined after implementation. Nothing in 183 creates an edge outside test
 
 ### Development Approach
 
-1. Program schema 002, `program_models`, `program_edges`, `effective_mode`, and the `member_has_live_edges` rule. Store tests.
+1. Program schema 002, `program_models`, `program_edges`, `effective_mode`, and the `member_referenced` check over edges in `apply_submission`. Store tests.
 2. The `resolve_edge` kind: envelope, CLI, apply and rejections. Inbox tests.
 3. Project schema 016, `BranchHead`, and `record_runner_report(branch_head=...)`. `submit_release` and `AnsweredBy.COORDINATOR`. Store tests.
 4. Readiness: `predecessors.external_waits_met`, `ready_slices(waiting)`, `current_slices`, `build_project_view`. Lifecycle tests and the no-edge regression test.

@@ -110,7 +110,7 @@ supervisor dir/
 | Program stage | `runner/program/stage.py` | Finds the project's program each tick; returns it, or `None`. |
 | Program listings | `inspection/program.py` | `program`, `program-blocked`, `program-submissions` rows. |
 
-`amoeba.program` exists because both the Runner and inspection need member reads and inspection may not import `amoeba.runner` (import rule 10). It imports `amoeba.store` and `amoeba.upstream` only.
+`amoeba.program` exists because both the Runner and inspection need member reads and inspection may not import `amoeba.runner` (import rule 10). It imports `amoeba.store` and `amoeba.upstream` only, and ships in 181 with exactly one function, `read_member`.
 
 ### Data Flow
 
@@ -124,7 +124,7 @@ supervisor dir/
 **The tick.**
 
 1. Intents applied, resolutions answered (unchanged).
-2. **Program stage.** With no program store, nothing happens. Otherwise one read of the program store finds the project's program; a project in none stops here. For a member project, the result is the `Program`, held on the tick. No member store is opened. In 181 nothing consumes it; 183 grows it into the view it hands to readiness.
+2. **Program stage.** With no program store, nothing happens. Otherwise one read of the program store finds the project's program; a project in none stops here. For a member project, the result is the `Program`. No member store is opened. In 181 the tick does not keep it (D7); 183 keeps it and grows it into the view it hands to readiness.
 3. The rest of the tick, unchanged.
 
 **Inspection.** `amoeba inspect program-blocked` opens the program store read-only, and for each program and member calls `read_member`, then lists the member's blocked nodes (if its store opens) and a `member_unreadable` row (if it is unreadable). Inspection works with the process stopped.
@@ -158,7 +158,7 @@ Status: decided
 ### D3 — `register_program` replaces, `register_member` upserts; one program per project
 Status: decided
 
-- `register_program` creates a program, or replaces an existing one whole: its concept location, member set and override set become exactly what the body lists, so a member left out (a mistyped `project_id`, for example) is removed. That is safe in 181 because nothing references a member yet; 183 and 184 add the rule for a member that edges or requests reference. `register_member` upserts one member into an existing program and removes nothing. A re-submission of an identical body is `applied`, as `create_project` is.
+- `register_program` creates a program, or replaces an existing one whole: its concept location, member set and override set become exactly what the body lists, so a member left out (a mistyped `project_id`, for example) is removed. A replace that would drop a member an edge or a request references is rejected `member_referenced`, so a referenced member is never removed. 181 reserves the code and nothing references a member yet; 183 adds the check over edges and 184 over requests, as each adds its table. `register_member` upserts one member into an existing program and removes nothing. A re-submission of an identical body is `applied`, as `create_project` is.
 - A project is a member of at most one program (unique `project_id` across `program_members`). Both shapes the architecture names (the `trading-*` product and the tool chain) are disjoint, and one program per project keeps "which program is this project in" a single lookup for every later slice. A project in another program is rejected `member_of_other_program`.
 - After the write, the concept member must be a member of the program; otherwise the whole submission is rejected `concept_member_not_member` and nothing is written. `register_member` removes nothing, so it cannot break this; `register_program` is checked against the set it writes.
 - Shape problems are quarantined (`invalid_payload`) before anything is written, naming the field: a missing `requests_initiative`, `concept_member` or `concept_path` is the "named error" the slice plan requires. Semantic problems that need the stored state are rejections with a code (see API Contracts).
@@ -202,11 +202,11 @@ Status: decided
 Status: decided
 
 - Place: in `ProjectTick.run`, directly after `_answer_resolutions()` and before Observe. That satisfies the architecture's order (intents, resolutions, program stage, then readiness), and keeps a PM resolution acknowledged before any later program-stage rule (183's supersession) can read the block.
-- Behavior in 181: `ProgramStage.run(project_id) -> Program | None`. `None` when there is no program store or the project is in no program; nothing else is read. The tick keeps the result as `program`; nothing consumes it until 183, which replaces it with a view carrying the members and each member's `MemberState` (GitHub issue #26). It writes nothing, issues nothing and does not change `tick.wrote`.
+- Behavior in 181: `ProgramStage.run(project_id) -> Program | None`. `None` when there is no program store or the project is in no program; nothing else is read. The tick does not keep the result: nothing would read it in 181. The read exists so the stage's place and its failure behavior ship and are tested now. 183, the first consumer, keeps the result and grows it into a view carrying the members and each member's `MemberState` (GitHub issue #26). It writes nothing, issues nothing and does not change `tick.wrote`.
 - Failures: a `StoreError` from the **program store** propagates; it is in `STORE_FAILURES` (the same exception types), so the tenant re-raises and the process exits as a store failure. Every project's tick reads the program store, so this stops projects in no program too: the architecture's "behaves exactly as after 140" holds only while the program store is healthy, and its explicit failure rule wins. Any other exception is a bug and reaches the tenant's existing catch as a project-scoped `unexpected_fault`.
 - `RunnerHost` gains `program_store: ProgramStore | None`, read every tick, because the store can appear at runtime when the first program is registered.
 - Cost: one program store read per tick, no member store opened, no subprocess.
-- `tick.py` is at 311 lines; the stage call is two lines and the stage lives in its own module. If the addition pushes `tick.py` over its budget, extract `_launch_context` and the escalation-closing helper to a sibling module in the same task.
+- `tick.py` is at 311 lines; the stage call is two lines and the stage lives in its own module. 181 extracts nothing from `tick.py`; two lines over a file already past the guideline does not justify a refactor here. 183, which adds the stage's result to the tick and hands it to readiness, owns any extraction.
 
 ### D8 — Inspection: supervisor-level listings over all programs
 Status: decided
@@ -229,7 +229,7 @@ Status: decided
 ### D10 — What is deferred
 Status: decided
 
-- **Removing a program, and removing a member that edges or requests reference.** In 181 a wrong member is removed by re-submitting `register_program` without it (D3), and a project moves between programs by removing it from one and registering it in the other. Removing a whole program, and the rules for a referenced member once 183 and 184 exist, are the slice plan's Future Work item "Member and program removal".
+- **Removing a program, and removing a member that edges or requests reference.** In 181 a wrong member is removed by re-submitting `register_program` without it (D3), and a project moves between programs by removing it from one and registering it in the other. A referenced member cannot be dropped (`member_referenced`, D3). Removing a whole program, and removing a referenced member with rules for its open edges and requests, are the slice plan's Future Work item "Member and program removal".
 - **Program submissions over the network.** `amoeba serve` submits project kinds only; program kinds go through the file inbox. Added when 160 needs it.
 - **A change feed for the program store.** 160 is the first consumer that would follow it.
 
@@ -301,6 +301,7 @@ Unknown keys are refused (unlike the project envelope's ignored extras, a misspe
 | `member_of_other_program` | A listed project is already a member of a different program. |
 | `concept_member_not_member` | After the write, the concept member would not be a member of the program. |
 | `override_not_member` | An override names a project that would not be a member of the program after the write. |
+| `member_referenced` | `register_program` would drop a member that an edge or a request references. Reserved in 181, where nothing references a member; 183 adds the check over edges and 184 over requests, each in the same apply transaction (D3). |
 
 **Reading the outcome:** `amoeba inspect program-submissions`, or `ProgramStore.submission(id)` from code.
 
@@ -351,8 +352,8 @@ CREATE TABLE program_submissions (
 ### Provides to Other Slices
 
 - **182:** `ProgramStore.program_of(project_id)` and the concept location; `members(program_id)` for the member list in passages; `updated_at` on `Program` and `Member` (the schema's columns) to date the member list; `read_member`, whose `Readable` result keeps the resolved `Checkout` and the CF project id of the member's one link, so 182 reads the concept from the concept member's checkout (182, D3).
-- **183:** the program store and its migration line (edges are migration 002); the program inbox and its drain (the edge resolution is a third `ProgramSubmissionKind`); the stored modes and overrides; the program stage, whose `Program` result 183 grows into the view it hands to readiness; `read_member` to add member state to it; the `program-blocked` listing to add edge rows to.
-- **184:** each member's `requests_initiative`; the checkout readability check; the program store for request rows.
+- **183:** the program store and its migration line (edges are migration 002); the program inbox and its drain (the edge resolution is a third `ProgramSubmissionKind`); the stored modes and overrides; the program stage, whose `Program` result 183 grows into the view it hands to readiness; `read_member` to add member state to it; the `program-blocked` listing to add edge rows to; the reserved `member_referenced` rejection, whose check over edges 183 adds to `apply_submission`.
+- **184:** each member's `requests_initiative`; the checkout readability check; the program store for request rows; the `member_referenced` check over requests.
 - **185:** `program_of` to know whether a project can request at all.
 
 ### Consumes from Other Slices
@@ -368,7 +369,7 @@ CREATE TABLE program_submissions (
 
 - Registering a program with its members through the program inbox writes the program store, created on first use; `amoeba inspect program` lists each member with its requests initiative, mode, overrides and state.
 - A payload missing `requests_initiative`, `concept_member` or `concept_path`, or with an out-of-range index, an unknown mode, a self override, a duplicate member or an unknown key, is refused by `amoeba submit` and quarantined when hand-written, with `invalid_payload` naming the field.
-- Each rejection code in API Contracts is produced by a body that triggers it, recorded on `program-submissions`, and writes nothing else.
+- Each rejection code in API Contracts except the reserved `member_referenced` is produced by a body that triggers it, recorded on `program-submissions`, and writes nothing else.
 - `register_program` on an existing program leaves exactly the listed members and overrides (a member left out is gone); `register_member` upserts without removing anything; an identical re-submission is `applied`; a reused submission id is a no-op.
 - A member that is unlinked (no link, or two), has no store, an unreadable store, no observed snapshot or an unresolvable checkout at its requests index shows on `program-blocked` with that reason; members' blocked nodes appear with `program_id`. Nothing exits.
 - The program stage runs after resolutions and before Observe; a project in no program, and a supervisor with no program store, tick with the same writes, commands and journal as before (a regression test compares a tick with and without an unrelated program registered).

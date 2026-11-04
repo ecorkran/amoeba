@@ -69,7 +69,7 @@ Nothing outside tests creates a request in this slice. 185 is the producer. A li
 - Readiness and dispatch changes: no implicit predecessor in the requests initiative, membership drive, and request priority in the sort key.
 - Per-project configuration: a `requests` section with `model` and `max_cost_usd`, with no defaults. Start-up wiring of 180's probe.
 - 183's edge observation of an unbound edge, and supersession closing a pending request.
-- `register_program`: 183's `member_has_live_edges` rule also counts live requests.
+- `register_program`: the `member_referenced` check over requests (181, D3).
 - `program-blocked` request rows.
 - Contract docs: store, inbox and process.
 
@@ -92,11 +92,12 @@ Nothing outside tests creates a request in this slice. 185 is the producer. A li
 
 ### Interfaces Required
 
-- **180:** `slice_writing_pipeline_path()`, the param and file-name constants, `RequestInput`, `prepare_request_directory`, `read_reply` with `NewSlice | AlreadyMet | ReplyProblem`, and `probe_slice_writing_pipeline`.
-- **181:** `ProgramStore`, `program_of`, `members` (each member's `requests_initiative`), `read_member`, the program stage seam, `RunnerHost.program_store`, the `program-blocked` listing, and `register_program`'s member rules.
-- **183:** the `edges` table and its operations, `EdgeWait`, `ProvidingSlice` and `ProvidingCommit`, `ProgramView.providing`, the observation loop in `observe_edges.py`, D9 supersession, `member_has_live_edges`, and `ready_slices(waiting)` and `current_slices(..., waiting)`.
-- **120:** `launch.spawn` with its logs, `mint_run_id` and `LaunchTracker`; `RunObserver.poll_run`; `checkout_holders` (`dispatch/hold.py`); the fresh-launch rule in `dispatch/checkout_check.py`; `checkout_reads` (git status and target); `git_read` (`log`); `PlanStage` and `PlanReadSchedule`; the by-id `sq` recovery observer; `supervision_entries`; and `StartupFailedError`.
-- **144:** the shape of the `sq_answer` path (its own journal kind, its own stage, its own scratch directory) as the pattern `sq_request` follows.
+Only the seams 184 changes or calls into are listed; everything else is used as its owner documents it.
+
+- **180:** `prepare_request_directory`, `read_reply` and `probe_slice_writing_pipeline`.
+- **181:** each member's `requests_initiative`, the program stage seam, `apply_submission`'s reserved `member_referenced` code, and the `program-blocked` listing.
+- **183:** the `edges` table (rebuilt here), `EdgeWait`, `ProgramView.providing`, D9 supersession, and the `waiting` argument to readiness (wrapped here).
+- **120 and 132:** `checkout_holders` (`dispatch/hold.py`), the fresh-launch rule, `PlanStage`, `supervision_entries` and the dispatch `SortKey`, all changed here; launch, observation and recovery used as `sq_answer` uses them (144's pattern).
 
 ## Architecture
 
@@ -115,13 +116,14 @@ Nothing outside tests creates a request in this slice. 185 is the producer. A li
 | Binding | `runner/request_run/bind.py` | Pure: request, tree and read freshness in, a bind or a failure out |
 | Request stage | `runner/request_run/stage.py` | Observe, finish, bind, then launch, once a tick |
 | Checkout rule | `runner/dispatch/hold.py` | `checkout_holds` separates in-flight holders from stopped ones. `sq_request` entries hold |
+| Readiness value | `runner/lifecycle/readiness.py` | `ProgramReadiness`: three frozen node-id sets. Owned by lifecycle; imports nothing from `runner/program` |
 | Readiness | `runner/lifecycle/predecessors.py`, `intent/governance.py`, `dispatch/build_view.py`, `dispatch/facts.py` | No implicit predecessor, membership drive, request priority |
-| Program stage | `runner/program/stage.py`, `observe_edges.py` | `ProgramView` gains `ProgramReadiness`. Unbound edges wait on their request |
+| Program stage | `runner/program/stage.py`, `observe_edges.py` | Fills `ProgramView.readiness`. Unbound edges wait on their request |
 | Listings | `inspection/program.py` | `request` rows on `program-blocked` |
 
 Also changed in place: `PlanStage` (`mark_due`, `read_completed_since`, D9), `project_config.py` (`RequestSettings`, D14) and the start-up probe wiring (D14).
 
-`runner/lifecycle` still never imports the program store. It receives node-id sets (183's principle).
+`runner/lifecycle` and `intent/` still never import the program store or `runner/program`. They receive node-id sets in a value they own (183's principle); the program stage imports `runner/lifecycle/readiness.py` to fill it, never the reverse.
 
 ### Data Flow
 
@@ -164,18 +166,19 @@ On an already-met reply, finish checks the target head and binds the edge to `Pr
 
 ### State Management
 
-- **Program store.** Request rows are written only by the provider's tick. Edge rows keep 183's writers. The asker's tick writes state, waits, satisfaction and release. The program inbox writes `release_confirmed_at`. 184 adds one column-disjoint writer: the provider's tick writes `provider_node_id` or `provider_commit` once, through `bind_edge`. `bind_edge` is a compare-and-set that succeeds only on an `open`, unbound edge (D10). 183's State Management line saying there is no third writer is amended to match.
+- **Program store.** Request rows are created by the asker's tick (`create_request`, 185), then written only by the provider's tick. Edge rows keep 183's writers. The asker's tick writes state, waits, satisfaction and release. The program inbox writes `release_confirmed_at`. 184 adds one column-disjoint writer: the provider's tick writes `provider_node_id` or `provider_commit` once, through `bind_edge`. `bind_edge` is a compare-and-set that succeeds only on an `open`, unbound edge (D10). 183's State Management line saying there is no third writer is amended to match.
 - **Provider's project store.** One `request` node per request run and its `sq_request` entry. The node is created `in_progress` and set to `done` when the run's entry resolves. Nothing else in the provider's store changes until the plan read creates the slice.
-- **Run I/O directory.** `<supervisor_dir>/requests/<run_id>/`, beside `answering/`. It is made fresh with exclusive `mkdir` and left in place after the run as evidence.
-- **Waits are stored**, as 183's edge waits are, with `evaluated_at`, because they come from git and `cf` reads that inspection may not make.
+- **Run I/O directory.** `<supervisor_dir>/requests/<run_id>/`, beside `answering/`, derived from the run id by one function and not stored. It is made fresh with exclusive `mkdir` and left in place after the run as evidence.
+- **Waits are stored**, as 183's edge waits are, with `wait_since`, because they come from git and `cf` reads that inspection may not make. A row is written only when its state or wait changes, and `wait_since` is set with it (183, D10).
+- **Evaluation order** matches 183: requests are evaluated oldest first (`created_at`, then `request_id`), and a budget refusal stops the pass and leaves the rest as they are for a later tick. No fairness ordering.
 
 ## Technical Decisions
 
 ### D1 — A request is a row beside its edge; the edge holds the need
 Status: decided
 
-- `requests` holds `request_id`, `program_id`, `edge_id` (unique, references `edges`), the `provider_project`, the `asking_slice_label` (`<index> <name>`, which `need.md` names and the edge does not carry), `state`, a wait or failure with detail, and the run fields. The run fields are `requests_index`, `slice_set`, `launch_head`, `target`, `run_id`, `journal_entry_id`, `io_dir`, the reply fields and the timestamps.
-- The need, the asking project, node and question block live on the edge (183, D1). The request reads them from there and stores no second copy. `provider_project` is duplicated from the edge on purpose, because every request query is "requests whose provider is this project". A `CHECK`-free test pins it equal to the edge's.
+- `requests` holds `request_id`, `program_id`, `edge_id` (unique, references `edges`), the `asking_slice_label` (`<index> <name>`, which `need.md` names and the edge does not carry), `state`, a wait or failure with detail, and only the run fields binding and recovery read: `slice_set`, `launch_head`, `run_id`, `journal_entry_id`, `reply_index` and the timestamps.
+- The need, the asking project, node and question block, and the provider live on the edge (183, D1). The request reads them from there and stores no second copy; "requests whose provider is this project" joins on `edges_by_provider`. The requests index comes from the member record and the target from the entry's parameters (D7); the I/O directory is derived from the run id. An already-met commit lives on the edge once bound, and in the failure detail for `head_moved`.
 - `create_request(*, waiting_project, waiting_node_id, asking_slice_label, question_block_id, provider_project, need) -> Request` writes the unbound edge, through 183's `create_edge` checks, and the `pending` request in one `BEGIN IMMEDIATE` transaction. The edge's mode is `effective_mode` at creation, as for every edge. 185 is the caller. In 184 only tests call it.
 - Rejected: storing the request as more edge columns. The request has its own lifecycle (pending, running, replied) that ends while the edge is still open. Folding it in would make every edge reader filter on request columns.
 
@@ -196,10 +199,9 @@ Status: decided
 
 - `unreadable`: the stage cannot evaluate the request. That covers a missing CF link or snapshot, no checkout at the requests index, or a failed git or `cf` read. The detail names which, with the command and stderr head for a read.
 - `requests_unconfigured`: the provider's project config has no `requests` section. Fixed by config and a restart, so it is a wait.
-- `checkout_in_use`: a run is in flight in the checkout. The detail names the holding node.
+- `checkout_in_use`: a run is in flight in the checkout, or another request to this provider is `running` or `replied` (D6). The detail names the holding node or the request ahead.
 - `checkout_branch`: the checkout is detached or not on the target.
 - `checkout_dirty`: the tree has changes. The detail gives the first paths and the count.
-- `request_ahead`: another request to this provider is `running` or `replied` (D6).
 - `awaiting_plan_read`: `replied` with no plan read completed since.
 
 `RequestFailure`:
@@ -245,7 +247,7 @@ Status: decided
 ### D6 — One request at a time per provider, oldest first
 Status: decided
 
-- The stage launches the oldest `pending` request (`created_at`, then `request_id`) only when no request to this provider is `running` or `replied`. The others wait `request_ahead`.
+- The stage launches the oldest `pending` request (`created_at`, then `request_id`) only when no request to this provider is `running` or `replied`. The others wait `checkout_in_use`, naming the request ahead.
 - All requests to a member run in the one checkout that owns its requests index, so they could not overlap anyway. The extra rule covers `replied`. The next run does not launch until the previous new slice has been bound. So the slice set each run records already contains every earlier request's slice, and the binding check (D9) cannot accept an index an earlier request wrote.
 - Cost: a request can wait up to one plan read behind the previous one. That is short next to a slice-writing run.
 - **No request timeout, by design.** A run that never finishes is bounded by its cost cap and Squadron's stall failure (180, D6). A plan read that never succeeds keeps the `replied` request, and every later request to that provider, waiting. Both cases are visible on the program blocked list and in `plan_read_failed`. The exit is the PM's resolution of the asker's block, which withdraws the request (D10).
@@ -258,15 +260,12 @@ In order, for the chosen request:
 1. **Configured?** `RequestSettings` for the provider, or wait `requests_unconfigured`.
 2. **Checkout and band.** D5's checkout, D4's band from the provider's store, and D5's hold. A failure becomes a wait or a failure, with nothing journaled.
 3. **Edge still open?** If it was superseded, the request goes `withdrawn` and nothing launches (D10).
-4. **Adopt an earlier attempt.** If the provider store already has an `sq_request` entry on `request_node_id(request)`, a crash happened after step 6 and before step 7. The stage records the request `running` from the entry's parameters, which carry every launch fact (step 6), and launches nothing. What follows depends on the crash window:
-   - **Between 6 and 7, or between 7 and 8:** no run was spawned. Recovery resolves the entry `not_applied` after the launch grace, and the request fails `run_lost` (D8). Relaunching is deferred (architecture), so the PM resolves the asker's block.
-   - **After 8:** the run exists. Recovery leaves it in flight, and the stage finishes it normally.
+4. **Check.** D5's reads, under the tick budget. A budget refusal stops launching for this tick and leaves the request `pending`.
+5. **Directory, input and journal.** Make `<supervisor_dir>/requests/<run_id>/` (`mint_run_id`) and call 180's `prepare_request_directory` with `RequestInput(asking project, asking slice label, requests index, need)`. Build the argv with `request_argv(...)`. An `OSError` fails the request `launch_failed` and removes the directory. Then `begin_request_run` writes the node and the entry in one provider-store transaction. Required parameter keys: `pipeline`, `params`, `run_id`, `checkout`, `request_id`, `requests_index`, `slice_set`, `target`, plus `dispatch_check` as evidence (its `head` is the launch head).
+6. **Program store.** The request goes `running` with `slice_set` (the sorted CF indices of the linked slices under the requests initiative, empty when it does not exist), `launch_head`, `run_id` and `journal_entry_id`, all copied from the entry.
+7. **Spawn.** `launch.spawn` from the checkout as working directory, with the existing launch logs, `run_id=` confirmation and launch grace. A spawn failure resolves the entry `failed`, sets the node `done`, and fails the request `launch_failed`, all in the same tick.
 
-   Either way no second run is launched.
-5. **Check.** D5's reads, under the tick budget. A budget refusal stops launching for this tick and leaves the request `pending`.
-6. **Directory, input and journal.** Make `<supervisor_dir>/requests/<run_id>/` (`mint_run_id`) and call 180's `prepare_request_directory` with `RequestInput(asking project, asking slice label, requests index, need)`. Build the argv with `request_argv(...)`. An `OSError` fails the request `launch_failed` and removes the directory. Then `begin_request_run` writes the node and the entry in one provider-store transaction. Required parameter keys: `pipeline`, `params`, `run_id`, `checkout`, `io_dir`, `request_id`, `requests_index`, `slice_set`, `target`, plus `dispatch_check` as evidence (its `head` is the launch head). Step 7 copies these keys, so step 4 can rebuild `running` from the entry alone.
-7. **Program store.** The request goes `running` with `requests_index`, `slice_set` (the sorted CF indices of the linked slices under the requests initiative, empty when it does not exist), `launch_head`, `target`, `run_id`, `journal_entry_id` and `io_dir`.
-8. **Spawn.** `launch.spawn` from the checkout as working directory, with the existing launch logs, `run_id=` confirmation and launch grace. A spawn failure resolves the entry `failed`, sets the node `done`, and fails the request `launch_failed`, all in the same tick.
+**Crash windows need no adoption branch.** The observe step (D8) runs before launch and walks unresolved `sq_request` entries. An entry whose request is still `pending` (a crash between 5 and 6) is recorded `running` from the entry's parameters there, so launch never sees that request as `pending` again. A run that was never spawned (a crash before 7) is left to recovery, which resolves the entry `not_applied` after the launch grace; the request then fails `run_lost` (D8). Relaunching is deferred (architecture). A run that was spawned is finished normally. No path launches a second run.
 
 - **The argv** is built only in `request_argv(pipeline_path, requests_index, run_id, io_dir, max_cost_usd, model)`. Today it builds 180's provisional form: `sq run <path> <requests index> --run-id <id> --io-dir <dir> --max-cost <usd> -p model=<alias>`. When 180 finalizes the syntax, only this function and its test change.
 - `params` journaled are the `-p` params (`model`). The cost cap is journaled as its own key, `max_cost_usd`, because it is not a pipeline param.
@@ -274,16 +273,17 @@ In order, for the chosen request:
 ### D8 — Finishing a request run
 Status: decided
 
-The stage polls each unresolved `sq_request` entry with `RunObserver.poll_run`, under the budget and `--run-poll-interval`, as the answering stage polls `sq_answer`. For a finished run, the program-store write comes first and the entry is resolved second. A crash in between is finished again on the next tick, because the request state tells the stage what is already recorded.
+The stage polls each unresolved `sq_request` entry with `RunObserver.poll_run`, under the budget and `--run-poll-interval`, as the answering stage polls `sq_answer`. First, an entry whose request is still `pending` is recorded `running` from its parameters (D7, crash windows). A run Squadron does not know about is not a finished run: the stage leaves the entry to recovery, which owns the launch grace and resolves it `not_applied`, and the request then fails `run_lost`. So a never-spawned run always ends `run_lost`, whatever the tick order. For a finished run, the program-store write comes first and the entry is resolved second. A crash in between is finished again on the next tick, because the request state tells the stage what is already recorded.
 
 | Run outcome | Reply | Effect |
 | --- | --- | --- |
-| not `completed` (failed, paused, orphaned, vanished) | not read (180, D7) | `failed` `run_failed`, with the failure kind and the 4 KiB tail |
+| finished, not `completed` (failed, paused, orphaned) | not read (180, D7) | `failed` `run_failed`, with the failure kind and the 4 KiB tail |
 | `completed` | `ReplyProblem` | `failed` `reply_missing` or `reply_malformed`, with the detail |
 | `completed` | `NewSlice(index)` | `replied` with `reply_index`. The provider's link is marked due (D9) |
 | `completed` | `AlreadyMet(commit)` | head check, then `met` or `failed` `head_moved` |
 
 - **Head check.** One `git_read` `log -1 --format=%H <target>` in the checkout. If the result equals `launch_head`, the stage calls `bind_edge(ProvidingCommit(commit))` and the request goes `met`. Otherwise it fails `head_moved`, naming both heads. The commit stays on the target as an undriven plan entry the PM can see (180, D3). A failed read leaves the request `running` with wait `unreadable`, and it is retried next tick, since the entry is not yet resolved.
+- **A `False` from `bind_edge`** means the edge closed (superseded) since the stage read it. The request goes `withdrawn` (D10), here and in D9's bind alike.
 - **The entry's result** is `{run_id, run_outcome, reply_kind, request_state}`. It carries `run_id`, so the run is Amoeba's for pruning (process contract, ownership guarantee). The request node goes `done` in the same transaction.
 - **A paused run** is not resumed. The pipeline has no human step, so a pause means Squadron stopped it. It fails `run_failed` with the pause's reason.
 - **Recovery.** `sq_request` registers the by-id `sq` observer, as `sq_answer` does, with no legacy matcher. An existing run is left in flight for the stage. An entry recovery resolves `not_applied` or `unknown` fails the request `run_lost` the next time the stage sees it. Nothing relaunches it (architecture, deferred).
@@ -303,7 +303,7 @@ Status: decided
 ### D10 — `bind_edge` is a compare-and-set; supersession withdraws
 Status: decided
 
-- `bind_edge(request_id, target, at) -> bool` finds the request's edge and sets `provider_node_id` or `provider_commit` only where the edge is `open` and both are null, in the same transaction as the request's move to `bound` or `met`. It returns `False` and writes nothing otherwise.
+- `bind_edge(request_id, target, at) -> bool` finds the request's edge and sets `provider_node_id` or `provider_commit` only where the edge is `open` and both are null, in the same transaction as the request's move to `bound` or `met`. It returns `False` and writes nothing otherwise. Both callers (D8's already-met finish, D9's bind) then withdraw the request with `withdraw_request`; there is no other `False` path, because only supersession closes an open edge before it is bound.
 - **Supersession.** A PM resolution on the asker's question block supersedes the edge in the asker's tick (183, D9). The request stage sees that the edge is closed:
   - `pending` goes `withdrawn` and does not launch.
   - `running` finishes the run (the entry must resolve) and then goes `withdrawn` with the reply recorded.
@@ -324,7 +324,7 @@ Status: decided
 ### D12 — Readiness: no implicit predecessor, and membership drive, through one value
 Status: decided
 
-- 183's `waiting` argument becomes `ProgramReadiness(waiting, membership_driven, standalone_initiatives)`. These are three frozen node-id sets, and `ProgramReadiness.EMPTY` is used for a project in no program. It is still a required argument with no default, for 183, D2's reason.
+- 183's `waiting` argument becomes `ProgramReadiness(waiting, membership_driven, standalone_initiatives)`, defined in `runner/lifecycle/readiness.py` so lifecycle and intent own it and never import `runner/program`. These are three frozen node-id sets, and `ProgramReadiness.EMPTY` is used for a project in no program. It is still a required argument with no default, for 183, D2's reason.
   - `waiting`: 183's set, unchanged.
   - `standalone_initiatives`: the node id of the initiative at the member's `requests_initiative`, when the node exists.
   - `membership_driven`: `ProgramView.providing`, unchanged. Every edge is created by a request, so only request slices are in it.
@@ -360,11 +360,11 @@ projects:
 ### D15 — `register_program` and `program-blocked`
 Status: decided
 
-- 183, D11's `member_has_live_edges` check also counts a request in `pending`, `running` or `replied` whose provider is the member. That covers the one gap an open edge leaves: a request still running after its edge was superseded. There is no new rejection code.
+- `ProgramStore.apply_submission` gains the `member_referenced` check over requests that 181, D3 reserved: a `register_program` that would drop a member any request references, as provider or asker through its edge, in any state, is rejected `member_referenced` in the same submission transaction and writes nothing else. 183 adds the same check over edges; 184 adds only the requests half. This also covers a request still running after its edge was superseded. No new rejection code.
 - `program-blocked` gains one row per request in `pending`, `running`, `replied` or `failed` whose edge is still open:
   - `project_id` is the provider, `node_id` the request node (empty before launch), and `title` `request <id> from <asking project> slice <label>`.
   - `blocked_on` is `request`, and `blocked_state_id` is empty.
-  - `reason` is `"<state>: <wait or failure>: <detail> (evaluated <at>)"`.
+  - `reason` is `"<state>: <wait or failure>: <detail> (since <wait_since>)"`, as 183's edge rows.
 - The asking slice's own row is 183's edge row, now with `request_open` or `request_failed`. So a stuck request reads as two linked rows: the provider's request, and the asker waiting on it.
 - A failed request whose edge closed (the PM resolved the asker) is no longer listed. The PM has acted.
 
@@ -396,8 +396,7 @@ create_request(*, waiting_project, waiting_node_id, asking_slice_label: str,
 requests_providing(project_id, states: AbstractSet[RequestState]) -> list[Request]
 request_for_edge(edge_id) -> Request | None
 record_request_wait(request_id, wait: RequestWait, detail: str, at) -> bool   # False: unchanged
-mark_running(request_id, *, requests_index, slice_set, launch_head, target,
-             run_id, journal_entry_id, io_dir, at)
+mark_running(request_id, *, slice_set, launch_head, run_id, journal_entry_id, at)
 record_reply(request_id, reply: NewSlice, at)                   # -> replied
 bind_edge(request_id, target: EdgeTarget, at) -> bool           # CAS; -> bound | met
 fail_request(request_id, failure: RequestFailure, detail: str, at)
@@ -416,14 +415,16 @@ def requests_band(nodes: Sequence[Node], requests_index: int) -> BandState
 def request_argv(pipeline: Path, requests_index: int, run_id: str, io_dir: Path,
                  max_cost_usd: float, model: str) -> tuple[str, ...]
 
-# runner/program/stage.py
+# runner/lifecycle/readiness.py  (imports nothing from runner/program or the program store)
 @dataclass(frozen=True)
 class ProgramReadiness:
     waiting: frozenset[str]
     membership_driven: frozenset[str]
     standalone_initiatives: frozenset[str]
     EMPTY: ClassVar[ProgramReadiness]
-# ProgramView gains: readiness: ProgramReadiness
+
+# runner/program/stage.py
+# ProgramView gains: readiness: ProgramReadiness   (filled here)
 
 # runner/project_config.py
 @dataclass(frozen=True)
@@ -448,18 +449,17 @@ INSERT INTO edges_new SELECT * FROM edges; DROP TABLE edges; ALTER TABLE edges_n
 CREATE TABLE requests (
   request_id TEXT PRIMARY KEY, program_id TEXT NOT NULL REFERENCES programs(program_id),
   edge_id TEXT NOT NULL UNIQUE REFERENCES edges(edge_id),
-  provider_project TEXT NOT NULL, asking_slice_label TEXT NOT NULL,
+  asking_slice_label TEXT NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('pending','running','replied','bound','met','failed','withdrawn')),
-  wait TEXT, wait_detail TEXT, evaluated_at TEXT,          -- CHECKed against RequestWait
+  wait TEXT, wait_detail TEXT, wait_since TEXT,            -- CHECKed against RequestWait; written only on change
   failure TEXT, failure_detail TEXT,                       -- CHECKed against RequestFailure
-  requests_index INTEGER, slice_set TEXT,                  -- JSON array of CF indices, set at launch
-  launch_head TEXT, target TEXT,
-  run_id TEXT, journal_entry_id TEXT, io_dir TEXT,
-  reply_kind TEXT CHECK (reply_kind IN ('new_slice', 'already_met')),
-  reply_index INTEGER, reply_commit TEXT, replied_at TEXT,
+  slice_set TEXT,                                          -- JSON array of CF indices, set at launch
+  launch_head TEXT, run_id TEXT, journal_entry_id TEXT,
+  reply_index INTEGER, replied_at TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL, closed_at TEXT,
   CHECK ((state = 'failed') = (failure IS NOT NULL)));
-CREATE INDEX requests_by_provider ON requests (provider_project, state, created_at);
+CREATE INDEX requests_by_state ON requests (state, created_at);
+-- provider lookups join edges on edges_by_provider
 ```
 
 Project store: no migration. `NodeKind.REQUEST` is a new value in an unchecked column, and `sq_request` is a new value of the journal's unchecked `kind`. The locality rule's allowed program-store set gains `requests`, and the proof's table list follows.
@@ -484,7 +484,7 @@ Project store: no migration. `NodeKind.REQUEST` is a new value in an unchecked c
 ### Functional Requirements
 
 - A request written with `create_request` produces exactly one request run in the provider, launched in the tick it becomes eligible, before the provider's next planned slice in that checkout. A test has a planned slice and a pending request both eligible in one tick: the request run launches and the planned slice does not.
-- A request run never overlaps a run in flight in the same checkout. A second request waits `request_ahead` while the first is `running` or `replied`.
+- A request run never overlaps a run in flight in the same checkout. A second request waits `checkout_in_use`, naming the first, while the first is `running` or `replied`.
 - A request run launches in a checkout held only by a paused, failed or orphaned node when the tree is clean and on the target. It waits `checkout_branch` or `checkout_dirty` otherwise, and `checkout_in_use` while any run is in flight there. No provider node is blocked by a request wait.
 - A new-slice reply binds the edge only after a plan read that started after the reply shows a new slice at that index. A reply naming an index that was in the recorded set, or one absent from the plan, fails `binding_failed`.
 - The bound slice has no implicit predecessor, is driven by membership while its edge is open, sorts ahead of planned slices in its checkout, and is launched by the provider's configured pipeline. A PM hold on its path stops it. A second request slice is ready while a first one is stopped, and launches when the checkout is free.
@@ -493,18 +493,20 @@ Project store: no migration. `NodeKind.REQUEST` is a new value in an unchecked c
 - A PM resolution on the asker's question block withdraws a pending request without launching. A running request finishes and is withdrawn, and the slice it wrote is not membership-driven.
 - A restart with a request run in flight adopts it through recovery and the stage, and never launches a second. A test kills the launch between the provider-store journal and the program-store `running` write, and again between that write and the spawn. In both cases the next tick records the request `running` from the entry, recovery resolves it `not_applied`, and the request fails `run_lost` with no second launch.
 - A missing `requests` section leaves the provider's requests waiting `requests_unconfigured`. A section with a missing or invalid key fails the load naming the key path. The probe runs at start only when some project has the section.
-- `register_program` that would drop the provider of a live request is rejected `member_has_live_edges`.
+- `register_program` that would drop a member any request references, in any state, is rejected `member_referenced` and writes nothing else; a test drops a member referenced only by a closed request and by a request still running after supersession.
+- A run Squadron does not know about, inside or past the launch grace, ends `run_lost` through recovery and never `run_failed`; a test runs the stage before and after recovery in both orders.
+- A bind or already-met finish that loses the race to supersession (`bind_edge` returns `False`) leaves the request `withdrawn`.
 - A project in no program, and a member with no requests, tick with the same writes, commands and journal as after 183.
 
 ### Technical Requirements
 
-- `bind.py` and `program/band.py` pass the purity check. Every new vocabulary is pinned to its `CHECK`. The locality proof covers `requests`. `runner/lifecycle` does not import the program store.
+- `bind.py` and `program/band.py` pass the purity check. Every new vocabulary is pinned to its `CHECK`. The locality proof covers `requests`. An import-boundary test fails if `runner/lifecycle` or `intent/` imports `runner/program` or the program store, directly or transitively.
 - Migration 003 is tested on a program store holding 183's edges in every state, and preserves them.
 - The stage is tested with a stub `sq` that writes `reply.json` into the I/O directory and exits per scenario, and with `tests/runner/git_repo.py` repos for the checkout and head checks. No live `sq` or model.
 - `request_argv` has one test pinning the provisional form, marked to change with 180's finalization.
 - Every git read goes through `git_read` (`status`, `log`). A test counts calls: none for a request blocked by a store-only reason, two (`git status`, `cf config get`) before a launch, and one (`log`) to finish an already-met run.
 - Format, lint and typecheck (`ruff`, `pyright` strict) pass, with the full suite.
-- Docs: `docs/store-contract.md` (requests, the edge rebuild, the `request` node kind, `sq_request` and its keys, the bind writer, locality), `docs/inbox-contract.md` (`member_has_live_edges` also counts live requests), `docs/process-contract.md` (the request stage, the checkout rule and exemption, readiness and dispatch changes, the `requests` section, the probe wiring, recovery), and `CHANGELOG.md`.
+- Docs: `docs/store-contract.md` (requests, the edge rebuild, the `request` node kind, `sq_request` and its keys, the bind writer, locality), `docs/inbox-contract.md` (`member_referenced` also checks requests), `docs/process-contract.md` (the request stage, the checkout rule and exemption, readiness and dispatch changes, the `requests` section, the probe wiring, recovery), and `CHANGELOG.md`.
 
 ### Integration Requirements
 
@@ -532,7 +534,7 @@ Draft; refined after implementation. Nothing in 184 creates a request outside te
    ```bash
    AMOEBA_STORE_DIR=<printed dir> amoeba inspect program-blocked
    ```
-   Expected: `request` rows with state, wait or failure, and evaluation time, beside the asker's `edge` rows.
+   Expected: `request` rows with state, wait or failure, and `wait_since`, beside the asker's `edge` rows.
 
 ## Risk Assessment
 
@@ -552,7 +554,7 @@ Draft; refined after implementation. Nothing in 184 creates a request outside te
 
 ### Development Approach
 
-1. Program schema 003 (edge rebuild and `requests`), vocabularies, `program_requests` with `create_request` and `bind_edge`, and live requests in `member_has_live_edges`. Store and migration tests.
+1. Program schema 003 (edge rebuild and `requests`), vocabularies, `program_requests` with `create_request` and `bind_edge`, and the `member_referenced` check over requests in `apply_submission`. Store, migration and rejection tests.
 2. `NodeKind.REQUEST`, `CommandKind.SQ_REQUEST` with its keys and observer registration, `supervision_entries`, and `begin_request_run` and `finish_request_run`. Store and recovery tests.
 3. `program/band.py`. `checkout_holds` in `hold.py`. `ProgramReadiness` through predecessors, governance, `build_view` and the sort key. Lifecycle, intent and dispatch tests, plus the no-program regression test.
 4. `RequestSettings` and probe wiring. Config and start-up tests.
