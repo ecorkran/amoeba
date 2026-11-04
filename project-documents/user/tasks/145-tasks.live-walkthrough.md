@@ -182,7 +182,7 @@ Per the LLD, D1, D2, D7 and Functional Requirements "Case 1". Start Amoeba with 
 
 Per the LLD, D3 and "Case 2". Drive slice 101 only after slice 100 is `done`.
 
-- [ ] **7.1 Drive slice 101 and record the outcome**
+- [x] **7.1 Drive slice 101 and record the outcome**
   - Prerequisite: task 6.1 complete.
   - [x] Check the record is `declined` with no resume from the answerer. Accepted by the PM (20261103): either decline path meets the case, the answer step's decline or the reserved-term screen's, and the answer prompt stays as it is (#23).
   - [x] Resolve as the PM: `submit resolution --decision resume --instructions "<the answer from the doc>"`. Check the run completes and the record becomes `answered` by the PM.
