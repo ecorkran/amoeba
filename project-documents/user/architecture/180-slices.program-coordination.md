@@ -46,7 +46,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    **Risk Level:** Medium. It depends on an agent editing a shared plan file correctly and on a pipeline shape Amoeba has not used.
    **Relative Effort:** 3
 
-2. [ ] **(181) Program Record** — Programs exist. A program store in its own subdirectory of the supervisor directory holds programs, members and consumption modes (declared per member, with per-pair overrides). A program inbox applies program and member registration, with body shapes in `docs/inbox-contract.md`. Each member's project config gains the index of its requests initiative, with no default. The program record names the concept document's member and path. 100's locality rule and its proof are updated to say what lives in the program store, what may not, and that a project's tick may open other members' stores read-only. The program stage is added to the Runner's tick after intents and resolutions and before readiness; in this slice it only reads members and reports those that cannot be read (unlinked, missing store, link snapshot or checkout) as blocked reasons. `amoeba inspect program` lists a program's members and its blocked list: each member's blocked nodes plus unreadable members.
+2. [ ] **(181) Program Record** — Programs exist. A program store in its own subdirectory of the supervisor directory holds programs, members and consumption modes (declared per member, with per-pair overrides). A program inbox applies program and member registration, with body shapes in `docs/inbox-contract.md`. Each member's registration names the index of its requests initiative, with no default. The program record names the concept document's member and path. 100's locality rule and its proof are updated to say what lives in the program store, what may not, and that a project's tick may open other members' stores read-only. The program stage is added to the Runner's tick after intents and resolutions and before readiness; in this slice it only finds the project's program and its members; the program blocked list reports members that cannot be read (unlinked, missing store, link snapshot or checkout) as blocked reasons. `amoeba inspect program` lists a program's members and its blocked list: each member's blocked nodes plus unreadable members.
    **Value:** Architectural enablement, and a visible change for the PM: a program's projects and everything blocked in them read as one list.
    **Success Criteria:**
    - Registering a program and its members through the program inbox writes the program store; a malformed body is rejected with a reason, as the project inbox does.
@@ -56,9 +56,9 @@ Slice numbers are execution order. Following the slice-planning guide, the first
    - A failure of the program store itself exits the process as a store failure.
    - A tick with no program store behaves exactly as after 140.
    **Dependencies:** None beyond 140.
-   **Interfaces:** Adds the program store and its migrations (`docs/store-contract.md`), the program inbox path and bodies (`docs/inbox-contract.md`), the program stage's place in the tick (`docs/process-contract.md`), and the requests initiative index to project config. Consumed by every later slice.
+   **Interfaces:** Adds the program store and its migrations (`docs/store-contract.md`), the program inbox path and bodies (`docs/inbox-contract.md`), the program stage's place in the tick (`docs/process-contract.md`), and the requests initiative index to the member registration. Consumed by every later slice.
    **Risk Level:** Medium. It changes 100's locality rule and the tick order.
-   **Relative Effort:** 3
+   **Relative Effort:** 4
 
 ## Feature Slices
 
@@ -148,7 +148,7 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 - **Behavior between slices.** After 181 a PM sees programs and one blocked list; nothing runs differently. 182 adds concept passages to members' answers. 183 and 184 change nothing in a live project, because nothing creates an edge or a request yet. 185 turns coordination on.
 - **Changes to 120- and 132-owned code.** Readiness takes external predecessors (183); the `done` transaction records the branch head (183); governance, dispatch order, the checkout hold and readiness in the requests initiative change for request runs (184). Each is a contract change in 120's documents.
 - **Changes to 140-owned code.** Source assembly (182); the question record, gate, reply contract and stranded sweep (185).
-- **Configuration lands where it is first read.** 181 adds the requests initiative index, 184 the slice-writing pipeline's models and cost cap, 185 the request limit. None has a default.
+- **Configuration lands where it is first read.** 181 adds the requests initiative index to the member registration (slice 181, D4), 184 the slice-writing pipeline's models and cost cap, 185 the request limit. None has a default.
 - **The program blocked list grows by slice.** 181 lists members' blocked nodes and unreadable members, 183 adds edges, 184 request runs and checkout waits, 185 askers waiting on requests.
 - **Deferred.** Everything under the architecture's "Deferred until use shows the need" stays out of this plan.
 
@@ -157,3 +157,4 @@ Slice numbers are execution order. Following the slice-planning guide, the first
 Living backlog; entries may be added during slice design, task breakdown, or implementation.
 
 1. [ ] **Separate request checkouts** — If requests often wait on held checkouts or PM merges, or reverse requests are often refused, give request runs their own checkout. Dependencies: [184]. Effort: 3/5
+2. [ ] **Member and program removal** — Remove a member from a program, remove a program, or move a project between programs, with rules for its open edges and requests. Until then a wrong registration is corrected by re-registering (181, D10). Dependencies: [183, 184]. Effort: 2/5
