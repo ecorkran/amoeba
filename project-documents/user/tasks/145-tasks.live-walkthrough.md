@@ -51,7 +51,7 @@ revision_number: 2
 
 **Commit cadence:** commit only at the `**Commit**:` markers. Run `uv run ruff format .` before each commit, and `uv run ruff check .` and `uv run pyright` before markers that follow Python changes.
 
-**D7 recovery applies to every live case task:** fixture cause, product cause, model judgement and environment (LLD D7). Each case runs once; a rerun uses a fresh slice index added to the scratch plan and committed on `main`; both runs are recorded; a product defect is filed as an issue and the case is marked `BLOCKED:` on it. Any slice entry added or corrected in the scratch checkout (a fresh rerun index, or a fixed forcing sentence) is also made in the repository tree `scripts/answerer_walkthrough/project/`, so a later walkthrough starts from the same plan; re-run `test_walkthrough_fixture.py` after the change. These tree changes ride in the task 11 commit.
+**D7 recovery applies to every live case task:** fixture cause, product cause, model judgement and environment (LLD D7). Each case runs once; a rerun uses a fresh slice index added to the scratch plan and committed on `main`; both runs are recorded; an actual product defect (broken, or high severity and reasonably likely) is filed as an issue and the case is marked `BLOCKED:` on it, while a safe outcome that fails to show the case is recorded in the Result and does not block. Any slice entry added or corrected in the scratch checkout (a fresh rerun index, or a fixed forcing sentence) is also made in the repository tree `scripts/answerer_walkthrough/project/`, so a later walkthrough starts from the same plan; re-run `test_walkthrough_fixture.py` after the change. These tree changes ride in the task 11 commit.
 
 **Live-result notes:** each live task writes what was observed (record fields, journal entries, outcome, run ids) in a "Result" sub-item under that task. Write only what was seen.
 
@@ -184,10 +184,9 @@ Per the LLD, D3 and "Case 2". Drive slice 101 only after slice 100 is `done`.
 
 - [ ] **7.1 Drive slice 101 and record the outcome**
   - Prerequisite: task 6.1 complete.
-  - [ ] Check the record is `declined`, `decline_reason reserved_term`, `reserved_term merge`, with no resume from the answerer.
+  - [x] Check the record is `declined` with no resume from the answerer. Accepted by the PM (20261103): either decline path meets the case, the answer step's decline or the reserved-term screen's, and the answer prompt stays as it is (#23).
   - [x] Resolve as the PM: `submit resolution --decision resume --instructions "<the answer from the doc>"`. Check the run completes and the record becomes `answered` by the PM.
   - [x] If the check step declined first (`check_said_no`), apply D7 "Model judgement": record the `decline_detail`, rerun once on a fresh slice index (add an entry to the scratch plan, copying 101's forcing sentence, and commit it).
-  - BLOCKED: slice 101 and its rerun slice 106 were both declined by the answer step (outcome answerer_declined), not by the reserved-term screen, because answering.yaml tells the answer step to decline merge authorizations; ecorkran/amoeba#23.
   - Result: slice 101 (run amoeba-20261103T193053Z-0793b29b8984): declined answerer_declined, detail "answering yes would authorize a merge to main, which requires declining regardless of what the passages say". PM resume answered; record answered by pm; run completed, slice done. Rerun on slice 106 (fresh index after 105, since a slice is ready only when the next-lower index is done): same outcome; its review loop paused once (loop_exhausted, no verdict), resumed, done. Issue #23.
 
 ---
@@ -203,7 +202,7 @@ Per the LLD, "Case 3". Slices 102 then 103, in order, each only after the previo
 - [x] **8.2 Slice 103: the reworded question is answered by the answerer**
   - Prerequisite: task 8.1 complete.
   - [x] Check the record is `answered` by the answerer, citing the PM passage from slice 102; run completes.
-  - [x] A decline (`check_said_no` or `answerer_declined`) follows D7 "Model judgement": record `decline_detail`, rerun once on a fresh index; a second miss is filed as an issue against 140's prompts and the case is marked `BLOCKED:` on it.
+  - [x] A decline (`check_said_no` or `answerer_declined`) follows D7 "Model judgement": record `decline_detail`, rerun once on a fresh index; a second miss is recorded in the Result and the case is closed as shown in part, with no issue and no `BLOCKED:`.
   - [x] Result: slice 103 (run amoeba-20261103T202608Z-6bfb27f0be89), asked in other words: answered by the answerer, check_verdict yes, cited P20, the PM passage from slice 102 (answering run amoeba-20261103T202643Z-11c20da9033f); run completed; done.
 
 ---
@@ -221,10 +220,10 @@ Per the LLD, D4 and "Case 4". The rule commit comes before slice 104 is driven.
   - [x] Drive slice 104. The first question (storage format) is answered by the answerer and uses the one answer. Check the second (license header) is declined `answer_limit_reached`, or declined by the answering run, then resolve as the PM with the answer text from the doc.
   - [x] Wait until the design run and the answering run have finished before answering, so the PM answer's date is later than the rule's.
   - [x] Result: slice 104 asked no question (the concept and rules in its prompt answered both) so it was rerun. Slice 107 (stronger wording) failed differently: its first question was declined answerer_declined because the plan passage said documents do not count; the second was answered by the answerer from the rule. Slice 109 (original wording) worked: first question answered by the answerer, second declined answer_limit_reached (check yes), PM answered "Every new source file starts with the MIT license header; this replaces the rules file for this project." after the rule commit. The resumed agent then re-asked the storage question; declined answer_limit_reached; PM answered; done. (Runs amoeba-20261103T214637Z-7a0e1326ee15 for 107, amoeba-20261103T222124Z-942031d3a26c for 109.)
-- [ ] **9.3 Slice 105: the PM answer wins**
-  - BLOCKED: slice 110 wrote its design without asking (the agent found the MIT answer in slice 109 design), so the answerer never answered from the PM passage; ecorkran/amoeba#24.
-  - [ ] Check the record is `answered` by the answerer, citing slice 104's PM passage; `passage_index` lists the rule's date before the PM answer's; run completes.
-  - [ ] Result: slice 110 done with no question; the rule-versus-PM-answer ordering was not shown live. Issue #24.
+- [x] **9.3 Slice 105: the PM answer wins**
+  - Accepted by the PM (20261103): case 4 stands as half shown. Slice 110 wrote its design without asking (the agent found the MIT answer in slice 109 design), so the answerer never answered from the PM passage (#24).
+  - [x] Run completes. The check that the record is `answered` by the answerer, citing slice 104's PM passage, with `passage_index` listing the rule's date before the PM answer's, was not met live and is waived by the PM.
+  - [x] Result: slice 110 done with no question; the rule-versus-PM-answer ordering was not shown live. Issue #24.
 
 ---
 
