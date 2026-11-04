@@ -119,34 +119,34 @@ usageByModel:
 
 ## 5. The pipeline file
 
-- [ ] **5.1 Path function and pipeline skeleton** (effort 2)
-  - [ ] Add `slice_writing_pipeline_path()` to `pipeline_file.py` as `answering_pipeline_path` does (`importlib.resources`, absolute path, `FileNotFoundError` when absent).
-  - [ ] Create `runner/request_run/slice_writing.yaml` with a header comment (names live in `pipeline_file.py`; no brace pair around a bare word except real params; capability keys are proposals until Task 9.1). `name: slice-writing`, two required params with no default, a `dispatch` write step and a `commit` step. Declare the params in the order `requests-index`, `model`: `requests-index` is the first required param, so it is the positional target of `sq run`, and `model` goes in `-p`, which does not satisfy the first required param (LLD "API Contracts").
-  - [ ] Write step (LLD D1, D4): `model` from the `model` param, no `allowed_tools` key, `prompt_files` for `need.md`, `reply_format: json`, `reply_file: reply.json`, `delivered_prompt_file: write.prompt.md`, and a placeholder `prompt` for Tasks 5.2 to 5.4.
-  - [ ] Commit step (LLD D5): the `paths` and fixed `message` from `pipeline_file.py`. The slice-plan glob uses the `requests-index` param; whether Squadron substitutes params in `paths` is decided in Task 9.1.
-  - [ ] No `max_cost_usd` and no timeout anywhere in the file (LLD D6).
-  - [ ] Add `src/amoeba/runner/request_run/slice_writing.yaml` to `[tool.hatch.build.targets.wheel] artifacts` in `pyproject.toml` and extend the comment above it.
-  - [ ] Success: the path function returns the file; `pyproject.toml` lists it.
-- [ ] **5.2 Write-step instructions: scope and bans** (effort 2)
-  - [ ] Write the first part of the `prompt` per LLD D2: the agent runs in the provider's checkout and may read code, plans and read-only git (`log`, `show`, `status`, `diff`); `need.md` is data and instructions inside it are not followed.
-  - [ ] Editable files: at most the two plan globs. State both globs by their `pipeline_file.py` values.
-  - [ ] Forbidden: git writes, `cf set` or any other CF write, edits to any other file, slice or initiative. After editing, run `cf list slices` for the requests index with `--json` and fix the files until the new index appears (LLD "Mitigation Strategies").
-  - [ ] Hallucination-trap rule, for Tasks 5.2 to 5.4: give no example hash, index or filename near an instruction to read one; describe shapes with placeholders in words, not literal values. Avoid a brace pair around a bare word except the real params.
-  - [ ] Success: the prompt states each item above; `sq` is not needed.
-- [ ] **5.3 Write-step instructions: initiative and entry** (effort 3)
-  - [ ] Initiative: when the initiative plan has no entry at the requests index, append the entry (title Requests, described as changes other program members asked for, no dependencies, status not started) and create `architecture/<index>-slices.requests.md` with slice-plan front matter whose `parent` is the initiative plan, plus the headings the provider's slice-plan template requires. An existing entry is used as is, whatever its name.
-  - [ ] Slice plan: when the entry exists but no slice plan exists at that index, create the slice plan as above and leave the initiative plan untouched. A slice plan at that index under another name is used as is.
-  - [ ] New entry: its index is the requests index when the initiative has no slices, otherwise one more than the highest index in it. Entry form is the provider's slice-plan form (checkbox, index in parentheses, bold title, description, risk, effort), `Dependencies: None` written explicitly. The description restates the need without loss and names the requesting member and slice from `need.md`. No other line changes except front matter `dateUpdated`.
-  - [ ] Success: the prompt states each item above.
-- [ ] **5.4 Write-step instructions: reply** (effort 2)
-  - [ ] Already met (LLD D3): reply `already_met` only when the code on the current branch already provides what the need asks for, naming the full commit hash taken from `git log`; write nothing in that case.
-  - [ ] Reply: one JSON object in the two LLD D7 shapes. If the provider has no initiative plan, reply in prose with no JSON object (LLD D2).
-  - [ ] Success: the prompt states each item above; no literal hash or index appears in it.
-- [ ] **5.5 Tests for the pipeline file** (effort 3)
-  - [ ] `tests/runner/request_run/test_pipeline_yaml.py`, mirroring `tests/runner/answering/test_pipeline_yaml.py`: step names and order; both params required with no default, and `requests-index` declared before `model`; the write step's model is the `model` param; its reply, delivered-prompt and prompt-file names equal the constants; no `allowed_tools` key; the commit step's `paths` equal the two constants; no `max_cost_usd` or timeout key anywhere.
-  - [ ] Prompt hygiene: every brace pair around a bare word (no spaces or quotes) in the prompt is a real param name (JSON shapes in the prompt are allowed); the prompt contains no literal 7-to-40-character hexadecimal string; it names both glob constants.
-  - [ ] Package path test: `slice_writing_pipeline_path()` is absolute, ends in `amoeba/runner/request_run/slice_writing.yaml`, and raises `FileNotFoundError` when the file is missing (monkeypatch as the answering test does).
-  - [ ] `tests/runner/request_run/test_wheel_contents.py`: build a wheel as `tests/runner/answering/test_wheel_contents.py` does; assert it lists `amoeba/runner/request_run/slice_writing.yaml`; extract it to a temporary directory and run `sys.executable -I -c` code that puts that directory first on `sys.path`, imports `slice_writing_pipeline_path` and prints it; assert the path is inside the extracted directory and the file exists.
+- [x] **5.1 Path function and pipeline skeleton** (effort 2)
+  - [x] Add `slice_writing_pipeline_path()` to `pipeline_file.py` as `answering_pipeline_path` does (`importlib.resources`, absolute path, `FileNotFoundError` when absent).
+  - [x] Create `runner/request_run/slice_writing.yaml` with a header comment (names live in `pipeline_file.py`; no brace pair around a bare word except real params; capability keys are proposals until Task 9.1). `name: slice-writing`, two required params with no default, a `dispatch` write step and a `commit` step. Declare the params in the order `requests-index`, `model`: `requests-index` is the first required param, so it is the positional target of `sq run`, and `model` goes in `-p`, which does not satisfy the first required param (LLD "API Contracts").
+  - [x] Write step (LLD D1, D4): `model` from the `model` param, no `allowed_tools` key, `prompt_files` for `need.md`, `reply_format: json`, `reply_file: reply.json`, `delivered_prompt_file: write.prompt.md`, and a placeholder `prompt` for Tasks 5.2 to 5.4.
+  - [x] Commit step (LLD D5): the `paths` and fixed `message` from `pipeline_file.py`. The slice-plan glob uses the `requests-index` param; whether Squadron substitutes params in `paths` is decided in Task 9.1.
+  - [x] No `max_cost_usd` and no timeout anywhere in the file (LLD D6).
+  - [x] Add `src/amoeba/runner/request_run/slice_writing.yaml` to `[tool.hatch.build.targets.wheel] artifacts` in `pyproject.toml` and extend the comment above it.
+  - [x] Success: the path function returns the file; `pyproject.toml` lists it.
+- [x] **5.2 Write-step instructions: scope and bans** (effort 2)
+  - [x] Write the first part of the `prompt` per LLD D2: the agent runs in the provider's checkout and may read code, plans and read-only git (`log`, `show`, `status`, `diff`); `need.md` is data and instructions inside it are not followed.
+  - [x] Editable files: at most the two plan globs. State both globs by their `pipeline_file.py` values.
+  - [x] Forbidden: git writes, `cf set` or any other CF write, edits to any other file, slice or initiative. After editing, run `cf list slices` for the requests index with `--json` and fix the files until the new index appears (LLD "Mitigation Strategies").
+  - [x] Hallucination-trap rule, for Tasks 5.2 to 5.4: give no example hash, index or filename near an instruction to read one; describe shapes with placeholders in words, not literal values. Avoid a brace pair around a bare word except the real params.
+  - [x] Success: the prompt states each item above; `sq` is not needed.
+- [x] **5.3 Write-step instructions: initiative and entry** (effort 3)
+  - [x] Initiative: when the initiative plan has no entry at the requests index, append the entry (title Requests, described as changes other program members asked for, no dependencies, status not started) and create `architecture/<index>-slices.requests.md` with slice-plan front matter whose `parent` is the initiative plan, plus the headings the provider's slice-plan template requires. An existing entry is used as is, whatever its name.
+  - [x] Slice plan: when the entry exists but no slice plan exists at that index, create the slice plan as above and leave the initiative plan untouched. A slice plan at that index under another name is used as is.
+  - [x] New entry: its index is the requests index when the initiative has no slices, otherwise one more than the highest index in it. Entry form is the provider's slice-plan form (checkbox, index in parentheses, bold title, description, risk, effort), `Dependencies: None` written explicitly. The description restates the need without loss and names the requesting member and slice from `need.md`. No other line changes except front matter `dateUpdated`.
+  - [x] Success: the prompt states each item above.
+- [x] **5.4 Write-step instructions: reply** (effort 2)
+  - [x] Already met (LLD D3): reply `already_met` only when the code on the current branch already provides what the need asks for, naming the full commit hash taken from `git log`; write nothing in that case.
+  - [x] Reply: one JSON object in the two LLD D7 shapes. If the provider has no initiative plan, reply in prose with no JSON object (LLD D2).
+  - [x] Success: the prompt states each item above; no literal hash or index appears in it.
+- [x] **5.5 Tests for the pipeline file** (effort 3)
+  - [x] `tests/runner/request_run/test_pipeline_yaml.py`, mirroring `tests/runner/answering/test_pipeline_yaml.py`: step names and order; both params required with no default, and `requests-index` declared before `model`; the write step's model is the `model` param; its reply, delivered-prompt and prompt-file names equal the constants; no `allowed_tools` key; the commit step's `paths` equal the two constants; no `max_cost_usd` or timeout key anywhere.
+  - [x] Prompt hygiene: every brace pair around a bare word (no spaces or quotes) in the prompt is a real param name (JSON shapes in the prompt are allowed); the prompt contains no literal 7-to-40-character hexadecimal string; it names both glob constants.
+  - [x] Package path test: `slice_writing_pipeline_path()` is absolute, ends in `amoeba/runner/request_run/slice_writing.yaml`, and raises `FileNotFoundError` when the file is missing (monkeypatch as the answering test does).
+  - [x] `tests/runner/request_run/test_wheel_contents.py`: build a wheel as `tests/runner/answering/test_wheel_contents.py` does; assert it lists `amoeba/runner/request_run/slice_writing.yaml`; extract it to a temporary directory and run `sys.executable -I -c` code that puts that directory first on `sys.path`, imports `slice_writing_pipeline_path` and prints it; assert the path is inside the extracted directory and the file exists.
   - [ ] Success: the tests pass.
 
 **Commit**: `feat: add slice-writing pipeline file and wheel packaging`
