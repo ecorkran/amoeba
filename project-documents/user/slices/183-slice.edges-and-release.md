@@ -156,7 +156,7 @@ A crash after step 1 repeats nothing: satisfied edges are not observed again. A 
 
 ### State Management
 
-- **Program store** (written only by the resident process). An edge row has exactly two writers, on disjoint columns. The asker's tick owns everything except `release_confirmed_at`: state, wait reason, satisfied fields and release. `ProgramInboxTenant` writes only `release_confirmed_at`, and the stage only reads it. `docs/store-contract.md` states this split. 184 and 185 write edges through the asker's tick or the program inbox apply, and add no third writer.
+- **Program store** (written only by the resident process). An edge row has exactly two writers, on disjoint columns. The asker's tick owns everything except `release_confirmed_at`: state, wait reason, satisfied fields and release. `ProgramInboxTenant` writes only `release_confirmed_at`, and the stage only reads it. `docs/store-contract.md` states this split. 185 writes edges through the asker's tick. 184 adds one column-disjoint writer: the provider's tick sets `provider_node_id` or `provider_commit` once on an unbound edge, by compare-and-set (184, D10).
 - **Provider's project store.** `slice_heads`, written by the provider's tick. Waiting projects read it read-only (181's locality rule).
 - **Asker's project store.** The release resolution and the settled question record, through the same slot and submission path the answerer uses.
 - **Wait reasons are stored**, unlike 181's member readability, because they come from git and `cf` reads that inspection may not make (inspection does no subprocess and does not import the Runner). Each row carries `evaluated_at`, and `program-blocked` shows it in the reason, so a stale reason, for example while the process is stopped, reads as stale.
@@ -286,7 +286,7 @@ Status: decided
 ### D13 — Listings
 Status: decided
 
-- `program-blocked` gains one row per edge in state `open` or `satisfied`: `program_id`, `project_id` (waiting), `node_id`, `title`, `blocked_on` = `edge`, `reason` = `"<wait>: <detail>"` (or `satisfied: awaiting release` for a satisfied edge), `blocked_state_id` = the question block, and the remaining columns empty. A satisfied edge whose release is pending is listed so that a release that fails to land is visible.
+- `program-blocked` gains one row per edge in state `open` or `satisfied`: `program_id`, `project_id` (waiting), `node_id`, `title`, `blocked_on` = `edge`, `reason` = `"<wait>: <detail>"` (or `satisfied: awaiting release` for a satisfied edge), `blocked_state_id` = the question block, `context` = the edge id (what `resolve-edge` names; 186, D9), and the remaining columns empty. A satisfied edge whose release is pending is listed so that a release that fails to land is visible.
 - The reason ends with ` (evaluated <evaluated_at>)`, so a stale reason reads as stale.
 - No listing of closed edges: nothing in 183's plan needs one (GitHub issue #28).
 - With no program store, no edge rows are listed, as in 181.

@@ -350,7 +350,7 @@ CREATE TABLE program_submissions (
 
 ### Provides to Other Slices
 
-- **182:** `ProgramStore.program_of(project_id)` and the concept location; `members(program_id)` for the member list in passages.
+- **182:** `ProgramStore.program_of(project_id)` and the concept location; `members(program_id)` for the member list in passages; `updated_at` on `Program` and `Member` (the schema's columns) to date the member list; `read_member`, whose `Readable` result keeps the resolved `Checkout` and the CF project id of the member's one link, so 182 reads the concept from the concept member's checkout (182, D3).
 - **183:** the program store and its migration line (edges are migration 002); the program inbox and its drain (the edge resolution is a third `ProgramSubmissionKind`); the stored modes and overrides; the program stage, whose `Program` result 183 grows into the view it hands to readiness; `read_member` to add member state to it; the `program-blocked` listing to add edge rows to.
 - **184:** each member's `requests_initiative`; the checkout readability check; the program store for request rows.
 - **185:** `program_of` to know whether a project can request at all.
