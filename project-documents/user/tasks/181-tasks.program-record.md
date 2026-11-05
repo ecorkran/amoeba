@@ -280,22 +280,24 @@ Note: no existing test asserted the inbox listing's full column tuple; the exist
 
 **Commit**: `test: extend the locality proof and the writer guard to the program store`
 
-- [ ] **8.3 `docs/store-contract.md`** (effort 2)
-  - [ ] "Store locality" per LLD D9; a new section "The program store" (the `ProgramStore` methods, the schema line starting at 1, creation on first submission, read-only access, failure modes); the migrations section notes the second line and the parameterized runner.
-  - [ ] Success: each LLD "API Contracts" method appears; no claim contradicts the code.
-- [ ] **8.4 `docs/inbox-contract.md`** (effort 2)
-  - [ ] New section "Program submissions": the root and layout, the envelope (no project id), the two bodies and their field rules, the rejection codes (with `member_referenced` marked reserved), quarantine reasons, how to read an outcome; the inspection listings, including the `queue` column.
-  - [ ] Success: the field table matches `inbox/program_envelope.py`.
-- [ ] **8.5 `docs/process-contract.md`** (effort 2)
-  - [ ] "The supervisor directory" table gains `programs/`; the tenants list gains the program inbox tenant after the inbox; the Runner tick gains the program stage between resolutions and Observe, with its failure rule (a program store failure exits the process, so it stops projects in no program too); "The writer model" says the program store has the same single writer; inspection lists the three listings.
-  - [ ] Success: the stage's place matches `ProjectTick.run`.
+- [x] **8.3 `docs/store-contract.md`** (effort 2)
+  - [x] "Store locality" per LLD D9; a new section "The program store" (the `ProgramStore` methods, the schema line starting at 1, creation on first submission, read-only access, failure modes); the migrations section notes the second line and the parameterized runner.
+  - [x] Success: each LLD "API Contracts" method appears; no claim contradicts the code.
+- [x] **8.4 `docs/inbox-contract.md`** (effort 2)
+  - [x] New section "Program submissions": the root and layout, the envelope (no project id), the two bodies and their field rules, the rejection codes (with `member_referenced` marked reserved), quarantine reasons, how to read an outcome; the inspection listings, including the `queue` column.
+  - [x] Success: the field table matches `inbox/program_envelope.py`.
+- [x] **8.5 `docs/process-contract.md`** (effort 2)
+  - [x] "The supervisor directory" table gains `programs/`; the tenants list gains the program inbox tenant after the inbox; the Runner tick gains the program stage between resolutions and Observe, with its failure rule (a program store failure exits the process, so it stops projects in no program too); "The writer model" says the program store has the same single writer; inspection lists the three listings.
+  - [x] Success: the stage's place matches `ProjectTick.run`.
 
 ## 9. Final validation
 
 - [ ] **9.1 Full checks** (effort 1)
-  - [ ] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest` (the bare run, which excludes the live and load tiers).
+  - [x] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and `uv run pytest` (the bare run, which excludes the live and load tiers).
   - [ ] Run the load tests that cover the changed paths, by explicit path because the bare run ignores `tests/load`: `uv run pytest tests/load/test_runner_tick_load.py tests/load/test_inbox_concurrent.py tests/load/test_program_load.py`. The two existing files' asserted bounds must hold without edits.
   - [ ] Success: all pass, with no existing test skipped, weakened or edited to pass, apart from the moves and edits Tasks 1.4, 1.5, 3.4, 4.4, 7.4, 7.5, 8.1 and 8.2 name. Tests added to existing files by other tasks are not edits. If a check fails, fix its cause and re-run.
+
+Note: tests/load/test_runner_tick_load.py and test_program_load.py pass without edits. tests/load/test_inbox_concurrent.py fails identically on main with no slice code ('creation never applied': start-up now takes about 0.6 s, longer than the test's 0.15 to 0.4 s kill window); filed as ecorkran/amoeba#32. The second and Success items stay unchecked until that test passes.
 
 **Commit**: `docs: document the program store, program inbox and program stage`
 

@@ -71,6 +71,7 @@ The directory holds:
 | `amoeba.pid` | JSON: pid, started-at, version. **Informational only.** |
 | `launch-logs/` | One stdout and one stderr log per launched `sq_run` entry, named `<entry id>.stdout.log` and `<entry id>.stderr.log`, written by the Runner's detached launch. Created at start; never deleted by Amoeba. They may hold whatever Squadron prints. *(Slice 122.)* |
 | `inbox/` | Submissions from outside the process: `tmp/`, `new/`, `quarantine/`, `failed/`. See [`inbox-contract.md`](inbox-contract.md). *(Slice 103.)* |
+| `programs/` | The program record. `programs.sqlite3` is the program store, created atomically on the first program submission (absent until then); `inbox/{tmp,new,quarantine,failed}/` holds program submissions, with the same layout as `inbox/`. See [`store-contract.md`](store-contract.md), "The program store", and [`inbox-contract.md`](inbox-contract.md), "Program submissions". A subdirectory, so project discovery never mistakes the store for a project. *(Slice 181.)* |
 | `amoeba ingest review --project ID --node NODE_ID --by NAME (--artifact PATH \| --stdout-json PATH) [--upstream-version LABEL] [--id ID]` | Read a Squadron review file, or the captured stdout of `sq review … --output json`, and submit it as a `verdict`. Prints the submission id on stdout and the node, parsed slice (`-` if none), and review type on stderr. Submits and does not wait: read the outcome with `inspect submissions` and `inspect inbox`. Refuses a project with no store file (`SUBMISSION_REFUSED`, nothing written) and opens no store. Works whether or not the process runs. See [`evidence-contract.md`](evidence-contract.md), "Parsing Squadron output". *(Slice 105.)* |
 
 **The lock is the truth; the PID file is a convenience.** The kernel releases an
@@ -135,8 +136,8 @@ defence, `amoeba start` sends its log through `BoundedStreamHandler`
 (`process/log_limit.py`): after 256 MiB in one process lifetime it writes one notice
 line and drops the rest until restart.
 
-**`amoeba start` registers four tenants, in this order** (the first three are
-`standard_tenants` in `process/tenants.py`; the fourth is `runner_tenant` in
+**`amoeba start` registers five tenants, in this order** (the first four are
+`standard_tenants` in `process/tenants.py`; the fifth is `runner_tenant` in
 `amoeba.runner`):
 
 1. `InboxTenant` (slice 103). It drains the inbox — see
@@ -144,10 +145,18 @@ line and drops the rest until restart.
    per tick, checking `stop_requested` between files. Registered first so a
    backlog that accumulated while the process was down — `watch_reviews`
    submissions included — drains ahead of any later tenant's work.
-2. `ReviewDetectionTenant` (slice 106). See "Review detection" below.
-3. `CFWatchTenant` (slice 108). See "Context Forge watch" below. After the inbox,
+2. `ProgramInboxTenant` (slice 181). It drains `programs/inbox/new/` into the
+   program store through the same file lifecycle as the inbox
+   (`process/inbox_drain.py`), sharing `inbox_batch_size` and
+   `inbox_max_attempts`. A program submission is attributed to no project. It
+   creates the program store atomically on first use; a store failure is counted
+   and stops the process below the attempt limit, exactly as for a project
+   submission. See [`inbox-contract.md`](inbox-contract.md), "Program
+   submissions".
+3. `ReviewDetectionTenant` (slice 106). See "Review detection" below.
+4. `CFWatchTenant` (slice 108). See "Context Forge watch" below. After the inbox,
    so a `link_cf_project` submission is applied before the tenant looks.
-4. `RunnerTenant` (slice 122). Observes the project's in-flight `sq_run` entries,
+5. `RunnerTenant` (slice 122). Observes the project's in-flight `sq_run` entries,
    records the finished ones, and launches what its planners ask for. It is the
    only tenant that starts a subprocess in a tick. See "The Runner tenant" below.
 
@@ -158,6 +167,8 @@ What a tenant may use on `host`:
 | `store_for(project_id)` | The open read-write store for a project. |
 | `project_ids` | Every project this process has open. **Grows at runtime** — see below. |
 | `open_project(project_id)` | Create-or-open a project's store read-write and add it to the open set. Idempotent. `project_ids` reflects it at once. Raises on an unsafe project id (before any path is computed) or a store that cannot be opened. *(Slice 103.)* |
+| `program_store` | The open program store, or `None` until one exists. **Read it every time**: it appears at runtime when the first program submission is applied. *(Slice 181.)* |
+| `ensure_program_store()` | The program store, created atomically on first use if absent. Raises if it cannot be created or opened. *(Slice 181.)* |
 | `stop_requested` | Whether shutdown has been requested. **Poll this.** |
 | `request_stop()` | Ask the loop to stop. |
 | `settings` | The `ProcessSettings` this process was built with. |
@@ -337,8 +348,8 @@ P` show the links and the recorded snapshots.
 
 *Slice 122.* `RunnerTenant` (`amoeba.runner`, imported only by `amoeba.cli`) is
 composed by `amoeba start` after the shipped tenants. Each tick, for every
-project, it runs: **apply** the PM's intents and **answer** its resolutions,
-**observe** the unresolved `sq_run` entries, **record** each finished run (the
+project, it runs: **apply** the PM's intents and **answer** its resolutions, run
+the **program stage** (below), **observe** the unresolved `sq_run` entries, **record** each finished run (the
 [outcome map](#the-outcome-map) decides its effect), build the view, **check** each
 launch candidate's checkout, **decide** (pure: a `Planner` sees a frozen
 `ProjectView` and returns actions), **act** (journal a command, then launch it), and
@@ -388,6 +399,36 @@ between phases, the reviews and the merge.
   which recovery marks `not_applied` once the launch grace period has passed. The
   step is then reissued (slice 125, issue #9): see
   [Dispatch and ingestion](#dispatch-and-ingestion).
+
+### The program stage
+
+*Slice 181.* `ProjectTick.run` calls `ProgramStage.run(project_id)`
+(`runner/program/stage.py`) directly after the resolutions are answered and
+before Observe, so a PM resolution is acknowledged before any later program-stage
+rule can read the block.
+
+In this slice the stage is **read-only**: one `program_of` read of the program
+store finds the project's program, or `None`. It opens no member store, writes
+nothing, issues nothing and does not change `tick.wrote`; the tick does not keep
+the result. Nothing runs differently: a project in no program, and a supervisor
+with no program store, tick exactly as before. The host's `program_store` is read
+every tick, because the store can appear at runtime.
+
+**Failure rule.** A `StoreError` from the **program store** propagates: it is in
+`STORE_FAILURES`, so the tenant re-raises it and the process exits as a store
+failure. Every project's tick reads the program store, so this stops projects in
+no program too; "exactly as before" holds only while the program store is
+healthy. Any other exception is a bug and reaches the tenant's one catch as a
+project-scoped `unexpected_fault`.
+
+**Member readability** (`amoeba.program.read_member`, used by inspection now and
+by the stage from a later slice). A member is *readable*, or *unreadable* with the
+first applicable reason: `store_missing`, `store_unreadable` (the read-only open
+or a read raised a `StoreError`), `unlinked` (no CF link, or more than one),
+`snapshot_missing` (the link has no `observed` snapshot) or `checkout_unresolved`
+(`resolve_checkout` at the member's requests initiative index names no
+checkout). It starts no subprocess and stores nothing. A member's store failing
+is that member's reason, never the process's.
 
 ### The plan read
 
@@ -1370,6 +1411,15 @@ names derive from the registry, never the reverse.
 A store at an unexpected schema version raises rather than being migrated, and
 inspecting a project with no store does not create one.
 
+*Slice 181* adds three supervisor-level listings over the program record:
+`program` (each member of every program, with its requests initiative, mode,
+overrides and state), `program-blocked` (every member's blocked nodes, plus a
+`member_unreadable` row for each member that cannot be read, so none is silently
+skipped) and `program-submissions`. They open the program store and each member's
+store read-only, so they work with the process stopped. With no program store
+they list nothing; a program store at the wrong schema version raises. The
+`inbox` listing also lists the program inbox, in a last `queue` column.
+
 ## The writer model
 
 Two parts, both mechanical:
@@ -1378,7 +1428,9 @@ Two parts, both mechanical:
    directory.
 2. **A guard test** (`tests/test_writer_guard.py`) walks the AST of every module
    under `src/amoeba/` and fails if any module other than
-   `process/project_stores.py` calls the read-write `Store.open`. *(Slice 103
+   `process/project_stores.py` calls the read-write `Store.open` or, since slice
+   181, `ProgramStore.open`: the program store has the same single writer.
+   *(Slice 103
    moved read-write opening there from `process/host.py`, which now delegates;
    the permitted set is still exactly one module.)*
 
