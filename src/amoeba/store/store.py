@@ -20,6 +20,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Self
 
+from amoeba.store import connection as connection_module
 from amoeba.store import paths, sql
 from amoeba.store.answer_submission import AnswerSubmissionOperations
 from amoeba.store.answering import AnsweringOperations
@@ -32,16 +33,7 @@ from amoeba.store.feed import FeedOperations
 from amoeba.store.inbox import InboxOperations
 from amoeba.store.journal import JournalOperations
 from amoeba.store.messages import MessageOperations
-from amoeba.store.migrations import (
-    EXPECTED_SCHEMA_VERSION,
-    migrate,
-    read_schema_version,
-)
-from amoeba.store.models import (
-    StoreCorruptError,
-    StorePermissionError,
-    StoreSchemaError,
-)
+from amoeba.store.migrations import EXPECTED_SCHEMA_VERSION, MIGRATIONS_PACKAGE
 from amoeba.store.nodes import NodeOperations
 from amoeba.store.project_escalations import ProjectEscalationOperations
 from amoeba.store.questions import QuestionOperations
@@ -144,18 +136,12 @@ class Store(
                 raise ValueError("open() requires either a path or a project_id")
             path = paths.store_path(project_id)
 
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        except OSError as error:
-            # Specific: an unwritable or unreachable parent. Typed so no caller
-            # mistakes it for a store that simply has no rows yet.
-            logger.exception("cannot create store directory %s", path.parent)
-            raise StorePermissionError(
-                f"cannot create store directory {path.parent}: {error}"
-            ) from error
-
-        connection = cls._connect(path, busy_timeout_seconds)
-        cls._migrate_or_close(connection)
+        connection = connection_module.open_read_write(
+            path,
+            package=MIGRATIONS_PACKAGE,
+            expected_version=EXPECTED_SCHEMA_VERSION,
+            busy_timeout_seconds=busy_timeout_seconds,
+        )
         return cls(connection, path, busy_timeout_seconds)
 
     @classmethod
@@ -204,59 +190,12 @@ class Store(
                 )
             path = paths.store_path(project_id)
 
-        # Checked before connecting: sqlite3 in mode=ro reports a missing file
-        # as an unhelpful "unable to open database file", and the caller needs
-        # to know the store does not exist rather than that it is unreadable.
-        if not path.exists():
-            raise StorePermissionError(f"no store exists at {path}")
-
-        connection = cls._connect_read_only(path, busy_timeout_seconds)
-        try:
-            version = read_schema_version(connection)
-            if version != EXPECTED_SCHEMA_VERSION:
-                raise StoreSchemaError(
-                    f"store at {path} is at schema version {version}, but this "
-                    f"code expects {EXPECTED_SCHEMA_VERSION}; a read-only open "
-                    "never migrates"
-                )
-        except Exception:
-            logger.exception("read-only open failed; closing the connection")
-            connection.close()
-            raise
-
+        connection = connection_module.open_read_only(
+            path,
+            expected_version=EXPECTED_SCHEMA_VERSION,
+            busy_timeout_seconds=busy_timeout_seconds,
+        )
         return cls(connection, path, busy_timeout_seconds)
-
-    @staticmethod
-    def _connect_read_only(
-        path: Path, busy_timeout_seconds: float
-    ) -> sqlite3.Connection:
-        """Connect via ``mode=ro`` and verify the file is readable.
-
-        WAL journal mode is deliberately not set here: that is a write, and a
-        WAL store is already readable through a read-only handle — the property
-        measured in ``tests/test_read_only_open.py``.
-        """
-        uri = f"file:{path}?mode=ro"
-        try:
-            connection = sqlite3.connect(
-                uri, uri=True, timeout=busy_timeout_seconds, isolation_level="DEFERRED"
-            )
-        except sqlite3.OperationalError as error:
-            # Specific: sqlite3 reports an unopenable path this way.
-            logger.exception("cannot open store read-only at %s", path)
-            raise StorePermissionError(
-                f"cannot open store read-only at {path}: {error}"
-            ) from error
-
-        try:
-            connection.execute(sql.PRAGMA_FOREIGN_KEYS_ON)
-        except sqlite3.DatabaseError as error:
-            connection.close()
-            # Specific: a non-SQLite or malformed file fails on first real use.
-            logger.exception("cannot read store at %s", path)
-            raise StoreCorruptError(f"cannot read store at {path}: {error}") from error
-
-        return connection
 
     @classmethod
     def open_temporary(cls) -> Self:
@@ -265,51 +204,13 @@ class Store(
         The store exists only for the lifetime of the connection and is never
         written to the central per-supervisor path.
         """
-        connection = cls._connect(IN_MEMORY_PATH)
-        cls._migrate_or_close(connection)
+        connection = connection_module.connect(IN_MEMORY_PATH)
+        connection_module.migrate_or_close(
+            connection,
+            package=MIGRATIONS_PACKAGE,
+            expected_version=EXPECTED_SCHEMA_VERSION,
+        )
         return cls(connection, IN_MEMORY_PATH)
-
-    @staticmethod
-    def _migrate_or_close(connection: sqlite3.Connection) -> None:
-        """Migrate a fresh connection, closing it if migration fails.
-
-        Shared by both constructors so they give the same failure guarantee:
-        a failed open never leaks a connection.
-        """
-        try:
-            migrate(connection)
-        except Exception:
-            logger.exception("migration failed; closing the connection")
-            connection.close()
-            raise
-
-    @staticmethod
-    def _connect(
-        path: Path, busy_timeout_seconds: float = sql.BUSY_TIMEOUT_SECONDS
-    ) -> sqlite3.Connection:
-        """Connect, set WAL and the busy timeout, and verify readability."""
-        try:
-            connection = sqlite3.connect(
-                path, timeout=busy_timeout_seconds, isolation_level="DEFERRED"
-            )
-        except sqlite3.OperationalError as error:
-            # Specific: sqlite3 reports an unopenable path this way. Typed so
-            # the resolved path reaches the caller in the message.
-            logger.exception("cannot open store at %s", path)
-            raise StorePermissionError(
-                f"cannot open store at {path}: {error}"
-            ) from error
-
-        try:
-            connection.execute(sql.PRAGMA_JOURNAL_MODE)
-            connection.execute(sql.PRAGMA_FOREIGN_KEYS_ON)
-        except sqlite3.DatabaseError as error:
-            connection.close()
-            # Specific: a non-SQLite or malformed file fails on first real use.
-            logger.exception("cannot configure store at %s", path)
-            raise StoreCorruptError(f"cannot read store at {path}: {error}") from error
-
-        return connection
 
     def close(self) -> None:
         """Close the underlying connection. Safe to call more than once."""

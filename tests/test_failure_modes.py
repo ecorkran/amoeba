@@ -281,11 +281,13 @@ def test_open_temporary_closes_the_connection_when_migration_fails(
         opened.append(connection)
         return connection
 
-    def _failing_migrate(connection: sqlite3.Connection) -> None:
+    def _failing_migrate(
+        connection: sqlite3.Connection, *, package: str, expected_version: int
+    ) -> int:
         raise StoreSchemaError("provoked migration failure")
 
-    monkeypatch.setattr(Store, "_connect", staticmethod(_tracking_connect))
-    monkeypatch.setattr("amoeba.store.store.migrate", _failing_migrate)
+    monkeypatch.setattr("amoeba.store.connection.connect", _tracking_connect)
+    monkeypatch.setattr("amoeba.store.connection.migrate_package", _failing_migrate)
 
     with pytest.raises(StoreSchemaError):
         Store.open_temporary()

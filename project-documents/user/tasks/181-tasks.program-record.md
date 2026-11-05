@@ -65,10 +65,12 @@ Note: tests/test_migrations.py's monkeypatch of _migration_files had to take the
 
 **Commit**: `refactor: parameterize the migration runner by package and version`
 
-- [ ] **1.2 Lift the connection helpers to a shared module** (effort 3)
-  - [ ] Create `store/connection.py` holding what `Store._connect`, `_connect_read_only` and `_migrate_or_close` do today, plus the read-only version check (version must equal the expected one, never migrates, never creates). Parameterize by migrations package and expected version. Error mapping to `StoreCorruptError`, `StoreBusyError`, `StorePermissionError`, `StoreSchemaError` is preserved exactly, with the same log lines.
-  - [ ] `Store.open`, `open_read_only` and `open_temporary` call it. `Store` keeps its public signatures.
-  - [ ] Success: `uv run pytest tests/test_store.py tests/test_read_only_open.py tests/test_store_safety.py tests/test_failure_modes.py` passes with no test edited.
+- [x] **1.2 Lift the connection helpers to a shared module** (effort 3)
+  - [x] Create `store/connection.py` holding what `Store._connect`, `_connect_read_only` and `_migrate_or_close` do today, plus the read-only version check (version must equal the expected one, never migrates, never creates). Parameterize by migrations package and expected version. Error mapping to `StoreCorruptError`, `StoreBusyError`, `StorePermissionError`, `StoreSchemaError` is preserved exactly, with the same log lines.
+  - [x] `Store.open`, `open_read_only` and `open_temporary` call it. `Store` keeps its public signatures.
+  - [x] Success: `uv run pytest tests/test_store.py tests/test_read_only_open.py tests/test_store_safety.py tests/test_failure_modes.py` passes with no test edited.
+
+Note: tests/test_failure_modes.py's open_temporary failure test patched Store._connect and store.migrate; it now patches amoeba.store.connection.connect and migrate_package (patch points only, same assertions).
 
 **Commit**: `refactor: lift the store connection helpers into a shared module`
 
