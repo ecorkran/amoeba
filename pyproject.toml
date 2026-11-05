@@ -25,6 +25,7 @@ packages = ["src/amoeba"]
 # in the wheel, not only exist in a source checkout.
 artifacts = [
     "src/amoeba/store/schema/*.sql",
+    "src/amoeba/store/program_schema/*.sql",
     "src/amoeba/runner/answering/answering.yaml",
     "src/amoeba/runner/request_run/slice_writing.yaml",
 ]

@@ -40,6 +40,16 @@ EXPECTED_EXPORTS = {
     "Route",
     "SubmissionKind",
     "SubmissionOutcome",
+    # The program store vocabulary, added by slice 181.
+    "REQUESTS_INITIATIVE_MAX",
+    "REQUESTS_INITIATIVE_MIN",
+    "ConsumptionMode",
+    "Member",
+    "Program",
+    "ProgramRejection",
+    "ProgramSubmissionKind",
+    "ProgramSubmissionRecord",
+    "ProgramStore",
     "COMPARABLE_STANDINGS",
     "FindingChange",
     "FindingSeverity",
@@ -126,6 +136,10 @@ EXPECTED_EXPORTS = {
     "PassageRef",
     # Locating stores (read-only consumers), added by slice 110
     "project_store_path",
+    "program_dir",
+    "GLOB_WILDCARD",
+    "validate_repo_relative_path",
+    "program_store_path",
     "store_dir",
     # The store
     "Store",

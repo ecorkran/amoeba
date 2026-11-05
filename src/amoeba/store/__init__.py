@@ -11,8 +11,9 @@ to be sufficient for designing a consumer without reading this implementation.
 
 Exported here is the contract and only the contract: SQL statements, column
 constants, row mapping, and migration machinery are internal and deliberately
-not re-exported. The one exception in path resolution is ``store_dir`` and
-``project_store_path``, which a read-only consumer needs to find a store.
+not re-exported. The exceptions in path resolution are ``store_dir``,
+``project_store_path``, ``program_dir`` and ``program_store_path``, which a
+read-only consumer needs to find a store.
 """
 
 from __future__ import annotations
@@ -116,7 +117,25 @@ from amoeba.store.models import (
     UnknownVocabularyValueError,
     VerdictNotFoundError,
 )
-from amoeba.store.paths import project_store_path, store_dir
+from amoeba.store.paths import (
+    GLOB_WILDCARD,
+    program_dir,
+    program_store_path,
+    project_store_path,
+    store_dir,
+    validate_repo_relative_path,
+)
+from amoeba.store.program_models import (
+    REQUESTS_INITIATIVE_MAX,
+    REQUESTS_INITIATIVE_MIN,
+    ConsumptionMode,
+    Member,
+    Program,
+    ProgramRejection,
+    ProgramSubmissionKind,
+    ProgramSubmissionRecord,
+)
+from amoeba.store.program_store import ProgramStore
 from amoeba.store.question_models import (
     ANSWER_DECISION,
     QUESTION_TRANSITIONS,
@@ -150,6 +169,17 @@ from amoeba.store.runner_models import (
 from amoeba.store.store import Store
 
 __all__ = [
+    "GLOB_WILDCARD",
+    "validate_repo_relative_path",
+    "ProgramStore",
+    "ProgramSubmissionRecord",
+    "ProgramSubmissionKind",
+    "ProgramRejection",
+    "Program",
+    "Member",
+    "ConsumptionMode",
+    "REQUESTS_INITIATIVE_MIN",
+    "REQUESTS_INITIATIVE_MAX",
     # Vocabularies
     "BLOCKED_KIND_TO_STATUS",
     "BLOCKED_STATUSES",
@@ -259,6 +289,8 @@ __all__ = [
     "BeginStatus",
     "PassageRef",
     # Locating stores (read-only consumers)
+    "program_dir",
+    "program_store_path",
     "project_store_path",
     "store_dir",
     # The store

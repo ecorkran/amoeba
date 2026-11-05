@@ -102,23 +102,29 @@ Note: the one 'projectPath' literal in the moved module now uses FIELD_PROJECT_P
 
 ## 2. The program store
 
-- [ ] **2.1 Paths, vocabularies and models** (effort 2)
-  - [ ] In `store/paths.py` define once `program_dir(store_dir)` (`programs/`) and `program_store_path(store_dir)` (`programs/programs.sqlite3`), and the directory and file names as constants. Tests in `tests/test_paths.py`: both paths; `discover_project_ids` on a directory holding `programs/programs.sqlite3` and a top-level `programs.sqlite3` (a project named `programs`) lists only the project.
-  - [ ] Create `store/program_models.py` with the `StrEnum`s `ProgramSubmissionKind` (`register_program`, `register_member`), `ConsumptionMode` (`from_source`, `from_release`), `ProgramRejection` (the five codes in the LLD API Contracts), and frozen dataclasses `Program`, `Member` and `ProgramSubmissionRecord` with the fields in LLD "API Contracts" and "Provides to Other Slices" (`updated_at` on `Program` and `Member`). Reuse `SubmissionOutcome` (`applied`, `rejected`) from `store/inbox_models.py`.
-  - [ ] Define the requests-initiative range (100, 799) once, as constants beside the models. Export the new names from `amoeba.store`.
-  - [ ] Success: the path tests pass; `uv run pyright` passes.
-- [ ] **2.2 Schema 001 and the pinning test** (effort 2)
-  - [ ] Create the package `store/program_schema/` (mirror how `store/schema/` is packaged, including package data) with `001_program_record.sql` exactly as the LLD "Database / Storage Schema" gives it; fill `schema_meta` to the same shape as the project store's `001`.
-  - [ ] Test in `tests/store/test_program_schema.py`: apply the migration to a scratch connection through the parameterized runner (package `amoeba.store.program_schema`, version 1); assert the table set; assert each enum's values equal the `CHECK` list of its column and the initiative range equals the `BETWEEN` bounds (read from `sqlite_master`); assert two members with one `project_id` in different programs is refused by `UNIQUE`; assert an override naming its own provider is refused by `CHECK`.
-  - [ ] Success: tests pass; a newer-stamped program store raises `StoreSchemaError`.
-- [ ] **2.3 `ProgramStore`: opens and reads** (effort 3)
-  - [ ] Create `store/program_store.py`: `ProgramStore.open(path)`, `open_read_only(path)`, `close`, context manager, over `store/connection.py` with `amoeba.store.program_schema` and version 1 (constant defined once). Same guarantees as `Store`: `open_read_only` never migrates, never creates, cannot write.
-  - [ ] Reads: `programs()`, `members(program_id)`, `program_of(project_id)`, `submission(id)`, `submissions()` in `applied_seq` order. Overrides are carried on `Member` as a mapping. SQL statements and row mapping follow the existing `sql_*.py` / `mapping_*.py` split; keep each file near 300 lines.
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **2.4 Tests for opens and reads** (effort 3)
-  - [ ] `tests/store/test_program_store_open.py`, mirroring `tests/test_read_only_open.py`: `open` creates and stamps version 1; reopen is idempotent; `open_read_only` on a missing file raises `StorePermissionError` and creates nothing; on a corrupt file raises `StoreCorruptError`; on a file at another version raises `StoreSchemaError` and leaves it unchanged; a write through the read-only handle raises.
-  - [ ] Reads against rows inserted by the test with plain SQL: `program_of` for a member, a non-member and an empty store; `members` with overrides; `submissions` order.
-  - [ ] Success: tests pass.
+- [x] **2.1 Paths, vocabularies and models** (effort 2)
+  - [x] In `store/paths.py` define once `program_dir(store_dir)` (`programs/`) and `program_store_path(store_dir)` (`programs/programs.sqlite3`), and the directory and file names as constants. Tests in `tests/test_paths.py`: both paths; `discover_project_ids` on a directory holding `programs/programs.sqlite3` and a top-level `programs.sqlite3` (a project named `programs`) lists only the project.
+  - [x] Create `store/program_models.py` with the `StrEnum`s `ProgramSubmissionKind` (`register_program`, `register_member`), `ConsumptionMode` (`from_source`, `from_release`), `ProgramRejection` (the five codes in the LLD API Contracts), and frozen dataclasses `Program`, `Member` and `ProgramSubmissionRecord` with the fields in LLD "API Contracts" and "Provides to Other Slices" (`updated_at` on `Program` and `Member`). Reuse `SubmissionOutcome` (`applied`, `rejected`) from `store/inbox_models.py`.
+  - [x] Define the requests-initiative range (100, 799) once, as constants beside the models. Export the new names from `amoeba.store`.
+  - [x] Success: the path tests pass; `uv run pyright` passes.
+
+Note: tests/test_public_api.py's expected export set gained the new names (the export is this task's own requirement).
+
+- [x] **2.2 Schema 001 and the pinning test** (effort 2)
+  - [x] Create the package `store/program_schema/` (mirror how `store/schema/` is packaged, including package data) with `001_program_record.sql` exactly as the LLD "Database / Storage Schema" gives it; fill `schema_meta` to the same shape as the project store's `001`.
+  - [x] Test in `tests/store/test_program_schema.py`: apply the migration to a scratch connection through the parameterized runner (package `amoeba.store.program_schema`, version 1); assert the table set; assert each enum's values equal the `CHECK` list of its column and the initiative range equals the `BETWEEN` bounds (read from `sqlite_master`); assert two members with one `project_id` in different programs is refused by `UNIQUE`; assert an override naming its own provider is refused by `CHECK`.
+  - [x] Success: tests pass; a newer-stamped program store raises `StoreSchemaError`.
+- [x] **2.3 `ProgramStore`: opens and reads** (effort 3)
+  - [x] Create `store/program_store.py`: `ProgramStore.open(path)`, `open_read_only(path)`, `close`, context manager, over `store/connection.py` with `amoeba.store.program_schema` and version 1 (constant defined once). Same guarantees as `Store`: `open_read_only` never migrates, never creates, cannot write.
+  - [x] Reads: `programs()`, `members(program_id)`, `program_of(project_id)`, `submission(id)`, `submissions()` in `applied_seq` order. Overrides are carried on `Member` as a mapping. SQL statements and row mapping follow the existing `sql_*.py` / `mapping_*.py` split; keep each file near 300 lines.
+  - [x] Success: `uv run pyright` passes.
+
+Note: ProgramStore is exported from amoeba.store, as are validate_repo_relative_path and GLOB_WILDCARD (Runner import rule 11 allows only public store names, so the Task 1.5 imports in passages.py and project_config.py now come from amoeba.store rather than amoeba.store.paths); tests/test_public_api.py's expected export set gained these names.
+
+- [x] **2.4 Tests for opens and reads** (effort 3)
+  - [x] `tests/store/test_program_store_open.py`, mirroring `tests/test_read_only_open.py`: `open` creates and stamps version 1; reopen is idempotent; `open_read_only` on a missing file raises `StorePermissionError` and creates nothing; on a corrupt file raises `StoreCorruptError`; on a file at another version raises `StoreSchemaError` and leaves it unchanged; a write through the read-only handle raises.
+  - [x] Reads against rows inserted by the test with plain SQL: `program_of` for a member, a non-member and an empty store; `members` with overrides; `submissions` order.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: add the program store with schema 001, vocabularies and reads`
 

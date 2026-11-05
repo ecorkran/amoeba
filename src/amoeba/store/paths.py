@@ -34,6 +34,14 @@ STORE_FILE_SUFFIX = ".sqlite3"
 #: The only wildcard in a rules entry or a plan file pattern.
 GLOB_WILDCARD: Final = "*"
 
+#: Subdirectory of the supervisor directory holding the program store and the
+#: program inbox. A directory, so no project id can collide with it and the
+#: top-level ``*.sqlite3`` scan for projects never sees the program store.
+PROGRAM_DIR_NAME: Final = "programs"
+
+#: The program store's file name inside :data:`PROGRAM_DIR_NAME`.
+PROGRAM_STORE_FILE_NAME: Final = f"programs{STORE_FILE_SUFFIX}"
+
 #: Suffix appended to a store's filename while it is built and migrated, before
 #: it is renamed into place. It must not end in ``STORE_FILE_SUFFIX``, so a
 #: half-built store is never discovered as a project.
@@ -161,3 +169,16 @@ def validate_repo_relative_path(entry: str, *, glob_allowed: bool) -> str:
         raise ValueError(f"`{GLOB_WILDCARD}` is allowed in the last segment only")
     return entry
 
+
+def program_dir(store_dir: Path) -> Path:
+    """The directory holding the program store and the program inbox."""
+    return store_dir / PROGRAM_DIR_NAME
+
+
+def program_store_path(store_dir: Path) -> Path:
+    """The one program store file in a supervisor directory.
+
+    Not created by resolving it: the store comes into being with the first
+    program submission.
+    """
+    return program_dir(store_dir) / PROGRAM_STORE_FILE_NAME

@@ -12,12 +12,15 @@ from pathlib import Path
 import pytest
 
 from amoeba.process.supervisor import store_path_for
+from amoeba.store.discovery import discover_project_ids
 from amoeba.store.paths import (
     DEFAULT_STORE_DIR,
     STORE_DIR_ENV_VAR,
     STORE_DIR_NAME,
     STORE_FILE_SUFFIX,
     XDG_CONFIG_HOME_ENV_VAR,
+    program_dir,
+    program_store_path,
     project_store_path,
     store_dir,
     store_path,
@@ -140,3 +143,23 @@ def test_repo_relative_path_accepts_files_when_globs_are_not_allowed(
     entry: str,
 ) -> None:
     assert validate_repo_relative_path(entry, glob_allowed=False) == entry
+
+
+def test_program_paths_sit_in_a_subdirectory_of_the_supervisor_directory(
+    tmp_path: Path,
+) -> None:
+    assert program_dir(tmp_path) == tmp_path / "programs"
+    assert program_store_path(tmp_path) == tmp_path / "programs" / "programs.sqlite3"
+    assert not (tmp_path / "programs").exists()
+
+
+def test_discovery_ignores_the_program_store_but_not_a_project_named_programs(
+    tmp_path: Path,
+) -> None:
+    """The subdirectory file is never a project; a top-level one is."""
+    program_store_path(tmp_path).parent.mkdir()
+    program_store_path(tmp_path).touch()
+    assert discover_project_ids(tmp_path) == []
+
+    (tmp_path / "programs.sqlite3").touch()
+    assert discover_project_ids(tmp_path) == ["programs"]

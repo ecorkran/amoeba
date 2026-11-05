@@ -34,7 +34,7 @@ from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
 from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
-from amoeba.store.paths import validate_repo_relative_path
+from amoeba.store import validate_repo_relative_path
 
 #: One ``rules_paths`` entry: stripped, non-blank, relative, contained (slice 143, D10).
 RulesPath = Annotated[
