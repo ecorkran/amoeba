@@ -220,7 +220,8 @@ Per the LLD, D2, D3, D4 and Functional Requirements "Case 1". The asker's slices
   - [ ] Prerequisite: Task 8.1 complete.
   - [ ] Wait until `git -C D/checkouts/notes-store log` shows a commit after the first, or `amoeba inspect journal --project notes-store --json` shows the run's `sq_request` entry (184) as finished with no new commit. Check `git -C D/checkouts/notes-store log` has one new commit on `main`; the new commit adds slice 700 in a new requests initiative 700 in the plan files; the edge is bound to it; no `notes-store` node was driven by the PM.
   - [ ] A request run that reports `already_met` for this need, or writes no slice, is model judgement (D7).
-  - [ ] Result: request run id, commit, the slice entry, the edge row.
+  - [ ] Push guard (184, D16): while the run is in flight, `ps eww` on the agent session process under the run's `sq` shows `GIT_CONFIG_KEY_0=core.hooksPath`. If it does not, record that in the doc and file an issue: the hook does not reach the agent's shell, and only the remote-ref comparison guards pushes.
+  - [ ] Result: request run id, commit, the slice entry, the edge row, the push-guard observation.
 - [ ] **8.3 The provider builds undriven, the PM acts, the asker resumes**
   - [ ] Prerequisite: Task 8.2 complete.
   - [ ] Wait until `amoeba inspect nodes --project notes-store --json` lists slice 700 `done`, with no `submit intent` made for it. Check the edge waits `not_on_target` (not `branch_head_missing`: that wait would mean no slice branch head was recorded).

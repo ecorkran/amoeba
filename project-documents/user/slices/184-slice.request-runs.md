@@ -213,6 +213,7 @@ Status: decided
 - `head_moved`: an already-met run moved the target head (180, D3).
 - `requests_initiative_full`, `requests_band_collision` (D4).
 - `launch_failed`: making the I/O directory, writing `need.md` or spawning failed.
+- `remote_refs_changed`: the checkout's remote-tracking refs differ from the launch listing (D16).
 
 Each vocabulary is a `StrEnum` pinned to its SQL `CHECK`. Nothing retries a failed request. The asker's question block stays open for the PM, and the PM's resolution supersedes the edge (183, D9).
 
@@ -260,10 +261,10 @@ In order, for the chosen request:
 1. **Configured?** `RequestSettings` for the provider, or wait `requests_unconfigured`.
 2. **Checkout and band.** D5's checkout, D4's band from the provider's store, and D5's hold. A failure becomes a wait or a failure, with nothing journaled.
 3. **Edge still open?** If it was superseded, the request goes `withdrawn` and nothing launches (D10).
-4. **Check.** D5's reads, under the tick budget. A budget refusal stops launching for this tick and leaves the request `pending`.
-5. **Directory, input and journal.** Make `<supervisor_dir>/requests/<run_id>/` (`mint_run_id`) and call 180's `prepare_request_directory` with `RequestInput(asking project, asking slice label, requests index, need)`. Build the argv with `request_argv(...)`. An `OSError` fails the request `launch_failed` and removes the directory. Then `begin_request_run` writes the node and the entry in one provider-store transaction. Required parameter keys: `pipeline`, `params`, `run_id`, `checkout`, `request_id`, `requests_index`, `slice_set`, `target`, plus `dispatch_check` as evidence (its `head` is the launch head).
+4. **Check.** D5's reads and D16's remote-ref listing, under the tick budget. A budget refusal stops launching for this tick and leaves the request `pending`.
+5. **Directory, input and journal.** Make `<supervisor_dir>/requests/<run_id>/` (`mint_run_id`) and call 180's `prepare_request_directory` with `RequestInput(asking project, asking slice label, requests index, need)`, and write D16's `pre-push` hook. Build the argv with `request_argv(...)`. An `OSError` fails the request `launch_failed` and removes the directory. Then `begin_request_run` writes the node and the entry in one provider-store transaction. Required parameter keys: `pipeline`, `params`, `run_id`, `checkout`, `request_id`, `requests_index`, `slice_set`, `target`, `remote_refs` (D16), plus `dispatch_check` as evidence (its `head` is the launch head).
 6. **Program store.** The request goes `running` with `slice_set` (the sorted CF indices of the linked slices under the requests initiative, empty when it does not exist), `launch_head`, `run_id` and `journal_entry_id`, all copied from the entry.
-7. **Spawn.** `launch.spawn` from the checkout as working directory, with the existing launch logs, `run_id=` confirmation and launch grace. A spawn failure resolves the entry `failed`, sets the node `done`, and fails the request `launch_failed`, all in the same tick.
+7. **Spawn.** `launch.spawn` from the checkout as working directory, with D16's environment overlay, the existing launch logs, `run_id=` confirmation and launch grace. A spawn failure resolves the entry `failed`, sets the node `done`, and fails the request `launch_failed`, all in the same tick.
 
 **Crash windows need no adoption branch.** The observe step (D8) runs before launch and walks unresolved `sq_request` entries. An entry whose request is still `pending` (a crash between 5 and 6) is recorded `running` from the entry's parameters there, so launch never sees that request as `pending` again. A run that was never spawned (a crash before 7) is left to recovery, which resolves the entry `not_applied` after the launch grace; the request then fails `run_lost` (D8). Relaunching is deferred (architecture). A run that was spawned is finished normally. No path launches a second run.
 
@@ -277,6 +278,7 @@ The stage polls each unresolved `sq_request` entry with `RunObserver.poll_run`, 
 
 | Run outcome | Reply | Effect |
 | --- | --- | --- |
+| any finished run, remote refs changed (D16) | not read | `failed` `remote_refs_changed` |
 | finished, not `completed` (failed, paused, orphaned) | not read (180, D7) | `failed` `run_failed`, with the failure kind and the 4 KiB tail |
 | `completed` | `ReplyProblem` | `failed` `reply_missing` or `reply_malformed`, with the detail |
 | `completed` | `NewSlice(index)` | `replied` with `reply_index`. The provider's link is marked due (D9) |
@@ -367,6 +369,16 @@ Status: decided
   - `reason` is `"<state>: <wait or failure>: <detail> (since <wait_since>)"`, as 183's edge rows.
 - The asking slice's own row is 183's edge row, now with `request_open` or `request_failed`. So a stuck request reads as two linked rows: the provider's request, and the asker waiting on it.
 - A failed request whose edge closed (the PM resolved the asker) is no longer listed. The PM has acted.
+
+### D16 — Push guard: block a plain push, detect any remote-ref change
+Status: decided
+
+180's write step has no tool restriction (180, D1; `ecorkran/amoeba#29`), and a request run works in the provider's real checkout with its real remotes. 184 owns the launch and the finish, so the guard lives here.
+
+- **Block.** At D7 step 5 the launch writes `<run dir>/git-hooks/pre-push`, executable, which prints that request runs may not push and exits 1. `launch.spawn` gains an optional environment overlay (default none, so other launches are unchanged), and the request launch passes `GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=core.hooksPath`, `GIT_CONFIG_VALUE_0=<that directory>`. This stops a plain `git push` only if the agent's shell inherits the launch environment; 186's live walkthrough checks that against a real run. `--no-verify` still gets past it, which is why the detection below exists. Side effect: the provider's own hooks do not run inside the request run, including on the commit step's commit. That commit touches only plan files, so this is accepted.
+- **Detect.** At D7 step 4, after the fresh-launch rule, one `git_read` of `for-each-ref --format=%(refname) %(objectname) refs/remotes` in the checkout. Its output is journaled as the parameter key `remote_refs`. A failed read is wait `unreadable`. `for-each-ref` joins the `git_read` allowlist.
+- **Finish.** For every finished run, before D8's outcome table, the stage reads the same listing once and compares it with `remote_refs`. A failed read leaves the request `running` with wait `unreadable` and the entry unresolved, as the head check does. A difference fails the request `remote_refs_changed` with the first changed refs in the detail, and the reply is not read. A fetch during the run also changes the listing; that false positive is accepted, since a request run has no reason to fetch.
+- When `#29` gives a real tool restriction, the block goes away and the detection stays.
 
 ### Technology Choices
 
@@ -550,7 +562,7 @@ Draft; refined after implementation. Nothing in 184 creates a request outside te
 - The exemption applies only when no run is in flight and the tree is clean and on the target. The check is the existing fresh-launch rule, unchanged. Membership drive applies only to slices an open edge names, and only requests create edges. A no-program regression test pins identical ticks.
 - Binding requires a new slice at the reported index, absent at launch, inside the band, seen by a plan read that started after the reply. Requests to one provider are serialized, so no other request can supply that slice. Nothing a model says satisfies an edge (183).
 - The argv lives in one function, the probe guards start-up, and every real-run step belongs to 186.
-- **Push (note, not yet in the task file).** A runner-side check belongs here, since 184 owns the launch (D7) and the finish (D8). Two parts. Block: launch the request run with `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` setting `core.hooksPath` to an Amoeba-owned directory whose `pre-push` hook exits non-zero. This stops a plain `git push` only if the session's shell inherits the launch environment, which has to be verified against a real run; `--no-verify` still gets past it. Detect: record `git for-each-ref refs/remotes` in the checkout at launch, and compare it at finish. A difference means something pushed or fetched during the run, and the request fails with a named reason before any binding. That needs one new `RequestFailure` value, so the vocabulary and its SQL `CHECK` change together. When `ecorkran/amoeba#29` gives a real tool restriction, the block goes away and the detection stays.
+- **Push.** D16: a `pre-push` hook through the launch environment blocks a plain push, and a remote-ref comparison at finish fails the request `remote_refs_changed` whatever got past the hook.
 
 ## Implementation Notes
 
