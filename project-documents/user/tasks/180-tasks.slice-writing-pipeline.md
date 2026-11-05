@@ -184,13 +184,13 @@ usageByModel:
 
 ## 8. Process contract and validation
 
-- [ ] **8.1 Process contract section** (effort 2)
-  - [ ] In `docs/process-contract.md`, add `### The slice-writing pipeline` after the answering run section and before "Context Forge shapes", in the style of "The answering pipeline". Cover: the shipped file and path function; the two steps; the two required params; the file names; the `need.md` format; the two reply shapes and `read_reply`'s three results; the guarantee a completed run leaves (at most one commit touching only the two plan files, no change left in the checkout; bounded to the checkout and target, LLD D1); the `already_met` rule that the target's HEAD must not move (enforced by 184); no wall-clock bound; the probe and that 184 wires it.
-  - [ ] State the launch argv from the LLD "API Contracts" and mark it **provisional until Task 9.2 confirms it against the shipped Squadron**.
-  - [ ] Success: the section names every item above and refers to the LLD for rationale. The dated `sq` observation is added in Task 9.5.
-- [ ] **8.2 Full validation pass** (effort 1)
-  - [ ] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright`, then `uv run pytest tests/runner/request_run tests/runner/answering tests/runner/test_probes_request_run.py tests/runner/test_probes_answering.py -q`, then the full `uv run pytest -q`. Run each once and read its output. Fix import-boundary failures (`tests/test_import_boundaries.py`) by importing only public names, not by editing the test.
-  - [ ] Success: all pass. A failure unrelated to this slice is noted under this task with its test name.
+- [x] **8.1 Process contract section** (effort 2)
+  - [x] In `docs/process-contract.md`, add `### The slice-writing pipeline` after the answering run section and before "Context Forge shapes", in the style of "The answering pipeline". Cover: the shipped file and path function; the two steps; the two required params; the file names; the `need.md` format; the two reply shapes and `read_reply`'s three results; the guarantee a completed run leaves (at most one commit touching only the two plan files, no change left in the checkout; bounded to the checkout and target, LLD D1); the `already_met` rule that the target's HEAD must not move (enforced by 184); no wall-clock bound; the probe and that 184 wires it.
+  - [x] State the launch argv from the LLD "API Contracts" and mark it **provisional until Task 9.2 confirms it against the shipped Squadron**.
+  - [x] Success: the section names every item above and refers to the LLD for rationale. The dated `sq` observation is added in Task 9.5.
+- [x] **8.2 Full validation pass** (effort 1)
+  - [x] Run `uv run ruff format .`, `uv run ruff check .`, `uv run pyright`, then `uv run pytest tests/runner/request_run tests/runner/answering tests/runner/test_probes_request_run.py tests/runner/test_probes_answering.py -q`, then the full `uv run pytest -q`. Run each once and read its output. Fix import-boundary failures (`tests/test_import_boundaries.py`) by importing only public names, not by editing the test.
+  - [x] Success: all pass. A failure unrelated to this slice is noted under this task with its test name.
 
 **Commit**: `docs: add slice-writing pipeline to process contract`
 
