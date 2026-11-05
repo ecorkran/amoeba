@@ -38,6 +38,7 @@ from amoeba.store import (
     DesiredState,
     Node,
     NodeKind,
+    ProgramStore,
     Store,
     SubmissionKind,
 )
@@ -263,6 +264,7 @@ class StoreHost:
 
     stop_requested = False
     project_ids = (PROJECT,)
+    program_store: ProgramStore | None = None
 
     def __init__(self, store: Store) -> None:
         self._store = store

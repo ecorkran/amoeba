@@ -1,9 +1,9 @@
-"""An in-process host for driving ``InboxTenant.tick`` directly.
+"""An in-process host for driving the inbox tenants' ``tick`` directly.
 
-``LocalHost`` satisfies the tenant's ``InboxHost`` protocol with **real**
-project stores opened by the real ``ProjectStores`` — only the process
-lifetime around them is absent. Tests of the full process, signals and
-restarts included, use ``host_harness`` instead.
+``LocalHost`` satisfies the ``InboxHost`` and ``ProgramInboxHost`` protocols
+with **real** project stores and a real program store, opened by the real
+``ProjectStores`` — only the process lifetime around them is absent. Tests of
+the full process, signals and restarts included, use ``host_harness`` instead.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from amoeba.process.project_stores import ProjectStores
 from amoeba.process.settings import ProcessSettings
-from amoeba.store import Store
+from amoeba.store import ProgramStore, Store
 
 
 class LocalHost:
@@ -23,6 +23,7 @@ class LocalHost:
         self.stop_requested = False
         self.stores = ProjectStores(supervisor_dir)
         self.stores.open_all()
+        self.stores.open_program_store()
 
     @property
     def project_ids(self) -> tuple[str, ...]:
@@ -33,3 +34,10 @@ class LocalHost:
 
     def open_project(self, project_id: str) -> Store:
         return self.stores.open_project(project_id)
+
+    @property
+    def program_store(self) -> ProgramStore | None:
+        return self.stores.program_store
+
+    def ensure_program_store(self) -> ProgramStore:
+        return self.stores.ensure_program_store()

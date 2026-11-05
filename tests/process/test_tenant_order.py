@@ -14,7 +14,7 @@ import pytest
 import amoeba.process.tenants as tenants_module
 from amoeba.process.settings import ProcessSettings
 
-EXPECTED_TENANT_NAMES = ("inbox", "review-detection", "cf-watch")
+EXPECTED_TENANT_NAMES = ("inbox", "program-inbox", "review-detection", "cf-watch")
 
 
 def _fixed_label(timeout_seconds: float) -> str:
@@ -34,5 +34,5 @@ def test_the_registered_tenants_and_their_order_are_pinned(
 
     tenants = tenants_module.standard_tenants(settings, supervisor_dir)
 
-    assert len(tenants) == 3
+    assert len(tenants) == 4
     assert tuple(tenant.name for tenant in tenants) == EXPECTED_TENANT_NAMES

@@ -47,7 +47,7 @@ from amoeba.process.instance_lock import (
 from amoeba.process.project_stores import ProjectStores
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.supervisor import recover_every_project
-from amoeba.store import Store
+from amoeba.store import ProgramStore, Store
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +166,23 @@ class ResidentProcess:
         """The projects this process has open. Grows at runtime."""
         return self._stores.project_ids
 
+    @property
+    def program_store(self) -> ProgramStore | None:
+        """The open program store, or ``None`` until one exists.
+
+        Read it every time: the store appears at runtime, when the first
+        program submission is applied.
+        """
+        return self._stores.program_store
+
+    def ensure_program_store(self) -> ProgramStore:
+        """The program store, created atomically on first use if absent.
+
+        Raises:
+            StoreError: If the store cannot be created or opened.
+        """
+        return self._stores.ensure_program_store()
+
     def request_stop(self) -> None:
         """Ask the loop to stop. Safe to call from a signal handler."""
         self._stop_event.set()
@@ -190,6 +207,7 @@ class ResidentProcess:
             # process can legitimately hold the lock with no PID file yet.
             write_pid_file(pid_path, version=self._version)
             self._stores.open_all()
+            self._stores.open_program_store()
             recover_every_project(self._stores.items(), self._settings)
             self._run_loop_with_grace()
         finally:

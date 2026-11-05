@@ -1,6 +1,7 @@
-"""The open set of project stores — the one module that writes.
+"""The open stores — the one module that writes.
 
-Every read-write ``Store.open`` in the package happens here, which
+Every read-write ``Store.open`` and ``ProgramStore.open`` in the package happens
+here, which
 ``tests/test_writer_guard.py`` enforces mechanically by walking the AST of
 every module under ``src/amoeba/``. The sole-writer model is completed by the
 instance lock: at most one resident process per supervisor directory, and
@@ -19,9 +20,13 @@ from pathlib import Path
 from amoeba.inbox.durable import fsync_directory
 from amoeba.process.errors import StartupFailedError
 from amoeba.process.supervisor import store_path_for
-from amoeba.store import Store, StoreError
+from amoeba.store import ProgramStore, Store, StoreError
 from amoeba.store.discovery import discover_project_ids
-from amoeba.store.paths import STORE_CREATING_SUFFIX, validate_project_id
+from amoeba.store.paths import (
+    STORE_CREATING_SUFFIX,
+    program_store_path,
+    validate_project_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +34,11 @@ logger = logging.getLogger(__name__)
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm")
 
 
-def _create_atomically(path: Path) -> None:
+def _create_atomically(store_class: type[Store | ProgramStore], path: Path) -> None:
     """Build and migrate a new store beside ``path``, then rename it into place.
+
+    ``store_class`` is the kind of store being built: a project store or the
+    program store, which share this one creation path.
 
     A reader polling for the store — the documented way a submitter learns its
     project exists — then finds it either absent or complete, never at an
@@ -45,7 +53,7 @@ def _create_atomically(path: Path) -> None:
     for leftover in (building, *_sidecars(building)):
         leftover.unlink(missing_ok=True)
 
-    Store.open(building).close()
+    store_class.open(building).close()
     if any(sidecar.exists() for sidecar in _sidecars(building)):
         raise StoreError(f"SQLite left its write-ahead log behind for {building}")
     building.replace(path)
@@ -70,6 +78,7 @@ class ProjectStores:
         """
         self._store_dir = store_dir
         self._stores: dict[str, Store] = {}
+        self._program_store: ProgramStore | None = None
 
     def open_all(self) -> None:
         """Open every project's store read-write.
@@ -109,11 +118,56 @@ class ProjectStores:
         validate_project_id(project_id)
         path = store_path_for(self._store_dir, project_id)
         if not path.exists():
-            _create_atomically(path)
+            _create_atomically(Store, path)
         store = Store.open(path)
         self._stores[project_id] = store
         logger.info("opened project %s at runtime", project_id)
         return store
+
+    def open_program_store(self) -> None:
+        """Open the program store read-write, if it exists. Called at start.
+
+        The store comes into being with the first program submission, so its
+        absence is normal and leaves :attr:`program_store` ``None``.
+
+        Raises:
+            StartupFailedError: If the file exists and cannot be opened, as for
+                a project store.
+        """
+        path = program_store_path(self._store_dir)
+        if not path.exists():
+            return
+        try:
+            self._program_store = ProgramStore.open(path)
+        except Exception as error:
+            logger.exception("cannot open the program store at %s", path)
+            raise StartupFailedError(
+                f"cannot open the program store at {path}: {error}"
+            ) from error
+
+    def ensure_program_store(self) -> ProgramStore:
+        """The program store, created atomically on first use if absent.
+
+        Built under a temporary name and renamed into place once migrated, as a
+        project store is, so an outside reader never sees it half-built.
+
+        Raises:
+            StoreError: If the store cannot be created or opened. Not caught
+                here — the caller decides what a failure means.
+        """
+        if self._program_store is not None:
+            return self._program_store
+        path = program_store_path(self._store_dir)
+        if not path.exists():
+            _create_atomically(ProgramStore, path)
+        self._program_store = ProgramStore.open(path)
+        logger.info("opened the program store at %s", path)
+        return self._program_store
+
+    @property
+    def program_store(self) -> ProgramStore | None:
+        """The open program store, or ``None`` while none exists."""
+        return self._program_store
 
     def store_for(self, project_id: str) -> Store:
         """The open read-write store for a project.
@@ -149,3 +203,10 @@ class ProjectStores:
                 # unclosed store recoverable anyway.
                 logger.exception("error closing the store for project %s", project_id)
         self._stores.clear()
+        if self._program_store is not None:
+            try:
+                self._program_store.close()
+            except Exception:
+                # Swallowed for the same reason as the project stores above.
+                logger.exception("error closing the program store")
+            self._program_store = None

@@ -15,6 +15,7 @@ from detection_harness import (
 
 import amoeba.process.tenants as tenants_module
 from amoeba.process.inbox_tenant import InboxTenant
+from amoeba.process.program_inbox_tenant import ProgramInboxTenant
 from amoeba.process.review_detection import ReviewDetectionTenant
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.version_label import VERSION_UNAVAILABLE
@@ -24,8 +25,9 @@ from amoeba.store import DetectionOutcome
 def _detection_tenant(supervisor_dir: Path) -> ReviewDetectionTenant:
     tenants = tenants_module.standard_tenants(ProcessSettings(), supervisor_dir)
     assert isinstance(tenants[0], InboxTenant)
-    assert isinstance(tenants[1], ReviewDetectionTenant)
-    return tenants[1]
+    assert isinstance(tenants[1], ProgramInboxTenant)
+    assert isinstance(tenants[2], ReviewDetectionTenant)
+    return tenants[2]
 
 
 def test_the_label_is_captured_once_and_reaches_the_tenant(

@@ -100,18 +100,20 @@ class InboxDrain[
         root: Path,
         *,
         parse: Callable[[bytes], EnvelopeT],
-        screen: Callable[[HostT, EnvelopeT], tuple[QuarantineReason, str] | None],
         apply: Callable[[HostT, EnvelopeT], RecordT],
+        screen: Callable[[HostT, EnvelopeT], tuple[QuarantineReason, str] | None]
+        | None = None,
     ) -> None:
         """Build a drain over ``root``'s inbox.
 
         Args:
             root: The directory holding ``inbox/`` (the layout functions' root).
             parse: Parses a file's bytes; raises ``EnvelopeError`` for a bad one.
-            screen: Returns a quarantine reason and detail for an envelope that
-                cannot be attributed, or ``None``. Never touches a store.
             apply: Applies an envelope and returns its record. Any exception is
                 counted as a sick store, never a bad submission.
+            screen: Returns a quarantine reason and detail for an envelope that
+                cannot be attributed, or ``None``. Never touches a store.
+                Omitted when every parsed envelope is attributable.
         """
         self._root = root
         self._parse = parse
@@ -153,7 +155,10 @@ class InboxDrain[
             self._quarantine(path, error.reason, error.detail)
             return
 
-        if (unattributed := self._screen(host, envelope)) is not None:
+        if (
+            self._screen is not None
+            and (unattributed := self._screen(host, envelope)) is not None
+        ):
             self._quarantine(path, *unattributed)
             return
 

@@ -26,7 +26,7 @@ from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
 from amoeba.runner.project_config import ProjectConfig
 from amoeba.runner.tick import ProjectTick
-from amoeba.store import Store
+from amoeba.store import ProgramStore, Store
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,15 @@ class RunnerHost(Protocol):
 
     def store_for(self, project_id: str) -> Store:
         """The read-write store of a hosted project."""
+        ...
+
+    @property
+    def program_store(self) -> ProgramStore | None:
+        """The open program store, or ``None`` while none exists.
+
+        Read every tick: the store appears at runtime, when the first program
+        submission is applied.
+        """
         ...
 
 

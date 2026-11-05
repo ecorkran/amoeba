@@ -15,6 +15,7 @@ from amoeba.process.inbox_tenant import InboxTenant
 from amoeba.process.observers.cf_readback import (
     capture_version_label as capture_cf_version_label,
 )
+from amoeba.process.program_inbox_tenant import ProgramInboxTenant
 from amoeba.process.review_detection import ReviewDetectionTenant
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.version_label import capture_sq_version_label
@@ -35,9 +36,11 @@ def standard_tenants(
     cf_label = capture_cf_version_label(settings.cf_timeout_seconds)
     # Tenants tick in registration order. The inbox is first, so a backlog of
     # submissions — ``watch_reviews`` and ``link_cf_project`` included — drains
-    # ahead of detection and the Context Forge watch.
+    # ahead of detection and the Context Forge watch. The program inbox follows
+    # it directly, sharing its batch size and attempt limit.
     return (
         InboxTenant(supervisor_dir),
+        ProgramInboxTenant(supervisor_dir),
         ReviewDetectionTenant(version_label=sq_label),
         CFWatchTenant(
             version_label=cf_label,

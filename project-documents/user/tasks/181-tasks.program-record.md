@@ -179,21 +179,24 @@ Note: ProgramStore is exported from amoeba.store, as are validate_repo_relative_
 
 ## 4. Program inbox tenant and host wiring
 
-- [ ] **4.1 Atomic creation and the program store holder** (effort 3)
-  - [ ] In `process/project_stores.py`, make `_create_atomically` take the store class and use it for both kinds. Add the program store's read-write holder in the same module (the writer guard's one module): `open_program_store()` opens it if the file exists (start-up), `ensure_program_store()` creates it atomically if absent, a `program_store` property (`None` when absent), and `close_all` closes it. A failure to open at start is `StartupFailedError` naming the program store.
-  - [ ] Tests (extend the `ProjectStores` tests in `tests/process/`): creation leaves no `.creating` file and no stranded WAL; an interrupted creation (a leftover `.creating` file) is replaced; start with a junk `programs.sqlite3` raises `StartupFailedError`; `close_all` closes it.
-  - [ ] Success: tests pass; existing project-store tests unedited.
-- [ ] **4.2 `ProgramInboxTenant`** (effort 4)
-  - [ ] Create `process/program_inbox_tenant.py`: drains `programs/inbox/new/` through the shared drain (Task 1.3) with `parse_program_envelope`; the apply creates the store atomically if absent and calls `ProgramStore.apply_submission`. No project attribution. A store failure is counted beside the file, stops the process below `inbox_max_attempts`, and parks the file at the limit, exactly as for project submissions. Tenant name is a constant.
-  - [ ] Compose it directly after `InboxTenant` in `process/tenants.py`, sharing `inbox_batch_size` and `inbox_max_attempts`.
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **4.3 Tests for `ProgramInboxTenant`** (effort 4)
-  - [ ] `tests/process/test_program_inbox_tenant.py`, mirroring the `InboxTenant` tests: a valid file applies, creates `programs/programs.sqlite3` on first use and is deleted after the commit; a rejection (`unknown_program`) is recorded and the file deleted; each of the four quarantine reasons moves the file to `programs/inbox/quarantine/` with its `.reason.json`, and for `invalid_payload` the sidecar's `detail` names the offending field; a store failure below the limit re-raises with a counter beside the file, and run through the process harness (`tests/host_harness.py`) the resident process exits as a store failure; at the limit the file is parked in `failed/`; a reused id with different content logs a warning and leaves the first record; a project file in `inbox/` is untouched by this tenant and the reverse; `standard_tenants` order is inbox, program inbox, then the rest.
-  - [ ] Success: tests pass.
-- [ ] **4.4 Start-up open and the Runner host member** (effort 3)
-  - [ ] In `process/host.py` open the program store at start through the holder (4.1) and expose `program_store`; add `program_store: ProgramStore | None` to `RunnerHost` in `runner/tenant.py` (read every tick: it can appear at runtime). Update test hosts that implement the protocol.
-  - [ ] Tests in `tests/test_host.py` style: no program store, the property is `None`; after a registration is drained, the same host's property is the open store; a corrupt program store at start is `STARTUP_FAILED` naming the program store (CLI exit via `tests/test_cli_lifecycle.py` patterns).
-  - [ ] Success: tests pass.
+- [x] **4.1 Atomic creation and the program store holder** (effort 3)
+  - [x] In `process/project_stores.py`, make `_create_atomically` take the store class and use it for both kinds. Add the program store's read-write holder in the same module (the writer guard's one module): `open_program_store()` opens it if the file exists (start-up), `ensure_program_store()` creates it atomically if absent, a `program_store` property (`None` when absent), and `close_all` closes it. A failure to open at start is `StartupFailedError` naming the program store.
+  - [x] Tests (extend the `ProjectStores` tests in `tests/process/`): creation leaves no `.creating` file and no stranded WAL; an interrupted creation (a leftover `.creating` file) is replaced; start with a junk `programs.sqlite3` raises `StartupFailedError`; `close_all` closes it.
+  - [x] Success: tests pass; existing project-store tests unedited.
+- [x] **4.2 `ProgramInboxTenant`** (effort 4)
+  - [x] Create `process/program_inbox_tenant.py`: drains `programs/inbox/new/` through the shared drain (Task 1.3) with `parse_program_envelope`; the apply creates the store atomically if absent and calls `ProgramStore.apply_submission`. No project attribution. A store failure is counted beside the file, stops the process below `inbox_max_attempts`, and parks the file at the limit, exactly as for project submissions. Tenant name is a constant.
+  - [x] Compose it directly after `InboxTenant` in `process/tenants.py`, sharing `inbox_batch_size` and `inbox_max_attempts`.
+  - [x] Success: `uv run pyright` passes.
+- [x] **4.3 Tests for `ProgramInboxTenant`** (effort 4)
+  - [x] `tests/process/test_program_inbox_tenant.py`, mirroring the `InboxTenant` tests: a valid file applies, creates `programs/programs.sqlite3` on first use and is deleted after the commit; a rejection (`unknown_program`) is recorded and the file deleted; each of the four quarantine reasons moves the file to `programs/inbox/quarantine/` with its `.reason.json`, and for `invalid_payload` the sidecar's `detail` names the offending field; a store failure below the limit re-raises with a counter beside the file, and run through the process harness (`tests/host_harness.py`) the resident process exits as a store failure; at the limit the file is parked in `failed/`; a reused id with different content logs a warning and leaves the first record; a project file in `inbox/` is untouched by this tenant and the reverse; `standard_tenants` order is inbox, program inbox, then the rest.
+  - [x] Success: tests pass.
+
+Note: three existing tests index the standard tenants by position (tests/process/test_tenant_order.py, test_cf_watch_wiring.py, test_review_detection_wiring.py) and were shifted by one for the new tenant; tests/local_host_harness.py gained the program-store members.
+
+- [x] **4.4 Start-up open and the Runner host member** (effort 3)
+  - [x] In `process/host.py` open the program store at start through the holder (4.1) and expose `program_store`; add `program_store: ProgramStore | None` to `RunnerHost` in `runner/tenant.py` (read every tick: it can appear at runtime). Update test hosts that implement the protocol.
+  - [x] Tests in `tests/test_host.py` style: no program store, the property is `None`; after a registration is drained, the same host's property is the open store; a corrupt program store at start is `STARTUP_FAILED` naming the program store (CLI exit via `tests/test_cli_lifecycle.py` patterns).
+  - [x] Success: tests pass.
 
 **Commit**: `feat: drain the program inbox into the program store at runtime`
 
