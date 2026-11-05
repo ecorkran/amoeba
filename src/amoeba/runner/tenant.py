@@ -24,6 +24,7 @@ from amoeba.runner.lifecycle.cadence import PlanReadSchedule
 from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.program import ProgramStage
 from amoeba.runner.project_config import ProjectConfig
 from amoeba.runner.tick import ProjectTick
 from amoeba.store import ProgramStore, Store
@@ -178,6 +179,7 @@ class RunnerTenant:
             call_timeout_seconds=self._settings.tick_call_timeout_seconds,
             amoeba_version=self._amoeba_version,
             auto_resume_limit=self._settings.auto_resume_limit,
+            program_stage=ProgramStage(host.program_store),
         )
         try:
             outcome = tick.run(budget), tick.wrote

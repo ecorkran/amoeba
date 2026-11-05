@@ -218,20 +218,22 @@ Note: three existing tests index the standard tenants by position (tests/process
 
 ## 6. The program stage
 
-- [ ] **6.1 `ProgramStage` and its place in the tick** (effort 3)
-  - [ ] Create `runner/program/stage.py`: `ProgramStage.run(project_id) -> Program | None`. `None` when the host has no program store, or the project is in no program; otherwise one `program_of` read. No member store opened, nothing written, `tick.wrote` untouched.
-  - [ ] Read `runner/tick.py` and `runner/tenant.py` to see how `ProjectTick` is built each tick. Pass the host's current `program_store` into the tick on every tick, and in `ProjectTick.run` call the stage directly after `_answer_resolutions()` and before Observe, discarding the result (two lines; extract nothing from `tick.py`, D7).
-  - [ ] A `StoreError` from the program store propagates (it is in `STORE_FAILURES`); any other exception is left to the tenant's existing project-scoped `unexpected_fault`.
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **6.2 Tests for the stage** (effort 4)
-  - [ ] `tests/runner/program/test_stage.py`: `None` with no store; `None` for a project in no program; the `Program` for a member; the store appearing between two ticks is seen on the second; a closed or corrupt program store raises a `STORE_FAILURES` member through the tenant and the process exits as a store failure; a non-store exception reaches `unexpected_fault` for that project only and other projects still tick.
-  - [ ] Order: with a recording stage, assert it runs after a resolution is answered and before the observer is called.
-  - [ ] Regression: tick the same scripted project with no program store, with a program store holding an unrelated program, and with a program store holding its own program; the store writes, issued commands and journal entries are identical across the three (reuse the harness in `tests/runner/test_end_to_end.py`).
-  - [ ] Success: tests pass; the existing Runner suite passes.
-- [ ] **6.3 Load tests for the program inbox and the tick's program read** (effort 3)
-  - [ ] Add `tests/load/test_program_load.py`, using `tests/load/load_harness.py` and mirroring `test_inbox_concurrent.py` and `test_runner_tick_load.py` (read both first). Case 1: several submitter processes concurrently `submit_program()` a few hundred `register_member` bodies (some ids resubmitted) while `ProgramInboxTenant` drains; afterwards every reported id has exactly one record, no `applied_seq` repeats, and `programs/inbox/new/`, `quarantine/` and `failed/` are empty. Case 2: many projects, each in the program store's program, tick under the harness; every tick still stays within its deadline and the program read adds no member-store open.
-  - [ ] Set each bound by measuring first, then at roughly twice the slowest observation (the rule `test_inbox_concurrent.py` states), and record the measurement and date in the module docstring.
-  - [ ] Success: `uv run pytest tests/load/test_program_load.py` passes. `.github/workflows/ci.yml` already runs `tests/load`, so no CI change.
+- [x] **6.1 `ProgramStage` and its place in the tick** (effort 3)
+  - [x] Create `runner/program/stage.py`: `ProgramStage.run(project_id) -> Program | None`. `None` when the host has no program store, or the project is in no program; otherwise one `program_of` read. No member store opened, nothing written, `tick.wrote` untouched.
+  - [x] Read `runner/tick.py` and `runner/tenant.py` to see how `ProjectTick` is built each tick. Pass the host's current `program_store` into the tick on every tick, and in `ProjectTick.run` call the stage directly after `_answer_resolutions()` and before Observe, discarding the result (two lines; extract nothing from `tick.py`, D7).
+  - [x] A `StoreError` from the program store propagates (it is in `STORE_FAILURES`); any other exception is left to the tenant's existing project-scoped `unexpected_fault`.
+  - [x] Success: `uv run pyright` passes.
+- [x] **6.2 Tests for the stage** (effort 4)
+  - [x] `tests/runner/program/test_stage.py`: `None` with no store; `None` for a project in no program; the `Program` for a member; the store appearing between two ticks is seen on the second; a closed or corrupt program store raises a `STORE_FAILURES` member through the tenant and the process exits as a store failure; a non-store exception reaches `unexpected_fault` for that project only and other projects still tick.
+  - [x] Order: with a recording stage, assert it runs after a resolution is answered and before the observer is called.
+  - [x] Regression: tick the same scripted project with no program store, with a program store holding an unrelated program, and with a program store holding its own program; the store writes, issued commands and journal entries are identical across the three (reuse the harness in `tests/runner/test_end_to_end.py`).
+  - [x] Success: tests pass; the existing Runner suite passes.
+- [x] **6.3 Load tests for the program inbox and the tick's program read** (effort 3)
+  - [x] Add `tests/load/test_program_load.py`, using `tests/load/load_harness.py` and mirroring `test_inbox_concurrent.py` and `test_runner_tick_load.py` (read both first). Case 1: several submitter processes concurrently `submit_program()` a few hundred `register_member` bodies (some ids resubmitted) while `ProgramInboxTenant` drains; afterwards every reported id has exactly one record, no `applied_seq` repeats, and `programs/inbox/new/`, `quarantine/` and `failed/` are empty. Case 2: many projects, each in the program store's program, tick under the harness; every tick still stays within its deadline and the program read adds no member-store open.
+  - [x] Set each bound by measuring first, then at roughly twice the slowest observation (the rule `test_inbox_concurrent.py` states), and record the measurement and date in the module docstring.
+  - [x] Success: `uv run pytest tests/load/test_program_load.py` passes. `.github/workflows/ci.yml` already runs `tests/load`, so no CI change.
+
+Note: tick-level program-stage tests use tests/runner/tick_support.py's Rig; the tenant-level ones reuse test_tenant.py's Rig. The tick bound in case 2 is 10x the 5 ms measurement, not 2x, because scheduling noise dominates at that scale (recorded in the module docstring).
 
 **Commit**: `feat: add the program stage to the Runner tick, read-only`
 

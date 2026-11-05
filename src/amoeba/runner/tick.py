@@ -1,7 +1,8 @@
 """One project's tick: observe, record finished runs, decide, act, close.
 
 The sequence is fixed code (D1): intents are applied first (124), then the PM's
-resolutions are answered (127), then the rest.
+resolutions are answered (127), then the program stage finds the project's program
+(181), then the rest.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from amoeba.runner.observe import RunObserver
 from amoeba.runner.observe_resume import resumed_from_states
 from amoeba.runner.observed import ObservedRun
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.program import ProgramStage
 from amoeba.runner.project_config import ProjectSettings
 from amoeba.runner.project_view import build_project_view
 from amoeba.runner.record_runs import record_finished
@@ -99,8 +101,10 @@ class ProjectTick:
         call_timeout_seconds: float,
         amoeba_version: str,
         auto_resume_limit: int,
+        program_stage: ProgramStage,
     ) -> None:
         self._project_id = project_id
+        self._program_stage = program_stage
         self._version_label = version_label
         self._project_settings = project_settings
         self._amoeba_version = amoeba_version
@@ -154,6 +158,8 @@ class ProjectTick:
         faults = TickFaults()
         desired = self._apply_intents()
         self._answer_resolutions()
+        # Read-only in 181: the result is not kept (D7); 183 is its first consumer.
+        self._program_stage.run(self._project_id)
         # Observe is not filtered by hold or drive. Slices 125 and 128 read
         # ``desired.drives_anything()`` to scope their Observe work.
         entries = self._run_entries()
