@@ -230,6 +230,7 @@ Status: decided
   3. **Already met:** the reply is `already_met`, `git merge-base --is-ancestor <commit> main` succeeds, there is no new commit, and the tree is clean.
 - In every case `write.prompt.md` in the I/O directory contains the need text, and the checkout contains no file from the I/O directory.
 - `tests/live` stays in `addopts` `--ignore`, so a bare `uv run pytest` spends nothing.
+- **No child outlives the wait.** `watch_run` launches `sq` as the leader of its own session and kills that whole session when the wait ends, for any reason, including a launcher that exited by itself. Otherwise children left by a launcher that exits early keep running, and spending, after pytest returns. Added after the slice's code review; `tests/runner/test_watch_run.py` pins it.
 
 ### Patterns and Conventions
 

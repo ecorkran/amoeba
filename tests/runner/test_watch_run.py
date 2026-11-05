@@ -6,8 +6,10 @@ child process, so the exit-grace and kill paths run with no ``sq`` and no spend.
 
 from __future__ import annotations
 
+import os
 import signal
 import sys
+import time
 from pathlib import Path
 
 import live_harness
@@ -77,3 +79,34 @@ def test_launcher_that_exits_before_the_run_is_found_is_a_poll_failure(
     assert isinstance(result.poll, PollFailure)
     assert "before run" in result.poll.reason
     assert result.exit_code == 0
+
+
+LEAVES_AN_ORPHAN = [
+    sys.executable,
+    "-c",
+    "import pathlib, subprocess, sys; "
+    "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+    "pathlib.Path('orphan.pid').write_text(str(child.pid))",
+]
+
+
+def _is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        # No such process: the kill reached it and it has been reaped.
+        return False
+    return True
+
+
+def test_child_of_a_launcher_that_exited_by_itself_is_killed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _stub_poll(monkeypatch, _outcome(RunOutcome.COMPLETED))
+    result = _watch(LEAVES_AN_ORPHAN, tmp_path, timeout=30, grace=30)
+    assert result.exit_code == 0
+    orphan_pid = int((tmp_path / "orphan.pid").read_text())
+    deadline = time.monotonic() + 5
+    while _is_alive(orphan_pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not _is_alive(orphan_pid)

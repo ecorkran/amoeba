@@ -97,8 +97,8 @@ def watch_run(
     """Launch ``argv`` in ``directory`` and wait at most ``timeout_seconds``.
 
     ``environ`` replaces the launch process's environment when given. Once the run
-    has an outcome the launcher gets ``exit_grace_seconds`` to exit by itself. On
-    the deadline, or after the grace, the launch process's whole session is
+    has an outcome the launcher gets ``exit_grace_seconds`` to exit by itself.
+    When the wait ends, for any reason, the launch process's whole session is
     killed, so no child keeps spending; a deadline leaves the poll a
     :class:`PollFailure` and the caller's assertion fails with it.
     """
@@ -134,14 +134,24 @@ def watch_run(
             else:
                 poll = PollFailure(f"run {run_id} did not finish in {timeout_seconds}s")
         finally:
-            if process.poll() is None:
-                # The launcher leads its own session; kill every member of it.
-                os.killpg(process.pid, signal.SIGKILL)
+            _kill_session(process.pid)
             process.wait()
         log.seek(0)
         return PipelineRun(
             run_id, poll, process.returncode, log.read()[:OUTPUT_HEAD_CHARS]
         )
+
+
+def _kill_session(session_id: int) -> None:
+    """Kill every member of the launcher's session, whether or not it has exited.
+
+    A launcher that exits by itself can leave children running and spending.
+    """
+    try:
+        os.killpg(session_id, signal.SIGKILL)
+    except ProcessLookupError:
+        # The launcher and all its children are already gone: nothing to kill.
+        return
 
 
 def _await_exit(process: subprocess.Popen[str], grace_seconds: float) -> None:
