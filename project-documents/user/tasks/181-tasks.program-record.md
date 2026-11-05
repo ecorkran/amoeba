@@ -202,17 +202,17 @@ Note: three existing tests index the standard tenants by position (tests/process
 
 ## 5. Member readability
 
-- [ ] **5.1 `amoeba.program.members`** (effort 4)
-  - [ ] Create the package `amoeba.program` with `members.py`: `MemberUnreadableReason` (`store_missing`, `store_unreadable`, `unlinked`, `snapshot_missing`, `checkout_unresolved`), `Readable` (keeps the resolved `Checkout` and the CF project id of the member's one link), `Unreadable(reason, detail)`, the alias `MemberState = Readable | Unreadable`, and `read_member(store_dir, member) -> MemberState`. Order per LLD D6; first failure wins.
-  - [ ] The `detail` of each reason: `store_missing` names the expected file (`{project_id}.sqlite3`); `store_unreadable` is the `StoreError` text; `unlinked` says no link or how many links; `snapshot_missing` names the CF project id of the link that has no `observed` snapshot; `checkout_unresolved` is `CheckoutUnresolved`'s reason.
-  - [ ] One directory check (`Path.is_dir` through `resolve_checkout`), no subprocess. A `StoreError` from the member's read-only open or reads becomes `store_unreadable`, in a specific `except` with the comment D6 requires; nothing else is caught. Zero links and two links are both `unlinked`, and none is chosen.
-  - [ ] The package imports only `amoeba.store` and `amoeba.upstream`.
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **5.2 Tests for `read_member` and the import rule** (effort 4)
-  - [ ] `tests/program/test_read_member.py`, with stores, links and snapshots written by the test (use `tests/cf_fixture.py` helpers where they fit; no live CF or `sq`). One test per reason, each asserting the reason and a `detail` with the content named in Task 5.1: `store_missing`; `store_unreadable` for a corrupt file, a wrong schema version and a lock held past a short timeout; `unlinked` for no link and for two links; `snapshot_missing`; `checkout_unresolved`; and the readable case with a project that has no worktrees (checkout is the project path) and one whose worktree owns the member's index.
-  - [ ] Precedence: a member failing two checks reports the earlier one. No exception escapes `read_member` for any reason above. The member's store file is unchanged after the call.
-  - [ ] Import rule: read `tests/test_import_boundaries.py`; add the `amoeba.program` rule (imports only `amoeba.store` and `amoeba.upstream`) and confirm inspection may import `amoeba.program` but not `amoeba.runner`. The rule fails when a deliberate `amoeba.runner` import is added to `program/members.py` (revert it).
-  - [ ] Success: `uv run pytest tests/program tests/test_import_boundaries.py` passes.
+- [x] **5.1 `amoeba.program.members`** (effort 4)
+  - [x] Create the package `amoeba.program` with `members.py`: `MemberUnreadableReason` (`store_missing`, `store_unreadable`, `unlinked`, `snapshot_missing`, `checkout_unresolved`), `Readable` (keeps the resolved `Checkout` and the CF project id of the member's one link), `Unreadable(reason, detail)`, the alias `MemberState = Readable | Unreadable`, and `read_member(store_dir, member) -> MemberState`. Order per LLD D6; first failure wins.
+  - [x] The `detail` of each reason: `store_missing` names the expected file (`{project_id}.sqlite3`); `store_unreadable` is the `StoreError` text; `unlinked` says no link or how many links; `snapshot_missing` names the CF project id of the link that has no `observed` snapshot; `checkout_unresolved` is `CheckoutUnresolved`'s reason.
+  - [x] One directory check (`Path.is_dir` through `resolve_checkout`), no subprocess. A `StoreError` from the member's read-only open or reads becomes `store_unreadable`, in a specific `except` with the comment D6 requires; nothing else is caught. Zero links and two links are both `unlinked`, and none is chosen.
+  - [x] The package imports only `amoeba.store` and `amoeba.upstream`.
+  - [x] Success: `uv run pyright` passes.
+- [x] **5.2 Tests for `read_member` and the import rule** (effort 4)
+  - [x] `tests/program/test_read_member.py`, with stores, links and snapshots written by the test (use `tests/cf_fixture.py` helpers where they fit; no live CF or `sq`). One test per reason, each asserting the reason and a `detail` with the content named in Task 5.1: `store_missing`; `store_unreadable` for a corrupt file, a wrong schema version and a lock held past a short timeout; `unlinked` for no link and for two links; `snapshot_missing`; `checkout_unresolved`; and the readable case with a project that has no worktrees (checkout is the project path) and one whose worktree owns the member's index.
+  - [x] Precedence: a member failing two checks reports the earlier one. No exception escapes `read_member` for any reason above. The member's store file is unchanged after the call.
+  - [x] Import rule: read `tests/test_import_boundaries.py`; add the `amoeba.program` rule (imports only `amoeba.store` and `amoeba.upstream`) and confirm inspection may import `amoeba.program` but not `amoeba.runner`. The rule fails when a deliberate `amoeba.runner` import is added to `program/members.py` (revert it).
+  - [x] Success: `uv run pytest tests/program tests/test_import_boundaries.py` passes.
 
 **Commit**: `feat: add member readability with a closed vocabulary of reasons`
 

@@ -4,16 +4,28 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from amoeba.store import CFSnapshotOutcome, Store, SubmissionKind
+from amoeba.store.cf_models import CFSnapshotInput
+from amoeba.store.inbox_models import LINK_CF_PROJECT_ID
+from amoeba.store.paths import project_store_path
 from amoeba.store.program_models import (
+    ConsumptionMode,
+    Member,
     ProgramSubmissionKind,
     ProgramSubmissionRecord,
 )
 from amoeba.store.program_store import ProgramStore
+from amoeba.upstream.context_forge import (
+    FIELD_PROJECT_PATH,
+    STATE_PROJECT_KEY,
+    STATE_WORKTREES_KEY,
+)
 
 SUBMITTED_AT = datetime(2026, 11, 5, tzinfo=UTC)
 CLOCK_START = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
@@ -137,3 +149,73 @@ def install_stepping_clock(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def open_store(tmp_path: Path) -> ProgramStore:
     return ProgramStore.open(tmp_path / "programs" / "programs.sqlite3")
+
+
+# --------------------------------------------------------------------------
+# Member stores: what read_member reads
+# --------------------------------------------------------------------------
+
+CF_PROJECT_ID = "cf-project-1"
+OBSERVED_AT = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
+
+
+def a_member(project_id: str, *, initiative: int = 790) -> Member:
+    """A stored-shape member, for calling ``read_member`` directly."""
+    return Member(
+        program_id="demo",
+        project_id=project_id,
+        requests_initiative=initiative,
+        consumed=ConsumptionMode.FROM_SOURCE,
+        overrides={},
+        registered_at=SUBMITTED_AT,
+        updated_at=SUBMITTED_AT,
+    )
+
+
+def link_member_store(store: Store, project_id: str, cf_project_id: str) -> None:
+    """Link ``project_id`` to a CF project through the real submission path."""
+    store.apply_submission(
+        submission_id=f"link-{cf_project_id}",
+        project_id=project_id,
+        kind=SubmissionKind.LINK_CF_PROJECT,
+        submitted_by="tester",
+        submitted_at=SUBMITTED_AT,
+        payload={LINK_CF_PROJECT_ID: cf_project_id},
+    )
+
+
+def observe(
+    store: Store,
+    project_id: str,
+    cf_project_id: str,
+    *,
+    project_path: Path,
+    worktrees: dict[str, object] | None = None,
+) -> None:
+    """Record an ``observed`` snapshot whose state names the project path."""
+    state = {
+        STATE_PROJECT_KEY: {FIELD_PROJECT_PATH: str(project_path)},
+        STATE_WORKTREES_KEY: worktrees or {},
+    }
+    store.record_cf_snapshot(
+        replace(_observed_input(project_id, cf_project_id), state=state, changed=[])
+    )
+
+
+def _observed_input(project_id: str, cf_project_id: str) -> CFSnapshotInput:
+    return CFSnapshotInput(
+        project_id=project_id,
+        cf_project_id=cf_project_id,
+        outcome=CFSnapshotOutcome.OBSERVED,
+        state={},
+        changed=[],
+        detail=None,
+        cf_updated_at="2026-11-05T12:00:00.000Z",
+        cf_version_label="cf test",
+        observed_at=OBSERVED_AT,
+    )
+
+
+def open_member_store(supervisor_dir: Path, project_id: str) -> Store:
+    """Create ``project_id``'s store in the supervisor directory, read-write."""
+    return Store.open(project_store_path(supervisor_dir, project_id))

@@ -20,6 +20,8 @@ Rule 11: ``amoeba.runner`` takes from ``amoeba.store``, ``amoeba.process`` and
 Rule 12: the routing engine, the CF gate reads and the pointer modules are gone
 (slice 132): their paths do not exist and no module under ``amoeba.runner`` imports
 them.
+Rule 13: ``amoeba.program`` imports only ``amoeba.store`` and ``amoeba.upstream``
+(slice 181), so inspection can use it without reaching ``amoeba.runner``.
 """
 
 from __future__ import annotations
@@ -421,3 +423,60 @@ def test_rule_12_nothing_imports_a_removed_runner_module() -> None:
         )
     ]
     assert offenders == []
+
+
+#: Rule 13: the only ``amoeba`` packages ``amoeba.program`` may import.
+ALLOWED_FOR_PROGRAM = ("amoeba.store", "amoeba.upstream", "amoeba.program")
+
+
+def _program_violations(path: Path) -> list[str]:
+    """The ``amoeba`` modules ``path`` imports beyond the program rule's allowance."""
+    return sorted(
+        name
+        for name in _imported_names(path)
+        if _mentions({name}, "amoeba")
+        and not any(_mentions({name}, allowed) for allowed in ALLOWED_FOR_PROGRAM)
+    )
+
+
+def test_rule_13_the_program_package_imports_only_the_store_and_upstream() -> None:
+    sources = sorted((SRC / "program").rglob("*.py"))
+    assert sources, "amoeba.program has no source"
+    assert [
+        f"{path.name} imports {name}"
+        for path in sources
+        for name in _program_violations(path)
+    ] == []
+
+
+def test_rule_13_fails_on_a_deliberate_runner_import(tmp_path: Path) -> None:
+    """The rule bites: a real copy of ``members.py`` plus a runner import is flagged."""
+    real = (SRC / "program" / "members.py").read_text(encoding="utf-8")
+    module = tmp_path / "members.py"
+    module.write_text(
+        real + "\nfrom amoeba.runner import tenant as _runner_tenant\n",
+        encoding="utf-8",
+    )
+
+    assert _program_violations(module) == [
+        "amoeba.runner",
+        "amoeba.runner.tenant",
+    ]
+
+
+def test_rule_13_inspection_may_import_the_program_package_but_not_the_runner(
+    tmp_path: Path,
+) -> None:
+    allowed = tmp_path / "uses_program.py"
+    allowed.write_text("from amoeba.program import read_member\n", encoding="utf-8")
+    forbidden = tmp_path / "uses_runner.py"
+    forbidden.write_text("from amoeba.runner import tenant\n", encoding="utf-8")
+
+    assert _runner_imports(allowed) == set()
+    assert _runner_imports(forbidden) != set()
+    # Rule 10 is what keeps the real inspection package off the runner.
+    assert [
+        path.name
+        for path in sorted((SRC / "inspection").rglob("*.py"))
+        if _runner_imports(path)
+    ] == []
