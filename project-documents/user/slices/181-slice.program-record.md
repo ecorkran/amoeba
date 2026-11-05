@@ -16,8 +16,8 @@ interfaces:
 - 184-slice.request-runs
 - 185-slice.request-outcome
 dateCreated: 20261103
-dateUpdated: 20261104
-status: not_started
+dateUpdated: 20261105
+status: in_progress
 turns: 39
 promptTokens: 3367393
 cachedTokens: 3226076
@@ -390,17 +390,23 @@ CREATE TABLE program_submissions (
 
 ### Verification Walkthrough
 
-Run against a throwaway supervisor directory; the real one is never touched. `amoeba start` needs `sq` installed for its start-up probe.
+Run against a throwaway supervisor directory; the real one is never touched. `amoeba start` needs `sq` installed for its start-up probe, runs in the foreground (background it), and takes about a second to be running. Use a scratch `--sq-runs-dir` so the observer reads nothing real. Verified 2026-11-05 on the implementation (`uv run amoeba …`); the outputs below are what was seen.
 
+0. **Setup.**
+   ```bash
+   export AMOEBA_STORE_DIR=$(mktemp -d)/supervisor; mkdir -p "$AMOEBA_STORE_DIR"
+   RUNS=$(mktemp -d)
+   start() { amoeba start --sq-runs-dir "$RUNS" --idle-interval 0.05 & }
+   running() { until amoeba status | grep -q running; do sleep 0.2; done; }
+   ```
 1. **A throwaway supervisor with two projects.**
    ```bash
-   export AMOEBA_STORE_DIR=$(mktemp -d)
-   amoeba submit create-project --project data --by operator
+   amoeba submit create-project --project data --by operator     # prints a submission id
    amoeba submit create-project --project engine --by operator
-   amoeba start
+   start; running
    amoeba inspect projects          # data, engine
-   amoeba inspect program           # no rows: no program store yet
-   ls "$AMOEBA_STORE_DIR"           # data.sqlite3 engine.sqlite3 inbox/ ... no programs/
+   amoeba inspect program           # prints (none): no program store yet
+   ls "$AMOEBA_STORE_DIR"           # data.sqlite3 engine.sqlite3 inbox launch-logs ... no programs/
    ```
 2. **Register a program.**
    ```bash
@@ -408,14 +414,41 @@ Run against a throwaway supervisor directory; the real one is never touched. `am
        --concept-member data --concept-path docs/program-concept.md \
        --members '[{"project_id":"data","requests_initiative":790,"consumed":"from_source","overrides":{}},
                    {"project_id":"engine","requests_initiative":790,"consumed":"from_source","overrides":{"data":"from_release"}}]'
-   amoeba inspect program-submissions   # one row, outcome applied
-   ls "$AMOEBA_STORE_DIR/programs"      # inbox/ programs.sqlite3
-   amoeba inspect program               # two rows; state unlinked for both
-   amoeba inspect program-blocked       # two member_unreadable rows: "unlinked: ..."
+   sleep 2                              # the process drains it on its next tick
+   amoeba inspect program-submissions   # one row: register_program, outcome applied, empty reason
+   ls "$AMOEBA_STORE_DIR/programs"      # inbox  programs.sqlite3  (plus the -shm and -wal files while it runs)
+   amoeba inspect program               # two rows (data, engine); state unlinked, detail "the project has no CF link";
+                                        #   engine's overrides column reads data=from_release; concept_path only on data's row
+   amoeba inspect program-blocked       # two member_unreadable rows, reason "unlinked: the project has no CF link"
    ```
-3. **Bad bodies.** Drop `requests_initiative` from a `register-member` call: `amoeba submit` exits 9 (`SUBMISSION_REFUSED`) naming the field. `register-member --program-id nope ...` is recorded `rejected`, `unknown_program: ...`, on `program-submissions`.
-4. **A missing member store.** `amoeba stop`, delete `engine.sqlite3`, `amoeba start`: `program-blocked` shows `engine` as `store_missing`, and `data` keeps ticking.
-5. **Process contract and proofs.** `amoeba stop`; `echo junk > "$AMOEBA_STORE_DIR/programs/programs.sqlite3"`; `amoeba start` exits `STARTUP_FAILED` naming the program store. Then `uv run pytest tests/contract tests/test_writer_guard.py tests/test_import_boundaries.py` passes, including the locality proof's negative cases.
+3. **Bad bodies.**
+   ```bash
+   # No requests_initiative: exits 9 (SUBMISSION_REFUSED), nothing written, and the message names the field:
+   #   amoeba: invalid_payload: 1 validation error for RegisterMemberPayload
+   #   member.requests_initiative  Field required
+   amoeba submit register-member --by operator --program-id demo \
+       --member '{"project_id":"ui","consumed":"from_release","overrides":{}}'; echo $?     # 9
+   # An unknown program is accepted by submit (exit 0, prints an id) and recorded rejected:
+   amoeba submit register-member --by operator --program-id nope \
+       --member '{"project_id":"ui","requests_initiative":790,"consumed":"from_release","overrides":{}}'
+   sleep 2; amoeba inspect program-submissions   # a second row: register_member, rejected, "unknown_program: no program nope"
+   ```
+4. **A missing member store.**
+   ```bash
+   amoeba stop
+   rm -f "$AMOEBA_STORE_DIR"/engine.sqlite3*
+   start; running
+   amoeba inspect program-blocked   # engine: member_unreadable, "store_missing: no engine.sqlite3 in <dir>"; data still listed
+   amoeba inspect projects          # only data: it keeps running
+   ```
+5. **Process contract and proofs.**
+   ```bash
+   amoeba stop
+   rm -f "$AMOEBA_STORE_DIR"/programs/programs.sqlite3-*     # the leftover WAL files, so the junk is read as is
+   echo junk > "$AMOEBA_STORE_DIR/programs/programs.sqlite3"
+   amoeba start --sq-runs-dir "$RUNS"   # exits 7 (STARTUP_FAILED): "cannot open the program store at <path>: ... file is not a database"
+   uv run pytest tests/contract tests/test_writer_guard.py tests/test_import_boundaries.py   # 337 passed, incl. the locality proof's negative cases
+   ```
 
 The CF-dependent reasons (`snapshot_missing`, `checkout_unresolved`, readable) are covered by tests with fixtures written by the tests; seeing them against a real CF project is 186's walkthrough.
 

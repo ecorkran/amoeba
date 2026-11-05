@@ -18,8 +18,8 @@ projectState: Initiatives 100, 120 and 140 are complete and merged. The project 
   or `programs/` exists. The parent slice plan and architecture already carry decision
   D4 (the requests initiative index lives on the member registration).
 dateCreated: 20261104
-dateUpdated: 20261104
-status: not_started
+dateUpdated: 20261105
+status: in_progress
 turns: 23
 promptTokens: 1182786
 cachedTokens: 1083463
@@ -301,18 +301,18 @@ Note: tests/load/test_runner_tick_load.py and test_program_load.py pass without 
 
 **Commit**: `docs: document the program store, program inbox and program stage`
 
-- [ ] **9.2 Verification walkthrough** (effort 3)
-  - [ ] Run `command -v sq`. If it is absent, write a line starting `BLOCKED:` under this task saying `amoeba start` cannot run without `sq`, leave the task unchecked and stop. Nothing before this task depends on it.
-  - [ ] Run steps 1 to 5 of the LLD "Verification Walkthrough" against a throwaway supervisor directory (`mktemp -d`), never the real one. Step 5's `pytest` command must pass.
-  - [ ] Success: every step shows what the LLD says it shows; any difference is fixed in code, and the closing report says what each step showed. After any fix, re-run Task 9.1's checks.
-  - [ ] Delete the throwaway directory when done.
+- [x] **9.2 Verification walkthrough** (effort 3)
+  - [x] Run `command -v sq`. If it is absent, write a line starting `BLOCKED:` under this task saying `amoeba start` cannot run without `sq`, leave the task unchecked and stop. Nothing before this task depends on it.
+  - [x] Run steps 1 to 5 of the LLD "Verification Walkthrough" against a throwaway supervisor directory (`mktemp -d`), never the real one. Step 5's `pytest` command must pass.
+  - [x] Success: every step shows what the LLD says it shows; any difference is fixed in code, and the closing report says what each step showed. After any fix, re-run Task 9.1's checks.
+  - [x] Delete the throwaway directory when done.
 
 Write no walkthrough note into this file. If a step needed a code fix, commit it at the marker below; this task's check-off commits with Task 9.3.
 
 **Commit**: `feat: correct what the program record walkthrough found` (only when a step needed a code fix; use `test:` when only tests changed)
 
-- [ ] **9.3 CHANGELOG** (effort 1)
-  - [ ] Under `[Unreleased] / Added`, one or two lines for slice 181 in the existing style: the program store and inbox, `register-program` and `register-member`, member readability, the program stage, the three listings and the `queue` column, 100's locality rule updated. Note that nothing runs differently yet.
-  - [ ] Success: entry present, concise.
+- [x] **9.3 CHANGELOG** (effort 1)
+  - [x] Under `[Unreleased] / Added`, one or two lines for slice 181 in the existing style: the program store and inbox, `register-program` and `register-member`, member readability, the program stage, the three listings and the `queue` column, 100's locality rule updated. Note that nothing runs differently yet.
+  - [x] Success: entry present, concise.
 
 **Commit**: `docs: add slice 181 to the changelog`
