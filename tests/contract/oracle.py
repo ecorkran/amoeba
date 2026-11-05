@@ -14,6 +14,7 @@ is spelled as a literal here or in the declaration.
 
 from __future__ import annotations
 
+import sqlite3
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
@@ -35,6 +36,7 @@ from amoeba.store import (
     SubmissionKind,
     SubmissionOutcome,
     VerdictStanding,
+    program_store_path,
     project_store_path,
 )
 
@@ -152,6 +154,63 @@ def diff_state(
     return lines
 
 
+#: What the program store may hold, written out here rather than derived from the
+#: code under test (slice 181, D9). Everything else is a project's.
+PROGRAM_TABLES = frozenset(
+    {
+        "schema_meta",
+        "programs",
+        "program_members",
+        "consumption_overrides",
+        "program_submissions",
+    }
+)
+
+#: A project store may hold none of these (``schema_meta`` is every store's).
+_PROGRAM_ONLY_TABLES = PROGRAM_TABLES - {"schema_meta"}
+
+
+def _table_names(store_file: Path) -> frozenset[str]:
+    """The tables of one SQLite file, read through a read-only connection."""
+    connection = sqlite3.connect(f"file:{store_file}?mode=ro", uri=True)
+    try:
+        rows = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    finally:
+        connection.close()
+    return frozenset(str(row[0]) for row in rows)
+
+
+def program_locality_problems(
+    supervisor_dir: Path, project_ids: Sequence[str]
+) -> list[str]:
+    """D9: the program store holds only program tables; no project store holds one.
+
+    With no program store there is nothing to check on that side, and a project
+    store is checked either way.
+    """
+    problems: list[str] = []
+    program_store = program_store_path(supervisor_dir)
+    if program_store.is_file():
+        tables = _table_names(program_store)
+        if tables != PROGRAM_TABLES:
+            extra = sorted(tables - PROGRAM_TABLES)
+            missing = sorted(PROGRAM_TABLES - tables)
+            problems.append(
+                f"the program store holds tables {extra} it may not, "
+                f"and lacks {missing}"
+            )
+    for project_id in project_ids:
+        store_file = project_store_path(supervisor_dir, project_id)
+        if not store_file.is_file():
+            continue
+        foreign = sorted(_table_names(store_file) & _PROGRAM_ONLY_TABLES)
+        if foreign:
+            problems.append(f"{project_id}'s store holds program tables {foreign}")
+    return problems
+
+
 def locality_problems(
     supervisor_dir: Path,
     project_ids: Sequence[str],
@@ -159,7 +218,7 @@ def locality_problems(
     changes: Mapping[str, Sequence[Change]],
     ledger_paths: Mapping[str, Sequence[str]],
 ) -> list[str]:
-    """D6: one store per project and nothing crossing between them."""
+    """D6, D9: one store per project, nothing crossing, program tables kept apart."""
     problems: list[str] = []
     suffix = project_store_path(supervisor_dir, project_ids[0]).suffix
     expected = sorted(project_store_path(supervisor_dir, p).name for p in project_ids)
@@ -176,7 +235,7 @@ def locality_problems(
             for path in ledger_paths[project_id]:
                 if Path(path).parent == reviews_dirs[other]:
                     problems.append(f"{project_id} ledger holds {other}'s file {path}")
-    return problems
+    return problems + program_locality_problems(supervisor_dir, project_ids)
 
 
 def sequence_problems(changes: Sequence[Change]) -> list[str]:

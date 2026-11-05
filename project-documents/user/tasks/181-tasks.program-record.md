@@ -269,14 +269,14 @@ Note: no existing test asserted the inbox listing's full column tuple; the exist
 
 ## 8. Locality rule, proofs and contract docs
 
-- [ ] **8.1 Locality proof** (effort 4)
-  - [ ] Read `tests/contract/oracle.py` (`locality_problems`) and the harness that builds its scenario. Extend the scenario so a program is registered through the program inbox before the proof runs.
-  - [ ] Add two checks to `locality_problems`: the program store's tables are exactly the allowed set (programs, members, overrides, program submissions, `schema_meta`), and no project store has a program table. The top-level `*.sqlite3` check is unchanged.
-  - [ ] Negative tests in `tests/contract/test_oracle.py`: add a `nodes` table, separately a `blocked_states` and a `question_records` table, to a scratch program store, and a program table to a project store; each makes the proof fail naming the table.
-  - [ ] Success: `uv run pytest tests/contract` passes, including the negatives.
-- [ ] **8.2 Writer guard** (effort 2)
-  - [ ] In `tests/test_writer_guard.py` also flag `ProgramStore.open(` (read-write) outside `process/project_stores.py`, not `open_read_only`. Add scan tests beside the existing ones: a violation is found, a wrapped call is found, `open_read_only` is ignored.
-  - [ ] Success: `uv run pytest tests/test_writer_guard.py` passes against the real source tree.
+- [x] **8.1 Locality proof** (effort 4)
+  - [x] Read `tests/contract/oracle.py` (`locality_problems`) and the harness that builds its scenario. Extend the scenario so a program is registered through the program inbox before the proof runs.
+  - [x] Add two checks to `locality_problems`: the program store's tables are exactly the allowed set (programs, members, overrides, program submissions, `schema_meta`), and no project store has a program table. The top-level `*.sqlite3` check is unchanged.
+  - [x] Negative tests in `tests/contract/test_oracle.py`: add a `nodes` table, separately a `blocked_states` and a `question_records` table, to a scratch program store, and a program table to a project store; each makes the proof fail naming the table.
+  - [x] Success: `uv run pytest tests/contract` passes, including the negatives.
+- [x] **8.2 Writer guard** (effort 2)
+  - [x] In `tests/test_writer_guard.py` also flag `ProgramStore.open(` (read-write) outside `process/project_stores.py`, not `open_read_only`. Add scan tests beside the existing ones: a violation is found, a wrapped call is found, `open_read_only` is ignored.
+  - [x] Success: `uv run pytest tests/test_writer_guard.py` passes against the real source tree.
 
 **Commit**: `test: extend the locality proof and the writer guard to the program store`
 
