@@ -92,11 +92,11 @@ Note: the one 'projectPath' literal in the moved module now uses FIELD_PROJECT_P
 
 **Commit**: `refactor: move resolve_checkout to the context_forge upstream module`
 
-- [ ] **1.5 Move the repo-relative path rule to `store/paths.py`** (effort 2)
-  - [ ] Add `validate_repo_relative_path(entry, *, glob_allowed)` to `store/paths.py`, carrying the checks of `_checked_rules_path` in `runner/project_config.py` (not absolute, no `..` segment, names a file, `*` in the last segment only when `glob_allowed`). `GLOB_WILDCARD` moves from `runner/answering/passages.py` into `store/paths.py`, defined once there; `passages.py` and `project_config.py` import it from `amoeba.store.paths`.
-  - [ ] The `AfterValidator` on the `RulesPath` annotation in `runner/project_config.py` (which `rules_paths` uses) calls it with `glob_allowed=True`; delete `_checked_rules_path`. Error messages stay the same.
-  - [ ] Add tests in `tests/test_paths.py` for both modes: each rejection and an accepted path. Existing project-config tests stay unedited and green.
-  - [ ] Success: `uv run pytest tests/test_paths.py tests/runner` passes.
+- [x] **1.5 Move the repo-relative path rule to `store/paths.py`** (effort 2)
+  - [x] Add `validate_repo_relative_path(entry, *, glob_allowed)` to `store/paths.py`, carrying the checks of `_checked_rules_path` in `runner/project_config.py` (not absolute, no `..` segment, names a file, `*` in the last segment only when `glob_allowed`). `GLOB_WILDCARD` moves from `runner/answering/passages.py` into `store/paths.py`, defined once there; `passages.py` and `project_config.py` import it from `amoeba.store.paths`.
+  - [x] The `AfterValidator` on the `RulesPath` annotation in `runner/project_config.py` (which `rules_paths` uses) calls it with `glob_allowed=True`; delete `_checked_rules_path`. Error messages stay the same.
+  - [x] Add tests in `tests/test_paths.py` for both modes: each rejection and an accepted path. Existing project-config tests stay unedited and green.
+  - [x] Success: `uv run pytest tests/test_paths.py tests/runner` passes.
 
 **Commit**: `refactor: move the repo-relative path rule to store paths`
 

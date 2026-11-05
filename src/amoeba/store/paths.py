@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Final
 
 #: Environment variable that overrides the store directory outright. Highest
 #: precedence — set it and neither XDG nor the default is consulted.
@@ -29,6 +30,9 @@ DEFAULT_STORE_DIR = Path.home() / ".config" / STORE_DIR_NAME
 
 #: Filename suffix for a project's store file.
 STORE_FILE_SUFFIX = ".sqlite3"
+
+#: The only wildcard in a rules entry or a plan file pattern.
+GLOB_WILDCARD: Final = "*"
 
 #: Suffix appended to a store's filename while it is built and migrated, before
 #: it is renamed into place. It must not end in ``STORE_FILE_SUFFIX``, so a
@@ -127,3 +131,33 @@ def project_store_path(directory: Path, project_id: str) -> Path:
     followers, which must not import the process.
     """
     return directory / f"{project_id}{STORE_FILE_SUFFIX}"
+
+
+def validate_repo_relative_path(entry: str, *, glob_allowed: bool) -> str:
+    """The entry, when it names a file inside a repository.
+
+    The one definition of the rule for every repo-relative path the system
+    accepts: a ``rules_paths`` entry (a ``*`` is allowed in the last segment)
+    and a program concept path (no wildcard at all).
+
+    Args:
+        entry: The path, already stripped.
+        glob_allowed: Whether ``*`` may appear in the last segment.
+
+    Raises:
+        ValueError: The entry is absolute, has a ``..`` segment, names a
+            directory, or has a ``*`` where none is allowed.
+    """
+    segments = entry.split("/")
+    if entry.startswith("/"):
+        raise ValueError("must be relative to the repository, not absolute")
+    if ".." in segments:
+        raise ValueError("must not contain a `..` segment")
+    if not segments[-1]:
+        raise ValueError("must name a file, not a directory")
+    if not glob_allowed and GLOB_WILDCARD in entry:
+        raise ValueError(f"must not contain `{GLOB_WILDCARD}`")
+    if any(GLOB_WILDCARD in segment for segment in segments[:-1]):
+        raise ValueError(f"`{GLOB_WILDCARD}` is allowed in the last segment only")
+    return entry
+

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated
@@ -32,33 +33,14 @@ from pydantic import (
 from pydantic_core import ErrorDetails
 
 from amoeba.process import StartupFailedError
-from amoeba.runner.answering.passages import GLOB_WILDCARD
 from amoeba.runner.launch import TARGET_PARAM_KEY, param_problem
-
-
-def _checked_rules_path(entry: str) -> str:
-    """The entry, when it is a usable ``rules_paths`` entry.
-
-    Raises:
-        ValueError: absolute, has a ``..`` segment, or ``*`` outside the last segment.
-    """
-    segments = entry.split("/")
-    if entry.startswith("/"):
-        raise ValueError("must be relative to the repository, not absolute")
-    if ".." in segments:
-        raise ValueError("must not contain a `..` segment")
-    if not segments[-1]:
-        raise ValueError("must name a file, not a directory")
-    if any(GLOB_WILDCARD in segment for segment in segments[:-1]):
-        raise ValueError("`*` is allowed in the last segment only")
-    return entry
-
+from amoeba.store.paths import validate_repo_relative_path
 
 #: One ``rules_paths`` entry: stripped, non-blank, relative, contained (slice 143, D10).
 RulesPath = Annotated[
     StrictStr,
     StringConstraints(strip_whitespace=True, min_length=1),
-    AfterValidator(_checked_rules_path),
+    AfterValidator(partial(validate_repo_relative_path, glob_allowed=True)),
 ]
 
 
