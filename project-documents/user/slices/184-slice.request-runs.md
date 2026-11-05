@@ -543,12 +543,14 @@ Draft; refined after implementation. Nothing in 184 creates a request outside te
 - **It changes 132's checkout hold and dispatch order and 124's governance.** A mistake launches a request run over live work, or drives the wrong slice.
 - **It acts on a model's reply about another project's repo.** A wrong index could bind an unrelated slice.
 - **180's launch shape is not final**, and real runs wait on Squadron.
+- **The write step can push from the provider's real checkout.** 180's write step has no tool restriction, only prompt text (180, D1 and D2; `ecorkran/amoeba#29`). The commit guard bounds the checkout and the target, but nothing stops the agent running `git push`. In 180's live tier this was a scratch repo with no remote; here it is the provider's real checkout and its real `origin`.
 
 ### Mitigation Strategies
 
 - The exemption applies only when no run is in flight and the tree is clean and on the target. The check is the existing fresh-launch rule, unchanged. Membership drive applies only to slices an open edge names, and only requests create edges. A no-program regression test pins identical ticks.
 - Binding requires a new slice at the reported index, absent at launch, inside the band, seen by a plan read that started after the reply. Requests to one provider are serialized, so no other request can supply that slice. Nothing a model says satisfies an edge (183).
 - The argv lives in one function, the probe guards start-up, and every real-run step belongs to 186.
+- **Push (note, not yet in the task file).** A runner-side check belongs here, since 184 owns the launch (D7) and the finish (D8). Two parts. Block: launch the request run with `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` setting `core.hooksPath` to an Amoeba-owned directory whose `pre-push` hook exits non-zero. This stops a plain `git push` only if the session's shell inherits the launch environment, which has to be verified against a real run; `--no-verify` still gets past it. Detect: record `git for-each-ref refs/remotes` in the checkout at launch, and compare it at finish. A difference means something pushed or fetched during the run, and the request fails with a named reason before any binding. That needs one new `RequestFailure` value, so the vocabulary and its SQL `CHECK` change together. When `ecorkran/amoeba#29` gives a real tool restriction, the block goes away and the detection stays.
 
 ## Implementation Notes
 
