@@ -67,8 +67,9 @@ steps:
         - If the initiative plan has the entry but no slice plan exists at that
           index, create the slice plan as above and leave the initiative plan
           untouched.
-        - If an entry or a slice plan already exists at that index under another
-          name, use it as it is.
+        - If the entry or the slice plan already exists at that index under
+          another name, keep that entry or file as it is, and still add the new
+          slice to that slice plan. Do not create a second one.
         - The new slice's index is {requests-index} when the initiative has no
           slices yet, and otherwise one more than the highest slice index already
           in it.

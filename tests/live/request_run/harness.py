@@ -161,7 +161,7 @@ def _check_every_run(
     """Assert what every run guarantees; return its new commits, oldest first."""
     report = f"{pipeline.poll}\n{pipeline.sq_output}"
     if pipeline.exit_code != 0:
-        raise AssertionError(f"sq exited {pipeline.exit_code}: {pipeline.sq_output}")
+        raise AssertionError(f"sq exited {pipeline.exit_code}: {report}")
     assert isinstance(pipeline.poll, RunOutcomeDocument), report
     assert pipeline.poll.outcome is RunOutcome.COMPLETED, report
     delivered = (io_directory / WRITE_PROMPT_FILE).read_text(encoding="utf-8")

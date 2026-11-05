@@ -1,14 +1,16 @@
 """Names of the shipped slice-writing pipeline, defined once (slice 180, D1 to D8).
 
-The pipeline YAML, the request directory preparation, the reply reader, the probe
-and the tests all import these names; a test asserts the YAML uses exactly them.
+The request directory preparation, the reply reader, the probe and the tests all
+import these names. The YAML cannot import, so it repeats them as literals; a test
+asserts it repeats exactly these.
 """
 
 from __future__ import annotations
 
-from importlib import resources
 from pathlib import Path
 from typing import Final
+
+from amoeba.runner.pipeline_resource import shipped_pipeline_path
 
 PIPELINE_FILE_NAME: Final = "slice_writing.yaml"
 
@@ -17,6 +19,9 @@ COMMIT_STEP: Final = "commit"
 
 REQUESTS_INDEX_PARAM: Final = "requests-index"
 MODEL_PARAM: Final = "model"
+
+# The lowest requests index or slice index (both are 1-based).
+MIN_INDEX: Final = 1
 
 # Input Amoeba writes into the run I/O directory.
 NEED_FILE: Final = "need.md"
@@ -51,8 +56,6 @@ def slice_writing_pipeline_path() -> Path:
     Raises:
         FileNotFoundError: When the file is not in the package.
     """
-    resource = resources.files("amoeba.runner.request_run").joinpath(PIPELINE_FILE_NAME)
-    path = Path(str(resource))
-    if not path.is_file():
-        raise FileNotFoundError(f"slice-writing pipeline file is missing: {path}")
-    return path.resolve()
+    return shipped_pipeline_path(
+        "amoeba.runner.request_run", PIPELINE_FILE_NAME, "slice-writing"
+    )

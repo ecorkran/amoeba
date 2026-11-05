@@ -16,7 +16,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, ValidationError
 
-from amoeba.runner.request_run.pipeline_file import REPLY_FILE
+from amoeba.runner.request_run.pipeline_file import MIN_INDEX, REPLY_FILE
 
 _COMMIT_PATTERN = re.compile(r"[0-9a-fA-F]{7,40}")
 
@@ -69,8 +69,8 @@ def _positive_index(value: object) -> int:
         value = int(text)
     if not isinstance(value, int):
         raise ValueError("index must be an integer or a string of digits")
-    if value < 1:
-        raise ValueError("index must be positive")
+    if value < MIN_INDEX:
+        raise ValueError(f"index must be at least {MIN_INDEX}")
     return value
 
 
@@ -121,7 +121,8 @@ def read_reply(directory: Path) -> NewSlice | AlreadyMet | ReplyProblem:
     try:
         document = _ReplyModel.model_validate_json(raw)
     except ValidationError as error:
-        return _malformed(str(error))
+        # One line: pydantic spreads its text over several and quotes the value.
+        return _malformed(" ".join(str(error).split()))
     try:
         if document.kind is ReplyKind.NEW_SLICE:
             return NewSlice(index=_positive_index(document.index))

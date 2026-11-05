@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 
 import pytest
+from live_environment import pipeline_environment
 from live_request_settings import RequestLiveSettings, read_request_live_settings
 
 from live.request_run.harness import RequestHarness
@@ -30,6 +31,6 @@ def request_harness(
     return RequestHarness(
         parent=tmp_path_factory.mktemp("request-live"),
         registry=tmp_path_factory.mktemp("cf-data"),
-        environ=dict(os.environ),
+        environ=pipeline_environment(os.environ),
         settings=request_live_settings,
     )

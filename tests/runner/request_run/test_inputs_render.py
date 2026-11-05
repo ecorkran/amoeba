@@ -50,6 +50,13 @@ def test_braces_and_markdown_are_preserved() -> None:
         (_request(label=""), "asking_slice_label"),
         (_request(label="140\nwidget"), "asking_slice_label"),
         (_request(label="140\rwidget"), "asking_slice_label"),
+        (_request(label="140 widget\n"), "asking_slice_label"),
+        *[
+            (_request(project=f"al{separator}pha"), "asking_project_id")
+            for separator in ("\v", "\f", "\x1c", "\x1d", "\x1e", "\x85")
+        ],
+        (_request(label="140\u2028widget"), "asking_slice_label"),
+        (_request(label="140\u2029widget"), "asking_slice_label"),
     ],
 )
 def test_invalid_request_is_refused(request_input: RequestInput, match: str) -> None:

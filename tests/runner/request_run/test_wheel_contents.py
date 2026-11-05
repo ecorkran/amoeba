@@ -1,4 +1,9 @@
-"""The built wheel ships the slice-writing pipeline file, usable once installed."""
+"""The built wheel ships the slice-writing pipeline file, usable once installed.
+
+This runs ``uv build`` in the default tier, as the answering pipeline's wheel test
+does: the default tier needs ``uv`` and a working hatchling build, a cost accepted
+because a pipeline file missing from the wheel only fails in an installed Amoeba.
+"""
 
 from __future__ import annotations
 

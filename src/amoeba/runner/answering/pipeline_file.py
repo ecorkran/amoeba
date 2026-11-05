@@ -6,9 +6,10 @@ import these names; a test asserts the YAML uses exactly them.
 
 from __future__ import annotations
 
-from importlib import resources
 from pathlib import Path
 from typing import Final
+
+from amoeba.runner.pipeline_resource import shipped_pipeline_path
 
 PIPELINE_FILE_NAME: Final = "answering.yaml"
 
@@ -37,8 +38,6 @@ def answering_pipeline_path() -> Path:
     Raises:
         FileNotFoundError: When the file is not in the package.
     """
-    resource = resources.files("amoeba.runner.answering").joinpath(PIPELINE_FILE_NAME)
-    path = Path(str(resource))
-    if not path.is_file():
-        raise FileNotFoundError(f"answering pipeline file is missing: {path}")
-    return path.resolve()
+    return shipped_pipeline_path(
+        "amoeba.runner.answering", PIPELINE_FILE_NAME, "answering"
+    )

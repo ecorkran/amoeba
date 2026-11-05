@@ -31,6 +31,7 @@ def _problem(directory: Path) -> ReplyProblem:
     result = read_reply(directory)
     assert isinstance(result, ReplyProblem)
     assert result.detail
+    assert "\n" not in result.detail, "a reply problem is one line"
     return result
 
 

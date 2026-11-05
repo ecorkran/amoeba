@@ -15,6 +15,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
+from pathlib import Path
 from typing import Final
 
 from amoeba.process import (
@@ -71,6 +72,47 @@ def probe_sq(
         )
 
 
+def _probe_pipeline(
+    settings: ProcessSettings,
+    run: CfRun,
+    label: str,
+    pipeline_path: Callable[[], Path],
+    extra_argv: Callable[[str], list[str]],
+) -> None:
+    """Run ``sq run <pipeline> --validate --strict`` once from a temporary directory.
+
+    ``extra_argv`` gets the path of a second temporary directory (alive for the
+    call) and returns the options added after ``--strict``. Every failure is a
+    ``StartupFailedError`` starting "``label`` pipeline probe failed".
+    """
+    prefix = f"{label} pipeline probe failed"
+    try:
+        path = pipeline_path()
+    except FileNotFoundError as error:
+        # A broken install is a start-up failure like any other probe failure.
+        raise StartupFailedError(f"{prefix}: {error}") from error
+    with (
+        tempfile.TemporaryDirectory() as scratch,
+        tempfile.TemporaryDirectory() as extra_directory,
+    ):
+        argv = [
+            SQ_EXECUTABLE,
+            "run",
+            str(path),
+            "--validate",
+            "--strict",
+            *extra_argv(extra_directory),
+        ]
+        completed = run_cf(argv, partial(run, cwd=scratch), settings.sq_timeout_seconds)
+    if isinstance(completed, CfCallFailed):
+        raise StartupFailedError(f"{prefix}: {completed.detail}")
+    if completed.returncode != 0:
+        raise StartupFailedError(
+            f"{prefix}: `{' '.join(argv)}` exited "
+            f"{completed.returncode}: {output_head(completed)}"
+        )
+
+
 def probe_answering_pipeline(settings: ProcessSettings, run: CfRun) -> None:
     """Check that `sq run <answering.yaml> --validate --strict` exits 0 (D9).
 
@@ -82,22 +124,9 @@ def probe_answering_pipeline(settings: ProcessSettings, run: CfRun) -> None:
         StartupFailedError: On a non-zero exit, a timeout or a missing ``sq``,
             naming the command, the exit code and the head of its output.
     """
-    try:
-        pipeline_path = answering_pipeline_path()
-    except FileNotFoundError as error:
-        # A broken install is a start-up failure like any other probe failure.
-        raise StartupFailedError(f"answering pipeline probe failed: {error}") from error
-    argv = [SQ_EXECUTABLE, "run", str(pipeline_path), "--validate", "--strict"]
-    shown = " ".join(argv)
-    with tempfile.TemporaryDirectory() as scratch:
-        completed = run_cf(argv, partial(run, cwd=scratch), settings.sq_timeout_seconds)
-    if isinstance(completed, CfCallFailed):
-        raise StartupFailedError(f"answering pipeline probe failed: {completed.detail}")
-    if completed.returncode != 0:
-        raise StartupFailedError(
-            f"answering pipeline probe failed: `{shown}` exited "
-            f"{completed.returncode}: {output_head(completed)}"
-        )
+    _probe_pipeline(
+        settings, run, "answering", answering_pipeline_path, lambda _directory: []
+    )
 
 
 def probe_slice_writing_pipeline(settings: ProcessSettings, run: CfRun) -> None:
@@ -114,38 +143,18 @@ def probe_slice_writing_pipeline(settings: ProcessSettings, run: CfRun) -> None:
             missing pipeline file, naming the command, the exit code and the head
             of its output.
     """
-    try:
-        pipeline_path = slice_writing_pipeline_path()
-    except FileNotFoundError as error:
-        # A broken install is a start-up failure like any other probe failure.
-        raise StartupFailedError(
-            f"slice-writing pipeline probe failed: {error}"
-        ) from error
-    with (
-        tempfile.TemporaryDirectory() as scratch,
-        tempfile.TemporaryDirectory() as io_directory,
-    ):
-        argv = [
-            SQ_EXECUTABLE,
-            "run",
-            str(pipeline_path),
-            "--validate",
-            "--strict",
+    _probe_pipeline(
+        settings,
+        run,
+        "slice-writing",
+        slice_writing_pipeline_path,
+        lambda io_directory: [
             IO_DIRECTORY_OPTION,
             io_directory,
             MAX_COST_OPTION,
             str(PROBE_MAX_COST_USD),
-        ]
-        completed = run_cf(argv, partial(run, cwd=scratch), settings.sq_timeout_seconds)
-    if isinstance(completed, CfCallFailed):
-        raise StartupFailedError(
-            f"slice-writing pipeline probe failed: {completed.detail}"
-        )
-    if completed.returncode != 0:
-        raise StartupFailedError(
-            f"slice-writing pipeline probe failed: `{' '.join(argv)}` exited "
-            f"{completed.returncode}: {output_head(completed)}"
-        )
+        ],
+    )
 
 
 @dataclass(frozen=True)

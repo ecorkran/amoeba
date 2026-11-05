@@ -862,7 +862,7 @@ the contract.
   case-insensitively after trimming; unknown keys are ignored; nothing defaults. `index`
   is a positive integer or a string of digits (not a boolean); `commit` is 7 to 40
   hexadecimal characters, returned lower case. Shape only: whether the index is new or
-  the commit exists is for slices 184 and 183.
+  the commit exists is for slices 184 and 183 (184's check is `ecorkran/amoeba#31`).
 
   ```json
   {"kind": "new_slice", "index": <new slice index>}

@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from amoeba.runner.answering import pipeline_file
+from amoeba.runner import pipeline_resource
 from amoeba.runner.answering.artifacts import AnswerKind, Verdict
 from amoeba.runner.answering.pipeline_file import (
     ANSWER_MODEL_PARAM,
@@ -112,6 +112,6 @@ def test_missing_file_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     def package_root(_package: str) -> Path:
         return tmp_path
 
-    monkeypatch.setattr(pipeline_file.resources, "files", package_root)
+    monkeypatch.setattr(pipeline_resource.resources, "files", package_root)
     with pytest.raises(FileNotFoundError, match=PIPELINE_FILE_NAME):
         answering_pipeline_path()

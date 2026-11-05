@@ -9,7 +9,7 @@ from typing import Any, cast
 import pytest
 import yaml
 
-from amoeba.runner.request_run import pipeline_file
+from amoeba.runner import pipeline_resource
 from amoeba.runner.request_run.pipeline_file import (
     COMMIT_MESSAGE,
     COMMIT_PATHS,
@@ -140,6 +140,6 @@ def test_missing_file_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     def package_root(_package: str) -> Path:
         return tmp_path
 
-    monkeypatch.setattr(pipeline_file.resources, "files", package_root)
+    monkeypatch.setattr(pipeline_resource.resources, "files", package_root)
     with pytest.raises(FileNotFoundError, match=PIPELINE_FILE_NAME):
         slice_writing_pipeline_path()
