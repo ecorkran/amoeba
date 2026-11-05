@@ -11,8 +11,8 @@ it, ``StatementRunner`` executes statements with the same typed errors.
 never creates, and cannot write.
 
 The store does not exist until the first program submission; the resident
-process creates it (``process/project_stores.py``). Reads here; the one write,
-``apply_submission``, is composed in from ``_program_writer``.
+process creates it (``process/project_stores.py``). Reads come from
+``_program_reads``; the one write, ``apply_submission``, from ``_program_writer``.
 """
 
 from __future__ import annotations
@@ -24,14 +24,14 @@ from typing import Self
 
 from amoeba.store import connection as connection_module
 from amoeba.store import sql
-from amoeba.store._program_reads import ProgramReads
+from amoeba.store._program_writer import ProgramWriter
 from amoeba.store.migrations import (
     EXPECTED_PROGRAM_SCHEMA_VERSION,
     PROGRAM_MIGRATIONS_PACKAGE,
 )
 
 
-class ProgramStore(ProgramReads):
+class ProgramStore(ProgramWriter):
     """The program store backed by one SQLite file.
 
     Open with :meth:`open` (resident process only) or :meth:`open_read_only`

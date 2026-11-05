@@ -104,3 +104,63 @@ SELECT {_SUBMISSION_LIST}
 FROM {TABLE_PROGRAM_SUBMISSIONS}
 ORDER BY applied_seq
 """
+
+# --------------------------------------------------------------------------
+# Writes. Every statement runs inside ``apply_submission``'s one transaction.
+# --------------------------------------------------------------------------
+
+INSERT_PROGRAM: Final = f"""
+INSERT INTO {TABLE_PROGRAMS} ({_PROGRAM_LIST})
+VALUES (?, ?, ?, ?, ?)
+"""
+
+#: Replaces the concept location and moves ``updated_at``; ``registered_at``
+#: never changes.
+UPDATE_PROGRAM: Final = f"""
+UPDATE {TABLE_PROGRAMS}
+SET concept_member = ?, concept_path = ?, updated_at = ?
+WHERE program_id = ?
+"""
+
+TOUCH_PROGRAM: Final = f"""
+UPDATE {TABLE_PROGRAMS}
+SET updated_at = ?
+WHERE program_id = ?
+"""
+
+INSERT_MEMBER: Final = f"""
+INSERT INTO {TABLE_PROGRAM_MEMBERS} ({_MEMBER_LIST})
+VALUES (?, ?, ?, ?, ?, ?)
+"""
+
+UPDATE_MEMBER: Final = f"""
+UPDATE {TABLE_PROGRAM_MEMBERS}
+SET requests_initiative = ?, consumed = ?, updated_at = ?
+WHERE program_id = ? AND project_id = ?
+"""
+
+DELETE_MEMBER: Final = f"""
+DELETE FROM {TABLE_PROGRAM_MEMBERS}
+WHERE program_id = ? AND project_id = ?
+"""
+
+INSERT_OVERRIDE: Final = f"""
+INSERT INTO {TABLE_CONSUMPTION_OVERRIDES} ({_OVERRIDE_LIST})
+VALUES (?, ?, ?, ?)
+"""
+
+DELETE_OVERRIDES_OF_PROVIDER: Final = f"""
+DELETE FROM {TABLE_CONSUMPTION_OVERRIDES}
+WHERE program_id = ? AND provider_id = ?
+"""
+
+#: ``applied_seq`` is the next integer, assigned inside the write transaction so
+#: it is the receiver's order and never repeats.
+INSERT_SUBMISSION: Final = f"""
+INSERT INTO {TABLE_PROGRAM_SUBMISSIONS} (
+    id, kind, submitted_by, submitted_at, payload, outcome, reason, applied_at,
+    applied_seq
+)
+SELECT ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(applied_seq), 0) + 1
+FROM {TABLE_PROGRAM_SUBMISSIONS}
+"""

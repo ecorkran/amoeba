@@ -128,28 +128,28 @@ Note: ProgramStore is exported from amoeba.store, as are validate_repo_relative_
 
 **Commit**: `feat: add the program store with schema 001, vocabularies and reads`
 
-- [ ] **2.5 `apply_submission` and `register_program` writes** (effort 3)
-  - [ ] Add `apply_submission(*, submission_id, kind, submitted_by, submitted_at, payload) -> ProgramSubmissionRecord`, in a new module (as `Store` does with `_submission_writer.py`) composed into `ProgramStore`. One `BEGIN IMMEDIATE` transaction: a reused id returns the existing record untouched (first wins); otherwise apply the kind's writes and record the submission `applied` with `applied_seq` and `applied_at`.
-  - [ ] `register_program` (LLD D3): creates the program or replaces it whole, so the concept location, member set and override set become exactly the body. An identical re-submission is `applied` and changes no row.
-  - [ ] Timestamps use the apply time (the submission's `applied_at`). `registered_at` is set on creation and never changes. `Member.updated_at` advances only when that member's index, mode or overrides change (a new member gets it at creation). `Program.updated_at` advances when the concept location changes, a member is added or removed, or any member changes, so it dates the member list; an identical re-submission moves neither.
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **2.6 Tests for `register_program` writes** (effort 3)
-  - [ ] `tests/store/test_program_apply_program.py`: create; replace with a member left out (it is gone, with its overrides); an identical re-submission is `applied` and every table, `updated_at` included, is unchanged except the new submission row; the timestamp rules in Task 2.5 (a changed mode advances that member and the program only; a removed member advances the program only; `registered_at` never moves).
-  - [ ] First wins: a reused id is a no-op, also with different content, and writes no second submission row. A failure inside the transaction leaves no submission row.
-  - [ ] Success: tests pass.
-- [ ] **2.7 `register_program` rejections** (effort 3)
-  - [ ] Checks run before any write, in this order; the first failure records the submission `rejected` with reason `"<code>: <detail>"` and writes nothing else: `member_of_other_program` (a listed project is in a different program; checked in code before the `UNIQUE` can fire), `concept_member_not_member` (against the set being written), `override_not_member` (against the set being written).
-  - [ ] `member_referenced` is reserved: define the check as a named hook that currently finds nothing, run after the three above, and say so in a comment.
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **2.8 Tests for `register_program` rejections** (effort 2)
-  - [ ] `tests/store/test_program_reject_program.py`: each of the three codes from a body that triggers it, recorded `rejected` with the `"<code>: <detail>"` reason and `applied_seq` rising; no other row written (compare table contents before and after); with two problems in one body the first in the order above is the one recorded.
-  - [ ] Success: tests pass.
-- [ ] **2.9 `apply_submission`: `register_member`** (effort 3)
-  - [ ] Upsert one member into an existing program; removes nothing; replaces that member's whole override set; timestamps by the rules in Task 2.5. Rejections, same recording as Task 2.7: `unknown_program`, `member_of_other_program`, `override_not_member` (override dependent not a member after the write).
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **2.10 Tests for `register_member`** (effort 2)
-  - [ ] `tests/store/test_program_apply_member.py`: add a new member; update an existing member's index, mode and overrides (override set replaced, other members untouched, timestamps per Task 2.5); an identical member re-submission changes no row; each rejection (`unknown_program`, `member_of_other_program`, `override_not_member`) recorded and nothing else written; the concept member still a member afterwards.
-  - [ ] Success: tests pass.
+- [x] **2.5 `apply_submission` and `register_program` writes** (effort 3)
+  - [x] Add `apply_submission(*, submission_id, kind, submitted_by, submitted_at, payload) -> ProgramSubmissionRecord`, in a new module (as `Store` does with `_submission_writer.py`) composed into `ProgramStore`. One `BEGIN IMMEDIATE` transaction: a reused id returns the existing record untouched (first wins); otherwise apply the kind's writes and record the submission `applied` with `applied_seq` and `applied_at`.
+  - [x] `register_program` (LLD D3): creates the program or replaces it whole, so the concept location, member set and override set become exactly the body. An identical re-submission is `applied` and changes no row.
+  - [x] Timestamps use the apply time (the submission's `applied_at`). `registered_at` is set on creation and never changes. `Member.updated_at` advances only when that member's index, mode or overrides change (a new member gets it at creation). `Program.updated_at` advances when the concept location changes, a member is added or removed, or any member changes, so it dates the member list; an identical re-submission moves neither.
+  - [x] Success: `uv run pyright` passes.
+- [x] **2.6 Tests for `register_program` writes** (effort 3)
+  - [x] `tests/store/test_program_apply_program.py`: create; replace with a member left out (it is gone, with its overrides); an identical re-submission is `applied` and every table, `updated_at` included, is unchanged except the new submission row; the timestamp rules in Task 2.5 (a changed mode advances that member and the program only; a removed member advances the program only; `registered_at` never moves).
+  - [x] First wins: a reused id is a no-op, also with different content, and writes no second submission row. A failure inside the transaction leaves no submission row.
+  - [x] Success: tests pass.
+- [x] **2.7 `register_program` rejections** (effort 3)
+  - [x] Checks run before any write, in this order; the first failure records the submission `rejected` with reason `"<code>: <detail>"` and writes nothing else: `member_of_other_program` (a listed project is in a different program; checked in code before the `UNIQUE` can fire), `concept_member_not_member` (against the set being written), `override_not_member` (against the set being written).
+  - [x] `member_referenced` is reserved: define the check as a named hook that currently finds nothing, run after the three above, and say so in a comment.
+  - [x] Success: `uv run pyright` passes.
+- [x] **2.8 Tests for `register_program` rejections** (effort 2)
+  - [x] `tests/store/test_program_reject_program.py`: each of the three codes from a body that triggers it, recorded `rejected` with the `"<code>: <detail>"` reason and `applied_seq` rising; no other row written (compare table contents before and after); with two problems in one body the first in the order above is the one recorded.
+  - [x] Success: tests pass.
+- [x] **2.9 `apply_submission`: `register_member`** (effort 3)
+  - [x] Upsert one member into an existing program; removes nothing; replaces that member's whole override set; timestamps by the rules in Task 2.5. Rejections, same recording as Task 2.7: `unknown_program`, `member_of_other_program`, `override_not_member` (override dependent not a member after the write).
+  - [x] Success: `uv run pyright` passes.
+- [x] **2.10 Tests for `register_member`** (effort 2)
+  - [x] `tests/store/test_program_apply_member.py`: add a new member; update an existing member's index, mode and overrides (override set replaced, other members untouched, timestamps per Task 2.5); an identical member re-submission changes no row; each rejection (`unknown_program`, `member_of_other_program`, `override_not_member`) recorded and nothing else written; the concept member still a member afterwards.
+  - [x] Success: tests pass.
 
 **Commit**: `feat: apply program and member registration in one transaction`
 
