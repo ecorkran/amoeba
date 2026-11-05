@@ -23,11 +23,13 @@ from amoeba.inbox.submit import (
     InvalidSubmissionError,
     SubmissionWriteError,
     submit,
+    submit_program,
 )
 
 __all__ = [
     # The one write path
     "submit",
+    "submit_program",
     # Read-only listings
     "failed",
     "pending",

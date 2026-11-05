@@ -155,25 +155,25 @@ Note: ProgramStore is exported from amoeba.store, as are validate_repo_relative_
 
 ## 3. Program envelope, submission and CLI
 
-- [ ] **3.1 Payload models** (effort 3)
-  - [ ] Create `inbox/program_envelope.py` (or a sibling `program_payloads.py` to stay near 300 lines). Define the payload field names as constants beside `ProgramSubmissionKind` and pin them to the models by a test, as `inbox_models.py` does for project kinds.
-  - [ ] Pydantic models per the LLD "Bodies" table, **unknown keys refused**: `program_id` (`validate_path_component`), `concept_member` and member `project_id` (`validate_project_id`), `concept_path` (`validate_repo_relative_path(glob_allowed=False)`, stripped, non-blank), `members` (non-empty, no project id twice), `member`, `requests_initiative` (strict integer in the range constants), `consumed` (`ConsumptionMode`), `overrides` (required mapping, may be `{}`, must not name the member itself, values are modes). Validation errors name the field.
-  - [ ] Success: `uv run pyright` passes.
-- [ ] **3.2 Tests for payload models** (effort 3)
-  - [ ] `tests/inbox/test_program_payloads.py`: a valid body of each kind; each failure in LLD Success Criteria (missing `requests_initiative`, `concept_member` or `concept_path`; index 99, 800, `true`, `"790"`, `790.0`; unknown mode; self override; duplicate member; unknown key; empty members; wrong-kind fields such as `member` on `register_program`) with the field named in the error; the pin test for field names.
-  - [ ] Success: tests pass.
-- [ ] **3.3 Envelope and `parse_program_envelope`** (effort 3)
-  - [ ] Envelope fields: `envelope_version`, `id`, `kind`, `submitted_by`, `submitted_at`, `payload`; **no project id**. `parse_program_envelope(raw)` raises the existing `EnvelopeError` with the existing `QuarantineReason` values that apply: `unparseable_envelope`, `unknown_envelope_version`, `unknown_kind`, `invalid_payload`. Mirror `inbox/envelope.py` and reuse its helpers rather than copying them.
-  - [ ] Tests `tests/inbox/test_program_envelope.py`: valid envelope of each kind; each of the four reasons from a real-format envelope file (write the JSON the way `submit_program` will); for `invalid_payload`, the error detail names the offending field (a body missing `requests_initiative` gives a detail containing it); a project kind sent to the program parser is `unknown_kind`.
-  - [ ] Success: tests pass.
-- [ ] **3.4 `submit_program()`** (effort 3)
-  - [ ] In `inbox/submit.py` (or a sibling module if it would pass ~300 lines) add `submit_program(kind, payload, submitted_by, submission_id=None, store_dir=None)`: validates first and raises `InvalidSubmissionError` with nothing written; otherwise writes durably (`write_durably`) to `programs/inbox/new/` using `layout` called with `program_dir(store_dir)`. Returns the id; first id wins, as `submit()`. Export from `amoeba.inbox`; update `tests/inbox/test_inbox_public_api.py`.
-  - [ ] Tests `tests/inbox/test_submit_program.py`, mirroring `test_submit.py`: file lands in `programs/inbox/new/` and nowhere in `inbox/`; invalid payload writes nothing; supplied id is reused; `store_dir` resolution matches `submit()`.
-  - [ ] Success: tests pass.
-- [ ] **3.5 CLI subcommands** (effort 3)
-  - [ ] Read `cli/submit.py`. Add `register-program` and `register-member` derived from `ProgramSubmissionKind` and the payload fields by the existing flag rule; program kinds take no `--project`; `--members` and `--member` take JSON. Each prints the submission id; `--id` reuses one; an invalid body exits 9 (`SUBMISSION_REFUSED`) naming the field.
-  - [ ] Tests (extend `tests/cli/` using `cli_harness.py`): both commands against a temporary supervisor directory; the exit-9 refusal for a missing `requests_initiative`; `--project` is not accepted.
-  - [ ] Success: tests pass; `amoeba submit --help` lists both.
+- [x] **3.1 Payload models** (effort 3)
+  - [x] Create `inbox/program_envelope.py` (or a sibling `program_payloads.py` to stay near 300 lines). Define the payload field names as constants beside `ProgramSubmissionKind` and pin them to the models by a test, as `inbox_models.py` does for project kinds.
+  - [x] Pydantic models per the LLD "Bodies" table, **unknown keys refused**: `program_id` (`validate_path_component`), `concept_member` and member `project_id` (`validate_project_id`), `concept_path` (`validate_repo_relative_path(glob_allowed=False)`, stripped, non-blank), `members` (non-empty, no project id twice), `member`, `requests_initiative` (strict integer in the range constants), `consumed` (`ConsumptionMode`), `overrides` (required mapping, may be `{}`, must not name the member itself, values are modes). Validation errors name the field.
+  - [x] Success: `uv run pyright` passes.
+- [x] **3.2 Tests for payload models** (effort 3)
+  - [x] `tests/inbox/test_program_payloads.py`: a valid body of each kind; each failure in LLD Success Criteria (missing `requests_initiative`, `concept_member` or `concept_path`; index 99, 800, `true`, `"790"`, `790.0`; unknown mode; self override; duplicate member; unknown key; empty members; wrong-kind fields such as `member` on `register_program`) with the field named in the error; the pin test for field names.
+  - [x] Success: tests pass.
+- [x] **3.3 Envelope and `parse_program_envelope`** (effort 3)
+  - [x] Envelope fields: `envelope_version`, `id`, `kind`, `submitted_by`, `submitted_at`, `payload`; **no project id**. `parse_program_envelope(raw)` raises the existing `EnvelopeError` with the existing `QuarantineReason` values that apply: `unparseable_envelope`, `unknown_envelope_version`, `unknown_kind`, `invalid_payload`. Mirror `inbox/envelope.py` and reuse its helpers rather than copying them.
+  - [x] Tests `tests/inbox/test_program_envelope.py`: valid envelope of each kind; each of the four reasons from a real-format envelope file (write the JSON the way `submit_program` will); for `invalid_payload`, the error detail names the offending field (a body missing `requests_initiative` gives a detail containing it); a project kind sent to the program parser is `unknown_kind`.
+  - [x] Success: tests pass.
+- [x] **3.4 `submit_program()`** (effort 3)
+  - [x] In `inbox/submit.py` (or a sibling module if it would pass ~300 lines) add `submit_program(kind, payload, submitted_by, submission_id=None, store_dir=None)`: validates first and raises `InvalidSubmissionError` with nothing written; otherwise writes durably (`write_durably`) to `programs/inbox/new/` using `layout` called with `program_dir(store_dir)`. Returns the id; first id wins, as `submit()`. Export from `amoeba.inbox`; update `tests/inbox/test_inbox_public_api.py`.
+  - [x] Tests `tests/inbox/test_submit_program.py`, mirroring `test_submit.py`: file lands in `programs/inbox/new/` and nowhere in `inbox/`; invalid payload writes nothing; supplied id is reused; `store_dir` resolution matches `submit()`.
+  - [x] Success: tests pass.
+- [x] **3.5 CLI subcommands** (effort 3)
+  - [x] Read `cli/submit.py`. Add `register-program` and `register-member` derived from `ProgramSubmissionKind` and the payload fields by the existing flag rule; program kinds take no `--project`; `--members` and `--member` take JSON. Each prints the submission id; `--id` reuses one; an invalid body exits 9 (`SUBMISSION_REFUSED`) naming the field.
+  - [x] Tests (extend `tests/cli/` using `cli_harness.py`): both commands against a temporary supervisor directory; the exit-9 refusal for a missing `requests_initiative`; `--project` is not accepted.
+  - [x] Success: tests pass; `amoeba submit --help` lists both.
 
 **Commit**: `feat: add program submissions, the program envelope and submit subcommands`
 

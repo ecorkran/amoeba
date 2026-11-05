@@ -2,7 +2,9 @@
 
 Both levels derive from the inbox's own definitions, never the reverse:
 
-- one subcommand per :class:`SubmissionKind` member, named from its value;
+- one subcommand per :class:`SubmissionKind` member, and per
+  :class:`ProgramSubmissionKind` member (which takes no ``--project``: a program
+  submission is attributed to no project), named from its value;
 - one flag per field of that kind's payload model, named from the field.
 
 So adding a kind — a member, a payload model, an effect — surfaces its
@@ -10,7 +12,8 @@ subcommand and its flags here with no second list to keep in step. A text or
 enum field takes its flag as typed; every other field takes JSON. Pydantic
 validates the result either way.
 
-It calls :func:`amoeba.inbox.submit` and opens no store. It works whether or
+It calls :func:`amoeba.inbox.submit` or :func:`amoeba.inbox.submit_program` and
+opens no store. It works whether or
 not the resident process is running, and prints the submission id.
 """
 
@@ -23,9 +26,10 @@ from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
-from amoeba.inbox import submit
+from amoeba.inbox import submit, submit_program
 from amoeba.inbox.envelope import KIND_PAYLOAD_MODELS
-from amoeba.store import SubmissionKind
+from amoeba.inbox.program_payloads import PROGRAM_KIND_PAYLOAD_MODELS
+from amoeba.store import ProgramSubmissionKind, SubmissionKind
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from amoeba.cli.main import ExitCode
@@ -35,7 +39,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 _PAYLOAD_DEST_PREFIX = "payload_"
 
 
-def subcommand_name(kind: SubmissionKind) -> str:
+def subcommand_name(kind: SubmissionKind | ProgramSubmissionKind) -> str:
     """``create_project`` → ``create-project``."""
     return kind.value.replace("_", "-")
 
@@ -91,19 +95,38 @@ def add_submit_parser(subparsers: Any) -> None:
     kinds = submit_parser.add_subparsers(dest="submission", required=True)
 
     for kind in SubmissionKind:
-        kind_parser = kinds.add_parser(subcommand_name(kind))
-        kind_parser.set_defaults(submission_kind=kind)
+        _add_kind_parser(kinds, kind, KIND_PAYLOAD_MODELS[kind], takes_project=True)
+    for program_kind in ProgramSubmissionKind:
+        _add_kind_parser(
+            kinds,
+            program_kind,
+            PROGRAM_KIND_PAYLOAD_MODELS[program_kind],
+            takes_project=False,
+        )
+
+
+def _add_kind_parser(
+    kinds: Any,
+    kind: SubmissionKind | ProgramSubmissionKind,
+    model: type[BaseModel],
+    *,
+    takes_project: bool,
+) -> None:
+    """One subcommand: the common flags, then one flag per payload field."""
+    kind_parser = kinds.add_parser(subcommand_name(kind))
+    kind_parser.set_defaults(submission_kind=kind)
+    if takes_project:
         kind_parser.add_argument("--project", required=True, help="The project.")
-        kind_parser.add_argument(
-            "--by", required=True, help="Who is submitting. Free-form."
-        )
-        kind_parser.add_argument(
-            "--id",
-            dest="submission_id",
-            default=None,
-            help="Reuse an id to retry safely. Generated when omitted.",
-        )
-        add_payload_flags(kind_parser, KIND_PAYLOAD_MODELS[kind])
+    kind_parser.add_argument(
+        "--by", required=True, help="Who is submitting. Free-form."
+    )
+    kind_parser.add_argument(
+        "--id",
+        dest="submission_id",
+        default=None,
+        help="Reuse an id to retry safely. Generated when omitted.",
+    )
+    add_payload_flags(kind_parser, model)
 
 
 def add_payload_flags(parser: argparse.ArgumentParser, model: type[BaseModel]) -> None:
@@ -135,15 +158,21 @@ def run_submit(args: argparse.Namespace) -> ExitCode:
     """
     from amoeba.cli.main import ExitCode
 
-    kind: SubmissionKind = args.submission_kind
-    payload = payload_from(args, KIND_PAYLOAD_MODELS[kind])
-    print(
-        submit(
-            project_id=args.project,
+    kind: SubmissionKind | ProgramSubmissionKind = args.submission_kind
+    if isinstance(kind, ProgramSubmissionKind):
+        submission_id = submit_program(
             kind=kind,
-            payload=payload,
+            payload=payload_from(args, PROGRAM_KIND_PAYLOAD_MODELS[kind]),
             submitted_by=args.by,
             submission_id=args.submission_id,
         )
-    )
+    else:
+        submission_id = submit(
+            project_id=args.project,
+            kind=kind,
+            payload=payload_from(args, KIND_PAYLOAD_MODELS[kind]),
+            submitted_by=args.by,
+            submission_id=args.submission_id,
+        )
+    print(submission_id)
     return ExitCode.OK

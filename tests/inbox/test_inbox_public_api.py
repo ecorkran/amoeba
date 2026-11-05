@@ -6,7 +6,8 @@ collection.
 
 What the LLD's Component Structure requires, made mechanical:
 
-- ``submit`` is the inbox's only write path; everything else exported reads.
+- ``submit`` and ``submit_program`` are the inbox's only write paths; everything
+  else exported reads.
 - ``amoeba.inbox`` never imports ``Store`` — it cannot open a store at all.
 - ``amoeba.store`` never imports ``amoeba.inbox``.
 
@@ -26,8 +27,9 @@ SOURCE_DIR = Path(__file__).parent.parent.parent / "src" / "amoeba"
 
 #: The exported contract, written out rather than derived from ``__all__``.
 EXPECTED_EXPORTS = {
-    # The one write path
+    # The write paths: project submissions and program submissions
     "submit",
+    "submit_program",
     # Read-only listings
     "failed",
     "pending",
@@ -43,8 +45,8 @@ EXPECTED_EXPORTS = {
     "SubmissionWriteError",
 }
 
-#: The only exported function that writes anything.
-WRITE_PATHS = {"submit"}
+#: The only exported functions that write anything.
+WRITE_PATHS = {"submit", "submit_program"}
 
 
 def _imported_modules(source: str) -> set[str]:
@@ -71,7 +73,7 @@ def test_the_export_surface_is_exactly_the_contract() -> None:
     assert set(inbox_package.__all__) == EXPECTED_EXPORTS
 
 
-def test_submit_is_the_only_exported_write_path() -> None:
+def test_submit_and_submit_program_are_the_only_exported_write_paths() -> None:
     """Every other exported function is a listing, and listings only read."""
     functions = {
         name
