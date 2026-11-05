@@ -1,7 +1,7 @@
 """Settings of the live tier (slice 140, D10), read from the environment.
 
-Pure and importable by unit tests; ``tests/live/conftest.py`` calls it at
-collection. Nothing is skipped and nothing has a default: a missing or invalid
+Pure and importable by unit tests; ``tests/live/answering/conftest.py`` calls it
+at collection. Nothing is skipped and nothing has a default: a missing or invalid
 variable fails with its name.
 """
 
