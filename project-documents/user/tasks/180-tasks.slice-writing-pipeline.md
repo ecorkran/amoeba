@@ -208,12 +208,12 @@ usageByModel:
 
 **Commit**: `feat: finalize slice-writing pipeline syntax against shipped squadron`
 
-- [ ] **9.2 Live validation test and final launch argv** (effort 2)
-  - [ ] Prerequisite: 9.1 is checked.
-  - [ ] Live validation test `tests/live/request_run/test_validate.py`: the real `sq` validates the shipped file with the probe's argv (exit 0); a copy with one unknown step key is rejected by `--validate --strict` (non-zero exit).
-  - [ ] Collection reads the request settings (Task 7.2), which this test does not use. Set both variables inline on the pytest command only, any model value and any positive cap (for example `AMOEBA_LIVE_REQUEST_MODEL=unused AMOEBA_LIVE_REQUEST_MAX_COST_USD=1 uv run pytest ...`). Do not export them: Task 9.4 relies on the session environment holding a real alias.
-  - [ ] Remove the "provisional" marking from the launch argv in `docs/process-contract.md`, restating the argv `sq` accepted.
-  - [ ] Success: the live validation test passes; the contract shows the final argv.
+- [x] **9.2 Live validation test and final launch argv** (effort 2)
+  - [x] Prerequisite: 9.1 is checked.
+  - [x] Live validation test `tests/live/request_run/test_validate.py`: the real `sq` validates the shipped file with the probe's argv (exit 0); a copy with one unknown step key is rejected by `--validate --strict` (non-zero exit).
+  - [x] Collection reads the request settings (Task 7.2), which this test does not use. Set both variables inline on the pytest command only, any model value and any positive cap (for example `AMOEBA_LIVE_REQUEST_MODEL=unused AMOEBA_LIVE_REQUEST_MAX_COST_USD=1 uv run pytest ...`). Do not export them: Task 9.4 relies on the session environment holding a real alias.
+  - [x] Remove the "provisional" marking from the launch argv in `docs/process-contract.md`, restating the argv `sq` accepted.
+  - [x] Success: the live validation test passes; the contract shows the final argv.
 
 **Commit**: `test: add live slice-writing validation test and finalize launch argv in contract`
 

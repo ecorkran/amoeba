@@ -826,9 +826,9 @@ the contract.
   commit step. Two required params, `requests-index` then `model`. Every step, param
   and file name is defined once in `runner/request_run/pipeline_file.py`.
 - **Launch.** From the provider's checkout as working directory (slice 184 launches it
-  this way). **Provisional until the Squadron release with the run I/O directory and
-  guarded commit step is confirmed (the final-argv task of slice 180)**; the option
-  names are proposals, requested in `ecorkran/squadron#292` and `#241`:
+  this way). The argv below is the one the shipped Squadron accepts (the run I/O
+  directory and cost cap options and the guarded commit step were requested in
+  `ecorkran/squadron#292` and `#241`; `--io-dir` needs an existing directory):
   `sq run <slice_writing_pipeline_path()> <requests index> --run-id <id> --io-dir <run I/O directory> --max-cost <usd> -p model=<alias>`.
   `requests-index` is the first required param, so it is the positional target; `-p`
   does not satisfy a required param. No wall-clock bound: neither the file nor the argv
