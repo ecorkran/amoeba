@@ -56,10 +56,12 @@ usageByModel:
 
 ## 1. Refactors with no behavior change
 
-- [ ] **1.1 Parameterize `store/migrations.py`** (effort 2)
-  - [ ] Make the migrations package and the expected version **required parameters with no default** of `_migration_files` and of the runner (rename the runner's generalized form, e.g. `migrate_package`), so a new store line that omits its version fails instead of silently getting 15. Keep `migrate(connection, expected_version=EXPECTED_SCHEMA_VERSION)` as the project store's thin wrapper over it, so existing callers and tests are unchanged; `Store` passes `amoeba.store.schema` and 15, each constant defined once.
-  - [ ] `read_schema_version` and the error behavior (`StoreSchemaError` on newer or missing migrations) are unchanged.
-  - [ ] Success: `uv run pytest tests/test_migrations.py tests/store` passes with no test edited; `uv run pyright` passes.
+- [x] **1.1 Parameterize `store/migrations.py`** (effort 2)
+  - [x] Make the migrations package and the expected version **required parameters with no default** of `_migration_files` and of the runner (rename the runner's generalized form, e.g. `migrate_package`), so a new store line that omits its version fails instead of silently getting 15. Keep `migrate(connection, expected_version=EXPECTED_SCHEMA_VERSION)` as the project store's thin wrapper over it, so existing callers and tests are unchanged; `Store` passes `amoeba.store.schema` and 15, each constant defined once.
+  - [x] `read_schema_version` and the error behavior (`StoreSchemaError` on newer or missing migrations) are unchanged.
+  - [x] Success: `uv run pytest tests/test_migrations.py tests/store` passes with no test edited; `uv run pyright` passes.
+
+Note: tests/test_migrations.py's monkeypatch of _migration_files had to take the new package argument (typed function replaces the zero-arg lambda); no other test edited.
 
 **Commit**: `refactor: parameterize the migration runner by package and version`
 
