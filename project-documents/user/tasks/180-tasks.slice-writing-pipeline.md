@@ -16,7 +16,7 @@ projectState: Initiatives 100, 120 and 140 are complete and merged. `src/amoeba/
   `--max-cost` (LLD D8).
 dateCreated: 20261104
 dateUpdated: 20261104
-status: in_progress
+status: complete
 turns: 19
 promptTokens: 1045492
 cachedTokens: 958525

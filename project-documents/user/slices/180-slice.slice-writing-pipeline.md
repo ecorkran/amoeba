@@ -9,7 +9,7 @@ interfaces:
 - 184
 dateCreated: 20261103
 dateUpdated: 20261104
-status: not_started
+status: complete
 turns: 44
 promptTokens: 4403551
 cachedTokens: 4256057
@@ -312,13 +312,13 @@ sq run <slice_writing_pipeline_path()> <requests index> --run-id <id> --io-dir <
 
 ### Verification Walkthrough
 
-Draft. Every step that needs a real run waits for a Squadron release with D8. Step 4 spends money on an SDK model; export the provider key first.
+Verified 20261104 against squadron 0.24.22 (`sq --version`). Steps 3 and 4 need a Squadron with D8's run I/O directory, guarded commit step and cost cap; decide that by running step 3, not by version. Step 4 spends money on an SDK model (a few cents for the three cases); export the provider key first.
 
 1. **Unit tier, no `sq`, no spend.**
    ```bash
    uv run pytest tests/runner/request_run tests/runner/answering -q
    ```
-   Expect all to pass: the input rendering, the directory preparation, the reply parser, the names-match test, both wheel tests, and the live tiers' settings rules.
+   Expect all to pass (`380 passed`, about 45 seconds): the input rendering, the directory preparation, the reply parser (including the captured replies in `tests/fixtures/slice_writing/`), the names-match test, both wheel tests, and the live tiers' settings rules.
 
 2. **The shipped pipeline is in the package.**
    ```bash
@@ -331,23 +331,23 @@ Draft. Every step that needs a real run waits for a Squadron release with D8. St
    P="$(uv run python -c 'from amoeba.runner.request_run.pipeline_file import slice_writing_pipeline_path as p; print(p())')"
    sq run "$P" --validate --strict --io-dir "$(mktemp -d)" --max-cost 1
    ```
-   Expect `Pipeline 'slice-writing' is valid.` and exit 0. On 0.24.17, expect a failure naming the unknown `commit` step or the unknown option. That failure is what the probe turns into `STARTUP_FAILED`.
+   Expect `Pipeline 'slice_writing' is valid.` (Squadron prints the name with an underscore; the file's `name:` is `slice-writing`) and exit 0. On a Squadron without D8 (0.24.20 was observed), expect a failure naming the unknown `commit` step or the unknown option (`--io-dir` exits 2 with `No such option`). That failure is what the probe turns into `STARTUP_FAILED`.
 
 4. **Live tier: real runs in a scratch project.**
    ```bash
    export AMOEBA_LIVE_REQUEST_MODEL=<SDK alias> AMOEBA_LIVE_REQUEST_MAX_COST_USD=<cap>
    uv run pytest tests/live/request_run -v --basetemp=/tmp/request-live
    ```
-   Expect the three cases to pass. Then inspect the first case's repo:
+   Expect 5 passed in about 40 seconds: the three request cases and the two validation tests. Then inspect the first case's repo (cases 1 and 2 share it, so it holds two new commits above the fixture's, one per case; the requests index is 200):
    ```bash
-   cd /tmp/request-live/<test>/repo
-   git log --oneline -3              # one new commit above the fixture's own
-   git show --name-only HEAD         # the initiative plan and the requests slice plan, nothing else
+   cd /tmp/request-live/request-live0/provider
+   git log --oneline -3              # two "docs: add request slice to the requests initiative plan" commits above "chore: scratch fixture"
+   git show --name-only --format=%s HEAD   # case 2's commit: only project-documents/user/architecture/200-slices.requests.md
    git status --short                # empty
-   CONTEXT_FORGE_DATA_DIR=/tmp/request-live/<test>/cf cf list slices <requests index> --json
-   cat /tmp/request-live/<test>/io/reply.json
+   CONTEXT_FORGE_DATA_DIR=/tmp/request-live/cf-data0 cf list slices 200 --json   # entries 200 and 201
+   cat /tmp/request-live/request-live0/first-io/reply.json   # {"kind": "new_slice", "index": 200}
    ```
-   The slice list shows one entry, at the index in `reply.json`.
+   The kept I/O directories are `first-io`, `second-io` and `met-io`; the met case's repo is `met`. Observed replies: `{"kind": "new_slice", "index": 200}`, `index` 201, and `already_met` with a 40-character hash.
 
 5. **The start-up probe.**
    ```bash
