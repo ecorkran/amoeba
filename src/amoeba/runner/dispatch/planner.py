@@ -32,7 +32,6 @@ from amoeba.runner.decide import (
     ProjectView,
     ResumeRun,
 )
-from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.checkout_check import Block, Ok
 from amoeba.runner.dispatch.facts import SliceDispatchFacts, SortKey
 from amoeba.runner.dispatch.params import (
@@ -47,6 +46,7 @@ from amoeba.runner.resolutions.vocabulary import (
 )
 from amoeba.runner.supervise import recorded_document, resume_ready
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, JournalEntry, Node
+from amoeba.upstream.context_forge import Checkout
 
 #: The states that start a pipeline; the others continue or wait.
 _LAUNCHES = frozenset({DispatchState.READY, DispatchState.REISSUE})

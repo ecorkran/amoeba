@@ -12,12 +12,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.facts import SliceDispatchFacts
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.launch import text_parameter
 from amoeba.runner.supervise import recorded_document, resume_ready
 from amoeba.store import PARAM_CHECKOUT, JournalEntry, Node
+from amoeba.upstream.context_forge import Checkout
 
 #: The states that continue a run: a PM's resolution, or an automatic retry.
 _RESUMING = frozenset({DispatchState.RESUME, DispatchState.AUTO_RESUME})

@@ -14,7 +14,6 @@ from amoeba.runner.decide import (
     ProjectView,
     ResumeRun,
 )
-from amoeba.runner.dispatch.checkout import CheckoutUnresolved
 from amoeba.runner.dispatch.checkout_check import Block, Ok
 from amoeba.runner.dispatch.params import (
     PARAM_DISPATCH_CHECK,
@@ -32,6 +31,7 @@ from amoeba.store import (
     JournalOutcome,
     JournalResolver,
 )
+from amoeba.upstream.context_forge import CheckoutUnresolved
 from runner.dispatch.dispatch_support import (
     FIRST,
     OK_EVIDENCE,

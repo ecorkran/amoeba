@@ -82,11 +82,13 @@ Note: tests/test_failure_modes.py's open_temporary failure test patched Store._c
 
 **Commit**: `refactor: extract the inbox file lifecycle into a shared drain`
 
-- [ ] **1.4 Move `resolve_checkout` to `amoeba.upstream.context_forge`** (effort 2)
-  - [ ] Move `resolve_checkout`, `Checkout` and `CheckoutUnresolved` from `runner/dispatch/checkout.py` into the `upstream/context_forge` package (a module beside the snapshot types, exported from the package). They depend only on `amoeba.store` types and CF constants; check no `amoeba.runner` import comes along.
-  - [ ] Update the callers: `runner/dispatch/facts.py`, `build_view.py`, `planner.py` and `candidates.py`; `runner/resolutions/planner.py`; `runner/answering/sources.py`. Confirm with `grep -rn "dispatch.checkout import" src tests` (the `checkout_check` and `checkout_reads` modules stay where they are). Delete `runner/dispatch/checkout.py` once nothing imports it.
-  - [ ] Move `tests/runner/dispatch/test_checkout.py` to the matching `tests/upstream/` location; update imports in `tests/runner/dispatch/test_planner.py`, `test_checkout_reads.py` and `dispatch_support.py`.
-  - [ ] Success: `uv run pytest tests/runner tests/upstream tests/test_import_boundaries.py` passes; behavior is unchanged.
+- [x] **1.4 Move `resolve_checkout` to `amoeba.upstream.context_forge`** (effort 2)
+  - [x] Move `resolve_checkout`, `Checkout` and `CheckoutUnresolved` from `runner/dispatch/checkout.py` into the `upstream/context_forge` package (a module beside the snapshot types, exported from the package). They depend only on `amoeba.store` types and CF constants; check no `amoeba.runner` import comes along.
+  - [x] Update the callers: `runner/dispatch/facts.py`, `build_view.py`, `planner.py` and `candidates.py`; `runner/resolutions/planner.py`; `runner/answering/sources.py`. Confirm with `grep -rn "dispatch.checkout import" src tests` (the `checkout_check` and `checkout_reads` modules stay where they are). Delete `runner/dispatch/checkout.py` once nothing imports it.
+  - [x] Move `tests/runner/dispatch/test_checkout.py` to the matching `tests/upstream/` location; update imports in `tests/runner/dispatch/test_planner.py`, `test_checkout_reads.py` and `dispatch_support.py`.
+  - [x] Success: `uv run pytest tests/runner tests/upstream tests/test_import_boundaries.py` passes; behavior is unchanged.
+
+Note: the one 'projectPath' literal in the moved module now uses FIELD_PROJECT_PATH, so the package's field-names-spelled-once test passes unedited.
 
 **Commit**: `refactor: move resolve_checkout to the context_forge upstream module`
 

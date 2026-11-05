@@ -8,11 +8,6 @@ from pathlib import Path
 import pytest
 from cf_harness import observed
 
-from amoeba.runner.dispatch.checkout import (
-    Checkout,
-    CheckoutUnresolved,
-    resolve_checkout,
-)
 from amoeba.store import CFSnapshot, Store
 from amoeba.upstream.context_forge import (
     FIELD_INDEX_RANGE,
@@ -20,6 +15,9 @@ from amoeba.upstream.context_forge import (
     FIELD_WORKTREE_PATH,
     STATE_PROJECT_KEY,
     STATE_WORKTREES_KEY,
+    Checkout,
+    CheckoutUnresolved,
+    resolve_checkout,
 )
 
 PROJECT = "demo"

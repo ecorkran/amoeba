@@ -25,7 +25,6 @@ from amoeba.runner.answering.source_reads import (
 )
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.cf_call import CfRun
-from amoeba.runner.dispatch.checkout import CheckoutUnresolved, resolve_checkout
 from amoeba.runner.dispatch.checkout_reads import ReadFailure, read_target
 from amoeba.runner.project_config import AnswererSettings
 from amoeba.store import (
@@ -37,6 +36,7 @@ from amoeba.store import (
     QuestionState,
     Store,
 )
+from amoeba.upstream.context_forge import CheckoutUnresolved, resolve_checkout
 
 
 def slice_label(node: Node) -> str:

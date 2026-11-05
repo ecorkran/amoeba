@@ -8,7 +8,6 @@ from itertools import count
 from pathlib import Path
 
 from amoeba.runner.decide import ProjectView
-from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
 from amoeba.runner.dispatch.checkout_check import DispatchCheck, Ok
 from amoeba.runner.dispatch.facts import SliceDispatchFacts, SortKey
 from amoeba.runner.dispatch.state import DispatchState
@@ -28,6 +27,7 @@ from amoeba.store import (
     NodeKind,
     NodeStatus,
 )
+from amoeba.upstream.context_forge import Checkout, CheckoutUnresolved
 from runner.tick_support import view_for
 
 PROJECT = "demo"
