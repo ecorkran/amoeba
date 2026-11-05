@@ -13,9 +13,18 @@ import subprocess
 from collections.abc import Iterator
 
 import pytest
-from live_settings import LiveSettings
+from live_environment import pipeline_environment
+from live_settings import LiveSettings, read_live_settings
 
 from live.answering.harness import CF_TIMEOUT_SECONDS, LiveHarness
+
+# Read at collection: a missing variable fails the whole tier with its name.
+_SETTINGS = read_live_settings(os.environ)
+
+
+@pytest.fixture(scope="session")
+def live_settings() -> LiveSettings:
+    return _SETTINGS
 
 
 @pytest.fixture(scope="session")
@@ -24,7 +33,10 @@ def live_harness(
 ) -> Iterator[LiveHarness]:
     parent = tmp_path_factory.mktemp("answering-live")
     data_dir = tmp_path_factory.mktemp("cf-data")
-    environ = {**os.environ, "CONTEXT_FORGE_DATA_DIR": str(data_dir)}
+    environ = {
+        **pipeline_environment(os.environ),
+        "CONTEXT_FORGE_DATA_DIR": str(data_dir),
+    }
     subprocess.run(
         ["cf", "init", "--lite", "--name", "amoeba-live"],
         cwd=parent,

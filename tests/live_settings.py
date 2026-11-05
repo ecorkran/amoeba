@@ -42,15 +42,20 @@ def require_variable(environ: Mapping[str, str], name: str) -> str:
     return value
 
 
-def _read_cost(environ: Mapping[str, str]) -> float:
-    raw = require_variable(environ, MAX_COST_VARIABLE)
+def read_cost(environ: Mapping[str, str], name: str) -> float:
+    """The variable's value as a positive, finite cost in USD.
+
+    Raises:
+        pytest.UsageError: When it is unset, blank or not such a number, naming it.
+    """
+    raw = require_variable(environ, name)
     try:
         cost = float(raw)
     except ValueError:
         cost = math.nan
     if not (math.isfinite(cost) and cost > 0):
         raise pytest.UsageError(
-            f"live tier: {MAX_COST_VARIABLE} must be a positive number, got {raw!r}"
+            f"live tier: {name} must be a positive number, got {raw!r}"
         )
     return cost
 
@@ -65,5 +70,5 @@ def read_live_settings(environ: Mapping[str, str]) -> LiveSettings:
     return LiveSettings(
         answer_model=require_variable(environ, ANSWER_MODEL_VARIABLE),
         check_model=require_variable(environ, CHECK_MODEL_VARIABLE),
-        max_cost_usd=_read_cost(environ),
+        max_cost_usd=read_cost(environ, MAX_COST_VARIABLE),
     )

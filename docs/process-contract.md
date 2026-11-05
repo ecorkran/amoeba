@@ -547,6 +547,10 @@ resumable → resume; question → answer; anything else → a person".
   `reply_file`, `delivered_prompt_file`) and `sq run --validate --strict` were first
   observed running the answering pipeline: squadron 0.24.14, on 20261103. The captured
   `answer.json` and `check.json` in `tests/fixtures/answering/` come from that run.
+  The slice-writing pipeline's run I/O directory and cost-cap options and its `commit`
+  step were first observed running the slice-writing pipeline: squadron 0.24.22, on
+  20261104. The captured `reply.json` files in `tests/fixtures/slice_writing/` come
+  from that run.
 - **The question record (slice 141).** A `QUESTION` plan carries the question
   (`OutcomePlan.question`), and ingest writes the block through `record_question`
   instead of `block_once`, so the block and the record land together or not at all
@@ -811,6 +815,75 @@ submits the answer or declines. Rationale and decisions D1 to D14 are in
 - **Faults.** A failure while finishing or launching escalates per project, not per
   node. A poll that cannot read a run is the usual `run_observation_failed` fault of
   the entry's node.
+
+### The slice-writing pipeline
+
+*Slice 180.* The pipeline a request run (slice 184) launches in a provider project's
+checkout. Rationale and decisions D1 to D10 are in
+`project-documents/user/slices/180-slice.slice-writing-pipeline.md`; this section is
+the contract.
+
+- **The shipped file.** `src/amoeba/runner/request_run/slice_writing.yaml`, shipped in
+  the wheel as package data. `slice_writing_pipeline_path()` returns its absolute path
+  and raises `FileNotFoundError` when it is absent. Two steps: `write`, a `dispatch`
+  with the provider's own tools (no `allowed_tools` key), then `commit`, a guarded
+  commit step. Two required params, `requests-index` then `model`. Every step, param
+  and file name is defined once in `runner/request_run/pipeline_file.py`.
+- **Launch.** From the provider's checkout as working directory (slice 184 launches it
+  this way). The argv below is the one the shipped Squadron accepts (the run I/O
+  directory and cost cap options and the guarded commit step were requested in
+  `ecorkran/squadron#292` and `#241`; `--io-dir` needs an existing directory):
+  `sq run <slice_writing_pipeline_path()> <requests index> --run-id <id> --io-dir <run I/O directory> --max-cost <usd> -p model=<alias>`.
+  `requests-index` is the first required param, so it is the positional target; `-p`
+  does not satisfy a required param. No wall-clock bound: neither the file nor the argv
+  carries a timeout (a stalled dispatch fails in Squadron; a working agent is bounded by
+  the cost cap).
+- **Inputs, written by `prepare_request_directory(directory, request)`** into an
+  existing, empty run I/O directory (anything else is a `ValueError`): `need.md` only,
+  rendered by `render_need` from a `RequestInput` (`asking_project_id`,
+  `asking_slice_label`, `requests_index`, `need`). A blank need, a requests index below
+  1, or a blank or multi-line project id or slice label is a `ValueError`.
+
+  ```markdown
+  # Request
+
+  requested by: <asking project id>, slice <index> <name>
+  requests initiative: <requests index>
+
+  <need text, verbatim>
+  ```
+
+- **Outputs, written by Squadron** into the run I/O directory: `reply.json` and
+  `write.prompt.md`. Nothing is written into the checkout by these.
+- **Reply shapes**, parsed by `read_reply` in `runner/request_run/reply.py`, which
+  returns `NewSlice(index)`, `AlreadyMet(commit)` or `ReplyProblem(kind, detail)` with
+  `kind` `missing` (no `reply.json`) or `malformed`. It never raises for file content
+  and raises `ValueError` only for a directory that does not exist. `kind` is matched
+  case-insensitively after trimming; unknown keys are ignored; nothing defaults. `index`
+  is a positive integer or a string of digits (not a boolean); `commit` is 7 to 40
+  hexadecimal characters, returned lower case. Shape only: whether the index is new or
+  the commit exists is for slices 184 and 183 (184's check is `ecorkran/amoeba#31`).
+
+  ```json
+  {"kind": "new_slice", "index": <new slice index>}
+  {"kind": "already_met", "commit": "<full commit hash>"}
+  ```
+
+  `read_reply` is called only for a run that completed; a failed run may leave a
+  `reply.json` because the commit step runs after the reply is written.
+- **What a completed run leaves.** At most one commit on the target, touching only the
+  initiative plan and the requests slice plan (the commit step's `paths`), and no change
+  left in the checkout. That is bounded to the checkout and the target: nothing bounds
+  what the agent does outside them (D1). The commit step fails the run when any file
+  outside those paths changed or when HEAD moved during the run.
+- **`already_met`.** The run writes nothing and the target's HEAD must not move. The
+  guard cannot catch an edited plan file, so slice 184 records the target's HEAD at
+  launch and blocks an `already_met` run that moved it.
+- **The probe.** `probe_slice_writing_pipeline(settings, run)` runs
+  `sq run <slice_writing.yaml> --validate --strict` with the I/O-directory and cost-cap
+  options once from a temporary directory and raises `StartupFailedError` on a non-zero
+  exit, a timeout, a missing `sq` or a missing file. It does not compare `sq` versions.
+  Nothing calls it yet; slice 184 wires it, when a project configures request runs.
 
 ### Context Forge shapes
 

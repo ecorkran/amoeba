@@ -1,8 +1,10 @@
-"""Run the real answering pipeline for the live tier (slice 140, D10).
+"""Run a real pipeline for the live tiers (slice 140, D10; slice 180, D10).
 
 ``sq run`` is launched the way the Runner launches it (detached stdin, working
-directory the scratch directory) and watched with the existing ``poll_run``.
-The live tests spend real money; this helper adds nothing but a bounded wait.
+directory the run's directory) and watched with the existing ``poll_run``.
+``run_pipeline`` runs the answering pipeline; ``watch_run`` is the shared launch
+and wait, which the request tier calls with its own argv. The live tests spend
+real money; this helper adds nothing but a bounded wait.
 """
 
 from __future__ import annotations
@@ -42,10 +44,15 @@ _NOT_YET: Final = frozenset({RunOutcome.TIMED_OUT, RunOutcome.NOT_FOUND})
 
 @dataclass(frozen=True)
 class PipelineRun:
-    """A live run: its id, its outcome and the head of ``sq``'s output."""
+    """A live run: its id, its outcome, the launcher's exit and ``sq``'s output head.
+
+    ``exit_code`` is the launch process's own; a launcher still running at the end
+    of the wait was killed, so it is then negative (the signal).
+    """
 
     run_id: str
     poll: RunPoll
+    exit_code: int
     sq_output: str
 
 
@@ -70,17 +77,33 @@ def run_pipeline(
     timeout_seconds: float,
     environ: Mapping[str, str] | None = None,
 ) -> PipelineRun:
-    """Launch the pipeline in ``directory`` and wait at most ``timeout_seconds``.
+    """Launch the answering pipeline in ``directory`` and wait for it.
 
-    ``environ`` replaces the launch process's environment when given. On the
-    deadline the launch process's whole session is killed, so no child keeps
-    spending, and the poll is a :class:`PollFailure`; the caller's assertion
-    fails with it.
+    The launcher is killed as soon as the run's outcome is known (no exit grace).
     """
     run_id = mint_run_id(datetime.now(UTC))
     argv = launch_argv(run_id, answer_model, check_model)
+    return watch_run(argv, run_id, directory, timeout_seconds, 0.0, environ)
+
+
+def watch_run(
+    argv: list[str],
+    run_id: str,
+    directory: Path,
+    timeout_seconds: float,
+    exit_grace_seconds: float,
+    environ: Mapping[str, str] | None = None,
+) -> PipelineRun:
+    """Launch ``argv`` in ``directory`` and wait at most ``timeout_seconds``.
+
+    ``environ`` replaces the launch process's environment when given. Once the run
+    has an outcome the launcher gets ``exit_grace_seconds`` to exit by itself. On
+    the deadline, or after the grace, the launch process's whole session is
+    killed, so no child keeps spending; a deadline leaves the poll a
+    :class:`PollFailure` and the caller's assertion fails with it.
+    """
     with tempfile.TemporaryFile("w+") as log:
-        process = contained_popen(  # noqa: S603 - argv built here, no shell
+        process = contained_popen(  # noqa: S603 - argv built by the caller, no shell
             argv,
             cwd=directory,
             stdin=subprocess.DEVNULL,
@@ -99,6 +122,7 @@ def run_pipeline(
                     break
                 exit_code = process.poll()
                 if poll.outcome not in _NOT_YET:
+                    _await_exit(process, exit_grace_seconds)
                     break
                 if exit_code is not None:
                     poll = PollFailure(
@@ -115,4 +139,15 @@ def run_pipeline(
                 os.killpg(process.pid, signal.SIGKILL)
             process.wait()
         log.seek(0)
-        return PipelineRun(run_id, poll, log.read()[:OUTPUT_HEAD_CHARS])
+        return PipelineRun(
+            run_id, poll, process.returncode, log.read()[:OUTPUT_HEAD_CHARS]
+        )
+
+
+def _await_exit(process: subprocess.Popen[str], grace_seconds: float) -> None:
+    """Give the launcher ``grace_seconds`` to exit on its own; never raises for it."""
+    try:
+        process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        # Still running after the grace: the caller's `finally` kills its session.
+        return

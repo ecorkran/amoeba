@@ -200,3 +200,11 @@ Command, run in a throwaway clone of this repo registered with `cf init --lite -
 | File | `verdict` | Why it is here |
 | --- | --- | --- |
 | `107-review.judge.slice-vs-arch.judge-samples-checks-and-calibration.20261015.md` | PASS | A `judge.slice-vs-arch` review: `score: 86.0`, seven `criteria` scores, a `runId` and `squadronVersion: 0.22.0` stamp, and no `verdictSource`, so its trust label is `unattested`. |
+
+## `slice_writing/` — slice-writing pipeline replies
+
+Captured **20261104** from the kept run I/O directories of the live slice-writing
+cases (`tests/live/request_run/`). Each subdirectory holds one `reply.json`, so
+`read_reply` reads it directly: `new_slice/` (first request, requests index 200) and
+`already_met/` (a need the scratch source already met; the hash is a commit of the
+throwaway scratch repo).

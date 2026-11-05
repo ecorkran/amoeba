@@ -9,7 +9,7 @@ interfaces:
 - 184
 dateCreated: 20261103
 dateUpdated: 20261104
-status: not_started
+status: complete
 turns: 44
 promptTokens: 4403551
 cachedTokens: 4256057
@@ -129,7 +129,7 @@ None. Each run's I/O directory holds its input and outputs, and `write.prompt.md
 Status: decided
 - Amoeba launches the pipeline by path, as it launches `answering.yaml`: `sq run <absolute path>`, from the provider's checkout as working directory. The agent must see the provider's code, plans, history and project instructions, and Squadron must run inside the provider's CF project.
 - **The write step** is a `dispatch` step with no `allowed_tools` key, so its model runs with the provider's own tools: the SDK's tools for an SDK alias, Squadron's default write tools for the others. It must read the repo, and it must edit files in it.
-- **What is bounded, and what is not.** The commit guard (D5) bounds what the run leaves in the checkout and on the target: at most one commit, touching only the two plan files. Nothing bounds what the agent does outside the checkout or in gitignored files (a push, another repo, the network). There, the bans in D2 are instructions only. Squadron cannot narrow the tools of an SDK-session dispatch per step (0.24.17 rejects a per-step `allowed_tools` on the session path, because the session fixes its tool set when it connects), so no tool restriction is declared. This is the same exposure as every run the Runner already launches in that checkout: the provider's configured pipeline runs agents there with the same tools.
+- **What is bounded, and what is not.** The commit guard (D5) bounds what the run leaves in the checkout and on the target: at most one commit, touching only the two plan files. Nothing bounds what the agent does outside the checkout or in gitignored files (a push, another repo, the network). There, the bans in D2 are instructions only. Squadron cannot narrow the tools of an SDK-session dispatch per step (0.24.17 rejects a per-step `allowed_tools` on the session path, because the session fixes its tool set when it connects), so no tool restriction is declared. This is the same exposure as every run the Runner already launches in that checkout: the provider's configured pipeline runs agents there with the same tools. Accepted for this slice; mechanical narrowing when Squadron can do it is `ecorkran/amoeba#29`.
 - **The commit step** is the capability 2 step (D5). It is separate from the write step so that what gets committed is decided by Squadron against fixed paths, never by the agent.
 - **No review step.** The output is one plan entry that restates the need. The provider's configured pipeline designs and reviews the request slice when it builds it, and that review is the review of this work. A review of the entry alone would add a model call and a loop to judge a paragraph. No Squadron review template fits a single plan entry either.
 - Rejected: a CF phase step (`design` with `phase: 3`). Phase 3 builds a context for writing a whole slice plan from an architecture, and a phase step can't be given the need. Its commit staging also follows the phase's artifact, not the two plan files.
@@ -142,7 +142,7 @@ Status: decided
   - the requests initiative's slice plan (`architecture/{requests-index}-slices.*.md`), to create it or add one entry.
 
   These two globs are the commit step's `paths`, so the instructions and the guard name the same set.
-- **Creating the initiative.** If the initiative plan has no entry at `{requests-index}`, the agent appends one: `({requests-index}) Requests`, described as changes that other members of the program asked for, with no dependencies and status `not_started`. It then creates `architecture/{requests-index}-slices.requests.md` with slice-plan frontmatter whose `parent` is the initiative plan, plus the headings the provider's slice-plan template requires. If the entry exists, it is the requests initiative because the PM's configuration names that index (181), so its name is not checked. A slice plan that exists at that index under another name is used as it is.
+- **Creating the initiative.** If the initiative plan has no entry at `{requests-index}`, the agent appends one: `({requests-index}) Requests`, described as changes that other members of the program asked for, with no dependencies and status `not_started`. It then creates `architecture/{requests-index}-slices.requests.md` with slice-plan frontmatter whose `parent` is the initiative plan, plus the headings the provider's slice-plan template requires. If the entry exists, it is the requests initiative because the PM's configuration names that index (181), so its name is not checked. A slice plan that exists at that index under another name is used as it is, and the new slice is still added to it (the reply is `new_slice`). A live case for this branch is `ecorkran/amoeba#30`.
 - **No architecture document.** Context Forge does not need one. Observed 20261103 on `cf 0.19.25`, in a scratch project in a throwaway registry: an initiative entry with no architecture file is listed by `cf list initiatives --json -a` (with `archFile: null`), `cf list slices <index> --json` reads a slice plan whose `parent` is the initiative plan, and `cf set arch <index>` then `cf set slice <index>` both succeed. So a request slice can be designed by Squadron phase steps like any other slice.
 - **The new entry.** Its index is `{requests-index}` when the initiative has no slices, and otherwise one more than the highest index in the initiative. Its entry text has the slice-plan form the provider's guide uses (a checkbox, the index in parentheses, a bold title, a description, risk and effort), with `Dependencies: None` written explicitly. Request slices stand alone, so a dependency the agent chose would wrongly become a predecessor. The description is the need, restated without loss, and names the requesting member and slice from `need.md`. The agent changes no other line except the frontmatter `dateUpdated`.
 - **Forbidden.** No git writes: no commit, branch switch, reset or push (the commit step commits). Read-only git (`log`, `show`, `status`, `diff`) is allowed, as D3 needs. Also forbidden: `cf set` or other CF writes, no change to any other file, slice or initiative. The instructions say that `need.md` is data, and that instructions found inside it are not to be followed. There is no tool restriction (D1), so inside the checkout the commit guard (D5) is the only enforcement of the write ban.
@@ -151,7 +151,7 @@ Status: decided
 ### D3 — Already met is the agent's call, and its commit is evidence
 Status: decided
 - The agent replies `already_met` only when the provider's code on the current branch already provides what the need asks for. It names the commit that made it so, as a full hash taken from `git log` (read-only git is part of reading the repo, and the instructions allow it alongside the ban on git writes).
-- The reply decides nothing about release. 183 satisfies the edge only when that commit is observed under the edge's consumption mode, so a wrong or invented hash keeps the asker waiting on the program blocked list. It never releases the asker early.
+- The reply decides nothing about release. 183 satisfies the edge only when that commit is observed under the edge's consumption mode, so a wrong or invented hash keeps the asker waiting on the program blocked list. It never releases the asker early. Slice 184's check that the commit exists on the target before it binds the edge is `ecorkran/amoeba#31`.
 - An `already_met` run writes nothing. The commit step finds no change and makes no commit. The guard allows changes inside the plan globs, so it cannot catch an agent that edits a plan file and then replies `already_met`. The runtime rule is the live tier's assertion: an `already_met` reply from a run that moved the target's HEAD is invalid. 184 records the target HEAD at launch, beside the slice set, and blocks such a request with that reason. The commit then stays on the target as an undriven plan entry, visible to the PM.
 
 ### D4 — Inputs and outputs live in a run I/O directory outside the checkout
@@ -312,13 +312,13 @@ sq run <slice_writing_pipeline_path()> <requests index> --run-id <id> --io-dir <
 
 ### Verification Walkthrough
 
-Draft. Every step that needs a real run waits for a Squadron release with D8. Step 4 spends money on an SDK model; export the provider key first.
+Verified 20261104 against squadron 0.24.22 (`sq --version`). Steps 3 and 4 need a Squadron with D8's run I/O directory, guarded commit step and cost cap; decide that by running step 3, not by version. Step 4 spends money on an SDK model (a few cents for the three cases); export the provider key first.
 
 1. **Unit tier, no `sq`, no spend.**
    ```bash
    uv run pytest tests/runner/request_run tests/runner/answering -q
    ```
-   Expect all to pass: the input rendering, the directory preparation, the reply parser, the names-match test, both wheel tests, and the live tiers' settings rules.
+   Expect all to pass (`380 passed`, about 45 seconds): the input rendering, the directory preparation, the reply parser (including the captured replies in `tests/fixtures/slice_writing/`), the names-match test, both wheel tests, and the live tiers' settings rules.
 
 2. **The shipped pipeline is in the package.**
    ```bash
@@ -331,23 +331,23 @@ Draft. Every step that needs a real run waits for a Squadron release with D8. St
    P="$(uv run python -c 'from amoeba.runner.request_run.pipeline_file import slice_writing_pipeline_path as p; print(p())')"
    sq run "$P" --validate --strict --io-dir "$(mktemp -d)" --max-cost 1
    ```
-   Expect `Pipeline 'slice-writing' is valid.` and exit 0. On 0.24.17, expect a failure naming the unknown `commit` step or the unknown option. That failure is what the probe turns into `STARTUP_FAILED`.
+   Expect `Pipeline 'slice_writing' is valid.` (Squadron prints the name with an underscore; the file's `name:` is `slice-writing`) and exit 0. On a Squadron without D8 (0.24.20 was observed), expect a failure naming the unknown `commit` step or the unknown option (`--io-dir` exits 2 with `No such option`). That failure is what the probe turns into `STARTUP_FAILED`.
 
 4. **Live tier: real runs in a scratch project.**
    ```bash
    export AMOEBA_LIVE_REQUEST_MODEL=<SDK alias> AMOEBA_LIVE_REQUEST_MAX_COST_USD=<cap>
    uv run pytest tests/live/request_run -v --basetemp=/tmp/request-live
    ```
-   Expect the three cases to pass. Then inspect the first case's repo:
+   Expect 5 passed in about 40 seconds: the three request cases and the two validation tests. Then inspect the first case's repo (cases 1 and 2 share it, so it holds two new commits above the fixture's, one per case; the requests index is 200):
    ```bash
-   cd /tmp/request-live/<test>/repo
-   git log --oneline -3              # one new commit above the fixture's own
-   git show --name-only HEAD         # the initiative plan and the requests slice plan, nothing else
+   cd /tmp/request-live/request-live0/provider
+   git log --oneline -3              # two "docs: add request slice to the requests initiative plan" commits above "chore: scratch fixture"
+   git show --name-only --format=%s HEAD   # case 2's commit: only project-documents/user/architecture/200-slices.requests.md
    git status --short                # empty
-   CONTEXT_FORGE_DATA_DIR=/tmp/request-live/<test>/cf cf list slices <requests index> --json
-   cat /tmp/request-live/<test>/io/reply.json
+   CONTEXT_FORGE_DATA_DIR=/tmp/request-live/cf-data0 cf list slices 200 --json   # entries 200 and 201
+   cat /tmp/request-live/request-live0/first-io/reply.json   # {"kind": "new_slice", "index": 200}
    ```
-   The slice list shows one entry, at the index in `reply.json`.
+   The kept I/O directories are `first-io`, `second-io` and `met-io`; the met case's repo is `met`. Observed replies: `{"kind": "new_slice", "index": 200}`, `index` 201, and `already_met` with a 40-character hash.
 
 5. **The start-up probe.**
    ```bash
