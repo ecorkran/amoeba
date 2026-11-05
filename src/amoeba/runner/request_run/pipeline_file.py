@@ -36,8 +36,8 @@ SLICE_PLAN_GLOB: Final = (
 COMMIT_PATHS: Final = (INITIATIVE_PLAN_GLOB, SLICE_PLAN_GLOB)
 COMMIT_MESSAGE: Final = "docs: add request slice to the requests initiative plan"
 
-# `sq run` option names for the run I/O directory and the per-run cost cap. These
-# are proposals until Task 9.1 confirms them against the shipped Squadron.
+# `sq run` option names for the run I/O directory and the per-run cost cap, as the
+# shipped Squadron accepts them (`sq run --help`; confirmed in Task 9.1).
 IO_DIRECTORY_OPTION: Final = "--io-dir"
 MAX_COST_OPTION: Final = "--max-cost"
 

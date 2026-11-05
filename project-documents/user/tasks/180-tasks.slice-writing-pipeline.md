@@ -16,7 +16,7 @@ projectState: Initiatives 100, 120 and 140 are complete and merged. `src/amoeba/
   `--max-cost` (LLD D8).
 dateCreated: 20261104
 dateUpdated: 20261104
-status: not_started
+status: in_progress
 turns: 19
 promptTokens: 1045492
 cachedTokens: 958525
@@ -147,7 +147,7 @@ usageByModel:
   - [x] Prompt hygiene: every brace pair around a bare word (no spaces or quotes) in the prompt is a real param name (JSON shapes in the prompt are allowed); the prompt contains no literal 7-to-40-character hexadecimal string; it names both glob constants.
   - [x] Package path test: `slice_writing_pipeline_path()` is absolute, ends in `amoeba/runner/request_run/slice_writing.yaml`, and raises `FileNotFoundError` when the file is missing (monkeypatch as the answering test does).
   - [x] `tests/runner/request_run/test_wheel_contents.py`: build a wheel as `tests/runner/answering/test_wheel_contents.py` does; assert it lists `amoeba/runner/request_run/slice_writing.yaml`; extract it to a temporary directory and run `sys.executable -I -c` code that puts that directory first on `sys.path`, imports `slice_writing_pipeline_path` and prints it; assert the path is inside the extracted directory and the file exists.
-  - [ ] Success: the tests pass.
+  - [x] Success: the tests pass.
 
 **Commit**: `feat: add slice-writing pipeline file and wheel packaging`
 
@@ -196,14 +196,15 @@ usageByModel:
 
 ## 9. Real runs against a Squadron release with D8
 
-- [ ] **9.1 Check the release and finalize the pipeline** (effort 3)
-  - [ ] From a temporary directory, run `sq run <slice_writing.yaml> --validate --strict` with the I/O-directory option (a temporary directory) and the cost-cap option. Then:
+- [x] **9.1 Check the release and finalize the pipeline** (effort 3)
+  - [x] From a temporary directory, run `sq run <slice_writing.yaml> --validate --strict` with the I/O-directory option (a temporary directory) and the cost-cap option. Then:
     - Exit 0: the capabilities are present; continue.
     - Output names an unknown `commit` step or an unknown option: the release lacks a capability. Write the `BLOCKED:` line (see "Order and blocking") and stop.
     - `sq` is not found, or the command times out: write the `BLOCKED:` line with that error and stop.
     - The file is rejected for another reason (a key or value in our file): fix the file as the message says and run again. If the only fix is a `paths` entry without the requests-index param, because `paths` does not accept params, do not widen the guard: write the `BLOCKED:` line naming that reason.
-  - [ ] Change `slice_writing.yaml`, the option-name and commit constants in `pipeline_file.py`, the probe argv, and the tests of Tasks 5.5 and 6.2 to the shipped syntax. Re-run those tests.
-  - [ ] Success: `sq run <file> --validate --strict` with the probe's options prints `Pipeline 'slice-writing' is valid.` and exits 0; the unit tier passes.
+  - [x] Change `slice_writing.yaml`, the option-name and commit constants in `pipeline_file.py`, the probe argv, and the tests of Tasks 5.5 and 6.2 to the shipped syntax. Re-run those tests.
+  - [x] Success: `sq run <file> --validate --strict` with the probe's options prints `Pipeline 'slice-writing' is valid.` and exits 0; the unit tier passes.
+  - **Observation (20261104, squadron 0.24.22):** `sq run <file> --validate --strict --io-dir <existing dir> --max-cost 1` exits 0 and prints `Pipeline 'slice_writing' is valid.` (Squadron prints the underscored name, not `slice-writing`; the file's `name:` is `slice-writing`). `--io-dir` requires an existing directory. The `commit` step accepts exactly `message` and `paths` (an unknown key is rejected under --strict). `--dry-run` with `-p model=muse` and positional index 7 lists steps write and commit. Validation and dry-run do not show whether `paths` substitutes `{requests-index}`; the live cases (9.4) exercise that. No change to the YAML keys, probe argv or option constants was needed; only the 'proposal' comments in `pipeline_file.py` and `slice_writing.yaml` were updated to say confirmed. Unit tier passes.
 
 **Commit**: `feat: finalize slice-writing pipeline syntax against shipped squadron`
 

@@ -8,9 +8,9 @@
 # bare word except the real params: Squadron reads it as a param placeholder and
 # rejects the file.
 #
-# The commit step's keys (and the sq run options for the run I/O directory and the
-# cost cap) are proposals until Task 9.1 confirms them against the shipped
-# Squadron; its paths may carry the requests-index param.
+# The commit step's keys (paths, message) are the ones the shipped Squadron
+# accepts under `sq run --validate --strict`; its paths may carry the
+# requests-index param.
 name: slice-writing
 description: Add one request slice to a provider's requests initiative, or report that the provider already meets the need
 
