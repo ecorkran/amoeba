@@ -480,6 +480,10 @@ def test_the_registered_listings_are_pinned() -> None:
         "desired-states",
         # Slice 141.
         "questions",
+        # Slice 181.
+        "program",
+        "program-blocked",
+        "program-submissions",
     }
 
 

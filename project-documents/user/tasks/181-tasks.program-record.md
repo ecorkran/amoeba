@@ -241,27 +241,29 @@ Note: tick-level program-stage tests use tests/runner/tick_support.py's Rig; the
 
 Read `inspection/__init__.py` (the registry), `inspection/listing.py` and `inspection/core.py` (`_blocked_rows`, `all_blocked_rows`) first. Listings open the program store read-only; with no program store each returns no rows; a program store at the wrong schema version raises, as a project store does.
 
-- [ ] **7.1 `program` listing** (effort 3)
-  - [ ] Create `inspection/program.py` with the rows of LLD D8: `program_id`, `project_id`, `requests_initiative`, `consumed`, `overrides` (`dependent=mode`, comma-separated, empty when none), `concept_path` (concept member's row only), `state` (`readable` or the reason value), `detail`. State comes from `read_member`. Register it as a supervisor-level listing.
-  - [ ] Tests `tests/inspection/test_program.py`: no program store gives no rows; two members, one readable and one per unreadable reason; the override string; `concept_path` only on the concept row; a wrong-version store raises.
-  - [ ] Success: tests pass.
-- [ ] **7.2 `program-submissions` listing** (effort 2)
-  - [ ] Rows `id`, `kind`, `submitted_by`, `submitted_at`, `outcome`, `reason` in `applied_seq` order; register it.
-  - [ ] Tests (same file or a sibling): applied and rejected rows with their reasons; order; empty without a store.
-  - [ ] Success: tests pass.
-- [ ] **7.3 `program-blocked` listing** (effort 4)
-  - [ ] Define the `member_unreadable` blocked-on kind once (`StrEnum` or constant beside the other blocked-on values; read how `blocked_on` is produced today). Columns are `program_id` followed by the `blocked` listing's columns.
-  - [ ] For each program and member: if the member's store opens read-only, its rows from `_blocked_rows` unchanged, with `program_id`; if `read_member` is unreadable, one extra row with `blocked_on` = `member_unreadable`, `reason` = `"<reason>: <detail>"` and the node columns empty. A member whose store opens but is unlinked appears both ways. A member store that does not open adds only the unreadable row.
-  - [ ] No member's failure raises. A `StoreError` from reading the blocked rows of a store that did open is caught in a specific `except` (with a comment saying why), and that member gets the `member_unreadable` row with `store_unreadable: <error>` and no node rows. Only the program store's own failures raise.
-  - [ ] Tests: members' blocked nodes carry `program_id`; each unreadable reason yields its row; the both-ways case; a corrupt member store does not stop the other members' rows; a member whose store opens but whose blocked-row read fails (inject the fault; see `tests/fault_injection.py`) gives the `store_unreadable` row and the other members' rows still list; inspection works with the process stopped and writes nothing.
-  - [ ] Success: tests pass.
-- [ ] **7.4 `inbox` listing gains `queue`** (effort 3)
-  - [ ] In `inspection/inbox.py` list both roots; add a **last** column `queue` (`project` or `program`, defined once). Existing column names and positions are unchanged; a supervisor with no program files lists exactly the rows it listed before, plus the key.
-  - [ ] Update the existing tests that assert the full column tuple (`tests/inbox/test_listings.py` and any CLI or serve test that does). Add cases: a program file in `new/`, a program quarantine with its reason, a program file in `failed/`.
-  - [ ] Success: tests pass.
-- [ ] **7.5 Registry, CLI and server** (effort 2)
-  - [ ] Confirm `amoeba inspect program | program-blocked | program-submissions` appear through the registry-derived CLI, and `/v1/listings/{name}` serves them with no route change. Update tests that enumerate listing names (`tests/test_cli_inspect.py`, `tests/serve/`).
-  - [ ] Success: `uv run pytest tests/inspection tests/inbox tests/serve tests/test_cli_inspect.py` passes.
+- [x] **7.1 `program` listing** (effort 3)
+  - [x] Create `inspection/program.py` with the rows of LLD D8: `program_id`, `project_id`, `requests_initiative`, `consumed`, `overrides` (`dependent=mode`, comma-separated, empty when none), `concept_path` (concept member's row only), `state` (`readable` or the reason value), `detail`. State comes from `read_member`. Register it as a supervisor-level listing.
+  - [x] Tests `tests/inspection/test_program.py`: no program store gives no rows; two members, one readable and one per unreadable reason; the override string; `concept_path` only on the concept row; a wrong-version store raises.
+  - [x] Success: tests pass.
+- [x] **7.2 `program-submissions` listing** (effort 2)
+  - [x] Rows `id`, `kind`, `submitted_by`, `submitted_at`, `outcome`, `reason` in `applied_seq` order; register it.
+  - [x] Tests (same file or a sibling): applied and rejected rows with their reasons; order; empty without a store.
+  - [x] Success: tests pass.
+- [x] **7.3 `program-blocked` listing** (effort 4)
+  - [x] Define the `member_unreadable` blocked-on kind once (`StrEnum` or constant beside the other blocked-on values; read how `blocked_on` is produced today). Columns are `program_id` followed by the `blocked` listing's columns.
+  - [x] For each program and member: if the member's store opens read-only, its rows from `_blocked_rows` unchanged, with `program_id`; if `read_member` is unreadable, one extra row with `blocked_on` = `member_unreadable`, `reason` = `"<reason>: <detail>"` and the node columns empty. A member whose store opens but is unlinked appears both ways. A member store that does not open adds only the unreadable row.
+  - [x] No member's failure raises. A `StoreError` from reading the blocked rows of a store that did open is caught in a specific `except` (with a comment saying why), and that member gets the `member_unreadable` row with `store_unreadable: <error>` and no node rows. Only the program store's own failures raise.
+  - [x] Tests: members' blocked nodes carry `program_id`; each unreadable reason yields its row; the both-ways case; a corrupt member store does not stop the other members' rows; a member whose store opens but whose blocked-row read fails (inject the fault; see `tests/fault_injection.py`) gives the `store_unreadable` row and the other members' rows still list; inspection works with the process stopped and writes nothing.
+  - [x] Success: tests pass.
+- [x] **7.4 `inbox` listing gains `queue`** (effort 3)
+  - [x] In `inspection/inbox.py` list both roots; add a **last** column `queue` (`project` or `program`, defined once). Existing column names and positions are unchanged; a supervisor with no program files lists exactly the rows it listed before, plus the key.
+  - [x] Update the existing tests that assert the full column tuple (`tests/inbox/test_listings.py` and any CLI or serve test that does). Add cases: a program file in `new/`, a program quarantine with its reason, a program file in `failed/`.
+  - [x] Success: tests pass.
+- [x] **7.5 Registry, CLI and server** (effort 2)
+  - [x] Confirm `amoeba inspect program | program-blocked | program-submissions` appear through the registry-derived CLI, and `/v1/listings/{name}` serves them with no route change. Update tests that enumerate listing names (`tests/test_cli_inspect.py`, `tests/serve/`).
+  - [x] Success: `uv run pytest tests/inspection tests/inbox tests/serve tests/test_cli_inspect.py` passes.
+
+Note: no existing test asserted the inbox listing's full column tuple; the existing listing tests needed only the pinned name set in test_cli_inspect.py and the seeded program in inspection_harness.py (every listing must have a row there).
 
 **Commit**: `feat: add program, program-blocked and program-submissions listings`
 
