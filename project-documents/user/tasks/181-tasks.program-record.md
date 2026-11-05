@@ -74,11 +74,11 @@ Note: tests/test_failure_modes.py's open_temporary failure test patched Store._c
 
 **Commit**: `refactor: lift the store connection helpers into a shared module`
 
-- [ ] **1.3 Extract `process/inbox_drain.py` from `InboxTenant`** (effort 4)
-  - [ ] Read `process/inbox_tenant.py` and `inbox/layout.py`. Move the per-file lifecycle (drain order and batch, parse and quarantine on an envelope error, apply, attempt counting, parking at the limit, durable moves, sidecar writes, the reused-id warning) into one class parameterized by the inbox root, the parse function, and the apply function. Project attribution (`no_store_for_project`, `create_project` routing) and `_apply` stay in `InboxTenant`.
-  - [ ] The drain reads `inbox_batch_size` and `inbox_max_attempts` from the host's settings, as the tenant does today. No new setting.
-  - [ ] `InboxTenant` is behaviorally identical: same terminal places, same log messages, same exception behavior below and at the attempt limit.
-  - [ ] Success: `uv run pytest tests/inbox tests/process` passes with no test edited; no lifecycle logic remains duplicated between the two modules.
+- [x] **1.3 Extract `process/inbox_drain.py` from `InboxTenant`** (effort 4)
+  - [x] Read `process/inbox_tenant.py` and `inbox/layout.py`. Move the per-file lifecycle (drain order and batch, parse and quarantine on an envelope error, apply, attempt counting, parking at the limit, durable moves, sidecar writes, the reused-id warning) into one class parameterized by the inbox root, the parse function, and the apply function. Project attribution (`no_store_for_project`, `create_project` routing) and `_apply` stay in `InboxTenant`.
+  - [x] The drain reads `inbox_batch_size` and `inbox_max_attempts` from the host's settings, as the tenant does today. No new setting.
+  - [x] `InboxTenant` is behaviorally identical: same terminal places, same log messages, same exception behavior below and at the attempt limit.
+  - [x] Success: `uv run pytest tests/inbox tests/process` passes with no test edited; no lifecycle logic remains duplicated between the two modules.
 
 **Commit**: `refactor: extract the inbox file lifecycle into a shared drain`
 
