@@ -236,14 +236,16 @@ usageByModel:
 
 **Commit**: `test: add live slice-writing request tests`
 
-- [ ] **9.5 Capture real replies and record the observation** (effort 2)
-  - [ ] Prerequisite: 9.4 is checked.
-  - [ ] Copy one real `new_slice` and one real `already_met` `reply.json` from the kept I/O directories under the Task 9.4 basetemp into `tests/fixtures/slice_writing/`, add parser tests that read them (keep the hand-written edge cases), and rerun the unit tier. If a captured reply does not parse as its kind, fix `read_reply` to accept the real shape and keep the captured file as the fixture.
-  - [ ] Add a dated note under "Squadron shapes" in `docs/process-contract.md`: "first observed running the slice-writing pipeline: squadron x.y.z, on <date>", with the version from `sq --version` as run in this task, beside the answering pipeline's note.
-  - [ ] Success: the unit tier passes on the captured files; the note holds a real version and date.
-- [ ] **9.6 Final check** (effort 1)
-  - [ ] Prerequisite: 9.5 is checked.
-  - [ ] Check the LLD's Verification Walkthrough steps 1 to 6 as written (steps 3 and 4 with the finalized options), plus `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and the full `uv run pytest -q`. Confirm `cf list projects` with `CONTEXT_FORGE_DATA_DIR` unset shows no scratch project.
-  - [ ] Success: every step gives the expected result; results are noted under this task.
+- [x] **9.5 Capture real replies and record the observation** (effort 2)
+  - [x] Prerequisite: 9.4 is checked.
+  - [x] Copy one real `new_slice` and one real `already_met` `reply.json` from the kept I/O directories under the Task 9.4 basetemp into `tests/fixtures/slice_writing/`, add parser tests that read them (keep the hand-written edge cases), and rerun the unit tier. If a captured reply does not parse as its kind, fix `read_reply` to accept the real shape and keep the captured file as the fixture.
+  - [x] Add a dated note under "Squadron shapes" in `docs/process-contract.md`: "first observed running the slice-writing pipeline: squadron x.y.z, on <date>", with the version from `sq --version` as run in this task, beside the answering pipeline's note.
+  - [x] Success: the unit tier passes on the captured files; the note holds a real version and date.
+  - Note: fixtures are one directory per reply (`new_slice/`, `already_met/`, each holding `reply.json`) so `read_reply` reads them directly; both parsed as their kind with no change to `read_reply`.
+- [x] **9.6 Final check** (effort 1)
+  - [x] Prerequisite: 9.5 is checked.
+  - [x] Check the LLD's Verification Walkthrough steps 1 to 6 as written (steps 3 and 4 with the finalized options), plus `uv run ruff format .`, `uv run ruff check .`, `uv run pyright` and the full `uv run pytest -q`. Confirm `cf list projects` with `CONTEXT_FORGE_DATA_DIR` unset shows no scratch project.
+  - [x] Success: every step gives the expected result; results are noted under this task.
+  - Results (20261104, squadron 0.24.22): walkthrough 1 (380 passed, request_run + answering), 2 (absolute path ending `amoeba/runner/request_run/slice_writing.yaml`), 3 (exit 0; Squadron prints `Pipeline 'slice_writing' is valid.` with an underscore), 4 (`tests/live/request_run -v --basetemp=/tmp/request-live`: 5 passed in 39.95s; the first case's repo has two new commits above the fixture, one per case, each touching only plan files; `git status --short` empty; `cf list slices 200 --json` lists entries 200 and 201), 5 (7 passed) and 6 (`cf list projects` with `CONTEXT_FORGE_DATA_DIR` unset shows no scratch project) all as expected. `uv run ruff format .`, `ruff check .`, `pyright` clean; full `uv run pytest -q`: 4499 passed. Walkthrough step 3's expected name needs correcting to the underscored form (done in the closing commit).
 
 **Commit**: `test: capture real slice-writing replies and record the squadron observation`

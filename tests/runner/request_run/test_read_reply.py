@@ -132,3 +132,16 @@ def test_invalid_utf8_is_malformed(tmp_path: Path) -> None:
 def test_malformed_replies_name_a_cause(tmp_path: Path, content: object) -> None:
     _write(tmp_path, content)
     assert _problem(tmp_path).kind is ProblemKind.MALFORMED
+
+
+CAPTURED = Path(__file__).parents[2] / "fixtures" / "slice_writing"
+
+
+def test_captured_new_slice_reply_parses() -> None:
+    # Byte-real reply.json from a live run of the shipped pipeline (Task 9.4).
+    assert read_reply(CAPTURED / "new_slice") == NewSlice(index=200)
+
+
+def test_captured_already_met_reply_parses() -> None:
+    result = read_reply(CAPTURED / "already_met")
+    assert result == AlreadyMet(commit="8dd16cada64c80b1b4d37b567b5f49b2bb9a83ef")

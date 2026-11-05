@@ -547,6 +547,10 @@ resumable → resume; question → answer; anything else → a person".
   `reply_file`, `delivered_prompt_file`) and `sq run --validate --strict` were first
   observed running the answering pipeline: squadron 0.24.14, on 20261103. The captured
   `answer.json` and `check.json` in `tests/fixtures/answering/` come from that run.
+  The slice-writing pipeline's run I/O directory and cost-cap options and its `commit`
+  step were first observed running the slice-writing pipeline: squadron 0.24.22, on
+  20261104. The captured `reply.json` files in `tests/fixtures/slice_writing/` come
+  from that run.
 - **The question record (slice 141).** A `QUESTION` plan carries the question
   (`OutcomePlan.question`), and ingest writes the block through `record_question`
   instead of `block_once`, so the block and the record land together or not at all
