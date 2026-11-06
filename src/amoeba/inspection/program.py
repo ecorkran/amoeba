@@ -19,7 +19,14 @@ from typing import Final
 
 from amoeba.inspection import core
 from amoeba.inspection.listing import Row
-from amoeba.program import MemberUnreadableReason, Readable, Unreadable, read_member
+from amoeba.program import (
+    MemberState,
+    MemberUnreadableReason,
+    Readable,
+    Unreadable,
+    member_state_in,
+    read_member,
+)
 from amoeba.store import Member, Program, ProgramStore, Store, StoreError
 from amoeba.store.paths import program_store_path, project_store_path
 
@@ -129,59 +136,43 @@ def program_blocked_rows(supervisor_dir: Path) -> list[Row]:
     """Every member's blocked nodes, plus one row per member that cannot be read."""
     rows: list[Row] = []
     for program, member in _members(supervisor_dir):
-        node_rows, read_failure = _member_node_rows(supervisor_dir, member)
+        node_rows, state = _member_node_rows(supervisor_dir, member)
         rows.extend({"program_id": program.program_id, **row} for row in node_rows)
-        reason = _unreadable_reason(supervisor_dir, member, read_failure)
-        if reason is not None:
-            rows.append(_unreadable_row(program.program_id, member, reason))
+        if isinstance(state, Unreadable):
+            rows.append(_unreadable_row(program.program_id, member, state))
     return rows
 
 
 def _member_node_rows(
     supervisor_dir: Path, member: Member
-) -> tuple[list[Row], str | None]:
-    """The member's blocked rows, and why they could not be read, if they could not.
+) -> tuple[list[Row], MemberState]:
+    """The member's blocked rows and its readability, from one read of its store.
 
-    A store that does not open yields no rows and no failure here: ``read_member``
-    reports it. A store that opened but could not be read yields the failure.
+    The store is opened once and both are read in one transaction, so a node row
+    and an unreadable row cannot disagree. A store that is missing is
+    ``read_member``'s to report (there is nothing to read twice).
     """
     path = project_store_path(supervisor_dir, member.project_id)
     if not path.is_file():
-        return [], None
+        return [], read_member(supervisor_dir, member)
     try:
-        store = Store.open_read_only(path)
-    except StoreError:
-        # Specific: the member's store does not open; read_member names why, so
-        # the member is reported once, with the same reason the listing shows.
-        return [], None
-    with store:
-        try:
-            with store.read_transaction():
-                return core.project_blocked_rows(store, member.project_id), None
-        except StoreError as error:
-            # Specific: a member store that opened but fails on read is that
-            # member's problem, reported as its row; only the program store's
-            # own failures may raise out of an inspection listing.
-            return [], str(error)
+        with Store.open_read_only(path) as store, store.read_transaction():
+            return (
+                core.project_blocked_rows(store, member.project_id),
+                member_state_in(store, member),
+            )
+    except StoreError as error:
+        # Specific: a member store that fails to open or read is that member's
+        # problem, reported as its row; only the program store's own failures
+        # may raise out of an inspection listing.
+        return [], Unreadable(MemberUnreadableReason.STORE_UNREADABLE, str(error))
 
 
-def _unreadable_reason(
-    supervisor_dir: Path, member: Member, read_failure: str | None
-) -> str | None:
-    """``"<reason>: <detail>"`` when the member needs an unreadable row, else None."""
-    if read_failure is not None:
-        return f"{MemberUnreadableReason.STORE_UNREADABLE.value}: {read_failure}"
-    state = read_member(supervisor_dir, member)
-    if isinstance(state, Unreadable):
-        return f"{state.reason.value}: {state.detail}"
-    return None
-
-
-def _unreadable_row(program_id: str, member: Member, reason: str) -> Row:
+def _unreadable_row(program_id: str, member: Member, state: Unreadable) -> Row:
     """A ``member_unreadable`` row: the node columns are empty."""
     row: Row = dict.fromkeys(PROGRAM_BLOCKED_COLUMNS, "")
     row["program_id"] = program_id
     row["project_id"] = member.project_id
     row["blocked_on"] = MEMBER_UNREADABLE_BLOCKED_ON
-    row["reason"] = reason
+    row["reason"] = f"{state.reason.value}: {state.detail}"
     return row

@@ -12,6 +12,7 @@ from amoeba.program.members import (
     MemberUnreadableReason,
     Readable,
     Unreadable,
+    member_state_in,
     read_member,
 )
 
@@ -20,5 +21,6 @@ __all__ = [
     "MemberUnreadableReason",
     "Readable",
     "Unreadable",
+    "member_state_in",
     "read_member",
 ]

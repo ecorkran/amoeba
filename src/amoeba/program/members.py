@@ -90,19 +90,26 @@ def read_member(
 
     try:
         with _open_read_only(path, busy_timeout_seconds) as store:
-            links = store.cf_links(member.project_id)
-            if len(links) != 1:
-                return Unreadable(
-                    MemberUnreadableReason.UNLINKED, _link_detail(len(links))
-                )
-            cf_project_id = links[0].cf_project_id
-            observed = store.latest_cf_snapshots(member.project_id, cf_project_id)[1]
+            return member_state_in(store, member)
     except StoreError as error:
         # Specific: a corrupt, wrong-version or busy member store is that
         # member's problem, reported as its reason. Only the program store's own
         # failures may stop the process, and they do not pass through here.
         return Unreadable(MemberUnreadableReason.STORE_UNREADABLE, str(error))
 
+
+def member_state_in(store: Store, member: Member) -> MemberState:
+    """The member's state from its already-open store, reasons 3 to 5.
+
+    For a caller that reads the member's store for something else too and needs
+    both from one snapshot (``program-blocked``). A store failure raises
+    ``StoreError``; the caller owns reason 2.
+    """
+    links = store.cf_links(member.project_id)
+    if len(links) != 1:
+        return Unreadable(MemberUnreadableReason.UNLINKED, _link_detail(len(links)))
+    cf_project_id = links[0].cf_project_id
+    observed = store.latest_cf_snapshots(member.project_id, cf_project_id)[1]
     if observed is None:
         return Unreadable(
             MemberUnreadableReason.SNAPSHOT_MISSING,
