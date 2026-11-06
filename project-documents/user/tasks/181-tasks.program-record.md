@@ -19,7 +19,7 @@ projectState: Initiatives 100, 120 and 140 are complete and merged. The project 
   D4 (the requests initiative index lives on the member registration).
 dateCreated: 20261104
 dateUpdated: 20261105
-status: in_progress
+status: complete
 turns: 23
 promptTokens: 1182786
 cachedTokens: 1083463

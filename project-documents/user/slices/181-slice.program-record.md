@@ -17,7 +17,7 @@ interfaces:
 - 185-slice.request-outcome
 dateCreated: 20261103
 dateUpdated: 20261105
-status: in_progress
+status: complete
 turns: 39
 promptTokens: 3367393
 cachedTokens: 3226076
