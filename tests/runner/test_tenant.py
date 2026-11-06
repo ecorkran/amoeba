@@ -16,7 +16,7 @@ from amoeba.runner.decide import Action, LaunchRun, ProjectView
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.project_config import ProjectConfig, ProjectSettings
 from amoeba.runner.tenant import RunnerTenant
-from amoeba.store import PARAM_RUN_ID, Store, StoreBusyError
+from amoeba.store import PARAM_RUN_ID, ProgramStore, Store, StoreBusyError
 from amoeba.store.inbox_models import Channel
 from runner.lifecycle.crash_support import fail_nth_write, restore_writes
 from runner.observe_support import (
@@ -39,6 +39,7 @@ class Host:
     def __init__(self, stores: dict[str, Store]) -> None:
         self.stores = stores
         self.stop_requested = False
+        self.program_store: ProgramStore | None = None
 
     @property
     def project_ids(self) -> tuple[str, ...]:

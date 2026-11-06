@@ -13,6 +13,20 @@ from amoeba.inspection.listing import FlagOption, ListingRequest, Row
 from amoeba.store import Channel, Store, paths
 from amoeba.store.discovery import discover_project_ids
 
+#: The ``blocked`` listing's columns, defined once: ``program-blocked`` is
+#: ``program_id`` followed by these.
+BLOCKED_COLUMNS: Final = (
+    "project_id",
+    "node_id",
+    "title",
+    "blocked_on",
+    "reason",
+    "context",
+    "blocked_state_id",
+    "question_state",
+    "decline_reason",
+)
+
 UNRESOLVED_OPTION = FlagOption(
     name="unresolved", help_text="Only entries still in flight."
 )
@@ -35,7 +49,7 @@ def node_rows(store: Store, request: ListingRequest) -> list[Row]:
 
 def blocked_rows(store: Store, request: ListingRequest) -> list[Row]:
     """Every blocked node in one project, with what it is blocked on."""
-    return _blocked_rows(store, request.require_project_id())
+    return project_blocked_rows(store, request.require_project_id())
 
 
 #: The ``reason`` of a block whose escalation recorded none (a judge or
@@ -51,11 +65,11 @@ def all_blocked_rows(store_dir: Path) -> list[Row]:
             paths.project_store_path(store_dir, project_id)
         ) as store:
             with store.read_transaction():
-                rows.extend(_blocked_rows(store, project_id))
+                rows.extend(project_blocked_rows(store, project_id))
     return rows
 
 
-def _blocked_rows(store: Store, project_id: str) -> list[Row]:
+def project_blocked_rows(store: Store, project_id: str) -> list[Row]:
     """The blocked rows of one project; ``payload`` is the escalation's, in full."""
     payloads = {
         message.blocked_state_id: dict(message.payload or {})

@@ -28,7 +28,7 @@ from amoeba.process import ProcessSettings, RunOutcome
 from amoeba.runner.launch import LAUNCH_LOGS_DIRNAME
 from amoeba.runner.project_config import ProjectConfig, ProjectSettings
 from amoeba.runner.tenant import RunnerTenant
-from amoeba.store import CommandKind, NodeKind, Store
+from amoeba.store import CommandKind, NodeKind, ProgramStore, Store
 
 PROJECT_COUNT = 10
 RUNS_PER_PROJECT = 10
@@ -43,6 +43,7 @@ MAX_TICKS_TO_REACH_EVERY_RUN = 30
 
 class Host:
     stop_requested = False
+    program_store: ProgramStore | None = None
 
     def __init__(self, stores: dict[str, Store]) -> None:
         self._stores = stores

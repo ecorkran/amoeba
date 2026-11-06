@@ -14,8 +14,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final
 
-#: The only wildcard in a rules entry or a plan file pattern.
-GLOB_WILDCARD: Final = "*"
+from amoeba.store import GLOB_WILDCARD
+
 _FRONT_MATTER_MARK: Final = "---"
 #: ATX heading of level 1-3: up to three leading spaces, 1-3 ``#``, then a blank or EOL.
 _CUT_HEADING = re.compile(r"^ {0,3}#{1,3}(?:[ \t]|$)")

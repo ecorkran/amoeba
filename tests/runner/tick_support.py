@@ -30,6 +30,7 @@ from amoeba.runner.lifecycle.plan_stage import PlanStage
 from amoeba.runner.lifecycle.tree import LifecycleTree
 from amoeba.runner.observe import RunObserver
 from amoeba.runner.probes import LinkProbes
+from amoeba.runner.program import ProgramStage
 from amoeba.runner.project_config import ProjectConfig, ProjectSettings
 from amoeba.runner.tenant import RunnerTenant
 from amoeba.runner.tick import ProjectTick
@@ -38,6 +39,7 @@ from amoeba.store import (
     DesiredState,
     Node,
     NodeKind,
+    ProgramStore,
     Store,
     SubmissionKind,
 )
@@ -216,6 +218,8 @@ class Rig:
         self.popen = Popen(store)
         self.context = NodeContext()
         self.deadline = 1_000_000.0
+        #: The program store the tick's program stage reads; none by default.
+        self.program_store: ProgramStore | None = None
         self.observer = RunObserver(
             supervisor_dir=self.supervisor_dir,
             tracker=self.tracker,
@@ -245,6 +249,7 @@ class Rig:
             call_timeout_seconds=8.0,
             amoeba_version=TEST_AMOEBA_VERSION,
             auto_resume_limit=self.auto_resume_limit,
+            program_stage=ProgramStage(self.program_store),
         )
         budget = TickBudget(self.deadline, Host(), self.clock.monotonic)
         return tick.run(budget), tick
@@ -263,6 +268,7 @@ class StoreHost:
 
     stop_requested = False
     project_ids = (PROJECT,)
+    program_store: ProgramStore | None = None
 
     def __init__(self, store: Store) -> None:
         self._store = store

@@ -47,8 +47,9 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 #: what this guard fails on.
 READ_WRITE_OPEN = "open"
 
-#: The class the call must be made on for it to count.
-STORE_CLASS = "Store"
+#: The classes the call must be made on for it to count: the project store and
+#: the program store, which has the same single writer (slice 181).
+STORE_CLASSES = frozenset({"Store", "ProgramStore"})
 
 #: The **only** module under ``src/amoeba/`` permitted to open a store
 #: read-write. Not a list that grows casually: adding to it widens the
@@ -94,12 +95,12 @@ def _relative_to_scripts(path: Path) -> str:
 
 
 def _read_write_open_calls(source: str) -> list[int]:
-    """Line numbers of every ``Store.open(...)`` call in ``source``.
+    """Line numbers of every ``Store.open(...)`` or ``ProgramStore.open(...)`` call.
 
     Matches an attribute call whose attribute is ``open`` and whose value is
-    the name ``Store`` — so ``Store.open_read_only`` and a local ``open()`` are
-    both correctly left alone. Walking the AST means a call wrapped across
-    lines is caught exactly as a single-line one is.
+    the name ``Store`` or ``ProgramStore`` — so ``open_read_only`` and a local
+    ``open()`` are both correctly left alone. Walking the AST means a call
+    wrapped across lines is caught exactly as a single-line one is.
     """
     tree = ast.parse(source)
     found: list[int] = []
@@ -114,7 +115,7 @@ def _read_write_open_calls(source: str) -> list[int]:
             continue
         if function.attr != READ_WRITE_OPEN:
             continue
-        if isinstance(function.value, ast.Name) and function.value.id == STORE_CLASS:
+        if isinstance(function.value, ast.Name) and function.value.id in STORE_CLASSES:
             found.append(node.lineno)
 
     return found
@@ -144,6 +145,32 @@ def test_the_scan_finds_a_wrapped_read_write_open() -> None:
     )
 
     assert _read_write_open_calls(wrapped) == [3]
+
+
+def test_the_scan_finds_a_read_write_program_store_open() -> None:
+    """The program store has the same single writer as the project stores."""
+    violation = (
+        "from amoeba.store import ProgramStore\n\nstore = ProgramStore.open(path)\n"
+    )
+
+    assert _read_write_open_calls(violation) == [3]
+
+
+def test_the_scan_finds_a_wrapped_program_store_open() -> None:
+    wrapped = (
+        "from amoeba.store import ProgramStore\n\n"
+        "store = ProgramStore.open(\n    path,\n    busy_timeout_seconds=1.0,\n)\n"
+    )
+
+    assert _read_write_open_calls(wrapped) == [3]
+
+
+def test_the_scan_ignores_the_program_stores_read_only_open() -> None:
+    permitted = (
+        "from amoeba.store import ProgramStore\n\nProgramStore.open_read_only(path)\n"
+    )
+
+    assert _read_write_open_calls(permitted) == []
 
 
 def test_the_scan_ignores_the_read_only_open() -> None:

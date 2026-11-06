@@ -194,12 +194,13 @@ def build_envelope(
     )
 
 
-def parse_envelope(raw: str | bytes) -> SubmissionEnvelope:
-    """Parse a submission file's content.
+def decode_envelope(raw: str | bytes) -> Mapping[str, object]:
+    """Decode a submission file's content to its JSON object.
+
+    Shared by the project and program envelopes.
 
     Raises:
-        EnvelopeError: With ``UNPARSEABLE_ENVELOPE`` if it is not a JSON
-            object, otherwise as :func:`validate_envelope` does.
+        EnvelopeError: With ``UNPARSEABLE_ENVELOPE`` if it is not a JSON object.
     """
     try:
         data: object = json.loads(raw)
@@ -210,7 +211,46 @@ def parse_envelope(raw: str | bytes) -> SubmissionEnvelope:
         ) from error
     if not isinstance(data, dict):
         raise EnvelopeError(QuarantineReason.UNPARSEABLE_ENVELOPE, "not a JSON object")
-    return validate_envelope(data)  # pyright: ignore[reportUnknownArgumentType]
+    return data  # pyright: ignore[reportUnknownVariableType]
+
+
+def check_envelope_version(data: Mapping[str, object]) -> None:
+    """Refuse an envelope whose version is not the one this code understands.
+
+    Raises:
+        EnvelopeError: With ``UNKNOWN_ENVELOPE_VERSION``.
+    """
+    version = data.get(ENVELOPE_VERSION_FIELD)
+    # An exact int: ``True == 1`` and ``1.0 == 1`` must not pass as version 1.
+    if type(version) is not int or version != ENVELOPE_VERSION:
+        raise EnvelopeError(
+            QuarantineReason.UNKNOWN_ENVELOPE_VERSION,
+            f"expected {ENVELOPE_VERSION}, got {version!r}",
+        )
+
+
+def check_envelope_kind(
+    data: Mapping[str, object], valid_kinds: frozenset[str]
+) -> None:
+    """Refuse an envelope whose kind is not one of ``valid_kinds``.
+
+    Raises:
+        EnvelopeError: With ``UNKNOWN_KIND``.
+    """
+    kind = data.get(ENVELOPE_KIND_FIELD)
+    # A string first: an unhashable value must be named, not crash the check.
+    if not isinstance(kind, str) or kind not in valid_kinds:
+        raise EnvelopeError(QuarantineReason.UNKNOWN_KIND, f"kind {kind!r}")
+
+
+def parse_envelope(raw: str | bytes) -> SubmissionEnvelope:
+    """Parse a submission file's content.
+
+    Raises:
+        EnvelopeError: With ``UNPARSEABLE_ENVELOPE`` if it is not a JSON
+            object, otherwise as :func:`validate_envelope` does.
+    """
+    return validate_envelope(decode_envelope(raw))
 
 
 def validate_envelope(data: Mapping[str, object]) -> SubmissionEnvelope:
@@ -221,18 +261,8 @@ def validate_envelope(data: Mapping[str, object]) -> SubmissionEnvelope:
     Raises:
         EnvelopeError: With the reason of the first check that failed.
     """
-    version = data.get(ENVELOPE_VERSION_FIELD)
-    # An exact int: ``True == 1`` and ``1.0 == 1`` must not pass as version 1.
-    if type(version) is not int or version != ENVELOPE_VERSION:
-        raise EnvelopeError(
-            QuarantineReason.UNKNOWN_ENVELOPE_VERSION,
-            f"expected {ENVELOPE_VERSION}, got {version!r}",
-        )
-
-    kind = data.get(ENVELOPE_KIND_FIELD)
-    # A string first: an unhashable value must be named, not crash the check.
-    if not isinstance(kind, str) or kind not in _KIND_VALUES:
-        raise EnvelopeError(QuarantineReason.UNKNOWN_KIND, f"kind {kind!r}")
+    check_envelope_version(data)
+    check_envelope_kind(data, _KIND_VALUES)
 
     try:
         envelope = SubmissionEnvelope.model_validate(data)

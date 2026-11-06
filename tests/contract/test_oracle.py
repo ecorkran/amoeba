@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -14,7 +15,10 @@ from amoeba.store import (
     ChangeKind,
     NodeKind,
     NodeStatus,
+    ProgramStore,
     Store,
+    program_store_path,
+    project_store_path,
 )
 from contract.oracle import (
     Category,
@@ -207,6 +211,60 @@ def test_a_foreign_change_on_a_feed_is_reported(tmp_path: Path) -> None:
     problems = _locality(tmp_path, {ALPHA: [foreign], BETA: []}, {ALPHA: [], BETA: []})
 
     assert len(problems) == 1 and "foreign" in problems[0]
+
+
+def _two_clean_stores_and_a_program_store(supervisor: Path) -> None:
+    for project in (ALPHA, BETA):
+        Store.open(project_store_path(supervisor, project)).close()
+    ProgramStore.open(program_store_path(supervisor)).close()
+
+
+def _add_table(store_file: Path, table: str) -> None:
+    with sqlite3.connect(store_file) as connection:
+        connection.execute(f"CREATE TABLE {table} (id TEXT)")
+
+
+def test_a_real_program_store_beside_clean_project_stores_is_clean(
+    tmp_path: Path,
+) -> None:
+    _two_clean_stores_and_a_program_store(tmp_path)
+
+    assert _locality(tmp_path, {ALPHA: [], BETA: []}, {ALPHA: [], BETA: []}) == []
+
+
+@pytest.mark.parametrize("table", ["nodes", "blocked_states", "question_records"])
+def test_a_project_table_in_the_program_store_is_reported_by_name(
+    tmp_path: Path, table: str
+) -> None:
+    _two_clean_stores_and_a_program_store(tmp_path)
+    _add_table(program_store_path(tmp_path), table)
+
+    problems = _locality(tmp_path, {ALPHA: [], BETA: []}, {ALPHA: [], BETA: []})
+
+    assert len(problems) == 1
+    assert "program store" in problems[0] and table in problems[0]
+
+
+def test_a_program_table_in_a_project_store_is_reported_by_name(
+    tmp_path: Path,
+) -> None:
+    _two_clean_stores_and_a_program_store(tmp_path)
+    _add_table(project_store_path(tmp_path, ALPHA), "program_members")
+
+    problems = _locality(tmp_path, {ALPHA: [], BETA: []}, {ALPHA: [], BETA: []})
+
+    assert len(problems) == 1
+    assert ALPHA in problems[0] and "program_members" in problems[0]
+
+
+def test_a_program_store_missing_a_table_is_reported(tmp_path: Path) -> None:
+    _two_clean_stores_and_a_program_store(tmp_path)
+    with sqlite3.connect(program_store_path(tmp_path)) as connection:
+        connection.execute("DROP TABLE consumption_overrides")
+
+    problems = _locality(tmp_path, {ALPHA: [], BETA: []}, {ALPHA: [], BETA: []})
+
+    assert len(problems) == 1 and "consumption_overrides" in problems[0]
 
 
 # --------------------------------------------------------------------------

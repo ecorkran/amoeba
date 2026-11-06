@@ -52,6 +52,7 @@ from amoeba.store import (
     Node,
     NodeKind,
     NodeStatus,
+    ProgramStore,
     QuestionState,
     Store,
 )
@@ -78,6 +79,7 @@ SETTINGS = ProcessSettings(
 
 class Host:
     stop_requested = False
+    program_store: ProgramStore | None = None
 
     def __init__(self, store: Store) -> None:
         self._store = store

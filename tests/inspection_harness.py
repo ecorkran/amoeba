@@ -23,6 +23,8 @@ from amoeba.store import (
     DetectionOutcome,
     JournalOutcome,
     NodeKind,
+    ProgramStore,
+    ProgramSubmissionKind,
     QuestionCatch,
     SetDesiredState,
     Store,
@@ -35,6 +37,7 @@ from amoeba.store.inbox_models import (
     WATCH_ACTIVE,
     WATCH_REVIEWS_DIR,
 )
+from amoeba.store.paths import program_store_path
 
 PROJECT = "demo"
 
@@ -180,6 +183,28 @@ def seed_every_listing(supervisor_dir: Path) -> SeededStore:
                 outcome=DetectionOutcome.UNPARSEABLE,
                 detail="not a review",
             )
+        )
+    # Slice 181: one program whose one member is the seeded project.
+    program_payload: dict[str, object] = {
+        "program_id": "fixture-program",
+        "concept_member": PROJECT,
+        "concept_path": "docs/program-concept.md",
+        "members": [
+            {
+                "project_id": PROJECT,
+                "requests_initiative": 790,
+                "consumed": "from_source",
+                "overrides": {},
+            }
+        ],
+    }
+    with ProgramStore.open(program_store_path(supervisor_dir)) as program_store:
+        program_store.apply_submission(
+            submission_id="fixture-program",
+            kind=ProgramSubmissionKind.REGISTER_PROGRAM,
+            submitted_by="fixture",
+            submitted_at=datetime(2026, 11, 5, tzinfo=UTC),
+            payload=program_payload,
         )
     # And one file still waiting in the inbox, written by the real submit().
     submit(

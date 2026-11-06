@@ -1076,7 +1076,20 @@ is not created). Resolution precedence, highest first:
 2. `XDG_CONFIG_HOME` — yields `$XDG_CONFIG_HOME/amoeba`
 3. `~/.config/amoeba` — the default, matching Squadron's `~/.config/squadron`
 
-The project's store file is that directory plus `{project_id}.sqlite3`.
+The project's store file is that directory plus `{project_id}.sqlite3`. There is
+exactly one other store: the **program store** at `programs/programs.sqlite3`
+(`program_store_path(store_dir)`; see [The program store](#the-program-store)).
+A subdirectory, so no project id can collide with it and discovery, which globs
+`*.sqlite3` at the top level only, never mistakes it for a project.
+
+**What each may hold (slice 181, D9).** The program store may hold programs,
+members, consumption modes and program submission records (later program slices
+add edges and requests). It may not hold any project's nodes, blocks, questions,
+journal, messages, verdicts, checks, snapshots or feed. A project store holds no
+program table. The resident process is the only read-write opener of either
+kind; a project's tick may open other members' stores **read-only**, and never
+writes them. The contract proof (`tests/contract/oracle.py`) checks both
+directions.
 
 Resolution is a **pure computation**: it creates nothing and touches no
 filesystem. Directory creation happens in `Store.open()`.
@@ -1084,6 +1097,61 @@ filesystem. Directory creation happens in `Store.open()`.
 **There is no per-project override.** The design declines it deliberately —
 adding one would put two locality paths in the foundation slice before any
 consumer needs either. Do not add one without a PM decision.
+
+## The program store
+
+*Added by slice 181. Program schema version 1 (`program_schema/001_program_record.sql`).*
+A **program** is a set of member projects that coordinate: the trading program
+(data, engine, ui) or the tool chain. `ProgramStore` holds the record of them in
+one SQLite file, `programs/programs.sqlite3`, with a schema line of its own. It
+is its own class, not more mixins on `Store`: it has none of `Store`'s tables, so
+"no project rows in the program store" is structural.
+
+```python
+from amoeba.store import ProgramStore
+
+ProgramStore.open(path)             # read-write; the resident process only
+ProgramStore.open_read_only(path)   # never migrates, never creates, cannot write
+apply_submission(*, submission_id, kind, submitted_by, submitted_at, payload) -> ProgramSubmissionRecord
+programs() -> list[Program]                  # program_id, concept_member, concept_path, registered_at, updated_at
+program(program_id) -> Program | None
+members(program_id) -> list[Member]          # project_id, requests_initiative, consumed, overrides, registered_at, updated_at
+program_of(project_id) -> Program | None     # a project is in at most one program
+submission(id) / submissions() -> ProgramSubmissionRecord(s)   # applied_seq order
+```
+
+**Schema.** `programs`, `program_members` (unique `project_id`: one program per
+project; `requests_initiative` 100–799; `consumed` is `from_source` or
+`from_release`), `consumption_overrides` (a dependent's mode for one provider,
+never the provider itself) and `program_submissions`, plus `schema_meta`. Each
+vocabulary is a `StrEnum` in `program_models.py` that a test pins to its `CHECK`.
+
+**Creation.** The store does not exist until the first program submission. The
+resident process builds it under `programs.sqlite3.creating` and renames it into
+place (`ProjectStores.ensure_program_store`), so a reader finds it absent or
+complete. At start the process opens it read-write if the file exists; failing to
+is `STARTUP_FAILED`.
+
+**`apply_submission`** runs one `BEGIN IMMEDIATE` transaction. A reused id returns
+the existing record untouched (first wins). Otherwise the kind's checks run
+against the stored state before any write: a rejection is recorded
+`rejected` with reason `"<code>: <detail>"` and nothing else is written; an
+application writes and records `applied`. The codes are `unknown_program`,
+`member_of_other_program`, `concept_member_not_member`, `override_not_member` and
+`member_referenced` (reserved: nothing references a member yet). `register_program`
+creates a program or replaces it whole, so a member left out is removed;
+`register_member` upserts one member and removes nothing. An identical
+re-submission is `applied` and changes no row. `Program.updated_at` advances when
+the concept location changes or a member is added, removed or changed;
+`Member.updated_at` only when that member's index, mode or overrides change;
+`registered_at` never moves.
+
+**Read-only access and failure modes** are the project store's: `open_read_only`
+raises `StorePermissionError` for a missing file (and creates nothing),
+`StoreCorruptError` for an unreadable one, and `StoreSchemaError` for any version
+but 1, leaving the file unchanged. Only the program store's own failures stop the
+process; a *member's* store failing is that member's problem (see
+`amoeba.program.read_member` in [`process-contract.md`](process-contract.md)).
 
 ## Migrations
 
@@ -1098,6 +1166,15 @@ adding a table onto working machinery, not debugging both at once.
 
 **A store stamped newer than the code raises `StoreSchemaError`.** It is never
 silently downgraded.
+
+**There are two schema lines** (slice 181). The runner is parameterized by
+migrations package and expected version, both required with no default
+(`migrate_package(connection, package=…, expected_version=…)`); `migrate()` is
+the project store's thin wrapper over it. The project store's line is
+`amoeba.store.schema`, currently at version 15. The program store's line is
+`amoeba.store.program_schema`, starting at version 1 and independent of it
+(`PROGRAM_MIGRATIONS_PACKAGE`, `EXPECTED_PROGRAM_SCHEMA_VERSION`). Connection
+opening and its error mapping are shared (`amoeba.store.connection`).
 
 The latest migration is `015` (slice 144, schema version 15: nine nullable
 `question_records` columns for the answering run, and a unique partial index on

@@ -25,6 +25,7 @@ from amoeba.store import (
     NodeStatus,
     SubmissionKind,
     SubmissionOutcome,
+    program_store_path,
     project_store_path,
 )
 from amoeba.upstream.squadron import parse_review_artifact, review_record_id
@@ -66,9 +67,25 @@ class ScenarioDriver:
         ]
         for project, submission_id in submissions:
             self._wait_applied(step.number, project, submission_id)
+        # Slice 181: a program over the projects, through the program inbox, so
+        # the locality oracle has a program store to check.
+        self._wait_program_applied(step.number, h.register_program(step.projects))
         for project in step.projects:
             self.subscribers[project] = h.follow_project(step.number, project)
             self._wait_baselined(step.number, project)
+
+    def _wait_program_applied(self, step: int, submission_id: str) -> None:
+        h = self.harness
+        path = program_store_path(h.supervisor_dir)
+
+        def applied() -> bool:
+            if not path.exists():
+                return False
+            with h.read_program_store() as store:
+                record = store.submission(submission_id)
+            return record is not None and record.outcome is SubmissionOutcome.APPLIED
+
+        h.wait_until(step, "the program registration to apply", applied)
 
     def _wait_applied(self, step: int, project: str, submission_id: str) -> None:
         h = self.harness

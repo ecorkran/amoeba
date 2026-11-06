@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TypeGuard, cast
 
 from amoeba.store import CFSnapshot
-from amoeba.upstream.context_forge import (
+from amoeba.upstream.context_forge.projects_file import (
     FIELD_INDEX_RANGE,
     FIELD_PROJECT_PATH,
     FIELD_WORKTREE_PATH,
@@ -62,7 +62,9 @@ def resolve_checkout(
     if project is None or worktrees is None:
         return CheckoutUnresolved("the CF snapshot has no project and worktrees")
     if not worktrees:
-        return _checked(project.get(FIELD_PROJECT_PATH), None, "projectPath", is_dir)
+        return _checked(
+            project.get(FIELD_PROJECT_PATH), None, FIELD_PROJECT_PATH, is_dir
+        )
     return _from_worktrees(worktrees, slice_index, is_dir)
 
 

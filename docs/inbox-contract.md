@@ -382,13 +382,98 @@ no `node_id` or `blocked_state_id`. Details are in
 
 | Command | Shows |
 | --- | --- |
-| `amoeba inspect inbox` | Every file pending in `new/`, quarantined, or failed, with attempts, reason, or last error. Opens no store. |
+| `amoeba inspect inbox` | Every file pending in `new/`, quarantined, or failed, with attempts, reason, or last error, in the project inbox and the [program inbox](#program-submissions). The last column, `queue` (`project` or `program`), says which; the earlier columns keep their names and positions. Opens no store. |
 | `amoeba inspect submissions --project P` | Applied and rejected records, in `applied_seq` order. |
 | `amoeba inspect messages --project P [--channel intent\|escalation]` | Messages in `seq` order, with `acknowledgment_outcome`, `acknowledgment_reason`, `fault_kind` and `closed_at` (each empty when unset). |
 
 All accept `--json`, and all work with the process running or stopped. The same
 listings are in Python as `amoeba.inbox.pending()`, `quarantined()`, and
 `failed()`.
+
+## Program submissions
+
+*Added by slice 181.* A **program** coordinates several projects, so its
+registration belongs to none of them. Program submissions use a second inbox
+root with the same layout, durability and terminal places as the first, drained
+by the same file lifecycle:
+
+```
+programs/inbox/{tmp,new,quarantine,failed}/
+```
+
+Submit from Python with `amoeba.inbox.submit_program(kind=…, payload=…,
+submitted_by=…, submission_id=None, store_dir=None)`, or from the shell:
+
+```
+amoeba submit register-program --by operator --program-id trading \
+    --concept-member trading-data --concept-path docs/program-concept.md \
+    --members '[{"project_id": "trading-data", "requests_initiative": 790,
+                 "consumed": "from_source", "overrides": {}}, …]'
+amoeba submit register-member --by operator --program-id trading \
+    --member '{"project_id": "trading-ui", "requests_initiative": 790,
+               "consumed": "from_release", "overrides": {}}'
+```
+
+Program kinds take no `--project`. Each prints the submission id; `--id` reuses
+one. An invalid body is refused with `SUBMISSION_REFUSED` (exit 9) naming the
+field, and nothing is written.
+
+**The envelope** is the project envelope's with **no project id**:
+`envelope_version`, `id`, `kind`, `submitted_by`, `submitted_at`, `payload`.
+
+**Bodies.** Unknown keys are **refused** (unlike the project envelope's ignored
+extras): a misspelled key here would silently drop a setting.
+
+| Field | Rule |
+| --- | --- |
+| `program_id` | Non-blank; a safe path component. |
+| `concept_member` | A project id. `register_program` only. |
+| `concept_path` | Repo-relative file path in the concept member's repo: stripped, non-blank, not absolute, no `..` segment, no `*`, names a file. `register_program` only. |
+| `members` | A non-empty list of member objects, no project id twice. `register_program` only. |
+| `member` | One member object. `register_member` only. |
+| member `project_id` | A project id. The project need not have a store yet; a member without one shows as `store_missing`. |
+| member `requests_initiative` | Strict integer, 100–799. Required. |
+| member `consumed` | `from_source` or `from_release`: how every other member consumes this one. |
+| member `overrides` | Required mapping, may be `{}`: dependent project id → `from_source` or `from_release`. Must not name the member itself. |
+
+**Semantics.** `register_program` creates a program or replaces it whole: its
+concept location, member set and overrides become exactly the body, so a member
+left out is removed. `register_member` upserts one member into an existing
+program and removes nothing; it replaces that member's whole override set. A
+project is a member of at most one program. An identical re-submission is
+`applied`; a reused submission id is a no-op.
+
+**Rejections** are recorded `rejected` with reason `"<code>: <detail>"`; nothing
+else is written.
+
+| Code | When |
+| --- | --- |
+| `unknown_program` | `register_member` names a program that does not exist. |
+| `member_of_other_program` | A listed project is already a member of a different program. |
+| `concept_member_not_member` | After the write, the concept member would not be a member. |
+| `override_not_member` | An override names a project that would not be a member after the write. |
+| `member_referenced` | **Reserved.** `register_program` would drop a member that an edge or a request references; nothing references a member yet. |
+
+**Quarantine.** A file that cannot be parsed or validated moves to
+`programs/inbox/quarantine/` with its `.reason.json`, for the reasons that apply:
+`unparseable_envelope`, `unknown_envelope_version`, `unknown_kind` and
+`invalid_payload` (whose detail names the offending field). There is no
+project to attribute, so `invalid_project_id` and `no_store_for_project` never
+occur. A store failure is counted beside the file and stops the process below
+`inbox_max_attempts`, then parks the file in `failed/`, exactly as for a project
+submission. The settings below apply to both inboxes.
+
+**Learning the outcome.** `amoeba inspect program-submissions`, or
+`ProgramStore.open_read_only(program_store_path(dir)).submission(id)`, which is
+`None` until the submission is applied.
+
+**Inspection.** `amoeba inspect program` lists each member of every program with
+its requests initiative, mode, overrides and state (`readable`, or why not);
+`amoeba inspect program-blocked` lists every member's blocked nodes plus one
+`member_unreadable` row per member that cannot be read; `amoeba inspect
+program-submissions` lists applied and rejected program submissions. With no
+program store each lists nothing. Program submissions are not accepted over the
+network (`amoeba serve` submits project kinds only); the listings are served.
 
 ## Settings
 

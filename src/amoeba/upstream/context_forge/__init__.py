@@ -1,6 +1,12 @@
 """Context Forge: ``projects.json`` (parse a project's projection, diff it) and the
-plan reads (``cf list initiatives``, ``cf list slices``)."""
+plan reads (``cf list initiatives``, ``cf list slices``), and
+``resolve_checkout`` (the checkout a CF snapshot says owns a slice index)."""
 
+from amoeba.upstream.context_forge.checkout import (
+    Checkout,
+    CheckoutUnresolved,
+    resolve_checkout,
+)
 from amoeba.upstream.context_forge.diff import diff_states
 from amoeba.upstream.context_forge.plan import (
     READ_INITIATIVES,
@@ -52,6 +58,8 @@ __all__ = [
     "CFReadOutcome",
     "CFSliceEntry",
     "CFSliceList",
+    "Checkout",
+    "CheckoutUnresolved",
     "PlanEntryLike",
     "PlanEntryStatus",
     "PlanParseError",
@@ -64,4 +72,5 @@ __all__ = [
     "parse_slice_list",
     "parse_slice_stem",
     "reported_complete",
+    "resolve_checkout",
 ]

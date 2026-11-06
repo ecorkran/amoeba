@@ -19,7 +19,7 @@ from amoeba.runner.dispatch.planner import DispatchPlanner
 from amoeba.runner.factory import PRODUCTION_PLANNERS
 from amoeba.runner.project_config import PROJECT_DEFAULTS, ProjectConfig
 from amoeba.runner.resolutions.planner import ContinuationPlanner
-from amoeba.store import Store
+from amoeba.store import ProgramStore, Store
 
 
 @pytest.fixture
@@ -137,6 +137,7 @@ def test_passed_planners_are_consulted_by_a_tick(
     class Host:
         stop_requested = False
         project_ids = ("demo",)
+        program_store: ProgramStore | None = None
 
         def store_for(self, project_id: str) -> Store:
             return store

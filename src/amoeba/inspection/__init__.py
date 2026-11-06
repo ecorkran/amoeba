@@ -23,6 +23,7 @@ from amoeba.inspection import (
     evidence,
     feed,
     inbox,
+    program,
     questions,
 )
 from amoeba.inspection.listing import (
@@ -72,8 +73,26 @@ LISTINGS: tuple[Listing, ...] = (
     Listing(
         name="inbox",
         help_text="Inbox files that are pending, quarantined, or failed.",
-        columns=("state", "file", "attempts", "reason", "problem"),
+        columns=inbox.INBOX_COLUMNS,
         supervisor_rows=inbox.inbox_rows,
+    ),
+    Listing(
+        name="program",
+        help_text="Every program's members, with each member's state.",
+        columns=program.PROGRAM_COLUMNS,
+        supervisor_rows=program.program_rows,
+    ),
+    Listing(
+        name="program-blocked",
+        help_text="Every program member's blocked nodes, and each unreadable member.",
+        columns=program.PROGRAM_BLOCKED_COLUMNS,
+        supervisor_rows=program.program_blocked_rows,
+    ),
+    Listing(
+        name="program-submissions",
+        help_text="Applied and rejected program submissions, in applied order.",
+        columns=program.PROGRAM_SUBMISSION_COLUMNS,
+        supervisor_rows=program.program_submission_rows,
     ),
     Listing(
         name="nodes",
@@ -84,17 +103,7 @@ LISTINGS: tuple[Listing, ...] = (
     Listing(
         name="blocked",
         help_text="Blocked nodes and what each is blocked on; all projects by default.",
-        columns=(
-            "project_id",
-            "node_id",
-            "title",
-            "blocked_on",
-            "reason",
-            "context",
-            "blocked_state_id",
-            "question_state",
-            "decline_reason",
-        ),
+        columns=core.BLOCKED_COLUMNS,
         rows=core.blocked_rows,
         supervisor_rows=core.all_blocked_rows,
     ),

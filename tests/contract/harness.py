@@ -23,11 +23,20 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from host_harness import HostProcess
+from program_harness import member, program_payload
 from review_fixtures import STAMPED_REVIEW_106
 from sq_stub import MODE_ENV, StubMode, write_sq_stub
 
-from amoeba.inbox import submit
-from amoeba.store import ChangeKind, Store, SubmissionKind, project_store_path
+from amoeba.inbox import submit, submit_program
+from amoeba.store import (
+    ChangeKind,
+    ProgramStore,
+    ProgramSubmissionKind,
+    Store,
+    SubmissionKind,
+    program_store_path,
+    project_store_path,
+)
 from contract.launched import LaunchedProcess
 from contract.runner_tenant import INTENT_CRASH_AT, INTENT_STEP, CrashPoint, ProofStep
 from contract.subscriber import BackgroundReader, Subscriber
@@ -316,6 +325,27 @@ class ProofHarness:
                 PAYLOAD_ACTIVE: True,
             },
         )
+
+    def register_program(self, project_ids: Sequence[str]) -> str:
+        """Register one program over ``project_ids`` through the program inbox."""
+        return submit_program(
+            kind=ProgramSubmissionKind.REGISTER_PROGRAM,
+            payload=program_payload(
+                program_id="proof",
+                concept_member=project_ids[0],
+                members=[member(project_id) for project_id in project_ids],
+            ),
+            submitted_by=PM_ACTOR,
+            store_dir=self.supervisor_dir,
+        )
+
+    @contextmanager
+    def read_program_store(self) -> Generator[ProgramStore]:
+        """A read-only view of the program store, the way inspection opens it."""
+        with ProgramStore.open_read_only(
+            program_store_path(self.supervisor_dir)
+        ) as store:
+            yield store
 
     def intent(
         self, project_id: str, step: ProofStep, crash_at: CrashPoint | None = None

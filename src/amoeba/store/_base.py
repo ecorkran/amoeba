@@ -54,8 +54,12 @@ def new_id() -> str:
     return uuid.uuid4().hex
 
 
-class StoreBase:
-    """Connection state and the helpers every operation mixin builds on."""
+class StatementRunner:
+    """A connection and statement execution that raises typed store errors.
+
+    The whole of what the program store needs; ``StoreBase`` adds the project
+    store's node lookups on top, so the program store has none of them.
+    """
 
     def __init__(
         self,
@@ -87,6 +91,10 @@ class StoreBase:
                     f"on {operation}: {error}"
                 ) from error
             raise
+
+
+class StoreBase(StatementRunner):
+    """Connection state and the helpers every operation mixin builds on."""
 
     def get_node(self, node_id: str) -> Node | None:
         """Return the node with this id, or ``None`` if there is none.

@@ -9,6 +9,7 @@ import pytest
 import amoeba.process.tenants as tenants_module
 from amoeba.process.cf_watch import CFWatchTenant
 from amoeba.process.inbox_tenant import InboxTenant
+from amoeba.process.program_inbox_tenant import ProgramInboxTenant
 from amoeba.process.review_detection import ReviewDetectionTenant
 from amoeba.process.settings import ProcessSettings
 from amoeba.process.version_label import VERSION_UNAVAILABLE
@@ -17,10 +18,11 @@ from amoeba.process.version_label import VERSION_UNAVAILABLE
 def _cf_tenant(supervisor_dir: Path, settings: ProcessSettings) -> CFWatchTenant:
     tenants = tenants_module.standard_tenants(settings, supervisor_dir)
     assert isinstance(tenants[0], InboxTenant)
-    assert isinstance(tenants[1], ReviewDetectionTenant)
-    assert isinstance(tenants[2], CFWatchTenant)
-    assert len(tenants) == 3
-    return tenants[2]
+    assert isinstance(tenants[1], ProgramInboxTenant)
+    assert isinstance(tenants[2], ReviewDetectionTenant)
+    assert isinstance(tenants[3], CFWatchTenant)
+    assert len(tenants) == 4
+    return tenants[3]
 
 
 def test_the_cf_label_is_captured_once_and_reaches_the_tenant(

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from amoeba.runner.dispatch.checkout import Checkout, CheckoutUnresolved
 from amoeba.runner.dispatch.state import DispatchState
 from amoeba.store import BlockedState, JournalEntry
+from amoeba.upstream.context_forge import Checkout, CheckoutUnresolved
 
 #: ``(initiative index, slice index)``: which slice goes first when a checkout is
 #: free for one.

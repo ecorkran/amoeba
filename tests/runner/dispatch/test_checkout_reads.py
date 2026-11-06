@@ -14,7 +14,6 @@ from cf_stub_gates import CONFIG_MODE_ENV, GateMode
 
 from amoeba.runner.budget import TickBudget
 from amoeba.runner.dispatch.candidates import Candidate, launch_candidates
-from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.checkout_check import Block, Ok
 from amoeba.runner.dispatch.checkout_reads import (
     DispatchReadFailed,
@@ -27,6 +26,7 @@ from amoeba.runner.faults import FaultKind
 from amoeba.runner.lifecycle.plan_read import CF_KEY_INTEGRATION_BRANCH
 from amoeba.runner.supervise import RESULT_OUTCOME_DOCUMENT
 from amoeba.store import CommandKind, JournalEntry, JournalOutcome, JournalResolver
+from amoeba.upstream.context_forge import Checkout
 from runner.dispatch.cf_world import budget_allowing, generous_budget
 from runner.dispatch.dispatch_support import FIRST, SECOND, entry, facts, node
 from runner.gate_rig import (

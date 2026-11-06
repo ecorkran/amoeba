@@ -399,12 +399,11 @@ def test_failed_migration_leaves_the_stamp_unadvanced(
                 connection.executescript("CREATE TABLE half_applied (id TEXT);")
                 raise sqlite3.OperationalError("simulated migration failure")
 
+        def _one_pending_file(package: str) -> list[tuple[int, object]]:
+            return [(starting_version + 1, object())]
+
         monkeypatch.setattr(migrations_module, "_apply_migration", _broken_apply)
-        monkeypatch.setattr(
-            migrations_module,
-            "_migration_files",
-            lambda: [(starting_version + 1, object())],
-        )
+        monkeypatch.setattr(migrations_module, "_migration_files", _one_pending_file)
 
         with pytest.raises(sqlite3.OperationalError):
             migrate(connection, expected_version=starting_version + 1)

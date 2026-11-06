@@ -12,15 +12,19 @@ from pathlib import Path
 import pytest
 
 from amoeba.process.supervisor import store_path_for
+from amoeba.store.discovery import discover_project_ids
 from amoeba.store.paths import (
     DEFAULT_STORE_DIR,
     STORE_DIR_ENV_VAR,
     STORE_DIR_NAME,
     STORE_FILE_SUFFIX,
     XDG_CONFIG_HOME_ENV_VAR,
+    program_dir,
+    program_store_path,
     project_store_path,
     store_dir,
     store_path,
+    validate_repo_relative_path,
 )
 
 
@@ -98,3 +102,64 @@ def test_resolution_creates_nothing(tmp_path: Path) -> None:
 
 def test_project_store_path_matches_the_process_resolution(tmp_path: Path) -> None:
     assert project_store_path(tmp_path, "demo") == store_path_for(tmp_path, "demo")
+
+
+@pytest.mark.parametrize("glob_allowed", [True, False])
+@pytest.mark.parametrize(
+    ("entry", "message"),
+    [
+        ("/etc/rules.md", "not absolute"),
+        ("docs/../rules.md", "`..` segment"),
+        ("docs/", "a file, not a directory"),
+    ],
+)
+def test_repo_relative_path_rejections_in_both_modes(
+    entry: str, message: str, glob_allowed: bool
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        validate_repo_relative_path(entry, glob_allowed=glob_allowed)
+
+
+@pytest.mark.parametrize("entry", ["rules.md", "docs/rules/python.md", "docs/*.md"])
+def test_repo_relative_path_accepts_files_when_globs_are_allowed(entry: str) -> None:
+    assert validate_repo_relative_path(entry, glob_allowed=True) == entry
+
+
+def test_repo_relative_path_allows_a_wildcard_in_the_last_segment_only() -> None:
+    with pytest.raises(ValueError, match="last segment only"):
+        validate_repo_relative_path("docs/*/rules.md", glob_allowed=True)
+
+
+@pytest.mark.parametrize("entry", ["docs/*.md", "docs/*/rules.md", "*"])
+def test_repo_relative_path_refuses_any_wildcard_when_globs_are_not_allowed(
+    entry: str,
+) -> None:
+    with pytest.raises(ValueError, match="must not contain"):
+        validate_repo_relative_path(entry, glob_allowed=False)
+
+
+@pytest.mark.parametrize("entry", ["rules.md", "docs/program-concept.md"])
+def test_repo_relative_path_accepts_files_when_globs_are_not_allowed(
+    entry: str,
+) -> None:
+    assert validate_repo_relative_path(entry, glob_allowed=False) == entry
+
+
+def test_program_paths_sit_in_a_subdirectory_of_the_supervisor_directory(
+    tmp_path: Path,
+) -> None:
+    assert program_dir(tmp_path) == tmp_path / "programs"
+    assert program_store_path(tmp_path) == tmp_path / "programs" / "programs.sqlite3"
+    assert not (tmp_path / "programs").exists()
+
+
+def test_discovery_ignores_the_program_store_but_not_a_project_named_programs(
+    tmp_path: Path,
+) -> None:
+    """The subdirectory file is never a project; a top-level one is."""
+    program_store_path(tmp_path).parent.mkdir()
+    program_store_path(tmp_path).touch()
+    assert discover_project_ids(tmp_path) == []
+
+    (tmp_path / "programs.sqlite3").touch()
+    assert discover_project_ids(tmp_path) == ["programs"]

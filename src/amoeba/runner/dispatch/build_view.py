@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from amoeba.runner.dispatch.checkout import CheckoutUnresolved, resolve_checkout
 from amoeba.runner.dispatch.facts import SliceDispatchFacts
 from amoeba.runner.dispatch.hold import checkout_holders
 from amoeba.runner.dispatch.state import DispatchState, dispatch_state
@@ -36,6 +35,7 @@ from amoeba.store import (
     latest_run_entry,
     supervision_entries,
 )
+from amoeba.upstream.context_forge import CheckoutUnresolved, resolve_checkout
 
 #: A block's payload key for the slice index the checkout could not be found for.
 PAYLOAD_INDEX = "index"

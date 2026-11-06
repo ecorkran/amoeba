@@ -4,17 +4,21 @@ The one ``LISTINGS`` registry registers these; nothing here is reachable
 except through it.
 
 ``submissions`` and ``messages`` receive a **read-only** store. ``inbox`` reads
-the supervisor directory and opens no store at all.
+the supervisor directory (the project inbox and the program inbox under
+``programs/``) and opens no store at all.
 """
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
+from typing import Final
 
 from amoeba import inbox
 from amoeba.inbox import layout
 from amoeba.inspection.listing import ChoiceOption, ListingRequest, Row
 from amoeba.store import Channel, Store
+from amoeba.store.paths import program_dir
 
 CHANNEL_OPTION = ChoiceOption(
     name="channel",
@@ -78,11 +82,33 @@ def message_rows(store: Store, request: ListingRequest) -> list[Row]:
     ]
 
 
-def inbox_rows(supervisor_dir: Path) -> list[Row]:
-    """Every file waiting in, or set aside by, the inbox. Opens no store.
+#: The ``inbox`` listing's columns. ``queue`` is last, so the earlier columns keep
+#: their names and positions for readers of project inbox rows.
+INBOX_COLUMNS: Final = ("state", "file", "attempts", "reason", "problem", "queue")
 
-    ``state`` is the directory the file sits in, named by ``layout``.
+
+class InboxQueue(StrEnum):
+    """Which inbox root a file sits in: the project inbox or the program inbox."""
+
+    PROJECT = "project"
+    PROGRAM = "program"
+
+
+def inbox_rows(supervisor_dir: Path) -> list[Row]:
+    """Every file waiting in, or set aside by, either inbox. Opens no store.
+
+    ``state`` is the directory the file sits in, named by ``layout``; ``queue``,
+    the last column, is which inbox. The project inbox's rows come first and are
+    exactly what they were before the program inbox existed, plus the key.
     """
+    return [
+        *_queue_rows(supervisor_dir, InboxQueue.PROJECT),
+        *_queue_rows(program_dir(supervisor_dir), InboxQueue.PROGRAM),
+    ]
+
+
+def _queue_rows(root: Path, queue: InboxQueue) -> list[Row]:
+    """The rows of one inbox, ``root`` being the directory that holds ``inbox/``."""
     return [
         *(
             {
@@ -91,8 +117,9 @@ def inbox_rows(supervisor_dir: Path) -> list[Row]:
                 "attempts": "" if entry.attempts is None else entry.attempts,
                 "reason": "",
                 "problem": entry.sidecar_error or "",
+                "queue": queue.value,
             }
-            for entry in inbox.pending(supervisor_dir)
+            for entry in inbox.pending(root)
         ),
         *(
             {
@@ -101,8 +128,9 @@ def inbox_rows(supervisor_dir: Path) -> list[Row]:
                 "attempts": "",
                 "reason": entry.reason.value if entry.reason else "",
                 "problem": entry.sidecar_error or entry.detail or "",
+                "queue": queue.value,
             }
-            for entry in inbox.quarantined(supervisor_dir)
+            for entry in inbox.quarantined(root)
         ),
         *(
             {
@@ -111,7 +139,8 @@ def inbox_rows(supervisor_dir: Path) -> list[Row]:
                 "attempts": "" if entry.attempts is None else entry.attempts,
                 "reason": "",
                 "problem": entry.sidecar_error or entry.last_error or "",
+                "queue": queue.value,
             }
-            for entry in inbox.failed(supervisor_dir)
+            for entry in inbox.failed(root)
         ),
     ]

@@ -35,6 +35,12 @@ MIGRATIONS_PACKAGE: Final = "amoeba.store.schema"
 #: The schema version this code expects. Bumped with each migration added.
 EXPECTED_SCHEMA_VERSION: Final = 15
 
+#: The program store's own migrations package and version line, starting at 1,
+#: independent of the project store's. Defined here beside the project store's
+#: so every store line's package and version live in one place.
+PROGRAM_MIGRATIONS_PACKAGE: Final = "amoeba.store.program_schema"
+EXPECTED_PROGRAM_SCHEMA_VERSION: Final = 1
+
 #: Version stamped on a store whose ``schema_meta`` table does not exist yet.
 UNINITIALIZED_SCHEMA_VERSION: Final = 0
 
@@ -42,8 +48,12 @@ UNINITIALIZED_SCHEMA_VERSION: Final = 0
 MIGRATION_FILENAME_PATTERN: Final = re.compile(r"^(\d{3})_[a-z0-9_]+\.sql$")
 
 
-def _migration_files() -> list[tuple[int, Traversable]]:
-    """Return every migration as ``(version, resource)``, ordered by version.
+def _migration_files(package: str) -> list[tuple[int, Traversable]]:
+    """Return every migration in ``package`` as ``(version, resource)``, ordered.
+
+    Args:
+        package: Dotted name of the package holding the numbered ``.sql`` files.
+            Required: each store line names its own.
 
     Raises:
         StoreSchemaError: If two migrations claim the same version, which would
@@ -51,7 +61,7 @@ def _migration_files() -> list[tuple[int, Traversable]]:
     """
     found: dict[int, Traversable] = {}
 
-    for entry in resources.files(MIGRATIONS_PACKAGE).iterdir():
+    for entry in resources.files(package).iterdir():
         match = MIGRATION_FILENAME_PATTERN.match(entry.name)
         if match is None:
             continue
@@ -123,12 +133,29 @@ def _apply_migration(
 def migrate(
     connection: sqlite3.Connection, expected_version: int = EXPECTED_SCHEMA_VERSION
 ) -> int:
-    """Bring the store up to ``expected_version``, applying migrations in order.
+    """Bring a project store up to ``expected_version``.
+
+    The project store's wrapper over :func:`migrate_package`. ``expected_version``
+    defaults to the version this code expects; parameterized so tests can stage
+    an older store.
+    """
+    return migrate_package(
+        connection, package=MIGRATIONS_PACKAGE, expected_version=expected_version
+    )
+
+
+def migrate_package(
+    connection: sqlite3.Connection, *, package: str, expected_version: int
+) -> int:
+    """Bring a store up to ``expected_version``, applying ``package``'s migrations.
+
+    Both arguments are required with no default, so a new store line that omits
+    its version fails instead of silently inheriting another line's.
 
     Args:
         connection: An open connection to the store.
-        expected_version: The version to migrate to. Defaults to the version
-            this code expects; parameterized so tests can stage an older store.
+        package: Dotted name of the package holding the store's ``.sql`` files.
+        expected_version: The version to migrate to.
 
     Returns:
         The version stamped when this returns.
@@ -151,7 +178,7 @@ def migrate(
 
     pending = [
         (version, resource)
-        for version, resource in _migration_files()
+        for version, resource in _migration_files(package)
         if current < version <= expected_version
     ]
 

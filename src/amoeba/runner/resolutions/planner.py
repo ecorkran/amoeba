@@ -19,7 +19,6 @@ from amoeba.runner.decide import (
     ProjectView,
     ResumeRun,
 )
-from amoeba.runner.dispatch.checkout import Checkout
 from amoeba.runner.dispatch.checkout_check import Block
 from amoeba.runner.dispatch.facts import SliceDispatchFacts
 from amoeba.runner.dispatch.params import PARAM_DISPATCH_CHECK
@@ -27,6 +26,7 @@ from amoeba.runner.dispatch.state import DispatchState
 from amoeba.runner.launch import text_parameter
 from amoeba.runner.resolutions.vocabulary import ResumeCause
 from amoeba.store import PARAM_CHECKOUT, PARAM_RUN_ID, Node
+from amoeba.upstream.context_forge import Checkout
 
 
 class ContinuationPlanner:
