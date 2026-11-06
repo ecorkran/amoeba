@@ -5,10 +5,10 @@ phase: 0
 phaseName: concept
 project: amoeba
 audience: [human, ai]
-description: Concept for Amoeba — an orchestration runner with deterministic control flow and bounded nondeterminism that drives Context Forge and Squadron through a project's full lifecycle, escalating to a human (or first to an ephemeral Judge) only where judgment is the actual work.
-dependsOn: [000-pre-concept.amoeba.md]
+description: Concept for Amoeba, rewritten 20261106. A tool that agents and pipelines call. It knows how a program's repos depend on each other, handles first-level questions by running a Squadron answering pipeline, and keeps the record of what was decided. Squadron does the work, and in normal use a human never types an Amoeba command.
+dependsOn: [000-pre-concept.amoeba.md, notes/005-usage-scenarios.amoeba.md]
 dateCreated: 20260618
-dateUpdated: 20261028
+dateUpdated: 20261106
 status: in_progress
 ---
 
@@ -16,7 +16,9 @@ status: in_progress
 
 ## Overview
 
-Amoeba is an orchestration runner with **deterministic control flow and bounded nondeterminism** that drives a software project through its full Context Forge / Squadron lifecycle (P0 concept → P6 code), reducing human involvement to the points where judgment is the actual work.
+Amoeba is a tool that agents and pipelines call. It knows how a program's repos depend on each other, handles first-level questions by running a Squadron answering pipeline, and keeps the record of what was decided. Squadron does the work inside each repo, and humans reach Amoeba through an agent.
+
+The User-Provided Concept below is the original idea, kept as written. Amoeba has moved a long way from it. The Refined Concept is the current one.
 
 ## User-Provided Concept
 
@@ -103,119 +105,124 @@ On adoption into a CF project, save the finished concept as `001-concept.amoeba.
 
 ## Refined Concept
 
-> This section adds structured analysis on top of the User-Provided Concept above. It is grounded in a read-only inspection of the current Context Forge (`packages/core`, `packages/cli`, `packages/mcp-server`) and Squadron (`src/squadron/{review,pipeline,server,client}`) source. Where the source contradicts an assumption in the pre-concept, that is called out explicitly — those corrections are the main value this section adds.
+> Rewritten 20261106 from `notes/005-usage-scenarios.amoeba.md`. It replaces the earlier Refined Concept, which is in git history. Where the User-Provided Concept above differs, this section governs.
 
-### Problem & Motivation
+### Problem
 
-Building software with AI tooling works until a project gets complicated, then degrades: the human becomes a full-time operator of a pipeline that is, step for step, **mostly deterministic**. Context Forge already removed nondeterminism from scaffolding; Squadron already placed nondeterminism deliberately inside review steps. The remaining human cost is the *orchestration* — running each command, reading each finding, deciding advance-or-block, and doing it again — plus the smaller, genuine-judgment cost of resolving the findings that aren't mechanical.
+Squadron works inside one repo and one run at a time. Two things fall outside that:
 
-Amoeba removes the human from the deterministic orchestration and routes the genuine-judgment findings first to an ephemeral Judge, escalating to the human only on low Judge consensus. The thesis it embodies is the toolchain's own, one level up: **spend an intelligence only where judgment pays for the variance it introduces.** Why now: CF and SQ are both mature enough to expose deterministic CLI/MCP surfaces and structured findings, which is exactly the substrate a deterministic runner needs.
+1. **Programs.** Some repos only make sense together: `trading-data`, `trading-engine` and `trading-ui` are one product, and Squadron, Context Forge and ai-project-guide are one toolchain. Each usually waits on a release of another. Today only the PM holds that picture.
+2. **Questions.** A pipeline's agent stops to ask something. Most of these questions could be answered from the project's rules, the program's concept and the PM's earlier answers, but the run waits for the PM anyway.
 
-### Target Users
+Amoeba had not been run by anyone as of 20261106. It was built from the bottom up (store, process, contracts, features), and no one could say who would start it or when. This concept starts from the people and agents who use it, and everything else has to justify itself against that use.
 
-Initially **Erik**, as direction-setter and escalation-resolver (not operator), driving `trading-data` first and then a backlog of specialized utilities. The audience evolves only in *degree*, not in kind: as deterministic gates absorb mechanical findings and the Judge earns per-category trust, the escalation rate falls and the same single supervisor oversees more concurrent lifecycle-trees. No new user *role* appears; multi-project mode is the same person watching a larger forest of runnable / blocked / done nodes.
+### What Amoeba is
 
-### Solution Approach
+A tool that agents and pipelines call. It does three things:
 
-A **standalone Runner + conversational Translator + on-demand Judge**, built *on top of* existing CF and SQ installations. It drives them via their deterministic surfaces; it does not reimplement or replace either.
+- **Knows the program:** the members, what each is doing, what each depends on and what is blocked.
+- **Handles first-level questions:** it routes a question to the answering pipeline with the right context, then returns the answer or passes the question up.
+- **Keeps the record:** who asked what, which model answered, from what, and what the PM overrode.
 
-**Amoeba is a real subsystem, not a thin wrapper over CF/SQ state — and that is by design.** The source inspection makes the scope concrete: Amoeba owns its own structured findings/run-state store (finding A) and owns the consensus-aggregation logic the Judge needs (finding D). It does **not** absorb capabilities that are properly CF's or Squadron's: the emitted tier field (finding C) and auto-fix (finding B) are both **Squadron-side upgrades** Amoeba *routes to and reads from*, not logic Amoeba reimplements. The boundary is consistent — Amoeba orchestrates and judges; CF and SQ generate and act. "Thin" describes only the *Translator's command authority* (a narrow fixed whitelist) and the Runner's *discretion* (zero — it's a state machine). It does **not** describe Amoeba's footprint. The deterministic-control-flow / bounded-nondeterminism thesis is unchanged by this; a substantial deterministic machine is still a deterministic machine. The named pieces Phase 1 will formalize into initiatives:
+### What Amoeba is not
 
-1. **Runner** — the deterministic state machine and the project's core artifact. Loop: `while runnable work exists → run CF/SQ command → parse findings → apply routing table → {advance | spawn Judge | write blocked-state}`. Zero discretion; not an agent.
-2. **Run-state store** — Amoeba-owned durable state for per-node status, open findings, blocked-states, and pending resolutions. (See "Where state actually lives" — this is a **correction** to the pre-concept's "reuse CF/SQ state": CF does not persist findings or checkpoints, so this store must exist as its own component.)
-3. **Routing engine** — the Tier 1/2/3 policy and thresholds. Deterministic table; the place where "build by inducing failure" makes its edits.
-4. **Judge** — a Squadron evaluation invoked on demand, returning `(resolution, confidence)` where confidence = cross-run / cross-model agreement. (See "Consensus is Amoeba's to orchestrate" — Squadron has no consensus primitive today.)
-5. **Translator** — the conversational layer at the human edge (intent → command sequence; findings → natural language). Surface-interchangeable because it only reads/writes state and issues a narrow, fixed command set.
-6. **Notification bridge** — outbound Discord webhook on escalation; an inbound path to land the human's reply back into the blocked node's resolution.
-7. **Resident substrate** — the long-lived process hosting the Runner loop and the durable message-queue the Translator, Judge, and (later) Cowork leave each other messages on. (See "The daemon is safe to relocate.")
+- **A pipeline engine.** Squadron runs the work, including phases, reviews, thresholds and merges.
+- **A pile of gates.** Squadron has those. A check on an answer belongs in the answering pipeline, as a Squadron step.
+- **A chat system.** Agent-to-agent conversation and the PM's chat live elsewhere.
+- **A graph runner.** The program graph is a dependency graph. Nobody walks it. Amoeba never launches member pipelines in order, because that would make it a workflow engine on top of a workflow engine.
 
-These are *named pieces*, not yet sequenced initiatives — Phase 1 will index and order them. DFS through the lifecycle tree (implement the first slice fully before planning the next) is the intended build order, starting from the easiest slice category.
+### On determinism
 
-#### Grounding findings (the corrections that matter)
+Amoeba adds nondeterminism on purpose: it asks a model to answer in the PM's place. Wrapping that in more deterministic machinery doesn't change what it is. The part that must be exact is **the record**, and the part that must be bounded is **what the answer can do**. An answer can only resume the run that asked. It never edits code, merges or changes a threshold.
 
-These five facts come from the source inspection and should be treated as load-bearing for Phase 1/2. Each maps to one or more of the pre-concept's open questions.
+### Where it sits
 
-**A. Where state actually lives — Amoeba must own a findings/run-state store.**
-CF persists project *workflow* state cleanly (`projects.json` under `getStoragePath()`; readable/writable via MCP `project_get` / `project_update` and CLI `cf get`/`cf set --json`). All `cf` commands are deterministic (no AI in the loop). **But CF does not persist review findings, checkpoints, or judge outputs** — its only freeform slot is `customData.recentEvents`/`additionalNotes`, which is unstructured text. Squadron emits findings but is request-shaped (it does not retain a queryable findings store across runs). **Conclusion:** "communicate through CF/SQ state" holds for *workflow pointers* (phase/slice/artifact paths), but Amoeba must own a small structured store for findings, blocked-states, and pending resolutions. This is the pre-concept's "small amount of Amoeba-owned run-state" — confirmed *necessary*, not optional, and larger than "small" implies for findings. *(Resolves part of OQ6; corrects the Technical Stack "reuse CF/SQ state" line.)*
+| Piece | Job | Graph |
+|---|---|---|
+| Squadron | Runs work inside one repo | Workflow graph: do A, then B, loop on review. Executed. |
+| Amoeba | Knows the program, handles first-level questions, keeps the record | Dependency graph between repos. Consulted, never executed. |
+| The chat agent (separate app) | The human front door: the coordinated agent the PM talks to | None |
+| Agent-to-agent talk (later) | Agents talking to each other | Not Amoeba. Closer to chat or a two-way agent dashboard. |
 
-**B. Auto-fix does not exist in Squadron — v1 routing is continue / Judge / escalate.**
-Squadron review is **read-only**: it emits findings and does not act on them. The only action-shaped mechanism is pipeline **loop conditions** (`REVIEW_PASS`, `REVIEW_CONCERNS_OR_BETTER`, `ACTION_SUCCESS`) with an on-exhaust **checkpoint** that is *human-triggered* (accept findings as next-iteration instructions, override, or exit-and-resume). **Conclusion:** there is a real **loop-until-verdict-improves** branch the Runner can drive deterministically, but no "regenerate the task breakdown to add the missing load-test task" auto-fix. v1 routing is **continue / Judge / escalate** exactly as the pre-concept's fallback predicted. True auto-fix (re-invoke a generation step, then recheck) is a later upgrade that belongs **in Squadron, not Amoeba** — acting on a finding is a *pipeline capability* (the same shape as Squadron's existing loop-conditions and human-triggered checkpoint actions, just automated). Amoeba's role stays *routing to* that capability and reading the verdict; it does not own the regeneration logic, which is squarely Squadron's identity. When the capability lands in Squadron, Amoeba gains an "auto-fix-and-recheck" routing branch for Tier-1 findings; until then, v1 routes those to continue/escalate. *(Resolves OQ1.)*
+### Users and how they reach it
 
-**C. The findings contract has no tier field — adding one is a Squadron dependency.**
-Squadron's structured finding is `{id, severity, category, summary, location}` with `severity ∈ {PASS, NOTE, CONCERN, FAIL}`. There is **no checkability-tier field**, and `concern` genuinely spans both mechanical rule-violations and semantic judgment — so the routing policy **cannot key on `severity` alone**, as the pre-concept already suspected. The clean fix (reviewer self-classifies each finding's tier at emission) is a **change to Squadron**, making it an Amoeba *dependency on Squadron* rather than something Amoeba owns. Until that field exists, Amoeba must infer tier in v1 — but note a refinement from a closer source read: **`category` is a free-form string** (no controlled vocabulary; defaults to `"uncategorized"`), so tier cannot be inferred from `category` reliably. v1 inference therefore leans on `severity` plus per-finding heuristics, and on Amoeba running its own Tier-1 deterministic predicates independent of severity. This makes the emitted tier field (tracked as Squadron dependency **S1**) the clean fix sooner rather than later. *(Resolves OQ2 and OQ3 together; see `notes/001-squadron-dependencies.amoeba.md`.)*
+**In normal use, a human never types an `amoeba` command.** If someone has to stop and think "is that amoeba or squadron?", the design has failed.
 
-**D. Consensus is Amoeba's to orchestrate — Squadron has no consensus primitive.**
-Squadron has **no built-in N-run / N-model agreement scoring.** It has `fan_out` + reducers (`collect`, `first_pass`) and pool-based per-action model selection, but nothing that runs the same evaluation N times and aggregates verdicts. **Conclusion:** "consensus = confidence" is **Amoeba's orchestration job** — the Runner drives N Squadron evaluations (across runs and/or the multi-provider pools Squadron does expose) and computes agreement itself — or it is a new Squadron feature. Either way it is not free, and the Judge component must own the aggregation logic. The pre-concept's instinct (don't trust self-reported confidence; use agreement) is right; the mechanism must be built. *(Resolves OQ4; the N, per-model-vs-per-run, and initial threshold remain to decide — see below.)*
+- **Agents and pipelines** use one set of operations, exposed over MCP for agent sessions and as a CLI for pipelines and scripts. Same operations, same names.
+- **The PM** reaches Amoeba through an agent: the chat agent, or a Claude or Codex session already open. "Where's trading at?" is a question to an agent, which calls Amoeba.
+- **Notifications go to agents.** Agents can already reach the PM by mobile push, macOS and so on, so Amoeba builds no notification mechanics.
+- **Set-up** is the one exception: register a program and its members once, ideally through an agent.
 
-**E. The Squadron daemon is safe to relocate — pipeline runs don't depend on it.**
-The Squadron daemon manages **agent lifecycle only** (`sq spawn/list/task/message/history/shutdown`). **Pipeline and review runs (`sq run`, `sq review`) do not depend on the daemon**, and no Langfuse coupling to the daemon was found. **Conclusion:** the pre-concept's required confirmation — "nothing in Squadron's pipeline/Langfuse/session paths depends on the daemon being resident" — **holds.** The daemon can be reused as the base for Amoeba's resident substrate (item 7) and relocated out of Squadron's request-shaped identity without breaking pipeline execution. *(Resolves OQ6.)*
+### How it runs
 
-#### Grounding update — 2026-09-13
+**Nothing stays running unless a scenario can't work without it.** By default Amoeba is a store, an MCP server started by whatever session uses it, and a CLI. A resident process is justified only by something that must happen when no run is active and nobody asked.
 
-Re-grounded against Squadron, Context Forge, and ai-project-guide HEAD after three months of upstream change (SQ +773 commits, CF +361, guide 0.15.6 → 0.17.4). Full detail with file:line citations in `notes/002-upstream-delta.amoeba.md`. Status of each finding:
+Amoeba works on runs it did not launch. It does not start work. The only run it resumes is the one that asked.
 
-- **A holds.** CF still persists workflow pointers only; review/gate state is recomputed from disk on every call. Boundary added: Squadron now persists per-pipeline `RunState` with resumable run IDs, so Amoeba's store is the *project-lifecycle* layer that references SQ run IDs, not a second per-run store. **PM decision 2026-09-13:** Squadron's unstarted initiative 280 (Shared Agent Artifact Store) is Amoeba's scope, folded into initiative 100.
-- **B partially superseded.** Squadron now has a multi-step loop (`judge-cycle.yaml`: `until: review.pass`, `on_exhaust: checkpoint`), but the checkpoint exits when non-interactive and saves state for `sq run --resume`. v1 routing stays continue / Judge / escalate; "SQ run exited at checkpoint" is a blocked-state the Runner must model and resume by run ID. Auto-fix is still SQ-side and undelivered (S4).
-- **C holds.** No tier field; `category` still free-form. v1 inference stands.
-- **D narrows the Judge.** Squadron initiatives 300/320 (intrinsic LLM judging & scoring, judge calibration) are complete: judge templates emit `score` + `criteria`, and a findings-addressed judge exists. Amoeba does **not** build a scorer; initiative 140 becomes *judge invocation + consensus*. Consensus is still Amoeba's — Squadron has `fan_out` but no agreement reducer.
-- **E holds technically, but the relocation plan is dropped.** The daemon is unchanged since 2026-05-19, Squadron's own pipeline engine never references it (`sq run` is fully in-process), and its surrounding message-bus/topology/supervisor modules are stubs. Reusing it would inherit frozen, unsupported code. Amoeba builds its substrate fresh. **PM decision 2026-09-13:** CF initiative 220 (Event-Driven Pipeline — persistent MCP daemon, server-initiated notifications), unstarted in CF, is Amoeba's: it is the push-based substrate seam that replaces polling `cf next`. *(Ownership confirmed by PM 2026-09-13.)*
-- **New H — Squadron has shipped the within-artifact runner.** Slice 303 (judge-gated review → fix → re-review cycle with auto-advance and escalation), slice 305 (findings-addressed gate: deterministic screens first, judge only on the residue — "deterministic where measurable, model-backed where not"), and slice 322 (calibration-to-threshold feedback, graduation registry) are complete. **Boundary:** the Runner *invokes* these loops for within-artifact convergence and owns only the lifecycle-level loop (phases, slices, CF gates, cross-run blocked-states, routing of what those loops escalate). Three Squadron constraints Amoeba honors: no automatic threshold mutation (operator decision on reported evidence); metrology is consumed as static config, never queried live; escalated-gate verdicts are never written into the metrology store. Also: Squadron finding ids are positional (`F001` by enumeration), so cross-run finding identity in Amoeba's store must be content-based; and stdout `--output json` currently reports `verdict: UNKNOWN` for judge templates (bug filed) — route judges on `score` or read the artifact.
-- **New F — CF review gating landed (CF initiative 240).** Config key is `workflow.review_enabled` (not `review_required`); review type is position-derived. The Runner consumes the gate via `workflow_status.activeSlice.status ∈ {pending-review, review-failed}` + `gateInfo`, never via `workflow_next`'s prose `recommendation`. Gating is verdict-only (`score` unenforced). Two silent-ungate hatches must be detected: `review: none` on a slice design (PM-only) and `dateCreated` before `review_gate_effective_date`.
-- **New G — derived verdicts.** Squadron's JSON exposes `fallback_used` (verdict derived after a summary-parse failure); `verdict == PASS && fallback_used` is the Runner's false-negative predicate. It is absent from frontmatter, so a derived PASS clears CF's gate. The Runner gates on SQ JSON, not on CF's gate alone. A failure artifact (`verdict: UNKNOWN` + provider-failure body) now occupies the live slot on provider failure — artifact presence ≠ review happened.
-- **First proof unanchored.** Kalshi ingestion (trading-data initiative 260) shipped manually and is in production. **PM decision 2026-09-13:** do not pre-select a replacement slice — sibling projects keep moving, so the PM picks an unstarted unit when Amoeba is ready to run a proof (selection criteria in `notes/002-upstream-delta.amoeba.md` §7). OQ7 (Kalshi discovery) no longer applies.
-- **Process.** Planning branches removed (guide 0.17.x; planning commits directly to the integration target); review gates are hard stops ("stop and report to the PM, or run the review"); `review: none` is PM-only and must never be written by automation.
+### What it has to do
 
-#### Multi-project programs — 2026-10-20 (PM)
+Full walkthroughs are in `notes/005-usage-scenarios.amoeba.md`.
 
-The "forest of runnable / blocked / done nodes" is not only several unrelated projects. The PM's real case is a **program**: `trading-data`, `trading-engine`, `trading-ui` (more coming) are separate repos that combine into one product, `trading`. Today only the PM holds the combined concept; amoeba's store is project-keyed and flat, so nothing records how the parts fit, and there are no cross-project dependencies or unified blocked-on-me view. Two needs follow:
+- **A: a question while the PM is away.** A `sq run` pauses on an agent's question. Amoeba gathers context and runs the answering pipeline. The run resumes with the answer, or an agent tells the PM. In the morning, the PM sees the finished run and a short list of what was decided on their behalf.
+- **B: a change in one member affects another.** A member's pipeline tells Amoeba what it released and what that touched. Another member's pipeline asks at the start of a slice whether anything it depends on has changed, then either picks the change up as context or stops with a reason.
+- **C: the PM asks where things stand.** An agent calls Amoeba and gets a short status per member: what's running, what's blocked and why, and what was answered since the PM last looked.
 
-1. **Program record.** A level above projects that owns a combined-concept document, the member-project list, and cross-project dependency edges (e.g. an engine slice blocked on a data slice). This is a quantity change in the store (one new table, a nullable program key on projects), not a rewrite, and agents in a member project can read the program concept to know what their part is for. Planned as initiative 180.
-2. **Multi-agent chat.** One channel in which each project's resident agent is a participant, so the PM can work across projects without Claude Desktop projects or named agents (which only cover Claude projects). It is the original orchestration idea that became Squadron; with Squadron dropping comms, it lands here as a client over the slice 109 network API. Planned as initiative 200, after 180 (the chat needs the program context to anchor to).
+### Programs
 
-Open: whether and how an agent in one project may read another project's state (cross-project visibility). The PM half-remembered a further item; none is recorded. Neither need is built before initiative 120; 100 and 120 only avoid foreclosing a program key or cross-project edges.
+There is one kind of program: a set of repos where members depend on each other, usually on a **release** of another member. A toolchain and a product are the same concept.
 
-#### Supervisor over Squadron — 2026-10-28 (PM)
+### Answering
 
-Building the Runner (120, slices 120–128) showed that its routing table, phase chaining, reruns, batching and judging repeat what Squadron's pipelines already do: `p456`-style pipelines chain phases, run thresholds decide pass or accept, `--max-revisions` bounds reruns, `*-plan` pipelines batch, and `judge-cycle` judges. Two copies of one policy disagree. So the Runner described above, which applies a routing table and spawns a Judge on findings, becomes a **supervisor**: it launches each project's configured pipeline, watches and resumes its runs, and keeps one blocked list across projects. Tier routing of review findings stays Squadron's.
+The answering run is a Squadron pipeline with two steps, each isolated:
 
-The judgment Amoeba spends moves from reviewing findings to **answering agents' questions**. A run most often stops because its agent asked something ("which branch?", "redesign or leave?"). Amoeba answers from the project's rules, plan, the program concept, and its earlier answers, and resumes the run with the answer. Only what it cannot answer reaches the PM. Initiative 140 becomes this answerer. The thesis stands: deterministic control flow around a bounded nondeterministic subroutine, now pointed at questions instead of findings. Full reasoning: `notes/004-direction.amoeba.md`.
+- **A closed set of evidence.** The answer step sees only the passages Amoeba supplies, and cites them.
+- **An independent check.** The check step sees the question, the passages and the reply, and shares no session with the answer step.
+- **No tools.** A passage that steers the model can at worst produce a wrong reply.
 
-#### Decisions locked at concept
+These are properties of the step's configuration, not of a model vendor. Claude models need to work here, which is `ecorkran/squadron#299`.
 
-* **Checkpoint = persisted blocked-state, not a blocking call.** Unchanged and central. Enables async-by-construction, free restart-survival, and a quantity-not-rewrite path to multi-project mode.
-* **State is the interface between parts** — for *workflow pointers* via CF, and for *findings/blocked-states/resolutions* via the Amoeba-owned run-state store (finding A). Parts never call each other directly.
-* **v1 routing = continue / Judge / escalate** (finding B). Auto-fix is explicitly deferred.
-* **Tier is inferred inside Amoeba for v1** (finding C). Amoeba derives each finding's tier from `category` plus its own Tier-1 deterministic predicates, run independently of Squadron's `severity`. No Squadron change is required to start; the emitted self-classified tier field stays a later upgrade, keeping the first Kalshi proof self-contained in one repo.
-* **Initial Judge threshold = always-escalate** (Judge runs and logs; human still decides). *(Reworded 2026-09-13:)* thresholds are **never mutated at runtime** — Amoeba accumulates per-category calibration evidence and *recommends* a change; the PM applies it as static config. This matches Squadron's stated non-goal (no automatic threshold mutation) and keeps escalated verdicts out of Squadron's calibration dataset.
-* **Notification = outbound Discord webhook + an inbound reply path.** No autonomous-agent runtime as the orchestration substrate (it would contradict the thesis).
+### Decisions
 
-#### Open questions carried into Phase 1/2
+- **A checkpoint is a persisted blocked-state, not a blocking call.** A paused run holds no process open, so the PM can answer whenever. Kept from the original concept.
+- **Amoeba owns the program and question state.** Context Forge persists only workflow pointers, and Squadron persists only per-run state. Kept, in SQLite.
+- **Amoeba depends on upstream shapes, not version numbers.** Kept.
+- **"State is the interface; parts never call each other" no longer holds.** Agents and pipelines call Amoeba directly.
 
-The source inspection answered the *architecture-shaping* open questions (OQ1, OQ2/3, OQ6). These remain genuine and belong to later phases:
+### What happened to the original pieces
 
-* **OQ4 calibration parameters:** choose N, decide consensus per-model vs per-run, and define the per-category trust-earning mechanism that lowers the always-escalate threshold over time. *(Phase 2 / tuned by induced-failure during P6.)*
-* **OQ2 tier field, later upgrade:** the inference path is locked for v1 (see Decisions). The deferred decision is *when* to add the self-classified tier field to Squadron — for cleaner routing and free reviewer-reliability eval data — once the first proof has run. *(Phase 2+ cross-repo upgrade, not a blocker.)*
-* **OQ5 Translator command authority:** fix the exact whitelist of `cf`/`sq` commands the Translator may issue, and flag any with side effects that warrant human confirmation even though the Translator is itself an intelligence. *(Phase 2.)*
-* **OQ6 substrate scope:** decide whether the resident substrate + durable queue + structured run-state store is an Amoeba-internal component or a separate primitive that Squadron, Amoeba, and Cowork sit on as peers. *(Phase 1 boundary decision.)*
-* **OQ7 Kalshi discovery:** a single front-loaded research step (granularity / history / structure of the Kalshi API) to turn the storage-format decision into a constraint to verify (predicted: relational → existing TimescaleDB) rather than a decision to make. Conditional escalation only if the data turns out non-relational. *(Phase 0/1 research step for the first proof.)*
+| Piece | Now |
+|---|---|
+| Runner | No longer the centre. Whatever survives is decided by the audit below. |
+| Routing engine | Gone. Squadron owns routing. |
+| Judge | Became the answering pipeline. |
+| Translator | The separate chat agent app. |
+| Notification bridge (Discord) | Dropped. Amoeba notifies agents. |
+| Run-state store | Stays, reduced to what the scenarios need. |
+| Resident substrate | Justified only by a scenario. |
+| Multi-agent chat | Not Amoeba. |
 
-### Initial Technical Direction
+### Grounding that still holds
 
-Directional, not committal (detailed stack decisions belong in Phase 2):
+Squadron facts below were read from its source at the dates in the notes; re-check the shape before depending on one.
 
-* **Runner:** hand-written deterministic state machine in **Python** (matches Squadron and the CLI surface). Shells out to / invokes `cf` and `sq`; parses structured output; applies a routing table. No AI in its own loop.
-* **CF interface:** prefer **MCP tools** (`project_get`, `project_update`, `workflow_status`, `introspection_*`) or **`cf ... --json`** for clean programmatic read/write; avoid editing `projects.json` directly (no file locking).
-* **SQ interface:** `sq run` / `sq review {slice|arch|tasks|code}` for evaluation; pipeline loop-conditions for the loop-until-verdict branch. `sq` agent-lifecycle commands (`spawn/list/task`) require the daemon; pipeline/review runs do not.
-* **Run-state store:** Amoeba-owned, durable, structured (findings, per-node status, blocked-states, pending resolutions). Substrate TBD pending the OQ6 boundary decision — candidate base is the relocated Squadron daemon plus a durable message-queue; keep it as simple as the first proof allows.
-* **Findings parsing:** parse Squadron's `{id, severity, category, summary, location}` front-matter leniently (semantic content, not exact formatting). Tier is **inferred** in v1 (no emitted tier field yet).
-* **Judge:** a Squadron evaluation pipeline invoked N times across runs/models; **Amoeba computes the agreement metric.** Confidence = consensus, not self-report.
-* **Translator:** AI conversational layer (Claude Code VS Code extension and/or a chat/SDK surface), interchangeable; narrow fixed command authority.
-* **Notification:** outbound Discord webhook; inbound reply path into the blocked node's resolution.
+- Squadron pauses a run on an agent's question (`checkpoint.kind = agent_question`, read through `sq runs wait --json`), and `sq run --resume <id> --instructions "<answer>"` reruns the stopped step. See `notes/004-direction.amoeba.md`.
+- Squadron's daemon is frozen and is not used by its pipeline engine, and Squadron will not build a server or message layer.
+- Squadron persists per-pipeline run state with resumable run ids, and its pipelines own phases, thresholds, revisions and judges.
+- Context Forge persists workflow pointers and does not store findings or checkpoints.
 
-### Development Approach
+### Open for architecture
 
-* **DFS through the lifecycle tree**, easiest slice category first, to validate Runner + routing table + Judge on low-risk work before hard slices.
-* **Build by inducing failure** — point the Runner at real work, and treat every wrong escalation as the next deterministic gate / routing rule, every missed escalation as a severity/calibration correction, and every confident-but-wrong Judge resolution as threshold-calibration data.
-* **Front-load judgment** at the concept and borderline-P1 checkpoints to manufacture downstream checkability (for deterministic gates) and judgeability (for the Judge).
-* **First proof:** drive one unstarted `trading-data` unit of work near-autonomously, with one front-loaded human checkpoint. *(Updated 2026-09-13: the original target — add Kalshi as a data source — shipped manually as trading-data initiative 260. The concrete unit is **not chosen in advance**: sibling projects keep moving, so the PM picks it from whatever is unstarted when Amoeba is ready to run a proof.)*
-* **Favor simplicity**; avoid premature optimization and avoid adopting an autonomous-agent framework as plumbing.
+1. **Who notices a paused run?** A Squadron hook that calls Amoeba needs a Squadron change and no watcher. A watcher needs no Squadron change but puts something back in the background. This decides whether a resident process exists at all.
+2. **What the operations are** that MCP and the CLI share.
+3. **How a member declares what it depends on, and what counts as a release** for a repo that doesn't publish versions. The current program record may be too much or too little.
+4. **How a Squadron pipeline in one repo reaches a program's state**, so that scenario B needs no human.
+5. **Which agent gets told** when a question has to go to the PM, including when no session is open. The chat agent is the natural recipient, but it's a separate app and not finished.
+6. **Whether requests between members stay.** Initiative 180 planned for an agent to ask another member for a change, plus hold, release and ordering. None of that is in the scenarios, and some of it walks the graph.
+
+### Development approach
+
+- **Scenarios first.** Nothing gets built unless a scenario needs it, and a new need starts as a new scenario.
+- **Audit before building.** Today's code (about 34k lines in `src`, 69k in `tests`, measured 20261106) gets sorted against scenarios A to C into keep, move to Squadron, or delete. The slice plan is rebuilt from that result, and slices 182 to 186 are re-judged there.
+- **First proof.** Scenario A, end to end, on a real run the PM started. The PM picks the unit of work from whatever is unstarted at the time.
+- **Build by inducing failure.** Point it at real work, and each wrong answer or needless escalation shows what to change next.
+- **Favor simplicity.** If it could be a Squadron pipeline, it should be.
