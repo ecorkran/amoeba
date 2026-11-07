@@ -51,8 +51,8 @@ Splitting it again (say, questions in one initiative and programs in another) wo
 ## External Dependencies
 
 - **`ecorkran/squadron#299`:** answering on Claude models. Until it lands, the answering steps' `allowed_tools: []` is refused on the `sdk` profile, so scenario A can't run on those models.
-- **The PM's chat agent app:** the natural agent to tell when a question goes to the PM, and it isn't finished. The architecture has to answer open question 5 without waiting for it.
-- **Three more Squadron changes,** listed in `220-arch.program-tool`: a command started when a run pauses, the working directory in the run file with JSON from `sq runs list`, and a command step in pipelines.
+- **The PM's chat agent app:** not a dependency. Amoeba pushes nothing, and getting waiting questions to the PM belongs to chat and agent communication.
+- **Two more Squadron changes,** listed in `220-arch.program-tool`: a command started when a run pauses (`#302`), and the working directory in the run file with JSON from `sq runs list` (`#303`). A pipeline command step (`#304`) is on hold. All are general, off unless configured, and never make Squadron depend on Amoeba.
 
 ## Sequencing
 
