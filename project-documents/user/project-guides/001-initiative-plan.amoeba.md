@@ -52,7 +52,7 @@ Splitting it again (say, questions in one initiative and programs in another) wo
 
 - **`ecorkran/squadron#299`:** answering on Claude models. Until it lands, the answering steps' `allowed_tools: []` is refused on the `sdk` profile, so scenario A can't run on those models.
 - **The PM's chat agent app:** the natural agent to tell when a question goes to the PM, and it isn't finished. The architecture has to answer open question 5 without waiting for it.
-- **A Squadron hook, if the architecture chooses one** for noticing a paused run. That would be a Squadron change.
+- **Three more Squadron changes,** listed in `220-arch.program-tool`: a command started when a run pauses, the working directory in the run file with JSON from `sq runs list`, and a command step in pipelines.
 
 ## Sequencing
 
