@@ -100,7 +100,7 @@ The cost is that a missed hook leaves a question waiting (machine asleep, comman
 
 Each dependency pair carries a `consumed` value (`from_source` or `from_release`) that says which reports the consumer sees: every report, or only those with a version. So a repo that publishes no versions reports when it merges, and its consumers are `from_source`. A consumer can only see what its provider reports, so a `from_source` consumer of a repo that reports only at releases sees only those.
 
-A report is identified by member, commit and version. Reporting the same thing twice changes nothing. A release tagged on a commit already reported at merge adds the version to that report. `from_release` consumers then see it, and `from_source` consumers, who already saw the commit, don't see it again.
+A report is identified by member and commit, and holds the commit's current version. Reporting the same thing twice changes nothing. A release tagged on a commit already reported at merge adds the version to that report. `from_release` consumers then see it, and `from_source` consumers, who already saw the commit, don't see it again.
 
 **4. How a repo reaches program state: through its agents, by a line in its rules file.** There is no pipeline step and no Squadron change. A repo that joins a program adds two lines to its own rules file:
 
