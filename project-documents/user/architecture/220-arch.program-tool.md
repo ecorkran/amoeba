@@ -10,7 +10,7 @@ dependencies: [100-arch.substrate-run-state-store, 120-arch.runner-routing-engin
 relatedSlices: []
 riskLevel: medium
 audience: [human, ai]
-description: Architecture for Amoeba as a tool that agents and pipelines call. Nothing stays running. Squadron starts a short-lived Amoeba command when a run pauses; Amoeba answers through the answering pipeline, resumes the run or tells an agent, and records the decision. Program knowledge is read from git, Context Forge and Squadron rather than mirrored. Answers the concept's six open questions and lists the Squadron changes they need.
+description: Architecture for Amoeba as a tool that agents and pipelines call. Nothing stays running. Squadron starts a short-lived Amoeba command when a run pauses; Amoeba answers through the answering pipeline, resumes the run or tells an agent, and records the decision. Members report their own releases, and run and slice state are read from Squadron and Context Forge rather than mirrored. Answers the concept's six open questions and lists the Squadron changes they need.
 dateCreated: 20261106
 dateUpdated: 20261106
 status: in_progress
@@ -36,7 +36,7 @@ Amoeba today is a resident supervisor: a long-running process that launches and 
 
 ## Architectural Principles
 
-- **Read, don't mirror.** The store holds only what nobody else holds: the question and answer record, program membership and dependencies, and how far each member has read each dependency. Run state stays in Squadron, slice state in Context Forge, and releases in git.
+- **Read, don't mirror.** The store holds only what nobody else holds: the question and answer record, program membership and dependencies, reported releases, and how far each member has read each dependency. Run state stays in Squadron and slice state in Context Forge.
 - **One operation, two doors.** MCP and the CLI are thin layers over the same operations, with the same names. Neither has logic of its own.
 - **Called, never calling around.** Amoeba starts no work, and the only run it resumes is the one that asked. It never walks the dependency graph.
 - **Squadron gets the checks.** A check on an answer is a step in the answering pipeline, not Amoeba code.
@@ -84,15 +84,16 @@ The cost is that a missed hook leaves a question waiting (machine asleep, comman
 | `answer` | An agent, for the PM | Records the PM's answer. Resumes the run if it is still waiting. Becomes the answer used for repeats, which also covers an override | A |
 | `status` | An agent | Per member: running, blocked and why, unhandled questions | C |
 | `decisions` | An agent | What was answered, by whom and from what, since a given point | A, C |
-| `changes` | A pipeline or agent | What this member's dependencies released since it last marked them read | B |
+| `report_release` | A pipeline or release skill | Records what this member released and what that touched | B |
+| `changes` | A pipeline or agent | What this member's dependencies reported since it last marked them read | B |
 | `mark_read` | A pipeline or agent | Moves that point forward | B |
 | `set_up` | An agent | Registers programs, members and dependencies | Set-up |
 
-**3. Dependencies and releases.** Set-up declares which members a member depends on, as member-to-member pairs. The program record's existing `consumed` value (`from_source` or `from_release`) says what counts as a release: a new commit on the provider's target branch, or a new version tag. So a repo that publishes no versions is simply `from_source`.
+**3. Dependencies and releases.** Set-up declares which members a member depends on, as member-to-member pairs. Each repo reports its own releases, because only the repo that made a change knows what it means. A report holds the commit, a version if there is one, what changed and what that touched.
 
-**Amoeba reads this from the provider's git history instead of being told.** This changes the concept's scenario B, where the provider's pipeline reports its release. Reporting would need a step in every provider's pipeline and in release skills that aren't pipelines at all, and a missed report would silently hide a change. Reading git needs nothing from the provider, and the commits and changelog are what a consumer needs anyway.
+The program record's existing `consumed` value (`from_source` or `from_release`) says which reports a consumer sees: every report, or only those with a version. So a repo that publishes no versions reports when it merges, and its consumers are `from_source`.
 
-**4. How a pipeline reaches program state.** Through the CLI, from a new Squadron command step. The member is worked out from the working directory, so a pipeline passes no paths or ids. A pipeline stops with a reason when the step fails, and passes its output to a later dispatch as a prompt file.
+**4. How a pipeline reaches program state.** Through the CLI, from a new Squadron command step: one step at the end of a provider's pipeline to report, and one at the start of a consumer's slice to ask. Release skills aren't pipelines, so they call `report_release` directly. The member is worked out from the working directory, so a caller passes no paths or ids. A pipeline stops with a reason when the step fails, and passes its output to a later dispatch as a prompt file.
 
 **5. Which agent gets told.** Amoeba runs one configured command with the question and run id, and that command's job is to reach the PM through an agent. It can start a headless agent session, so it doesn't need an open one, and the chat app replaces it later by changing the setting. If it is unset or fails, the question stays in `status` with that reason. Whether a headless session can reach the PM's phone gets proven during scenario A.
 
@@ -117,9 +118,9 @@ One store at a fixed per-user location, with no flags. Programs of one are allow
 | Change | Needed for | Status |
 |---|---|---|
 | Tool-less Claude steps | A, on Claude models | `ecorkran/squadron#299`, open |
-| Command started on pause, in the run's directory | A | Not filed |
-| Working directory in the run file, and JSON from `sq runs list` | C, and catching up on a missed hook | Not filed |
-| Command step in pipelines | B, and deterministic checks on answers | Not filed |
+| Command started on pause, in the run's directory | A | `ecorkran/squadron#302`, open |
+| Working directory in the run file, and JSON from `sq runs list` | C, and catching up on a missed hook | `ecorkran/squadron#303`, open |
+| Command step in pipelines | B, and deterministic checks on answers | `ecorkran/squadron#304`, open |
 
 ## Technical Considerations
 
@@ -128,7 +129,7 @@ One store at a fixed per-user location, with no flags. Programs of one are allow
 - **Resume can be refused.** Squadron holds one run lock per checkout, so a resume fails while another run is active there. The answer is already recorded by then, so `status` shows it as answered but not resumed. It isn't retried in the background.
 - **Runaway loops and spend.** A run that keeps asking hits the per-run answer limit and goes to the PM. Each answering run has its own cost cap through `pipeline.max_cost_usd`.
 - **Answer checks move in two stages.** The deterministic reserved-term screen in `runner/answering/gate.py` becomes a pipeline step once the command step exists. It stays where it is until then, since dropping it would widen what an answer can say.
-- **Stale provider checkouts.** Reading git sees only what the local checkout has. `changes` fetches the provider first, and a failed fetch is reported in the result, not treated as "nothing changed".
+- **A missed report.** A repo that forgets to report hides its change from its consumers. Each repo adds its report once, so this gets fixed when someone notices, and it gets no extra mechanism.
 - **Prompt-only runs.** An agent driving `/sq:run` is already in a session and handles its own questions. These runs are outside `handle_pause`.
 - **No data to migrate.** Nobody has run Amoeba, so the store starts from a new baseline schema and the old migrations go.
 - **Tests follow the code.** Most of the 69k lines of tests cover code that goes. The live answering tests stay and become the check on scenario A.
@@ -141,7 +142,7 @@ Provisional. The audit and the slice plan decide.
 - **The cut:** remove what the audit rejects, and move to the single store and config.
 - **Pause handling:** `handle_pause`, `answer` and the notify command, through the CLI. This is the first proof, scenario A on a real run.
 - **MCP and status:** the MCP server, `status` and `decisions`. Scenario C.
-- **Program dependencies:** dependency declarations, `changes` and `mark_read`. Scenario B.
+- **Program dependencies:** dependency declarations, `report_release`, `changes` and `mark_read`. Scenario B.
 - **Answer checks in the pipeline:** move the deterministic screen into a pipeline step.
 
 ## Related Work
