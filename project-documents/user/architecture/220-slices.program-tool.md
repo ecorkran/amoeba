@@ -81,7 +81,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    - A run resumed by someone else before Amoeba gets to it is recorded as not delivered and is not resumed again.
    - A refused resume, or one whose process died, is resumed by a second `handle_pause` with the recorded answer and no new answering run.
    - `answer` on a waiting question resumes the run and is used for the same question next time; it never counts toward the answer limit.
-   - Each live answering test that 221 deleted as `waits on 223` has its claim restored, from the commit the audit's section 8 names.
+   - Each live answering test that 221 deleted as `waits on 223` has its claim restored, from the commit the audit's Live tests section names.
    **Dependencies:** 222. External: `ecorkran/squadron#299` for answering on Claude models; `ecorkran/squadron#302` for the hook to start `handle_pause` (calling it by hand works without it).
    **Interfaces:** Provides `handle_pause` and `answer`, the question record's states and the resume outcomes. Consumes 140's answering pipeline and passages as kept by 221.
    **Risk Level:** High. It resumes real runs on a model's answer, and it is the test of the whole design.
@@ -126,7 +126,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 
 ## Gated on the Scenario A Trial
 
-8. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member, commit and version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
+8. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member and commit and holding the commit's current version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
    **Value:** User value. A repo designing a slice sees what changed upstream without the PM relaying it.
    **Success Criteria:**
    - A `from_source` consumer sees a provider's merge report; a `from_release` consumer sees it only once it has a version.
