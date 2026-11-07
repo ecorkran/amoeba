@@ -1,0 +1,161 @@
+---
+docType: slice-plan
+layer: project
+project: amoeba
+parent: user/architecture/220-arch.program-tool.md
+archIndex: 220
+component: program-tool
+audience: [human, ai]
+description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, a live trial of scenario A, the MCP server, and program dependencies (scenario B, built only if scenario A passes its test).
+dateCreated: 20261107
+dateUpdated: 20261107
+status: not_started
+---
+
+# Slice Plan: Program Tool
+
+## Parent Document
+
+`220-arch.program-tool.md`
+
+## Planning Context
+
+Architecture-level. Initiatives 100, 120 and 140 built a resident supervisor that nobody has run. This plan first cuts that down to what scenarios A to C need, then builds the eight operations on a new store. Three things shape it:
+
+- **Audit before cutting.** The architecture's table of what stays and what goes is a starting guess. The audit settles it piece by piece, so the cut deletes from a list, not from memory.
+- **Scenario A is the gate.** Pause handling and a live trial come before anything else new. If most real questions still reach the PM, the design is rethought and scenario B is not built.
+- **CLI before MCP.** The operations are proven through the CLI, where a run can be driven and inspected by hand. MCP is a thin layer added once they work.
+
+Slice numbers are execution order. The first slice takes the plan's index (220).
+
+## Foundation Work
+
+1. [ ] **(220) Code Audit** — A document, `user/analysis/220-analysis.code-audit.md`, that sorts every module in `src` and its tests into keep, keep and rework, move to Squadron (filed as a Squadron issue), or delete, each judged against scenarios A to C. It names what the kept answering code depends on that is being deleted (nodes, journal entries, blocked states, the tick loop) and what replaces each. It decides whether slice 182's branch is merged, partly reused or redone, and confirms that 180's slice-writing pipeline goes. No code changes.
+   **Value:** Architectural enablement. The cut works from a list, and the size of the rework is known before the store is designed.
+   **Success Criteria:**
+   - Every package under `src` and every test directory has a verdict and a one-line reason tied to a scenario or to nothing.
+   - Each kept module lists what it imports that is being deleted, and what replaces it.
+   - Slice 182 has a verdict: merge, reuse parts, or redo, with the parts named.
+   - Anything marked move to Squadron has an issue filed, or the audit says why it is deleted instead.
+   **Dependencies:** None.
+   **Interfaces:** Produces the delete list for 221 and the reuse list for 222 and 223.
+   **Risk Level:** Low
+   **Relative Effort:** 2
+
+## Migration / Refactoring Slices
+
+2. [ ] **(221) The Cut** — Delete what the audit rejects: the resident host and its lock and recovery, the tick loop, launch and dispatch, the HTTP server, the inbox, the change feed, the old CLI and inspection views, the old store and its migrations, and their tests. What stays is a library: the answering pipeline file, passage assembly, decision logic, the answer screen and the upstream readers, each with its tests passing on its own. The README drops the old pitch and says what Amoeba is now. Old slice documents keep their files.
+   **Value:** Architectural value. The code shrinks to what the scenarios use, and everything after is written against a small base.
+   **Success Criteria:**
+   - Every item the audit marks delete is gone, along with its tests.
+   - Format, lint, typecheck and the remaining tests pass.
+   - The kept answering pieces run in their tests with no store, no tick and no resident process.
+   - The live answering tests still pass, or the audit records why one waits on 223.
+   - No kept module imports a deleted one.
+   **Dependencies:** 220.
+   **Interfaces:** Leaves the kept answering pieces and upstream readers as the library 222 and 223 build on.
+   **Risk Level:** Medium. The answering pieces are tied to what goes, and pulling them apart is the real work.
+   **Relative Effort:** 4
+
+## Feature Slices (in implementation order)
+
+3. [ ] **(222) Store, Config and Set-up** — The new store and the first operation. One SQLite store at a fixed per-user location, which tests redirect through one environment variable read in one config place. A new baseline schema: the question record keyed on run id and `paused_at`; programs, members, member-to-member dependency pairs carrying `consumed`; reported releases; per-member settings; and the PM's single `decisions` marker. One user-level config file for models, cost cap, per-run answer limit and the default list of what answers may not authorize, with no defaults in code. `set_up` registers programs, members (rule file paths and any change to the authorize list) and dependency pairs. From inside a repo the member is the Context Forge project for the working directory, and worktrees of one repo are one member. Short-lived writers rely on SQLite's busy timeout, with no single-writer lock.
+   **Value:** Architectural enablement, and the first thing the PM can run: a program set up and read back.
+   **Success Criteria:**
+   - A test run never touches the real store; a test checks the environment variable is honored and that nothing else picks the location.
+   - A missing config value fails with an error that names it.
+   - `set_up` through the CLI registers a program, members and pairs; a repeat call changes nothing; a malformed call is rejected with a reason.
+   - Two worktrees of one repo resolve to the same member; a directory in no program is reported as such.
+   - Several processes writing at once all succeed or fail with a named error.
+   **Dependencies:** 221.
+   **Interfaces:** Provides the store, config reader, member resolution and `set_up` to every later slice. Schema and config go in the project's contract docs.
+   **Risk Level:** Low
+   **Relative Effort:** 3
+
+4. [ ] **(223) Pause Handling** — Scenario A through the CLI. `handle_pause` takes a run id: it handles only an agent question from an in-process run in a program member and leaves every other run alone; claims the question; gathers context (slice from the run's parameters, rules, the program concept and the member's PM answers from Context Forge and the store); starts the answering run from a scratch directory with the hook's opt-out and records its run id on the claim; records an answer that passes the check and the screen, then resumes; otherwise records the question as waiting on the PM with the reason. `answer` records the PM's answer, makes it the precedent for repeats, and resumes if the run is still at that pause. Both share one resume: compare the checkpoint, start `sq run --resume` detached from the recorded checkout with a log file, wait briefly for `running`, and record resumed, refused or not delivered. The answer step and check step enforce the member's authorize list, with the screen as backstop. The per-run limit counts only automatic answers. A dead claim is resolved by checking the recorded answering run first. Wiring the Squadron hook to `handle_pause` is a config line in a member, documented here.
+   **Value:** User value. A run that stops on a question at night gets answered and carries on, or leaves a clear reason for the PM.
+   **Success Criteria:**
+   - On a real paused run, `handle_pause` answers and resumes it, and the record shows the question, passages, answer and resume outcome.
+   - A run outside a program, a prompt-only run, a non-question checkpoint and an already-claimed question are each left alone with a reason.
+   - An answer that authorizes something on the member's list waits on the PM; allowing that item for the member lets the same kind of answer through.
+   - A run resumed by someone else before Amoeba gets to it is recorded as not delivered and is not resumed again.
+   - A refused resume, or one whose process died, is resumed by a second `handle_pause` with the recorded answer and no new answering run.
+   - `answer` on a waiting question resumes the run and is used for the same question next time; it never counts toward the answer limit.
+   **Dependencies:** 222. External: `ecorkran/squadron#299` for answering on Claude models; `ecorkran/squadron#302` for the hook to start `handle_pause` (calling it by hand works without it).
+   **Interfaces:** Provides `handle_pause` and `answer`, the question record's states and the resume outcomes. Consumes 140's answering pipeline and passages as kept by 221.
+   **Risk Level:** High. It resumes real runs on a model's answer, and it is the test of the whole design.
+   **Relative Effort:** 5
+
+5. [ ] **(224) Status and Decisions** — The read side. `status` shows, per member, running and paused runs, why each paused run stopped, questions waiting on the PM with their reasons, answers not yet resumed, and paused question runs with no finished record (a missed hook), which an agent can pass to `handle_pause`. `decisions` lists what was answered, by whom and from what, since the PM's marker or a given time. `mark_read` moves the PM's marker to the last record the caller saw. Run state is read from Squadron and slice state from Context Forge, never copied into the store. `status`, `decisions` and `answer` take an explicit program or question when called from outside a member.
+   **Value:** User value. The PM, through any agent, sees what is waiting on them and what was decided without them.
+   **Success Criteria:**
+   - `status` on a program with a running run, a paused question run, a waiting question and a missed hook shows each correctly.
+   - A missed hook found by `status` and passed to `handle_pause` is answered and resumed.
+   - `decisions` since the marker shows only newer records; `mark_read` moves the marker and never past what the caller saw.
+   - Nothing in the store duplicates run status or slice state; a test checks the schema.
+   **Dependencies:** 223. External: `ecorkran/squadron#303` (working directory in the run file and JSON from `sq runs list`).
+   **Interfaces:** Provides `status`, `decisions` and `mark_read`.
+   **Risk Level:** Low
+   **Relative Effort:** 3
+
+## Integration Work
+
+6. [ ] **(225) Scenario A Trial** — Amoeba switched on for real work in the PM's own repos: the hook configured in each member, real runs left to pause, and the share of questions answered without the PM measured from `decisions`. Wrong answers, false screen matches and questions that should have been answered are recorded with what would have fixed them (a rule line, a passage, a prompt change). The result is a short note with the numbers and a verdict: go on to 227, or rethink the design.
+   **Value:** Verification. Decides whether Amoeba saves the PM more than it costs before more is built.
+   **Success Criteria:**
+   - Real work runs in at least two members, with every question accounted for in `decisions`.
+   - The note gives answered without the PM, waiting on the PM by reason, and wrong answers.
+   - The note states go or rethink, and the initiative plan reflects it.
+   - Any shape met in real runs that the tests lacked becomes a fixture.
+   **Dependencies:** 223, 224. External: `ecorkran/squadron#302`.
+   **Interfaces:** None new.
+   **Risk Level:** Low
+   **Relative Effort:** 2
+
+7. [ ] **(226) MCP Server** — An MCP server over the operations built so far, with the same names and no logic of its own. Long work (`handle_pause`, `answer` with a resume) starts a detached CLI process and returns at once. Store calls run off the async loop. This completes scenario C: any agent session can see status and decisions and answer for the PM.
+   **Value:** User value. The PM can ask any agent what is waiting and answer through it, from any directory.
+   **Success Criteria:**
+   - Every operation available on the CLI is available over MCP with the same inputs and results.
+   - A long call over MCP returns at once and its work shows in `status`.
+   - No operation logic lives in the MCP layer; a test checks both doors call the same functions.
+   **Dependencies:** 224. Does not wait on 225.
+   **Interfaces:** Provides the MCP server and its install instructions.
+   **Risk Level:** Low
+   **Relative Effort:** 2
+
+## Gated on the Scenario A Trial
+
+8. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member, commit and version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
+   **Value:** User value. A repo designing a slice sees what changed upstream without the PM relaying it.
+   **Success Criteria:**
+   - A `from_source` consumer sees a provider's merge report; a `from_release` consumer sees it only once it has a version.
+   - Tagging a release on an already reported commit adds the version; a `from_source` consumer does not see it twice.
+   - Two worktrees calling `changes` from different starting points each see everything since their own point.
+   - The rule lines, pasted into two of the PM's repos, lead the design agent to call `changes` in a real design run.
+   **Dependencies:** 225 with a go verdict, and 226.
+   **Interfaces:** Provides `report_release`, `changes` and the rule-line text.
+   **Risk Level:** Medium. Nothing forces an agent to follow a rule line.
+   **Relative Effort:** 3
+
+## Implementation Order
+
+`220 → 221 → 222 → 223 → 224 → 225 → 226 → 227`.
+
+- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 227 waits on the trial's verdict.
+- **Risk.** 223 is the riskiest and the test of the design, so it comes right after the base it needs and before anything else new.
+- **Parallel work.** 226 can run beside 225, since the trial is mostly waiting on real runs.
+
+## Notes
+
+- **External dependencies.** 223 can be built and tested by calling `handle_pause` by hand, but the trial needs `#302`. Answering on Claude models needs `#299`. Missed-hook catch-up and per-member run status need `#303`. `#304` stays on hold unless 227 shows agents skipping the rule lines.
+- **Retired work.** Slices 183 to 186 are retired by the architecture and get no successors here. Slice 180's slice-writing pipeline goes in 221 unless the audit finds a use. Slice 182 is decided by the audit; its program-concept passages are wanted and land in 223's context step if it is redone.
+- **Concept wording.** The concept still says a steered passage "can at worst produce a wrong reply" and that checks on an answer belong in the pipeline. Both are corrected as a planning edit, outside these slices.
+- **No data migration.** Nobody has run Amoeba, so 222 starts from a new baseline and 221 deletes the old migrations.
+- **Deferred.** A cost cap per time window, subscription-aware cost handling, and sharing PM precedent across a program wait until use shows the need.
+
+## Future Work
+
+Living backlog; entries may be added during slice design, task breakdown, or implementation.
+
+1. [ ] **Pipeline step for program checks** — If agents skip the scenario B rule lines, add the check as a pipeline step once `ecorkran/squadron#304` lands. Dependencies: [227]. Effort: 2/5
+2. [ ] **Spend cap per time window** — Limit unattended answering and resume spend per day or week, with subscription models treated apart from list-priced ones. Dependencies: [225]. Effort: 2/5
