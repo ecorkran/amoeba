@@ -160,3 +160,4 @@ Living backlog; entries may be added during slice design, task breakdown, or imp
 
 1. [ ] **Pipeline step for program checks** — If agents skip the scenario B rule lines, add the check as a pipeline step once `ecorkran/squadron#304` lands. Dependencies: [227]. Effort: 2/5
 2. [ ] **Spend cap per time window** — Limit unattended answering and resume spend per day or week, with subscription models treated apart from list-priced ones. Dependencies: [225]. Effort: 2/5
+3. [ ] **Removing members and pairs in `set_up`** — Explicit remove entries, refusing a member with question records, if use shows mistaken registrations happen. Dependencies: [222]. Effort: 1/5
