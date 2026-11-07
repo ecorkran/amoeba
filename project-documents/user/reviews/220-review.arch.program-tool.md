@@ -8,252 +8,165 @@ rulesSource: project
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/architecture/220-arch.program-tool.md
 aiModel: claude-opus-5-5
 aiProfile: sdk
 status: complete
-dateCreated: 20261106
-dateUpdated: 20261106
-reviewedSha: cc4c1d0cde24167bd5578da48e78f7f46da0a2a4
+dateCreated: 20261107
+dateUpdated: 20261107
+reviewedSha: 84bf5596fbea144a9a28e1d611ec317d643d5ca5
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 30
-turns: 31
-promptTokens: 804662
-cachedTokens: 656665
-cacheWriteTokens: 147981
-completionTokens: 19007
-durationSeconds: 190.4
-costUsd: 1.69623
+toolCallsMade: 10
+turns: 11
+promptTokens: 690784
+cachedTokens: 587653
+cacheWriteTokens: 103115
+completionTokens: 11757
+durationSeconds: 132.7
+costUsd: 1.1785
 costBasis: provider
 squadronVersion: 0.24.23
 findings:
   - id: F001
-    severity: fail
-    category: feasibility
-    summary: "Resume is a foreground, long-running process, but scenario A says nothing is left running"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:102-110"
+    severity: concern
+    category: consistency
+    summary: "\"The resume fails later … the run is still at that pause\" is wrong for failures after the resume starts"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:128-136"
   - id: F002
     severity: concern
-    category: completeness
-    summary: "Nothing can retry a resume that didn't happen"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:129"
+    category: feasibility
+    summary: "The answer screen is a substring match, but the policy it enforces is about meaning"
+    location: "project-documents/user/architecture/220-arch.program-tool.md#what-an-answer-may-authorize"
   - id: F003
     severity: concern
     category: consistency
-    summary: "The \"run and checkpoint\" uniqueness key has no checkpoint id to use, and only covers Amoeba's own callers"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:128"
+    summary: "\"Reporting the same commit twice changes nothing\" drops the release report for a commit already reported at merge"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:94-101"
   - id: F004
     severity: concern
-    category: consistency
-    summary: "\"Bounded answers\" overstates what a resume can do"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:34"
+    category: completeness
+    summary: "One cursor per member treats \"seen\" as \"accounted for\", and worktrees share it"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:96"
   - id: F005
     severity: concern
-    category: abstraction
-    summary: "The kept answering code assumes things this design removes"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:53"
+    category: dependencies
+    summary: "Whether the answering run handles its own pause depends on where the scratch directory is"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:119-122"
   - id: F006
     severity: concern
     category: completeness
-    summary: "\"Member from the working directory\" has no defined mapping, and it breaks for worktrees and cwd-less agents"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:96"
+    summary: "\"A claim whose recorded process has died\" doesn't say how death is detected, and a retake leaves an orphaned answering run"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:169"
   - id: F007
-    severity: concern
-    category: consistency
-    summary: "One user-level config can't hold per-repo answer settings"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:114"
-  - id: F008
-    severity: concern
-    category: feasibility
-    summary: "The PM's reply path is undefined when the agent told is headless"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:98"
-  - id: F009
-    severity: concern
-    category: feasibility
-    summary: "Scenario B's steps don't fit a command step, and the provider's report has no content source"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:92-96"
-  - id: F010
-    severity: concern
-    category: completeness
-    summary: "\"Since the PM last looked\" has no owner"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:86"
-  - id: F011
-    severity: concern
-    category: consistency
-    summary: "The slice order leaves the first proof without its own recovery path and morning list"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:143-144"
-  - id: F012
-    severity: concern
-    category: technology
-    summary: "Blocking operations over MCP aren't addressed"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:40"
-  - id: F013
-    severity: concern
-    category: consistency
-    summary: "An interactive run gets taken over without the person knowing"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:32"
-  - id: F014
-    severity: concern
-    category: completeness
-    summary: "The hook's timing and process contract aren't specified"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:75"
-  - id: F015
     severity: note
-    category: other
-    summary: "The program record still carries the removed requests model"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:94"
-  - id: F016
+    category: consistency
+    summary: "The frontmatter depends on documents this design says it replaces"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:9"
+  - id: F008
+    severity: note
+    category: technology
+    summary: "Some details of the MCP and store mechanics are unstated"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:174"
+  - id: F009
+    severity: note
+    category: completeness
+    summary: "Smaller things left undefined"
+    location: "unverified"
+  - id: F010
     severity: note
     category: antipattern
-    summary: "Proportionality is sound, but `mark_read` might not need to be separate"
-    location: "project-documents/user/architecture/220-arch.program-tool.md:88-89"
+    summary: "Per-member authorization settings could wait"
+    location: "project-documents/user/architecture/220-arch.program-tool.md:140"
 ---
 
 # Review: arch — initiative 220
 
-**Verdict:** FAIL
+**Verdict:** CONCERNS
 **Model:** claude-opus-5-5
 
 ## Findings
 
-### [FAIL] Resume is a foreground, long-running process, but scenario A says nothing is left running
+### [CONCERN] "The resume fails later … the run is still at that pause" is wrong for failures after the resume starts
 
-Steps 5 to 7 have `handle_pause` resume the run and then exit with "Nothing is left running". But `sq run --resume` is the work run itself: it executes in that process and holds the run lock for the whole run (`squadron/cli/commands/run.py:1076-1085`). That leaves two options, and the document chooses neither:
+The resume section promises that if "the resume fails later, `status` still shows it: the answer is recorded and the run is still at that pause. Calling `handle_pause` again resumes with the recorded answer." That only holds when the resume never took the run lock (a refusal, or a process that died before spawning). Once `sq run --resume` takes the lock, the run leaves the pause. A failure after that point is a `failed` run at some later step, not the original pause.
 
-- **Wait for it:** `handle_pause` lives for the rest of a possibly hours-long `p6` run, which breaks "exits when the call is done". An `answer` over MCP would hold a tool call open for the same time.
-- **Detach it:** the failures that matter happen after Amoeba has gone. The lock refusal is raised at once in the child (`run_lock.py:8`), so nothing is left to write the "answered but not resumed" state that line 129 promises.
+Then step 1's checkpoint comparison sees that the run "has moved". It records the answer as **not delivered** and blames "someone else", when the answer was in fact delivered and the run failed. `PIPELINES.md:388` says a `FAILED` step resumes like a paused one, so nothing in Squadron stops a later caller from resuming the failed run again with no answer attached.
 
-The same gap affects these:
+The record needs a third outcome besides "resumed" and "not delivered": *delivered, run then failed*. `status` needs to tell the three apart. That means saying which run-file fields mark "left that pause": the status changing, `paused_at` being cleared, or both. The facts list doesn't establish this. Step 3's "wait briefly for the run to leave that pause" relies on the same unstated field.
 
-- **Logs:** nothing says where the detached run's output goes.
-- **Environment:** a resume started by an MCP server inherits that server's environment, not the original run's.
+### [CONCERN] The answer screen is a substring match, but the policy it enforces is about meaning
 
-The design needs an explicit resume contract. One workable shape:
+"What an answer may authorize" states a semantic policy: an answer may not authorize "a push, a merge to the main branch, a release, a destructive database statement or a policy change". Technical Considerations says the enforcement "is a substring match". These don't fit together:
 
-1. Spawn the resume detached, with a log path.
-2. Wait a short time for the lock result or for the run state to change.
-3. Have `status` work out "not resumed" by comparing the recorded answer with the run's current checkpoint, rather than relying on a written outcome.
+- **False positives:** "merge the two helpers into one", "release the lock before writing" and "drop the unused column from the DTO" all match terms on the list. Each sends a harmless answer to the PM, which pushes down the exact number the scenario A test measures.
+- **False negatives:** "ship it", "go ahead and tag 1.4" and "fold it into main" match nothing.
+- **Per-member settings:** "a member can loosen or tighten that list, so 'yes, merge it' can be allowed" assumes the list holds concepts, not strings. It's unclear what a member actually edits.
 
-### [CONCERN] Nothing can retry a resume that didn't happen
+Either state the screen honestly as a coarse keyword tripwire, accept its false-positive cost and drop the per-member "authorize" wording, or make the independent check step responsible for the semantic policy and keep the substring screen as a backstop. Today the document implies the screen enforces the policy.
 
-"It isn't retried in the background" is fine, but no foreground path is defined either. In the operations table:
+### [CONCERN] "Reporting the same commit twice changes nothing" drops the release report for a commit already reported at merge
 
-- `answer` records a PM answer.
-- `handle_pause` answers a question.
+Decision 3 makes the provider report at merge (no version) for `from_source` consumers and at release (with a version) for `from_release` consumers. The operations table makes `report_release` idempotent on the commit. When a release is tagged on the commit that was already reported at merge (no separate bump commit), the release report is a no-op. `from_release` consumers then never see the release, because they only see reports that carry a version.
 
-Neither says what happens when a question already has an answer and the run is still paused, whether from a refused resume or from a process that died between recording and resuming. A second `handle_pause` could spend money answering again, or could back off and leave the run stuck, because the claim is already settled. The operation needs a defined rule: reuse the recorded answer and only resume. The answer states also need to be listed (claimed, answered, resumed, escalated), since the principle at line 43 depends on them.
+The idempotency key needs to include the version, or a second report of the same commit needs to be able to *add* a version to the existing report. That second case also needs a defined effect on `from_source` consumers who already saw the report.
 
-### [CONCERN] The "run and checkpoint" uniqueness key has no checkpoint id to use, and only covers Amoeba's own callers
+### [CONCERN] One cursor per member treats "seen" as "accounted for", and worktrees share it
 
-Squadron's `CheckpointState` holds `reason`, `step`, `verdict` and `paused_at`, with no id (`pipeline/state.py:168-174`). The key has to be `(run_id, paused_at)` or similar, and that choice decides what counts as "the same question". Step and question text would wrongly merge an agent asking the same thing twice.
+Lines 105 and 110 are also affected. `changes` returns "what this member's dependencies reported since its marker", and the design agent "marks it read once its design accounts for it". A single forward-moving marker per member breaks in three ways:
 
-The constraint also misses people and agents who resume without Amoeba. An agent that launched `sq run`, or the PM at a terminal, can run `sq run --resume` while `handle_pause` is mid-answer. Amoeba would then resume a run that has moved on, delivering an answer to the wrong pause. Before any resume, including one from `answer`, the current checkpoint must be re-read and matched against the claimed key. "Still waiting" in the operations table needs this definition.
+- **Irrelevant now, relevant later:** a change that doesn't matter to this slice but matters to the next one. If the agent marks it read, the next slice never sees it. If it doesn't, every later design sees it again, along with everything behind it.
+- **Reports arriving mid-design:** if `mark_read` moves the marker to "now", it skips reports that came in after `changes` was called. It must take the last report id the caller actually saw.
+- **Parallel worktrees:** "all worktrees of a repo are one member". Two slices designed at once in different worktrees share one marker, so whichever finishes first hides the change from the other. The first review raised this (F009), and the revision doesn't address it.
 
-Dead-claim detection is also unspecified. "A claim whose process has died" needs a pid plus start time, or a lease, and it must handle the case where `handle_pause` died but its answering `sq run` child is still running. Otherwise a retake spends twice and produces two answers.
+Scenario B is gated on scenario A, so this doesn't block. It should be settled before the program dependencies slice. The simplest fix may be no cursor at all for `changes`: return reports since the consumer's last merged design, or since a time, and let the agent judge.
 
-### [CONCERN] "Bounded answers" overstates what a resume can do
+### [CONCERN] Whether the answering run handles its own pause depends on where the scratch directory is
 
-The goal and concept say an answer "can only resume the run that asked" and that a steered passage "can at worst produce a wrong reply". But `--instructions` "prepends text to every dispatch the resumed run makes" (`squadron/docs/PIPELINES.md:391`), and those dispatches have tools, commit code and can merge. So a passage that steers the tool-less answer step can reach a tool-using implement agent as trusted instruction text.
+Step 2 says the answering run's own pause is ignored "since it runs from a scratch directory" that resolves to no program. That safety depends on two things the document never pins down:
 
-What is actually bounded is which run receives the answer, not what that run does with it. The reserved-term screen is the only deterministic mitigation, and it matches substrings only. The document should state this risk and say what the check step and the screen are relied on to catch.
+- where the scratch directory is
+- how Context Forge resolves it (it may walk up parent directories)
 
-The cost cap has a related gap. Line 130 caps each answering run, but each `sq run --resume` of the work run starts counting from $0 (`PIPELINES.md:1179`). Unattended spend on the work run is therefore roughly the answer limit times the run's cap.
+Amoeba is itself a natural member of the Squadron / Context Forge / ai-project-guide program. If the scratch directory ever ends up under a member checkout, or under a directory Context Forge maps to a project, a paused answering run starts `handle_pause` on itself. That could recurse and spend money unattended.
 
-### [CONCERN] The kept answering code assumes things this design removes
+Decision 1 already provides a per-run opt-out flag. The answering run should always pass it, so the guard is explicit and doesn't depend on directory layout. Step 5 already treats a paused answering run as "waits on the PM", which is consistent with this.
 
-"Keep `answering/`, about 2.1k" and "keep questions" understate the work, and step 4 ("gathers passages") hides the hard part:
+### [CONCERN] "A claim whose recorded process has died" doesn't say how death is detected, and a retake leaves an orphaned answering run
 
-- **Foreign keys:** `question_records` has foreign keys to `nodes`, `command_journal` and `blocked_states` (`store/schema/013_question_records.sql:15-23`).
-- **Launch path:** `launch_answering` needs a `TickBudget`, a `LaunchTracker`, the supervisor directory and a journal entry.
-- **Sources:** `assemble_sources` needs a slice node with a CF index and an initiative parent, plus a CF snapshot row (`sources.py:94-127`).
-- **Polling:** `stage.py` finishes answering runs by polling them across ticks.
+Step 3 records "the checkout and the process". A bare pid is unsafe because of pid reuse. Liveness needs pid plus process start time, or a lease with a heartbeat. The document also says "the first recorded answer wins", but when `handle_pause` dies, nothing is left to collect its answering run's output. That child's answer is never recorded. The retake doesn't race it, it just spends twice and throws the first result away.
 
-For a run Amoeba didn't launch, none of those nodes exist. The document never says how `handle_pause` gets the slice and initiative for a foreign run, or what happens for a run with no slice. Today `locate_sources` treats a missing slice plan as a decline (`source_reads.py:222-226`), so every non-slice pipeline would go to the PM.
+Either record the answering run's own run id at claim time, so a retake can read that run's result (or wait for it) before starting a second, or state plainly that a retake always spends again. This is the same gap the first review raised (F003), narrowed but not closed.
 
-This is the core of scenario A. The architecture should define the new question record's identity (run, checkpoint, member) and how slice context is derived, not leave it to the audit.
+### [NOTE] The frontmatter depends on documents this design says it replaces
 
-### [CONCERN] "Member from the working directory" has no defined mapping, and it breaks for worktrees and cwd-less agents
+`dependencies: [100-arch…, 120-arch…, 140-arch…]`, but Related Work (line 194) says this document replaces `100-arch`, `120-arch` and `180-arch` for new work. Only `140-arch` (the answering pipeline that is kept) is a real dependency. Listing replaced documents as dependencies points readers and tooling at the wrong context.
 
-`program_members` stores only `project_id`, with no path. Today's readability code resolves checkouts through `cf_links` and `latest_cf_snapshots` (`program/members.py:108-121`), which are the kind of mirrored tables the "read, don't mirror" principle removes. The document doesn't say what identifies a member from a directory: the CF project id, a git remote, or a registered path.
+### [NOTE] Some details of the MCP and store mechanics are unstated
 
-Three cases need an answer:
+- **MCP library:** `pyproject.toml` has no MCP library. Line 174 leaves fitting the synchronous store into the MCP library's async model to slice design. That's acceptable for a per-session stdio server, but the first MCP slice should name the library. It should also say whether short operations run in a worker thread, to satisfy the Python rule against blocking work in async code.
+- **Store location:** "one store at a fixed per-user location, with no flags" (line 148) still needs an override for tests, at least an environment variable read in one config place, so test runs never touch the real store.
 
-- **Worktrees:** the PM's Squadron has several checkouts (`squadron-240`, `squadron-bug` and others). They must all resolve to one member, yet each has its own run lock (`run_lock.py:5-6`).
-- **MCP sessions:** the server's working directory is wherever the session started, and the chat agent has no repo at all. "A caller passes no paths or ids" can't hold for `status`, `decisions` or `answer`, so these need explicit program or member arguments.
-- **`answer` from another session:** resume only works from the checkout, so the checkout must be recorded at claim time. It isn't in the store contents at line 39, though it could be recorded for question runs without mirroring run state.
+### [NOTE] Smaller things left undefined
 
-### [CONCERN] One user-level config can't hold per-repo answer settings
+These are spread across the operations table, Technical Considerations and the question record, so they have no single location.
 
-The settings listed are models, cost cap, answer limit and notify command. `AnswererSettings` also has `rules_paths`, `reserved_terms`, `passages_max_chars` and `max_concurrent_runs` (`runner/project_config.py:67-97`). `rules_paths` is relative to a repo and fails hard when an entry matches no file (`source_reads.py:196-199`), so a single user-wide value would decline every question in a repo laid out differently. Reserved terms are also likely to differ per program.
+- **Answer limit:** it's unclear whether PM answers count toward the per-run limit.
+- **PM marker:** it's unclear whether the PM's `decisions` marker is kept per program or globally.
+- **Prompt-only runs:** the document says these "are outside `handle_pause`" (line 175) without saying how `handle_pause` recognizes them if they still produce paused run files that fire the hook.
 
-Either pick a convention that needs no per-repo value, or put per-member settings in the program record. Also say whether `max_concurrent_runs` survives, because with nothing resident there is no scheduler to enforce it, and simultaneous pauses all start answering runs at once.
+Each is one sentence to settle in slice design.
 
-The per-repo rules and PM precedent also raise a scoping question for the single store. `pm_precedent` reads by `project_id` today, and the document doesn't say whether precedent stays per member or spans a program.
+### [NOTE] Per-member authorization settings could wait
 
-### [CONCERN] The PM's reply path is undefined when the agent told is headless
-
-Decision 5 defers only whether a headless session can reach the PM's phone. The harder part is the way back. A headless session sends a push and exits, so "the PM's reply comes back through `answer`" (line 109) has no receiver and no session holding the question id. The concept's "you answer from wherever you are" is what scenario A promises, and the chat app that could do it isn't finished.
-
-The first proof needs a stated path, even if it is only "the PM opens any agent session, which reads `status` and calls `answer`". That path should be written down as the accepted limit.
-
-Also specify how the question reaches the command. It is untrusted model output, so it must go as an argument or file with no shell interpretation. "Fails" also needs a definition: is that only a non-zero exit, and is there a timeout?
-
-### [CONCERN] Scenario B's steps don't fit a command step, and the provider's report has no content source
-
-Several parts of decisions 3 and 4 don't work out as written:
-
-- **Pick up or stop:** the scenario needs a judgment, but a command step can only pass or fail. Is `changes` non-zero when anything has changed, or only on error? If it fails on any change, every slice stops. If it never does, "stop with a reason" never happens. A later dispatch would have to make that decision, and the pipeline needs a way to act on it.
-- **Report content:** "what changed and what that touched" is meaningful text, but the report is a CLI call in a deterministic step. Line 96 describes output flowing from a command to a dispatch, not from an earlier dispatch into the command. `ecorkran/squadron#304` needs to specify both directions.
-- **`mark_read`:** no pipeline step is allotted to it. Decision 4 lists one report step and one ask step. If it runs at slice start, a change is lost when the slice is abandoned. If it runs at the end, a second worktree running in parallel sees the same change, because the cursor is per member and not per checkout.
-- **Duplicate reports:** resuming a pipeline re-runs a failed step, and a merge report plus a release skill can cover the same commit. `report_release` needs an idempotency key, probably member plus commit.
-- **Report timing:** "the end of a provider's pipeline" must come after the merge. Otherwise a failed merge leaves a report for code that never landed. The project's merge happens in Phase 7, outside the implementation steps.
-- **Adoption cost:** the design relies on "each repo adds its report once". Pipelines have no extension mechanism: lookup is first match wins, and you copy a built-in file to change it (`PIPELINES.md:897-899`). Each member would carry a forked copy of each built-in pipeline it uses, and those drift from Squadron's versions. This is a larger cost than line 132 implies, and worth raising on #304.
-
-### [CONCERN] "Since the PM last looked" has no owner
-
-Scenario C and the morning list need "what was answered since the PM last looked". `decisions` takes "a given point", but the caller is an agent session with no memory of the last look, and the store contents at line 39 include no such marker. Either add a per-reader marker, like `mark_read`, or accept a time window and say so. As written, every new session has to guess a point.
-
-### [CONCERN] The slice order leaves the first proof without its own recovery path and morning list
-
-The operations table marks `decisions` as part of scenario A, and the concept says the PM sees "a short list of what was decided". The failure handling also depends on `status`: missed hooks, escalation reasons, and answered-but-not-resumed. But the anticipated slices put `status` and `decisions` in the later "MCP and status" slice for scenario C. So the first proof has no way to see a missed hook or read the record.
-
-Move CLI versions of `status` and `decisions` into pause handling, and leave MCP for later. Note that the missed-hook part of `status` needs `ecorkran/squadron#303`, not just #302, because run files live in a shared per-user directory with no working directory (`state.py:334-335`). That makes #303 a requirement for A's recovery path, even though line 122 lists it as C and catching up.
-
-### [CONCERN] Blocking operations over MCP aren't addressed
-
-"One operation, two doors" treats all operations as equal, but `handle_pause` runs an LLM pipeline for minutes, and possibly a resume after that. "An agent catching up" would call it through MCP, where a long tool call risks client timeouts. The store is also synchronous SQLite, while the project's Python rules forbid synchronous work over 1ms inside async functions, so an async MCP SDK needs an executor or subprocess. The document names no MCP library.
-
-Either make `handle_pause` over MCP start a detached CLI process and return, or remove it from MCP and have the agent run the CLI. Both are a difference between the doors, so line 40 needs to allow for it.
-
-### [CONCERN] An interactive run gets taken over without the person knowing
-
-"Works on any Squadron run" means a PM watching `sq run` at a terminal also has their question answered and the run resumed in a detached process they can't see. That run is then non-interactive, so a later interactive checkpoint exits and pauses instead of prompting (`PIPELINES.md:390`). A scripted caller that handles paused exit codes itself also collides with this (see the checkpoint finding).
-
-Decide whether `handle_pause` applies to runs with a terminal attached, or whether the hook gets a per-run opt-out. This is one flag in #302 if settled now, and a change to the hook contract later.
-
-### [CONCERN] The hook's timing and process contract aren't specified
-
-Line 75 says Squadron starts the command and doesn't wait. #302 should also pin down:
-
-- **Timing:** the hook must fire after the run state is saved and, ideally, after the run lock is released, since the lock fails at once with no waiting (`run_lock.py:8`). A fast repeat answer could otherwise lose to the exiting parent.
-- **Isolation:** the child must be in its own session, so that closing the terminal doesn't kill an answering run in progress.
-- **Answering runs:** the answering run is itself a Squadron run that can pause. Its hook is ignored only because its scratch directory is in no program, which is implicit and worth stating. `handle_pause` must treat a paused answering run as a failure.
-
-### [NOTE] The program record still carries the removed requests model
-
-`program_members.requests_initiative` is `NOT NULL` and exists for requests, which decision 6 removes. `consumed` is stored per provider with a separate `consumption_overrides` table (`program_schema/001_program_record.sql:33-50`). With dependency pairs now declared, `consumed` belongs on the pair and the overrides table can go. The new baseline schema is the time to do this, so "kept and reworked" should say so. Also, a from-source consumer of a repo that reports only at releases sees no merge-level changes, which should be stated.
-
-### [NOTE] Proportionality is sound, but `mark_read` might not need to be separate
-
-The design cuts heavily, and I found nothing large to remove. If the pipeline finding above resolves into a single step, `changes --mark-read` could replace one of the eight operations.
+Apart from the screen issue above, the design is proportionate. The one piece no scenario needs yet is letting each member loosen or tighten what answers may authorize. The user-level default list covers scenario A's first proof. Per-member overrides can be added when a repo actually needs "yes, merge it".
 
 ### Run Digest
 
-- Response length: 17293 chars
+- Response length: 10537 chars
 - Response is newline-free: no
-- Tool calls made: 30
+- Tool calls made: 10
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -261,13 +174,13 @@ The design cuts heavily, and I found nothing large to remove. If the pipeline fi
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 31
-- Tokens — prompt / cached / cache write / completion / reasoning: 804662 / 656665 / 147981 / 19007 / not computed
-- Duration: 190.4 s
-- Cost: $1.70 (provider)
+- Turns: 11
+- Tokens — prompt / cached / cache write / completion / reasoning: 690784 / 587653 / 103115 / 11757 / not computed
+- Duration: 132.7 s
+- Cost: $1.18 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 16
+- Finding-shaped matches — whole response: 10
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 16
-- Finding-shaped matches — surviving validation: 16
+- Finding-shaped matches — in findings section: 10
+- Finding-shaped matches — surviving validation: 10
