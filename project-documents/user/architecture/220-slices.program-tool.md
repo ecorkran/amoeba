@@ -8,8 +8,8 @@ component: program-tool
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, a live trial of scenario A, the MCP server, and program dependencies (scenario B, built only if scenario A passes its test).
 dateCreated: 20261107
-dateUpdated: 20261107
-status: not_started
+dateUpdated: 20261108
+status: in_progress
 ---
 
 # Slice Plan: Program Tool
@@ -30,7 +30,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 
 ## Foundation Work
 
-1. [ ] **(220) Code Audit** — A document, `user/analysis/220-analysis.code-audit.md`, that sorts every module in `src` and its tests into keep, keep and rework, move to Squadron (filed as a Squadron issue), or delete, each judged against scenarios A to C. It names what the kept answering code depends on that is being deleted (nodes, journal entries, blocked states, the tick loop) and what replaces each. It decides whether slice 182's branch is merged, partly reused or redone, and confirms that 180's slice-writing pipeline goes. No code changes.
+1. [x] **(220) Code Audit** — A document, `user/analysis/220-analysis.code-audit.md`, that sorts every module in `src` and its tests into keep, keep and rework, move to Squadron (filed as a Squadron issue), or delete, each judged against scenarios A to C. It names what the kept answering code depends on that is being deleted (nodes, journal entries, blocked states, the tick loop) and what replaces each. It decides whether slice 182's branch is merged, partly reused or redone, and confirms that 180's slice-writing pipeline goes. No code changes.
    **Value:** Architectural enablement. The cut works from a list, and the size of the rework is known before the store is designed.
    **Success Criteria:**
    - Every package under `src` and every test directory has a verdict and a one-line reason tied to a scenario or to nothing.
