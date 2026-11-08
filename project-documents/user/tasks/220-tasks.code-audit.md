@@ -11,7 +11,7 @@ projectState: Slices up to 182 are partly merged to main; the 182 branch (`182-s
   `user/analysis/` does not exist yet.
 dateCreated: 20261107
 dateUpdated: 20261108
-status: not_started
+status: in_progress
 turns: 10
 promptTokens: 291955
 cachedTokens: 259908
@@ -40,21 +40,21 @@ Commits are at `**Commit**:` markers only. Task files are updated by the `task-c
 
 ## 0. Setup
 
-- [ ] **0.1 Create the branch**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
-  - [ ] Confirm the working tree is clean and you are on the target
-  - [ ] `git checkout -b 220-slice.code-audit {target}`
-  - [ ] Success: `git branch --show-current` prints `220-slice.code-audit`
+- [x] **0.1 Create the branch**
+  - [x] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
+  - [x] Confirm the working tree is clean and you are on the target
+  - [x] `git checkout -b 220-slice.code-audit {target}`
+  - [x] Success: `git branch --show-current` prints `220-slice.code-audit`
 
-- [ ] **0.2 Read the inputs**
-  - [ ] Read `user/slices/220-slice.code-audit.md` and `user/architecture/220-arch.program-tool.md` (scenarios A, B, C, set-up; the Current State table)
-  - [ ] Read `user/architecture/220-slices.program-tool.md` for the 221 to 224 scope lines
-  - [ ] Read `file-naming-conventions.md` for the `analysis` frontmatter
-  - [ ] Success: you can state each scenario in one sentence each
+- [x] **0.2 Read the inputs**
+  - [x] Read `user/slices/220-slice.code-audit.md` and `user/architecture/220-arch.program-tool.md` (scenarios A, B, C, set-up; the Current State table)
+  - [x] Read `user/architecture/220-slices.program-tool.md` for the 221 to 224 scope lines
+  - [x] Read `file-naming-conventions.md` for the `analysis` frontmatter
+  - [x] Success: you can state each scenario in one sentence each
 
-- [ ] **0.3 Create the audit skeleton**
-  - [ ] Create `user/analysis/220-analysis.code-audit.md` with `analysis` frontmatter (`topic: code-audit`, status `in_progress`) and the seven section headings, each with a placeholder line
-  - [ ] Success: file has seven headings in the order listed above
+- [x] **0.3 Create the audit skeleton**
+  - [x] Create `user/analysis/220-analysis.code-audit.md` with `analysis` frontmatter (`topic: code-audit`, status `in_progress`) and the seven section headings, each with a placeholder line
+  - [x] Success: file has seven headings in the order listed above
 
 **Commit**: `docs: add code audit skeleton`
 
