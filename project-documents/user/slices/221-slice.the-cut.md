@@ -10,7 +10,7 @@ interfaces:
 - 223-slice.pause-handling
 dateCreated: 20261107
 dateUpdated: 20261108
-status: not_started
+status: complete
 ---
 
 # Slice Design: The Cut
@@ -187,3 +187,17 @@ No new behavior. Where a sever changes a signature, the function's tests move to
 
 - **Smaller wins.** A kept test or helper in doubt, with no scenario behind it, goes. Git history keeps it.
 - **Don't fix while cutting.** A bug in kept code is filed as an issue under the Fixes rule, so the diff is only moves, severs and deletes.
+
+## Verification Walkthrough
+
+Run from the repository root on branch `221-slice.the-cut`, after the slice's commits. Observed 20261108.
+
+1. **The tree is two packages.** `ls src/amoeba` prints `__init__.py`, `answering`, `upstream` (and a `__pycache__` after any run). `find src -name '*.sql'` prints nothing. `find src -name '*.py' | xargs wc -l | tail -1` is about 2,800 lines (it was about 34,000); the same count for `tests` is about 6,500 (it was about 69,000).
+2. **The checks pass.** `uv run ruff format --check .` ends `108 files already formatted`. `uv run ruff check .` prints `All checks passed!`. `uv run pyright` ends `0 errors, 0 warnings, 0 informations`. `uv run pytest -q` ends `544 passed`.
+3. **The library stands alone.** `uv run pytest tests/answering tests/upstream -q` ends `423 passed`, with no store, tick or resident process. `tests/test_import_boundaries.py` passes: `amoeba.upstream` imports nothing from `amoeba.answering`.
+4. **Nothing names a deleted package.** `git grep -nE "amoeba\.(runner|process|store|program|serve|inbox|feed|cli|inspection)" -- src tests scripts README.md` prints two lines, both prose quoted in the frozen fixture `tests/answering/fixtures/sources/project-documents/user/tasks/132-tasks.pipeline-supervisor.md`; no code matches.
+5. **The wheel is right.** `uv build --wheel --out-dir <scratch>` builds `amoeba-0.1.0-py3-none-any.whl`. `unzip -l` on it lists `amoeba/answering/answering.yaml`, no `.sql` file and no `entry_points.txt`. `pyproject.toml` has no `[project.scripts]`, no `starlette`, `uvicorn` or `httpx2`, and one wheel artifact, `src/amoeba/answering/answering.yaml`. `tests/answering/test_wheel_contents.py` asserts all of this.
+6. **The live tier passes.** With `sq` and `cf` on `PATH`, a provider key in the shell and `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL` and `AMOEBA_LIVE_MAX_COST_USD` set, `uv run pytest tests/live/answering -q` ends `7 passed` (about 75 seconds, real spend). The files present are `harness.py`, `question_tails.py`, `test_pipeline_run.py`, `test_precedence.py` and the fixture; `stage_harness.py` and `test_answering_run.py` are gone, and the audit's Live tests table names their claims and restore commit `ed6041a`.
+7. **The audit is the record.** Every row changed during the cut says "Changed from `rework` in 221" with a reason, and the audit's "Verdicts changed while cutting (slice 221, D1)" section lists the rest.
+
+Caveats: the checks do not pass after the leaf deletions alone (the importers go in the same step), so sections 1 and 2 of the tasks are one commit. `amoeba#32` closes at merge in Phase 7.

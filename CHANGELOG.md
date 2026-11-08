@@ -148,6 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Slice 221: Amoeba is a library. The answering pipeline and its pure parts moved to `amoeba.answering`, and the `sq`, `cf` and `git` readers to `amoeba.upstream`, severed from nodes, the journal, blocked states and the tick. `AnswererSettings` has no `max_concurrent_runs`; `assemble_sources` takes the checkout, slice reference and PM precedent as values.
+- Slice 221: the README says what Amoeba is now and what exists; the `pyproject.toml` description matches it.
 - Slice 132: **behavior change.** A resolution's decision is `resume` (optional `instructions`, passed verbatim) or `stop`. `resume` resumes the slice's run, or relaunches the slice when there is no run to resume. The intent body loses `until`; a body that carries it is `malformed_body`.
 - Slice 132: **behavior change.** The pre-dispatch check is git only: a fresh launch must be on the target and clean, a resume on the target or the slice's own branch (the tree is not checked). The same rule applies to every pipeline, and the check reads only `git.integration_branch` from Context Forge.
 - Slice 132: a held or blocked slice with a `paused`, `failed` or `orphaned` run keeps its checkout until the PM acts (the hold widened from `paused`).
@@ -171,6 +173,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Slice 221: the supervisor and everything it ran: the tick, nodes, journal, blocked states, host and lock, the inbox, feed, HTTP server and inspection views, the `amoeba` command and its entry point, review and verdict code, the old store and its 15 migrations, the slice-writing pipeline, `tests/load`, the demo and walkthrough scripts and the old contract docs. About 34,000 lines of source and 69,000 of tests came down to about 2,800 and 6,500.
+- Slice 221: the `starlette`, `uvicorn` and `httpx2` dependencies, the CI load-test step, and the live tests that wait on slice 223 (`stage_harness.py`, `test_answering_run.py`; restore from `ed6041a`).
 - Slice 132: the routing engine: `--routing-table`, the setting `routing_table_path`, the shipped table, `amoeba inspect routing-decisions`, the run time bounds and the `run_overrun` escalation. The store keeps the routing-decision, table-version and attempt-count tables, `awaits_routing` and `drive_until_step`, unwritten by the Runner.
 - Slice 132: the resolution decisions `retry`, `accept`, `handled` and `rerun` (rejected `unknown_decision`), and the rejection codes `not_at_loop`, `usage_limit_pause`, `checkpoint_unknown`, `interactive_checkpoint` and `decision_not_applicable`.
 - Slice 132: the `merge_policy` key of the project config (an entry with any key beside `pipeline` and `params` fails to load), the `-p merge=false` launch parameter, and merge observation. A pipeline that merges is a pipeline that merges.

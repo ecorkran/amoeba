@@ -44,7 +44,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 
 ## Migration / Refactoring Slices
 
-2. [ ] **(221) The Cut** — Delete what the audit rejects: the resident host and its lock and recovery, the tick loop, launch and dispatch, the HTTP server, the inbox, the change feed, the old CLI and inspection views, the old store and its migrations, and their tests. What stays is a library: the answering pipeline file, passage assembly, decision logic, the answer screen and the upstream readers, each with its tests passing on its own. The README drops the old pitch and says what Amoeba is now. Old slice documents keep their files.
+2. [x] **(221) The Cut** — Delete what the audit rejects: the resident host and its lock and recovery, the tick loop, launch and dispatch, the HTTP server, the inbox, the change feed, the old CLI and inspection views, the old store and its migrations, and their tests. What stays is a library: the answering pipeline file, passage assembly, decision logic, the answer screen and the upstream readers, each with its tests passing on its own. The README drops the old pitch and says what Amoeba is now. Old slice documents keep their files.
    **Note (220 audit):** `upstream/` is mostly delete (only the Context Forge plan parsers are kept, reworked). The `sq` launch, poll and resume code that stays lives in `process/` and `runner/`, and some helpers must move before their packages go. The audit's Verdicts and Dependencies sections are the delete list.
    **Value:** Architectural value. The code shrinks to what the scenarios use, and everything after is written against a small base.
    **Success Criteria:**
