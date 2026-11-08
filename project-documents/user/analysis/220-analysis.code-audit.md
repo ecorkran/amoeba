@@ -163,15 +163,108 @@ The code that starts, polls and resumes `sq` runs lives here and in `process/`, 
 
 ### `tests/`
 
-TODO: section 3.
+Rule (D1, D2): tests follow the code they exercise. A test of deleted code is `delete`. A test of kept code is `rework` only if its claim holds without nodes, journal entries, blocked states or the tick, otherwise `delete` and the slice that rebuilds that code writes new ones (222 for the store, 223 for pause handling, 224 for the CLI and status). Verdicts here come from each file's imports and test names; most files were not read in full. "Keep" means it works unchanged once the source deletions are made.
+
+Test directories named `runner`, `store`, `process` and `live` are importable top-level packages, and some kept tests import helpers from them. A deleted directory's helpers must go in the same commit as their importers, and every kept directory keeps its `__init__.py`.
+
+**Top-level files in `tests/`**
+
+| Path | Verdict | Reason |
+|---|---|---|
+| `conftest.py` | rework | Set-up, A: keep `pytest_sessionstart` (orphan reaping), `store_file`, `store`, `supervisor_dir`. Drop the fixtures that import `inbox_harness` and `serve_harness`. |
+| `answerer_settings.py` | rework | A: builder for the answering settings; follows the 222 config move. |
+| `ast_strings.py`, `cf_stub_gates.py`, `test_cf_stub_gates.py` | keep | A: generic AST helper for "spelled once" tests; the `cf config get` stub for `read_target` and its self-test. |
+| `cf_stub.py` | rework | A: keep `cf config get`, `cf list initiatives` and `cf list slices`; drop the `cf status --json` probe parts. |
+| `sq_stub.py`, `sq_stub_scripts.py`, `test_sq_stub_run.py` | rework | A, 223 base: the fake `sq` (run, runs wait, validate) and its self-test. Drop the review scripts (they import `review_fixtures`), `runs prune`, and any `--timeout 0` assumption. |
+| `sq_stub_resume.py`, `test_sq_stub_resume.py` | keep | A, 223 base: the fake `sq run --resume` and its self-test. |
+| `process_containment.py`, `test_process_containment.py` | keep | Test hygiene for every scenario: file-size cap and orphan reaping for child processes. |
+| `fault_injection.py` | rework | Set-up, A: fails one SQL statement to prove rollback; 222 and 223 atomicity tests need it. |
+| `cli_harness.py` | rework | All scenarios: keep `run_cli` and `cli_environment` for 224; drop the start, stop, serve and submit drivers. |
+| `test_observer_sq_outcome.py`, `test_observer_sq_outcome_fields.py` | rework | A, 223 base: tests of the one `sq runs wait --json` reader. The exact-argv test changes with the timeout; drop the review tests. |
+| `test_process_public_api.py`, `test_public_api.py` | rework | Set-up, A: export-hygiene tests hold; the expected export lists are rewritten for the new surface. |
+| `test_migrations.py` | rework | Set-up: stamp, newer-than-code, corrupt-file, failed-migration and no-op claims hold for the baseline. Drop the 002 and 003 upgrade tests. |
+| `test_paths.py`, `test_read_only_open.py`, `test_failure_modes.py` | rework | Set-up: store location, env override, read-only open, busy timeout and WAL claims. Replace node and journal rows with question or program rows. |
+| `test_store_safety.py` | rework | Set-up: guard that no test touches the central store; it builds its forbidden names from `paths.store_path`, which goes. |
+| `test_import_boundaries.py` | rework | Set-up: keep the store, cli and runner layering rules; drop the feed, serve, inspection and run-pruning rules. It already fails on deleted names. |
+| `live_environment.py`, `live_harness.py`, `live_settings.py` | keep | A: the live tier's helpers; they import only kept units. See Live tests. |
+| `test_store.py`, `test_queries.py`, `test_models.py`, `test_journal.py`, `test_journal_models.py`, `test_create_node_guard.py`, `test_writer_guard.py`, `legacy_nodes.py`, `routing_helpers.py`, `sq_run_fixtures.py` | delete | Nodes, blocked states, the journal and their guards and seed helpers. |
+| `test_host.py`, `test_host_program_store.py`, `test_instance_lock.py`, `host_harness.py`, `local_host_harness.py` | delete | The resident host and instance lock. |
+| `test_recovery.py`, `test_recovery_sq_answer.py`, `test_observer_sq_run_id.py`, `test_observer_sq_runs.py`, `test_observer_cf_readback.py`, `test_version_label.py` | delete | Journal recovery, the observers and the version label. |
+| `test_cli_inspect.py`, `test_cli_lifecycle.py`, `test_settings_flags.py` | delete | Deleted CLI commands; 224 writes new. |
+| `test_demo_evidence_payloads.py`, `detection_e2e_harness.py`, `detection_harness.py`, `evidence_harness.py`, `review_fixtures.py` | delete | Review evidence and detection. |
+| `cf_fixture.py`, `cf_harness.py`, `cf_watch_harness.py` | delete | The `projects.json` fixture, snapshots and the resident watcher. |
+| `feed_harness.py`, `inbox_harness.py`, `ingest_e2e_harness.py`, `inspection_harness.py`, `serve_harness.py`, `program_harness.py` | delete | Rigs for the feed, inbox, ingest, inspection, server and old program submissions. |
+| `question_harness.py` | delete | Seeds question records through nodes and journal entries. 222 and 223 need their own seeding helper; seeding any state through the store's SQL constants is worth copying. |
+| `test_answerer_walkthrough_script.py`, `live_request_settings.py` | delete | Tests the old walkthrough script setup (`amoeba start`, `projects.yaml`); the slice-writing live tier's settings. |
+
+**Directories**
+
+| Path | Verdict | Reason |
+|---|---|---|
+| `tests/live/` | see Live tests | Per-file verdicts for `answering/` are in the Live tests section. `live/request_run/` is deleted (D5, in the runner table above). `live/conftest.py` stays with the live tier. |
+| `tests/load/` (14 files) | delete | Resident-host and tick load, server load, crash loops and inbox concurrency. |
+| `tests/contract/` | delete | The slice 110 proof harness: start, submit, journal recovery and the public-API rule over inbox, feed and inspection. |
+| `tests/feed/`, `tests/inbox/`, `tests/inspection/`, `tests/serve/` | delete | Tests of deleted source packages. |
+| `tests/cli/` (15 files) | delete | They exercise submit, ingest, feed, serve, inbox, evidence, judge and watch commands; 224 writes new CLI tests. |
+| `tests/process/` (21 files) | delete | cf watch, inbox tenants, project stores, prune, review detection, tenant order, log limit. |
+| `tests/program/test_read_member.py` | delete | Member readability through cf links, snapshots and per-project store files. 224 writes new if readability stays. |
+| `tests/upstream/test_cf_plan.py` | rework | A: `parse_initiatives` and `parse_slice_list` over the fixtures; drop the plan-status tests. |
+| `tests/upstream/test_import_direction.py` | rework | Set-up: keep "store does not import upstream"; drop the inbox and process rows. |
+| `tests/upstream/context_forge/` (5 files), `test_field_names_defined_once.py`, `test_review_*.py` (7 files) | delete | Tests of the deleted watcher units and the review parser. |
+| `tests/store/test_migration_004.py` to `test_migration_015.py` | delete | No data to migrate; 222 writes one baseline. |
+| `tests/store/` question and answer group: `test_question_records`, `_question_answering_fields`, `_question_record_catch`, `_question_acknowledgment`, `_answering_evidence`, `_answer_submission`, `_begin_answering`, `_resolutions` | delete | All seeded through `question_harness` (nodes, journal entries, blocked states, resolution slot, inbox submission). 222 and 223 write new ones for the new states and the per-run answer count. |
+| `tests/store/` program group: `test_program_apply_member`, `_apply_program`, `_reject_program`, `_program_schema`, `_program_store_open` | delete | Submissions, overrides, `requests_initiative` and the separate program file; 222 writes new for B. |
+| `tests/store/` node, routing, inbox, feed, cf, check, verdict and evidence groups (`test_terminal_done`, `_read_transaction`, `test_routing_*`, `_unrouted_outcomes`, `_desired_state`, `_messages`, `_runner_report`, `_project_escalation`, `_attribution`, `_inbox_*`, `_feed_*`, `_mapping_feed`, `_cf_snapshots`, `_link_cf_project`, `_watch_reviews`, `_review_sources`, `_detections`, `_record_detected_verdict`, `_checks`, `_check_*`, `_evidence_models`, `_finding_*`, `_verdict*`, `_calibration`, `_judge_samples`, `_provider_failure_problem`) | delete | Tests of deleted store units. |
+| `tests/runner/answering/`: `test_read_answer.py`, `test_read_check.py`, `test_pipeline_yaml.py`, `test_wheel_contents.py`, `test_question_tails_fixture.py`, `fixtures/sources/`, `expected_passages.md` | keep | A: parsing of the answer and check files, the shipped pipeline file, captured question tails (which read the live fixture file), and the passage fixtures. `test_pipeline_yaml.py` changes only when the authorize-list claim is settled. |
+| `tests/runner/answering/`: `test_passages.py`, `test_inputs_render.py`, `test_prepare_scratch.py`, `test_decide.py`, `test_stub_answering.py`, `test_source_reads.py`, `sources_repo.py` | rework | A: passage cutting, question rendering, scratch preparation, the six-check decision, the stub run, git reads at the target commit. Each changes for a reason named in the src rows: `node_id` to a slice value, blank-slice flip, hook opt-out, `RunSummary.of` inputs, no `TickBudget`. |
+| `tests/runner/answering/`: `test_sources.py`, `test_walkthrough_fixture.py`, `sources_assembly.py`, `fixtures/expected_end_to_end.md`, `test_launch_prepare.py`, `test_launch_answering.py`, `launch_rig.py`, `test_finish_answering.py`, `test_settle.py`, `test_stage_observe.py`, `test_stage_pending.py`, `test_stage_stranded.py` | delete | Assembly over node trees and snapshots, launching through nodes, journal and the tracker, settling keyed on journal entries, and the deleted `settle.py` and `stage.py`. 223 writes new for each claim. |
+| `tests/runner/answering/test_live_tier_rules.py` | keep | A: checks `live_settings` and the question tails; follows `tests/live`. |
+| `tests/runner/`: `test_answer_gate.py`, `test_git_read.py`, `test_git_read_only_place.py`, `test_launch.py`, `test_launch_ids.py`, `test_launch_logs.py`, `test_cf_commands_defined_once.py`, `test_cf_stub_plan.py` | rework | A, 223 base: the screen, git reads, launch argv and run ids, launch logs, the Context Forge command scan and stub plan reads. Drop the budget, journal-entry, tracker, porcelain-status and log-by-entry-id tests. |
+| `tests/runner/test_cf_call.py`, `git_repo.py`, `purity.py`, `__init__.py` | keep | A: `run_cf`; real temp git repos; the "no I/O" check; the package marker. |
+| `tests/runner/observe_support.py` | rework | A: kept tests import `Clock`, `Host` and `FakeCf` from it, but it also imports `TickBudget`, `RunObserver`, `LaunchTracker` and journal types. Split the generic fakes out. |
+| `tests/runner/dispatch/test_checkout_target.py` | rework | A: `read_config` and `read_target`. Drop the budget test; its `main` default is the magic default flagged above. |
+| `tests/runner/resolutions/test_argv.py` | keep | A, 223 base: `resume_argv`. |
+| `tests/runner/resolutions/test_confirm.py` | rework | A, 223 base: the `resume_progress` table; drop the `resumed_from_entry` tests. |
+| `tests/runner/test_live_environment.py`, `test_watch_run.py` | keep | A: tests of the live helpers that sit outside `tests/live`; follow `tests/live`. |
+| `tests/runner/` the tick, crash and plumbing group (`test_tick*`, `test_tenant*`, `test_crash_*`, `test_decide.py`, `test_budget*`, `test_factory`, `test_faults`, `test_finish`, `test_observe_*`, `test_supervise`, `test_sq_answer_readers`, `test_end_to_end*`, `test_project_config.py`, `test_probes*.py`; helpers `tick_support`, `plan_tick_support`, `crash_*`, `gate_rig`, `conftest.py`) | delete | The tick loop, journal and node plumbing, the per-project config file model (222 writes new for the answering settings), and the probes. `conftest.py` only installs `passing_checks` from `tick_support`. |
+| `tests/runner/dispatch/` (everything else), `resolutions/` (everything else), `ingest/`, `intent/`, `lifecycle/`, `program/`, `request_run/` | delete | Tests of deleted runner subpackages (see the runner table). |
+| `tests/fixtures/answering/` | keep | A: the `answer.json` and `check.json` captures. |
+| `tests/fixtures/sq_outcomes/` | rework | A: keep the paused and failed captures; drop the review captures. |
+| `tests/fixtures/cf/` | rework | A: keep `list_initiatives_a.json`, `list_slices_*.json` and `config/`; delete `projects.json` and `cf_get_amoeba.json`. |
+| `tests/fixtures/git/`, `slice_writing/`, `sq_reviews/`, `sq_runs/` | delete | Porcelain-status captures, slice-writing replies, the review parser's captures, the legacy run-file matcher's captures. |
+| `tests/fixtures/README.md` | rework | Trim to the kept fixture sets. |
+
+Helpers kept tests need that sit in deleted areas, which 221 must split out before deleting: `observe_support.py` (generic fakes), `tests/conftest.py` (imports `inbox_harness` and `serve_harness`), `sq_stub_scripts.py` (imports `review_fixtures`), `sources_repo.py` (imports `runner.budget`), and `test_question_tails_fixture.py` (reads a file under `tests/live/answering/fixtures/`).
 
 ### `scripts/` and `docs/`
 
-TODO: section 3.
+| Path | Verdict | Reason |
+|---|---|---|
+| `scripts/answerer_walkthrough.py` | rework | Scenario A: the manual proof on a real run. Keep the scratch git checkout, throwaway Context Forge project (`cf init`, `cf set`, `cf get --json`) and `.env` copy; drop the `amoeba start`, store directory and `projects.yaml` set-up. |
+| `scripts/answerer_walkthrough/project/` (six fixture files) | rework | Scenario A: the project content the walkthrough's passages come from. Used by `test_walkthrough_fixture.py` (deleted); 223 rebuilds a passage-assembly test on it. |
+| `scripts/demo_detection.py` | delete | Seeds nodes and takes the resident instance lock. |
+| `scripts/demo_evidence.py`, `scripts/demo_evidence/` (three JSON files and a README) | delete | Seeds a node for verdict submission walkthroughs. |
+| `scripts/demo_inbox.py` | delete | Seeds a human-blocked node. |
+| `docs/answerer-walkthrough.md` | rework | Scenario A walkthrough, but its steps (`amoeba start`, journal entries, inspect, nodes) describe the old design; rewrite to `handle_pause`, `answer` and `status`. |
+| `docs/context-forge-contract.md` | delete | The `projects.json` watch, snapshots, plan reads and the runner's use of Context Forge. |
+| `docs/evidence-contract.md` | delete | Verdicts, findings, judge samples and calibration. |
+| `docs/feed-contract.md`, `docs/inbox-contract.md`, `docs/network-contract.md` | delete | The change feed, the inbox and messages, the HTTP server. |
+| `docs/process-contract.md` | delete | The resident process, tenants, recovery and the old CLI. |
+| `docs/store-contract.md` | delete | The old store (nodes, journal, blocked states); 222 documents the new one. |
+| `docs/substrate-guide.md` | delete | An index to initiatives 120, 140 and 160 and the old contracts. |
 
 ### Packaged resources
 
-TODO: section 3.
+| Resource | Verdict | Reason |
+|---|---|---|
+| `pyproject.toml` `[project.scripts] amoeba = "amoeba.cli.main:main"` | keep | The one console entry point for every scenario; the `main` it names is reworked. |
+| `pyproject.toml` artifact `store/schema/*.sql` (15 migrations) | delete | No data to migrate; 222 adds a baseline and updates this entry. |
+| `pyproject.toml` artifact `store/program_schema/*.sql` | delete | Holds `requests_initiative`, `consumption_overrides` and `program_submissions`; the 222 baseline replaces it. |
+| `pyproject.toml` artifact `runner/answering/answering.yaml` | keep | Scenario A answering pipeline (the file itself is a rework row above; the packaging entry stays). |
+| `pyproject.toml` artifact `runner/request_run/slice_writing.yaml` | delete | D5: no scenario calls the slice-writing pipeline. |
+| `pyproject.toml` dependencies `starlette`, `uvicorn`, dev `httpx2` | delete | Imported only by `serve/`, `cli/serve.py` and the server tests. `pydantic` and `pyyaml` stay until 222 and 223 show whether the kept code still needs them (the answering settings and `plan.py` use pydantic; `project_config.py` is the only YAML reader). |
+| `pyproject.toml` `description`, pytest `addopts` | rework | The description ("Orchestration runner...") is stale. Drop `--ignore=tests/load` with the load tests; keep `--ignore=tests/live`. `.github/workflows/ci.yml` also has a "Load tests" step to remove. |
+| Other packaged files | none | No non-Python file under `src/` other than the 16 SQL files and the two YAML files. |
 
 ## Dependencies of kept code
 

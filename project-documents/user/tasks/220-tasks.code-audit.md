@@ -119,23 +119,23 @@ Commits are at `**Commit**:` markers only. Task files are updated by the `task-c
 
 ## 3. Tests, Scripts, Docs and Packaged Resources
 
-- [ ] **3.1 Audit `tests/` directories and top-level files**
-  - [ ] Cover each directory (`cli`, `contract`, `feed`, `fixtures`, `inbox`, `inspection`, `live`, `load`, `process`, `program`, `runner`, `serve`, `store`, `upstream`) and each top-level `test_*.py` and harness file
-  - [ ] For `live`, add one row pointing to the Live tests section; per-file verdicts under `tests/live/answering/` are written only in 5.1
-  - [ ] A test of deleted code is `delete`; a test of kept code is `rework` only if its claim holds without nodes, journal entries or the tick, otherwise `delete` and note 223 writes new ones
-  - [ ] Add rows to Verdicts
+- [x] **3.1 Audit `tests/` directories and top-level files**
+  - [x] Cover each directory (`cli`, `contract`, `feed`, `fixtures`, `inbox`, `inspection`, `live`, `load`, `process`, `program`, `runner`, `serve`, `store`, `upstream`) and each top-level `test_*.py` and harness file
+  - [x] For `live`, add one row pointing to the Live tests section; per-file verdicts under `tests/live/answering/` are written only in 5.1
+  - [x] A test of deleted code is `delete`; a test of kept code is `rework` only if its claim holds without nodes, journal entries or the tick, otherwise `delete` and note 223 writes new ones
+  - [x] Add rows to Verdicts
 
-- [ ] **3.2 Audit `scripts/` and `docs/`**
-  - [ ] One row per script and per doc file (`docs/*.md` and `scripts/*`), with reason
-  - [ ] Add rows to Verdicts
+- [x] **3.2 Audit `scripts/` and `docs/`**
+  - [x] One row per script and per doc file (`docs/*.md` and `scripts/*`), with reason
+  - [x] Add rows to Verdicts
 
-- [ ] **3.3 Audit packaged resources**
-  - [ ] Confirm rows exist for `answering.yaml` (1.1) and `slice_writing.yaml` (2.2); add rows for the schema directories and the console entry point (read `pyproject.toml`)
-  - [ ] Add rows to Verdicts
+- [x] **3.3 Audit packaged resources**
+  - [x] Confirm rows exist for `answering.yaml` (1.1) and `slice_writing.yaml` (2.2); add rows for the schema directories and the console entry point (read `pyproject.toml`)
+  - [x] Add rows to Verdicts
 
-- [ ] **3.4 Coverage check by hand**
-  - [ ] List every directory under `src/amoeba` and `tests`, plus `scripts/` and `docs/`; confirm each is covered by a row
-  - [ ] Add rows for anything missed
+- [x] **3.4 Coverage check by hand**
+  - [x] List every directory under `src/amoeba` and `tests`, plus `scripts/` and `docs/`; confirm each is covered by a row
+  - [x] Add rows for anything missed
 
 **Commit**: `docs: audit tests, scripts, docs and resources verdicts`
 
