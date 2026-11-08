@@ -41,7 +41,8 @@ Effort: 3/5.
 
 - **Slice 223:** question and answer rows and their reads, `handle_pause`, `answer`, `run_file.read_run_facts`, `poll_run` and its checkpoint parser, `answering_dir()`, `answering_wait_seconds`, and the `deps` bundle.
 - **Slice 222:** the store, config, `resolve_member`, `project_of`, `run_cf`, and the exit-code constants and typed errors.
-- **`ecorkran/squadron#303`** (open on 20261107): see D1.
+- **`ecorkran/squadron#303`:** shipped in `sq` 0.24.24 (checked 20261108); see D1.
+- **The slice 220 audit** (`user/analysis/220-analysis.code-audit.md`): read its Verdicts rows for `inspection/`, `program/` and `cli/`, its Dependencies rows for `program/members.py`, `cli/main.py` and `process/sq_outcome.py`, and its Differences from the architecture. "Audit items" below settles what lands on this slice. `inspection/` is deleted whole; `inspection/questions.py` is only a column reference, so every `status` and `decisions` query here is new, written on the new store.
 - **Context Forge 0.19.26:** `cf list projects --json` prints `{id, name, projectPath?, fileSlice, isActive}`. `projectPath` is missing on some entries.
 
 ## Components
@@ -72,10 +73,11 @@ Imports stay `cli → operations → store, config, upstream`. No subprocess run
 ### D1 — Reading runs: `sq runs list --json`, built to #303's proposed shape
 
 - `run_list.list_runs(run) -> list[ListedRun] | RunListProblem`. A `ListedRun` holds `run_id`, `pipeline`, `status`, `working_directory` (absolute path or `None`) and `checkpoint` (`kind`, `paused_at`, `question`, or `None`), parsed by `poll_run`'s checkpoint parser so `paused_at` matches what 223 stores. An unknown status is kept as a raw string. No other module runs `sq runs list`.
-- Called without `--all`, relying on the default to list every running and paused run. The fixture task records an older paused run and one from another directory. If the default leaves either out, `run_list.py` passes `--all` and drops completed runs itself. A run absent from the listing has finished or is gone.
+- Called without `--all`, relying on the default to list every running and paused run. Observed 20261108 on `sq` 0.24.24: the default lists running, paused and failed runs and omits only completed ones, and every paused run that `--all` lists is also in the default. The fixture task still records an older paused run and one from another directory; if the default leaves either out, `run_list.py` passes `--all` and drops completed runs itself. A run absent from the listing has finished or is gone.
+- `--json` prints the documents on stdout. `sq` may also print a warning on stderr (for example that some runs reference unavailable pipelines); that is not an error, and `list_runs` parses stdout only. The listing's `checkpoint` carries more fields than `ListedRun` keeps (`step`, `verdict`, `review_file`, …); the rest are ignored.
 - **Time bound.** `sq` runs with the timeout `deps` passes to `poll_run`. `cf` calls go through `run_cf` with its existing timeout. `project_of` calls run one after another, so a whole `status` call takes at most the `sq` timeout, plus one `cf` timeout for names, plus one `cf` timeout per distinct run directory. An `sq` or names timeout is exit 3. A `project_of` timeout is a `lookup_failed` run (D4).
 - A non-zero exit, non-JSON output or a missing field is a `RunListProblem` quoting the output head, raised as `SquadronError` (exit 3). The message says `status` needs Squadron with #303.
-- **Waits on #303.** Code and tests are written now against #303's proposed fields (run id, pipeline, status, working directory, the `sq runs wait --json` checkpoint, `null` directory for older run files), using a fake `sq`. The slice is not complete until #303 lands, its real output is recorded in `tests/fixtures/squadron/runs_list/`, and the parser passes on it. Different landed names change only `run_list.py` and its fixtures. If #303 has not landed by that task, it gets a `BLOCKED:` line.
+- **#303 has landed** (`sq` 0.24.24). Fixtures are recorded from real `sq runs list --json` output in `tests/fixtures/squadron/runs_list/`. Only if the installed `sq` lacks `runs list --json` does the slice fall back to hand-built stand-ins in #303's proposed shape (run id, pipeline, status, working directory, the `sq runs wait --json` checkpoint, `null` directory for older run files) with a fake `sq`; the slice is then not complete until real output is recorded and the parser passes on it. Different landed names change only `run_list.py` and its fixtures.
 
 ### D2 — Scope of `status`
 
@@ -113,7 +115,7 @@ There is one PM, so "what is waiting on me" covers every program, and an MCP ses
 
 **Runs**, by `working_directory`:
 
-- `None` (pre-#303 run file): `unplaced_runs`, reason `no_directory`.
+- `None` (run started before `sq` 0.24.24): `unplaced_runs`, reason `no_directory`, for a `paused` run only. Any other status with no directory is not listed (see Audit items).
 - Directory missing (removed worktree): `unplaced_runs`, reason `directory_missing`. Checked before any `cf` call.
 - Under `answering_dir()` (223 D12): not listed, no `cf` call. Scratch directories are never pruned, so without this skip each would cost a `cf` call.
 - `project_of` gives `CFProjectNotFound`, or a project in no program in scope: not listed.
@@ -176,7 +178,7 @@ programs:
         waiting_on_pm:
           - {run_id, paused_at, question, slice_label, waiting_reason, waiting_detail, since,
              run_state, next}
-unplaced_runs: [{run_id, status, reason}]
+unplaced_runs: [{run_id, status, reason, checkpoint_kind}]   # paused runs only; kind from the checkpoint
 ```
 
 - Missed hooks and unresumed answers have no lists of their own; the `pause` class identifies them. For `answered_unresumed`, `detail` gives the resume outcome and reason.
@@ -200,6 +202,18 @@ Python entry points:
 - **Real output** in `tests/fixtures/`: `cf list projects --json` from CF 0.19.26, with an entry lacking `projectPath`. After #303: `sq runs list --json` with a running run, a paused agent question, a paused run of another kind, a `null`-directory run, and D1's older and other-directory paused runs.
 - **Unit tests** with fake `sq` and `cf`, as in 222 and 223: every `PauseClass` and D3's cross-check; D4's placement rules, including two worktrees on one member, `lookup_failed` with the rest shown, the scratch-directory skip, and each `run_state`; D2's three scopes; D5's starting points, narrowing and null `read_through` cases; D7's outcomes and concurrent calls; the `waiting_reason` pin; D9.
 - 223's tests pass unchanged.
+
+## Audit items
+
+What the slice 220 audit (`user/analysis/220-analysis.code-audit.md`) leaves to this slice, and how it is settled.
+
+- **Member readability: `status` does not report it.** The old `program/members.py` (readable or unreadable, with five reasons that all depend on deleted snapshots, links and per-project stores) is not reworked. `src/amoeba/program/` is deleted whole; if 221 left any of it, this slice deletes it. A member is a Context Forge project id (222), so there is nothing to read per member. What can fail is shown where it happens: a run's directory that cannot be placed is in `unplaced_runs` (`directory_missing`, `lookup_failed`), and an unreadable run file is `run_file_unreadable` (D3).
+- **A member has no single checkout.** All worktrees of a repo are one member (222), so `status` shows no member checkout. Each run carries its own `working_directory`, and each `next` carries that run's directory. `questions.checkout` is a record of where a pause ran (D9), never a current location.
+- **Matching a run to a member and detecting prompt-only runs.** `sq runs list --json` gives only `run_id`, `pipeline`, `status`, `working_directory` and `checkpoint` (checked 20261108 on `sq` 0.24.24); it has no run parameters and no `execution_mode`. Matching works with those fields: `working_directory`, then `project_of` (D4). `execution_mode` comes from 223's `run_file.read_run_facts`, read only for a placed paused `agent_question` run with no question row (D3). Run parameters are not needed here. Missing: a run with a `null` working directory cannot be placed, so a missed hook on a run from before `sq` 0.24.24 is never shown as `unhandled`. Real listing on the PM's machine: 84 runs, 83 with a `null` directory, and 1 paused `agent_question` run among them.
+- **`unplaced_runs` lists paused runs only, with the checkpoint kind.** The same listing has 38 running and 18 failed runs with no directory; listing them would bury what the PM must act on, and none can be a missed hook. A paused run with no directory is listed with its `checkpoint_kind`, so an unplaced `agent_question` is visible. The reasons are unchanged.
+- **CLI shapes and exit codes.** 223 D13 defines the `handle_pause` and `answer` shapes and the exit-code meanings (`0` result, `1` rejected, `2` usage, `3` operational, with the same error types); D8 gives the same table for the three read-side commands and takes 222's constants. One difference: `handle_pause` exits `0` for every outcome, while `status` and `decisions` exit `1` only when `rejected`. If 223's table changes, D8's follows it.
+- **Question states and resume fields.** The reads use 222 and 223's names: `questions.state` is `claimed`, `answered` or `waiting_on_pm`; `answers.resume_outcome` is `resumed`, `refused` or `not_delivered`; `waiting_reason`, `waiting_detail`, `slice_label`, `passages`, `evidence`, `cited`, `resume_detail` and `resume_at` come from 222's baseline and 223's migration `002` (223 D10). The tasks read the real column names in the migrations first and use those over the design's.
+- **Module homes.** Per 221, the `sq runs wait` reader is `upstream/squadron/run_outcome.py` (`poll_run`, checkpoint kinds, formerly `process/sq_outcome.py`) and the `cf` runner is `upstream/context_forge/cli_call.py` (`run_cf`, `CfCallFailed`). `run_list.py` sits beside the first, reuses its checkpoint parser and its `sq` executable constant, and imports nothing from `process/`.
 
 ## Provides to Other Slices
 

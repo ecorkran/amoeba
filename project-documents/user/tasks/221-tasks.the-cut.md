@@ -65,7 +65,8 @@ Delete units no kept unit depends on. A file that imports one of them is edited 
 
 - [ ] **1.1 Delete `serve/`, `inbox/`, `feed/` and `inspection/`**
   - [ ] `git rm -r` `src/amoeba/serve`, `inbox`, `feed` and `inspection`, and their tests
-  - [ ] Success: none of the four directories or their test directories remains
+  - [ ] Delete the rigs the audit marks `delete` for these packages (`feed_harness.py`, `inbox_harness.py`, `ingest_e2e_harness.py`, `inspection_harness.py`, `serve_harness.py`, `program_harness.py`), and drop the fixtures in `tests/conftest.py` that import them; keep the rest of that file for now (task 2.14 trims it to `reap_orphans`) (design, Audit items)
+  - [ ] Success: none of the four directories or their test directories remains; `tests/conftest.py` imports no deleted rig
 
 - [ ] **1.2 Delete `cli/`**
   - [ ] `git rm -r src/amoeba/cli` and its tests
@@ -79,7 +80,8 @@ Delete units no kept unit depends on. A file that imports one of them is edited 
 
 - [ ] **1.4 Delete `tests/load/`**
   - [ ] `git rm -r tests/load`; remove `--ignore=tests/load` from pytest `addopts` (D7, D8)
-  - [ ] Success: `addopts` is `["--ignore=tests/live"]`; `tests/load` is gone
+  - [ ] Remove the "Load tests" step from `.github/workflows/ci.yml`, and the header comments that describe a separate load tier (design, Audit items)
+  - [ ] Success: `addopts` is `["--ignore=tests/live"]`; `tests/load` is gone; `ci.yml` has no `tests/load` reference
 
 - [ ] **1.5 Delete the audit's `delete` scripts and docs**
   - [ ] Delete each file under `scripts/` and `docs/` whose audit verdict is `delete`; leave every `keep` or `rework` file
@@ -100,6 +102,7 @@ Checks run once, at task 2.21; do not re-point old code to keep it compiling. Ta
   - [ ] Delete each `rework` unit whose behavior only works with a later replacement (question record, `sq` launch, store submit), with its tests, at its old path; D2 lists the predicted units, the audit decides
   - [ ] For a unit with a kept half, keep that half where the audit's `rework` reason says; if it names no destination, place it in `src/amoeba/answering/` (D3)
   - [ ] For each deleted unit, change its audit row to `delete` and add a line to Differences from the architecture with the reason; note it here (D1)
+  - [ ] Before deleting a file, relocate what kept code imports from it (the helpers listed in 2.8); do not delete a unit whose name is in the design's "Names the live tier needs" list, and keep the audit's kept halves (e.g. the scratch-preparation half of `answering/launch.py`, the kept half of `runner/launch.py`) even where D2 predicted a whole-file delete (audit wins, D1)
   - [ ] Success: no stub or placeholder remains for launch, stage, settle or submit
 
 - [ ] **2.2 Move the answering library and its tests**
@@ -117,15 +120,17 @@ Checks run once, at task 2.21; do not re-point old code to keep it compiling. Ta
 - [ ] **2.4 Create `answering/settings.py` (D5)**
   - [ ] Move `AnswererSettings` from `runner/project_config.py`, keeping its no-defaults rule
   - [ ] Drop `max_concurrent_runs`, and any field only it read
+  - [ ] Move `validate_repo_relative_path` (from `store/paths.py`; `RulesPath` uses it) with `GLOB_WILDCARD` handled per 2.3, so `answering/settings.py` imports nothing from `amoeba.store`; 222 imports it from there
   - [ ] Move its tests to `tests/answering/`, keeping assertions that still apply
   - [ ] Success: `AnswererSettings` has no default values and no `max_concurrent_runs`
 
 - [ ] **2.5 Move the upstream readers (D3, D4)**
-  - [ ] Context Forge: `git mv src/amoeba/runner/cf_call.py src/amoeba/upstream/context_forge/cli_call.py`; move `CFSnapshot` into `upstream/context_forge/`; keep the existing exports of its `__init__.py`
-  - [ ] Squadron: `git mv src/amoeba/process/sq_outcome.py src/amoeba/upstream/squadron/run_outcome.py`; move `RunEnded`, `RunVanished` and `LaunchFailed` from `runner/observed.py` into it (`decide` imports them from there); add `upstream/squadron/__init__.py` re-exporting nothing if absent
-  - [ ] `git mv` `runner/budget.py` and `runner/git_read.py` to `src/amoeba/upstream/`, if the audit keeps them
+  - [ ] Context Forge: `git mv src/amoeba/runner/cf_call.py src/amoeba/upstream/context_forge/cli_call.py`; keep `upstream/context_forge/plan.py` (rework: drop the plan-status and `reported_complete` helpers); do not move `CFSnapshot` (dropped, D4); the audit deletes `checkout.py`, `projects_file.py`, `diff.py`, `slice_stem.py` and `__init__.py` of that package, so create an empty `__init__.py` (audit wins, D1)
+  - [ ] Squadron: `git mv src/amoeba/process/sq_outcome.py src/amoeba/upstream/squadron/run_outcome.py` (drop `RunReview` and `reviews`); move the `observed.py` values `RunEnded`, `RunVanished`, `LaunchFailed`, `ResumeFailed` and `Finished` into it as plain values (`decide` imports them from there); add `upstream/squadron/__init__.py` re-exporting nothing if absent
+  - [ ] Other `sq` and `cf` survivors go to their homes in the design's Audit items (`squadron/launch.py`, `squadron/resume_argv.py`, `squadron/resume_confirm.py`, `squadron/faults.py`, `context_forge/target_read.py`, `bounded_text.py`); each keeps only the audit's kept names, with the drops the design lists
+  - [ ] `git mv` `runner/git_read.py` to `src/amoeba/upstream/git_read.py` and drop its `TickBudget` parameter and the porcelain-status helpers the audit deletes; `runner/budget.py` is `delete` and is not moved
   - [ ] Move the tests of all of the above to `tests/upstream/`; update imports elsewhere
-  - [ ] Success: each of these exists only under `upstream/`; `poll_run` and the three run types live in `run_outcome.py`
+  - [ ] Success: each of these exists only under `upstream/`; `poll_run`, `SQ_EXECUTABLE` and the five run values live in `run_outcome.py`; no `CFSnapshot` exists
 
 - [ ] **2.6 Sever: values passed in (D2 "Parameter")**
   - [ ] For each Dependencies of kept code entry marked "value passed in", make the value a parameter (e.g. `assemble_sources` takes a slice reference and a tuple of `PmAnswer`, not a `Store` and a `Node`)
@@ -139,7 +144,11 @@ Checks run once, at task 2.21; do not re-point old code to keep it compiling. Ta
 
 - [ ] **2.8 Sever: helpers moved (D2 "Move")**
   - [ ] Move each small helper taken from a deleted module next to its only kept user, or into `upstream/` if two kept modules use it
-  - [ ] Success: no kept module imports a deleted module
+  - [ ] Relocate, before the deleting tasks (2.10 to 2.13), what kept code imports from modules that go: `cut_to_bound` (`ingest/outcome.py`), `STDERR_TAIL_LIMIT_BYTES` (`runner/launch.py`), `QuestionInvariantError` (`settle.py`; next to its kept importer, or dropped if its only importer is a deleted unit), `LaunchFailure` and `ResumeFailure` (`faults.py`), `Finished` values (`observed.py`), `SQ_EXECUTABLE`, and `read_config`, `read_target` and the `cf_argv` pieces (`checkout_reads.py`, `plan_read.py`), to the homes in the design's Audit items
+  - [ ] `BEGIN_IMMEDIATE` and `decode_mapping`/`decode_timestamp` need no move: the whole store goes and 222 creates them; confirm no kept module imports them
+  - [ ] `DEFAULT_TARGET_BRANCH`: move it unchanged with `read_target`, defined once; add no behavior (223 task 4.6 keeps it as the single named constant, with tests)
+  - [ ] Split the test helpers before deleting their owners: `tests/runner/observe_support.py` (keep `Clock`, `Host`, `FakeCf`; drop `TickBudget`, `RunObserver`, `LaunchTracker`, journal types), `tests/sq_stub_scripts.py` (drop the review scripts, `runs prune` and any `--timeout 0` assumption), `tests/runner/answering/sources_repo.py` (drop `runner.budget`); kept tests import the split result
+  - [ ] Success: no kept module or kept test helper imports a deleted module
 
 - [ ] **2.9 Check coupling and layering**
   - [ ] Search kept code and `answering.yaml` for schema column names, YAML references to deleted files, and anything started by the tick; note any found and fixed here
@@ -159,13 +168,16 @@ Checks run once, at task 2.21; do not re-point old code to keep it compiling. Ta
   - [ ] Success: `src/amoeba/store` does not exist; no `.sql` file remains under `src`
 
 - [ ] **2.13 Delete the remaining `delete` and `squadron` rows**
-  - [ ] Delete the upstream review parsers and any other audit `delete` or `squadron` path still present, with their tests
+  - [ ] Delete what the audit marks `delete` under `upstream/`: `context_forge/{checkout, projects_file, diff, slice_stem}.py` and `squadron/review*.py`, with their tests; only `plan.py`, `cli_call.py`, `target_read.py` and the 2.5 `squadron/` modules stay
+  - [ ] Delete any other audit `delete` or `squadron` path still present, with its tests
   - [ ] Success: every path the audit marks `delete` or `squadron` is gone; `src/amoeba` holds only `__init__.py`, `answering` and `upstream` (plus anything the audit kept under another name)
 
 - [ ] **2.14 Rework or delete the remaining tests (D8)**
   - [ ] Handle only tests not already moved or re-signatured in 2.2 to 2.8: keep one only if its claim holds without nodes, journal entries, blocked states or a tick, building its inputs directly; otherwise delete it (223 or 224 writes the replacement)
   - [ ] Remove any fixture with old-shape fields (`node_id`, journal ids); a test or helper in doubt with no scenario behind it goes
-  - [ ] Success: no test or fixture mentions nodes, journal entries, blocked states or a tick
+  - [ ] Trim `tests/conftest.py` to `pytest_sessionstart` (orphan reaping, `reap_orphans`): remove `store_file`, `store`, `supervisor_dir` and anything else that imports the deleted store or process packages
+  - [ ] Keep `tests/test_store_safety.py` (audit: `rework`): replace its `amoeba.store.paths` import with the same names as string literals (`store_dir`, `store_path`, `DEFAULT_STORE_DIR`, `DEFAULT_SQ_RUNS_DIR`, `DEFAULT_CF_DATA_DIR`); the scan and the exemptions are unchanged
+  - [ ] Success: no test or fixture mentions nodes, journal entries, blocked states or a tick; `test_store_safety.py` imports nothing from `amoeba.store`
 
 - [ ] **2.15 Rewrite the import-boundaries test (D6)**
   - [ ] Rewrite `tests/test_import_boundaries.py` to enforce one rule: `amoeba.upstream` imports nothing from `amoeba.answering`; remove every rule about deleted packages
@@ -187,12 +199,15 @@ Checks run once, at task 2.21; do not re-point old code to keep it compiling. Ta
 
 - [ ] **2.19 Update the `stays` live tests**
   - [ ] For each file under `tests/live/answering` that the audit's Live tests section marks `stays`, update imports to the new paths and signatures
+  - [ ] Keep the names the live tier imports (design, "Names the live tier needs": `SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`, `mint_run_id`, `prepare_scratch`, `OUTPUT_HEAD_CHARS`) with unchanged signatures; only the module paths in the files that import them (`live_harness.py`, `harness.py` and the `stays` tests) change (`amoeba.process` becomes `amoeba.upstream.squadron.run_outcome` and `launch`)
   - [ ] Success: each such file is present and imports nothing deleted
 
 - [ ] **2.20 Delete the `waits on 223` live tests (D8)**
   - [ ] For each file marked `waits on 223`, confirm its Live tests entry names the scenario A claim and the restore commit (the `main` commit this branch forked from); if either is missing, add it to the audit in this commit
-  - [ ] `git rm` the file, and any file the audit marks `delete`
-  - [ ] Success: every deleted `waits on 223` file has its claim and restore commit recorded in the audit
+  - [ ] `git rm` the file, and any file the audit marks `delete`, which includes `tests/live/answering/test_sdk_refusal.py`
+  - [ ] Remove `SDK_MODEL_VARIABLE` (`AMOEBA_LIVE_SDK_MODEL`) from `tests/live_settings.py`, and any remaining reference to it (`git grep SDK_MODEL_VARIABLE`; the `request_run` copy of `test_live_tier_rules.py` went in 1.3, and the kept `answering` copy must not name it)
+  - [ ] Confirm the audit's Live tests notes say a restore brings back only the two `waits on 223` files (`launch_rig.py`, `question_harness.py` and the old `observe_support.py` are deleted or split); add the note in this commit if missing
+  - [ ] Success: every deleted `waits on 223` file has its claim and restore commit recorded in the audit; no `SDK_MODEL_VARIABLE` reference remains
 
 - [ ] **2.21 Verify the cut**
   - [ ] Run the checks once and read the output

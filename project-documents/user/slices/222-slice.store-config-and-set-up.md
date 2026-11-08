@@ -49,6 +49,8 @@ src/amoeba/
 ├── store/
 │   ├── store.py         # Store.open(), transactions, typed errors
 │   ├── migrations.py    # numbered SQL files, schema_meta version check
+│   ├── sql.py           # statement constants, BEGIN_IMMEDIATE defined once
+│   ├── row_values.py    # decode_mapping, decode_timestamp, typed column reads
 │   ├── schema/001_baseline.sql
 │   ├── vocabulary.py    # ConsumedMode, QuestionState, ResumeOutcome
 │   ├── programs.py      # program, member, settings and pair reads and upserts
@@ -227,6 +229,15 @@ The CLI is the process boundary and the one top-level handler for these errors.
 ### D11 — Fixtures from real Context Forge output
 
 `tests/fixtures/context_forge/` holds CF 0.19.26's `cf get --json` output from a default worktree, a non-default worktree of the same project, a subdirectory of a checkout (same `id` as the root on 20261107), and the `PROJECT_NOT_FOUND` document. The `project_of` parser is tested on them.
+
+### Audit items (220 code audit)
+
+`user/analysis/220-analysis.code-audit.md` ("Dependencies of kept code" and "Differences from the architecture") raised items that land on this slice. Those already settled above: the concept columns and the optional concept (D3, D7); the per-member authorize lists and their relation to `reserved_terms` (D3 `members`, D8: both come from the same config items, so they are one source and two derived values); the resume outcome (`answers.resume_outcome`, D3; the resume log path is a column 223 adds in its `002`); the fresh-store race (D4, tested by task 8.8); `XDG_CONFIG_HOME` (D1: not consulted); the answering run id and checkout on the claim (`questions.answering_run_id`, `checkout`, D3); the slice label on the question record (223's `002` adds `questions.slice_label`). The rest:
+
+- **Scratch directory.** No column. An answering run's scratch directory is derived as `answering_dir() / <answering_run_id>` (223 D6 and D12), so a later explicit call reads `answer.json` and `check.json` from the claim's `answering_run_id` alone. This slice adds no path column; `docs/store-contract.md` states the derivation so nobody adds a second source of truth. The answering run's log paths are derived from the same id (223 D6).
+- **Opting a member in or out of answering.** Program membership is the only switch. There is no `answering_enabled` column and no equivalent of the old `answerer:` section. A repo is opted in by being a program member and having the pause hook configured; it is opted out by not being registered, or by leaving the hook unconfigured. A pause from a directory that is not a member is skipped by `handle_pause` (223), which is why `resolve_member` returns `NotInProgram`. A second switch would be a second place for the two to disagree. `docs/store-contract.md` records this.
+- **Store helpers re-homed from the old store.** 221 deletes `src/amoeba/store` whole and moves none of the helpers the audit lists, so this slice creates them: `BEGIN_IMMEDIATE` is defined once in `store/sql.py` and used by `Store.write()` and `migrate()`; `decode_mapping` and `decode_timestamp` live in `store/row_values.py` for the program mapping now and the question mapping in 223. The old versions (`sql_inbox.py`, `mapping_journal.py`, `row_values.py`, `connection.py` in the commit 221 branched from) may be restored and adapted; no other old store module is.
+- **Test seeding helper.** The old `question_harness.py` (seeding through nodes and journal entries) is gone. This slice adds `tests/store/seed.py`, which inserts programs, members, pairs, questions and answers through the store's `sql.py` constants, taking each column value as an argument with no default, so 223 and 224 seed any state without going through the operation under test. `tests/fault_injection.py` (fail one named SQL statement to prove a rollback) is rewritten for the new `Store` and used by this slice's atomicity tests and by 223's.
 
 ## API Contracts
 

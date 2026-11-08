@@ -112,7 +112,8 @@ usageByModel:
   - [ ] `store/store.py`: `BUSY_TIMEOUT_SECONDS = 5.0` defined once; typed errors `StoreError` and subclasses `StoreBusyError`, `StorePermissionError`, `StoreCorruptError`, `StoreSchemaError`
   - [ ] `Store.open(path, *, busy_timeout_seconds=BUSY_TIMEOUT_SECONDS)` creates the parent directory, sets the busy timeout at connect, `journal_mode=WAL`, `foreign_keys=ON`, then migrates; `Store.write()` yields a `BEGIN IMMEDIATE` transaction and `Store.read()` a `BEGIN` one, each committing or rolling back on exit
   - [ ] A busy timeout raises `StoreBusyError` naming the path and timeout; each other open failure maps to its typed error. No lock file, pid file or read-only mode
-  - [ ] Success: opening a path in a missing directory creates it and the store
+  - [ ] `store/sql.py` defines the `BEGIN IMMEDIATE` statement once (`BEGIN_IMMEDIATE`) and the statement constants; `Store.write()` and `migrate()` both use it. `store/row_values.py` holds `decode_mapping`, `decode_timestamp` and the typed column reads. Slice 221 deleted the old store and moved none of these, so write them here; the old `sql_inbox.py`, `mapping_journal.py`, `row_values.py` and `connection.py` in the commit 221 branched from may be restored and adapted
+  - [ ] Success: opening a path in a missing directory creates it and the store; `git grep -n "BEGIN IMMEDIATE" src` finds the statement text in one place only
 
 - [ ] **3.5 Store tests**
   - [ ] `tests/store/test_store.py`: open creates the store; reopen applies nothing; a store stamped higher raises `StoreSchemaError` and its bytes are unchanged; a held write transaction in a second connection with `busy_timeout_seconds=0.2` gives `StoreBusyError`; an unwritable directory gives `StorePermissionError`; a non-database file gives `StoreCorruptError`; a failed `write()` block rolls back
@@ -122,6 +123,12 @@ usageByModel:
 - [ ] **3.6 Vocabulary pinning test**
   - [ ] `tests/store/test_vocabulary_pinning.py`: for each `CHECK` list in `001_baseline.sql` (`consumed`, `state`, `answered_by`, `resume_outcome`), parse the list from the SQL text and assert it equals the values of the matching enum
   - [ ] Success: test passes; adding a value to an enum alone makes it fail (verify once, then revert)
+
+- [ ] **3.7 Store test helpers (design, Audit items)**
+  - [ ] `tests/store/seed.py`: functions that insert a program, member, dependency pair, question and answer row through the `store/sql.py` constants, inside a given `Store.write()` transaction; every column value is an argument, none has a default. Used by this slice's store tests and left for 223 and 224 to seed any state
+  - [ ] Rewrite `tests/fault_injection.py` for the new `Store` (fail one named SQL statement in a transaction with a chosen exception); if slice 221 deleted it, restore it from the commit 221 branched from and adapt it. It has no node-specific helper
+  - [ ] Add to `tests/store/test_store.py`: with a fault injected on the second insert of a `Store.write()` block that first inserted a program, no program row remains
+  - [ ] Success: the seed helper builds a program with a member, a pair, a `claimed` question and an `answerer` answer, and a read-back matches (programs, members and pairs through `store/programs.py`; question and answer rows by `SELECT`); the fault-injection test passes
 
 **Commit**: `feat: add SQLite store with baseline schema and migrations`
 
@@ -270,7 +277,8 @@ usageByModel:
 
 - [ ] **11.1 Store contract doc**
   - [ ] Replace the content of `docs/store-contract.md` (the old per-project store contract is obsolete after slice 221; if 221 already removed it, create it) with the D3 description: each table and column, its vocabulary, and which slice writes it; the migration rule (no edits to `001`, later migrations `ALTER TABLE … ADD COLUMN` only); the home and `AMOEBA_HOME` rule; frontmatter per `file-naming-conventions.md`
-  - [ ] Success: every table and column in `001_baseline.sql` appears in the doc
+  - [ ] State two derivations the schema deliberately has no column for (design, Audit items): an answering run's scratch directory is `answering_dir() / <answering_run_id>` (223 D6, D12), so `questions.answering_run_id` is its only record; and answering has no per-member switch, since program membership is the opt-in (no `answering_enabled` column, no `answerer:` section equivalent)
+  - [ ] Success: every table and column in `001_baseline.sql` appears in the doc, and the doc states both derivations
 
 - [ ] **11.2 Contract match test**
   - [ ] `tests/test_contract_docs.py`: assert every table and column name in `001_baseline.sql` (read from `PRAGMA table_info` on a fresh store) appears in `docs/store-contract.md`, and every `UserConfig` field name appears in `docs/config-contract.md`

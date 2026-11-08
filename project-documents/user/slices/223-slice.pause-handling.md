@@ -31,7 +31,8 @@ Scenario A through the CLI: `amoeba handle_pause <run_id>` (run in the paused ru
   - `sq run --resume <id> --instructions <text>` resumes and adds the text to every dispatch.
   - `sq run --run-id <id>` creates a run under a given id.
   - The run file `~/.config/squadron/runs/<run_id>.json` (`schema_version` 5) holds `params` and `execution_mode` (`sdk` or `prompt-only`). Neither is in `sq runs wait --json`.
-- **External, not blocking the build:** `ecorkran/squadron#299` (until it lands, the config names non-Claude models for the answer and check steps). `ecorkran/squadron#302` (the pause command and its opt-out; a hand call works without it).
+  - Rechecked 20261108 on `sq` 0.24.24 (the audit's finding): the run file is still `schema_version` 5 with `params` and `execution_mode`. `sq run` has `--pause-hook` / `--no-pause-hook` (default on). `sq runs list --json` gives `run_id`, `pipeline`, `status`, `working_directory` and `checkpoint`, with no `params` or `execution_mode`, so D2 stands.
+- **Squadron issues, all closed and in 0.24.24:** `ecorkran/squadron#299` (tool-less steps on Claude models; the live tests need 0.24.24 or later), `#302` (the pause command and its opt-out, `--no-pause-hook`), `#303` (the run's working directory in `sq runs list --json`).
 
 ## Architecture
 
@@ -45,7 +46,7 @@ src/amoeba/
 │   ├── answering_run.py    # scratch, start, wait, settle (decide + gate)
 │   ├── resume.py           # shared resume
 │   ├── answer.py           # PM answer, then resume
-│   └── processes.py        # spawn_detached(argv, cwd, logs); stderr_tail
+│   └── processes.py        # start_child(argv, cwd, logs) wraps the kept spawn; terminate_group
 ├── store/
 │   ├── questions.py        # question/answer reads and compare-and-set writes
 │   └── schema/002_pause_handling.sql
@@ -57,7 +58,7 @@ src/amoeba/
 └── cli/main.py             # + handle_pause, answer
 ```
 
-Imports stay `cli → operations → store, config, upstream, answering`. `processes.py` imports nothing from Amoeba. `run_file.py` imports nothing from `answering`.
+Imports stay `cli → operations → store, config, upstream, answering`. `processes.py` imports only the kept `upstream.squadron.launch` (`spawn`, `LaunchLogs`, `LaunchError`). `run_file.py` imports nothing from `answering`.
 
 ### Data Flow
 
@@ -86,7 +87,7 @@ Imports stay `cli → operations → store, config, upstream, answering`. `proce
 
 ### D2 — The run file reader
 
-`run_file.read_run_facts(runs_dir, run_id) -> RunFacts | RunFileProblem`. Checks `schema_version` is 5. Returns `params` (str to str) and `execution_mode` as `ExecutionMode`. A missing file, other version, bad JSON, missing field or unknown mode is a `RunFileProblem` naming file and field; the caller raises `SquadronError` and never falls back to `sdk`. `runs_dir` is passed in. Squadron prints neither field in JSON, so this coupling lives in one module behind a version check. One task comments on `ecorkran/squadron#303` asking for both fields in `sq runs wait --json`.
+`run_file.read_run_facts(runs_dir, run_id) -> RunFacts | RunFileProblem`. Checks `schema_version` is 5. Returns `params` (str to str) and `execution_mode` as `ExecutionMode`. A missing file, other version, bad JSON, missing field or unknown mode is a `RunFileProblem` naming file and field; the caller raises `SquadronError` and never falls back to `sdk`. `runs_dir` is passed in. Squadron prints neither field in JSON, so this coupling lives in one module behind a version check. One task comments on `ecorkran/squadron#303` (closed; it shipped only the working directory) asking for both fields in `sq runs wait --json`, or opens a new issue citing it if a comment is not possible.
 
 ### D3 — What `handle_pause` leaves alone
 
@@ -138,10 +139,11 @@ A Squadron or `cf` failure is an operational error (exit 3), not a skip: "can't 
 
 ### D6 — The answering run
 
-- **Id and scratch.** Id is `amoeba-<UTC stamp>-<12 hex>` (the deleted `mint_run_id`, restored in `answering_run.py`). Before the claim, `answering_dir() / <id>` is created exclusively and filled by `prepare_scratch`, including the not-authorized file (D11). An `OSError` inserts the row as `waiting_on_pm` with `answering_launch_failed`.
-- **Command.** `sq run <answering.yaml> <answer_model> --run-id <id> -p check-model=<check_model>`. No pause opt-out flag, because #302 hasn't defined one. If the answering run pauses and the hook fires, it is skipped as `answering_run` (D3), since the claim already holds its id. Adding #302's flag is deferred to 225 (amoeba#35).
+- **Id and scratch.** Id is `amoeba-<UTC stamp>-<12 hex>` (from the kept `mint_run_id` in `upstream.squadron.launch`, which 221 keeps; imported, not restored or copied). Before the claim, `answering_dir() / <id>` is created exclusively and filled by `prepare_scratch`, including the not-authorized file (D11). An `OSError` inserts the row as `waiting_on_pm` with `answering_launch_failed`.
+- **Command.** The kept `build_argv(<answering.yaml>, <id>, {"answer-model": <answer_model>, "check-model": <check_model>}, target_key="answer-model")` (`upstream.squadron.launch`) gives `sq run <answering.yaml> <answer_model> --run-id <id> -p check-model=<check_model>`; `answering_run.py` appends `--no-pause-hook`. Flag order is not significant to `sq`. The flag is `--no-pause-hook` (Squadron #302, closed, in 0.24.24; named in `sq run --help`), defined once as a constant in `answering_run.py` and always passed: an answering run must never start the pause command. If a pause hook fires anyway, it is still skipped as `answering_run` (D3), since the claim already holds its id. The audit found no live test of the opt-out; D15 adds one. This supersedes the earlier deferral of the flag to 225.
 - **Order.** Insert the claim with the id, then spawn. A death in between leaves a claim for a run that never started (D7).
-- **Spawn.** `processes.spawn_detached(argv, cwd=scratch, logs)`: exclusive log files, own session, `stdin` from `/dev/null`, inherited environment, closed descriptors. Logs at `logs_dir() / "answering" / <id>.{stdout,stderr}.log`. A spawn error settles as `answering_launch_failed`.
+- **Spawn.** The kept `upstream.squadron.launch.spawn(argv, checkout=scratch, logs, popen)` already does the detached start: log files opened `xb` (exclusive), `start_new_session`, `stdin` from `/dev/null`, inherited environment, `close_fds`, and returns a `ChildHandle` or a `LaunchError`. 223 adds no second spawn; `operations/processes.py` only wraps it: it builds the `LaunchLogs` from the answering run id, creates the log directory first, passes `subprocess.Popen` as `popen`, and gives the wait and terminate calls the kept `ChildHandle` (poll only) lacks. Logs at `logs_dir() / "answering" / <id>.{stdout,stderr}.log` (the kept `log_paths` names by journal entry id and goes with 221, so the paths are built from the run id here). A `LaunchError` settles as `answering_launch_failed`.
+- **What the wrapper adds, and why.** The kept `ChildHandle` has only `poll()`; the real child is a `subprocess.Popen` (the kept `popen` parameter), so the wrapper's `WaitableChild` protocol (`poll`, `wait(timeout)`, `pid`) is satisfied by it, and `terminate_group(child)` is `os.killpg` on the child's own session. These are the only new pieces; the stdio and log contract is the kept one. `stderr_tail` is the kept one (last `STDERR_TAIL_LIMIT_BYTES`); no new `n` parameter.
 - **Wait.** Up to `answering_wait_seconds` (required config key, number > 0) for the child to exit. On timeout, terminate its process group and settle as `answering_run_stalled` (`no result after <n> seconds`). Otherwise one `poll_run(id)` gives a `RunSummary`; a `PollFailure` settles as `answering_run_failed` so the claim doesn't hang.
 - **Settle.** If completed, `read_answer` and `read_check` from scratch. `decide_answer(summary, answer, check, passage_ids)` with the claim's passage ids. A `Confirmed` answer goes through `evaluate_gate(question, prior, answer=…, settings=…)`. Pass: compare-and-set `claimed → answered` and add an `answerer` answer row, one transaction. Decline: compare-and-set to `waiting_on_pm` with the reason.
 - **Answer limit.** `prior` counts only automatic answers (`answered_by = 'answerer'`, this `run_id`, any `paused_at`), inside the settle transaction. PM answers never count. If `prior` already meets `answer_limit` when the question is first seen, insert as `waiting_on_pm` with `answer_limit_reached` and start nothing; the gate stays the final word.
@@ -166,7 +168,7 @@ With the age gate, only a claimant that died before its spawn causes a second an
 `resume.resume(store, question, answer_seq, *, deps) -> ResumeResult`, called by both operations.
 
 1. **Checkpoint.** `poll_run(run_id)`. Not `paused`, or a different `paused_at`: `not_delivered`, nothing started.
-2. **Start.** `sq run --resume <run_id> --instructions <compose_instructions(question, answer)>` via `spawn_detached` with `cwd = questions.checkout`. Logs at `logs_dir() / "resume" / <run_id> / <answer_seq>-<UTC stamp>.{stdout,stderr}.log`; the stdout path is `resume_log`. A spawn error is `refused`.
+2. **Start.** `resume_argv(run_id, compose_instructions(question, answer))` (kept, `upstream.squadron.resume_argv`) gives `sq run --resume <run_id> --instructions <text>`, started through the same kept `spawn` (via the `processes.py` wrapper) with `checkout = questions.checkout`. Logs at `logs_dir() / "resume" / <run_id> / <answer_seq>-<UTC stamp>.{stdout,stderr}.log`; the stdout path is `resume_log`. A spawn error is `refused`.
 3. **Wait.** Poll every `RESUME_POLL_INTERVAL_SECONDS` (0.5, in `resume.py`) for up to `resume_wait_seconds` (required config key, number > 0):
    - `running`, or moved past this pause (other `paused_at`, `completed`, `failed`): **resumed**. A fast run can pause again before a poll sees `running`.
    - Child exited, run still at this pause: **refused**, stderr tail as detail (e.g. a held run lock).
@@ -208,6 +210,8 @@ Each JSON column has one serializer and one parser in `store/questions.py`, test
 - **Authorize list.** `pipeline_file.NOT_AUTHORIZED_FILE = "not_authorized.md"`. `inputs.render_not_authorized(items)` writes one `key: description` bullet per item; an empty list renders `No item is barred for this repository.` `prepare_scratch` writes it. In `answering.yaml` both steps list it in `prompt_files` after `passages.md`. The hard-coded list in both prompts is replaced by text saying the list follows the passages, and the answer step must decline, and the check step reply no, when an answer would authorize anything on it. The existing pin test covers the new file. Not passed as a `-p` parameter, because Squadron splits `-p` values on commas.
 - **Screen.** `settings.reserved_terms` already holds only the member's barred items (222 D8), and `evaluate_gate` is unchanged. Allowing an item for a member removes it from both the prompt file and the screen.
 - **Program passages.** `program_concept` and `program_members` come from the 182 take group in the audit's Slice 182 section; if that group is empty they are written new from 182's design. `answering.passages` gains both kinds and their rendering. `assemble` takes a `ProgramSources` value: the concept as a `SourceFile` (member id, path, commit, date, text) and the member list. Both prompts list the two new kind words.
+- **Slice 182 groups (audit, Slice 182 section).** Take by copy from branch `182-slice.program-concept-as-a-source` (`git show <branch>:<path>`; do not merge the branch): `program_passages.py`, the `passages.py` kinds and rendering, the `answering.yaml` kind sentences, the `source_reads.py` renames, and the tests `test_passages.py`, `test_pipeline_yaml.py`, `test_program_passages.py`. Rewrite with this slice's context: `program_sources.py` (keep `_read_concept_file`, `_within_limit`, `without_path`, `_read_from_asker` and the `SourcesProblem` kinds; replace `ProgramContext`, `read_member`, `_read_target` and `TickBudget`), the `assemble_sources` program hunk, the concept-repo fixtures and the program test cases. Drop the no-program path: a lone repo is a program of one, and `not_in_program` is the only skip for it (D3). 182's decisions D3 to D6 apply, notably D6: no rules, plan or PM answers from other members.
+- **The concept is optional.** 222 allows a program whose concept columns are both null, but the 182 branch requires `concept_member` to be a real member. `ProgramSources.concept` is `None` for such a program: no `program_concept` passage, the member list still emitted, no error. Tested.
 - **Where program reads happen.** In `pause_context.py`, replacing 181's `read_member`: concept member and path from `programs`, member list from `members_of`, the concept member's checkout from `project_of(reference=…).project_path` (222 D6), and the concept file through the git allowlist at that checkout's target (182 D3; the asker's own pinned commit if it is the concept member).
 - **Boundary.** `answering` imports nothing from `store`, `config` or `operations` (`store` already imports `answering.values`). `tests/test_import_boundaries.py` gains this rule.
 
@@ -227,6 +231,7 @@ amoeba answer <run_id> [--paused-at <ts>] --text <answer>
 - Both print their result model as JSON on stdout.
 - Exit codes extend 222's constants. `handle_pause` exits `0` for every outcome, including `skipped`. `answer` exits `1` when `rejected`. `2` is usage. `3` is operational: `SquadronError`, `ContextForgeError`, `ConfigError`, `AmoebaHomeError`, any `StoreError`, message on stderr.
 - `HandlePauseResult.outcome` is `skipped`, `waiting_on_pm`, `superseded`, `resumed`, `refused` or `not_delivered`, plus `skip_reason` or `waiting_reason`, `detail`, question key, claimed `checkout`, `answering_run_id` and `answer_seq` where they apply.
+- The argument shapes, JSON output and exit-code table are written once in `docs/cli-contract.md` (new, with `set_up`'s from 222), which 224 extends for its operations.
 - No call log. A call that writes no row leaves a pause 224 lists as a missed hook. Call logging stays unbuilt until use shows the need (amoeba#34; 225 D4).
 
 ### D14 — Wiring the hook
@@ -243,7 +248,28 @@ amoeba answer <run_id> [--paused-at <ts>] --text <answer>
 - **Fake `sq`.** Unit and CLI tests put a fake `sq` first on `PATH` that replays recorded `sq runs wait --json` documents and exit codes. Recordings in `tests/fixtures/squadron/` are real 0.24.23 output: an `agent_question` pause (modeled on the run captured 20261107), another checkpoint kind, a running run, a completed run. A real schema-5 run file is the `run_file` fixture.
 - **Unit coverage.** Every `SkipReason`, each producible `DeclineReason`, every row of D7, every D8 branch including the poll after the timeout kill. The compare-and-set guards (a PM answer during settling gives `superseded`; `resumed` is never overwritten). The answer limit ignoring PM answers. An item barred for one member and allowed for another. No transaction open while a subprocess runs (through the injected spawner and poller). Migration `002` on a version-1 store.
 - **Live tier** (`tests/live/pause/`, outside the default suite): `asks_question.yaml`, whose dispatch ends on a question the repo's rules settle, run in a throwaway worktree registered as a member under a test `AMOEBA_HOME`. The test calls `amoeba handle_pause` on the pause and asserts the record (question, passages, answer, `resumed`) and that the run left the pause.
-- **Restored tests.** The `waits on 223` files named in the audit's Live tests section are restored from the named commit and rewritten to drive `handle_pause`. Each keeps its claim.
+- **Opt-out live case** (also in `tests/live/pause/`): a pipeline with `pipeline.on_pause_command` writing a marker file and ending paused, started with the answering run's argv builder (so `--no-pause-hook` comes from the one constant) leaves no marker; the same pipeline started without the flag writes it (the control). No model is needed.
+- **`answering.yaml` validation.** A test runs real `sq run <answering.yaml> --validate` (the audit deletes the old probe test). It needs `sq` on `PATH`.
+- **Restored tests.** The `waits on 223` files named in the audit's Live tests section are restored from the named commit (`ed6041a`) and rewritten to drive `handle_pause`. Each keeps its claim. The restore brings back only those two files; the deleted `launch_rig`, `observe_support` and `question_harness` helpers are a template to rewrite, not restored. The kept live files import names that must not change (Audit items, 10).
+- **Tests the audit deleted, written new here:** launch (argv, scratch, run id; tasks 5.5 to 5.7), settle after a finished run (5.8, 5.9, 7.10, 7.11), sources assembly (3.5, 4.7), and the question and answer store (section 1).
+
+### Audit items (220 code audit, "Differences from the architecture")
+
+Items the audit assigns to this slice that the decisions above do not already settle:
+
+1. **A finished run's scratch directory.** Derived, never stored: `answering_dir() / <answering_run_id>` (State). The dead-claim settle (D7) reads `answer.json` and `check.json` from it on a later call, so 222 adds no field for it.
+2. **Authorize list and `reserved_terms`.** One setting: D11 (`not_authorized.md` plus the screen).
+3. **Hook opt-out.** D6 (`--no-pause-hook`), live case in D15.
+4. **Waiting on the answering run.** `poll_run` keeps its hard-coded `--timeout 0` (a non-blocking read). `handle_pause` never asks `sq` to block: D6 waits on the child process (up to `answering_wait_seconds`) and then polls once; D8 polls on its own interval. No loop around a blocking wait, so no `poll_run` change.
+5. **Slice and `execution_mode`.** From the run file (D2), because neither `sq runs list --json` nor `sq runs wait --json` has them (checked on 0.24.24). `RunOutcomeDocument` does not grow.
+6. **Run lock and exit code 2.** D8 judges a refused resume by the child's exit with the run still at the pause, whatever the exit code; it does not use `resume_progress`'s "exit 2 means refused" mapping. Whether a held lock exits 2 is unverified: a task checks it against the real `sq` before the resume code (6.0a) and records the observed exit code and stderr as a fixture. If code reuses `has_left` or `is_at` from `confirm.py`, it does not carry the exit-2 rule.
+7. **A run with no slice** must be answered: D5. `inputs.render_question` rejects a blank slice label today, so a no-slice question must reach it carrying `NO_SLICE_LABEL` and render (3.4), while a blank string stays rejected. The live tests always pass a slice and stay green.
+8. **`DEFAULT_TARGET_BRANCH = "main"` in `read_target`** is not a silent fallback to remove. Context Forge documents an empty `git.integration_branch` as "the target is `main`" (`cf config get` returns empty with source `default`), and failing on it would stall every member repo with no integration branch. 221 moves the constant unchanged. This slice (task 4.6) keeps that one rule centralized: `DEFAULT_TARGET_BRANCH` is the single named constant in the config/read module (`upstream/context_forge/target_read.py`), documented there as Context Forge's own default, and referenced everywhere (no `"main"` literal elsewhere in `src`). An empty value yields the constant; a non-empty value is used as-is. A failed `cf config get` call (not an empty value) stays an explicit typed error, which `gather` maps to `sources_unreadable` with the output head.
+9. **CLI shapes, output and exit codes:** D13, written to `docs/cli-contract.md`.
+10. **Names the kept live tests import, which must not change:** `amoeba.process` today (wherever 221 moves them, the live harness imports follow) keeps `SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run` and `QUESTION_TAIL_CHARS`; `mint_run_id` keeps its signature; `prepare_scratch(directory, question, passages_markdown, max_cost_usd)` keeps its four positional parameters. The not-authorized items (D11) are a new keyword-only `not_authorized` parameter defaulting to `()`, which renders "No item is barred for this repository." That keeps the kept live harness working, because `answering.yaml` now lists `not_authorized.md` in `prompt_files` and the harness's scratch must hold the file. `make_scratch` (5.5) always passes the member's items explicitly, and a test pins that.
+11. **Restored live files:** D15.
+12. **Optional concept:** D11. **182 take, rewrite and drop groups:** D11.
+13. **Tests the audit deleted:** D15 maps each to its tasks, plus the real-`sq` `--validate` test of `answering.yaml`.
 
 ## Interfaces
 
@@ -253,7 +279,7 @@ amoeba answer <run_id> [--paused-at <ts>] --text <answer>
 - `operations.answer.answer(store, config, document: object, *, deps) -> AnswerResult`
 - `operations.resume.resume(...)`, internal
 - `store.questions`: `get_question`, `latest_question`, `answers_of`, `latest_answer`, `automatic_answer_count`, `pm_precedent`, and the writes in D4 and D8
-- `processes.spawn_detached(argv, cwd, logs)`
+- `processes.start_child(argv, cwd, logs)` (wraps the kept `upstream.squadron.launch.spawn`) and `processes.terminate_group(child)`
 - `deps` bundles the `cf` runner, `poll_run` (with its timeout), the spawner and the paths
 
 **To 224:** question states, `waiting_reason`, `waiting_detail`, and answer rows with `seq`, `answered_by`, `cited` and resume columns. An answer with `resume_outcome` null or `refused` means "answered, not resumed". `handle_pause` is what `status` points an agent at for a missed hook.
@@ -272,7 +298,9 @@ amoeba answer <run_id> [--paused-at <ts>] --text <answer>
 - An answer authorizing an item on the member's list waits on the PM (`check_said_no` or `reserved_term`). After `set_up` allows that item for the member, the same question is answered.
 - `answer` on a waiting question records it, resumes the run, and is precedent at a later pause.
 - `ruff format --check`, `ruff check`, `pyright` (strict) and `pytest` pass, including D15's unit coverage.
-- `answering.yaml` holds no hard-coded authorize list.
+- `answering.yaml` holds no hard-coded authorize list, and `sq run <answering.yaml> --validate` passes.
+- The answering run's argv always carries `--no-pause-hook`; the live opt-out case shows no hook fires for it.
+- A program with no concept is answered, and a run with no slice is answered.
 - `docs/squadron-hook.md`, `docs/store-contract.md` and `docs/config-contract.md` (both new keys) match the code.
 - The live tier and restored `tests/live/answering` files pass with `AMOEBA_LIVE_*` set.
 - The #303 comment is posted (D2).

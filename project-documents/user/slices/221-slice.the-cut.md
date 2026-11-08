@@ -9,7 +9,7 @@ interfaces:
 - 222-slice.store-config-and-set-up
 - 223-slice.pause-handling
 dateCreated: 20261107
-dateUpdated: 20261107
+dateUpdated: 20261108
 status: not_started
 ---
 
@@ -77,13 +77,13 @@ A `rework` unit is changed only as far as needed to cut it off from deleted code
 A `rework` unit that only works with a later replacement (question record, `sq` launch, store submit) is deleted, not stubbed. Under D1 its row becomes `delete`, and Differences from the architecture records why. Predicted: `answering/launch.py`, `stage.py`, `settle.py`, the store-writing half of `finish.py`, and `program/members.py`. A stub would be dead code that 222 or 223 must fit around.
 
 ### D3 — Layout
-- The answering library moves from `amoeba/runner/answering/` to `amoeba/answering/`. Nothing else in `runner/` is kept.
-- Readers of other tools' state live under `amoeba/upstream/`: Context Forge (existing, plus `cf_call.py` as `context_forge/cli_call.py`), Squadron run output (`process/sq_outcome.py` as `squadron/run_outcome.py`, with the `RunEnded`, `RunVanished` and `LaunchFailed` types from `runner/observed.py` that `decide` uses), and git (`git_read.py`).
+- The answering library moves from `amoeba/runner/answering/` to `amoeba/answering/`. Nothing else in `runner/` is kept except the survivors listed under Audit items (audit wins, D1), which go to `upstream/`.
+- Readers of other tools' state live under `amoeba/upstream/`: Context Forge (`plan.py`, reworked, plus `cf_call.py` as `context_forge/cli_call.py`; the audit deletes the other existing Context Forge files and the review parsers, so the earlier "the upstream readers stay" was wrong, audit wins, D1), Squadron run output (`process/sq_outcome.py` as `squadron/run_outcome.py`, with the `observed.py` values `decide` uses) and the other `sq` and `cf` survivors in Audit items, and git (`git_read.py`).
 - Files move with `git mv`, so history follows them.
-- Imports name the defining module. `__init__` files re-export nothing, except `upstream/context_forge/__init__.py`, which keeps its existing exports.
+- Imports name the defining module. `__init__` files re-export nothing. The audit deletes `upstream/context_forge/__init__.py`, so its existing exports go too (audit wins, D1).
 
 ### D4 — Value types leave the old store
-Each value type the kept code still uses from `amoeba.store` (`DeclineReason`, `GateRefusal`, `AnsweringEvidence`, `PassageRef`, `AnsweredBy`, `GLOB_WILDCARD`, the parameter-name constants) moves unchanged to `amoeba/answering/values.py`. `CFSnapshot` moves into `upstream/context_forge/`. Types only deleted code used (`QuestionRecord`, `QuestionState`, `BlockedState`, `JournalEntry`) go. The vocabulary of answers belongs to answering, so 222's store imports it from here. Record-only types, such as question states, belong to 222's store and never move into `answering`.
+Each value type the kept code still uses from `amoeba.store` (`DeclineReason`, `GateRefusal`, `AnsweringEvidence`, `PassageRef`, `AnsweredBy`, `GLOB_WILDCARD`, the parameter-name constants) moves unchanged to `amoeba/answering/values.py`. `CFSnapshot` goes, not moves: only `upstream/context_forge/checkout.py` and the snapshot tables used it, and the audit deletes both (audit wins, D1). Types only deleted code used (`QuestionRecord`, `QuestionState`, `BlockedState`, `JournalEntry`) go. The vocabulary of answers belongs to answering, so 222's store imports it from here. Record-only types, such as question states, belong to 222's store and never move into `answering`.
 
 ### D5 — Answerer settings
 `AnswererSettings` moves from `runner/project_config.py` to `answering/settings.py`, keeping its no-defaults rule. `max_concurrent_runs` is dropped, as the architecture removes that limit. The rest of `project_config.py` goes. 222 adds the loader and decides where `rules_paths` and the authorize list come from.
@@ -107,6 +107,26 @@ Each value type the kept code still uses from `amoeba.store` (`DeclineReason`, `
 ### D9 — README and docs
 The README drops the hero image and old pitch and says briefly: what Amoeba is (a tool agents and pipelines call to answer a paused run's first-level questions and keep the record, across a program of repos; no process of its own; optional for Squadron), what exists now (the library, no command), where the design lives (concept, `220-arch.program-tool.md`, slice plan), and how to run the checks, including the live tier's `AMOEBA_LIVE_*` variables. It claims nothing the code does not back. The `assets/` image goes if unused. `pyproject.toml`'s `description` matches the README's first line. `docs/` and `scripts/` follow the audit (the walkthrough script and doc are expected to go, since they drive the stage through the store).
 
+### Audit items (220 code audit)
+
+The audit's "Differences from the architecture" and "Ordering constraints for 221" raise items that land here. Where they contradict the decisions above, the audit wins (D1); D3, D4 and the Migration Plan table are amended. Already settled above: the live-test `stays` and `waits on 223` handling (D8) and the unused server dependencies, schema artifacts and slice-writing artifact (D7). The rest:
+
+- **`upstream/` is mostly delete.** Only `context_forge/plan.py` (`parse_initiatives`, `parse_slice_list`, `CFInitiative`, `CFSliceList`, `CFErrorDocument`) is kept, reworked: drop the plan-status and `reported_complete` helpers. `context_forge/{checkout, projects_file, diff, slice_stem, __init__}.py` and `squadron/review*.py` are deleted.
+- **One home for the surviving `sq` and `cf` helpers (an audit gap; 221 decides).** They go under `upstream/`, the lower layer, so `answering` and 223 import them and `upstream` imports nothing from `answering`. Filenames below are the new names; contents move unchanged except the drops named.
+  - `squadron/run_outcome.py`: `process/sq_outcome.py` including `SQ_EXECUTABLE` (drop `RunReview` and `reviews`), and the `observed.py` values `RunEnded`, `RunVanished`, `LaunchFailed`, `ResumeFailed` and `Finished` as plain values (`ObservedRun`, `Observed`, `TickResult` go).
+  - `squadron/faults.py`: `LaunchFailure` and `ResumeFailure` (the rest of `faults.py` goes).
+  - `squadron/launch.py`: the kept half of `runner/launch.py` (`mint_run_id`, `SQUADRON_RUN_ID_PATTERN`, `build_argv`, `param_problem`, `spawn`, `LaunchLogs`, `ChildHandle`, `stderr_confirms`, `stderr_tail`, `LaunchError`, `PopenFactory`, `STDERR_TAIL_LIMIT_BYTES`). `launch(entry, ...)`, `text_parameter`, `PARAM_*`, `LaunchTracker`, `TrackedLaunch` and `LAUNCH_LOGS_DIRNAME` go.
+  - `squadron/resume_argv.py` (`resolutions/argv.py`; only its `SQ_RUN_COMMAND` import changes) and `squadron/resume_confirm.py` (`ResumedFrom`, `has_left`, `is_at`, `resume_progress`; `resumed_from_entry` and `STOPPED_OUTCOMES` go).
+  - `context_forge/target_read.py`: `read_config` and `read_target` (from `dispatch/checkout_reads.py`) with `cf_argv`, `config_get_command` and `CF_KEY_INTEGRATION_BRANCH` (from `lifecycle/plan_read.py`); the budget parameter goes.
+  - `bounded_text.py`: `cut_to_bound` (from `ingest/outcome.py`; `decide` and `launch` both use it).
+- **Names the live tier needs.** The kept live files import these, so they keep their names and signatures and only their module paths change: `SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`, `mint_run_id`, `prepare_scratch(directory, question, passages_markdown, max_cost_usd)`, `OUTPUT_HEAD_CHARS` (in `cli_call`). Do not delete a unit whose name is on this list under D2.
+- **Relocate before the home file goes.** Kept code imports these from modules that are deleted, so each moves first: `cut_to_bound`, `STDERR_TAIL_LIMIT_BYTES`, `LaunchFailure`, `ResumeFailure`, the `Finished` values, `SQ_EXECUTABLE`, and the `read_config`, `read_target` and `cf_argv` pieces, all to the homes above. `validate_repo_relative_path` (in `store/paths.py`, used by `AnswererSettings`'s `RulesPath`, and imported by 222) moves with `AnswererSettings` to `answering/settings.py`. `QuestionInvariantError` (in `settle.py`) moves next to its kept importer; if the only importer is a unit deleted under D2, it goes. `BEGIN_IMMEDIATE` (`sql_inbox.py`) and `decode_mapping` and `decode_timestamp` (`mapping_journal.py`) have no kept user because the whole store goes, so nothing moves; 222 creates them in its own `store/sql.py` and `row_values.py`.
+- **`DEFAULT_TARGET_BRANCH = "main"`** (in `checkout_reads.py`) is a magic default the project rules forbid. 221 adds no behavior, so it moves unchanged with `read_target`, defined once. An empty `git.integration_branch` means `main` in Context Forge itself, so it is not removed: 223 (task 4.6) keeps it as the single named constant, with tests.
+- **Test helpers split before their owners are deleted.** `tests/runner/observe_support.py`: keep the generic fakes (`Clock`, `Host`, `FakeCf`), drop `TickBudget`, `RunObserver`, `LaunchTracker` and journal types. `tests/conftest.py`: drop the fixtures importing the inbox, serve and store rigs; only `reap_orphans` (the session-start orphan reaping) remains once the store is gone. `tests/sq_stub_scripts.py`: drop the review scripts (they import `review_fixtures`), `runs prune` and any `--timeout 0` assumption. `tests/runner/answering/sources_repo.py`: drop its `runner.budget` import. `test_question_tails_fixture.py` reads `tests/live/answering/fixtures/`, which stays.
+- **`store_path` and `test_store_safety.py`.** The guard stays, but it builds its forbidden names from `amoeba.store.paths`, which goes. Replace that import with the same names as string literals (`store_dir`, `store_path`, `DEFAULT_STORE_DIR`, `DEFAULT_SQ_RUNS_DIR`, `DEFAULT_CF_DATA_DIR`), so the guard covers 222's accessors of those names.
+- **Live files.** `tests/live/answering/test_sdk_refusal.py` is deleted (Squadron's behavior, not an Amoeba claim) and `SDK_MODEL_VARIABLE` is removed from `tests/live_settings.py`; the README names no `AMOEBA_LIVE_SDK_MODEL`. The two `waits on 223` files restore from the commit in the audit's Live tests table, and a restore brings back only those two files: `launch_rig.py`, `question_harness.py` and the old `observe_support.py` are gone, so 223 rewrites its helpers using the restored files as a template.
+- **CI.** `.github/workflows/ci.yml` loses its "Load tests" step and the header comments that describe a separate load tier; the default suite step stays.
+
 ## Migration Plan
 
 **What moves** (expected; the audit decides):
@@ -116,10 +136,11 @@ The README drops the hero image and old pitch and says briefly: what Amoeba is (
 | `runner/answering/{answering.yaml, pipeline_file, inputs, passages, source_reads, sources, artifacts, decide, gate}` | `answering/` |
 | `runner/pipeline_resource.py` | `answering/pipeline_resource.py` |
 | `AnswererSettings` from `runner/project_config.py` | `answering/settings.py` |
-| Value types from `store/` | `answering/values.py`; `CFSnapshot` to `upstream/context_forge/` |
-| `process/sq_outcome.py`, ended-run types from `runner/observed.py` | `upstream/squadron/run_outcome.py` |
-| `runner/{budget, git_read}.py` | `upstream/{budget, git_read}.py` |
+| Value types from `store/` | `answering/values.py` (`CFSnapshot` is dropped) |
+| `process/sq_outcome.py`, run values from `runner/observed.py` | `upstream/squadron/run_outcome.py` |
+| `runner/git_read.py` (`budget.py` is `delete` in the audit) | `upstream/git_read.py` |
 | `runner/cf_call.py` | `upstream/context_forge/cli_call.py` |
+| Other `sq` and `cf` survivors (`launch.py`, `resolutions/{argv,confirm}.py`, `faults.py`, `read_target`, `cut_to_bound`) | `upstream/`, per Audit items |
 
 Paths are under `src/amoeba/`. No compatibility re-exports are left at old paths.
 

@@ -9,7 +9,7 @@ projectState: Slices 221 to 223 are merged. `src/amoeba` holds `answering/`, `up
   `config/`, `store/` (migrations 001 and 002, `pm_marker` included), `operations/`
   (member resolution, `set_up`, `handle_pause`, `answer`, `Deps`) and the `set_up`,
   `handle_pause` and `answer` CLI commands. No read-side operation exists. Nobody
-  has run Amoeba. `ecorkran/squadron#303` (`sq runs list --json`) is open.
+  has run Amoeba. `ecorkran/squadron#303` (`sq runs list --json`) shipped in `sq` 0.24.24.
 dateCreated: 20261107
 dateUpdated: 20261108
 status: not_started
@@ -38,7 +38,8 @@ usageByModel:
 - New modules: `operations/{pause_class,status,decisions,mark_read}.py`, `store/decisions.py`, `upstream/squadron/run_list.py`, `upstream/context_forge/projects.py`. Changed: `operations/handle_pause.py` and its helpers (calls `classify_pause`), `store/questions.py` (+ `open_questions`), `operations/deps.py` (+ `list_runs`, `project_names`), `cli/main.py`. Result and request models go in separate model modules (for example `status_models.py`) if a module nears ~300 lines; the design's public import paths stay valid through re-exports.
 - No store migration. Imports stay `cli → operations → store, config, upstream`. No subprocess runs inside a store transaction. Every closed vocabulary (`PauseClass`, unplaced reasons, rejection codes, `mark_read` outcomes, `run_state`) is a `StrEnum` defined once. Request models validate raw input inside the operation. No new packages.
 - No silent fallbacks: an unknown `sq` status stays a raw string, a missing field is an error, a member id missing from `cf` names is an error.
-- `status` needs `sq runs list --json` from `ecorkran/squadron#303`. Tasks 3 and 4 are written against #303's proposed shape with a fake `sq`; task 5 records the real output once it lands.
+- `status` needs `sq runs list --json` from `ecorkran/squadron#303`, shipped in `sq` 0.24.24. Task 3.1 records real output; the proposed-shape stand-ins are used only if the installed `sq` lacks the command, and task 5 then replaces them.
+- Read the slice 220 audit (`user/analysis/220-analysis.code-audit.md`: Verdicts for `inspection/`, `program/` and `cli/`; Dependencies rows for `program/members.py`, `cli/main.py` and `process/sq_outcome.py`; Differences from the architecture) and the design's "Audit items" section. Settled there: `status` reports no member readability and `program/` is deleted, `unplaced_runs` lists paused runs only with their checkpoint kind, and every `status` and `decisions` query is new (`inspection/` is deleted; its `questions.py` is only a column reference).
 - Checks, from the repo root: `uv run ruff format --check .`, `uv run ruff check .`, `uv run pyright`, `uv run pytest`. "Checks pass" means all four.
 - Take 222 and 223's actual module paths over the design's sketches where they differ.
 - Work on branch `224-slice.status-and-decisions`. Commit only at `**Commit**:` markers. Update this file through the `task-checker` agent. Do not merge or push.
@@ -55,6 +56,7 @@ usageByModel:
 - [ ] **0.2 Confirm 223 and locate inputs**
   - [ ] Confirm `src/amoeba/operations/handle_pause.py`, `answer.py`, `deps.py`, `store/questions.py`, `store/answers.py` and `upstream/squadron/run_file.py` exist and `amoeba handle_pause --help` runs; if not, write `BLOCKED: slice 223 not merged` under this task and stop
   - [ ] Find the module and signature of each of: `poll_run` and its checkpoint parser, `read_run_facts`, `RunFacts`, `ExecutionMode`, `RunFileProblem`, `SkipReason`, `QuestionState`, `ResumeOutcome`, `PassageRef`, `AnsweringEvidence`, `Deps`, `answering_dir`, `answering_wait_seconds` (config), `resolve_member`, `project_of`, `members_of`, `programs`, `run_cf`, `CFProjectNotFound`, `CfCallFailed`, the exit-code constants, the typed errors, and the checks inside `pause_eligibility.py` and `pause_existing.py` (note "absent" for any that don't exist); note import paths
+  - [ ] Read the audit sections named in the Context Summary and the design's "Audit items". Note whether `src/amoeba/program/`, `src/amoeba/inspection/` and `src/amoeba/process/` still exist; if `program/` does, it is deleted in task 3.8 (no member readability). Note where `poll_run`, `SQ_EXECUTABLE` and `run_cf` landed (221 expects `upstream/squadron/run_outcome.py` and `upstream/context_forge/cli_call.py`)
   - [ ] Find the columns of `questions`, `answers` and `pm_marker` in the migrations (names of the `seq`, `recorded_at`, `answered_by`, `cited`, `resume_*`, `last_seen_seq` columns)
   - [ ] Check whether `sq runs list --json` exists in the installed `sq` (`sq runs list --help`); note the result under this task
   - [ ] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
@@ -128,6 +130,7 @@ usageByModel:
 ## 3. Runs list and `status` (D1, D2, D4, D8)
 
 - [ ] **3.1 Fake `sq runs list` helper and proposed-shape fixtures**
+  - [ ] If task 0.2 found `sq runs list --json` installed (`sq` 0.24.24 has it), do task 5.1's fixture recording now, then use the real fixtures in 3.2 to 3.8, skip the proposed-shape fixtures below, and mark 5.2's fixture swap done when 5.1 is. Only if the command is absent, write the stand-ins below
   - [ ] Extend the 223 fake `sq` helper to replay a named fixture for `sq runs list --json` and record its argv (so a test can see whether `--all` was passed)
   - [ ] Write fixtures under `tests/fixtures/squadron/runs_list_proposed/` in #303's proposed shape (fields: run id, pipeline, status, working directory, `checkpoint` as in `sq runs wait --json`): running run, paused agent question, paused other kind, `null` directory, an older paused run, a paused run of another directory. This is the one exception to the never-hand-write rule, because #303 has not landed: start each from the real `sq runs wait --json` fixture from 223 and add only the proposed fields. Add a README stating these are stand-ins for #303, replaced in task 5.1
   - [ ] Success: each fixture parses as JSON; the fake replays it and the argv record shows the call
@@ -135,6 +138,7 @@ usageByModel:
 - [ ] **3.2 `run_list.py` (D1) and tests**
   - [ ] Create `upstream/squadron/run_list.py`: `ListedRun` (`run_id`, `pipeline`, `status` kept as raw string when unknown, `working_directory: Path | None`, `checkpoint: (kind, paused_at, question) | None`), `RunListProblem`, `list_runs(run) -> list[ListedRun] | RunListProblem`. `checkpoint` is parsed by `poll_run`'s checkpoint parser so `paused_at` matches what 223 stores. No other module runs `sq runs list`
   - [ ] Non-zero exit, non-JSON and a missing field are each a `RunListProblem` quoting the output head. The `sq` timeout is the one `deps` passes to `poll_run`
+  - [ ] Parse stdout only: a warning on stderr (real `sq` prints one when runs reference unavailable pipelines) is not a problem. Keep only the three checkpoint fields; ignore the rest (`step`, `verdict`, `review_file`, …). Reuse `poll_run`'s `sq` executable constant and checkpoint parser from where task 0.2 found them, and import nothing from `process/`. Test: a fixture with extra checkpoint fields and a stderr warning parses
   - [ ] Add `list_runs` to `Deps`. Where the caller turns a `RunListProblem` into `SquadronError` (exit 3), the message says `status` needs Squadron with #303
   - [ ] Each proposed fixture parses to the right `ListedRun`; the `null` directory gives `working_directory` None; an unknown status stays raw; one test per problem kind; a timeout is a `RunListProblem`; `paused_at` equals the value the checkpoint parser gives for the same checkpoint
   - [ ] Success: module imports; pyright strict clean; tests pass
@@ -153,6 +157,7 @@ usageByModel:
 - [ ] **3.5 Run placement (D4) and tests**
   - [ ] Create `operations/status_placement.py`: `UnplacedReason` (`StrEnum`: `no_directory`, `directory_missing`, `lookup_failed`), `place_runs(listed, members_in_scope, answering_dir, project_of)`. Rules in order: `None` directory is unplaced `no_directory`; missing directory is unplaced `directory_missing` (before any `cf` call); directory under `answering_dir()` is dropped with no `cf` call; `project_of` gives `CFProjectNotFound` or a project in no program in scope: dropped; `CfCallFailed` or timeout: unplaced `lookup_failed` with the error text; a member in scope: listed under it
   - [ ] Cache `project_of` per directory for the call
+  - [ ] `unplaced_runs` entries are kept for `paused` runs only (design "Audit items"): a running, failed or other-status run with no directory, a missing directory or a failed lookup is not listed. Each entry carries `checkpoint_kind` (the checkpoint's kind, raw if unknown). Test with the real fixture's mix: running and failed runs with `null` directories give no entry; a paused `agent_question` run with a `null` directory gives `no_directory` with kind `agent_question`
   - [ ] One test per rule, including a `project_of` timeout giving `lookup_failed`; two worktrees of one repo land on one member with a single `cf` call per directory; `lookup_failed` leaves the other runs placed; the scratch directory makes no `cf` call; a missing directory makes none; unplaced runs are not filtered by program
   - [ ] Success: module imports; pyright strict clean; tests pass
 
@@ -173,6 +178,7 @@ usageByModel:
   - [ ] In `operations/status.py` add `StatusRequest(program?)`, `StatusResult` (`outcome` `listed` or `rejected`, `programs`, `unplaced_runs`, `problems`, as `DecisionsResult` does; `unknown_program` from 3.4 gives `rejected`), and `status(store, config, document, *, directory, deps)`. Flow per the design: scope (3.4); one store read (3.3); one `list_runs` call; place (3.5); classify (3.6); waiting questions (3.7); one `project_names` call; build the result
   - [ ] Every member in scope is listed, even with nothing to show. Members as `{id, name}`. `RunListProblem` and names failures are raised as `SquadronError` and `ContextForgeError`
   - [ ] No subprocess inside a store transaction: the store is read first
+  - [ ] No member readability and no member checkout in the result (design "Audit items"): delete `src/amoeba/program/` if it still exists, and confirm nothing imports it or `Readable`/`Unreadable`. `unplaced_runs` entries are `{run_id, status, reason, checkpoint_kind}`
   - [ ] Cases: a member with nothing; two members in different programs under the all-programs scope; a `lookup_failed` run beside a waiting question that is still shown; `unplaced_runs` entries; an `sq` failure and a names failure each raise
   - [ ] Cross-check table test (D3): run the same fixtures through `status` and `handle_pause`; every `unhandled` or `claim_stale` run in `status` is one `handle_pause` does not skip
   - [ ] Success: module imports; pyright strict clean; tests pass
@@ -194,6 +200,7 @@ usageByModel:
 - [ ] **5.1 Record real `sq runs list` output**
   - [ ] Run `sq runs list --help` and note whether `sq runs list --json` exists. If it does not, write `BLOCKED: waiting on squadron#303` under this task and stop
   - [ ] Capture real `sq runs list --json` into `tests/fixtures/squadron/runs_list/`, producing each case with real `sq`: a running run and a paused agent question (both from 223's `tests/live/pause/asks_question.yaml`); a paused run of another kind (the pipeline recorded for that case in 223 task 2.2); a paused run in another directory (start the same pipeline from a second throwaway worktree); an older paused run (leave one pause unresolved, then capture after a newer run exists). For the `null`-directory run, use a pre-#303 run file already in `~/.config/squadron/runs/` if the listing shows one; otherwise copy a real listing and set that one run's directory to `null`, and mark the file as edited in the README. Record `sq --version` and the date in the README
+  - [ ] If a listing prints a stderr warning about runs referencing unavailable pipelines, confirm those runs still appear in the stdout JSON; if any are missing, note which and whether a paused run could be among them (a missed hook on it would be invisible to `status`), and record it in the README
   - [ ] Run `sq runs list --json` with no flag while those runs exist. If the default omits the older paused run or the other-directory run, make `run_list.py` pass `--all` and drop completed runs itself (D1)
   - [ ] Success: each fixture parses; the note records whether `--all` was needed
 

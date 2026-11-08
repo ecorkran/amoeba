@@ -54,6 +54,7 @@ usageByModel:
   - [ ] Confirm `src/amoeba/store/`, `src/amoeba/config/` and `src/amoeba/operations/` exist and `amoeba set_up` runs; if not, write `BLOCKED: slice 222 not merged` under this task and stop
   - [ ] Open the audit's Slice 182 section and Live tests section. Note under this task: the 182 take and rewrite groups (for `program_concept` and `program_members`, D11), the list of `waits on 223` test files and the commit to restore them from
   - [ ] Find the module of each of: `poll_run`, `RunSummary`, `PollFailure`, `read_answer`, `read_check`, `decide_answer`, `evaluate_gate`, `prepare_scratch`, `compose_instructions`, `read_committed_sources`, `read_target`, `sources_reason`, `SourcesProblem`, `answering_for`, `resolve_member`, `project_of`, `members_of`, `programs`, `DeclineReason`, `QuestionState`, `ResumeOutcome`, `PassageRef`, `AnsweringEvidence`, `run_cf` (note "absent" for any that don't exist); note import paths
+  - [ ] Also note: the import path and signatures of the kept launch helpers in `upstream/squadron/launch.py` (`mint_run_id`, `build_argv`, `spawn`, `LaunchLogs`, `LaunchError`, `stderr_tail`; 221 task 2.5 keeps them) and of `resume_argv` in `upstream/squadron/resume_argv.py`; if any is absent, write `BLOCKED: slice 221 did not keep <name>` and stop; where `DEFAULT_TARGET_BRANCH` now lives (`upstream/context_forge/target_read.py`, moved unchanged by 221 task 2.8); the import paths the kept live files use for `SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`; `sq --version` (0.24.24 or later; the live tests and the `--no-pause-hook` flag need it)
   - [ ] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
   - [ ] Success: a note lists the audit groups, the restore commit, each import path and the baseline result
 
@@ -149,7 +150,7 @@ usageByModel:
 
 - [ ] **3.1 Not-authorized file**
   - [ ] Add `pipeline_file.NOT_AUTHORIZED_FILE = "not_authorized.md"`; add `inputs.render_not_authorized(items)`: one `key: description` bullet per item; empty list renders `No item is barred for this repository.`
-  - [ ] `prepare_scratch` writes the file
+  - [ ] `prepare_scratch` writes the file. Keep its four positional parameters `(directory, question, passages_markdown, max_cost_usd)`; add the items as a keyword-only `not_authorized` defaulting to `()` (renders the empty-list line), so the kept live harness still works. The names and signatures the kept live tests import (`SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`, `mint_run_id`) are not changed
   - [ ] Success: module imports; pyright strict clean
 
 - [ ] **3.2 Rewrite `answering.yaml` prompts**
@@ -158,17 +159,21 @@ usageByModel:
 
 - [ ] **3.3 Not-authorized tests**
   - [ ] Test rendering: two items, empty list. Test `prepare_scratch` writes the file with the items given. Update the existing pin test so it covers the new file and the `prompt_files` order
+  - [ ] Add a test that runs real `sq run <answering.yaml> --validate` (with the pipeline's required params) and passes; the old probe test is deleted. If CI has no `sq`, put it in `tests/live/answering/` (run with `uv run pytest tests/live`), not in the default suite
   - [ ] Success: tests pass
 
 - [ ] **3.4 Program passages**
   - [ ] Add `ProgramSources` (concept as a `SourceFile`: member id, path, commit, date, text; and the member list). Port `program_concept` and `program_members` from the 182 take group; if that group is empty, write them new from the design of slice 182
   - [ ] `answering.passages` gains both kinds and their rendering; `assemble` takes `ProgramSources`; both prompts list the two new kind words
+  - [ ] Port by copy from branch `182-slice.program-concept-as-a-source` (`git show 182-slice.program-concept-as-a-source:<path>`, no merge): the take group (`program_passages.py`, the `passages.py` kinds and rendering, the `answering.yaml` kind sentences, the `source_reads.py` renames) with the take-group tests (`test_passages.py`, `test_pipeline_yaml.py`, `test_program_passages.py`), re-pointed to 222's `Member` and `Program`. Do not port the drop group (the no-program path: `program=None` optionality, commit `6c2499b`, its baseline tests)
+  - [ ] `ProgramSources.concept` is optional (`None` when the program has no concept): no `program_concept` passage, member list still emitted. 182's branch requires a concept member; this is the gap the audit names
   - [ ] Make plan row selection in `source_reads` optional when `slice_ref` is `None`
+  - [ ] `inputs.render_question` rejects a blank slice label today. A no-slice question must reach it and be rendered, not rejected: D5's `NO_SLICE_LABEL` is passed for it (the library takes the label as an argument; it does not import the constant), and a blank string stays rejected. Keep the live tests' constructor calls unchanged; they always pass a slice
   - [ ] Find every existing caller of `assemble` and `source_reads` and every existing test of them (grep under `src` and `tests`); update each to the new signatures in this task
   - [ ] Success: module imports; pyright strict clean; all four checks pass
 
 - [ ] **3.5 Program passage and no-slice tests**
-  - [ ] Tests: `assemble` with program sources emits both kinds; with no slice it emits rules, program and precedent passages and no plan passages; `source_reads` with `slice_ref=None` selects no plan rows
+  - [ ] Tests: `assemble` with program sources emits both kinds; with no slice it emits rules, program and precedent passages and no plan passages; `source_reads` with `slice_ref=None` selects no plan rows; `assemble` with `concept=None` emits the member list and no concept passage; `render_question` renders a no-slice question and still rejects a blank label
   - [ ] Success: tests pass
 
 - [ ] **3.6 Import boundary**
@@ -194,18 +199,22 @@ usageByModel:
 
 - [ ] **4.4 Program sources read**
   - [ ] `read_program_sources(...)` in `pause_context.py`: concept member and path from `programs`, member list from `members_of`, concept member's checkout from `project_of(reference=…).project_path`, concept file read through the git allowlist at that checkout's target (the asker's own pinned commit if it is the concept member). Returns `ProgramSources` (task 3.4)
+  - [ ] Rewrite group of 182's `program_sources.py`: copy its git logic (`_read_concept_file`, `_within_limit`, `without_path`, `_read_from_asker`, the `SourcesProblem` kinds) from the 182 branch; replace `ProgramContext`, `read_member`, `_read_target` and `TickBudget` with the checkout, members from the store and the moved `read_target`. Keep 182's decisions D3 to D6 (the asker's own pinned commit; member-list wording; early size stop; no rules, plan or PM answers from other members)
+  - [ ] A program with no concept (both columns null) gives `ProgramSources` with `concept=None` and no read
   - [ ] Success: module imports; pyright strict clean
 
 - [ ] **4.5 Program sources tests**
   - [ ] Using a temporary git repo: concept read at the other member's target; concept member equal to the asker uses its own pinned commit; unreadable file gives its `DeclineReason` through `sources_reason`
+  - [ ] Port the assertions of 182's `test_program_sources.py` (missing, unreadable, non-UTF-8, timeout, too large, asker holds the concept) and the program section of `test_sources.py` (concept once, problem as value, visibility), with its concept-repo fixtures (`program_rig.py`); the call-count and budget cases get new shapes. Add: program with no concept returns no concept and reads nothing
   - [ ] Success: tests pass
 
 - [ ] **4.6 `gather`**
   - [ ] `gather(checkout, member, program, run_facts, question, settings, cf_run) -> PauseContext | SourcesProblem` combines: `resolve_slice`; committed rules and plan files via `read_committed_sources` from the question's checkout at `read_target` (`rules_paths` from `answering_for`); `read_program_sources`; precedent from `questions.pm_precedent`. Each `SourcesProblem` maps to its `DeclineReason` through `sources_reason`
+  - [ ] Centralize the empty-means-main rule: `DEFAULT_TARGET_BRANCH` (task 0.2 note) is the one named constant in `target_read.py`, with a comment that it is Context Forge's own documented default for an empty `git.integration_branch`. `read_target` returns it for an empty value and the value as-is otherwise; no `"main"` literal elsewhere in `src` (grep to confirm; reference the constant). A failed `cf config get` call (nonzero exit, unreadable output; not an empty value) raises an explicit typed error that `gather` maps to `sources_unreadable` with the output head. Add no other fallback
   - [ ] Success: module imports; pyright strict clean
 
 - [ ] **4.7 `gather` tests**
-  - [ ] Using a temporary git repo and the 4.1 fixtures: full context with a slice; no-slice context has no plan passages; precedent passages present after a PM answer and absent for automatic answers; a failing sub-step returns its problem and nothing partial
+  - [ ] Using a temporary git repo and the 4.1 fixtures: full context with a slice; no-slice context has no plan passages; precedent passages present after a PM answer and absent for automatic answers; a failing sub-step returns its problem and nothing partial; in `read_target` tests: an empty `git.integration_branch` yields `DEFAULT_TARGET_BRANCH`, a non-empty value (e.g. `dev/erik`) is used as-is, and a failing `cf config get` call gives the typed error, which `gather` reports as `sources_unreadable`
   - [ ] Success: tests pass
 
 **Commit**: `feat: gather pause context from slice, program and precedent`
@@ -213,11 +222,11 @@ usageByModel:
 ## 5. Answering run (D6)
 
 - [ ] **5.1 Spawn helper**
-  - [ ] Create `operations/processes.py`: `spawn_detached(argv, cwd, logs)` (exclusive log files, own session, `stdin` from `/dev/null`, inherited environment, closed descriptors) returning a handle that can wait with a timeout and terminate its process group; `stderr_tail(path, n)`. Imports nothing from Amoeba
+  - [ ] Create `operations/processes.py` as a thin wrapper over the kept `upstream.squadron.launch.spawn` (exclusive `xb` logs, own session, `stdin` from `/dev/null`, inherited environment, `close_fds`); write no second spawn. `start_child(argv, cwd, logs: LaunchLogs)`: create the logs' parent directory, call `spawn(argv, cwd, logs, subprocess.Popen)`, return the child (a `WaitableChild` protocol defined here: `poll`, `wait(timeout)`, `pid`, satisfied by `Popen`) or the kept `LaunchError`. `terminate_group(child)`: `os.killpg` of the child's own session, then wait for exit. These are the only additions: the kept `ChildHandle` has `poll()` only, and 223's wait and terminate need more. `stderr_tail` is the kept one (last `STDERR_TAIL_LIMIT_BYTES`), not re-implemented. Imports only `upstream.squadron.launch` from Amoeba
   - [ ] Success: module imports; pyright strict clean
 
 - [ ] **5.2 Spawn helper tests**
-  - [ ] Tests with real short subprocesses: logs are written; a second spawn to the same log path fails (exclusive); wait times out on a sleeping child; terminate kills the child and its own child; `stdin` is empty; `stderr_tail` returns the last lines
+  - [ ] Tests of the wrapper with real short subprocesses (the kept `spawn`'s own tests moved by 221 are not repeated): logs are written, including when the log directory does not yet exist; a second `start_child` to the same log path returns a `LaunchError` (exclusive); wait times out on a sleeping child; `terminate_group` kills the child and its own child; `stdin` is empty; the kept `stderr_tail` returns the last lines of a child's stderr log
   - [ ] Success: tests pass
 
 - [ ] **5.3 Shared `Deps`**
@@ -231,17 +240,17 @@ usageByModel:
   - [ ] Success: all four checks pass; the contract doc lists both keys
 
 - [ ] **5.5 Scratch and run id**
-  - [ ] In `operations/answering_run.py` restore `mint_run_id` (`amoeba-<UTC stamp>-<12 hex>`) from the deleted version (find it in the commit before slice 221) and add `make_scratch(answering_dir, run_id, ...)`: exclusive directory create, then `prepare_scratch` including the not-authorized file. An `OSError` returns a failure value for `answering_launch_failed`
-  - [ ] Add tests: id format; two ids differ; existing directory fails; scratch holds `passages.md` and `not_authorized.md`
+  - [ ] In `operations/answering_run.py` import `mint_run_id` (`amoeba-<UTC stamp>-<12 hex>`) from `upstream.squadron.launch`, where 221 keeps it (task 0.2 note) with its signature, because the kept live harness calls it; do not restore or copy it. `make_scratch` always passes the member's not-authorized items to `prepare_scratch` explicitly. Add `make_scratch(answering_dir, run_id, ...)`: exclusive directory create, then `prepare_scratch` including the not-authorized file. An `OSError` returns a failure value for `answering_launch_failed`
+  - [ ] Add tests: id format; two ids differ; existing directory fails; scratch holds `passages.md` and `not_authorized.md` with the member's items (not the empty-list line)
   - [ ] Success: tests pass
 
 - [ ] **5.6 Start and wait**
-  - [ ] `start(...)` builds `sq run <answering.yaml> <answer_model> --run-id <id> -p check-model=<check_model>` (no pause opt-out flag) and spawns it in the scratch with logs at `logs_dir() / "answering" / <id>.{stdout,stderr}.log`; a spawn error is `answering_launch_failed`
-  - [ ] `wait(...)`: wait up to `answering_wait_seconds`; on timeout terminate the process group and return `answering_run_stalled` (`no result after <n> seconds`); otherwise one `poll_run(id)`; a `PollFailure` is `answering_run_failed`
+  - [ ] `start(...)` builds the argv with the kept `build_argv(<answering.yaml>, <id>, {"answer-model": <answer_model>, "check-model": <check_model>}, target_key="answer-model")` (gives `sq run <answering.yaml> <answer_model> --run-id <id> -p check-model=<check_model>`; a `ValueError` from it is `answering_launch_failed`) and appends `--no-pause-hook`. Confirm the flag name with `sq run --help` (Squadron #302, closed, in 0.24.24) and define it once as a constant in `answering_run.py`; the answering run always passes it. Starts it with `processes.start_child` (the kept `spawn`) in the scratch, logs at `logs_dir() / "answering" / <id>.{stdout,stderr}.log` built from the run id as a `LaunchLogs`; a `LaunchError` is `answering_launch_failed`
+  - [ ] `wait(...)`: wait up to `answering_wait_seconds`; on timeout terminate the process group and return `answering_run_stalled` (`no result after <n> seconds`); otherwise one `poll_run(id)`; a `PollFailure` is `answering_run_failed`. `poll_run` keeps its hard-coded `--timeout 0` (a non-blocking read): the wait is on the child process, never a blocking `sq runs wait`, so `poll_run` is not changed (audit item: how `handle_pause` waits)
   - [ ] Success: module imports; pyright strict clean
 
 - [ ] **5.7 Start and wait tests**
-  - [ ] Using the fake `sq` and injected spawner and poller: argv is exactly as designed (assert no pause flag); spawn error, stall and poll failure each give their decline reason; no store transaction is open while the spawner or poller runs
+  - [ ] Using the fake `sq` and injected spawner and poller: argv is exactly as designed and holds `--no-pause-hook` exactly once; spawn error, stall and poll failure each give their decline reason; no store transaction is open while the spawner or poller runs
   - [ ] Success: tests pass
 
 - [ ] **5.8 Settle**
@@ -260,16 +269,22 @@ usageByModel:
   - [ ] Create `operations/pause_models.py` with `ResumeResult` (`outcome`: `resumed`, `refused`, `not_delivered`; `detail`; `resume_log`). Task 7.1 adds the other models to this file
   - [ ] Success: module imports; pyright strict clean
 
+- [ ] **6.0a Check the run lock against the real `sq`**
+  - [ ] Before any resume code: with the real `sq`, pause a run (`tests/live/pause/asks_question.yaml`), start one `sq run --resume <id>` that holds the run lock, and start a second `sq run --resume <id>` on the same run. Record the second's exit code, stderr text and whether the run stayed at the pause, under `tests/fixtures/squadron/` (README: `sq --version`, date). Never hand-write it
+  - [ ] Decide from the observation: D8 judges `refused` by "child exited, run still at this pause", whatever the exit code. If the held lock exits 2 or anything else, note it; do not carry `resume_progress`'s "exit 2 means refused" rule into new code (if `has_left` or `is_at` from `confirm.py` are reused, only the checkpoint compare is)
+  - [ ] If the lock cannot be provoked, write `BLOCKED: cannot provoke the run lock` under this task and stop
+  - [ ] Success: the fixture and a note of the observed exit code and stderr exist; the 6.2 refused-branch test replays that fixture
+
 - [ ] **6.1 Implement `resume.py`**
   - [ ] `resume.resume(store, question, answer_seq, *, deps) -> ResumeResult`. `RESUME_POLL_INTERVAL_SECONDS = 0.5` defined in the module
   - [ ] Step 1: `poll_run(run_id)`; not `paused` or a different `paused_at` gives `not_delivered`, nothing started
-  - [ ] Step 2: `sq run --resume <run_id> --instructions <compose_instructions(question, answer)>` via `spawn_detached`, `cwd = questions.checkout`, logs at `logs_dir() / "resume" / <run_id> / <answer_seq>-<UTC stamp>.{stdout,stderr}.log` (stdout path is `resume_log`); spawn error is `refused`
+  - [ ] Step 2: argv is the kept `resume_argv(run_id, compose_instructions(question, answer))` (`upstream.squadron.resume_argv`), started via `processes.start_child` (the kept `spawn`), `cwd = questions.checkout`, logs as a `LaunchLogs` at `logs_dir() / "resume" / <run_id> / <answer_seq>-<UTC stamp>.{stdout,stderr}.log` (stdout path is `resume_log`); a `LaunchError` is `refused`
   - [ ] Step 3: poll every interval up to `resume_wait_seconds`. `running`, or moved past (other `paused_at`, `completed`, `failed`) is `resumed`; child exited with the run still at this pause is `refused` with `stderr_tail` as detail; timeout with child alive and run unchanged: terminate the process group, wait for exit, poll once more; still at this pause is `refused` (`not running after <n> seconds`), `running` or moved past is `resumed` (`resume process terminated after taking the run`)
   - [ ] Step 4: `record_resume`
   - [ ] Success: module imports; pyright strict clean
 
 - [ ] **6.2 Resume tests**
-  - [ ] Every branch with injected poller and spawner: not paused, different `paused_at`, running, moved past, paused again before a poll saw running, child exited at the pause with stderr tail, timeout then still paused, timeout then running after the kill
+  - [ ] Every branch with injected poller and spawner: not paused, different `paused_at`, running, moved past, paused again before a poll saw running, child exited at the pause with stderr tail (using the real exit code and stderr recorded in 6.0a), timeout then still paused, timeout then running after the kill
   - [ ] `--instructions` is a single argv element holding the composed text, including text with spaces, quotes and a leading `…`
   - [ ] `resumed` and `not_delivered` are never overwritten; of two racing resumes the second's refusal does not replace the first's `resumed`
   - [ ] No store transaction is open while spawning or polling
@@ -348,7 +363,8 @@ usageByModel:
 
 - [ ] **8.3 Contract docs**
   - [ ] Update `docs/store-contract.md`: the nine new columns, the vocabularies, which operation writes each column. Update `docs/config-contract.md` check against the code (both new keys already added in 5.3)
-  - [ ] Success: every column in `002_pause_handling.sql` appears in the doc with its writer
+  - [ ] Create `docs/cli-contract.md` (frontmatter as the other contract docs): argument shapes, JSON result output and the exit-code table (0, 1, 2, 3 with their causes) for `handle_pause` and `answer`, plus `set_up`'s from 222; 224 extends it for its operations
+  - [ ] Success: every column in `002_pause_handling.sql` appears in the doc with its writer; the CLI contract matches the code
 
 **Commit**: `feat: add handle_pause and answer commands and contract docs`
 
@@ -362,12 +378,17 @@ usageByModel:
   - [ ] Using `tests/live/pause/asks_question.yaml` (created in task 2.2), add a live test that makes a throwaway worktree registered as a member under a test `AMOEBA_HOME`, starts the run, calls `amoeba handle_pause` on the pause, and asserts the record (question, passages, answer, `resumed`) and that the run left the pause. Gate on `AMOEBA_LIVE_*` like the existing live tests; outside the default suite
   - [ ] Success: with `AMOEBA_LIVE_*` set the test passes; without it the default suite does not collect it
 
+- [ ] **9.2a Live case for the hook opt-out**
+  - [ ] No live test covers it. In `tests/live/pause/` add a pipeline whose `pipeline.on_pause_command` (see `sq run --help`) writes a marker file and which ends paused. A test starts it with the argv from the answering run's builder (task 5.6, so `--no-pause-hook` comes from the one constant) and asserts no marker exists; the control starts the same pipeline without the flag and asserts the marker exists. No model call is needed. Gate like the other live tests
+  - [ ] Success: with the flag no marker; without it the marker; outside the default suite
+
 - [ ] **9.3 Restore waiting live tests**
-  - [ ] Restore the `waits on 223` files named in the audit's Live tests section from the commit noted in task 0.2 and rewrite each to drive `handle_pause`; each keeps its claim
+  - [ ] Restore the `waits on 223` files named in the audit's Live tests section (`stage_harness.py`, `test_answering_run.py`) from the commit noted in task 0.2 (`git show <commit>:<path>`) and rewrite each to drive `handle_pause`; each keeps its claim. The restore brings back only those two files: `launch_rig.py`, `observe_support.py` and `question_harness.py` are deleted too, so treat them as a template and write what the rewrite needs
+  - [ ] The kept live files (`harness.py`, `test_pipeline_run.py`, `test_precedence.py`, `question_tails.py`) still import and collect with the names listed in task 3.1; run `uv run pytest tests/live --collect-only` with `AMOEBA_LIVE_*` set and fix any import that 221 or this slice moved
   - [ ] Success: with `AMOEBA_LIVE_*` set the restored files pass; the default suite still passes
 
 - [ ] **9.4 Comment on squadron#303**
-  - [ ] Post one comment on `ecorkran/squadron#303` asking for `params` and `execution_mode` (and the run's directory) in `sq runs wait --json`, using `gh issue comment`. Record the comment URL under this task
+  - [ ] #303 is closed and shipped only the working directory (`sq runs list --json`, `sq` 0.24.24). Post one comment on `ecorkran/squadron#303` asking for `params` and `execution_mode` in `sq runs wait --json` (or `sq runs list --json`), using `gh issue comment`; if that is not possible on a closed issue, open a new issue that cites #303 with `gh issue create`. Record the URL under this task
   - [ ] Success: the URL is noted; if `gh` fails, write `BLOCKED: <error>` and stop
 
 ## 10. Final validation
