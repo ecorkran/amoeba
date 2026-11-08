@@ -45,6 +45,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 ## Migration / Refactoring Slices
 
 2. [ ] **(221) The Cut** — Delete what the audit rejects: the resident host and its lock and recovery, the tick loop, launch and dispatch, the HTTP server, the inbox, the change feed, the old CLI and inspection views, the old store and its migrations, and their tests. What stays is a library: the answering pipeline file, passage assembly, decision logic, the answer screen and the upstream readers, each with its tests passing on its own. The README drops the old pitch and says what Amoeba is now. Old slice documents keep their files.
+   **Note (220 audit):** `upstream/` is mostly delete (only the Context Forge plan parsers are kept, reworked). The `sq` launch, poll and resume code that stays lives in `process/` and `runner/`, and some helpers must move before their packages go. The audit's Verdicts and Dependencies sections are the delete list.
    **Value:** Architectural value. The code shrinks to what the scenarios use, and everything after is written against a small base.
    **Success Criteria:**
    - Every item the audit marks delete is gone, along with its tests.
@@ -73,6 +74,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    **Relative Effort:** 3
 
 4. [ ] **(223) Pause Handling** — Scenario A through the CLI. `handle_pause` takes a run id: it handles only an agent question from an in-process run in a program member and leaves every other run alone; claims the question; gathers context (slice from the run's parameters, rules, the program concept and the member's PM answers from Context Forge and the store); starts the answering run from a scratch directory with the hook's opt-out and records its run id on the claim; records an answer that passes the check and the screen, then resumes; otherwise records the question as waiting on the PM with the reason. `answer` records the PM's answer, makes it the precedent for repeats, and resumes if the run is still at that pause. Both share one resume: compare the checkpoint, start `sq run --resume` detached from the recorded checkout with a log file, wait briefly for `running`, and record resumed, refused or not delivered. The answer step and check step enforce the member's authorize list, with the screen as backstop. The per-run limit counts only automatic answers. A dead claim is resolved by checking the recorded answering run first. Wiring the Squadron hook to `handle_pause` is a config line in a member, documented here.
+   **Note (220 audit):** slice 182's branch is reused in parts, not merged; its take and rewrite groups feed the context step. See the Slice 182 section of `user/analysis/220-analysis.code-audit.md`.
    **Value:** User value. A run that stops on a question at night gets answered and carries on, or leaves a clear reason for the PM.
    **Success Criteria:**
    - On a real paused run, `handle_pause` answers and resumes it, and the record shows the question, passages, answer and resume outcome.

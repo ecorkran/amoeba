@@ -141,15 +141,15 @@ Commits are at `**Commit**:` markers only. Task files are updated by the `task-c
 
 ## 4. Slice 182
 
-- [ ] **4.1 Sort the 182 diff**
-  - [ ] Run `git diff --stat {target}...182-slice.program-concept-as-a-source` and `git diff --name-only` for the same range
-  - [ ] Sort every changed file into take, rewrite or drop (D4); read commit `e0a4615` to place it
-  - [ ] Write the Slice 182 section: verdict (merge, reuse parts, or redo) and the three groups
-  - [ ] Check that no listed file is a `delete` row in Verdicts, or explain in Differences
+- [x] **4.1 Sort the 182 diff**
+  - [x] Run `git diff --stat {target}...182-slice.program-concept-as-a-source` and `git diff --name-only` for the same range
+  - [x] Sort every changed file into take, rewrite or drop (D4); read commit `e0a4615` to place it
+  - [x] Write the Slice 182 section: verdict (merge, reuse parts, or redo) and the three groups
+  - [x] Check that no listed file is a `delete` row in Verdicts, or explain in Differences
 
-- [ ] **4.2 Note on the slice plan**
-  - [ ] If the verdict is reuse parts or redo, add a one-line note to the 223 entry in `user/architecture/220-slices.program-tool.md` pointing to the Slice 182 section
-  - [ ] If a verdict changes any other slice plan entry's scope, add a one-line note there too
+- [x] **4.2 Note on the slice plan**
+  - [x] If the verdict is reuse parts or redo, add a one-line note to the 223 entry in `user/architecture/220-slices.program-tool.md` pointing to the Slice 182 section
+  - [x] If a verdict changes any other slice plan entry's scope, add a one-line note there too
 
 **Commit**: `docs: audit slice 182 branch`
 

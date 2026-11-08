@@ -341,7 +341,52 @@ Nodes, journal entries, blocked states and the tick appear in the table at the t
 
 ## Slice 182
 
-TODO: verdict and the changed files sorted into take, rewrite, drop.
+**Verdict: reuse parts.** Do not merge the branch; port the take group by copy or cherry-pick when 223 builds the context step.
+
+Branch `182-slice.program-concept-as-a-source`, 11 commits (`6c2499b` to `a2619fb`), 28 files, +2,295 and -197 lines, about 55% of it tests. Merge-base is `1d00846` ("mark slice 181 complete"); main is 37 commits ahead, all docs only, so the base is old but no code moved. `git merge-tree` against main is clean today. It will not stay clean: 221 deletes `stage.py`, `launch.py`, `tick.py` and `tenant.py` and moves or reshapes the rest of `runner/answering/`, which turns a late merge into delete-modify conflicts and carries code that imports deleted modules (`Member`, `Program`, `ProgramStore`, `QuestionRecord`, `JournalEntry`, `read_member`, `TickBudget`, `checkout_reads.read_target`, `project_config`).
+
+Commit `e0a4615` ("pass the tick's program to the answering launch") adds `LaunchContext.program`, changes `AnsweringStage.run(budget, faults, program)` and builds a `ProgramContext` from the tick's `ProgramStage` result and `ProgramStore.members`; `ProjectTick` takes a `program_store`. Every hook in it is tick- or store-shaped, so all of it is rewrite; the one lasting idea is `assemble_sources(..., program=)`.
+
+### Take (works on the new base once imports are re-pointed)
+
+| File | Why |
+|---|---|
+| `src/amoeba/runner/answering/answering.yaml` | Both prompts name the kinds `program_concept` and `program_members`, identical in both steps. Moves with the file in 221. |
+| `src/amoeba/runner/answering/passages.py` | Adds `PROGRAM_CONCEPT` and `PROGRAM_MEMBERS` kinds, `Passage.member`, `SourceFile.member`, member-line rendering and `assemble(program_sources=)`. Its only deleted-code import is `GLOB_WILDCARD`, which 221 relocates anyway. |
+| `src/amoeba/runner/answering/program_passages.py` | Pure, 75 lines: `ProgramSources`, `member_list_text`, `member_list_date`, marker constants. Re-point `Member` and `Program` to 222's types. |
+| `src/amoeba/runner/answering/source_reads.py` | Public names for the git helpers (`GitReads`, `Listings`, `in_context`, `read_file`) and `member=None` on `SourceFile`. A pure rename. |
+| `tests/runner/answering/test_passages.py` | The program-kind render and `assemble` tests. Re-point the `passage_refs` import. |
+| `tests/runner/answering/test_pipeline_yaml.py` | Both steps name every kind with identical sentences. |
+| `tests/runner/answering/test_program_passages.py` | Pure tests; re-point the store type imports. |
+| `project-documents/user/tasks/182-tasks.program-concept-as-a-source.md` | Stays on the branch as history. It holds 182's decisions D1 to D7, which 223 cites: D3 (the asker's own pinned commit), D4 (member-list wording and markers), D5 (early size stop), D6 (visibility: no rules, plan or PM answers from other members). |
+
+### Rewrite (the idea is wanted, the code is bound to deleted code)
+
+| File | Why |
+|---|---|
+| `src/amoeba/runner/answering/program_sources.py` (227 lines) | The concept read is wanted. Keep the git logic: `_read_concept_file`, `_within_limit`, `without_path`, `_read_from_asker`, the `SourcesProblem` kinds. Replace `ProgramContext` (carries `store_dir` and a member tuple), `read_member`, `_read_target` and `TickBudget` with 223's context step: checkout from the claim, members from the store, the target read through the moved `read_target`. |
+| `src/amoeba/runner/answering/sources.py` | The `assemble_sources(program=...)` hunk, `_project_files` and `_program_sources` budget the characters left after the project's own text and keep the concept once. Keyed to `Store`, `Node` and `TickBudget`. |
+| `src/amoeba/runner/answering/launch.py` | The `program: ProgramContext | None` field and its pass-through. The launch is rebuilt in 223. |
+| `src/amoeba/runner/answering/stage.py`, `src/amoeba/runner/tick.py`, `src/amoeba/runner/tenant.py` | The `_with_program` method, the `ProgramStage` result passed on, and `program_store=`: the e0a4615 wiring. Files deleted in 221; 223 builds the program context from the store instead. |
+| `tests/runner/answering/program_rig.py`, `tests/runner/answering/test_program_rig.py` | The temporary git concept-repo fixtures are reusable; the rig imports `amoeba.program`, `project_store_path` and `TickBudget`. |
+| `tests/runner/answering/test_program_sources.py` | About 20 concept-read cases (missing, unreadable, non-UTF-8, timeout, too large, call order, asker holds the concept). The assertions port; the call-count and budget cases need new shapes. |
+| `tests/runner/answering/test_sources.py` (program section only) | The program-question render, concept-once, problem-as-value and visibility tests. The file is node-bound and a `delete` row, so its program assertions port into 223's new sources test. |
+| `tests/load/test_program_passages_load.py` | One Context Forge call and four git calls whatever the size. It lives in `tests/load/`, a `delete` row, so it moves to `tests/runner/answering/` with the rewrite or goes with the directory. |
+| `tests/live/answering/stage_harness.py` | A signature-only edit; the file waits on 223 (see Live tests). |
+
+### Drop (the no-program path, and edits to code that is deleted)
+
+| File or change | Why |
+|---|---|
+| `program: ProgramContext | None` optionality in `LaunchContext` and `assemble_sources` | A lone repo is a program of one, so the parameter is never optional. |
+| Commit `6c2499b` entirely, and 182's D1 rule that nothing beyond the project's own reads is made | The baseline pin for a project in no program. Its tests: `test_baseline_a_project_in_no_program_launches_as_after_144`, `test_baseline_holds_with_no_program_store_and_with_an_unrelated_program`, `_forbid_program_reads`, `test_program_none_renders_the_hand_written_file_as_before`, `test_a_project_in_no_program_launches_with_no_context_and_no_members_read`, `test_no_program_sources_gives_the_set_as_before`, the `_Baseline` class and `_seed_baseline_answers`. |
+| `tests/runner/answering/launch_rig.py`, `sources_assembly.py`, `test_launch_prepare.py`, `test_stage_observe.py`, `test_stage_pending.py`; `tests/runner/test_end_to_end_answering.py`, `test_tick_answering.py`, `tick_support.py` | Signature-only edits (`program=None`, `run(budget, faults, None)`, `program_store=`) and program-context launch cases in files that are `delete` rows. 223's new launch and context tests cover the same claims. |
+
+**Gap in the branch:** slice 222 allows a program whose concept columns are both null, but `ProgramContext` requires `concept_member` to be a real member. The concept must be optional in the rewrite, and no branch test covers that case.
+
+**What 223's context step reuses:** the passage kinds and rendering, `ProgramSources` and the member-list helpers, the prompt sentences, the concept git read with the asker-holds-concept shortcut, the concept-repo test fixtures, and 182's decisions D3 to D6. `passage_refs` already records the member list's source through `passage.source or question_id`.
+
+Not read in full by the research: the program test bodies, the `answering.yaml` change beyond its diff, and 182's tasks-file diff. The sort rests on the full `src` diff and the full text of `program_passages.py` and `program_sources.py`.
 
 ## Live tests
 
