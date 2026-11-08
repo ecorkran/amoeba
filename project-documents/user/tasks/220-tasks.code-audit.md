@@ -60,29 +60,29 @@ Commits are at `**Commit**:` markers only. Task files are updated by the `task-c
 
 ## 1. Answering and Store Verdicts
 
-- [ ] **1.1 Audit `runner/answering/`**
-  - [ ] Read each module: `artifacts.py`, `decide.py`, `finish.py`, `gate.py`, `inputs.py`, `launch.py`, `passages.py`, `pipeline_file.py`, `settle.py`, `source_reads.py`, `sources.py`, `stage.py`, `answering.yaml`
-  - [ ] For each, record imports from, and uses of, nodes, journal entries, blocked states, the tick, and question `node_id`
-  - [ ] Add one row per module (split further only if a module is mixed) to the Verdicts table with verdict and scenario-naming reason
+- [x] **1.1 Audit `runner/answering/`**
+  - [x] Read each module: `artifacts.py`, `decide.py`, `finish.py`, `gate.py`, `inputs.py`, `launch.py`, `passages.py`, `pipeline_file.py`, `settle.py`, `source_reads.py`, `sources.py`, `stage.py`, `answering.yaml`
+  - [x] For each, record imports from, and uses of, nodes, journal entries, blocked states, the tick, and question `node_id`
+  - [x] Add one row per module (split further only if a module is mixed) to the Verdicts table with verdict and scenario-naming reason
 
-- [ ] **1.2 Audit `store/` question and answer units**
-  - [ ] Cover `questions.py`, `question_models.py`, `sql_questions.py`, `mapping_questions.py`, `answering.py`, `answer_submission.py`, `project_escalations.py`, `routing_decisions.py`
-  - [ ] Note schema columns each relies on (including `node_id`)
-  - [ ] Add rows to Verdicts
+- [x] **1.2 Audit `store/` question and answer units**
+  - [x] Cover `questions.py`, `question_models.py`, `sql_questions.py`, `mapping_questions.py`, `answering.py`, `answer_submission.py`, `project_escalations.py`, `routing_decisions.py`
+  - [x] Note schema columns each relies on (including `node_id`)
+  - [x] Add rows to Verdicts
 
-- [ ] **1.3 Audit `store/` node, journal, block and check units**
-  - [ ] Cover `nodes.py`, `journal*.py`, `mapping_journal.py`, `sql_journal.py`, `blocking.py`, `_block_writer.py`, `checks.py`, `check_models.py`, `_check_writer.py`, `sql_checks.py`, `desired_states.py`, `attribution.py`, `calibration.py`
-  - [ ] Add rows to Verdicts
+- [x] **1.3 Audit `store/` node, journal, block and check units**
+  - [x] Cover `nodes.py`, `journal*.py`, `mapping_journal.py`, `sql_journal.py`, `blocking.py`, `_block_writer.py`, `checks.py`, `check_models.py`, `_check_writer.py`, `sql_checks.py`, `desired_states.py`, `attribution.py`, `calibration.py`
+  - [x] Add rows to Verdicts
 
-- [ ] **1.4 Audit remaining `store/` and its schema directories**
-  - [ ] Cover connection, migrations, paths, base, models, program store and schema (`program_*`, `_program_*`, `sql_program.py`, `mapping_program.py`, `schema/`, `program_schema/`), messages and inbox, feed, cf, evidence, runner and verdict units
-  - [ ] Group by the coarsest agreeing level per D1; split `store/` by module where mixed
-  - [ ] Add rows to Verdicts
+- [x] **1.4 Audit remaining `store/` and its schema directories**
+  - [x] Cover connection, migrations, paths, base, models, program store and schema (`program_*`, `_program_*`, `sql_program.py`, `mapping_program.py`, `schema/`, `program_schema/`), messages and inbox, feed, cf, evidence, runner and verdict units
+  - [x] Group by the coarsest agreeing level per D1; split `store/` by module where mixed
+  - [x] Add rows to Verdicts
 
-- [ ] **1.5 Record the first dependency entries**
-  - [ ] In Dependencies of kept code, add an entry for each `keep` or `rework` unit from 1.1 to 1.4: what deleted thing it relies on, and one replacement per D3 (new store table or field, 223/224 operation, caller-passed value, or nothing with reason)
-  - [ ] Include coupling an import list misses: `node_id` on question records, schema columns, `answering.yaml` references, and answering code started by the tick
-  - [ ] Any replacement the architecture lacks goes in Differences, not designed here
+- [x] **1.5 Record the first dependency entries**
+  - [x] In Dependencies of kept code, add an entry for each `keep` or `rework` unit from 1.1 to 1.4: what deleted thing it relies on, and one replacement per D3 (new store table or field, 223/224 operation, caller-passed value, or nothing with reason)
+  - [x] Include coupling an import list misses: `node_id` on question records, schema columns, `answering.yaml` references, and answering code started by the tick
+  - [x] Any replacement the architecture lacks goes in Differences, not designed here
 
 **Commit**: `docs: audit answering and store verdicts`
 
