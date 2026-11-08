@@ -85,13 +85,81 @@ Verdicts: `keep`, `rework`, `squadron`, `delete`. Scenarios: A pause handling, B
 | `program_store.py`, `_program_reads.py`, `mapping_program.py`, `sql_program.py` | rework | Set-up, B: the program and member reads and typed mapping stay as the programs, members and dependencies layer. The separate-file `ProgramStore` merges into the single store; overrides and submissions statements go. |
 | `_program_writer.py`, `_program_specs.py` | rework | Set-up: the validate-in-one-`BEGIN IMMEDIATE`-transaction shape is reusable for `set_up`. `apply_submission`, `program_submissions`, overrides and `requests_initiative` go. |
 
-### `src/amoeba/runner/` (other than `answering/`) and `src/amoeba/process/`
+### `src/amoeba/runner/` (other than `answering/`)
 
-TODO: section 2.
+The code that starts, polls and resumes `sq` runs lives here and in `process/`, not in `upstream/`. The rows marked "223 base" are what slice 223 builds `handle_pause` and the resume from.
+
+| Path | Verdict | Reason |
+|---|---|---|
+| `launch.py`: `mint_run_id`, `SQUADRON_RUN_ID_PATTERN`, `build_argv`, `param_problem`, `spawn`, `stderr_confirms`, `stderr_tail`, `LaunchError`, `PopenFactory`, `STDERR_TAIL_LIMIT_BYTES` | rework | Scenario A, 223 base: starts the answering run and the detached resume (`start_new_session`, log file, `cwd=checkout`). Log naming is tied to the journal entry id today. |
+| `launch.py`: `launch(entry, ...)`, `text_parameter`, `_params_parameter`, `PARAM_*` journal keys, `LaunchTracker`, `TrackedLaunch`, `LAUNCH_LOGS_DIRNAME` | delete | Launching a journaled command and reaping children each tick. |
+| `resolutions/argv.py` | keep | Scenario A, 223 base: `resume_argv` builds `sq run --resume <id> --instructions <text>`. Only its `SQ_RUN_COMMAND` import path changes. |
+| `resolutions/confirm.py`: `ResumedFrom`, `has_left`, `is_at`, `resume_progress` | rework | Scenario A, 223 base: the checkpoint compare and resumed or refused judgment. Its inputs come from journal entries today. |
+| `resolutions/confirm.py`: `resumed_from_entry`, `STOPPED_OUTCOMES` | delete | Reads journal entries. |
+| `resolutions/` (`act`, `classify`, `judge`, `planner`, `prepoll`, `stage`, `vocabulary`) | delete | PM resolutions of blocked nodes; the `answer` operation replaces them. |
+| `cf_call.py` | keep | Scenario A: `run_cf`, a bounded subprocess call with `CfCallFailed`, used by the git and Context Forge reads. |
+| `git_read.py`: `git_read`, `show_object_args`, `resolve_commit_args`, `last_change_args`, `parse_tree_*` | rework | Scenario A: reads committed files for passages. Remove the `TickBudget` parameter. |
+| `git_read.py`: `status_args`, `parse_porcelain_v2`, `GitStatus`, `is_ancestor_args` | delete | Used only by the dispatch checkout check. |
+| `dispatch/checkout_reads.py`: `read_config`, `read_target` | rework | Scenario A: reads `git.integration_branch` through `cf config get` in the checkout, which the passage sources need. Move out of `dispatch/`. |
+| `dispatch/` (everything else) | delete | Launches a slice's pipeline from the tick; Amoeba starts no work. |
+| `lifecycle/plan_read.py`: `cf_argv`, `config_get_command`, `CF_KEY_INTEGRATION_BRANCH` | rework | Scenario A: needed by `read_target`. Move into the same small Context Forge read module. |
+| `lifecycle/` (everything else) | delete | The node tree reconciled from a plan read; there are no nodes. |
+| `observed.py`: `RunEnded`, `RunVanished`, `LaunchFailed`, `ResumeFailed`, `Finished` | rework | Scenario A: outcome values the answering decision consumes. Keep as plain values. |
+| `observed.py`: `ObservedRun`, `Observed`, `TickResult` | delete | Wrappers over in-flight runs, journal and tick. |
+| `faults.py`: `LaunchFailure`, `ResumeFailure` | rework | Scenario A: two standalone enums used by launch, observed, confirm and the answering code. Move them. |
+| `faults.py` (the rest) | delete | Node, blocked-state and escalation code. |
+| `ingest/outcome.py`: `cut_to_bound` | rework | Scenario A: bounded text cutting used by `decide.py` and `launch.py`. Move it. |
+| `ingest/outcome.py` (the rest), `ingest/record.py`, `ingest/reviews.py` | delete | Node-block planning and review recording. |
+| `project_config.py`: `AnswererSettings` | rework | Scenario A, set-up: the answering settings move to the user-level config and the member's settings. |
+| `project_config.py` (the rest) | delete | Per-project pipeline and params, `max_concurrent_runs`, the YAML file model. |
+| `pipeline_resource.py` | keep | Scenario A: `shipped_pipeline_path` locates the packaged `answering.yaml`. |
+| `supervise.py`, `observe.py`, `observe_resume.py` | delete | Outcome classification, the tick's run observer and journal resume observer. Reference only for 223; `observe_resume.tail_or_error` is worth copying. |
+| `tick.py`, `act.py`, `decide.py`, `finish.py`, `record_runs.py`, `project_view.py`, `budget.py`, `factory.py`, `tenant.py` | delete | The tick loop and its journal and node plumbing; nothing in A to C uses them. |
+| `probes.py` | delete | Resident start-up probes. The `--validate` check of `answering.yaml` is worth keeping as a test, not as runtime code. |
+| `intent/` | delete | PM intents applied to nodes. |
+| `program/` | delete | `ProgramStage` is a read-only tick stage; the store's program lookup is the real one. |
+| `request_run/`, `slice_writing.yaml` | delete | Slice 180's slice-writing pipeline (D5). Scenarios A to C start no work, so no scenario calls it; its only source importer is `probes.py`. Slices 183 to 186 are retired. |
+| `tests/runner/request_run/` (6 test modules and `__init__.py`), `tests/runner/test_probes_request_run.py`, `tests/live/request_run/` (all files), `tests/live_request_settings.py`, `tests/fixtures/slice_writing/` (`already_met/reply.json`, `new_slice/reply.json`) | delete | Tests, live tests and settings helper of the slice-writing pipeline, which goes (D5). The Tests section below repeats this for coverage. |
+| `__init__.py` | delete | Exports `runner_tenant`; imported only by the old CLI. |
+
+### `src/amoeba/process/`
+
+| Path | Verdict | Reason |
+|---|---|---|
+| `sq_outcome.py` | rework | Scenario A, 223 base: the one reader of `sq runs wait --json` (`poll_run`, `RunOutcomeDocument`, `RunCheckpoint`, kind enums). It hard-codes `--timeout 0`, models no working directory, run parameters or `execution_mode`, and carries `RunReview`, which only deleted ingest uses. |
+| `__init__.py` | rework | Scenario A: its exports are the facade the answering code imports; drop the host, tenant, observer, recovery and review exports. |
+| `settings.py`: `sq_timeout_seconds`, `cf_timeout_seconds`, `launch_grace_seconds`, `cf_data_dir`, `sq_runs_dir` | rework | Scenario A, set-up: these move into the user-level config. Defaults must not stay as magic values in code. |
+| `settings.py` (the rest) | delete | Idle, shutdown, tick, inbox, review-scan and cf-scan settings, `auto_resume_limit`, `project_config_path`. |
+| `errors.py`: `StartupFailedError` | rework | Scenario A, set-up: imported by `project_config`; keep or replace with the new config error. |
+| `errors.py` (the rest) | delete | `AlreadyRunningError`, `GraceExpiredError`, `UpstreamShapeError`. |
+| `host.py`, `supervisor.py`, `tenants.py`, `grace.py`, `project_stores.py`, `instance_lock.py`, `log_limit.py` | delete | The resident process: tenant loop, instance lock, shutdown grace, single-writer opener. There is no resident process. |
+| `recovery.py`, `observers/` | delete | Recovery of journaled commands by observation. `observers/sq_runs.py` is the legacy run-file matcher; `sq runs list --json` now gives the working directory. |
+| `inbox_drain.py`, `inbox_tenant.py`, `program_inbox_tenant.py` | delete | The inbox goes. |
+| `cf_watch.py` | delete | A resident watch for Context Forge pointer moves. |
+| `review_detection.py`, `review_scan.py` | delete | A resident review-file scan that records verdicts on nodes. |
+| `run_pruning.py` | delete | Prune candidates from journal ownership; `sq runs prune` already exists in Squadron. |
+| `version_label.py` | delete | A provenance label on journal ticks; the question record has no such field. |
 
 ### `src/amoeba/upstream/`, `program/`, `cli/`, `inspection/`, `serve/`, `inbox/`, `feed/`
 
-TODO: section 2.
+| Path | Verdict | Reason |
+|---|---|---|
+| `__init__.py` | keep | Package root; set-up. |
+| `upstream/context_forge/plan.py`: `parse_initiatives`, `parse_slice_list`, `CFInitiative`, `CFSliceList`, `CFErrorDocument` | rework | Scenario A: the kept answering code needs a slice's initiative index from Context Forge in the checkout, and these parse that output. Drop the plan-status and `reported_complete` helpers; 223 drops the whole file if it reads the index another way. |
+| `upstream/context_forge/checkout.py` | delete | Picks a checkout from a stored snapshot; the checkout is now the run's working directory passed in. Imports `amoeba.store.CFSnapshot`. |
+| `upstream/context_forge/projects_file.py`, `diff.py`, `slice_stem.py`, `__init__.py` | delete | `projects.json` projection and snapshot diff for the resident watcher; `slice_stem` is used only by node machinery. |
+| `upstream/squadron/` (`review*.py`, `__init__.py`) | delete | Parses `sq review` output into verdict records; no scenario uses review verdicts. |
+| `program/members.py`, `__init__.py` | rework | Scenario C, `status`: a member that cannot be read must show with a reason. Only the closed `Readable` and `Unreadable` vocabulary survives; all five reasons depend on deleted things. If 224 does not want readability, this is a delete. |
+| `cli/main.py`, `cli/__init__.py` | rework | All scenarios: the `amoeba` entry point and the single process-boundary handler stay as the thin shell over the eight operations. The old parsers and most exit codes go. |
+| `cli/lifecycle.py`, `settings_flags.py` | delete | Start, stop and status of the resident process; its settings flags. |
+| `cli/inspect.py` | delete | Prints the inspection registry; `status` and `decisions` (224) replace it. |
+| `cli/submit.py`, `cli/ingest.py` | delete | Writes inbox submissions; submits a review as a verdict. |
+| `cli/feed.py`, `cli/serve.py` | delete | The feed follower and the HTTP server command. |
+| `cli/prune.py` | delete | Prunes runs the resident runner owns; `sq runs prune` already exists. Not a Squadron candidate, since it depends on Amoeba owning the runs. |
+| `inspection/` (11 modules) | delete | Every row function reads nodes, journal, blocked states, verdicts, snapshots, inbox or the feed. `questions.py` is a column reference for `status` and `decisions` (224), not code to keep. |
+| `serve/` | delete | HTTP and SSE server; the only user of `starlette` and `uvicorn`. |
+| `inbox/` | delete | File inbox drained by the resident tenant, including the program envelope and payload files. |
+| `feed/` | delete | Change-feed follower for a feed that goes. |
 
 ### `tests/`
 
@@ -155,7 +223,28 @@ Each entry names one replacement: a new-store table or field (222), an operation
 
 ### Runner, process, upstream, program, cli
 
-TODO: section 2.
+Nodes, journal entries, blocked states and the tick appear in the table at the top of this section. Entries here add what the runner and process units rely on.
+
+| Unit | Relies on (being deleted) | Replacement |
+|---|---|---|
+| `runner/launch.py` kept parts | `JournalEntry`, `PARAM_CHECKOUT`, `PARAM_RUN_ID`, `launch(entry, ...)` | Values passed in by the caller: checkout, run id, pipeline, params. |
+| `runner/launch.py` `spawn` | `log_paths(supervisor_dir, entry.id)` | 222 field: the log file named on the question record, as the architecture's resume step requires. |
+| `runner/launch.py` | `LaunchTracker` (in-memory children reaped each tick) | Nothing: `handle_pause` waits on its own answering child, and the detached resume needs no reaping. |
+| `resolutions/confirm.py` | `resumed_from_entry` reading `JournalEntry.result["outcome_document"]` through `supervise.recorded_document` | 222: `paused_at` and the checkpoint on the question record, passed into `has_left` and `is_at`. |
+| `resolutions/confirm.py` | A tracked child's exit code and `past_grace` from `issued_at` | Value passed in: 223 starts the child itself and knows its exit code and start time. The architecture's "wait briefly for `running`" step is not in `resume_progress`; 223 builds it. |
+| `observed.py` kept values | `ObservedRun.run: InFlightRun`, an unresolved journal entry | Nothing: drop the wrappers; the `Finished` variants stay as plain values. |
+| `git_read.py`, `checkout_reads.py` | `TickBudget` | Nothing (see the tick row above). |
+| `project_config.py` | Per-project YAML keyed on an Amoeba project id; the `answerer:` section's presence turns the answerer on | `set_up` per-member settings and the user-level config (222). NOT COVERED: how a member opts in or out of answering besides program membership. |
+| `process/sq_outcome.py` | `--timeout 0` hard-coded in `RUNS_WAIT_FLAGS`; the tick re-polls | NOT COVERED: whether `handle_pause` loops `poll_run` or passes a real timeout. A 223 choice. |
+| `process/sq_outcome.py` | `RunOutcomeDocument` has no `execution_mode`, run parameters or working directory, all of which `handle_pause` needs (steps 2 and 4, and the recorded checkout) | NOT COVERED: whether `sq runs wait --json` emits them. Checked 20261108 against `sq` 0.24.24: `sq runs list --json` (Squadron #303, shipped) gives `run_id`, `pipeline`, `status`, `working_directory` and `checkpoint` only (older runs show a null working directory), so it has no parameters or `execution_mode` either. `sq runs wait --json` documents status, checkpoint and failure only. Where the slice and `execution_mode` come from is open; `RunOutcomeDocument` or a new reader must grow, and that is a 223 task. |
+| `process/sq_outcome.py` | `RunReview` and `reviews`, used only by deleted `ingest/reviews.py` | Nothing: remove. |
+| `process/sq_outcome.py` | `SQ_EXECUTABLE` is defined here but imported by `runner/launch.py`, `resolutions/argv.py` and `probes.py`; the package name `process` stops describing it | The surviving `sq` and `cf` helpers need one home; 221 or 223 picks it. |
+| `process/settings.py` kept fields | A frozen dataclass with hard-coded numeric defaults and `Path.home()` paths | User-level config file (architecture, "Where things live"), with no defaults in code. |
+| Resume run-lock handling | No module reads or reasons about Squadron's run lock; `resume_progress` calls exit code 2 `REFUSED` | NOT COVERED: whether a held lock exits 2 is unverified. 223 checks it against the real `sq`. |
+| `upstream/context_forge/plan.py` | Nothing deleted, but it exists for the plan sync | Operation in 223: the slice's initiative index, read through `cf list` in the checkout. |
+| `program/members.py` | `Store.cf_links`, `latest_cf_snapshots`, `member.requests_initiative`, per-project store files | The member is the Context Forge project for the working directory (222, `set_up`). NOT COVERED: whether `status` reports member readability at all, and what a member's checkout is when all worktrees are one member. |
+| `cli/main.py` | `process.errors` and `process.host` types, `InboxSubmitError`, `VerdictNotFoundError`, `UpstreamShapeError`, `VERSION` from the PID file | The new store's own error type (222); nothing for the rest. NOT COVERED: the CLI's argument shapes, output format and exit-code table for the eight operations; 223 and 224 define them. |
+| `scripts/answerer_walkthrough.py`, `docs/answerer-walkthrough.md` | `amoeba start`, `AMOEBA_STORE_DIR`, `projects.yaml`, `inspect`, `submit` | `set_up`, the user-level config, `handle_pause`, `answer`, `status`. |
 
 ## Slice 182
 

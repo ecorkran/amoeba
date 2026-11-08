@@ -88,32 +88,32 @@ Commits are at `**Commit**:` markers only. Task files are updated by the `task-c
 
 ## 2. Runner, Process, Upstream and Program Verdicts
 
-- [ ] **2.1 Audit remaining `runner/` top-level modules and subpackages**
-  - [ ] Cover `tick.py`, `act.py`, `decide.py`, `observe*.py`, `launch.py`, `finish.py`, `supervise.py`, `tenant.py`, `factory.py`, `budget.py`, `faults.py`, `probes.py`, `cf_call.py`, `git_read.py`, `project_*`, `pipeline_resource.py`, `record_runs.py`
-  - [ ] Cover `dispatch/`, `ingest/`, `intent/`, `lifecycle/`, `resolutions/`, `program/`
-  - [ ] Add rows to Verdicts
+- [x] **2.1 Audit remaining `runner/` top-level modules and subpackages**
+  - [x] Cover `tick.py`, `act.py`, `decide.py`, `observe*.py`, `launch.py`, `finish.py`, `supervise.py`, `tenant.py`, `factory.py`, `budget.py`, `faults.py`, `probes.py`, `cf_call.py`, `git_read.py`, `project_*`, `pipeline_resource.py`, `record_runs.py`
+  - [x] Cover `dispatch/`, `ingest/`, `intent/`, `lifecycle/`, `resolutions/`, `program/`
+  - [x] Add rows to Verdicts
 
-- [ ] **2.2 Audit `runner/request_run/` (slice 180)**
-  - [ ] Per D5, default `delete`; keep only if you can name a scenario that calls it
-  - [ ] Cover `slice_writing.yaml`, its tests and fixtures
-  - [ ] Add rows to Verdicts
+- [x] **2.2 Audit `runner/request_run/` (slice 180)**
+  - [x] Per D5, default `delete`; keep only if you can name a scenario that calls it
+  - [x] Cover `slice_writing.yaml`, its tests and fixtures
+  - [x] Add rows to Verdicts
 
-- [ ] **2.3 Audit `process/`**
-  - [ ] Cover host, supervisor, tenants, recovery, observers, instance lock, settings, review detection and scan, inbox tenants, cf watch, sq outcome, run pruning, log limit, grace, version label, project stores
-  - [ ] Split by module (D1) and add rows to Verdicts
+- [x] **2.3 Audit `process/`**
+  - [x] Cover host, supervisor, tenants, recovery, observers, instance lock, settings, review detection and scan, inbox tenants, cf watch, sq outcome, run pruning, log limit, grace, version label, project stores
+  - [x] Split by module (D1) and add rows to Verdicts
 
-- [ ] **2.4 Audit `upstream/` and `program/`**
-  - [ ] `upstream/context_forge` and `upstream/squadron`: split by module; note which are the `sq` launch, poll and resume code
-  - [ ] `program/` (`members.py`)
-  - [ ] Add rows to Verdicts
+- [x] **2.4 Audit `upstream/` and `program/`**
+  - [x] `upstream/context_forge` and `upstream/squadron`: split by module; note which are the `sq` launch, poll and resume code
+  - [x] `program/` (`members.py`)
+  - [x] Add rows to Verdicts
 
-- [ ] **2.5 Audit `cli/`, `inspection/`, `serve/`, `inbox/`, `feed/`**
-  - [ ] `cli/` (each command file), `inspection/` (each module)
-  - [ ] `serve/`, `inbox/`, `feed/`: one row each if uniform
-  - [ ] Add rows to Verdicts
+- [x] **2.5 Audit `cli/`, `inspection/`, `serve/`, `inbox/`, `feed/`**
+  - [x] `cli/` (each command file), `inspection/` (each module)
+  - [x] `serve/`, `inbox/`, `feed/`: one row each if uniform
+  - [x] Add rows to Verdicts
 
-- [ ] **2.6 Record dependency entries for 2.1 to 2.5**
-  - [ ] Same rules as 1.5, including nodes, journal entries, blocked states and the tick loop as explicit entries
+- [x] **2.6 Record dependency entries for 2.1 to 2.5**
+  - [x] Same rules as 1.5, including nodes, journal entries, blocked states and the tick loop as explicit entries
 
 **Commit**: `docs: audit runner, process, upstream and program verdicts`
 
