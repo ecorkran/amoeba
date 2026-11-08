@@ -390,12 +390,93 @@ Not read in full by the research: the program test bodies, the `answering.yaml` 
 
 ## Live tests
 
-TODO: each file under `tests/live/answering/`.
+Every file under `tests/live/answering/`. "Waits on 223" files are deleted in 221 and restored by 223 from the commit named; the restore hash is the last commit on main that touched the file. The live tests need `sq` 0.24.24 or later (tool-less steps on Claude models, Squadron #299, closed 20261108).
+
+| File | Verdict | Decisive imports | Scenario A claim it covers | Restore commit |
+|---|---|---|---|---|
+| `__init__.py` | stays | none | Package marker. | n/a |
+| `conftest.py` | stays | helpers `live_environment`, `live_settings`, `live/answering/harness.py` | Builds one throwaway Context Forge project and gives `sq` a whitelisted environment. | n/a |
+| `harness.py` | stays | `amoeba.process` (`RunOutcome`, `RunOutcomeDocument`), `runner.answering.inputs`; via `live_harness`: `process.SQ_EXECUTABLE`, `poll_run`, `pipeline_file`, `cf_call.OUTPUT_HEAD_CHARS`, `launch.mint_run_id` | Runs the real shipped `answering.yaml` through `sq run` in a scratch directory with real models. Stays only if those names keep their signatures (see below). | n/a |
+| `question_tails.py` | stays | none (string constants) | Question wording shaped like Squadron's truncated tails; `test_live_tier_rules.py` checks each fits `QUESTION_TAIL_CHARS`. | n/a |
+| `fixtures/question_tails.json` | stays | none | Ten real question tails from the slice 145 walkthrough, used by `test_question_tails_fixture.py` and a corpus for how `handle_pause` meets real wording. | n/a |
+| `test_pipeline_run.py` | stays | `artifacts`, `inputs.QuestionInput`, `pipeline_file`, `harness` | Answer and check steps run tool-less on real models and write four parsable files; a hostile passage instruction produces no extra file; the check step's prompt holds the question, passages and answer but not the answer step's instruction, and neither prompt carries Squadron's project-rules block. | n/a |
+| `test_precedence.py` | stays | `artifacts`, `inputs.QuestionInput`, `harness.passage` | The check enforces later-date precedence and per-slice PM-answer matching on real models (four cases). It tests the prompt wording in `answering.yaml`, so a prompt change affects its result, not its imports. | n/a |
+| `stage_harness.py` | waits on 223 | `AnsweringStage`, `TickBudget`, `NodeContext`, `TickFaults`, `RunObserver`, `Node`, `Store`; helpers `question_harness`, `launch_rig`, `observe_support` | Drives the real answering stage and store with real models until a question settles. 223 replaces it with a `handle_pause` harness. | `ed6041a` |
+| `test_answering_run.py` | waits on 223 | `stage_harness`; reads `store.blocked_state(...)`, `block.resolution.instructions`, `live.rig.node`, `other_slice(...)` | Four end-to-end cases: a plan-rules passage answers the question; a reworded question on the same slice is answered from the PM's earlier answer; the same meaning on another slice is answered from an all-slices PM answer; a slice whose answer differs is declined. The only tests of the whole path from a real pause to the record. | `ed6041a` |
+| `test_sdk_refusal.py` | delete | `inputs`, `pipeline_file`, `live_settings.SDK_MODEL_VARIABLE`, `harness` | Asserted that a check step on an SDK-session alias is refused by Squadron's no-tools guard. With #299 closed, a tool-less step on a Claude alias now runs, which is what scenario A relies on and `test_pipeline_run.py` already covers; the refusal is Squadron's behavior, not an Amoeba claim. Also remove `SDK_MODEL_VARIABLE` from `live_settings.py`. | n/a |
+
+Notes for 221 and 223:
+
+- **Helpers the kept files need:** `tests/live_settings.py`, `live_environment.py`, `live_harness.py` and `process_containment.py`, and the root `tests/conftest.py`, which must be trimmed to `reap_orphans` because it imports the inbox and server rigs. `tests/live/conftest.py` only puts `tests/` on `sys.path`.
+- **Names that must not change:** `amoeba.process` keeps `SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run` and `QUESTION_TAIL_CHARS`; `mint_run_id` keeps its signature; `prepare_scratch(directory, question, passages_markdown, max_cost_usd)` keeps its signature. The live tests always pass a slice, so allowing "no slice" in `render_question` does not break them.
+- **Restoring from `ed6041a` brings back only the two files**, not `launch_rig.py`, `observe_support.py` or `question_harness.py`, which are deleted too. 223 treats them as a template to rewrite.
+- **What no live test covers today:** the pause hook and its opt-out (`--no-pause-hook`, Squadron #302). The answering run must always pass the opt-out, so 223 needs a live case for it.
+- **Selection:** `addopts` ignores `tests/live`, so `uv run pytest` skips them and `uv run pytest tests/live` runs them. Collection fails if `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL` or `AMOEBA_LIVE_MAX_COST_USD` is unset; there are no defaults and no skip. A provider key must be in the shell, and `sq` and `cf` must be on `PATH`.
 
 ## Move to Squadron
 
-TODO: each item with its issue link.
+**None.** No unit is marked `squadron` and no issue was filed. Checked 20261108 against `gh issue list -R ecorkran/squadron --state open` (the full open list, #305 to #9) and `sq` 0.24.24.
+
+Candidates considered and why none qualifies:
+
+| Candidate | Outcome |
+|---|---|
+| Tool-less Claude steps, command started on pause, working directory in the run file, JSON from `sq runs list` | Already Squadron issues #299, #302 and #303, all closed 20261108 and present in 0.24.24. Squadron #192 ("`sq runs list --json` for out-of-process consumers") is still open although the feature now exists; that is Squadron's housekeeping, not an Amoeba item. |
+| A command step in pipelines | Squadron #304, open and on hold. Amoeba depends on it only if agents skip the scenario B rule lines. |
+| Pruning runs (`process/run_pruning.py`, `cli/prune.py`) | `sq runs prune` already exists. The Amoeba code depends on Amoeba owning the runs, so it is deleted. |
+| Detached process start, bounded `cf` and `git` reads, run-id minting (`runner/launch.py`, `cf_call.py`, `git_read.py`) | Useful only to Amoeba; nothing a Squadron user would ask for. |
+| The markdown passage cutter (`passages.py` `cut_passages`) | The only thing remotely general, and no Squadron user need exists. |
+| Review parsing and verdict records (`upstream/squadron/`, `store/finding_identity.py`) | Serve only the deleted review ingest and are Amoeba-specific design. |
+| A rolling-window cost cap | Squadron #242 already asks for one; Amoeba's own future-work item (spend cap per time window) can lean on it. |
 
 ## Differences from the architecture
 
-TODO: each place the verdicts differ from the Current State table.
+The architecture is not edited here (slice scope); these are the places the verdicts differ from its Current State table and facts, and the replacements it does not cover.
+
+### Against the Current State table
+
+| Area | Architecture expected | Audit result |
+|---|---|---|
+| `upstream/` | Keep | **Delete, except `context_forge/plan.py` (rework).** `upstream/squadron/` is only review-output parsing for the deleted verdict store. `upstream/context_forge/` is snapshot, watch and node-plan code. The slice 221 plan line "the upstream readers stay" is wrong; a note was added to the 221 entry. |
+| Where `sq` launch, poll and resume code lives | Not stated | `process/sq_outcome.py` (`sq runs wait --json`), `runner/launch.py` (`spawn`, argv, run ids), `runner/resolutions/argv.py` (resume argv) and `confirm.py` (checkpoint compare). These are the 223 base and sit in packages the table says mostly go. `process` is a poor name for what survives there. |
+| `runner/` | Keep answering pipeline, passages, decision logic, answer screen; rewrite launching and polling | Agrees, with more named survivors outside `answering/`: `launch.spawn` and argv, `confirm.py`, `cf_call.py`, `git_read.py`, `read_target`, `observed.py` values, two fault enums, `cut_to_bound`, `AnswererSettings`, `pipeline_resource.py`. Everything else, including `stage.py`, `settle.py` and the tick-launched `launch_answering`, goes. |
+| `store/` questions | "Keep questions and programs, re-keyed" | The question record is **new design, not a re-key.** Today it is keyed on a journal entry (`source_entry_id`), and no `paused_at` exists anywhere in the code. Every question and answer unit is rework or delete, and every store test of them is deleted. Kept as-is: `connection.py`, `row_values.py` only. |
+| `store/` single-writer | "The single-writer checks go" | The store has none (`store.py` says it does not enforce single-writer); the lock is `process/instance_lock.py`. The store already uses `BEGIN IMMEDIATE` and typed busy errors, which fit as-is. A real new risk instead: two processes opening a fresh store can both read version 0 and the second fails (see Dependencies). |
+| `process/` | Goes, apart from reading Squadron's output | Agrees: `sq_outcome.py` stays; `settings.py` and `errors.py` keep a few fields; `observers/sq_runs.py` goes because `sq runs list --json` now gives the working directory. |
+| `cli/` | Replaced by the operations | `cli/main.py` and `__init__.py` are reworked (the entry point and boundary handler stay); every command file goes. |
+| `serve/`, `inbox/`, `feed/` | Goes (`feed/` goes with the change feed) | Agrees: all three are deleted whole. |
+| `inspection/` | Mostly replaced by `status` and `decisions` | All deleted; `inspection/questions.py` is only a column reference for 224. |
+| `program/` | Kept and reworked | Rework, effectively a rewrite: only the `Readable` and `Unreadable` vocabulary survives, and it is a delete if 224 does not want member readability. |
+| Live answering tests | "Stay and become the check on scenario A" | Three stay unchanged (`test_pipeline_run.py`, `test_precedence.py`, `question_tails.py` and its fixture); two wait on 223 (`stage_harness.py`, `test_answering_run.py`); `test_sdk_refusal.py` is deleted. |
+| Squadron changes table | #299, #302, #303 open | All three are closed and in `sq` 0.24.24; #304 is open. The architecture's facts were read from 0.24.23. |
+
+### Replacements the architecture does not cover
+
+Not designed here; each is raised for the slice named.
+
+| Gap | Slice |
+|---|---|
+| Where an answering run's scratch directory is recorded or derived. A later explicit call needs it to read `answer.json` and `check.json` of a finished run. | 222 or 223 |
+| How a per-member authorize list reaches the static `answering.yaml` prompts, and whether it is the same setting as `reserved_terms`. | 222 and 223 |
+| The hook opt-out flag for the answering run, and a live case for it. The shape comes from Squadron #302. | 223 |
+| Record fields for the resume outcome (resumed, refused, not delivered) and the resume log file. | 222 |
+| `concept_member` and `concept_path` on the program, which the 182 concept passage needs but the architecture's baseline list omits; and the concept must be optional (222 allows a program with none). | 222 and 223 |
+| How a member opts in or out of answering besides program membership (today the presence of an `answerer:` section). | 222 |
+| Whether `handle_pause` loops `poll_run` or passes a real timeout; `poll_run` hard-codes `--timeout 0`. | 223 |
+| Where `handle_pause` gets the run's slice and `execution_mode`. Neither `sq runs list --json` nor `sq runs wait --json` documents them. | 223 |
+| Whether a held run lock makes `sq run --resume` exit 2, which `resume_progress` reads as refused. Unverified. | 223 |
+| Whether `status` reports member readability, and what a member's checkout is when all worktrees are one member. | 224 |
+| The CLI's argument shapes, output format and exit-code table for the eight operations. | 223 and 224 |
+| A fresh-store creation race guard (`BEGIN IMMEDIATE` plus a version re-read). | 222 |
+| Whether `XDG_CONFIG_HOME` stays as a location source; the architecture allows one env var and nothing else. | 222 |
+| A run with no slice must be answered; `render_question` rejects a blank slice label today. | 223 |
+| `DEFAULT_TARGET_BRANCH = "main"` in `checkout_reads.py` is a magic default the project rules forbid. | 221 or 223 |
+| The surviving `sq` and `cf` helpers need one home outside `process/`. | 221 or 223 |
+
+### Ordering constraints for 221
+
+Kept code imports these from modules that go, so they must move first or in the same commit: `cut_to_bound` (`runner/ingest/outcome.py`), `STDERR_TAIL_LIMIT_BYTES` (`runner/launch.py`), `QuestionInvariantError` (`settle.py`), `BEGIN_IMMEDIATE` (`sql_inbox.py`), `decode_mapping` and `decode_timestamp` (`mapping_journal.py`), `read_config`, `read_target` and the `cf_argv` pieces (`dispatch/checkout_reads.py`, `lifecycle/plan_read.py`), `SQ_EXECUTABLE` (`process/sq_outcome.py`), `LaunchFailure` and `ResumeFailure` (`faults.py`), `Finished` values (`observed.py`). Test helpers split the same way: `observe_support.py`, `tests/conftest.py`, `sq_stub_scripts.py`, `sources_repo.py`. The `store_path` name goes with `test_store_safety.py`'s forbidden-name set. `pyproject.toml` loses `starlette`, `uvicorn`, `httpx2`, the schema artifacts and the slice-writing artifact, and CI loses its load-test step.
+
+### Slice 182 files that sit in `delete` rows
+
+Restated from the Slice 182 section: `stage.py`, `tick.py`, `tenant.py`, `launch.py` (the `LaunchContext` and `launch_answering` parts), `tests/runner/answering/launch_rig.py`, `sources_assembly.py`, `test_launch_prepare.py`, `test_sources.py`, `test_stage_observe.py`, `test_stage_pending.py`, `tests/runner/test_end_to_end_answering.py`, `test_tick_answering.py`, `tick_support.py` and `tests/load/test_program_passages_load.py`. The branch edits to them are signature-only or program-context wiring; the wanted ideas (program context reaching the launch, the program-question render and visibility tests, the one-call load shape) are in the rewrite group and port to 223's new code and tests, so no verdict changes.

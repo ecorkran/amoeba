@@ -155,19 +155,19 @@ Commits are at `**Commit**:` markers only. Task files are updated by the `task-c
 
 ## 5. Live Tests, Squadron and Differences
 
-- [ ] **5.1 Live tests**
-  - [ ] For `conftest.py`, `harness.py`, `question_tails.py`, `stage_harness.py`, `test_answering_run.py`, `test_pipeline_run.py`, `test_precedence.py`, `test_sdk_refusal.py` and `fixtures/` under `tests/live/answering/`: state stays, waits on 223 (name the scenario A claim it covers), or delete
-  - [ ] Write the Live tests section
+- [x] **5.1 Live tests**
+  - [x] For `conftest.py`, `harness.py`, `question_tails.py`, `stage_harness.py`, `test_answering_run.py`, `test_pipeline_run.py`, `test_precedence.py`, `test_sdk_refusal.py` and `fixtures/` under `tests/live/answering/`: state stays, waits on 223 (name the scenario A claim it covers), or delete
+  - [x] Write the Live tests section
 
-- [ ] **5.2 Squadron candidates**
-  - [ ] List units that Squadron users in general would want and that can be described without mentioning Amoeba
-  - [ ] Run `gh issue list -R ecorkran/squadron --state open` and check each candidate against it (#299, #302, #303, #304 exist)
-  - [ ] For each remaining candidate, read #302 and #303 for style, then file an issue with `gh issue create -R ecorkran/squadron`; if there are none, say so
-  - [ ] Write the Move to Squadron section with an issue link per item; set `squadron` rows' reasons to include the link
+- [x] **5.2 Squadron candidates**
+  - [x] List units that Squadron users in general would want and that can be described without mentioning Amoeba
+  - [x] Run `gh issue list -R ecorkran/squadron --state open` and check each candidate against it (#299, #302, #303, #304 exist)
+  - [x] For each remaining candidate, read #302 and #303 for style, then file an issue with `gh issue create -R ecorkran/squadron`; if there are none, say so
+  - [x] Write the Move to Squadron section with an issue link per item; set `squadron` rows' reasons to include the link
 
-- [ ] **5.3 Differences from the architecture**
-  - [ ] Compare Verdicts against the architecture's Current State table
-  - [ ] List each difference with the reason, plus any uncovered replacements from the Dependencies section
+- [x] **5.3 Differences from the architecture**
+  - [x] Compare Verdicts against the architecture's Current State table
+  - [x] List each difference with the reason, plus any uncovered replacements from the Dependencies section
 
 **Commit**: `docs: audit live tests, squadron items and differences`
 
