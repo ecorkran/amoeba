@@ -1,7 +1,7 @@
 [project]
 name = "amoeba"
 version = "0.1.0"
-description = "Orchestration runner with deterministic control flow and bounded nondeterminism."
+description = "Amoeba: a tool that answers a paused run's first-level questions and keeps the record"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }

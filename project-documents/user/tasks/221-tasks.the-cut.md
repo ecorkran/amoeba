@@ -228,30 +228,33 @@ Checks run once, at task 2.21; do not re-point old code to keep it compiling. Ta
 
 These tasks normally change no files, so there is no commit marker.
 
-- [ ] **3.1 Build the wheel**
-  - [ ] Run `uv build`; list the wheel's contents with `unzip -l`
-  - [ ] Success: the wheel holds `amoeba/answering/answering.yaml`, no `.sql` files, and no console entry point (`entry_points.txt` absent or empty)
-  - [ ] If a failure here or in 3.2 needs a file change from the cut, make it and commit it as `refactor: {what was fixed}`; this is the only commit in this section
+- [x] **3.1 Build the wheel**
+  - Note: `uv build --wheel` built amoeba-0.1.0; the wheel holds amoeba/answering/answering.yaml, no .sql files and no entry_points.txt (a wheel-contents test now asserts all three).
+  - [x] Run `uv build`; list the wheel's contents with `unzip -l`
+  - [x] Success: the wheel holds `amoeba/answering/answering.yaml`, no `.sql` files, and no console entry point (`entry_points.txt` absent or empty)
+  - [x] If a failure here or in 3.2 needs a file change from the cut, make it and commit it as `refactor: {what was fixed}`; this is the only commit in this section
 
-- [ ] **3.2 Run the live tier**
-  - [ ] With the `AMOEBA_LIVE_*` variables and `sq` available, run `uv run pytest tests/live/answering`
-  - [ ] If they are unavailable, write `BLOCKED: live tier needs AMOEBA_LIVE_* and sq` under this task and stop
-  - [ ] Success: the live tests pass
+- [x] **3.2 Run the live tier**
+  - Note: Live tier ran with the AMOEBA_LIVE_* variables and the provider key taken from .env by name (no whole-.env injection): `uv run pytest tests/live/answering` 7 passed, run twice (after the cut and after the README).
+  - [x] With the `AMOEBA_LIVE_*` variables and `sq` available, run `uv run pytest tests/live/answering`
+  - [x] If they are unavailable, write `BLOCKED: live tier needs AMOEBA_LIVE_* and sq` under this task and stop
+  - [x] Success: the live tests pass
 
 ## 4. README
 
-- [ ] **4.1 Rewrite the README (D9)**
-  - [ ] Remove the hero image and old pitch; delete `assets/` if nothing else uses it
-  - [ ] Say, briefly: what Amoeba is (a tool agents and pipelines call to answer a paused run's first-level questions and keep the record, across a program of repos; no process of its own; optional for Squadron), what exists now (the library, no command), where the design lives (concept, `220-arch.program-tool.md`, the slice plan), and how to run the checks, including the live tier's `AMOEBA_LIVE_*` variables
-  - [ ] Read each variable name from the live tests' source; do not write one from memory
-  - [ ] Set `pyproject.toml`'s `description` to the README's first line
-  - [ ] Success: the README claims nothing the code does not back and mentions no command, store, tick or inbox
+- [x] **4.1 Rewrite the README (D9)**
+  - [x] Remove the hero image and old pitch; delete `assets/` if nothing else uses it
+  - [x] Say, briefly: what Amoeba is (a tool agents and pipelines call to answer a paused run's first-level questions and keep the record, across a program of repos; no process of its own; optional for Squadron), what exists now (the library, no command), where the design lives (concept, `220-arch.program-tool.md`, the slice plan), and how to run the checks, including the live tier's `AMOEBA_LIVE_*` variables
+  - [x] Read each variable name from the live tests' source; do not write one from memory
+  - [x] Set `pyproject.toml`'s `description` to the README's first line
+  - [x] Success: the README claims nothing the code does not back and mentions no command, store, tick or inbox
 
-- [ ] **4.2 Final verification**
-  - [ ] Run the checks once; rerun `uv run pytest tests/live/answering`
-  - [ ] `git grep -nE "amoeba\.(runner|process|store|program|serve|inbox|feed|cli|inspection)"` over `src tests scripts docs README.md` finds nothing
-  - [ ] Walk the slice's Success Criteria list and note each as met (closing `amoeba#32` happens at merge in Phase 7, not here)
-  - [ ] Any audit row changed during the cut has its reason and is in the same commit as its code
-  - [ ] Success: every Success Criteria item in the design is met
+- [x] **4.2 Final verification**
+  - Note: Final run: ruff format --check, ruff check and pyright clean; 544 tests passed. The old-package grep over src tests scripts README.md finds only two lines of frozen fixture prose in tests/answering/fixtures/sources (project documents quoted verbatim, not code); docs/ no longer exists. Success Criteria walked: all met except the amoeba#32 closure, which happens at merge in Phase 7. Audit rows changed during the cut are in the same commit as their code, with reasons.
+  - [x] Run the checks once; rerun `uv run pytest tests/live/answering`
+  - [x] `git grep -nE "amoeba\.(runner|process|store|program|serve|inbox|feed|cli|inspection)"` over `src tests scripts docs README.md` finds nothing
+  - [x] Walk the slice's Success Criteria list and note each as met (closing `amoeba#32` happens at merge in Phase 7, not here)
+  - [x] Any audit row changed during the cut has its reason and is in the same commit as its code
+  - [x] Success: every Success Criteria item in the design is met
 
 **Commit**: `docs: rewrite README for the library`
