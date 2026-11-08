@@ -1,9 +1,9 @@
-"""Run a real pipeline for the live tiers (slice 140, D10; slice 180, D10).
+"""Run a real pipeline for the live tier (slice 140, D10).
 
-``sq run`` is launched the way the Runner launches it (detached stdin, working
+``sq run`` is launched the way Amoeba launches it (detached stdin, working
 directory the run's directory) and watched with the existing ``poll_run``.
-``run_pipeline`` runs the answering pipeline; ``watch_run`` is the shared launch
-and wait, which the request tier calls with its own argv. The live tests spend
+``run_pipeline`` runs the answering pipeline; ``watch_run`` is the launch
+and wait. The live tests spend
 real money; this helper adds nothing but a bounded wait.
 """
 
@@ -22,19 +22,19 @@ from typing import Final
 
 from process_containment import contained_popen
 
-from amoeba.process import (
+from amoeba.answering.pipeline_file import (
+    CHECK_MODEL_PARAM,
+    answering_pipeline_path,
+)
+from amoeba.upstream.context_forge.cli_call import OUTPUT_HEAD_CHARS
+from amoeba.upstream.squadron.launch import mint_run_id
+from amoeba.upstream.squadron.run_outcome import (
     SQ_EXECUTABLE,
     PollFailure,
     RunOutcome,
     RunPoll,
     poll_run,
 )
-from amoeba.runner.answering.pipeline_file import (
-    CHECK_MODEL_PARAM,
-    answering_pipeline_path,
-)
-from amoeba.runner.cf_call import OUTPUT_HEAD_CHARS
-from amoeba.runner.launch import mint_run_id
 
 POLL_INTERVAL_SECONDS: Final = 2.0
 POLL_CALL_TIMEOUT_SECONDS: Final = 30.0

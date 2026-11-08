@@ -1,0 +1,219 @@
+"""The outcome document's ``checkpoint`` and ``failure`` (slice 125, D7).
+
+Every document here is a real ``sq runs wait --timeout 0 --json`` capture from
+``tests/fixtures/sq_outcomes/`` (see the fixtures README), never one composed by
+hand, so a change in Squadron's shape fails here first.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from amoeba.upstream.squadron.run_outcome import (
+    OUTCOME_EXIT_CODES,
+    CheckpointKind,
+    FailureKind,
+    PollFailure,
+    RunOutcome,
+    RunOutcomeDocument,
+    UnknownKind,
+    parse_checkpoint_kind,
+    parse_failure_kind,
+    poll_run,
+)
+
+FIXTURES = Path(__file__).parents[2] / "fixtures" / "sq_outcomes"
+
+
+def _fixture(name: str) -> RunOutcomeDocument:
+    return RunOutcomeDocument.model_validate_json(
+        (FIXTURES / name).read_text(encoding="utf-8")
+    )
+
+
+def test_a_failed_run_carries_its_failure() -> None:
+    document = _fixture("failed_artifact_missing.json")
+
+    assert document.outcome is RunOutcome.FAILED
+    assert document.failure is not None
+    assert document.failure.kind == "artifact_missing"
+    assert document.failure.step == "design-0"
+    assert document.failure.message is not None
+    assert document.failure.message.startswith("phase dispatch completed")
+    assert parse_failure_kind(document.failure.kind) is FailureKind.ARTIFACT_MISSING
+
+
+def test_a_paused_run_carries_its_checkpoint() -> None:
+    document = _fixture("paused_awaits_human.json")
+
+    assert document.outcome is RunOutcome.PAUSED
+    checkpoint = document.checkpoint
+    assert checkpoint is not None
+    assert (checkpoint.kind, checkpoint.step, checkpoint.step_type) == (
+        "awaits_human",
+        "branch-10",
+        "branch",
+    )
+    assert checkpoint.is_loop is False
+    assert (checkpoint.round, checkpoint.max_rounds) == (None, None)
+    assert (checkpoint.verdict, checkpoint.review_file) == (None, None)
+    assert checkpoint.reason == "checkpoint"
+    assert checkpoint.paused_at == datetime(2026, 10, 16, 2, 20, 27, 561691, tzinfo=UTC)
+    assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.AWAITS_HUMAN
+
+
+def test_an_unexpected_reporting_type_does_not_fail_the_document() -> None:
+    raw = json.loads(
+        (FIXTURES / "paused_awaits_human.json").read_text(encoding="utf-8")
+    )
+    raw["checkpoint"]["round"] = "2/3"
+    raw["checkpoint"]["is_loop"] = "yes"
+
+    document = RunOutcomeDocument.model_validate(raw)
+
+    assert document.checkpoint is not None
+    assert (document.checkpoint.round, document.checkpoint.is_loop) == ("2/3", "yes")
+    assert document.checkpoint.kind == "awaits_human"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("loop_exhausted", CheckpointKind.LOOP_EXHAUSTED),
+        ("interactive_checkpoint", CheckpointKind.INTERACTIVE_CHECKPOINT),
+        ("awaits_human", CheckpointKind.AWAITS_HUMAN),
+        ("other", CheckpointKind.OTHER),
+        (None, None),
+        ("awaits_robot", UnknownKind("awaits_robot")),
+        ("Awaits_Human", UnknownKind("Awaits_Human")),
+        ("", UnknownKind("")),
+    ],
+)
+def test_checkpoint_kinds_parse_to_a_member_or_the_unknown_text(
+    raw: str | None, expected: object
+) -> None:
+    assert parse_checkpoint_kind(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("provider_error", FailureKind.PROVIDER_ERROR),
+        ("stall", FailureKind.STALL),
+        ("artifact_missing", FailureKind.ARTIFACT_MISSING),
+        ("cost_cap", FailureKind.COST_CAP),
+        (None, None),
+        ("meltdown", UnknownKind("meltdown")),
+    ],
+)
+def test_failure_kinds_parse_to_a_member_or_the_unknown_text(
+    raw: str | None, expected: object
+) -> None:
+    assert parse_failure_kind(raw) == expected
+
+
+def test_an_unrecognized_kind_does_not_fail_a_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    text = (
+        '{"run_id": "run-20261022-p5-aaaa1111", "outcome": "failed", '
+        '"failure": {"kind": "meltdown", "step": "s", "message": "m"}}'
+    )
+
+    def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command, OUTCOME_EXIT_CODES[RunOutcome.FAILED], text, ""
+        )
+
+    monkeypatch.setattr("amoeba.upstream.squadron.run_outcome.subprocess.run", fake_run)
+
+    polled = poll_run("run-20261022-p5-aaaa1111", timeout_seconds=5.0)
+
+    assert not isinstance(polled, PollFailure)
+    assert polled.failure is not None
+    assert parse_failure_kind(polled.failure.kind) == UnknownKind("meltdown")
+
+
+@pytest.mark.parametrize("name", sorted(p.name for p in FIXTURES.glob("*.json")))
+def test_every_real_capture_survives_a_poll(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    text = (FIXTURES / name).read_text(encoding="utf-8")
+    document = RunOutcomeDocument.model_validate_json(text)
+
+    def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command, OUTCOME_EXIT_CODES[document.outcome], text, ""
+        )
+
+    monkeypatch.setattr("amoeba.upstream.squadron.run_outcome.subprocess.run", fake_run)
+
+    assert poll_run(document.run_id, timeout_seconds=5.0) == document
+
+
+def test_an_agent_question_pause_carries_its_question() -> None:
+    checkpoint = _fixture("composed_paused_agent_question.json").checkpoint
+
+    assert checkpoint is not None
+    assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.AGENT_QUESTION
+    assert checkpoint.question is not None and "178" in checkpoint.question
+    assert checkpoint.resets_at is None
+
+
+def test_an_agent_question_with_no_question_reads_none() -> None:
+    raw = json.loads(
+        (FIXTURES / "composed_paused_agent_question.json").read_text(encoding="utf-8")
+    )
+    del raw["checkpoint"]["question"]
+
+    checkpoint = RunOutcomeDocument.model_validate(raw).checkpoint
+
+    assert checkpoint is not None
+    assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.AGENT_QUESTION
+    assert checkpoint.question is None
+
+
+def test_a_usage_limit_pause_carries_a_timezone_aware_resets_at() -> None:
+    checkpoint = _fixture("composed_paused_usage_limit.json").checkpoint
+
+    assert checkpoint is not None
+    assert parse_checkpoint_kind(checkpoint.kind) is CheckpointKind.USAGE_LIMIT
+    assert checkpoint.resets_at == datetime(2026, 10, 29, 18, 0, tzinfo=UTC)
+
+
+def test_a_resets_at_with_an_offset_keeps_its_instant() -> None:
+    raw = json.loads(
+        (FIXTURES / "composed_paused_usage_limit.json").read_text(encoding="utf-8")
+    )
+    raw["checkpoint"]["resets_at"] = "2026-10-29T20:00:00+02:00"
+
+    checkpoint = RunOutcomeDocument.model_validate(raw).checkpoint
+
+    assert checkpoint is not None
+    assert checkpoint.resets_at == datetime(2026, 10, 29, 18, 0, tzinfo=UTC)
+
+
+def test_a_failure_carries_the_agent_text_when_present_and_none_when_absent() -> None:
+    with_text = _fixture("composed_failed_agent_text.json").failure
+    without_text = _fixture("failed_artifact_missing.json").failure
+
+    assert with_text is not None and without_text is not None
+    assert with_text.agent_text is not None and "slice 178" in with_text.agent_text
+    assert without_text.agent_text is None
+
+
+def test_a_checkpoint_without_the_new_fields_reads_none() -> None:
+    checkpoint = _fixture("paused_awaits_human.json").checkpoint
+
+    assert checkpoint is not None
+    assert (checkpoint.question, checkpoint.resets_at) == (None, None)
+
+
+def test_an_unknown_checkpoint_kind_still_parses_as_unknown() -> None:
+    assert parse_checkpoint_kind("agent_shrug") == UnknownKind("agent_shrug")

@@ -17,8 +17,6 @@ import pytest
 ANSWER_MODEL_VARIABLE: Final = "AMOEBA_LIVE_ANSWER_MODEL"
 CHECK_MODEL_VARIABLE: Final = "AMOEBA_LIVE_CHECK_MODEL"
 MAX_COST_VARIABLE: Final = "AMOEBA_LIVE_MAX_COST_USD"
-# Read only by the SDK-alias refusal test (Task 9.4), not at collection.
-SDK_MODEL_VARIABLE: Final = "AMOEBA_LIVE_SDK_MODEL"
 
 
 @dataclass(frozen=True)

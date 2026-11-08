@@ -8,8 +8,8 @@ from pathlib import Path
 from live_harness import PipelineRun, run_pipeline
 from live_settings import LiveSettings
 
-from amoeba.process import RunOutcome, RunOutcomeDocument
-from amoeba.runner.answering.inputs import QuestionInput, prepare_scratch
+from amoeba.answering.inputs import QuestionInput, prepare_scratch
+from amoeba.upstream.squadron.run_outcome import RunOutcome, RunOutcomeDocument
 
 SQ_RUN_TIMEOUT_SECONDS = 600
 CF_TIMEOUT_SECONDS = 60

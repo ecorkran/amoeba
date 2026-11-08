@@ -6,7 +6,7 @@ never loosened to fit a model.
 
 from __future__ import annotations
 
-from amoeba.runner.answering.artifacts import (
+from amoeba.answering.artifacts import (
     AnswererDecline,
     CheckReply,
     ProposedAnswer,
@@ -14,7 +14,7 @@ from amoeba.runner.answering.artifacts import (
     read_answer,
     read_check,
 )
-from amoeba.runner.answering.inputs import QuestionInput
+from amoeba.answering.inputs import QuestionInput
 from live.answering.harness import AnsweringRun, LiveHarness, passage
 
 THIS_SLICE = "140 answering-pipeline"

@@ -8,12 +8,7 @@ license = { file = "LICENSE" }
 dependencies = [
     "pydantic>=2.13.5",
     "pyyaml>=6.0.3",
-    "starlette>=1.8.0",
-    "uvicorn>=0.54.0",
 ]
-
-[project.scripts]
-amoeba = "amoeba.cli.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -21,13 +16,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/amoeba"]
-# Migration SQL and the shipped pipeline files (answering, slice-writing) must ship
-# in the wheel, not only exist in a source checkout.
+# The shipped answering pipeline file must ship in the wheel, not only exist in a
+# source checkout.
 artifacts = [
-    "src/amoeba/store/schema/*.sql",
-    "src/amoeba/store/program_schema/*.sql",
-    "src/amoeba/runner/answering/answering.yaml",
-    "src/amoeba/runner/request_run/slice_writing.yaml",
+    "src/amoeba/answering/answering.yaml",
 ]
 
 [dependency-groups]
@@ -36,7 +28,6 @@ dev = [
     "pyright>=1.1.390",
     "ruff>=0.8",
     "types-pyyaml>=6.0.12.20260906",
-    "httpx2>=2.13.1",
 ]
 
 [tool.ruff]
@@ -59,10 +50,8 @@ reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# The load tier is never collected by a bare `uv run pytest`: it drives real
-# processes through crash loops and takes far longer than the default suite.
-# An explicit `uv run pytest tests/load` still collects it, because a path
-# named on the command line is collected regardless of --ignore. The live tier
-# (real sq, real models, real spend) is excluded the same way: run it with
-# `uv run pytest tests/live` and the AMOEBA_LIVE_* variables set.
-addopts = ["--ignore=tests/load", "--ignore=tests/live"]
+# The live tier (real sq, real models, real spend) is never collected by a bare
+# `uv run pytest`. An explicit `uv run pytest tests/live` still collects it,
+# because a path named on the command line is collected regardless of --ignore.
+# Run it with the AMOEBA_LIVE_* variables set.
+addopts = ["--ignore=tests/live"]

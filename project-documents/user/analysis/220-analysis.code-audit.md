@@ -45,7 +45,7 @@ Verdicts: `keep`, `rework`, `squadron`, `delete`. Scenarios: A pause handling, B
 | `sources.py` | rework | Scenario A: assembles the passage sources. Every function reads node rows (see Dependencies). |
 | `launch.py`: `passage_refs`, `_prepare_scratch`, `_discard_scratch`, argv build | rework | Scenario A: scratch preparation, `sq run` argv for the answering pipeline, passage provenance. |
 | `launch.py`: `LaunchContext`, `launch_answering`, `LaunchStatus.STOPPED` and `SKIPPED`, tracker and log-path use | delete | Tick-launched, tied to `LaunchTracker`, `TickBudget` and a journal entry. `handle_pause` waits on the answering run instead (223). |
-| `finish.py` | rework | Scenario A: settling a finished answering run (decide, then submit through the gate or decline) stays, including discard-if-the-PM-answered-first. It is keyed on journal entries today. |
+| `finish.py` | delete | Changed from `rework` in 221 (D1, D2): every part is keyed on journal entries or writes the store (settle, submit, decline, discard-if-the-PM-answered-first). The pure remainder is reading the two reply files and calling `decide_answer`, which 223 writes against the new record. `QuestionInvariantError` has no kept importer and went with it. |
 | `settle.py` | delete | Pure tick logic over blocked states. Two outcomes survive as `handle_pause` declines (blank question text, answerer not configured). `QuestionInvariantError` lives here but `finish.py` imports it, so it needs a new home. |
 | `stage.py` | delete | `AnsweringStage` exists only to be called from the tick, over journal entries, blocked states and the run observer. Its stranded-claim idea is the architecture's dead-claim rule (223). |
 
@@ -186,12 +186,12 @@ Test directories named `runner`, `store`, `process` and `live` are importable to
 | `sq_stub.py`, `sq_stub_scripts.py`, `test_sq_stub_run.py` | rework | A, 223 base: the fake `sq` (run, runs wait, validate) and its self-test. Drop the review scripts (they import `review_fixtures`), `runs prune`, and any `--timeout 0` assumption. |
 | `sq_stub_resume.py`, `test_sq_stub_resume.py` | keep | A, 223 base: the fake `sq run --resume` and its self-test. |
 | `process_containment.py`, `test_process_containment.py` | keep | Test hygiene for every scenario: file-size cap and orphan reaping for child processes. |
-| `fault_injection.py` | rework | Set-up, A: fails one SQL statement to prove rollback; 222 and 223 atomicity tests need it. |
-| `cli_harness.py` | rework | All scenarios: keep `run_cli` and `cli_environment` for 224; drop the start, stop, serve and submit drivers. |
+| `fault_injection.py` | delete | Changed from `rework` in 221 (D1, D8): it patches the old `Store` and its SQL constants, which go whole. 222 and 223 write their own for the new store. |
+| `cli_harness.py` | delete | Changed from `rework` in 221 (D1, D8): it runs `amoeba.cli.main`, which no longer exists, and nothing uses it until 224 writes the commands. |
 | `test_observer_sq_outcome.py`, `test_observer_sq_outcome_fields.py` | rework | A, 223 base: tests of the one `sq runs wait --json` reader. The exact-argv test changes with the timeout; drop the review tests. |
-| `test_process_public_api.py`, `test_public_api.py` | rework | Set-up, A: export-hygiene tests hold; the expected export lists are rewritten for the new surface. |
-| `test_migrations.py` | rework | Set-up: stamp, newer-than-code, corrupt-file, failed-migration and no-op claims hold for the baseline. Drop the 002 and 003 upgrade tests. |
-| `test_paths.py`, `test_read_only_open.py`, `test_failure_modes.py` | rework | Set-up: store location, env override, read-only open, busy timeout and WAL claims. Replace node and journal rows with question or program rows. |
+| `test_process_public_api.py`, `test_public_api.py` | delete | Changed from `rework` in 221 (D1, D8): they pin the export lists of `amoeba.process` and `amoeba.store`, both deleted; 222 writes export tests for the new surface. |
+| `test_migrations.py` | delete | Changed from `rework` in 221 (D1, D8): it tests `store/migrations.py` and the 15 old migrations, which go whole. 222 writes the stamp, newer-than-code, corrupt-file, failed-migration and no-op claims against its baseline. |
+| `test_paths.py`, `test_read_only_open.py`, `test_failure_modes.py` | delete | Changed from `rework` in 221 (D1, D8): they test `store/paths.py`, `connection.py` and the node and journal writes, all deleted. 222 writes store location, env override, read-only open, busy timeout and WAL claims. |
 | `test_store_safety.py` | rework | Set-up: guard that no test touches the central store; it builds its forbidden names from `paths.store_path`, which goes. |
 | `test_import_boundaries.py` | rework | Set-up: keep the store, cli and runner layering rules; drop the feed, serve, inspection and run-pruning rules. It already fails on deleted names. |
 | `live_environment.py`, `live_harness.py`, `live_settings.py` | keep | A: the live tier's helpers; they import only kept units. See Live tests. |
@@ -217,7 +217,7 @@ Test directories named `runner`, `store`, `process` and `live` are importable to
 | `tests/process/` (21 files) | delete | cf watch, inbox tenants, project stores, prune, review detection, tenant order, log limit. |
 | `tests/program/test_read_member.py` | delete | Member readability through cf links, snapshots and per-project store files. 224 writes new if readability stays. |
 | `tests/upstream/test_cf_plan.py` | rework | A: `parse_initiatives` and `parse_slice_list` over the fixtures; drop the plan-status tests. |
-| `tests/upstream/test_import_direction.py` | rework | Set-up: keep "store does not import upstream"; drop the inbox and process rows. |
+| `tests/upstream/test_import_direction.py` | delete | Changed from `rework` in 221 (D1, D6): its only live rule ("upstream does not import the inbox, process or store") is trivially true now; `tests/test_import_boundaries.py` enforces the one D6 rule. |
 | `tests/upstream/context_forge/` (5 files), `test_field_names_defined_once.py`, `test_review_*.py` (7 files) | delete | Tests of the deleted watcher units and the review parser. |
 | `tests/store/test_migration_004.py` to `test_migration_015.py` | delete | No data to migrate; 222 writes one baseline. |
 | `tests/store/` question and answer group: `test_question_records`, `_question_answering_fields`, `_question_record_catch`, `_question_acknowledgment`, `_answering_evidence`, `_answer_submission`, `_begin_answering`, `_resolutions` | delete | All seeded through `question_harness` (nodes, journal entries, blocked states, resolution slot, inbox submission). 222 and 223 write new ones for the new states and the per-run answer count. |
@@ -229,7 +229,7 @@ Test directories named `runner`, `store`, `process` and `live` are importable to
 | `tests/runner/answering/test_live_tier_rules.py` | keep | A: checks `live_settings` and the question tails; follows `tests/live`. |
 | `tests/runner/`: `test_answer_gate.py`, `test_git_read.py`, `test_git_read_only_place.py`, `test_launch.py`, `test_launch_ids.py`, `test_launch_logs.py`, `test_cf_commands_defined_once.py`, `test_cf_stub_plan.py` | rework | A, 223 base: the screen, git reads, launch argv and run ids, launch logs, the Context Forge command scan and stub plan reads. Drop the budget, journal-entry, tracker, porcelain-status and log-by-entry-id tests. |
 | `tests/runner/test_cf_call.py`, `git_repo.py`, `purity.py`, `__init__.py` | keep | A: `run_cf`; real temp git repos; the "no I/O" check; the package marker. |
-| `tests/runner/observe_support.py` | rework | A: kept tests import `Clock`, `Host` and `FakeCf` from it, but it also imports `TickBudget`, `RunObserver`, `LaunchTracker` and journal types. Split the generic fakes out. |
+| `tests/runner/observe_support.py` | delete | Changed from `rework` in 221 (D1, D8): the kept tests used `Clock` and `Host` only to build a `TickBudget`, which goes, and nothing uses `FakeCf`, so no generic fake needed splitting out. The kept source-read and git-read tests count calls through a wrapper on `run` instead. |
 | `tests/runner/dispatch/test_checkout_target.py` | rework | A: `read_config` and `read_target`. Drop the budget test; its `main` default is the magic default flagged above. |
 | `tests/runner/resolutions/test_argv.py` | keep | A, 223 base: `resume_argv`. |
 | `tests/runner/resolutions/test_confirm.py` | rework | A, 223 base: the `resume_progress` table; drop the `resumed_from_entry` tests. |
@@ -248,12 +248,12 @@ Helpers kept tests need that sit in deleted areas, which 221 must split out befo
 
 | Path | Verdict | Reason |
 |---|---|---|
-| `scripts/answerer_walkthrough.py` | rework | Scenario A: the manual proof on a real run. Keep the scratch git checkout, throwaway Context Forge project (`cf init`, `cf set`, `cf get --json`) and `.env` copy; drop the `amoeba start`, store directory and `projects.yaml` set-up. |
-| `scripts/answerer_walkthrough/project/` (six fixture files) | rework | Scenario A: the project content the walkthrough's passages come from. Used by `test_walkthrough_fixture.py` (deleted); 223 rebuilds a passage-assembly test on it. |
+| `scripts/answerer_walkthrough.py` | delete | Changed from `rework` in 221 (D1, D9): once `amoeba start`, the store directory and `projects.yaml` are dropped it only builds a scratch checkout and prints instructions for commands that do not exist. 223 rebuilds it against `handle_pause`; the scratch git checkout, throwaway Context Forge project (`cf init`, `cf set`, `cf get --json`) and `.env` copy are in git history. |
+| `scripts/answerer_walkthrough/project/` (six fixture files) | rework | Scenario A: the project content the walkthrough's passages come from. Kept as data, now without its script. Used by `test_walkthrough_fixture.py` (deleted); 223 rebuilds a passage-assembly test on it. |
 | `scripts/demo_detection.py` | delete | Seeds nodes and takes the resident instance lock. |
 | `scripts/demo_evidence.py`, `scripts/demo_evidence/` (three JSON files and a README) | delete | Seeds a node for verdict submission walkthroughs. |
 | `scripts/demo_inbox.py` | delete | Seeds a human-blocked node. |
-| `docs/answerer-walkthrough.md` | rework | Scenario A walkthrough, but its steps (`amoeba start`, journal entries, inspect, nodes) describe the old design; rewrite to `handle_pause`, `answer` and `status`. |
+| `docs/answerer-walkthrough.md` | delete | Changed from `rework` in 221 (D1, D9): its steps (`amoeba start`, journal entries, inspect, nodes) describe the old design, and `handle_pause`, `answer` and `status` do not exist yet, so a rewrite would name code that is not there. 223 and 224 write the new walkthrough. |
 | `docs/context-forge-contract.md` | delete | The `projects.json` watch, snapshots, plan reads and the runner's use of Context Forge. |
 | `docs/evidence-contract.md` | delete | Verdicts, findings, judge samples and calibration. |
 | `docs/feed-contract.md`, `docs/inbox-contract.md`, `docs/network-contract.md` | delete | The change feed, the inbox and messages, the HTTP server. |
@@ -457,6 +457,21 @@ The architecture is not edited here (slice scope); these are the places the verd
 | `program/` | Kept and reworked | Rework, effectively a rewrite: only the `Readable` and `Unreadable` vocabulary survives, and it is a delete if 224 does not want member readability. |
 | Live answering tests | "Stay and become the check on scenario A" | Three stay unchanged (`test_pipeline_run.py`, `test_precedence.py`, `question_tails.py` and its fixture); two wait on 223 (`stage_harness.py`, `test_answering_run.py`); `test_sdk_refusal.py` is deleted. |
 | Squadron changes table | #299, #302, #303 open | All three are closed and in `sq` 0.24.24; #304 is open. The architecture's facts were read from 0.24.23. |
+
+### Verdicts changed while cutting (slice 221, D1)
+
+Each row above marked "Changed from `rework` in 221" has its reason there. Beyond those rows, the cut did these things the audit left open:
+
+| Unit | What 221 did |
+|---|---|
+| `answering/launch.py` | Kept only `passage_refs` and the scratch-directory helpers (`prepare_scratch_directory`, `discard_scratch`, public names for the old private ones). `prepare_launch`, the argv and params build, and `ANSWERING_DIRNAME` went: 223 builds them against the new record. |
+| `answering/sources.py` | `assemble_sources` takes the checkout, the Context Forge project id, a `SliceRef`, the slice label and a tuple of `PmAnswer`. `slice_label`, `pm_precedent` and `_slice_ref` went (they read nodes and the store). |
+| `answering/passages.py` | `PmAnswer.node_id` is gone; `assemble(question_slice_label=...)` orders same-slice answers by the label. |
+| `upstream/git_read.py` | The allowlist is `show` and `log`; `status` and `merge-base` went with their builders and parsers. |
+| `upstream/context_forge/plan.py` | The `status` field and every status type went with `reported_complete`; `extra="ignore"` still accepts the key. |
+| Test doubles | `cf_stub` lost the `cf status --json` probe; `sq_stub` lost `runs prune` and accepts any `--timeout` value for `runs wait`; `sq_stub_scripts` lost the review scripts. |
+| Fixtures | Removed the review captures in `sq_outcomes/`, `cf/projects.json` and `cf/cf_get_amoeba.json`, and the `git/`, `sq_reviews/`, `sq_runs/` and `slice_writing/` sets. |
+| `tests/conftest.py` | Only `pytest_sessionstart` (orphan reaping) is left. |
 
 ### Replacements the architecture does not cover
 

@@ -1,1 +1,1 @@
-"""Amoeba: orchestration runner for Context Forge and Squadron projects."""
+"""Amoeba: answers a paused run's first-level questions (Context Forge, Squadron)."""

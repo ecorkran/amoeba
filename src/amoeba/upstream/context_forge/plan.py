@@ -1,15 +1,13 @@
 """Context Forge's plan reads: initiatives and the slice list of one initiative.
 
 ``cf list initiatives --json -a`` and ``cf list slices <index> --json`` are the
-Runner's view of a project's plan. This module holds their models and parsers and
-nothing else: running ``cf`` belongs to the Runner.
+view of a project's plan. This module holds their models and parsers and nothing
+else: running ``cf`` belongs to ``cli_call``.
 
-Models are lenient where CF varies and strict where the Runner relies on a field:
-an unknown extra field is ignored, but a missing ``index``, ``name`` or
-``isChecked`` (or ``entries``) fails the whole read with one :class:`PlanParseError`.
-A status outside :class:`PlanEntryStatus` is an explicit :class:`UnknownPlanStatus`
-carrying the raw text, never a default. An absent status is ``None``: CF did not
-report one.
+Models are lenient where CF varies and strict where the callers rely on a field:
+an unknown extra field is ignored (a plan entry's ``status`` among them: nothing
+here reads it), but a missing ``index``, ``name`` or ``isChecked`` (or ``entries``)
+fails the whole read with one :class:`PlanParseError`.
 
 The ``error: true`` document CF prints for an initiative without a slice plan is a
 CF answer, not a parse failure; :func:`parse_slice_list` returns it as a
@@ -19,11 +17,9 @@ CF answer, not a parse failure; :func:`parse_slice_list` returns it as a
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from enum import StrEnum
-from typing import Annotated, Final, Literal, Protocol, cast
+from typing import Final, Literal, cast
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 #: The two reads, named in a :class:`PlanParseError`.
 READ_INITIATIVES: Final = "list initiatives"
@@ -33,27 +29,6 @@ READ_SLICE_LIST: Final = "list slices"
 _ENTRIES_KEY: Final = "entries"
 _ENTRY_INDEX_KEY: Final = "index"
 _ERROR_FLAG_KEY: Final = "error"
-
-
-class PlanEntryStatus(StrEnum):
-    """The plan-entry statuses CF reports."""
-
-    COMPLETE = "complete"
-    IN_PROGRESS = "in_progress"
-    NOT_STARTED = "not_started"
-    DEPRECATED = "deprecated"
-    DEFERRED = "deferred"
-    DEGRADED = "degraded"
-
-
-@dataclass(frozen=True)
-class UnknownPlanStatus:
-    """A status outside :class:`PlanEntryStatus`, with the text CF printed."""
-
-    raw: str
-
-
-type PlanStatus = PlanEntryStatus | UnknownPlanStatus
 
 
 class PlanParseError(ValueError):
@@ -73,20 +48,6 @@ class PlanParseError(ValueError):
         self.detail = detail
 
 
-def _coerce_status(value: object) -> PlanStatus | None:
-    if value is None or isinstance(value, PlanEntryStatus | UnknownPlanStatus):
-        return value
-    try:
-        return PlanEntryStatus(value)
-    except ValueError:
-        # Specific: text outside the vocabulary is an answer, kept with its raw
-        # value, so the caller decides what an unknown status means.
-        return UnknownPlanStatus(raw=str(value))
-
-
-type _Status = Annotated[PlanStatus | None, BeforeValidator(_coerce_status)]
-
-
 class _PlanModel(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
@@ -98,7 +59,6 @@ class CFInitiative(_PlanModel):
     name: str
     is_checked: bool = Field(alias="isChecked")
     arch_file: str | None = Field(default=None, alias="archFile")
-    status: _Status = None
 
 
 class CFSliceEntry(_PlanModel):
@@ -108,7 +68,6 @@ class CFSliceEntry(_PlanModel):
     name: str
     is_checked: bool = Field(alias="isChecked")
     design_file: str | None = Field(default=None, alias="designFile")
-    status: _Status = None
 
 
 class CFSliceList(_PlanModel):
@@ -124,21 +83,6 @@ class CFErrorDocument(_PlanModel):
     error: Literal[True]
     code: str | None = None
     message: str | None = None
-
-
-class PlanEntryLike(Protocol):
-    """What :func:`reported_complete` reads: an entry, or a value holding its fields."""
-
-    @property
-    def is_checked(self) -> bool: ...
-
-    @property
-    def status(self) -> PlanStatus | None: ...
-
-
-def reported_complete(entry: PlanEntryLike) -> bool:
-    """Whether CF reports the entry complete: ``complete`` status or checked."""
-    return entry.is_checked or entry.status == PlanEntryStatus.COMPLETE
 
 
 def parse_initiatives(text: str) -> list[CFInitiative]:

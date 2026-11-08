@@ -10,14 +10,14 @@ import json
 
 import yaml
 
-from amoeba.runner.answering.artifacts import (
+from amoeba.answering.artifacts import (
     CheckReply,
     ProposedAnswer,
     read_answer,
     read_check,
 )
-from amoeba.runner.answering.inputs import QuestionInput
-from amoeba.runner.answering.pipeline_file import (
+from amoeba.answering.inputs import QuestionInput
+from amoeba.answering.pipeline_file import (
     ANSWER_PROMPT_FILE,
     ANSWER_REPLY_FILE,
     ANSWER_STEP,

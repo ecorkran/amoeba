@@ -69,11 +69,11 @@ def _line(pid: int, parent: int, elapsed: str, command: str) -> str:
 def test_only_old_orphans_naming_the_pytest_root_are_leaked() -> None:
     listing = "\n".join(
         [
-            _line(10, 1, OLD, f"python -m runner.crash_entry --dir {ROOT}/p1"),
-            _line(11, 1, FRESH, f"python -m runner.crash_entry --dir {ROOT}/p2"),
-            _line(12, 4242, OLD, f"python -m runner.crash_entry --dir {ROOT}/p3"),
+            _line(10, 1, OLD, f"python -m leaked_child --dir {ROOT}/p1"),
+            _line(11, 1, FRESH, f"python -m leaked_child --dir {ROOT}/p2"),
+            _line(12, 4242, OLD, f"python -m leaked_child --dir {ROOT}/p3"),
             _line(13, 1, OLD, "/usr/sbin/cfprefsd agent"),
-            _line(14, 1, OLD, "python -m amoeba.cli.main start --dir /srv/real"),
+            _line(14, 1, OLD, "python -m other_tool start --dir /srv/real"),
         ]
     )
 

@@ -1,17 +1,11 @@
-"""A stub ``cf`` for the Runner's per-link shape probes (slice 122, D9).
+"""A stub ``cf`` for the plan reads (slices 122 and 123).
 
-No test runs the real ``cf``. The stub answers the two probe commands, in the
-shapes observed on Context Forge 0.19.x (20261020):
-
-* ``cf status --json -p <id>`` prints a JSON object.
-* ``cf list initiatives --json -a -p <id>`` prints the captured initiatives
-  array (``tests/fixtures/cf/list_initiatives_a.json``); without ``-a`` it
-  exits 2, as an unexpected invocation.
-
-Plan reads (slice 123) answer from the directory ``CF_STUB_PLAN_DIR``:
+No test runs the real ``cf``. The stub answers the plan commands in the shapes
+observed on Context Forge 0.19.x (20261020), from the directory ``CF_STUB_PLAN_DIR``:
 
 * ``cf list initiatives --json -a`` prints ``initiatives.json`` (the captured
-  fixture when the directory has none).
+  fixture ``tests/fixtures/cf/list_initiatives_a.json`` when the directory has
+  none); without ``-a`` it exits 2, as an unexpected invocation.
 * ``cf list slices <index> --json`` prints ``slices-<index>.json``. When there is
   none, it prints the captured error document on **stderr** and exits 1, as the
   real ``cf`` does for an initiative without a slice plan.
@@ -54,7 +48,7 @@ class CfMode(StrEnum):
     GOOD = "good"
     #: Exit 0 with no output, as a deleted CF project does.
     EMPTY = "empty"
-    #: An array for status and an object for initiatives.
+    #: An array for the slice list and an object for the initiatives.
     WRONG_FORM = "wrong_form"
     #: Exit 1 with a message on stderr.
     FAIL = "fail"
@@ -81,9 +75,8 @@ _SCRIPT = textwrap.dedent(
     if len(arguments) < 3 or arguments[-2] != "-p" or "--json" not in arguments:
         print("stub cf: unexpected arguments", arguments, file=sys.stderr)
         sys.exit(2)
-    is_status = arguments[0] == "status"
     is_slices = arguments[:2] == ["list", "slices"]
-    if not is_status and not is_slices and "-a" not in arguments:
+    if not is_slices and "-a" not in arguments:
         print("stub cf: initiatives needs -a", arguments, file=sys.stderr)
         sys.exit(2)
     if mode == {fail!r}:
@@ -117,9 +110,7 @@ _SCRIPT = textwrap.dedent(
         path = os.path.join(plan_dir, name + ".json")
         return open(path, encoding="utf-8").read() if os.path.exists(path) else None
 
-    if is_status:
-        print("[]" if wrong else '{{"project": "stub"}}')
-    elif is_slices:
+    if is_slices:
         text = plan_text("slices-" + arguments[2])
         if text is None:
             # CF prints this document on stderr, and exits 1.
