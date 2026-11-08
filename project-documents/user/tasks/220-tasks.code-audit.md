@@ -11,7 +11,7 @@ projectState: Slices up to 182 are partly merged to main; the 182 branch (`182-s
   `user/analysis/` does not exist yet.
 dateCreated: 20261107
 dateUpdated: 20261108
-status: in_progress
+status: complete
 turns: 10
 promptTokens: 291955
 cachedTokens: 259908
@@ -173,16 +173,16 @@ Commits are at `**Commit**:` markers only. Task files are updated by the `task-c
 
 ## 6. Finish
 
-- [ ] **6.1 Write the Summary**
-  - [ ] A few lines: what stays, the 182 verdict, issues filed
-  - [ ] Set frontmatter status to `complete`
+- [x] **6.1 Write the Summary**
+  - [x] A few lines: what stays, the 182 verdict, issues filed
+  - [x] Set frontmatter status to `complete`
 
-- [ ] **6.2 Verify success criteria**
-  - [ ] All seven sections are filled; no placeholder lines remain
-  - [ ] Every `squadron` row links an open issue
-  - [ ] Every `keep` and `rework` row names a scenario
-  - [ ] Every directory under `src/amoeba` and `tests`, plus `scripts/` and `docs/`, has a row (repeat of 3.4)
-  - [ ] Every file in the 182 diff is sorted (repeat of 4.1)
-  - [ ] `git diff --name-only {target}...HEAD` lists only files under `project-documents/` (nothing under `src/`, `tests/`, `scripts/` or `docs/`)
+- [x] **6.2 Verify success criteria**
+  - [x] All seven sections are filled; no placeholder lines remain
+  - [x] Every `squadron` row links an open issue
+  - [x] Every `keep` and `rework` row names a scenario
+  - [x] Every directory under `src/amoeba` and `tests`, plus `scripts/` and `docs/`, has a row (repeat of 3.4)
+  - [x] Every file in the 182 diff is sorted (repeat of 4.1)
+  - [x] `git diff --name-only {target}...HEAD` lists only files under `project-documents/` (nothing under `src/`, `tests/`, `scripts/` or `docs/`)
 
 **Commit**: `docs: complete code audit`

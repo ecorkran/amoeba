@@ -4,7 +4,7 @@ project: amoeba
 topic: code-audit
 dateCreated: 20261108
 dateUpdated: 20261108
-status: in_progress
+status: complete
 ---
 
 # Analysis: Code Audit
@@ -13,7 +13,15 @@ Slice design: `user/slices/220-slice.code-audit.md`. Architecture: `user/archite
 
 ## Summary
 
-TODO: what stays, the slice 182 verdict, issues filed.
+**What stays.** The answering pipeline and its pure parts (`pipeline_file`, `artifacts`, `decide`, `gate`, passage cutting, `answering.yaml`), reworked at their edges: `node_id`, journal entries and the tick budget come out, a slice value and the caller's checkout go in, and the settings move to a user-level config. Also kept: the `sq` launch, argv, run-id and resume-confirm helpers, `process/sq_outcome.py` (the one reader of `sq runs wait --json`), the bounded `cf` and `git` reads, `store/connection.py` and the SQLite plumbing, the program and member reads (for `set_up`), a thin `cli/main.py` and the `amoeba` entry point, the Context Forge plan parsers, the fake `sq` and `cf` test doubles, and three live answering tests. Everything else is deleted: the tick, nodes, journal, blocked states, the host and its lock, dispatch and lifecycle, the inbox, feed, HTTP server, inspection views, all review and verdict code, `upstream/` apart from the plan parsers, the old migrations, the slice-writing pipeline (D5), and their tests, scripts and contract docs. The architecture's "keep `upstream/`" was wrong.
+
+**Slice 182: reuse parts.** Take the program passage kinds, `program_passages.py`, the pipeline text and the git helper renames; rewrite the tick wiring (`e0a4615`) and the concept read's store dependencies; drop the no-program path. Do not merge; 221 would turn a late merge into delete-modify conflicts. The 223 plan entry carries a note.
+
+**Gaps.** Sixteen replacements the architecture does not cover are listed under Differences, for 222 to 224. The main ones: where the answering run's scratch directory is recorded, how a per-member authorize list reaches the static pipeline file, where `handle_pause` gets a run's slice, and the question record's real new key (`paused_at` exists nowhere in today's code).
+
+**Squadron issues filed: none.** #299, #302 and #303 are closed and in `sq` 0.24.24; #304 stays on hold.
+
+Verdicts for `src/amoeba`, `tests`, `scripts`, `docs` and packaged resources are by hand and by import and test-name scan; most test files were not read in full.
 
 ## Verdicts
 
@@ -232,7 +240,7 @@ Test directories named `runner`, `store`, `process` and `live` are importable to
 | `tests/fixtures/sq_outcomes/` | rework | A: keep the paused and failed captures; drop the review captures. |
 | `tests/fixtures/cf/` | rework | A: keep `list_initiatives_a.json`, `list_slices_*.json` and `config/`; delete `projects.json` and `cf_get_amoeba.json`. |
 | `tests/fixtures/git/`, `slice_writing/`, `sq_reviews/`, `sq_runs/` | delete | Porcelain-status captures, slice-writing replies, the review parser's captures, the legacy run-file matcher's captures. |
-| `tests/fixtures/README.md` | rework | Trim to the kept fixture sets. |
+| `tests/fixtures/README.md` | rework | Set-up: trim to the kept fixture sets. |
 
 Helpers kept tests need that sit in deleted areas, which 221 must split out before deleting: `observe_support.py` (generic fakes), `tests/conftest.py` (imports `inbox_harness` and `serve_harness`), `sq_stub_scripts.py` (imports `review_fixtures`), `sources_repo.py` (imports `runner.budget`), and `test_question_tails_fixture.py` (reads a file under `tests/live/answering/fixtures/`).
 
@@ -263,7 +271,7 @@ Helpers kept tests need that sit in deleted areas, which 221 must split out befo
 | `pyproject.toml` artifact `runner/answering/answering.yaml` | keep | Scenario A answering pipeline (the file itself is a rework row above; the packaging entry stays). |
 | `pyproject.toml` artifact `runner/request_run/slice_writing.yaml` | delete | D5: no scenario calls the slice-writing pipeline. |
 | `pyproject.toml` dependencies `starlette`, `uvicorn`, dev `httpx2` | delete | Imported only by `serve/`, `cli/serve.py` and the server tests. `pydantic` and `pyyaml` stay until 222 and 223 show whether the kept code still needs them (the answering settings and `plan.py` use pydantic; `project_config.py` is the only YAML reader). |
-| `pyproject.toml` `description`, pytest `addopts` | rework | The description ("Orchestration runner...") is stale. Drop `--ignore=tests/load` with the load tests; keep `--ignore=tests/live`. `.github/workflows/ci.yml` also has a "Load tests" step to remove. |
+| `pyproject.toml` `description`, pytest `addopts` | rework | Set-up: the description ("Orchestration runner...") is stale. Drop `--ignore=tests/load` with the load tests; keep `--ignore=tests/live`. `.github/workflows/ci.yml` also has a "Load tests" step to remove. |
 | Other packaged files | none | No non-Python file under `src/` other than the 16 SQL files and the two YAML files. |
 
 ## Dependencies of kept code
