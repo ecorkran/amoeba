@@ -1,0 +1,1486 @@
+---
+docType: review
+layer: project
+reviewType: code
+slice: the-cut
+targetKind: slice
+rulesSource: project
+conventionsSource: AGENTS.md
+projectRules: [python.md, sql.md, testing.md]
+project: amoeba
+verdict: PASS
+verdictSource: stated
+sourceDocument: project-documents/user/slices/221-slice.the-cut.md
+aiModel: claude-sonnet-5-5
+aiProfile: sdk
+status: complete
+dateCreated: 20261108
+dateUpdated: 20261108
+reviewedSha: 068e9b79faacece22384ef5379161b95616ff6d8
+toolsGiven: [read_file, list_files, grep]
+toolCallsMade: 9
+diffTruncated: true
+diffCutFiles:
+  - "scripts/answerer_walkthrough.py"
+  - "scripts/demo_detection.py"
+  - "scripts/demo_evidence.py"
+  - "scripts/demo_inbox.py"
+  - "src/amoeba/__init__.py"
+  - "src/amoeba/answering/__init__.py"
+  - "src/amoeba/answering/artifacts.py"
+  - "src/amoeba/answering/decide.py"
+  - "src/amoeba/answering/gate.py"
+  - "src/amoeba/answering/inputs.py"
+  - "src/amoeba/answering/launch.py"
+  - "src/amoeba/answering/passages.py"
+  - "src/amoeba/answering/pipeline_file.py"
+  - "src/amoeba/answering/pipeline_resource.py"
+  - "src/amoeba/answering/settings.py"
+  - "src/amoeba/answering/source_reads.py"
+  - "src/amoeba/answering/sources.py"
+  - "src/amoeba/answering/values.py"
+  - "src/amoeba/cli/__init__.py"
+  - "src/amoeba/cli/feed.py"
+  - "src/amoeba/cli/ingest.py"
+  - "src/amoeba/cli/inspect.py"
+  - "src/amoeba/cli/lifecycle.py"
+  - "src/amoeba/cli/main.py"
+  - "src/amoeba/cli/prune.py"
+  - "src/amoeba/cli/serve.py"
+  - "src/amoeba/cli/settings_flags.py"
+  - "src/amoeba/cli/submit.py"
+  - "src/amoeba/feed/__init__.py"
+  - "src/amoeba/feed/follower.py"
+  - "src/amoeba/feed/wire.py"
+  - "src/amoeba/inbox/__init__.py"
+  - "src/amoeba/inbox/check_payloads.py"
+  - "src/amoeba/inbox/durable.py"
+  - "src/amoeba/inbox/envelope.py"
+  - "src/amoeba/inbox/evidence_payloads.py"
+  - "src/amoeba/inbox/layout.py"
+  - "src/amoeba/inbox/payload_config.py"
+  - "src/amoeba/inbox/pending.py"
+  - "src/amoeba/inbox/program_envelope.py"
+  - "src/amoeba/inbox/program_payloads.py"
+  - "src/amoeba/inbox/sidecars.py"
+  - "src/amoeba/inbox/submit.py"
+  - "src/amoeba/inspection/__init__.py"
+  - "src/amoeba/inspection/cf.py"
+  - "src/amoeba/inspection/checks.py"
+  - "src/amoeba/inspection/core.py"
+  - "src/amoeba/inspection/desired_states.py"
+  - "src/amoeba/inspection/evidence.py"
+  - "src/amoeba/inspection/feed.py"
+  - "src/amoeba/inspection/inbox.py"
+  - "src/amoeba/inspection/listing.py"
+  - "src/amoeba/inspection/program.py"
+  - "src/amoeba/inspection/questions.py"
+  - "src/amoeba/process/__init__.py"
+  - "src/amoeba/process/cf_watch.py"
+  - "src/amoeba/process/errors.py"
+  - "src/amoeba/process/grace.py"
+  - "src/amoeba/process/host.py"
+  - "src/amoeba/process/inbox_drain.py"
+  - "src/amoeba/process/inbox_tenant.py"
+  - "src/amoeba/process/instance_lock.py"
+  - "src/amoeba/process/log_limit.py"
+  - "src/amoeba/process/observers/__init__.py"
+  - "src/amoeba/process/observers/cf_get.py"
+  - "src/amoeba/process/observers/cf_readback.py"
+  - "src/amoeba/process/observers/sq_run_id.py"
+  - "src/amoeba/process/observers/sq_runs.py"
+  - "src/amoeba/process/program_inbox_tenant.py"
+  - "src/amoeba/process/project_stores.py"
+  - "src/amoeba/process/recovery.py"
+  - "src/amoeba/process/review_detection.py"
+  - "src/amoeba/process/review_scan.py"
+  - "src/amoeba/process/run_pruning.py"
+  - "src/amoeba/process/settings.py"
+  - "src/amoeba/process/supervisor.py"
+  - "src/amoeba/process/tenants.py"
+  - "src/amoeba/process/version_label.py"
+  - "src/amoeba/program/__init__.py"
+  - "src/amoeba/program/members.py"
+  - "src/amoeba/runner/__init__.py"
+  - "src/amoeba/runner/act.py"
+  - "src/amoeba/runner/answering/finish.py"
+  - "src/amoeba/runner/answering/launch.py"
+  - "src/amoeba/runner/answering/settle.py"
+  - "src/amoeba/runner/answering/sources.py"
+  - "src/amoeba/runner/answering/stage.py"
+  - "src/amoeba/runner/budget.py"
+  - "src/amoeba/runner/decide.py"
+  - "src/amoeba/runner/dispatch/__init__.py"
+  - "src/amoeba/runner/dispatch/build_view.py"
+  - "src/amoeba/runner/dispatch/candidates.py"
+  - "src/amoeba/runner/dispatch/check_stage.py"
+  - "src/amoeba/runner/dispatch/checkout_check.py"
+  - "src/amoeba/runner/dispatch/checkout_reads.py"
+  - "src/amoeba/runner/dispatch/facts.py"
+  - "src/amoeba/runner/dispatch/hold.py"
+  - "src/amoeba/runner/dispatch/params.py"
+  - "src/amoeba/runner/dispatch/planner.py"
+  - "src/amoeba/runner/dispatch/reissue.py"
+  - "src/amoeba/runner/dispatch/state.py"
+  - "src/amoeba/runner/factory.py"
+  - "src/amoeba/runner/faults.py"
+  - "src/amoeba/runner/finish.py"
+  - "src/amoeba/runner/ingest/__init__.py"
+  - "src/amoeba/runner/ingest/outcome.py"
+  - "src/amoeba/runner/ingest/record.py"
+  - "src/amoeba/runner/ingest/reviews.py"
+  - "src/amoeba/runner/intent/__init__.py"
+  - "src/amoeba/runner/intent/apply.py"
+  - "src/amoeba/runner/intent/governance.py"
+  - "src/amoeba/runner/intent/merge.py"
+  - "src/amoeba/runner/intent/vocabulary.py"
+  - "src/amoeba/runner/lifecycle/__init__.py"
+  - "src/amoeba/runner/lifecycle/cadence.py"
+  - "src/amoeba/runner/lifecycle/completion.py"
+  - "src/amoeba/runner/lifecycle/orphaning.py"
+  - "src/amoeba/runner/lifecycle/plan_read.py"
+  - "src/amoeba/runner/lifecycle/plan_stage.py"
+  - "src/amoeba/runner/lifecycle/predecessors.py"
+  - "src/amoeba/runner/lifecycle/read_checks.py"
+  - "src/amoeba/runner/lifecycle/reconcile.py"
+  - "src/amoeba/runner/lifecycle/references.py"
+  - "src/amoeba/runner/lifecycle/slugs.py"
+  - "src/amoeba/runner/lifecycle/status_block.py"
+  - "src/amoeba/runner/lifecycle/tree.py"
+  - "src/amoeba/runner/observe.py"
+  - "src/amoeba/runner/observe_resume.py"
+  - "src/amoeba/runner/observed.py"
+  - "src/amoeba/runner/probes.py"
+  - "src/amoeba/runner/program/__init__.py"
+  - "src/amoeba/runner/program/stage.py"
+  - "src/amoeba/runner/project_config.py"
+  - "src/amoeba/runner/project_view.py"
+  - "src/amoeba/runner/record_runs.py"
+  - "src/amoeba/runner/request_run/__init__.py"
+  - "src/amoeba/runner/request_run/inputs.py"
+  - "src/amoeba/runner/request_run/pipeline_file.py"
+  - "src/amoeba/runner/request_run/reply.py"
+  - "src/amoeba/runner/resolutions/__init__.py"
+  - "src/amoeba/runner/resolutions/act.py"
+  - "src/amoeba/runner/resolutions/classify.py"
+  - "src/amoeba/runner/resolutions/judge.py"
+  - "src/amoeba/runner/resolutions/planner.py"
+  - "src/amoeba/runner/resolutions/prepoll.py"
+  - "src/amoeba/runner/resolutions/stage.py"
+  - "src/amoeba/runner/resolutions/vocabulary.py"
+  - "src/amoeba/runner/supervise.py"
+  - "src/amoeba/runner/tenant.py"
+  - "src/amoeba/runner/tick.py"
+  - "src/amoeba/serve/__init__.py"
+  - "src/amoeba/serve/app.py"
+  - "src/amoeba/serve/auth.py"
+  - "src/amoeba/serve/errors.py"
+  - "src/amoeba/serve/feed_route.py"
+  - "src/amoeba/serve/policy.py"
+  - "src/amoeba/serve/reads.py"
+  - "src/amoeba/serve/responses.py"
+  - "src/amoeba/serve/server.py"
+  - "src/amoeba/serve/settings.py"
+  - "src/amoeba/serve/stream.py"
+  - "src/amoeba/serve/submissions.py"
+  - "src/amoeba/store/__init__.py"
+  - "src/amoeba/store/_base.py"
+  - "src/amoeba/store/_block_writer.py"
+  - "src/amoeba/store/_check_writer.py"
+  - "src/amoeba/store/_program_reads.py"
+  - "src/amoeba/store/_program_specs.py"
+  - "src/amoeba/store/_program_writer.py"
+  - "src/amoeba/store/_submission_writer.py"
+  - "src/amoeba/store/_verdict_writer.py"
+  - "src/amoeba/store/answer_submission.py"
+  - "src/amoeba/store/answering.py"
+  - "src/amoeba/store/attribution.py"
+  - "src/amoeba/store/blocking.py"
+  - "src/amoeba/store/calibration.py"
+  - "src/amoeba/store/cf_models.py"
+  - "src/amoeba/store/cf_snapshots.py"
+  - "src/amoeba/store/check_models.py"
+  - "src/amoeba/store/checks.py"
+  - "src/amoeba/store/connection.py"
+  - "src/amoeba/store/desired_states.py"
+  - "src/amoeba/store/discovery.py"
+  - "src/amoeba/store/evidence_models.py"
+  - "src/amoeba/store/feed.py"
+  - "src/amoeba/store/feed_models.py"
+  - "src/amoeba/store/finding_identity.py"
+  - "src/amoeba/store/inbox.py"
+  - "src/amoeba/store/inbox_models.py"
+  - "src/amoeba/store/journal.py"
+  - "src/amoeba/store/journal_models.py"
+  - "src/amoeba/store/mapping.py"
+  - "src/amoeba/store/mapping_cf.py"
+  - "src/amoeba/store/mapping_evidence.py"
+  - "src/amoeba/store/mapping_feed.py"
+  - "src/amoeba/store/mapping_inbox.py"
+  - "src/amoeba/store/mapping_journal.py"
+  - "src/amoeba/store/mapping_program.py"
+  - "src/amoeba/store/mapping_questions.py"
+  - "src/amoeba/store/mapping_runner.py"
+  - "src/amoeba/store/messages.py"
+  - "src/amoeba/store/migrations.py"
+  - "src/amoeba/store/models.py"
+  - "src/amoeba/store/nodes.py"
+  - "src/amoeba/store/paths.py"
+  - "src/amoeba/store/program_models.py"
+  - "src/amoeba/store/program_schema/001_program_record.sql"
+  - "src/amoeba/store/program_schema/__init__.py"
+  - "src/amoeba/store/program_store.py"
+  - "src/amoeba/store/project_escalations.py"
+  - "src/amoeba/store/question_models.py"
+  - "src/amoeba/store/questions.py"
+  - "src/amoeba/store/review_sources.py"
+  - "src/amoeba/store/routing_decisions.py"
+  - "src/amoeba/store/row_values.py"
+  - "src/amoeba/store/runner_models.py"
+  - "src/amoeba/store/runner_report.py"
+  - "src/amoeba/store/schema/001_initial.sql"
+  - "src/amoeba/store/schema/002_node_note.sql"
+  - "src/amoeba/store/schema/003_command_journal.sql"
+  - "src/amoeba/store/schema/004_inbox_and_messages.sql"
+  - "src/amoeba/store/schema/005_verdicts_and_findings.sql"
+  - "src/amoeba/store/schema/006_change_feed_and_detection.sql"
+  - "src/amoeba/store/schema/007_judge_samples_checks_and_progress.sql"
+  - "src/amoeba/store/schema/008_context_forge_snapshots.sql"
+  - "src/amoeba/store/schema/009_runner_contract.sql"
+  - "src/amoeba/store/schema/010_node_cf_index.sql"
+  - "src/amoeba/store/schema/011_journal_awaits_routing.sql"
+  - "src/amoeba/store/schema/012_resolution_decisions.sql"
+  - "src/amoeba/store/schema/013_question_records.sql"
+  - "src/amoeba/store/schema/014_answer_submission.sql"
+  - "src/amoeba/store/schema/015_answering_run.sql"
+  - "src/amoeba/store/schema/__init__.py"
+  - "src/amoeba/store/sql.py"
+  - "src/amoeba/store/sql_cf.py"
+  - "src/amoeba/store/sql_checks.py"
+  - "src/amoeba/store/sql_evidence.py"
+  - "src/amoeba/store/sql_feed.py"
+  - "src/amoeba/store/sql_inbox.py"
+  - "src/amoeba/store/sql_journal.py"
+  - "src/amoeba/store/sql_program.py"
+  - "src/amoeba/store/sql_questions.py"
+  - "src/amoeba/store/sql_runner.py"
+  - "src/amoeba/store/store.py"
+  - "src/amoeba/store/verdict_payload.py"
+  - "src/amoeba/store/verdicts.py"
+  - "src/amoeba/store/write_values.py"
+  - "src/amoeba/upstream/bounded_text.py"
+  - "src/amoeba/upstream/context_forge/__init__.py"
+  - "src/amoeba/upstream/context_forge/checkout.py"
+  - "src/amoeba/upstream/context_forge/cli_call.py"
+  - "src/amoeba/upstream/context_forge/diff.py"
+  - "src/amoeba/upstream/context_forge/plan.py"
+  - "src/amoeba/upstream/context_forge/projects_file.py"
+  - "src/amoeba/upstream/context_forge/slice_stem.py"
+  - "src/amoeba/upstream/context_forge/target_read.py"
+  - "src/amoeba/upstream/git_read.py"
+  - "src/amoeba/upstream/squadron/__init__.py"
+  - "src/amoeba/upstream/squadron/faults.py"
+  - "src/amoeba/upstream/squadron/launch.py"
+  - "src/amoeba/upstream/squadron/resume_argv.py"
+  - "src/amoeba/upstream/squadron/resume_confirm.py"
+  - "src/amoeba/upstream/squadron/review.py"
+  - "src/amoeba/upstream/squadron/review_artifact.py"
+  - "src/amoeba/upstream/squadron/review_fields.py"
+  - "src/amoeba/upstream/squadron/review_json.py"
+  - "src/amoeba/upstream/squadron/review_values.py"
+  - "src/amoeba/upstream/squadron/run_outcome.py"
+  - "tests/answerer_settings.py"
+  - "tests/answering/__init__.py"
+  - "tests/answering/sources_repo.py"
+  - "tests/answering/test_answer_gate.py"
+  - "tests/answering/test_decide.py"
+  - "tests/answering/test_inputs_render.py"
+  - "tests/answering/test_launch_scratch.py"
+  - "tests/answering/test_live_tier_rules.py"
+  - "tests/answering/test_passages.py"
+  - "tests/answering/test_pipeline_yaml.py"
+  - "tests/answering/test_prepare_scratch.py"
+  - "tests/answering/test_question_tails_fixture.py"
+  - "tests/answering/test_read_answer.py"
+  - "tests/answering/test_read_check.py"
+  - "tests/answering/test_source_reads.py"
+  - "tests/answering/test_stub_answering.py"
+  - "tests/answering/test_wheel_contents.py"
+  - "tests/cf_fixture.py"
+  - "tests/cf_harness.py"
+  - "tests/cf_stub.py"
+  - "tests/cf_watch_harness.py"
+  - "tests/cli/test_cf_watch_end_to_end.py"
+  - "tests/cli/test_detection_e2e_harness.py"
+  - "tests/cli/test_detection_end_to_end.py"
+  - "tests/cli/test_evidence_end_to_end.py"
+  - "tests/cli/test_feed.py"
+  - "tests/cli/test_inbox_end_to_end.py"
+  - "tests/cli/test_ingest.py"
+  - "tests/cli/test_ingest_end_to_end.py"
+  - "tests/cli/test_ingest_end_to_end_modes.py"
+  - "tests/cli/test_ingest_judge_samples.py"
+  - "tests/cli/test_judge_end_to_end.py"
+  - "tests/cli/test_serve.py"
+  - "tests/cli/test_serve_smoke.py"
+  - "tests/cli/test_submit.py"
+  - "tests/cli/test_submit_program.py"
+  - "tests/cli_harness.py"
+  - "tests/conftest.py"
+  - "tests/contract/__init__.py"
+  - "tests/contract/bootstrap.py"
+  - "tests/contract/conftest.py"
+  - "tests/contract/end_state.py"
+  - "tests/contract/harness.py"
+  - "tests/contract/launched.py"
+  - "tests/contract/network.py"
+  - "tests/contract/oracle.py"
+  - "tests/contract/public_api.py"
+  - "tests/contract/runner_tenant.py"
+  - "tests/contract/scenario.py"
+  - "tests/contract/standin.py"
+  - "tests/contract/steps.py"
+  - "tests/contract/steps_late.py"
+  - "tests/contract/steps_prune.py"
+  - "tests/contract/subscriber.py"
+  - "tests/contract/test_harness.py"
+  - "tests/contract/test_lifecycle_proof.py"
+  - "tests/contract/test_network_subset.py"
+  - "tests/contract/test_oracle.py"
+  - "tests/contract/test_public_api_rule.py"
+  - "tests/contract/test_runner_report_completion.py"
+  - "tests/detection_e2e_harness.py"
+  - "tests/detection_harness.py"
+  - "tests/evidence_harness.py"
+  - "tests/fault_injection.py"
+  - "tests/feed/test_follower.py"
+  - "tests/feed/test_wire.py"
+  - "tests/feed_harness.py"
+  - "tests/git_repo.py"
+  - "tests/host_harness.py"
+  - "tests/inbox/__init__.py"
+  - "tests/inbox/test_envelope.py"
+  - "tests/inbox/test_inbox_public_api.py"
+  - "tests/inbox/test_listings.py"
+  - "tests/inbox/test_program_envelope.py"
+  - "tests/inbox/test_program_payloads.py"
+  - "tests/inbox/test_submit.py"
+  - "tests/inbox/test_submit_program.py"
+  - "tests/inbox_harness.py"
+  - "tests/ingest_e2e_harness.py"
+  - "tests/inspection/__init__.py"
+  - "tests/inspection/test_cf.py"
+  - "tests/inspection/test_checks.py"
+  - "tests/inspection/test_desired_states.py"
+  - "tests/inspection/test_evidence.py"
+  - "tests/inspection/test_feed.py"
+  - "tests/inspection/test_inbox_queue.py"
+  - "tests/inspection/test_listing.py"
+  - "tests/inspection/test_message_columns.py"
+  - "tests/inspection/test_node_rows.py"
+  - "tests/inspection/test_program.py"
+  - "tests/inspection/test_questions.py"
+  - "tests/inspection/test_read_listing.py"
+  - "tests/inspection_harness.py"
+  - "tests/legacy_nodes.py"
+  - "tests/live/answering/harness.py"
+  - "tests/live/answering/stage_harness.py"
+  - "tests/live/answering/test_answering_run.py"
+  - "tests/live/answering/test_pipeline_run.py"
+  - "tests/live/answering/test_precedence.py"
+  - "tests/live/answering/test_sdk_refusal.py"
+  - "tests/live/conftest.py"
+  - "tests/live/request_run/__init__.py"
+  - "tests/live/request_run/conftest.py"
+  - "tests/live/request_run/harness.py"
+  - "tests/live/request_run/scratch_repo.py"
+  - "tests/live/request_run/test_request_run.py"
+  - "tests/live/request_run/test_validate.py"
+  - "tests/live_harness.py"
+  - "tests/live_request_settings.py"
+  - "tests/live_settings.py"
+  - "tests/load/__init__.py"
+  - "tests/load/conftest.py"
+  - "tests/load/load_harness.py"
+  - "tests/load/test_cf_watch_load.py"
+  - "tests/load/test_crash_loop.py"
+  - "tests/load/test_feed_and_detection_load.py"
+  - "tests/load/test_harness_smoke.py"
+  - "tests/load/test_inbox_concurrent.py"
+  - "tests/load/test_program_load.py"
+  - "tests/load/test_recovery_scale.py"
+  - "tests/load/test_runner_tick_load.py"
+  - "tests/load/test_serve_load.py"
+  - "tests/load/test_verdict_concurrent.py"
+  - "tests/local_host_harness.py"
+  - "tests/process/__init__.py"
+  - "tests/process/conftest.py"
+  - "tests/process/test_cf_watch.py"
+  - "tests/process/test_cf_watch_failures.py"
+  - "tests/process/test_cf_watch_wiring.py"
+  - "tests/process/test_detection_key.py"
+  - "tests/process/test_inbox_process.py"
+  - "tests/process/test_inbox_tenant.py"
+  - "tests/process/test_log_limit.py"
+  - "tests/process/test_program_inbox_tenant.py"
+  - "tests/process/test_program_store_holder.py"
+  - "tests/process/test_project_stores.py"
+  - "tests/process/test_prune_selection.py"
+  - "tests/process/test_prune_sq_runs.py"
+  - "tests/process/test_review_detection.py"
+  - "tests/process/test_review_detection_baseline.py"
+  - "tests/process/test_review_detection_lifecycle.py"
+  - "tests/process/test_review_detection_ownership.py"
+  - "tests/process/test_review_detection_refusals.py"
+  - "tests/process/test_review_detection_wiring.py"
+  - "tests/process/test_tenant_order.py"
+  - "tests/program/__init__.py"
+  - "tests/program/test_read_member.py"
+  - "tests/program_harness.py"
+  - "tests/purity.py"
+  - "tests/question_harness.py"
+  - "tests/review_fixtures.py"
+  - "tests/routing_helpers.py"
+  - "tests/runner/__init__.py"
+  - "tests/runner/answering/__init__.py"
+  - "tests/runner/answering/launch_rig.py"
+  - "tests/runner/answering/sources_assembly.py"
+  - "tests/runner/answering/test_finish_answering.py"
+  - "tests/runner/answering/test_launch_answering.py"
+  - "tests/runner/answering/test_launch_prepare.py"
+  - "tests/runner/answering/test_settle.py"
+  - "tests/runner/answering/test_sources.py"
+  - "tests/runner/answering/test_stage_observe.py"
+  - "tests/runner/answering/test_stage_pending.py"
+  - "tests/runner/answering/test_stage_stranded.py"
+  - "tests/runner/answering/test_walkthrough_fixture.py"
+  - "tests/runner/conftest.py"
+  - "tests/runner/crash_entry.py"
+  - "tests/runner/crash_harness.py"
+  - "tests/runner/crash_resume.py"
+  - "tests/runner/dispatch/__init__.py"
+  - "tests/runner/dispatch/cf_world.py"
+  - "tests/runner/dispatch/dispatch_support.py"
+  - "tests/runner/dispatch/test_act_block_dispatch.py"
+  - "tests/runner/dispatch/test_check_stage.py"
+  - "tests/runner/dispatch/test_checkout_check.py"
+  - "tests/runner/dispatch/test_checkout_reads.py"
+  - "tests/runner/dispatch/test_hold.py"
+  - "tests/runner/dispatch/test_params.py"
+  - "tests/runner/dispatch/test_planner.py"
+  - "tests/runner/dispatch/test_reissue.py"
+  - "tests/runner/dispatch/test_state.py"
+  - "tests/runner/dispatch/test_tick_checkout.py"
+  - "tests/runner/dispatch/test_tick_concurrency.py"
+  - "tests/runner/dispatch/test_tick_dispatch.py"
+  - "tests/runner/dispatch/test_tick_predispatch.py"
+  - "tests/runner/dispatch/test_view_resolution.py"
+  - "tests/runner/dispatch/tick_rig.py"
+  - "tests/runner/gate_rig.py"
+  - "tests/runner/ingest/__init__.py"
+  - "tests/runner/ingest/test_detection_skip.py"
+  - "tests/runner/ingest/test_outcome.py"
+  - "tests/runner/ingest/test_plan_supervised.py"
+  - "tests/runner/ingest/test_record.py"
+  - "tests/runner/ingest/test_reviews.py"
+  - "tests/runner/ingest/test_tick_ingest.py"
+  - "tests/runner/intent/__init__.py"
+  - "tests/runner/intent/intent_support.py"
+  - "tests/runner/intent/merge_cases.py"
+  - "tests/runner/intent/rows_support.py"
+  - "tests/runner/intent/test_apply_pending.py"
+  - "tests/runner/intent/test_governance_index.py"
+  - "tests/runner/intent/test_governing.py"
+  - "tests/runner/intent/test_interpret_merge.py"
+  - "tests/runner/intent/test_interpret_targets.py"
+  - "tests/runner/intent/test_vocabulary.py"
+  - "tests/runner/lifecycle/__init__.py"
+  - "tests/runner/lifecycle/crash_support.py"
+  - "tests/runner/lifecycle/reconcile_support.py"
+  - "tests/runner/lifecycle/test_cadence.py"
+  - "tests/runner/lifecycle/test_completion.py"
+  - "tests/runner/lifecycle/test_orphaning.py"
+  - "tests/runner/lifecycle/test_plan_read.py"
+  - "tests/runner/lifecycle/test_read_checks.py"
+  - "tests/runner/lifecycle/test_ready_slices.py"
+  - "tests/runner/lifecycle/test_reconcile_crash.py"
+  - "tests/runner/lifecycle/test_reconcile_create.py"
+  - "tests/runner/lifecycle/test_reconcile_update.py"
+  - "tests/runner/lifecycle/test_status_block.py"
+  - "tests/runner/lifecycle/test_tree.py"
+  - "tests/runner/lifecycle/tree_support.py"
+  - "tests/runner/observe_support.py"
+  - "tests/runner/plan_tick_support.py"
+  - "tests/runner/program/__init__.py"
+  - "tests/runner/program/test_stage.py"
+  - "tests/runner/request_run/__init__.py"
+  - "tests/runner/request_run/test_inputs_render.py"
+  - "tests/runner/request_run/test_live_tier_rules.py"
+  - "tests/runner/request_run/test_pipeline_yaml.py"
+  - "tests/runner/request_run/test_prepare_directory.py"
+  - "tests/runner/request_run/test_read_reply.py"
+  - "tests/runner/request_run/test_wheel_contents.py"
+  - "tests/runner/resolutions/__init__.py"
+  - "tests/runner/resolutions/resolution_support.py"
+  - "tests/runner/resolutions/rig_support.py"
+  - "tests/runner/resolutions/test_act.py"
+  - "tests/runner/resolutions/test_classify.py"
+  - "tests/runner/resolutions/test_decisions_e2e.py"
+  - "tests/runner/resolutions/test_finish_resume.py"
+  - "tests/runner/resolutions/test_instructions_flow.py"
+  - "tests/runner/resolutions/test_judge.py"
+  - "tests/runner/resolutions/test_observe_resume.py"
+  - "tests/runner/resolutions/test_planner.py"
+  - "tests/runner/resolutions/test_prepoll.py"
+  - "tests/runner/resolutions/test_stage.py"
+  - "tests/runner/resolutions/test_tick_resume.py"
+  - "tests/runner/resolutions/test_tick_stage.py"
+  - "tests/runner/resolutions/test_vocabulary.py"
+  - "tests/runner/test_budget.py"
+  - "tests/runner/test_budget_coverage.py"
+  - "tests/runner/test_crash_harness.py"
+  - "tests/runner/test_crash_recovery.py"
+  - "tests/runner/test_crash_resume.py"
+  - "tests/runner/test_decide.py"
+  - "tests/runner/test_end_to_end.py"
+  - "tests/runner/test_end_to_end_answering.py"
+  - "tests/runner/test_factory.py"
+  - "tests/runner/test_faults.py"
+  - "tests/runner/test_finish.py"
+  - "tests/runner/test_observe_launch.py"
+  - "tests/runner/test_observe_poll.py"
+  - "tests/runner/test_probes.py"
+  - "tests/runner/test_probes_answering.py"
+  - "tests/runner/test_probes_request_run.py"
+  - "tests/runner/test_project_config.py"
+  - "tests/runner/test_sq_answer_readers.py"
+  - "tests/runner/test_supervise.py"
+  - "tests/runner/test_tenant.py"
+  - "tests/runner/test_tenant_fault_pacing.py"
+  - "tests/runner/test_tick.py"
+  - "tests/runner/test_tick_answering.py"
+  - "tests/runner/test_tick_auto_resume.py"
+  - "tests/runner/test_tick_governance.py"
+  - "tests/runner/test_tick_intents.py"
+  - "tests/runner/test_tick_plan.py"
+  - "tests/runner/test_tick_plan_faults.py"
+  - "tests/runner/tick_support.py"
+  - "tests/serve/__init__.py"
+  - "tests/serve/conftest.py"
+  - "tests/serve/test_auth.py"
+  - "tests/serve/test_errors.py"
+  - "tests/serve/test_follow_thread.py"
+  - "tests/serve/test_policy.py"
+  - "tests/serve/test_reads.py"
+  - "tests/serve/test_serve_harness.py"
+  - "tests/serve/test_settings.py"
+  - "tests/serve/test_stream_delivery.py"
+  - "tests/serve/test_stream_response.py"
+  - "tests/serve/test_stream_slots.py"
+  - "tests/serve/test_submissions.py"
+  - "tests/serve_harness.py"
+  - "tests/sq_run_fixtures.py"
+  - "tests/sq_stub.py"
+  - "tests/sq_stub_scripts.py"
+  - "tests/store/__init__.py"
+  - "tests/store/test_answer_submission.py"
+  - "tests/store/test_answering_evidence.py"
+  - "tests/store/test_attribution.py"
+  - "tests/store/test_begin_answering.py"
+  - "tests/store/test_calibration.py"
+  - "tests/store/test_cf_snapshots.py"
+  - "tests/store/test_check_models.py"
+  - "tests/store/test_check_submission.py"
+  - "tests/store/test_checks.py"
+  - "tests/store/test_desired_state.py"
+  - "tests/store/test_detections.py"
+  - "tests/store/test_evidence_models.py"
+  - "tests/store/test_feed_invariant.py"
+  - "tests/store/test_feed_reads.py"
+  - "tests/store/test_feed_triggers.py"
+  - "tests/store/test_finding_changes.py"
+  - "tests/store/test_finding_identity.py"
+  - "tests/store/test_inbox_apply.py"
+  - "tests/store/test_inbox_models.py"
+  - "tests/store/test_judge_samples.py"
+  - "tests/store/test_link_cf_project.py"
+  - "tests/store/test_mapping_feed.py"
+  - "tests/store/test_messages.py"
+  - "tests/store/test_migration_004.py"
+  - "tests/store/test_migration_005.py"
+  - "tests/store/test_migration_006.py"
+  - "tests/store/test_migration_007.py"
+  - "tests/store/test_migration_008.py"
+  - "tests/store/test_migration_009.py"
+  - "tests/store/test_migration_010.py"
+  - "tests/store/test_migration_011.py"
+  - "tests/store/test_migration_012.py"
+  - "tests/store/test_migration_013.py"
+  - "tests/store/test_migration_014.py"
+  - "tests/store/test_migration_015.py"
+  - "tests/store/test_program_apply_member.py"
+  - "tests/store/test_program_apply_program.py"
+  - "tests/store/test_program_reject_program.py"
+  - "tests/store/test_program_schema.py"
+  - "tests/store/test_program_store_open.py"
+  - "tests/store/test_project_escalation.py"
+  - "tests/store/test_provider_failure_problem.py"
+  - "tests/store/test_question_acknowledgment.py"
+  - "tests/store/test_question_answering_fields.py"
+  - "tests/store/test_question_record_catch.py"
+  - "tests/store/test_question_records.py"
+  - "tests/store/test_read_transaction.py"
+  - "tests/store/test_record_detected_verdict.py"
+  - "tests/store/test_resolutions.py"
+  - "tests/store/test_review_sources.py"
+  - "tests/store/test_routing_decision_clears_flag.py"
+  - "tests/store/test_routing_decisions.py"
+  - "tests/store/test_routing_decisions_atomic.py"
+  - "tests/store/test_routing_reads.py"
+  - "tests/store/test_routing_validation.py"
+  - "tests/store/test_runner_report.py"
+  - "tests/store/test_terminal_done.py"
+  - "tests/store/test_unrouted_outcomes.py"
+  - "tests/store/test_verdict_payload_types.py"
+  - "tests/store/test_verdict_reads.py"
+  - "tests/store/test_verdict_submission.py"
+  - "tests/store/test_verdict_to_payload.py"
+  - "tests/store/test_verdicts.py"
+  - "tests/store/test_watch_reviews.py"
+  - "tests/test_answerer_walkthrough_script.py"
+  - "tests/test_cli_inspect.py"
+  - "tests/test_cli_lifecycle.py"
+  - "tests/test_create_node_guard.py"
+  - "tests/test_demo_evidence_payloads.py"
+  - "tests/test_failure_modes.py"
+  - "tests/test_host.py"
+  - "tests/test_host_program_store.py"
+  - "tests/test_import_boundaries.py"
+  - "tests/test_instance_lock.py"
+  - "tests/test_journal.py"
+  - "tests/test_journal_models.py"
+  - "tests/test_live_environment.py"
+  - "tests/test_migrations.py"
+  - "tests/test_models.py"
+  - "tests/test_observer_cf_readback.py"
+  - "tests/test_observer_sq_run_id.py"
+  - "tests/test_observer_sq_runs.py"
+  - "tests/test_paths.py"
+  - "tests/test_process_containment.py"
+  - "tests/test_process_public_api.py"
+  - "tests/test_public_api.py"
+  - "tests/test_queries.py"
+  - "tests/test_read_only_open.py"
+  - "tests/test_recovery.py"
+  - "tests/test_recovery_sq_answer.py"
+  - "tests/test_settings_flags.py"
+  - "tests/test_sq_stub_run.py"
+  - "tests/test_store.py"
+  - "tests/test_store_safety.py"
+  - "tests/test_version_label.py"
+  - "tests/test_watch_run.py"
+  - "tests/test_writer_guard.py"
+  - "tests/upstream/context_forge/test_cf_commands_defined_once.py"
+  - "tests/upstream/context_forge/test_cf_stub_plan.py"
+  - "tests/upstream/context_forge/test_checkout.py"
+  - "tests/upstream/context_forge/test_cli_call.py"
+  - "tests/upstream/context_forge/test_diff.py"
+  - "tests/upstream/context_forge/test_field_names_defined_once.py"
+  - "tests/upstream/context_forge/test_plan.py"
+  - "tests/upstream/context_forge/test_projects_file.py"
+  - "tests/upstream/context_forge/test_slice_stem.py"
+  - "tests/upstream/context_forge/test_target_read.py"
+  - "tests/upstream/squadron/__init__.py"
+  - "tests/upstream/squadron/test_launch.py"
+  - "tests/upstream/squadron/test_launch_ids.py"
+  - "tests/upstream/squadron/test_launch_logs.py"
+  - "tests/upstream/squadron/test_resume_argv.py"
+  - "tests/upstream/squadron/test_resume_confirm.py"
+  - "tests/upstream/squadron/test_run_outcome.py"
+  - "tests/upstream/squadron/test_run_outcome_fields.py"
+  - "tests/upstream/test_field_names_defined_once.py"
+  - "tests/upstream/test_git_read.py"
+  - "tests/upstream/test_git_read_only_place.py"
+  - "tests/upstream/test_import_direction.py"
+  - "tests/upstream/test_review_artifact.py"
+  - "tests/upstream/test_review_compose.py"
+  - "tests/upstream/test_review_frontmatter.py"
+  - "tests/upstream/test_review_json.py"
+  - "tests/upstream/test_review_judge_fixture.py"
+  - "tests/upstream/test_review_record_id.py"
+  - "tests/upstream/test_review_types.py"
+turns: 10
+promptTokens: 362102
+cachedTokens: 233414
+cacheWriteTokens: 128678
+completionTokens: 2559
+durationSeconds: 23.5
+costUsd: 0.566024
+costBasis: provider
+squadronVersion: 0.24.24
+categoriesNormalized: true
+findings:
+  - id: F001
+    severity: pass
+    category: error-handling-observability
+    summary: "Exception handling follows the project rules in the reviewed answering modules"
+    location: "src/amoeba/answering/launch.py:42-62"
+  - id: F002
+    severity: pass
+    category: type-contract-debt
+    summary: "Settings, gate and git reads fail explicitly instead of defaulting"
+    location: "src/amoeba/answering/settings.py:86-115"
+  - id: F003
+    severity: note
+    category: dependency-config-debt
+    summary: "Tooling config matches the Python rules; the only `os.environ` use is in `git_read`"
+    location: "pyproject.toml:42"
+  - id: F004
+    severity: note
+    category: other
+    summary: "Most of the diff was not reviewed"
+    location: "unverified"
+---
+
+# Review: code — slice 221
+
+**Verdict:** PASS
+**Model:** claude-sonnet-5-5
+**Diff:** truncated: 0 of 3611408 characters reached the model
+  - scripts/answerer_walkthrough.py: omitted (0 of 10268 characters)
+  - scripts/demo_detection.py: omitted (0 of 2753 characters)
+  - scripts/demo_evidence.py: omitted (0 of 2046 characters)
+  - scripts/demo_inbox.py: omitted (0 of 2631 characters)
+  - src/amoeba/__init__.py: omitted (0 of 325 characters)
+  - src/amoeba/answering/__init__.py: omitted (0 of 205 characters)
+  - src/amoeba/answering/artifacts.py: omitted (0 of 661 characters)
+  - src/amoeba/answering/decide.py: omitted (0 of 2191 characters)
+  - src/amoeba/answering/gate.py: omitted (0 of 1291 characters)
+  - src/amoeba/answering/inputs.py: omitted (0 of 559 characters)
+  - src/amoeba/answering/launch.py: omitted (0 of 2585 characters)
+  - src/amoeba/answering/passages.py: omitted (0 of 2657 characters)
+  - src/amoeba/answering/pipeline_file.py: omitted (0 of 982 characters)
+  - src/amoeba/answering/pipeline_resource.py: omitted (0 of 221 characters)
+  - src/amoeba/answering/settings.py: omitted (0 of 4597 characters)
+  - src/amoeba/answering/source_reads.py: omitted (0 of 6331 characters)
+  - src/amoeba/answering/sources.py: omitted (0 of 2702 characters)
+  - src/amoeba/answering/values.py: omitted (0 of 2833 characters)
+  - src/amoeba/cli/__init__.py: omitted (0 of 488 characters)
+  - src/amoeba/cli/feed.py: omitted (0 of 3485 characters)
+  - src/amoeba/cli/ingest.py: omitted (0 of 7184 characters)
+  - src/amoeba/cli/inspect.py: omitted (0 of 3457 characters)
+  - src/amoeba/cli/lifecycle.py: omitted (0 of 6544 characters)
+  - src/amoeba/cli/main.py: omitted (0 of 12160 characters)
+  - src/amoeba/cli/prune.py: omitted (0 of 9234 characters)
+  - src/amoeba/cli/serve.py: omitted (0 of 2632 characters)
+  - src/amoeba/cli/settings_flags.py: omitted (0 of 7557 characters)
+  - src/amoeba/cli/submit.py: omitted (0 of 6705 characters)
+  - src/amoeba/feed/__init__.py: omitted (0 of 532 characters)
+  - src/amoeba/feed/follower.py: omitted (0 of 4394 characters)
+  - src/amoeba/feed/wire.py: omitted (0 of 778 characters)
+  - src/amoeba/inbox/__init__.py: omitted (0 of 1375 characters)
+  - src/amoeba/inbox/check_payloads.py: omitted (0 of 1322 characters)
+  - src/amoeba/inbox/durable.py: omitted (0 of 2191 characters)
+  - src/amoeba/inbox/envelope.py: omitted (0 of 10431 characters)
+  - src/amoeba/inbox/evidence_payloads.py: omitted (0 of 2603 characters)
+  - src/amoeba/inbox/layout.py: omitted (0 of 3240 characters)
+  - src/amoeba/inbox/payload_config.py: omitted (0 of 519 characters)
+  - src/amoeba/inbox/pending.py: omitted (0 of 4514 characters)
+  - src/amoeba/inbox/program_envelope.py: omitted (0 of 4822 characters)
+  - src/amoeba/inbox/program_payloads.py: omitted (0 of 3946 characters)
+  - src/amoeba/inbox/sidecars.py: omitted (0 of 2026 characters)
+  - src/amoeba/inbox/submit.py: omitted (0 of 6603 characters)
+  - src/amoeba/inspection/__init__.py: omitted (0 of 9092 characters)
+  - src/amoeba/inspection/cf.py: omitted (0 of 2709 characters)
+  - src/amoeba/inspection/checks.py: omitted (0 of 2429 characters)
+  - src/amoeba/inspection/core.py: omitted (0 of 5640 characters)
+  - src/amoeba/inspection/desired_states.py: omitted (0 of 1890 characters)
+  - src/amoeba/inspection/evidence.py: omitted (0 of 5611 characters)
+  - src/amoeba/inspection/feed.py: omitted (0 of 4058 characters)
+  - src/amoeba/inspection/inbox.py: omitted (0 of 5654 characters)
+  - src/amoeba/inspection/listing.py: omitted (0 of 6865 characters)
+  - src/amoeba/inspection/program.py: omitted (0 of 6869 characters)
+  - src/amoeba/inspection/questions.py: omitted (0 of 4478 characters)
+  - src/amoeba/process/__init__.py: omitted (0 of 3113 characters)
+  - src/amoeba/process/cf_watch.py: omitted (0 of 12684 characters)
+  - src/amoeba/process/errors.py: omitted (0 of 2330 characters)
+  - src/amoeba/process/grace.py: omitted (0 of 3661 characters)
+  - src/amoeba/process/host.py: omitted (0 of 12314 characters)
+  - src/amoeba/process/inbox_drain.py: omitted (0 of 11671 characters)
+  - src/amoeba/process/inbox_tenant.py: omitted (0 of 3717 characters)
+  - src/amoeba/process/instance_lock.py: omitted (0 of 9524 characters)
+  - src/amoeba/process/log_limit.py: omitted (0 of 2642 characters)
+  - src/amoeba/process/observers/__init__.py: omitted (0 of 796 characters)
+  - src/amoeba/process/observers/cf_get.py: omitted (0 of 6313 characters)
+  - src/amoeba/process/observers/cf_readback.py: omitted (0 of 10017 characters)
+  - src/amoeba/process/observers/sq_run_id.py: omitted (0 of 7694 characters)
+  - src/amoeba/process/observers/sq_runs.py: omitted (0 of 12060 characters)
+  - src/amoeba/process/program_inbox_tenant.py: omitted (0 of 3011 characters)
+  - src/amoeba/process/project_stores.py: omitted (0 of 9087 characters)
+  - src/amoeba/process/recovery.py: omitted (0 of 8759 characters)
+  - src/amoeba/process/review_detection.py: omitted (0 of 10552 characters)
+  - src/amoeba/process/review_scan.py: omitted (0 of 7454 characters)
+  - src/amoeba/process/run_pruning.py: omitted (0 of 3485 characters)
+  - src/amoeba/process/settings.py: omitted (0 of 6793 characters)
+  - src/amoeba/process/supervisor.py: omitted (0 of 4823 characters)
+  - src/amoeba/process/tenants.py: omitted (0 of 2302 characters)
+  - src/amoeba/process/version_label.py: omitted (0 of 2579 characters)
+  - src/amoeba/program/__init__.py: omitted (0 of 823 characters)
+  - src/amoeba/program/members.py: omitted (0 of 5514 characters)
+  - src/amoeba/runner/__init__.py: omitted (0 of 528 characters)
+  - src/amoeba/runner/act.py: omitted (0 of 6561 characters)
+  - src/amoeba/runner/answering/finish.py: omitted (0 of 7669 characters)
+  - src/amoeba/runner/answering/launch.py: omitted (0 of 9632 characters)
+  - src/amoeba/runner/answering/settle.py: omitted (0 of 2260 characters)
+  - src/amoeba/runner/answering/sources.py: omitted (0 of 5678 characters)
+  - src/amoeba/runner/answering/stage.py: omitted (0 of 7850 characters)
+  - src/amoeba/runner/budget.py: omitted (0 of 1739 characters)
+  - src/amoeba/runner/decide.py: omitted (0 of 7584 characters)
+  - src/amoeba/runner/dispatch/__init__.py: omitted (0 of 574 characters)
+  - src/amoeba/runner/dispatch/build_view.py: omitted (0 of 6196 characters)
+  - src/amoeba/runner/dispatch/candidates.py: omitted (0 of 4421 characters)
+  - src/amoeba/runner/dispatch/check_stage.py: omitted (0 of 3492 characters)
+  - src/amoeba/runner/dispatch/checkout_check.py: omitted (0 of 4530 characters)
+  - src/amoeba/runner/dispatch/checkout_reads.py: omitted (0 of 6857 characters)
+  - src/amoeba/runner/dispatch/facts.py: omitted (0 of 1578 characters)
+  - src/amoeba/runner/dispatch/hold.py: omitted (0 of 3204 characters)
+  - src/amoeba/runner/dispatch/params.py: omitted (0 of 1459 characters)
+  - src/amoeba/runner/dispatch/planner.py: omitted (0 of 7684 characters)
+  - src/amoeba/runner/dispatch/reissue.py: omitted (0 of 5961 characters)
+  - src/amoeba/runner/dispatch/state.py: omitted (0 of 4264 characters)
+  - src/amoeba/runner/factory.py: omitted (0 of 5797 characters)
+  - src/amoeba/runner/faults.py: omitted (0 of 9871 characters)
+  - src/amoeba/runner/finish.py: omitted (0 of 5327 characters)
+  - src/amoeba/runner/ingest/__init__.py: omitted (0 of 544 characters)
+  - src/amoeba/runner/ingest/outcome.py: omitted (0 of 11500 characters)
+  - src/amoeba/runner/ingest/record.py: omitted (0 of 9404 characters)
+  - src/amoeba/runner/ingest/reviews.py: omitted (0 of 6194 characters)
+  - src/amoeba/runner/intent/__init__.py: omitted (0 of 295 characters)
+  - src/amoeba/runner/intent/apply.py: omitted (0 of 4465 characters)
+  - src/amoeba/runner/intent/governance.py: omitted (0 of 3132 characters)
+  - src/amoeba/runner/intent/merge.py: omitted (0 of 2133 characters)
+  - src/amoeba/runner/intent/vocabulary.py: omitted (0 of 1560 characters)
+  - src/amoeba/runner/lifecycle/__init__.py: omitted (0 of 306 characters)
+  - src/amoeba/runner/lifecycle/cadence.py: omitted (0 of 3770 characters)
+  - src/amoeba/runner/lifecycle/completion.py: omitted (0 of 3442 characters)
+  - src/amoeba/runner/lifecycle/orphaning.py: omitted (0 of 5304 characters)
+  - src/amoeba/runner/lifecycle/plan_read.py: omitted (0 of 7592 characters)
+  - src/amoeba/runner/lifecycle/plan_stage.py: omitted (0 of 5814 characters)
+  - src/amoeba/runner/lifecycle/predecessors.py: omitted (0 of 2145 characters)
+  - src/amoeba/runner/lifecycle/read_checks.py: omitted (0 of 7011 characters)
+  - src/amoeba/runner/lifecycle/reconcile.py: omitted (0 of 7319 characters)
+  - src/amoeba/runner/lifecycle/references.py: omitted (0 of 3649 characters)
+  - src/amoeba/runner/lifecycle/slugs.py: omitted (0 of 1120 characters)
+  - src/amoeba/runner/lifecycle/status_block.py: omitted (0 of 3363 characters)
+  - src/amoeba/runner/lifecycle/tree.py: omitted (0 of 5433 characters)
+  - src/amoeba/runner/observe.py: omitted (0 of 13908 characters)
+  - src/amoeba/runner/observe_resume.py: omitted (0 of 6896 characters)
+  - src/amoeba/runner/observed.py: omitted (0 of 2132 characters)
+  - src/amoeba/runner/probes.py: omitted (0 of 10290 characters)
+  - src/amoeba/runner/program/__init__.py: omitted (0 of 372 characters)
+  - src/amoeba/runner/program/stage.py: omitted (0 of 2381 characters)
+  - src/amoeba/runner/project_config.py: omitted (0 of 8894 characters)
+  - src/amoeba/runner/project_view.py: omitted (0 of 2970 characters)
+  - src/amoeba/runner/record_runs.py: omitted (0 of 2203 characters)
+  - src/amoeba/runner/request_run/__init__.py: omitted (0 of 293 characters)
+  - src/amoeba/runner/request_run/inputs.py: omitted (0 of 2766 characters)
+  - src/amoeba/runner/request_run/pipeline_file.py: omitted (0 of 2378 characters)
+  - src/amoeba/runner/request_run/reply.py: omitted (0 of 4742 characters)
+  - src/amoeba/runner/resolutions/__init__.py: omitted (0 of 309 characters)
+  - src/amoeba/runner/resolutions/act.py: omitted (0 of 8428 characters)
+  - src/amoeba/runner/resolutions/classify.py: omitted (0 of 1359 characters)
+  - src/amoeba/runner/resolutions/judge.py: omitted (0 of 5074 characters)
+  - src/amoeba/runner/resolutions/planner.py: omitted (0 of 3287 characters)
+  - src/amoeba/runner/resolutions/prepoll.py: omitted (0 of 2581 characters)
+  - src/amoeba/runner/resolutions/stage.py: omitted (0 of 1867 characters)
+  - src/amoeba/runner/resolutions/vocabulary.py: omitted (0 of 3261 characters)
+  - src/amoeba/runner/supervise.py: omitted (0 of 8446 characters)
+  - src/amoeba/runner/tenant.py: omitted (0 of 9227 characters)
+  - src/amoeba/runner/tick.py: omitted (0 of 12560 characters)
+  - src/amoeba/serve/__init__.py: omitted (0 of 641 characters)
+  - src/amoeba/serve/app.py: omitted (0 of 3785 characters)
+  - src/amoeba/serve/auth.py: omitted (0 of 3820 characters)
+  - src/amoeba/serve/errors.py: omitted (0 of 7191 characters)
+  - src/amoeba/serve/feed_route.py: omitted (0 of 5633 characters)
+  - src/amoeba/serve/policy.py: omitted (0 of 3800 characters)
+  - src/amoeba/serve/reads.py: omitted (0 of 6248 characters)
+  - src/amoeba/serve/responses.py: omitted (0 of 781 characters)
+  - src/amoeba/serve/server.py: omitted (0 of 2133 characters)
+  - src/amoeba/serve/settings.py: omitted (0 of 3471 characters)
+  - src/amoeba/serve/stream.py: omitted (0 of 8853 characters)
+  - src/amoeba/serve/submissions.py: omitted (0 of 6208 characters)
+  - src/amoeba/store/__init__.py: omitted (0 of 7826 characters)
+  - src/amoeba/store/_base.py: omitted (0 of 4960 characters)
+  - src/amoeba/store/_block_writer.py: omitted (0 of 11997 characters)
+  - src/amoeba/store/_check_writer.py: omitted (0 of 4760 characters)
+  - src/amoeba/store/_program_reads.py: omitted (0 of 2932 characters)
+  - src/amoeba/store/_program_specs.py: omitted (0 of 3255 characters)
+  - src/amoeba/store/_program_writer.py: omitted (0 of 11223 characters)
+  - src/amoeba/store/_submission_writer.py: omitted (0 of 1831 characters)
+  - src/amoeba/store/_verdict_writer.py: omitted (0 of 8911 characters)
+  - src/amoeba/store/answer_submission.py: omitted (0 of 8409 characters)
+  - src/amoeba/store/answering.py: omitted (0 of 4211 characters)
+  - src/amoeba/store/attribution.py: omitted (0 of 1796 characters)
+  - src/amoeba/store/blocking.py: omitted (0 of 11394 characters)
+  - src/amoeba/store/calibration.py: omitted (0 of 3884 characters)
+  - src/amoeba/store/cf_models.py: omitted (0 of 2166 characters)
+  - src/amoeba/store/cf_snapshots.py: omitted (0 of 4621 characters)
+  - src/amoeba/store/check_models.py: omitted (0 of 6700 characters)
+  - src/amoeba/store/checks.py: omitted (0 of 3670 characters)
+  - src/amoeba/store/connection.py: omitted (0 of 6629 characters)
+  - src/amoeba/store/desired_states.py: omitted (0 of 4794 characters)
+  - src/amoeba/store/discovery.py: omitted (0 of 1064 characters)
+  - src/amoeba/store/evidence_models.py: omitted (0 of 8307 characters)
+  - src/amoeba/store/feed.py: omitted (0 of 10433 characters)
+  - src/amoeba/store/feed_models.py: omitted (0 of 3353 characters)
+  - src/amoeba/store/finding_identity.py: omitted (0 of 2973 characters)
+  - src/amoeba/store/inbox.py: omitted (0 of 13552 characters)
+  - src/amoeba/store/inbox_models.py: omitted (0 of 5264 characters)
+  - src/amoeba/store/journal.py: omitted (0 of 15673 characters)
+  - src/amoeba/store/journal_models.py: omitted (0 of 7252 characters)
+  - src/amoeba/store/mapping.py: omitted (0 of 6633 characters)
+  - src/amoeba/store/mapping_cf.py: omitted (0 of 5835 characters)
+  - src/amoeba/store/mapping_evidence.py: omitted (0 of 12086 characters)
+  - src/amoeba/store/mapping_feed.py: omitted (0 of 4791 characters)
+  - src/amoeba/store/mapping_inbox.py: omitted (0 of 5234 characters)
+  - src/amoeba/store/mapping_journal.py: omitted (0 of 6025 characters)
+  - src/amoeba/store/mapping_program.py: omitted (0 of 4464 characters)
+  - src/amoeba/store/mapping_questions.py: omitted (0 of 8146 characters)
+  - src/amoeba/store/mapping_runner.py: omitted (0 of 5290 characters)
+  - src/amoeba/store/messages.py: omitted (0 of 6197 characters)
+  - src/amoeba/store/migrations.py: omitted (0 of 7747 characters)
+  - src/amoeba/store/models.py: omitted (0 of 7371 characters)
+  - src/amoeba/store/nodes.py: omitted (0 of 6499 characters)
+  - src/amoeba/store/paths.py: omitted (0 of 7238 characters)
+  - src/amoeba/store/program_models.py: omitted (0 of 4267 characters)
+  - src/amoeba/store/program_schema/001_program_record.sql: omitted (0 of 2568 characters)
+  - src/amoeba/store/program_schema/__init__.py: omitted (0 of 436 characters)
+  - src/amoeba/store/program_store.py: omitted (0 of 4410 characters)
+  - src/amoeba/store/project_escalations.py: omitted (0 of 4639 characters)
+  - src/amoeba/store/question_models.py: omitted (0 of 6887 characters)
+  - src/amoeba/store/questions.py: omitted (0 of 10909 characters)
+  - src/amoeba/store/review_sources.py: omitted (0 of 5156 characters)
+  - src/amoeba/store/routing_decisions.py: omitted (0 of 11946 characters)
+  - src/amoeba/store/row_values.py: omitted (0 of 1186 characters)
+  - src/amoeba/store/runner_models.py: omitted (0 of 4305 characters)
+  - src/amoeba/store/runner_report.py: omitted (0 of 7917 characters)
+  - src/amoeba/store/schema/001_initial.sql: omitted (0 of 1963 characters)
+  - src/amoeba/store/schema/002_node_note.sql: omitted (0 of 692 characters)
+  - src/amoeba/store/schema/003_command_journal.sql: omitted (0 of 1998 characters)
+  - src/amoeba/store/schema/004_inbox_and_messages.sql: omitted (0 of 3228 characters)
+  - src/amoeba/store/schema/005_verdicts_and_findings.sql: omitted (0 of 2528 characters)
+  - src/amoeba/store/schema/006_change_feed_and_detection.sql: omitted (0 of 5410 characters)
+  - src/amoeba/store/schema/007_judge_samples_checks_and_progress.sql: omitted (0 of 3487 characters)
+  - src/amoeba/store/schema/008_context_forge_snapshots.sql: omitted (0 of 2490 characters)
+  - src/amoeba/store/schema/009_runner_contract.sql: omitted (0 of 4323 characters)
+  - src/amoeba/store/schema/010_node_cf_index.sql: omitted (0 of 921 characters)
+  - src/amoeba/store/schema/011_journal_awaits_routing.sql: omitted (0 of 889 characters)
+  - src/amoeba/store/schema/012_resolution_decisions.sql: omitted (0 of 1345 characters)
+  - src/amoeba/store/schema/013_question_records.sql: omitted (0 of 2988 characters)
+  - src/amoeba/store/schema/014_answer_submission.sql: omitted (0 of 705 characters)
+  - src/amoeba/store/schema/015_answering_run.sql: omitted (0 of 1609 characters)
+  - src/amoeba/store/schema/__init__.py: omitted (0 of 281 characters)
+  - src/amoeba/store/sql.py: omitted (0 of 13074 characters)
+  - src/amoeba/store/sql_cf.py: omitted (0 of 4087 characters)
+  - src/amoeba/store/sql_checks.py: omitted (0 of 9924 characters)
+  - src/amoeba/store/sql_evidence.py: omitted (0 of 8900 characters)
+  - src/amoeba/store/sql_feed.py: omitted (0 of 7002 characters)
+  - src/amoeba/store/sql_inbox.py: omitted (0 of 8946 characters)
+  - src/amoeba/store/sql_journal.py: omitted (0 of 9080 characters)
+  - src/amoeba/store/sql_program.py: omitted (0 of 4701 characters)
+  - src/amoeba/store/sql_questions.py: omitted (0 of 7056 characters)
+  - src/amoeba/store/sql_runner.py: omitted (0 of 9956 characters)
+  - src/amoeba/store/store.py: omitted (0 of 9169 characters)
+  - src/amoeba/store/verdict_payload.py: omitted (0 of 10155 characters)
+  - src/amoeba/store/verdicts.py: omitted (0 of 9190 characters)
+  - src/amoeba/store/write_values.py: omitted (0 of 1123 characters)
+  - src/amoeba/upstream/bounded_text.py: omitted (0 of 703 characters)
+  - src/amoeba/upstream/context_forge/__init__.py: omitted (0 of 2174 characters)
+  - src/amoeba/upstream/context_forge/checkout.py: omitted (0 of 5054 characters)
+  - src/amoeba/upstream/context_forge/cli_call.py: omitted (0 of 634 characters)
+  - src/amoeba/upstream/context_forge/diff.py: omitted (0 of 1889 characters)
+  - src/amoeba/upstream/context_forge/plan.py: omitted (0 of 4656 characters)
+  - src/amoeba/upstream/context_forge/projects_file.py: omitted (0 of 8329 characters)
+  - src/amoeba/upstream/context_forge/slice_stem.py: omitted (0 of 1728 characters)
+  - src/amoeba/upstream/context_forge/target_read.py: omitted (0 of 3732 characters)
+  - src/amoeba/upstream/git_read.py: omitted (0 of 6815 characters)
+  - src/amoeba/upstream/squadron/__init__.py: omitted (0 of 886 characters)
+  - src/amoeba/upstream/squadron/faults.py: omitted (0 of 850 characters)
+  - src/amoeba/upstream/squadron/launch.py: omitted (0 of 7481 characters)
+  - src/amoeba/upstream/squadron/resume_argv.py: omitted (0 of 724 characters)
+  - src/amoeba/upstream/squadron/resume_confirm.py: omitted (0 of 3878 characters)
+  - src/amoeba/upstream/squadron/review.py: omitted (0 of 5461 characters)
+  - src/amoeba/upstream/squadron/review_artifact.py: omitted (0 of 4593 characters)
+  - src/amoeba/upstream/squadron/review_fields.py: omitted (0 of 2717 characters)
+  - src/amoeba/upstream/squadron/review_json.py: omitted (0 of 4528 characters)
+  - src/amoeba/upstream/squadron/review_values.py: omitted (0 of 4561 characters)
+  - src/amoeba/upstream/squadron/run_outcome.py: omitted (0 of 3310 characters)
+  - tests/answerer_settings.py: omitted (0 of 1309 characters)
+  - tests/answering/__init__.py: omitted (0 of 159 characters)
+  - tests/answering/sources_repo.py: omitted (0 of 1624 characters)
+  - tests/answering/test_answer_gate.py: omitted (0 of 1024 characters)
+  - tests/answering/test_decide.py: omitted (0 of 2130 characters)
+  - tests/answering/test_inputs_render.py: omitted (0 of 600 characters)
+  - tests/answering/test_launch_scratch.py: omitted (0 of 2710 characters)
+  - tests/answering/test_live_tier_rules.py: omitted (0 of 727 characters)
+  - tests/answering/test_passages.py: omitted (0 of 3923 characters)
+  - tests/answering/test_pipeline_yaml.py: omitted (0 of 817 characters)
+  - tests/answering/test_prepare_scratch.py: omitted (0 of 577 characters)
+  - tests/answering/test_question_tails_fixture.py: omitted (0 of 583 characters)
+  - tests/answering/test_read_answer.py: omitted (0 of 916 characters)
+  - tests/answering/test_read_check.py: omitted (0 of 895 characters)
+  - tests/answering/test_source_reads.py: omitted (0 of 4486 characters)
+  - tests/answering/test_stub_answering.py: omitted (0 of 607 characters)
+  - tests/answering/test_wheel_contents.py: omitted (0 of 1431 characters)
+  - tests/cf_fixture.py: omitted (0 of 1259 characters)
+  - tests/cf_harness.py: omitted (0 of 1791 characters)
+  - tests/cf_stub.py: omitted (0 of 2763 characters)
+  - tests/cf_watch_harness.py: omitted (0 of 3478 characters)
+  - tests/cli/test_cf_watch_end_to_end.py: omitted (0 of 4526 characters)
+  - tests/cli/test_detection_e2e_harness.py: omitted (0 of 1072 characters)
+  - tests/cli/test_detection_end_to_end.py: omitted (0 of 6692 characters)
+  - tests/cli/test_evidence_end_to_end.py: omitted (0 of 6376 characters)
+  - tests/cli/test_feed.py: omitted (0 of 5213 characters)
+  - tests/cli/test_inbox_end_to_end.py: omitted (0 of 5791 characters)
+  - tests/cli/test_ingest.py: omitted (0 of 13219 characters)
+  - tests/cli/test_ingest_end_to_end.py: omitted (0 of 4849 characters)
+  - tests/cli/test_ingest_end_to_end_modes.py: omitted (0 of 5035 characters)
+  - tests/cli/test_ingest_judge_samples.py: omitted (0 of 3898 characters)
+  - tests/cli/test_judge_end_to_end.py: omitted (0 of 5026 characters)
+  - tests/cli/test_serve.py: omitted (0 of 6863 characters)
+  - tests/cli/test_serve_smoke.py: omitted (0 of 6157 characters)
+  - tests/cli/test_submit.py: omitted (0 of 14378 characters)
+  - tests/cli/test_submit_program.py: omitted (0 of 3795 characters)
+  - tests/cli_harness.py: omitted (0 of 10388 characters)
+  - tests/conftest.py: omitted (0 of 3828 characters)
+  - tests/contract/__init__.py: omitted (0 of 259 characters)
+  - tests/contract/bootstrap.py: omitted (0 of 4112 characters)
+  - tests/contract/conftest.py: omitted (0 of 937 characters)
+  - tests/contract/end_state.py: omitted (0 of 5121 characters)
+  - tests/contract/harness.py: omitted (0 of 14125 characters)
+  - tests/contract/launched.py: omitted (0 of 2421 characters)
+  - tests/contract/network.py: omitted (0 of 6377 characters)
+  - tests/contract/oracle.py: omitted (0 of 10753 characters)
+  - tests/contract/public_api.py: omitted (0 of 4194 characters)
+  - tests/contract/runner_tenant.py: omitted (0 of 12215 characters)
+  - tests/contract/scenario.py: omitted (0 of 5437 characters)
+  - tests/contract/standin.py: omitted (0 of 4232 characters)
+  - tests/contract/steps.py: omitted (0 of 11523 characters)
+  - tests/contract/steps_late.py: omitted (0 of 10025 characters)
+  - tests/contract/steps_prune.py: omitted (0 of 3570 characters)
+  - tests/contract/subscriber.py: omitted (0 of 2273 characters)
+  - tests/contract/test_harness.py: omitted (0 of 3814 characters)
+  - tests/contract/test_lifecycle_proof.py: omitted (0 of 1589 characters)
+  - tests/contract/test_network_subset.py: omitted (0 of 5527 characters)
+  - tests/contract/test_oracle.py: omitted (0 of 11207 characters)
+  - tests/contract/test_public_api_rule.py: omitted (0 of 3475 characters)
+  - tests/contract/test_runner_report_completion.py: omitted (0 of 2704 characters)
+  - tests/detection_e2e_harness.py: omitted (0 of 7890 characters)
+  - tests/detection_harness.py: omitted (0 of 4357 characters)
+  - tests/evidence_harness.py: omitted (0 of 4563 characters)
+  - tests/fault_injection.py: omitted (0 of 1490 characters)
+  - tests/feed/test_follower.py: omitted (0 of 7191 characters)
+  - tests/feed/test_wire.py: omitted (0 of 1662 characters)
+  - tests/feed_harness.py: omitted (0 of 2694 characters)
+  - tests/git_repo.py: omitted (0 of 145 characters)
+  - tests/host_harness.py: omitted (0 of 11816 characters)
+  - tests/inbox/__init__.py: omitted (0 of 111 characters)
+  - tests/inbox/test_envelope.py: omitted (0 of 6482 characters)
+  - tests/inbox/test_inbox_public_api.py: omitted (0 of 4151 characters)
+  - tests/inbox/test_listings.py: omitted (0 of 6828 characters)
+  - tests/inbox/test_program_envelope.py: omitted (0 of 5532 characters)
+  - tests/inbox/test_program_payloads.py: omitted (0 of 6105 characters)
+  - tests/inbox/test_submit.py: omitted (0 of 5063 characters)
+  - tests/inbox/test_submit_program.py: omitted (0 of 3452 characters)
+  - tests/inbox_harness.py: omitted (0 of 2476 characters)
+  - tests/ingest_e2e_harness.py: omitted (0 of 3704 characters)
+  - tests/inspection/__init__.py: omitted (0 of 121 characters)
+  - tests/inspection/test_cf.py: omitted (0 of 5534 characters)
+  - tests/inspection/test_checks.py: omitted (0 of 7178 characters)
+  - tests/inspection/test_desired_states.py: omitted (0 of 4907 characters)
+  - tests/inspection/test_evidence.py: omitted (0 of 7657 characters)
+  - tests/inspection/test_feed.py: omitted (0 of 6363 characters)
+  - tests/inspection/test_inbox_queue.py: omitted (0 of 4492 characters)
+  - tests/inspection/test_listing.py: omitted (0 of 3750 characters)
+  - tests/inspection/test_message_columns.py: omitted (0 of 2336 characters)
+  - tests/inspection/test_node_rows.py: omitted (0 of 2652 characters)
+  - tests/inspection/test_program.py: omitted (0 of 11693 characters)
+  - tests/inspection/test_questions.py: omitted (0 of 10747 characters)
+  - tests/inspection/test_read_listing.py: omitted (0 of 4025 characters)
+  - tests/inspection_harness.py: omitted (0 of 8286 characters)
+  - tests/legacy_nodes.py: omitted (0 of 1259 characters)
+  - tests/live/answering/harness.py: omitted (0 of 660 characters)
+  - tests/live/answering/stage_harness.py: omitted (0 of 3963 characters)
+  - tests/live/answering/test_answering_run.py: omitted (0 of 3866 characters)
+  - tests/live/answering/test_pipeline_run.py: omitted (0 of 716 characters)
+  - tests/live/answering/test_precedence.py: omitted (0 of 780 characters)
+  - tests/live/answering/test_sdk_refusal.py: omitted (0 of 1741 characters)
+  - tests/live/conftest.py: omitted (0 of 773 characters)
+  - tests/live/request_run/__init__.py: omitted (0 of 263 characters)
+  - tests/live/request_run/conftest.py: omitted (0 of 1355 characters)
+  - tests/live/request_run/harness.py: omitted (0 of 6959 characters)
+  - tests/live/request_run/scratch_repo.py: omitted (0 of 5525 characters)
+  - tests/live/request_run/test_request_run.py: omitted (0 of 5002 characters)
+  - tests/live/request_run/test_validate.py: omitted (0 of 2492 characters)
+  - tests/live_harness.py: omitted (0 of 1651 characters)
+  - tests/live_request_settings.py: omitted (0 of 1436 characters)
+  - tests/live_settings.py: omitted (0 of 508 characters)
+  - tests/load/__init__.py: omitted (0 of 756 characters)
+  - tests/load/conftest.py: omitted (0 of 1635 characters)
+  - tests/load/load_harness.py: omitted (0 of 9102 characters)
+  - tests/load/test_cf_watch_load.py: omitted (0 of 4872 characters)
+  - tests/load/test_crash_loop.py: omitted (0 of 9601 characters)
+  - tests/load/test_feed_and_detection_load.py: omitted (0 of 4686 characters)
+  - tests/load/test_harness_smoke.py: omitted (0 of 2596 characters)
+  - tests/load/test_inbox_concurrent.py: omitted (0 of 8379 characters)
+  - tests/load/test_program_load.py: omitted (0 of 10313 characters)
+  - tests/load/test_recovery_scale.py: omitted (0 of 13709 characters)
+  - tests/load/test_runner_tick_load.py: omitted (0 of 4666 characters)
+  - tests/load/test_serve_load.py: omitted (0 of 8923 characters)
+  - tests/load/test_verdict_concurrent.py: omitted (0 of 7339 characters)
+  - tests/local_host_harness.py: omitted (0 of 1714 characters)
+  - tests/process/__init__.py: omitted (0 of 115 characters)
+  - tests/process/conftest.py: omitted (0 of 1774 characters)
+  - tests/process/test_cf_watch.py: omitted (0 of 7054 characters)
+  - tests/process/test_cf_watch_failures.py: omitted (0 of 8288 characters)
+  - tests/process/test_cf_watch_wiring.py: omitted (0 of 2525 characters)
+  - tests/process/test_detection_key.py: omitted (0 of 3279 characters)
+  - tests/process/test_inbox_process.py: omitted (0 of 9367 characters)
+  - tests/process/test_inbox_tenant.py: omitted (0 of 11843 characters)
+  - tests/process/test_log_limit.py: omitted (0 of 1838 characters)
+  - tests/process/test_program_inbox_tenant.py: omitted (0 of 11857 characters)
+  - tests/process/test_program_store_holder.py: omitted (0 of 3925 characters)
+  - tests/process/test_project_stores.py: omitted (0 of 3309 characters)
+  - tests/process/test_prune_selection.py: omitted (0 of 4808 characters)
+  - tests/process/test_prune_sq_runs.py: omitted (0 of 10850 characters)
+  - tests/process/test_review_detection.py: omitted (0 of 4328 characters)
+  - tests/process/test_review_detection_baseline.py: omitted (0 of 4912 characters)
+  - tests/process/test_review_detection_lifecycle.py: omitted (0 of 2538 characters)
+  - tests/process/test_review_detection_ownership.py: omitted (0 of 4407 characters)
+  - tests/process/test_review_detection_refusals.py: omitted (0 of 7813 characters)
+  - tests/process/test_review_detection_wiring.py: omitted (0 of 2786 characters)
+  - tests/process/test_tenant_order.py: omitted (0 of 1625 characters)
+  - tests/program/__init__.py: omitted (0 of 115 characters)
+  - tests/program/test_read_member.py: omitted (0 of 7190 characters)
+  - tests/program_harness.py: omitted (0 of 7131 characters)
+  - tests/purity.py: omitted (0 of 137 characters)
+  - tests/question_harness.py: omitted (0 of 5253 characters)
+  - tests/review_fixtures.py: omitted (0 of 2012 characters)
+  - tests/routing_helpers.py: omitted (0 of 2352 characters)
+  - tests/runner/__init__.py: omitted (0 of 113 characters)
+  - tests/runner/answering/__init__.py: omitted (0 of 133 characters)
+  - tests/runner/answering/launch_rig.py: omitted (0 of 9106 characters)
+  - tests/runner/answering/sources_assembly.py: omitted (0 of 3092 characters)
+  - tests/runner/answering/test_finish_answering.py: omitted (0 of 12807 characters)
+  - tests/runner/answering/test_launch_answering.py: omitted (0 of 4708 characters)
+  - tests/runner/answering/test_launch_prepare.py: omitted (0 of 7857 characters)
+  - tests/runner/answering/test_settle.py: omitted (0 of 3551 characters)
+  - tests/runner/answering/test_sources.py: omitted (0 of 8017 characters)
+  - tests/runner/answering/test_stage_observe.py: omitted (0 of 3715 characters)
+  - tests/runner/answering/test_stage_pending.py: omitted (0 of 5640 characters)
+  - tests/runner/answering/test_stage_stranded.py: omitted (0 of 3123 characters)
+  - tests/runner/answering/test_walkthrough_fixture.py: omitted (0 of 2322 characters)
+  - tests/runner/conftest.py: omitted (0 of 535 characters)
+  - tests/runner/crash_entry.py: omitted (0 of 10833 characters)
+  - tests/runner/crash_harness.py: omitted (0 of 10676 characters)
+  - tests/runner/crash_resume.py: omitted (0 of 3270 characters)
+  - tests/runner/dispatch/__init__.py: omitted (0 of 131 characters)
+  - tests/runner/dispatch/cf_world.py: omitted (0 of 3582 characters)
+  - tests/runner/dispatch/dispatch_support.py: omitted (0 of 5216 characters)
+  - tests/runner/dispatch/test_act_block_dispatch.py: omitted (0 of 2727 characters)
+  - tests/runner/dispatch/test_check_stage.py: omitted (0 of 3982 characters)
+  - tests/runner/dispatch/test_checkout_check.py: omitted (0 of 4244 characters)
+  - tests/runner/dispatch/test_checkout_reads.py: omitted (0 of 11225 characters)
+  - tests/runner/dispatch/test_hold.py: omitted (0 of 4016 characters)
+  - tests/runner/dispatch/test_params.py: omitted (0 of 1356 characters)
+  - tests/runner/dispatch/test_planner.py: omitted (0 of 11572 characters)
+  - tests/runner/dispatch/test_reissue.py: omitted (0 of 5159 characters)
+  - tests/runner/dispatch/test_state.py: omitted (0 of 10272 characters)
+  - tests/runner/dispatch/test_tick_checkout.py: omitted (0 of 3357 characters)
+  - tests/runner/dispatch/test_tick_concurrency.py: omitted (0 of 3514 characters)
+  - tests/runner/dispatch/test_tick_dispatch.py: omitted (0 of 6485 characters)
+  - tests/runner/dispatch/test_tick_predispatch.py: omitted (0 of 11403 characters)
+  - tests/runner/dispatch/test_view_resolution.py: omitted (0 of 3056 characters)
+  - tests/runner/dispatch/tick_rig.py: omitted (0 of 6486 characters)
+  - tests/runner/gate_rig.py: omitted (0 of 1799 characters)
+  - tests/runner/ingest/__init__.py: omitted (0 of 127 characters)
+  - tests/runner/ingest/test_detection_skip.py: omitted (0 of 5185 characters)
+  - tests/runner/ingest/test_outcome.py: omitted (0 of 5895 characters)
+  - tests/runner/ingest/test_plan_supervised.py: omitted (0 of 9167 characters)
+  - tests/runner/ingest/test_record.py: omitted (0 of 12641 characters)
+  - tests/runner/ingest/test_reviews.py: omitted (0 of 11664 characters)
+  - tests/runner/ingest/test_tick_ingest.py: omitted (0 of 5759 characters)
+  - tests/runner/intent/__init__.py: omitted (0 of 127 characters)
+  - tests/runner/intent/intent_support.py: omitted (0 of 1186 characters)
+  - tests/runner/intent/merge_cases.py: omitted (0 of 2739 characters)
+  - tests/runner/intent/rows_support.py: omitted (0 of 962 characters)
+  - tests/runner/intent/test_apply_pending.py: omitted (0 of 8329 characters)
+  - tests/runner/intent/test_governance_index.py: omitted (0 of 1500 characters)
+  - tests/runner/intent/test_governing.py: omitted (0 of 5370 characters)
+  - tests/runner/intent/test_interpret_merge.py: omitted (0 of 2620 characters)
+  - tests/runner/intent/test_interpret_targets.py: omitted (0 of 3781 characters)
+  - tests/runner/intent/test_vocabulary.py: omitted (0 of 1631 characters)
+  - tests/runner/lifecycle/__init__.py: omitted (0 of 133 characters)
+  - tests/runner/lifecycle/crash_support.py: omitted (0 of 1380 characters)
+  - tests/runner/lifecycle/reconcile_support.py: omitted (0 of 2111 characters)
+  - tests/runner/lifecycle/test_cadence.py: omitted (0 of 6032 characters)
+  - tests/runner/lifecycle/test_completion.py: omitted (0 of 5095 characters)
+  - tests/runner/lifecycle/test_orphaning.py: omitted (0 of 7731 characters)
+  - tests/runner/lifecycle/test_plan_read.py: omitted (0 of 9269 characters)
+  - tests/runner/lifecycle/test_read_checks.py: omitted (0 of 5482 characters)
+  - tests/runner/lifecycle/test_ready_slices.py: omitted (0 of 3410 characters)
+  - tests/runner/lifecycle/test_reconcile_crash.py: omitted (0 of 4063 characters)
+  - tests/runner/lifecycle/test_reconcile_create.py: omitted (0 of 10023 characters)
+  - tests/runner/lifecycle/test_reconcile_update.py: omitted (0 of 4714 characters)
+  - tests/runner/lifecycle/test_status_block.py: omitted (0 of 5098 characters)
+  - tests/runner/lifecycle/test_tree.py: omitted (0 of 2519 characters)
+  - tests/runner/lifecycle/tree_support.py: omitted (0 of 3400 characters)
+  - tests/runner/observe_support.py: omitted (0 of 6370 characters)
+  - tests/runner/plan_tick_support.py: omitted (0 of 2090 characters)
+  - tests/runner/program/__init__.py: omitted (0 of 129 characters)
+  - tests/runner/program/test_stage.py: omitted (0 of 8500 characters)
+  - tests/runner/request_run/__init__.py: omitted (0 of 273 characters)
+  - tests/runner/request_run/test_inputs_render.py: omitted (0 of 2561 characters)
+  - tests/runner/request_run/test_live_tier_rules.py: omitted (0 of 1950 characters)
+  - tests/runner/request_run/test_pipeline_yaml.py: omitted (0 of 4752 characters)
+  - tests/runner/request_run/test_prepare_directory.py: omitted (0 of 2169 characters)
+  - tests/runner/request_run/test_read_reply.py: omitted (0 of 5458 characters)
+  - tests/runner/request_run/test_wheel_contents.py: omitted (0 of 2272 characters)
+  - tests/runner/resolutions/__init__.py: omitted (0 of 137 characters)
+  - tests/runner/resolutions/resolution_support.py: omitted (0 of 5087 characters)
+  - tests/runner/resolutions/rig_support.py: omitted (0 of 2622 characters)
+  - tests/runner/resolutions/test_act.py: omitted (0 of 11624 characters)
+  - tests/runner/resolutions/test_classify.py: omitted (0 of 3144 characters)
+  - tests/runner/resolutions/test_decisions_e2e.py: omitted (0 of 5226 characters)
+  - tests/runner/resolutions/test_finish_resume.py: omitted (0 of 5357 characters)
+  - tests/runner/resolutions/test_instructions_flow.py: omitted (0 of 1646 characters)
+  - tests/runner/resolutions/test_judge.py: omitted (0 of 4554 characters)
+  - tests/runner/resolutions/test_observe_resume.py: omitted (0 of 8498 characters)
+  - tests/runner/resolutions/test_planner.py: omitted (0 of 6590 characters)
+  - tests/runner/resolutions/test_prepoll.py: omitted (0 of 3969 characters)
+  - tests/runner/resolutions/test_stage.py: omitted (0 of 4841 characters)
+  - tests/runner/resolutions/test_tick_resume.py: omitted (0 of 7302 characters)
+  - tests/runner/resolutions/test_tick_stage.py: omitted (0 of 2773 characters)
+  - tests/runner/resolutions/test_vocabulary.py: omitted (0 of 1741 characters)
+  - tests/runner/test_budget.py: omitted (0 of 1389 characters)
+  - tests/runner/test_budget_coverage.py: omitted (0 of 4376 characters)
+  - tests/runner/test_crash_harness.py: omitted (0 of 1643 characters)
+  - tests/runner/test_crash_recovery.py: omitted (0 of 11670 characters)
+  - tests/runner/test_crash_resume.py: omitted (0 of 5159 characters)
+  - tests/runner/test_decide.py: omitted (0 of 9557 characters)
+  - tests/runner/test_end_to_end.py: omitted (0 of 13781 characters)
+  - tests/runner/test_end_to_end_answering.py: omitted (0 of 17634 characters)
+  - tests/runner/test_factory.py: omitted (0 of 10107 characters)
+  - tests/runner/test_faults.py: omitted (0 of 6920 characters)
+  - tests/runner/test_finish.py: omitted (0 of 7060 characters)
+  - tests/runner/test_observe_launch.py: omitted (0 of 7487 characters)
+  - tests/runner/test_observe_poll.py: omitted (0 of 7101 characters)
+  - tests/runner/test_probes.py: omitted (0 of 10807 characters)
+  - tests/runner/test_probes_answering.py: omitted (0 of 4243 characters)
+  - tests/runner/test_probes_request_run.py: omitted (0 of 5010 characters)
+  - tests/runner/test_project_config.py: omitted (0 of 12628 characters)
+  - tests/runner/test_sq_answer_readers.py: omitted (0 of 6181 characters)
+  - tests/runner/test_supervise.py: omitted (0 of 7954 characters)
+  - tests/runner/test_tenant.py: omitted (0 of 11078 characters)
+  - tests/runner/test_tenant_fault_pacing.py: omitted (0 of 3009 characters)
+  - tests/runner/test_tick.py: omitted (0 of 7632 characters)
+  - tests/runner/test_tick_answering.py: omitted (0 of 8913 characters)
+  - tests/runner/test_tick_auto_resume.py: omitted (0 of 7263 characters)
+  - tests/runner/test_tick_governance.py: omitted (0 of 5736 characters)
+  - tests/runner/test_tick_intents.py: omitted (0 of 4095 characters)
+  - tests/runner/test_tick_plan.py: omitted (0 of 6094 characters)
+  - tests/runner/test_tick_plan_faults.py: omitted (0 of 5063 characters)
+  - tests/runner/tick_support.py: omitted (0 of 10600 characters)
+  - tests/serve/__init__.py: omitted (0 of 111 characters)
+  - tests/serve/conftest.py: omitted (0 of 1883 characters)
+  - tests/serve/test_auth.py: omitted (0 of 5556 characters)
+  - tests/serve/test_errors.py: omitted (0 of 3775 characters)
+  - tests/serve/test_follow_thread.py: omitted (0 of 5474 characters)
+  - tests/serve/test_policy.py: omitted (0 of 5089 characters)
+  - tests/serve/test_reads.py: omitted (0 of 13736 characters)
+  - tests/serve/test_serve_harness.py: omitted (0 of 1553 characters)
+  - tests/serve/test_settings.py: omitted (0 of 2157 characters)
+  - tests/serve/test_stream_delivery.py: omitted (0 of 7610 characters)
+  - tests/serve/test_stream_response.py: omitted (0 of 7585 characters)
+  - tests/serve/test_stream_slots.py: omitted (0 of 8984 characters)
+  - tests/serve/test_submissions.py: omitted (0 of 10842 characters)
+  - tests/serve_harness.py: omitted (0 of 6760 characters)
+  - tests/sq_run_fixtures.py: omitted (0 of 2274 characters)
+  - tests/sq_stub.py: omitted (0 of 8074 characters)
+  - tests/sq_stub_scripts.py: omitted (0 of 5144 characters)
+  - tests/store/__init__.py: omitted (0 of 111 characters)
+  - tests/store/test_answer_submission.py: omitted (0 of 15767 characters)
+  - tests/store/test_answering_evidence.py: omitted (0 of 6824 characters)
+  - tests/store/test_attribution.py: omitted (0 of 3565 characters)
+  - tests/store/test_begin_answering.py: omitted (0 of 7850 characters)
+  - tests/store/test_calibration.py: omitted (0 of 7715 characters)
+  - tests/store/test_cf_snapshots.py: omitted (0 of 6140 characters)
+  - tests/store/test_check_models.py: omitted (0 of 3698 characters)
+  - tests/store/test_check_submission.py: omitted (0 of 4425 characters)
+  - tests/store/test_checks.py: omitted (0 of 7015 characters)
+  - tests/store/test_desired_state.py: omitted (0 of 6758 characters)
+  - tests/store/test_detections.py: omitted (0 of 3859 characters)
+  - tests/store/test_evidence_models.py: omitted (0 of 7332 characters)
+  - tests/store/test_feed_invariant.py: omitted (0 of 7169 characters)
+  - tests/store/test_feed_reads.py: omitted (0 of 2686 characters)
+  - tests/store/test_feed_triggers.py: omitted (0 of 13743 characters)
+  - tests/store/test_finding_changes.py: omitted (0 of 8467 characters)
+  - tests/store/test_finding_identity.py: omitted (0 of 6648 characters)
+  - tests/store/test_inbox_apply.py: omitted (0 of 12779 characters)
+  - tests/store/test_inbox_models.py: omitted (0 of 2953 characters)
+  - tests/store/test_judge_samples.py: omitted (0 of 6867 characters)
+  - tests/store/test_link_cf_project.py: omitted (0 of 2907 characters)
+  - tests/store/test_mapping_feed.py: omitted (0 of 2931 characters)
+  - tests/store/test_messages.py: omitted (0 of 15810 characters)
+  - tests/store/test_migration_004.py: omitted (0 of 8282 characters)
+  - tests/store/test_migration_005.py: omitted (0 of 7895 characters)
+  - tests/store/test_migration_006.py: omitted (0 of 5006 characters)
+  - tests/store/test_migration_007.py: omitted (0 of 6641 characters)
+  - tests/store/test_migration_008.py: omitted (0 of 5328 characters)
+  - tests/store/test_migration_009.py: omitted (0 of 11592 characters)
+  - tests/store/test_migration_010.py: omitted (0 of 6356 characters)
+  - tests/store/test_migration_011.py: omitted (0 of 5504 characters)
+  - tests/store/test_migration_012.py: omitted (0 of 6557 characters)
+  - tests/store/test_migration_013.py: omitted (0 of 3965 characters)
+  - tests/store/test_migration_014.py: omitted (0 of 3652 characters)
+  - tests/store/test_migration_015.py: omitted (0 of 4617 characters)
+  - tests/store/test_program_apply_member.py: omitted (0 of 4935 characters)
+  - tests/store/test_program_apply_program.py: omitted (0 of 5920 characters)
+  - tests/store/test_program_reject_program.py: omitted (0 of 3821 characters)
+  - tests/store/test_program_schema.py: omitted (0 of 5013 characters)
+  - tests/store/test_program_store_open.py: omitted (0 of 6506 characters)
+  - tests/store/test_project_escalation.py: omitted (0 of 6649 characters)
+  - tests/store/test_provider_failure_problem.py: omitted (0 of 2628 characters)
+  - tests/store/test_question_acknowledgment.py: omitted (0 of 7530 characters)
+  - tests/store/test_question_answering_fields.py: omitted (0 of 3412 characters)
+  - tests/store/test_question_record_catch.py: omitted (0 of 4690 characters)
+  - tests/store/test_question_records.py: omitted (0 of 8289 characters)
+  - tests/store/test_read_transaction.py: omitted (0 of 2232 characters)
+  - tests/store/test_record_detected_verdict.py: omitted (0 of 4237 characters)
+  - tests/store/test_resolutions.py: omitted (0 of 8196 characters)
+  - tests/store/test_review_sources.py: omitted (0 of 5941 characters)
+  - tests/store/test_routing_decision_clears_flag.py: omitted (0 of 2748 characters)
+  - tests/store/test_routing_decisions.py: omitted (0 of 8674 characters)
+  - tests/store/test_routing_decisions_atomic.py: omitted (0 of 3470 characters)
+  - tests/store/test_routing_reads.py: omitted (0 of 4133 characters)
+  - tests/store/test_routing_validation.py: omitted (0 of 4161 characters)
+  - tests/store/test_runner_report.py: omitted (0 of 13079 characters)
+  - tests/store/test_terminal_done.py: omitted (0 of 8622 characters)
+  - tests/store/test_unrouted_outcomes.py: omitted (0 of 4045 characters)
+  - tests/store/test_verdict_payload_types.py: omitted (0 of 3542 characters)
+  - tests/store/test_verdict_reads.py: omitted (0 of 4090 characters)
+  - tests/store/test_verdict_submission.py: omitted (0 of 7443 characters)
+  - tests/store/test_verdict_to_payload.py: omitted (0 of 4398 characters)
+  - tests/store/test_verdicts.py: omitted (0 of 8419 characters)
+  - tests/store/test_watch_reviews.py: omitted (0 of 5480 characters)
+  - tests/test_answerer_walkthrough_script.py: omitted (0 of 7015 characters)
+  - tests/test_cli_inspect.py: omitted (0 of 18039 characters)
+  - tests/test_cli_lifecycle.py: omitted (0 of 19048 characters)
+  - tests/test_create_node_guard.py: omitted (0 of 2573 characters)
+  - tests/test_demo_evidence_payloads.py: omitted (0 of 1235 characters)
+  - tests/test_failure_modes.py: omitted (0 of 10762 characters)
+  - tests/test_host.py: omitted (0 of 24435 characters)
+  - tests/test_host_program_store.py: omitted (0 of 3623 characters)
+  - tests/test_import_boundaries.py: omitted (0 of 19573 characters)
+  - tests/test_instance_lock.py: omitted (0 of 13200 characters)
+  - tests/test_journal.py: omitted (0 of 20989 characters)
+  - tests/test_journal_models.py: omitted (0 of 4696 characters)
+  - tests/test_live_environment.py: omitted (0 of 197 characters)
+  - tests/test_migrations.py: omitted (0 of 14796 characters)
+  - tests/test_models.py: omitted (0 of 6029 characters)
+  - tests/test_observer_cf_readback.py: omitted (0 of 14470 characters)
+  - tests/test_observer_sq_run_id.py: omitted (0 of 14534 characters)
+  - tests/test_observer_sq_runs.py: omitted (0 of 17927 characters)
+  - tests/test_paths.py: omitted (0 of 5955 characters)
+  - tests/test_process_containment.py: omitted (0 of 1110 characters)
+  - tests/test_process_public_api.py: omitted (0 of 3039 characters)
+  - tests/test_public_api.py: omitted (0 of 8635 characters)
+  - tests/test_queries.py: omitted (0 of 11514 characters)
+  - tests/test_read_only_open.py: omitted (0 of 10593 characters)
+  - tests/test_recovery.py: omitted (0 of 24885 characters)
+  - tests/test_recovery_sq_answer.py: omitted (0 of 4094 characters)
+  - tests/test_settings_flags.py: omitted (0 of 6094 characters)
+  - tests/test_sq_stub_run.py: omitted (0 of 3764 characters)
+  - tests/test_store.py: omitted (0 of 12017 characters)
+  - tests/test_store_safety.py: omitted (0 of 2699 characters)
+  - tests/test_version_label.py: omitted (0 of 1766 characters)
+  - tests/test_watch_run.py: omitted (0 of 1115 characters)
+  - tests/test_writer_guard.py: omitted (0 of 13621 characters)
+  - tests/upstream/context_forge/test_cf_commands_defined_once.py: omitted (0 of 2700 characters)
+  - tests/upstream/context_forge/test_cf_stub_plan.py: omitted (0 of 812 characters)
+  - tests/upstream/context_forge/test_checkout.py: omitted (0 of 5749 characters)
+  - tests/upstream/context_forge/test_cli_call.py: omitted (0 of 623 characters)
+  - tests/upstream/context_forge/test_diff.py: omitted (0 of 5464 characters)
+  - tests/upstream/context_forge/test_field_names_defined_once.py: omitted (0 of 2004 characters)
+  - tests/upstream/context_forge/test_plan.py: omitted (0 of 3748 characters)
+  - tests/upstream/context_forge/test_projects_file.py: omitted (0 of 6796 characters)
+  - tests/upstream/context_forge/test_slice_stem.py: omitted (0 of 1862 characters)
+  - tests/upstream/context_forge/test_target_read.py: omitted (0 of 4146 characters)
+  - tests/upstream/squadron/__init__.py: omitted (0 of 177 characters)
+  - tests/upstream/squadron/test_launch.py: omitted (0 of 7931 characters)
+  - tests/upstream/squadron/test_launch_ids.py: omitted (0 of 1716 characters)
+  - tests/upstream/squadron/test_launch_logs.py: omitted (0 of 1313 characters)
+  - tests/upstream/squadron/test_resume_argv.py: omitted (0 of 793 characters)
+  - tests/upstream/squadron/test_resume_confirm.py: omitted (0 of 1892 characters)
+  - tests/upstream/squadron/test_run_outcome.py: omitted (0 of 2155 characters)
+  - tests/upstream/squadron/test_run_outcome_fields.py: omitted (0 of 4145 characters)
+  - tests/upstream/test_field_names_defined_once.py: omitted (0 of 2041 characters)
+  - tests/upstream/test_git_read.py: omitted (0 of 7594 characters)
+  - tests/upstream/test_git_read_only_place.py: omitted (0 of 1635 characters)
+  - tests/upstream/test_import_direction.py: omitted (0 of 2025 characters)
+  - tests/upstream/test_review_artifact.py: omitted (0 of 10490 characters)
+  - tests/upstream/test_review_compose.py: omitted (0 of 5075 characters)
+  - tests/upstream/test_review_frontmatter.py: omitted (0 of 4811 characters)
+  - tests/upstream/test_review_json.py: omitted (0 of 8294 characters)
+  - tests/upstream/test_review_judge_fixture.py: omitted (0 of 1839 characters)
+  - tests/upstream/test_review_record_id.py: omitted (0 of 3136 characters)
+  - tests/upstream/test_review_types.py: omitted (0 of 2162 characters)
+
+## Findings
+
+### [PASS] Exception handling follows the project rules in the reviewed answering modules
+
+Every `try/except` in the files I read catches a specific type (`OSError`, `UnicodeDecodeError`) and has a comment saying why it is safe.
+- `prepare_scratch_directory` turns an `OSError` into a returned error string, and its comment says the `ValueError` from `prepare_scratch` is deliberately left uncaught.
+- `discard_scratch` logs a warning and carries on, since the directory is unused.
+- `_read_file` in `source_reads.py:271-276` reports a non-UTF-8 file as an unreadable source.
+- A grep of `src/amoeba/answering` found no `except Exception`, bare `except:` or `os.environ` reads.
+
+### [PASS] Settings, gate and git reads fail explicitly instead of defaulting
+
+`AnswererSettings` has no default values and uses `extra="forbid"` and `frozen=True`. It uses Pydantic strict types and validators for repo-relative paths and model aliases. `evaluate_gate` is pure and normalizes text through one function. `git_read` in `upstream/git_read.py` allows only `show` and `log`, refuses option-like commit names, and returns timeouts as values (`GitReadFailure`).
+
+### [NOTE] Tooling config matches the Python rules; the only `os.environ` use is in `git_read`
+
+Ruff selects `E, F, W, I, UP, BLE, ASYNC, B`, and pyright is set to strict. The one `os.environ` use I found in `src` is `git_read.py:108`. It copies the process environment into the child `git` process's environment and adds `GIT_TERMINAL_PROMPT=0`. It does not read configuration, so the "one value, one source" rule doesn't apply.
+
+### [NOTE] Most of the diff was not reviewed
+
+The runner, store, serve, CLI, inbox and process packages, the SQL migrations and the large test suite were not read, and I made no claims about them. To cover them, run `ruff check` and `pyright` in CI. A reviewer should also check these areas:
+- the test-tier DB-URL guard tests required by `testing.md`;
+- load tests for any concurrency or network code that was added or moved;
+- source files over ~300 lines.
+
+### Run Digest
+
+- Response length: 2733 chars
+- Response is newline-free: no
+- Tool calls made: 9
+- Tool calls failed: 0
+- Stop reason: end_turn
+- Output budget: backend default
+- System prompt: preset+append
+- Settings sources: project
+- Reasoning characters: 0
+- Effort: backend default
+- Turns: 10
+- Tokens — prompt / cached / cache write / completion / reasoning: 362102 / 233414 / 128678 / 2559 / not computed
+- Duration: 23.5 s
+- Cost: $0.57 (provider)
+- `## Summary` located: yes
+- `## Findings` located: yes
+- Finding-shaped matches — whole response: 4
+- Finding-shaped matches — inside fences: 0
+- Finding-shaped matches — in findings section: 4
+- Finding-shaped matches — surviving validation: 4
+- Diff coverage: truncated; PASS kept because the model made 9 successful tool call(s)
