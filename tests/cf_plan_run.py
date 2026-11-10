@@ -4,8 +4,9 @@ Recordings are in ``tests/fixtures/context_forge`` (real ``cf`` 0.19.26 output).
 ``list initiatives`` replays ``list_initiatives_a.json``. ``list slices <n>`` replays
 ``list_slices_<n>.json``; an initiative with no recording gets a recorded
 ``error: true`` document on stderr with exit 1, which is what ``cf`` does for one
-with no slice plan. ``config get git.integration_branch`` answers the configured
-value in ``cf``'s own document shape. Every argv is kept in ``calls``.
+with no slice plan. ``get --json`` replays the project recording, and
+``config get git.integration_branch`` answers the configured value in ``cf``'s own
+document shape. Every argv is kept in ``calls``.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from cf_fixtures import FIXTURES, failure
+from cf_fixtures import FIXTURES, failure, replay
 
 NO_PLAN_FIXTURE = "list_slices_200_error.json"
 
@@ -26,6 +27,9 @@ class PlanCfRun:
 
     integration_branch: str
     broken: bool
+    #: The recording ``cf get --json`` replays (``default_worktree`` unless a test
+    #: says the directory is outside every project).
+    project_fixture: str = "default_worktree"
     calls: list[list[str]] = field(default_factory=lambda: [])
 
     def __call__(
@@ -41,6 +45,8 @@ class PlanCfRun:
             if (FIXTURES / name).exists():
                 return self._replay(argv, name)
             return self._replay(argv, NO_PLAN_FIXTURE, to_stderr=True)
+        if argv[1] == "get":
+            return replay(argv, self.project_fixture)
         if argv[1:3] == ["config", "get"]:
             text = json.dumps({"value": self.integration_branch})
             return subprocess.CompletedProcess(list(argv), 0, text, "")

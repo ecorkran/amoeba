@@ -14,6 +14,9 @@ from fake_sq import FakePoller, fake_poller
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.processes import Spawner, WaitableChild
+from amoeba.store.models import Member, MemberSettings
+from amoeba.store.programs import get_member, upsert_member, upsert_program
+from amoeba.store.store import Store
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import RunPoll
 
@@ -140,3 +143,37 @@ def build_deps(
         squadron_runs_dir=tmp_path / "runs",
     )
     return DepsRig(deps, clock, sleep, recorder, poller)
+
+
+def register_member(
+    store: Store,
+    project_id: str,
+    *,
+    rules_paths: tuple[str, ...] = ("CLAUDE.md",),
+    concept_member: str | None = None,
+    concept_path: str | None = None,
+) -> Member:
+    """Register ``project_id`` as a member of program ``demo`` and read it back."""
+    with store.write() as transaction:
+        upsert_program(
+            transaction,
+            program_id="demo",
+            concept_member=concept_member,
+            concept_path=concept_path,
+            now=START,
+        )
+        upsert_member(
+            transaction,
+            program_id="demo",
+            settings=MemberSettings(
+                project_id=project_id,
+                rules_paths=rules_paths,
+                authorize_allow=(),
+                authorize_deny=(),
+            ),
+            now=START,
+        )
+    with store.read() as transaction:
+        member = get_member(transaction, project_id)
+    assert member is not None
+    return member

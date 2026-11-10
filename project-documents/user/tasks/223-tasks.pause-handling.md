@@ -329,59 +329,84 @@ usageByModel:
 
 ## 7. `handle_pause` and `answer` (D3, D4, D7, D9)
 
-- [ ] **7.1 Result models and `SkipReason`**
-  - [ ] In `operations/pause_models.py` (created in 6.0) add `SkipReason` (`StrEnum`, the D3 table's eleven reasons) and `HandlePauseResult` (`outcome`: `skipped`, `waiting_on_pm`, `superseded`, `resumed`, `refused`, `not_delivered`; plus `skip_reason` or `waiting_reason`, `detail`, question key, claimed `checkout`, `answering_run_id`, `answer_seq`). `handle_pause.py` re-exports both, so the design's import path works. The split keeps each module near the ~300-line guideline
-  - [ ] Success: module imports; pyright strict clean
+- [x] **7.1 Result models and `SkipReason`**
+  - [x] In `operations/pause_models.py` (created in 6.0) add `SkipReason` (`StrEnum`, the D3 table's eleven reasons) and `HandlePauseResult` (`outcome`: `skipped`, `waiting_on_pm`, `superseded`, `resumed`, `refused`, `not_delivered`; plus `skip_reason` or `waiting_reason`, `detail`, question key, claimed `checkout`, `answering_run_id`, `answer_seq`). `handle_pause.py` re-exports both, so the design's import path works. The split keeps each module near the ~300-line guideline
+  - [x] Success: module imports; pyright strict clean
+  - Note: module split for the ~300-line limit (covers 7.1, 7.2, 7.4, 7.6, 7.8 and 7.10):
+    - `operations/pause_models.py`: `ResumeResult`, `SkipReason`, `HandlePauseOutcome`, `HandlePauseResult`
+    - `pause_eligibility.py`: `check_eligibility`, `Skip`, `Eligible`
+    - `pause_claim.py`: `start_new_claim`, `restart_dead_claim`
+    - `pause_results.py`: `PauseTarget`, `finish`, `resume_answer`, `skipped`
+    - `pause_existing.py`: `handle_existing` (settled-row and dead-claim paths)
+    - `handle_pause.py`: the entry point; re-exports `SkipReason`, `HandlePauseResult`, `HandlePauseOutcome`
+    - `SquadronError` is `upstream/squadron/errors.py` (added in 6.1)
 
-- [ ] **7.2 Eligibility checks (D3)**
-  - [ ] In `operations/pause_eligibility.py`, implement the checks in D3's order, first failure wins: `not_paused`, `not_agent_question` (detail gives raw kind), `no_question_text`, `answering_run` (via `any_answering_run_id`), `not_a_project`, `not_in_program`, `prompt_only` (run file read only after membership; a `RunFileProblem` raises `SquadronError`), `other_member`
-  - [ ] A Squadron or `cf` failure raises the operational error; it is never a skip
-  - [ ] Success: module imports; pyright strict clean
+- [x] **7.2 Eligibility checks (D3)**
+  - [x] In `operations/pause_eligibility.py`, implement the checks in D3's order, first failure wins: `not_paused`, `not_agent_question` (detail gives raw kind), `no_question_text`, `answering_run` (via `any_answering_run_id`), `not_a_project`, `not_in_program`, `prompt_only` (run file read only after membership; a `RunFileProblem` raises `SquadronError`), `other_member`
+  - [x] A Squadron or `cf` failure raises the operational error; it is never a skip
+  - [x] Success: module imports; pyright strict clean
+  - Note:
+    - a Context Forge failure raises `ContextForgeError` (from `resolve_member`); a run file problem in a member raises `SquadronError`; a failing `sq` raises `SquadronError`
+    - the `other_member` check needs the existing row and is made after `prompt_only`, as D3 orders them
 
-- [ ] **7.3 Eligibility tests**
-  - [ ] One test per `SkipReason` that these checks produce, using the fake `sq`, fake `cf` and store. Include: run-file problem in a non-member repo is not an error; run-file problem in a member raises; a failing `sq` or `cf` raises and writes nothing
-  - [ ] Success: tests pass
+- [x] **7.3 Eligibility tests**
+  - [x] One test per `SkipReason` that these checks produce, using the fake `sq`, fake `cf` and store. Include: run-file problem in a non-member repo is not an error; run-file problem in a member raises; a failing `sq` or `cf` raises and writes nothing
+  - [x] Success: tests pass
+  - Note: test support added for section 7's tests:
+    - `tests/operations/handle_rig.py`: a whole `handle_pause` world (real store and git checkout, replayed `cf` and `sq runs wait`, a spawner that plays Squadron)
+    - `tests/operations/pause_support.py`: fake clock, sleep, child, spawner, `register_member`
+    - `tests/cf_plan_run.py`: replays `cf get`, `list` and `config get`
 
-- [ ] **7.4 Claim step for a new question (D4, D6)**
-  - [ ] In `operations/handle_pause.py` (the entry point, calling `pause_eligibility`), when no row exists: `resolve_member`, `answering_for`; if `automatic_answer_count` already meets `answer_limit`, insert `waiting_on_pm / answer_limit_reached` and stop; `gather`; make scratch; insert in one transaction as `claimed` (with answering run id and passages) or `waiting_on_pm` (failure reason). A lost insert removes the scratch and returns `skipped / already_claimed`. Result carries `checkout`
-  - [ ] Success: module imports; pyright strict clean
+- [x] **7.4 Claim step for a new question (D4, D6)**
+  - [x] In `operations/handle_pause.py` (the entry point, calling `pause_eligibility`), when no row exists: `resolve_member`, `answering_for`; if `automatic_answer_count` already meets `answer_limit`, insert `waiting_on_pm / answer_limit_reached` and stop; `gather`; make scratch; insert in one transaction as `claimed` (with answering run id and passages) or `waiting_on_pm` (failure reason). A lost insert removes the scratch and returns `skipped / already_claimed`. Result carries `checkout`
+  - [x] Success: module imports; pyright strict clean
+  - Note:
+    - scratch is made, and the `waiting_on_pm` row is written with the gathered `slice_label`, `source_commit` and passages when the failure came after context (scratch failure)
+    - the `waiting_on_pm` row is written with none of them when the failure came before context (answer limit, context failure)
 
-- [ ] **7.5 Claim step tests**
-  - [ ] Answer limit already met inserts `waiting_on_pm / answer_limit_reached` and starts nothing; context failure inserts `waiting_on_pm` and starts nothing; scratch `OSError` inserts `waiting_on_pm / answering_launch_failed`; lost insert race removes scratch and skips
-  - [ ] Success: tests pass
+- [x] **7.5 Claim step tests**
+  - [x] Answer limit already met inserts `waiting_on_pm / answer_limit_reached` and starts nothing; context failure inserts `waiting_on_pm` and starts nothing; scratch `OSError` inserts `waiting_on_pm / answering_launch_failed`; lost insert race removes scratch and skips
+  - [x] Success: tests pass
 
-- [ ] **7.6 Answer step for a new claim (D6, D8)**
-  - [ ] After a successful claim: start, wait, settle (tasks 5.6 and 5.8); only an `answered` settle is resumed (D8). `waiting` and `superseded` settles map to the matching `HandlePauseResult` outcome without resuming
-  - [ ] Success: module imports; pyright strict clean
+- [x] **7.6 Answer step for a new claim (D6, D8)**
+  - [x] After a successful claim: start, wait, settle (tasks 5.6 and 5.8); only an `answered` settle is resumed (D8). `waiting` and `superseded` settles map to the matching `HandlePauseResult` outcome without resuming
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **7.7 Answer step tests**
-  - [ ] Answered and resumed end to end with fakes; declined answer is not resumed; `superseded` is returned and not resumed
-  - [ ] Success: tests pass
+- [x] **7.7 Answer step tests**
+  - [x] Answered and resumed end to end with fakes; declined answer is not resumed; `superseded` is returned and not resumed
+  - [x] Success: tests pass
 
-- [ ] **7.8 Settled-row paths (D3, D4)**
-  - [ ] In `operations/pause_existing.py` (called by `handle_pause` when a row exists): `answered` with latest answer not `resumed` or `not_delivered`: resume with the latest answer, starting no answering run. `waiting_on_pm` and settled answers: `skipped` with `waiting_on_pm` or `settled`
-  - [ ] Success: module imports; pyright strict clean
+- [x] **7.8 Settled-row paths (D3, D4)**
+  - [x] In `operations/pause_existing.py` (called by `handle_pause` when a row exists): `answered` with latest answer not `resumed` or `not_delivered`: resume with the latest answer, starting no answering run. `waiting_on_pm` and settled answers: `skipped` with `waiting_on_pm` or `settled`
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **7.9 Settled-row tests**
-  - [ ] One test per path above. A refused earlier resume is retried with the recorded answer and no answering run starts
-  - [ ] Success: tests pass
+- [x] **7.9 Settled-row tests**
+  - [x] One test per path above. A refused earlier resume is retried with the recorded answer and no answering run starts
+  - [x] Success: tests pass
 
-- [ ] **7.10 Dead-claim paths (D7)**
-  - [ ] In `pause_existing.py`, `claimed`: apply the D7 table with `poll_run(answering_run_id)` and the claim age against `answering_wait_seconds`. Running and young skip; running and old `settle_waiting` with `answering_run_stalled`; `completed`, `failed`, `paused`, `orphaned` settle from scratch then resume; `not_found` young skip; `not_found` old gather again, new scratch under a new id, `replace_claim`, spawn, continue as 7.6; `PollFailure` raises with nothing written
-  - [ ] Success: module imports; pyright strict clean
+- [x] **7.10 Dead-claim paths (D7)**
+  - [x] In `pause_existing.py`, `claimed`: apply the D7 table with `poll_run(answering_run_id)` and the claim age against `answering_wait_seconds`. Running and young skip; running and old `settle_waiting` with `answering_run_stalled`; `completed`, `failed`, `paused`, `orphaned` settle from scratch then resume; `not_found` young skip; `not_found` old gather again, new scratch under a new id, `replace_claim`, spawn, continue as 7.6; `PollFailure` raises with nothing written
+  - [x] Success: module imports; pyright strict clean
+  - Note:
+    - the claim's age is `now - updated_at` (the insert time, or the last `replace_claim`), so a replaced claim's age restarts
+    - `unreadable` and `unknown_status` answering-run outcomes (not in the D7 table) raise `SquadronError` with nothing written, like a poll failure
+    - a dead-claim restart whose context cannot be gathered again settles the old claim as `waiting_on_pm` with the source reason
 
-- [ ] **7.11 Dead-claim tests**
-  - [ ] One test per D7 row. A late reply after a stall is ignored because the row is no longer `claimed`
-  - [ ] Success: tests pass
+- [x] **7.11 Dead-claim tests**
+  - [x] One test per D7 row. A late reply after a stall is ignored because the row is no longer `claimed`
+  - [x] Success: tests pass
 
-- [ ] **7.12 `answer` operation (D9)**
-  - [ ] `operations/answer.py`: `AnswerRequest` (`run_id`, optional `paused_at`, `text`) validated from a document; `AnswerResult` (`outcome` `recorded` or `rejected`, question key, `answer_seq`, `ResumeResult`, `problems`)
-  - [ ] Find by `(run_id, paused_at)` or the run's latest `claimed_at`; no row is `rejected / no_such_question` with detail telling to run `handle_pause` from the run's checkout. Text stripped, empty is `rejected / malformed`. `add_pm_answer`, then resume (D8) with the new answer
-  - [ ] Success: module imports; pyright strict clean
+- [x] **7.12 `answer` operation (D9)**
+  - [x] `operations/answer.py`: `AnswerRequest` (`run_id`, optional `paused_at`, `text`) validated from a document; `AnswerResult` (`outcome` `recorded` or `rejected`, question key, `answer_seq`, `ResumeResult`, `problems`)
+  - [x] Find by `(run_id, paused_at)` or the run's latest `claimed_at`; no row is `rejected / no_such_question` with detail telling to run `handle_pause` from the run's checkout. Text stripped, empty is `rejected / malformed`. `add_pm_answer`, then resume (D8) with the new answer
+  - [x] Success: module imports; pyright strict clean
+  - Note:
+    - `operations/answer.py`: `AnswerRequest` (pydantic, `extra="forbid"`, `run_id`/`text` non-blank after stripping, optional `paused_at`), `AnswerOutcome`, `AnswerRejection` (`no_such_question`, `malformed`), `AnswerResult(outcome, rejection, key, answer_seq, resume, problems)`
+    - if `sq` cannot be read when resuming, the PM answer stays recorded and `SquadronError` propagates
 
-- [ ] **7.13 `answer` tests**
-  - [ ] Cases: waiting question recorded and resumed; no question; empty text; unknown fields rejected; `paused_at` omitted picks the latest; override of an automatic answer is recorded and the newest PM answer is precedent in `pm_precedent`; already resumed question gives `not_delivered` and the override stands; `waiting_reason` is not cleared; PM answer skips screen and limit
-  - [ ] Success: tests pass
+- [x] **7.13 `answer` tests**
+  - [x] Cases: waiting question recorded and resumed; no question; empty text; unknown fields rejected; `paused_at` omitted picks the latest; override of an automatic answer is recorded and the newest PM answer is precedent in `pm_precedent`; already resumed question gives `not_delivered` and the override stands; `waiting_reason` is not cleared; PM answer skips screen and limit
+  - [x] Success: tests pass
 
 **Commit**: `feat: add handle_pause and answer operations`
 
