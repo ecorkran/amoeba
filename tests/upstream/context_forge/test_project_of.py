@@ -22,6 +22,7 @@ from amoeba.upstream.context_forge.project_of import (
     CFProjectNotFound,
     project_of,
 )
+from amoeba.upstream.context_forge.target_read import CF_PROJECT_FLAG
 
 DIRECTORY = Path("/work/checkout")
 
@@ -100,15 +101,17 @@ def test_a_reference_passes_dash_p_and_the_reference() -> None:
     seen: list[tuple[list[str], dict[str, object]]] = []
     replay = fake_cf_run(DEFAULT_WORKTREE)
 
-    def recording(argv: Sequence[str], **kwargs: object) -> object:
+    def recording(
+        argv: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
         seen.append((list(argv), kwargs))
         return replay(argv, **kwargs)
 
-    result = project_of(reference="amoeba", run=recording)  # type: ignore[arg-type]
+    result = project_of(reference="amoeba", run=recording)
 
     assert isinstance(result, CFProject)
     argv, kwargs = seen[0]
-    assert argv[argv.index("-p") + 1] == "amoeba"
+    assert argv[argv.index(CF_PROJECT_FLAG) + 1] == "amoeba"
     assert "cwd" not in kwargs
 
 
@@ -116,14 +119,16 @@ def test_a_directory_is_the_working_directory_of_the_call() -> None:
     seen: list[dict[str, object]] = []
     replay = fake_cf_run(DEFAULT_WORKTREE)
 
-    def recording(argv: Sequence[str], **kwargs: object) -> object:
+    def recording(
+        argv: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
         seen.append(kwargs)
         return replay(argv, **kwargs)
 
-    project_of(directory=DIRECTORY, run=recording)  # type: ignore[arg-type]
+    project_of(directory=DIRECTORY, run=recording)
 
     assert seen[0]["cwd"] == DIRECTORY
-    assert "-p" not in fake_cf_argv(DIRECTORY)
+    assert CF_PROJECT_FLAG not in fake_cf_argv(DIRECTORY)
 
 
 def fake_cf_argv(directory: Path) -> list[str]:

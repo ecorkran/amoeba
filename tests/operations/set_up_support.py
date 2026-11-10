@@ -25,6 +25,7 @@ from user_configs import user_config
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.set_up import SetUpResult, set_up
 from amoeba.store.store import Store
+from amoeba.upstream.context_forge.target_read import CF_PROJECT_FLAG
 
 DIRECTORY = Path("/work/checkout")
 #: The Context Forge id and name of the recorded default-worktree project.
@@ -55,9 +56,9 @@ class FakeCf:
         self, argv: Sequence[str], **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         self.calls.append(list(argv))
-        if "-p" not in argv:
+        if CF_PROJECT_FLAG not in argv:
             return replay(argv, self._directory_fixture)
-        reference = argv[list(argv).index("-p") + 1]
+        reference = argv[list(argv).index(CF_PROJECT_FLAG) + 1]
         for project_id, name in self._projects:
             if reference in (project_id, name):
                 text = json.dumps(project_document(project_id, name))
