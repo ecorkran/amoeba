@@ -210,42 +210,46 @@ usageByModel:
 
 ## 8. `set_up`
 
-- [ ] **8.1 Request and result models (D7)**
-  - [ ] `operations/set_up.py`: frozen, `extra="forbid"` pydantic `SetUpRequest` (program, optional concept where omitted differs from null, optional members with `project`, `rules_paths`, `authorize_allow`, `authorize_deny`, `depends_on` entries of `provider` and `consumed`), `SetUpProblemCode` enum with the nine codes of D7, `SetUpProblem(code, detail)`, and `SetUpResult` (`outcome`, `changes`, `problems`, `program`, `working_directory`)
-  - [ ] `rules_paths` entries use the repo-relative path validation type from slice 221; `concept.path` uses `validate_repo_relative_path`
-  - [ ] Success: pyright strict clean
+- [x] **8.1 Request and result models (D7)**
+  - [x] `operations/set_up.py`: frozen, `extra="forbid"` pydantic `SetUpRequest` (program, optional concept where omitted differs from null, optional members with `project`, `rules_paths`, `authorize_allow`, `authorize_deny`, `depends_on` entries of `provider` and `consumed`), `SetUpProblemCode` enum with the nine codes of D7, `SetUpProblem(code, detail)`, and `SetUpResult` (`outcome`, `changes`, `problems`, `program`, `working_directory`)
+  - [x] `rules_paths` entries use the repo-relative path validation type from slice 221; `concept.path` uses `validate_repo_relative_path`
+  - [x] Success: pyright strict clean
+  - Note: to keep files near 300 lines the request/result models are in operations/set_up_models.py, resolution in set_up_resolve.py, checks in set_up_checks.py; set_up.py re-exports SetUpRequest, SetUpResult, SetUpProblemCode and ContextForgeError. SetUpResult.working_directory is null for a malformed request (nothing was looked up) and program is null when the program does not exist.
 
-- [ ] **8.2 Validation and resolution phase (D7, Data Flow steps 2 and 3)**
-  - [ ] `set_up(store, config, document: object, *, directory, run)` validates `document` itself; each pydantic error becomes a `malformed` problem, plus `malformed` for a member listed twice after resolution and for a key in both authorize lists
-  - [ ] Resolve the working directory and every member reference (and `concept.member`, providers) to CF ids through `project_of` before the first `Store.write()` (the `Store` is passed in already open; no subprocess runs under the write lock); an omitted `project` uses the working directory; a missing project gives `not_a_project`; `ContextForgeError` propagates before anything is written
-  - [ ] Success: a `cf` failure with a fake `CfRun` raises `ContextForgeError` and the store has no rows
+- [x] **8.2 Validation and resolution phase (D7, Data Flow steps 2 and 3)**
+  - [x] `set_up(store, config, document: object, *, directory, run)` validates `document` itself; each pydantic error becomes a `malformed` problem, plus `malformed` for a member listed twice after resolution and for a key in both authorize lists
+  - [x] Resolve the working directory and every member reference (and `concept.member`, providers) to CF ids through `project_of` before the first `Store.write()` (the `Store` is passed in already open; no subprocess runs under the write lock); an omitted `project` uses the working directory; a missing project gives `not_a_project`; `ContextForgeError` propagates before anything is written
+  - [x] Success: a `cf` failure with a fake `CfRun` raises `ContextForgeError` and the store has no rows
+  - Note: resolution problems (not_a_project, duplicate member) are returned without running the 8.4 checks, so problems of the two phases are not merged in one result; each phase lists all of its own.
 
-- [ ] **8.3 Validation tests**
-  - [ ] `tests/operations/test_set_up_validation.py`: a non-mapping document, a missing `program`, an unknown field, a non-repo-relative `rules_paths` and `concept.path`, a member listed twice via name and id, and a key in both authorize lists each give `malformed` with a detail naming the field; a bad reference and a bad working directory with omitted `project` give `not_a_project`
-  - [ ] Success: tests pass; each rejection leaves the store empty
+- [x] **8.3 Validation tests**
+  - [x] `tests/operations/test_set_up_validation.py`: a non-mapping document, a missing `program`, an unknown field, a non-repo-relative `rules_paths` and `concept.path`, a member listed twice via name and id, and a key in both authorize lists each give `malformed` with a detail naming the field; a bad reference and a bad working directory with omitted `project` give `not_a_project`
+  - [x] Success: tests pass; each rejection leaves the store empty
 
-- [ ] **8.4 Checks (D7)**
-  - [ ] Inside one `Store.write()` read current state, compute the state the request would produce, run the remaining checks (`empty_program`, `member_of_other_program`, `rules_paths_required`, `unknown_provider`, `self_dependency`, `unknown_authorize_item`, `concept_member_not_member`), and collect all problems
-  - [ ] Any problem: roll back and return `rejected` with the unchanged state (null `program` if it does not exist). With no problems, this task stops after the checks; 8.6 adds the writes
-  - [ ] Success: pyright strict clean
+- [x] **8.4 Checks (D7)**
+  - [x] Inside one `Store.write()` read current state, compute the state the request would produce, run the remaining checks (`empty_program`, `member_of_other_program`, `rules_paths_required`, `unknown_provider`, `self_dependency`, `unknown_authorize_item`, `concept_member_not_member`), and collect all problems
+  - [x] Any problem: roll back and return `rejected` with the unchanged state (null `program` if it does not exist). With no problems, this task stops after the checks; 8.6 adds the writes
+  - [x] Success: pyright strict clean
+  - Note: no writes happen before the checks pass, so on a problem the transaction simply commits empty; nothing to roll back.
 
-- [ ] **8.5 Check tests**
-  - [ ] `tests/operations/test_set_up_checks.py`: one test per remaining D7 code, each asserting the code, a detail naming the field or member, and an unchanged store; two problems in one request are both returned
-  - [ ] Success: tests pass
+- [x] **8.5 Check tests**
+  - [x] `tests/operations/test_set_up_checks.py`: one test per remaining D7 code, each asserting the code, a detail naming the field or member, and an unchanged store; two problems in one request are both returned
+  - [x] Success: tests pass
 
-- [ ] **8.6 Writes and result (D7)**
-  - [ ] No problems: upsert (never remove; a given list replaces the stored value) and return `applied` with one `changes` line per created or changed row, or `unchanged` with nothing written
-  - [ ] `program` is read in the same transaction; `working_directory` is built from the working-directory lookup already made in 8.2 (no new `cf` call): not found gives `{not_a_project: <CF message>}`; otherwise `get_member` on the CF id in the same transaction, after any writes, gives `{member, program}` when found and `{not_in_program: <CF id>}` when not. A request naming only `program` is the read-back
-  - [ ] Success: pyright strict clean
+- [x] **8.6 Writes and result (D7)**
+  - [x] No problems: upsert (never remove; a given list replaces the stored value) and return `applied` with one `changes` line per created or changed row, or `unchanged` with nothing written
+  - [x] `program` is read in the same transaction; `working_directory` is built from the working-directory lookup already made in 8.2 (no new `cf` call): not found gives `{not_a_project: <CF message>}`; otherwise `get_member` on the CF id in the same transaction, after any writes, gives `{member, program}` when found and `{not_in_program: <CF id>}` when not. A request naming only `program` is the read-back
+  - [x] Success: pyright strict clean
 
-- [ ] **8.7 Outcome tests**
-  - [ ] `tests/operations/test_set_up_outcomes.py`: a valid request creates program, members, settings and pairs and returns `applied` with one change line per row; the same request returns `unchanged` and every `updated_at` stays; changing one value changes only that row; a program-only request reads back; `concept: null` clears the concept and an omitted `concept` leaves it; `not_in_program` and `not_a_project` appear in `working_directory`
-  - [ ] Omitted `project` from two worktrees: with a member registered through the default-worktree fixture, a request with an omitted `project` run with the non-default-worktree fixture (and again with the subdirectory fixture) resolves to the same member and returns `unchanged`
-  - [ ] Success: tests pass
+- [x] **8.7 Outcome tests**
+  - [x] `tests/operations/test_set_up_outcomes.py`: a valid request creates program, members, settings and pairs and returns `applied` with one change line per row; the same request returns `unchanged` and every `updated_at` stays; changing one value changes only that row; a program-only request reads back; `concept: null` clears the concept and an omitted `concept` leaves it; `not_in_program` and `not_a_project` appear in `working_directory`
+  - [x] Omitted `project` from two worktrees: with a member registered through the default-worktree fixture, a request with an omitted `project` run with the non-default-worktree fixture (and again with the subdirectory fixture) resolves to the same member and returns `unchanged`
+  - [x] Success: tests pass
+  - Note: tests/operations/set_up_support.py provides FakeCf (routes cf get by directory or -p reference, reusing the recorded default-worktree document with another id/name for extra projects) and set_up_worker.py is the per-process worker for 8.8.
 
-- [ ] **8.8 Concurrent `set_up` test**
-  - [ ] `tests/operations/test_set_up_concurrent.py`: 8 processes against one new store each call `set_up` for the same program with a different member (fake `CfRun` in each); each returns `applied` or raises `StoreBusyError`, and the store ends with every member that reported `applied`
-  - [ ] Success: test passes on five consecutive runs
+- [x] **8.8 Concurrent `set_up` test**
+  - [x] `tests/operations/test_set_up_concurrent.py`: 8 processes against one new store each call `set_up` for the same program with a different member (fake `CfRun` in each); each returns `applied` or raises `StoreBusyError`, and the store ends with every member that reported `applied`
+  - [x] Success: test passes on five consecutive runs
 
 **Commit**: `feat: add set_up operation`
 
