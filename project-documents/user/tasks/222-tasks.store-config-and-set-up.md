@@ -144,18 +144,19 @@ usageByModel:
 
 ## 4. User config
 
-- [ ] **4.1 Implement `config/user_config.py` (D5)**
-  - [ ] Frozen pydantic models `UserConfig` and `NotAuthorizedItem`, both `extra="forbid"` with no field defaults, fields and constraints as in D5's tables (`answer_model` and `check_model` as `ModelAlias`; `max_cost_usd` > 0; `answer_limit` and `passages_max_chars` ≥ 1; `authorize_items` may be empty with unique `key`)
-  - [ ] `load_user_config(path)` raises `ConfigError` listing every problem in one pass, each naming the file and key: missing file ("no config at <path>; see docs/config-contract.md"), not UTF-8, not YAML, missing key, unknown key, bad value
-  - [ ] Success: modules import; pyright strict clean
+- [x] **4.1 Implement `config/user_config.py` (D5)**
+  - [x] Frozen pydantic models `UserConfig` and `NotAuthorizedItem`, both `extra="forbid"` with no field defaults, fields and constraints as in D5's tables (`answer_model` and `check_model` as `ModelAlias`; `max_cost_usd` > 0; `answer_limit` and `passages_max_chars` ≥ 1; `authorize_items` may be empty with unique `key`)
+  - [x] `load_user_config(path)` raises `ConfigError` listing every problem in one pass, each naming the file and key: missing file ("no config at <path>; see docs/config-contract.md"), not UTF-8, not YAML, missing key, unknown key, bad value
+  - [x] Success: modules import; pyright strict clean
 
-- [ ] **4.2 Config contract doc and example**
-  - [ ] Write `docs/config-contract.md` (with YAML frontmatter per `file-naming-conventions.md`): each key, its type and meaning, and one complete example whose `authorize_items` are the five defaults named in the design's D5 (including the item keyed `merge_to_main`), all `denied_by_default: true`
-  - [ ] Success: the example block is valid YAML; the doc names every D5 key
+- [x] **4.2 Config contract doc and example**
+  - [x] Write `docs/config-contract.md` (with YAML frontmatter per `file-naming-conventions.md`): each key, its type and meaning, and one complete example whose `authorize_items` are the five defaults named in the design's D5 (including the item keyed `merge_to_main`), all `denied_by_default: true`
+  - [x] Success: the example block is valid YAML; the doc names every D5 key
+  - Note: the example's model aliases are the obvious placeholders replace-with-answer-alias and replace-with-check-alias.
 
-- [ ] **4.3 Config tests**
-  - [ ] `tests/config/test_user_config.py`: the example from `docs/config-contract.md` loads (extract it from the doc, do not copy it); parametrized, removing each one key in turn raises `ConfigError` naming that key; unknown key, bad value, duplicate item `key`, missing file, non-UTF-8 and non-YAML each raise `ConfigError` naming the file; two problems in one file are both listed
-  - [ ] Success: tests pass
+- [x] **4.3 Config tests**
+  - [x] `tests/config/test_user_config.py`: the example from `docs/config-contract.md` loads (extract it from the doc, do not copy it); parametrized, removing each one key in turn raises `ConfigError` naming that key; unknown key, bad value, duplicate item `key`, missing file, non-UTF-8 and non-YAML each raise `ConfigError` naming the file; two problems in one file are both listed
+  - [x] Success: tests pass
 
 **Commit**: `feat: add user config loading and contract doc`
 
