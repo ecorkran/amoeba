@@ -78,19 +78,20 @@ usageByModel:
 
 ## 2. Home
 
-- [ ] **2.1 Implement `config/home.py` (D1)**
-  - [ ] Create `src/amoeba/config/__init__.py` and `home.py` with `amoeba_home()`, `store_path()`, `config_path()` and `AmoebaHomeError`
-  - [ ] `amoeba_home()` reads `AMOEBA_HOME` at call time; unset gives `Path.home() / ".config" / "amoeba"`; set but empty or relative raises `AmoebaHomeError`; `XDG_CONFIG_HOME` is never read
-  - [ ] File names `amoeba.sqlite3` and `config.yaml` are constants defined once in `home.py`
-  - [ ] Success: module imports; pyright strict is clean on it
+- [x] **2.1 Implement `config/home.py` (D1)**
+  - [x] Create `src/amoeba/config/__init__.py` and `home.py` with `amoeba_home()`, `store_path()`, `config_path()` and `AmoebaHomeError`
+  - [x] `amoeba_home()` reads `AMOEBA_HOME` at call time; unset gives `Path.home() / ".config" / "amoeba"`; set but empty or relative raises `AmoebaHomeError`; `XDG_CONFIG_HOME` is never read
+  - [x] File names `amoeba.sqlite3` and `config.yaml` are constants defined once in `home.py`
+  - [x] Success: module imports; pyright strict is clean on it
 
-- [ ] **2.2 Home tests (D10)**
-  - [ ] `tests/config/test_home.py`: paths sit under `AMOEBA_HOME`; the fixture's home is not the real default; with the variable unset and `XDG_CONFIG_HOME` set, the default is used; empty and relative values raise `AmoebaHomeError`
-  - [ ] Success: tests pass
+- [x] **2.2 Home tests (D10)**
+  - [x] `tests/config/test_home.py`: paths sit under `AMOEBA_HOME`; the fixture's home is not the real default; with the variable unset and `XDG_CONFIG_HOME` set, the default is used; empty and relative values raise `AmoebaHomeError`
+  - [x] Success: tests pass
+  - Note: tests/test_store_safety.py no longer forbids store_path/store_dir/DEFAULT_STORE_DIR — store_path() resolves under the per-test AMOEBA_HOME (D10), so it cannot reach the real home; the Squadron and CF directory names stay forbidden.
 
-- [ ] **2.3 AST test for the one read of `AMOEBA_HOME`**
-  - [ ] `tests/test_home_access.py`: parse every module under `src/amoeba` except `config/home.py`; fail if any contains the string `AMOEBA_HOME` or calls `Path.home`. Reuse `tests/ast_strings.py` helpers if they fit
-  - [ ] Success: test passes; adding `Path.home()` to another module makes it fail (verify once, then revert)
+- [x] **2.3 AST test for the one read of `AMOEBA_HOME`**
+  - [x] `tests/test_home_access.py`: parse every module under `src/amoeba` except `config/home.py`; fail if any contains the string `AMOEBA_HOME` or calls `Path.home`. Reuse `tests/ast_strings.py` helpers if they fit
+  - [x] Success: test passes; adding `Path.home()` to another module makes it fail (verify once, then revert)
 
 **Commit**: `feat: add Amoeba home resolution`
 

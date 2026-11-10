@@ -1,9 +1,14 @@
-"""Mechanical guard: no test may reach for the central per-supervisor store.
+"""Mechanical guard: no test may reach for another tool's real directories.
 
 The testing rules require each tier to carry a guard that scans its own files
 for the dangerous accessor rather than trusting that nobody wrote one. The
-danger here is a test resolving the real store path and operating on the
-supervisor's live lifecycle history instead of a throwaway file.
+danger here is a test resolving Squadron's real runs directory or Context
+Forge's real data directory and operating on live history instead of a
+throwaway file.
+
+Amoeba's own store path is not on the list: ``store_path()`` resolves under
+``AMOEBA_HOME``, which the autouse fixture in ``conftest.py`` points at a fresh
+directory for every test (slice 222, D10), so it can never reach the real home.
 
 The scan is multiline-aware, per the testing rules: a per-line grep is defeated
 by a call split across lines, so this walks the parsed AST instead.
@@ -18,16 +23,13 @@ import pytest
 
 TESTS_DIR = Path(__file__).parent
 
-#: Names that resolve the central store (the store's path accessors), Squadron's
-#: runs directory, or Context Forge's data directory. A test referencing any of
-#: them is reaching outside its throwaway directories. The last two are fixed at
-#: import from the real home directory, so a test points a subprocess at a
-#: scratch location by setting ``HOME``, never by naming them.
+#: Names that resolve Squadron's runs directory or Context Forge's data
+#: directory. A test referencing any of them is reaching outside its throwaway
+#: directories. They are fixed at import from the real home directory, so a
+#: test points a subprocess at a scratch location by setting ``HOME``, never by
+#: naming them.
 FORBIDDEN_PATH_NAMES = frozenset(
     {
-        "store_dir",
-        "store_path",
-        "DEFAULT_STORE_DIR",
         "DEFAULT_SQ_RUNS_DIR",
         "DEFAULT_CF_DATA_DIR",
     }
@@ -68,9 +70,12 @@ def _referenced_forbidden_names(source: str) -> set[str]:
 
 def test_scan_finds_a_wrapped_reference() -> None:
     """The scan itself is verified — a wrapped call must not slip past it."""
-    wrapped = 'from paths import store_path\n\nstore_path(\n    "demo",\n)\n'
+    wrapped = (
+        "from settings import DEFAULT_SQ_RUNS_DIR\n\n"
+        "print(\n    DEFAULT_SQ_RUNS_DIR,\n)\n"
+    )
 
-    assert _referenced_forbidden_names(wrapped) == {"store_path"}
+    assert _referenced_forbidden_names(wrapped) == {"DEFAULT_SQ_RUNS_DIR"}
 
 
 @pytest.mark.parametrize("name", ["DEFAULT_SQ_RUNS_DIR", "DEFAULT_CF_DATA_DIR"])
@@ -89,12 +94,11 @@ def test_scan_ignores_unrelated_source() -> None:
 
 
 @pytest.mark.parametrize("module_path", _test_modules(), ids=lambda path: path.name)
-def test_no_test_module_resolves_the_central_store(module_path: Path) -> None:
-    """No test module references the central store path constant or resolver."""
+def test_no_test_module_resolves_a_real_tool_directory(module_path: Path) -> None:
+    """No test module references Squadron's or Context Forge's real directories."""
     referenced = _referenced_forbidden_names(module_path.read_text(encoding="utf-8"))
 
     assert not referenced, (
-        f"{module_path.name} references {sorted(referenced)}, which resolve the "
-        "central store or a real tool directory. Tests must operate only on a "
-        "throwaway store under tmp_path, never on the central store."
+        f"{module_path.name} references {sorted(referenced)}, which resolve a "
+        "real tool directory. Tests must operate only on throwaway directories."
     )
