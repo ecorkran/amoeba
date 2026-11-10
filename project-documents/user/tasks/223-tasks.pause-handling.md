@@ -10,8 +10,8 @@ projectState: Slices 221 and 222 are merged. `src/amoeba` holds `answering/`, `u
   `answering_for`) and the `amoeba set_up` CLI. No pause handling exists. Nobody has
   run Amoeba.
 dateCreated: 20261107
-dateUpdated: 20261108
-status: not_started
+dateUpdated: 20261110
+status: in_progress
 turns: 11
 promptTokens: 429930
 cachedTokens: 379625
@@ -44,78 +44,89 @@ usageByModel:
 
 ## 0. Setup
 
-- [ ] **0.1 Create the branch**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
-  - [ ] Confirm the working tree is clean and you are on the target
-  - [ ] `git checkout -b 223-slice.pause-handling {target}`
-  - [ ] Success: `git branch --show-current` prints `223-slice.pause-handling`
+- [x] **0.1 Create the branch**
+  - [x] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
+  - [x] Confirm the working tree is clean and you are on the target
+  - [x] `git checkout -b 223-slice.pause-handling {target}`
+  - [x] Success: `git branch --show-current` prints `223-slice.pause-handling`
 
-- [ ] **0.2 Confirm 222 and locate inputs**
-  - [ ] Confirm `src/amoeba/store/`, `src/amoeba/config/` and `src/amoeba/operations/` exist and `amoeba set_up` runs; if not, write `BLOCKED: slice 222 not merged` under this task and stop
-  - [ ] Open the audit's Slice 182 section and Live tests section. Note under this task: the 182 take and rewrite groups (for `program_concept` and `program_members`, D11), the list of `waits on 223` test files and the commit to restore them from
-  - [ ] Find the module of each of: `poll_run`, `RunSummary`, `PollFailure`, `read_answer`, `read_check`, `decide_answer`, `evaluate_gate`, `prepare_scratch`, `compose_instructions`, `read_committed_sources`, `read_target`, `sources_reason`, `SourcesProblem`, `answering_for`, `resolve_member`, `project_of`, `members_of`, `programs`, `DeclineReason`, `QuestionState`, `ResumeOutcome`, `PassageRef`, `AnsweringEvidence`, `run_cf` (note "absent" for any that don't exist); note import paths
-  - [ ] Also note: the import path and signatures of the kept launch helpers in `upstream/squadron/launch.py` (`mint_run_id`, `build_argv`, `spawn`, `LaunchLogs`, `LaunchError`, `stderr_tail`; 221 task 2.5 keeps them) and of `resume_argv` in `upstream/squadron/resume_argv.py`; if any is absent, write `BLOCKED: slice 221 did not keep <name>` and stop; where `DEFAULT_TARGET_BRANCH` now lives (`upstream/context_forge/target_read.py`, moved unchanged by 221 task 2.8); the import paths the kept live files use for `SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`; `sq --version` (0.24.24 or later; the live tests and the `--no-pause-hook` flag need it)
-  - [ ] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
-  - [ ] Success: a note lists the audit groups, the restore commit, each import path and the baseline result
+- [x] **0.2 Confirm 222 and locate inputs**
+  - [x] Confirm `src/amoeba/store/`, `src/amoeba/config/` and `src/amoeba/operations/` exist and `amoeba set_up` runs; if not, write `BLOCKED: slice 222 not merged` under this task and stop
+  - [x] Open the audit's Slice 182 section and Live tests section. Note under this task: the 182 take and rewrite groups (for `program_concept` and `program_members`, D11), the list of `waits on 223` test files and the commit to restore them from
+  - [x] Find the module of each of: `poll_run`, `RunSummary`, `PollFailure`, `read_answer`, `read_check`, `decide_answer`, `evaluate_gate`, `prepare_scratch`, `compose_instructions`, `read_committed_sources`, `read_target`, `sources_reason`, `SourcesProblem`, `answering_for`, `resolve_member`, `project_of`, `members_of`, `programs`, `DeclineReason`, `QuestionState`, `ResumeOutcome`, `PassageRef`, `AnsweringEvidence`, `run_cf` (note "absent" for any that don't exist); note import paths
+  - [x] Also note: the import path and signatures of the kept launch helpers in `upstream/squadron/launch.py` (`mint_run_id`, `build_argv`, `spawn`, `LaunchLogs`, `LaunchError`, `stderr_tail`; 221 task 2.5 keeps them) and of `resume_argv` in `upstream/squadron/resume_argv.py`; if any is absent, write `BLOCKED: slice 221 did not keep <name>` and stop; where `DEFAULT_TARGET_BRANCH` now lives (`upstream/context_forge/target_read.py`, moved unchanged by 221 task 2.8); the import paths the kept live files use for `SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`; `sq --version` (0.24.24 or later; the live tests and the `--no-pause-hook` flag need it)
+  - [x] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
+  - [x] Success: a note lists the audit groups, the restore commit, each import path and the baseline result
+  - Notes (recorded 20261110):
+    - Branch `223-slice.pause-handling` already existed at main's HEAD (a506eab), tree clean; target is `main` (`git.integration_branch` empty).
+    - Audit Slice 182 groups. Take (copy from `182-slice.program-concept-as-a-source`): `answering.yaml` kind sentences, `passages.py` kinds and rendering, `program_passages.py`, `source_reads.py` renames, tests `test_passages.py`, `test_pipeline_yaml.py`, `test_program_passages.py`. Rewrite: `program_sources.py` (keep `_read_concept_file`, `_within_limit`, `without_path`, `_read_from_asker`, `SourcesProblem` kinds), the `sources.py` program hunk, `launch.py` program field, `program_rig.py`, `test_program_sources.py`, program section of `test_sources.py`, `test_program_passages_load.py`. Drop: no-program path (`program=None` optionality, commit `6c2499b` and its baseline tests).
+    - Live tests that `wait on 223`: `tests/live/answering/stage_harness.py` and `tests/live/answering/test_answering_run.py`; restore from commit `ed6041a` (verified to exist).
+    - Import paths (all under `src/amoeba/`): `poll_run`, `PollFailure`, `RunPoll` (type alias `RunOutcomeDocument | PollFailure`), `RunOutcome`, `RunOutcomeDocument`, `SQ_EXECUTABLE`, `QUESTION_TAIL_CHARS` in `upstream/squadron/run_outcome.py` (`poll_run(run_id, *, timeout_seconds)`); `RunSummary`, `decide_answer`, `sources_reason` in `answering/decide.py`; `read_answer`, `read_check` in `answering/artifacts.py`; `evaluate_gate(question, prior_answers: int, *, answer, settings)` and `compose_instructions(question, answer)` in `answering/gate.py`; `prepare_scratch(directory, question, passages_markdown, max_cost_usd)` in `answering/inputs.py`; `read_committed_sources` in `answering/source_reads.py`; `SourcesProblem` in `answering/passages.py`; `DeclineReason`, `PassageRef` (fields id, source, question_id, date; no `kind`), `AnsweringEvidence` in `answering/values.py`; `read_target` and `DEFAULT_TARGET_BRANCH` ("main") in `upstream/context_forge/target_read.py`; `project_of` in `upstream/context_forge/project_of.py`; `run_cf` in `upstream/context_forge/cli_call.py`; `answering_for` in `operations/member_answering.py`; `resolve_member` in `operations/members.py`; `members_of` and the other program reads are functions in the module `store/programs.py` (there is no `programs` function); `QuestionState`, `ResumeOutcome` in `store/vocabulary.py`; `mint_run_id(now)`, `build_argv(pipeline, run_id, params, *, target_key=TARGET_PARAM_KEY)`, `spawn(argv, checkout, logs, popen)`, `LaunchLogs(stdout, stderr)`, `LaunchError(failure, detail)`, `stderr_tail(path)` in `upstream/squadron/launch.py`; `resume_argv(run_id, instructions)` in `upstream/squadron/resume_argv.py`. All present; none absent.
+    - Note: `upstream/squadron/launch.py` already defines `TARGET_PARAM_KEY = "slice"`; task 4.2 must not create a second constant of that name with a different meaning (decide there).
+    - `sq --version`: `squadron 0.24.25` (>= 0.24.24).
+    - Baseline: ruff format clean (164 files), ruff check clean, pyright 0 errors, pytest 756 passed.
 
 ## 1. Store and migration (D4, D10)
 
-- [ ] **1.1 Migration `002_pause_handling.sql`**
-  - [ ] Create `store/schema/002_pause_handling.sql`: `ALTER TABLE … ADD COLUMN` only, all nullable. `questions`: `slice_label`, `source_commit`, `passages`, `waiting_detail`, `evidence`. `answers`: `cited`, `resume_detail`, `resume_log`, `resume_at` (D10 table)
-  - [ ] Set `EXPECTED_SCHEMA_VERSION` to 2
-  - [ ] Success: a version-1 store opens and migrates to version 2 with data intact
+- [x] **1.1 Migration `002_pause_handling.sql`**
+  - [x] Create `store/schema/002_pause_handling.sql`: `ALTER TABLE … ADD COLUMN` only, all nullable. `questions`: `slice_label`, `source_commit`, `passages`, `waiting_detail`, `evidence`. `answers`: `cited`, `resume_detail`, `resume_log`, `resume_at` (D10 table)
+  - [x] Set `EXPECTED_SCHEMA_VERSION` to 2
+  - [x] Success: a version-1 store opens and migrates to version 2 with data intact
+  - Note: `docs/store-contract.md` already updated with the nine columns (the contract-docs test requires it); task 8.3 re-checks it.
 
-- [ ] **1.2 Migration tests**
-  - [ ] Extend the store tests: build a version-1 store with a question and an answer row, migrate, assert the rows survive and the nine columns exist and are null
-  - [ ] Success: tests pass; the existing SQL `CHECK`-vs-enum pin tests still pass
+- [x] **1.2 Migration tests**
+  - [x] Extend the store tests: build a version-1 store with a question and an answer row, migrate, assert the rows survive and the nine columns exist and are null
+  - [x] Success: tests pass; the existing SQL `CHECK`-vs-enum pin tests still pass
 
-- [ ] **1.3 JSON column serializers**
-  - [ ] In `store/question_json.py` add one serializer and one parser each for `passages` (array of `PassageRef`: id, kind, source, date), `evidence` (`AnsweringEvidence`: proposed answer, citations, check verdict and reason) and `cited` (array of passage ids). Use `PassageRef` and `AnsweringEvidence` from the modules recorded in task 0.2; if 221 has no such type, define it in `answering/values.py` (which `store` may already import)
-  - [ ] Parsers raise a typed `StoreError` subclass naming the column on bad JSON; no silent empty value
-  - [ ] Success: module imports; pyright strict clean
+- [x] **1.3 JSON column serializers**
+  - [x] In `store/question_json.py` add one serializer and one parser each for `passages` (array of `PassageRef`: id, kind, source, date), `evidence` (`AnsweringEvidence`: proposed answer, citations, check verdict and reason) and `cited` (array of passage ids). Use `PassageRef` and `AnsweringEvidence` from the modules recorded in task 0.2; if 221 has no such type, define it in `answering/values.py` (which `store` may already import)
+  - [x] Parsers raise a typed `StoreError` subclass naming the column on bad JSON; no silent empty value
+  - [x] Success: module imports; pyright strict clean
+  - Note: `PassageRef` has no `kind` field, so the `passages` column stores `id`, `source`, `question_id`, `date`; `store/question_json.py` reuses `decode_mapping_list` (new in `store/row_values.py`).
 
-- [ ] **1.4 Serializer tests**
-  - [ ] Round-trip test per column; a bad-JSON test per parser
-  - [ ] Success: tests pass
+- [x] **1.4 Serializer tests**
+  - [x] Round-trip test per column; a bad-JSON test per parser
+  - [x] Success: tests pass
 
-- [ ] **1.5 Question reads, insert and claim moves**
-  - [ ] In `store/questions.py` add reads `get_question(run_id, paused_at)`, `latest_question(run_id)` (latest `claimed_at`), `any_answering_run_id(run_id)` (true if some question has that `answering_run_id`)
-  - [ ] Add `insert_question(...)`: `INSERT … ON CONFLICT (run_id, paused_at) DO NOTHING`, returns whether this call wrote the row; state `claimed` (with `answering_run_id`, passages, slice label, source commit) or `waiting_on_pm` (with `waiting_reason`, `waiting_detail`)
-  - [ ] Add compare-and-set moves, each `UPDATE … WHERE state = 'claimed' AND answering_run_id = ?`, returning whether a row changed: `settle_waiting` (reason, detail, evidence) and `replace_claim` (swap `answering_run_id` and passages old to new, for D7 `not_found` old)
-  - [ ] Every write is one short `BEGIN IMMEDIATE` transaction; none is held across a subprocess
-  - [ ] Success: module imports; pyright strict clean
+- [x] **1.5 Question reads, insert and claim moves**
+  - [x] In `store/questions.py` add reads `get_question(run_id, paused_at)`, `latest_question(run_id)` (latest `claimed_at`), `any_answering_run_id(run_id)` (true if some question has that `answering_run_id`)
+  - [x] Add `insert_question(...)`: `INSERT … ON CONFLICT (run_id, paused_at) DO NOTHING`, returns whether this call wrote the row; state `claimed` (with `answering_run_id`, passages, slice label, source commit) or `waiting_on_pm` (with `waiting_reason`, `waiting_detail`)
+  - [x] Add compare-and-set moves, each `UPDATE … WHERE state = 'claimed' AND answering_run_id = ?`, returning whether a row changed: `settle_waiting` (reason, detail, evidence) and `replace_claim` (swap `answering_run_id` and passages old to new, for D7 `not_found` old)
+  - [x] Every write is one short `BEGIN IMMEDIATE` transaction; none is held across a subprocess
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **1.6 Question tests**
-  - [ ] Reads: `get_question` and `latest_question` return the right row (two questions on one run, different `claimed_at`); `any_answering_run_id` true for a known id and false otherwise
-  - [ ] Insert race: second insert returns false and leaves the first row
-  - [ ] Each compare-and-set returns false when the state or `answering_run_id` differs, true otherwise
-  - [ ] Success: tests pass
+- [x] **1.6 Question tests**
+  - [x] Reads: `get_question` and `latest_question` return the right row (two questions on one run, different `claimed_at`); `any_answering_run_id` true for a known id and false otherwise
+  - [x] Insert race: second insert returns false and leaves the first row
+  - [x] Each compare-and-set returns false when the state or `answering_run_id` differs, true otherwise
+  - [x] Success: tests pass
 
-- [ ] **1.7 Answer reads and writes**
-  - [ ] In `store/answers.py` (a separate module to keep `questions.py` near ~300 lines; `store/questions.py` re-exports these names so the design's `store.questions` interface holds) add reads `answers_of(question)`, `latest_answer(question)` (highest `seq`), `automatic_answer_count(run_id)` (rows with `answered_by = 'answerer'`, this `run_id`, any `paused_at`)
-  - [ ] Add `add_pm_answer`: one transaction adds a `pm` answer row and sets `answered` from any state; does not clear `waiting_reason` or `waiting_detail`
-  - [ ] Add `record_resume(answer, outcome, detail, log, at)` with `WHERE resume_outcome IS NULL OR resume_outcome = 'refused'`
-  - [ ] Success: module imports; pyright strict clean
+- [x] **1.7 Answer reads and writes**
+  - [x] In `store/answers.py` (a separate module to keep `questions.py` near ~300 lines; `store/questions.py` re-exports these names so the design's `store.questions` interface holds) add reads `answers_of(question)`, `latest_answer(question)` (highest `seq`), `automatic_answer_count(run_id)` (rows with `answered_by = 'answerer'`, this `run_id`, any `paused_at`)
+  - [x] Add `add_pm_answer`: one transaction adds a `pm` answer row and sets `answered` from any state; does not clear `waiting_reason` or `waiting_detail`
+  - [x] Add `record_resume(answer, outcome, detail, log, at)` with `WHERE resume_outcome IS NULL OR resume_outcome = 'refused'`
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **1.8 Answer read and write tests**
-  - [ ] `answers_of` returns all rows in `seq` order; a newer PM answer adds a row and `latest_answer` returns it
-  - [ ] `automatic_answer_count` ignores PM answers and counts across `paused_at` values
-  - [ ] `add_pm_answer` sets `answered` from `claimed` and from `waiting_on_pm` and leaves `waiting_reason` in place
-  - [ ] `record_resume` never overwrites `resumed` or `not_delivered`, does overwrite `refused`
-  - [ ] Success: tests pass
+- [x] **1.8 Answer read and write tests**
+  - [x] `answers_of` returns all rows in `seq` order; a newer PM answer adds a row and `latest_answer` returns it
+  - [x] `automatic_answer_count` ignores PM answers and counts across `paused_at` values
+  - [x] `add_pm_answer` sets `answered` from `claimed` and from `waiting_on_pm` and leaves `waiting_reason` in place
+  - [x] `record_resume` never overwrites `resumed` or `not_delivered`, does overwrite `refused`
+  - [x] Success: tests pass
 
-- [ ] **1.9 Automatic settle with gate**
-  - [ ] In `store/answers.py` add `settle_answered(…, gate)`, compare-and-set `claimed → answered` (same guard as 1.5). In one `BEGIN IMMEDIATE` transaction: count `prior` with `automatic_answer_count`, call `gate(prior)` (returns a decline or `None`); on a decline write nothing and return it; otherwise do the compare-and-set and insert the `answerer` answer row with `cited`; return `settled`, the decline, or `lost`
-  - [ ] Success: module imports; pyright strict clean
+- [x] **1.9 Automatic settle with gate**
+  - [x] In `store/answers.py` add `settle_answered(…, gate)`, compare-and-set `claimed → answered` (same guard as 1.5). In one `BEGIN IMMEDIATE` transaction: count `prior` with `automatic_answer_count`, call `gate(prior)` (returns a decline or `None`); on a decline write nothing and return it; otherwise do the compare-and-set and insert the `answerer` answer row with `cited`; return `settled`, the decline, or `lost`
+  - [x] Success: module imports; pyright strict clean
+  - Note: `settle_answered` checks the claim is still held before calling the gate, so a lost claim returns `lost` even if the gate would decline; it also writes `questions.evidence` on settle.
 
-- [ ] **1.10 Automatic settle tests**
-  - [ ] A PM answer during a claim makes the later `settle_answered` return `lost`; a gate that declines writes nothing and its decline is returned; `gate` receives only automatic answers in `prior`; success writes the `answerer` row with `cited`
-  - [ ] Success: tests pass
+- [x] **1.10 Automatic settle tests**
+  - [x] A PM answer during a claim makes the later `settle_answered` return `lost`; a gate that declines writes nothing and its decline is returned; `gate` receives only automatic answers in `prior`; success writes the `answerer` row with `cited`
+  - [x] Success: tests pass
 
-- [ ] **1.11 PM precedent read**
-  - [ ] Add `pm_precedent(store, member_id)` in `store/answers.py`: the newest PM answer for each of the member's questions, with question text, slice label and `recorded_at`; automatic answers excluded
-  - [ ] Add tests: two PM answers on one question gives only the newer; an automatic-only question gives nothing; another member's questions are excluded
-  - [ ] Success: tests pass
+- [x] **1.11 PM precedent read**
+  - [x] Add `pm_precedent(store, member_id)` in `store/answers.py`: the newest PM answer for each of the member's questions, with question text, slice label and `recorded_at`; automatic answers excluded
+  - [x] Add tests: two PM answers on one question gives only the newer; an automatic-only question gives nothing; another member's questions are excluded
+  - [x] Success: tests pass
 
 **Commit**: `feat: add pause-handling store migration and question access`
 

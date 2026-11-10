@@ -112,8 +112,13 @@ a foreign key would be circular.
 | `checkout` | The checkout the run paused in. |
 | `state` | `claimed`, `answered` or `waiting_on_pm` (`QuestionState`). |
 | `answering_run_id` | The answering run, null before one starts. |
-| `waiting_reason` | Why the PM must answer; unconstrained in SQL, checked in code by 223. |
+| `waiting_reason` | Why the PM must answer, a `DeclineReason`; unconstrained in SQL, checked in code. Written with the `waiting_on_pm` insert or move; a PM answer does not clear it. |
 | `claimed_at`, `updated_at` | UTC times. |
+| `slice_label` | Migration `002`. The slice label (`<index> <name>`, or `none`) the passages were gathered for; reused on precedent passages. Written with the claim insert by `handle_pause`; null when the question waited before context was gathered. |
+| `source_commit` | Migration `002`. The commit the passages were read at. Written with the claim insert. |
+| `passages` | Migration `002`. JSON array of passage references (`id`, `source`, `question_id`, `date`). Written with the claim insert; rewritten by `replace_claim` for a dead claim. |
+| `waiting_detail` | Migration `002`. Bounded detail for `waiting_reason`. Written with `waiting_reason`. |
+| `evidence` | Migration `002`. JSON object: `proposed_answer`, `cited`, `verdict`, `reason`, as far as the answering run got. Written when the claim settles, to `answered` or `waiting_on_pm`. |
 
 ### `answers` (written by slice 223; counted by slice 224)
 
@@ -126,7 +131,11 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 | `answered_by` | `answerer` or `pm` (`AnsweredBy`). |
 | `answer` | The answer text. |
 | `recorded_at` | UTC time. |
-| `resume_outcome` | Null, or `resumed`, `refused` or `not_delivered` (`ResumeOutcome`). |
+| `resume_outcome` | Null, or `resumed`, `refused` or `not_delivered` (`ResumeOutcome`). Written by the shared resume; `resumed` and `not_delivered` are never overwritten, `refused` may be. |
+| `cited` | Migration `002`. JSON array of the passage ids an automatic answer cites; null for a PM answer. Written with the `answerer` row. |
+| `resume_detail` | Migration `002`. Refusal or not-delivered detail. Written with `resume_outcome`. |
+| `resume_log` | Migration `002`. Path of the resume's stdout log. Written with `resume_outcome`. |
+| `resume_at` | Migration `002`. UTC time the resume outcome was recorded. Written with `resume_outcome`. |
 
 ### `pm_marker` (moved by slice 224)
 
