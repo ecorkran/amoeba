@@ -11,8 +11,8 @@ interfaces:
 - 226-slice.mcp-server
 - 227-slice.program-dependencies
 dateCreated: 20261107
-dateUpdated: 20261107
-status: not_started
+dateUpdated: 20261109
+status: complete
 ---
 
 # Slice Design: Store, Config and Set-up
@@ -268,11 +268,23 @@ What each slice takes:
 - 8 processes against one new store each call `set_up` for the same program with a different member; each returns `applied` or raises `StoreBusyError`, and the store ends with every applied member. A held write transaction with `busy_timeout_seconds=0.2` gives `StoreBusyError`. A store stamped higher gives `StoreSchemaError` and is unchanged.
 - The D10, vocabulary-pinning, D11 and import-boundary tests pass, as do `ruff format --check`, `ruff check`, `pyright` (strict) and `pytest`. The wheel contains `001_baseline.sql`. Both contract docs match the code.
 
-**Walkthrough** (repo root, `export AMOEBA_HOME="$(mktemp -d)"`):
+**Walkthrough** (repo root; run 20261109 with the real `cf` 0.19.26; any agent can repeat it)
 
-1. `printf 'program: demo\n' | uv run amoeba set_up --file -` exits 3 with `ConfigError: no config at ...`. Copy the example from `docs/config-contract.md` into `$AMOEBA_HOME/config.yaml`.
-2. A request with `program: demo` and one member with `rules_paths: [CLAUDE.md]` and no `project` returns `applied`, with amoeba's CF id as the member. Rerun: `unchanged`.
-3. Register a repo with two CF worktrees from the first, then read back from the second: `working_directory` names the same member. From `/tmp` it shows `not_a_project`.
+Setup: `export AMOEBA_HOME="$(mktemp -d)"` and `A="$PWD/.venv/bin/amoeba"` (after `uv sync`; `uv run amoeba` is the same command, but step 3 runs it from other directories).
+
+1. No config yet: `printf 'program: demo\n' | $A set_up --file -` prints `error: ConfigError: no config at $AMOEBA_HOME/config.yaml; see docs/config-contract.md` on stderr and exits 3. Then copy the yaml block under `## Example` in `docs/config-contract.md` into `$AMOEBA_HOME/config.yaml`.
+2. Write `$AMOEBA_HOME/req.yaml`:
+
+   ```yaml
+   program: demo
+   members:
+     - rules_paths: [CLAUDE.md]
+   ```
+
+   `$A set_up --file $AMOEBA_HOME/req.yaml` exits 0 and prints JSON with `"outcome": "applied"`, `"changes": ["added program demo", "added member <amoeba's Context Forge id>"]`, and `program.members` holding that one member. Run it again: exit 0, `"outcome": "unchanged"`, `"changes": []`.
+3. Worktrees. From a second registered worktree of the same repo (`git worktree add --detach <dir> HEAD`, then in `<dir>`: `cf worktree init --name walkthrough-wt --range 800-899 -o`, which does not alter the default worktree's range), `printf 'program: demo\n' | $A set_up --file -` returns `unchanged` and `working_directory` is `{"member": {...}, "program": "demo"}` with the same `project_id` as step 2. From `/tmp` the same command returns `unchanged` with `"working_directory": {"not_a_project": "No project specified and no registered project found at current path."}`. Remove the throwaway afterwards: `cf worktree rm walkthrough-wt -y` and `git worktree remove --force <dir>`.
+
+Caveats found while running it: the `not_a_project` text is Context Forge's own message, so it can change with `cf`. A project that is not a member gives `{"not_in_program": "<cf id>"}` instead of `member`. `rules_paths` is required only for a member not yet registered.
 
 ## Future Work
 

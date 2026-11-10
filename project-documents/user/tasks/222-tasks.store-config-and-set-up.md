@@ -9,7 +9,7 @@ projectState: Slice 221 is merged. `src/amoeba` holds only `answering/` and `ups
   No store, config, or command exists. Nobody has run Amoeba.
 dateCreated: 20261107
 dateUpdated: 20261109
-status: in_progress
+status: complete
 turns: 9
 promptTokens: 259263
 cachedTokens: 215714
