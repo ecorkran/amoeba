@@ -297,19 +297,21 @@ usageByModel:
 
 ## 11. Contract docs and final validation
 
-- [ ] **11.1 Store contract doc**
-  - [ ] Replace the content of `docs/store-contract.md` (the old per-project store contract is obsolete after slice 221; if 221 already removed it, create it) with the D3 description: each table and column, its vocabulary, and which slice writes it; the migration rule (no edits to `001`, later migrations `ALTER TABLE … ADD COLUMN` only); the home and `AMOEBA_HOME` rule; frontmatter per `file-naming-conventions.md`
-  - [ ] State two derivations the schema deliberately has no column for (design, Audit items): an answering run's scratch directory is `answering_dir() / <answering_run_id>` (223 D6, D12), so `questions.answering_run_id` is its only record; and answering has no per-member switch, since program membership is the opt-in (no `answering_enabled` column, no `answerer:` section equivalent)
-  - [ ] Success: every table and column in `001_baseline.sql` appears in the doc, and the doc states both derivations
+- [x] **11.1 Store contract doc**
+  - [x] Replace the content of `docs/store-contract.md` (the old per-project store contract is obsolete after slice 221; if 221 already removed it, create it) with the D3 description: each table and column, its vocabulary, and which slice writes it; the migration rule (no edits to `001`, later migrations `ALTER TABLE … ADD COLUMN` only); the home and `AMOEBA_HOME` rule; frontmatter per `file-naming-conventions.md`
+  - [x] State two derivations the schema deliberately has no column for (design, Audit items): an answering run's scratch directory is `answering_dir() / <answering_run_id>` (223 D6, D12), so `questions.answering_run_id` is its only record; and answering has no per-member switch, since program membership is the opt-in (no `answering_enabled` column, no `answerer:` section equivalent)
+  - [x] Success: every table and column in `001_baseline.sql` appears in the doc, and the doc states both derivations
+  - Note: docs/store-contract.md created (docs/ did not exist; 221 had already removed the old contract). It states both derivations (scratch dir from answering_run_id; no per-member answering switch), the migration rule, and the home rule.
 
-- [ ] **11.2 Contract match test**
-  - [ ] `tests/test_contract_docs.py`: assert every table and column name in `001_baseline.sql` (read from `PRAGMA table_info` on a fresh store) appears in `docs/store-contract.md`, and every `UserConfig` field name appears in `docs/config-contract.md`
-  - [ ] Success: test passes
+- [x] **11.2 Contract match test**
+  - [x] `tests/test_contract_docs.py`: assert every table and column name in `001_baseline.sql` (read from `PRAGMA table_info` on a fresh store) appears in `docs/store-contract.md`, and every `UserConfig` field name appears in `docs/config-contract.md`
+  - [x] Success: test passes
 
-- [ ] **11.3 Full validation and walkthrough**
-  - [ ] Checks pass
-  - [ ] Run the design's Walkthrough steps 1 to 3 with `AMOEBA_HOME="$(mktemp -d)"`; note each result under this task (step 3's two worktrees: use `git worktree add` on a registered throwaway checkout)
-  - [ ] Walk the design's Success Criteria list and note any criterion not covered by a test
-  - [ ] Success: all four checks pass; steps 1 to 3 give the documented results (exit 3 `ConfigError: no config at ...`, then `applied` and `unchanged`, then the same member from both worktrees and `not_a_project` from `/tmp`)
+- [x] **11.3 Full validation and walkthrough**
+  - [x] Checks pass
+  - [x] Run the design's Walkthrough steps 1 to 3 with `AMOEBA_HOME="$(mktemp -d)"`; note each result under this task (step 3's two worktrees: use `git worktree add` on a registered throwaway checkout)
+  - [x] Walk the design's Success Criteria list and note any criterion not covered by a test
+  - [x] Success: all four checks pass; steps 1 to 3 give the documented results (exit 3 `ConfigError: no config at ...`, then `applied` and `unchanged`, then the same member from both worktrees and `not_a_project` from `/tmp`)
+  - Note: four checks pass (ruff format --check, ruff check, pyright strict, pytest 756 passed). Walkthrough run with AMOEBA_HOME=$(mktemp -d) and the real cf 0.19.26: step 1 exit 3 `error: ConfigError: no config at <home>/config.yaml; see docs/config-contract.md`; after copying the doc example into config.yaml, step 2 `applied` (changes: `added program demo`, `added member project_1781844717321_1gukaohbc`; the member is amoeba's CF id) and the rerun `unchanged`; step 3 with a throwaway `git worktree add` checkout registered via `cf worktree init --name walkthrough-wt --range 800-899 -o` (removed afterwards) printed `unchanged demo project_1781844717321_1gukaohbc` (the same member as the default worktree), and from /tmp `working_directory` was `{not_a_project: 'No project specified and no registered project found at current path.'}`. Success Criteria walked: every criterion is covered by a test (set_up outcomes/validation/checks/concurrent, CLI, answering_for, store, vocabulary pinning, D10 home tests, D11 recordings, import boundaries, wheel, contract docs); none uncovered.
 
 **Commit**: `docs: add store and config contracts`
