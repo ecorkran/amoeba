@@ -184,3 +184,8 @@ def failing_poll(reason: str) -> Callable[..., RunPoll]:
         return PollFailure(reason)
 
     return poll
+
+
+def poll_not_found(run_id: str) -> RunOutcomeDocument:
+    """What ``sq runs wait`` reports for a run it has no state for."""
+    return RunOutcomeDocument(run_id=run_id, outcome=RunOutcome.NOT_FOUND)

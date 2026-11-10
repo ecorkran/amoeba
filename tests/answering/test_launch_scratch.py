@@ -55,7 +55,9 @@ def test_a_passage_with_no_source_is_a_programming_error() -> None:
 def test_the_scratch_directory_is_made_and_filled(tmp_path: Path) -> None:
     scratch = tmp_path / "answering" / "run-1"
 
-    problem = prepare_scratch_directory(scratch, QUESTION, "## P1\n", 0.5)
+    problem = prepare_scratch_directory(
+        scratch, QUESTION, "## P1\n", 0.5, not_authorized=()
+    )
 
     assert problem is None
     assert (scratch / "question.md").is_file()
@@ -66,7 +68,9 @@ def test_an_existing_scratch_directory_is_never_reused(tmp_path: Path) -> None:
     scratch = tmp_path / "run-1"
     scratch.mkdir()
 
-    problem = prepare_scratch_directory(scratch, QUESTION, "## P1\n", 0.5)
+    problem = prepare_scratch_directory(
+        scratch, QUESTION, "## P1\n", 0.5, not_authorized=()
+    )
 
     assert problem is not None and "FileExistsError" in problem
     assert list(scratch.iterdir()) == []
@@ -76,7 +80,7 @@ def test_discarding_removes_the_directory_and_tolerates_a_missing_one(
     tmp_path: Path,
 ) -> None:
     scratch = tmp_path / "run-1"
-    prepare_scratch_directory(scratch, QUESTION, "## P1\n", 0.5)
+    prepare_scratch_directory(scratch, QUESTION, "## P1\n", 0.5, not_authorized=())
 
     discard_scratch(scratch)
     discard_scratch(scratch)

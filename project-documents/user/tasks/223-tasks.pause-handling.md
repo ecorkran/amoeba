@@ -241,45 +241,50 @@ usageByModel:
 
 ## 5. Answering run (D6)
 
-- [ ] **5.1 Spawn helper**
-  - [ ] Create `operations/processes.py` as a thin wrapper over the kept `upstream.squadron.launch.spawn` (exclusive `xb` logs, own session, `stdin` from `/dev/null`, inherited environment, `close_fds`); write no second spawn. `start_child(argv, cwd, logs: LaunchLogs)`: create the logs' parent directory, call `spawn(argv, cwd, logs, subprocess.Popen)`, return the child (a `WaitableChild` protocol defined here: `poll`, `wait(timeout)`, `pid`, satisfied by `Popen`) or the kept `LaunchError`. `terminate_group(child)`: `os.killpg` of the child's own session, then wait for exit. These are the only additions: the kept `ChildHandle` has `poll()` only, and 223's wait and terminate need more. `stderr_tail` is the kept one (last `STDERR_TAIL_LIMIT_BYTES`), not re-implemented. Imports only `upstream.squadron.launch` from Amoeba
-  - [ ] Success: module imports; pyright strict clean
+- [x] **5.1 Spawn helper**
+  - [x] Create `operations/processes.py` as a thin wrapper over the kept `upstream.squadron.launch.spawn` (exclusive `xb` logs, own session, `stdin` from `/dev/null`, inherited environment, `close_fds`); write no second spawn. `start_child(argv, cwd, logs: LaunchLogs)`: create the logs' parent directory, call `spawn(argv, cwd, logs, subprocess.Popen)`, return the child (a `WaitableChild` protocol defined here: `poll`, `wait(timeout)`, `pid`, satisfied by `Popen`) or the kept `LaunchError`. `terminate_group(child)`: `os.killpg` of the child's own session, then wait for exit. These are the only additions: the kept `ChildHandle` has `poll()` only, and 223's wait and terminate need more. `stderr_tail` is the kept one (last `STDERR_TAIL_LIMIT_BYTES`), not re-implemented. Imports only `upstream.squadron.launch` from Amoeba
+  - [x] Success: module imports; pyright strict clean
+  - Note: `start_child(argv, cwd, logs, popen=subprocess.Popen)` takes the popen factory as a defaulted parameter because the repo's containment test requires every test-started process to go through `process_containment.contained_popen`; production uses the default. `Spawner` (type alias) is the injectable form. `terminate_group` sends SIGTERM then SIGKILL (`TERMINATE_GRACE_SECONDS` = 5) to the child's own process group and waits. `processes.py` also imports `upstream.squadron.faults.LaunchFailure` (same package family as `launch`).
 
-- [ ] **5.2 Spawn helper tests**
-  - [ ] Tests of the wrapper with real short subprocesses (the kept `spawn`'s own tests moved by 221 are not repeated): logs are written, including when the log directory does not yet exist; a second `start_child` to the same log path returns a `LaunchError` (exclusive); wait times out on a sleeping child; `terminate_group` kills the child and its own child; `stdin` is empty; the kept `stderr_tail` returns the last lines of a child's stderr log
-  - [ ] Success: tests pass
+- [x] **5.2 Spawn helper tests**
+  - [x] Tests of the wrapper with real short subprocesses (the kept `spawn`'s own tests moved by 221 are not repeated): logs are written, including when the log directory does not yet exist; a second `start_child` to the same log path returns a `LaunchError` (exclusive); wait times out on a sleeping child; `terminate_group` kills the child and its own child; `stdin` is empty; the kept `stderr_tail` returns the last lines of a child's stderr log
+  - [x] Success: tests pass
 
-- [ ] **5.3 Shared `Deps`**
-  - [ ] Create `operations/deps.py` with one frozen dataclass `Deps` (cf runner, `poll_run` with its timeout, spawner, `answering_dir`, `logs_dir`, `squadron_runs_dir` paths), imported by `answering_run`, `resume`, `handle_pause`, `pause_existing` and `answer`. It imports nothing from those modules, so there is no cycle. The injected spawner and poller used by tasks 5.6 onward come from it
-  - [ ] Success: module imports; pyright strict clean
+- [x] **5.3 Shared `Deps`**
+  - [x] Create `operations/deps.py` with one frozen dataclass `Deps` (cf runner, `poll_run` with its timeout, spawner, `answering_dir`, `logs_dir`, `squadron_runs_dir` paths), imported by `answering_run`, `resume`, `handle_pause`, `pause_existing` and `answer`. It imports nothing from those modules, so there is no cycle. The injected spawner and poller used by tasks 5.6 onward come from it
+  - [x] Success: module imports; pyright strict clean
+  - Note: `Deps` (operations/deps.py) also carries `clock` and `sleep` (so tests control time and the 0.5 s resume poll loop), and `production_deps(*, answering_dir, logs_dir, squadron_runs_dir)` builds the real edges for the CLI. `poll_run` in `Deps` is `Callable[[str], RunPoll]` with its timeout (`RUN_POLL_TIMEOUT_SECONDS` = 30) bound.
 
-- [ ] **5.4 Config keys**
-  - [ ] Add required keys `answering_wait_seconds` and `resume_wait_seconds` (number > 0) to the config model; a missing or non-positive value is a `ConfigError`; no default in code. Update `docs/config-contract.md` with both keys
-  - [ ] Add both keys to every existing test config fixture and to the example config in `docs/config-contract.md`, so existing configs and tests still load
-  - [ ] Add tests: missing, zero, negative, non-number each fail; valid passes
-  - [ ] Success: all four checks pass; the contract doc lists both keys
+- [x] **5.4 Config keys**
+  - [x] Add required keys `answering_wait_seconds` and `resume_wait_seconds` (number > 0) to the config model; a missing or non-positive value is a `ConfigError`; no default in code. Update `docs/config-contract.md` with both keys
+  - [x] Add both keys to every existing test config fixture and to the example config in `docs/config-contract.md`, so existing configs and tests still load
+  - [x] Add tests: missing, zero, negative, non-number each fail; valid passes
+  - [x] Success: all four checks pass; the contract doc lists both keys
+  - Note: both keys accept an int or float > 0 (booleans rejected); `docs/config-contract.md` lists them and its example sets 600 and 60; `tests/user_configs.py` updated.
 
-- [ ] **5.5 Scratch and run id**
-  - [ ] In `operations/answering_run.py` import `mint_run_id` (`amoeba-<UTC stamp>-<12 hex>`) from `upstream.squadron.launch`, where 221 keeps it (task 0.2 note) with its signature, because the kept live harness calls it; do not restore or copy it. `make_scratch` always passes the member's not-authorized items to `prepare_scratch` explicitly. Add `make_scratch(answering_dir, run_id, ...)`: exclusive directory create, then `prepare_scratch` including the not-authorized file. An `OSError` returns a failure value for `answering_launch_failed`
-  - [ ] Add tests: id format; two ids differ; existing directory fails; scratch holds `passages.md` and `not_authorized.md` with the member's items (not the empty-list line)
-  - [ ] Success: tests pass
+- [x] **5.5 Scratch and run id**
+  - [x] In `operations/answering_run.py` import `mint_run_id` (`amoeba-<UTC stamp>-<12 hex>`) from `upstream.squadron.launch`, where 221 keeps it (task 0.2 note) with its signature, because the kept live harness calls it; do not restore or copy it. `make_scratch` always passes the member's not-authorized items to `prepare_scratch` explicitly. Add `make_scratch(answering_dir, run_id, ...)`: exclusive directory create, then `prepare_scratch` including the not-authorized file. An `OSError` returns a failure value for `answering_launch_failed`
+  - [x] Add tests: id format; two ids differ; existing directory fails; scratch holds `passages.md` and `not_authorized.md` with the member's items (not the empty-list line)
+  - [x] Success: tests pass
+  - Note (covers 5.5, 5.6 and 5.8): `operations/answering_run.py` holds `make_scratch` (a thin wrapper over the existing `answering.launch.prepare_scratch_directory`, which now takes a required keyword-only `not_authorized`), `answering_argv`, `start`, `wait`, `Claim` and the `NO_PAUSE_HOOK_FLAG` constant (`--no-pause-hook`, confirmed in `sq run --help` on sq 0.24.25; a test pins that it is spelled only there). Settle moved to `operations/answering_settle.py` (the ~300-line limit): `SettleResult` is `Answered | Waiting | Superseded` there, and `answer_claim` is start, wait, settle in order. `wait` also maps a child that exited with no run at Squadron to the library's `LaunchFailed` (non-zero exit, with the stderr tail) or `RunVanished` (exit 0). A gate refusal settles to waiting with the gate's reason, with `evidence` stored.
 
-- [ ] **5.6 Start and wait**
-  - [ ] `start(...)` builds the argv with the kept `build_argv(<answering.yaml>, <id>, {"answer-model": <answer_model>, "check-model": <check_model>}, target_key="answer-model")` (gives `sq run <answering.yaml> <answer_model> --run-id <id> -p check-model=<check_model>`; a `ValueError` from it is `answering_launch_failed`) and appends `--no-pause-hook`. Confirm the flag name with `sq run --help` (Squadron #302, closed, in 0.24.24) and define it once as a constant in `answering_run.py`; the answering run always passes it. Starts it with `processes.start_child` (the kept `spawn`) in the scratch, logs at `logs_dir() / "answering" / <id>.{stdout,stderr}.log` built from the run id as a `LaunchLogs`; a `LaunchError` is `answering_launch_failed`
-  - [ ] `wait(...)`: wait up to `answering_wait_seconds`; on timeout terminate the process group and return `answering_run_stalled` (`no result after <n> seconds`); otherwise one `poll_run(id)`; a `PollFailure` is `answering_run_failed`. `poll_run` keeps its hard-coded `--timeout 0` (a non-blocking read): the wait is on the child process, never a blocking `sq runs wait`, so `poll_run` is not changed (audit item: how `handle_pause` waits)
-  - [ ] Success: module imports; pyright strict clean
+- [x] **5.6 Start and wait**
+  - [x] `start(...)` builds the argv with the kept `build_argv(<answering.yaml>, <id>, {"answer-model": <answer_model>, "check-model": <check_model>}, target_key="answer-model")` (gives `sq run <answering.yaml> <answer_model> --run-id <id> -p check-model=<check_model>`; a `ValueError` from it is `answering_launch_failed`) and appends `--no-pause-hook`. Confirm the flag name with `sq run --help` (Squadron #302, closed, in 0.24.24) and define it once as a constant in `answering_run.py`; the answering run always passes it. Starts it with `processes.start_child` (the kept `spawn`) in the scratch, logs at `logs_dir() / "answering" / <id>.{stdout,stderr}.log` built from the run id as a `LaunchLogs`; a `LaunchError` is `answering_launch_failed`
+  - [x] `wait(...)`: wait up to `answering_wait_seconds`; on timeout terminate the process group and return `answering_run_stalled` (`no result after <n> seconds`); otherwise one `poll_run(id)`; a `PollFailure` is `answering_run_failed`. `poll_run` keeps its hard-coded `--timeout 0` (a non-blocking read): the wait is on the child process, never a blocking `sq runs wait`, so `poll_run` is not changed (audit item: how `handle_pause` waits)
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **5.7 Start and wait tests**
-  - [ ] Using the fake `sq` and injected spawner and poller: argv is exactly as designed and holds `--no-pause-hook` exactly once; spawn error, stall and poll failure each give their decline reason; no store transaction is open while the spawner or poller runs
-  - [ ] Success: tests pass
+- [x] **5.7 Start and wait tests**
+  - [x] Using the fake `sq` and injected spawner and poller: argv is exactly as designed and holds `--no-pause-hook` exactly once; spawn error, stall and poll failure each give their decline reason; no store transaction is open while the spawner or poller runs
+  - [x] Success: tests pass
+  - Note: the no-transaction-open check is in `test_answer_claim_starts_waits_and_settles_with_no_transaction_open` (takes a store write inside the injected spawner and poller callbacks); the stall test uses a real sleeping child.
 
-- [ ] **5.8 Settle**
-  - [ ] `settle(...)`: if completed, `read_answer` and `read_check` from scratch, `decide_answer(summary, answer, check, passage_ids)` with the claim's passage ids; a `Confirmed` answer goes to `settle_answered` with `gate = lambda prior: evaluate_gate(question, prior, answer=…, settings=…)` (the count happens inside the store transaction, 1.9). A gate decline or a `decide_answer` decline goes to `settle_waiting` with the reason, bounded detail and evidence. `settle` returns a `SettleResult` defined in `answering_run.py`: `answered`, `waiting` (reason, detail) or `superseded` (any `lost`/false return)
-  - [ ] Success: module imports; pyright strict clean
+- [x] **5.8 Settle**
+  - [x] `settle(...)`: if completed, `read_answer` and `read_check` from scratch, `decide_answer(summary, answer, check, passage_ids)` with the claim's passage ids; a `Confirmed` answer goes to `settle_answered` with `gate = lambda prior: evaluate_gate(question, prior, answer=…, settings=…)` (the count happens inside the store transaction, 1.9). A gate decline or a `decide_answer` decline goes to `settle_waiting` with the reason, bounded detail and evidence. `settle` returns a `SettleResult` defined in `answering_run.py`: `answered`, `waiting` (reason, detail) or `superseded` (any `lost`/false return)
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **5.9 Settle tests**
-  - [ ] Cases: confirmed and gate passes gives `answered` with an `answerer` row and `cited`; check said no gives `check_said_no`; screen refusal gives `reserved_term`; an item barred for one member and allowed for another gives different results; PM answer during settling gives `superseded`; answer limit counts automatic answers only (the gate declines with `answer_limit_reached` at the limit, and nothing is written for the answer)
-  - [ ] Success: tests pass
+- [x] **5.9 Settle tests**
+  - [x] Cases: confirmed and gate passes gives `answered` with an `answerer` row and `cited`; check said no gives `check_said_no`; screen refusal gives `reserved_term`; an item barred for one member and allowed for another gives different results; PM answer during settling gives `superseded`; answer limit counts automatic answers only (the gate declines with `answer_limit_reached` at the limit, and nothing is written for the answer)
+  - [x] Success: tests pass
 
 **Commit**: `feat: add answering run start, wait and settle`
 
