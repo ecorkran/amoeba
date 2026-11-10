@@ -255,15 +255,16 @@ usageByModel:
 
 ## 9. Member answering settings
 
-- [ ] **9.1 Implement `operations/member_answering.py` (D8)**
-  - [ ] `MemberAnswering` (`settings: AnswererSettings`, `not_authorized`: tuple of items with descriptions) and `answering_for(member_settings, config)`
-  - [ ] Not-authorized items: config items with `denied_by_default: true` not in `authorize_allow`, plus items in `authorize_deny`, in config order; `reserved_terms` are those items' screen phrases; `rules_paths` the member's; the remaining fields from the config
-  - [ ] An authorize key the config lacks raises `ConfigError` naming the member and key
-  - [ ] Success: pyright strict clean
+- [x] **9.1 Implement `operations/member_answering.py` (D8)**
+  - [x] `MemberAnswering` (`settings: AnswererSettings`, `not_authorized`: tuple of items with descriptions) and `answering_for(member_settings, config)`
+  - [x] Not-authorized items: config items with `denied_by_default: true` not in `authorize_allow`, plus items in `authorize_deny`, in config order; `reserved_terms` are those items' screen phrases; `rules_paths` the member's; the remaining fields from the config
+  - [x] An authorize key the config lacks raises `ConfigError` naming the member and key
+  - [x] Success: pyright strict clean
+  - Note: an item both allowed and denied on one member stays not-authorized (deny wins); tests/user_configs.py is the shared UserConfig builder.
 
-- [ ] **9.2 `answering_for` tests**
-  - [ ] `tests/operations/test_member_answering.py`: a member allowing `merge_to_main` lacks that item's phrases and description while another member keeps them; a member denying a `denied_by_default: false` item gets it and others don't; items keep config order; config-sourced fields reach the settings; an unknown authorize key raises `ConfigError` naming member and key
-  - [ ] Success: tests pass
+- [x] **9.2 `answering_for` tests**
+  - [x] `tests/operations/test_member_answering.py`: a member allowing `merge_to_main` lacks that item's phrases and description while another member keeps them; a member denying a `denied_by_default: false` item gets it and others don't; items keep config order; config-sourced fields reach the settings; an unknown authorize key raises `ConfigError` naming member and key
+  - [x] Success: tests pass
 
 **Commit**: `feat: add per-member answering settings`
 
