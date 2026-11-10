@@ -443,36 +443,60 @@ usageByModel:
 
 ## 9. Live tier, restored tests, hook doc (D14, D15)
 
-- [ ] **9.1 Hook doc**
-  - [ ] Write `docs/squadron-hook.md` with the four D14 points: configure `amoeba handle_pause <run_id>` run in the run's directory (the exact config line is deferred to 225, amoeba#35); only repos in a program need it and a run started with the opt-out is left alone; a hand call must run in the run's own checkout until #303; the hook's environment must reach `sq`, `cf`, `git` and model credentials
-  - [ ] Success: the doc has frontmatter and states all four points
+- [x] **9.1 Hook doc**
+  - [x] Write `docs/squadron-hook.md` with the four D14 points: configure `amoeba handle_pause <run_id>` run in the run's directory (the exact config line is deferred to 225, amoeba#35); only repos in a program need it and a run started with the opt-out is left alone; a hand call must run in the run's own checkout until #303; the hook's environment must reach `sq`, `cf`, `git` and model credentials
+  - [x] Success: the doc has frontmatter and states all four points
+  - Note: `docs/squadron-hook.md` states the four D14 points.
 
-- [ ] **9.2 Live pause pipeline and test**
-  - [ ] Using `tests/live/pause/asks_question.yaml` (created in task 2.2), add a live test that makes a throwaway worktree registered as a member under a test `AMOEBA_HOME`, starts the run, calls `amoeba handle_pause` on the pause, and asserts the record (question, passages, answer, `resumed`) and that the run left the pause. Gate on `AMOEBA_LIVE_*` like the existing live tests; outside the default suite
-  - [ ] Success: with `AMOEBA_LIVE_*` set the test passes; without it the default suite does not collect it
+- [x] **9.2 Live pause pipeline and test**
+  - [x] Using `tests/live/pause/asks_question.yaml` (created in task 2.2), add a live test that makes a throwaway worktree registered as a member under a test `AMOEBA_HOME`, starts the run, calls `amoeba handle_pause` on the pause, and asserts the record (question, passages, answer, `resumed`) and that the run left the pause. Gate on `AMOEBA_LIVE_*` like the existing live tests; outside the default suite
+  - [x] Success: with `AMOEBA_LIVE_*` set the test passes; without it the default suite does not collect it
+  - Note:
+    - `tests/live/pause/test_handle_pause_live.py` (harness `tests/live/pause/harness.py`, fixtures `conftest.py`) builds a throwaway git member, registers it with its own Context Forge data dir and `AMOEBA_HOME`, runs `asks_question.yaml` to a pause, calls the real `amoeba handle_pause` and asserts the question, passages, cited answer, evidence verdict `yes`, `resumed`, a resume log, and that the run left the pause.
+    - It is outside the default suite (`addopts = --ignore=tests/live`); a bare `uv run pytest` collects none of `tests/live`.
+    - Passed 20261110 with `AMOEBA_LIVE_*` set (`haiku-xhigh`, cap 0.5).
 
-- [ ] **9.2a Live case for the hook opt-out**
-  - [ ] No live test covers it. In `tests/live/pause/` add a pipeline whose `pipeline.on_pause_command` (see `sq run --help`) writes a marker file and which ends paused. A test starts it with the argv from the answering run's builder (task 5.6, so `--no-pause-hook` comes from the one constant) and asserts no marker exists; the control starts the same pipeline without the flag and asserts the marker exists. No model call is needed. Gate like the other live tests
-  - [ ] Success: with the flag no marker; without it the marker; outside the default suite
+- [x] **9.2a Live case for the hook opt-out**
+  - [x] No live test covers it. In `tests/live/pause/` add a pipeline whose `pipeline.on_pause_command` (see `sq run --help`) writes a marker file and which ends paused. A test starts it with the argv from the answering run's builder (task 5.6, so `--no-pause-hook` comes from the one constant) and asserts no marker exists; the control starts the same pipeline without the flag and asserts the marker exists. No model call is needed. Gate like the other live tests
+  - [x] Success: with the flag no marker; without it the marker; outside the default suite
+  - Note:
+    - `tests/live/pause/test_hook_opt_out.py` (passed 20261110).
+    - Deviation: the task says no model call is needed, but Squadron has no step that ends a run paused without one (the gate policies need review legs; `branch merge` needs a slice branch with unfinished tasks), so each of its two runs makes one cheap model call through the same `asks_question.yaml`; the hook, not the model, is under test.
+    - The marker script is set through the member's `.squadron.toml` key `pipeline.on_pause_command`; the flag comes from `NO_PAUSE_HOOK_FLAG` (the one constant). Result: no marker with the flag, a marker without it.
 
-- [ ] **9.3 Restore waiting live tests**
-  - [ ] Restore the `waits on 223` files named in the audit's Live tests section (`stage_harness.py`, `test_answering_run.py`) from the commit noted in task 0.2 (`git show <commit>:<path>`) and rewrite each to drive `handle_pause`; each keeps its claim. The restore brings back only those two files: `launch_rig.py`, `observe_support.py` and `question_harness.py` are deleted too, so treat them as a template and write what the rewrite needs
-  - [ ] The kept live files (`harness.py`, `test_pipeline_run.py`, `test_precedence.py`, `question_tails.py`) still import and collect with the names listed in task 3.1; run `uv run pytest tests/live --collect-only` with `AMOEBA_LIVE_*` set and fix any import that 221 or this slice moved
-  - [ ] Success: with `AMOEBA_LIVE_*` set the restored files pass; the default suite still passes
+- [x] **9.3 Restore waiting live tests**
+  - [x] Restore the `waits on 223` files named in the audit's Live tests section (`stage_harness.py`, `test_answering_run.py`) from the commit noted in task 0.2 (`git show <commit>:<path>`) and rewrite each to drive `handle_pause`; each keeps its claim. The restore brings back only those two files: `launch_rig.py`, `observe_support.py` and `question_harness.py` are deleted too, so treat them as a template and write what the rewrite needs
+  - [x] The kept live files (`harness.py`, `test_pipeline_run.py`, `test_precedence.py`, `question_tails.py`) still import and collect with the names listed in task 3.1; run `uv run pytest tests/live --collect-only` with `AMOEBA_LIVE_*` set and fix any import that 221 or this slice moved
+  - [x] Success: with `AMOEBA_LIVE_*` set the restored files pass; the default suite still passes
+  - Note:
+    - Restored `stage_harness.py` and `test_answering_run.py` from `ed6041a` and rewrote both to drive `amoeba handle_pause` on real pauses of a fixture member (the frozen sources fixture committed as a repo, registered with its own CF data dir; the pause question is given to the pipeline's model through a generated one-step pipeline; PM precedent is seeded into the store).
+    - The four claims are kept: rules passage answers; reworded question on the same slice from PM answer; same meaning on another slice from an all-slices PM answer; a slice where the answer differs waits on the PM. All 4 passed with real models.
+    - The kept `test_pipeline_run.py` needed one edit: its `PREPARED` set now includes `not_authorized.md` (the scratch gained that file, task 3.1).
+    - Full live tier: 14 tests collected, all passing.
 
-- [ ] **9.4 Comment on squadron#303**
-  - [ ] #303 is closed and shipped only the working directory (`sq runs list --json`, `sq` 0.24.24). Post one comment on `ecorkran/squadron#303` asking for `params` and `execution_mode` in `sq runs wait --json` (or `sq runs list --json`), using `gh issue comment`; if that is not possible on a closed issue, open a new issue that cites #303 with `gh issue create`. Record the URL under this task
-  - [ ] Success: the URL is noted; if `gh` fails, write `BLOCKED: <error>` and stop
+- [x] **9.4 Comment on squadron#303**
+  - [x] #303 is closed and shipped only the working directory (`sq runs list --json`, `sq` 0.24.24). Post one comment on `ecorkran/squadron#303` asking for `params` and `execution_mode` in `sq runs wait --json` (or `sq runs list --json`), using `gh issue comment`; if that is not possible on a closed issue, open a new issue that cites #303 with `gh issue create`. Record the URL under this task
+  - [x] Success: the URL is noted; if `gh` fails, write `BLOCKED: <error>` and stop
+  - Note: comment posted on the closed issue: https://github.com/ecorkran/squadron/issues/303#issuecomment-6770960438 (asks for `params` and `execution_mode` in `sq runs wait --json` and `sq runs list --json`).
 
 ## 10. Final validation
 
-- [ ] **10.1 Full checks**
-  - [ ] Run the checks once; fix failures introduced by this slice
-  - [ ] Success: all four pass; `answering.yaml` has no hard-coded authorize list; no module outside `home.py` reads `AMOEBA_HOME` or calls `Path.home`
+- [x] **10.1 Full checks**
+  - [x] Run the checks once; fix failures introduced by this slice
+  - [x] Success: all four pass; `answering.yaml` has no hard-coded authorize list; no module outside `home.py` reads `AMOEBA_HOME` or calls `Path.home`
+  - Note: ruff format, ruff check, pyright strict and pytest (1082 tests) pass; `answering.yaml` has no hard-coded authorize list; `grep` finds no `AMOEBA_HOME` or `Path.home` outside `config/home.py`.
 
-- [ ] **10.2 Verification walkthrough**
-  - [ ] Run the design's Verification Walkthrough steps 1 to 5 from the repo root with a scratch `AMOEBA_HOME` and both wait keys set. Include the barred-then-allowed check: an answer authorizing a barred item waits on the PM, then after `set_up` allows the item for the member the same question is answered
-  - [ ] Record each step's observed result in a note under this task. An unexpected result is a defect in this slice: fix it, or write `BLOCKED:` with the evidence
-  - [ ] Success: the notes show `skipped / not_a_project`, `resumed`, the store rows, `skipped / settled`, and `recorded` for `answer`
+- [x] **10.2 Verification walkthrough**
+  - [x] Run the design's Verification Walkthrough steps 1 to 5 from the repo root with a scratch `AMOEBA_HOME` and both wait keys set. Include the barred-then-allowed check: an answer authorizing a barred item waits on the PM, then after `set_up` allows the item for the member the same question is answered
+  - [x] Record each step's observed result in a note under this task. An unexpected result is a defect in this slice: fix it, or write `BLOCKED:` with the evidence
+  - [x] Success: the notes show `skipped / not_a_project`, `resumed`, the store rows, `skipped / settled`, and `recorded` for `answer`
+  - Note: results (run 20261110, sq 0.24.25, cf 0.19.26, alias haiku-xhigh, scratch AMOEBA_HOME):
+    - Step 1: `set_up` `applied`, added program demo and member (this repo's CF id).
+    - Step 2: real pause `demo-pause-1`, `agent_question`, question about the maximum length of a source file.
+    - Step 3: from /tmp `skipped / not_a_project`, exit 0.
+    - Step 4: `resumed`, answering run id `amoeba-20261110T151115Z-…`, `answer_seq` 1. Store rows: question `answered`, slice label `none`, 22 passages (CLAUDE.md rules and the demo member list), evidence verdict `yes`. Answer by `answerer` ("There is no hard maximum ... about 300 lines"), cited `["P6"]`, `resumed`, a resume log under `$AMOEBA_HOME/logs/resume/demo-pause-1/`.
+    - Unexpected result, recorded not fixed: a second `handle_pause` did not give `skipped / settled`. After a resume this pipeline's agent asks the same question again, so the run pauses at a new `paused_at` and the second call answers that new pause (`answer_seq` 2, then 3). The fourth call hit the answer limit (`waiting_on_pm / answer_limit_reached`); a fifth call for that pause gave `skipped / waiting_on_pm`. `skipped / settled` for the same pause is covered by `test_a_second_call_after_a_resume_is_settled`. This is the designed behavior (D3, D4, D6), so the walkthrough in the slice design was corrected, not the code.
+    - Step 5: `amoeba answer` on the waiting question: `recorded`, `answer_seq` 4, resume `resumed`. `answer no-such-run`: `rejected / no_such_question`, exit 1.
+    - Barred-then-allowed: with a PM answer "Yes. Push the branch to origin ..." as the later passage, `demo-push-2` waited on the PM with `answerer_declined` (a push is on the not-authorized list). After `set_up` with `authorize_allow: [push]`, `demo-push-3` (same question) was `resumed` and answered "Yes. Push the branch ..." citing the PM passage. The walkthrough in the slice design was rewritten with these commands and outputs.
 
 **Commit**: `test: add live pause tier, restore answering tests, add hook doc`

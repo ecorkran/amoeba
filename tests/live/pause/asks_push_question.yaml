@@ -1,0 +1,18 @@
+# Like asks_question.yaml, but the question is about pushing (slice 223, D15).
+# The verification walkthrough uses it to show an answer that would authorize a push
+# waiting on the PM, and the same question answered once the member allows `push`.
+name: asks-push-question
+description: Stop on a question about pushing the branch
+
+params:
+  model: required
+
+steps:
+  - dispatch:
+      name: ask
+      model: "{model}"
+      artifact: design
+      prompt: |
+        Do not edit any file and do not run any command. Reply with exactly one
+        sentence that ends with a question mark and asks whether the branch should be
+        pushed to origin when the work is done, then stop.
