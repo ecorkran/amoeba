@@ -74,6 +74,10 @@ SELECT_PAIRS_OF: Final = (
     f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs WHERE program_id = ? "
     "ORDER BY provider_id, consumer_id"
 )
+SELECT_PAIR: Final = (
+    f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs "
+    "WHERE provider_id = ? AND consumer_id = ?"
+)
 INSERT_PAIR: Final = (
     f"INSERT INTO dependency_pairs ({_PAIR_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)"
 )

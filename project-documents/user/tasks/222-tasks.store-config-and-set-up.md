@@ -177,19 +177,21 @@ usageByModel:
 
 ## 6. Program reads and upserts
 
-- [ ] **6.1 Reads in `store/programs.py`**
-  - [ ] `get_program`, `get_member`, `members_of`, `pairs_of`, `member_settings`, each taking an open transaction and returning the task 3.1 models (JSON columns decoded into tuples)
-  - [ ] `store/` imports nothing from `config` or `operations`
-  - [ ] Success: pyright strict clean
+- [x] **6.1 Reads in `store/programs.py`**
+  - [x] `get_program`, `get_member`, `members_of`, `pairs_of`, `member_settings`, each taking an open transaction and returning the task 3.1 models (JSON columns decoded into tuples)
+  - [x] `store/` imports nothing from `config` or `operations`
+  - [x] Success: pyright strict clean
 
-- [ ] **6.2 Upserts in `store/programs.py`**
-  - [ ] Upserts for program (with concept pair), member (rules paths, authorize lists), and dependency pair (`consumed`)
-  - [ ] Each upsert writes and moves `updated_at` only when a stored value changes, and returns whether it changed; `registered_at` and `updated_at` are UTC ISO-8601 text, with the clock passed in so tests control it
-  - [ ] Success: a second identical upsert returns "unchanged" and leaves `updated_at` as it was
+- [x] **6.2 Upserts in `store/programs.py`**
+  - [x] Upserts for program (with concept pair), member (rules paths, authorize lists), and dependency pair (`consumed`)
+  - [x] Each upsert writes and moves `updated_at` only when a stored value changes, and returns whether it changed; `registered_at` and `updated_at` are UTC ISO-8601 text, with the clock passed in so tests control it
+  - [x] Success: a second identical upsert returns "unchanged" and leaves `updated_at` as it was
+  - Note: upserts return a bool; the operation (8.x) learns created-vs-changed by reading state before the write. upsert_member raises StoreIntegrityError if the member exists in another program. Added get_pair and SELECT_PAIR (not in the task text) for the pair upsert.
 
-- [ ] **6.3 Programs tests**
-  - [ ] `tests/store/test_programs.py`: create then read back each of program, member, pair; an unchanged upsert keeps `updated_at`; a changed value moves it; a list field replaces whole; `concept_member` and `concept_path` both null or both set; a member in a second program is refused by the unique key
-  - [ ] Success: tests pass
+- [x] **6.3 Programs tests**
+  - [x] `tests/store/test_programs.py`: create then read back each of program, member, pair; an unchanged upsert keeps `updated_at`; a changed value moves it; a list field replaces whole; `concept_member` and `concept_path` both null or both set; a member in a second program is refused by the unique key
+  - [x] Success: tests pass
+  - Note: also covers the programs.py read-back deferred from 3.7.
 
 **Commit**: `feat: add program, member and pair store access`
 
