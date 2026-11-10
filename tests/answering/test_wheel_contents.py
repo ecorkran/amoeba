@@ -1,4 +1,4 @@
-"""The built wheel ships the answering pipeline file and no stray entry points."""
+"""The built wheel ships the answering pipeline file."""
 
 from __future__ import annotations
 
@@ -26,4 +26,3 @@ def test_wheel_lists_the_pipeline_file(tmp_path: Path) -> None:
     with zipfile.ZipFile(wheels[0]) as wheel:
         names = wheel.namelist()
     assert f"amoeba/answering/{PIPELINE_FILE_NAME}" in names
-    assert not [name for name in names if name.endswith("entry_points.txt")]

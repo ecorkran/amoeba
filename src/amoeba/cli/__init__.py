@@ -1,0 +1,1 @@
+"""The ``amoeba`` command line."""

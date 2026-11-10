@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+from user_configs import CONFIG_CONTRACT as CONTRACT
+from user_configs import example_config_text
 
 from amoeba.config.user_config import ConfigError, load_user_config
 
-CONTRACT = Path(__file__).parents[2] / "docs" / "config-contract.md"
 TOP_LEVEL_KEYS = [
     "answer_model",
     "check_model",
@@ -24,16 +24,8 @@ TOP_LEVEL_KEYS = [
 ITEM_KEYS = ["key", "description", "screen_phrases", "denied_by_default"]
 
 
-def _example_text() -> str:
-    """The yaml block under the doc's Example heading, extracted rather than copied."""
-    example = CONTRACT.read_text(encoding="utf-8").split("## Example", 1)[1]
-    match = re.search(r"```yaml\n(.*?)```", example, re.DOTALL)
-    assert match is not None, "no yaml block under ## Example"
-    return match.group(1)
-
-
 def _example() -> dict[str, Any]:
-    document: dict[str, Any] = yaml.safe_load(_example_text())
+    document: dict[str, Any] = yaml.safe_load(example_config_text())
     return document
 
 
@@ -45,7 +37,7 @@ def _write(tmp_path: Path, document: object) -> Path:
 
 def test_the_documented_example_loads(tmp_path: Path) -> None:
     path = tmp_path / "config.yaml"
-    path.write_text(_example_text(), encoding="utf-8")
+    path.write_text(example_config_text(), encoding="utf-8")
 
     config = load_user_config(path)
 

@@ -1,8 +1,15 @@
-"""Layering: ``amoeba.upstream`` imports nothing from ``amoeba.answering`` (D6).
+"""Layering of the packages under ``src/amoeba`` (slice 222, Component Structure).
 
-The library reads as ``answering -> upstream -> stdlib, pydantic, pyyaml``. A shared
-piece that both layers need lives in ``upstream``, never the other way round. An import
-of a package that no longer exists is not checked here: it fails pyright and the suite.
+```
+cli ──► operations ──► store ──► answering.values
+             │   └────► config ──► answering.settings
+             └────────► upstream, answering
+```
+
+``store`` imports nothing from ``config``, ``operations`` or ``cli``. ``upstream``
+imports nothing from ``answering`` or the packages above it. ``config`` imports only
+``answering.settings`` and its type module. ``operations`` does not import ``cli``.
+An import of a package that no longer exists is not checked here: it fails pyright.
 """
 
 from __future__ import annotations
@@ -10,9 +17,27 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 SRC = Path(__file__).parents[1] / "src" / "amoeba"
-UPSTREAM = SRC / "upstream"
-FORBIDDEN_FOR_UPSTREAM = "amoeba.answering"
+ROOT = "amoeba"
+
+#: package -> the ``amoeba`` packages (or modules) it may not import.
+FORBIDDEN: dict[str, tuple[str, ...]] = {
+    "store": ("amoeba.config", "amoeba.operations", "amoeba.cli"),
+    "upstream": (
+        "amoeba.answering",
+        "amoeba.config",
+        "amoeba.store",
+        "amoeba.operations",
+        "amoeba.cli",
+    ),
+    "operations": ("amoeba.cli",),
+}
+#: package -> the only ``amoeba`` modules outside itself it may import.
+ONLY_ALLOWED: dict[str, tuple[str, ...]] = {
+    "config": ("amoeba.answering.settings", "amoeba.answering.values"),
+}
 
 
 def _imported_names(source: str) -> set[str]:
@@ -31,23 +56,86 @@ def _mentions(names: set[str], prefix: str) -> bool:
     return any(name == prefix or name.startswith(prefix + ".") for name in names)
 
 
-def _violations(source: str) -> bool:
-    return _mentions(_imported_names(source), FORBIDDEN_FOR_UPSTREAM)
+def forbidden_imports(source: str, forbidden: tuple[str, ...]) -> list[str]:
+    """The ``forbidden`` packages ``source`` imports from."""
+    names = _imported_names(source)
+    return [prefix for prefix in forbidden if _mentions(names, prefix)]
 
 
-def test_upstream_imports_nothing_from_answering() -> None:
-    files = sorted(UPSTREAM.rglob("*.py"))
-    assert files, "amoeba.upstream has no source"
-    for path in files:
-        assert not _violations(path.read_text(encoding="utf-8")), path.name
+def disallowed_imports(
+    source: str, package: str, allowed: tuple[str, ...]
+) -> list[str]:
+    """The ``amoeba`` imports of ``source`` outside ``package`` and not allowed."""
+    own = f"{ROOT}.{package}"
+    return sorted(
+        name
+        for name in _imported_names(source)
+        if (name == ROOT or name.startswith(ROOT + "."))
+        and not _mentions({name}, own)
+        # ``from amoeba import x`` names a module of the root package: x is checked
+        # through the ``amoeba.x`` entry, so the bare root is skipped.
+        and name != ROOT
+        and not any(
+            _mentions({name}, ok) or ok.startswith(name + ".") for ok in allowed
+        )
+    )
 
 
-def test_the_rule_catches_each_way_of_importing_answering() -> None:
-    assert _violations("import amoeba.answering.values\n")
-    assert _violations("from amoeba.answering import values\n")
-    assert _violations("from amoeba.answering.values import DeclineReason\n")
+def _modules(package: str) -> list[Path]:
+    files = sorted((SRC / package).rglob("*.py"))
+    assert files, f"amoeba.{package} has no source"
+    return files
 
 
-def test_the_rule_ignores_upstream_and_unrelated_imports() -> None:
-    assert not _violations("from amoeba.upstream.squadron import launch\n")
-    assert not _violations("from amoeba import answering_notes\nimport json\n")
+@pytest.mark.parametrize("package", sorted(FORBIDDEN))
+def test_package_does_not_import_what_it_may_not(package: str) -> None:
+    for path in _modules(package):
+        found = forbidden_imports(path.read_text(encoding="utf-8"), FORBIDDEN[package])
+        assert not found, f"{path.relative_to(SRC)} imports {found}"
+
+
+@pytest.mark.parametrize("package", sorted(ONLY_ALLOWED))
+def test_package_imports_only_what_it_is_allowed(package: str) -> None:
+    for path in _modules(package):
+        found = disallowed_imports(
+            path.read_text(encoding="utf-8"), package, ONLY_ALLOWED[package]
+        )
+        assert not found, f"{path.relative_to(SRC)} imports {found}"
+
+
+def test_the_forbidden_rule_catches_each_way_of_importing() -> None:
+    forbidden = ("amoeba.answering",)
+
+    assert forbidden_imports("import amoeba.answering.values\n", forbidden)
+    assert forbidden_imports("from amoeba.answering import values\n", forbidden)
+    assert forbidden_imports(
+        "from amoeba.answering.values import DeclineReason\n", forbidden
+    )
+
+
+def test_the_forbidden_rule_ignores_unrelated_imports() -> None:
+    forbidden = ("amoeba.answering",)
+
+    assert not forbidden_imports(
+        "from amoeba.upstream.squadron import launch\n", forbidden
+    )
+    assert not forbidden_imports(
+        "from amoeba import answering_notes\nimport json\n", forbidden
+    )
+
+
+def test_the_allow_list_rule_catches_a_stray_amoeba_import() -> None:
+    allowed = ("amoeba.answering.settings",)
+
+    assert disallowed_imports(
+        "from amoeba.store.store import Store\n", "config", allowed
+    )
+    assert disallowed_imports("import amoeba.operations\n", "config", allowed)
+    assert not disallowed_imports(
+        "from amoeba.answering.settings import ModelAlias\nimport yaml\n",
+        "config",
+        allowed,
+    )
+    assert not disallowed_imports(
+        "from amoeba.config.home import x\n", "config", allowed
+    )

@@ -10,16 +10,20 @@ dependencies = [
     "pyyaml>=6.0.3",
 ]
 
+[project.scripts]
+amoeba = "amoeba.cli.main:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/amoeba"]
-# The shipped answering pipeline file must ship in the wheel, not only exist in a
-# source checkout.
+# The shipped answering pipeline file and the store's numbered migrations must ship
+# in the wheel, not only exist in a source checkout.
 artifacts = [
     "src/amoeba/answering/answering.yaml",
+    "src/amoeba/store/schema/*.sql",
 ]
 
 [dependency-groups]

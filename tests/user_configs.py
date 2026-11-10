@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
+
+CONFIG_CONTRACT = Path(__file__).parents[1] / "docs" / "config-contract.md"
+
+
+def example_config_text() -> str:
+    """The yaml block under ``## Example`` in the config contract, not a copy."""
+    example = CONFIG_CONTRACT.read_text(encoding="utf-8").split("## Example", 1)[1]
+    match = re.search(r"```yaml\n(.*?)```", example, re.DOTALL)
+    assert match is not None, "no yaml block under ## Example"
+    return match.group(1)
+
 
 MERGE_TO_MAIN = NotAuthorizedItem(
     key="merge_to_main",

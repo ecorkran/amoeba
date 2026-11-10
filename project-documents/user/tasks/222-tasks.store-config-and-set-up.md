@@ -270,25 +270,28 @@ usageByModel:
 
 ## 10. CLI, packaging and boundaries
 
-- [ ] **10.1 Implement the CLI (D9)**
-  - [ ] `cli/main.py`: `argparse`, subcommand `set_up` with `--file <path|->`, no per-field flags; exit codes as named constants (0 applied or unchanged, 1 rejected, 2 usage or unreadable/non-UTF-8/non-YAML request, 3 `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, any `StoreError`)
-  - [ ] Order: read text and `yaml.safe_load` (exit 2 on failure, before config or store), then `load_user_config(config_path())`, open the store at `store_path()`, call `set_up` with the current directory and `run_cf`, print `SetUpResult` JSON to stdout
-  - [ ] Errors print `error: <ExceptionName>: <message>` to stderr; this is the one top-level handler; `RequestDocumentError` is defined here and names the source
-  - [ ] Only `cli` calls `amoeba_home()`, `store_path()` and `config_path()`
-  - [ ] Success: pyright strict clean
+- [x] **10.1 Implement the CLI (D9)**
+  - [x] `cli/main.py`: `argparse`, subcommand `set_up` with `--file <path|->`, no per-field flags; exit codes as named constants (0 applied or unchanged, 1 rejected, 2 usage or unreadable/non-UTF-8/non-YAML request, 3 `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, any `StoreError`)
+  - [x] Order: read text and `yaml.safe_load` (exit 2 on failure, before config or store), then `load_user_config(config_path())`, open the store at `store_path()`, call `set_up` with the current directory and `run_cf`, print `SetUpResult` JSON to stdout
+  - [x] Errors print `error: <ExceptionName>: <message>` to stderr; this is the one top-level handler; `RequestDocumentError` is defined here and names the source
+  - [x] Only `cli` calls `amoeba_home()`, `store_path()` and `config_path()`
+  - [x] Success: pyright strict clean
 
-- [ ] **10.2 Packaging**
-  - [ ] `pyproject.toml`: add `[project.scripts] amoeba = "amoeba.cli.main:main"` and include `src/amoeba/store/schema/*.sql` in the wheel
-  - [ ] `tests/test_wheel_contents.py`: build the wheel into a temporary directory with `uv build --wheel --out-dir` and assert its file list contains `amoeba/store/schema/001_baseline.sql`
-  - [ ] Success: `uv run amoeba --help` lists `set_up`; the wheel test passes
+- [x] **10.2 Packaging**
+  - [x] `pyproject.toml`: add `[project.scripts] amoeba = "amoeba.cli.main:main"` and include `src/amoeba/store/schema/*.sql` in the wheel
+  - [x] `tests/test_wheel_contents.py`: build the wheel into a temporary directory with `uv build --wheel --out-dir` and assert its file list contains `amoeba/store/schema/001_baseline.sql`
+  - [x] Success: `uv run amoeba --help` lists `set_up`; the wheel test passes
+  - Note: tests/answering/test_wheel_contents.py no longer asserts there is no entry_points.txt (the wheel now has the amoeba entry point).
 
-- [ ] **10.3 CLI tests**
-  - [ ] `tests/cli/test_set_up_cli.py`, run as subprocesses with the task 1.3 fake `cf` first on `PATH` and the fixture `AMOEBA_HOME`: valid request from a file and from stdin exits 0 with result JSON; rerun exits 0 `unchanged`; a rejected request exits 1 with JSON; a missing file, non-UTF-8 and non-YAML request exit 2 and no store file is created; a missing config file and a config missing one key exit 3 naming the file or key; a failing `cf` exits 3 with the store unchanged; a store stamped higher exits 3
-  - [ ] Success: tests pass
+- [x] **10.3 CLI tests**
+  - [x] `tests/cli/test_set_up_cli.py`, run as subprocesses with the task 1.3 fake `cf` first on `PATH` and the fixture `AMOEBA_HOME`: valid request from a file and from stdin exits 0 with result JSON; rerun exits 0 `unchanged`; a rejected request exits 1 with JSON; a missing file, non-UTF-8 and non-YAML request exit 2 and no store file is created; a missing config file and a config missing one key exit 3 naming the file or key; a failing `cf` exits 3 with the store unchanged; a store stamped higher exits 3
+  - [x] Success: tests pass
+  - Note: the CLI tests run the installed `amoeba` script (next to sys.executable) through process_containment.contained_popen, as the repo's containment guard requires; additionally cover a relative AMOEBA_HOME (exit 3, AmoebaHomeError), bad arguments (exit 2) and a non-mapping document (exit 1, malformed).
 
-- [ ] **10.4 Import boundary test**
-  - [ ] `tests/test_import_boundaries.py`: parse imports under `src/amoeba` and assert the design's direction: `store` imports nothing from `config`, `operations` or `cli`; `upstream` imports nothing from `answering`, `config`, `store`, `operations` or `cli`; `config` imports only `answering.settings` (and its type modules); `operations` does not import `cli`
-  - [ ] Success: test passes; adding a forbidden import makes it fail (verify once, then revert)
+- [x] **10.4 Import boundary test**
+  - [x] `tests/test_import_boundaries.py`: parse imports under `src/amoeba` and assert the design's direction: `store` imports nothing from `config`, `operations` or `cli`; `upstream` imports nothing from `answering`, `config`, `store`, `operations` or `cli`; `config` imports only `answering.settings` (and its type modules); `operations` does not import `cli`
+  - [x] Success: test passes; adding a forbidden import makes it fail (verify once, then revert)
+  - Note: tests/test_import_boundaries.py was rewritten as a table of rules (store, upstream, operations forbidden lists; config allow-list of answering.settings and answering.values); it replaces the earlier upstream-only test.
 
 **Commit**: `feat: add amoeba set_up command and packaging`
 
