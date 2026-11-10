@@ -97,43 +97,48 @@ usageByModel:
 
 ## 3. Store
 
-- [ ] **3.1 Vocabulary and models (D3)**
-  - [ ] `store/vocabulary.py`: `ConsumedMode` (`from_source`, `from_release`), `QuestionState` (`claimed`, `answered`, `waiting_on_pm`), `ResumeOutcome` (`resumed`, `refused`, `not_delivered`), all `StrEnum`
-  - [ ] `store/models.py`: frozen `Program`, `Member`, `MemberSettings`, `DependencyPair` carrying the columns in D3's tables
-  - [ ] Success: modules import; pyright strict clean
+- [x] **3.1 Vocabulary and models (D3)**
+  - [x] `store/vocabulary.py`: `ConsumedMode` (`from_source`, `from_release`), `QuestionState` (`claimed`, `answered`, `waiting_on_pm`), `ResumeOutcome` (`resumed`, `refused`, `not_delivered`), all `StrEnum`
+  - [x] `store/models.py`: frozen `Program`, `Member`, `MemberSettings`, `DependencyPair` carrying the columns in D3's tables
+  - [x] Success: modules import; pyright strict clean
 
-- [ ] **3.2 Baseline schema (D3)**
-  - [ ] `store/schema/001_baseline.sql` creating `schema_meta`, `programs`, `members`, `dependency_pairs`, `releases`, `questions`, `answers`, `pm_marker` with the columns, keys, foreign keys, `UNIQUE` and `CHECK` constraints of D3's table (including the composite foreign keys that stop a pair crossing programs and `CHECK (provider_id <> consumer_id)`)
-  - [ ] `answered_by` CHECK values come from `answering.values.AnsweredBy`; all other CHECK lists from `store/vocabulary.py`
-  - [ ] `pm_marker` is created with its single row at `last_seen_seq` 0; `schema_meta` is stamped by migrations (3.3), not here
-  - [ ] Success: the file runs against an empty in-memory SQLite database without error
+- [x] **3.2 Baseline schema (D3)**
+  - [x] `store/schema/001_baseline.sql` creating `schema_meta`, `programs`, `members`, `dependency_pairs`, `releases`, `questions`, `answers`, `pm_marker` with the columns, keys, foreign keys, `UNIQUE` and `CHECK` constraints of D3's table (including the composite foreign keys that stop a pair crossing programs and `CHECK (provider_id <> consumer_id)`)
+  - [x] `answered_by` CHECK values come from `answering.values.AnsweredBy`; all other CHECK lists from `store/vocabulary.py`
+  - [x] `pm_marker` is created with its single row at `last_seen_seq` 0; `schema_meta` is stamped by migrations (3.3), not here
+  - [x] Success: the file runs against an empty in-memory SQLite database without error
 
-- [ ] **3.3 Migrations (D4)**
-  - [ ] `store/migrations.py`: `EXPECTED_SCHEMA_VERSION` equal to the highest numbered file in `store/schema/`; a `migrate(connection)` that, inside `BEGIN IMMEDIATE`, reads the stored version (0 when the `schema_meta` table does not exist yet, as on a new store), applies missing files in order, and stamps the version
-  - [ ] A store stamped higher than `EXPECTED_SCHEMA_VERSION` raises `StoreSchemaError` and is left untouched
-  - [ ] Success: migrating an empty database yields version 1 and all eight tables
+- [x] **3.3 Migrations (D4)**
+  - [x] `store/migrations.py`: `EXPECTED_SCHEMA_VERSION` equal to the highest numbered file in `store/schema/`; a `migrate(connection)` that, inside `BEGIN IMMEDIATE`, reads the stored version (0 when the `schema_meta` table does not exist yet, as on a new store), applies missing files in order, and stamps the version
+  - [x] A store stamped higher than `EXPECTED_SCHEMA_VERSION` raises `StoreSchemaError` and is left untouched
+  - [x] Success: migrating an empty database yields version 1 and all eight tables
+  - Note: migrations run statements one at a time (split_statements) because sqlite3 executescript would commit the open transaction.
 
-- [ ] **3.4 `Store` (D2)**
-  - [ ] `store/store.py`: `BUSY_TIMEOUT_SECONDS = 5.0` defined once; typed errors `StoreError` and subclasses `StoreBusyError`, `StorePermissionError`, `StoreCorruptError`, `StoreSchemaError`
-  - [ ] `Store.open(path, *, busy_timeout_seconds=BUSY_TIMEOUT_SECONDS)` creates the parent directory, sets the busy timeout at connect, `journal_mode=WAL`, `foreign_keys=ON`, then migrates; `Store.write()` yields a `BEGIN IMMEDIATE` transaction and `Store.read()` a `BEGIN` one, each committing or rolling back on exit
-  - [ ] A busy timeout raises `StoreBusyError` naming the path and timeout; each other open failure maps to its typed error. No lock file, pid file or read-only mode
-  - [ ] `store/sql.py` defines the `BEGIN IMMEDIATE` statement once (`BEGIN_IMMEDIATE`) and the statement constants; `Store.write()` and `migrate()` both use it. `store/row_values.py` holds `decode_mapping`, `decode_timestamp` and the typed column reads. Slice 221 deleted the old store and moved none of these, so write them here; the old `sql_inbox.py`, `mapping_journal.py`, `row_values.py` and `connection.py` in the commit 221 branched from may be restored and adapted
-  - [ ] Success: opening a path in a missing directory creates it and the store; `git grep -n "BEGIN IMMEDIATE" src` finds the statement text in one place only
+- [x] **3.4 `Store` (D2)**
+  - [x] `store/store.py`: `BUSY_TIMEOUT_SECONDS = 5.0` defined once; typed errors `StoreError` and subclasses `StoreBusyError`, `StorePermissionError`, `StoreCorruptError`, `StoreSchemaError`
+  - [x] `Store.open(path, *, busy_timeout_seconds=BUSY_TIMEOUT_SECONDS)` creates the parent directory, sets the busy timeout at connect, `journal_mode=WAL`, `foreign_keys=ON`, then migrates; `Store.write()` yields a `BEGIN IMMEDIATE` transaction and `Store.read()` a `BEGIN` one, each committing or rolling back on exit
+  - [x] A busy timeout raises `StoreBusyError` naming the path and timeout; each other open failure maps to its typed error. No lock file, pid file or read-only mode
+  - [x] `store/sql.py` defines the `BEGIN IMMEDIATE` statement once (`BEGIN_IMMEDIATE`) and the statement constants; `Store.write()` and `migrate()` both use it. `store/row_values.py` holds `decode_mapping`, `decode_timestamp` and the typed column reads. Slice 221 deleted the old store and moved none of these, so write them here; the old `sql_inbox.py`, `mapping_journal.py`, `row_values.py` and `connection.py` in the commit 221 branched from may be restored and adapted
+  - [x] Success: opening a path in a missing directory creates it and the store; `git grep -n "BEGIN IMMEDIATE" src` finds the statement text in one place only
+  - Note: the typed errors live in store/errors.py (not store.py) to avoid an import cycle with migrations.py; also added StoreIntegrityError (constraint refusals) and StoreRowError (bad stored value). Transaction wraps the connection, maps sqlite3 errors, and is what store functions take. `grep -rn "BEGIN IMMEDIATE" src` finds the text only in store/sql.py (git grep ignores untracked files until committed).
+  - Note: tests/answering/test_wheel_contents.py no longer asserts the wheel has no .sql file (the schema now ships); task 10.2 adds the positive wheel test.
 
-- [ ] **3.5 Store tests**
-  - [ ] `tests/store/test_store.py`: open creates the store; reopen applies nothing; a store stamped higher raises `StoreSchemaError` and its bytes are unchanged; a held write transaction in a second connection with `busy_timeout_seconds=0.2` gives `StoreBusyError`; an unwritable directory gives `StorePermissionError`; a non-database file gives `StoreCorruptError`; a failed `write()` block rolls back
-  - [ ] `tests/store/test_schema.py`: foreign keys are enforced (a pair across programs, a pair with equal ends, a member of a missing program all fail); `pm_marker` holds one row at 0
-  - [ ] Success: tests pass
+- [x] **3.5 Store tests**
+  - [x] `tests/store/test_store.py`: open creates the store; reopen applies nothing; a store stamped higher raises `StoreSchemaError` and its bytes are unchanged; a held write transaction in a second connection with `busy_timeout_seconds=0.2` gives `StoreBusyError`; an unwritable directory gives `StorePermissionError`; a non-database file gives `StoreCorruptError`; a failed `write()` block rolls back
+  - [x] `tests/store/test_schema.py`: foreign keys are enforced (a pair across programs, a pair with equal ends, a member of a missing program all fail); `pm_marker` holds one row at 0
+  - [x] Success: tests pass
 
-- [ ] **3.6 Vocabulary pinning test**
-  - [ ] `tests/store/test_vocabulary_pinning.py`: for each `CHECK` list in `001_baseline.sql` (`consumed`, `state`, `answered_by`, `resume_outcome`), parse the list from the SQL text and assert it equals the values of the matching enum
-  - [ ] Success: test passes; adding a value to an enum alone makes it fail (verify once, then revert)
+- [x] **3.6 Vocabulary pinning test**
+  - [x] `tests/store/test_vocabulary_pinning.py`: for each `CHECK` list in `001_baseline.sql` (`consumed`, `state`, `answered_by`, `resume_outcome`), parse the list from the SQL text and assert it equals the values of the matching enum
+  - [x] Success: test passes; adding a value to an enum alone makes it fail (verify once, then revert)
+  - Note: verified once — adding EXTRA to ConsumedMode alone failed the pinning test; reverted.
 
-- [ ] **3.7 Store test helpers (design, Audit items)**
-  - [ ] `tests/store/seed.py`: functions that insert a program, member, dependency pair, question and answer row through the `store/sql.py` constants, inside a given `Store.write()` transaction; every column value is an argument, none has a default. Used by this slice's store tests and left for 223 and 224 to seed any state
-  - [ ] Rewrite `tests/fault_injection.py` for the new `Store` (fail one named SQL statement in a transaction with a chosen exception); if slice 221 deleted it, restore it from the commit 221 branched from and adapt it. It has no node-specific helper
-  - [ ] Add to `tests/store/test_store.py`: with a fault injected on the second insert of a `Store.write()` block that first inserted a program, no program row remains
-  - [ ] Success: the seed helper builds a program with a member, a pair, a `claimed` question and an `answerer` answer, and a read-back matches (programs, members and pairs through `store/programs.py`; question and answer rows by `SELECT`); the fault-injection test passes
+- [x] **3.7 Store test helpers (design, Audit items)**
+  - [x] `tests/store/seed.py`: functions that insert a program, member, dependency pair, question and answer row through the `store/sql.py` constants, inside a given `Store.write()` transaction; every column value is an argument, none has a default. Used by this slice's store tests and left for 223 and 224 to seed any state
+  - [x] Rewrite `tests/fault_injection.py` for the new `Store` (fail one named SQL statement in a transaction with a chosen exception); if slice 221 deleted it, restore it from the commit 221 branched from and adapt it. It has no node-specific helper
+  - [x] Add to `tests/store/test_store.py`: with a fault injected on the second insert of a `Store.write()` block that first inserted a program, no program row remains
+  - [x] Success: the seed helper builds a program with a member, a pair, a `claimed` question and an `answerer` answer, and a read-back matches (programs, members and pairs through `store/programs.py`; question and answer rows by `SELECT`); the fault-injection test passes
+  - Note: the read-back in tests/store/test_schema.py uses plain SELECTs for all rows, because store/programs.py does not exist until task 6; task 6.3 adds the read-back through programs.py. Fault injection patches Transaction.execute (tests/fault_injection.py). Helper tests import as `from store.seed import ...` (tests/store is a package).
 
 **Commit**: `feat: add SQLite store with baseline schema and migrations`
 
