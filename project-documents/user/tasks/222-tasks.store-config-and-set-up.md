@@ -8,7 +8,7 @@ dependencies:
 projectState: Slice 221 is merged. `src/amoeba` holds only `answering/` and `upstream/`.
   No store, config, or command exists. Nobody has run Amoeba.
 dateCreated: 20261107
-dateUpdated: 20261108
+dateUpdated: 20261109
 status: in_progress
 turns: 9
 promptTokens: 259263
@@ -162,15 +162,16 @@ usageByModel:
 
 ## 5. Project lookup (Context Forge)
 
-- [ ] **5.1 Implement `upstream/context_forge/project_of.py` (D6)**
-  - [ ] Frozen `CFProject` (`id`, `name`, `project_path` from `projectPath`; other fields ignored) and `CFProjectNotFound` (CF's message)
-  - [ ] `project_of(*, directory=None, reference=None, run)` runs `cf get --json` with `cwd=directory` or with `-p <reference>`, via the injected `CfRun`; a `PROJECT_NOT_FOUND` document on either stream gives `CFProjectNotFound`; any other failure or unparseable output gives `CfCallFailed` quoting the output head
-  - [ ] Module imports nothing from `answering` or the new packages
-  - [ ] Success: pyright strict clean
+- [x] **5.1 Implement `upstream/context_forge/project_of.py` (D6)**
+  - [x] Frozen `CFProject` (`id`, `name`, `project_path` from `projectPath`; other fields ignored) and `CFProjectNotFound` (CF's message)
+  - [x] `project_of(*, directory=None, reference=None, run)` runs `cf get --json` with `cwd=directory` or with `-p <reference>`, via the injected `CfRun`; a `PROJECT_NOT_FOUND` document on either stream gives `CFProjectNotFound`; any other failure or unparseable output gives `CfCallFailed` quoting the output head
+  - [x] Module imports nothing from `answering` or the new packages
+  - [x] Success: pyright strict clean
+  - Note: project_of returns CfCallFailed (not raises), per D6's signature; exactly one of directory/reference is required (ValueError otherwise); CF_GET_TIMEOUT_SECONDS = 30.0 is defined in project_of.py. A bad `-p` reference also yields a PROJECT_NOT_FOUND document (checked live).
 
-- [ ] **5.2 `project_of` tests**
-  - [ ] `tests/upstream/context_forge/test_project_of.py`: parse each task 1.2 fixture; default and non-default worktree fixtures give the same `id`; the subdirectory fixture gives the root's `id`; the not-found fixture gives `CFProjectNotFound` with the message; garbage output and a nonzero exit with no document give `CfCallFailed`; with `reference` the argument list contains `-p` and the reference
-  - [ ] Success: tests pass
+- [x] **5.2 `project_of` tests**
+  - [x] `tests/upstream/context_forge/test_project_of.py`: parse each task 1.2 fixture; default and non-default worktree fixtures give the same `id`; the subdirectory fixture gives the root's `id`; the not-found fixture gives `CFProjectNotFound` with the message; garbage output and a nonzero exit with no document give `CfCallFailed`; with `reference` the argument list contains `-p` and the reference
+  - [x] Success: tests pass
 
 **Commit**: `feat: add Context Forge project lookup`
 
