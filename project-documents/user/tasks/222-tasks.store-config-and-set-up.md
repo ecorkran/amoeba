@@ -197,14 +197,14 @@ usageByModel:
 
 ## 7. Member resolution
 
-- [ ] **7.1 Implement `operations/members.py` (D6)**
-  - [ ] `ContextForgeError`; `NotInProgram` (CF id) and `NotAProject` (CF message); `resolve_member(store, directory, run) -> Member | NotInProgram | NotAProject`
-  - [ ] `CfCallFailed` from `project_of` is raised as `ContextForgeError`; no worktree logic of Amoeba's own
-  - [ ] Success: pyright strict clean
+- [x] **7.1 Implement `operations/members.py` (D6)**
+  - [x] `ContextForgeError`; `NotInProgram` (CF id) and `NotAProject` (CF message); `resolve_member(store, directory, run) -> Member | NotInProgram | NotAProject`
+  - [x] `CfCallFailed` from `project_of` is raised as `ContextForgeError`; no worktree logic of Amoeba's own
+  - [x] Success: pyright strict clean
 
-- [ ] **7.2 Resolution tests**
-  - [ ] `tests/operations/test_members.py`: a registered member's default worktree and non-default worktree fixtures both give the same `Member`; the subdirectory fixture gives it too; a CF project outside the program gives `NotInProgram` with its id; the not-found fixture gives `NotAProject`; a failing `cf` raises `ContextForgeError`
-  - [ ] Success: tests pass
+- [x] **7.2 Resolution tests**
+  - [x] `tests/operations/test_members.py`: a registered member's default worktree and non-default worktree fixtures both give the same `Member`; the subdirectory fixture gives it too; a CF project outside the program gives `NotInProgram` with its id; the not-found fixture gives `NotAProject`; a failing `cf` raises `ContextForgeError`
+  - [x] Success: tests pass
 
 **Commit**: `feat: add member resolution`
 
