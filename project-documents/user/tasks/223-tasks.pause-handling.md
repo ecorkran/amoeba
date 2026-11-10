@@ -412,19 +412,32 @@ usageByModel:
 
 ## 8. CLI and contract docs (D13)
 
-- [ ] **8.1 CLI commands**
-  - [ ] In `cli/main.py` add `amoeba handle_pause <run_id>` and `amoeba answer <run_id> [--paused-at <ts>] --text <answer>`. Both print their result model as JSON on stdout. The CLI alone calls the home helpers and builds `Deps` (task 6.0)
-  - [ ] Exit codes extend 222's constants: `handle_pause` exits 0 for every outcome including `skipped`; `answer` exits 1 when `rejected`; 2 is usage; 3 is operational (`SquadronError`, `ContextForgeError`, `ConfigError`, `AmoebaHomeError`, any `StoreError`) with the message on stderr
-  - [ ] Success: `uv run amoeba handle_pause --help` and `answer --help` print usage
+- [x] **8.1 CLI commands**
+  - [x] In `cli/main.py` add `amoeba handle_pause <run_id>` and `amoeba answer <run_id> [--paused-at <ts>] --text <answer>`. Both print their result model as JSON on stdout. The CLI alone calls the home helpers and builds `Deps` (task 6.0)
+  - [x] Exit codes extend 222's constants: `handle_pause` exits 0 for every outcome including `skipped`; `answer` exits 1 when `rejected`; 2 is usage; 3 is operational (`SquadronError`, `ContextForgeError`, `ConfigError`, `AmoebaHomeError`, any `StoreError`) with the message on stderr
+  - [x] Success: `uv run amoeba handle_pause --help` and `answer --help` print usage
+  - Note:
+    - `cli/main.py` adds `handle_pause RUN_ID` and `answer RUN_ID [--paused-at TS] --text T`; results are printed with `dataclasses.asdict` as JSON (the 223 result models are frozen dataclasses).
+    - `Deps` is built by `operations.deps.production_deps(...)`, called only from the CLI with the home helpers.
+    - `SquadronError` joins the exit-3 set.
+    - Exit codes are the 222 constants (`handle_pause` always exits 0 on a result; `answer` exits 1 when rejected).
 
-- [ ] **8.2 CLI subprocess tests**
-  - [ ] With fake `sq` and `cf` on `PATH`, `HOME` set to a temporary directory holding `.config/squadron/runs/<run_id>.json` (copied from the fixture), and the autouse `AMOEBA_HOME`: `handle_pause` skip exits 0 with JSON; operational failure exits 3 with stderr; `answer` rejected exits 1; usage error exits 2; no test reads the developer's real run files
-  - [ ] Success: tests pass
+- [x] **8.2 CLI subprocess tests**
+  - [x] With fake `sq` and `cf` on `PATH`, `HOME` set to a temporary directory holding `.config/squadron/runs/<run_id>.json` (copied from the fixture), and the autouse `AMOEBA_HOME`: `handle_pause` skip exits 0 with JSON; operational failure exits 3 with stderr; `answer` rejected exits 1; usage error exits 2; no test reads the developer's real run files
+  - [x] Success: tests pass
+  - Note:
+    - `tests/cli/test_pause_cli.py` runs the real `amoeba` script with the recorded-`sq` fake (`tests/fake_sq.py`) and a fake `cf` on `PATH`, `HOME` a temp dir holding the copied run file.
+    - Covers: skip exit 0; operational failure exit 3 (no `sq` on PATH; missing config); `answer` rejected exit 1; `answer` recorded with a refused resume exit 0; `--paused-at`; usage errors exit 2; `--help`.
 
-- [ ] **8.3 Contract docs**
-  - [ ] Update `docs/store-contract.md`: the nine new columns, the vocabularies, which operation writes each column. Update `docs/config-contract.md` check against the code (both new keys already added in 5.3)
-  - [ ] Create `docs/cli-contract.md` (frontmatter as the other contract docs): argument shapes, JSON result output and the exit-code table (0, 1, 2, 3 with their causes) for `handle_pause` and `answer`, plus `set_up`'s from 222; 224 extends it for its operations
-  - [ ] Success: every column in `002_pause_handling.sql` appears in the doc with its writer; the CLI contract matches the code
+- [x] **8.3 Contract docs**
+  - [x] Update `docs/store-contract.md`: the nine new columns, the vocabularies, which operation writes each column. Update `docs/config-contract.md` check against the code (both new keys already added in 5.3)
+  - [x] Create `docs/cli-contract.md` (frontmatter as the other contract docs): argument shapes, JSON result output and the exit-code table (0, 1, 2, 3 with their causes) for `handle_pause` and `answer`, plus `set_up`'s from 222; 224 extends it for its operations
+  - [x] Success: every column in `002_pause_handling.sql` appears in the doc with its writer; the CLI contract matches the code
+  - Note:
+    - `docs/store-contract.md` gained "Question lifecycle and who writes it" (the nine new columns were already there from task 1.1, each with its writer; the `DeclineReason` values written; resume rules).
+    - `docs/config-contract.md` was checked against the code (both keys, example, tests).
+    - New `docs/cli-contract.md` covers `set_up`, `handle_pause`, `answer`, JSON results and the exit-code table.
+    - `tests/test_contract_docs.py` now also fails if the store contract misses a `DeclineReason`, or the CLI contract misses a command, an exit code, a `HandlePauseOutcome`, a `SkipReason` or an `AnswerRejection`.
 
 **Commit**: `feat: add handle_pause and answer commands and contract docs`
 
