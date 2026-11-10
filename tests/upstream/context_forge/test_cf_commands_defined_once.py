@@ -23,6 +23,10 @@ COMMAND_WORDS: Final = frozenset(
         plan_read.CF_JSON_FLAG,
         "config",
         plan_read.CF_KEY_INTEGRATION_BRANCH,
+        plan_read.CF_ALL_FLAG,
+        plan_read.CF_LIST_COMMAND,
+        plan_read.CF_INITIATIVES_WORD,
+        plan_read.CF_SLICES_WORD,
     }
 )
 

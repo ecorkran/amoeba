@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The user config file Amoeba reads from its home, key by key, with one complete example.
 dateCreated: 20261109
-dateUpdated: 20261109
+dateUpdated: 20261110
 status: complete
 ---
 
@@ -27,6 +27,8 @@ Later slices add keys; each is required too, so an old file fails naming the new
 | `max_cost_usd` | number > 0 | Cost cap of one answering run, in US dollars |
 | `answer_limit` | integer >= 1 | Most automatic answers one run may take |
 | `passages_max_chars` | integer >= 1 | Most characters of passages an answering run is sent |
+| `answering_wait_seconds` | number > 0 | Longest one answering run may take before it is stopped; also the age at which an unfinished claim counts as dead |
+| `resume_wait_seconds` | number > 0 | Longest a resumed run may take to start running before the resume is judged refused |
 | `authorize_items` | list, may be empty | Everything answers may be barred from authorizing |
 
 Each `authorize_items` entry has all four fields, and no others:
@@ -50,6 +52,8 @@ check_model: replace-with-check-alias
 max_cost_usd: 0.5
 answer_limit: 3
 passages_max_chars: 60000
+answering_wait_seconds: 600
+resume_wait_seconds: 60
 authorize_items:
   - key: push
     description: Pushing commits to a remote.

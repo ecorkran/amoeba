@@ -166,6 +166,17 @@ class RunCheckpoint(BaseModel):
     #: ``QUESTION_TAIL_CHARS`` long.
     question: str | None = None
 
+    @property
+    def paused_at_text(self) -> str | None:
+        """``paused_at`` as ``sq runs wait --json`` printed it (slice 223, D1).
+
+        Squadron writes the time with ``datetime.isoformat()``, so formatting the
+        parsed value the same way gives back the printed text exactly; this is the
+        one place the text form is made, and it is only ever compared with values
+        made here.
+        """
+        return None if self.paused_at is None else self.paused_at.isoformat()
+
 
 class RunFailure(BaseModel):
     """A failed run's failure. The kind stays raw; :func:`parse_failure_kind` reads it.

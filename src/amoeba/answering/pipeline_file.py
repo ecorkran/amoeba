@@ -22,6 +22,7 @@ CHECK_MODEL_PARAM: Final = "check-model"
 # Inputs Amoeba writes into the scratch directory.
 QUESTION_FILE: Final = "question.md"
 PASSAGES_FILE: Final = "passages.md"
+NOT_AUTHORIZED_FILE: Final = "not_authorized.md"
 RULES_DIRECTORY: Final = "rules"
 SQUADRON_CONFIG_FILE: Final = ".squadron.toml"
 

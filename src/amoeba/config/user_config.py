@@ -66,6 +66,11 @@ class UserConfig(BaseModel):
     answer_limit: Annotated[StrictInt, Field(ge=1)]
     #: Most characters of passages an answering run is sent.
     passages_max_chars: Annotated[StrictInt, Field(ge=1)]
+    #: Longest an answering run may take before it is stopped, in seconds (slice 223).
+    answering_wait_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
+    #: Longest a resumed run may take to start running before the resume is judged
+    #: refused, in seconds (slice 223).
+    resume_wait_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
     #: Everything answers may be barred from authorizing. May be empty.
     authorize_items: tuple[NotAuthorizedItem, ...]
 

@@ -3,24 +3,28 @@
 from __future__ import annotations
 
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from amoeba.answering.inputs import (
+    NO_ITEM_BARRED_TEXT,
     QuestionInput,
     prepare_scratch,
     render_squadron_config,
 )
+from amoeba.answering.pipeline_file import NOT_AUTHORIZED_FILE
 
 QUESTION = QuestionInput("140 answering-pipeline", "Which base branch?")
 PASSAGES = "## Passage P1\n\nkind: rule\n\nCafé rule text — verbatim.\n"
 
 
-def test_writes_the_four_entries(tmp_path: Path) -> None:
+def test_writes_the_five_entries(tmp_path: Path) -> None:
     prepare_scratch(tmp_path, QUESTION, PASSAGES, 1.5)
     assert sorted(entry.name for entry in tmp_path.iterdir()) == [
         ".squadron.toml",
+        "not_authorized.md",
         "passages.md",
         "question.md",
         "rules",
@@ -30,6 +34,32 @@ def test_writes_the_four_entries(tmp_path: Path) -> None:
         (tmp_path / "question.md")
         .read_text(encoding="utf-8")
         .endswith("Which base branch?")
+    )
+
+
+@dataclass(frozen=True)
+class _Item:
+    key: str
+    description: str
+
+
+def test_without_a_list_the_file_says_nothing_is_barred(tmp_path: Path) -> None:
+    prepare_scratch(tmp_path, QUESTION, PASSAGES, 1.5)
+
+    assert (tmp_path / NOT_AUTHORIZED_FILE).read_text(encoding="utf-8") == (
+        NO_ITEM_BARRED_TEXT
+    )
+
+
+def test_the_items_given_are_written_to_the_not_authorized_file(
+    tmp_path: Path,
+) -> None:
+    items = [_Item("push", "pushing to a remote"), _Item("merge", "merging to main")]
+
+    prepare_scratch(tmp_path, QUESTION, PASSAGES, 1.5, not_authorized=items)
+
+    assert (tmp_path / NOT_AUTHORIZED_FILE).read_text(encoding="utf-8") == (
+        "- push: pushing to a remote\n- merge: merging to main"
     )
 
 

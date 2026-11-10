@@ -1,0 +1,87 @@
+{
+  "slicePlan": "220-slices.program-tool",
+  "total": 8,
+  "completed": 3,
+  "entries": [
+    {
+      "index": 220,
+      "name": "Code Audit",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/220-slice.code-audit.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 221,
+      "name": "The Cut",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/221-slice.the-cut.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 222,
+      "name": "Store, Config and Set-up",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/222-slice.store-config-and-set-up.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 223,
+      "name": "Pause Handling",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/223-slice.pause-handling.md",
+      "status": "in_progress",
+      "isActive": true,
+      "isNext": false
+    },
+    {
+      "index": 224,
+      "name": "Status and Decisions",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/224-slice.status-and-decisions.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 225,
+      "name": "Scenario A Trial",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/225-slice.scenario-a-trial.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 226,
+      "name": "MCP Server",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/226-slice.mcp-server.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 227,
+      "name": "Program Dependencies",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/227-slice.program-dependencies.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "slicePlan": "140-slices.question-answerer",
+  "total": 6,
+  "completed": 6,
+  "entries": [
+    {
+      "index": 140,
+      "name": "Answering Pipeline",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/140-slice.answering-pipeline.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 141,
+      "name": "Question Record",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/141-slice.question-record.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 142,
+      "name": "The Gate and Answer Submission",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/142-slice.the-gate-and-answer-submission.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 143,
+      "name": "Source Passages",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/143-slice.source-passages.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 144,
+      "name": "Answering Run",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/144-slice.answering-run.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 145,
+      "name": "Live Walkthrough",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/145-slice.live-walkthrough.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    }
+  ]
+}

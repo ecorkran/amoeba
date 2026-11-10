@@ -49,17 +49,29 @@ def _decode_json(value: object, column: str) -> object:
         raise StoreRowError(f"{column} is not valid JSON: {value!r}") from error
 
 
-def decode_mapping(value: object, column: str) -> Mapping[str, object]:
-    """A stored JSON object column, or ``StoreRowError``."""
-    decoded = _decode_json(value, column)
+def _narrow_mapping(decoded: object, column: str) -> Mapping[str, object]:
     if not isinstance(decoded, dict):
-        raise StoreRowError(f"{column} is not a JSON object: {value!r}")
+        raise StoreRowError(f"{column} is not a JSON object: {decoded!r}")
     narrowed: dict[str, object] = {}
     for key, item in decoded.items():  # pyright: ignore[reportUnknownVariableType]
         if not isinstance(key, str):
             raise StoreRowError(f"{column} has a non-string key: {key!r}")
         narrowed[key] = item
     return narrowed
+
+
+def decode_mapping(value: object, column: str) -> Mapping[str, object]:
+    """A stored JSON object column, or ``StoreRowError``."""
+    return _narrow_mapping(_decode_json(value, column), column)
+
+
+def decode_mapping_list(value: object, column: str) -> tuple[Mapping[str, object], ...]:
+    """A stored JSON array of objects, or ``StoreRowError``."""
+    decoded = _decode_json(value, column)
+    if not isinstance(decoded, list):
+        raise StoreRowError(f"{column} is not a JSON array: {value!r}")
+    items: list[object] = list(decoded)  # pyright: ignore[reportUnknownArgumentType]
+    return tuple(_narrow_mapping(item, column) for item in items)
 
 
 def decode_string_list(value: object, column: str) -> tuple[str, ...]:

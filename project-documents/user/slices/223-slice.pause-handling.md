@@ -10,8 +10,8 @@ interfaces:
 - 225-slice.scenario-a-trial
 - 226-slice.mcp-server
 dateCreated: 20261107
-dateUpdated: 20261107
-status: not_started
+dateUpdated: 20261110
+status: complete
 ---
 
 # Slice Design: Pause Handling
@@ -307,27 +307,66 @@ Items the audit assigns to this slice that the decisions above do not already se
 
 ### Verification Walkthrough
 
-From the amoeba repo root, with a scratch home whose config is copied from `docs/config-contract.md` (both wait keys set, non-Claude models until #299 lands).
+Run from the amoeba repo root, with `sq` 0.24.24 or later and `cf` on `PATH`, against a
+scratch home. Verified 20261110 with `sq` 0.24.25 and `cf` 0.19.26 and the `haiku-xhigh`
+Squadron alias for both models (any alias that runs tool-less steps works). Every
+command below was run as written; the output shown is what it printed, trimmed to the
+fields that matter. Model text varies from run to run.
 
-1. Set up:
+1. Set up a scratch home and register this repo as a one-member program.
    ```bash
-   export AMOEBA_HOME="$(mktemp -d)"; cp <filled config> "$AMOEBA_HOME/config.yaml"
+   export AMOEBA_HOME="$(mktemp -d)"
+   # Copy the yaml block under "## Example" in docs/config-contract.md to
+   # "$AMOEBA_HOME/config.yaml", with answer_model and check_model set to your alias.
    printf 'program: demo\nmembers:\n  - rules_paths: [CLAUDE.md]\n' | uv run amoeba set_up --file -
    ```
-   Expect `applied`, with amoeba as a member.
-2. Make a real pause (no `slice` parameter, so the no-slice path is used):
+   Expect `"outcome": "applied"` and `added member <this repo's Context Forge id>`.
+
+2. Make a real pause. The pipeline has no `slice` parameter, so the no-slice path is used.
    ```bash
-   sq run tests/live/pause/asks_question.yaml <model> --run-id demo-pause-1
+   sq run tests/live/pause/asks_question.yaml <alias> --run-id demo-pause-1
    sq runs wait demo-pause-1 --timeout 0 --json
    ```
-   Expect `paused`, `agent_question`, a question about file length limits.
-3. `cd /tmp && uv run --project <amoeba repo> amoeba handle_pause demo-pause-1` gives `skipped / not_a_project`.
-4. `uv run amoeba handle_pause demo-pause-1` gives `resumed`, and `sq runs wait` shows the run running or past the pause. Then:
+   Expect `Agent is waiting for an answer: What is the maximum length of a source file in this repository?`; the JSON has `"outcome": "paused"`, `"checkpoint": {"kind": "agent_question", ...}` and the question.
+
+3. From a directory that is no Context Forge project:
+   ```bash
+   (cd /tmp && uv run --project <amoeba repo> amoeba handle_pause demo-pause-1)
+   ```
+   Expect `"outcome": "skipped"`, `"skip_reason": "not_a_project"`, exit 0.
+
+4. From the repo root: `uv run amoeba handle_pause demo-pause-1`.
+   Expect `"outcome": "resumed"`, `key`, `checkout` (the repo root), an `answering_run_id` (`amoeba-<stamp>-<12 hex>`) and `"answer_seq": 1`. Then:
    ```bash
    sqlite3 "$AMOEBA_HOME/amoeba.sqlite3" "select state, slice_label, passages, evidence from questions; select answered_by, answer, cited, resume_outcome, resume_log from answers;"
    ```
-   Expect `answered`, passages, check `yes`, an `answerer` answer with citations, `resumed`, and an existing log path. Running `handle_pause` again gives `skipped / settled`.
-5. `uv run amoeba answer <run_id> --text "…"` on a `waiting_on_pm` question gives `recorded` and a resume result.
+   Expect state `answered`, slice label `none`, a passage list (rules from `CLAUDE.md` and the `demo` member list), evidence with `"verdict": "yes"`, an `answerer` answer ("no hard maximum ... about 300 lines") with `["P6"]`-style citations, `resumed`, and a log path under `$AMOEBA_HOME/logs/resume/demo-pause-1/` that exists.
+
+   **Caveat.** This pipeline's agent asks the same question again after every resume, so the run pauses again at a new `paused_at` and a second `handle_pause` answers that new pause (`answer_seq` 2, then 3). The fourth call finds the answer limit (3 automatic answers for the run) already met: `"outcome": "waiting_on_pm"`, `"waiting_reason": "answer_limit_reached"`, and a fifth call for that pause gives `"outcome": "skipped"`, `"skip_reason": "waiting_on_pm"`. `skipped` / `settled` is what a repeat call for the *same* pause gets once its answer was handed over; the live run cannot produce it (the pause is gone after a resume), so `tests/operations/test_handle_pause.py::test_a_second_call_after_a_resume_is_settled` covers it.
+
+5. Answer the waiting question as the PM:
+   ```bash
+   uv run amoeba answer demo-pause-1 --text "About 300 lines; split a file that grows past that."
+   ```
+   Expect `"outcome": "recorded"`, the `key`, `"answer_seq": 4` and `"resume": {"outcome": "resumed", ...}`; the `answers` table now has a `pm` row as the newest. `uv run amoeba answer no-such-run --text x` prints `"outcome": "rejected"`, `"rejection": "no_such_question"` and exits 1.
+
+6. An answer authorizing a barred item waits on the PM, then is answered once the member allows it. Pause a run on a question about pushing, record a PM answer that says yes, pause the same question again, allow `push` for the member, and pause it a third time:
+   ```bash
+   sq run tests/live/pause/asks_push_question.yaml <alias> --run-id demo-push-1
+   uv run amoeba handle_pause demo-push-1      # answered from CLAUDE.md: "No, do not push ..." (not barred)
+   uv run amoeba answer demo-push-1 --text "Yes. Push the branch to origin when the work is done."
+   sq run tests/live/pause/asks_push_question.yaml <alias> --run-id demo-push-2
+   uv run amoeba handle_pause demo-push-2      # the PM answer is the later passage
+   ```
+   Expect `"outcome": "waiting_on_pm"`, `"waiting_reason": "answerer_declined"` (or `reserved_term` / `check_said_no`, whichever stops it first) with a detail saying a push is on the not-authorized list. Then:
+   ```bash
+   printf 'program: demo\nmembers:\n  - authorize_allow: [push]\n' | uv run amoeba set_up --file -
+   sq run tests/live/pause/asks_push_question.yaml <alias> --run-id demo-push-3
+   uv run amoeba handle_pause demo-push-3
+   ```
+   Expect `"outcome": "resumed"` and an `answerer` answer ("Yes. Push the branch ...") citing the PM passage.
+
+The live tier repeats steps 2 to 4 and the barred-then-allowed case on throwaway repos: `AMOEBA_LIVE_ANSWER_MODEL=<alias> AMOEBA_LIVE_CHECK_MODEL=<alias> AMOEBA_LIVE_MAX_COST_USD=0.5 uv run pytest tests/live`.
 
 ## Risks and Special Considerations
 

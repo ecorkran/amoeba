@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -9,7 +10,9 @@ from pathlib import Path
 from cf_fixtures import (
     DEFAULT_WORKTREE,
     FIXTURES,
+    NON_DEFAULT_WORKTREE,
     OUTSIDE_ANY_PROJECT,
+    SUBDIRECTORY,
     fake_cf_run,
     fixture_document,
     fixture_text,
@@ -32,9 +35,36 @@ def test_fake_run_puts_the_not_found_document_on_stderr() -> None:
     assert completed.stderr == fixture_text(OUTSIDE_ANY_PROJECT)
 
 
+#: The ``cf get --json`` recordings; the plan reads (``list_*``) sit beside them.
+PROJECT_RECORDINGS = (
+    DEFAULT_WORKTREE,
+    NON_DEFAULT_WORKTREE,
+    SUBDIRECTORY,
+    OUTSIDE_ANY_PROJECT,
+)
+
+
+def test_every_plan_recording_parses_and_each_error_one_is_the_error_document() -> None:
+    plan_files = sorted(FIXTURES.glob("list_*.json"))
+    assert len(plan_files) == 8
+    for path in plan_files:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        if path.stem.endswith("_error"):
+            assert document["error"] is True
+        else:
+            assert document
+
+
 def test_every_recording_parses_and_the_project_recordings_share_an_id() -> None:
-    names = sorted(path.stem for path in FIXTURES.glob("*.json"))
-    assert len(names) == 4
+    names = sorted(PROJECT_RECORDINGS)
+    assert (
+        sorted(
+            path.stem
+            for path in FIXTURES.glob("*.json")
+            if not path.stem.startswith("list_")
+        )
+        == names
+    )
     documents = {name: fixture_document(name) for name in names}
 
     ids = {doc["id"] for name, doc in documents.items() if name != OUTSIDE_ANY_PROJECT}

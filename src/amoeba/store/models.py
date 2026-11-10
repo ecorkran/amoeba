@@ -8,7 +8,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from amoeba.store.vocabulary import ConsumedMode
+from amoeba.answering.values import (
+    AnsweredBy,
+    AnsweringEvidence,
+    DeclineReason,
+    PassageRef,
+)
+from amoeba.store.vocabulary import ConsumedMode, QuestionState, ResumeOutcome
 
 
 @dataclass(frozen=True)
@@ -61,3 +67,60 @@ class DependencyPair:
     consumed: ConsumedMode
     registered_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True)
+class QuestionKey:
+    """A question's identity: the run and the checkpoint time exactly as Squadron
+    printed it (slice 223, D1)."""
+
+    run_id: str
+    paused_at: str
+
+
+@dataclass(frozen=True)
+class QuestionRecord:
+    """One row of ``questions``."""
+
+    key: QuestionKey
+    member_id: str
+    question: str
+    checkout: str
+    state: QuestionState
+    answering_run_id: str | None
+    waiting_reason: DeclineReason | None
+    waiting_detail: str | None
+    slice_label: str | None
+    source_commit: str | None
+    passages: tuple[PassageRef, ...] | None
+    evidence: AnsweringEvidence | None
+    claimed_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class AnswerRecord:
+    """One row of ``answers``."""
+
+    seq: int
+    key: QuestionKey
+    answered_by: AnsweredBy
+    answer: str
+    cited: tuple[str, ...] | None
+    recorded_at: datetime
+    resume_outcome: ResumeOutcome | None
+    resume_detail: str | None
+    resume_log: str | None
+    resume_at: datetime | None
+
+
+@dataclass(frozen=True)
+class PmPrecedent:
+    """The newest PM answer to one of a member's questions."""
+
+    key: QuestionKey
+    question: str
+    slice_label: str | None
+    answer_seq: int
+    answer: str
+    recorded_at: datetime

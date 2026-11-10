@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import logging
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
-from amoeba.answering.inputs import QuestionInput, prepare_scratch
+from amoeba.answering.inputs import BarredItem, QuestionInput, prepare_scratch
 from amoeba.answering.passages import PassageSet
 from amoeba.answering.values import PassageRef
 
@@ -36,14 +37,24 @@ def passage_refs(passages: PassageSet) -> tuple[PassageRef, ...]:
 
 
 def prepare_scratch_directory(
-    scratch: Path, question: QuestionInput, passages: str, max_cost_usd: float
+    scratch: Path,
+    question: QuestionInput,
+    passages: str,
+    max_cost_usd: float,
+    *,
+    not_authorized: Sequence[BarredItem],
 ) -> str | None:
-    """Make and fill the scratch directory; the error text if the disk refused."""
+    """Make and fill the scratch directory; the error text if the disk refused.
+
+    ``not_authorized`` is the member's own list, always stated by the caller.
+    """
     try:
         scratch.parent.mkdir(parents=True, exist_ok=True)
         # Exclusive: a directory is never reused, even on a run id collision.
         scratch.mkdir()
-        prepare_scratch(scratch, question, passages, max_cost_usd)
+        prepare_scratch(
+            scratch, question, passages, max_cost_usd, not_authorized=not_authorized
+        )
     except OSError as error:
         # An expected external failure (permissions, a full disk): an answer for
         # the caller to record as a decline, not a bug. ``prepare_scratch``'s

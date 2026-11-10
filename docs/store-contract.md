@@ -3,9 +3,9 @@ docType: reference
 layer: project
 project: amoeba
 audience: [human, ai]
-description: The Amoeba store contract: the home, every table and column of the baseline schema with its vocabulary and the slice that writes it, and the migration rule.
+description: The Amoeba store contract: the home, every table and column of the schema with its vocabulary and the operation that writes it, and the migration rule.
 dateCreated: 20261109
-dateUpdated: 20261109
+dateUpdated: 20261110
 status: complete
 ---
 
@@ -112,8 +112,13 @@ a foreign key would be circular.
 | `checkout` | The checkout the run paused in. |
 | `state` | `claimed`, `answered` or `waiting_on_pm` (`QuestionState`). |
 | `answering_run_id` | The answering run, null before one starts. |
-| `waiting_reason` | Why the PM must answer; unconstrained in SQL, checked in code by 223. |
+| `waiting_reason` | Why the PM must answer, a `DeclineReason`; unconstrained in SQL, checked in code. Written with the `waiting_on_pm` insert or move; a PM answer does not clear it. |
 | `claimed_at`, `updated_at` | UTC times. |
+| `slice_label` | Migration `002`. The slice label (`<index> <name>`, or `none`) the passages were gathered for; reused on precedent passages. Written with the claim insert by `handle_pause`; null when the question waited before context was gathered. |
+| `source_commit` | Migration `002`. The commit the passages were read at. Written with the claim insert. |
+| `passages` | Migration `002`. JSON array of passage references (`id`, `source`, `question_id`, `date`). Written with the claim insert; rewritten by `replace_claim` for a dead claim. |
+| `waiting_detail` | Migration `002`. Bounded detail for `waiting_reason`. Written with `waiting_reason`. |
+| `evidence` | Migration `002`. JSON object: `proposed_answer`, `cited`, `verdict`, `reason`, as far as the answering run got. Written when the claim settles, to `answered` or `waiting_on_pm`. |
 
 ### `answers` (written by slice 223; counted by slice 224)
 
@@ -126,7 +131,11 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 | `answered_by` | `answerer` or `pm` (`AnsweredBy`). |
 | `answer` | The answer text. |
 | `recorded_at` | UTC time. |
-| `resume_outcome` | Null, or `resumed`, `refused` or `not_delivered` (`ResumeOutcome`). |
+| `resume_outcome` | Null, or `resumed`, `refused` or `not_delivered` (`ResumeOutcome`). Written by the shared resume; `resumed` and `not_delivered` are never overwritten, `refused` may be. |
+| `cited` | Migration `002`. JSON array of the passage ids an automatic answer cites; null for a PM answer. Written with the `answerer` row. |
+| `resume_detail` | Migration `002`. Refusal or not-delivered detail. Written with `resume_outcome`. |
+| `resume_log` | Migration `002`. Path of the resume's stdout log. Written with `resume_outcome`. |
+| `resume_at` | Migration `002`. UTC time the resume outcome was recorded. Written with `resume_outcome`. |
 
 ### `pm_marker` (moved by slice 224)
 
@@ -134,6 +143,34 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 |---|---|
 | `id` | Always 1; the table holds one row. |
 | `last_seen_seq` | The `answers.seq` the PM has seen; created at 0, meaning nothing seen. |
+
+## Question lifecycle and who writes it (slice 223)
+
+A question moves `claimed` to `answered` or `waiting_on_pm`; a PM answer moves it to
+`answered` from any state. Every move out of `claimed` names the claim it holds
+(`answering_run_id`), so a PM answer made meanwhile wins.
+
+| Operation | Writes |
+|---|---|
+| `handle_pause`, a new question | one `questions` row, inserted in one transaction: `claimed` with `answering_run_id`, `slice_label`, `source_commit` and `passages`, or `waiting_on_pm` with `waiting_reason` and `waiting_detail` (and the context columns when the failure came after the context was gathered) |
+| `handle_pause`, settling an answering run | `answered`: `questions.evidence` and an `answerer` `answers` row with `cited`, in one transaction through the answer gate. Otherwise `waiting_on_pm`: `waiting_reason`, `waiting_detail`, `evidence` |
+| `handle_pause`, a dead claim | `replace_claim` (`answering_run_id` and `passages`, for a claimant that died before it started), or `waiting_on_pm` with `answering_run_stalled` |
+| `answer` | a `pm` `answers` row and `answered`, in one transaction; `waiting_reason` and `waiting_detail` are not cleared |
+| the shared resume (both) | `answers.resume_outcome`, `resume_detail`, `resume_log`, `resume_at` |
+
+`questions.waiting_reason` holds a `DeclineReason` (`answering/values.py`); SQL does not
+constrain it. The values `handle_pause` writes: `answer_limit_reached`,
+`reserved_term`, `sources_too_large`, `sources_missing`, `sources_unreadable`,
+`answering_launch_failed`, `answering_run_failed`, `answering_run_stalled`,
+`answering_cost_cap`, `answering_run_orphaned`, `artifact_missing`,
+`artifact_malformed`, `answerer_declined`, `uncited`, `unknown_citation`,
+`check_said_no`. The remaining members (`node_already_blocked`, `question_missing`,
+`answerer_not_configured`, `no_answer_on_file`, `answer_discarded`) come from before the
+cut and are not written.
+
+An answer with `resume_outcome` null or `refused` is "answered, not resumed": the next
+`handle_pause` for that question resumes with the latest answer and starts no answering
+run. `resumed` and `not_delivered` are never overwritten.
 
 ## Derivations the schema deliberately has no column for
 

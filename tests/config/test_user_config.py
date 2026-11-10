@@ -19,6 +19,8 @@ TOP_LEVEL_KEYS = [
     "max_cost_usd",
     "answer_limit",
     "passages_max_chars",
+    "answering_wait_seconds",
+    "resume_wait_seconds",
     "authorize_items",
 ]
 ITEM_KEYS = ["key", "description", "screen_phrases", "denied_by_default"]
@@ -97,6 +99,12 @@ def _with(key: str, value: object) -> Callable[[dict[str, Any]], None]:
         (_with("max_cost_usd", 0), "max_cost_usd"),
         (_with("answer_limit", 0), "answer_limit"),
         (_with("passages_max_chars", "many"), "passages_max_chars"),
+        (_with("answering_wait_seconds", 0), "answering_wait_seconds"),
+        (_with("answering_wait_seconds", -5), "answering_wait_seconds"),
+        (_with("answering_wait_seconds", "soon"), "answering_wait_seconds"),
+        (_with("resume_wait_seconds", 0), "resume_wait_seconds"),
+        (_with("resume_wait_seconds", -0.5), "resume_wait_seconds"),
+        (_with("resume_wait_seconds", True), "resume_wait_seconds"),
         (_with("answer_model", "a,b"), "answer_model"),
         (_with("check_model", "  "), "check_model"),
         (_with("authorize_items", "none"), "authorize_items"),
@@ -183,3 +191,14 @@ def test_a_document_that_is_not_a_mapping_names_the_file(tmp_path: Path) -> None
 
     with pytest.raises(ConfigError, match=f"{path}.*mapping"):
         load_user_config(path)
+
+
+@pytest.mark.parametrize("key", ["answering_wait_seconds", "resume_wait_seconds"])
+@pytest.mark.parametrize("value", [1, 0.5, 600])
+def test_a_positive_wait_is_accepted(tmp_path: Path, key: str, value: float) -> None:
+    document = _example()
+    document[key] = value
+
+    config = load_user_config(_write(tmp_path, document))
+
+    assert getattr(config, key) == value

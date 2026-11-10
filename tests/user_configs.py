@@ -48,5 +48,7 @@ def user_config(
         max_cost_usd=0.5,
         answer_limit=3,
         passages_max_chars=60000,
+        answering_wait_seconds=600,
+        resume_wait_seconds=60,
         authorize_items=authorize_items,
     )

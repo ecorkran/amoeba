@@ -1,0 +1,77 @@
+{
+  "slicePlan": "180-slices.program-coordination",
+  "total": 7,
+  "completed": 2,
+  "entries": [
+    {
+      "index": 180,
+      "name": "Slice-Writing Pipeline",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/180-slice.slice-writing-pipeline.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 181,
+      "name": "Program Record",
+      "isChecked": true,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/181-slice.program-record.md",
+      "status": "complete",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 182,
+      "name": "Program Concept as a Source",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/182-slice.program-concept-as-a-source.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": true
+    },
+    {
+      "index": 183,
+      "name": "Edges and Release",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/183-slice.edges-and-release.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 184,
+      "name": "Request Runs",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/184-slice.request-runs.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 185,
+      "name": "Request Outcome",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/185-slice.request-outcome.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    },
+    {
+      "index": 186,
+      "name": "Live Walkthrough",
+      "isChecked": false,
+      "retroactive": false,
+      "designFile": "project-documents/user/slices/186-slice.live-walkthrough.md",
+      "status": "not_started",
+      "isActive": false,
+      "isNext": false
+    }
+  ]
+}

@@ -11,7 +11,10 @@ from amoeba.config.home import (
     HOME_VARIABLE,
     STORE_FILE_NAME,
     AmoebaHomeError,
+    answering_dir,
     config_path,
+    logs_dir,
+    squadron_runs_dir,
     store_path,
 )
 from amoeba.config.home import amoeba_home as resolved_home
@@ -46,3 +49,16 @@ def test_empty_or_relative_value_raises(
 
     with pytest.raises(AmoebaHomeError, match=HOME_VARIABLE):
         resolved_home()
+
+
+def test_answering_and_logs_dirs_sit_under_the_variable(amoeba_home: Path) -> None:
+    assert answering_dir() == amoeba_home / "answering"
+    assert logs_dir() == amoeba_home / "logs"
+
+
+def test_squadron_runs_dir_sits_under_the_user_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    assert squadron_runs_dir() == tmp_path / ".config" / "squadron" / "runs"

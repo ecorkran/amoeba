@@ -23,6 +23,7 @@ from amoeba.answering.pipeline_file import (
     ANSWER_STEP,
     CHECK_PROMPT_FILE,
     CHECK_REPLY_FILE,
+    NOT_AUTHORIZED_FILE,
     PASSAGES_FILE,
     QUESTION_FILE,
     RULES_DIRECTORY,
@@ -39,7 +40,13 @@ RULE_TEXT = (
     "Commit messages use the form `type: short imperative summary`, for example "
     "`fix: handle empty input`. The type is one of feat, fix, docs or chore."
 )
-PREPARED = {QUESTION_FILE, PASSAGES_FILE, RULES_DIRECTORY, SQUADRON_CONFIG_FILE}
+PREPARED = {
+    QUESTION_FILE,
+    PASSAGES_FILE,
+    NOT_AUTHORIZED_FILE,
+    RULES_DIRECTORY,
+    SQUADRON_CONFIG_FILE,
+}
 OUTPUTS = {ANSWER_REPLY_FILE, ANSWER_PROMPT_FILE, CHECK_REPLY_FILE, CHECK_PROMPT_FILE}
 RULE_PASSAGE = passage(
     1, "rule", "2026-10-01T00:00:00Z", RULE_TEXT, source="docs/commit-rules.md"

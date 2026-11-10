@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from amoeba.answering.values import DeclineReason
+from amoeba.cli import main as cli
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
+from amoeba.operations.answer import AnswerRejection
+from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.store.store import Store
 
 DOCS = Path(__file__).parents[1] / "docs"
 STORE_CONTRACT = DOCS / "store-contract.md"
 CONFIG_CONTRACT = DOCS / "config-contract.md"
+CLI_CONTRACT = DOCS / "cli-contract.md"
 INTERNAL_TABLE_PREFIX = "sqlite_"
 
 
@@ -62,3 +67,30 @@ def test_the_config_contract_names_every_user_config_field() -> None:
     missing = [field for field in fields if f"`{field}`" not in text]
 
     assert not missing, f"config-contract.md does not name {missing}"
+
+
+def test_the_store_contract_names_every_decline_reason() -> None:
+    text = STORE_CONTRACT.read_text(encoding="utf-8")
+
+    missing = [
+        reason.value for reason in DeclineReason if f"`{reason.value}`" not in text
+    ]
+
+    assert not missing, f"store-contract.md does not name {missing}"
+
+
+def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> None:
+    text = CLI_CONTRACT.read_text(encoding="utf-8")
+    commands = [cli.SET_UP_COMMAND, cli.HANDLE_PAUSE_COMMAND, cli.ANSWER_COMMAND]
+    exit_codes = [cli.EXIT_OK, cli.EXIT_REJECTED, cli.EXIT_USAGE, cli.EXIT_ERROR]
+    values = [
+        *(outcome.value for outcome in HandlePauseOutcome),
+        *(reason.value for reason in SkipReason),
+        *(rejection.value for rejection in AnswerRejection),
+    ]
+
+    missing = [f"amoeba {name}" for name in commands if f"amoeba {name}" not in text]
+    missing += [f"exit {code}" for code in exit_codes if f"| {code} |" not in text]
+    missing += [value for value in values if f"`{value}`" not in text]
+
+    assert not missing, f"cli-contract.md does not name {missing}"
