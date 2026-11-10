@@ -86,7 +86,7 @@ class CommittedSources:
 
 
 @dataclass(frozen=True)
-class _Git:
+class GitReads:
     """The arguments every git call here shares."""
 
     repo: Path
@@ -119,10 +119,10 @@ def _user_subdirectory(directory: str) -> str:
     return relative
 
 
-class _Listings:
+class Listings:
     """Directory listings at the pinned commit, each read once."""
 
-    def __init__(self, git: _Git, commit: str) -> None:
+    def __init__(self, git: GitReads, commit: str) -> None:
         self._git = git
         self._commit = commit
         self._by_directory: dict[str, tuple[str, ...]] = {}
@@ -133,41 +133,43 @@ class _Listings:
             return self._by_directory[directory]
         answer = self._git.read(show_object_args(self._commit, directory))
         if not isinstance(answer, GitReadResult):
-            return _in_context(answer, context)
+            return in_context(answer, context)
         names = parse_tree_listing(answer.stdout)
         self._by_directory[directory] = names
         return names
 
 
-def _in_context(problem: SourcesProblem, context: str) -> SourcesProblem:
+def in_context(problem: SourcesProblem, context: str) -> SourcesProblem:
     return SourcesProblem(problem.kind, f"{context}: {problem.detail}")
 
 
 def locate_sources(
     repo: Path,
     target: str,
-    slice_ref: SliceRef,
+    slice_ref: SliceRef | None,
     rules_paths: tuple[str, ...],
     run: CfRun,
     timeout_seconds: float,
 ) -> SourceSelection | SourcesProblem:
     """Resolve ``target`` to a commit and pick the files to read, rules then plan.
 
+    With ``slice_ref`` ``None`` (a run with no slice) no plan file is selected.
+
     A file picked twice is kept at its first position. Makes ``2 + L`` git calls for
     ``L`` directory listings; reading the files is :func:`read_committed_sources`.
     """
-    git = _Git(repo, run, timeout_seconds)
+    git = GitReads(repo, run, timeout_seconds)
     resolved = git.read(resolve_commit_args(target))
     if not isinstance(resolved, GitReadResult):
         return resolved
     commit = resolved.stdout.strip()
     if not commit:
         return unreadable(f"target {target!r} resolved to no commit")
-    listings = _Listings(git, commit)
+    listings = Listings(git, commit)
     rules = _select_rules(listings, rules_paths)
     if not isinstance(rules, tuple):
         return rules
-    plan = _select_plan(git, listings, commit, slice_ref)
+    plan = () if slice_ref is None else _select_plan(git, listings, commit, slice_ref)
     if not isinstance(plan, tuple):
         return plan
     chosen: dict[str, SelectedFile] = {}
@@ -177,7 +179,7 @@ def locate_sources(
 
 
 def _select_rules(
-    listings: _Listings, rules_paths: tuple[str, ...]
+    listings: Listings, rules_paths: tuple[str, ...]
 ) -> tuple[SelectedFile, ...] | SourcesProblem:
     chosen: list[SelectedFile] = []
     for entry in rules_paths:
@@ -196,11 +198,11 @@ def _select_rules(
 
 
 def _select_plan(
-    git: _Git, listings: _Listings, commit: str, slice_ref: SliceRef
+    git: GitReads, listings: Listings, commit: str, slice_ref: SliceRef
 ) -> tuple[SelectedFile, ...] | SourcesProblem:
     root = git.read(show_object_args(commit, USER_ROOT))
     if not isinstance(root, GitReadResult):
-        return _in_context(root, USER_ROOT)
+        return in_context(root, USER_ROOT)
     present = set(parse_tree_directories(root.stdout))
     found: dict[str, tuple[str, ...]] = {}
     for directory in dict.fromkeys(row.directory for row in PLAN_ROWS):
@@ -224,7 +226,7 @@ def _select_plan(
 def read_committed_sources(
     repo: Path,
     target: str,
-    slice_ref: SliceRef,
+    slice_ref: SliceRef | None,
     rules_paths: tuple[str, ...],
     max_chars: int,
     run: CfRun,
@@ -241,11 +243,11 @@ def read_committed_sources(
     )
     if not isinstance(selection, SourceSelection):
         return selection
-    git = _Git(repo, run, timeout_seconds)
+    git = GitReads(repo, run, timeout_seconds)
     files: list[SourceFile] = []
     total = 0
     for chosen in selection.files:
-        read = _read_file(git, selection.commit, chosen)
+        read = read_file(git, selection.commit, chosen)
         if not isinstance(read, SourceFile):
             return read
         total += len(read.text)
@@ -259,12 +261,12 @@ def read_committed_sources(
     return CommittedSources(selection.commit, tuple(files))
 
 
-def _read_file(
-    git: _Git, commit: str, chosen: SelectedFile
+def read_file(
+    git: GitReads, commit: str, chosen: SelectedFile
 ) -> SourceFile | SourcesProblem:
     dated = git.read(last_change_args(commit, chosen.path))
     if not isinstance(dated, GitReadResult):
-        return _in_context(dated, chosen.path)
+        return in_context(dated, chosen.path)
     date = parse_git_date(dated.stdout)
     if date is None:
         return unreadable(f"no usable commit date for {chosen.path}: {dated.stdout!r}")
@@ -275,5 +277,5 @@ def _read_file(
         # raised, because the repository (not a bug here) caused it.
         return unreadable(f"{chosen.path} is not UTF-8 text")
     if not isinstance(shown, GitReadResult):
-        return _in_context(shown, chosen.path)
-    return SourceFile(chosen.path, chosen.kind, date, shown.stdout)
+        return in_context(shown, chosen.path)
+    return SourceFile(chosen.path, chosen.kind, date, shown.stdout, member=None)

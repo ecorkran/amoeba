@@ -6,7 +6,9 @@ cli ──► operations ──► store ──► answering.values
              └────────► upstream, answering
 ```
 
-``store`` imports nothing from ``config``, ``operations`` or ``cli``. ``upstream``
+``store`` imports nothing from ``config``, ``operations`` or ``cli``. ``answering``
+imports nothing from ``store``, ``config``, ``operations`` or ``cli`` (``store`` and
+``config`` import its value and settings modules, never the reverse). ``upstream``
 imports nothing from ``answering`` or the packages above it. ``config`` imports only
 ``answering.settings`` and its type module. ``operations`` does not import ``cli``.
 An import of a package that no longer exists is not checked here: it fails pyright.
@@ -24,6 +26,12 @@ ROOT = "amoeba"
 
 #: package -> the ``amoeba`` packages (or modules) it may not import.
 FORBIDDEN: dict[str, tuple[str, ...]] = {
+    "answering": (
+        "amoeba.store",
+        "amoeba.config",
+        "amoeba.operations",
+        "amoeba.cli",
+    ),
     "store": ("amoeba.config", "amoeba.operations", "amoeba.cli"),
     "upstream": (
         "amoeba.answering",

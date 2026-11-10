@@ -161,37 +161,40 @@ usageByModel:
 
 ## 3. Answering library changes (D11)
 
-- [ ] **3.1 Not-authorized file**
-  - [ ] Add `pipeline_file.NOT_AUTHORIZED_FILE = "not_authorized.md"`; add `inputs.render_not_authorized(items)`: one `key: description` bullet per item; empty list renders `No item is barred for this repository.`
-  - [ ] `prepare_scratch` writes the file. Keep its four positional parameters `(directory, question, passages_markdown, max_cost_usd)`; add the items as a keyword-only `not_authorized` defaulting to `()` (renders the empty-list line), so the kept live harness still works. The names and signatures the kept live tests import (`SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`, `mint_run_id`) are not changed
-  - [ ] Success: module imports; pyright strict clean
+- [x] **3.1 Not-authorized file**
+  - [x] Add `pipeline_file.NOT_AUTHORIZED_FILE = "not_authorized.md"`; add `inputs.render_not_authorized(items)`: one `key: description` bullet per item; empty list renders `No item is barred for this repository.`
+  - [x] `prepare_scratch` writes the file. Keep its four positional parameters `(directory, question, passages_markdown, max_cost_usd)`; add the items as a keyword-only `not_authorized` defaulting to `()` (renders the empty-list line), so the kept live harness still works. The names and signatures the kept live tests import (`SQ_EXECUTABLE`, `RunOutcome`, `RunOutcomeDocument`, `PollFailure`, `RunPoll`, `poll_run`, `QUESTION_TAIL_CHARS`, `mint_run_id`) are not changed
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **3.2 Rewrite `answering.yaml` prompts**
-  - [ ] In both steps list `not_authorized.md` in `prompt_files` after `passages.md`. Replace the hard-coded authorize list in both prompts with text saying the list follows the passages; the answer step must decline, and the check step reply no, when an answer would authorize anything on it
-  - [ ] Success: `answering.yaml` contains no hard-coded authorize list (grep for the old items finds none)
+- [x] **3.2 Rewrite `answering.yaml` prompts**
+  - [x] In both steps list `not_authorized.md` in `prompt_files` after `passages.md`. Replace the hard-coded authorize list in both prompts with text saying the list follows the passages; the answer step must decline, and the check step reply no, when an answer would authorize anything on it
+  - [x] Success: `answering.yaml` contains no hard-coded authorize list (grep for the old items finds none)
+  - Note: both prompts also carry 182's kind sentences (program_concept, program_members), with a pin test.
 
-- [ ] **3.3 Not-authorized tests**
-  - [ ] Test rendering: two items, empty list. Test `prepare_scratch` writes the file with the items given. Update the existing pin test so it covers the new file and the `prompt_files` order
-  - [ ] Add a test that runs real `sq run <answering.yaml> --validate` (with the pipeline's required params) and passes; the old probe test is deleted. If CI has no `sq`, put it in `tests/live/answering/` (run with `uv run pytest tests/live`), not in the default suite
-  - [ ] Success: tests pass
+- [x] **3.3 Not-authorized tests**
+  - [x] Test rendering: two items, empty list. Test `prepare_scratch` writes the file with the items given. Update the existing pin test so it covers the new file and the `prompt_files` order
+  - [x] Add a test that runs real `sq run <answering.yaml> --validate` (with the pipeline's required params) and passes; the old probe test is deleted. If CI has no `sq`, put it in `tests/live/answering/` (run with `uv run pytest tests/live`), not in the default suite
+  - [x] Success: tests pass
+  - Note: `sq run answering.yaml --validate` test is `tests/live/answering/test_validate.py` (needs `sq`, so it runs with `uv run pytest tests/live` and the `AMOEBA_LIVE_*` variables; verified passing). CI has no `sq`. No old probe test existed to delete.
 
-- [ ] **3.4 Program passages**
-  - [ ] Add `ProgramSources` (concept as a `SourceFile`: member id, path, commit, date, text; and the member list). Port `program_concept` and `program_members` from the 182 take group; if that group is empty, write them new from the design of slice 182
-  - [ ] `answering.passages` gains both kinds and their rendering; `assemble` takes `ProgramSources`; both prompts list the two new kind words
-  - [ ] Port by copy from branch `182-slice.program-concept-as-a-source` (`git show 182-slice.program-concept-as-a-source:<path>`, no merge): the take group (`program_passages.py`, the `passages.py` kinds and rendering, the `answering.yaml` kind sentences, the `source_reads.py` renames) with the take-group tests (`test_passages.py`, `test_pipeline_yaml.py`, `test_program_passages.py`), re-pointed to 222's `Member` and `Program`. Do not port the drop group (the no-program path: `program=None` optionality, commit `6c2499b`, its baseline tests)
-  - [ ] `ProgramSources.concept` is optional (`None` when the program has no concept): no `program_concept` passage, member list still emitted. 182's branch requires a concept member; this is the gap the audit names
-  - [ ] Make plan row selection in `source_reads` optional when `slice_ref` is `None`
-  - [ ] `inputs.render_question` rejects a blank slice label today. A no-slice question must reach it and be rendered, not rejected: D5's `NO_SLICE_LABEL` is passed for it (the library takes the label as an argument; it does not import the constant), and a blank string stays rejected. Keep the live tests' constructor calls unchanged; they always pass a slice
-  - [ ] Find every existing caller of `assemble` and `source_reads` and every existing test of them (grep under `src` and `tests`); update each to the new signatures in this task
-  - [ ] Success: module imports; pyright strict clean; all four checks pass
+- [x] **3.4 Program passages**
+  - [x] Add `ProgramSources` (concept as a `SourceFile`: member id, path, commit, date, text; and the member list). Port `program_concept` and `program_members` from the 182 take group; if that group is empty, write them new from the design of slice 182
+  - [x] `answering.passages` gains both kinds and their rendering; `assemble` takes `ProgramSources`; both prompts list the two new kind words
+  - [x] Port by copy from branch `182-slice.program-concept-as-a-source` (`git show 182-slice.program-concept-as-a-source:<path>`, no merge): the take group (`program_passages.py`, the `passages.py` kinds and rendering, the `answering.yaml` kind sentences, the `source_reads.py` renames) with the take-group tests (`test_passages.py`, `test_pipeline_yaml.py`, `test_program_passages.py`), re-pointed to 222's `Member` and `Program`. Do not port the drop group (the no-program path: `program=None` optionality, commit `6c2499b`, its baseline tests)
+  - [x] `ProgramSources.concept` is optional (`None` when the program has no concept): no `program_concept` passage, member list still emitted. 182's branch requires a concept member; this is the gap the audit names
+  - [x] Make plan row selection in `source_reads` optional when `slice_ref` is `None`
+  - [x] `inputs.render_question` rejects a blank slice label today. A no-slice question must reach it and be rendered, not rejected: D5's `NO_SLICE_LABEL` is passed for it (the library takes the label as an argument; it does not import the constant), and a blank string stays rejected. Keep the live tests' constructor calls unchanged; they always pass a slice
+  - [x] Find every existing caller of `assemble` and `source_reads` and every existing test of them (grep under `src` and `tests`); update each to the new signatures in this task
+  - [x] Success: module imports; pyright strict clean; all four checks pass
+  - Note: `ProgramSources(concept: SourceFile | None, members: SourceFile)` lives in `answering/passages.py` (not a separate `program_passages.py`, which would need a `TYPE_CHECKING` cycle). `Member`/`Program` are NOT imported into `answering` because task 3.6 forbids `answering` importing `store`: the member-list text and date helpers (`member_list_text`, `member_list_date`, marker constants, built on 222's `Member` and `Program`) therefore go into `operations` with task 4.4, and their tests (182's `test_program_passages` member-list cases) are ported there. `SourceFile` and `Passage` gained a required `member` field. `source_reads` made `GitReads`, `Listings`, `in_context`, `read_file` public; `locate_sources` and `read_committed_sources` take `SliceRef | None`. `assemble` takes required `program_sources`. `render_question` already accepts any non-blank single-line label, so no code change was needed for the no-slice label; tests added in `tests/answering/test_program_passages.py`. The only caller of `assemble` and `read_committed_sources` was `answering/sources.py::assemble_sources`, which had no callers and no tests; it is deleted because task 4.6's `gather` replaces it (gather must read program sources between the committed read and the assembly).
 
-- [ ] **3.5 Program passage and no-slice tests**
-  - [ ] Tests: `assemble` with program sources emits both kinds; with no slice it emits rules, program and precedent passages and no plan passages; `source_reads` with `slice_ref=None` selects no plan rows; `assemble` with `concept=None` emits the member list and no concept passage; `render_question` renders a no-slice question and still rejects a blank label
-  - [ ] Success: tests pass
+- [x] **3.5 Program passage and no-slice tests**
+  - [x] Tests: `assemble` with program sources emits both kinds; with no slice it emits rules, program and precedent passages and no plan passages; `source_reads` with `slice_ref=None` selects no plan rows; `assemble` with `concept=None` emits the member list and no concept passage; `render_question` renders a no-slice question and still rejects a blank label
+  - [x] Success: tests pass
 
-- [ ] **3.6 Import boundary**
-  - [ ] Add to `tests/test_import_boundaries.py`: `answering` imports nothing from `store`, `config` or `operations`. Confirm `store` importing `answering.values` is allowed
-  - [ ] Success: test passes; adding a forbidden import makes it fail (verify once, then revert)
+- [x] **3.6 Import boundary**
+  - [x] Add to `tests/test_import_boundaries.py`: `answering` imports nothing from `store`, `config` or `operations`. Confirm `store` importing `answering.values` is allowed
+  - [x] Success: test passes; adding a forbidden import makes it fail (verify once, then revert)
 
 **Commit**: `feat: add program passages and not-authorized list to answering library`
 

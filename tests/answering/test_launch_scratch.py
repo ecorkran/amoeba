@@ -26,7 +26,9 @@ def _passage(
     source: str | None,
     question_id: str | None = None,
 ) -> Passage:
-    return Passage(passage_id, kind, source, DATE, "text", None, None, question_id)
+    return Passage(
+        passage_id, kind, source, DATE, "text", None, None, question_id, None
+    )
 
 
 def _set(*passages: Passage) -> PassageSet:

@@ -17,6 +17,7 @@ from amoeba.answering.passages import (
     PassageSet,
     PlanRow,
     PmAnswer,
+    ProgramSources,
     SourceFile,
     SourcesProblem,
     SourcesProblemKind,
@@ -224,12 +225,13 @@ def _passage(
         "question": None,
         "slice_label": None,
         "question_id": None,
+        "member": None,
     }
     fields.update(extra)
     return Passage(
         id=f"P{number}", kind=kind, source=fields["source"], date=date, text=text,
         question=fields["question"], slice_label=fields["slice_label"],
-        question_id=fields["question_id"],
+        question_id=fields["question_id"], member=fields["member"],
     )  # fmt: skip
 
 
@@ -284,7 +286,7 @@ OTHER = "7 Other"
 
 
 def _file(path: str, text: str, kind: PassageKind = PassageKind.RULE) -> SourceFile:
-    return SourceFile(path, kind, FIXED, text)
+    return SourceFile(path, kind, FIXED, text, member=None)
 
 
 def _pm(record_id: str, slice_label: str, day: int, answer: str = "Yes.") -> PmAnswer:
@@ -294,16 +296,32 @@ def _pm(record_id: str, slice_label: str, day: int, answer: str = "Yes.") -> PmA
     )  # fmt: skip
 
 
+CONCEPT = SourceFile(
+    "docs/program-concept.md", PassageKind.PROGRAM_CONCEPT, FIXED,
+    "# Program\nHow the projects fit.\n", member="trading-data",
+)  # fmt: skip
+MEMBER_LIST = SourceFile(
+    "trading", PassageKind.PROGRAM_MEMBERS, FIXED,
+    "Program: trading\nProjects in this program:\n- trading-data\n", member=None,
+)  # fmt: skip
+PROGRAM = ProgramSources(concept=CONCEPT, members=MEMBER_LIST)
+#: Rules (two passages), plan (one), then the program's two, before any PM answer.
+LEADING_PASSAGES = 5
+
+
 def _assemble(
-    answers: list[PmAnswer], max_chars: int = 100_000, *files: SourceFile
+    answers: list[PmAnswer],
+    max_chars: int = 100_000,
+    *files: SourceFile,
+    program: ProgramSources = PROGRAM,
 ) -> PassageSet | SourcesProblem:
     committed = files or (
         _file("r.md", "# A\none\n## B\ntwo\n"),
         _file("p.md", "plan\n", PassageKind.PLAN),
     )
     return assemble(
-        committed, answers, question_slice_label=SLICE, max_chars=max_chars,
-        source_commit="c0ffee",
+        committed, answers, program_sources=program, question_slice_label=SLICE,
+        max_chars=max_chars, source_commit="c0ffee",
     )  # fmt: skip
 
 
@@ -312,17 +330,19 @@ def _set(result: PassageSet | SourcesProblem) -> PassageSet:
     return result
 
 
-def test_order_is_rules_then_plan_then_pm_with_gap_free_ids() -> None:
+def test_order_is_rules_plan_program_then_pm_with_gap_free_ids() -> None:
     result = _set(_assemble([_pm("q1", SLICE, 1)]))
 
     assert [(p.id, p.kind) for p in result.passages] == [
         ("P1", PassageKind.RULE),
         ("P2", PassageKind.RULE),
         ("P3", PassageKind.PLAN),
-        ("P4", PassageKind.PM_ANSWER),
+        ("P4", PassageKind.PROGRAM_CONCEPT),
+        ("P5", PassageKind.PROGRAM_MEMBERS),
+        ("P6", PassageKind.PM_ANSWER),
     ]
     assert result.source_commit == "c0ffee"
-    assert result.ids == {"P1", "P2", "P3", "P4"}
+    assert result.ids == {"P1", "P2", "P3", "P4", "P5", "P6"}
 
 
 def test_pm_answers_for_the_same_slice_come_first_newest_first() -> None:
@@ -335,16 +355,23 @@ def test_pm_answers_for_the_same_slice_come_first_newest_first() -> None:
 
     result = _set(_assemble(answers))
 
-    assert [p.question_id for p in result.passages[3:]] == ["c", "b", "a", "d"]
+    assert [p.question_id for p in result.passages[LEADING_PASSAGES:]] == [
+        "c",
+        "b",
+        "a",
+        "d",
+    ]
 
 
 def test_ties_on_date_go_by_record_id() -> None:
     result = _set(_assemble([_pm("q2", SLICE, 1), _pm("q1", SLICE, 1)]))
 
-    assert [p.question_id for p in result.passages[3:]] == ["q1", "q2"]
+    assert [p.question_id for p in result.passages[LEADING_PASSAGES:]] == ["q1", "q2"]
 
 
-def test_rules_and_plan_over_the_limit_is_too_large_with_both_numbers() -> None:
+def test_committed_and_program_text_over_the_limit_is_too_large_with_both_numbers() -> (
+    None
+):
     result = _assemble([], 10)
 
     assert isinstance(result, SourcesProblem)
@@ -361,7 +388,7 @@ def test_the_first_misfit_drops_itself_and_every_later_answer() -> None:
 
     result = _set(_assemble([older, small, big], fit_one))
 
-    assert [p.question_id for p in result.passages[3:]] == []
+    assert [p.question_id for p in result.passages[LEADING_PASSAGES:]] == []
     assert result.dropped_pm_answers == ("big", "small", "older")
 
 
@@ -372,7 +399,7 @@ def test_answers_that_fit_are_kept_and_the_rest_dropped_in_order() -> None:
     result = _set(_assemble([third, second, first], two))
     rendered = render_passages(result)
 
-    assert [p.question_id for p in result.passages[3:]] == ["a", "b"]
+    assert [p.question_id for p in result.passages[LEADING_PASSAGES:]] == ["a", "b"]
     assert result.dropped_pm_answers == ("c",)
     assert len(rendered) <= two
     assert "Q c?" not in rendered

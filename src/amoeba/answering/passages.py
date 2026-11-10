@@ -1,8 +1,8 @@
 """The passages an answering run sees: types, cutting, selection, assembly (slice 143).
 
 Pure: no file, process or store access. ``source_reads`` fetches committed text and
-``sources`` wires it to the caller's values; everything that can be decided from
-values lives here so it is tested without a repository.
+the pause context wires it to the caller's values; everything that can be decided
+from values lives here so it is tested without a repository.
 """
 
 from __future__ import annotations
@@ -31,6 +31,8 @@ class PassageKind(StrEnum):
     RULE = "rule"
     PLAN = "plan"
     PM_ANSWER = "pm_answer"
+    PROGRAM_CONCEPT = "program_concept"
+    PROGRAM_MEMBERS = "program_members"
 
 
 @dataclass(frozen=True)
@@ -39,7 +41,8 @@ class Passage:
 
     id: str
     kind: PassageKind
-    #: Repo-relative path for a rule or plan passage; ``None`` for a PM answer.
+    #: Repo-relative path for a rule, plan or concept passage; the program id for the
+    #: member list (recorded, not rendered); ``None`` for a PM answer.
     source: str | None
     date: datetime
     text: str
@@ -49,6 +52,8 @@ class Passage:
     slice_label: str | None
     #: PM answers only: the record it came from. Not rendered.
     question_id: str | None
+    #: Program concept passages only: the project that holds the concept file.
+    member: str | None
 
 
 @dataclass(frozen=True)
@@ -67,12 +72,33 @@ class PassageSet:
 
 @dataclass(frozen=True)
 class SourceFile:
-    """One committed rules or plan file, read whole."""
+    """One committed rules, plan or program file, read whole.
+
+    ``path`` is the repo-relative path, or the program id for the member list.
+    """
 
     path: str
     kind: PassageKind
     date: datetime
     text: str
+    #: Program concept only: the project that holds the file.
+    member: str | None
+
+
+@dataclass(frozen=True)
+class ProgramSources:
+    """The program files an answering run adds to a member's question (slice 182)."""
+
+    #: Kind ``program_concept``, ``member`` set to the concept member. ``None`` for a
+    #: program with no concept: then there is no concept passage.
+    concept: SourceFile | None
+    #: Kind ``program_members``; its path is the program id and is not rendered.
+    members: SourceFile
+
+    @property
+    def files(self) -> tuple[SourceFile, ...]:
+        """The files in offer order: the concept (if any), then the member list."""
+        return (self.members,) if self.concept is None else (self.concept, self.members)
 
 
 @dataclass(frozen=True)
@@ -249,7 +275,10 @@ def parse_git_date(text: str) -> datetime | None:
 def _render_section(passage: Passage) -> str:
     """One ``## Passage`` section, ending in a newline."""
     lines = [f"## Passage {passage.id}", "", f"kind: {passage.kind}"]
-    if passage.source is not None:
+    if passage.member is not None:
+        lines.append(f"member: {passage.member}")
+    # The member list's ``source`` is the program id, kept for the passage record.
+    if passage.source is not None and passage.kind is not PassageKind.PROGRAM_MEMBERS:
         lines.append(f"source: {passage.source}")
     lines.append(f"date: {format_utc(passage.date)}")
     if passage.question is not None:
@@ -275,6 +304,7 @@ def _pm_passage(answer: PmAnswer, number: int) -> Passage:
         question=answer.question,
         slice_label=answer.slice_label,
         question_id=answer.record_id,
+        member=None,
     )
 
 
@@ -292,6 +322,7 @@ def _committed_passages(committed: Sequence[SourceFile]) -> list[Passage]:
                     question=None,
                     slice_label=None,
                     question_id=None,
+                    member=source.member,
                 )
             )
     return found
@@ -313,23 +344,26 @@ def assemble(
     committed: Sequence[SourceFile],
     pm_answers: Sequence[PmAnswer],
     *,
+    program_sources: ProgramSources,
     question_slice_label: str,
     max_chars: int,
     source_commit: str,
 ) -> PassageSet | SourcesProblem:
     """Number the passages and fit PM precedent into ``max_chars`` of rendered text.
 
-    Rules and plan are never trimmed: if they alone exceed the limit the result is
-    ``sources_too_large``. PM answers are added in priority order until one does not
-    fit; that one and every later one are dropped, so a smaller, lower-priority answer
-    never jumps a dropped one.
+    Rules, plan and program passages (the concept, then the member list) are never
+    trimmed: if they alone exceed the limit the result is ``sources_too_large``. PM
+    answers are added in priority order until one does not fit; that one and every
+    later one are dropped, so a smaller, lower-priority answer never jumps a dropped
+    one.
     """
-    kept = _committed_passages(committed)
+    kept = _committed_passages((*committed, *program_sources.files))
     size = _rendered_size(kept)
     if size > max_chars:
         return SourcesProblem(
             SourcesProblemKind.TOO_LARGE,
-            f"rules and plan passages are {size} characters; the limit is {max_chars}",
+            f"rules, plan and program passages are {size} characters; "
+            f"the limit is {max_chars}",
         )
     ordered = _pm_order(pm_answers, question_slice_label)
     for position, answer in enumerate(ordered):

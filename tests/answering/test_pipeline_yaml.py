@@ -10,6 +10,7 @@ import yaml
 
 from amoeba.answering import pipeline_resource
 from amoeba.answering.artifacts import AnswerKind, Verdict
+from amoeba.answering.passages import PassageKind
 from amoeba.answering.pipeline_file import (
     ANSWER_MODEL_PARAM,
     ANSWER_PROMPT_FILE,
@@ -19,6 +20,7 @@ from amoeba.answering.pipeline_file import (
     CHECK_PROMPT_FILE,
     CHECK_REPLY_FILE,
     CHECK_STEP,
+    NOT_AUTHORIZED_FILE,
     PASSAGES_FILE,
     PIPELINE_FILE_NAME,
     QUESTION_FILE,
@@ -70,7 +72,7 @@ def test_reply_and_prompt_files() -> None:
 
 def test_prompt_files_and_reply_chaining() -> None:
     steps = _steps()
-    both = [QUESTION_FILE, PASSAGES_FILE]
+    both = [QUESTION_FILE, PASSAGES_FILE, NOT_AUTHORIZED_FILE]
     assert steps[ANSWER_STEP]["prompt_files"] == both
     assert steps[CHECK_STEP]["prompt_files"] == both
     assert steps[CHECK_STEP]["reply_from"] == ANSWER_STEP
@@ -115,3 +117,45 @@ def test_missing_file_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(pipeline_resource.resources, "files", package_root)
     with pytest.raises(FileNotFoundError, match=PIPELINE_FILE_NAME):
         answering_pipeline_path()
+
+
+#: The items the prompts used to hard-code; the list is now ``not_authorized.md``.
+OLD_AUTHORIZE_LIST = ("a push", "a merge to main", "a release", "a destructive")
+
+
+def test_prompts_hold_no_hard_coded_authorize_list() -> None:
+    for step in _steps().values():
+        prompt = " ".join(step["prompt"].split())
+        for old_item in OLD_AUTHORIZE_LIST:
+            assert old_item not in prompt
+
+
+def test_both_prompts_point_at_the_not_authorized_list_after_the_passages() -> None:
+    for step in _steps().values():
+        prompt = " ".join(step["prompt"].split())
+        assert "not-authorized list that follows the passages" in prompt
+
+
+#: The sentences both steps carry about the passage kinds (slice 182, D8).
+KIND_SENTENCES = (
+    "The kinds are rule, plan, pm_answer, program_concept or program_members. "
+    "A program_concept passage comes from the concept document of the program "
+    "this project belongs to, held in the member project its member line names; "
+    "it describes how the program's projects fit together and what each one is "
+    "for. A program_members passage lists the program's projects and marks the "
+    "one the question comes from."
+)
+
+
+def test_both_steps_name_every_passage_kind_with_the_same_sentences() -> None:
+    for step in _steps().values():
+        prompt = " ".join(step["prompt"].split())
+        assert KIND_SENTENCES in prompt
+        for kind in PassageKind:
+            assert kind.value in prompt
+
+
+def test_the_kind_sentences_name_the_kinds_by_their_enum_values() -> None:
+    listed = KIND_SENTENCES.split(".")[0].removeprefix("The kinds are ")
+    names = listed.replace(" or ", ", ").split(", ")
+    assert names == [kind.value for kind in PassageKind]

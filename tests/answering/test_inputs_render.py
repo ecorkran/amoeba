@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
-from amoeba.answering.inputs import QuestionInput, render_question
+from amoeba.answering.inputs import (
+    NO_ITEM_BARRED_TEXT,
+    QuestionInput,
+    render_not_authorized,
+    render_question,
+)
 
 
 def test_exact_format() -> None:
@@ -50,3 +57,22 @@ def test_empty_question_is_refused() -> None:
 def test_blank_or_multiline_input_is_refused(label: str, text: str, match: str) -> None:
     with pytest.raises(ValueError, match=match):
         render_question(QuestionInput(label, text))
+
+
+@dataclass(frozen=True)
+class _Item:
+    key: str
+    description: str
+
+
+def test_not_authorized_renders_one_bullet_per_item_in_order() -> None:
+    rendered = render_not_authorized(
+        [_Item("push", "pushing to a remote"), _Item("release", "tagging a release")]
+    )
+
+    assert rendered == "- push: pushing to a remote\n- release: tagging a release"
+
+
+def test_an_empty_not_authorized_list_says_nothing_is_barred() -> None:
+    assert render_not_authorized([]) == NO_ITEM_BARRED_TEXT
+    assert NO_ITEM_BARRED_TEXT == "No item is barred for this repository."
