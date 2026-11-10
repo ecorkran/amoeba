@@ -1,0 +1,58 @@
+[
+  {
+    "index": 100,
+    "name": "Substrate & Run-State Store",
+    "status": "complete",
+    "archFile": "100-arch.substrate-run-state-store.md",
+    "isActive": false,
+    "isChecked": true
+  },
+  {
+    "index": 120,
+    "name": "Runner",
+    "status": "complete",
+    "archFile": "120-arch.runner-routing-engine.md",
+    "isActive": false,
+    "isChecked": true
+  },
+  {
+    "index": 140,
+    "name": "Question Answerer",
+    "status": "complete",
+    "archFile": "140-arch.question-answerer.md",
+    "isActive": false,
+    "isChecked": true
+  },
+  {
+    "index": 160,
+    "name": "Translator & Notification",
+    "status": "deprecated",
+    "archFile": null,
+    "isActive": false,
+    "isChecked": false
+  },
+  {
+    "index": 180,
+    "name": "Program Coordination",
+    "status": "deprecated",
+    "archFile": "180-arch.program-coordination.md",
+    "isActive": false,
+    "isChecked": false
+  },
+  {
+    "index": 200,
+    "name": "Multi-Agent Chat",
+    "status": "deprecated",
+    "archFile": null,
+    "isActive": false,
+    "isChecked": false
+  },
+  {
+    "index": 220,
+    "name": "Program Tool",
+    "status": "in_progress",
+    "archFile": "220-arch.program-tool.md",
+    "isActive": true,
+    "isChecked": false
+  }
+]

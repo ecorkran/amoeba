@@ -109,8 +109,10 @@ class PmAnswer:
     question: str
     answer: str
     date: datetime
-    #: The slice it was answered on, as ``<index> <title>``.
-    slice_label: str
+    #: The slice it was answered on, as ``<index> <title>``; ``None`` when the
+    #: question was recorded before its slice was known (then no ``slice:`` line is
+    #: rendered, so the check cannot match it to a slice).
+    slice_label: str | None
 
 
 class SourcesProblemKind(StrEnum):

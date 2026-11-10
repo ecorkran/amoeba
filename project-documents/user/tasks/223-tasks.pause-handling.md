@@ -200,38 +200,42 @@ usageByModel:
 
 ## 4. Context (D5)
 
-- [ ] **4.1 Record slice-lookup fixtures**
-  - [ ] Add to `tests/fixtures/context_forge/` real `cf list initiatives --json -a` output and `cf list slices <index> --json` output for plans in this repo, including an index that is in no plan. Capture with real `cf`; do not hand-write. Extend the README with `cf --version` and date
-  - [ ] Success: files parse as JSON; one slice index from the run fixture's range is in a plan, one is in none
+- [x] **4.1 Record slice-lookup fixtures**
+  - [x] Add to `tests/fixtures/context_forge/` real `cf list initiatives --json -a` output and `cf list slices <index> --json` output for plans in this repo, including an index that is in no plan. Capture with real `cf`; do not hand-write. Extend the README with `cf --version` and date
+  - [x] Success: files parse as JSON; one slice index from the run fixture's range is in a plan, one is in none
+  - Note: recorded 20261110 with cf 0.19.26 in `tests/fixtures/context_forge/` (`list_initiatives_a.json`, `list_slices_{100,120,140,180,220}.json`, and the stderr error documents `list_slices_{160,200}_error.json`); README extended. Slice 223 is in initiative 220's plan; 299 is in none. `tests/test_cf_fixtures.py` now names its four `cf get` recordings explicitly and has a test for the plan recordings.
 
-- [ ] **4.2 Slice resolution in `pause_context.py`**
-  - [ ] Define `TARGET_PARAM_KEY = "slice"` (the run parameter holding the slice index) and `NO_SLICE_LABEL = "none"` once in `operations/pause_context.py`
-  - [ ] `resolve_slice(run_facts, cf_run)`: parse `params[TARGET_PARAM_KEY]` as an index; search plans of initiatives with index no higher than it, highest first; label `<index> <name>`. A non-integer value, or one in no plan, is `sources_missing`. Absent parameter: the no-slice label (D5). A failing `cf` call is `sources_unreadable` with the output head
-  - [ ] Success: module imports; pyright strict clean
+- [x] **4.2 Slice resolution in `pause_context.py`**
+  - [x] Define `TARGET_PARAM_KEY = "slice"` (the run parameter holding the slice index) and `NO_SLICE_LABEL = "none"` once in `operations/pause_context.py`
+  - [x] `resolve_slice(run_facts, cf_run)`: parse `params[TARGET_PARAM_KEY]` as an index; search plans of initiatives with index no higher than it, highest first; label `<index> <name>`. A non-integer value, or one in no plan, is `sources_missing`. Absent parameter: the no-slice label (D5). A failing `cf` call is `sources_unreadable` with the output head
+  - [x] Success: module imports; pyright strict clean
+  - Note: `TARGET_PARAM_KEY` is NOT redefined: `upstream/squadron/launch.py` already defines `TARGET_PARAM_KEY = "slice"` (the run parameter holding the slice index), so `pause_context.py` imports it (one definition). `NO_SLICE_LABEL = "none"` and `READ_TIMEOUT_SECONDS = 30.0` (named constant, same precedent as `CF_GET_TIMEOUT_SECONDS`) are defined in `operations/pause_context.py`. The `cf list` command words are spelled once in `upstream/context_forge/target_read.py` (`list_initiatives_command`, `list_slices_command`, with the defined-once test extended); the runs are in the new `upstream/context_forge/plan_read.py` (`read_initiatives`, `read_slice_list`, tested in `tests/upstream/context_forge/test_plan_read.py`). `resolve_slice(checkout, cf_project_id, params, run)` takes the params dict from `RunFacts` rather than the whole `RunFacts`. A slice's initiative that has no plan (CF's `error: true` document) is skipped, not an error.
 
-- [ ] **4.3 Slice resolution tests**
-  - [ ] Using the 4.1 fixtures: slice found; slice in no plan and non-integer parameter each give `sources_missing`; no parameter gives the no-slice label; failing `cf` gives `sources_unreadable`
-  - [ ] Success: tests pass
+- [x] **4.3 Slice resolution tests**
+  - [x] Using the 4.1 fixtures: slice found; slice in no plan and non-integer parameter each give `sources_missing`; no parameter gives the no-slice label; failing `cf` gives `sources_unreadable`
+  - [x] Success: tests pass
 
-- [ ] **4.4 Program sources read**
-  - [ ] `read_program_sources(...)` in `pause_context.py`: concept member and path from `programs`, member list from `members_of`, concept member's checkout from `project_of(reference=…).project_path`, concept file read through the git allowlist at that checkout's target (the asker's own pinned commit if it is the concept member). Returns `ProgramSources` (task 3.4)
-  - [ ] Rewrite group of 182's `program_sources.py`: copy its git logic (`_read_concept_file`, `_within_limit`, `without_path`, `_read_from_asker`, the `SourcesProblem` kinds) from the 182 branch; replace `ProgramContext`, `read_member`, `_read_target` and `TickBudget` with the checkout, members from the store and the moved `read_target`. Keep 182's decisions D3 to D6 (the asker's own pinned commit; member-list wording; early size stop; no rules, plan or PM answers from other members)
-  - [ ] A program with no concept (both columns null) gives `ProgramSources` with `concept=None` and no read
-  - [ ] Success: module imports; pyright strict clean
+- [x] **4.4 Program sources read**
+  - [x] `read_program_sources(...)` in `pause_context.py`: concept member and path from `programs`, member list from `members_of`, concept member's checkout from `project_of(reference=…).project_path`, concept file read through the git allowlist at that checkout's target (the asker's own pinned commit if it is the concept member). Returns `ProgramSources` (task 3.4)
+  - [x] Rewrite group of 182's `program_sources.py`: copy its git logic (`_read_concept_file`, `_within_limit`, `without_path`, `_read_from_asker`, the `SourcesProblem` kinds) from the 182 branch; replace `ProgramContext`, `read_member`, `_read_target` and `TickBudget` with the checkout, members from the store and the moved `read_target`. Keep 182's decisions D3 to D6 (the asker's own pinned commit; member-list wording; early size stop; no rules, plan or PM answers from other members)
+  - [x] A program with no concept (both columns null) gives `ProgramSources` with `concept=None` and no read
+  - [x] Success: module imports; pyright strict clean
+  - Note: split for the ~300-line limit: the member-list text and date helpers, `ProgramRead`/`AskerReads` inputs, the concept read and `without_path` are in `operations/program_sources.py` (not `pause_context.py`). A concept member that is not a Context Forge project (`PROJECT_NOT_FOUND`) is `sources_missing`; a failing `cf` call is `sources_unreadable`. Ported tests live in `tests/operations/test_program_sources.py` with `program_rig.py`; the 182 `read_member` defect cases, budget refusals and call-count-by-budget cases have no counterpart (the store and tick budget are gone).
 
-- [ ] **4.5 Program sources tests**
-  - [ ] Using a temporary git repo: concept read at the other member's target; concept member equal to the asker uses its own pinned commit; unreadable file gives its `DeclineReason` through `sources_reason`
-  - [ ] Port the assertions of 182's `test_program_sources.py` (missing, unreadable, non-UTF-8, timeout, too large, asker holds the concept) and the program section of `test_sources.py` (concept once, problem as value, visibility), with its concept-repo fixtures (`program_rig.py`); the call-count and budget cases get new shapes. Add: program with no concept returns no concept and reads nothing
-  - [ ] Success: tests pass
+- [x] **4.5 Program sources tests**
+  - [x] Using a temporary git repo: concept read at the other member's target; concept member equal to the asker uses its own pinned commit; unreadable file gives its `DeclineReason` through `sources_reason`
+  - [x] Port the assertions of 182's `test_program_sources.py` (missing, unreadable, non-UTF-8, timeout, too large, asker holds the concept) and the program section of `test_sources.py` (concept once, problem as value, visibility), with its concept-repo fixtures (`program_rig.py`); the call-count and budget cases get new shapes. Add: program with no concept returns no concept and reads nothing
+  - [x] Success: tests pass
 
-- [ ] **4.6 `gather`**
-  - [ ] `gather(checkout, member, program, run_facts, question, settings, cf_run) -> PauseContext | SourcesProblem` combines: `resolve_slice`; committed rules and plan files via `read_committed_sources` from the question's checkout at `read_target` (`rules_paths` from `answering_for`); `read_program_sources`; precedent from `questions.pm_precedent`. Each `SourcesProblem` maps to its `DeclineReason` through `sources_reason`
-  - [ ] Centralize the empty-means-main rule: `DEFAULT_TARGET_BRANCH` (task 0.2 note) is the one named constant in `target_read.py`, with a comment that it is Context Forge's own documented default for an empty `git.integration_branch`. `read_target` returns it for an empty value and the value as-is otherwise; no `"main"` literal elsewhere in `src` (grep to confirm; reference the constant). A failed `cf config get` call (nonzero exit, unreadable output; not an empty value) raises an explicit typed error that `gather` maps to `sources_unreadable` with the output head. Add no other fallback
-  - [ ] Success: module imports; pyright strict clean
+- [x] **4.6 `gather`**
+  - [x] `gather(checkout, member, program, run_facts, question, settings, cf_run) -> PauseContext | SourcesProblem` combines: `resolve_slice`; committed rules and plan files via `read_committed_sources` from the question's checkout at `read_target` (`rules_paths` from `answering_for`); `read_program_sources`; precedent from `questions.pm_precedent`. Each `SourcesProblem` maps to its `DeclineReason` through `sources_reason`
+  - [x] Centralize the empty-means-main rule: `DEFAULT_TARGET_BRANCH` (task 0.2 note) is the one named constant in `target_read.py`, with a comment that it is Context Forge's own documented default for an empty `git.integration_branch`. `read_target` returns it for an empty value and the value as-is otherwise; no `"main"` literal elsewhere in `src` (grep to confirm; reference the constant). A failed `cf config get` call (nonzero exit, unreadable output; not an empty value) raises an explicit typed error that `gather` maps to `sources_unreadable` with the output head. Add no other fallback
+  - [x] Success: module imports; pyright strict clean
+  - Note: `gather(store, checkout, member, run_facts, settings, run)` has no `question` parameter (the question text is not used by the context; the caller passes it to the scratch), reads the store once in one short read transaction before any subprocess (program, members, PM precedent), and returns a `SourcesProblem` for the caller to map with `sources_reason`. `read_target` returns a `ReadFailure` value (not a raised error) for a failed `cf config get`; gather maps it to `sources_unreadable` with the output head, which satisfies the explicit-typed-failure requirement without a new exception. `DEFAULT_TARGET_BRANCH` was already the single `"main"` literal in `src` (grep confirmed). `PmAnswer.slice_label` became `str | None`: a PM answer to a question recorded before its slice was known (e.g. waiting on `answer_limit_reached`) renders with no `slice:` line instead of a made-up label. A PM precedent's record id is `<run_id>@<paused_at>`.
 
-- [ ] **4.7 `gather` tests**
-  - [ ] Using a temporary git repo and the 4.1 fixtures: full context with a slice; no-slice context has no plan passages; precedent passages present after a PM answer and absent for automatic answers; a failing sub-step returns its problem and nothing partial; in `read_target` tests: an empty `git.integration_branch` yields `DEFAULT_TARGET_BRANCH`, a non-empty value (e.g. `dev/erik`) is used as-is, and a failing `cf config get` call gives the typed error, which `gather` reports as `sources_unreadable`
-  - [ ] Success: tests pass
+- [x] **4.7 `gather` tests**
+  - [x] Using a temporary git repo and the 4.1 fixtures: full context with a slice; no-slice context has no plan passages; precedent passages present after a PM answer and absent for automatic answers; a failing sub-step returns its problem and nothing partial; in `read_target` tests: an empty `git.integration_branch` yields `DEFAULT_TARGET_BRANCH`, a non-empty value (e.g. `dev/erik`) is used as-is, and a failing `cf config get` call gives the typed error, which `gather` reports as `sources_unreadable`
+  - [x] Success: tests pass
 
 **Commit**: `feat: gather pause context from slice, program and precedent`
 

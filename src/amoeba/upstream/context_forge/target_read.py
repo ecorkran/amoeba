@@ -25,6 +25,11 @@ from amoeba.upstream.context_forge.cli_call import (
 CF_EXECUTABLE: Final = "cf"
 CF_PROJECT_FLAG: Final = "-p"
 CF_JSON_FLAG: Final = "--json"
+#: ``cf list initiatives -a``: every initiative, not only the active one.
+CF_ALL_FLAG: Final = "-a"
+CF_LIST_COMMAND: Final = "list"
+CF_INITIATIVES_WORD: Final = "initiatives"
+CF_SLICES_WORD: Final = "slices"
 
 #: The CF config key naming the integration branch.
 CF_KEY_INTEGRATION_BRANCH: Final = "git.integration_branch"
@@ -39,6 +44,16 @@ _VALUE_KEY: Final = "value"
 def config_get_command(key: str) -> tuple[str, ...]:
     """``cf config get <key> --json``, run in a checkout."""
     return ("config", "get", key, CF_JSON_FLAG)
+
+
+def list_initiatives_command() -> tuple[str, ...]:
+    """``cf list initiatives --json -a``: every initiative of the project."""
+    return (CF_LIST_COMMAND, CF_INITIATIVES_WORD, CF_JSON_FLAG, CF_ALL_FLAG)
+
+
+def list_slices_command(initiative_index: int) -> tuple[str, ...]:
+    """``cf list slices <index> --json``: one initiative's slice plan."""
+    return (CF_LIST_COMMAND, CF_SLICES_WORD, str(initiative_index), CF_JSON_FLAG)
 
 
 def cf_argv(command: Sequence[str], cf_project_id: str) -> list[str]:
