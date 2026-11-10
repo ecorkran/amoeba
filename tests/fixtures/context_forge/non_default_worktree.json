@@ -1,0 +1,21 @@
+{
+  "name": "amoeba",
+  "id": "project_1781844717321_1gukaohbc",
+  "projectPath": "/private/tmp/claude-501/-Users-manta-source-repos-manta-amoeba/8ab560c7-b06d-4541-b2cf-b82aa439d772/scratchpad/amoeba-wt-fixture",
+  "template": "default",
+  "dateProject": "20261109",
+  "createdAt": "2026-06-19T04:51:57.320Z",
+  "updatedAt": "2026-11-10T03:55:16.796Z",
+  "customData": {},
+  "worktree": {
+    "id": "wt_1794282916795_j6v25f17n",
+    "name": "fixture-wt",
+    "indexRange": [
+      800,
+      899
+    ],
+    "worktreePath": "/private/tmp/claude-501/-Users-manta-source-repos-manta-amoeba/8ab560c7-b06d-4541-b2cf-b82aa439d772/scratchpad/amoeba-wt-fixture",
+    "rangeOverride": true,
+    "isDefault": false
+  }
+}

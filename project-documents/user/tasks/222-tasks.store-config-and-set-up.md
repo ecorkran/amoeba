@@ -9,7 +9,7 @@ projectState: Slice 221 is merged. `src/amoeba` holds only `answering/` and `ups
   No store, config, or command exists. Nobody has run Amoeba.
 dateCreated: 20261107
 dateUpdated: 20261108
-status: not_started
+status: in_progress
 turns: 9
 promptTokens: 259263
 cachedTokens: 215714
@@ -41,34 +41,38 @@ usageByModel:
 
 ## 0. Setup
 
-- [ ] **0.1 Create the branch**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
-  - [ ] Confirm the working tree is clean and you are on the target
-  - [ ] `git checkout -b 222-slice.store-config-and-set-up {target}`
-  - [ ] Success: `git branch --show-current` prints `222-slice.store-config-and-set-up`
+- [x] **0.1 Create the branch**
+  - [x] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
+  - [x] Confirm the working tree is clean and you are on the target
+  - [x] `git checkout -b 222-slice.store-config-and-set-up {target}`
+  - [x] Success: `git branch --show-current` prints `222-slice.store-config-and-set-up`
+  - Note: target is main (integration_branch empty); branch 222-slice.store-config-and-set-up created from main.
 
-- [ ] **0.2 Confirm slice 221 and locate its types**
-  - [ ] Confirm `src/amoeba` has `answering/` and `upstream/` and no `store/` or `cli/`; if not, write `BLOCKED: slice 221 not merged` under this task and stop
-  - [ ] Find the module of each of `AnswererSettings`, `RulesPath`, `ModelAlias`, `validate_repo_relative_path`, `AnsweredBy`, `run_cf`, `CfRun`, `CfCallFailed`; note the import paths under this task
-  - [ ] Run the checks once and note the baseline result; failures present before this slice are written down, not fixed
-  - [ ] Success: a note lists each import path and the baseline result
+- [x] **0.2 Confirm slice 221 and locate its types**
+  - [x] Confirm `src/amoeba` has `answering/` and `upstream/` and no `store/` or `cli/`; if not, write `BLOCKED: slice 221 not merged` under this task and stop
+  - [x] Find the module of each of `AnswererSettings`, `RulesPath`, `ModelAlias`, `validate_repo_relative_path`, `AnsweredBy`, `run_cf`, `CfRun`, `CfCallFailed`; note the import paths under this task
+  - [x] Run the checks once and note the baseline result; failures present before this slice are written down, not fixed
+  - [x] Success: a note lists each import path and the baseline result
+  - Note: import paths — AnswererSettings, RulesPath, ModelAlias, validate_repo_relative_path: amoeba.answering.settings; AnsweredBy: amoeba.answering.values; run_cf, CfRun, CfCallFailed: amoeba.upstream.context_forge.cli_call (no CfRun/CfCallFailed move; all as the design states). src/amoeba holds answering/ and upstream/ only. Baseline: ruff format, ruff check, pyright clean; pytest 544 passed.
 
 ## 1. Test infrastructure
 
-- [ ] **1.1 Autouse `AMOEBA_HOME` fixture (D10)**
-  - [ ] In `tests/conftest.py` (create or extend) add an autouse fixture that sets `AMOEBA_HOME` to a fresh temporary directory per test and restores it afterwards
-  - [ ] Success: a throwaway test reading `os.environ["AMOEBA_HOME"]` sees a different directory in two tests and never the real `~/.config/amoeba`
+- [x] **1.1 Autouse `AMOEBA_HOME` fixture (D10)**
+  - [x] In `tests/conftest.py` (create or extend) add an autouse fixture that sets `AMOEBA_HOME` to a fresh temporary directory per test and restores it afterwards
+  - [x] Success: a throwaway test reading `os.environ["AMOEBA_HOME"]` sees a different directory in two tests and never the real `~/.config/amoeba`
 
-- [ ] **1.2 Record Context Forge fixtures (D11)**
-  - [ ] Create `tests/fixtures/context_forge/` holding real `cf get --json` stdout from: a default worktree, a non-default worktree of the same project, a subdirectory of a checkout, and a directory outside any project (the `PROJECT_NOT_FOUND` document). Name each file for its case
-  - [ ] Capture by running `cf get --json` in each place, using `git worktree add` on a throwaway checkout of this repo for the non-default worktree; do not hand-write any fixture
-  - [ ] Add `tests/fixtures/context_forge/README.md` recording the `cf --version` and capture date
-  - [ ] If a case cannot be captured, write `BLOCKED: cannot record <case>` under this task and stop
-  - [ ] Success: four files exist; each parses as JSON; the subdirectory and root fixtures have the same `id`
+- [x] **1.2 Record Context Forge fixtures (D11)**
+  - [x] Create `tests/fixtures/context_forge/` holding real `cf get --json` stdout from: a default worktree, a non-default worktree of the same project, a subdirectory of a checkout, and a directory outside any project (the `PROJECT_NOT_FOUND` document). Name each file for its case
+  - [x] Capture by running `cf get --json` in each place, using `git worktree add` on a throwaway checkout of this repo for the non-default worktree; do not hand-write any fixture
+  - [x] Add `tests/fixtures/context_forge/README.md` recording the `cf --version` and capture date
+  - [x] If a case cannot be captured, write `BLOCKED: cannot record <case>` under this task and stop
+  - [x] Success: four files exist; each parses as JSON; the subdirectory and root fixtures have the same `id`
+  - Note: cf 0.19.26, captured 20261109. The PROJECT_NOT_FOUND document is on stderr (exit 1), so outside_any_project.json holds the stderr text. The non-default worktree was registered with `cf worktree init --name fixture-wt --range 800-899 -o` on a throwaway checkout, then removed (cf worktree rm, git worktree remove).
 
-- [ ] **1.3 Fake `cf` and `CfRun` helpers**
-  - [ ] Add test helpers: a function returning a fake `CfRun` that replays a named fixture or a given failure, and a script writer that places a fake `cf` first on `PATH` (for the CLI subprocess tests in task 10.3). The script is written for one mode: replay a named fixture, or fail (nonzero exit, no JSON)
-  - [ ] Success: calling the fake `CfRun` with the default-worktree fixture name returns that fixture's text; running the written failure-mode script exits nonzero
+- [x] **1.3 Fake `cf` and `CfRun` helpers**
+  - [x] Add test helpers: a function returning a fake `CfRun` that replays a named fixture or a given failure, and a script writer that places a fake `cf` first on `PATH` (for the CLI subprocess tests in task 10.3). The script is written for one mode: replay a named fixture, or fail (nonzero exit, no JSON)
+  - [x] Success: calling the fake `CfRun` with the default-worktree fixture name returns that fixture's text; running the written failure-mode script exits nonzero
+  - Note: helpers in tests/cf_fixtures.py (fake_cf_run, write_fake_cf); tests in tests/test_cf_fixtures.py. A throwaway-style home test is kept as tests/test_amoeba_home_fixture.py.
 
 **Commit**: `test: add AMOEBA_HOME fixture and Context Forge recordings`
 

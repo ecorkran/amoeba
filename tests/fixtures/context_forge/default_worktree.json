@@ -1,0 +1,32 @@
+{
+  "name": "amoeba",
+  "id": "project_1781844717321_1gukaohbc",
+  "projectPath": "/Users/manta/source/repos/manta/amoeba",
+  "template": "default",
+  "fileArch": "220-arch.program-tool",
+  "fileSlicePlan": "220-slices.program-tool",
+  "fileSlice": "222-slice.store-config-and-set-up",
+  "fileTasks": "222-tasks.store-config-and-set-up",
+  "developmentPhase": "Phase 6: Implementation",
+  "instruction": "Phase 6: Implementation",
+  "dateProject": "20261109",
+  "createdAt": "2026-06-19T04:51:57.320Z",
+  "updatedAt": "2026-11-10T03:55:16.796Z",
+  "customData": {},
+  "worktree": {
+    "id": "wt_1792034653114_tcyv1a3ry",
+    "name": "default",
+    "indexRange": [
+      100,
+      799
+    ],
+    "worktreePath": "/Users/manta/source/repos/manta/amoeba",
+    "isDefault": true,
+    "developmentPhase": "Phase 6: Implementation",
+    "instruction": "Phase 6: Implementation",
+    "archDoc": "220-arch.program-tool",
+    "slicePlan": "220-slices.program-tool",
+    "activeSlice": "222-slice.store-config-and-set-up",
+    "activeTaskFile": "222-tasks.store-config-and-set-up"
+  }
+}
