@@ -1,0 +1,11 @@
+{
+  "run_id": "amoeba-fixture-completed-1",
+  "outcome": "completed",
+  "status": "completed",
+  "pipeline": "amoeba-capture-completes",
+  "started_at": "2026-11-10T14:15:48.199956+00:00",
+  "updated_at": "2026-11-10T14:15:50.176364+00:00",
+  "checkpoint": null,
+  "failure": null,
+  "reviews": []
+}

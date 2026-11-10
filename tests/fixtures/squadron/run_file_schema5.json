@@ -1,0 +1,110 @@
+{
+  "schema_version": 5,
+  "run_id": "amoeba-fixture-pause-3",
+  "pipeline": "asks_question",
+  "params": {
+    "model": "haiku-xhigh"
+  },
+  "execution_mode": "sdk",
+  "started_at": "2026-11-10T14:15:34.539743Z",
+  "updated_at": "2026-11-10T14:15:37.070395Z",
+  "status": "paused",
+  "current_step": "ask",
+  "completed_steps": [
+    {
+      "step_name": "ask",
+      "step_type": "dispatch",
+      "status": "paused",
+      "verdict": null,
+      "score": null,
+      "outputs": {
+        "response": "What is the maximum length of a source file in this repository?"
+      },
+      "action_results": [
+        {
+          "success": false,
+          "action_type": "dispatch",
+          "outputs": {
+            "response": "What is the maximum length of a source file in this repository?"
+          },
+          "error": "could not resolve expected design artifact path: no 'slice' param in scope; agent's final text: \"What is the maximum length of a source file in this repository?\"",
+          "awaits_human": false,
+          "metadata": {
+            "prompt": {
+              "sha256": "5834f103bc94214ad8fe8d6b9983aaa272849439b9443754e03a5f5c3616d37a",
+              "source": "explicit",
+              "squadron_version": "0.24.25",
+              "cf_version": null,
+              "guide_version": null
+            },
+            "model": "claude-haiku-5-5",
+            "profile": "sdk-session",
+            "background_tasks_waited": 0,
+            "background_tasks_stopped": 0,
+            "background_shells_running": 0,
+            "system_prompt_mode": "preset",
+            "setting_sources": "project",
+            "auto_memory": true,
+            "project_rules": {
+              "conventions": "sdk-native"
+            },
+            "usage": {
+              "model": "claude-haiku-5-5",
+              "alias": "haiku-xhigh",
+              "profile": "sdk",
+              "effort": "xhigh",
+              "turns": 1,
+              "duration_seconds": 1.7556587080471218,
+              "tokens": {
+                "prompt": 21529,
+                "cached": 11384,
+                "cache_write": 10143,
+                "completion": 138,
+                "reasoning": null
+              },
+              "cost_usd": 0.00234334,
+              "cost_basis": "provider"
+            },
+            "effort_sent": "xhigh",
+            "head_before": "5b6a72917a7fbd19b81c9de6f73c8d75ef780aad",
+            "head_after": "5b6a72917a7fbd19b81c9de6f73c8d75ef780aad",
+            "failure_kind": "agent_question",
+            "agent_question": "What is the maximum length of a source file in this repository?"
+          },
+          "verdict": null,
+          "findings": [],
+          "score": null,
+          "criteria": null,
+          "provenance": null
+        }
+      ],
+      "prior_round_results": [],
+      "loop_commits": null,
+      "accepted": false,
+      "exhausted": false,
+      "iteration": 0,
+      "completed_at": "2026-11-10T14:15:37.069441Z"
+    }
+  ],
+  "checkpoint": {
+    "reason": "could not resolve expected design artifact path: no 'slice' param in scope; agent's final text: \"What is the maximum length of a source file in this repository?\"",
+    "step": "ask",
+    "verdict": null,
+    "paused_at": "2026-11-10T14:15:37.069441Z"
+  },
+  "compact_summaries": {},
+  "pool_selections": [],
+  "owner": {
+    "pid": 81359,
+    "hostname": "anemone",
+    "claimed_at": "2026-11-10T14:15:34.539435Z",
+    "heartbeat_interval_s": 30
+  },
+  "heartbeat_at": "2026-11-10T14:15:34.539743Z",
+  "active_step": null,
+  "progress_at": "2026-11-10T14:15:37.069441Z",
+  "active_item": null,
+  "pipeline_path": "/Users/manta/source/repos/manta/amoeba/tests/live/pause/asks_question.yaml",
+  "replay": false,
+  "working_directory": "/private/var/folders/sh/z0st27515979z5n4v263_svc0000gn/T/tmp.tiRsAbAVle"
+}

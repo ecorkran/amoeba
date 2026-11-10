@@ -19,6 +19,12 @@ HOME_VARIABLE: Final = "AMOEBA_HOME"
 DEFAULT_HOME_PARTS: Final = (".config", "amoeba")
 STORE_FILE_NAME: Final = "amoeba.sqlite3"
 CONFIG_FILE_NAME: Final = "config.yaml"
+#: Scratch directories of answering runs, one per run id (slice 223, D12).
+ANSWERING_DIR_NAME: Final = "answering"
+#: Stdout and stderr logs of answering runs and resumes.
+LOGS_DIR_NAME: Final = "logs"
+#: Squadron's run files, relative to the user's home. Read only by ``run_file``.
+SQUADRON_RUNS_PARTS: Final = (".config", "squadron", "runs")
 
 
 class AmoebaHomeError(Exception):
@@ -55,3 +61,18 @@ def store_path() -> Path:
 def config_path() -> Path:
     """The user config file under the home."""
     return amoeba_home() / CONFIG_FILE_NAME
+
+
+def answering_dir() -> Path:
+    """Where each answering run's scratch directory lives, under the home."""
+    return amoeba_home() / ANSWERING_DIR_NAME
+
+
+def logs_dir() -> Path:
+    """Where answering and resume logs live, under the home."""
+    return amoeba_home() / LOGS_DIR_NAME
+
+
+def squadron_runs_dir() -> Path:
+    """Squadron's run-file directory, ``~/.config/squadron/runs``."""
+    return Path.home().joinpath(*SQUADRON_RUNS_PARTS)

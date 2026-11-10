@@ -132,28 +132,30 @@ usageByModel:
 
 ## 2. Run file, home paths and `sq` fixtures (D2, D12, D15)
 
-- [ ] **2.1 Home paths (D12)**
-  - [ ] In `config/home.py` add `answering_dir()` (`amoeba_home() / "answering"`), `logs_dir()` (`amoeba_home() / "logs"`), `squadron_runs_dir()` (`Path.home() / ".config" / "squadron" / "runs"`); directory names as constants in that file
-  - [ ] Extend `tests/config/test_home.py`: first two sit under `AMOEBA_HOME`; the third is under the (test-set) `HOME`; the AST test from 222 (only `home.py` calls `Path.home`) still passes
-  - [ ] Success: tests pass
+- [x] **2.1 Home paths (D12)**
+  - [x] In `config/home.py` add `answering_dir()` (`amoeba_home() / "answering"`), `logs_dir()` (`amoeba_home() / "logs"`), `squadron_runs_dir()` (`Path.home() / ".config" / "squadron" / "runs"`); directory names as constants in that file
+  - [x] Extend `tests/config/test_home.py`: first two sit under `AMOEBA_HOME`; the third is under the (test-set) `HOME`; the AST test from 222 (only `home.py` calls `Path.home`) still passes
+  - [x] Success: tests pass
 
-- [ ] **2.2 Record `sq` fixtures (D15)**
-  - [ ] Create `tests/live/pause/asks_question.yaml`: a dispatch that ends on a question about file length limits that the repo's rules settle. Task 9.2 reuses it
-  - [ ] Create `tests/fixtures/squadron/` with real 0.24.23 output (or the installed version; record it) of `sq runs wait <id> --timeout 0 --json` for: an `agent_question` pause, a pause of another checkpoint kind, a running run, a completed run. Name files for the case. Capture by running real `sq` (the `agent_question` pause comes from `asks_question.yaml`); never hand-write
-  - [ ] Copy one real schema-5 run file from `~/.config/squadron/runs/` into `tests/fixtures/squadron/` as the `run_file` fixture; strip nothing that the reader parses
-  - [ ] Add `tests/fixtures/squadron/README.md` with `sq --version` and capture date
-  - [ ] If a case cannot be captured, write `BLOCKED: cannot record <case>` under this task and stop
-  - [ ] Success: each JSON fixture parses; the pause fixture has `checkpoint.kind`, `paused_at` and `question`
+- [x] **2.2 Record `sq` fixtures (D15)**
+  - [x] Create `tests/live/pause/asks_question.yaml`: a dispatch that ends on a question about file length limits that the repo's rules settle. Task 9.2 reuses it
+  - [x] Create `tests/fixtures/squadron/` with real 0.24.23 output (or the installed version; record it) of `sq runs wait <id> --timeout 0 --json` for: an `agent_question` pause, a pause of another checkpoint kind, a running run, a completed run. Name files for the case. Capture by running real `sq` (the `agent_question` pause comes from `asks_question.yaml`); never hand-write
+  - [x] Copy one real schema-5 run file from `~/.config/squadron/runs/` into `tests/fixtures/squadron/` as the `run_file` fixture; strip nothing that the reader parses
+  - [x] Add `tests/fixtures/squadron/README.md` with `sq --version` and capture date
+  - [x] If a case cannot be captured, write `BLOCKED: cannot record <case>` under this task and stop
+  - [x] Success: each JSON fixture parses; the pause fixture has `checkpoint.kind`, `paused_at` and `question`
+  - Note: `asks_question.yaml` is a one-step `dispatch` that declares `artifact: design` and has no `slice` param; with none in scope Squadron's artifact post-condition fails and, because the reply ends on a question mark, the run pauses as `agent_question` (Squadron #249). An `implement` step would need `branch: enter` and a `slice` param, which would defeat the no-slice walkthrough. Recordings captured 20261110 with `sq` 0.24.25 in `tests/fixtures/squadron/`: `wait_paused_agent_question.json` (exit 3), `wait_paused_interactive_checkpoint.json` (exit 3, a real older local `slice` run, kind `interactive_checkpoint`), `wait_running.json` (exit 4, outcome `timed_out`), `wait_completed.json` (exit 0), `run_file_schema5.json` (real run file of the agent_question run, `params` {model}, mode `sdk`; keeps this machine's `pipeline_path`). Run ids in the recordings are the real captured ids; the fake `sq` helper re-addresses `run_id` to the id a test registers.
 
-- [ ] **2.3 Fake `sq` helper**
-  - [ ] Add a test helper that writes a fake `sq` first on `PATH`: replays a named fixture for `sq runs wait`, records its argv to a file for `sq run …` (including `--resume` with `--instructions`), exits with a configured code. A second helper returns an injectable `poll_run` fake
-  - [ ] Success: running the written script with the pause fixture prints that fixture; a `sq run` call appears in the argv record
+- [x] **2.3 Fake `sq` helper**
+  - [x] Add a test helper that writes a fake `sq` first on `PATH`: replays a named fixture for `sq runs wait`, records its argv to a file for `sq run …` (including `--resume` with `--instructions`), exits with a configured code. A second helper returns an injectable `poll_run` fake
+  - [x] Success: running the written script with the pause fixture prints that fixture; a `sq run` call appears in the argv record
+  - Note: helper is `tests/fake_sq.py` (`write_fake_sq`, `FakeSq.run_calls`, `fake_poller`, `poll_result`, `failing_poll`), tested in `tests/test_fake_sq.py`. The existing `tests/sq_stub*.py` stub is a different, stateful design for the launch/resume tests and is left alone.
 
-- [ ] **2.4 Run file reader (D1, D2)**
-  - [ ] Create `upstream/squadron/run_file.py`: `ExecutionMode` (`StrEnum`: `sdk`, `prompt-only`), `RunFacts(params: dict[str, str], execution_mode)`, `RunFileProblem` (names file and field), `read_run_facts(runs_dir, run_id) -> RunFacts | RunFileProblem`. Check `schema_version` is 5. Missing file, other version, bad JSON, missing field and unknown mode are each a `RunFileProblem`
-  - [ ] Imports nothing from `answering`; `runs_dir` is an argument
-  - [ ] Add `tests/upstream/test_run_file.py`: the real fixture parses with the right params and mode; one test per problem kind; no case returns `sdk` by default
-  - [ ] Success: tests pass
+- [x] **2.4 Run file reader (D1, D2)**
+  - [x] Create `upstream/squadron/run_file.py`: `ExecutionMode` (`StrEnum`: `sdk`, `prompt-only`), `RunFacts(params: dict[str, str], execution_mode)`, `RunFileProblem` (names file and field), `read_run_facts(runs_dir, run_id) -> RunFacts | RunFileProblem`. Check `schema_version` is 5. Missing file, other version, bad JSON, missing field and unknown mode are each a `RunFileProblem`
+  - [x] Imports nothing from `answering`; `runs_dir` is an argument
+  - [x] Add `tests/upstream/test_run_file.py`: the real fixture parses with the right params and mode; one test per problem kind; no case returns `sdk` by default
+  - [x] Success: tests pass
 
 **Commit**: `feat: add run file reader, home paths and Squadron recordings`
 

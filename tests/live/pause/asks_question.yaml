@@ -1,0 +1,22 @@
+# A pipeline whose one step ends on a question (slice 223, D15). The question is
+# about the file length limit, which this repository's CLAUDE.md settles, so the
+# answering pipeline can answer it from the member's rules.
+#
+# Squadron pauses a step as `agent_question` when the step declares an artifact, none
+# is written and the agent's reply has a line ending in a question mark (Squadron
+# #249). The run has no `slice` parameter, so it exercises the no-slice path (D5).
+name: asks-question
+description: Stop on a question about file length limits
+
+params:
+  model: required
+
+steps:
+  - dispatch:
+      name: ask
+      model: "{model}"
+      artifact: design
+      prompt: |
+        Do not edit any file and do not run any command. Reply with exactly one
+        sentence that ends with a question mark and asks what the maximum length
+        of a source file in this repository is, then stop.
