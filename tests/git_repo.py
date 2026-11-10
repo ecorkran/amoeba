@@ -10,6 +10,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from live_environment import process_environment
+
 IDENTITY = ("-c", "user.name=Amoeba Test", "-c", "user.email=test@example.invalid")
 
 
@@ -21,7 +23,7 @@ def git(
 ) -> subprocess.CompletedProcess[str]:
     """Run ``git`` in ``repo``; a non-zero exit raises unless ``check`` is False.
 
-    ``env`` adds variables to the inherited environment for this call only.
+    ``env`` adds variables to the named process variables for this call only.
     """
     return subprocess.run(
         ["git", *IDENTITY, *args],
@@ -29,7 +31,7 @@ def git(
         capture_output=True,
         text=True,
         check=check,
-        env={**os.environ, **env} if env else None,
+        env=process_environment(os.environ, **env) if env else None,
     )
 
 

@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 import yaml
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf
+from live_environment import process_environment
 from process_containment import contained_popen
 from user_configs import example_config_text
 
@@ -33,7 +34,11 @@ def _run(
 ) -> subprocess.CompletedProcess[str]:
     bin_dir = tmp_path / "bin"
     write_fake_cf(bin_dir, cf_fixture)
-    environment = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+    environment = process_environment(
+        os.environ,
+        PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        AMOEBA_HOME=os.environ["AMOEBA_HOME"],
+    )
     child = contained_popen(
         [str(AMOEBA), *arguments],
         stdin=subprocess.PIPE,

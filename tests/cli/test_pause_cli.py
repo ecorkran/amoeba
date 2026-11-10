@@ -27,6 +27,7 @@ from fake_sq import (
     poll_result,
     write_fake_sq,
 )
+from live_environment import process_environment
 from process_containment import contained_popen
 from user_configs import example_config_text
 
@@ -72,11 +73,12 @@ def _run(
     write_fake_cf(bin_dir, DEFAULT_WORKTREE)
     if not with_sq:
         (bin_dir / "sq").unlink(missing_ok=True)
-    environment = {
-        **os.environ,
-        "PATH": f"{bin_dir}{os.pathsep}{SYSTEM_PATH}",
-        "HOME": str(_home(tmp_path)),
-    }
+    environment = process_environment(
+        os.environ,
+        PATH=f"{bin_dir}{os.pathsep}{SYSTEM_PATH}",
+        HOME=str(_home(tmp_path)),
+        AMOEBA_HOME=os.environ["AMOEBA_HOME"],
+    )
     child = contained_popen(
         [str(AMOEBA), *arguments],
         stdin=subprocess.DEVNULL,

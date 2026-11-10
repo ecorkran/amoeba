@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+from live_environment import process_environment
 from process_containment import contained_popen
 from sq_stub import (
     LOG_ENV,
@@ -46,13 +47,15 @@ class Rig:
         self.cwd: Path | None = None
 
     def env(self, **extra: str) -> dict[str, str]:
-        return {
-            **os.environ,
-            "HOME": str(self.home),
-            LOG_ENV: str(self.log),
-            RUN_SECONDS_ENV: "0",
-            **extra,
-        }
+        return process_environment(
+            os.environ,
+            **{
+                "HOME": str(self.home),
+                LOG_ENV: str(self.log),
+                RUN_SECONDS_ENV: "0",
+                **extra,
+            },
+        )
 
     def start(self, *arguments: str, **extra: str) -> subprocess.Popen[str]:
         return contained_popen(

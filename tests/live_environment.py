@@ -43,6 +43,16 @@ PROVIDER_VARIABLES: Final = (
 PIPELINE_VARIABLES: Final = (*PROCESS_VARIABLES, *PROVIDER_VARIABLES)
 
 
+def process_environment(environ: Mapping[str, str], **extra: str) -> dict[str, str]:
+    """The named process variables of ``environ`` that are set, plus ``extra``.
+
+    For test subprocesses that need no credentials: the whole test-run environment
+    is never passed on (the testing rules, "Never inject a whole `.env`").
+    """
+    named = {name: environ[name] for name in PROCESS_VARIABLES if name in environ}
+    return {**named, **extra}
+
+
 def pipeline_environment(environ: Mapping[str, str]) -> dict[str, str]:
     """The named variables of ``environ`` that are set; nothing else."""
     return {name: environ[name] for name in PIPELINE_VARIABLES if name in environ}

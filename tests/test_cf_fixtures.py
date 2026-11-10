@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -88,9 +87,7 @@ def test_script_in_failure_mode_exits_nonzero(tmp_path: Path) -> None:
 def test_script_replays_a_recording(tmp_path: Path) -> None:
     script = write_fake_cf(tmp_path / "bin", DEFAULT_WORKTREE)
 
-    completed = subprocess.run(
-        [str(script)], capture_output=True, text=True, env=os.environ
-    )
+    completed = subprocess.run([str(script)], capture_output=True, text=True)
 
     assert completed.returncode == 0
     assert completed.stdout == fixture_text(DEFAULT_WORKTREE)

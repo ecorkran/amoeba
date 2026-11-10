@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 
+from live_environment import process_environment
 from process_containment import contained_popen
 
 from amoeba.operations.set_up_models import SetUpOutcome
@@ -24,7 +25,7 @@ FINISH_TIMEOUT_SECONDS = 60.0
 
 
 def _start(store_path: Path, gate: Path, number: int) -> subprocess.Popen[str]:
-    environment = {**os.environ, "PYTHONPATH": str(TESTS_DIRECTORY)}
+    environment = process_environment(os.environ, PYTHONPATH=str(TESTS_DIRECTORY))
     return contained_popen(
         [sys.executable, str(WORKER), str(store_path), str(gate), str(number)],
         stdout=subprocess.PIPE,

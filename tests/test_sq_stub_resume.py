@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from live_environment import process_environment
 from sq_stub import (
     STUB_STATE_RELATIVE,
     write_outcome_document,
@@ -51,12 +52,14 @@ class Rig:
         )
 
     def resume(self, *arguments: str, **extra: str) -> subprocess.CompletedProcess[str]:
-        env = {
-            **os.environ,
-            "HOME": str(self.home),
-            RESUME_ARGV_LOG_ENV: str(self.argv_log),
-            **extra,
-        }
+        env = process_environment(
+            os.environ,
+            **{
+                "HOME": str(self.home),
+                RESUME_ARGV_LOG_ENV: str(self.argv_log),
+                **extra,
+            },
+        )
         return subprocess.run(
             [sys.executable, str(self.stub), "run", "--resume", *arguments],
             env=env,
