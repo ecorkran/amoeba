@@ -20,6 +20,8 @@ from amoeba.upstream.squadron.run_outcome import RunPoll
 START = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
 #: A pid no process holds, so a stray group stop reaches nothing.
 UNUSED_PID = 2_000_000_000
+#: What a child killed by SIGTERM reports.
+KILLED_EXIT_CODE = -15
 
 
 @dataclass
@@ -59,6 +61,9 @@ class FakeChild:
         return self.exit_code
 
     def wait(self, timeout: float | None = None) -> int:
+        if self.exit_code is None and timeout is None:
+            # A wait with no timeout after a group stop: the child is gone.
+            self.exit_code = KILLED_EXIT_CODE
         if self.exit_code is None:
             raise subprocess.TimeoutExpired("fake", timeout or 0)
         return self.exit_code

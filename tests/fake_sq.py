@@ -42,6 +42,10 @@ PAUSED_INTERACTIVE: Final = "wait_paused_interactive_checkpoint.json"
 RUNNING: Final = "wait_running.json"
 COMPLETED: Final = "wait_completed.json"
 RUN_FILE: Final = "run_file_schema5.json"
+#: The run-lock recording: paused, then running under the first resume.
+LOCK_BEFORE: Final = "resume_lock_before.json"
+LOCK_DURING: Final = "resume_lock_during.json"
+LOCK_REFUSED_STDOUT: Final = "resume_lock_refused.stdout.txt"
 
 CONFIG_FILE: Final = "fake_sq.json"
 ARGV_RECORD_FILE: Final = "sq_argv.jsonl"

@@ -1,0 +1,24 @@
+{
+  "run_id": "amoeba-fixture-lock-3",
+  "outcome": "paused",
+  "status": "paused",
+  "pipeline": "asks_question",
+  "started_at": "2026-11-10T14:38:12.965233+00:00",
+  "updated_at": "2026-11-10T14:38:15.078747+00:00",
+  "checkpoint": {
+    "kind": "agent_question",
+    "step": "ask",
+    "step_type": "dispatch",
+    "is_loop": false,
+    "round": null,
+    "max_rounds": null,
+    "verdict": null,
+    "review_file": null,
+    "reason": "could not resolve expected design artifact path: no 'slice' param in scope; agent's final text: \"What is the maximum length of a source file in this repository?\"",
+    "paused_at": "2026-11-10T14:38:15.077930+00:00",
+    "resets_at": null,
+    "question": "What is the maximum length of a source file in this repository?"
+  },
+  "failure": null,
+  "reviews": []
+}

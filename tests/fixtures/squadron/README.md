@@ -30,3 +30,26 @@ Each is stdout of one call (the exit code is in the second column).
 It is unedited, so it holds this machine's path to the pipeline file in
 `pipeline_path`. Its `paused_at` is written `…Z`; `sq runs wait --json` prints the
 same instant as `…+00:00` (slice 223, D1: only the `wait` form is ever stored).
+
+## The run lock (slice 223, task 6.0a)
+
+Captured 20261110 with `sq` 0.24.25 on a real `agent_question` run
+(`tests/live/pause/asks_question.yaml`, run id `amoeba-fixture-lock-3`): one
+`sq run --resume <id> --instructions ...` was started and left running, then a second
+`sq run --resume <id> --instructions "second resume"` was started on the same run.
+
+| File | What it is |
+| --- | --- |
+| `resume_lock_before.json` | `sq runs wait --timeout 0 --json` before either resume: `paused`, exit 3 |
+| `resume_lock_during.json` | the same call 1.2 s after the first resume started: `timed_out` / `running`, exit 4 |
+| `resume_lock_refused.stdout.txt` | stdout of the **second** resume |
+| `resume_lock_refused.stderr.txt` | stderr of the second resume: **empty** |
+| `resume_lock_after.json` | the same call right after the second resume exited: still `running` (the first holds it), exit 4 |
+
+Observed: the second resume **exits 1** (not 2), prints
+`Error: Run '<id>' is still running under pid <pid> on <host>.` on **stdout**, and
+leaves stderr empty. The run was `running` under the first resume, not at the pause.
+So a refusal detail read from stderr alone is empty; `resume` reads stderr and falls
+back to stdout. A held lock is judged by "child exited, run still at this pause" and
+never by the exit code (D8); when the poll after the refusal already shows the
+holder's `running`, the loser reports `resumed` too (the run is running).

@@ -1,0 +1,11 @@
+{
+  "run_id": "amoeba-fixture-lock-3",
+  "outcome": "timed_out",
+  "status": "running",
+  "pipeline": "asks_question",
+  "started_at": "2026-11-10T14:38:12.965233+00:00",
+  "updated_at": "2026-11-10T14:38:17.576592+00:00",
+  "checkpoint": null,
+  "failure": null,
+  "reviews": []
+}

@@ -70,6 +70,12 @@ def answers_of(transaction: Transaction, key: QuestionKey) -> tuple[AnswerRecord
     return tuple(_answer(row) for row in rows)
 
 
+def get_answer(transaction: Transaction, seq: int) -> AnswerRecord | None:
+    """The answer row with this ``seq``."""
+    row = transaction.execute(sql.SELECT_ANSWER, (seq,)).fetchone()
+    return None if row is None else _answer(row)
+
+
 def latest_answer(transaction: Transaction, key: QuestionKey) -> AnswerRecord | None:
     """The answer with the highest ``seq``: the one a resume delivers."""
     row = transaction.execute(

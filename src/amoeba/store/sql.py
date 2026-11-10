@@ -149,6 +149,7 @@ SELECT_ANSWERS_OF: Final = (
     f"SELECT {_ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq"
 )
+SELECT_ANSWER: Final = f"SELECT {_ANSWER_COLUMNS} FROM answers WHERE seq = ?"
 SELECT_LATEST_ANSWER: Final = (
     f"SELECT {_ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq DESC LIMIT 1"

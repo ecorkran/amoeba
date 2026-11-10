@@ -290,30 +290,40 @@ usageByModel:
 
 ## 6. Resume (D8)
 
-- [ ] **6.0 `ResumeResult` model**
-  - [ ] Create `operations/pause_models.py` with `ResumeResult` (`outcome`: `resumed`, `refused`, `not_delivered`; `detail`; `resume_log`). Task 7.1 adds the other models to this file
-  - [ ] Success: module imports; pyright strict clean
+- [x] **6.0 `ResumeResult` model**
+  - [x] Create `operations/pause_models.py` with `ResumeResult` (`outcome`: `resumed`, `refused`, `not_delivered`; `detail`; `resume_log`). Task 7.1 adds the other models to this file
+  - [x] Success: module imports; pyright strict clean
+  - Note: `ResumeResult` is in `operations/pause_models.py`.
 
-- [ ] **6.0a Check the run lock against the real `sq`**
-  - [ ] Before any resume code: with the real `sq`, pause a run (`tests/live/pause/asks_question.yaml`), start one `sq run --resume <id>` that holds the run lock, and start a second `sq run --resume <id>` on the same run. Record the second's exit code, stderr text and whether the run stayed at the pause, under `tests/fixtures/squadron/` (README: `sq --version`, date). Never hand-write it
-  - [ ] Decide from the observation: D8 judges `refused` by "child exited, run still at this pause", whatever the exit code. If the held lock exits 2 or anything else, note it; do not carry `resume_progress`'s "exit 2 means refused" rule into new code (if `has_left` or `is_at` from `confirm.py` are reused, only the checkpoint compare is)
-  - [ ] If the lock cannot be provoked, write `BLOCKED: cannot provoke the run lock` under this task and stop
-  - [ ] Success: the fixture and a note of the observed exit code and stderr exist; the 6.2 refused-branch test replays that fixture
+- [x] **6.0a Check the run lock against the real `sq`**
+  - [x] Before any resume code: with the real `sq`, pause a run (`tests/live/pause/asks_question.yaml`), start one `sq run --resume <id>` that holds the run lock, and start a second `sq run --resume <id>` on the same run. Record the second's exit code, stderr text and whether the run stayed at the pause, under `tests/fixtures/squadron/` (README: `sq --version`, date). Never hand-write it
+  - [x] Decide from the observation: D8 judges `refused` by "child exited, run still at this pause", whatever the exit code. If the held lock exits 2 or anything else, note it; do not carry `resume_progress`'s "exit 2 means refused" rule into new code (if `has_left` or `is_at` from `confirm.py` are reused, only the checkpoint compare is)
+  - [x] If the lock cannot be provoked, write `BLOCKED: cannot provoke the run lock` under this task and stop (not triggered: the lock was provoked)
+  - [x] Success: the fixture and a note of the observed exit code and stderr exist; the 6.2 refused-branch test replays that fixture
+  - Note (observed 20261110, sq 0.24.25, real run `amoeba-fixture-lock-3`; recordings `tests/fixtures/squadron/resume_lock_*`, README section "The run lock"): the second `sq run --resume <id>` while the first held the run **exits 1** (not 2), prints `Error: Run '<id>' is still running under pid <pid> on <host>.` on **stdout**, and leaves **stderr empty**; the run was `running` under the first resume (not at the pause).
+    - Consequences recorded in code: the refusal detail reads the stderr tail and falls back to the stdout tail; refusal is judged by "child gone and run still at this pause", never the exit code; when the poll already shows the holder's `running`, the loser reports `resumed` as well (the run is running).
+    - No "exit 2 means refused" rule was carried over, and `has_left`/`is_at` were not reused.
+    - The 6.2 refused-branch test replays the recorded stdout message and exit code 1 with an empty stderr.
 
-- [ ] **6.1 Implement `resume.py`**
-  - [ ] `resume.resume(store, question, answer_seq, *, deps) -> ResumeResult`. `RESUME_POLL_INTERVAL_SECONDS = 0.5` defined in the module
-  - [ ] Step 1: `poll_run(run_id)`; not `paused` or a different `paused_at` gives `not_delivered`, nothing started
-  - [ ] Step 2: argv is the kept `resume_argv(run_id, compose_instructions(question, answer))` (`upstream.squadron.resume_argv`), started via `processes.start_child` (the kept `spawn`), `cwd = questions.checkout`, logs as a `LaunchLogs` at `logs_dir() / "resume" / <run_id> / <answer_seq>-<UTC stamp>.{stdout,stderr}.log` (stdout path is `resume_log`); a `LaunchError` is `refused`
-  - [ ] Step 3: poll every interval up to `resume_wait_seconds`. `running`, or moved past (other `paused_at`, `completed`, `failed`) is `resumed`; child exited with the run still at this pause is `refused` with `stderr_tail` as detail; timeout with child alive and run unchanged: terminate the process group, wait for exit, poll once more; still at this pause is `refused` (`not running after <n> seconds`), `running` or moved past is `resumed` (`resume process terminated after taking the run`)
-  - [ ] Step 4: `record_resume`
-  - [ ] Success: module imports; pyright strict clean
+- [x] **6.1 Implement `resume.py`**
+  - [x] `resume.resume(store, question, answer_seq, *, deps) -> ResumeResult`. `RESUME_POLL_INTERVAL_SECONDS = 0.5` defined in the module
+  - [x] Step 1: `poll_run(run_id)`; not `paused` or a different `paused_at` gives `not_delivered`, nothing started
+  - [x] Step 2: argv is the kept `resume_argv(run_id, compose_instructions(question, answer))` (`upstream.squadron.resume_argv`), started via `processes.start_child` (the kept `spawn`), `cwd = questions.checkout`, logs as a `LaunchLogs` at `logs_dir() / "resume" / <run_id> / <answer_seq>-<UTC stamp>.{stdout,stderr}.log` (stdout path is `resume_log`); a `LaunchError` is `refused`
+  - [x] Step 3: poll every interval up to `resume_wait_seconds`. `running`, or moved past (other `paused_at`, `completed`, `failed`) is `resumed`; child exited with the run still at this pause is `refused` with `stderr_tail` as detail; timeout with child alive and run unchanged: terminate the process group, wait for exit, poll once more; still at this pause is `refused` (`not running after <n> seconds`), `running` or moved past is `resumed` (`resume process terminated after taking the run`)
+  - [x] Step 4: `record_resume`
+  - [x] Success: module imports; pyright strict clean
+  - Note: `resume(store, question, answer_seq, *, deps, wait_seconds)` takes `wait_seconds` (the `resume_wait_seconds` config value) as a keyword. It reads the answer text through the new `store.answers.get_answer(seq)`.
+    - `upstream/squadron/errors.py::SquadronError` added. An unreadable first poll raises it, with nothing started or written; 7.2 and 8.1 use it.
+    - `RunCheckpoint.paused_at_text` added in `run_outcome.py` (`paused_at.isoformat()`). It reproduces the recorded `paused_at` text exactly on three real recordings; the key's `paused_at` is always made this one way.
+    - Polls after the child starts that are unreadable or show `not_found`/`unknown` status are `unclear`: the loop keeps waiting, and the final result is `refused`.
+    - Resume log names: `<logs>/resume/<run_id>/<answer_seq>-<UTC stamp with microseconds>.{stdout,stderr}.log`.
 
-- [ ] **6.2 Resume tests**
-  - [ ] Every branch with injected poller and spawner: not paused, different `paused_at`, running, moved past, paused again before a poll saw running, child exited at the pause with stderr tail (using the real exit code and stderr recorded in 6.0a), timeout then still paused, timeout then running after the kill
-  - [ ] `--instructions` is a single argv element holding the composed text, including text with spaces, quotes and a leading `…`
-  - [ ] `resumed` and `not_delivered` are never overwritten; of two racing resumes the second's refusal does not replace the first's `resumed`
-  - [ ] No store transaction is open while spawning or polling
-  - [ ] Success: tests pass
+- [x] **6.2 Resume tests**
+  - [x] Every branch with injected poller and spawner: not paused, different `paused_at`, running, moved past, paused again before a poll saw running, child exited at the pause with stderr tail (using the real exit code and stderr recorded in 6.0a), timeout then still paused, timeout then running after the kill
+  - [x] `--instructions` is a single argv element holding the composed text, including text with spaces, quotes and a leading `…`
+  - [x] `resumed` and `not_delivered` are never overwritten; of two racing resumes the second's refusal does not replace the first's `resumed`
+  - [x] No store transaction is open while spawning or polling
+  - [x] Success: tests pass
 
 **Commit**: `feat: add shared resume for paused runs`
 
