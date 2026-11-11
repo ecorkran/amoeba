@@ -11,8 +11,8 @@ projectState: Slices 221 to 223 are merged. `src/amoeba` holds `answering/`, `up
   `handle_pause` and `answer` CLI commands. No read-side operation exists. Nobody
   has run Amoeba. `ecorkran/squadron#303` (`sq runs list --json`) shipped in `sq` 0.24.24.
 dateCreated: 20261107
-dateUpdated: 20261108
-status: not_started
+dateUpdated: 20261111
+status: in_progress
 turns: 12
 promptTokens: 408751
 cachedTokens: 350906
@@ -47,38 +47,42 @@ usageByModel:
 
 ## 0. Setup
 
-- [ ] **0.1 Create the branch**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
-  - [ ] Confirm the working tree is clean and you are on the target
-  - [ ] `git checkout -b 224-slice.status-and-decisions {target}`
-  - [ ] Success: `git branch --show-current` prints `224-slice.status-and-decisions`
+- [x] **0.1 Create the branch**
+  - [x] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
+  - [x] Confirm the working tree is clean and you are on the target
+  - [x] `git checkout -b 224-slice.status-and-decisions {target}`
+  - [x] Success: `git branch --show-current` prints `224-slice.status-and-decisions`
+  - Note: Branch `224-slice.status-and-decisions` already existed (zero commits ahead of `main`, target `main`, tree clean); no new branch created.
 
-- [ ] **0.2 Confirm 223 and locate inputs**
-  - [ ] Confirm `src/amoeba/operations/handle_pause.py`, `answer.py`, `deps.py`, `store/questions.py`, `store/answers.py` and `upstream/squadron/run_file.py` exist and `amoeba handle_pause --help` runs; if not, write `BLOCKED: slice 223 not merged` under this task and stop
-  - [ ] Find the module and signature of each of: `poll_run` and its checkpoint parser, `read_run_facts`, `RunFacts`, `ExecutionMode`, `RunFileProblem`, `SkipReason`, `QuestionState`, `ResumeOutcome`, `PassageRef`, `AnsweringEvidence`, `Deps`, `answering_dir`, `answering_wait_seconds` (config), `resolve_member`, `project_of`, `members_of`, `programs`, `run_cf`, `CFProjectNotFound`, `CfCallFailed`, the exit-code constants, the typed errors, and the checks inside `pause_eligibility.py` and `pause_existing.py` (note "absent" for any that don't exist); note import paths
-  - [ ] Read the audit sections named in the Context Summary and the design's "Audit items". Note whether `src/amoeba/program/`, `src/amoeba/inspection/` and `src/amoeba/process/` still exist; if `program/` does, it is deleted in task 3.8 (no member readability). Note where `poll_run`, `SQ_EXECUTABLE` and `run_cf` landed (221 expects `upstream/squadron/run_outcome.py` and `upstream/context_forge/cli_call.py`)
-  - [ ] Find the columns of `questions`, `answers` and `pm_marker` in the migrations (names of the `seq`, `recorded_at`, `answered_by`, `cited`, `resume_*`, `last_seen_seq` columns)
-  - [ ] Check whether `sq runs list --json` exists in the installed `sq` (`sq runs list --help`); note the result under this task
-  - [ ] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
-  - [ ] Success: a note lists each import path, the column names, the `sq runs list` result and the baseline result
+- [x] **0.2 Confirm 223 and locate inputs**
+  - [x] Confirm `src/amoeba/operations/handle_pause.py`, `answer.py`, `deps.py`, `store/questions.py`, `store/answers.py` and `upstream/squadron/run_file.py` exist and `amoeba handle_pause --help` runs; if not, write `BLOCKED: slice 223 not merged` under this task and stop
+  - [x] Find the module and signature of each of: `poll_run` and its checkpoint parser, `read_run_facts`, `RunFacts`, `ExecutionMode`, `RunFileProblem`, `SkipReason`, `QuestionState`, `ResumeOutcome`, `PassageRef`, `AnsweringEvidence`, `Deps`, `answering_dir`, `answering_wait_seconds` (config), `resolve_member`, `project_of`, `members_of`, `programs`, `run_cf`, `CFProjectNotFound`, `CfCallFailed`, the exit-code constants, the typed errors, and the checks inside `pause_eligibility.py` and `pause_existing.py` (note "absent" for any that don't exist); note import paths
+  - [x] Read the audit sections named in the Context Summary and the design's "Audit items". Note whether `src/amoeba/program/`, `src/amoeba/inspection/` and `src/amoeba/process/` still exist; if `program/` does, it is deleted in task 3.8 (no member readability). Note where `poll_run`, `SQ_EXECUTABLE` and `run_cf` landed (221 expects `upstream/squadron/run_outcome.py` and `upstream/context_forge/cli_call.py`)
+  - [x] Find the columns of `questions`, `answers` and `pm_marker` in the migrations (names of the `seq`, `recorded_at`, `answered_by`, `cited`, `resume_*`, `last_seen_seq` columns)
+  - [x] Check whether `sq runs list --json` exists in the installed `sq` (`sq runs list --help`); note the result under this task
+  - [x] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
+  - [x] Success: a note lists each import path, the column names, the `sq runs list` result and the baseline result
+  - Note: Import paths (all exist; `amoeba handle_pause --help` runs): `operations/{handle_pause,answer,deps,pause_eligibility,pause_existing,pause_models,pause_results,pause_claim,members}.py`; `store/{questions,answers,programs,models,vocabulary,question_json,row_values}.py`; `upstream/squadron/{run_file,run_outcome,errors}.py`; `upstream/context_forge/{cli_call,project_of,target_read}.py`. `poll_run`, `SQ_EXECUTABLE`, `RunCheckpoint` (the checkpoint parser; `paused_at_text`), `parse_checkpoint_kind`, `CheckpointKind`, `RunOutcome` in `upstream/squadron/run_outcome.py`; `read_run_facts`, `RunFacts`, `ExecutionMode`, `RunFileProblem` in `upstream/squadron/run_file.py`; `QuestionState`, `ResumeOutcome` in `store/vocabulary.py`; `PassageRef`, `AnsweringEvidence`, `AnsweredBy`, `DeclineReason` in `answering/values.py`; `Deps` (+`production_deps`, `RUN_POLL_TIMEOUT_SECONDS`) in `operations/deps.py`; `answering_dir`, `store_path`, `config_path`, `squadron_runs_dir` in `config/home.py`; `answering_wait_seconds` on `UserConfig` (`config/user_config.py`); `resolve_member`, `ContextForgeError`, `NotAProject`, `NotInProgram` in `operations/members.py`; `project_of`, `CFProject`, `CFProjectNotFound` in `upstream/context_forge/project_of.py`; `run_cf`, `CfCallFailed`, `CfRun`, `output_head` in `upstream/context_forge/cli_call.py` (`CF_*` command words in `target_read.py`, pinned by a defined-once test); `SquadronError` in `upstream/squadron/errors.py`; exit codes `EXIT_OK/REJECTED/USAGE/ERROR` in `cli/main.py`; `StoreError`/`StoreRowError` in `store/errors.py`; `programs`: absent as a function (only `get_program`, `get_member`, `members_of`, `member_settings` in `store/programs.py`; 3.3 adds the list-all read); `project_names`, `list_runs`: absent. Checks formerly in `pause_eligibility.py`/`pause_existing.py`: run/kind/text, answering_run, membership, prompt-only, other_member, and row-state dispatch. `src/amoeba/program/`, `inspection/`, `process/` do not exist (nothing to delete in 3.8). Columns: questions: run_id, paused_at, member_id, question, checkout, state, answering_run_id, waiting_reason, claimed_at, updated_at (001) + slice_label, source_commit, passages, waiting_detail, evidence (002); answers: seq, run_id, paused_at, answered_by, answer, recorded_at, resume_outcome (001) + cited, resume_detail, resume_log, resume_at (002); pm_marker: id, last_seen_seq. `sq` is 0.24.26 and has `sq runs list --json` (so 3.1's stand-ins are skipped; 5.1's recording is done in 3.1). `cf` is 0.19.26. Baseline: format, ruff, pyright clean; 1221 tests pass.
 
 ## 1. Extract `classify_pause` (D3)
 
-- [ ] **1.1 `PauseClass` and `classify_pause` and tests**
-  - [ ] Create `operations/pause_class.py` with `PauseClass` (`StrEnum`, the ten D3 classes: `not_paused`, `other_checkpoint`, `no_question_text`, `prompt_only`, `unhandled`, `claim_live`, `claim_stale`, `waiting_on_pm`, `answered_unresumed`, `settled`) and `classify_pause(outcome, question_row, latest_answer, run_facts, claim_age_limit, now) -> PauseClass`
-  - [ ] Implement from the checks now in `pause_eligibility.py` and `pause_existing.py`, in the D3 table's rules. `run_facts` is passed as a value; the function reads no file, store or process. `not_paused` first, then kind, then question text; with no row, `execution_mode` picks `prompt_only` or `unhandled`; with a row, state and latest answer outcome pick the rest, and claim age against `claim_age_limit` picks `claim_live` or `claim_stale`
-  - [ ] The module imports nothing from `store` or `upstream.squadron` except value types
-  - [ ] One test per `PauseClass`, built from the D3 table's "When" column. Include: claim exactly at the limit, `answered` with latest outcome null, `refused`, `resumed` and `not_delivered`, no row with each `execution_mode`
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **1.1 `PauseClass` and `classify_pause` and tests**
+  - [x] Create `operations/pause_class.py` with `PauseClass` (`StrEnum`, the ten D3 classes: `not_paused`, `other_checkpoint`, `no_question_text`, `prompt_only`, `unhandled`, `claim_live`, `claim_stale`, `waiting_on_pm`, `answered_unresumed`, `settled`) and `classify_pause(outcome, question_row, latest_answer, run_facts, claim_age_limit, now) -> PauseClass`
+  - [x] Implement from the checks now in `pause_eligibility.py` and `pause_existing.py`, in the D3 table's rules. `run_facts` is passed as a value; the function reads no file, store or process. `not_paused` first, then kind, then question text; with no row, `execution_mode` picks `prompt_only` or `unhandled`; with a row, state and latest answer outcome pick the rest, and claim age against `claim_age_limit` picks `claim_live` or `claim_stale`
+  - [x] The module imports nothing from `store` or `upstream.squadron` except value types
+  - [x] One test per `PauseClass`, built from the D3 table's "When" column. Include: claim exactly at the limit, `answered` with latest outcome null, `refused`, `resumed` and `not_delivered`, no row with each `execution_mode`
+  - [x] Success: module imports; pyright strict clean; tests pass
 
-- [ ] **1.2 Wire `handle_pause` to `classify_pause`**
-  - [ ] Replace the run, row and run-file checks in `handle_pause` and its helpers with a call to `classify_pause`, mapping each class to the action in D3's `handle_pause` column. The `answering_run` and membership checks stay before it. A `RunFileProblem` still raises `SquadronError`. `SkipReason` values do not change. `run_facts` is read only when no row exists and the run is a paused `agent_question`
-  - [ ] Success: module imports; pyright strict clean
-  - [ ] Success: 223's `handle_pause` and `answer` tests pass unchanged (no edit to them)
+- [x] **1.2 Wire `handle_pause` to `classify_pause`**
+  - [x] Replace the run, row and run-file checks in `handle_pause` and its helpers with a call to `classify_pause`, mapping each class to the action in D3's `handle_pause` column. The `answering_run` and membership checks stay before it. A `RunFileProblem` still raises `SquadronError`. `SkipReason` values do not change. `run_facts` is read only when no row exists and the run is a paused `agent_question`
+  - [x] Success: module imports; pyright strict clean
+  - [x] Success: 223's `handle_pause` and `answer` tests pass unchanged (no edit to them)
+  - Note: Deviation: `check_eligibility` keeps reading `run_facts` after the membership check whatever the row state (as in 223), instead of only when no row exists. Reason: 223's unchanged `test_pause_eligibility` (type-checked by strict pyright) reads `Eligible.run_facts.params` as non-optional, and `restart_dead_claim` needs the facts. `classify_pause` itself still uses `run_facts` only when no row exists, and `status` (3.6) reads them only then. `check_eligibility` uses `classify_run_only`/`classify_no_row` from `pause_class.py`; `handle_pause` calls `classify_pause` and `handle_existing` dispatches on the class (the stale/live claim age now comes from the class).
 
-- [ ] **1.3 Pin `waiting_reason` retention**
-  - [ ] Add a test that `add_pm_answer` and the automatic settle both leave `waiting_reason` and `waiting_detail` in place when they set `answered` (D5). If 223's tests already assert it for both paths, point to them in a note and add nothing
-  - [ ] Success: the pin exists for both paths and passes
+- [x] **1.3 Pin `waiting_reason` retention**
+  - [x] Add a test that `add_pm_answer` and the automatic settle both leave `waiting_reason` and `waiting_detail` in place when they set `answered` (D5). If 223's tests already assert it for both paths, point to them in a note and add nothing
+  - [x] Success: the pin exists for both paths and passes
+  - Note: Added `tests/store/test_waiting_reason_retained.py` (PM answer path and automatic settle path).
 
 **Commit**: `refactor: extract classify_pause from handle_pause`
 
