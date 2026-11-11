@@ -53,3 +53,38 @@ So a refusal detail read from stderr alone is empty; `resume` reads stderr and f
 back to stdout. A held lock is judged by "child exited, run still at this pause" and
 never by the exit code (D8); when the poll after the refusal already shows the
 holder's `running`, the loser reports `resumed` too (the run is running).
+
+## `sq runs list --json` (slice 224, tasks 3.1 and 5.1)
+
+Captured 20261111 with `sq` 0.24.26 on the PM's machine (a dated observation, not a
+pin), called with no `--all`. `runs_list/list_mixed.json` is **a selection of eleven
+elements of that real listing, each element unedited** (the array holds only the chosen
+ones, in the listing's order, re-indented). The full listing had 98 runs. The cases:
+
+| Run id | Case |
+| --- | --- |
+| `run-20261111-p6-fe470d63` | running, with a directory |
+| `demo-push-3` | newer paused `agent_question`, with a directory |
+| `demo-pause-1` | older paused `agent_question`, same directory (made by 223's live fixtures) |
+| `amoeba-20261110T150234Z-8bf24f09cfbb` | paused `agent_question` in another directory (a throwaway test member) |
+| `run-20261105-p6-7dc230a3` | paused `awaits_human`, `working_directory` `null` (run before `sq` 0.24.24) |
+| `run-20261015-p5-8a59ee89` | paused `other`, `null` directory |
+| `run-20261004-p6-8bc5e634` | paused `interactive_checkpoint` with `step`, `verdict` and `review_file` (the extra checkpoint fields), `null` directory |
+| `run-20261110-p6-9ea18232` | failed, with a directory |
+| `run-20261105-effort-compact-acbbe8e8` | failed, `null` directory |
+| `run-20261105-effort-walkthrough-none-e65efbbe` | running, `null` directory |
+| `run-20261106-tasks-plan-711d0fe6` | completed, `null` directory (the default listing still includes some) |
+
+Every listed run is real; none is hand-written or edited. No paused run of another
+checkpoint kind **with** a directory exists on the machine and none could be made
+cheaply (`checkpoint: always` on a dispatch step does not pause), so that case is
+built in test code from a real element by the tests that need it.
+
+`runs_list/list_stderr.txt` is the real stderr of the same call: one warning that 13
+runs reference unavailable pipelines. `--json` stdout is unaffected by it.
+
+**Was `--all` needed?** No. The same machine lists 189 runs with `--all` and 98 without.
+All 32 paused runs of the `--all` listing are in the default listing; the runs it omits
+are `running` or `completed` ones with nothing to resume. So `list_runs` calls `sq runs
+list --json` with no `--all`. The warning's unavailable pipelines do not hide runs: the
+paused runs it concerns are in the stdout JSON (the null-directory ones above).

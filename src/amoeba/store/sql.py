@@ -219,3 +219,40 @@ SELECT_MAX_ANSWER_SEQ: Final = "SELECT COALESCE(MAX(seq), 0) FROM answers"
 RAISE_MARKER: Final = """
 UPDATE pm_marker SET last_seen_seq = MAX(last_seen_seq, ?) WHERE id = 1
 """
+
+
+# --- reads for ``status`` (slice 224, D4) ------------------------------------
+
+
+def placeholders(count: int) -> str:
+    """``count`` bound-parameter marks for an ``IN`` list; never values."""
+    if count < 1:
+        raise ValueError("an IN list needs at least one value")
+    return ", ".join("?" * count)
+
+
+def select_open_questions(member_count: int) -> str:
+    """Every ``waiting_on_pm`` question of the members, oldest first."""
+    return (
+        f"SELECT {QUESTION_COLUMNS} FROM questions "
+        f"WHERE state = ? AND member_id IN ({placeholders(member_count)}) "
+        "ORDER BY claimed_at, rowid"
+    )
+
+
+def select_member_questions(member_count: int) -> str:
+    """Every question of the members, oldest first, so the last of a run is its
+    latest."""
+    return (
+        f"SELECT {QUESTION_COLUMNS} FROM questions "
+        f"WHERE member_id IN ({placeholders(member_count)}) "
+        "ORDER BY claimed_at, rowid"
+    )
+
+
+def select_answers_of_runs(run_count: int) -> str:
+    """Every answer of the runs, in ``seq`` order."""
+    return (
+        f"SELECT {ANSWER_COLUMNS} FROM answers "
+        f"WHERE run_id IN ({placeholders(run_count)}) ORDER BY seq"
+    )

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-
 import pytest
 
-from amoeba.answering.values import AnsweredBy
 from amoeba.operations.pause_class import (
     ObservedPause,
     PauseClass,
@@ -16,8 +13,9 @@ from amoeba.operations.pause_class import (
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from amoeba.upstream.squadron.run_file import ExecutionMode, RunFacts
+from operations.status_support import RUN_NOW, answer_row, question_row
 
-NOW = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
+NOW = RUN_NOW
 LIMIT = 600.0
 KEY = QuestionKey("run-1", "2026-11-11T11:00:00+00:00")
 SDK = RunFacts(params={}, execution_mode=ExecutionMode.SDK)
@@ -28,37 +26,11 @@ ASKING = ObservedPause(
 
 
 def _row(state: QuestionState, *, age_seconds: float = 0.0) -> QuestionRecord:
-    return QuestionRecord(
-        key=KEY,
-        member_id="member-a",
-        question="Which?",
-        checkout="/work",
-        state=state,
-        answering_run_id="answering-1",
-        waiting_reason=None,
-        waiting_detail=None,
-        slice_label=None,
-        source_commit=None,
-        passages=(),
-        evidence=None,
-        claimed_at=NOW - timedelta(seconds=age_seconds),
-        updated_at=NOW - timedelta(seconds=age_seconds),
-    )
+    return question_row(KEY, state, age_seconds=age_seconds)
 
 
 def _answer(outcome: ResumeOutcome | None) -> AnswerRecord:
-    return AnswerRecord(
-        seq=1,
-        key=KEY,
-        answered_by=AnsweredBy.ANSWERER,
-        answer="Yes.",
-        cited=None,
-        recorded_at=NOW,
-        resume_outcome=outcome,
-        resume_detail=None,
-        resume_log=None,
-        resume_at=None,
-    )
+    return answer_row(KEY, outcome)
 
 
 def _classify(

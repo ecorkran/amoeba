@@ -18,6 +18,7 @@ from amoeba.store.answers import (
     Lost,
     Settled,
     add_pm_answer,
+    answer_from_row,
     answers_of,
     automatic_answer_count,
     get_answer,
@@ -26,7 +27,7 @@ from amoeba.store.answers import (
     record_resume,
     settle_answered,
 )
-from amoeba.store.models import QuestionKey, QuestionRecord
+from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
 from amoeba.store.question_json import (
     parse_evidence,
     parse_passages,
@@ -56,6 +57,8 @@ __all__ = [
     "insert_question",
     "latest_answer",
     "latest_question",
+    "latest_rows_by_run",
+    "open_questions",
     "pm_precedent",
     "record_resume",
     "replace_claim",
@@ -105,6 +108,52 @@ def latest_question(transaction: Transaction, run_id: str) -> QuestionRecord | N
     """The run's question with the latest ``claimed_at``."""
     row = transaction.execute(sql.SELECT_LATEST_QUESTION, (run_id,)).fetchone()
     return None if row is None else question_from_row(row)
+
+
+def open_questions(
+    transaction: Transaction, member_ids: Sequence[str]
+) -> tuple[QuestionRecord, ...]:
+    """Every ``waiting_on_pm`` question of these members, oldest first by
+    ``claimed_at``."""
+    if not member_ids:
+        return ()
+    rows = transaction.execute(
+        sql.select_open_questions(len(member_ids)),
+        (QuestionState.WAITING_ON_PM.value, *member_ids),
+    ).fetchall()
+    return tuple(question_from_row(row) for row in rows)
+
+
+def latest_rows_by_run(
+    transaction: Transaction, member_ids: Sequence[str]
+) -> dict[str, tuple[QuestionRecord, AnswerRecord | None]]:
+    """For each run that has a question of these members, the run's latest question
+    (by ``claimed_at``) and that question's latest answer, keyed by ``run_id``.
+
+    A run id is not known until ``sq`` is asked, so this reads every run of the
+    members; a run with no entry has no row.
+    """
+    if not member_ids:
+        return {}
+    rows = transaction.execute(
+        sql.select_member_questions(len(member_ids)), tuple(member_ids)
+    ).fetchall()
+    latest: dict[str, QuestionRecord] = {}
+    for row in rows:
+        record = question_from_row(row)
+        latest[record.key.run_id] = record  # oldest first: the last one wins
+    if not latest:
+        return {}
+    answer_rows = transaction.execute(
+        sql.select_answers_of_runs(len(latest)), tuple(latest)
+    ).fetchall()
+    newest: dict[QuestionKey, AnswerRecord] = {}
+    for answer_row in answer_rows:
+        answer = answer_from_row(answer_row)
+        newest[answer.key] = answer  # seq order: the last one wins
+    return {
+        run_id: (record, newest.get(record.key)) for run_id, record in latest.items()
+    }
 
 
 def any_answering_run_id(transaction: Transaction, run_id: str) -> bool:

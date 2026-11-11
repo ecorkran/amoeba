@@ -10,6 +10,8 @@ from fake_sq import (
     PAUSED_AGENT_QUESTION,
     fake_poller,
     poll_result,
+    recorded_listing,
+    recorded_warning,
     write_fake_sq,
 )
 
@@ -80,3 +82,30 @@ def test_the_poller_returns_its_script_then_repeats_the_last() -> None:
     assert poller("r1", timeout_seconds=1) == paused
     assert poller.calls == ["r1", "r1"]
     assert paused.outcome is RunOutcome.PAUSED
+
+
+def test_runs_list_replays_the_recording_and_records_its_argv(tmp_path: Path) -> None:
+    fake = write_fake_sq(
+        tmp_path,
+        waits={},
+        run_exit_code=0,
+        run_stderr="",
+        runs_list=recorded_listing(stderr=recorded_warning()),
+    )
+
+    result = _sq(fake.directory, "runs", "list", "--json")
+
+    assert result.returncode == 0
+    assert result.stdout == recorded_listing().stdout
+    assert "unavailable pipelines" in result.stderr
+    assert fake.list_calls() == [["runs", "list", "--json"]]
+    assert fake.run_calls() == []
+
+
+def test_an_sq_without_a_listing_exits_2_for_runs_list(tmp_path: Path) -> None:
+    fake = write_fake_sq(tmp_path, waits={}, run_exit_code=0, run_stderr="")
+
+    result = _sq(fake.directory, "runs", "list", "--json")
+
+    assert result.returncode == 2
+    assert result.stdout == ""

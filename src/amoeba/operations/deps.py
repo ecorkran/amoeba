@@ -1,10 +1,10 @@
 """What the pause and read operations need from outside, bundled once (slices 223, 224).
 
-``Deps`` holds the ``cf`` runner, the project-name reader, the one-shot run poll, the
-child spawner, the clock, the sleep and the directories. The CLI builds it with
-:func:`production_deps`; a unit test builds it with fakes, so no test starts a real
-process or waits in real time. It imports nothing from the operation modules that use
-it, so there is no cycle.
+``Deps`` holds the ``cf`` runner, the project-name and run-list readers, the one-shot
+run poll, the child spawner, the clock, the sleep and the directories. The CLI builds
+it with :func:`production_deps`; a unit test builds it with fakes, so no test starts a
+real process or waits in real time. It imports nothing from the operation modules that
+use it, so there is no cycle.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from typing import Final
 from amoeba.operations.processes import Spawner, start_child
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
 from amoeba.upstream.context_forge.projects import ProjectNames, project_names
+from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem, list_runs
 from amoeba.upstream.squadron.run_outcome import RunPoll, poll_run
 
 #: One ``sq runs wait --timeout 0`` call reads a run file; a call this long is stuck.
@@ -32,6 +33,10 @@ type PollRun = Callable[[str], RunPoll]
 
 #: Reads every Context Forge project's name by id (slice 224, D6).
 type ReadProjectNames = Callable[[], ProjectNames | CfCallFailed]
+
+
+#: Reads the whole ``sq runs list --json`` listing with the poll's timeout bound.
+type ListRuns = Callable[[], list[ListedRun] | RunListProblem]
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,7 @@ class Deps:
     #: Squadron's run files (``squadron_runs_dir()``).
     squadron_runs_dir: Path
     project_names: ReadProjectNames
+    list_runs: ListRuns
 
 
 def _utc_now() -> datetime:
@@ -70,4 +76,5 @@ def production_deps(
         logs_dir=logs_dir,
         squadron_runs_dir=squadron_runs_dir,
         project_names=partial(project_names, subprocess.run),
+        list_runs=partial(list_runs, timeout_seconds=RUN_POLL_TIMEOUT_SECONDS),
     )

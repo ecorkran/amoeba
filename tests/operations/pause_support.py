@@ -20,6 +20,7 @@ from amoeba.store.store import Store
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import ProjectNames
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
+from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem
 from amoeba.upstream.squadron.run_outcome import RunPoll
 
 START = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
@@ -118,6 +119,10 @@ def _unused_project_names() -> ProjectNames | CfCallFailed:
     raise AssertionError("this test gave no project_names reader")
 
 
+def _unused_list_runs() -> list[ListedRun] | RunListProblem:
+    raise AssertionError("this test gave no list_runs reader")
+
+
 def build_deps(
     tmp_path: Path,
     *,
@@ -148,6 +153,7 @@ def build_deps(
         logs_dir=tmp_path / "logs",
         squadron_runs_dir=tmp_path / "runs",
         project_names=_unused_project_names,
+        list_runs=_unused_list_runs,
     )
     return DepsRig(deps, clock, sleep, recorder, poller)
 
