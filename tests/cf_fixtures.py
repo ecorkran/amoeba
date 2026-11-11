@@ -81,3 +81,23 @@ def write_fake_cf(bin_dir: Path, fixture: str | None) -> Path:
     script.write_text("#!/bin/sh\n" + body, encoding="utf-8")
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
     return script
+
+
+LIST_PROJECTS = "list_projects"
+
+
+def write_fake_cf_with_projects(bin_dir: Path, fixture: str) -> Path:
+    """An executable ``cf`` that answers ``cf get`` with the recording ``fixture`` and
+    ``cf list`` with the real ``cf list projects --json`` recording (slice 224)."""
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    body = (
+        'case "$1" in\n'
+        f"  get) cat '{FIXTURES / f'{fixture}.json'}' ;;\n"
+        f"  list) cat '{FIXTURES / f'{LIST_PROJECTS}.json'}' ;;\n"
+        f"  *) echo '{FAILURE_MESSAGE}' >&2; exit {FAILURE_EXIT_CODE} ;;\n"
+        "esac\n"
+    )
+    script = bin_dir / "cf"
+    script.write_text("#!/bin/sh\n" + body, encoding="utf-8")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR)
+    return script

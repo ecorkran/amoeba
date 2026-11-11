@@ -200,11 +200,12 @@ usageByModel:
 
 ## 4. CLI (D8)
 
-- [ ] **4.1 CLI commands and tests**
-  - [ ] In `cli/main.py` add `amoeba status [--program <id>]`, `amoeba decisions [--since <iso-8601>] [--program <id>]`, `amoeba mark_read --through <seq>`. Each prints its result model as JSON on stdout. The CLI alone builds `Deps` (the `project_names` and `list_runs` fields were added in 2.2 and 3.2). Only `status` loads the config
-  - [ ] Exit codes use 222's constants: 0 result; 1 `rejected`; 2 usage; 3 `SquadronError`, `ContextForgeError`, `ConfigError`, `AmoebaHomeError` or any `StoreError`, message on stderr. If `cli/main.py` nears ~300 lines, put the three commands in a new `cli/read_side.py` registered from `main.py`
-  - [ ] With fake `sq` and `cf` on `PATH` and the autouse `AMOEBA_HOME`: `status` prints JSON and exits 0; `status --program nope` exits 1; an `sq` without `runs list` exits 3 with a message naming `sq runs list --json`; `decisions` exits 0 with and without records; malformed `--since` exits 1; `mark_read --through 999999` exits 1; `mark_read` without `--through` exits 2; no test touches the developer's real home
-  - [ ] Success: `uv run amoeba status --help`, `decisions --help` and `mark_read --help` print usage; tests pass
+- [x] **4.1 CLI commands and tests**
+  - [x] In `cli/main.py` add `amoeba status [--program <id>]`, `amoeba decisions [--since <iso-8601>] [--program <id>]`, `amoeba mark_read --through <seq>`. Each prints its result model as JSON on stdout. The CLI alone builds `Deps` (the `project_names` and `list_runs` fields were added in 2.2 and 3.2). Only `status` loads the config
+  - [x] Exit codes use 222's constants: 0 result; 1 `rejected`; 2 usage; 3 `SquadronError`, `ContextForgeError`, `ConfigError`, `AmoebaHomeError` or any `StoreError`, message on stderr. If `cli/main.py` nears ~300 lines, put the three commands in a new `cli/read_side.py` registered from `main.py`
+  - [x] With fake `sq` and `cf` on `PATH` and the autouse `AMOEBA_HOME`: `status` prints JSON and exits 0; `status --program nope` exits 1; an `sq` without `runs list` exits 3 with a message naming `sq runs list --json`; `decisions` exits 0 with and without records; malformed `--since` exits 1; `mark_read --through 999999` exits 1; `mark_read` without `--through` exits 2; no test touches the developer's real home
+  - [x] Success: `uv run amoeba status --help`, `decisions --help` and `mark_read --help` print usage; tests pass
+  - Note: `cli/main.py` is 264 lines, so no `cli/read_side.py` split was needed. `docs/cli-contract.md` now documents the three commands, and `tests/test_contract_docs.py` checks the new commands and vocabularies (`PauseClass`, `RejectCode`, `UnplacedReason`, `RunState`, `MarkReadOutcome`, `DecisionsOutcome`). `tests/cf_fixtures.py` gained `write_fake_cf_with_projects`. The 13 subprocess tests in `tests/cli/test_read_side_cli.py` pass; format, ruff and pyright strict are clean; 1444 tests pass.
 
 **Commit**: `feat: add status, decisions and mark_read commands`
 
