@@ -44,7 +44,10 @@ PROJECT_RECORDINGS = (
 
 
 def test_every_plan_recording_parses_and_each_error_one_is_the_error_document() -> None:
-    plan_files = sorted(FIXTURES.glob("list_*.json"))
+    # ``list_projects.json`` is the project registry (slice 224), not a plan read.
+    plan_files = sorted(
+        path for path in FIXTURES.glob("list_*.json") if path.stem != "list_projects"
+    )
     assert len(plan_files) == 8
     for path in plan_files:
         document = json.loads(path.read_text(encoding="utf-8"))

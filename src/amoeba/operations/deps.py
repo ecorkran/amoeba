@@ -1,7 +1,7 @@
-"""What the pause operations need from outside, bundled once (slice 223, task 5.3).
+"""What the pause and read operations need from outside, bundled once (slices 223, 224).
 
-``Deps`` holds the ``cf`` runner, the one-shot run poll, the child spawner, the
-clock, the sleep and the three directories. The CLI builds it with
+``Deps`` holds the ``cf`` runner, the project-name reader, the one-shot run poll, the
+child spawner, the clock, the sleep and the directories. The CLI builds it with
 :func:`production_deps`; a unit test builds it with fakes, so no test starts a real
 process or waits in real time. It imports nothing from the operation modules that use
 it, so there is no cycle.
@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Final
 
 from amoeba.operations.processes import Spawner, start_child
-from amoeba.upstream.context_forge.cli_call import CfRun
+from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
+from amoeba.upstream.context_forge.projects import ProjectNames, project_names
 from amoeba.upstream.squadron.run_outcome import RunPoll, poll_run
 
 #: One ``sq runs wait --timeout 0`` call reads a run file; a call this long is stuck.
@@ -27,6 +28,10 @@ RUN_POLL_TIMEOUT_SECONDS: Final = 30.0
 
 #: Reads one run's outcome without waiting: ``poll_run`` with its timeout bound.
 type PollRun = Callable[[str], RunPoll]
+
+
+#: Reads every Context Forge project's name by id (slice 224, D6).
+type ReadProjectNames = Callable[[], ProjectNames | CfCallFailed]
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,7 @@ class Deps:
     logs_dir: Path
     #: Squadron's run files (``squadron_runs_dir()``).
     squadron_runs_dir: Path
+    project_names: ReadProjectNames
 
 
 def _utc_now() -> datetime:
@@ -63,4 +69,5 @@ def production_deps(
         answering_dir=answering_dir,
         logs_dir=logs_dir,
         squadron_runs_dir=squadron_runs_dir,
+        project_names=partial(project_names, subprocess.run),
     )

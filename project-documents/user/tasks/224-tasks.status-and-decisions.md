@@ -88,46 +88,50 @@ usageByModel:
 
 ## 2. Decisions, `mark_read`, names, schema test (D5, D6, D7, D9)
 
-- [ ] **2.1 Decision reads (D5) and tests**
-  - [ ] In `store/decisions.py` add `read_marker(store)` (returns `last_seen_seq`), `answers_since(store, *, after_seq=None, since=None, program=None)` returning each answer joined to its question, member and program, oldest first by `seq`, and `prior_answer_seq` (newest earlier answer to the same question, or null) per row. Exactly one of `after_seq` and `since` is given. The store takes `since` as UTC text; conversion is the operation's job (2.4)
-  - [ ] Rows carry the raw columns the record needs: question text, `paused_at`, `slice_label`, `passages`, `waiting_reason`, `waiting_detail`, `evidence`, answer text, `answered_by`, `cited`, `resume_outcome`, `resume_detail`, `resume_at`. JSON columns are parsed with the 223 parsers (`store/question_json.py`)
-  - [ ] Two programs, two members, several questions. Cases: `after_seq` filter, `since` filter (boundary inclusive), `program` narrowing, ordering by `seq`, `prior_answer_seq` for a PM answer after an automatic one and null for a first answer, an empty store
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **2.1 Decision reads (D5) and tests**
+  - [x] In `store/decisions.py` add `read_marker(store)` (returns `last_seen_seq`), `answers_since(store, *, after_seq=None, since=None, program=None)` returning each answer joined to its question, member and program, oldest first by `seq`, and `prior_answer_seq` (newest earlier answer to the same question, or null) per row. Exactly one of `after_seq` and `since` is given. The store takes `since` as UTC text; conversion is the operation's job (2.4)
+  - [x] Rows carry the raw columns the record needs: question text, `paused_at`, `slice_label`, `passages`, `waiting_reason`, `waiting_detail`, `evidence`, answer text, `answered_by`, `cited`, `resume_outcome`, `resume_detail`, `resume_at`. JSON columns are parsed with the 223 parsers (`store/question_json.py`)
+  - [x] Two programs, two members, several questions. Cases: `after_seq` filter, `since` filter (boundary inclusive), `program` narrowing, ordering by `seq`, `prior_answer_seq` for a PM answer after an automatic one and null for a first answer, an empty store
+  - [x] Success: module imports; pyright strict clean; tests pass
 
-- [ ] **2.2 Member names (D6)**
-  - [ ] Create `upstream/context_forge/projects.py`: `project_names(run) -> dict[str, str] | CfCallFailed`, one `cf list projects --json` call through `run_cf`, reading only `id` and `name`. Non-JSON output or an entry without `id` or `name` is a `CfCallFailed` quoting the output head
-  - [ ] Add `project_names` to `Deps` (production value calls it with the cf runner)
-  - [ ] Success: module imports; pyright strict clean
+- [x] **2.2 Member names (D6)**
+  - [x] Create `upstream/context_forge/projects.py`: `project_names(run) -> dict[str, str] | CfCallFailed`, one `cf list projects --json` call through `run_cf`, reading only `id` and `name`. Non-JSON output or an entry without `id` or `name` is a `CfCallFailed` quoting the output head
+  - [x] Add `project_names` to `Deps` (production value calls it with the cf runner)
+  - [x] Success: module imports; pyright strict clean
 
-- [ ] **2.3 Record `cf list projects` fixture and tests**
-  - [ ] Capture real `cf list projects --json` output into `tests/fixtures/context_forge/list_projects.json` from the installed `cf` (record `cf --version`), keeping an entry that lacks `projectPath` if the output has one; never hand-write. If none lacks it, say so in the fixture README and go on (the reader reads only `id` and `name`)
-  - [ ] Tests: the real fixture parses to the right id-to-name map; non-JSON and a missing field each give `CfCallFailed`; a non-zero exit gives `CfCallFailed`
-  - [ ] Success: tests pass
+- [x] **2.3 Record `cf list projects` fixture and tests**
+  - [x] Capture real `cf list projects --json` output into `tests/fixtures/context_forge/list_projects.json` from the installed `cf` (record `cf --version`), keeping an entry that lacks `projectPath` if the output has one; never hand-write. If none lacks it, say so in the fixture README and go on (the reader reads only `id` and `name`)
+  - [x] Tests: the real fixture parses to the right id-to-name map; non-JSON and a missing field each give `CfCallFailed`; a non-zero exit gives `CfCallFailed`
+  - [x] Success: tests pass
+  - Note: `cf list projects --json` recorded with cf 0.19.26 on 20261111 into `tests/fixtures/context_forge/list_projects.json` (29 entries, one without `projectPath`); `tests/test_cf_fixtures.py`'s plan-recording glob now excludes it.
 
-- [ ] **2.4 `decisions` request, rejections and tests (D5)**
-  - [ ] Create `operations/decisions.py` with `DecisionsRequest(since?, program?)` (validated from a document, unknown fields rejected) and a shared `RejectCode` (`StrEnum`, defined once in `operations/reject_codes.py` for the three operations): `unknown_program`, `malformed`, `beyond_last_record`. `mark_read` (2.6) uses the last
-  - [ ] `since` must be ISO-8601 with a UTC offset, converted to the store's UTC text; no offset or unparsable is `rejected / malformed`. Unknown `program` is `rejected / unknown_program` listing known ids. Without `since`, start after the marker
-  - [ ] Tests: `since` without offset and garbage are `malformed`; unknown fields are rejected; unknown `program` lists known ids; a valid `since` converts to UTC text
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **2.4 `decisions` request, rejections and tests (D5)**
+  - [x] Create `operations/decisions.py` with `DecisionsRequest(since?, program?)` (validated from a document, unknown fields rejected) and a shared `RejectCode` (`StrEnum`, defined once in `operations/reject_codes.py` for the three operations): `unknown_program`, `malformed`, `beyond_last_record`. `mark_read` (2.6) uses the last
+  - [x] `since` must be ISO-8601 with a UTC offset, converted to the store's UTC text; no offset or unparsable is `rejected / malformed`. Unknown `program` is `rejected / unknown_program` listing known ids. Without `since`, start after the marker
+  - [x] Tests: `since` without offset and garbage are `malformed`; unknown fields are rejected; unknown `program` lists known ids; a valid `since` converts to UTC text
+  - [x] Success: module imports; pyright strict clean; tests pass
+  - Note: `RejectCode` and the shared `validation_problems` / `unknown_program_problem` live in `operations/reject_codes.py`; `list_programs` added to `store/programs.py`.
 
-- [ ] **2.5 `decisions` records and `read_through` (D5, D8) and tests**
-  - [ ] In `operations/decisions.py` add `DecisionsRecord`, `DecisionsResult` (`outcome` `listed` or `rejected`, `records`, `read_through`, `marker`, `problems`) and `decisions(store, document, *, deps)`, using the request handling from 2.4
-  - [ ] Each record has the D5 fields. `based_on` for `answerer`: cited passages (`id`, `kind`, `source`, `date`, from `cited` and the question's `passages`) plus the check verdict and reason from `evidence`; for `pm`: `waiting_reason` and `waiting_detail`, or null if the PM answered first. `resume`: `outcome`, `detail`, `at`
-  - [ ] Members as `{id, name}` from one `project_names` call made after the store read. A member id missing from the names is a `ContextForgeError` naming it; `CfCallFailed` is raised as `ContextForgeError`
-  - [ ] `read_through` is the last listed `seq` only when the listing started at the marker (no `since`), had no `program`, and is not empty; otherwise null. `marker` is the value read
-  - [ ] Cases: default start after marker; `since` start; `program` narrowing; `read_through` null for each of `since`, `program`, empty; record fields for an `answerer` row and for a `pm` row after a waiting question and for a `pm` row with no waiting reason; PM override shows `prior_answer_seq`; member id missing from names raises; names failure raises with no store write
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **2.5 `decisions` records and `read_through` (D5, D8) and tests**
+  - [x] In `operations/decisions.py` add `DecisionsRecord`, `DecisionsResult` (`outcome` `listed` or `rejected`, `records`, `read_through`, `marker`, `problems`) and `decisions(store, document, *, deps)`, using the request handling from 2.4
+  - [x] Each record has the D5 fields. `based_on` for `answerer`: cited passages (`id`, `kind`, `source`, `date`, from `cited` and the question's `passages`) plus the check verdict and reason from `evidence`; for `pm`: `waiting_reason` and `waiting_detail`, or null if the PM answered first. `resume`: `outcome`, `detail`, `at`
+  - [x] Members as `{id, name}` from one `project_names` call made after the store read. A member id missing from the names is a `ContextForgeError` naming it; `CfCallFailed` is raised as `ContextForgeError`
+  - [x] `read_through` is the last listed `seq` only when the listing started at the marker (no `since`), had no `program`, and is not empty; otherwise null. `marker` is the value read
+  - [x] Cases: default start after marker; `since` start; `program` narrowing; `read_through` null for each of `since`, `program`, empty; record fields for an `answerer` row and for a `pm` row after a waiting question and for a `pm` row with no waiting reason; PM override shows `prior_answer_seq`; member id missing from names raises; names failure raises with no store write
+  - [x] Success: module imports; pyright strict clean; tests pass
+  - Note: Result models are pydantic, in `operations/decisions_models.py`, re-exported from `operations/decisions.py`. Deviation: a cited passage's `kind` is `pm_answer` when the stored `PassageRef` has a `question_id`, otherwise null, because the store records no passage kind for rule/plan/concept passages (never guessed). `project_names` is not called when the listing is empty.
 
-- [ ] **2.6 `mark_read` operation (D7) and tests**
-  - [ ] Add `advance_marker(store, through)` to `store/decisions.py`: one `BEGIN IMMEDIATE` transaction; `through` above `MAX(answers.seq)` returns beyond-last-record without writing; otherwise `last_seen_seq = MAX(last_seen_seq, :through)` and returns previous and current. An empty answers table counts as `MAX = 0`
-  - [ ] Create `operations/mark_read.py`: `MarkReadRequest(through: int >= 0)`, `MarkReadOutcome` (`StrEnum`: `moved`, `unchanged`, `rejected`), `MarkReadResult` (`outcome`, `previous`, `current`, `problems`), `mark_read(store, document)`. Beyond-last-record is `rejected / beyond_last_record`; negative or non-integer `through` is `rejected / malformed`
-  - [ ] Cases: `moved`; `unchanged` for an equal and for a lower `through` (marker never moves back); `beyond_last_record` leaves the marker; `through` 0 on an empty store is `unchanged`; negative and string `through` are `malformed`; two threads advancing to different values leave the higher; a record written after a `decisions` call stays unread after `mark_read` with that call's `read_through`
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **2.6 `mark_read` operation (D7) and tests**
+  - [x] Add `advance_marker(store, through)` to `store/decisions.py`: one `BEGIN IMMEDIATE` transaction; `through` above `MAX(answers.seq)` returns beyond-last-record without writing; otherwise `last_seen_seq = MAX(last_seen_seq, :through)` and returns previous and current. An empty answers table counts as `MAX = 0`
+  - [x] Create `operations/mark_read.py`: `MarkReadRequest(through: int >= 0)`, `MarkReadOutcome` (`StrEnum`: `moved`, `unchanged`, `rejected`), `MarkReadResult` (`outcome`, `previous`, `current`, `problems`), `mark_read(store, document)`. Beyond-last-record is `rejected / beyond_last_record`; negative or non-integer `through` is `rejected / malformed`
+  - [x] Cases: `moved`; `unchanged` for an equal and for a lower `through` (marker never moves back); `beyond_last_record` leaves the marker; `through` 0 on an empty store is `unchanged`; negative and string `through` are `malformed`; two threads advancing to different values leave the higher; a record written after a `decisions` call stays unread after `mark_read` with that call's `read_through`
+  - [x] Success: module imports; pyright strict clean; tests pass
+  - Note: `advance_marker` returns a `MarkerResult` (`MarkerMove`: moved, unchanged, beyond_last_record) from `store/decisions.py`.
 
-- [ ] **2.7 Schema holds no mirrored state (D9)**
-  - [ ] Add `tests/store/test_schema_holds_no_mirrored_state.py`: migrate a new store, read every `(table, column)` from `PRAGMA table_info`, assert equality with one pinned set. Each pinned column sits in a group by reason: record, membership, settings, marker (a dict of reason to columns, so the doc and test agree)
-  - [ ] Update `docs/store-contract.md`: list each column under one reason; state that `questions.checkout` and `questions.slice_label` are record and are never read as current state
-  - [ ] Success: tests pass; adding a column in a scratch edit fails the test (verify once, then revert)
+- [x] **2.7 Schema holds no mirrored state (D9)**
+  - [x] Add `tests/store/test_schema_holds_no_mirrored_state.py`: migrate a new store, read every `(table, column)` from `PRAGMA table_info`, assert equality with one pinned set. Each pinned column sits in a group by reason: record, membership, settings, marker (a dict of reason to columns, so the doc and test agree)
+  - [x] Update `docs/store-contract.md`: list each column under one reason; state that `questions.checkout` and `questions.slice_label` are record and are never read as current state
+  - [x] Success: tests pass; adding a column in a scratch edit fails the test (verify once, then revert)
 
 **Commit**: `feat: add decisions and mark_read operations and schema test`
 

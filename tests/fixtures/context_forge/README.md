@@ -26,3 +26,9 @@ amoeba project, unedited.
 
 Slice 223 is in the plan of initiative 220; slice 299 is in no plan. Used by the
 `resolve_slice` tests.
+
+## Project names (slice 224, task 2.3)
+
+`list_projects.json`: `cf list projects --json`, stdout, exit 0. Recorded with `cf --version`
+0.19.26 on 20261111, unedited. One entry (`trading`) lacks `projectPath`; the reader
+reads only `id` and `name`. Used by `tests/upstream/context_forge/test_projects.py`.

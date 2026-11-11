@@ -64,7 +64,8 @@ __all__ = [
 ]
 
 
-def _question(row: Sequence[object]) -> QuestionRecord:
+def question_from_row(row: Sequence[object]) -> QuestionRecord:
+    """A ``QuestionRecord`` from a row of ``sql.QUESTION_COLUMNS``."""
     return QuestionRecord(
         key=QuestionKey(
             run_id=text(row[0], "questions.run_id"),
@@ -97,13 +98,13 @@ def get_question(transaction: Transaction, key: QuestionKey) -> QuestionRecord |
     row = transaction.execute(
         sql.SELECT_QUESTION, (key.run_id, key.paused_at)
     ).fetchone()
-    return None if row is None else _question(row)
+    return None if row is None else question_from_row(row)
 
 
 def latest_question(transaction: Transaction, run_id: str) -> QuestionRecord | None:
     """The run's question with the latest ``claimed_at``."""
     row = transaction.execute(sql.SELECT_LATEST_QUESTION, (run_id,)).fetchone()
-    return None if row is None else _question(row)
+    return None if row is None else question_from_row(row)
 
 
 def any_answering_run_id(transaction: Transaction, run_id: str) -> bool:

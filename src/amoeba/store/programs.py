@@ -67,6 +67,12 @@ def _pair(row: Sequence[object]) -> DependencyPair:
 # --- reads ------------------------------------------------------------------
 
 
+def list_programs(transaction: Transaction) -> tuple[Program, ...]:
+    """Every program, by id."""
+    rows = transaction.execute(sql.SELECT_PROGRAMS).fetchall()
+    return tuple(_program(row) for row in rows)
+
+
 def get_program(transaction: Transaction, program_id: str) -> Program | None:
     row = transaction.execute(sql.SELECT_PROGRAM, (program_id,)).fetchone()
     return None if row is None else _program(row)

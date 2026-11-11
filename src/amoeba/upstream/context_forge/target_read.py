@@ -30,6 +30,7 @@ CF_ALL_FLAG: Final = "-a"
 CF_LIST_COMMAND: Final = "list"
 CF_INITIATIVES_WORD: Final = "initiatives"
 CF_SLICES_WORD: Final = "slices"
+CF_PROJECTS_WORD: Final = "projects"
 
 #: The CF config key naming the integration branch.
 CF_KEY_INTEGRATION_BRANCH: Final = "git.integration_branch"
@@ -49,6 +50,11 @@ def config_get_command(key: str) -> tuple[str, ...]:
 def list_initiatives_command() -> tuple[str, ...]:
     """``cf list initiatives --json -a``: every initiative of the project."""
     return (CF_LIST_COMMAND, CF_INITIATIVES_WORD, CF_JSON_FLAG, CF_ALL_FLAG)
+
+
+def list_projects_command() -> tuple[str, ...]:
+    """``cf list projects --json``: every registered project, not tied to a checkout."""
+    return (CF_LIST_COMMAND, CF_PROJECTS_WORD, CF_JSON_FLAG)
 
 
 def list_slices_command(initiative_index: int) -> tuple[str, ...]:

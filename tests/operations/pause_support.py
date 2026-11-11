@@ -17,6 +17,8 @@ from amoeba.operations.processes import Spawner, WaitableChild
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
+from amoeba.upstream.context_forge.cli_call import CfCallFailed
+from amoeba.upstream.context_forge.projects import ProjectNames
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.upstream.squadron.run_outcome import RunPoll
 
@@ -112,6 +114,10 @@ class DepsRig:
     poller: FakePoller
 
 
+def _unused_project_names() -> ProjectNames | CfCallFailed:
+    raise AssertionError("this test gave no project_names reader")
+
+
 def build_deps(
     tmp_path: Path,
     *,
@@ -141,6 +147,7 @@ def build_deps(
         answering_dir=tmp_path / "answering",
         logs_dir=tmp_path / "logs",
         squadron_runs_dir=tmp_path / "runs",
+        project_names=_unused_project_names,
     )
     return DepsRig(deps, clock, sleep, recorder, poller)
 
