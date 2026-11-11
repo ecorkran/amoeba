@@ -1,0 +1,20 @@
+# Like asks_question.yaml, but the question concerns a choice no rule file settles
+# (slice 224, task 5.3). The member's CLAUDE.md says only how long source files may
+# be, so the answering pipeline cannot answer from the rules and `handle_pause`
+# declines to `waiting_on_pm`. The status walkthrough uses it to show a question
+# waiting on the PM and the PM's answer in `decisions`.
+name: asks-unsettled-question
+description: Stop on a question no rule settles
+
+params:
+  model: required
+
+steps:
+  - dispatch:
+      name: ask
+      model: "{model}"
+      artifact: design
+      prompt: |
+        Do not edit any file and do not run any command. Reply with exactly one
+        sentence that ends with a question mark and asks which of the two colours,
+        teal or amber, the project's logo should use, then stop.

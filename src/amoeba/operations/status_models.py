@@ -1,7 +1,7 @@
 """The values ``status`` returns (slice 224, D4, D8): pydantic models the CLI prints.
 
-``RunState`` and ``UnplacedReason`` are defined here, once, and re-exported by the
-modules that produce them. ``status`` re-exports the public models.
+``WaitingRunState`` and ``UnplacedReason`` are defined here, once, and re-exported by
+the modules that produce them. ``status`` re-exports the public models.
 """
 
 from __future__ import annotations
@@ -36,8 +36,9 @@ class UnplacedReason(StrEnum):
     LOOKUP_FAILED = "lookup_failed"
 
 
-class RunState(StrEnum):
-    """Where the run of a waiting question is now."""
+class WaitingRunState(StrEnum):
+    """Where the run of a waiting question is now (the ``run_state`` field). Not the
+    answering decision's ``RunState`` (``answering.decide``), a different vocabulary."""
 
     AT_PAUSE = "at_pause"
     MOVED_ON = "moved_on"
@@ -93,7 +94,7 @@ class WaitingEntry(_Model):
     waiting_detail: str | None
     #: When the question was first recorded.
     since: datetime
-    run_state: RunState
+    run_state: WaitingRunState
     #: For ``moved_on``: the run's state now.
     detail: str | None
     next: NextAction | None

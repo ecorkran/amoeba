@@ -15,7 +15,7 @@ from amoeba.operations.members import ContextForgeError
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
 from amoeba.operations.status import StatusOutcome, StatusResult, status
-from amoeba.operations.status_models import RunState, UnplacedReason
+from amoeba.operations.status_models import UnplacedReason, WaitingRunState
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
@@ -161,7 +161,7 @@ def test_a_lookup_failure_is_unplaced_beside_a_waiting_question_still_shown(
     (member,) = result.programs[0].members
     (waiting,) = member.waiting_on_pm
     assert waiting.run_id == "gone-run"
-    assert waiting.run_state is RunState.NOT_LISTED
+    assert waiting.run_state is WaitingRunState.NOT_LISTED
     assert waiting.next is None
 
 
@@ -211,7 +211,7 @@ def test_a_waiting_question_at_its_pause_names_answer_and_a_pm_flows_through(
     (entry,) = member.runs
     assert entry.pause is PauseClass.WAITING_ON_PM
     (waiting,) = member.waiting_on_pm
-    assert waiting.run_state is RunState.AT_PAUSE
+    assert waiting.run_state is WaitingRunState.AT_PAUSE
     assert waiting.next is not None
     assert waiting.next.paused_at == run.checkpoint.paused_at
 

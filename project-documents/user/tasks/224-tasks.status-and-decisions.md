@@ -223,16 +223,18 @@ usageByModel:
   - [x] Point the `run_list` tests at the real fixtures and delete `tests/fixtures/squadron/runs_list_proposed/`. Differences in field names change only `run_list.py` and its fixtures; if the landed shape differs in kind (not just names), write `BLOCKED: #303 shape differs: <how>` and stop
   - [x] Success: the parser passes on every real fixture; `status` tests still pass
 
-- [ ] **5.3 Verification walkthrough**
-  - [ ] For walkthrough step 6, create `tests/live/pause/asks_unsettled_question.yaml` first: a dispatch whose question concerns a choice no rule file in the test member settles (so `handle_pause` declines to `waiting_on_pm`), modelled on `asks_question.yaml`
-  - [ ] Run the design's Verification Walkthrough steps 1 to 7 from a throwaway worktree with a scratch `AMOEBA_HOME` and the wait keys set
-  - [ ] Record each step's observed result in a note under this task. An unexpected result is a defect in this slice: fix it, or write `BLOCKED:` with the evidence
-  - [ ] Success: the notes show `applied`, `pause: unhandled` with a `handle_pause` `next`, `resumed`, one `answerer` record with `read_through`, `moved` then no records, exit 1 `beyond_last_record`, a `waiting_on_pm` entry then a `pm` record with that `waiting_reason`, all-programs scope and exit 1 `unknown_program`
+- [x] **5.3 Verification walkthrough**
+  - [x] For walkthrough step 6, create `tests/live/pause/asks_unsettled_question.yaml` first: a dispatch whose question concerns a choice no rule file in the test member settles (so `handle_pause` declines to `waiting_on_pm`), modelled on `asks_question.yaml`
+  - [x] Run the design's Verification Walkthrough steps 1 to 7 from a throwaway worktree with a scratch `AMOEBA_HOME` and the wait keys set
+  - [x] Record each step's observed result in a note under this task. An unexpected result is a defect in this slice: fix it, or write `BLOCKED:` with the evidence
+  - [x] Success: the notes show `applied`, `pause: unhandled` with a `handle_pause` `next`, `resumed`, one `answerer` record with `read_through`, `moved` then no records, exit 1 `beyond_last_record`, a `waiting_on_pm` entry then a `pm` record with that `waiting_reason`, all-programs scope and exit 1 `unknown_program`
+  - Note: Walkthrough steps 1 to 7 were run with real `sq` 0.24.26, `cf` 0.19.26 and real models (`sonnet-high`/`sonnet`) on 20261111, as an automated live test: `tests/live/pause/test_status_walkthrough_live.py` (throwaway member repo with its own Context Forge data dir and scratch `AMOEBA_HOME`, wait keys set from the example config; harness `run_amoeba` gained a `cwd` argument). `tests/live/pause/asks_unsettled_question.yaml` (logo colour question) was created first. Observed: step 1 `applied`; step 2 `pause: unhandled`, `next: handle_pause` with the run's directory and `paused_at`; step 3 `resumed`; step 4 one `answerer` record, cited passage P1, check verdict `yes`, `resume.outcome: resumed`, `read_through: 1`; step 5 `moved` (0 to 1), then `records: []`, `read_through: null`, `marker: 1`, and `mark_read --through 999999` exit 1 `beyond_last_record`; step 6 `handle_pause` gave `waiting_on_pm` with `answerer_declined`, `status` listed it under `waiting_on_pm` with that reason, `run_state: at_pause` and `next: answer`, then `answer` recorded and `decisions` showed a `pm` record whose `based_on.waiting_reason` is `answerer_declined`; step 7 `status` from a non-member directory listed every program and `--program nope` exited 1 `unknown_program` with the known ids. One unexpected result, not a defect in `status`: `asks_question.yaml` ends every step on a question, so after the step 3 resume the run pauses again with a new `paused_at`, which `status` correctly shows as `unhandled` (a new pause); the test and the walkthrough now check the original pause. The walkthrough in the slice design is updated with commands, expected output and caveats. The live test passed on the final code.
 
 ## 6. Final validation
 
-- [ ] **6.1 Full checks**
-  - [ ] Run the checks once; fix failures introduced by this slice
-  - [ ] Success: all four pass; 223's tests pass unchanged; `run_list.py` is the only module that runs `sq runs list`; `PauseClass`, `UnplacedReason`, `RunState` and the rejection codes are each defined once
+- [x] **6.1 Full checks**
+  - [x] Run the checks once; fix failures introduced by this slice
+  - [x] Success: all four pass; 223's tests pass unchanged; `run_list.py` is the only module that runs `sq runs list`; `PauseClass`, `UnplacedReason`, `RunState` and the rejection codes are each defined once
+  - Note: Checks run once at the end: ruff format, ruff check, pyright strict clean; 1450 tests pass; 223's `handle_pause`, `answer`, eligibility and existing-row tests are unmodified (only helper files and the contract/defined-once tests were extended). `tests/test_read_side_defined_once.py` pins that `run_list.py` is the only module spelling `sq runs list` and that `PauseClass`, `UnplacedReason`, `WaitingRunState`, `RejectCode`, `MarkReadOutcome` and `RunFileUnreadable` are each defined once. The `status` `run_state` vocabulary is named `WaitingRunState` because `answering.decide` already has an unrelated `RunState`.
 
 **Commit**: `feat: read real sq runs list output in status`

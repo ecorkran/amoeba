@@ -13,7 +13,11 @@ from amoeba.operations.mark_read import MarkReadOutcome
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.operations.status_models import RunFileUnreadable, RunState, UnplacedReason
+from amoeba.operations.status_models import (
+    RunFileUnreadable,
+    UnplacedReason,
+    WaitingRunState,
+)
 from amoeba.store.store import Store
 
 DOCS = Path(__file__).parents[1] / "docs"
@@ -103,7 +107,7 @@ def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> No
         RunFileUnreadable.RUN_FILE_UNREADABLE.value,
         *(code.value for code in RejectCode),
         *(reason.value for reason in UnplacedReason),
-        *(state.value for state in RunState),
+        *(state.value for state in WaitingRunState),
         *(outcome.value for outcome in MarkReadOutcome),
         *(outcome.value for outcome in DecisionsOutcome),
     ]

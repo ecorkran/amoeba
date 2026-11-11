@@ -222,25 +222,42 @@ What the slice 220 audit (`user/analysis/220-analysis.code-audit.md`) leaves to 
 
 ## Verification Walkthrough
 
-Needs Squadron with #303 and slices 222 and 223. Uses a test home so the real store is untouched. Before #303, `amoeba status` exits 3 with a `SquadronError` naming `sq runs list --json`.
+Needs `sq` with `sq runs list --json` (`ecorkran/squadron#303`, shipped in 0.24.24; run on 0.24.26), `cf`, slices 222 and 223, and a model alias for the answering pipeline. All commands run from the repo root of the checkout under test. The store is a scratch home, so the real store is untouched. Without `sq runs list --json`, `amoeba status` exits 3 with a `SquadronError` naming `sq runs list --json`.
 
-1. **Set up**, in a throwaway worktree of the amoeba repo:
+**Automated.** `tests/live/pause/test_status_walkthrough_live.py` runs steps 1 to 7 below with real `sq`, `cf` and models, in a throwaway member repo (its own Context Forge data directory and `AMOEBA_HOME`):
+
+```bash
+export AMOEBA_LIVE_ANSWER_MODEL=<alias> AMOEBA_LIVE_CHECK_MODEL=<alias> AMOEBA_LIVE_MAX_COST_USD=3
+uv run pytest tests/live/pause/test_status_walkthrough_live.py
+```
+
+It passed on 20261111 (about 50 s). By hand, the same steps are:
+
+1. **Set up.** In a throwaway git checkout registered with Context Forge (`cf init --lite --name <name>`):
    ```bash
    export AMOEBA_HOME=$(mktemp -d)
-   # write $AMOEBA_HOME/config.yaml from the example in docs/config-contract.md
+   # write $AMOEBA_HOME/config.yaml from the example in docs/config-contract.md,
+   # with answer_model, check_model, max_cost_usd, answering_wait_seconds, resume_wait_seconds set
    amoeba set_up --file - <<'EOF'
    program: trial
    members:
      - rules_paths: [CLAUDE.md]
    EOF
    ```
-   Expect `applied`.
-2. **Missed hook.** With no hook configured, run 223's live fixture pipeline (`tests/live/pause/`) with `sq run` until it pauses on its question. `amoeba status` shows the run with `pause: unhandled` and `next: {operation: handle_pause, run_id: …, directory: <worktree>}`.
-3. **Catch up.** From that directory, `amoeba handle_pause <run_id>` gives `resumed`. `amoeba status` no longer shows the run as `unhandled`.
-4. **Decisions.** `amoeba decisions` shows one `answerer` record with cited passages, check verdict, `resume.outcome: resumed`, and a numeric `read_through`.
-5. **Mark read.** `amoeba mark_read --through <read_through>` gives `moved`. `amoeba decisions` then shows no records and `read_through: null`. `amoeba mark_read --through 999999` exits 1 with `beyond_last_record`.
-6. **Waiting on the PM.** Run a pause the rules don't settle so `handle_pause` declines it. `amoeba status` lists it under `waiting_on_pm` with its reason and `next: {operation: answer, …}`. After `amoeba answer <run_id> --text "…"`, `amoeba decisions` shows a `pm` record whose `based_on.waiting_reason` is that reason.
-7. **Scope.** From a directory in no program, `amoeba status` lists every program. `amoeba status --program nope` exits 1 with `unknown_program` and the known ids.
+   Expect `outcome: applied`.
+2. **Missed hook.** Start the live pipeline with no pause hook: `sq run tests/live/pause/asks_question.yaml <model> --run-id <run_id> --no-pause-hook`, and wait until `sq runs wait <run_id> --timeout 0 --json` says `paused`. Then `amoeba status` prints `"outcome": "listed"` and, under the member, the run with `"pause": "unhandled"` and `"next": {"operation": "handle_pause", "run_id": "<run_id>", "paused_at": "<its paused_at>", "directory": "<the checkout>"}`.
+3. **Catch up.** From that directory, `amoeba handle_pause <run_id>` prints `"outcome": "resumed"`. `amoeba status` no longer shows that pause as `unhandled`. **Caveat:** `asks_question.yaml` ends every step on a question, so the resumed run pauses again a few seconds later with a *new* `paused_at`. That second pause has no row and is `unhandled` in its own right: it is a new pause, not the original one, and `status` is right to show it. Check the original `paused_at` is not unhandled, or call `status` while the run is `running` (then `pause` is null).
+4. **Decisions.** `amoeba decisions` prints one record with `"answered_by": "answerer"`, `based_on.cited` (one passage with `id`, `source`, `date`; `kind` is null for a file passage), `based_on.check_verdict: "yes"` with its reason, `"resume": {"outcome": "resumed", ...}`, and `"read_through": 1` (a number, the record's `seq`), `"marker": 0`.
+5. **Mark read.** `amoeba mark_read --through <read_through>` prints `"outcome": "moved", "previous": 0, "current": 1`. `amoeba decisions` then prints `"records": []`, `"read_through": null`, `"marker": 1`. `amoeba mark_read --through 999999` exits 1 with `"rejection": "beyond_last_record"`.
+6. **Waiting on the PM.** Start `tests/live/pause/asks_unsettled_question.yaml` the same way (a question about a logo colour that no rule settles). `amoeba handle_pause <run_id>` prints `"outcome": "waiting_on_pm"` with `waiting_reason: answerer_declined`. `amoeba status` lists it under the member's `waiting_on_pm` with that `waiting_reason`, `"run_state": "at_pause"` and `"next": {"operation": "answer", "run_id": "<run_id>", "paused_at": "<its paused_at>", "directory": null}`. After `amoeba answer <run_id> --text "Use teal."` (prints `recorded`, `resume.outcome: resumed`), `amoeba decisions` shows one record with `"answered_by": "pm"` and `based_on.waiting_reason` equal to the reason above.
+7. **Scope.** From a directory in no program, `amoeba status` lists every program. `amoeba status --program nope` exits 1 with `"rejection": "unknown_program"` and `problems` naming the known ids (for example `known programs: trial`).
+
+**Caveats found.**
+
+- `amoeba status` lists the machine's real Squadron runs, so `unplaced_runs` shows every paused run with no placeable directory: a null `working_directory` (a run from before `sq` 0.24.24, 17 of the 32 paused runs on the PM's machine) or a removed worktree (`directory_missing`, for example the live tests' own throwaway members). It does not appear for a running, failed or completed run.
+- `sq runs list --json` prints a warning on stderr when runs reference unavailable pipelines. It is ignored; stdout is parsed.
+- A run's latest question row is used only when its `paused_at` equals the run's current checkpoint. A run that paused again after being answered is judged by its new pause.
+- A cited passage's `kind` is `pm_answer` for a PM precedent and null for other passages: the store records no passage kind.
 
 ## Development Order
 

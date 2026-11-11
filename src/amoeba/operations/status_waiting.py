@@ -14,13 +14,13 @@ from dataclasses import dataclass
 from amoeba.operations.status_models import (
     NextAction,
     NextOperation,
-    RunState,
     WaitingEntry,
+    WaitingRunState,
 )
 from amoeba.store.models import QuestionRecord
 from amoeba.upstream.squadron.run_list import ListedRun
 
-__all__ = ["MemberWaiting", "RunState", "waiting_entries"]
+__all__ = ["MemberWaiting", "WaitingRunState", "waiting_entries"]
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ def waiting_entries(
 def _entry(question: QuestionRecord, run: ListedRun | None) -> WaitingEntry:
     state, detail = _where(question, run)
     next_action = None
-    if state is RunState.AT_PAUSE:
+    if state is WaitingRunState.AT_PAUSE:
         next_action = NextAction(
             operation=NextOperation.ANSWER,
             run_id=question.key.run_id,
@@ -69,15 +69,15 @@ def _entry(question: QuestionRecord, run: ListedRun | None) -> WaitingEntry:
 
 def _where(
     question: QuestionRecord, run: ListedRun | None
-) -> tuple[RunState, str | None]:
+) -> tuple[WaitingRunState, str | None]:
     if run is None:
-        return RunState.NOT_LISTED, None
+        return WaitingRunState.NOT_LISTED, None
     checkpoint = run.checkpoint
     if run.is_paused and checkpoint is not None:
         if checkpoint.paused_at == question.key.paused_at:
-            return RunState.AT_PAUSE, None
+            return WaitingRunState.AT_PAUSE, None
         return (
-            RunState.MOVED_ON,
+            WaitingRunState.MOVED_ON,
             f"the run is paused at a later pause ({checkpoint.paused_at})",
         )
-    return RunState.MOVED_ON, f"the run is {run.status}"
+    return WaitingRunState.MOVED_ON, f"the run is {run.status}"

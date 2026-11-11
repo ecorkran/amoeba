@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from amoeba.answering.values import DeclineReason
-from amoeba.operations.status_models import NextOperation, RunState, WaitingEntry
+from amoeba.operations.status_models import NextOperation, WaitingEntry, WaitingRunState
 from amoeba.operations.status_waiting import waiting_entries
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.vocabulary import QuestionState
@@ -40,7 +40,7 @@ def test_a_question_at_its_pause_names_answer_with_run_id_and_paused_at() -> Non
 
     (entry,) = _entries((question,), [run])
 
-    assert entry.run_state is RunState.AT_PAUSE
+    assert entry.run_state is WaitingRunState.AT_PAUSE
     assert entry.next is not None
     assert entry.next.operation is NextOperation.ANSWER
     assert entry.next.run_id == PAUSED
@@ -59,7 +59,7 @@ def test_a_question_whose_run_is_running_has_moved_on_with_no_next() -> None:
 
     (entry,) = _entries((question_row(key, QuestionState.WAITING_ON_PM),), [run])
 
-    assert entry.run_state is RunState.MOVED_ON
+    assert entry.run_state is WaitingRunState.MOVED_ON
     assert entry.detail == "the run is running"
     assert entry.next is None
 
@@ -70,7 +70,7 @@ def test_a_question_whose_run_paused_again_has_moved_on() -> None:
 
     (entry,) = _entries((question_row(earlier, QuestionState.WAITING_ON_PM),), [run])
 
-    assert entry.run_state is RunState.MOVED_ON
+    assert entry.run_state is WaitingRunState.MOVED_ON
     assert entry.detail is not None
     assert "later pause" in entry.detail
     assert entry.next is None
@@ -81,7 +81,7 @@ def test_a_question_for_a_run_no_longer_listed_is_not_listed() -> None:
 
     (entry,) = _entries((question_row(gone, QuestionState.WAITING_ON_PM),), [])
 
-    assert entry.run_state is RunState.NOT_LISTED
+    assert entry.run_state is WaitingRunState.NOT_LISTED
     assert entry.next is None
     assert entry.detail is None
 
@@ -92,7 +92,7 @@ def test_the_run_is_found_across_the_whole_listing_whatever_its_directory() -> N
 
     (entry,) = _entries((question_row(key, QuestionState.WAITING_ON_PM),), [run])
 
-    assert entry.run_state is RunState.AT_PAUSE
+    assert entry.run_state is WaitingRunState.AT_PAUSE
 
 
 def test_the_order_of_the_open_questions_is_kept() -> None:
