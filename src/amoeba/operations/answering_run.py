@@ -50,7 +50,7 @@ from amoeba.upstream.squadron.run_outcome import (
 
 #: ``sq run``'s opt-out of the pipeline's pause command (Squadron #302). An answering
 #: run always passes it: it must never start the command that answers pauses.
-NO_PAUSE_HOOK_FLAG: Final = "--no-pause-hook"
+PAUSE_COMMAND_OPT_OUT_FLAG: Final = "--no-pause-hook"
 
 #: Log subdirectory of an answering run: ``<logs>/answering/<id>.{stdout,stderr}.log``.
 ANSWERING_LOG_DIRECTORY: Final = "answering"
@@ -133,7 +133,7 @@ def answering_argv(run_id: str, settings: AnswererSettings) -> list[str]:
         },
         target_key=ANSWER_MODEL_PARAM,
     )
-    return [*argv, NO_PAUSE_HOOK_FLAG]
+    return [*argv, PAUSE_COMMAND_OPT_OUT_FLAG]
 
 
 def _declined(reason: DeclineReason, detail: str) -> Declined:

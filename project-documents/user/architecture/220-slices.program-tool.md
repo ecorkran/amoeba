@@ -6,7 +6,7 @@ parent: user/architecture/220-arch.program-tool.md
 archIndex: 220
 component: program-tool
 audience: [human, ai]
-description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, a live trial of scenario A, the MCP server, and program dependencies (scenario B, built only if scenario A passes its test).
+description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, switching on scenario A for real work, the MCP server, and program dependencies (scenario B).
 dateCreated: 20261107
 dateUpdated: 20261108
 status: in_progress
@@ -23,7 +23,7 @@ status: in_progress
 Architecture-level. Initiatives 100, 120 and 140 built a resident supervisor that nobody has run. This plan first cuts that down to what scenarios A to C need, then builds the eight operations on a new store. Three things shape it:
 
 - **Audit before cutting.** The architecture's table of what stays and what goes is a starting guess. The audit settles it piece by piece, so the cut deletes from a list, not from memory.
-- **Scenario A is the gate.** Pause handling and a live trial come before anything else new. If most real questions still reach the PM, the design is rethought and scenario B is not built.
+- **Scenario A comes first.** Pause handling and switching it on for real work come before anything else new. The counted trial and its go/rethink verdict were dropped (needs PM-driven work); the PM judges from `decisions` and `status` in normal use, and scenario B does not wait on a verdict.
 - **CLI before MCP.** The operations are proven through the CLI, where a run can be driven and inspected by hand. MCP is a thin layer added once they work.
 
 Slice numbers are execution order. The first slice takes the plan's index (220).
@@ -103,8 +103,8 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 
 ## Integration Work
 
-6. [ ] **(225) Scenario A Trial** — Amoeba switched on for real work in the PM's own repos: the hook configured in each member, real runs left to pause, and the share of questions answered without the PM measured from `decisions`. Wrong answers, false screen matches and questions that should have been answered are recorded with what would have fixed them (a rule line, a passage, a prompt change). The result is a short note with the numbers and a verdict: go on to 227, or rethink the design.
-   **Value:** Verification. Decides whether Amoeba saves the PM more than it costs before more is built.
+6. [ ] **(225) Scenario A Trial** — Amoeba switched on for real work in the PM's own repos. Done: the answering run's pause-hook opt-out flag and the exact hook config line are documented (`docs/squadron-hook.md`); the tool is installed and the `trading` program registered; the hook is configured at user level; a sanity pass with 223's live fixture pipeline in each member (and in Amoeba's own repo, which is left alone) came out clean. The counted trial (a ledger of real questions and a go/rethink verdict) was dropped because it needs the PM to generate work on demand. Evidence comes from normal use of `decisions` and `status`.
+   **Value:** Verification. Amoeba is live on the PM's repos, so real use shows whether it saves the PM more than it costs.
    **Success Criteria:**
    - Real work runs in at least two members, with every question accounted for in `decisions`.
    - The note gives answered without the PM, waiting on the PM by reason, and wrong answers.
@@ -126,7 +126,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    **Risk Level:** Low
    **Relative Effort:** 2
 
-## Gated on the Scenario A Trial
+## Scenario B
 
 8. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member and commit and holding the commit's current version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
    **Value:** User value. A repo designing a slice sees what changed upstream without the PM relaying it.
@@ -135,7 +135,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    - Tagging a release on an already reported commit adds the version; a `from_source` consumer does not see it twice.
    - Two worktrees calling `changes` from different starting points each see everything since their own point.
    - The rule lines, pasted into two of the PM's repos, lead the design agent to call `changes` in a real design run.
-   **Dependencies:** 225 with a go verdict, and 226.
+   **Dependencies:** 225 and 226.
    **Interfaces:** Provides `report_release`, `changes` and the rule-line text.
    **Risk Level:** Medium. Nothing forces an agent to follow a rule line.
    **Relative Effort:** 3
@@ -144,9 +144,9 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 
 `220 → 221 → 222 → 223 → 224 → 225 → 226 → 227`.
 
-- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 227 waits on the trial's verdict.
+- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 227 needs 225 and 226.
 - **Risk.** 223 is the riskiest and the test of the design, so it comes right after the base it needs and before anything else new.
-- **Parallel work.** 226 can run beside 225, since the trial is mostly waiting on real runs.
+- **Parallel work.** 226 can run beside 225, since 225 is only setup and a sanity pass.
 
 ## Notes
 

@@ -9,8 +9,8 @@ dependencies:
 interfaces:
 - 227-slice.program-dependencies
 dateCreated: 20261107
-dateUpdated: 20261107
-status: not_started
+dateUpdated: 20261112
+status: complete
 ---
 
 # Slice Design: Scenario A Trial
@@ -20,6 +20,10 @@ status: not_started
 Switch Amoeba on for real work in the PM's own repos, let real runs pause, and count from `decisions` and `status` the share of questions answered without the PM. Wrong answers, false screen matches and questions that should have been answered are recorded with what would have fixed them. The result is a short note with the numbers and a verdict: go on to 227, or rethink the design.
 
 This is a trial, not a build. The only code is the answering run's opt-out flag and the hook config line (amoeba#35, deferred here by 223), plus fixtures and fixes for real shapes the tests missed. Answering spend is not measured (amoeba#38).
+
+## Revision 2026-11-12: counted trial dropped
+
+The counted trial (D5, D6, D7, D10: 20 counted questions, a ledger, a go/rethink verdict) is dropped. It needed the PM to produce real work on demand to fill a count. What stays: D1 to D4, D8 and D9, plus the sanity pass. Amoeba stays on; `decisions` and `status` hold the evidence from normal use. 227 no longer waits on a verdict. Success criteria below are reduced to the items that remain; the sections marked dropped are kept for the record.
 
 ## Scope
 
@@ -63,7 +67,7 @@ Status: decided
 The call log (amoeba#34) is not built: the share does not need it, because a hook call that wrote no row leaves its pause visible in `status` as a missed hook, which counts against the share, and the catch-up call run from a terminal shows any error. A missed question whose cause the catch-up doesn't show is recorded as `cause unknown`, never guessed. amoeba#34 stays open.
 
 ### D5 — Trial window and stopping rule
-Status: decided
+Status: dropped (2026-11-12)
 
 - **Start:** `trial_start`, the UTC time of the first run after the sanity pass, recorded in the note.
 - **Stop:** the first review pass at which the ledger holds at least 20 counted questions from at least two members. Below 20, one question moves the share by more than five points.
@@ -71,7 +75,7 @@ Status: decided
 - Amoeba stays on after the trial.
 
 ### D6 — Review passes and the ledger
-Status: decided
+Status: dropped (2026-11-12)
 
 After each working session, an agent runs `amoeba decisions --since <trial_start>` and `amoeba status` from outside every member.
 
@@ -80,7 +84,7 @@ After each working session, an agent runs `amoeba decisions --since <trial_start
 The note holds one row per question, keyed on `(run_id, paused_at)`, recording: answered without the PM or not (an automatic answer that was resumed and not overridden or judged wrong); for the rest, the `waiting_reason` or why Amoeba missed it; anything that went wrong (a wrong answer, a false screen match, a question that should have been answered); and one line on what would have fixed it (a rule line, a passage, a prompt change, a code fix). A PM override is always a wrong answer. The PM can change any row.
 
 ### D7 — Verdict
-Status: decided
+Status: dropped (2026-11-12)
 
 **Go** when more than half of the counted questions were answered without the PM, **rethink** otherwise. Wrong answers are recorded with their fix, not used as a second test. An automatic answer that authorized an item on its member's not-authorized list gets an issue against 223's check and screen, whatever the verdict.
 
@@ -95,7 +99,7 @@ Status: decided
 A crash, parse failure or unreadable input met in a real run (`handle_pause` exit 3, `RunFileProblem`, `PollFailure`, `sources_missing`, `sources_unreadable`) gets its raw output (secrets redacted) as a fixture under `tests/fixtures/`, a test that fails for the reported reason, a fix committed on the slice branch, and a reinstall (D2). A D9 fix only lets the existing path run; anything touching answer content falls under D8.
 
 ### D10 — Recording the verdict
-Status: decided
+Status: dropped (2026-11-12)
 
 - **The note** (docType `analysis`) holds the setup, `trial_start` and stop pass, the ledger, the counts (answered without the PM, waiting by reason, wrong answers, false screen matches, should-have-answered), the verdict, proposed fixes, and whether amoeba#36 is needed. The tally is a `jq` recipe over the CLI's JSON, kept in the note's appendix.
 - **Go:** the initiative plan's 220 entry gains one line with the share and a link to the note.
@@ -103,22 +107,22 @@ Status: decided
 
 ## Success Criteria
 
-- The three D1 members are registered, and a pause in each starts `handle_pause` through the hook.
-- Real work runs in at least two members, and the ledger holds at least 20 counted questions from at least two members, with every question in `decisions` and every missed hook in `status` after `trial_start` accounted for.
-- The note gives the D10 counts with proposed fixes, and states go or rethink; the plans reflect it.
-- The answering run's command carries the opt-out flag (unit-tested). Each D9 shape has a fixture and a test that failed before its fix. Format, lint, typecheck and tests pass after each fix. amoeba#35 is closed.
+- The three D1 members are registered, and a pause in each starts `handle_pause` through the hook (sanity pass).
+- The answering run's command carries the opt-out flag (unit-tested). Each D9 shape has a fixture and a test that failed before its fix. Format, lint, typecheck and tests pass. amoeba#35 is closed.
+- The plans no longer gate 227 on a verdict.
 
 ## Verification Walkthrough
 
-Draft. Needs 223 and 224 merged and Squadron with #302 and #303.
+Verified 2026-11-12 on branch `225-slice.scenario-a-trial` (installed commit 93e8f41), with Squadron 0.24.26 (#302 and #303 shipped). Needs slices 223 and 224 merged.
 
-1. **Checks and install**, on the slice branch after the D3 commit:
+1. **Checks and install**, from the amoeba repo root:
    ```bash
-   uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest
+   uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest -q
    uv tool install --force .
-   which amoeba
    ```
-2. **Config and members.** Write `~/.config/amoeba/config.yaml`. Then, from `trading-data`:
+   Expect `All checks passed!`, `0 errors, 0 warnings`, and `1452 passed`. Then from a directory outside the repo, `amoeba --help` runs. Caveat: if a project `.venv` is on PATH, `which amoeba` prints that venv's binary; the installed tool is `~/.local/bin/amoeba`.
+2. **Opt-out flag.** `grep -rn PAUSE_COMMAND_OPT_OUT_FLAG src` shows the constant defined once in `operations/answering_run.py` (value `--no-pause-hook`); the unit tests assert the answering run's `sq run` argv carries it exactly once.
+3. **Config and members.** `~/.config/amoeba/config.yaml` follows the example in `docs/config-contract.md` (credentials from the environment). From `trading-data`:
    ```bash
    amoeba set_up --file - <<'EOF'
    program: trading
@@ -134,11 +138,10 @@ Draft. Needs 223 and 224 merged and Squadron with #302 and #303.
        rules_paths: [CLAUDE.md]
    EOF
    ```
-   Expect `applied`; a repeat gives `unchanged`.
-3. **Hook.** Add the config line from `docs/squadron-hook.md` to Squadron's config.
-4. **Sanity pass, not counted.** In `trading-data`, run 223's live fixture pipeline (`<amoeba repo>/tests/live/pause/`) and leave it to pause. With no command typed, expect `decisions` to show an `answerer` record with `resume.outcome: resumed`, or `status` to list it under `waiting_on_pm`, and no question record for the answering run's id. A pause in the amoeba repo leaves nothing in the store.
-5. **Trial.** Record `trial_start`. The PM works as normal. Review passes per D6.
-6. **Stop and verdict.** At the D5 stop, run the tally, check the counts add up to the ledger's rows, and record the verdict (D7, D10).
+   Expect JSON with `"outcome": "applied"` the first time and `"outcome": "unchanged"` on a repeat (the repeat was re-run during this verification).
+4. **Hook.** `sq config set pipeline.on_pause_command "amoeba handle_pause"` (user level). `sq config get pipeline.on_pause_command` prints `pipeline.on_pause_command = amoeba handle_pause  (user)`. A watching PM skips the hook for one run with `sq run --no-pause-hook`.
+5. **Sanity pass, not counted.** In each member run `sq run <amoeba repo>/tests/live/pause/asks_question.yaml` (model `sonnet-high`) and leave it to pause. From outside every member, `amoeba decisions` lists `answerer` records with `resume.outcome: resumed` for each member's run, and no question record exists for an answering run's id. The fixture re-asks after each resume, so each run ends under `waiting_on_pm` in `amoeba status` with `answer_limit_reached` after 3 answers; that is expected. The same pipeline in the amoeba repo (not a member) adds nothing to `decisions` or `status`.
+6. **Trial (dropped).** The counted trial and verdict are dropped; evidence comes from normal use of `decisions` and `status`.
 
 ## Risks
 

@@ -20,15 +20,28 @@ waiting on the PM. This file says what the wiring must satisfy. The CLI is in
 ## What to configure
 
 - **The command.** Configure `amoeba handle_pause <run_id>`, run in the run's own
-  directory. Squadron supplies both the run id and the directory (Squadron #302,
-  `pipeline.on_pause_command`). The exact configuration line is added with #302's form
-  when the scenario A trial (slice 225) wires a real repository (amoeba#35).
+  directory. Squadron supplies both the run id (as the command's last argument) and the
+  directory (Squadron #302, `pipeline.on_pause_command`). The configuration line:
+
+  ```bash
+  sq config set pipeline.on_pause_command "amoeba handle_pause"
+  ```
+
+  Squadron splits the value like a shell line and runs it without a shell, so `amoeba`
+  must be on the `PATH` the pausing `sq run` has.
+- **User-level or per-project.** The line above writes the user-level config
+  (`~/.config/squadron/config.toml`), configured once. A pause in a repo outside any
+  program then skips as `not_a_project` or `not_in_program`. To hook only some repos,
+  run `sq config set --project pipeline.on_pause_command "amoeba handle_pause"` from
+  each one instead; that writes the repo's `.squadron.toml`.
 - **Which repos.** Only repos in a program need the hook. A repo that is not a Context
   Forge project, or is in no program, is skipped by `handle_pause` itself
-  (`not_a_project`, `not_in_program`). A run started with the opt-out
-  (`sq run --no-pause-hook`) is left alone: Amoeba's own answering runs always pass it,
-  and a pause that does reach `handle_pause` from an answering run is skipped as
-  `answering_run`.
+  (`not_a_project`, `not_in_program`).
+- **The opt-out.** A run started with `sq run --no-pause-hook` does not start the
+  command. A PM who watches a run and will answer it personally passes this flag. Amoeba's
+  own answering runs always pass it (`PAUSE_COMMAND_OPT_OUT_FLAG` in
+  `operations/answering_run.py`); a pause that does reach `handle_pause` from an
+  answering run is skipped as `answering_run`.
 - **A hand call.** Run by hand, `amoeba handle_pause <run_id>` must run in the run's own
   checkout. Squadron records nothing that confirms the directory until it adds the
   run's working directory to `sq runs wait --json` (see the `params` and
