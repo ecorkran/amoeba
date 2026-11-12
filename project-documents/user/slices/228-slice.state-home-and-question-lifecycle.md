@@ -35,7 +35,7 @@ revision_number: 2
 
 Running 225 showed design holes that the Amoeba design rules (CLAUDE.md, "Amoeba Design Rules") now forbid. This slice fixes them:
 
-- **State leaves `~/.config`.** `config.yaml` stays in `~/.config/amoeba/`. The store, `answering/` and `logs/` move to `${XDG_STATE_HOME:-~/.local/state}/amoeba/`. An existing store is moved by code on first use and checked before the old copy is deleted. `AMOEBA_HOME` still redirects everything to one directory for tests.
+- **State leaves `~/.config`.** `config.yaml` stays in `~/.config/amoeba/`. The store, `answering/` and `logs/` move to `~/.local/state/amoeba/`. An existing store is moved by code on first use and checked before the old copy is deleted. `AMOEBA_HOME` still redirects everything to one directory for tests.
 - **Every question has an exit.** A new `closed` state. `dismiss` closes a `claimed` or `waiting_on_pm` question with a reason. `status` and `handle_pause` close questions whose run has moved on or been deleted, recording the run's outcome. `retract` stops a PM answer being precedent. A PM answer resets the run's answer limit.
 - **Set-up can undo itself.** `set_up` gains `remove` entries for members and pairs. It refuses to remove a member with open questions.
 - **Everything written has a cleanup.** Answering scratch directories and logs of settled questions are pruned after a configured age. The new calls log is pruned the same way.
@@ -45,7 +45,7 @@ Closes amoeba#34, #36 and #37. Effort: 4/5.
 
 ## Value
 
-User value. The PM, or any agent acting for the PM, can clear a stuck or stale question with a command. Nothing is ever fixed by editing the store. Records whose run has gone close on their own, so `status` shows only what is actually waiting. A hook call that did nothing leaves a reason that can be read. State lives where state belongs, and nothing Amoeba writes grows without bound.
+User value. The PM, or any agent acting for the PM, can clear a stuck or stale question with a command. Nothing is ever fixed by editing the store. Records whose run has gone close on their own, so `status` shows only what is actually waiting. A hook call that did nothing leaves a reason that can be read. State lives where state belongs, and nothing Amoeba writes grows without bound except the question and answer record, which grows with real pauses and is the record.
 
 It also settles the home layout and the question states that 226 (MCP) and 227 (program dependencies) read.
 
@@ -110,7 +110,7 @@ src/amoeba/
 └── cli/main.py           # + dismiss, retract; prepare_state_home; calls log at the boundary
 ```
 
-Import direction is unchanged: `cli → operations → store, config, upstream`. `store/relocate.py` takes both paths as arguments and imports nothing from `config`. Only `config/home.py` reads `AMOEBA_HOME`, `XDG_STATE_HOME` or `Path.home`. The 222 D10 AST test gains `XDG_STATE_HOME`.
+Import direction is unchanged: `cli → operations → store, config, upstream`. `store/relocate.py` takes both paths as arguments and imports nothing from `config`. Only `config/home.py` reads `AMOEBA_HOME` or `Path.home`.
 
 ### Data Flow
 
@@ -144,27 +144,27 @@ Status: decided
 `config/home.py`:
 
 - `config_home()`: `$AMOEBA_HOME` when set, else `~/.config/amoeba`. Holds `config.yaml` only. `XDG_CONFIG_HOME` is still not consulted (222 D1). The plan keeps the config at `~/.config/amoeba/`, and it is already the XDG default.
-- `state_home()`: `$AMOEBA_HOME` when set; else `$XDG_STATE_HOME/amoeba` when that variable is set and non-empty; else `~/.local/state/amoeba`. An empty `XDG_STATE_HOME` counts as unset, as the XDG spec defines it. A relative value raises `AmoebaHomeError`. The spec says to ignore such a value, but the project forbids silent fallbacks.
+- `state_home()`: `$AMOEBA_HOME` when set; else `~/.local/state/amoeba`. `XDG_STATE_HOME` is not consulted. The hook runs in Squadron's environment and the shell in another, and a variable set in only one would put them on different stores with no error.
 - `store_path()`, `answering_dir()` and `logs_dir()` move under `state_home()`. `calls_log_dir()` is `logs_dir() / "calls"`. `config_path()` is under `config_home()`.
 - `legacy_state_home()` returns `~/.config/amoeba` when `AMOEBA_HOME` is unset and that path differs from `state_home()`; otherwise `None`. Only the move (D2) and run placement (D12) use it.
 - `amoeba_home()` is removed. Each caller asks for the home it means, so no code can put state in the config directory by accident.
 - `squadron_runs_dir()` is unchanged. Squadron's own layout is not Amoeba's to move.
 - A `StateLayout` value (state home, store path, answering dir, logs dir, legacy home or `None`) is built once by the CLI and passed down, so operations still take paths, not the environment.
 
-Tests: the autouse `AMOEBA_HOME` fixture is unchanged, so every test still gets one throwaway directory. `tests/config/test_home.py` adds: `XDG_STATE_HOME` honored, empty treated as unset, relative rejected, `AMOEBA_HOME` overriding both, `legacy_state_home()` being `None` under `AMOEBA_HOME`.
+Tests: the autouse `AMOEBA_HOME` fixture is unchanged, so every test still gets one throwaway directory. `tests/config/test_home.py` adds: the default state home, `AMOEBA_HOME` overriding both homes, `legacy_state_home()` being `None` under `AMOEBA_HOME`.
 
 ### D2 — Moving the legacy state on first use
 Status: decided
 
 `operations/state_move.prepare_state_home(layout) -> MoveReport` runs inside `state_move.open_state_store(layout)`, the only function that opens the store: it moves, then calls `Store.open`. The CLI and 226's MCP layer open the store only through it. An AST test checks that no module under `src/amoeba` except `state_move.py` calls `Store.open`, and a CLI test runs every subcommand against a legacy home and checks the move happened. So no entry point can create an empty state-home store before the move. It does nothing when `layout.legacy_home` is `None` or holds none of `amoeba.sqlite3`, `answering/` or `logs/`. Steps 1–4 run only when the legacy `amoeba.sqlite3` file exists. With only directories left (a crash during step 5), the call goes straight to step 5.
 
-1. **Lock the old store.** Open the legacy store read-write without create (an `sqlite3` URI with `mode=rw`, never `Store.open`, which would create a missing store), and take `BEGIN IMMEDIATE` on it, using the normal busy timeout. This keeps out any process still running old code, and a second new process wanting to move. Whoever loses the lock waits, then finds the move done. Old code's write transactions are short, so the wait normally ends well inside the timeout. If it doesn't, the call raises `StoreBusyError` (exit 3; for the hook, a calls-log line and a missed hook in `status`), nothing has been written, and the next call tries the move again.
+1. **Lock the old store.** Open the legacy store read-write without create (an `sqlite3` URI with `mode=rw`, never `Store.open`, which would create a missing store), and take `BEGIN IMMEDIATE` on it, using the normal busy timeout. This keeps out any process still running old code, and a second new process wanting to move. Whoever loses the lock waits, then finds the move done. Old code's write transactions are short, so the wait normally ends well inside the timeout. If it doesn't, the call raises `StoreBusyError` (exit 3; for the hook, a calls-log line and a missed hook in `status`), nothing has been written, and the next call tries the move again. After the lock is taken the legacy file is checked again: if it is gone, another process finished the move while this one waited (a lock on a file already deleted would succeed), so this call closes the connection and goes to step 5. A `mode=rw` open that fails because the file is gone is the same case.
 2. **Copy.** If the new store does not exist, a leftover `amoeba.sqlite3.moving` from a crash inside this step is deleted first. Only the lock holder reaches this step, so the file is never another process's live copy. `store/relocate.copy_store` then copies the old one with `Connection.backup` into `amoeba.sqlite3.moving` in the state home. It then rewrites every `answers.resume_log` value that starts with the legacy home to the new state home. That column holds absolute paths (223 D10), and no other column holds a path under the home. A `sqlite3.Error` or `OSError` from the copy (a full disk, an I/O error) deletes the `.moving` file and raises `StoreRelocateError` naming the cause. The old store is untouched, and the next call tries again.
 3. **Verify the copy.** `PRAGMA integrity_check` returns `ok`. The schema version matches. Every table's row count matches. `MAX(answers.seq)` matches. No `resume_log` still starts with the legacy prefix. On any mismatch, delete the `.moving` file and raise `StoreRelocateError` (a `StoreError`, so exit 3) naming the check. The old store is not touched.
 4. **Place it.** Rename `.moving` to `amoeba.sqlite3` (atomic within one directory), then commit and close the old connection. Delete the old `amoeba.sqlite3` and its `-wal` and `-shm` files.
 5. **Move directories.** Move each entry of the legacy `answering/`, `logs/answering/` and `logs/resume/` into the same place under the state home: first to `.<name>.moving` with `shutil.move` (which copies when the two homes are on different filesystems), then rename. A leftover `.<name>.moving` from a crashed move is removed and that entry moved again. Empty legacy directories are removed. `config.yaml` is never touched.
 
-**Both stores exist** (a crash between steps 4 and the delete, or a process on old code wrote to the legacy path after the move): under the step 1 lock, compare as in step 3. If they are the same, delete the legacy store and continue with step 5. If they differ, the state-home store wins, because it is the only one current code writes, and `open_state_store` guarantees it was created by the move, never empty by accident. The legacy store (with its `-wal` and `-shm` files) is moved into the state home as `amoeba.sqlite3.legacy-<UTC stamp>`, never opened again, and the move continues with step 5. One stderr line names the set-aside file and both stores' row counts and `MAX(answers.seq)`, so whatever the old process wrote can still be read there. D9 prunes the set-aside file after `prune_after_days`. This only happens when an old install kept running after the upgrade, which is rare, so it gets a set-aside file rather than a merge.
+**Both stores exist** (a crash between steps 4 and the delete, or a process on old code wrote to the legacy path after the move): under the step 1 lock, compare as in step 3. If they are the same, delete the legacy store and continue with step 5. If they differ, the state-home store wins, because it is the only one current code writes, and `open_state_store` guarantees it was created by the move, never empty by accident. The legacy store (with its `-wal` and `-shm` files) is moved into the state home as `amoeba.sqlite3.legacy-<UTC stamp>`, never opened again, and the move continues with step 5. One stderr line names the set-aside file and both stores' row counts and `MAX(answers.seq)`, so whatever the old process wrote can still be read there. D9 leaves it alone. This only happens when an old install kept running after the upgrade, which is rare, so it gets a set-aside file rather than a merge.
 
 `MoveReport` (moved store yes or no, entries moved) goes to stderr as one line when something moved. Tests use explicit throwaway paths for both homes and never `Path.home`. They cover: a fresh move with every row and `resume_log` checked, a crash after each step and inside step 2 (simulated by stopping there) followed by a clean rerun, a copy error, including a crash during step 5 with the legacy store already deleted (no legacy store is created), identical and differing double stores, a held legacy write lock, and a cross-filesystem-style move (by injecting the mover).
 
@@ -192,12 +192,12 @@ Status: decided
 |---|---|
 | `waiting_on_pm` | `closed`, reason `run_moved_on` or `run_gone`, `closed_detail` the run's state |
 | `claimed`, `claimed_at` older than `answering_wait_seconds` | Same. A young claim is left alone, since its answering run may still settle |
-| `answered`, latest answer unresumed, its newest of `recorded_at`, `resume_started_at` and `resume_at` older than `resume_bound_seconds(config, deps)` | Answer's `resume_outcome` set to `not_delivered`, detail the run's state. No new question state: this is 223 D8's own meaning of not delivered |
+| `answered`, latest answer unresumed, its newest of `recorded_at`, `resume_started_at` and `resume_at` older than `resume_bound_seconds(config)` | Answer's `resume_outcome` set to `not_delivered`, detail the run's state. No new question state: this is 223 D8's own meaning of not delivered |
 
-- **"Not at its pause"** means the run is paused at another `paused_at`, or is `running`, `completed` or `failed`. That is `run_moved_on`, with the state or later `paused_at` as detail. A run `sq` no longer knows is `run_gone`: `not_found` from `poll_run` in `handle_pause`, or absent from the `--all` listing in `status`.
-- **`resume_bound_seconds(config, deps)`** is `resume_wait_seconds + RESUME_POLL_INTERVAL_SECONDS + 2 × <poll_run timeout> + 2 × TERMINATE_GRACE_SECONDS + BUSY_TIMEOUT_SECONDS`, defined once in `resume.py`. It is the longest a resume can take before recording its outcome (223 D8 steps 3–4). It counts the last poll in the wait loop, the SIGTERM grace and then the SIGKILL grace in `terminate_group`, the poll after the kill, and the store write. `resume.py` sets `resume_started_at` just before every spawn, so a retried resume in flight is never marked `not_delivered` under it.
+- **"Not at its pause"** means the run is paused at another `paused_at`, or is `running`, `completed` or `failed`. That is `run_moved_on`, with the state or later `paused_at` as detail. A run `sq` no longer knows is `run_gone`: `not_found` from `poll_run` in `handle_pause`, or absent from both the `--all` listing and the runs directory in `status`.
+- **`resume_bound_seconds(config)`** is `resume_wait_seconds + RESUME_POLL_INTERVAL_SECONDS + 2 × RUN_POLL_TIMEOUT_SECONDS + 2 × TERMINATE_GRACE_SECONDS + BUSY_TIMEOUT_SECONDS`, defined once in `resume.py`. It is the longest a resume can take before recording its outcome (223 D8 steps 3–4). It counts the last poll in the wait loop, the SIGTERM grace and then the SIGKILL grace in `terminate_group`, the poll after the kill, and the store write. `resume.py` sets `resume_started_at` just before every spawn, so a retried resume in flight is never marked `not_delivered` under it. It is a compare-and-set on the answer's `resume_outcome` (null or `refused`): if the sweep already made the outcome final, no child is spawned and the resume reports `not_delivered`.
 - **`sweep_run(store, config, run_id, polled, now)`** runs in `handle_pause` right after `poll_run`, before eligibility (except that an answering run's id never has rows). It closes this run's open rows at any other `paused_at`, or all of them if the run is no longer paused. It needs no directory or member, because the run id and Squadron's answer settle it. So the hook at a run's next pause closes the question left at the last one, with nobody calling `status`.
-- **`sweep_scope(store, config, rows, listed, deps, now)`** runs in `status` for open rows of members in scope. Every row is judged from the one listing `status` already makes, which `run_list.py` now takes with `--all`. Checked on `sq` 0.24.27, 20261112: the default listing held 8 of the 100 completed runs, and `--all` held all 100 plus every running, paused and failed run. So a run in the listing gives its state or later pause, and a run absent from it is `run_gone`. `status` drops completed runs from its per-member run lists, so what it shows is unchanged. The sweep adds no `sq` call and nothing to `status`'s time bound.
+- **`sweep_scope(store, config, rows, listed, deps, now)`** runs in `status` for open rows of members in scope. Every row is judged from the one listing `status` already makes, which `run_list.py` now takes with `--all`. Checked on `sq` 0.24.27, 20261112: the default listing held 8 of the 100 completed runs, and `--all` held all 100 plus every running, paused and failed run. So a run in the listing gives its state or later pause, and a run absent from it is `run_gone` only when its run file is also absent from Squadron's runs directory (a file check, no subprocess). A run absent from the listing that still has a file is left open, so an incomplete listing never closes a live question. `status` drops completed runs from its per-member run lists, so what it shows is unchanged. The sweep adds no `sq` call and nothing to `status`'s time bound.
 - No transaction is held across a subprocess. Both sweeps read, call `sq` (`sweep_run` reuses `handle_pause`'s poll), then write in one short transaction.
 - **A failed sweep write never fails the call.** A `StoreBusyError` on the sweep's transaction is caught, with a comment saying why: a closure that lost a lock must not hide the PM's waiting list. The rows stay open and close at a later call. `status` still prints everything, with the rows shown as before the sweep and the error in a new `sweep_problem` field. `handle_pause` puts it in its calls-log line's `detail` and carries on. Any other `StoreError` stays exit 3, as 222 D9 defines.
 - `status` now writes. 224 kept it read-only. The plan assigns this to `status` because a run that completes never fires the hook again, so `status` is the only call that sees it.
@@ -215,8 +215,9 @@ amoeba dismiss <run_id> [--paused-at <ts>] --reason <text>
 - **Reason**, stripped and non-empty, else `rejected / malformed`. It is stored as `closed_detail`.
 - **`claimed` or `waiting_on_pm`**: compare-and-set to `closed`, `dismissed`. Outcome `dismissed`. A run at the answer limit is `waiting_on_pm`, so it can be dismissed. An in-flight answering run for a dismissed claim settles into nothing, because 223's settle is `WHERE state = 'claimed'`. It is not killed: its cost cap and `answering_wait_seconds` bound it, and its scratch is pruned like any other (D9).
 - **Already `closed`**: outcome `unchanged`, with the existing reason.
-- **`answered`**: `rejected / not_open`. The detail says the answer was already given, and that `retract` stops it being precedent.
-- The run is not resumed and stays paused in Squadron, where Squadron's own commands deal with it. `status` shows it with the class `closed` (D12) and no `next`. `handle_pause` skips it as `closed`.
+- **`answered`, latest answer unresumed** (`resume_outcome` null or `refused`): one transaction closes the question (`closed`, `dismissed`) and marks that answer `not_delivered` with detail `dismissed`. Outcome `dismissed`. This is the exit for an answer the run will not take: a resume refused at the run's own pause, or a removed member's question.
+- **`answered`, latest answer `resumed` or `not_delivered`**: `rejected / not_open`. For a `resumed` answer the detail says it was delivered, and that `retract` stops it being precedent; for a `not_delivered` one it says the answer was recorded but never delivered.
+- The run is not resumed and stays paused in Squadron, where Squadron's own commands deal with it. `status` shows it with the class `closed` (D12) and no `next`; the detail says the run is still paused in Squadron and Amoeba does not resume or end it (`sq run --resume` continues it). `handle_pause` skips it as `closed`.
 - A dismissed question has no PM answer, so it is never precedent. `pm_precedent` also leaves out `closed` questions explicitly (D6), so this holds if a later change lets a closed question carry a PM answer.
 - Exit 0 for `dismissed` or `unchanged`, 1 for `rejected`.
 
@@ -254,9 +255,9 @@ remove:
 - **Members are soft-removed.** `members.removed_at` is set. Their question, answer and release rows reference the member, and they are the record. A removed member's pairs are deleted. A removed member is treated as not a member everywhere, enforced in one place. `store/programs.py` defines the active-member predicate (`removed_at IS NULL`) once as an SQL constant, and every member and pair read there uses it. No other module queries `members`, which an AST test over the SQL constants checks. So `resolve_member` gives `NotInProgram`, `members_of` leaves the member out, `status` doesn't list it, and `member_of_other_program` ignores it, with no filter of their own. Naming it again under `members` re-registers it (clearing `removed_at`, possibly in another program), with `rules_paths` required as for a new member.
 - **Pairs are deleted.** A pair carries no history.
 - **The concept** is removed with `concept: null`, which 222 D7 already provides. This slice adds no second way. It adds a test and documents the line under removal in `docs/cli-contract.md`. Removing the concept member without clearing or moving the concept is rejected by the existing `concept_member_not_member` check.
-- **New problems:** `member_has_open_questions` (the member has `claimed` or `waiting_on_pm` rows; the detail lists their keys and says to `dismiss` or `answer` them), `not_a_member` (the reference is no member of this program, past or present). `malformed` also covers a member under both `members` and `remove.members`, a pair under both `depends_on` and `remove.pairs`, and removing a member while naming it as a pair end.
+- **New problems:** `member_has_open_questions` (the member has an open question, as D4 defines it: `claimed`, `waiting_on_pm`, or `answered` with an unresumed latest answer; the detail lists their keys and says to `dismiss` or `answer` them), `not_a_member` (the reference is no member of this program, past or present). `malformed` also covers a member under both `members` and `remove.members`, a pair under both `depends_on` and `remove.pairs`, and removing a member while naming it as a pair end.
 - **Repeats** follow 222: removing an already removed member or an absent pair is no change, so a repeat request returns `unchanged`. `changes` gains `removed member <id>` and `removed pair <provider> -> <consumer>` lines.
-- An answered question waiting on a resume does not block removal. It is not a question waiting on anyone, and D4 closes it.
+- An `answered` question with an unresumed answer blocks removal like any open question. Its run is still paused, and once the member is gone the hook skips it as `not_in_program`, so only `dismiss` (D5) can close it.
 
 ### D9 — Pruning
 Status: decided
@@ -266,7 +267,7 @@ New required config key `prune_after_days` (int ≥ 1, no default in code; 222 D
 - **Settled question:** `closed`, or `answered` with latest answer `resumed` or `not_delivered`.
 - **`answering/<id>/` and `logs/answering/<id>.*`:** removed when older than the age (by mtime) and either no question has `answering_run_id = <id>` (a lost insert race, a crash before insert, or an id a restarted dead claim replaced) or that question is settled.
 - **`logs/resume/<run_id>/`:** a file is removed when older than the age and its run has no open question (D4). The directory goes when empty. `answers.resume_log` keeps the path as history. `decisions` prints it as stored, and a missing file there is not an error; `docs/store-contract.md` says so.
-- **`amoeba.sqlite3.legacy-<stamp>`** (D2) is removed when older than the age.
+- **`amoeba.sqlite3.legacy-<stamp>`** (D2) is not pruned. It holds the only copy of answers an old process wrote after the move. It exists only when an old install kept running after the upgrade, so it is at most one store-sized file per such event, which the PM can delete. Deleting the file is its accepted exit: no process reads it, and `docs/store-contract.md` says so.
 - **`logs/calls/<date>.jsonl`:** removed when the date is older than the age.
 - **Any other file under `logs/`** (226's `logs/mcp/` included) is removed when older than the age, and an emptied directory goes with it.
 - An entry tied to an open question is kept whatever its age. It is evidence for the PM and for the dead-claim path. D4 and the PM's commands bound how long a question stays open.
@@ -277,7 +278,7 @@ New required config key `prune_after_days` (int ≥ 1, no default in code; 222 D
 Status: decided
 
 - `RunFacts` gains `working_directory: Path | None`. It is present in schema-5 files from `sq` 0.24.24 on, and absent (`None`) in earlier schema-5 files, which is no error. `_Body` reads it as optional. A recorded file from 0.24.27 is the new fixture, beside the existing one without the key.
-- `handle_pause` checks `realpath(directory) == realpath(working_directory)` after `prompt_only` (the run file is already read for that check) and before the row checks. A mismatch gives the skip `wrong_checkout` with the detail `called from <directory>; the run was started in <working_directory>`, and writes no question row. The D4 `sweep_run` runs before every skip, so a skipped call may already have closed this run's rows at other pauses. That is intended: it depends only on the run id and Squadron's answer, never on the directory. With `None`, the check is skipped, as before.
+- `handle_pause` checks `realpath(directory) == realpath(working_directory)` after `prompt_only` (the run file is already read for that check) and before the row checks. A mismatch gives the skip `wrong_checkout` with the detail `called from <directory>; the run was started in <working_directory>`, and writes no question row. When the recorded directory no longer exists the detail says so and names Squadron's own commands (`sq run --resume`) as the way to continue or leave the run. The D4 `sweep_run` runs before every skip, so a skipped call may already have closed this run's rows at other pauses. That is intended: it depends only on the run id and Squadron's answer, never on the directory. With `None`, the check is skipped, as before.
 - It applies whatever the row state, so a dead claim or an unresumed answer is never resumed from a second worktree either.
 - `docs/squadron-hook.md` drops its warning for runs started on `sq` 0.24.24 or later, and keeps it for older runs.
 
@@ -305,12 +306,12 @@ Status: decided
 - `cli/main.py` gains `dismiss` and `retract` (exit 0, 1, 2, 3 as 222 D9) and opens the store only through `open_state_store` (D2) in every command. `StoreRelocateError` is exit 3.
 - `docs/cli-contract.md`: both new commands, `set_up` `remove`, the new `status` fields, the new skip reasons (`closed`, `wrong_checkout`), and the calls log's line format.
 - `docs/config-contract.md`: `prune_after_days` in the key table and the example (value `30`), and the two homes.
-- `docs/store-contract.md`: its description of the migration rule says `ADD COLUMN` stays the default, names `003`'s `questions` rebuild as the one exception and why (D3), and says a new exception needs the same justification in its design. Also migration `003`, the `closed` state and its reasons, which operation writes each new column, and the lifecycle table from D4/D5/D6.
-- `README.md` "where things live": the two homes and `XDG_STATE_HOME`.
+- `docs/store-contract.md`: its description of the migration rule says `ADD COLUMN` stays the default, names `003`'s `questions` rebuild as the one exception and why (D3), and says a new exception needs the same justification in its design. Also migration `003`, the `closed` state and its reasons, that deleting a set-aside `amoeba.sqlite3.legacy-<stamp>` file is its exit, which operation writes each new column, and the lifecycle table from D4/D5/D6.
+- `README.md` "where things live": the two homes.
 
 ### Pending Planning Edits
 
-Made outside this slice, when this design is accepted:
+Made by task 0.1 of this slice's task file, on the target before the slice branch exists, which also updates the matching lines of the 226 and 227 task files:
 
 - **`220-arch.program-tool.md`:** the operation table gains `dismiss` and `retract`. "The question record" gains the `closed` state and its three reasons, and says a retracted PM answer is not precedent and a PM answer resets the answer limit. "Where things live" gains the two homes. A note says `status` closes records whose run has gone and prunes old files, and that this is still bounded and adds no `sq` call.
 - **`226-slice.mcp-server.md`:** eight operations, not six. The tool table gains `dismiss` and `retract` (in-process). The stdio smoke test lists eight tools. The MCP layer opens the store through `open_state_store`.
@@ -325,7 +326,7 @@ Made outside this slice, when this design is accepted:
 
 ### Migration Plan
 
-**What moves:** the store file and the `answering/` and `logs/` trees, from `~/.config/amoeba/` to `${XDG_STATE_HOME:-~/.local/state}/amoeba/`. `config.yaml` stays.
+**What moves:** the store file and the `answering/` and `logs/` trees, from `~/.config/amoeba/` to `~/.local/state/amoeba/`. `config.yaml` stays.
 
 **Consumers of the home functions:** `cli/main.py` (`store_path`, `config_path`, `_deps` building `answering_dir`, `logs_dir`) and `status_placement.py` (through `deps`). Removing `amoeba_home()` makes pyright list any caller this design missed. `tests/conftest.py` keeps `AMOEBA_HOME`. The live tests set `AMOEBA_HOME`, so they are unaffected.
 
@@ -355,7 +356,7 @@ See D3. One rebuilt table (`questions`), five added columns elsewhere, schema ve
 
 - With `AMOEBA_HOME` unset in a throwaway `HOME`, a legacy `~/.config/amoeba/` holding a store, `answering/` and `logs/` ends with only `config.yaml` there after one command. The new store has every row, `resume_log` paths point under the state home, and it is at schema 3.
 - A differing double store leaves the state-home store in use and the legacy one set aside as `amoeba.sqlite3.legacy-<stamp>` in the state home, named on stderr. A held legacy write lock delays the move and then the move completes.
-- `dismiss` closes a `claimed` and a `waiting_on_pm` question (including one at the answer limit), returns `unchanged` on repeat, and rejects an `answered` one with `not_open`. `handle_pause` on the same pause skips as `closed`, and `status` shows class `closed`.
+- `dismiss` closes a `claimed` and a `waiting_on_pm` question (including one at the answer limit), closes an `answered` one whose answer is unresumed (marking that answer `not_delivered`), returns `unchanged` on repeat, and rejects an `answered` one whose answer was delivered with `not_open`. `handle_pause` on the same pause skips as `closed`, and `status` shows class `closed`.
 - `retract` on a PM answer removes it from `pm_precedent`. An `answerer` answer is rejected. A new PM answer restores precedent.
 - After a PM answer, a run with `answer_limit` automatic answers already given gets another automatic answer.
 - `handle_pause` at a run's later pause closes the open row at the earlier pause as `run_moved_on`. `status` closes a waiting row whose run completed (`run_moved_on`, detail `completed`) and one whose run is unknown to `sq` (`run_gone`), lists both in `closed_now` once, and never closes a young claim or an answer whose resume may be in flight.
@@ -373,7 +374,7 @@ See D3. One rebuilt table (`questions`), five added columns elsewhere, schema ve
 
 ### Integration Requirements
 
-- A question in every state has an exit with no file edits: `claimed` (settle, dead claim, sweep, dismiss), `waiting_on_pm` (answer, sweep, dismiss), `answered` and unresumed (resume, sweep), `answered` and settled (terminal), `closed` (terminal; `answer` reopens it), a retracted answer (terminal; a new answer replaces it). A test walks each state to its exit.
+- A question in every state has an exit with no file edits: `claimed` (settle, dead claim, sweep, dismiss), `waiting_on_pm` (answer, sweep, dismiss), `answered` and unresumed (resume, sweep, dismiss), `answered` and settled (terminal), `closed` (terminal; `answer` reopens it), a retracted answer (terminal; a new answer replaces it). A test walks each state to its exit.
 - 226 and 227 designs can read the layout and states from this document and the contract docs alone.
 
 ### Verification Walkthrough
@@ -383,7 +384,7 @@ Draft, refined after Phase 6. Run from the amoeba repo root with `sq` 0.24.24 or
 1. **Checks.** `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest -q`. All pass.
 2. **Legacy move, throwaway.**
    ```bash
-   export FAKE_HOME=$(mktemp -d); unset AMOEBA_HOME XDG_STATE_HOME
+   export FAKE_HOME=$(mktemp -d); unset AMOEBA_HOME
    mkdir -p $FAKE_HOME/.config/amoeba
    cp ~/.config/amoeba/config.yaml $FAKE_HOME/.config/amoeba/   # then add prune_after_days: 30
    sqlite3 ~/.config/amoeba/amoeba.sqlite3 ".backup $FAKE_HOME/.config/amoeba/amoeba.sqlite3"
