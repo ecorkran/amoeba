@@ -21,6 +21,19 @@ class QuestionState(StrEnum):
     CLAIMED = "claimed"
     ANSWERED = "answered"
     WAITING_ON_PM = "waiting_on_pm"
+    #: Ended without an answer to deliver (228 D3); ``answer`` reopens it.
+    CLOSED = "closed"
+
+
+class ClosedReason(StrEnum):
+    """Why a question was closed."""
+
+    #: The PM, or an agent for the PM, ran ``dismiss``.
+    DISMISSED = "dismissed"
+    #: The run left that pause, or finished, so nobody can answer it.
+    RUN_MOVED_ON = "run_moved_on"
+    #: Squadron no longer knows the run.
+    RUN_GONE = "run_gone"
 
 
 class ResumeOutcome(StrEnum):

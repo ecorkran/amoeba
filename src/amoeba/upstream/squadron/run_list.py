@@ -1,8 +1,10 @@
 """The one reader of ``sq runs list --json`` (slice 224, D1).
 
-It is the only module that runs ``sq runs list`` or parses its output. Called without
-``--all``: the default lists every running and paused run (and some completed ones),
-which is every run ``status`` can act on; a run absent from it has finished or is gone.
+It is the only module that runs ``sq runs list`` or parses its output. Called with
+``--all`` (228 D4): the default listing holds every running, paused and failed run but
+only some completed ones, so a run absent from it could still exist; ``--all`` adds
+every completed run, so a run absent from it is unknown to ``sq`` unless its run
+file says otherwise (``run_file_exists``).
 Only stdout is parsed: ``sq`` may print a warning on stderr (for example that some runs
 reference unavailable pipelines), and that is not an error.
 
@@ -27,10 +29,12 @@ from amoeba.upstream.squadron.run_outcome import SQ_EXECUTABLE, RunCheckpoint
 
 #: ``sq runs list --json``.
 RUNS_LIST_ARGUMENTS: Final = ("runs", "list")
-RUNS_LIST_FLAGS: Final = ("--json",)
+RUNS_LIST_FLAGS: Final = ("--json", "--all")
 
 #: The listing's status for a paused run.
 PAUSED_STATUS: Final = "paused"
+#: The listing's status for a finished run.
+COMPLETED_STATUS: Final = "completed"
 
 
 @dataclass(frozen=True)
@@ -58,6 +62,10 @@ class ListedRun:
     @property
     def is_paused(self) -> bool:
         return self.status == PAUSED_STATUS
+
+    @property
+    def is_completed(self) -> bool:
+        return self.status == COMPLETED_STATUS
 
 
 @dataclass(frozen=True)

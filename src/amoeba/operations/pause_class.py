@@ -37,6 +37,8 @@ class PauseClass(StrEnum):
     WAITING_ON_PM = "waiting_on_pm"
     ANSWERED_UNRESUMED = "answered_unresumed"
     SETTLED = "settled"
+    #: The pause's question was closed (228 D3); the run is still paused.
+    CLOSED = "closed"
 
 
 #: Resume outcomes after which the answer needs no further delivery.
@@ -133,6 +135,8 @@ def classify_pause(  # noqa: PLR0913 - the D3 table's inputs, each a value
             if age >= timedelta(seconds=claim_age_limit):
                 return PauseClass.CLAIM_STALE
             return PauseClass.CLAIM_LIVE
+        case QuestionState.CLOSED:
+            return PauseClass.CLOSED
         case QuestionState.ANSWERED:
             if latest_answer is None:
                 raise ValueError("an answered question needs its latest answer")

@@ -110,6 +110,11 @@ def decode_timestamp(value: object, column: str) -> datetime:
     return moment.astimezone(UTC)
 
 
+def optional_timestamp(value: object, column: str) -> datetime | None:
+    """A stored UTC time, or ``None`` for a null column."""
+    return None if value is None else decode_timestamp(value, column)
+
+
 def encode_timestamp(moment: datetime) -> str:
     """The text stored for a time: UTC ISO-8601. A naive time is a bug."""
     if moment.tzinfo is None:

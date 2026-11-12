@@ -33,7 +33,7 @@ from user_configs import example_config_text
 
 from amoeba.answering.values import DeclineReason
 from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, main
-from amoeba.config.home import config_path, store_path
+from amoeba.config.home import calls_log_dir, config_path, store_path
 from amoeba.store.models import MemberSettings, QuestionKey
 from amoeba.store.programs import upsert_member, upsert_program
 from amoeba.store.questions import NewQuestion, insert_question, settle_waiting
@@ -282,3 +282,99 @@ def test_main_in_process_exits_two_on_a_usage_error() -> None:
         main(["answer", RUN])
 
     assert stopped.value.code == EXIT_USAGE
+
+
+def _logged_lines() -> list[dict[str, Any]]:
+    """Every calls-log line written so far, oldest first."""
+    lines: list[dict[str, Any]] = []
+    for path in sorted(calls_log_dir().glob("*.jsonl")):
+        lines.extend(json.loads(line) for line in path.read_text("utf-8").splitlines())
+    return lines
+
+
+def test_a_skipped_call_adds_one_calls_log_line(tmp_path: Path) -> None:
+    _write_config()
+    _fake_sq(tmp_path, {RUN: COMPLETED})
+
+    completed = _run(tmp_path, "handle_pause", RUN)
+
+    (line,) = _logged_lines()
+    assert line["run_id"] == RUN
+    assert line["directory"] == str(tmp_path)
+    assert (line["outcome"], line["reason"]) == ("skipped", "not_paused")
+    assert _result(completed)["outcome"] == line["outcome"]
+
+
+def test_a_handled_call_logs_the_outcome_it_printed(tmp_path: Path) -> None:
+    _write_config()
+    _seed_waiting_question()
+    _fake_sq(tmp_path, {RUN: PAUSED_AGENT_QUESTION})
+
+    completed = _run(tmp_path, "handle_pause", RUN)
+
+    assert completed.returncode == EXIT_OK, completed.stderr
+    printed = _result(completed)
+    (line,) = _logged_lines()
+    assert line["outcome"] == printed["outcome"]
+    assert line["reason"] == (printed["skip_reason"] or printed["waiting_reason"])
+    assert line["detail"] == printed["detail"]
+
+
+def test_a_config_error_with_a_fresh_state_home_still_adds_a_line(
+    tmp_path: Path,
+) -> None:
+    _fake_sq(tmp_path, {RUN: COMPLETED})
+    assert not calls_log_dir().exists()
+
+    completed = _run(tmp_path, "handle_pause", RUN)
+
+    assert completed.returncode == EXIT_ERROR
+    (line,) = _logged_lines()
+    assert line["run_id"] == RUN
+    assert line["error"] == "ConfigError"
+    assert str(config_path()) in line["detail"]
+    assert "outcome" not in line
+
+
+def test_a_store_error_adds_one_line(tmp_path: Path) -> None:
+    _write_config()
+    _fake_sq(tmp_path, {RUN: COMPLETED})
+    store_path().parent.mkdir(parents=True, exist_ok=True)
+    store_path().write_bytes(b"this is not a sqlite database" * 100)
+
+    completed = _run(tmp_path, "handle_pause", RUN)
+
+    assert completed.returncode == EXIT_ERROR
+    (line,) = _logged_lines()
+    assert line["error"] == "StoreCorruptError"
+    assert "error: StoreCorruptError" in completed.stderr
+
+
+def test_a_failing_log_write_leaves_the_exit_code_and_result_unchanged(
+    tmp_path: Path,
+) -> None:
+    _write_config()
+    _fake_sq(tmp_path, {RUN: COMPLETED})
+    calls_log_dir().parent.mkdir(parents=True, exist_ok=True)
+    calls_log_dir().write_text("a file where the directory goes", encoding="utf-8")
+
+    completed = _run(tmp_path, "handle_pause", RUN)
+
+    assert completed.returncode == EXIT_OK
+    assert _result(completed)["skip_reason"] == "not_paused"
+    assert completed.stderr.count("calls log") == 1
+
+
+def test_a_bad_state_home_goes_to_stderr_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("AMOEBA_HOME", "relative/path")
+    monkeypatch.chdir(tmp_path)
+
+    code = main(["handle_pause", RUN])
+
+    assert code == EXIT_ERROR
+    assert "AmoebaHomeError" in capsys.readouterr().err
+    assert list(tmp_path.rglob("*.jsonl")) == []

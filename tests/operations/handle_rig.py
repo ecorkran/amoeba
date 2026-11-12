@@ -123,10 +123,12 @@ def _completed_for(run_id: str) -> RunPoll:
     return poll_result(COMPLETED, run_id)
 
 
-def _run_file(runs_dir: Path, params: dict[str, str]) -> None:
+def _run_file(runs_dir: Path, params: dict[str, str], directory: Path) -> None:
+    """The recorded run file with ``working_directory`` set, as ``sq`` 0.24.24+."""
     runs_dir.mkdir(parents=True, exist_ok=True)
     document = json.loads((SQUADRON_FIXTURES / RUN_FILE).read_text(encoding="utf-8"))
     document["params"] = params
+    document["working_directory"] = str(directory)
     (runs_dir / f"{RUN}.json").write_text(json.dumps(document), encoding="utf-8")
 
 
@@ -145,7 +147,9 @@ def world(  # noqa: PLR0913 - the knobs a handle_pause test turns
     """A store with one member and a checkout, ready for ``handle_pause``."""
     directory = _fresh_checkout(tmp_path / "checkout")
     runs_dir = tmp_path / "runs"
-    _run_file(runs_dir, {"model": "haiku-xhigh"} if params is None else params)
+    _run_file(
+        runs_dir, {"model": "haiku-xhigh"} if params is None else params, directory
+    )
     spawned = SpawnLog()
     paused = list(paused_polls)
     asked = {"count": 0}

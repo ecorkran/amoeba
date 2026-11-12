@@ -9,6 +9,7 @@ handle; the existing row picks the path (D4): none claims and answers it
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from pathlib import Path
 
@@ -24,10 +25,15 @@ from amoeba.operations.pause_models import (
     SkipReason,
 )
 from amoeba.operations.pause_results import PauseTarget, skipped
+from amoeba.operations.question_sweep import sweep_note, sweep_run
 from amoeba.store.answers import latest_answer
-from amoeba.store.errors import StoreRowError
+from amoeba.store.errors import StoreError, StoreRowError
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState
+from amoeba.upstream.squadron.errors import SquadronError
+from amoeba.upstream.squadron.run_outcome import PollFailure, RunOutcomeDocument
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "HandlePauseOutcome",
@@ -51,9 +57,49 @@ def handle_pause(
         SquadronError: ``sq`` or the run file gave no usable answer.
         ContextForgeError: ``cf`` gave no usable answer.
         ConfigError: The member refers to an authorize key the config lacks.
-        StoreError: The store cannot be used.
+        StoreError: The store cannot be used (a failure of the final prune is a note
+            in ``detail`` instead).
     """
-    checked = check_eligibility(store, run_id, directory, deps)
+    polled = deps.poll_run(run_id)
+    if isinstance(polled, PollFailure):
+        raise SquadronError(polled.reason)
+    # Before eligibility and so before every skip: closing this run's older open
+    # questions depends only on the run id and what Squadron says, never the directory.
+    swept = sweep_run(store, config, run_id, polled, deps.clock())
+    result = _handle_polled(store, config, run_id, directory, deps, polled)
+    # Last, after any resume, so pruning never delays one (228 D9).
+    notes = [
+        note
+        for note in (sweep_note(swept), _prune_note(store, config, deps))
+        if note is not None
+    ]
+    if not notes:
+        return result
+    detail = "; ".join(([] if result.detail is None else [result.detail]) + notes)
+    return replace(result, detail=detail)
+
+
+def _prune_note(store: Store, config: UserConfig, deps: Deps) -> str | None:
+    """What pruning could not do, as a note. A store failure here is a note, not an
+    error: the result is already decided, and a resume may already have been
+    delivered, so raising would report a failure for work that happened."""
+    try:
+        pruned = deps.prune(store, now=deps.clock(), after_days=config.prune_after_days)
+    except StoreError as error:
+        logger.exception("prune failed after handling the pause")
+        return f"prune: {error}"
+    return pruned.note()
+
+
+def _handle_polled(  # noqa: PLR0913 - the pieces of one call
+    store: Store,
+    config: UserConfig,
+    run_id: str,
+    directory: Path,
+    deps: Deps,
+    polled: RunOutcomeDocument,
+) -> HandlePauseResult:
+    checked = check_eligibility(store, run_id, directory, deps, polled)
     if isinstance(checked, Skip):
         return skipped(checked.reason, None, None, checked.detail)
     target = PauseTarget(

@@ -71,11 +71,27 @@ class MemberRequest(_Model):
         return self
 
 
+class RemovePairRequest(_Model):
+    #: Context Forge project names or ids.
+    provider: NonBlankText
+    consumer: NonBlankText
+
+
+class RemoveRequest(_Model):
+    """What ``set_up`` takes out (228 D8). Members are removed softly, pairs deleted."""
+
+    #: Context Forge project names or ids.
+    members: tuple[NonBlankText, ...] = ()
+    pairs: tuple[RemovePairRequest, ...] = ()
+
+
 class SetUpRequest(_Model):
     program: NonBlankText
     #: Omitted leaves the concept alone; null clears it.
     concept: ConceptRequest | None = None
     members: tuple[MemberRequest, ...] = ()
+    #: Omitted removes nothing.
+    remove: RemoveRequest = RemoveRequest()
 
 
 # --- result ------------------------------------------------------------------
@@ -99,6 +115,8 @@ class SetUpProblemCode(StrEnum):
     SELF_DEPENDENCY = "self_dependency"
     UNKNOWN_AUTHORIZE_ITEM = "unknown_authorize_item"
     CONCEPT_MEMBER_NOT_MEMBER = "concept_member_not_member"
+    MEMBER_HAS_OPEN_QUESTIONS = "member_has_open_questions"
+    NOT_A_MEMBER = "not_a_member"
 
 
 class SetUpProblem(_Model):

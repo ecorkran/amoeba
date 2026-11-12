@@ -1,4 +1,5 @@
-"""The run file reader (slice 223, D2): ``params`` and ``execution_mode``.
+"""The run file reader (slice 223, D2, 228 D10): ``params``, ``execution_mode`` and
+``working_directory``.
 
 Squadron prints neither field in ``sq runs wait --json``, so this is the one place
 that opens ``~/.config/squadron/runs/<run_id>.json``. It checks ``schema_version``
@@ -38,6 +39,9 @@ class RunFacts:
 
     params: dict[str, str]
     execution_mode: ExecutionMode
+    #: Where the run was started: written by ``sq`` 0.24.24 on. ``None`` for a file
+    #: from before that, which is no error (the ``wrong_checkout`` check is skipped).
+    working_directory: Path | None
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,12 @@ class _Body(BaseModel):
 
     params: dict[StrictStr, StrictStr]
     execution_mode: ExecutionMode
+    working_directory: StrictStr | None = None
+
+
+def run_file_exists(runs_dir: Path, run_id: str) -> bool:
+    """Whether Squadron has a run file for ``run_id``: a file check, no subprocess."""
+    return (runs_dir / f"{run_id}{RUN_FILE_SUFFIX}").is_file()
 
 
 def read_run_facts(runs_dir: Path, run_id: str) -> RunFacts | RunFileProblem:
@@ -88,7 +98,13 @@ def read_run_facts(runs_dir: Path, run_id: str) -> RunFacts | RunFileProblem:
         # Expected: not JSON, not an object, or a field missing or of the wrong
         # type or value; named by file and field, never defaulted.
         return RunFileProblem(f"run file {path}: {_problems(error)}")
-    return RunFacts(params=body.params, execution_mode=body.execution_mode)
+    return RunFacts(
+        params=body.params,
+        execution_mode=body.execution_mode,
+        working_directory=(
+            None if body.working_directory is None else Path(body.working_directory)
+        ),
+    )
 
 
 def _problems(error: ValidationError) -> str:

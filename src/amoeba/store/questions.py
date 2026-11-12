@@ -23,24 +23,24 @@ from amoeba.store.answers import (
     automatic_answer_count,
     get_answer,
     latest_answer,
+    mark_not_delivered,
+    mark_resume_started,
     pm_precedent,
     record_resume,
+    retract_answer,
     settle_answered,
 )
 from amoeba.store.models import AnswerRecord, QuestionKey, QuestionRecord
-from amoeba.store.question_json import (
-    parse_evidence,
-    parse_passages,
-    serialize_evidence,
-    serialize_passages,
+from amoeba.store.question_closing import (
+    close_question,
+    dismiss_question,
+    member_open_questions,
+    open_rows_of_run,
+    sweep_candidates,
 )
-from amoeba.store.row_values import (
-    decode_timestamp,
-    encode_timestamp,
-    optional_text,
-    text,
-    vocabulary,
-)
+from amoeba.store.question_json import serialize_evidence, serialize_passages
+from amoeba.store.question_rows import question_from_row
+from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Transaction
 from amoeba.store.vocabulary import QuestionState
 
@@ -52,46 +52,29 @@ __all__ = [
     "any_answering_run_id",
     "answers_of",
     "automatic_answer_count",
+    "close_question",
+    "dismiss_question",
+    "find_question",
     "get_answer",
     "get_question",
     "insert_question",
     "latest_answer",
     "latest_question",
     "latest_rows_by_run",
+    "mark_not_delivered",
+    "mark_resume_started",
+    "member_open_questions",
     "open_questions",
+    "open_rows_of_run",
     "pm_precedent",
+    "question_from_row",
     "record_resume",
     "replace_claim",
+    "retract_answer",
     "settle_answered",
     "settle_waiting",
+    "sweep_candidates",
 ]
-
-
-def question_from_row(row: Sequence[object]) -> QuestionRecord:
-    """A ``QuestionRecord`` from a row of ``sql.QUESTION_COLUMNS``."""
-    return QuestionRecord(
-        key=QuestionKey(
-            run_id=text(row[0], "questions.run_id"),
-            paused_at=text(row[1], "questions.paused_at"),
-        ),
-        member_id=text(row[2], "questions.member_id"),
-        question=text(row[3], "questions.question"),
-        checkout=text(row[4], "questions.checkout"),
-        state=vocabulary(row[5], QuestionState, "questions.state"),
-        answering_run_id=optional_text(row[6], "questions.answering_run_id"),
-        waiting_reason=(
-            None
-            if row[7] is None
-            else vocabulary(row[7], DeclineReason, "questions.waiting_reason")
-        ),
-        waiting_detail=optional_text(row[8], "questions.waiting_detail"),
-        slice_label=optional_text(row[9], "questions.slice_label"),
-        source_commit=optional_text(row[10], "questions.source_commit"),
-        passages=None if row[11] is None else parse_passages(row[11]),
-        evidence=None if row[12] is None else parse_evidence(row[12]),
-        claimed_at=decode_timestamp(row[13], "questions.claimed_at"),
-        updated_at=decode_timestamp(row[14], "questions.updated_at"),
-    )
 
 
 # --- reads ------------------------------------------------------------------
@@ -108,6 +91,15 @@ def latest_question(transaction: Transaction, run_id: str) -> QuestionRecord | N
     """The run's question with the latest ``claimed_at``."""
     row = transaction.execute(sql.SELECT_LATEST_QUESTION, (run_id,)).fetchone()
     return None if row is None else question_from_row(row)
+
+
+def find_question(
+    transaction: Transaction, run_id: str, paused_at: str | None
+) -> QuestionRecord | None:
+    """The question at ``paused_at``, or the run's latest when it is ``None``."""
+    if paused_at is not None:
+        return get_question(transaction, QuestionKey(run_id, paused_at))
+    return latest_question(transaction, run_id)
 
 
 def open_questions(

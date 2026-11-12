@@ -9,16 +9,24 @@ from amoeba.cli import main as cli
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
 from amoeba.operations.answer import AnswerRejection
 from amoeba.operations.decisions import DecisionsOutcome
+from amoeba.operations.dismiss import DismissOutcome, DismissRejection
 from amoeba.operations.mark_read import MarkReadOutcome
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.reject_codes import RejectCode
+from amoeba.operations.retract import RetractOutcome, RetractRejection
+from amoeba.operations.set_up_models import RemoveRequest, SetUpProblemCode
 from amoeba.operations.status_models import (
+    ClosedNowEntry,
+    RunEntry,
     RunFileUnreadable,
+    StatusResult,
     UnplacedReason,
     WaitingRunState,
 )
+from amoeba.store.errors import StoreRelocateError
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import ClosedReason, QuestionState
 
 DOCS = Path(__file__).parents[1] / "docs"
 STORE_CONTRACT = DOCS / "store-contract.md"
@@ -97,6 +105,8 @@ def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> No
         cli.STATUS_COMMAND,
         cli.DECISIONS_COMMAND,
         cli.MARK_READ_COMMAND,
+        cli.DISMISS_COMMAND,
+        cli.RETRACT_COMMAND,
     ]
     exit_codes = [cli.EXIT_OK, cli.EXIT_REJECTED, cli.EXIT_USAGE, cli.EXIT_ERROR]
     values = [
@@ -110,6 +120,12 @@ def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> No
         *(state.value for state in WaitingRunState),
         *(outcome.value for outcome in MarkReadOutcome),
         *(outcome.value for outcome in DecisionsOutcome),
+        *(outcome.value for outcome in DismissOutcome),
+        *(rejection.value for rejection in DismissRejection),
+        *(outcome.value for outcome in RetractOutcome),
+        *(rejection.value for rejection in RetractRejection),
+        *(code.value for code in SetUpProblemCode),
+        *(reason.value for reason in ClosedReason),
     ]
 
     missing = [f"amoeba {name}" for name in commands if f"amoeba {name}" not in text]
@@ -117,3 +133,49 @@ def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> No
     missing += [value for value in values if f"`{value}`" not in text]
 
     assert not missing, f"cli-contract.md does not name {missing}"
+
+
+def test_the_cli_contract_names_the_new_status_fields_and_the_remove_section() -> None:
+    text = CLI_CONTRACT.read_text(encoding="utf-8")
+    assert "last_call" in RunEntry.model_fields
+    fields = [
+        *(name for name in StatusResult.model_fields if name != "programs"),
+        *ClosedNowEntry.model_fields,
+        "last_call",
+        *(f"remove.{name}" for name in RemoveRequest.model_fields),
+    ]
+
+    missing = [field for field in fields if f"`{field}`" not in text]
+    missing += [
+        phrase
+        for phrase in ("StoreRelocateError", "concept: null", "logs/calls/")
+        if phrase not in text
+    ]
+
+    assert not missing, f"cli-contract.md does not name {missing}"
+
+
+def test_the_store_contract_names_the_lifecycle_vocabulary_and_the_migration() -> None:
+    text = STORE_CONTRACT.read_text(encoding="utf-8")
+    names = [
+        *(state.value for state in QuestionState),
+        *(reason.value for reason in ClosedReason),
+        "003_question_lifecycle.sql",
+        "legacy-<UTC stamp>",
+        ".state-move.lock",
+        "~/.local/state/amoeba/",
+        "XDG_STATE_HOME",
+        "the one exception",
+    ]
+
+    missing = [name for name in names if name.lower() not in text.lower()]
+
+    assert not missing, f"store-contract.md does not say {missing}"
+    assert StoreRelocateError.__name__ in text
+
+
+def test_the_config_contract_names_both_homes() -> None:
+    text = CONFIG_CONTRACT.read_text(encoding="utf-8")
+
+    assert "~/.config/amoeba/" in text
+    assert "~/.local/state/amoeba/" in text

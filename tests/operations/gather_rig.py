@@ -50,7 +50,9 @@ def settings(*, max_chars: int = 1_000_000) -> AnswererSettings:
 
 
 def facts(params: dict[str, str]) -> RunFacts:
-    return RunFacts(params=params, execution_mode=ExecutionMode.SDK)
+    return RunFacts(
+        params=params, execution_mode=ExecutionMode.SDK, working_directory=None
+    )
 
 
 @dataclass

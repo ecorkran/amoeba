@@ -72,24 +72,32 @@ def _claimed(key: QuestionKey, run_id: str) -> NewQuestion:
 # 7.5: the claim step
 
 
+def _earlier_automatic_answers(w: World) -> list[QuestionKey]:
+    """As many settled automatic answers for the run as its limit allows."""
+    keys: list[QuestionKey] = []
+    for number in range(w.config.answer_limit):
+        earlier = QuestionKey(KEY.run_id, f"2026-11-09T0{number}:00:00+00:00")
+        with w.store.write() as transaction:
+            insert_question(
+                transaction, _claimed(earlier, f"earlier-{number}"), now=NOW
+            )
+        settle_answered(
+            w.store,
+            earlier,
+            f"earlier-{number}",
+            answer="x",
+            cited=(),
+            evidence=AnsweringEvidence(),
+            gate=lambda _prior: None,
+            now=NOW,
+        )
+        keys.append(earlier)
+    return keys
+
+
 def test_an_answer_limit_already_met_waits_and_starts_nothing(tmp_path: Path) -> None:
     with world(tmp_path) as w:
-        for number in range(w.config.answer_limit):
-            earlier = QuestionKey(KEY.run_id, f"2026-11-09T0{number}:00:00+00:00")
-            with w.store.write() as transaction:
-                insert_question(
-                    transaction, _claimed(earlier, f"earlier-{number}"), now=NOW
-                )
-            settle_answered(
-                w.store,
-                earlier,
-                f"earlier-{number}",
-                answer="x",
-                cited=(),
-                evidence=AnsweringEvidence(),
-                gate=lambda _prior: None,
-                now=NOW,
-            )
+        _earlier_automatic_answers(w)
 
         result = w.handle()
 
@@ -98,6 +106,21 @@ def test_an_answer_limit_already_met_waits_and_starts_nothing(tmp_path: Path) ->
         record = _record(w)
         assert record.state is QuestionState.WAITING_ON_PM
         assert record.answering_run_id is None
+
+
+def test_a_pm_answer_gives_a_run_at_its_limit_another_automatic_answer(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path) as w:
+        earlier = _earlier_automatic_answers(w)
+        with w.store.write() as transaction:
+            add_pm_answer(transaction, earlier[-1], "the PM stepped in", now=NOW)
+
+        result = w.handle()
+
+        assert result.outcome is HandlePauseOutcome.RESUMED, result
+        (answer,) = _answers(w)
+        assert answer.answered_by is AnsweredBy.ANSWERER
 
 
 def test_a_context_failure_waits_with_its_reason_and_starts_nothing(

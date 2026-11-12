@@ -144,7 +144,7 @@ def _pause_of(
             return RunFileUnreadable.RUN_FILE_UNREADABLE, read.reason
         facts = read
     pause_class = classify_pause(observed, row, answer, facts, claim_age_limit, now)
-    return pause_class, _detail(pause_class, observed, answer)
+    return pause_class, _detail(pause_class, observed, answer, row)
 
 
 def _row_for_pause(
@@ -162,7 +162,10 @@ def _row_for_pause(
 
 
 def _detail(
-    pause_class: PauseClass, observed: ObservedPause, answer: AnswerRecord | None
+    pause_class: PauseClass,
+    observed: ObservedPause,
+    answer: AnswerRecord | None,
+    row: QuestionRecord | None,
 ) -> str | None:
     match pause_class:
         case PauseClass.OTHER_CHECKPOINT:
@@ -172,8 +175,20 @@ def _detail(
             return f"the checkpoint has no {missing}"
         case PauseClass.ANSWERED_UNRESUMED | PauseClass.SETTLED:
             return _resume_text(answer)
+        case PauseClass.CLOSED:
+            return _closed_text(row)
         case _:
             return None
+
+
+def _closed_text(row: QuestionRecord | None) -> str:
+    if row is None or row.closed_reason is None:
+        raise StoreRowError("a closed question has no closed_reason")
+    detail = f": {row.closed_detail}" if row.closed_detail else ""
+    return (
+        f"closed ({row.closed_reason}{detail}). The run is still paused in Squadron; "
+        "Amoeba does not resume or end it. `sq run --resume` continues it"
+    )
 
 
 def _kind_text(raw: str | None) -> str:

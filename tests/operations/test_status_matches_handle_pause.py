@@ -19,9 +19,14 @@ from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.status import status
 from amoeba.operations.status_runs import HANDLED_BY_HANDLE_PAUSE
-from amoeba.store.answers import Settled, record_resume, settle_answered
-from amoeba.store.questions import NewQuestion, insert_question
-from amoeba.store.vocabulary import ResumeOutcome
+from amoeba.store.answers import Settled, answers_of, record_resume, settle_answered
+from amoeba.store.questions import (
+    NewQuestion,
+    close_question,
+    get_question,
+    insert_question,
+)
+from amoeba.store.vocabulary import ClosedReason, ResumeOutcome
 from amoeba.upstream.squadron.run_list import ListedCheckpoint, ListedRun
 from amoeba.upstream.squadron.run_outcome import RunOutcome, RunOutcomeDocument
 from operations.handle_rig import (
@@ -121,6 +126,22 @@ def _settled(w: World) -> None:
         )
 
 
+def _closed(w: World) -> None:
+    _waiting(w)
+    with w.store.write() as transaction:
+        row = get_question(transaction, KEY)
+        assert row is not None
+        assert close_question(
+            transaction,
+            KEY,
+            ClosedReason.RUN_MOVED_ON,
+            "completed",
+            row.state,
+            row.updated_at,
+            START,
+        )
+
+
 @dataclass(frozen=True)
 class Scenario:
     setup: Callable[[World], None]
@@ -141,6 +162,7 @@ SCENARIOS = {
     "waiting": Scenario(_waiting, PauseClass.WAITING_ON_PM, SkipReason.WAITING_ON_PM),
     "answered_unresumed": Scenario(_unresumed, PauseClass.ANSWERED_UNRESUMED, None),
     "settled": Scenario(_settled, PauseClass.SETTLED, SkipReason.SETTLED),
+    "closed": Scenario(_closed, PauseClass.CLOSED, SkipReason.CLOSED),
 }
 
 
@@ -190,3 +212,30 @@ def test_status_and_handle_pause_agree_on_every_class(
     else:
         assert handled.outcome is HandlePauseOutcome.SKIPPED, handled
         assert handled.skip_reason is scenario.skip
+
+
+def test_a_closed_pause_shows_why_and_has_no_next_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path, answering_poll=_answering_run_is_still_going) as w:
+        _closed(w)
+        deps = replace(
+            w.deps,
+            list_runs=lambda: [_listed(w)],
+            project_names=lambda: {PROJECT_ID: "the-member"},
+        )
+
+        shown = status(w.store, user_config(), {}, directory=w.directory, deps=deps)
+        handled = w.handle()
+        with w.store.read() as transaction:
+            answers = answers_of(transaction, KEY)
+
+    (entry,) = shown.programs[0].members[0].runs
+    assert entry.pause is PauseClass.CLOSED
+    assert entry.next is None
+    assert entry.detail is not None
+    assert "run_moved_on: completed" in entry.detail
+    assert "still paused in Squadron" in entry.detail
+    assert "sq run --resume" in entry.detail
+    assert handled.skip_reason is SkipReason.CLOSED
+    assert answers == ()

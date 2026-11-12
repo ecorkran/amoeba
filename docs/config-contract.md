@@ -5,14 +5,18 @@ project: amoeba
 audience: [human, ai]
 description: The user config file Amoeba reads from its home, key by key, with one complete example.
 dateCreated: 20261109
-dateUpdated: 20261110
+dateUpdated: 20261112
 status: complete
 ---
 
 # Config contract
 
-Amoeba reads one user-level file, `config.yaml`, from its home: `$AMOEBA_HOME` when
-set, otherwise `~/.config/amoeba/`. The code has no default for any key. A missing
+Amoeba reads one user-level file, `config.yaml`, from its **config home**: `$AMOEBA_HOME`
+when set, otherwise `~/.config/amoeba/`. It is the one file a person edits. Everything
+Amoeba writes (the store, answering scratch, logs) lives in the **state home**:
+`$AMOEBA_HOME` when set, otherwise `~/.local/state/amoeba/` (see `store-contract.md`).
+`XDG_CONFIG_HOME` and `XDG_STATE_HOME` are not consulted. The code has no default for
+any key. A missing
 file, a missing key, an unknown key or a bad value fails the command with exit 3,
 naming the file and the key, and every problem found is listed in one pass.
 
@@ -29,6 +33,7 @@ Later slices add keys; each is required too, so an old file fails naming the new
 | `passages_max_chars` | integer >= 1 | Most characters of passages an answering run is sent |
 | `answering_wait_seconds` | number > 0 | Longest one answering run may take before it is stopped; also the age at which an unfinished claim counts as dead |
 | `resume_wait_seconds` | number > 0 | Longest a resumed run may take to start running before the resume is judged refused |
+| `prune_after_days` | integer >= 1 | Age in days after which settled answering scratch, logs and calls-log days are deleted; anything tied to an open question is kept |
 | `authorize_items` | list, may be empty | Everything answers may be barred from authorizing |
 
 Each `authorize_items` entry has all four fields, and no others:
@@ -54,6 +59,7 @@ answer_limit: 3
 passages_max_chars: 60000
 answering_wait_seconds: 600
 resume_wait_seconds: 60
+prune_after_days: 30
 authorize_items:
   - key: push
     description: Pushing commits to a remote.

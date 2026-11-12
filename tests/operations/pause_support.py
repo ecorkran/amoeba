@@ -14,6 +14,7 @@ from fake_sq import FakePoller, fake_poller
 
 from amoeba.operations.deps import Deps
 from amoeba.operations.processes import Spawner, WaitableChild
+from amoeba.operations.prune_models import PruneReport
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
@@ -123,6 +124,11 @@ def _unused_list_runs() -> list[ListedRun] | RunListProblem:
     raise AssertionError("this test gave no list_runs reader")
 
 
+def no_prune(store: Store, *, now: datetime, after_days: int) -> PruneReport:
+    """A ``prune`` that removes nothing: a unit test of another operation."""
+    return PruneReport(removed=0, problems=())
+
+
 def build_deps(
     tmp_path: Path,
     *,
@@ -151,9 +157,12 @@ def build_deps(
         sleep=sleep,
         answering_dir=tmp_path / "answering",
         logs_dir=tmp_path / "logs",
+        calls_log_dir=tmp_path / "logs" / "calls",
         squadron_runs_dir=tmp_path / "runs",
+        legacy_home=None,
         project_names=_unused_project_names,
         list_runs=_unused_list_runs,
+        prune=no_prune,
     )
     return DepsRig(deps, clock, sleep, recorder, poller)
 

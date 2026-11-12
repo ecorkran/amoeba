@@ -17,12 +17,18 @@ from pathlib import Path
 from typing import Final
 
 from amoeba.answering.gate import compose_instructions
-from amoeba.operations.deps import Deps
+from amoeba.config.user_config import UserConfig
+from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS, Deps
 from amoeba.operations.pause_models import ResumeResult
-from amoeba.operations.processes import WaitableChild, terminate_group
-from amoeba.store.answers import get_answer, record_resume
+from amoeba.operations.processes import (
+    TERMINATE_GRACE_SECONDS,
+    WaitableChild,
+    terminate_group,
+)
+from amoeba.store.answers import get_answer, mark_resume_started, record_resume
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import QuestionKey, QuestionRecord
-from amoeba.store.store import Store
+from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import ResumeOutcome
 from amoeba.upstream.bounded_text import cut_to_bound
 from amoeba.upstream.squadron.errors import SquadronError
@@ -39,6 +45,23 @@ RESUME_POLL_INTERVAL_SECONDS: Final = 0.5
 
 RESUME_LOG_DIRECTORY: Final = "resume"
 LOG_STAMP_FORMAT: Final = "%Y%m%dT%H%M%S%fZ"
+
+
+def resume_bound_seconds(config: UserConfig) -> float:
+    """The longest a resume can take before it records its outcome (228 D4).
+
+    The wait loop and its last poll, the SIGTERM grace and then the SIGKILL grace in
+    ``terminate_group``, the poll after the kill (and the first poll before the
+    spawn), and the store write. The sweep leaves an answer alone for this long after
+    its newest sign of life.
+    """
+    return (
+        config.resume_wait_seconds
+        + RESUME_POLL_INTERVAL_SECONDS
+        + 2 * RUN_POLL_TIMEOUT_SECONDS
+        + 2 * TERMINATE_GRACE_SECONDS
+        + BUSY_TIMEOUT_SECONDS
+    )
 
 
 class _Seen(StrEnum):
@@ -61,6 +84,9 @@ def resume(
 ) -> ResumeResult:
     """Resume the question's run with the answer ``answer_seq`` and record the outcome.
 
+    The result is what the store holds: if the answer's outcome was already final, that
+    outcome, not this attempt's.
+
     Raises:
         SquadronError: The first poll could not be read (the state is unknown, so
             nothing is started and nothing is written).
@@ -70,26 +96,35 @@ def resume(
         answer = get_answer(transaction, answer_seq)
     if answer is None or answer.key != question.key:
         raise ValueError(f"answer {answer_seq} is not an answer to {question.key}")
-    result = _attempt(question, answer.answer, answer_seq, deps, wait_seconds)
+    attempted = _attempt(store, question, answer.answer, answer_seq, deps, wait_seconds)
     with store.write() as transaction:
-        record_resume(
+        if attempted is not None and record_resume(
             transaction,
             answer_seq,
-            result.outcome,
-            detail=result.detail,
-            log=result.resume_log,
+            attempted.outcome,
+            detail=attempted.detail,
+            log=attempted.resume_log,
             at=deps.clock(),
-        )
-    return result
+        ):
+            return attempted
+        # Nothing was started, or the outcome was already final and stays: the
+        # result is the stored outcome, not this attempt's.
+        final = get_answer(transaction, answer_seq)
+    if final is None or final.resume_outcome is None:
+        raise StoreRowError(f"answer {answer_seq} has no resume outcome to report")
+    return ResumeResult(final.resume_outcome, final.resume_detail, final.resume_log)
 
 
-def _attempt(
+def _attempt(  # noqa: PLR0913 - the pieces of one resume
+    store: Store,
     question: QuestionRecord,
     answer_text: str,
     answer_seq: int,
     deps: Deps,
     wait_seconds: float,
-) -> ResumeResult:
+) -> ResumeResult | None:
+    """The attempt's result, or ``None`` when the outcome was already final and
+    nothing was started."""
     first = deps.poll_run(question.key.run_id)
     if isinstance(first, PollFailure):
         raise SquadronError(first.reason)
@@ -98,6 +133,12 @@ def _attempt(
         return ResumeResult(
             ResumeOutcome.NOT_DELIVERED, _not_delivered_detail(first, seen), None
         )
+    # Own short transaction, never across the spawn. False means the outcome is
+    # already final (a sweep or a dismissal got there first): start nothing.
+    with store.write() as transaction:
+        started = mark_resume_started(transaction, answer_seq, now=deps.clock())
+    if not started:
+        return None
     logs = _resume_logs(deps, question.key.run_id, answer_seq)
     # The text is one argv element behind ``--instructions`` (no shell), and it always
     # starts with the fixed "You asked: ", so neither the question nor the answer can

@@ -35,7 +35,6 @@ from amoeba.upstream.squadron.run_file import (
 )
 from amoeba.upstream.squadron.run_outcome import (
     CheckpointKind,
-    PollFailure,
     RunOutcomeDocument,
     UnknownKind,
     parse_checkpoint_kind,
@@ -66,17 +65,21 @@ class Eligible:
 
 
 def check_eligibility(
-    store: Store, run_id: str, directory: Path, deps: Deps
+    store: Store,
+    run_id: str,
+    directory: Path,
+    deps: Deps,
+    polled: RunOutcomeDocument,
 ) -> Eligible | Skip:
     """Run the D3 checks for ``run_id``'s pause, from the run's ``directory``.
 
+    ``polled`` is the poll the caller already made (``handle_pause`` polls once, for
+    the close sweep and for these checks).
+
     Raises:
-        SquadronError: ``sq`` or the run file gave no usable answer.
+        SquadronError: The run file gave no usable answer.
         ContextForgeError: ``cf`` gave no usable answer.
     """
-    polled = deps.poll_run(run_id)
-    if isinstance(polled, PollFailure):
-        raise SquadronError(polled.reason)
     observed = observed_from_document(polled)
     early = classify_run_only(observed)
     if early is not None:
@@ -107,6 +110,34 @@ def _run_only_skip(pause_class: PauseClass, polled: RunOutcomeDocument) -> Skip:
             raise ValueError(f"{pause_class} is not decided from the run alone")
 
 
+def _checkout_of(directory: Path) -> Path:
+    """The checkout holding ``directory``: its nearest ancestor with a ``.git`` entry
+    (a directory, or the file a linked worktree has), else ``directory`` itself."""
+    resolved = directory.resolve()
+    for candidate in (resolved, *resolved.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return resolved
+
+
+def _wrong_checkout(directory: Path, started_in: Path | None) -> Skip | None:
+    """A skip when the call is not from the run's checkout (228 D10).
+
+    Checkouts are compared, not directories: a symlinked path or a subdirectory of
+    the checkout passes, a different worktree (even one nested inside) does not.
+    ``None`` (a run file from before ``sq`` 0.24.24) skips the check, as before.
+    """
+    if started_in is None or _checkout_of(directory) == _checkout_of(started_in):
+        return None
+    detail = f"called from {directory}; the run was started in {started_in}"
+    if not started_in.exists():
+        detail += (
+            " (that directory no longer exists; use Squadron's own commands, such as "
+            "`sq run --resume`, to continue or leave the run)"
+        )
+    return Skip(SkipReason.WRONG_CHECKOUT, detail)
+
+
 def _raw(kind: CheckpointKind | UnknownKind | None) -> str:
     if kind is None:
         return "not reported"
@@ -132,8 +163,13 @@ def _member_checks(
         raise SquadronError(facts.reason)
     with store.read() as transaction:
         existing = get_question(transaction, key)
-    if existing is not None and existing.member_id != resolved.project_id:
-        return Skip(SkipReason.OTHER_MEMBER, f"member {existing.member_id}")
     if existing is None and classify_no_row(facts) is PauseClass.PROMPT_ONLY:
         return Skip(SkipReason.PROMPT_ONLY, None)
+    # Whatever the row state: a dead claim or an unresumed answer is never resumed
+    # from a second worktree either.
+    wrong = _wrong_checkout(directory, facts.working_directory)
+    if wrong is not None:
+        return wrong
+    if existing is not None and existing.member_id != resolved.project_id:
+        return Skip(SkipReason.OTHER_MEMBER, f"member {existing.member_id}")
     return Eligible(key, question, resolved, observed, facts, existing)

@@ -29,7 +29,7 @@ from operations.status_support import (
 )
 
 LIMIT = 600.0
-MEMBER = Member("demo", MemberSettings("member-a", (), (), ()), RUN_NOW, RUN_NOW)
+MEMBER = Member("demo", MemberSettings("member-a", (), (), ()), RUN_NOW, RUN_NOW, None)
 PAUSED = "demo-pause-1"
 RUNNING = "run-20261111-p6-fe470d63"
 

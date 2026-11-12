@@ -34,6 +34,14 @@ class StoreIntegrityError(StoreError):
     """A schema constraint (foreign key, unique, check) refused a write."""
 
 
+class StoreRelocateError(StoreError):
+    """Moving the legacy store to the state home failed or did not verify.
+
+    The old store is untouched and any partial copy is gone, so the next call
+    tries the move again.
+    """
+
+
 class StoreRowError(StoreError):
     """A stored value is not what its column promises."""
 

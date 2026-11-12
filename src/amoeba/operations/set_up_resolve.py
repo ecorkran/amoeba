@@ -16,6 +16,11 @@ from amoeba.operations.set_up_models import (
     SetUpProblemCode,
     SetUpRequest,
 )
+from amoeba.operations.set_up_remove_resolve import (
+    RequestedPair,
+    ResolvedRemoval,
+    resolve_removal,
+)
 from amoeba.store.vocabulary import ConsumedMode
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
 from amoeba.upstream.context_forge.project_of import (
@@ -59,6 +64,8 @@ class ResolvedRequest:
     #: With ``concept_given``: ``None`` clears the concept.
     concept: ResolvedConcept | None
     members: tuple[ResolvedMember, ...]
+    #: What ``remove`` takes out, as ids (228 D8).
+    removal: ResolvedRemoval
 
 
 @dataclass(frozen=True)
@@ -166,6 +173,15 @@ def resolve_request(request: SetUpRequest, directory: Path, run: CfRun) -> Resol
             )
         )
 
+    requested_pairs = [
+        RequestedPair(member.index, position, dependency.provider_id, member.project_id)
+        for member in members
+        for position, dependency in enumerate(member.depends_on)
+    ]
+    removal, removal_problems = resolve_removal(
+        request.remove, lookups.reference, first_seen, requested_pairs
+    )
+    problems += removal_problems
     if problems:
         return Resolution(working, None, tuple(problems))
     resolved = ResolvedRequest(
@@ -173,5 +189,6 @@ def resolve_request(request: SetUpRequest, directory: Path, run: CfRun) -> Resol
         concept_given="concept" in request.model_fields_set,
         concept=concept,
         members=tuple(members),
+        removal=removal,
     )
     return Resolution(working, resolved, ())

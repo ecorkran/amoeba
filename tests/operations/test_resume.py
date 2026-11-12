@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -20,15 +21,30 @@ from fake_sq import (
 )
 from process_containment import contained_popen
 from store.question_support import MEMBER_ID, NOW, seed_members
+from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy
+from amoeba.operations.deps import RUN_POLL_TIMEOUT_SECONDS
 from amoeba.operations.pause_models import ResumeResult
-from amoeba.operations.processes import WaitableChild, start_child
-from amoeba.operations.resume import RESUME_POLL_INTERVAL_SECONDS, resume
-from amoeba.store.answers import add_pm_answer, answers_of, record_resume
+from amoeba.operations.processes import (
+    TERMINATE_GRACE_SECONDS,
+    WaitableChild,
+    start_child,
+)
+from amoeba.operations.resume import (
+    RESUME_POLL_INTERVAL_SECONDS,
+    resume,
+    resume_bound_seconds,
+)
+from amoeba.store.answers import (
+    add_pm_answer,
+    answers_of,
+    mark_not_delivered,
+    record_resume,
+)
 from amoeba.store.models import QuestionKey, QuestionRecord
 from amoeba.store.questions import NewQuestion, get_question, insert_question
-from amoeba.store.store import Store
+from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.store.vocabulary import ResumeOutcome
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.faults import LaunchFailure
@@ -294,7 +310,7 @@ def test_resumed_and_not_delivered_are_never_overwritten(
     again = build_deps(tmp_path / "again", polls={RUN: [RUNNING_DOC]}, spawns=[])
     second = resume(store, question, seq, deps=again.deps, wait_seconds=WAIT)
 
-    assert second.outcome is ResumeOutcome.NOT_DELIVERED
+    assert second.outcome is ResumeOutcome.RESUMED  # the stored outcome stands
     assert _stored(store, seq)[0] is ResumeOutcome.RESUMED
     with store.write() as transaction:
         assert not record_resume(
@@ -403,3 +419,133 @@ def test_instructions_are_one_argv_element_holding_the_composed_text(
     assert result.outcome is ResumeOutcome.RESUMED
     expected = f"You asked: …What limit?\nAnswer: {answer}"
     assert fake.run_calls() == [["run", "--resume", RUN, "--instructions", expected]]
+
+
+# 228 D4: resume_started_at, resume_bound_seconds and an outcome made final first.
+
+
+def _started_at(store: Store, seq: int) -> object:
+    with store.read() as transaction:
+        return next(
+            r for r in answers_of(transaction, KEY) if r.seq == seq
+        ).resume_started_at
+
+
+def test_resume_started_at_is_set_before_the_spawn(
+    tmp_path: Path, store: Store
+) -> None:
+    seen_at_spawn: list[object] = []
+    question, seq = _question(store)
+
+    def record_what_the_store_says() -> None:
+        seen_at_spawn.append(_started_at(store, seq))
+
+    rig = build_deps(
+        tmp_path,
+        polls={RUN: [PAUSE, RUNNING_DOC]},
+        spawns=[FakeChild(exit_code=None)],
+        on_spawn=record_what_the_store_says,
+    )
+
+    result = resume(store, question, seq, deps=rig.deps, wait_seconds=WAIT)
+
+    assert result.outcome is ResumeOutcome.RESUMED
+    assert seen_at_spawn == [NOW]
+
+
+def test_resume_started_at_is_set_again_before_a_refused_retry(
+    tmp_path: Path, store: Store
+) -> None:
+    question, seq = _question(store)
+    first = build_deps(
+        tmp_path, polls={RUN: [PAUSE, PAUSE]}, spawns=[FakeChild(exit_code=1)]
+    )
+    assert (
+        resume(store, question, seq, deps=first.deps, wait_seconds=WAIT).outcome
+        is ResumeOutcome.REFUSED
+    )
+    with sqlite3.connect(store.path) as connection:  # throwaway store in tmp_path
+        connection.execute("UPDATE answers SET resume_started_at = NULL")
+    seen_at_spawn: list[object] = []
+
+    def record() -> None:
+        seen_at_spawn.append(_started_at(store, seq))
+
+    retry = build_deps(
+        tmp_path,
+        polls={RUN: [PAUSE, RUNNING_DOC]},
+        spawns=[FakeChild(exit_code=None)],
+        on_spawn=record,
+    )
+
+    result = resume(store, question, seq, deps=retry.deps, wait_seconds=WAIT)
+
+    assert result.outcome is ResumeOutcome.RESUMED
+    assert seen_at_spawn == [NOW]
+
+
+def test_the_resume_bound_is_the_sum_of_its_named_parts() -> None:
+    config = user_config()
+
+    assert resume_bound_seconds(config) == (
+        config.resume_wait_seconds
+        + RESUME_POLL_INTERVAL_SECONDS
+        + 2 * RUN_POLL_TIMEOUT_SECONDS
+        + 2 * TERMINATE_GRACE_SECONDS
+        + BUSY_TIMEOUT_SECONDS
+    )
+    assert resume_bound_seconds(config) == 60 + 0.5 + 60.0 + 10.0 + 5.0
+
+
+def test_an_answer_made_not_delivered_first_spawns_nothing_and_reports_it(
+    tmp_path: Path, store: Store
+) -> None:
+    question, seq = _question(store)
+    swept = {"done": False}
+
+    def sweep_wins_the_race() -> None:
+        if not swept["done"]:
+            swept["done"] = True
+            with store.write() as transaction:
+                mark_not_delivered(transaction, seq, "run moved on", now=NOW)
+
+    rig = build_deps(
+        tmp_path,
+        polls={RUN: [PAUSE]},
+        spawns=[FakeChild(exit_code=None)],
+        on_poll=sweep_wins_the_race,
+    )
+
+    result = resume(store, question, seq, deps=rig.deps, wait_seconds=WAIT)
+
+    assert result.outcome is ResumeOutcome.NOT_DELIVERED
+    assert result.detail == "run moved on"
+    assert rig.spawner.calls == []
+    assert _stored(store, seq) == (ResumeOutcome.NOT_DELIVERED, "run moved on")
+
+
+def test_a_sweep_that_wins_while_the_child_runs_decides_the_reported_outcome(
+    tmp_path: Path, store: Store
+) -> None:
+    question, seq = _question(store)
+    polls = {"count": 0}
+
+    def sweep_wins_after_the_spawn() -> None:
+        polls["count"] += 1
+        if polls["count"] == 2:  # the first poll is before the spawn
+            with store.write() as transaction:
+                mark_not_delivered(transaction, seq, "run moved on", now=NOW)
+
+    rig = build_deps(
+        tmp_path,
+        polls={RUN: [PAUSE, RUNNING_DOC]},
+        spawns=[FakeChild(None)],
+        on_poll=sweep_wins_after_the_spawn,
+    )
+
+    result = resume(store, question, seq, deps=rig.deps, wait_seconds=WAIT)
+
+    assert len(rig.spawner.calls) == 1
+    assert result.outcome is ResumeOutcome.NOT_DELIVERED
+    assert result.detail == "run moved on"
+    assert _stored(store, seq) == (ResumeOutcome.NOT_DELIVERED, "run moved on")

@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: How Squadron's pause command is wired to amoeba handle_pause, and what the hook needs.
 dateCreated: 20261110
-dateUpdated: 20261110
+dateUpdated: 20261112
 status: complete
 ---
 
@@ -43,17 +43,22 @@ waiting on the PM. This file says what the wiring must satisfy. The CLI is in
   `operations/answering_run.py`); a pause that does reach `handle_pause` from an
   answering run is skipped as `answering_run`.
 - **A hand call.** Run by hand, `amoeba handle_pause <run_id>` must run in the run's own
-  checkout. Squadron records nothing that confirms the directory until it adds the
-  run's working directory to `sq runs wait --json` (see the `params` and
-  `execution_mode` request on `ecorkran/squadron`); until then a call from another
-  directory resumes the run there. The result's `checkout` field says where the
-  question was claimed.
+  checkout. For a run started on `sq` 0.24.24 or later the run file records where the
+  run started, and a call from any other directory is skipped as `wrong_checkout`
+  (the detail names both directories) and writes nothing. For a run started on an older
+  `sq` nothing confirms the directory, so a call from another directory resumes the run
+  there; the result's `checkout` field says where the question was claimed.
 - **The environment.** The hook's environment must reach `sq`, `cf`, `git` and the
   model credentials the answering pipeline uses: `handle_pause` starts the answering
   run and the resume as children that inherit it.
 
 ## What a missed hook looks like
 
-A pause for which the hook never ran leaves no row. Slice 224's `status` lists such
-pauses; calling `amoeba handle_pause <run_id>` from the run's checkout handles one
-late.
+A pause for which the hook never ran leaves no row. `amoeba status` lists such pauses
+as `unhandled`; calling `amoeba handle_pause <run_id>` from the run's checkout handles
+one late.
+
+A hook that ran and did nothing, or failed, leaves a line: every `handle_pause` call is
+appended to `<state home>/logs/calls/<UTC date>.jsonl`, an error exit and a `ConfigError`
+included (format in `cli-contract.md`). `status` shows the newest line for each
+`unhandled` or `claim_stale` run as `last_call`, which says why the hook missed.

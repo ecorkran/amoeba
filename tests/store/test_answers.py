@@ -28,6 +28,7 @@ from amoeba.store.answers import (
 )
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import get_question, insert_question
+from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from store.question_support import (
@@ -40,6 +41,7 @@ from store.question_support import (
     seed_members,
     waiting_question,
 )
+from store.seed import insert_answer
 
 EVIDENCE = AnsweringEvidence(proposed_answer="300", cited=("r1",), verdict="yes")
 SECOND_KEY = QuestionKey(KEY.run_id, "2026-11-10T13:00:00+00:00")
@@ -93,7 +95,7 @@ def test_latest_answer_is_none_without_answers(store: Store) -> None:
         assert answers_of(transaction, KEY) == ()
 
 
-def test_automatic_count_ignores_pm_answers_and_spans_checkpoints(
+def test_automatic_count_spans_checkpoints_and_restarts_at_a_pm_answer(
     store: Store,
 ) -> None:
     with store.write() as transaction:
@@ -133,7 +135,8 @@ def test_automatic_count_ignores_pm_answers_and_spans_checkpoints(
         add_pm_answer(transaction, KEY, "pm says", now=NOW)
 
     with store.read() as transaction:
-        assert automatic_answer_count(transaction, KEY.run_id) == 2
+        # The PM answered after both, so the run's count started again (228 D7).
+        assert automatic_answer_count(transaction, KEY.run_id) == 0
         assert automatic_answer_count(transaction, "another-run") == 0
 
 
@@ -322,3 +325,131 @@ def test_precedent_excludes_other_members_and_keeps_slice_labels(store: Store) -
         ("mine", "223 pause-handling")
     ]
     assert [(item.answer, item.slice_label) for item in theirs] == [("theirs", None)]
+
+
+# 228 D7: the limit counts since the run's last PM answer.
+
+RETRACT = "UPDATE answers SET retracted_at = ?, retract_reason = 'wrong' WHERE seq = ?"
+
+
+def _seed_answer(store: Store, answered_by: AnsweredBy, key: QuestionKey = KEY) -> int:
+    with store.write() as transaction:
+        if get_question(transaction, key) is None:
+            insert_question(
+                transaction, waiting_question(key, member_id=MEMBER_ID), now=NOW
+            )
+        insert_answer(
+            transaction,
+            run_id=key.run_id,
+            paused_at=key.paused_at,
+            answered_by=answered_by,
+            answer="text",
+            recorded_at=NOW,
+            resume_outcome=None,
+        )
+        row = transaction.execute("SELECT MAX(seq) FROM answers").fetchone()
+    assert row is not None
+    return int(row[0])
+
+
+def _count(store: Store, run_id: str = KEY.run_id) -> int:
+    with store.read() as transaction:
+        return automatic_answer_count(transaction, run_id)
+
+
+def test_with_no_pm_answer_every_automatic_answer_counts(store: Store) -> None:
+    for _ in range(3):
+        _seed_answer(store, AnsweredBy.ANSWERER)
+
+    assert _count(store) == 3
+
+
+def test_a_pm_answer_resets_the_count_and_later_answers_count_again(
+    store: Store,
+) -> None:
+    _seed_answer(store, AnsweredBy.ANSWERER)
+    _seed_answer(store, AnsweredBy.ANSWERER)
+    _seed_answer(store, AnsweredBy.PM)
+    assert _count(store) == 0
+
+    _seed_answer(store, AnsweredBy.ANSWERER)
+
+    assert _count(store) == 1
+
+
+def test_a_retracted_pm_answer_still_resets_the_count(store: Store) -> None:
+    _seed_answer(store, AnsweredBy.ANSWERER)
+    pm_seq = _seed_answer(store, AnsweredBy.PM)
+    _seed_answer(store, AnsweredBy.ANSWERER)
+    with store.write() as transaction:
+        transaction.execute(RETRACT, (encode_timestamp(NOW), pm_seq))
+
+    assert _count(store) == 1
+
+
+def test_only_the_pm_answers_of_the_same_run_reset_it(store: Store) -> None:
+    other = QuestionKey("run-2", KEY.paused_at)
+    _seed_answer(store, AnsweredBy.ANSWERER)
+    _seed_answer(store, AnsweredBy.PM, other)
+    _seed_answer(store, AnsweredBy.ANSWERER, other)
+
+    assert _count(store) == 1
+    assert _count(store, other.run_id) == 1
+
+
+# 228 D6: precedent leaves out retracted answers and closed questions.
+
+
+def _retract(store: Store, seq: int) -> None:
+    with store.write() as transaction:
+        transaction.execute(RETRACT, (encode_timestamp(NOW), seq))
+
+
+def _precedent(store: Store) -> list[str]:
+    with store.read() as transaction:
+        return [item.answer for item in pm_precedent(transaction, MEMBER_ID)]
+
+
+def test_a_retracted_newest_answer_gives_no_precedent_and_the_older_is_not_revived(
+    store: Store,
+) -> None:
+    with store.write() as transaction:
+        insert_question(transaction, waiting_question(), now=NOW)
+        add_pm_answer(transaction, KEY, "older", now=NOW)
+        newest = add_pm_answer(transaction, KEY, "newer", now=NOW)
+    assert _precedent(store) == ["newer"]
+
+    _retract(store, newest)
+
+    assert _precedent(store) == []
+
+
+def test_a_new_pm_answer_after_a_retraction_is_the_precedent(store: Store) -> None:
+    with store.write() as transaction:
+        insert_question(transaction, waiting_question(), now=NOW)
+        first = add_pm_answer(transaction, KEY, "first", now=NOW)
+    _retract(store, first)
+    assert _precedent(store) == []
+
+    with store.write() as transaction:
+        add_pm_answer(transaction, KEY, "second", now=NOW)
+
+    assert _precedent(store) == ["second"]
+
+
+def test_a_closed_question_gives_no_precedent(store: Store) -> None:
+    with store.write() as transaction:
+        insert_question(transaction, waiting_question(), now=NOW)
+        add_pm_answer(transaction, KEY, "answer", now=NOW)
+        transaction.execute(
+            "UPDATE questions SET state = ?, closed_reason = 'dismissed'",
+            (QuestionState.CLOSED.value,),
+        )
+
+    assert _precedent(store) == []
+
+
+def test_answerer_answers_are_never_precedent_even_unretracted(store: Store) -> None:
+    _seed_answer(store, AnsweredBy.ANSWERER)
+
+    assert _precedent(store) == []

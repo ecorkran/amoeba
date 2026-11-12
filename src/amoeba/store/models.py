@@ -14,7 +14,12 @@ from amoeba.answering.values import (
     DeclineReason,
     PassageRef,
 )
-from amoeba.store.vocabulary import ConsumedMode, QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import (
+    ClosedReason,
+    ConsumedMode,
+    QuestionState,
+    ResumeOutcome,
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +56,8 @@ class Member:
     settings: MemberSettings
     registered_at: datetime
     updated_at: datetime
+    #: When ``set_up`` removed the member; ``None`` for an active one.
+    removed_at: datetime | None
 
     @property
     def project_id(self) -> str:
@@ -96,6 +103,11 @@ class QuestionRecord:
     evidence: AnsweringEvidence | None
     claimed_at: datetime
     updated_at: datetime
+    #: Set with ``state`` ``closed``; kept as history if ``answer`` reopens it.
+    closed_reason: ClosedReason | None
+    #: The dismissal reason, or the run's outcome when the sweep closed it.
+    closed_detail: str | None
+    closed_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -112,6 +124,11 @@ class AnswerRecord:
     resume_detail: str | None
     resume_log: str | None
     resume_at: datetime | None
+    #: Set when a PM answer was retracted; the answer stays delivered (228 D6).
+    retracted_at: datetime | None
+    retract_reason: str | None
+    #: Set just before each resume spawn (228 D4).
+    resume_started_at: datetime | None
 
 
 @dataclass(frozen=True)

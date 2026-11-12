@@ -71,6 +71,14 @@ def handle_existing(  # noqa: PLR0913 - the pieces of one classified pause
             )
         case PauseClass.SETTLED:
             return skipped(SkipReason.SETTLED, target.key, checkout)
+        case PauseClass.CLOSED:
+            closed = existing.closed_reason
+            return skipped(
+                SkipReason.CLOSED,
+                target.key,
+                checkout,
+                None if closed is None else str(closed),
+            )
         case PauseClass.WAITING_ON_PM:
             reason = existing.waiting_reason
             return skipped(

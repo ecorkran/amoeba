@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.set_up_models import SetUpProblem, SetUpProblemCode
+from amoeba.operations.set_up_remove import check_removal
 from amoeba.operations.set_up_resolve import ResolvedMember, ResolvedRequest
 from amoeba.store.programs import get_member, get_program, members_of
 from amoeba.store.store import Transaction
@@ -82,7 +83,7 @@ def check_request(
         )
     members_after = {
         member.project_id for member in members_of(transaction, program_id)
-    }
+    } - request.removal.member_ids
     for member in request.members:
         stored = get_member(transaction, member.project_id)
         if stored is not None and stored.program_id != program_id:
@@ -102,6 +103,14 @@ def check_request(
                 transaction, config_keys, program_id, member, frozenset(members_after)
             )
         )
+    problems.extend(
+        check_removal(
+            transaction,
+            program_id,
+            request.removal,
+            concept_given=request.concept_given,
+        )
+    )
     concept = request.concept
     if concept is not None and concept.member_id not in members_after:
         problems.append(
