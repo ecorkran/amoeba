@@ -47,12 +47,12 @@ revision_number: 2
 
 ## 0. Setup
 
-- [ ] **0.1 Update the 220, 226 and 227 plans on the target**
-  - [ ] On the target (read `cf config get git.integration_branch`; the target is its value, or `main` if empty) with a clean working tree, edit the planning documents. These are planning work, so they commit to the target, not the slice branch
-  - [ ] `user/architecture/220-arch.program-tool.md`: the operation table gains `dismiss` and `retract`; "The question record" gains the `closed` state with its three reasons and says a retracted PM answer is not precedent and a PM answer resets the answer limit; "Where things live" gains the two homes; a note says `status` closes records whose run has gone and prunes old files, is still bounded and adds no `sq` call
-  - [ ] `user/slices/226-slice.mcp-server.md` and `user/tasks/226-tasks.mcp-server.md`: eight operations, not six (find each count with `grep -n -i six`); the tool table gains `dismiss` and `retract`, in-process; the stdio smoke test lists eight tools; the MCP layer opens the store through `open_state_store`; the task that names who may call `amoeba_home()` names `state_layout()`, `config_home()` and `state_home()` instead, since `amoeba_home()` is removed
-  - [ ] `user/tasks/227-tasks.program-dependencies.md`: its `projectState` says the CLI and MCP server expose eight operations (225's six plus `dismiss` and `retract`), not six. Update `dateUpdated` in each edited file
-  - [ ] Success: no 226 or 227 line states a count of six operations or tools, and `amoeba_home` appears in neither 226 file
+- [x] **0.1 Update the 220, 226 and 227 plans on the target**
+  - [x] On the target (read `cf config get git.integration_branch`; the target is its value, or `main` if empty) with a clean working tree, edit the planning documents. These are planning work, so they commit to the target, not the slice branch
+  - [x] `user/architecture/220-arch.program-tool.md`: the operation table gains `dismiss` and `retract`; "The question record" gains the `closed` state with its three reasons and says a retracted PM answer is not precedent and a PM answer resets the answer limit; "Where things live" gains the two homes; a note says `status` closes records whose run has gone and prunes old files, is still bounded and adds no `sq` call
+  - [x] `user/slices/226-slice.mcp-server.md` and `user/tasks/226-tasks.mcp-server.md`: eight operations, not six (find each count with `grep -n -i six`); the tool table gains `dismiss` and `retract`, in-process; the stdio smoke test lists eight tools; the MCP layer opens the store through `open_state_store`; the task that names who may call `amoeba_home()` names `state_layout()`, `config_home()` and `state_home()` instead, since `amoeba_home()` is removed
+  - [x] `user/tasks/227-tasks.program-dependencies.md`: its `projectState` says the CLI and MCP server expose eight operations (225's six plus `dismiss` and `retract`), not six. Update `dateUpdated` in each edited file
+  - [x] Success: no 226 or 227 line states a count of six operations or tools, and `amoeba_home` appears in neither 226 file
 
 **Commit**: `docs: update the 220, 226 and 227 plans for slice 228`
 

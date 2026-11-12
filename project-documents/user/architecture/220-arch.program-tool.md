@@ -12,7 +12,7 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba as a tool that agents and pipelines call. No Amoeba process stays running. Squadron optionally starts a short-lived Amoeba command when a run pauses; Amoeba answers through the answering pipeline and starts the resume, or records the question as waiting on the PM. Squadron never requires Amoeba. Members report their own releases through their agents, and run and slice state are read from Squadron and Context Forge rather than mirrored. Revised 20261106 and 20261107 from two architecture reviews and PM notes.
 dateCreated: 20261106
-dateUpdated: 20261107
+dateUpdated: 20261112
 status: in_progress
 ---
 
@@ -91,6 +91,8 @@ The cost is that a missed hook leaves a question waiting (machine asleep, comman
 | `answer` | An agent, for the PM | Records the PM's answer. Starts the resume if the run is still at that pause. Becomes the answer used for repeats, which also covers an override | A |
 | `status` | An agent | Per member: running, blocked and why, questions waiting on the PM, answered but not resumed | A, C |
 | `decisions` | An agent | What was answered, by whom and from what, since the PM's marker or a given time | A, C |
+| `dismiss` | An agent, for the PM | Closes a `claimed` or `waiting_on_pm` question, or an `answered` one whose answer was never delivered, with a reason. The run is not resumed and stays paused in Squadron | A, C |
+| `retract` | An agent, for the PM | Marks a PM answer retracted, so it stops being precedent. The answer stays delivered and stays in `decisions` | A, C |
 | `mark_read` | An agent | Moves the PM's marker for `decisions` forward to the last record the caller saw | C |
 | `report_release` | An agent or release skill | Records what this member released and what that touched | B |
 | `changes` | An agent | What this member's dependencies reported since a point the caller gives | B |
@@ -147,13 +149,17 @@ The list is a policy about meaning, so models enforce it. The answer step is tol
 
 A question is identified by run id and `paused_at`, so the same words asked at a later pause are a new question. It moves from claimed to answered or waiting on the PM, and a PM answer moves a waiting question to answered. A delivered answer is then resumed, refused or not delivered, as above.
 
-PM answers are kept per member as the precedent for repeats. Sharing them across a program waits until use shows the need. The per-run answer limit counts only automatic answers, never the PM's. There is one PM, so the PM's `decisions` marker is a single one across all programs.
+A question can also be **closed**, with one of three reasons: `dismissed` (the PM or an agent for the PM closed it with `dismiss`), `run_moved_on` (the run left that pause, or finished, so nobody can answer it) or `run_gone` (Squadron no longer knows the run). A closed question is terminal, except that a later `answer` reopens it as answered. `handle_pause` closes a run's older open questions when the run pauses again, and `status` closes those whose run has moved on or gone, so every open question has an exit with nobody editing files.
+
+PM answers are kept per member as the precedent for repeats. Sharing them across a program waits until use shows the need. The per-run answer limit counts only automatic answers, never the PM's, and it counts those given since the PM's last answer on that run, so a PM answer resets it. A retracted PM answer is not precedent, and an older PM answer to the same question is not brought back. There is one PM, so the PM's `decisions` marker is a single one across all programs.
 
 ### Where things live
 
-One store at a fixed per-user location, with no flags. Tests point it elsewhere through one environment variable, read in one config place, so a test run never touches the real store. Programs of one are allowed, so a lone repo needs no separate "no program" path.
+One store at a fixed per-user location, with no flags. State and config live in two homes: the config file in `~/.config/amoeba/`, and the store, answering scratch and logs in `~/.local/state/amoeba/`. Tests point both at one directory through one environment variable, read in one config place, so a test run never touches the real store. Programs of one are allowed, so a lone repo needs no separate "no program" path.
 
 Amoeba's settings (models, cost cap, per-run answer limit, what answers may authorize) sit in one user-level config file, set once. Per-member settings go on the member at set-up: its rule file paths, which depend on the repo's layout, and any change to what its answers may authorize. The concurrent-run limit goes, because nothing is left to enforce it, so simultaneous pauses start simultaneous answering runs, each under its own cost cap.
+
+`status` now writes: it closes question records whose run has gone, and prunes old scratch and log files. This is still bounded and adds no `sq` call: it judges from the one `sq runs list` listing it already makes, and the pruning is a file walk.
 
 The new baseline schema drops what the old program record held for requests: `requests_initiative` goes, `consumed` moves to the dependency pair, and the overrides table goes.
 

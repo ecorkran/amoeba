@@ -5,10 +5,11 @@ project: amoeba
 parent: user/architecture/220-slices.program-tool.md
 dependencies:
 - 224-slice.status-and-decisions
+- 228-slice.state-home-and-question-lifecycle
 interfaces:
 - 227-slice.program-dependencies
 dateCreated: 20261107
-dateUpdated: 20261107
+dateUpdated: 20261112
 status: not_started
 ---
 
@@ -16,7 +17,7 @@ status: not_started
 
 ## Overview
 
-An MCP server, `amoeba-mcp`, in front of the six operations the CLI has after 224: `set_up`, `handle_pause`, `answer`, `status`, `decisions` and `mark_read`. It uses the CLI's names, passes input through unchanged, and returns the operations' own results. It has no logic of its own. It completes scenario C: from any directory, an agent session can see what waits on the PM and what was decided, and can answer for the PM.
+An MCP server, `amoeba-mcp`, in front of the eight operations the CLI has after 228: `set_up`, `handle_pause`, `answer`, `status`, `decisions`, `mark_read`, `dismiss` and `retract`. It uses the CLI's names, passes input through unchanged, and returns the operations' own results. It has no logic of its own. It completes scenario C: from any directory, an agent session can see what waits on the PM and what was decided, and can answer for the PM.
 
 **Value:** the PM can ask any agent session, in any repo or none, what is waiting and answer through it, with no `cd` and no CLI flags.
 
@@ -24,7 +25,7 @@ An MCP server, `amoeba-mcp`, in front of the six operations the CLI has after 22
 
 ## Dependencies
 
-- **222, 223, 224 complete:** all six operations with request and result models, 223's `deps` bundle, `processes.spawn_detached` and `logs_dir()`, and the typed errors. 225 is not required.
+- **222, 223, 224 and 228 complete:** all eight operations (224's set plus 228's `dismiss` and `retract`) with request and result models, 223's `deps` bundle, `processes.spawn_detached` and `logs_dir()`, and the typed errors. 225 is not required.
 - **Python MCP SDK `mcp` 2.x,** observed at 2.3.0 on 20261107. The tool guide describes v1; the design follows the 2.x source.
 - **`ecorkran/squadron#303`,** inherited from 224: run directories in `status` for `handle_pause`.
 
@@ -42,7 +43,7 @@ src/amoeba/
 └── cli/main.py          # uses OperationName, wiring, build_parser()
 ```
 
-`cli` and `mcp` both import `operations` and `wiring`. `mcp` imports nothing from `store`, `config`, `upstream`, `answering` or `cli`; it gets the types it names from `wiring`. 222's rule that only the doors call `amoeba_home()` now names `cli`, `mcp` and `wiring`.
+`cli` and `mcp` both import `operations` and `wiring`. `mcp` imports nothing from `store`, `config`, `upstream`, `answering` or `cli`; it gets the types it names from `wiring`. 228 split the home into config and state: the doors ask for `state_layout()`, `config_home()` and `state_home()`, which only `cli`, `mcp` and `wiring` may call, and they open the store only through `open_state_store` (228 D2).
 
 The server holds no state. Each call loads the config, opens the store in its worker thread and closes it, so no SQLite connection is shared across threads. The agent client starts and stops the server with its session, which fits "nothing to run".
 
@@ -61,15 +62,17 @@ The server holds no state. Each call loads the config, opens the store in its wo
 | `decisions` | in-process | `DecisionsRequest` | `DecisionsResult` |
 | `mark_read` | in-process | `MarkReadRequest` | `MarkReadResult` |
 | `answer` | in-process | `AnswerRequest` | `AnswerResult` |
+| `dismiss` | in-process | `DismissRequest` | `DismissResult` |
+| `retract` | in-process | `RetractRequest` | `RetractResult` |
 | `handle_pause` | detached | `HandlePauseCall` (`run_id`, `directory`) | `StartedCall` |
 
-`answer` runs in-process in a worker thread, not detached as the plan entry's wording has it. Its resume waits only `resume_wait_seconds` (223 D8) and spawns `sq run --resume` detached in its own session, so it is not long work, and the agent relaying a PM decision gets `no_such_question`, `rejected`, `refused` or `not_delivered` back directly. Only `handle_pause`, which waits for a whole answering run, is detached. 227 adds two rows.
+`answer` runs in-process in a worker thread, not detached as the plan entry's wording has it. Its resume waits only `resume_wait_seconds` (223 D8) and spawns `sq run --resume` detached in its own session, so it is not long work, and the agent relaying a PM decision gets `no_such_question`, `rejected`, `refused` or `not_delivered` back directly. Only `handle_pause`, which waits for a whole answering run, is detached. `dismiss` and `retract` are in-process too: each is one short write with no subprocess. 227 adds two rows.
 
 ### D3 — Names once, descriptions in the table
 `OperationName(StrEnum)` in `operations/names.py`; the CLI registers subcommands from it and the table uses it for tool names. The `handle_pause` description says the result lands in the receipt's stdout log and an empty log may mean still running or killed, so confirm through `status` or `decisions`. The `answer` description says `text` must be a decision the PM actually gave, passed on as given, never one the agent composed, since a `pm` answer becomes precedent (223 D9).
 
 ### D4 — Shared wiring; store calls off the loop
-`wiring.py` holds what both doors do before calling an operation: `load_config()`, `open_store()`, `default_deps()` (223's bundle plus 224's `list_runs` and `project_names`) and `OPERATIONAL_ERRORS`. `cli/main.py` moves to it with no behavior change. `call_tool` is async; every in-process call, store open included, and the detached spawn run in `anyio.to_thread.run_sync`. Nothing synchronous runs on the loop but the table lookup and result building.
+`wiring.py` holds what both doors do before calling an operation: `load_config()`, `open_store()` (which opens the store through `open_state_store`, 228 D2), `default_deps()` (223's bundle plus 224's `list_runs` and `project_names`) and `OPERATIONAL_ERRORS`. `cli/main.py` moves to it with no behavior change. `call_tool` is async; every in-process call, store open included, and the detached spawn run in `anyio.to_thread.run_sync`. Nothing synchronous runs on the loop but the table lookup and result building.
 
 ### D5 — `directory` input and results
 - For tools with `takes_directory` (`set_up`, `status`, `handle_pause`), the schema is the request model's JSON schema plus a required `directory` (absolute path). `directory` is removed before the rest is passed to the operation.
@@ -107,7 +110,7 @@ Default suite, fake `cf` and `sq` from 222 to 224.
 - **Boundary:** an AST test that `amoeba.mcp` imports none of `store`, `config`, `upstream`, `answering`, `cli`.
 - **Off the loop:** a tool blocked on a `threading.Event` does not stop a second call completing.
 - **Detached:** `handle_pause` returns `StartedCall` before the child exits; the child's stdout log then holds its `HandlePauseResult`. A relative `directory` starts nothing.
-- **stdio smoke:** the SDK's stdio client starts `amoeba-mcp` and lists six tools.
+- **stdio smoke:** the SDK's stdio client starts `amoeba-mcp` and lists eight tools.
 
 ## Success Criteria
 

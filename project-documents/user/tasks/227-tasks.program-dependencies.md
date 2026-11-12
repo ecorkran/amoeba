@@ -9,10 +9,11 @@ dependencies:
 - 226-slice.mcp-server
 projectState: Slices 222 to 226 are designed and tasked; this slice assumes they are
   merged and that 225's trial gave a go verdict. The store baseline already has `dependency_pairs.consumed`
-  and the `releases` table. The CLI and the MCP server expose six operations; neither
+  and the `releases` table. The CLI and the MCP server expose eight operations (225's set plus 228's `dismiss`
+  and `retract`); neither
   has `report_release` or `changes`. Nobody has run Amoeba.
 dateCreated: 20261107
-dateUpdated: 20261108
+dateUpdated: 20261112
 status: not_started
 turns: 8
 promptTokens: 253298

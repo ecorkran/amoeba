@@ -5,14 +5,15 @@ project: amoeba
 lld: user/slices/226-slice.mcp-server.md
 dependencies:
 - 224-slice.status-and-decisions
+- 228-slice.state-home-and-question-lifecycle
 projectState: Slices 222 to 224 are designed and tasked; this slice assumes they are
-  merged. The six operations (`set_up`, `handle_pause`, `answer`, `status`, `decisions`,
-  `mark_read`) exist with request and result models, 223's `Deps` bundle, `processes.spawn_detached`,
+  merged. The eight operations (`set_up`, `handle_pause`, `answer`, `status`, `decisions`,
+  `mark_read`, `dismiss`, `retract`) exist with request and result models, 223's `Deps` bundle, `processes.spawn_detached`,
   `logs_dir()` and the typed errors. The CLI (`cli/main.py`) is the only door. No
   MCP server exists. Nobody has run Amoeba. `ecorkran/squadron#303` is inherited from
   224.
 dateCreated: 20261107
-dateUpdated: 20261108
+dateUpdated: 20261112
 status: not_started
 turns: 7
 promptTokens: 182074
@@ -35,7 +36,7 @@ usageByModel:
 ## Context Summary
 
 - Working on slice 226 (design: `user/slices/226-slice.mcp-server.md`; decisions D1 to D10 are cited by number).
-- Adds `amoeba-mcp`, a stdio MCP server exposing the six CLI operations by the CLI's names, with the CLI's inputs and JSON results. It has no operation logic.
+- Adds `amoeba-mcp`, a stdio MCP server exposing the eight CLI operations by the CLI's names, with the CLI's inputs and JSON results. It has no operation logic.
 - New modules: `operations/names.py`, `wiring.py`, `mcp/{server,tools,in_process,detached}.py`, `docs/mcp-server.md`. Changed: `cli/main.py` (uses `OperationName`, `wiring`, `build_parser()`), `pyproject.toml`, README.
 - `amoeba.mcp` imports nothing from `store`, `config`, `upstream`, `answering` or `cli` (D10 boundary test); it takes types from `wiring`.
 - Python MCP SDK `mcp` 2.x (observed 2.3.0 on 20261107). The tool guide in `ai-project-guide/tool-guides/mcp` describes v1; follow the 2.x source and docs (context7) where they differ. Confirm the low-level `Server`, `on_list_tools`, `on_call_tool`, `stdio_server` and stdio client names against the installed package before coding.
@@ -56,7 +57,7 @@ usageByModel:
 
 - [ ] **0.2 Confirm 222 to 224 and locate inputs**
   - [ ] Confirm `src/amoeba/operations/` holds `set_up`, `handle_pause`, `answer`, `status`, `decisions`, `mark_read` and `deps`; and that `amoeba status --help` runs. If not, write `BLOCKED: slices 222-224 not merged` under this task and stop
-  - [ ] Find the module and signature of each of: the six operation functions, their request and result models (`SetUpRequest`, status request, `DecisionsRequest`, `MarkReadRequest`, `AnswerRequest`, `HandlePauseResult` and the result models), `HandlePauseCall` (note "absent" if it does not exist; task 1.1 creates it), `Deps`, the default-deps builder in `cli/main.py`, `spawn_detached`, `logs_dir`, `amoeba_home` and the environment variable it reads, the typed errors and exit-code constants, and how `cli/main.py` loads config and opens the store; note import paths
+  - [ ] Find the module and signature of each of: the eight operation functions, their request and result models (`SetUpRequest`, status request, `DecisionsRequest`, `MarkReadRequest`, `AnswerRequest`, `DismissRequest`, `RetractRequest`, `HandlePauseResult` and the result models), `HandlePauseCall` (note "absent" if it does not exist; task 1.1 creates it), `Deps`, the default-deps builder in `cli/main.py`, `spawn_detached`, `logs_dir`, `state_layout()`, `config_home()`, `state_home()` and `open_state_store` (228 split the home) and the environment variable they read, the typed errors and exit-code constants, and how `cli/main.py` loads config and opens the store; note import paths
   - [ ] Find how `cli/main.py` registers subcommands and whether a `build_parser()` function exists
   - [ ] Check the installed `mcp` version (`uv pip show mcp`) and whether it is a declared dependency; note the result
   - [ ] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
@@ -72,7 +73,7 @@ usageByModel:
 
 - [ ] **1.1 `OperationName` and `build_parser()` and tests**
   - [ ] Create `operations/names.py` with `OperationName(StrEnum)`: `set_up`, `handle_pause`, `answer`, `status`, `decisions`, `mark_read`
-  - [ ] Change `cli/main.py` to register subcommands from `OperationName` (no literal subcommand strings left for these six) and to expose `build_parser()` returning the parser, used by `main()`. Behavior unchanged
+  - [ ] Change `cli/main.py` to register subcommands from `OperationName` (no literal subcommand strings left for these eight) and to expose `build_parser()` returning the parser, used by `main()`. Behavior unchanged
   - [ ] Ensure `HandlePauseCall` (frozen pydantic: `run_id` any string, `directory` absolute path) exists, creating it in `operations` next to `handle_pause` only if task 0.2 found it absent; tasks 2.1 and 3.1 use it
   - [ ] Test: the `build_parser()` subcommand names equal `{n.value for n in OperationName}`; if created here, `HandlePauseCall` accepts a `run_id` starting with `-` and rejects a relative `directory`
   - [ ] Success: module imports; pyright strict clean; the CLI's existing tests pass unchanged (no edit to them)
@@ -82,7 +83,7 @@ usageByModel:
   - [ ] Re-export `Store`, `UserConfig`, `OperationDeps` (the `Deps` type) from `wiring` so `mcp` need not import `store` or `config`; add an `__all__`
   - [ ] Switch `cli/main.py` to `wiring`; no behavior change
   - [ ] Test: `default_deps()` returns a bundle with every field set; `OPERATIONAL_ERRORS` contains each typed error the CLI maps to exit 3, checked against the CLI's exit-3 test inputs
-  - [ ] Update 222's rule comment/doc line naming who may call `amoeba_home()` to `cli`, `mcp` and `wiring`
+  - [ ] Update the rule comment/doc line naming who may call `state_layout()`, `config_home()` and `state_home()` to `cli`, `mcp` and `wiring`; `open_store()` in `wiring` opens the store through `open_state_store`
   - [ ] Success: module imports; pyright strict clean; the CLI's existing tests pass unchanged
 
 **Commit**: `refactor: extract operation names and wiring for second door`
@@ -90,7 +91,7 @@ usageByModel:
 ## 2. Tool table and in-process tools (D2, D4, D5, D7)
 
 - [ ] **2.1 `tools.py`: `ToolSpec`, `TOOLS` table, schemas, argument preparation (D2, D5) and tests**
-  - [ ] Create `mcp/tools.py` with `RunMode(StrEnum)` (`IN_PROCESS`, `DETACHED`), frozen dataclass `ToolSpec` (`name: OperationName`, `request_model`, `takes_directory`, `mode`, `call` adapter or none for detached, `description`) and `TOOLS: tuple[ToolSpec, ...]` with the six rows from the D2 table
+  - [ ] Create `mcp/tools.py` with `RunMode(StrEnum)` (`IN_PROCESS`, `DETACHED`), frozen dataclass `ToolSpec` (`name: OperationName`, `request_model`, `takes_directory`, `mode`, `call` adapter or none for detached, `description`) and `TOOLS: tuple[ToolSpec, ...]` with the eight rows from the D2 table (`dismiss` and `retract` are in-process)
   - [ ] `description` per tool is short. The `handle_pause` description says the result lands in the receipt's stdout log, an empty log may mean still running or killed, confirm through `status` or `decisions`. The `answer` description says `text` must be a decision the PM actually gave, passed on as given, never composed by the agent (D3)
   - [ ] `call` adapters are one line each: place the arguments the operation takes (request document, `directory`, deps). They contain no validation and no logic
   - [ ] Add `input_schema(spec)`: the request model's JSON schema; for `takes_directory` tools add a required string property `directory` described as an absolute path. For `handle_pause` the base is `HandlePauseCall`
@@ -147,7 +148,7 @@ usageByModel:
   - [ ] Success: `uv run amoeba-mcp` starts and waits on stdin without printing to stdout; boundary test passes
 
 - [ ] **4.4 stdio smoke test**
-  - [ ] Test: the SDK's stdio client starts `amoeba-mcp` (the `amoeba-mcp` script beside `sys.executable`, with the home environment variable noted in task 0.2 set to a temp directory and fake `cf` and `sq` on `PATH`) and lists six tools whose names equal `OperationName`, each with an input schema; also call `decisions` on an empty store and check a normal result
+  - [ ] Test: the SDK's stdio client starts `amoeba-mcp` (the `amoeba-mcp` script beside `sys.executable`, with the home environment variable noted in task 0.2 set to a temp directory and fake `cf` and `sq` on `PATH`) and lists eight tools whose names equal `OperationName`, each with an input schema; also call `decisions` on an empty store and check a normal result
   - [ ] Success: smoke test passes without leaving a child process behind
   - [ ] Success: checks pass; the CLI's existing tests pass unchanged
 
@@ -156,7 +157,7 @@ usageByModel:
 ## 5. Install docs and walkthrough (D9)
 
 - [ ] **5.1 `docs/mcp-server.md` and README link**
-  - [ ] Create `docs/mcp-server.md` with YAML frontmatter per `file-naming-conventions.md`. Content: install (`uv tool install --force <repo>`, which installs `amoeba` and `amoeba-mcp` into one environment); register once at user scope (`claude mcp add --scope user amoeba -- amoeba-mcp`, or a Codex `[mcp_servers.amoeba]` entry); the client must pass a `PATH` reaching `sq`, `cf` and `git` plus model credentials; restart the client session after a reinstall; the six tools and that `handle_pause` returns a receipt whose stdout log holds the result
+  - [ ] Create `docs/mcp-server.md` with YAML frontmatter per `file-naming-conventions.md`. Content: install (`uv tool install --force <repo>`, which installs `amoeba` and `amoeba-mcp` into one environment); register once at user scope (`claude mcp add --scope user amoeba -- amoeba-mcp`, or a Codex `[mcp_servers.amoeba]` entry); the client must pass a `PATH` reaching `sq`, `cf` and `git` plus model credentials; restart the client session after a reinstall; the eight tools and that `handle_pause` returns a receipt whose stdout log holds the result
   - [ ] Check the Codex entry syntax against current Codex documentation before writing it; if it cannot be confirmed, state so in the doc rather than guessing
   - [ ] Link the doc from the README
   - [ ] Success: the doc exists, the README link resolves, and no credentials appear in either
