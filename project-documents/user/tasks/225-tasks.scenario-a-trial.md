@@ -12,8 +12,8 @@ projectState: Slices 221 to 224 are designed with task files; this slice assumes
   has run Amoeba. `ecorkran/squadron#302` (pause command with per-run opt-out) and
   `#303` (`sq runs list --json`) may still be open.
 dateCreated: 20261107
-dateUpdated: 20261111
-status: in_progress
+dateUpdated: 20261112
+status: complete
 turns: 8
 promptTokens: 286106
 cachedTokens: 248312
