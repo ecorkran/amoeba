@@ -115,51 +115,64 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    **Risk Level:** Low
    **Relative Effort:** 2
 
-7. [ ] **(226) MCP Server** — An MCP server over the operations built so far, with the same names and no logic of its own. Long work (`handle_pause`, `answer` with a resume) starts a detached CLI process and returns at once. Store calls run off the async loop. This completes scenario C: any agent session can see status and decisions and answer for the PM.
+7. [ ] **(228) State Home and Question Lifecycle** — Fixes the design holes found running 225. State moves out of `~/.config`: `config.yaml` stays in `~/.config/amoeba/`; the store, `answering/` and `logs/` live under `${XDG_STATE_HOME:-~/.local/state}/amoeba/`, with `AMOEBA_HOME` still redirecting everything for tests, and an existing store moved over by code on first use. Every question gets an exit: `dismiss` (CLI) closes a `claimed` or `waiting_on_pm` question with a reason, never counts as precedent and drops out of `status`; `status` and `handle_pause` close, with the run's outcome, a waiting question whose run has moved on or been deleted; `retract` stops a PM answer being precedent. The answer limit counts automatic answers since the run's last PM answer, so a PM answer resets it, and a run at the limit is answerable and dismissible. `set_up` gains `remove` entries for members, pairs and concept, refusing a member with open questions. Answering scratch directories and logs of settled questions are pruned after a configured age. `handle_pause` skips as `wrong_checkout` when called outside the run's recorded directory (amoeba#37), and every call that writes no question row is appended to a calls log (amoeba#34). Closes amoeba#34, #36, #37.
+   **Value:** User value. A stuck or stale question can always be cleared by the PM or an agent with a command, nothing is ever fixed by editing the store, and state is where state belongs.
+   **Success Criteria:**
+   - After a fresh install, `config.yaml` is the only file under `~/.config/amoeba/`; an existing store there is moved on first use, with every record intact.
+   - A question in every state has a command or an automatic rule that ends it; no state needs a person editing files.
+   - A PM answer resets the run's automatic-answer count; a dismissed or retracted answer is never shown to the answerer as precedent.
+   - A call outside the run's recorded directory skips as `wrong_checkout` and writes no question row; every call that writes no row appears in the calls log.
+   - `set_up` removes a member, pair or concept, and refuses a member with open questions.
+   - Settled scratch directories and logs older than the configured age are pruned.
+   **Dependencies:** 223, 224.
+   **Interfaces:** Provides `dismiss`, `retract` and `set_up` removal; changes the home layout 226 and 227 read.
+   **Risk Level:** Medium. Moves the live store; the move is tested only against throwaway homes and keeps the old file until the new one verifies.
+   **Relative Effort:** 4
+
+8. [ ] **(226) MCP Server** — An MCP server over the operations built so far, with the same names and no logic of its own. Long work (`handle_pause`, `answer` with a resume) starts a detached CLI process and returns at once. Store calls run off the async loop. This completes scenario C: any agent session can see status and decisions and answer for the PM.
    **Value:** User value. The PM can ask any agent what is waiting and answer through it, from any directory.
    **Success Criteria:**
    - Every operation available on the CLI is available over MCP with the same inputs and results.
    - A long call over MCP returns at once and its work shows in `status`.
    - No operation logic lives in the MCP layer; a test checks both doors call the same functions.
-   **Dependencies:** 224. Does not wait on 225.
+   **Dependencies:** 224 and 228.
+   **Required fixes to the existing design:** use the names the code has (`start_child`, `terminate_group`), not `spawn_detached`; `answer` over MCP takes a question key from `status` and records the caller as `via: mcp`; long waits run detached and `status` is bounded so no call outlives an MCP client timeout.
    **Interfaces:** Provides the MCP server and its install instructions.
    **Risk Level:** Low
    **Relative Effort:** 2
 
 ## Scenario B
 
-8. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member and commit and holding the commit's current version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
+9. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member and commit and holding the commit's current version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
    **Value:** User value. A repo designing a slice sees what changed upstream without the PM relaying it.
    **Success Criteria:**
    - A `from_source` consumer sees a provider's merge report; a `from_release` consumer sees it only once it has a version.
    - Tagging a release on an already reported commit adds the version; a `from_source` consumer does not see it twice.
    - Two worktrees calling `changes` from different starting points each see everything since their own point.
    - The rule lines, pasted into two of the PM's repos, lead the design agent to call `changes` in a real design run.
-   **Dependencies:** 225 and 226.
+   **Dependencies:** 226 and 228.
+   **Required fixes to the existing design:** `report_release` has a correct/replace flag so a wrong `touched` list can be fixed; a provider missing from `cf list projects` is a warning, not exit 3, and `set_up remove` (228) clears stale pairs; `changes` takes its starting point from the caller's own stored marker or an explicit argument, with the git commit time only a hint; the integration check is an automated fixture test, not a real design run in the PM's repos.
    **Interfaces:** Provides `report_release`, `changes` and the rule-line text.
    **Risk Level:** Medium. Nothing forces an agent to follow a rule line.
    **Relative Effort:** 3
 
 ## Implementation Order
 
-`220 → 221 → 222 → 223 → 224 → 225 → 226 → 227`.
+`220 → 221 → 222 → 223 → 224 → 225 → 228 → 226 → 227`.
 
-- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 227 needs 225 and 226.
+- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 228 comes before 226 and 227 because they read the home layout and the question states it changes. 227 needs 226 and 228.
 - **Risk.** 223 is the riskiest and the test of the design, so it comes right after the base it needs and before anything else new.
 - **Parallel work.** 226 can run beside 225, since 225 is only setup and a sanity pass.
 
 ## Notes
 
-- **External dependencies.** 223 can be built and tested by calling `handle_pause` by hand, but the trial needs `#302`. Missed-hook catch-up and per-member run status need `#303`. `#304` stays on hold unless 227 shows agents skipping the rule lines.
+- **External dependencies.** `#299`, `#302` and `#303` are closed and in the installed `sq`. `#304` stays on hold unless 227 shows agents skipping the rule lines.
 - **Retired work.** Slices 183 to 186 are retired by the architecture and get no successors here. Slice 180's slice-writing pipeline goes in 221 unless the audit finds a use. Slice 182 is decided by the audit; its program-concept passages are wanted and land in 223's context step if it is redone.
 - **Concept wording.** The concept still says a steered passage "can at worst produce a wrong reply" and that checks on an answer belong in the pipeline. Both are corrected as a planning edit, outside these slices.
 - **No data migration.** Nobody has run Amoeba, so 222 starts from a new baseline and 221 deletes the old migrations.
-- **Deferred.** A cost cap per time window, subscription-aware cost handling, and sharing PM precedent across a program wait until use shows the need.
 
 ## Future Work
 
 Living backlog; entries may be added during slice design, task breakdown, or implementation.
 
 1. [ ] **Pipeline step for program checks** — If agents skip the scenario B rule lines, add the check as a pipeline step once `ecorkran/squadron#304` lands. Dependencies: [227]. Effort: 2/5
-2. [ ] **Spend cap per time window** — Limit unattended answering and resume spend per day or week, with subscription models treated apart from list-priced ones. Dependencies: [225]. Effort: 2/5
-3. [ ] **Removing members and pairs in `set_up`** — Explicit remove entries, refusing a member with question records, if use shows mistaken registrations happen. Dependencies: [222]. Effort: 1/5
