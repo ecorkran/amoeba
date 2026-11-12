@@ -5,11 +5,11 @@ project: amoeba
 parent: user/architecture/220-slices.program-tool.md
 dependencies:
 - 224-slice.status-and-decisions
-- 225-slice.scenario-a-trial
 - 226-slice.mcp-server
+- 228-slice.state-home-and-question-lifecycle
 interfaces: []
 dateCreated: 20261107
-dateUpdated: 20261107
+dateUpdated: 20261112
 status: not_started
 ---
 
@@ -19,107 +19,123 @@ status: not_started
 
 Scenario B. A provider repo reports what it released, and a consumer reads those reports before designing a slice. Nobody relays anything.
 
-- **`report_release`** records a release from the member's own checkout (D1, D2).
+- **`report_release`** records a release from the member's own checkout. The same operation corrects a report's text or withdraws it (D1, D2).
 - **`changes`** returns what this member's providers reported since a time the caller gives, filtered by each pair's `consumed`. Nothing is marked read (D3, D4).
 - Both are added to the CLI and the MCP tool table under the same names (D5).
-- `docs/program-rules.md` holds the two rule lines a member pastes into its rules file (D6).
+- `docs/program-rules.md` holds the two rule blocks a member pastes into its rules file (D6).
+- Integration is proven by automated tests: a flow test runs the rule block's commands in fixture repos, and a live test runs both operations against real `cf` (D7). No step waits on real use.
 
-No table or migration: 222's baseline already has `dependency_pairs.consumed` and `releases`.
-
-**Gate.** Built only after 225's trial gives a go verdict. On a rethink verdict this design goes back to the PM.
+No table or migration: `releases` and `dependency_pairs.consumed` are in the baseline. This slice does not change `EXPECTED_SCHEMA_VERSION`; it stays at the value 226 sets.
 
 ## Value
 
-User value. A repo designing a slice sees what changed in the repos it depends on without the PM relaying it. A `from_release` consumer doesn't see a provider's unreleased work.
+User value. A repo designing a slice sees what changed in the repos it depends on without the PM relaying it. A `from_release` consumer doesn't see a provider's unreleased work. A wrong report is fixed or withdrawn by the agent that made it.
 
 ## Technical Scope
 
-**Included:** `store/releases.py` and a `Release` model; `operations/report_release.py`; `operations/changes.py`; `operations/since.py`; two `OperationName` members, CLI subcommands and MCP rows; `docs/program-rules.md`; contract doc updates (D8); tests (D7).
+**Included:** `store/releases.py` and a `Release` model; `operations/report_release.py` (modes `report`, `correct`, `withdraw`); `operations/changes.py`; `operations/since.py`; two `RejectCode` members; two `OperationName` members, `wiring.invoke` cases, CLI subcommands and MCP rows; `docs/program-rules.md`; contract doc updates (D8); tests (D7).
 
 **Excluded:**
 
-- Any change to `set_up`. Pairs and `consumed` are registered there already (222 D7).
+- Any change to `set_up`. Pairs and `consumed` are set there (222 D7); removal is `set_up remove` (228).
 - Marking reports read, notifying consumers, or reading past direct providers (architecture: pull, never walks the graph).
 - Running `git` from Amoeba. The caller passes a full hash and a time.
-- A pipeline step that calls `changes` (`ecorkran/squadron#304`, slice plan Future Work 1).
-- Removing or correcting a report. Rare; fixed by hand in SQLite, like a wrong registration.
+- A pipeline step that calls `changes` (`ecorkran/squadron#304`, slice plan Future Work 1). Not part of this slice.
 
 ## Dependencies
 
-- **225** with a go verdict. **226**: `OperationName`, `ToolSpec` (`takes_directory`, `RunMode.IN_PROCESS`), `wiring.default_deps()`, `build_parser()`, parity tests.
-- **222**: `Store.open`/`write()`/`read()`, `resolve_member`, `store.programs.pairs_of`, `ConsumedMode`, the `releases` table (`seq`, `member_id`, `commit_sha`, `version`, `changed`, `touched`, `reported_at`, `versioned_at`, `UNIQUE (member_id, commit_sha)`), CLI exit-code constants.
-- **224**: `project_names(run)`, and 224 D5's `since` rule (ISO-8601 with an offset, converted to the store's UTC text; no offset is `malformed`). 224 has no function for it, so this slice writes `operations/since.py` `parse_since()` and switches `decisions` to it. 224's tests pass unchanged.
+- **224:** `project_names` (`upstream/context_forge/projects.py`); `resolve_member` and `ContextForgeError` (`operations/members.py`); `RejectCode` and `validation_problems` (`operations/reject_codes.py`); `decisions`' `since` rule, which this slice moves into `parse_since()` (D5).
+- **226:** `OperationName`, `ToolSpec`, `RunMode`, `wiring.invoke` (`src/amoeba/wiring.py`), `build_parser()`, and 226's parity tests. 226 is designed and tasked but not built, so this slice starts after it merges.
+- **228:** `state_layout()`, which the doors use to open the store. Its active-member rule means `pairs_of` returns only pairs whose two members are active.
+- **222:** `Store.read()` and `Store.write()` (`write()` is `BEGIN IMMEDIATE`), `encode_string_list` and `decode_string_list`, `encode_timestamp` and `decode_timestamp`, `ConsumedMode`, and the `releases` table (`seq`, `member_id`, `commit_sha`, `version`, `changed`, `touched`, `reported_at`, `versioned_at`, `UNIQUE (member_id, commit_sha)`).
+- **225:** complete, with no verdict. Plan entry 6 dropped the counted trial, so this slice has no gate.
 - No new packages, no Squadron or Context Forge change.
 
 ## Architecture
 
 ```
 src/amoeba/
-├── store/models.py          # + Release
-├── store/releases.py        # release_for_commit, insert_release, add_version, visible_releases
-├── operations/names.py      # + REPORT_RELEASE, CHANGES
-├── operations/since.py      # parse_since(); decisions calls it too
+├── store/models.py            # + Release
+├── store/releases.py          # release_for_commit, insert_release, add_version,
+│                              #   correct_release, delete_release, visible_releases
+├── operations/names.py        # + REPORT_RELEASE, CHANGES
+├── operations/reject_codes.py # + NOT_A_MEMBER, NOT_REPORTED
+├── operations/since.py        # parse_since(); decisions calls it too
 ├── operations/report_release.py
 ├── operations/changes.py
-├── cli/main.py              # + two subcommands
-└── mcp/tools.py             # + two rows
+├── wiring.py                  # + two invoke cases (226 D4)
+├── cli/main.py                # + two subcommands
+└── mcp/tools.py               # + two rows
 docs/program-rules.md
 ```
 
 Import direction is unchanged: `cli`, `mcp` → `operations` → `store`, `upstream`.
 
-**Flow.** Each operation validates the unvalidated document from either door into its request model (`rejected / malformed` on failure), then resolves the directory with `resolve_member` (`rejected / not_a_member` with the resolution as detail). All `cf` calls happen before the store is touched. `report_release` then applies D2 in one `BEGIN IMMEDIATE` transaction. `changes` reads pairs and visible reports in one read transaction, gets names from one `project_names` call, and writes nothing.
+**Flow.** Each operation validates the unvalidated document from either door into its request model (`rejected / malformed` on failure). `changes` then reads the names with one `cf` call, and both operations resolve the directory with `resolve_member` (`rejected / not_a_member`). No `cf` call runs while a write transaction is open. `report_release` applies D2 in one `store.write()` transaction. `changes` reads pairs and visible reports in one `store.read()` transaction and writes nothing.
 
-**State.** `releases` is written only by `report_release`. No read position is stored; the caller's starting point comes from its own git history (D4).
+**State.** `releases` is written only by `report_release`. A row is created by a report, changed by versioning or correction, and deleted by withdrawal. No read position is stored (D4).
 
 ## Technical Decisions
 
-### D1 — The release report request
+### D1 — The release request
 
-`ReportReleaseRequest`, frozen pydantic, `extra="forbid"`:
+`ReportReleaseRequest`: frozen pydantic, `extra="forbid"`, with a model validator that enforces the mode rules.
 
 | Field | Rule |
 |---|---|
-| `commit` | Required, stripped, lowercased. Full hash only: 40 or 64 hex characters. An abbreviated hash would split one commit into two reports. The rejection detail says `git rev-parse` gives a full hash. |
-| `version` | Optional; stripped, non-empty when given. Stored as given. |
-| `changed` | Required, non-empty: what changed, for someone using this repo. |
-| `touched` | Required list of at least one non-empty string: the things other repos use that the change touched. Deduplicated, order kept. Stored as a JSON array, so a consumer agent can match items without parsing prose. |
+| `mode` | `report` (default), `correct` or `withdraw`. A `ReportMode` StrEnum. |
+| `commit` | Required in every mode. Stripped, lowercased; 40 or 64 hex characters. An abbreviated hash would split one commit into two reports. The rejection detail says `git rev-parse` gives a full hash. |
+| `version` | Optional in `report` and `correct`; stripped, non-empty when given; stored as given. Not allowed in `withdraw`. |
+| `changed` | Required in `report` and `correct`; non-empty. Not allowed in `withdraw`. |
+| `touched` | Required in `report` and `correct`: at least one non-empty string; duplicates removed, order kept; stored as a JSON array so a consumer agent can match items without parsing prose. Not allowed in `withdraw`. |
 
-### D2 — Report identity and repeats
+A field the mode does not allow is `malformed`, and the detail names the field and the mode.
 
-A report is identified by member and commit, and holds the commit's current version. With `stored` being the member's report for `commit`:
+### D2 — Report identity, repeats, corrections and withdrawal
 
-| Case | Outcome | Write |
-|---|---|---|
-| No `stored` | `recorded` | Insert. `reported_at` now; `versioned_at` now if a version is given, else null. |
-| A version different from `stored`'s, or `stored` has none | `versioned` | Set `version`, `versioned_at` to now, and replace `changed` and `touched`. |
-| Anything else | `unchanged` | None |
+A report is identified by member and commit. With `stored` being the member's report for `commit`:
 
-- A repeat is `unchanged` whatever its wording, since agents rephrase. The result always carries the stored report.
+| Mode | Case | Outcome | Write |
+|---|---|---|---|
+| `report` | No `stored` | `recorded` | Insert. `reported_at` now; `versioned_at` now if a version is given, else null. |
+| `report` | A version is given and differs from `stored`'s, or `stored` has none | `versioned` | Set `version`; `versioned_at` now; replace `changed` and `touched`. `reported_at` and `seq` unchanged. |
+| `report` | Anything else | `unchanged` | None. |
+| `correct` | No `stored` | `rejected` / `not_reported` | None. |
+| `correct` | `stored` exists | `corrected` | Replace `changed` and `touched`. Set `version` if given, else keep it. `reported_at` now. `versioned_at` now if the row has a version after the write, else null. |
+| `withdraw` | No `stored` | `rejected` / `not_reported` | None. |
+| `withdraw` | `stored` exists | `withdrawn` | Delete the row. |
+
+- A repeat in `report` mode is `unchanged` whatever its wording, since agents rephrase. The result carries the stored report.
 - Versioning replaces the text because a release describes everything since the previous release. `reported_at` doesn't move, so `from_source` consumers don't see the commit again (D3).
 - Only a tag on the reported commit merges into a report. A release flow that adds its own commit makes a second report.
-- `BEGIN IMMEDIATE` serializes concurrent reports of one commit. An `IntegrityError` on the unique key is a bug and is not caught.
+- A correction moves the times to now so consumers see it again. A `from_source` consumer sees the corrected report if its `since` predates the correction. A `from_release` consumer sees it if the row is versioned and its `since` predates the correction. A consumer whose `since` is later doesn't see it.
+- Withdrawal deletes the row. A consumer that already read the report keeps its own record in its Dependencies section; that section is the record the operator sees.
+- A withdrawn commit can be reported again; it gets a new `seq`.
+- `BEGIN IMMEDIATE` serializes concurrent writers, and the stored-row check and the write share one transaction. An `IntegrityError` on the unique key is a bug and is not caught.
 
-`ReportReleaseResult`: `outcome` (`recorded`, `versioned`, `unchanged`, `rejected`), `member` (CF project id or null), `report` (`seq`, `commit`, `version`, `changed`, `touched`, `reported_at`, `versioned_at`, or null), `problems` (`code`: `malformed` or `not_a_member`, and `detail`). Codes are `StrEnum`s.
+`ReportReleaseResult`: `outcome` (`recorded`, `versioned`, `corrected`, `unchanged`, `withdrawn`, `rejected`); `member` (the CF project id, or null when the directory is not a member); `report` (the stored report after the call; null after `withdrawn` and on rejection); `problems` (`code` from `RejectCode`: `malformed`, `not_a_member` or `not_reported`, and `detail`).
+
+Rows are bounded: one per commit a member reported, so they grow with the member's merges and releases. `withdraw` is the explicit cancel for a row, and no cleanup job runs.
 
 ### D3 — What `changes` returns
 
-`ChangesRequest`: `since`, required, validated by `parse_since`. The member is the caller's directory.
+`ChangesRequest`: `since`, required, validated by `parse_since` (D5). The member is the caller's directory.
 
-For each pair where the caller is the consumer, one function `visible_releases(tx, provider_id, consumed, since)` selects:
+Flow: validate; `project_names()` (one `cf` call; a `CfCallFailed` raises `ContextForgeError`); `resolve_member`; then one read transaction that takes the caller's pairs from `pairs_of` (the rows whose consumer is the caller) and calls `visible_releases` for each pair. `visible_releases(tx, provider_id, consumed, since)` selects:
 
 | `consumed` | Visible when | Ordered by |
 |---|---|---|
 | `from_source` | `reported_at >= since` | `reported_at`, `seq` |
 | `from_release` | `version IS NOT NULL AND versioned_at >= since` | `versioned_at`, `seq` |
 
-Every pair is listed, including those with nothing visible, so "checked, nothing new" differs from "not a dependency". A member with no providers gets empty `pairs`, not a rejection.
+- Every pair is listed, including pairs with nothing visible, so "checked, nothing new" differs from "not a dependency". A member with no providers gets `listed` with empty `pairs`. Pairs come in `pairs_of`'s order (provider id, consumer id).
+- A member or provider id that `project_names` does not list keeps its id, gets `name: null`, and adds a `warnings` entry (`not_in_context_forge`, with the id). The outcome stays `listed`. A `cf` failure is not a warning; it is `ContextForgeError`.
 
-`ChangesResult`: `outcome` (`listed`, `rejected`), `member` (`{id, name}`), `since` (normalized UTC), `pairs` (each `{provider: {id, name}, consumed, releases: [report as in D2]}`), `problems` (`malformed`, `not_a_member`). A provider id missing from Context Forge's list is a `ContextForgeError`, as in 224 D6.
+`ChangesResult`: `outcome` (`listed`, `rejected`); `member` (`{id, name}`); `since` (normalized UTC text); `pairs` (each `{provider: {id, name}, consumed, releases}`, where each release has the `report` shape of D2); `problems` (`malformed`, `not_a_member`); `warnings` (`not_in_context_forge`, with detail).
 
 ### D4 — The starting point belongs to the caller
 
-Amoeba stores no read marker, so parallel worktrees never hide changes from each other. The consumer's `since` is the committer time of the commit that added the most recent slice design on its branch:
+Amoeba stores no read marker. A marker kept by Amoeba would be shared by every worktree of a member, so a change could be hidden from one worktree by another. The caller gives `since`, and the rule block tells the consumer agent how to get it from git. The consumer's `since` is the committer time of the commit that added the most recent slice design on its branch:
 
     git log -1 --diff-filter=A --format=%cI -- project-documents/user/slices/
 
@@ -127,22 +143,26 @@ If that prints nothing (no previous design), use the earliest root commit's time
 
     git log --max-parents=0 --reverse --format=%cI | head -1
 
-The agent runs it before committing its own design. This departs from the architecture's "usually its branch's last merge": a provider often reports while the consumer implements, after its design and before its merge, and the last merge would miss that report.
+The agent runs it before committing its own design. A provider often reports while the consumer implements, after the consumer's design and before its merge, so the last merge would miss that report. The path is the Context Forge slice-design path; a member whose slice designs live elsewhere edits the path in its pasted block.
 
-### D5 — The two doors
+### D5 — Doors and shared pieces
 
 - `OperationName` gains `REPORT_RELEASE = "report_release"` and `CHANGES = "changes"`; 226's name-parity test covers them.
+- `wiring.invoke` gains two cases. Each calls its operation with the caller's directory and the door (226 D4).
+- `operations/since.py`: `parse_since(value: str) -> str`. An ISO-8601 string with an offset becomes the store's UTC text (`encode_timestamp`). A string with no offset, or one that does not parse, raises `ValueError` with the same messages 224 uses. `DecisionsRequest._utc_text` in `operations/decisions.py` calls `parse_since`, so its behavior, messages and tests do not change.
+- `RejectCode` gains `NOT_A_MEMBER` and `NOT_REPORTED`. `test_contract_docs` checks the codes against the contract docs (D8).
 - **CLI:**
   ```
-  amoeba report_release --commit <sha> [--version <v>] --changed <text> --touched <item> [--touched <item> …]
+  amoeba report_release --commit <sha> [--version <v>] --changed <text> --touched <item> [--touched <item> …] [--correct]
+  amoeba report_release --commit <sha> --withdraw
   amoeba changes --since <iso-8601>
   ```
-  Flags map one-to-one onto request fields and are not marked required in argparse, so a missing field is rejected by the operation with the same detail on both doors. Exit codes: `0` for any non-rejected outcome, `1` rejected, `2` usage, `3` operational error (`ContextForgeError`, `ConfigError`, `AmoebaHomeError`, `StoreError`).
-- **MCP:** two `RunMode.IN_PROCESS` rows with `takes_directory = True`; `directory` is required and absolute (226 D5). Descriptions contain no example values.
+  `--correct` and `--withdraw` form a mutually exclusive group. No flag is `required=True` in argparse. Absent flags are left out of the document, so the operation rejects a missing field with the same detail on both doors. `--touched` is repeatable and collected as a list. Exit codes: `0` for any non-rejected outcome, `1` rejected, `2` usage, `3` operational error (`OPERATIONAL_ERRORS`).
+- **MCP:** two `ToolSpec` rows: `RunMode.IN_PROCESS`, `takes_directory = True`, `request_model` `ReportReleaseRequest` and `ChangesRequest`. No per-tool adapter (226 D2). Descriptions say what the call does, say that `report_release` also corrects or withdraws, and contain no example values.
 
-### D6 — The rule lines
+### D6 — The rule blocks
 
-`docs/program-rules.md` holds two blocks, each pasted whole, and says where each goes. A repo outside a program carries neither. The text is:
+`docs/program-rules.md` holds two blocks, each pasted whole, and says where each goes. A repo outside a program carries neither.
 
 **Consumer** (rules file of a member with providers):
 
@@ -150,30 +170,36 @@ The agent runs it before committing its own design. This departs from the archit
 
 **Provider** (rules file of a member others depend on, and the repo's release skill after its tag step):
 
-> When a slice merge into the target, or a release, changes something other repos use (an interface, a command, a file format, a schema, or behavior they rely on), run `amoeba report_release` in this checkout. Pass `--commit` as the full hash of the merged commit (`git rev-parse HEAD`), or for a release the tagged commit (`git rev-list -n 1 <tag name>`). Pass `--version` as the tag name for a release, and omit it otherwise. Pass `--changed` as what changed, for someone using this repo; for a release, cover everything since the previous release. Pass one `--touched` per thing changed. On a non-zero exit, record the error in the task notes or the release result, and do not retry with different values.
+> When a slice merge into the target, or a release, changes something other repos use (an interface, a command, a file format, a schema, or behavior they rely on), run `amoeba report_release` in this checkout. Pass `--commit` as the full hash of the merged commit (`git rev-parse HEAD`), or for a release the tagged commit (`git rev-list -n 1 <tag name>`). Pass `--version` as the tag name for a release, and omit it otherwise. Pass `--changed` as what changed, for someone using this repo; for a release, cover everything since the previous release. Pass one `--touched` per thing changed. On a non-zero exit, record the error in the task notes or the release result, and do not retry with different values. If a report you made is wrong, run the same command with `--correct` and the true text. To take a report back entirely, run `amoeba report_release --commit <full hash> --withdraw`.
 
-The design's Dependencies section is where the consumer records the result, because `changes` writes nothing and the plan's last criterion reads from it. No sample hash, time or version appears near any value the agent must fetch (project rules, hallucination traps).
+The Dependencies section is where the consumer records the result, because `changes` writes nothing. No sample hash, time or version appears near any value the agent must fetch (project rules, hallucination traps).
 
 ### D7 — Tests
 
-Default suite, autouse `AMOEBA_HOME` fixture, 222's fake `cf`.
+Default suite, autouse `AMOEBA_HOME` fixture, the replayed `cf` in `tests/cf_fixtures.py`, and the git helpers in `tests/git_repo.py`.
 
-- **Validation:** abbreviated or non-hex hash, empty `changed`, empty or missing `touched`, blank `version`, offset-less `since` are each `malformed`. Upper-case hash stored lowercased; duplicate `touched` removed in order.
-- **D2:** one test per row, asserting outcome and stored row, including a second version on a versioned commit. A rephrased repeat keeps the stored text.
-- **D3,** one provider with a `from_source` and a `from_release` consumer, rows seeded at chosen times (store writes take the time as an argument): the merge report reaches only `from_source`; after versioning `from_release` sees it with the release text; a `from_source` `since` between report and tag sees nothing, an earlier one sees one entry with the version; two `since` values each see everything after their own point; a provider's provider is never listed; no providers gives empty `pairs`.
-- **Non-members:** both operations return `not_a_member` and write nothing. A `cf` failure exits 3.
-- **Doors:** 226's parity tests cover the rows. 226's stdio test's literal tool count becomes one per `OperationName` member (the one edit to a 226 test). One CLI test per subcommand for exits 0 and 1 and a repeated `--touched` arriving as a list.
-- **Rule lines:** `docs/program-rules.md` has both blocks, each names its operation and flags as `build_parser()` defines them, the consumer block has both D4 commands, and neither contains a 40-hex string.
+- **Validation:** per mode, each cross-field violation and each bad field is `malformed`: abbreviated or non-hex hash; empty `changed`; empty or missing `touched`; blank `version`; `version` or `touched` on `withdraw`; offset-less `since`; unknown field. An upper-case hash is stored lowercased; duplicate `touched` items are removed in order.
+- **D2:** one test per row of the table, asserting outcome and stored row, including a second version on a versioned commit. A rephrased repeat keeps the stored text.
+- **Corrections:** a `from_source` `since` between the original report and the correction sees the corrected report; a `since` after the correction sees nothing. A `from_release` consumer sees a corrected row once it is versioned. `correct` and `withdraw` on a commit with no report are `rejected / not_reported` and write nothing.
+- **Withdrawal:** after `withdraw`, `changes` no longer lists the report, and reporting the commit again is `recorded`.
+- **D3 (store level, rows seeded at chosen times):** the merge report reaches only `from_source`; after versioning, `from_release` sees it with the release text; a `from_source` `since` between report and tag sees nothing, and an earlier one sees one entry with the version; two `since` values each see everything after their own point; a provider's provider is never listed; no providers gives empty `pairs`.
+- **Warnings:** a provider missing from the `cf` names is listed with `name: null` and one `not_in_context_forge` warning. A `cf` failure raises `ContextForgeError`.
+- **Non-members:** `not_a_member` on both operations, and nothing written.
+- **`changes` writes nothing:** a table dump before and after is equal.
+- **Doors:** 226's parity tests cover the rows. 226's stdio literal count becomes one per `OperationName` member (the one edit to a 226 test). One CLI test per subcommand for exits 0, 1 and 2 (the mutually exclusive flags); a repeated `--touched` arrives as a list; absent flags are absent from the document.
+- **Rule blocks:** `docs/program-rules.md` has both blocks, each in the form D6 gives. Each names its operation and flags as `build_parser()` defines them (flag names come from the parser, not a literal list). The consumer block contains both D4 commands. Neither block contains a 40-hex string. The parser is lenient about heading and whitespace, and the real file is the fixture.
+- **Flow test (automated integration)**, `tests/program/test_program_flow.py`: a provider repo and a consumer repo from `tests/git_repo.py`, both members of one program in a replayed `cf`. The test reads the consumer block from `docs/program-rules.md`, runs its two git commands in the consumer repo, and passes the output to `changes`. Then it checks the window case: the provider reports after the consumer's design commit and before its merge, and the consumer's `since` still sees the report (committer dates set with `GIT_COMMITTER_DATE`, and a clock fixed after the design commit). The provider then tags and reports with a version, and the `from_release` consumer sees it.
+- **Live test**, `tests/live/program/test_program_dependencies_live.py`: real `cf` and `git`, two throwaway members built with the helpers in `tests/live/pause/harness.py`, and a throwaway `AMOEBA_HOME`. It runs both operations through the CLI and asserts `recorded`, `unchanged`, `malformed` with exit 1, and the consumer's `changes` result. It exercises the real `cf list projects` output through `project_names`.
 
 ### D8 — Contract docs
 
-- `docs/store-contract.md`: `releases` written by `report_release`, `touched` as a JSON array, D2's rules, no read record.
-- The CLI contract and `docs/mcp-server.md`: the two operations.
-- `docs/program-rules.md`: D6, a pointer to 222's `set_up` contract for choosing `consumed`, and the D2 note that a release merges with a merge report only when the tag is on the reported commit.
+- `docs/store-contract.md`: `releases` is written only by `report_release`; `touched` is a JSON array; D2's identity, repeat, correction and withdrawal rules; no read record is kept.
+- `docs/cli-contract.md` and `docs/mcp-server.md`: the two operations, their flags, modes, outcomes and exit codes; both MCP tools take an absolute `directory`.
+- `docs/program-rules.md`: the D6 blocks; a pointer to 222's `set_up` contract for choosing `consumed`; and the D2 note that a release merges into a merge report only when the tag is on the reported commit, and that a release flow adding its own commit makes a second report.
 
 ## Implementation Details
 
-**`changes` result (JSON).** A `report_release` result has the same `report` object.
+**`changes` result (JSON).** A `report_release` result carries the same `report` object.
 
 ```json
 {"outcome": "listed",
@@ -184,45 +210,73 @@ Default suite, autouse `AMOEBA_HOME` fixture, 222's fake `cf`.
             "releases": [{"seq": 0, "commit": "<full hash>", "version": "<tag>",
                           "changed": "<text>", "touched": ["<item>"],
                           "reported_at": "<UTC ISO-8601>", "versioned_at": "<UTC ISO-8601>"}]}],
- "problems": []}
+ "problems": [],
+ "warnings": []}
 ```
 
-**Python:** `report_release(store, document, *, directory, deps)` and `changes(store, document, *, directory, deps)`. `report_release` takes the UTC time once per call and passes it to the store writes.
+**Python:** `report_release(store, document, *, directory, deps)` and `changes(store, document, *, directory, deps)`. Each takes the time once per call from `deps.clock()` and passes it to the store writes.
 
 ## Success Criteria
 
 - A `from_source` consumer sees a provider's merge report; a `from_release` consumer sees it only once it has a version.
 - Tagging a release on an already reported commit adds the version; a `from_source` consumer does not see it twice.
+- A correction is seen again by consumers whose `since` predates it, and a withdrawn report is no longer listed.
 - Two worktrees calling `changes` from different starting points each see everything since their own point.
 - Both operations work on the CLI and over MCP with the same inputs and results. A caller outside every program gets `not_a_member` and nothing is written.
-- Format, lint, pyright (strict) and the full default suite pass. No migration; `EXPECTED_SCHEMA_VERSION` unchanged. Docs match the code (D8).
-- **Integration:** the rule lines, pasted into two of the PM's member repos, lead a design agent to call `changes` in a real design run, and the design's Dependencies section records the result (walkthrough step 5). The merge does not wait for this, but the slice is not complete until it is recorded.
+- A provider missing from `cf`'s names is listed with a warning. A `cf` failure exits 3.
+- Format, lint, pyright (strict), the full default suite and the live test pass. This slice does not change `EXPECTED_SCHEMA_VERSION`. Docs match the code (D8).
+- Integration without a real design run: the flow test runs the rule block's commands in fixture repos and gets the reports, and the live test runs both operations against real `cf`.
 
 ### Verification Walkthrough
 
-Steps 2 to 4 use a scratch `AMOEBA_HOME` and 225's trading repos (`trading-data` provider; `trading-engine` `from_source`, `trading-ui` `from_release`), with `amoeba` installed from this slice's branch as in 225 D2.
+All steps run by the implementing agent, with no person involved.
 
-1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest` passes.
-2. `export AMOEBA_HOME="$(mktemp -d)"`, copy the user config into it, and `amoeba set_up` the trading program with the two pairs. Expect `applied`.
-3. In `trading-data`, record `T0` with `date -u +%Y-%m-%dT%H:%M:%S+00:00`, then `amoeba report_release --commit "$(git rev-parse HEAD)" --changed "walkthrough report" --touched "walkthrough item"`: `recorded`, version null. Repeat with other text: `unchanged`, text kept. With `--commit "$(git rev-parse --short HEAD)"`: exit 1, `malformed`. `amoeba changes --since "$T0"` shows the report in `trading-engine` and an empty pair in `trading-ui`.
-4. Record `T1`, then report the same commit with `--version walkthrough-1` and new text: `versioned`. `trading-ui` now sees it with the version; `trading-engine` sees nothing since `T1` and one entry since `T0`.
-5. Real use: unset `AMOEBA_HOME`, add the pairs to the real program, paste the provider line into `trading-data`'s rules file and release skill and the consumer line into the other two. After a real provider merge that others use, run a real design in `trading-engine` and confirm its Dependencies section records what `changes` returned. Note any design that skipped the call, as evidence for `#304`.
+1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest` passes. This includes the flow test.
+2. The live test `tests/live/program/test_program_dependencies_live.py` passes with real `cf` and `git`.
+
+## Operator Walkthrough
+
+The operator is an agent session in each repo.
+
+- **Start.** Install the tool (`uv tool install --force <repo>`, as 226 D8). An agent session in each member that others depend on adds the provider block to that repo's rules file and release skill. An agent session in each member with providers adds the consumer block to its rules file. Each change is a commit to that repo's target. Nothing waits on the PM.
+- **Normal, provider.** After a merge that others use, the agent runs `report_release` with the full hash: `recorded`. After a release tag, it runs the same command with `--version`: `versioned`.
+- **Normal, consumer.** Before designing, the agent runs the D4 git command, then `changes`, and records the reports, or that there are none, in its Dependencies section.
+- **Failure: bad input.** An abbreviated hash, empty text or a blank version gives exit 1 and `malformed` with the detail. The agent corrects the value and runs again. A rejected call writes nothing.
+- **Failure: not a member.** `not_a_member`, and nothing is written. The agent records the directory as outside every program in its Dependencies section.
+- **Failure: `cf` down.** Exit 3 with the error. The agent records the error in its Dependencies section and does not retry with other values. It never treats the failure as "no changes".
+- **Failure: no previous design.** The fallback command runs. If the repo has no commits, both git commands print nothing, `since` is empty, and `changes` rejects it as `malformed`. The agent records that error.
+- **Wrong report.** `--correct` with the true text: `corrected`. Consumers whose `since` predates the correction see it again.
+- **Report that should not exist.** `--withdraw` with the full hash: `withdrawn`. The report is gone from `changes`. A consumer that read it earlier keeps its own record in its Dependencies section.
+- **End state.** Each report is one row per commit a member reported, and the rows are the record. No cleanup job runs. A removed member's reports stay in the table, bounded by its history, and are not listed because its pairs are gone.
+- **Clear or undo.** A single report: `--withdraw`. A pair: `set_up remove` (228). No step edits SQLite by hand.
+
+**Dead ends found and closed:**
+
+- A wrong `touched` list had no fix except a hand edit. Closed by `correct` (D2).
+- A correction would be invisible to consumers that had already read the commit. Closed by moving the times on correction (D2).
+- A report that should not exist had no exit. Closed by `withdraw` (D2).
+- A provider missing from `cf` failed the whole call. Now a warning (D3).
+- The integration check waited on a real design run in the PM's repos. Now automated (D7).
+- The slice waited on 225's verdict, which the plan had already dropped. Removed (Dependencies).
 
 ## Risk Assessment
 
-Agents may skip the rule lines; the architecture accepts this. The consumer line makes a skipped call visible in the design, and Future Work 1 (`#304`) is the fallback. Report text reaches consumer agents with tools, but comes only from the PM's own member repos, and the consumer line asks the agent to judge it, not obey it.
+Agents may skip the rule blocks. The consumer block requires the Dependencies section to record the `changes` result or the error, so a skipped call shows in the design. No fallback mechanism is added. Report text reaches consumer agents with tools, but comes only from the PM's own member repos, and the consumer block asks the agent to judge it, not to obey it.
 
 ## Implementation Notes
 
 Relative effort: 3.
 
-1. `store/releases.py` and `Release`, with D2 tests at store level.
-2. `operations/since.py` (switch `decisions`), `operations/report_release.py`, validation and non-member tests. Commit.
-3. `operations/changes.py` with D3 tests.
-4. Doors, CLI tests, stdio count. Commit.
-5. `docs/program-rules.md` and its test, contract docs. Commit.
-6. Walkthrough steps 2 to 4 gate review and merge. Step 5 runs when a real provider merge and design happen; its result goes in the task notes.
+1. `store/releases.py`, `Release`, and the D2 store-level tests, including `correct` and `withdraw`. Commit.
+2. `parse_since` and the `decisions` switch, `report_release` with its modes and validation, and the `RejectCode` additions. Commit.
+3. `changes` and its D3 tests. Commit.
+4. Doors: names, `invoke` cases, CLI, MCP rows, stdio count. Commit.
+5. `docs/program-rules.md` and its test; contract docs. Commit.
+6. Flow test and live test. Commit.
 
 ### Pending Planning Edits
 
-- **Starting point** (D4): the creation of the previous slice design, instead of "usually its branch's last merge". A one-line edit to `220-arch.program-tool.md` (decision 4, consumer rule) and slice plan entry 8, made outside this slice.
+To apply as planning edits, outside this slice:
+
+- **Starting point** (D4): architecture decision 4's "usually its branch's last merge" becomes the creation of the previous slice design. Slice plan entry 9's "stored marker or an explicit argument" becomes "an explicit argument, with the git commit time as the hint".
+- **Slice plan entry 9, integration criterion** ("a real design run in the PM's repos"): replaced by the automated flow and live tests (D7).
