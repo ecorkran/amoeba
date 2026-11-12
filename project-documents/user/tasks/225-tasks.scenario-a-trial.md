@@ -12,8 +12,8 @@ projectState: Slices 221 to 224 are designed with task files; this slice assumes
   has run Amoeba. `ecorkran/squadron#302` (pause command with per-run opt-out) and
   `#303` (`sq runs list --json`) may still be open.
 dateCreated: 20261107
-dateUpdated: 20261108
-status: not_started
+dateUpdated: 20261111
+status: in_progress
 turns: 8
 promptTokens: 286106
 cachedTokens: 248312
@@ -46,36 +46,41 @@ usageByModel:
 
 ## 0. Setup
 
-- [ ] **0.1 Create the branch**
-  - [ ] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
-  - [ ] Confirm the working tree is clean and you are on the target
-  - [ ] `git checkout -b 225-slice.scenario-a-trial {target}`
-  - [ ] Success: `git branch --show-current` prints `225-slice.scenario-a-trial`
+- [x] **0.1 Create the branch**
+  - [x] Read `cf config get git.integration_branch`; the target is its value, or `main` if empty
+  - [x] Confirm the working tree is clean and you are on the target
+  - [x] `git checkout -b 225-slice.scenario-a-trial {target}`
+  - [x] Success: `git branch --show-current` prints `225-slice.scenario-a-trial`
+  Note: branch 225-slice.scenario-a-trial already existed and was checked out at main's tip (9cca9f4) with a clean tree; target is main (integration_branch empty).
 
-- [ ] **0.2 Confirm dependencies and locate inputs**
-  - [ ] Confirm `src/amoeba/operations/answering_run.py`, `handle_pause.py`, `status.py`, `decisions.py` and `docs/squadron-hook.md` exist and `amoeba status --help` runs; if not, write `BLOCKED: slices 223 and 224 not merged` under this task and stop
-  - [ ] Check `sq` for #302: `sq run --help` and the squadron config docs for a pause-command setting and a per-run opt-out. Note the exact flag name and config line, or "absent"
-  - [ ] Check `sq runs list --json` (#303) exists. Note the result
-  - [ ] Confirm the five D1 repos' paths and that `trading-data`, `trading-engine`, `trading-ui` each have `CLAUDE.md`, and `trading-data` has `project-documents/user/project-guides/000-concept.trading.md`; a missing file is written down, not created
-  - [ ] Find the initiative plan file containing the 220 entry (`grep -rl "Program Tool" project-documents/user`); note its path
-  - [ ] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
-  - [ ] Success: a note under this task (copied into the trial note at 5.1) lists the #302 flag and config line (or absent), the #303 result, the member paths, the initiative plan path and the baseline result
+- [x] **0.2 Confirm dependencies and locate inputs**
+  - [x] Confirm `src/amoeba/operations/answering_run.py`, `handle_pause.py`, `status.py`, `decisions.py` and `docs/squadron-hook.md` exist and `amoeba status --help` runs; if not, write `BLOCKED: slices 223 and 224 not merged` under this task and stop
+  - [x] Check `sq` for #302: `sq run --help` and the squadron config docs for a pause-command setting and a per-run opt-out. Note the exact flag name and config line, or "absent"
+  - [x] Check `sq runs list --json` (#303) exists. Note the result
+  - [x] Confirm the five D1 repos' paths and that `trading-data`, `trading-engine`, `trading-ui` each have `CLAUDE.md`, and `trading-data` has `project-documents/user/project-guides/000-concept.trading.md`; a missing file is written down, not created
+  - [x] Find the initiative plan file containing the 220 entry (`grep -rl "Program Tool" project-documents/user`); note its path
+  - [x] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
+  - [x] Success: a note under this task (copied into the trial note at 5.1) lists the #302 flag and config line (or absent), the #303 result, the member paths, the initiative plan path and the baseline result
+  Note: all files present; `amoeba status --help` runs (via `uv run`; `amoeba` is not yet on PATH until 2.1). #302 shipped: config key `pipeline.on_pause_command` (set with `sq config set pipeline.on_pause_command "amoeba handle_pause"`, user-level in ~/.config/squadron/config.toml, or `--project` for per-repo .squadron.toml) and per-run opt-out `sq run --no-pause-hook`; key currently unset. #303: `sq runs list --json` exists (fields run_id, pipeline, status, working_directory, checkpoint); both squadron issues are CLOSED; sq 0.24.26. Member paths: /Users/manta/source/repos/manta/{trading-data,trading-engine,trading-ui}, each has CLAUDE.md; trading-data has project-documents/user/project-guides/000-concept.trading.md. Initiative plan: project-documents/user/project-guides/001-initiative-plan.amoeba.md. Baseline: format, ruff, pyright clean, 1452 tests pass.
 
 ## 1. Opt-out flag and hook line (D3)
 
-- [ ] **1.1 `PAUSE_COMMAND_OPT_OUT_FLAG` in the answering run, with test**
-  - [ ] If 0.2 found #302 absent, write `BLOCKED: waiting on squadron#302` under this task and stop
-  - [ ] In `operations/answering_run.py` define `PAUSE_COMMAND_OPT_OUT_FLAG` once, using #302's shipped form, and add it to the `sq run` command the answering run builds. The `answering_run` skip in `handle_pause` is unchanged
-  - [ ] Unit test: the command built for an answering run contains the flag exactly once; a test of the existing command builder's other arguments still passes unchanged. The test fails before the change
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **1.1 `PAUSE_COMMAND_OPT_OUT_FLAG` in the answering run, with test**
+  - [x] If 0.2 found #302 absent, write `BLOCKED: waiting on squadron#302` under this task and stop
+  - [x] In `operations/answering_run.py` define `PAUSE_COMMAND_OPT_OUT_FLAG` once, using #302's shipped form, and add it to the `sq run` command the answering run builds. The `answering_run` skip in `handle_pause` is unchanged
+  - [x] Unit test: the command built for an answering run contains the flag exactly once; a test of the existing command builder's other arguments still passes unchanged. The test fails before the change
+  - [x] Success: module imports; pyright strict clean; tests pass
+  Note: slice 223 had already shipped the flag as `NO_PAUSE_HOOK_FLAG` (`--no-pause-hook`) in answering_run.py with tests (argv carries it exactly once; one-constant-in-one-module test). #302 is present, so no BLOCKED. This task renamed the constant to the design's `PAUSE_COMMAND_OPT_OUT_FLAG` (src, 3 test files, live harness); no behavior change, so no failing-before test is possible; existing tests cover it and pass.
 
-- [ ] **1.2 Document the hook line**
-  - [ ] In `docs/squadron-hook.md` replace the deferred-to-225 text with the exact config line from #302's shipped form, and how a watching PM passes the opt-out. State whether the setting is user-level (configured once; pauses outside members skip as `not_a_project` or `not_in_program`) or per-project (configured in each D1 member)
-  - [ ] Success: the file has the exact line copied from #302's docs, with no placeholder values left
+- [x] **1.2 Document the hook line**
+  - [x] In `docs/squadron-hook.md` replace the deferred-to-225 text with the exact config line from #302's shipped form, and how a watching PM passes the opt-out. State whether the setting is user-level (configured once; pauses outside members skip as `not_a_project` or `not_in_program`) or per-project (configured in each D1 member)
+  - [x] Success: the file has the exact line copied from #302's docs, with no placeholder values left
+  Note: docs/squadron-hook.md now has the exact `sq config set pipeline.on_pause_command "amoeba handle_pause"` line, the user-level vs per-project choice, and the `--no-pause-hook` opt-out.
 
-- [ ] **1.3 Checks**
-  - [ ] Run the checks once; fix failures introduced by this slice
-  - [ ] Success: all four pass
+- [x] **1.3 Checks**
+  - [x] Run the checks once; fix failures introduced by this slice
+  - [x] Success: all four pass
+  Note: format, ruff, pyright clean; 1452 tests pass.
 
 **Commit**: `feat: add pause-command opt-out to the answering run and document hook line` with the body line `Closes #35` (the issue closes when the slice merges)
 

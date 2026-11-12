@@ -16,7 +16,7 @@ from amoeba.answering.pipeline_file import answering_pipeline_path
 from amoeba.answering.settings import AnswererSettings
 from amoeba.answering.values import DeclineReason
 from amoeba.operations.answering_run import (
-    NO_PAUSE_HOOK_FLAG,
+    PAUSE_COMMAND_OPT_OUT_FLAG,
     ScratchFailure,
     answering_argv,
     answering_logs,
@@ -118,8 +118,8 @@ def test_the_argv_is_the_designed_command_with_the_opt_out_once() -> None:
         "check-model=check-alias",
         "--no-pause-hook",
     ]
-    assert argv.count(NO_PAUSE_HOOK_FLAG) == 1
-    assert NO_PAUSE_HOOK_FLAG == "--no-pause-hook"
+    assert argv.count(PAUSE_COMMAND_OPT_OUT_FLAG) == 1
+    assert PAUSE_COMMAND_OPT_OUT_FLAG == "--no-pause-hook"
 
 
 def test_the_flag_is_one_constant_in_one_module() -> None:

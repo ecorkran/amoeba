@@ -27,7 +27,7 @@ from process_containment import contained_popen
 from user_configs import example_config_text
 
 from amoeba.config.home import STORE_FILE_NAME
-from amoeba.operations.answering_run import NO_PAUSE_HOOK_FLAG
+from amoeba.operations.answering_run import PAUSE_COMMAND_OPT_OUT_FLAG
 from amoeba.upstream.squadron.launch import TARGET_PARAM_KEY, build_argv
 
 AMOEBA: Final = Path(sys.executable).with_name("amoeba")
@@ -219,7 +219,7 @@ def start_pause(
         target_key=SLICE_PARAM if slice_index is not None else PIPELINE_MODEL_PARAM,
     )
     return watch_run(
-        [*argv, NO_PAUSE_HOOK_FLAG] if opt_out else argv,
+        [*argv, PAUSE_COMMAND_OPT_OUT_FLAG] if opt_out else argv,
         run_id,
         world.repo,
         SQ_RUN_TIMEOUT_SECONDS,

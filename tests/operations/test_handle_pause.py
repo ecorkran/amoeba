@@ -12,7 +12,7 @@ from store.question_support import NOW
 from user_configs import user_config
 
 from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
-from amoeba.operations.answering_run import NO_PAUSE_HOOK_FLAG
+from amoeba.operations.answering_run import PAUSE_COMMAND_OPT_OUT_FLAG
 from amoeba.operations.pause_models import (
     HandlePauseOutcome,
     HandlePauseResult,
@@ -186,7 +186,7 @@ def test_a_question_is_answered_and_the_run_resumed_end_to_end(tmp_path: Path) -
         assert result.answer_seq == answer.seq
         assert result.answering_run_id == record.answering_run_id
         (answering,) = w.spawned.answering
-        assert answering.count(NO_PAUSE_HOOK_FLAG) == 1
+        assert answering.count(PAUSE_COMMAND_OPT_OUT_FLAG) == 1
         assert "--run-id" in answering
         (resume,) = w.spawned.resumes
         assert resume[-1] == f"You asked: {QUESTION}\nAnswer: {ANSWER_TEXT}"
