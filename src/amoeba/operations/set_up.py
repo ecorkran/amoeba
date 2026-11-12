@@ -2,9 +2,10 @@
 
 The flow: validate the document, resolve every reference through Context Forge (all
 ``cf`` calls, before the store is written), then in one write transaction read the
-stored state, run the checks, and either write or return the problems. Upsert only:
-what the request names is created or set, nothing is removed, and a given list
-replaces the stored value whole. A repeat writes nothing and returns ``unchanged``.
+stored state, run the checks, and either write or return the problems. What the
+request names under ``members`` is created or set, and a given list replaces the
+stored value whole; only what it names under ``remove`` is removed (228 D8). A repeat
+writes nothing and returns ``unchanged``.
 
 The request and result models live in ``set_up_models``; they are importable from
 here too.
@@ -35,6 +36,7 @@ from amoeba.operations.set_up_models import (
     WorkingDirectoryNotAProject,
     WorkingDirectoryNotInProgram,
 )
+from amoeba.operations.set_up_remove import apply_removal
 from amoeba.operations.set_up_resolve import (
     ResolvedMember,
     ResolvedRequest,
@@ -261,6 +263,7 @@ def _apply(
     # Pairs after every member exists: a provider may be added in this request.
     for member in request.members:
         changes += _write_pairs(transaction, request, member, now)
+    changes += apply_removal(transaction, request.removal, now)
     return SetUpResult(
         outcome=SetUpOutcome.APPLIED if changes else SetUpOutcome.UNCHANGED,
         changes=tuple(changes),

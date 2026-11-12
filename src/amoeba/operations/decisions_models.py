@@ -80,6 +80,10 @@ class DecisionsRecord(_Model):
     #: Null for a PM answer given before the question ever waited.
     based_on: AnswererBasis | PmBasis | None
     resume: ResumeRecord
+    #: Set when the PM answer was retracted (228 D6): it stays delivered and listed
+    #: but is no longer precedent.
+    retracted_at: datetime | None
+    retract_reason: str | None
 
 
 class DecisionsOutcome(StrEnum):

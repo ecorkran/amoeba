@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The Amoeba store contract: the home, every table and column of the schema with its vocabulary and the operation that writes it, and the migration rule.
 dateCreated: 20261109
-dateUpdated: 20261111
+dateUpdated: 20261112
 status: complete
 ---
 
@@ -15,15 +15,49 @@ Amoeba keeps one SQLite file, `amoeba.sqlite3`, in its home. This document is th
 reference for what is in it. `tests/test_contract_docs.py` fails if a table or column
 of the schema is missing here.
 
-## The home
+## The homes
 
-- The home is `$AMOEBA_HOME` when that is set, otherwise `~/.config/amoeba/`.
-  `XDG_CONFIG_HOME` is not consulted. A set but empty or relative `AMOEBA_HOME` is an
-  error (`AmoebaHomeError`), never a fall back to the default.
-- `config.yaml` (see `config-contract.md`) and `amoeba.sqlite3` live directly in it.
+- **Config home:** `$AMOEBA_HOME` when set, otherwise `~/.config/amoeba/`. It holds
+  `config.yaml` (see `config-contract.md`), which a person edits, and nothing else.
+- **State home:** `$AMOEBA_HOME` when set, otherwise `~/.local/state/amoeba/`. It holds
+  everything Amoeba writes: `amoeba.sqlite3` (with its `-wal` and `-shm` files),
+  `answering/` (one scratch directory per answering run), and `logs/` with `answering/`,
+  `resume/<run_id>/`, `calls/<UTC date>.jsonl` and, from slice 226, `mcp/`. With
+  `AMOEBA_HOME` set both homes are that one directory.
+- `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are not consulted: the pause hook and an
+  interactive shell may differ in them, and one command must find one store. A set but
+  empty or relative `AMOEBA_HOME` is an error (`AmoebaHomeError`), never a fall back to
+  the default.
 - Only `config/home.py` reads the variable. The CLI (and the MCP layer, slice 226)
-  resolve the paths and pass them down; operations take an open store and a config.
+  build a `StateLayout` once and pass the paths down; operations take an open store and
+  a config. The store is opened only through `open_state_store(layout)`.
 - Tests set `AMOEBA_HOME` to a fresh temporary directory for every test.
+
+### Moving a pre-228 install
+
+Before slice 228 the state sat in `~/.config/amoeba/`. The first command of a new
+version moves it, under a lock on the old store (so an old process still running and a
+second new process both wait):
+
+1. Back up the old store into `amoeba.sqlite3.moving` in the state home, rewrite every
+   `answers.resume_log` that starts with the old home to start with the state home,
+   and verify the copy (integrity check, schema version, every table's row count,
+   `MAX(answers.seq)`, no path left under the old home). A failed check deletes the
+   copy and is `StoreRelocateError` (exit 3); the old store is never written.
+2. Rename the copy to `amoeba.sqlite3` and delete the old store with its `-wal` and
+   `-shm`.
+3. Move each entry of the old `answering/`, `logs/answering/` and `logs/resume/` to the
+   same place under the state home (to `.<name>.moving` first, then renamed). `config.yaml`
+   is never touched.
+
+Every step can be interrupted: a rerun finishes, and never recreates the old store.
+The whole move holds an `flock` on `<state home>/.state-move.lock`, an empty file
+created only when old state exists (deleting it is harmless), because the directory
+moves are outside the old store's SQLite lock. If both stores exist and differ (an old
+process kept writing after the move), the state-home store is kept and the old one is
+set aside as `amoeba.sqlite3.legacy-<UTC stamp>` in the state home, named on stderr
+with both stores' row counts and `MAX(answers.seq)`. **Deleting that file is its exit:**
+no process reads it and `prune` never touches it.
 
 ## Concurrency
 
@@ -35,15 +69,22 @@ file, pid file or read-only mode, and a missing store is created.
 
 ## Migrations
 
-- Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_...`), shipped
-  in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number.
+- Numbered files in `src/amoeba/store/schema/` (`001_baseline.sql`, `002_pause_handling.sql`,
+  `003_question_lifecycle.sql`), shipped in the wheel. `EXPECTED_SCHEMA_VERSION` equals the highest number.
 - Opening applies the missing files in order inside one write transaction and stamps
   `schema_meta.version`. A store stamped higher than the code expects is refused
   (`StoreSchemaError`) and left untouched.
-- **No edits to `001`.** A store may already exist. Later migrations use only
-  `ALTER TABLE ... ADD COLUMN`, so no table is rebuilt: an added column is nullable or
-  `NOT NULL` with a constant default, may carry a `CHECK`, and may `REFERENCES` only
-  with a null default.
+- **No edits to `001`, `002` or `003`**, or any applied migration. A store may already
+  exist. `ALTER TABLE ... ADD COLUMN` stays the default: an added column is nullable or `NOT NULL` with a constant
+  default, may carry a `CHECK`, and may `REFERENCES` only with a null default.
+- **The one exception is `003`.** A new question state means widening
+  `questions.state`'s `CHECK` list, which SQLite cannot change in place, and a
+  `closed_at` column beside an unchanged `state` would split one state across two
+  columns that every reader has to combine. So `003` rebuilds `questions` once (create
+  `questions_new`, copy, drop, rename). The runner turns foreign keys off around a
+  migration, runs `PRAGMA foreign_key_check` before commit (any row raises
+  `StoreCorruptError` and rolls back) and turns them back on. A later migration that
+  needs another rebuild needs the same justification in its slice design.
 - Times are UTC ISO-8601 text. Member ids are Context Forge project ids. Every closed
   vocabulary is a `StrEnum` (`store/vocabulary.py`, `answering/values.py`), and a test
   pins each `CHECK` list to its enum.
@@ -80,6 +121,7 @@ a foreign key would be circular.
 | `authorize_allow` | JSON array of config item keys taken off this member's not-authorized list. |
 | `authorize_deny` | JSON array of config item keys put on it. |
 | `registered_at`, `updated_at` | As above. |
+| `removed_at` | Migration `003`. UTC time `set_up` removed the member; null for an active one. The row stays, because the member's questions and answers reference it and are the record. |
 
 ### `dependency_pairs` (`set_up`; read by slice 227)
 
@@ -110,7 +152,7 @@ a foreign key would be circular.
 | `member_id` | The member whose run paused. |
 | `question` | The question text. |
 | `checkout` | The checkout the run paused in. |
-| `state` | `claimed`, `answered` or `waiting_on_pm` (`QuestionState`). |
+| `state` | `claimed`, `answered`, `waiting_on_pm` or `closed` (`QuestionState`; `closed` from migration `003`). |
 | `answering_run_id` | The answering run, null before one starts. |
 | `waiting_reason` | Why the PM must answer, a `DeclineReason`; unconstrained in SQL, checked in code. Written with the `waiting_on_pm` insert or move; a PM answer does not clear it. |
 | `claimed_at`, `updated_at` | UTC times. |
@@ -119,6 +161,10 @@ a foreign key would be circular.
 | `passages` | Migration `002`. JSON array of passage references (`id`, `source`, `question_id`, `date`). Written with the claim insert; rewritten by `replace_claim` for a dead claim. |
 | `waiting_detail` | Migration `002`. Bounded detail for `waiting_reason`. Written with `waiting_reason`. |
 | `evidence` | Migration `002`. JSON object: `proposed_answer`, `cited`, `verdict`, `reason`, as far as the answering run got. Written when the claim settles, to `answered` or `waiting_on_pm`. |
+
+| `closed_reason` | Migration `003`. Null, or `dismissed`, `run_moved_on` or `run_gone` (`ClosedReason`, a `CHECK`). Written with the move to `closed` by `dismiss`, `handle_pause` and `status`; kept as history if `answer` later reopens the question. |
+| `closed_detail` | Migration `003`. The dismissal reason, or the run's state when the sweep closed it. Written with `closed_reason`. |
+| `closed_at` | Migration `003`. UTC time the question was closed. Written with `closed_reason`. |
 
 ### `answers` (written by slice 223; counted by slice 224)
 
@@ -134,8 +180,11 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 | `resume_outcome` | Null, or `resumed`, `refused` or `not_delivered` (`ResumeOutcome`). Written by the shared resume; `resumed` and `not_delivered` are never overwritten, `refused` may be. |
 | `cited` | Migration `002`. JSON array of the passage ids an automatic answer cites; null for a PM answer. Written with the `answerer` row. |
 | `resume_detail` | Migration `002`. Refusal or not-delivered detail. Written with `resume_outcome`. |
-| `resume_log` | Migration `002`. Path of the resume's stdout log. Written with `resume_outcome`. |
+| `resume_log` | Migration `002`. Path of the resume's stdout log. Written with `resume_outcome`. The file may have been pruned (see below); the path stays as history and a missing file is not an error. |
 | `resume_at` | Migration `002`. UTC time the resume outcome was recorded. Written with `resume_outcome`. |
+| `retracted_at` | Migration `003`. UTC time a PM answer was retracted; null otherwise. Written once by `retract`. The answer stays delivered and stays in `decisions`. |
+| `retract_reason` | Migration `003`. Why it was retracted. Written with `retracted_at`. |
+| `resume_started_at` | Migration `003`. UTC time just before a resume was spawned, retries included, so the sweep never marks an answer `not_delivered` under a resume in flight. Written by the shared resume. |
 
 ### `pm_marker` (moved by slice 224)
 
@@ -151,27 +200,52 @@ one of four things. `tests/store/test_schema_holds_no_mirrored_state.py` pins th
 columns under the same reasons, so a new column fails it until it is listed in both
 places and its reason is stated.
 
-- **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.run_id`, `answers.seq`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
+- **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.resume_started_at`, `answers.retract_reason`, `answers.retracted_at`, `answers.run_id`, `answers.seq`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.closed_at`, `questions.closed_detail`, `questions.closed_reason`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
 
-- **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows. Columns: `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
+- **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows. Columns: `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.removed_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
 
 - **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_paths`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
 
 - **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
 
-## Question lifecycle and who writes it (slice 223)
+## Question lifecycle and who writes it (slices 223 and 228)
 
 A question moves `claimed` to `answered` or `waiting_on_pm`; a PM answer moves it to
-`answered` from any state. Every move out of `claimed` names the claim it holds
-(`answering_run_id`), so a PM answer made meanwhile wins.
+`answered` from any state, `closed` included. It is **open** while it is `claimed`,
+`waiting_on_pm`, or `answered` with its latest answer unresumed (`resume_outcome` null
+or `refused`). Every move out of `claimed` names the claim it holds
+(`answering_run_id`), and every close, dismissal and retraction is a compare-and-set in
+one short write transaction, so a PM answer made meanwhile wins.
 
 | Operation | Writes |
 |---|---|
 | `handle_pause`, a new question | one `questions` row, inserted in one transaction: `claimed` with `answering_run_id`, `slice_label`, `source_commit` and `passages`, or `waiting_on_pm` with `waiting_reason` and `waiting_detail` (and the context columns when the failure came after the context was gathered) |
 | `handle_pause`, settling an answering run | `answered`: `questions.evidence` and an `answerer` `answers` row with `cited`, in one transaction through the answer gate. Otherwise `waiting_on_pm`: `waiting_reason`, `waiting_detail`, `evidence` |
 | `handle_pause`, a dead claim | `replace_claim` (`answering_run_id` and `passages`, for a claimant that died before it started), or `waiting_on_pm` with `answering_run_stalled` |
-| `answer` | a `pm` `answers` row and `answered`, in one transaction; `waiting_reason` and `waiting_detail` are not cleared |
-| the shared resume (both) | `answers.resume_outcome`, `resume_detail`, `resume_log`, `resume_at` |
+| `answer` | a `pm` `answers` row and `answered`, in one transaction; `waiting_reason`, `waiting_detail` and any `closed_*` columns are not cleared |
+| the shared resume (both) | `answers.resume_started_at` just before every spawn, then `resume_outcome`, `resume_detail`, `resume_log`, `resume_at` |
+| `dismiss` | `closed` with `closed_reason` `dismissed`, `closed_detail` (the PM's reason) and `closed_at`, from `claimed`, `waiting_on_pm` or `answered` with an unresumed answer; that answer becomes `not_delivered` (`dismissed`) in the same transaction |
+| `retract` | `answers.retracted_at` and `retract_reason` on a PM answer, once |
+| the close sweep: `handle_pause` (that run's rows at other pauses), `status` (open rows of the members in scope) | `closed` with `closed_reason` `run_moved_on` or `run_gone` and the run's state as `closed_detail`; a claim only once older than `answering_wait_seconds`; an unresumed answer past `resume_bound_seconds` becomes `not_delivered` |
+| `set_up` removal | `members.removed_at`; the member's `dependency_pairs` rows are deleted |
+
+How each state ends with nobody editing a file: `claimed` settles, or is replaced or
+swept; `waiting_on_pm` is answered, dismissed or swept; `answered` unresumed is resumed,
+dismissed or swept; `closed` is terminal and `answer` reopens it; a retracted answer is
+terminal and a new PM answer replaces it as precedent. A PM answer resets the answer
+limit, which counts `answerer` answers after the run's newest `pm` answer (a retracted
+one still counts as the last). Precedent is each question's newest PM answer, left out
+when retracted or when the question is `closed`; an older answer is not revived.
+
+Pruning (`prune_after_days`, run by `handle_pause` and `status`) removes only files:
+answering scratch and logs of settled or orphaned answering runs, resume logs of runs
+with no open question, calls-log day files, and other old files under `logs/`. Anything
+tied to an open question is kept at any age. Store rows are never pruned: they are the
+record, and the sweep, `dismiss` and set-up removal bound how many are open.
+
+A prune walks the trees at most once an hour: it records the walk in the mtime of one
+empty file, `<state home>/.last-prune`, and a call within the hour does nothing.
+Deleting the file only makes the next call walk.
 
 `questions.waiting_reason` holds a `DeclineReason` (`answering/values.py`); SQL does not
 constrain it. The values `handle_pause` writes: `answer_limit_reached`,

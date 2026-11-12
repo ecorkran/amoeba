@@ -81,6 +81,9 @@ def question_row(
         evidence=None,
         claimed_at=moment,
         updated_at=moment,
+        closed_reason=None,
+        closed_detail=None,
+        closed_at=None,
     )
 
 
@@ -103,6 +106,9 @@ def answer_row(
         resume_detail=detail,
         resume_log=None,
         resume_at=None,
+        retracted_at=None,
+        retract_reason=None,
+        resume_started_at=None,
     )
 
 

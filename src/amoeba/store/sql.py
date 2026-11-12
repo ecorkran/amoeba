@@ -18,6 +18,41 @@ COMMIT: Final = "COMMIT"
 ROLLBACK: Final = "ROLLBACK"
 PRAGMA_JOURNAL_MODE_WAL: Final = "PRAGMA journal_mode=WAL"
 PRAGMA_FOREIGN_KEYS_ON: Final = "PRAGMA foreign_keys=ON"
+#: Off only around a migration, which may rebuild a referenced table (228 D3).
+PRAGMA_FOREIGN_KEYS_OFF: Final = "PRAGMA foreign_keys=OFF"
+PRAGMA_FOREIGN_KEY_CHECK: Final = "PRAGMA foreign_key_check"
+
+# --- relocating a store (store/relocate.py) ---------------------------------
+
+PRAGMA_INTEGRITY_CHECK: Final = "PRAGMA integrity_check"
+INTEGRITY_CHECK_OK: Final = "ok"
+#: Every ordinary table, leaving out SQLite's own (``sqlite_sequence`` and the like).
+SELECT_USER_TABLE_NAMES: Final = (
+    "SELECT name FROM sqlite_master WHERE type = 'table' "
+    "AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name"
+)
+#: ``resume_log`` values naming a path under a directory: the directory itself or
+#: anything below it. Parameters: the directory, then the directory with a trailing
+#: separator, twice (``substr`` rather than ``LIKE``, whose wildcards a path may hold).
+_RESUME_LOG_UNDER: Final = "(resume_log = ? OR substr(resume_log, 1, length(?)) = ?)"
+COUNT_RESUME_LOGS_UNDER: Final = (
+    f"SELECT COUNT(*) FROM answers WHERE {_RESUME_LOG_UNDER}"
+)
+REWRITE_RESUME_LOGS_UNDER: Final = f"""
+UPDATE answers SET resume_log = ? || substr(resume_log, length(?) + 1)
+WHERE {_RESUME_LOG_UNDER}
+"""
+
+
+def count_rows(table: str) -> str:
+    """``SELECT COUNT(*)`` for a table named by ``sqlite_master``, identifier-quoted."""
+    return f'SELECT COUNT(*) FROM "{table.replace(chr(34), chr(34) * 2)}"'
+
+
+def select_all_rows(table: str) -> str:
+    """``SELECT *`` for a table named by ``sqlite_master``, identifier-quoted."""
+    return f'SELECT * FROM "{table.replace(chr(34), chr(34) * 2)}"'
+
 
 # --- schema_meta ------------------------------------------------------------
 
@@ -49,35 +84,67 @@ WHERE program_id = ?
 
 # --- members ----------------------------------------------------------------
 
-_MEMBER_COLUMNS: Final = (
+_MEMBER_INSERT_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
     "registered_at, updated_at"
 )
-SELECT_MEMBER: Final = f"SELECT {_MEMBER_COLUMNS} FROM members WHERE project_id = ?"
+_MEMBER_COLUMNS: Final = f"{_MEMBER_INSERT_COLUMNS}, removed_at"
+#: The active-member predicate (228 D8), the one place "a removed member is not a
+#: member" is written. Every member and pair read below uses it.
+ACTIVE_MEMBER: Final = "removed_at IS NULL"
+SELECT_MEMBER: Final = (
+    f"SELECT {_MEMBER_COLUMNS} FROM members WHERE project_id = ? AND {ACTIVE_MEMBER}"
+)
+#: Reads removed members too: tells a past member from a stranger, and feeds the upsert.
+SELECT_MEMBER_ANY: Final = f"SELECT {_MEMBER_COLUMNS} FROM members WHERE project_id = ?"
 SELECT_MEMBERS_OF: Final = (
-    f"SELECT {_MEMBER_COLUMNS} FROM members WHERE program_id = ? ORDER BY project_id"
+    f"SELECT {_MEMBER_COLUMNS} FROM members WHERE program_id = ? "
+    f"AND {ACTIVE_MEMBER} ORDER BY project_id"
 )
 INSERT_MEMBER: Final = (
-    f"INSERT INTO members ({_MEMBER_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)"
 )
 UPDATE_MEMBER: Final = """
 UPDATE members SET rules_paths = ?, authorize_allow = ?, authorize_deny = ?,
     updated_at = ?
 WHERE project_id = ?
 """
+# Re-registering a removed member: a fresh registration, possibly in another program.
+REREGISTER_MEMBER: Final = """
+UPDATE members SET program_id = ?, rules_paths = ?, authorize_allow = ?,
+    authorize_deny = ?, registered_at = ?, updated_at = ?, removed_at = NULL
+WHERE project_id = ?
+"""
+REMOVE_MEMBER: Final = (
+    "UPDATE members SET removed_at = ?, updated_at = ? "
+    f"WHERE project_id = ? AND {ACTIVE_MEMBER}"
+)
 
 # --- dependency_pairs -------------------------------------------------------
 
 _PAIR_COLUMNS: Final = (
     "program_id, provider_id, consumer_id, consumed, registered_at, updated_at"
 )
+# A pair is read only while both its ends are active members. ``remove_member``
+# deletes a removed member's pairs, so this holds the rule a second way.
+_PAIR_ENDS_ACTIVE: Final = (
+    "provider_id IN (SELECT project_id FROM members "
+    f"WHERE {ACTIVE_MEMBER}) AND consumer_id IN "
+    f"(SELECT project_id FROM members WHERE {ACTIVE_MEMBER})"
+)
 SELECT_PAIRS_OF: Final = (
     f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs WHERE program_id = ? "
-    "ORDER BY provider_id, consumer_id"
+    f"AND {_PAIR_ENDS_ACTIVE} ORDER BY provider_id, consumer_id"
 )
 SELECT_PAIR: Final = (
     f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs "
-    "WHERE provider_id = ? AND consumer_id = ?"
+    f"WHERE provider_id = ? AND consumer_id = ? AND {_PAIR_ENDS_ACTIVE}"
+)
+DELETE_PAIR: Final = (
+    "DELETE FROM dependency_pairs WHERE provider_id = ? AND consumer_id = ?"
+)
+DELETE_PAIRS_OF_MEMBER: Final = (
+    "DELETE FROM dependency_pairs WHERE provider_id = ? OR consumer_id = ?"
 )
 INSERT_PAIR: Final = (
     f"INSERT INTO dependency_pairs ({_PAIR_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)"
@@ -103,7 +170,8 @@ VALUES (?, ?, ?, ?, ?, ?)
 
 QUESTION_COLUMNS: Final = """run_id, paused_at, member_id, question, checkout, state,
     answering_run_id, waiting_reason, waiting_detail, slice_label, source_commit,
-    passages, evidence, claimed_at, updated_at"""
+    passages, evidence, claimed_at, updated_at, closed_reason, closed_detail,
+    closed_at"""
 SELECT_QUESTION: Final = (
     f"SELECT {QUESTION_COLUMNS} FROM questions WHERE run_id = ? AND paused_at = ?"
 )
@@ -144,8 +212,62 @@ MARK_QUESTION_ANSWERED: Final = """
 UPDATE questions SET state = ?, updated_at = ? WHERE run_id = ? AND paused_at = ?
 """
 
+# --- the question lifecycle (slice 228, D4 to D6) ---------------------------
+
+# Every close is a compare-and-set on the row's state and ``updated_at``: the row
+# count tells the caller whether it won. Parameters: closed state, reason, detail,
+# closed_at, updated_at, run id, paused_at, expected state, expected updated_at.
+CLOSE_QUESTION: Final = """
+UPDATE questions SET state = ?, closed_reason = ?, closed_detail = ?,
+    closed_at = ?, updated_at = ?
+WHERE run_id = ? AND paused_at = ? AND state = ? AND updated_at = ?
+"""
+# A question is open when it is claimed or waiting on the PM, or answered with its
+# latest answer unresumed (resume outcome null or refused). Parameters: claimed,
+# waiting_on_pm, answered, refused.
+_OPEN_QUESTION_CLAUSE: Final = """(
+    questions.state IN (?, ?)
+    OR (questions.state = ?
+        AND EXISTS (
+            SELECT 1 FROM answers AS latest
+            WHERE latest.run_id = questions.run_id
+                AND latest.paused_at = questions.paused_at
+                AND latest.seq = (
+                    SELECT MAX(any_answer.seq) FROM answers AS any_answer
+                    WHERE any_answer.run_id = questions.run_id
+                        AND any_answer.paused_at = questions.paused_at)
+                AND (latest.resume_outcome IS NULL OR latest.resume_outcome = ?))))"""
+_OPEN_ORDER: Final = " ORDER BY questions.claimed_at, questions.rowid"
+SELECT_OPEN_ROWS_OF_RUN: Final = (
+    f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.run_id = ? "
+    f"AND {_OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
+)
+SELECT_OPEN_ROWS_OF_MEMBER: Final = (
+    f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.member_id = ? "
+    f"AND {_OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
+)
+
+# What ``prune`` needs: the answering run ids and the run ids of open questions.
+SELECT_OPEN_ANSWERING_RUN_IDS: Final = (
+    "SELECT DISTINCT questions.answering_run_id FROM questions "
+    f"WHERE questions.answering_run_id IS NOT NULL AND {_OPEN_QUESTION_CLAUSE}"
+)
+SELECT_RUN_IDS_WITH_OPEN_QUESTION: Final = (
+    f"SELECT DISTINCT questions.run_id FROM questions WHERE {_OPEN_QUESTION_CLAUSE}"
+)
+
+
+def select_open_rows_of_members(member_count: int) -> str:
+    """Every open row of the members, oldest first."""
+    return (
+        f"SELECT {QUESTION_COLUMNS} FROM questions WHERE questions.member_id "
+        f"IN ({placeholders(member_count)}) AND {_OPEN_QUESTION_CLAUSE}{_OPEN_ORDER}"
+    )
+
+
 ANSWER_COLUMNS: Final = """seq, run_id, paused_at, answered_by, answer, cited,
-    recorded_at, resume_outcome, resume_detail, resume_log, resume_at"""
+    recorded_at, resume_outcome, resume_detail, resume_log, resume_at, retracted_at,
+    retract_reason, resume_started_at"""
 SELECT_ANSWERS_OF: Final = (
     f"SELECT {ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq"
@@ -155,9 +277,15 @@ SELECT_LATEST_ANSWER: Final = (
     f"SELECT {ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq DESC LIMIT 1"
 )
-COUNT_AUTOMATIC_ANSWERS: Final = (
-    "SELECT COUNT(*) FROM answers WHERE run_id = ? AND answered_by = ?"
-)
+# Automatic answers since the PM last answered the run (228 D7): a PM answer resets
+# the limit, a retracted one included (the run did receive it). Parameters: run id,
+# the automatic answerer, run id, the PM.
+COUNT_AUTOMATIC_ANSWERS: Final = """
+SELECT COUNT(*) FROM answers
+WHERE run_id = ? AND answered_by = ?
+    AND seq > COALESCE(
+        (SELECT MAX(seq) FROM answers WHERE run_id = ? AND answered_by = ?), 0)
+"""
 INSERT_RECORDED_ANSWER: Final = """
 INSERT INTO answers (run_id, paused_at, answered_by, answer, cited, recorded_at)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -166,6 +294,23 @@ VALUES (?, ?, ?, ?, ?, ?)
 RECORD_RESUME: Final = """
 UPDATE answers SET resume_outcome = ?, resume_detail = ?, resume_log = ?,
     resume_at = ?
+WHERE seq = ? AND (resume_outcome IS NULL OR resume_outcome = ?)
+"""
+# Retraction is set once (228 D6). Parameters: retracted_at, reason, seq.
+RETRACT_ANSWER: Final = """
+UPDATE answers SET retracted_at = ?, retract_reason = ?
+WHERE seq = ? AND retracted_at IS NULL
+"""
+# Both compare-and-set on an outcome that is not final (null or refused).
+# Parameters: started_at, seq, refused.
+MARK_RESUME_STARTED: Final = """
+UPDATE answers SET resume_started_at = ?
+WHERE seq = ? AND (resume_outcome IS NULL OR resume_outcome = ?)
+"""
+# Parameters: not_delivered, detail, resume_at, seq, refused. ``resume_log`` stays
+# as an earlier refused resume left it.
+MARK_NOT_DELIVERED: Final = """
+UPDATE answers SET resume_outcome = ?, resume_detail = ?, resume_at = ?
 WHERE seq = ? AND (resume_outcome IS NULL OR resume_outcome = ?)
 """
 SELECT_PM_PRECEDENT: Final = """
@@ -183,6 +328,8 @@ WHERE question_row.member_id = ?
         WHERE newer.run_id = question_row.run_id
             AND newer.paused_at = question_row.paused_at
             AND newer.answered_by = ?)
+    AND answer_row.retracted_at IS NULL
+    AND question_row.state <> ?
 ORDER BY answer_row.seq
 """
 

@@ -58,6 +58,12 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "answers.resume_detail",
             "answers.resume_log",
             "answers.resume_at",
+            "answers.retracted_at",
+            "answers.retract_reason",
+            "answers.resume_started_at",
+            "questions.closed_reason",
+            "questions.closed_detail",
+            "questions.closed_at",
         }
     ),
     # Who is in a program: the PM's registration, the one thing only Amoeba knows.
@@ -70,6 +76,7 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "members.program_id",
             "members.registered_at",
             "members.updated_at",
+            "members.removed_at",
             "dependency_pairs.program_id",
             "dependency_pairs.provider_id",
             "dependency_pairs.consumer_id",

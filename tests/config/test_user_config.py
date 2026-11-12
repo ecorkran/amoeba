@@ -21,6 +21,7 @@ TOP_LEVEL_KEYS = [
     "passages_max_chars",
     "answering_wait_seconds",
     "resume_wait_seconds",
+    "prune_after_days",
     "authorize_items",
 ]
 ITEM_KEYS = ["key", "description", "screen_phrases", "denied_by_default"]
@@ -105,6 +106,11 @@ def _with(key: str, value: object) -> Callable[[dict[str, Any]], None]:
         (_with("resume_wait_seconds", 0), "resume_wait_seconds"),
         (_with("resume_wait_seconds", -0.5), "resume_wait_seconds"),
         (_with("resume_wait_seconds", True), "resume_wait_seconds"),
+        (_with("prune_after_days", 0), "prune_after_days"),
+        (_with("prune_after_days", -3), "prune_after_days"),
+        (_with("prune_after_days", 1.5), "prune_after_days"),
+        (_with("prune_after_days", True), "prune_after_days"),
+        (_with("prune_after_days", "30"), "prune_after_days"),
         (_with("answer_model", "a,b"), "answer_model"),
         (_with("check_model", "  "), "check_model"),
         (_with("authorize_items", "none"), "authorize_items"),
@@ -202,3 +208,13 @@ def test_a_positive_wait_is_accepted(tmp_path: Path, key: str, value: float) -> 
     config = load_user_config(_write(tmp_path, document))
 
     assert getattr(config, key) == value
+
+
+@pytest.mark.parametrize("value", [1, 30, 365])
+def test_a_positive_whole_number_of_days_is_accepted(
+    tmp_path: Path, value: int
+) -> None:
+    document = _example()
+    document["prune_after_days"] = value
+
+    assert load_user_config(_write(tmp_path, document)).prune_after_days == value

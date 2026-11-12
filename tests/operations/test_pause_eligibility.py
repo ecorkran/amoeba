@@ -33,6 +33,7 @@ from fake_sq import (
 )
 from store.question_support import NOW
 
+from amoeba.operations.deps import Deps
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.pause_eligibility import Eligible, Skip, check_eligibility
 from amoeba.operations.pause_models import SkipReason
@@ -68,13 +69,18 @@ def _with_run_file(tmp_path: Path, *, mode: str | None = None) -> None:
     runs = tmp_path / "runs"
     runs.mkdir()
     document = json.loads((SQUADRON_FIXTURES / RUN_FILE).read_text(encoding="utf-8"))
+    document["working_directory"] = str(DIRECTORY)  # where the run was started
     if mode is not None:
         document["execution_mode"] = mode
     (runs / f"{RUN}.json").write_text(json.dumps(document), encoding="utf-8")
 
 
-def _check(store: Store, rig: DepsRig) -> Eligible | Skip:
-    return check_eligibility(store, RUN, DIRECTORY, rig.deps)
+def _check(store: Store, rig_or_deps: DepsRig | Deps) -> Eligible | Skip:
+    """``check_eligibility`` on the poll ``handle_pause`` would have made."""
+    deps = rig_or_deps.deps if isinstance(rig_or_deps, DepsRig) else rig_or_deps
+    polled = deps.poll_run(RUN)
+    assert not isinstance(polled, PollFailure), polled
+    return check_eligibility(store, RUN, DIRECTORY, deps, polled)
 
 
 def _skip(result: Eligible | Skip) -> Skip:
@@ -161,7 +167,7 @@ def test_an_answering_run_is_skipped_before_context_forge_is_asked(
     rig = _rig(tmp_path, PAUSE)
     deps = replace(rig.deps, cf_run=tracking_cf)
 
-    result = _skip(check_eligibility(store, RUN, DIRECTORY, deps))
+    result = _skip(_check(store, deps))
 
     assert result.reason is SkipReason.ANSWERING_RUN
     assert calls == []
@@ -247,16 +253,6 @@ def test_an_eligible_pause_carries_the_key_question_member_and_facts(
     assert result.existing is None
 
 
-def test_a_failing_sq_raises_and_writes_nothing(tmp_path: Path, store: Store) -> None:
-    rig = _rig(tmp_path, PollFailure("sq runs wait timed out"))
-
-    with pytest.raises(SquadronError, match="timed out"):
-        _check(store, rig)
-
-    with store.read() as transaction:
-        assert transaction.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 0
-
-
 def test_a_failing_cf_raises_the_operational_error(
     tmp_path: Path, store: Store
 ) -> None:
@@ -279,7 +275,7 @@ def test_the_checks_work_against_the_fake_sq_executable(
     rig = _rig(tmp_path, PAUSE)
     deps = replace(rig.deps, poll_run=partial(poll_run, timeout_seconds=20))
 
-    result = check_eligibility(store, RUN, DIRECTORY, deps)
+    result = _check(store, deps)
 
     assert isinstance(result, Eligible)
     assert result.key.paused_at == PAUSED_AT

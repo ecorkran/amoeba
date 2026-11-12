@@ -8,7 +8,7 @@ import pytest
 from store.question_support import NOW
 
 from amoeba.operations.status_models import UnplacedReason
-from amoeba.operations.status_placement import Placement, place_runs
+from amoeba.operations.status_placement import Placement, place_runs, scratch_roots
 from amoeba.store.models import Member, MemberSettings
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
@@ -21,6 +21,7 @@ MEMBER = Member(
     MemberSettings(MEMBER_ID, (), (), ()),
     NOW,
     NOW,
+    None,
 )
 PAUSED = "demo-pause-1"
 PAUSED_OTHER_KIND = "run-20261004-p6-8bc5e634"
@@ -54,7 +55,7 @@ def scratch(tmp_path: Path) -> Path:
 
 
 def _place(runs: list[ListedRun], project_of: _ProjectOf, scratch: Path) -> Placement:
-    return place_runs(runs, {MEMBER_ID: MEMBER}, scratch, project_of)
+    return place_runs(runs, {MEMBER_ID: MEMBER}, (scratch,), project_of)
 
 
 def test_a_none_directory_is_unplaced_for_a_paused_run_with_its_kind(
@@ -132,6 +133,36 @@ def test_the_scratch_directory_is_dropped_with_no_cf_call(scratch: Path) -> None
 
     assert result == Placement((), ())
     assert project_of.calls == []
+
+
+def test_a_run_under_the_legacy_answering_directory_is_skipped_with_no_cf_call(
+    tmp_path: Path, scratch: Path
+) -> None:
+    legacy_home = tmp_path / "legacy"
+    run_directory = legacy_home / "answering" / "amoeba-20261111T000000Z-bbbbbbbbbbbb"
+    run_directory.mkdir(parents=True)
+    runs = [in_directory(recorded_run(PAUSED), run_directory)]
+    project_of = _ProjectOf({})
+
+    result = place_runs(
+        runs,
+        {MEMBER_ID: MEMBER},
+        scratch_roots(scratch, legacy_home),
+        project_of,
+    )
+
+    assert result == Placement((), ())
+    assert project_of.calls == []
+
+
+def test_scratch_roots_name_the_legacy_directory_only_when_there_is_a_legacy_home(
+    tmp_path: Path,
+) -> None:
+    assert scratch_roots(tmp_path / "a", None) == (tmp_path / "a",)
+    assert scratch_roots(tmp_path / "a", tmp_path / "b") == (
+        tmp_path / "a",
+        tmp_path / "b" / "answering",
+    )
 
 
 def test_a_directory_in_no_project_or_a_project_outside_the_scope_is_dropped(
@@ -213,6 +244,6 @@ def test_two_worktrees_of_one_repo_land_on_one_member_one_call_per_directory(
 def test_unplaced_runs_are_not_filtered_by_program(scratch: Path) -> None:
     runs = [recorded_run("run-20261105-p6-7dc230a3")]
 
-    result = place_runs(runs, {}, scratch, _ProjectOf({}))
+    result = place_runs(runs, {}, (scratch,), _ProjectOf({}))
 
     assert len(result.unplaced) == 1

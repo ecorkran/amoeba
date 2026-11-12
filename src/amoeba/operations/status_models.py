@@ -13,9 +13,11 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from amoeba.answering.values import DeclineReason
+from amoeba.operations.calls_log import CallEntry
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.reject_codes import RejectCode
+from amoeba.store.vocabulary import ClosedReason, ResumeOutcome
 
 
 class _Model(BaseModel):
@@ -81,6 +83,9 @@ class RunEntry(_Model):
     pause: PauseClass | RunFileUnreadable | None
     detail: str | None
     next: NextAction | None
+    #: For an ``unhandled`` or ``claim_stale`` run: the newest calls-log line for it,
+    #: which shows why a hook missed. Null when none was logged (D11).
+    last_call: CallEntry | None = None
 
 
 class WaitingEntry(_Model):
@@ -123,6 +128,25 @@ class UnplacedRunEntry(_Model):
     detail: str | None = None
 
 
+class ClosedNowEntry(_Model):
+    """A question this call closed, or an answer it marked ``not_delivered`` (D12).
+
+    For a closed question ``closed_reason`` is set and ``answer_seq`` is null; for an
+    answer marked ``not_delivered`` it is the other way round. ``closed_detail`` is
+    the run's state in both.
+    """
+
+    program: str
+    member: MemberName
+    run_id: str
+    paused_at: str
+    question: str
+    closed_reason: ClosedReason | None
+    closed_detail: str
+    answer_seq: int | None = None
+    resume_outcome: ResumeOutcome | None = None
+
+
 class StatusOutcome(StrEnum):
     LISTED = "listed"
     REJECTED = "rejected"
@@ -135,4 +159,10 @@ class StatusResult(_Model):
     rejection: RejectCode | None = None
     programs: tuple[ProgramStatus, ...] = ()
     unplaced_runs: tuple[UnplacedRunEntry, ...] = ()
+    #: What this call closed, so the PM sees each automatic closure once (D12).
+    closed_now: tuple[ClosedNowEntry, ...] = ()
+    #: Set when the sweep could not take the store's lock; nothing was closed.
+    sweep_problem: str | None = None
+    #: Calls-log files that could not be read, and entries prune could not remove, D12.
+    file_problems: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()

@@ -71,6 +71,9 @@ class UserConfig(BaseModel):
     #: Longest a resumed run may take to start running before the resume is judged
     #: refused, in seconds (slice 223).
     resume_wait_seconds: Annotated[StrictInt | StrictFloat, Field(gt=0)]
+    #: Age in days after which settled scratch, logs and calls-log days are removed
+    #: (slice 228, D9).
+    prune_after_days: Annotated[StrictInt, Field(ge=1)]
     #: Everything answers may be barred from authorizing. May be empty.
     authorize_items: tuple[NotAuthorizedItem, ...]
 

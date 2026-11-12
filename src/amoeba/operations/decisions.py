@@ -155,6 +155,8 @@ def _record(row: DecisionRow, names: ProjectNames) -> DecisionsRecord:
             detail=answer.resume_detail,
             at=answer.resume_at,
         ),
+        retracted_at=answer.retracted_at,
+        retract_reason=answer.retract_reason,
     )
 
 

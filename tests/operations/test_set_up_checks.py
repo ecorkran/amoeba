@@ -13,6 +13,7 @@ from user_configs import user_config
 
 from amoeba.operations.set_up import SetUpProblemCode, SetUpResult
 from amoeba.operations.set_up_models import SetUpOutcome
+from amoeba.store.programs import remove_member
 from amoeba.store.store import Store
 from operations.set_up_support import row_counts, run_set_up
 
@@ -82,6 +83,23 @@ def test_member_of_other_program(store: Store) -> None:
     assert "members.0" in detail
     assert "provider-id" in detail
     assert "other" in detail
+
+
+def test_a_removed_member_of_another_program_is_not_in_that_program(
+    store: Store,
+) -> None:
+    _seed_other_program(store, "provider-id")
+    with store.write() as transaction:
+        remove_member(transaction, "provider-id", NOW)
+
+    result = run_set_up(
+        store,
+        {"program": "demo", "members": [{"project": "provider", **RULES}]},
+        projects=PROJECTS,
+        config=user_config(),
+    )
+
+    assert result.outcome is SetUpOutcome.APPLIED
 
 
 def test_rules_paths_required_for_a_new_member(store: Store) -> None:

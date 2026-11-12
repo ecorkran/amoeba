@@ -58,7 +58,7 @@ def _raw_entries() -> list[dict[str, object]]:
     return entries
 
 
-def test_the_real_recording_parses_with_its_stderr_warning_and_no_all_flag(
+def test_the_real_recording_parses_with_its_stderr_warning_and_asks_for_all(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     directory = _with_sq(
@@ -72,7 +72,7 @@ def test_the_real_recording_parses_with_its_stderr_warning_and_no_all_flag(
         str(entry["run_id"]) for entry in _raw_entries()
     ]
     calls = (directory / "sq_list_argv.jsonl").read_text(encoding="utf-8")
-    assert json.loads(calls.splitlines()[0]) == ["runs", "list", "--json"]
+    assert json.loads(calls.splitlines()[0]) == ["runs", "list", "--json", "--all"]
 
 
 def test_a_run_has_its_id_pipeline_status_directory_and_checkpoint(

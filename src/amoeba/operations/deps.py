@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Final
 
 from amoeba.operations.processes import Spawner, start_child
+from amoeba.operations.prune_models import Prune
 from amoeba.upstream.context_forge.cli_call import CfCallFailed, CfRun
 from amoeba.upstream.context_forge.projects import ProjectNames, project_names
 from amoeba.upstream.squadron.run_list import ListedRun, RunListProblem, list_runs
@@ -53,10 +54,17 @@ class Deps:
     answering_dir: Path
     #: Where answering and resume logs go (``logs_dir()``).
     logs_dir: Path
+    #: Where the calls log's day files go (``calls_log_dir()``).
+    calls_log_dir: Path
     #: Squadron's run files (``squadron_runs_dir()``).
     squadron_runs_dir: Path
+    #: The pre-228 home, whose ``answering/`` placement also skips; ``None`` when
+    #: there is no legacy home (``StateLayout.legacy_home``).
+    legacy_home: Path | None
     project_names: ReadProjectNames
     list_runs: ListRuns
+    #: Removes settled scratch and logs past ``prune_after_days`` (228 D9).
+    prune: Prune
 
 
 def _utc_now() -> datetime:
@@ -64,7 +72,13 @@ def _utc_now() -> datetime:
 
 
 def production_deps(
-    *, answering_dir: Path, logs_dir: Path, squadron_runs_dir: Path
+    *,
+    answering_dir: Path,
+    logs_dir: Path,
+    calls_log_dir: Path,
+    squadron_runs_dir: Path,
+    legacy_home: Path | None,
+    prune: Prune,
 ) -> Deps:
     """The real edges: ``subprocess.run``, ``poll_run``, ``start_child``, the clock."""
     return Deps(
@@ -75,7 +89,10 @@ def production_deps(
         sleep=time.sleep,
         answering_dir=answering_dir,
         logs_dir=logs_dir,
+        calls_log_dir=calls_log_dir,
         squadron_runs_dir=squadron_runs_dir,
+        legacy_home=legacy_home,
         project_names=partial(project_names, subprocess.run),
         list_runs=partial(list_runs, timeout_seconds=RUN_POLL_TIMEOUT_SECONDS),
+        prune=prune,
     )

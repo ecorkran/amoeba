@@ -23,7 +23,7 @@ from amoeba.operations.members import (
     resolve_member,
 )
 from amoeba.store.models import Member, MemberSettings
-from amoeba.store.programs import upsert_member, upsert_program
+from amoeba.store.programs import remove_member, upsert_member, upsert_program
 from amoeba.store.store import Store
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
@@ -74,6 +74,16 @@ def test_every_view_of_a_repo_gives_the_same_member(store: Store, fixture: str) 
 
 def test_a_cf_project_outside_the_program_is_not_in_program(store: Store) -> None:
     _register(store, "some-other-project")
+
+    result = resolve_member(store, DIRECTORY, fake_cf_run(DEFAULT_WORKTREE))
+
+    assert result == NotInProgram(FIXTURE_PROJECT_ID)
+
+
+def test_a_removed_member_is_not_in_the_program(store: Store) -> None:
+    _register(store, FIXTURE_PROJECT_ID)
+    with store.write() as transaction:
+        remove_member(transaction, FIXTURE_PROJECT_ID, NOW)
 
     result = resolve_member(store, DIRECTORY, fake_cf_run(DEFAULT_WORKTREE))
 

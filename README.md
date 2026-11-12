@@ -4,12 +4,18 @@ Amoeba is being rebuilt as a tool that agents and pipelines call. When a Squadro
 
 ## What exists now
 
-A library, and no command. The slice plan builds the rest on top of it.
+The `amoeba` command, backed by one SQLite store. Its commands (`docs/cli-contract.md`) are `set_up`, `handle_pause`, `answer`, `dismiss`, `retract`, `status`, `decisions` and `mark_read`. There is no resident process: each command is a short run, and Squadron never needs Amoeba.
 
 - `amoeba.answering`: the answering pipeline (`answering.yaml`), the passage cutting and citation check, the six-check decision on whether an answer stands, and the answer screen.
-- `amoeba.upstream`: bounded readers of what other tools say (`cf`, `git`, `sq runs wait --json`), and the argv for starting and resuming an `sq` run.
+- `amoeba.upstream`: bounded readers of what other tools say (`cf`, `git`, `sq`), and the argv for starting and resuming an `sq` run.
+- `amoeba.store`, `amoeba.operations`, `amoeba.cli`: the store and its migrations, the operations, and the command line.
 
-There is no store, no tick and no resident process. The old supervisor was cut in slice 221.
+## Where things live
+
+- **Config home**, `~/.config/amoeba/`: `config.yaml`, the one file you edit (`docs/config-contract.md`).
+- **State home**, `~/.local/state/amoeba/`: everything Amoeba writes. The store `amoeba.sqlite3`, `answering/` scratch, and `logs/` (answering, resume, `calls/<date>.jsonl`). Old scratch and logs are pruned after `prune_after_days`; the store's rows are kept.
+- `$AMOEBA_HOME`, when set, is both homes. `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are ignored.
+- An install from before slice 228 kept its state in the config home. The first command moves it, once (`docs/store-contract.md`, "Moving a pre-228 install").
 
 ## Where the design lives
 

@@ -18,8 +18,10 @@ from operations.status_support import RUN_NOW, answer_row, question_row
 NOW = RUN_NOW
 LIMIT = 600.0
 KEY = QuestionKey("run-1", "2026-11-11T11:00:00+00:00")
-SDK = RunFacts(params={}, execution_mode=ExecutionMode.SDK)
-PROMPT_ONLY = RunFacts(params={}, execution_mode=ExecutionMode.PROMPT_ONLY)
+SDK = RunFacts(params={}, execution_mode=ExecutionMode.SDK, working_directory=None)
+PROMPT_ONLY = RunFacts(
+    params={}, execution_mode=ExecutionMode.PROMPT_ONLY, working_directory=None
+)
 ASKING = ObservedPause(
     paused=True, kind="agent_question", paused_at=KEY.paused_at, question="Which?"
 )
@@ -126,6 +128,13 @@ def test_a_handed_over_answer_is_settled(outcome: ResumeOutcome) -> None:
     result = _classify(row=_row(QuestionState.ANSWERED), latest=_answer(outcome))
 
     assert result is PauseClass.SETTLED
+
+
+def test_a_closed_row_is_closed_whatever_the_answer() -> None:
+    row = _row(QuestionState.CLOSED)
+
+    assert _classify(row=row) is PauseClass.CLOSED
+    assert _classify(row=row, latest=_answer(None)) is PauseClass.CLOSED
 
 
 def test_an_answered_row_without_its_answer_is_a_caller_bug() -> None:

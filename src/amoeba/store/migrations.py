@@ -22,7 +22,7 @@ from amoeba.store.errors import StoreCorruptError, StoreSchemaError
 
 #: The highest numbered file in ``store/schema/``. Bumped with each migration added;
 #: ``tests/store/test_migrations.py`` pins it to the files.
-EXPECTED_SCHEMA_VERSION: Final = 2
+EXPECTED_SCHEMA_VERSION: Final = 3
 
 #: Stamp of a store with no ``schema_meta`` table yet, as a new store has.
 UNINITIALIZED_SCHEMA_VERSION: Final = 0
@@ -92,33 +92,57 @@ def read_schema_version(connection: sqlite3.Connection) -> int:
     return row[0]
 
 
-def migrate(connection: sqlite3.Connection) -> int:
-    """Bring the store to ``EXPECTED_SCHEMA_VERSION``; returns the stamped version.
-
-    The connection must be in autocommit mode (``isolation_level=None``).
+def _apply_pending(connection: sqlite3.Connection) -> bool:
+    """Apply every migration above the stamp; ``True`` when any was applied.
 
     Raises:
         StoreSchemaError: The store is stamped higher than this code expects.
     """
-    connection.execute(sql.BEGIN_IMMEDIATE)
+    current = read_schema_version(connection)
+    if current > EXPECTED_SCHEMA_VERSION:
+        raise StoreSchemaError(
+            f"store is at schema version {current}, newer than the "
+            f"{EXPECTED_SCHEMA_VERSION} this code expects; refusing to downgrade"
+        )
+    applied = False
+    for version, script in migration_files():
+        if version <= current:
+            continue
+        for statement in split_statements(script):
+            connection.execute(statement)
+        connection.execute(sql.UPSERT_SCHEMA_VERSION, (sql.SCHEMA_META_ROW_ID, version))
+        applied = True
+    return applied
+
+
+def migrate(connection: sqlite3.Connection) -> int:
+    """Bring the store to ``EXPECTED_SCHEMA_VERSION``; returns the stamped version.
+
+    The connection must be in autocommit mode (``isolation_level=None``). Foreign
+    keys are off for the transaction (the pragma does nothing inside one), so a
+    migration may rebuild a referenced table; before commit ``foreign_key_check``
+    must find nothing. They are on again afterward, committed or not.
+
+    Raises:
+        StoreSchemaError: The store is stamped higher than this code expects.
+        StoreCorruptError: A migration left a dangling foreign key; rolled back.
+    """
+    connection.execute(sql.PRAGMA_FOREIGN_KEYS_OFF)
     try:
-        current = read_schema_version(connection)
-        if current > EXPECTED_SCHEMA_VERSION:
-            raise StoreSchemaError(
-                f"store is at schema version {current}, newer than the "
-                f"{EXPECTED_SCHEMA_VERSION} this code expects; refusing to downgrade"
-            )
-        for version, script in migration_files():
-            if version <= current:
-                continue
-            for statement in split_statements(script):
-                connection.execute(statement)
-            connection.execute(
-                sql.UPSERT_SCHEMA_VERSION, (sql.SCHEMA_META_ROW_ID, version)
-            )
-        connection.execute(sql.COMMIT)
-    except BaseException:
-        if connection.in_transaction:
-            connection.execute(sql.ROLLBACK)
-        raise
+        connection.execute(sql.BEGIN_IMMEDIATE)
+        try:
+            if _apply_pending(connection):
+                violations = connection.execute(sql.PRAGMA_FOREIGN_KEY_CHECK).fetchall()
+                if violations:
+                    raise StoreCorruptError(
+                        f"migration left {len(violations)} dangling foreign "
+                        f"key(s), first: {tuple(violations[0])}"
+                    )
+            connection.execute(sql.COMMIT)
+        except BaseException:
+            if connection.in_transaction:
+                connection.execute(sql.ROLLBACK)
+            raise
+    finally:
+        connection.execute(sql.PRAGMA_FOREIGN_KEYS_ON)
     return EXPECTED_SCHEMA_VERSION

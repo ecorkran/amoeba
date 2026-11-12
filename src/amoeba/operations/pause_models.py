@@ -35,6 +35,8 @@ class SkipReason(StrEnum):
     ALREADY_CLAIMED = "already_claimed"
     WAITING_ON_PM = "waiting_on_pm"
     SETTLED = "settled"
+    CLOSED = "closed"
+    WRONG_CHECKOUT = "wrong_checkout"
 
 
 class HandlePauseOutcome(StrEnum):

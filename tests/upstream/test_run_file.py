@@ -18,7 +18,14 @@ from amoeba.upstream.squadron.run_file import (
 REAL_FILE = (
     Path(__file__).parents[1] / "fixtures" / "squadron" / "run_file_schema5.json"
 )
+REAL_FILE_WITHOUT_DIRECTORY = (
+    Path(__file__).parents[1]
+    / "fixtures"
+    / "squadron"
+    / "run_file_schema5_no_working_directory.json"
+)
 RUN_ID = "amoeba-fixture-pause-3"
+OLD_RUN_ID = "run-20261105-effort-walkthrough-none-e65efbbe"
 
 
 def _runs_dir_with(tmp_path: Path, changes: dict[str, object | None]) -> Path:
@@ -38,9 +45,46 @@ def test_the_real_file_parses_with_its_params_and_mode(tmp_path: Path) -> None:
 
     facts = read_run_facts(tmp_path, RUN_ID)
 
+    recorded = json.loads(REAL_FILE.read_text(encoding="utf-8"))
     assert facts == RunFacts(
-        params={"model": "haiku-xhigh"}, execution_mode=ExecutionMode.SDK
+        params={"model": "haiku-xhigh"},
+        execution_mode=ExecutionMode.SDK,
+        working_directory=Path(recorded["working_directory"]),
     )
+
+
+def test_a_file_from_sq_0_24_24_or_later_gives_its_working_directory(
+    tmp_path: Path,
+) -> None:
+    shutil.copy(REAL_FILE, tmp_path / f"{RUN_ID}.json")
+
+    facts = read_run_facts(tmp_path, RUN_ID)
+
+    assert isinstance(facts, RunFacts)
+    assert facts.working_directory is not None
+    assert facts.working_directory.is_absolute()
+
+
+def test_a_file_from_before_sq_0_24_24_reads_as_none_not_an_error(
+    tmp_path: Path,
+) -> None:
+    recorded = json.loads(REAL_FILE_WITHOUT_DIRECTORY.read_text(encoding="utf-8"))
+    assert "working_directory" not in recorded
+    shutil.copy(REAL_FILE_WITHOUT_DIRECTORY, tmp_path / f"{OLD_RUN_ID}.json")
+
+    facts = read_run_facts(tmp_path, OLD_RUN_ID)
+
+    assert facts == RunFacts(
+        params={"topic": "demo"},
+        execution_mode=ExecutionMode.PROMPT_ONLY,
+        working_directory=None,
+    )
+
+
+def test_a_non_string_working_directory_is_a_problem(tmp_path: Path) -> None:
+    runs_dir = _runs_dir_with(tmp_path, {"working_directory": 7})
+
+    assert isinstance(read_run_facts(runs_dir, RUN_ID), RunFileProblem)
 
 
 def test_a_prompt_only_run_reads_as_prompt_only(tmp_path: Path) -> None:

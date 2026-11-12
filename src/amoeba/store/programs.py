@@ -2,8 +2,9 @@
 
 Every function takes an open transaction (``Store.read()`` or ``Store.write()``).
 An upsert writes, and moves ``updated_at``, only when a stored value changes, and
-says whether it did. The clock is passed in so a test controls it. Nothing here is
-removed: a list field given to an upsert replaces the stored list whole.
+says whether it did. The clock is passed in so a test controls it. A list field given
+to an upsert replaces the stored list whole. A member is removed softly (228 D8): its
+row stays, ``removed_at`` is set, and every read here but ``get_member_any`` skips it.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from amoeba.store.row_values import (
     encode_string_list,
     encode_timestamp,
     optional_text,
+    optional_timestamp,
     text,
     vocabulary,
 )
@@ -50,6 +52,7 @@ def _member(row: Sequence[object]) -> Member:
         ),
         registered_at=decode_timestamp(row[5], "members.registered_at"),
         updated_at=decode_timestamp(row[6], "members.updated_at"),
+        removed_at=optional_timestamp(row[7], "members.removed_at"),
     )
 
 
@@ -80,6 +83,12 @@ def get_program(transaction: Transaction, program_id: str) -> Program | None:
 
 def get_member(transaction: Transaction, project_id: str) -> Member | None:
     row = transaction.execute(sql.SELECT_MEMBER, (project_id,)).fetchone()
+    return None if row is None else _member(row)
+
+
+def get_member_any(transaction: Transaction, project_id: str) -> Member | None:
+    """The member row whether or not it was removed (``removed_at`` says which)."""
+    row = transaction.execute(sql.SELECT_MEMBER_ANY, (project_id,)).fetchone()
     return None if row is None else _member(row)
 
 
@@ -145,8 +154,10 @@ def upsert_member(
 ) -> bool:
     """Create the member or replace its lists.
 
+    A removed member is registered afresh, in this program, whichever it was in.
+
     Raises:
-        StoreIntegrityError: The member already belongs to another program.
+        StoreIntegrityError: The active member already belongs to another program.
     """
     stamp = encode_timestamp(now)
     lists = (
@@ -154,11 +165,17 @@ def upsert_member(
         encode_string_list(settings.authorize_allow),
         encode_string_list(settings.authorize_deny),
     )
-    existing = get_member(transaction, settings.project_id)
+    existing = get_member_any(transaction, settings.project_id)
     if existing is None:
         transaction.execute(
             sql.INSERT_MEMBER,
             (settings.project_id, program_id, *lists, stamp, stamp),
+        )
+        return True
+    if existing.removed_at is not None:
+        transaction.execute(
+            sql.REREGISTER_MEMBER,
+            (program_id, *lists, stamp, stamp, settings.project_id),
         )
         return True
     if existing.program_id != program_id:
@@ -196,3 +213,25 @@ def upsert_pair(
         sql.UPDATE_PAIR, (consumed.value, stamp, provider_id, consumer_id)
     )
     return True
+
+
+# --- removal (228 D8) ----------------------------------------------------------
+
+
+def remove_member(transaction: Transaction, project_id: str, now: datetime) -> bool:
+    """Soft-remove the member and delete its pairs; False if it was not active.
+
+    The member's question, answer and release rows stay: they are the record.
+    """
+    stamp = encode_timestamp(now)
+    cursor = transaction.execute(sql.REMOVE_MEMBER, (stamp, stamp, project_id))
+    if cursor.rowcount != 1:
+        return False
+    transaction.execute(sql.DELETE_PAIRS_OF_MEMBER, (project_id, project_id))
+    return True
+
+
+def remove_pair(transaction: Transaction, provider_id: str, consumer_id: str) -> bool:
+    """Delete the pair; False if there was none."""
+    cursor = transaction.execute(sql.DELETE_PAIR, (provider_id, consumer_id))
+    return cursor.rowcount == 1

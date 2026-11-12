@@ -50,5 +50,6 @@ def user_config(
         passages_max_chars=60000,
         answering_wait_seconds=600,
         resume_wait_seconds=60,
+        prune_after_days=30,
         authorize_items=authorize_items,
     )

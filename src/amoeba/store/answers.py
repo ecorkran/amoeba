@@ -25,6 +25,7 @@ from amoeba.store.row_values import (
     encode_timestamp,
     integer,
     optional_text,
+    optional_timestamp,
     text,
     vocabulary,
 )
@@ -34,7 +35,6 @@ from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 
 def answer_from_row(row: Sequence[object]) -> AnswerRecord:
     """An ``AnswerRecord`` from a row of ``sql.ANSWER_COLUMNS``."""
-    resume_at = row[10]
     return AnswerRecord(
         seq=integer(row[0], "answers.seq"),
         key=QuestionKey(
@@ -52,11 +52,10 @@ def answer_from_row(row: Sequence[object]) -> AnswerRecord:
         ),
         resume_detail=optional_text(row[8], "answers.resume_detail"),
         resume_log=optional_text(row[9], "answers.resume_log"),
-        resume_at=(
-            None
-            if resume_at is None
-            else decode_timestamp(resume_at, "answers.resume_at")
-        ),
+        resume_at=optional_timestamp(row[10], "answers.resume_at"),
+        retracted_at=optional_timestamp(row[11], "answers.retracted_at"),
+        retract_reason=optional_text(row[12], "answers.retract_reason"),
+        resume_started_at=optional_timestamp(row[13], "answers.resume_started_at"),
     )
 
 
@@ -86,19 +85,25 @@ def latest_answer(transaction: Transaction, key: QuestionKey) -> AnswerRecord | 
 
 
 def automatic_answer_count(transaction: Transaction, run_id: str) -> int:
-    """Answers the answerer gave this run, across every ``paused_at``; PM answers
-    never count toward the limit."""
+    """Answers the answerer gave this run, across every ``paused_at``, since the
+    run's newest PM answer (all of them if it has none). PM answers never count
+    toward the limit, and one resets it, retracted or not (228 D7)."""
     row = transaction.execute(
-        sql.COUNT_AUTOMATIC_ANSWERS, (run_id, AnsweredBy.ANSWERER.value)
+        sql.COUNT_AUTOMATIC_ANSWERS,
+        (run_id, AnsweredBy.ANSWERER.value, run_id, AnsweredBy.PM.value),
     ).fetchone()
     return 0 if row is None else integer(row[0], "count")
 
 
 def pm_precedent(transaction: Transaction, member_id: str) -> tuple[PmPrecedent, ...]:
     """The newest PM answer to each of the member's questions, oldest first.
-    Automatic answers are never precedent."""
+    Automatic answers are never precedent. A question gives none when that newest
+    answer is retracted or the question is closed; an older PM answer is not brought
+    back (228 D6)."""
     pm = AnsweredBy.PM.value
-    rows = transaction.execute(sql.SELECT_PM_PRECEDENT, (member_id, pm, pm)).fetchall()
+    rows = transaction.execute(
+        sql.SELECT_PM_PRECEDENT, (member_id, pm, pm, QuestionState.CLOSED.value)
+    ).fetchall()
     return tuple(
         PmPrecedent(
             key=QuestionKey(
@@ -153,6 +158,47 @@ def record_resume(
             detail,
             log,
             encode_timestamp(at),
+            answer_seq,
+            ResumeOutcome.REFUSED.value,
+        ),
+    )
+    return cursor.rowcount == 1
+
+
+def retract_answer(
+    transaction: Transaction, seq: int, reason: str, *, now: datetime
+) -> bool:
+    """Mark the answer retracted, once. True if this call set it, False if it was
+    already retracted or does not exist. The answer stays delivered (228 D6)."""
+    cursor = transaction.execute(
+        sql.RETRACT_ANSWER, (encode_timestamp(now), reason, seq)
+    )
+    return cursor.rowcount == 1
+
+
+def mark_resume_started(
+    transaction: Transaction, answer_seq: int, *, now: datetime
+) -> bool:
+    """Record that a resume is about to be spawned. False when the answer's outcome
+    is already final (``resumed`` or ``not_delivered``): nothing may be spawned."""
+    cursor = transaction.execute(
+        sql.MARK_RESUME_STARTED,
+        (encode_timestamp(now), answer_seq, ResumeOutcome.REFUSED.value),
+    )
+    return cursor.rowcount == 1
+
+
+def mark_not_delivered(
+    transaction: Transaction, answer_seq: int, detail: str, *, now: datetime
+) -> bool:
+    """Make the answer ``not_delivered`` unless its outcome is final; never
+    overwrites ``resumed``. True if it wrote."""
+    cursor = transaction.execute(
+        sql.MARK_NOT_DELIVERED,
+        (
+            ResumeOutcome.NOT_DELIVERED.value,
+            detail,
+            encode_timestamp(now),
             answer_seq,
             ResumeOutcome.REFUSED.value,
         ),

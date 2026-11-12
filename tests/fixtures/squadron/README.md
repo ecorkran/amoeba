@@ -31,6 +31,13 @@ It is unedited, so it holds this machine's path to the pipeline file in
 `pipeline_path`. Its `paused_at` is written `…Z`; `sq runs wait --json` prints the
 same instant as `…+00:00` (slice 223, D1: only the `wait` form is ever stored).
 
+`run_file_schema5.json` has `working_directory` (`sq` writes it from 0.24.24 on, slice
+228 D10; this run was made on 0.24.25), and its value is that test run's throwaway
+directory. `run_file_schema5_no_working_directory.json` is the real run file of
+`run-20261105-effort-walkthrough-none-e65efbbe` (the `prompt-only` demo run in the
+listing recording below), copied unedited from before 0.24.24: schema 5 with no such
+key. The two pin both shapes.
+
 ## The run lock (slice 223, task 6.0a)
 
 Captured 20261110 with `sq` 0.24.25 on a real `agent_question` run
@@ -57,7 +64,7 @@ holder's `running`, the loser reports `resumed` too (the run is running).
 ## `sq runs list --json` (slice 224, tasks 3.1 and 5.1)
 
 Captured 20261111 with `sq` 0.24.26 on the PM's machine (a dated observation, not a
-pin), called with no `--all`. `runs_list/list_mixed.json` is **a selection of eleven
+pin), called with no `--all` (a 224 recording; see below). `runs_list/list_mixed.json` is **a selection of eleven
 elements of that real listing, each element unedited** (the array holds only the chosen
 ones, in the listing's order, re-indented). The full listing had 98 runs. The cases:
 
@@ -83,8 +90,13 @@ built in test code from a real element by the tests that need it.
 `runs_list/list_stderr.txt` is the real stderr of the same call: one warning that 13
 runs reference unavailable pipelines. `--json` stdout is unaffected by it.
 
-**Was `--all` needed?** No. The same machine lists 189 runs with `--all` and 98 without.
-All 32 paused runs of the `--all` listing are in the default listing; the runs it omits
-are `running` or `completed` ones with nothing to resume. So `list_runs` calls `sq runs
-list --json` with no `--all`. The warning's unavailable pipelines do not hide runs: the
+**Was `--all` needed?** Not for 224, which only acted on running and paused runs: the
+same machine listed 189 runs with `--all` and 98 without, and all 32 paused runs were
+in the default listing. Slice 228 (D4) calls `sq runs list --json --all`, because
+`status` now closes questions whose run is absent from the listing, and an absent run
+must mean "unknown to `sq`", not "a completed run the default listing left out" (checked
+on `sq` 0.24.27, 20261112: the default listing held 8 of 100 completed runs, `--all`
+all of them). The recording above is a selection of the default listing, so the fake
+`sq` prints it for `--all` and drops its `completed` runs without `--all`, as the real
+`sq` does. The warning's unavailable pipelines do not hide runs: the
 paused runs it concerns are in the stdout JSON (the null-directory ones above).

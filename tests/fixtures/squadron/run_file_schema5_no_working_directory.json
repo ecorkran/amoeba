@@ -1,0 +1,24 @@
+{
+  "schema_version": 5,
+  "run_id": "run-20261105-effort-walkthrough-none-e65efbbe",
+  "pipeline": "effort-walkthrough-none",
+  "params": {
+    "topic": "demo"
+  },
+  "execution_mode": "prompt-only",
+  "started_at": "2026-11-05T14:12:49.708016Z",
+  "updated_at": "2026-11-05T14:12:49.708016Z",
+  "status": "running",
+  "current_step": null,
+  "completed_steps": [],
+  "checkpoint": null,
+  "compact_summaries": {},
+  "pool_selections": [],
+  "owner": null,
+  "heartbeat_at": null,
+  "active_step": null,
+  "progress_at": null,
+  "active_item": null,
+  "pipeline_path": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/782ca97f-d9c2-437b-939e-48f63268d7c6/scratchpad/effort-walkthrough-none.yaml",
+  "replay": false
+}

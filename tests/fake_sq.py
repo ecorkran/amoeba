@@ -87,7 +87,12 @@ _SCRIPT = textwrap.dedent(
         if listing is None:
             print("fake sq: no such command", arguments, file=sys.stderr)
             sys.exit({usage})
-        sys.stdout.write(listing["stdout"])
+        stdout = listing["stdout"]
+        if "--all" not in arguments:
+            # As the real sq: the default listing leaves out completed runs.
+            kept = [r for r in json.loads(stdout) if r["status"] != "completed"]
+            stdout = json.dumps(kept, indent=2)
+        sys.stdout.write(stdout)
         if listing["stderr"]:
             print(listing["stderr"], file=sys.stderr, end="")
         sys.exit(listing["exit_code"])

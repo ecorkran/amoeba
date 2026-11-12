@@ -158,6 +158,7 @@ def member(project_id: str, *, updated: datetime = REGISTERED) -> Member:
         ),
         registered_at=REGISTERED,
         updated_at=updated,
+        removed_at=None,
     )
 
 

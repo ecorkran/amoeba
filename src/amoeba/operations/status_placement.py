@@ -10,17 +10,18 @@ bury what the PM has to act on. ``project_of`` is called once per directory.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from amoeba.config.home import ANSWERING_DIR_NAME
 from amoeba.operations.status_models import UnplacedReason, UnplacedRunEntry
 from amoeba.store.models import Member
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
 from amoeba.upstream.squadron.run_list import ListedRun
 
-__all__ = ["PlacedRun", "Placement", "UnplacedReason", "place_runs"]
+__all__ = ["PlacedRun", "Placement", "UnplacedReason", "place_runs", "scratch_roots"]
 
 #: Looks up a directory's Context Forge project (one ``cf`` call).
 type ProjectOf = Callable[[Path], CFProject | CFProjectNotFound | CfCallFailed]
@@ -42,10 +43,18 @@ class Placement:
     unplaced: tuple[UnplacedRunEntry, ...]
 
 
+def scratch_roots(answering_dir: Path, legacy_home: Path | None) -> tuple[Path, ...]:
+    """The directories whose runs are answering scratch: the answering directory and,
+    for a paused answering run started before the state move, the legacy one (D12)."""
+    if legacy_home is None:
+        return (answering_dir,)
+    return (answering_dir, legacy_home / ANSWERING_DIR_NAME)
+
+
 def place_runs(
     listed: list[ListedRun],
     members_in_scope: Mapping[str, Member],
-    answering_dir: Path,
+    scratch_dirs: Sequence[Path],
     project_of: ProjectOf,
 ) -> Placement:
     """Place ``listed`` under ``members_in_scope`` (by project id); see the module
@@ -64,7 +73,7 @@ def place_runs(
             refuse(run, UnplacedReason.NO_DIRECTORY, None)
         elif not directory.exists():
             refuse(run, UnplacedReason.DIRECTORY_MISSING, None)
-        elif directory.resolve().is_relative_to(answering_dir.resolve()):
+        elif any(directory.resolve().is_relative_to(d.resolve()) for d in scratch_dirs):
             continue  # an answering run's scratch: never listed, no cf call
         else:
             if directory not in lookups:

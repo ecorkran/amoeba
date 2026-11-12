@@ -93,13 +93,34 @@ def test_runs_list_replays_the_recording_and_records_its_argv(tmp_path: Path) ->
         runs_list=recorded_listing(stderr=recorded_warning()),
     )
 
-    result = _sq(fake.directory, "runs", "list", "--json")
+    result = _sq(fake.directory, "runs", "list", "--json", "--all")
 
     assert result.returncode == 0
     assert result.stdout == recorded_listing().stdout
     assert "unavailable pipelines" in result.stderr
-    assert fake.list_calls() == [["runs", "list", "--json"]]
+    assert fake.list_calls() == [["runs", "list", "--json", "--all"]]
     assert fake.run_calls() == []
+
+
+def test_without_all_the_fake_omits_completed_runs(tmp_path: Path) -> None:
+    fake = write_fake_sq(
+        tmp_path,
+        waits={},
+        run_exit_code=0,
+        run_stderr="",
+        runs_list=recorded_listing(),
+    )
+
+    everything = json.loads(
+        _sq(fake.directory, "runs", "list", "--json", "--all").stdout
+    )
+    default = json.loads(_sq(fake.directory, "runs", "list", "--json").stdout)
+
+    assert any(run["status"] == "completed" for run in everything)
+    assert not any(run["status"] == "completed" for run in default)
+    assert len(default) == len(everything) - sum(
+        run["status"] == "completed" for run in everything
+    )
 
 
 def test_an_sq_without_a_listing_exits_2_for_runs_list(tmp_path: Path) -> None:

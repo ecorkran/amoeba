@@ -15,7 +15,7 @@ from amoeba.store import sql
 from amoeba.store.answers import answer_from_row
 from amoeba.store.errors import StoreRowError
 from amoeba.store.models import AnswerRecord, QuestionRecord
-from amoeba.store.questions import question_from_row
+from amoeba.store.question_rows import question_from_row
 from amoeba.store.row_values import integer, optional_integer, text
 from amoeba.store.store import Store, Transaction
 

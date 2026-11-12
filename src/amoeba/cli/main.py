@@ -1,6 +1,6 @@
 """The ``amoeba`` command (slices 222 to 224, D9, D13): one subcommand per operation.
 
-This is the process boundary. It alone calls ``amoeba_home()``, ``store_path()`` and
+This is the process boundary. It alone calls ``state_layout()`` and
 ``config_path()``, reads the request text, and turns the expected failures into an
 ``error: <ExceptionName>: <message>`` line on stderr and an exit code. Later slices
 add subcommands and reuse the exit codes.
@@ -14,6 +14,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
@@ -21,21 +22,26 @@ import yaml
 
 from amoeba.config.home import (
     AmoebaHomeError,
-    answering_dir,
+    StateLayout,
     config_path,
-    logs_dir,
     squadron_runs_dir,
-    store_path,
+    state_layout,
 )
 from amoeba.config.user_config import ConfigError, load_user_config
 from amoeba.operations.answer import AnswerOutcome, AnswerResult, answer
+from amoeba.operations.calls_log import append_call, error_entry, result_entry
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
 from amoeba.operations.deps import Deps, production_deps
+from amoeba.operations.dismiss import DismissOutcome, DismissResult, dismiss
 from amoeba.operations.handle_pause import HandlePauseResult, handle_pause
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult, mark_read
 from amoeba.operations.members import ContextForgeError
+from amoeba.operations.prune import prune
+from amoeba.operations.prune_models import Prune, PruneReport
+from amoeba.operations.retract import RetractOutcome, RetractResult, retract
 from amoeba.operations.set_up import set_up
 from amoeba.operations.set_up_models import SetUpOutcome
+from amoeba.operations.state_move import open_state_store
 from amoeba.operations.status import StatusOutcome, StatusResult, status
 from amoeba.store.errors import StoreError
 from amoeba.store.store import Store
@@ -53,6 +59,8 @@ ANSWER_COMMAND: Final = "answer"
 STATUS_COMMAND: Final = "status"
 DECISIONS_COMMAND: Final = "decisions"
 MARK_READ_COMMAND: Final = "mark_read"
+DISMISS_COMMAND: Final = "dismiss"
+RETRACT_COMMAND: Final = "retract"
 STDIN_SOURCE: Final = "-"
 STDIN_NAME: Final = "<stdin>"
 JSON_INDENT: Final = 2
@@ -90,10 +98,10 @@ def read_request_document(source: str) -> object:
         raise RequestDocumentError(f"{name}: not YAML: {error}") from error
 
 
-def _run_set_up(source: str) -> int:
+def _run_set_up(layout: StateLayout, source: str) -> int:
     document = read_request_document(source)
     config = load_user_config(config_path())
-    with Store.open(store_path()) as store:
+    with open_state_store(layout) as store:
         result = set_up(
             store, config, document, directory=Path.cwd(), run=subprocess.run
         )
@@ -101,39 +109,88 @@ def _run_set_up(source: str) -> int:
     return EXIT_REJECTED if result.outcome is SetUpOutcome.REJECTED else EXIT_OK
 
 
-def _deps() -> Deps:
-    """The real edges, with the home's directories; only the CLI asks the home."""
+def _prune_in(layout: StateLayout) -> Prune:
+    """``prune`` with the layout bound, so the operations never see the environment."""
+
+    def prune_layout(store: Store, *, now: datetime, after_days: int) -> PruneReport:
+        return prune(store, layout, now, after_days)
+
+    return prune_layout
+
+
+def _deps(layout: StateLayout) -> Deps:
+    """The real edges, with the layout's directories; only the CLI asks the home."""
     return production_deps(
-        answering_dir=answering_dir(),
-        logs_dir=logs_dir(),
+        answering_dir=layout.answering_dir,
+        logs_dir=layout.logs_dir,
+        calls_log_dir=layout.calls_log_dir,
         squadron_runs_dir=squadron_runs_dir(),
+        legacy_home=layout.legacy_home,
+        prune=_prune_in(layout),
     )
 
 
-def _print_result(result: HandlePauseResult | AnswerResult) -> None:
+def _print_result(
+    result: HandlePauseResult | AnswerResult | DismissResult | RetractResult,
+) -> None:
     """A result as JSON on stdout (enums are strings)."""
     sys.stdout.write(json.dumps(asdict(result), indent=JSON_INDENT) + "\n")
 
 
-def _run_handle_pause(run_id: str) -> int:
+def _run_handle_pause(layout: StateLayout, run_id: str) -> int:
     config = load_user_config(config_path())
-    deps = _deps()
-    with Store.open(store_path()) as store:
-        result = handle_pause(store, config, run_id, directory=Path.cwd(), deps=deps)
+    deps = _deps(layout)
+    directory = Path.cwd()
+    with open_state_store(layout) as store:
+        result = handle_pause(store, config, run_id, directory=directory, deps=deps)
     _print_result(result)
+    # After the result is printed: a log failure cannot change what was reported.
+    now = deps.clock()
+    reason = result.skip_reason or result.waiting_reason
+    entry = result_entry(run_id, directory, result.outcome, reason, result.detail, now)
+    append_call(layout.calls_log_dir, entry, now)
     return EXIT_OK
 
 
-def _run_answer(run_id: str, paused_at: str | None, text: str) -> int:
+def _log_failed_call(layout: StateLayout, run_id: str, error: Exception) -> None:
+    """The calls-log line of a ``handle_pause`` that ended in an exit-3 error."""
+    now = datetime.now(UTC)
+    entry = error_entry(run_id, Path.cwd(), error, now)
+    append_call(layout.calls_log_dir, entry, now)
+
+
+def _run_answer(
+    layout: StateLayout, run_id: str, paused_at: str | None, text: str
+) -> int:
     config = load_user_config(config_path())
-    deps = _deps()
+    deps = _deps(layout)
     document: dict[str, str] = {"run_id": run_id, "text": text}
     if paused_at is not None:
         document["paused_at"] = paused_at
-    with Store.open(store_path()) as store:
+    with open_state_store(layout) as store:
         result = answer(store, config, document, deps=deps)
     _print_result(result)
     return EXIT_REJECTED if result.outcome is AnswerOutcome.REJECTED else EXIT_OK
+
+
+def _run_dismiss(
+    layout: StateLayout, run_id: str, paused_at: str | None, reason: str
+) -> int:
+    document: dict[str, str] = {"run_id": run_id, "reason": reason}
+    if paused_at is not None:
+        document["paused_at"] = paused_at
+    with open_state_store(layout) as store:
+        result = dismiss(store, document, clock=_deps(layout).clock)
+    _print_result(result)
+    return EXIT_REJECTED if result.outcome is DismissOutcome.REJECTED else EXIT_OK
+
+
+def _run_retract(layout: StateLayout, answer_seq: int, reason: str) -> int:
+    document: dict[str, object] = {"answer_seq": answer_seq, "reason": reason}
+    with open_state_store(layout) as store:
+        result = retract(store, document, clock=_deps(layout).clock)
+    _print_result(result)
+    return EXIT_REJECTED if result.outcome is RetractOutcome.REJECTED else EXIT_OK
 
 
 def _print_model(result: StatusResult | DecisionsResult | MarkReadResult) -> None:
@@ -141,31 +198,31 @@ def _print_model(result: StatusResult | DecisionsResult | MarkReadResult) -> Non
     sys.stdout.write(result.model_dump_json(indent=JSON_INDENT) + "\n")
 
 
-def _run_status(program: str | None) -> int:
+def _run_status(layout: StateLayout, program: str | None) -> int:
     config = load_user_config(config_path())
-    deps = _deps()
+    deps = _deps(layout)
     document: dict[str, str] = {} if program is None else {"program": program}
-    with Store.open(store_path()) as store:
+    with open_state_store(layout) as store:
         result = status(store, config, document, directory=Path.cwd(), deps=deps)
     _print_model(result)
     return EXIT_REJECTED if result.outcome is StatusOutcome.REJECTED else EXIT_OK
 
 
-def _run_decisions(since: str | None, program: str | None) -> int:
-    deps = _deps()
+def _run_decisions(layout: StateLayout, since: str | None, program: str | None) -> int:
+    deps = _deps(layout)
     document: dict[str, str] = {}
     if since is not None:
         document["since"] = since
     if program is not None:
         document["program"] = program
-    with Store.open(store_path()) as store:
+    with open_state_store(layout) as store:
         result = decisions(store, document, deps=deps)
     _print_model(result)
     return EXIT_REJECTED if result.outcome is DecisionsOutcome.REJECTED else EXIT_OK
 
 
-def _run_mark_read(through: int) -> int:
-    with Store.open(store_path()) as store:
+def _run_mark_read(layout: StateLayout, through: int) -> int:
+    with open_state_store(layout) as store:
         result = mark_read(store, {"through": through})
     _print_model(result)
     return EXIT_REJECTED if result.outcome is MarkReadOutcome.REJECTED else EXIT_OK
@@ -229,36 +286,65 @@ def _parser() -> argparse.ArgumentParser:
         metavar="SEQ",
         help="the read_through of a decisions call",
     )
+    dismiss_parser = commands.add_parser(
+        DISMISS_COMMAND,
+        help="close a question that has no answer to deliver; the run stays paused",
+    )
+    dismiss_parser.add_argument("run_id", help="the run the question was asked in")
+    dismiss_parser.add_argument(
+        "--paused-at",
+        metavar="TIMESTAMP",
+        help="the pause, as `sq runs wait --json` prints it (default: the latest)",
+    )
+    dismiss_parser.add_argument("--reason", required=True, help="why it is closed")
+    retract_parser = commands.add_parser(
+        RETRACT_COMMAND,
+        help="stop a PM answer being precedent; it stays delivered and listed",
+    )
+    retract_parser.add_argument(
+        "answer_seq", type=int, help="the answer's seq, from `amoeba decisions`"
+    )
+    retract_parser.add_argument("--reason", required=True, help="why it is retracted")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command; returns the exit code."""
     arguments = _parser().parse_args(argv)
+    layout: StateLayout | None = None
     try:
+        layout = state_layout()
         if arguments.command == SET_UP_COMMAND:
-            return _run_set_up(arguments.file)
+            return _run_set_up(layout, arguments.file)
         if arguments.command == HANDLE_PAUSE_COMMAND:
-            return _run_handle_pause(arguments.run_id)
+            return _run_handle_pause(layout, arguments.run_id)
         if arguments.command == ANSWER_COMMAND:
-            return _run_answer(arguments.run_id, arguments.paused_at, arguments.text)
+            return _run_answer(
+                layout, arguments.run_id, arguments.paused_at, arguments.text
+            )
         if arguments.command == STATUS_COMMAND:
-            return _run_status(arguments.program)
+            return _run_status(layout, arguments.program)
         if arguments.command == DECISIONS_COMMAND:
-            return _run_decisions(arguments.since, arguments.program)
+            return _run_decisions(layout, arguments.since, arguments.program)
         if arguments.command == MARK_READ_COMMAND:
-            return _run_mark_read(arguments.through)
+            return _run_mark_read(layout, arguments.through)
+        if arguments.command == DISMISS_COMMAND:
+            return _run_dismiss(
+                layout, arguments.run_id, arguments.paused_at, arguments.reason
+            )
+        if arguments.command == RETRACT_COMMAND:
+            return _run_retract(layout, arguments.answer_seq, arguments.reason)
         raise AssertionError(f"unhandled command {arguments.command!r}")
     except RequestDocumentError as error:
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
         return EXIT_USAGE
-    except (
-        ConfigError,
-        AmoebaHomeError,
-        ContextForgeError,
-        SquadronError,
-        StoreError,
-    ) as error:
+    except AmoebaHomeError as error:
+        # No state home, so no calls log to write: stderr only (228 D11).
+        sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
+        return EXIT_ERROR
+    except (ConfigError, ContextForgeError, SquadronError, StoreError) as error:
         # The process boundary: these are the expected failures, reported once.
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
+        if arguments.command == HANDLE_PAUSE_COMMAND and layout is not None:
+            _log_failed_call(layout, arguments.run_id, error)
         return EXIT_ERROR

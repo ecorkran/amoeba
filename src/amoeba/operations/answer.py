@@ -27,9 +27,9 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.pause_models import ResumeResult
 from amoeba.operations.resume import resume
 from amoeba.store.answers import add_pm_answer, record_resume
-from amoeba.store.models import QuestionKey, QuestionRecord
-from amoeba.store.questions import get_question, latest_question
-from amoeba.store.store import Store, Transaction
+from amoeba.store.models import QuestionKey
+from amoeba.store.questions import find_question, get_question
+from amoeba.store.store import Store
 from amoeba.store.vocabulary import ResumeOutcome
 from amoeba.upstream.squadron.errors import SquadronError
 
@@ -85,7 +85,7 @@ def answer(
     # One transaction: find the question, add the answer and read the question back,
     # so the answer is recorded against exactly the row it was found on.
     with store.write() as transaction:
-        found = _find(transaction, request)
+        found = find_question(transaction, request.run_id, request.paused_at)
         if found is None:
             return _rejected(
                 AnswerRejection.NO_SUCH_QUESTION,
@@ -124,12 +124,6 @@ def _record_refused(
             at=deps.clock(),
         )
     return ResumeResult(ResumeOutcome.REFUSED, detail, None)
-
-
-def _find(transaction: Transaction, request: AnswerRequest) -> QuestionRecord | None:
-    if request.paused_at is not None:
-        return get_question(transaction, QuestionKey(request.run_id, request.paused_at))
-    return latest_question(transaction, request.run_id)
 
 
 def _rejected(reason: AnswerRejection, problems: tuple[str, ...]) -> AnswerResult:

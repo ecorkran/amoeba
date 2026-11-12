@@ -27,24 +27,31 @@ from amoeba.operations.members import (
     NotInProgram,
     resolve_member,
 )
+from amoeba.operations.question_sweep_scope import sweep_scope
 from amoeba.operations.reject_codes import (
     RejectCode,
     unknown_program_problem,
     validation_problems,
 )
+from amoeba.operations.status_calls import attach_last_calls
+from amoeba.operations.status_closed import closed_now_entries
 from amoeba.operations.status_models import (
     MemberStatus,
     ProgramStatus,
     StatusOutcome,
     StatusResult,
 )
-from amoeba.operations.status_placement import place_runs
+from amoeba.operations.status_placement import place_runs, scratch_roots
 from amoeba.operations.status_runs import MemberRun, classify_runs
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
 from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Member
 from amoeba.store.programs import get_program, list_programs, members_of
-from amoeba.store.questions import latest_rows_by_run, open_questions
+from amoeba.store.questions import (
+    latest_rows_by_run,
+    open_questions,
+    sweep_candidates,
+)
 from amoeba.store.store import Store, Transaction
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.project_of import project_of
@@ -145,17 +152,19 @@ def status(
         return _rejected(scope.code, scope.problems)
     members = {m.project_id: m for entry in scope for m in entry.members}
     with store.read() as transaction:
-        open_rows = open_questions(transaction, list(members))
+        candidates = sweep_candidates(transaction, list(members))
         rows = latest_rows_by_run(transaction, list(members))
     listed = deps.list_runs()
     if isinstance(listed, RunListProblem):
         raise SquadronError(
             f"status needs `sq runs list --json` (Squadron with #303): {listed.reason}"
         )
+    # The listing is ``--all`` so the sweep can tell a finished run from an unknown
+    # one; completed runs stay out of the per-member run lists, as before.
     placement = place_runs(
-        listed,
+        [run for run in listed if not run.is_completed],
         members,
-        deps.answering_dir,
+        scratch_roots(deps.answering_dir, deps.legacy_home),
         lambda found: project_of(directory=found, run=deps.cf_run),
     )
     runs = classify_runs(
@@ -165,12 +174,28 @@ def status(
         config.answering_wait_seconds,
         deps.clock(),
     )
-    waiting = waiting_entries(open_rows, listed)
+    with_calls = attach_last_calls(runs, deps.calls_log_dir)
+    runs = with_calls.runs
+    # Names come before the sweep: the external ``cf`` call can fail, and a failure
+    # after the sweep's write would lose the report of what it closed.
     names = _names(members, deps)
+    swept = sweep_scope(store, config, candidates, listed, deps, deps.clock())
+    # What is still open after the sweep. After a failed write that is everything,
+    # shown as before the sweep.
+    with store.read() as transaction:
+        open_rows = open_questions(transaction, list(members))
+    waiting = waiting_entries(open_rows, listed)
+    program_of = {
+        m.project_id: entry.program_id for entry in scope for m in entry.members
+    }
+    pruned = deps.prune(store, now=deps.clock(), after_days=config.prune_after_days)
     return StatusResult(
         outcome=StatusOutcome.LISTED,
         programs=tuple(_program_status(entry, names, runs, waiting) for entry in scope),
         unplaced_runs=placement.unplaced,
+        closed_now=closed_now_entries(swept, program_of, names),
+        sweep_problem=swept.problem,
+        file_problems=with_calls.problems + pruned.problems,
     )
 
 

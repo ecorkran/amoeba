@@ -145,6 +145,10 @@ def test_a_lookup_failure_is_unplaced_beside_a_waiting_question_still_shown(
     key = QuestionKey("gone-run", "2026-11-09T08:00:00+00:00")
     with store.write() as transaction:
         insert_question(transaction, waiting_question(key, member_id=CORE), now=NOW)
+    # Squadron still has this run's file, so absence from the listing proves nothing
+    # and the question stays open (228 D4); a run with no file would be closed.
+    (tmp_path / "runs").mkdir()
+    (tmp_path / "runs" / "gone-run.json").write_text("{}", encoding="utf-8")
     broken = tmp_path / "broken"
     broken.mkdir()
     cf = FakeCf(
