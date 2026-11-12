@@ -41,6 +41,8 @@ Splitting it again (say, questions in one initiative and programs in another) wo
    - **An audit of today's code** against the scenarios, sorting about 34k lines in `src` and 69k in `tests` into keep, move to Squadron, or delete, and doing the deleting. Slices 182 to 186 are re-judged here.
    - **The architecture document answers the concept's six open questions**, starting with who notices a paused run, since that decides whether a resident process exists at all.
 
+   - **Scenario A switched on 2026-11-12** (hook live at user level, `trading` program registered, sanity pass clean). The counted trial and verdict were dropped as needing PM-driven work; evidence comes from normal use of `amoeba decisions` and `amoeba status`.
+
    Out of scope: launching member pipelines, notification mechanics, chat, and any check on an answer that could be a Squadron step. Dependencies: [100, 120, 140]. Status: not_started
 
 ## Cross-Initiative Dependencies
