@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from amoeba.answering.values import DeclineReason
 from amoeba.config.user_config import UserConfig
 from amoeba.operations.answering_settle import (
     SettleResult,
@@ -44,6 +45,35 @@ class PauseTarget:
     run_facts: RunFacts
 
 
+def waiting_result(
+    target: PauseTarget,
+    reason: DeclineReason,
+    detail: str | None,
+    answering_run_id: str | None,
+) -> HandlePauseResult:
+    """A question left waiting on the PM, with why."""
+    return HandlePauseResult(
+        HandlePauseOutcome.WAITING_ON_PM,
+        waiting_reason=reason,
+        detail=detail,
+        key=target.key,
+        checkout=str(target.checkout),
+        answering_run_id=answering_run_id,
+    )
+
+
+def superseded_result(
+    target: PauseTarget, answering_run_id: str | None
+) -> HandlePauseResult:
+    """A claim that was no longer this caller's when it tried to settle it."""
+    return HandlePauseResult(
+        HandlePauseOutcome.SUPERSEDED,
+        key=target.key,
+        checkout=str(target.checkout),
+        answering_run_id=answering_run_id,
+    )
+
+
 def finish(  # noqa: PLR0913 - what a settled claim needs to become a result
     store: Store,
     config: UserConfig,
@@ -53,23 +83,10 @@ def finish(  # noqa: PLR0913 - what a settled claim needs to become a result
     settled: SettleResult,
 ) -> HandlePauseResult:
     """A settle as a result: resume the run only when the question was answered."""
-    checkout = str(target.checkout)
     if isinstance(settled, Superseded):
-        return HandlePauseResult(
-            HandlePauseOutcome.SUPERSEDED,
-            key=target.key,
-            checkout=checkout,
-            answering_run_id=answering_run_id,
-        )
+        return superseded_result(target, answering_run_id)
     if isinstance(settled, Waiting):
-        return HandlePauseResult(
-            HandlePauseOutcome.WAITING_ON_PM,
-            waiting_reason=settled.reason,
-            detail=settled.detail,
-            key=target.key,
-            checkout=checkout,
-            answering_run_id=answering_run_id,
-        )
+        return waiting_result(target, settled.reason, settled.detail, answering_run_id)
     return resume_answer(
         store, config, deps, target.key, settled.answer_seq, answering_run_id
     )

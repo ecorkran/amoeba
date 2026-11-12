@@ -1,8 +1,8 @@
 """The passages an answering run sees: types, cutting, selection, assembly (slice 143).
 
 Pure: no file, process or store access. ``source_reads`` fetches committed text and
-the pause context wires it to the caller's values; everything that can be decided
-from values lives here so it is tested without a repository.
+``operations.pause_context.gather`` wires it to the caller's values; everything that
+can be decided from values lives here so it is tested without a repository.
 """
 
 from __future__ import annotations
@@ -330,16 +330,13 @@ def _committed_passages(committed: Sequence[SourceFile]) -> list[Passage]:
     return found
 
 
-def _pm_order(answers: Sequence[PmAnswer], slice_label: str) -> list[PmAnswer]:
-    """Same-slice answers first, newest first; ties (to the second) by record id."""
-    return sorted(
-        answers,
-        key=lambda a: (
-            a.slice_label != slice_label,
-            -int(a.date.timestamp()),
-            a.record_id,
-        ),
-    )
+def _pm_order(answers: Sequence[PmAnswer]) -> list[PmAnswer]:
+    """Newest first; ties (to the second) by record id.
+
+    The slice label is never used to order or match: it is display text the answering
+    models compare, and a renamed slice must not change what is kept.
+    """
+    return sorted(answers, key=lambda a: (-int(a.date.timestamp()), a.record_id))
 
 
 def assemble(
@@ -347,7 +344,6 @@ def assemble(
     pm_answers: Sequence[PmAnswer],
     *,
     program_sources: ProgramSources,
-    question_slice_label: str,
     max_chars: int,
     source_commit: str,
 ) -> PassageSet | SourcesProblem:
@@ -367,7 +363,7 @@ def assemble(
             f"rules, plan and program passages are {size} characters; "
             f"the limit is {max_chars}",
         )
-    ordered = _pm_order(pm_answers, question_slice_label)
+    ordered = _pm_order(pm_answers)
     for position, answer in enumerate(ordered):
         passage = _pm_passage(answer, len(kept) + 1)
         grown = (

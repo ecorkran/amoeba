@@ -68,15 +68,11 @@ def settle(
     decision = _decide(deps, claim, finished)
     if isinstance(decision, Declined):
         return _wait_on_pm(store, deps, claim, decision)
-    refused: list[GateRefusal] = []
 
     def gate(prior: int) -> GateRefusal | None:
-        refusal = evaluate_gate(
+        return evaluate_gate(
             claim.question, prior, answer=decision.answer, settings=claim.settings
         )
-        if refusal is not None:
-            refused.append(refusal)
-        return refusal
 
     outcome = settle_answered(
         store,

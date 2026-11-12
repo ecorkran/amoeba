@@ -71,5 +71,6 @@ used. Result (`AnswerResult`):
 | `resume` | `outcome` (`resumed`, `refused` or `not_delivered`), `detail`, `resume_log` |
 | `problems` | one line per problem when `rejected` |
 
-Exit 1 when `rejected`, else 0 (a refused or not-delivered resume still exits 0: the
-answer is recorded and is precedent).
+Exit 1 when `rejected`, else 0. A refused or not-delivered resume, including one
+refused because `sq` could not be read, still exits 0: the answer is recorded and is
+precedent.

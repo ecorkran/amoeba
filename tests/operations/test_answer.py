@@ -24,6 +24,7 @@ from amoeba.store.questions import (
     settle_waiting,
 )
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
+from amoeba.upstream.squadron.run_outcome import PollFailure
 from operations.handle_rig import (
     KEY,
     PAUSE,
@@ -279,3 +280,21 @@ def test_a_pm_answer_skips_the_screen_and_the_limit(tmp_path: Path) -> None:
 
         assert result.outcome is AnswerOutcome.RECORDED
         assert _answers(w)[0].answer == "Fine, run git push origin main."
+
+
+def test_an_unreadable_sq_leaves_the_answer_recorded_and_the_resume_refused(
+    tmp_path: Path,
+) -> None:
+    with world(tmp_path, paused_polls=(PollFailure("sq broke"),)) as w:
+        _waiting_row(w)
+
+        result = _ask(w, {"run_id": RUN, "text": PM_TEXT})
+
+        assert result.outcome is AnswerOutcome.RECORDED
+        assert result.resume is not None
+        assert result.resume.outcome is ResumeOutcome.REFUSED
+        assert "sq broke" in (result.resume.detail or "")
+        (row,) = _answers(w)
+        assert (row.answer, row.resume_outcome) == (PM_TEXT, ResumeOutcome.REFUSED)
+        assert "sq broke" in (row.resume_detail or "")
+        assert _record(w).state is QuestionState.ANSWERED

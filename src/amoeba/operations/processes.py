@@ -15,14 +15,12 @@ import signal
 import subprocess
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Final, Protocol, cast
+from typing import Any, Final, Protocol
 
 from amoeba.upstream.squadron.faults import LaunchFailure
 from amoeba.upstream.squadron.launch import (
-    ChildHandle,
     LaunchError,
     LaunchLogs,
-    PopenFactory,
     spawn,
 )
 
@@ -45,6 +43,9 @@ class WaitableChild(Protocol):
         ...
 
 
+#: Starts a child process: ``subprocess.Popen`` in production, a fake in tests.
+type WaitablePopen = Callable[..., WaitableChild]
+
 #: Starts a child in a directory with its logs: ``start_child`` in production, a
 #: fake in unit tests.
 type Spawner = Callable[[Sequence[str], Path, LaunchLogs], WaitableChild | LaunchError]
@@ -54,7 +55,7 @@ def start_child(
     argv: Sequence[str],
     cwd: Path,
     logs: LaunchLogs,
-    popen: PopenFactory = subprocess.Popen,
+    popen: WaitablePopen = subprocess.Popen,
 ) -> WaitableChild | LaunchError:
     """Start ``argv`` in ``cwd``, logging to ``logs``; the logs' directories are made.
 
@@ -72,22 +73,24 @@ def start_child(
         # An expected external failure (permissions, a full disk): an answer for
         # the caller to record, not a bug. Reported the way ``spawn`` reports one.
         return spawn_failure(error)
-    started = spawn(argv, str(cwd), logs, popen)
+    # The kept ``spawn`` hands back a ``ChildHandle`` (``poll`` only); keep the
+    # waitable child the factory made, so no type is narrowed after the fact.
+    made: list[WaitableChild] = []
+
+    def recording_popen(*args: Any, **kwargs: Any) -> WaitableChild:
+        child = popen(*args, **kwargs)
+        made.append(child)
+        return child
+
+    started = spawn(argv, str(cwd), logs, recording_popen)
     if isinstance(started, LaunchError):
         return started
-    return _waitable(started)
+    return made[0]
 
 
 def spawn_failure(error: OSError) -> LaunchError:
     """The kept launch error for an ``OSError`` before the child started."""
     return LaunchError(LaunchFailure.SPAWN_ERROR, f"{type(error).__name__}: {error}")
-
-
-def _waitable(started: ChildHandle) -> WaitableChild:
-    """The kept handle is the ``Popen`` the factory returned; narrow it."""
-    if not (hasattr(started, "wait") and hasattr(started, "pid")):
-        raise TypeError("the popen factory returned a child that cannot be waited on")
-    return cast("WaitableChild", started)
 
 
 def terminate_group(child: WaitableChild) -> None:

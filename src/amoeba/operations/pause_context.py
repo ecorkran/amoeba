@@ -255,7 +255,6 @@ def _assemble(  # noqa: PLR0913 - the pieces gather has already read
         files,
         [_pm_answer(item) for item in stored.precedent],
         program_sources=program_sources,
-        question_slice_label=slice_context.label,
         max_chars=settings.passages_max_chars,
         source_commit=committed.commit,
     )

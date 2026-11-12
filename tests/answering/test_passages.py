@@ -320,7 +320,7 @@ def _assemble(
         _file("p.md", "plan\n", PassageKind.PLAN),
     )
     return assemble(
-        committed, answers, program_sources=program, question_slice_label=SLICE,
+        committed, answers, program_sources=program,
         max_chars=max_chars, source_commit="c0ffee",
     )  # fmt: skip
 
@@ -345,7 +345,7 @@ def test_order_is_rules_plan_program_then_pm_with_gap_free_ids() -> None:
     assert result.ids == {"P1", "P2", "P3", "P4", "P5", "P6"}
 
 
-def test_pm_answers_for_the_same_slice_come_first_newest_first() -> None:
+def test_pm_answers_come_newest_first_whatever_their_slice_label() -> None:
     answers = [
         _pm("a", OTHER, 9),
         _pm("b", SLICE, 1),
@@ -356,10 +356,10 @@ def test_pm_answers_for_the_same_slice_come_first_newest_first() -> None:
     result = _set(_assemble(answers))
 
     assert [p.question_id for p in result.passages[LEADING_PASSAGES:]] == [
-        "c",
-        "b",
         "a",
         "d",
+        "c",
+        "b",
     ]
 
 

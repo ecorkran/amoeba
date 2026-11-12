@@ -33,11 +33,16 @@ from amoeba.operations.deps import Deps
 from amoeba.operations.member_answering import MemberAnswering, answering_for
 from amoeba.operations.pause_context import PauseContext, gather
 from amoeba.operations.pause_models import (
-    HandlePauseOutcome,
     HandlePauseResult,
     SkipReason,
 )
-from amoeba.operations.pause_results import PauseTarget, finish, skipped
+from amoeba.operations.pause_results import (
+    PauseTarget,
+    finish,
+    skipped,
+    superseded_result,
+    waiting_result,
+)
 from amoeba.store.answers import automatic_answer_count
 from amoeba.store.questions import (
     NewQuestion,
@@ -202,13 +207,7 @@ def _record_waiting(
         inserted = insert_question(transaction, new, now=deps.clock())
     if not inserted:
         return skipped(SkipReason.ALREADY_CLAIMED, target.key, str(target.checkout))
-    return HandlePauseResult(
-        HandlePauseOutcome.WAITING_ON_PM,
-        waiting_reason=failed.reason,
-        detail=failed.detail,
-        key=target.key,
-        checkout=str(target.checkout),
-    )
+    return waiting_result(target, failed.reason, failed.detail, None)
 
 
 def _settle_dead_claim_waiting(
@@ -230,17 +229,5 @@ def _settle_dead_claim_waiting(
             now=deps.clock(),
         )
     if not moved:
-        return HandlePauseResult(
-            HandlePauseOutcome.SUPERSEDED,
-            key=target.key,
-            checkout=str(target.checkout),
-            answering_run_id=old_answering_run_id,
-        )
-    return HandlePauseResult(
-        HandlePauseOutcome.WAITING_ON_PM,
-        waiting_reason=failed.reason,
-        detail=failed.detail,
-        key=target.key,
-        checkout=str(target.checkout),
-        answering_run_id=old_answering_run_id,
-    )
+        return superseded_result(target, old_answering_run_id)
+    return waiting_result(target, failed.reason, failed.detail, old_answering_run_id)

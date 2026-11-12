@@ -31,7 +31,7 @@ from process_containment import contained_popen
 from user_configs import example_config_text
 
 from amoeba.answering.values import DeclineReason
-from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE
+from amoeba.cli.main import EXIT_ERROR, EXIT_OK, EXIT_REJECTED, EXIT_USAGE, main
 from amoeba.config.home import config_path, store_path
 from amoeba.store.models import MemberSettings, QuestionKey
 from amoeba.store.programs import upsert_member, upsert_program
@@ -75,9 +75,7 @@ def _run(
     environment = {
         **os.environ,
         "PATH": f"{bin_dir}{os.pathsep}{SYSTEM_PATH}",
-        "HOME": str(_home(tmp_path))
-        if not (tmp_path / "home").exists()
-        else str(tmp_path / "home"),
+        "HOME": str(_home(tmp_path)),
     }
     child = contained_popen(
         [str(AMOEBA), *arguments],
@@ -262,3 +260,23 @@ def test_help_prints_usage_for_both_commands(tmp_path: Path) -> None:
 
         assert completed.returncode == EXIT_OK
         assert completed.stdout.startswith("usage: amoeba " + command)
+
+
+def test_main_in_process_rejects_an_answer_with_no_question(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _write_config()
+
+    code = main(["answer", RUN, "--text", "Use 250."])
+
+    assert code == EXIT_REJECTED
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["outcome"] == "rejected"
+    assert printed["rejection"] == "no_such_question"
+
+
+def test_main_in_process_exits_two_on_a_usage_error() -> None:
+    with pytest.raises(SystemExit) as stopped:
+        main(["answer", RUN])
+
+    assert stopped.value.code == EXIT_USAGE

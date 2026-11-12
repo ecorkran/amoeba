@@ -2,27 +2,27 @@
 
 Squadron prints neither field in ``sq runs wait --json``, so this is the one place
 that opens ``~/.config/squadron/runs/<run_id>.json``. It checks ``schema_version``
-and never reads ``paused_at`` from the file (the file writes it ``...Z``, the
-``wait`` document ``...+00:00``; D1). ``runs_dir`` is an argument, so only the
-process boundary decides where the directory is. A problem is a value naming the
-file and field; the caller raises, and nothing falls back to a guessed mode.
+first (a file of another version need not have the other fields) and never reads
+``paused_at`` from the file (the file writes it ``...Z``, the ``wait`` document
+``...+00:00``; D1). ``runs_dir`` is an argument, so only the process boundary decides
+where the directory is. A problem is a value naming the file and field; the caller
+raises, and nothing falls back to a guessed mode.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final, cast
+from typing import Final
+
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationError
 
 #: The run file layout this reader understands.
 SUPPORTED_SCHEMA_VERSION: Final = 5
 
 RUN_FILE_SUFFIX: Final = ".json"
 SCHEMA_VERSION_FIELD: Final = "schema_version"
-PARAMS_FIELD: Final = "params"
-EXECUTION_MODE_FIELD: Final = "execution_mode"
 
 
 class ExecutionMode(StrEnum):
@@ -47,6 +47,23 @@ class RunFileProblem:
     reason: str
 
 
+class _Header(BaseModel):
+    """The one field read before any other, so another version is named as such."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    schema_version: StrictInt
+
+
+class _Body(BaseModel):
+    """The fields of a version-5 run file the reader uses."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    params: dict[StrictStr, StrictStr]
+    execution_mode: ExecutionMode
+
+
 def read_run_facts(runs_dir: Path, run_id: str) -> RunFacts | RunFileProblem:
     """The run's ``params`` and ``execution_mode``, or the problem with its file."""
     path = runs_dir / f"{run_id}{RUN_FILE_SUFFIX}"
@@ -59,55 +76,24 @@ def read_run_facts(runs_dir: Path, run_id: str) -> RunFacts | RunFileProblem:
         # Expected: the file exists but cannot be read (permissions, a directory).
         return RunFileProblem(f"run file {path} cannot be read: {error}")
     try:
-        document: object = json.loads(text)
-    except json.JSONDecodeError as error:
-        # Expected: the file is not JSON, e.g. half-written.
-        return RunFileProblem(f"run file {path} is not valid JSON: {error}")
-    return _facts(path, document)
-
-
-def _facts(path: Path, document: object) -> RunFacts | RunFileProblem:
-    if not isinstance(document, dict):
-        return RunFileProblem(f"run file {path} is not a JSON object")
-    fields = cast("dict[str, object]", document)
-    version = fields.get(SCHEMA_VERSION_FIELD)
-    if version != SUPPORTED_SCHEMA_VERSION or isinstance(version, bool):
-        return RunFileProblem(
-            f"run file {path}: {SCHEMA_VERSION_FIELD} is {version!r}, "
-            f"this reader understands {SUPPORTED_SCHEMA_VERSION}"
-        )
-    params = _params(path, fields.get(PARAMS_FIELD))
-    if isinstance(params, RunFileProblem):
-        return params
-    mode = _mode(path, fields.get(EXECUTION_MODE_FIELD))
-    if isinstance(mode, RunFileProblem):
-        return mode
-    return RunFacts(params=params, execution_mode=mode)
-
-
-def _params(path: Path, value: object) -> dict[str, str] | RunFileProblem:
-    if not isinstance(value, dict):
-        return RunFileProblem(
-            f"run file {path}: {PARAMS_FIELD} is missing or not an object"
-        )
-    params: dict[str, str] = {}
-    for key, item in value.items():  # pyright: ignore[reportUnknownVariableType]
-        if not isinstance(key, str) or not isinstance(item, str):
+        header = _Header.model_validate_json(text)
+        if header.schema_version != SUPPORTED_SCHEMA_VERSION:
             return RunFileProblem(
-                f"run file {path}: {PARAMS_FIELD} holds a non-string entry {key!r}"
+                f"run file {path}: {SCHEMA_VERSION_FIELD} is "
+                f"{header.schema_version}, this reader understands "
+                f"{SUPPORTED_SCHEMA_VERSION}"
             )
-        params[key] = item
-    return params
+        body = _Body.model_validate_json(text)
+    except ValidationError as error:
+        # Expected: not JSON, not an object, or a field missing or of the wrong
+        # type or value; named by file and field, never defaulted.
+        return RunFileProblem(f"run file {path}: {_problems(error)}")
+    return RunFacts(params=body.params, execution_mode=body.execution_mode)
 
 
-def _mode(path: Path, value: object) -> ExecutionMode | RunFileProblem:
-    if value is None:
-        return RunFileProblem(f"run file {path}: {EXECUTION_MODE_FIELD} is missing")
-    try:
-        return ExecutionMode(value)
-    except ValueError:
-        # Specific: a mode newer than this code; reported, never mapped to a near one.
-        return RunFileProblem(
-            f"run file {path}: {EXECUTION_MODE_FIELD} {value!r} is not one of "
-            f"{[mode.value for mode in ExecutionMode]}"
-        )
+def _problems(error: ValidationError) -> str:
+    return "; ".join(
+        f"{'.'.join(str(part) for part in problem['loc']) or 'document'}: "
+        f"{problem['msg']} (got {problem['input']!r})"
+        for problem in error.errors()
+    )

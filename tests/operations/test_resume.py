@@ -353,6 +353,8 @@ def test_no_store_transaction_is_open_while_spawning_or_polling(
         "has spaces and 'single' and \"double\" quotes",
         "…leading ellipsis, then; shell $chars `and` more",
         "two\nlines",
+        "--decision accept --run-id other",
+        "-- --instructions again",
     ],
 )
 def test_instructions_are_one_argv_element_holding_the_composed_text(

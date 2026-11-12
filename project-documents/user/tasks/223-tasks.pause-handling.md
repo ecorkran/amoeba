@@ -11,7 +11,7 @@ projectState: Slices 221 and 222 are merged. `src/amoeba` holds `answering/`, `u
   run Amoeba.
 dateCreated: 20261107
 dateUpdated: 20261110
-status: in_progress
+status: complete
 turns: 11
 promptTokens: 429930
 cachedTokens: 379625

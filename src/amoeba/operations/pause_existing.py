@@ -69,9 +69,7 @@ def handle_existing(
         case QuestionState.ANSWERED:
             return _answered(store, config, deps, target, existing)
         case QuestionState.WAITING_ON_PM:
-            reason = (
-                None if existing.waiting_reason is None else existing.waiting_reason
-            )
+            reason = existing.waiting_reason
             return skipped(
                 SkipReason.WAITING_ON_PM,
                 target.key,

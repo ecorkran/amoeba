@@ -99,6 +99,9 @@ def _attempt(
             ResumeOutcome.NOT_DELIVERED, _not_delivered_detail(first, seen), None
         )
     logs = _resume_logs(deps, question.key.run_id, answer_seq)
+    # The text is one argv element behind ``--instructions`` (no shell), and it always
+    # starts with the fixed "You asked: ", so neither the question nor the answer can
+    # be read as an option or as a second argument, whatever they contain.
     argv = resume_argv(
         question.key.run_id, compose_instructions(question.question, answer_text)
     )

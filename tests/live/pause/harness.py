@@ -225,10 +225,13 @@ def start_pause(
     )
 
 
-def store_rows(world: PauseWorld, statement: str) -> list[tuple[object, ...]]:
-    """Rows of a read-only query against the world's store."""
+def store_rows(
+    world: PauseWorld, statement: str, parameters: tuple[object, ...] = ()
+) -> list[tuple[object, ...]]:
+    """Rows of a read-only query against the world's store; values are bound."""
     with sqlite3.connect(f"file:{world.store}?mode=ro", uri=True) as connection:
-        return [tuple(row) for row in connection.execute(statement).fetchall()]
+        cursor = connection.execute(statement, parameters)
+        return [tuple(row) for row in cursor.fetchall()]
 
 
 def result_of(completed: subprocess.CompletedProcess[str]) -> dict[str, object]:

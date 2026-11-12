@@ -13,7 +13,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict
 from pathlib import Path
 from typing import Final
 
@@ -28,9 +28,9 @@ from amoeba.config.home import (
     store_path,
 )
 from amoeba.config.user_config import ConfigError, load_user_config
-from amoeba.operations.answer import AnswerOutcome, answer
+from amoeba.operations.answer import AnswerOutcome, AnswerResult, answer
 from amoeba.operations.deps import Deps, production_deps
-from amoeba.operations.handle_pause import handle_pause
+from amoeba.operations.handle_pause import HandlePauseResult, handle_pause
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.set_up import set_up
 from amoeba.operations.set_up_models import SetUpOutcome
@@ -104,10 +104,8 @@ def _deps() -> Deps:
     )
 
 
-def _print_result(result: object) -> None:
-    """A dataclass result as JSON on stdout (enums are strings)."""
-    if not is_dataclass(result) or isinstance(result, type):
-        raise TypeError(f"not a result value: {result!r}")
+def _print_result(result: HandlePauseResult | AnswerResult) -> None:
+    """A result as JSON on stdout (enums are strings)."""
     sys.stdout.write(json.dumps(asdict(result), indent=JSON_INDENT) + "\n")
 
 

@@ -76,9 +76,7 @@ class LivePause:
         self, slice_label: str, question: str, answer: str, when: datetime
     ) -> QuestionKey:
         """A question the PM answered, as precedent for the pause under test."""
-        key = QuestionKey(
-            f"seeded-{abs(hash((question, slice_label)))}", when.isoformat()
-        )
+        key = QuestionKey(f"seeded-{slice_label.split()[0]}", when.isoformat())
         seeded = NewQuestion(
             key=key,
             member_id=self.member_id,
@@ -104,13 +102,15 @@ class LivePause:
         (row,) = store_rows(
             self.world,
             "SELECT state, waiting_reason, waiting_detail, evidence, passages "
-            f"FROM questions WHERE run_id = '{self.run_id}'",
+            "FROM questions WHERE run_id = ?",
+            (self.run_id,),
         )
         state, reason, detail, evidence, passages = row
         answers = store_rows(
             self.world,
             "SELECT answer, cited FROM answers "
-            f"WHERE run_id = '{self.run_id}' AND answered_by = 'answerer'",
+            "WHERE run_id = ? AND answered_by = 'answerer'",
+            (self.run_id,),
         )
         verdict = None if evidence is None else json.loads(str(evidence))["verdict"]
         refs = () if passages is None else parse_passages(passages)
