@@ -8,7 +8,7 @@ component: program-tool
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, switching on scenario A for real work, the MCP server, and program dependencies (scenario B).
 dateCreated: 20261107
-dateUpdated: 20261108
+dateUpdated: 20261112
 status: in_progress
 ---
 
@@ -136,10 +136,10 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    - A long call over MCP returns at once and its work shows in `status`.
    - No operation logic lives in the MCP layer; a test checks both doors call the same functions.
    **Dependencies:** 224 and 228.
-   **Required fixes to the existing design:** use the names the code has (`start_child`, `terminate_group`), not `spawn_detached`; `answer` over MCP takes a question key from `status` and records the caller as `via: mcp`; long waits run detached and `status` is bounded so no call outlives an MCP client timeout.
-   **Interfaces:** Provides the MCP server and its install instructions.
+   **Required fixes to the existing design:** use the names the code has (`start_child`, `terminate_group`), not `spawn_detached`; `answer` over MCP takes a question key from `status` and records the caller as `via: mcp`; long waits run detached and every MCP call has a deadline so none outlives a client timeout. Redesigned after 228: both doors place operation arguments in one `wiring.invoke`; each answer records its door (`answers.via`, migration 004); detached logs are pruned by 228's `prune`; the walkthrough is a live fixture test, not a PM step.
+   **Interfaces:** Provides the MCP server and its install instructions, and `answers.via`.
    **Risk Level:** Low
-   **Relative Effort:** 2
+   **Relative Effort:** 3
 
 ## Scenario B
 
