@@ -103,7 +103,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 
 ## Integration Work
 
-6. [ ] **(225) Scenario A Trial** — Amoeba switched on for real work in the PM's own repos. Done: the answering run's pause-hook opt-out flag and the exact hook config line are documented (`docs/squadron-hook.md`); the tool is installed and the `trading` program registered; the hook is configured at user level; a sanity pass with 223's live fixture pipeline in each member (and in Amoeba's own repo, which is left alone) came out clean. The counted trial (a ledger of real questions and a go/rethink verdict) was dropped because it needs the PM to generate work on demand. Evidence comes from normal use of `decisions` and `status`.
+6. [x] **(225) Scenario A Trial** — Amoeba switched on for real work in the PM's own repos. Done: the answering run's pause-hook opt-out flag and the exact hook config line are documented (`docs/squadron-hook.md`); the tool is installed and the `trading` program registered; the hook is configured at user level; a sanity pass with 223's live fixture pipeline in each member (and in Amoeba's own repo, which is left alone) came out clean. The counted trial (a ledger of real questions and a go/rethink verdict) was dropped because it needs the PM to generate work on demand. Evidence comes from normal use of `decisions` and `status`.
    **Value:** Verification. Amoeba is live on the PM's repos, so real use shows whether it saves the PM more than it costs.
    **Success Criteria:**
    - Real work runs in at least two members, with every question accounted for in `decisions`.
