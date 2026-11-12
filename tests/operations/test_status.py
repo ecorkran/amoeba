@@ -298,3 +298,19 @@ def test_no_store_transaction_is_open_while_sq_is_asked(
     result = status(store, user_config(), {}, directory=core_dir, deps=deps)
 
     assert result.outcome is StatusOutcome.LISTED
+
+
+def test_a_cf_lookup_that_times_out_is_unplaced_as_lookup_failed(
+    store: Store, tmp_path: Path, core_dir: Path, elsewhere: Path
+) -> None:
+    slow = tmp_path / "slow"
+    slow.mkdir()
+    cf = FakeCf({core_dir: CORE, slow: CfAnswer.TIMES_OUT})
+    runs = [in_directory(recorded_run(PAUSED), slow)]
+
+    result = _run_status(store, tmp_path, cf, runs, directory=core_dir)
+
+    (entry,) = result.unplaced_runs
+    assert entry.reason is UnplacedReason.LOOKUP_FAILED
+    assert entry.detail is not None
+    assert "timed out" in entry.detail

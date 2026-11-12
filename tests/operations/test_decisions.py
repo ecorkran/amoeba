@@ -20,8 +20,9 @@ from store.decision_support import (
     seed_programs,
     waiting_then_pm,
 )
+from store.question_support import ANSWERING_RUN, claimed_question
 
-from amoeba.answering.values import AnsweredBy, DeclineReason
+from amoeba.answering.values import AnsweredBy, AnsweringEvidence, DeclineReason
 from amoeba.operations.decisions import (
     DecisionsOutcome,
     DecisionsResult,
@@ -30,9 +31,10 @@ from amoeba.operations.decisions import (
 from amoeba.operations.decisions_models import AnswererBasis, PmBasis
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.store.answers import add_pm_answer, record_resume
+from amoeba.store.answers import Settled, add_pm_answer, record_resume, settle_answered
 from amoeba.store.decisions import advance_marker
 from amoeba.store.models import QuestionKey
+from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
 from amoeba.store.vocabulary import ResumeOutcome
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
@@ -253,3 +255,27 @@ def test_a_names_failure_raises_and_writes_nothing(
         count = transaction.execute("SELECT COUNT(*) FROM answers").fetchone()
     assert marker[0] == 0
     assert count[0] == len(seqs)
+
+
+def test_citations_stored_as_written_are_matched_as_the_gate_read_them(
+    store: Store, tmp_path: Path
+) -> None:
+    key = QuestionKey("run-8", "2026-11-10T12:00:00+00:00")
+    with store.write() as transaction:
+        insert_question(transaction, claimed_question(key, member_id=CORE), now=at(1))
+    settled = settle_answered(
+        store,
+        key,
+        ANSWERING_RUN,
+        answer="auto",
+        cited=(" r1 ", "", "R1"),
+        evidence=AnsweringEvidence(verdict="yes", reason="cited"),
+        gate=lambda _prior: None,
+        now=at(1),
+    )
+    assert isinstance(settled, Settled)
+
+    (record,) = _run(store, tmp_path).records
+
+    assert isinstance(record.based_on, AnswererBasis)
+    assert [passage.id for passage in record.based_on.cited] == ["r1"]

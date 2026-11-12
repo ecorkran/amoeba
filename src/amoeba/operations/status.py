@@ -11,17 +11,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
 
 from pydantic import (
     BaseModel,
     ConfigDict,
-    StrictStr,
-    StringConstraints,
     ValidationError,
 )
 
-from amoeba.config.user_config import UserConfig
+from amoeba.config.user_config import NonBlank, UserConfig
 from amoeba.operations.decisions_models import MemberName
 from amoeba.operations.deps import Deps
 from amoeba.operations.members import (
@@ -44,6 +41,7 @@ from amoeba.operations.status_models import (
 from amoeba.operations.status_placement import place_runs
 from amoeba.operations.status_runs import MemberRun, classify_runs
 from amoeba.operations.status_waiting import MemberWaiting, waiting_entries
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import Member
 from amoeba.store.programs import get_program, list_programs, members_of
 from amoeba.store.questions import latest_rows_by_run, open_questions
@@ -63,16 +61,13 @@ __all__ = [
     "status",
 ]
 
-#: A stripped, non-empty string.
-_NonBlank = Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
-
 
 class StatusRequest(BaseModel):
     """What ``status`` is asked: optionally one program."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    program: _NonBlank | None = None
+    program: NonBlank | None = None
 
 
 @dataclass(frozen=True)
@@ -122,7 +117,7 @@ def resolve_scope(
 
 def _scoped(transaction: Transaction, program_id: str) -> ScopedProgram:
     if get_program(transaction, program_id) is None:
-        raise ValueError(f"program {program_id!r} vanished while it was read")
+        raise StoreRowError(f"program {program_id!r} vanished while it was read")
     return ScopedProgram(program_id, members_of(transaction, program_id))
 
 

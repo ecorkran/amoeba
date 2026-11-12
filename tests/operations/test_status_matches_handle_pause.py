@@ -18,6 +18,7 @@ from amoeba.answering.values import AnsweringEvidence, DeclineReason
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.status import status
+from amoeba.operations.status_runs import HANDLED_BY_HANDLE_PAUSE
 from amoeba.store.answers import Settled, record_resume, settle_answered
 from amoeba.store.questions import NewQuestion, insert_question
 from amoeba.store.vocabulary import ResumeOutcome
@@ -37,11 +38,6 @@ from operations.pause_support import START
 
 OLD_RUN = "amoeba-20261110T110000Z-oldoldoldold"
 WAIT = 600.0
-
-#: The classes ``handle_pause`` acts on rather than skips.
-ACTED_ON = frozenset(
-    {PauseClass.UNHANDLED, PauseClass.CLAIM_STALE, PauseClass.ANSWERED_UNRESUMED}
-)
 
 
 def _claim(w: World, *, age_seconds: float) -> None:
@@ -188,7 +184,7 @@ def test_status_and_handle_pause_agree_on_every_class(
     (member,) = program.members
     (entry,) = member.runs
     assert entry.pause is scenario.status_class
-    if scenario.status_class in ACTED_ON:
+    if scenario.status_class in HANDLED_BY_HANDLE_PAUSE:
         assert handled.outcome is not HandlePauseOutcome.SKIPPED, handled
         assert entry.next is not None
     else:

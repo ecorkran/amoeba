@@ -22,6 +22,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, StrictStr, TypeAdapter, ValidationError
 
+from amoeba.upstream.context_forge.cli_call import OUTPUT_HEAD_CHARS, output_head
 from amoeba.upstream.squadron.run_outcome import SQ_EXECUTABLE, RunCheckpoint
 
 #: ``sq runs list --json``.
@@ -30,9 +31,6 @@ RUNS_LIST_FLAGS: Final = ("--json",)
 
 #: The listing's status for a paused run.
 PAUSED_STATUS: Final = "paused"
-
-#: How much of the output a problem quotes.
-OUTPUT_HEAD_CHARS: Final = 200
 
 
 @dataclass(frozen=True)
@@ -111,7 +109,7 @@ def list_runs(*, timeout_seconds: float) -> list[ListedRun] | RunListProblem:
     except OSError as error:
         # Expected: `sq` could not be started (permissions, exec format).
         return RunListProblem(f"`{SQ_EXECUTABLE}` could not be run: {error}")
-    head = (completed.stdout or completed.stderr)[:OUTPUT_HEAD_CHARS]
+    head = output_head(completed)
     if completed.returncode != 0:
         return RunListProblem(f"`{shown}` exited {completed.returncode}: {head}")
     return parse_listing(completed.stdout)

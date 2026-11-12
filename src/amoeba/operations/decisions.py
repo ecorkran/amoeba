@@ -8,18 +8,18 @@ their input through unchanged.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     StrictStr,
-    StringConstraints,
     ValidationError,
     field_validator,
 )
 
+from amoeba.answering.passages import PassageKind, normalized_citations
 from amoeba.answering.values import AnsweredBy, PassageRef
+from amoeba.config.user_config import NonBlank
 from amoeba.operations.decisions_models import (
     AnswererBasis,
     CitedPassage,
@@ -52,12 +52,6 @@ __all__ = [
     "decisions",
 ]
 
-#: The ``kind`` of a passage that is a PM's earlier answer.
-_PM_ANSWER_KIND = "pm_answer"
-
-#: A stripped, non-empty string.
-_NonBlank = Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
-
 
 class DecisionsRequest(BaseModel):
     """What ``decisions`` is asked. Without ``since`` the listing starts after the
@@ -67,7 +61,7 @@ class DecisionsRequest(BaseModel):
 
     #: ISO-8601 with a UTC offset in; the store's UTC text once validated.
     since: StrictStr | None = None
-    program: _NonBlank | None = None
+    program: NonBlank | None = None
 
     @field_validator("since")
     @classmethod
@@ -182,12 +176,13 @@ def _basis(row: DecisionRow) -> AnswererBasis | PmBasis | None:
 
 
 def _cited(row: DecisionRow) -> tuple[CitedPassage, ...]:
-    cited_ids = row.answer.cited or ()
+    # The gate accepted the ids as ``normalized_citations`` reads them, while the
+    # answer row keeps them as written, so they are matched the same way.
     offered: dict[str, PassageRef] = {
-        ref.id: ref for ref in row.question.passages or ()
+        ref.id.strip().upper(): ref for ref in row.question.passages or ()
     }
     passages: list[CitedPassage] = []
-    for passage_id in cited_ids:
+    for passage_id in dict.fromkeys(normalized_citations(row.answer.cited or ())):
         ref = offered.get(passage_id)
         if ref is None:
             raise StoreRowError(
@@ -197,7 +192,7 @@ def _cited(row: DecisionRow) -> tuple[CitedPassage, ...]:
         passages.append(
             CitedPassage(
                 id=ref.id,
-                kind=None if ref.question_id is None else _PM_ANSWER_KIND,
+                kind=None if ref.question_id is None else PassageKind.PM_ANSWER.value,
                 source=ref.source,
                 date=ref.date,
             )

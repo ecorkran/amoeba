@@ -44,15 +44,6 @@ DELIVERED: frozenset[ResumeOutcome] = frozenset(
     {ResumeOutcome.RESUMED, ResumeOutcome.NOT_DELIVERED}
 )
 
-#: The classes decided from the run alone, before any membership or row is known.
-RUN_ONLY_CLASSES: frozenset[PauseClass] = frozenset(
-    {
-        PauseClass.NOT_PAUSED,
-        PauseClass.OTHER_CHECKPOINT,
-        PauseClass.NO_QUESTION_TEXT,
-    }
-)
-
 
 @dataclass(frozen=True)
 class ObservedPause:

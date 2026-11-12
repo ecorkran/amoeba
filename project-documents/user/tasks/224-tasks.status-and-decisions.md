@@ -12,7 +12,7 @@ projectState: Slices 221 to 223 are merged. `src/amoeba` holds `answering/`, `up
   has run Amoeba. `ecorkran/squadron#303` (`sq runs list --json`) shipped in `sq` 0.24.24.
 dateCreated: 20261107
 dateUpdated: 20261111
-status: in_progress
+status: complete
 turns: 12
 promptTokens: 408751
 cachedTokens: 350906

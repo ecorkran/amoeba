@@ -13,6 +13,7 @@ from enum import StrEnum
 
 from amoeba.store import sql
 from amoeba.store.answers import answer_from_row
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import AnswerRecord, QuestionRecord
 from amoeba.store.questions import question_from_row
 from amoeba.store.row_values import integer, optional_integer, text
@@ -37,7 +38,7 @@ def read_marker(transaction: Transaction) -> int:
     """The PM's marker: the last answer ``seq`` they have seen."""
     row = transaction.execute(sql.SELECT_MARKER).fetchone()
     if row is None:
-        raise ValueError("pm_marker has no row")
+        raise StoreRowError("pm_marker has no row")
     return integer(row[0], "pm_marker.last_seen_seq")
 
 
@@ -106,7 +107,7 @@ def advance_marker(store: Store, through: int) -> MarkerResult:
         previous = read_marker(transaction)
         last = transaction.execute(sql.SELECT_MAX_ANSWER_SEQ).fetchone()
         if last is None:
-            raise ValueError("MAX(seq) returned no row")
+            raise StoreRowError("MAX(seq) returned no row")
         if through > integer(last[0], "answers.seq"):
             return MarkerResult(MarkerMove.BEYOND_LAST_RECORD, previous, previous)
         transaction.execute(sql.RAISE_MARKER, (through,))

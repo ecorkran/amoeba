@@ -381,6 +381,12 @@ def _rendered_size(kept: Sequence[Passage]) -> int:
     return len(render_passages(PassageSet(tuple(kept), "", ())))
 
 
+def normalized_citations(cited: Sequence[str]) -> list[str]:
+    """Cited ids as ``check_citations`` reads them: trimmed, upper-cased, blanks
+    dropped. The one definition of what a stored citation means."""
+    return [item.strip().upper() for item in cited if item.strip()]
+
+
 def check_citations(
     cited: Sequence[str], passage_ids: Collection[str]
 ) -> CitationProblem | None:
@@ -389,7 +395,7 @@ def check_citations(
     Ids are trimmed and upper-cased first. Blank entries are ignored; nothing left is
     ``uncited``. Unknown ids are reported once each, in cited order.
     """
-    normalized = [item.strip().upper() for item in cited if item.strip()]
+    normalized = normalized_citations(cited)
     if not normalized:
         return CitationProblem(CitationKind.UNCITED, ())
     unknown = tuple(dict.fromkeys(i for i in normalized if i not in passage_ids))

@@ -28,14 +28,16 @@ from amoeba.operations.status_models import (
     RunFileUnreadable,
 )
 from amoeba.operations.status_placement import PlacedRun
+from amoeba.store.errors import StoreRowError
 from amoeba.store.models import AnswerRecord, QuestionRecord
+from amoeba.store.vocabulary import QuestionState
 from amoeba.upstream.squadron.run_file import RunFacts, RunFileProblem, read_run_facts
 from amoeba.upstream.squadron.run_list import ListedCheckpoint, ListedRun
 from amoeba.upstream.squadron.run_outcome import UnknownKind, parse_checkpoint_kind
 
 #: The classes ``handle_pause`` acts on: a missed hook, a dead claim, an answer left
 #: undelivered.
-_HANDLED_BY_HANDLE_PAUSE = frozenset(
+HANDLED_BY_HANDLE_PAUSE = frozenset(
     {
         PauseClass.UNHANDLED,
         PauseClass.CLAIM_STALE,
@@ -87,7 +89,7 @@ def _entry(
         raise ValueError(f"run {run.run_id} was placed without a directory")
     pause, detail = _pause_of(run, rows, runs_dir, claim_age_limit, now)
     next_action = None
-    if isinstance(pause, PauseClass) and pause in _HANDLED_BY_HANDLE_PAUSE:
+    if isinstance(pause, PauseClass) and pause in HANDLED_BY_HANDLE_PAUSE:
         checkpoint = run.checkpoint
         next_action = NextAction(
             operation=NextOperation.HANDLE_PAUSE,
@@ -153,6 +155,9 @@ def _row_for_pause(
     found = rows.get(run_id)
     if found is None or found[0].key.paused_at != observed.paused_at:
         return None, None
+    row, answer = found
+    if row.state is QuestionState.ANSWERED and answer is None:
+        raise StoreRowError(f"question {row.key} is answered but has no answer row")
     return found
 
 
@@ -181,7 +186,7 @@ def _kind_text(raw: str | None) -> str:
 
 def _resume_text(answer: AnswerRecord | None) -> str:
     if answer is None:
-        raise ValueError("an answered question has no latest answer")
+        raise StoreRowError("an answered question has no latest answer")
     outcome = _NOT_ATTEMPTED if answer.resume_outcome is None else answer.resume_outcome
     if answer.resume_detail:
         return f"{outcome}: {answer.resume_detail}"

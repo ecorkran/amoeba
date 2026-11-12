@@ -41,7 +41,8 @@ type ListRuns = Callable[[], list[ListedRun] | RunListProblem]
 
 @dataclass(frozen=True)
 class Deps:
-    """The injectable edges of ``handle_pause`` and ``answer``."""
+    """The injectable edges of ``handle_pause``, ``answer``, ``status`` and
+    ``decisions``."""
 
     cf_run: CfRun
     poll_run: PollRun
