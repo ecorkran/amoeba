@@ -8,6 +8,10 @@
 - ``sq run ...`` appends its argv, as one JSON array per line, to the argv record,
   prints nothing and exits with the configured code. ``--resume <id> --instructions
   <text>`` is just such a call, so the record shows the text as one element.
+- ``sq runs list ...`` appends its argv to its own record (so a test can see whether
+  ``--all`` was passed) and replays the registered listing: its stdout, its stderr and
+  its exit code. With no listing registered it exits 2, as an ``sq`` without the
+  command does (slice 224).
 - Anything else exits 2.
 
 The documents are the recordings in ``tests/fixtures/squadron``. A test registers a
@@ -24,7 +28,7 @@ import json
 import sys
 import textwrap
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Final
 
@@ -49,6 +53,11 @@ LOCK_REFUSED_STDOUT: Final = "resume_lock_refused.stdout.txt"
 
 CONFIG_FILE: Final = "fake_sq.json"
 ARGV_RECORD_FILE: Final = "sq_argv.jsonl"
+LIST_ARGV_RECORD_FILE: Final = "sq_list_argv.jsonl"
+RUNS_LIST_FIXTURES: Final = SQUADRON_FIXTURES / "runs_list"
+#: A real ``sq runs list --json`` selection and the real warning printed with it.
+LIST_MIXED: Final = "list_mixed.json"
+LIST_STDERR: Final = "list_stderr.txt"
 NOT_FOUND_EXIT_CODE: Final = OUTCOME_EXIT_CODES[RunOutcome.NOT_FOUND]
 USAGE_EXIT_CODE: Final = 2
 
@@ -71,6 +80,17 @@ _SCRIPT = textwrap.dedent(
             sys.exit({not_found})
         print(json.dumps(entry["document"], indent=2))
         sys.exit(entry["exit_code"])
+    if arguments[:2] == ["runs", "list"]:
+        with open(here / {list_record!r}, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(arguments) + "\\n")
+        listing = config["list"]
+        if listing is None:
+            print("fake sq: no such command", arguments, file=sys.stderr)
+            sys.exit({usage})
+        sys.stdout.write(listing["stdout"])
+        if listing["stderr"]:
+            print(listing["stderr"], file=sys.stderr, end="")
+        sys.exit(listing["exit_code"])
     if arguments[:1] == ["run"]:
         with open(here / {record!r}, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(arguments) + "\\n")
@@ -96,6 +116,29 @@ def exit_code_for(document: Mapping[str, object]) -> int:
 
 
 @dataclass(frozen=True)
+class FakeListing:
+    """What the fake prints for ``sq runs list``: verbatim stdout and stderr."""
+
+    stdout: str
+    stderr: str
+    exit_code: int
+
+
+def recorded_listing(
+    name: str = LIST_MIXED, *, stderr: str = "", exit_code: int = 0
+) -> FakeListing:
+    """A ``runs_list`` recording as the listing the fake prints; ``stderr`` is
+    ``LIST_STDERR``'s text when a test wants the real warning."""
+    text = (RUNS_LIST_FIXTURES / name).read_text(encoding="utf-8")
+    return FakeListing(stdout=text, stderr=stderr, exit_code=exit_code)
+
+
+def recorded_warning() -> str:
+    """The real stderr warning that came with the recorded listing."""
+    return (RUNS_LIST_FIXTURES / LIST_STDERR).read_text(encoding="utf-8")
+
+
+@dataclass(frozen=True)
 class FakeSq:
     """The written fake: put ``directory`` first on ``PATH``."""
 
@@ -104,6 +147,19 @@ class FakeSq:
     @property
     def argv_record(self) -> Path:
         return self.directory / ARGV_RECORD_FILE
+
+    @property
+    def list_argv_record(self) -> Path:
+        return self.directory / LIST_ARGV_RECORD_FILE
+
+    def list_calls(self) -> list[list[str]]:
+        """The argv (without ``sq``) of every ``sq runs list`` call, in order."""
+        if not self.list_argv_record.exists():
+            return []
+        return [
+            json.loads(line)
+            for line in self.list_argv_record.read_text(encoding="utf-8").splitlines()
+        ]
 
     def run_calls(self) -> list[list[str]]:
         """The argv (without ``sq``) of every ``sq run`` call, in order."""
@@ -121,6 +177,7 @@ def write_fake_sq(
     waits: Mapping[str, str],
     run_exit_code: int,
     run_stderr: str,
+    runs_list: FakeListing | None = None,
 ) -> FakeSq:
     """Write the fake into ``directory``.
 
@@ -128,6 +185,7 @@ def write_fake_sq(
         waits: Run id to the name of the recording ``sq runs wait`` replays for it.
         run_exit_code: What every ``sq run ...`` call exits with.
         run_stderr: What every ``sq run ...`` call prints on stderr (may be empty).
+        runs_list: What ``sq runs list`` prints; ``None`` is an ``sq`` that lacks it.
     """
     directory.mkdir(parents=True, exist_ok=True)
     entries: dict[str, dict[str, object]] = {}
@@ -138,6 +196,7 @@ def write_fake_sq(
         "waits": entries,
         "run_exit_code": run_exit_code,
         "run_stderr": run_stderr,
+        "list": None if runs_list is None else asdict(runs_list),
     }
     (directory / CONFIG_FILE).write_text(json.dumps(config), encoding="utf-8")
     script = directory / "sq"
@@ -146,6 +205,7 @@ def write_fake_sq(
             python=sys.executable,
             config=CONFIG_FILE,
             record=ARGV_RECORD_FILE,
+            list_record=LIST_ARGV_RECORD_FILE,
             not_found=NOT_FOUND_EXIT_CODE,
             usage=USAGE_EXIT_CODE,
         ),

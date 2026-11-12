@@ -11,7 +11,6 @@ nothing written.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from pathlib import Path
 
 from amoeba.answering.decide import Declined
@@ -22,6 +21,7 @@ from amoeba.operations.answering_settle import settle
 from amoeba.operations.deps import Deps
 from amoeba.operations.member_answering import answering_for
 from amoeba.operations.pause_claim import restart_dead_claim
+from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseResult, SkipReason
 from amoeba.operations.pause_results import (
     PauseTarget,
@@ -29,20 +29,15 @@ from amoeba.operations.pause_results import (
     resume_answer,
     skipped,
 )
-from amoeba.store.answers import latest_answer
 from amoeba.store.errors import StoreRowError
-from amoeba.store.models import QuestionRecord
+from amoeba.store.models import AnswerRecord, QuestionRecord
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_outcome import (
     PollFailure,
     RunEnded,
     RunOutcome,
 )
-
-#: Resume outcomes after which the answer needs no further delivery.
-_DELIVERED = frozenset({ResumeOutcome.RESUMED, ResumeOutcome.NOT_DELIVERED})
 
 #: An answering run that has ended, one way or another: the claimant died before it
 #: could settle, so the settle is done from the scratch (D7).
@@ -56,19 +51,27 @@ _ENDED = frozenset(
 )
 
 
-def handle_existing(
+def handle_existing(  # noqa: PLR0913 - the pieces of one classified pause
     store: Store,
     config: UserConfig,
     deps: Deps,
     target: PauseTarget,
     existing: QuestionRecord,
+    pause_class: PauseClass,
+    latest: AnswerRecord | None,
 ) -> HandlePauseResult:
-    """The path for a question that has a row, by its state."""
+    """The path for a question that has a row, by its ``classify_pause`` class."""
     checkout = str(target.checkout)
-    match existing.state:
-        case QuestionState.ANSWERED:
-            return _answered(store, config, deps, target, existing)
-        case QuestionState.WAITING_ON_PM:
+    match pause_class:
+        case PauseClass.ANSWERED_UNRESUMED:
+            if latest is None:
+                raise StoreRowError(f"question {target.key} has no answer row")
+            return resume_answer(
+                store, config, deps, target.key, latest.seq, existing.answering_run_id
+            )
+        case PauseClass.SETTLED:
+            return skipped(SkipReason.SETTLED, target.key, checkout)
+        case PauseClass.WAITING_ON_PM:
             reason = existing.waiting_reason
             return skipped(
                 SkipReason.WAITING_ON_PM,
@@ -76,36 +79,24 @@ def handle_existing(
                 checkout,
                 None if reason is None else str(reason),
             )
-        case QuestionState.CLAIMED:
-            return _claimed(store, config, deps, target, existing)
+        case PauseClass.CLAIM_LIVE | PauseClass.CLAIM_STALE:
+            old = pause_class is PauseClass.CLAIM_STALE
+            return _claimed(store, config, deps, target, existing, old=old)
+        case _:
+            raise ValueError(f"{pause_class} is not a class of a question with a row")
 
 
-def _answered(
+def _claimed(  # noqa: PLR0913 - the pieces of one D7 row
     store: Store,
     config: UserConfig,
     deps: Deps,
     target: PauseTarget,
     existing: QuestionRecord,
+    *,
+    old: bool,
 ) -> HandlePauseResult:
-    with store.read() as transaction:
-        latest = latest_answer(transaction, target.key)
-    if latest is None:
-        raise StoreRowError(f"question {target.key} is answered but has no answer row")
-    if latest.resume_outcome in _DELIVERED:
-        return skipped(SkipReason.SETTLED, target.key, str(target.checkout))
-    return resume_answer(
-        store, config, deps, target.key, latest.seq, existing.answering_run_id
-    )
-
-
-def _claimed(
-    store: Store,
-    config: UserConfig,
-    deps: Deps,
-    target: PauseTarget,
-    existing: QuestionRecord,
-) -> HandlePauseResult:
-    """The dead-claim table of D7."""
+    """The dead-claim table of D7. ``old`` is the claim's age against the limit, as
+    ``classify_pause`` judged it."""
     answering_run_id = existing.answering_run_id
     if answering_run_id is None or existing.passages is None:
         raise StoreRowError(f"claimed question {target.key} has no run id or passages")
@@ -113,7 +104,6 @@ def _claimed(
     if isinstance(polled, PollFailure):
         raise SquadronError(polled.reason)
     wait_seconds = config.answering_wait_seconds
-    old = deps.clock() - existing.updated_at >= timedelta(seconds=wait_seconds)
     claim = Claim(
         key=target.key,
         answering_run_id=answering_run_id,

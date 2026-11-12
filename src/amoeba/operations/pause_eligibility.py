@@ -16,13 +16,19 @@ from amoeba.operations.members import (
     NotInProgram,
     resolve_member,
 )
+from amoeba.operations.pause_class import (
+    ObservedPause,
+    PauseClass,
+    classify_no_row,
+    classify_run_only,
+    observed_from_document,
+)
 from amoeba.operations.pause_models import SkipReason
 from amoeba.store.models import Member, QuestionKey, QuestionRecord
 from amoeba.store.questions import any_answering_run_id, get_question
 from amoeba.store.store import Store
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.run_file import (
-    ExecutionMode,
     RunFacts,
     RunFileProblem,
     read_run_facts,
@@ -30,7 +36,7 @@ from amoeba.upstream.squadron.run_file import (
 from amoeba.upstream.squadron.run_outcome import (
     CheckpointKind,
     PollFailure,
-    RunOutcome,
+    RunOutcomeDocument,
     UnknownKind,
     parse_checkpoint_kind,
 )
@@ -52,6 +58,8 @@ class Eligible:
     #: The question text exactly as ``sq runs wait --json`` printed it.
     question: str
     member: Member
+    #: What the poll said about the pause, for ``classify_pause``.
+    observed: ObservedPause
     run_facts: RunFacts
     #: The row for this question, when an earlier call made one.
     existing: QuestionRecord | None
@@ -69,22 +77,34 @@ def check_eligibility(
     polled = deps.poll_run(run_id)
     if isinstance(polled, PollFailure):
         raise SquadronError(polled.reason)
-    if polled.outcome is not RunOutcome.PAUSED:
-        return Skip(SkipReason.NOT_PAUSED, f"the run's outcome is {polled.outcome}")
-    checkpoint = polled.checkpoint
-    kind = parse_checkpoint_kind(None if checkpoint is None else checkpoint.kind)
-    if kind is not CheckpointKind.AGENT_QUESTION:
-        return Skip(SkipReason.NOT_AGENT_QUESTION, f"checkpoint kind {_raw(kind)}")
-    paused_at = checkpoint.paused_at_text if checkpoint is not None else None
-    question = None if checkpoint is None else checkpoint.question
-    if paused_at is None or question is None or not question.strip():
-        return Skip(SkipReason.NO_QUESTION_TEXT, None)
+    observed = observed_from_document(polled)
+    early = classify_run_only(observed)
+    if early is not None:
+        return _run_only_skip(early, polled)
+    paused_at, question = observed.paused_at, observed.question
+    if paused_at is None or question is None:
+        raise AssertionError("classify_run_only passed a pause without its text")
     with store.read() as transaction:
         if any_answering_run_id(transaction, run_id):
             return Skip(SkipReason.ANSWERING_RUN, None)
-    return _member_checks(
-        store, QuestionKey(run_id, paused_at), question, directory, deps
-    )
+    key = QuestionKey(run_id, paused_at)
+    return _member_checks(store, key, question, observed, directory, deps)
+
+
+def _run_only_skip(pause_class: PauseClass, polled: RunOutcomeDocument) -> Skip:
+    """The skip for a class decided from the run alone, with its detail."""
+    match pause_class:
+        case PauseClass.NOT_PAUSED:
+            return Skip(SkipReason.NOT_PAUSED, f"the run's outcome is {polled.outcome}")
+        case PauseClass.OTHER_CHECKPOINT:
+            kind = parse_checkpoint_kind(
+                None if polled.checkpoint is None else polled.checkpoint.kind
+            )
+            return Skip(SkipReason.NOT_AGENT_QUESTION, f"checkpoint kind {_raw(kind)}")
+        case PauseClass.NO_QUESTION_TEXT:
+            return Skip(SkipReason.NO_QUESTION_TEXT, None)
+        case _:
+            raise ValueError(f"{pause_class} is not decided from the run alone")
 
 
 def _raw(kind: CheckpointKind | UnknownKind | None) -> str:
@@ -94,7 +114,12 @@ def _raw(kind: CheckpointKind | UnknownKind | None) -> str:
 
 
 def _member_checks(
-    store: Store, key: QuestionKey, question: str, directory: Path, deps: Deps
+    store: Store,
+    key: QuestionKey,
+    question: str,
+    observed: ObservedPause,
+    directory: Path,
+    deps: Deps,
 ) -> Eligible | Skip:
     resolved = resolve_member(store, directory, deps.cf_run)
     if isinstance(resolved, NotAProject):
@@ -105,10 +130,10 @@ def _member_checks(
     facts = read_run_facts(deps.squadron_runs_dir, key.run_id)
     if isinstance(facts, RunFileProblem):
         raise SquadronError(facts.reason)
-    if facts.execution_mode is ExecutionMode.PROMPT_ONLY:
-        return Skip(SkipReason.PROMPT_ONLY, None)
     with store.read() as transaction:
         existing = get_question(transaction, key)
     if existing is not None and existing.member_id != resolved.project_id:
         return Skip(SkipReason.OTHER_MEMBER, f"member {existing.member_id}")
-    return Eligible(key, question, resolved, facts, existing)
+    if existing is None and classify_no_row(facts) is PauseClass.PROMPT_ONLY:
+        return Skip(SkipReason.PROMPT_ONLY, None)
+    return Eligible(key, question, resolved, observed, facts, existing)

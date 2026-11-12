@@ -30,6 +30,10 @@ def integer(value: object, column: str) -> int:
     return value
 
 
+def optional_integer(value: object, column: str) -> int | None:
+    return None if value is None else integer(value, column)
+
+
 def vocabulary[EnumT: StrEnum](value: object, enum: type[EnumT], column: str) -> EnumT:
     """The member of ``enum`` the column holds."""
     try:

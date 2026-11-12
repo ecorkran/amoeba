@@ -37,6 +37,7 @@ ON CONFLICT (id) DO UPDATE SET version = excluded.version
 _PROGRAM_COLUMNS: Final = (
     "program_id, concept_member, concept_path, registered_at, updated_at"
 )
+SELECT_PROGRAMS: Final = f"SELECT {_PROGRAM_COLUMNS} FROM programs ORDER BY program_id"
 SELECT_PROGRAM: Final = f"SELECT {_PROGRAM_COLUMNS} FROM programs WHERE program_id = ?"
 INSERT_PROGRAM: Final = (
     f"INSERT INTO programs ({_PROGRAM_COLUMNS}) VALUES (?, ?, ?, ?, ?)"
@@ -100,14 +101,14 @@ INSERT INTO answers (run_id, paused_at, answered_by, answer, recorded_at,
 VALUES (?, ?, ?, ?, ?, ?)
 """
 
-_QUESTION_COLUMNS: Final = """run_id, paused_at, member_id, question, checkout, state,
+QUESTION_COLUMNS: Final = """run_id, paused_at, member_id, question, checkout, state,
     answering_run_id, waiting_reason, waiting_detail, slice_label, source_commit,
     passages, evidence, claimed_at, updated_at"""
 SELECT_QUESTION: Final = (
-    f"SELECT {_QUESTION_COLUMNS} FROM questions WHERE run_id = ? AND paused_at = ?"
+    f"SELECT {QUESTION_COLUMNS} FROM questions WHERE run_id = ? AND paused_at = ?"
 )
 SELECT_LATEST_QUESTION: Final = f"""
-SELECT {_QUESTION_COLUMNS} FROM questions WHERE run_id = ?
+SELECT {QUESTION_COLUMNS} FROM questions WHERE run_id = ?
 ORDER BY claimed_at DESC, rowid DESC LIMIT 1
 """
 SELECT_ANSWERING_RUN_EXISTS: Final = (
@@ -143,15 +144,15 @@ MARK_QUESTION_ANSWERED: Final = """
 UPDATE questions SET state = ?, updated_at = ? WHERE run_id = ? AND paused_at = ?
 """
 
-_ANSWER_COLUMNS: Final = """seq, run_id, paused_at, answered_by, answer, cited,
+ANSWER_COLUMNS: Final = """seq, run_id, paused_at, answered_by, answer, cited,
     recorded_at, resume_outcome, resume_detail, resume_log, resume_at"""
 SELECT_ANSWERS_OF: Final = (
-    f"SELECT {_ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
+    f"SELECT {ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq"
 )
-SELECT_ANSWER: Final = f"SELECT {_ANSWER_COLUMNS} FROM answers WHERE seq = ?"
+SELECT_ANSWER: Final = f"SELECT {ANSWER_COLUMNS} FROM answers WHERE seq = ?"
 SELECT_LATEST_ANSWER: Final = (
-    f"SELECT {_ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
+    f"SELECT {ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq DESC LIMIT 1"
 )
 COUNT_AUTOMATIC_ANSWERS: Final = (
@@ -184,3 +185,74 @@ WHERE question_row.member_id = ?
             AND newer.answered_by = ?)
 ORDER BY answer_row.seq
 """
+
+
+# --- decisions and the PM's marker (slice 224) -------------------------------
+
+
+def _qualified(columns: str, alias: str) -> str:
+    return ", ".join(f"{alias}.{name.strip()}" for name in columns.split(","))
+
+
+# Each answer joined to its question and the member's program: the answer columns,
+# the question columns, the program id, then the newest earlier answer's seq.
+_SELECT_DECISIONS: Final = f"""
+SELECT {_qualified(ANSWER_COLUMNS, "answer_row")},
+    {_qualified(QUESTION_COLUMNS, "question_row")},
+    member_row.program_id,
+    (SELECT MAX(earlier.seq) FROM answers AS earlier
+     WHERE earlier.run_id = answer_row.run_id
+         AND earlier.paused_at = answer_row.paused_at
+         AND earlier.seq < answer_row.seq)
+FROM answers AS answer_row
+JOIN questions AS question_row
+    ON question_row.run_id = answer_row.run_id
+    AND question_row.paused_at = answer_row.paused_at
+JOIN members AS member_row ON member_row.project_id = question_row.member_id
+"""
+DECISIONS_ORDER: Final = " ORDER BY answer_row.seq"
+DECISIONS_PROGRAM_CLAUSE: Final = " AND member_row.program_id = ?"
+SELECT_DECISIONS_AFTER_SEQ: Final = f"{_SELECT_DECISIONS} WHERE answer_row.seq > ?"
+SELECT_DECISIONS_SINCE: Final = f"{_SELECT_DECISIONS} WHERE answer_row.recorded_at >= ?"
+SELECT_MARKER: Final = "SELECT last_seen_seq FROM pm_marker WHERE id = 1"
+SELECT_MAX_ANSWER_SEQ: Final = "SELECT COALESCE(MAX(seq), 0) FROM answers"
+RAISE_MARKER: Final = """
+UPDATE pm_marker SET last_seen_seq = MAX(last_seen_seq, ?) WHERE id = 1
+"""
+
+
+# --- reads for ``status`` (slice 224, D4) ------------------------------------
+
+
+def placeholders(count: int) -> str:
+    """``count`` bound-parameter marks for an ``IN`` list; never values."""
+    if count < 1:
+        raise ValueError("an IN list needs at least one value")
+    return ", ".join("?" * count)
+
+
+def select_open_questions(member_count: int) -> str:
+    """Every ``waiting_on_pm`` question of the members, oldest first."""
+    return (
+        f"SELECT {QUESTION_COLUMNS} FROM questions "
+        f"WHERE state = ? AND member_id IN ({placeholders(member_count)}) "
+        "ORDER BY claimed_at, rowid"
+    )
+
+
+def select_member_questions(member_count: int) -> str:
+    """Every question of the members, oldest first, so the last of a run is its
+    latest."""
+    return (
+        f"SELECT {QUESTION_COLUMNS} FROM questions "
+        f"WHERE member_id IN ({placeholders(member_count)}) "
+        "ORDER BY claimed_at, rowid"
+    )
+
+
+def select_answers_of_runs(run_count: int) -> str:
+    """Every answer of the runs, in ``seq`` order."""
+    return (
+        f"SELECT {ANSWER_COLUMNS} FROM answers "
+        f"WHERE run_id IN ({placeholders(run_count)}) ORDER BY seq"
+    )

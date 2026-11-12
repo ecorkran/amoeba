@@ -5,7 +5,7 @@ project: amoeba
 audience: [human, ai]
 description: The Amoeba store contract: the home, every table and column of the schema with its vocabulary and the operation that writes it, and the migration rule.
 dateCreated: 20261109
-dateUpdated: 20261110
+dateUpdated: 20261111
 status: complete
 ---
 
@@ -143,6 +143,21 @@ Append-only, so an automatic answer and a later PM answer are both kept.
 |---|---|
 | `id` | Always 1; the table holds one row. |
 | `last_seen_seq` | The `answers.seq` the PM has seen; created at 0, meaning nothing seen. |
+
+## Why each column exists
+
+The schema holds no state that Context Forge or Squadron already says; every column is
+one of four things. `tests/store/test_schema_holds_no_mirrored_state.py` pins the same
+columns under the same reasons, so a new column fails it until it is listed in both
+places and its reason is stated.
+
+- **record**: what happened, written once when it did and never updated to follow anything else. A column here is never read as current state: `questions.checkout` is where a pause ran and `questions.slice_label` the slice its passages were gathered for, not where the member is or what slice it is on. Columns: `answers.answer`, `answers.answered_by`, `answers.cited`, `answers.paused_at`, `answers.recorded_at`, `answers.resume_at`, `answers.resume_detail`, `answers.resume_log`, `answers.resume_outcome`, `answers.run_id`, `answers.seq`, `questions.answering_run_id`, `questions.checkout`, `questions.claimed_at`, `questions.evidence`, `questions.member_id`, `questions.passages`, `questions.paused_at`, `questions.question`, `questions.run_id`, `questions.slice_label`, `questions.source_commit`, `questions.state`, `questions.updated_at`, `questions.waiting_detail`, `questions.waiting_reason`, `releases.changed`, `releases.commit_sha`, `releases.member_id`, `releases.reported_at`, `releases.seq`, `releases.touched`, `releases.version`, `releases.versioned_at`.
+
+- **membership**: who is in a program, the PM's registration and the one thing only Amoeba knows. Columns: `dependency_pairs.consumer_id`, `dependency_pairs.program_id`, `dependency_pairs.provider_id`, `dependency_pairs.registered_at`, `dependency_pairs.updated_at`, `members.program_id`, `members.project_id`, `members.registered_at`, `members.updated_at`, `programs.program_id`, `programs.registered_at`, `programs.updated_at`.
+
+- **settings**: what the PM chose for a program or member, and the store's own schema version. Columns: `dependency_pairs.consumed`, `members.authorize_allow`, `members.authorize_deny`, `members.rules_paths`, `programs.concept_member`, `programs.concept_path`, `schema_meta.id`, `schema_meta.version`.
+
+- **marker**: how far the PM has read the decisions. Columns: `pm_marker.id`, `pm_marker.last_seen_seq`.
 
 ## Question lifecycle and who writes it (slice 223)
 

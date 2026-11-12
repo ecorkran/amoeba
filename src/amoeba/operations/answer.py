@@ -15,17 +15,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated
 
 from pydantic import (
     BaseModel,
     ConfigDict,
-    StrictStr,
-    StringConstraints,
     ValidationError,
 )
 
-from amoeba.config.user_config import UserConfig
+from amoeba.config.user_config import NonBlank, UserConfig
 from amoeba.operations.deps import Deps
 from amoeba.operations.pause_models import ResumeResult
 from amoeba.operations.resume import resume
@@ -36,20 +33,17 @@ from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import ResumeOutcome
 from amoeba.upstream.squadron.errors import SquadronError
 
-#: A stripped, non-empty string.
-_NonBlank = Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
-
 
 class AnswerRequest(BaseModel):
     """What ``answer`` is asked: the run, optionally which pause, and the text."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    run_id: _NonBlank
+    run_id: NonBlank
     #: The pause, as ``sq runs wait --json`` printed it; the run's latest question
     #: when omitted.
-    paused_at: _NonBlank | None = None
-    text: _NonBlank
+    paused_at: NonBlank | None = None
+    text: NonBlank
 
 
 class AnswerOutcome(StrEnum):

@@ -8,7 +8,16 @@ from amoeba.answering.values import DeclineReason
 from amoeba.cli import main as cli
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
 from amoeba.operations.answer import AnswerRejection
+from amoeba.operations.decisions import DecisionsOutcome
+from amoeba.operations.mark_read import MarkReadOutcome
+from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
+from amoeba.operations.reject_codes import RejectCode
+from amoeba.operations.status_models import (
+    RunFileUnreadable,
+    UnplacedReason,
+    WaitingRunState,
+)
 from amoeba.store.store import Store
 
 DOCS = Path(__file__).parents[1] / "docs"
@@ -81,12 +90,26 @@ def test_the_store_contract_names_every_decline_reason() -> None:
 
 def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> None:
     text = CLI_CONTRACT.read_text(encoding="utf-8")
-    commands = [cli.SET_UP_COMMAND, cli.HANDLE_PAUSE_COMMAND, cli.ANSWER_COMMAND]
+    commands = [
+        cli.SET_UP_COMMAND,
+        cli.HANDLE_PAUSE_COMMAND,
+        cli.ANSWER_COMMAND,
+        cli.STATUS_COMMAND,
+        cli.DECISIONS_COMMAND,
+        cli.MARK_READ_COMMAND,
+    ]
     exit_codes = [cli.EXIT_OK, cli.EXIT_REJECTED, cli.EXIT_USAGE, cli.EXIT_ERROR]
     values = [
         *(outcome.value for outcome in HandlePauseOutcome),
         *(reason.value for reason in SkipReason),
         *(rejection.value for rejection in AnswerRejection),
+        *(pause.value for pause in PauseClass if pause is not PauseClass.NOT_PAUSED),
+        RunFileUnreadable.RUN_FILE_UNREADABLE.value,
+        *(code.value for code in RejectCode),
+        *(reason.value for reason in UnplacedReason),
+        *(state.value for state in WaitingRunState),
+        *(outcome.value for outcome in MarkReadOutcome),
+        *(outcome.value for outcome in DecisionsOutcome),
     ]
 
     missing = [f"amoeba {name}" for name in commands if f"amoeba {name}" not in text]

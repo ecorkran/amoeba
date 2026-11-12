@@ -1,0 +1,203 @@
+[
+  {
+    "id": "project_1758069879482_xankquaj6",
+    "name": "trading",
+    "fileSlice": "800-review.timescale_minute_data",
+    "isActive": false
+  },
+  {
+    "id": "project_1758802082679_bav11ncvw",
+    "name": "quantum-teleportation",
+    "projectPath": "/Users/manta/source/repos/manta/temp/quantum-teleportation",
+    "fileSlice": "101-slice.flux-capacitor-thermal-modeling",
+    "isActive": false
+  },
+  {
+    "id": "project_1759882394912_2n6hsqe0y",
+    "name": "squadron",
+    "projectPath": "/Users/manta/source/repos/manta/squadron",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1771053534513_a6fansham",
+    "name": "context-forge",
+    "projectPath": "/Users/manta/source/repos/manta/context-forge",
+    "fileSlice": "179-slice.remove-bundled-prompt-asset",
+    "isActive": false
+  },
+  {
+    "id": "project_1771953453041_9txsvqqr7",
+    "name": "context-visualizer",
+    "projectPath": "/Users/manta/source/repos/manta/context-visualizer",
+    "fileSlice": "127-slice.mcp-native-project-registry",
+    "isActive": false
+  },
+  {
+    "id": "project_1772944086090_xur4el334",
+    "name": "otix-ai-chat",
+    "projectPath": "/Users/manta/source/repos/otix/otix-ai-chat",
+    "fileSlice": "104-slice.cloudflare-tunnel-deployment",
+    "isActive": false
+  },
+  {
+    "id": "project_1773187187168_2gtm08mlc",
+    "name": "manta-templates-pro",
+    "projectPath": "/Users/manta/source/repos/manta/manta-templates-pro",
+    "fileSlice": "105-slice.validation-publishing",
+    "isActive": false
+  },
+  {
+    "id": "project_1773376790062_tkb59egfd",
+    "name": "doge",
+    "projectPath": "/Users/manta/source/repos/jobs/doge",
+    "fileSlice": "103-slice.frontend-polish-and-data-fixes",
+    "isActive": false
+  },
+  {
+    "id": "project_1773456203131_6mk3pbuzp",
+    "name": "migratory",
+    "projectPath": "/Users/manta/source/repos/manta/migratory",
+    "fileSlice": "100-slice.agent-state-and-tick-function",
+    "isActive": false
+  },
+  {
+    "id": "project_1773962297191_18jiro1z8",
+    "name": "hydrology-dashboard",
+    "projectPath": "/Users/manta/source/repos/manta/hydrology-dashboard",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1774662175524_j5057k16t",
+    "name": "trading-data",
+    "projectPath": "/Users/manta/source/repos/manta/trading-data",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1775367533427_8qb33100f",
+    "name": "migratory-viewer",
+    "projectPath": "/Users/manta/source/repos/manta/migratory-viewer",
+    "fileSlice": "115-slice.wire-header-alignment-and-zero-copy-deserialization",
+    "isActive": false
+  },
+  {
+    "id": "project_1778184972870_o6p2k70e0",
+    "name": "trading-api",
+    "projectPath": "/Users/manta/source/repos/manta/trading-api",
+    "isActive": false
+  },
+  {
+    "id": "project_1778363812838_di28x2r9l",
+    "name": "migratory-client-native",
+    "projectPath": "/Users/manta/source/repos/manta/migratory-client-native",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1778642589084_bib46c4ze",
+    "name": "trading-ui",
+    "projectPath": "/Users/manta/source/repos/manta/trading-ui",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1779208689056_wsnilav5m",
+    "name": "grizcam_portal",
+    "projectPath": "/Users/manta/source/repos/grizzly/grizcam_portal",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1779209365821_yi6qdu33a",
+    "name": "grizcam_desktop",
+    "projectPath": "/Users/manta/source/repos/grizzly/grizcam_desktop",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1781844717321_1gukaohbc",
+    "name": "amoeba",
+    "projectPath": "/Users/manta/source/repos/manta/amoeba",
+    "fileSlice": "",
+    "isActive": true
+  },
+  {
+    "id": "project_1782190786147_hdrhq8vki",
+    "name": "grizcam_mobile_ios",
+    "projectPath": "/Users/manta/source/repos/grizzly/grizcam_mobile_ios",
+    "fileSlice": "185-slice.harness-adoption-and-evidence-handoff",
+    "isActive": false
+  },
+  {
+    "id": "project_1782433455376_1a1fukjqh",
+    "name": "grizcam_mobile_android",
+    "projectPath": "/Users/manta/source/repos/grizzly/grizcam_mobile_android",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1782680529434_oxdc201u1",
+    "name": "ai-project-guide",
+    "projectPath": "/Users/manta/source/repos/manta/ai-project-guide",
+    "fileSlice": "120-slice.setup-ide-behavior-tests",
+    "isActive": false
+  },
+  {
+    "id": "project_1782703470540_b1u933ijy",
+    "name": "ios-baseline",
+    "projectPath": "/Users/manta/source/repos/grizzly/temp/ios-baseline",
+    "fileSlice": "104-slice.validation-and-capture",
+    "isActive": false
+  },
+  {
+    "id": "project_1783605868146_jkr5dssu0",
+    "name": "erikcorkran.com",
+    "projectPath": "/Users/manta/source/repos/manta/erikcorkran.com",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1785959008433_swewgek93",
+    "name": "benj-gmail-wrapper",
+    "projectPath": "/Users/manta/source/repos/jake/benj-gmail-wrapper",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1790652620025_rqzh7gspu",
+    "name": "sq932-scratch",
+    "projectPath": "/private/tmp/sq932-scratch",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1791056046580_2hxqjldnc",
+    "name": "sq-scratch",
+    "projectPath": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3902c14d-be22-46fb-b067-0fc1cb906f8b/scratchpad/sq-scratch",
+    "fileSlice": "109-slice.longest-line-in-json",
+    "isActive": false
+  },
+  {
+    "id": "project_1791928334405_x7dijeywt",
+    "name": "crap-test-1",
+    "projectPath": "/Users/manta/source/repos/manta/temp/crap-test-1",
+    "fileSlice": "",
+    "isActive": false
+  },
+  {
+    "id": "project_1792260857826_7y0gwkygc",
+    "name": "trading-engine",
+    "projectPath": "/Users/manta/source/repos/manta/trading-engine",
+    "fileSlice": "104-slice.series-and-point-series",
+    "isActive": false
+  },
+  {
+    "id": "project_1793102949038_6lkxvxuvd",
+    "name": "tank-game-onboard",
+    "projectPath": "/Users/manta/source/repos/manta/tank-game-onboard",
+    "fileSlice": "",
+    "isActive": false
+  }
+]

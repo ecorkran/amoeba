@@ -1,0 +1,157 @@
+[
+  {
+    "run_id": "run-20261111-p6-fe470d63",
+    "pipeline": "p6",
+    "status": "running",
+    "working_directory": "/Users/manta/source/repos/manta/amoeba",
+    "checkpoint": null
+  },
+  {
+    "run_id": "demo-push-3",
+    "pipeline": "asks_push_question",
+    "status": "paused",
+    "working_directory": "/Users/manta/source/repos/manta/amoeba",
+    "checkpoint": {
+      "kind": "agent_question",
+      "step": "ask",
+      "step_type": "dispatch",
+      "is_loop": false,
+      "round": null,
+      "max_rounds": null,
+      "verdict": null,
+      "review_file": null,
+      "reason": "could not resolve expected design artifact path: no 'slice' param in scope; agent's final text: \"Should the branch `223-slice.pause-handling` be pushed to origin when the work is done?\"",
+      "paused_at": "2026-11-10T15:15:21.417743+00:00",
+      "resets_at": null,
+      "question": "Should the branch `223-slice.pause-handling` be pushed to origin when the work is done?"
+    }
+  },
+  {
+    "run_id": "run-20261110-p6-9ea18232",
+    "pipeline": "p6",
+    "status": "failed",
+    "working_directory": "/Users/manta/source/repos/manta/trading-engine",
+    "checkpoint": null
+  },
+  {
+    "run_id": "demo-pause-1",
+    "pipeline": "asks_question",
+    "status": "paused",
+    "working_directory": "/Users/manta/source/repos/manta/amoeba",
+    "checkpoint": {
+      "kind": "agent_question",
+      "step": "ask",
+      "step_type": "dispatch",
+      "is_loop": false,
+      "round": null,
+      "max_rounds": null,
+      "verdict": null,
+      "review_file": null,
+      "reason": "could not resolve expected design artifact path: no 'slice' param in scope; agent's final text: \"What is the maximum length of a source file in this repository?\"",
+      "paused_at": "2026-11-10T15:13:46.301314+00:00",
+      "resets_at": null,
+      "question": "What is the maximum length of a source file in this repository?"
+    }
+  },
+  {
+    "run_id": "amoeba-20261110T150234Z-8bf24f09cfbb",
+    "pipeline": "asks_question",
+    "status": "paused",
+    "working_directory": "/private/var/folders/sh/z0st27515979z5n4v263_svc0000gn/T/pytest-of-manta/pytest-1920/test_the_opt_out_leaves_no_mar0/member",
+    "checkpoint": {
+      "kind": "agent_question",
+      "step": "ask",
+      "step_type": "dispatch",
+      "is_loop": false,
+      "round": null,
+      "max_rounds": null,
+      "verdict": null,
+      "review_file": null,
+      "reason": "could not resolve expected design artifact path: no 'slice' param in scope; agent's final text: \"What is the maximum length of a source file in this repository?\"",
+      "paused_at": "2026-11-10T15:02:38.650351+00:00",
+      "resets_at": null,
+      "question": "What is the maximum length of a source file in this repository?"
+    }
+  },
+  {
+    "run_id": "run-20261106-tasks-plan-711d0fe6",
+    "pipeline": "tasks-plan",
+    "status": "completed",
+    "working_directory": null,
+    "checkpoint": null
+  },
+  {
+    "run_id": "run-20261105-effort-compact-acbbe8e8",
+    "pipeline": "effort-compact",
+    "status": "failed",
+    "working_directory": null,
+    "checkpoint": null
+  },
+  {
+    "run_id": "run-20261105-effort-walkthrough-none-e65efbbe",
+    "pipeline": "effort-walkthrough-none",
+    "status": "running",
+    "working_directory": null,
+    "checkpoint": null
+  },
+  {
+    "run_id": "run-20261105-p6-7dc230a3",
+    "pipeline": "p6",
+    "status": "paused",
+    "working_directory": null,
+    "checkpoint": {
+      "kind": "awaits_human",
+      "step": "branch-5",
+      "step_type": "branch",
+      "is_loop": false,
+      "round": null,
+      "max_rounds": null,
+      "verdict": null,
+      "review_file": null,
+      "reason": "checkpoint",
+      "paused_at": "2026-11-05T13:37:42.901942+00:00",
+      "resets_at": null,
+      "question": null
+    }
+  },
+  {
+    "run_id": "run-20261015-p5-8a59ee89",
+    "pipeline": "p5",
+    "status": "paused",
+    "working_directory": null,
+    "checkpoint": {
+      "kind": "other",
+      "step": "loop-1",
+      "step_type": "loop",
+      "is_loop": true,
+      "round": 2,
+      "max_rounds": 2,
+      "verdict": null,
+      "review_file": null,
+      "reason": "loop loop-1 round 2: revise dispatch failed: feedback: review but no prior review in scope",
+      "paused_at": "2026-10-15T22:43:42.504072+00:00",
+      "resets_at": null,
+      "question": null
+    }
+  },
+  {
+    "run_id": "run-20261004-p6-8bc5e634",
+    "pipeline": "p6",
+    "status": "paused",
+    "working_directory": null,
+    "checkpoint": {
+      "kind": "interactive_checkpoint",
+      "step": "implement-1",
+      "step_type": "implement",
+      "is_loop": false,
+      "round": null,
+      "max_rounds": null,
+      "verdict": "FAIL",
+      "review_file": "project-documents/user/reviews/106-review.code.json-output.md",
+      "reason": "checkpoint",
+      "paused_at": "2026-10-04T18:42:15.375436+00:00",
+      "resets_at": null,
+      "question": null
+    }
+  }
+]

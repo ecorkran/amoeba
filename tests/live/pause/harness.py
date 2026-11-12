@@ -137,14 +137,17 @@ def _run(argv: list[str], cwd: Path, environ: dict[str, str]) -> None:
     )
 
 
-def run_amoeba(world: PauseWorld, *arguments: str) -> subprocess.CompletedProcess[str]:
-    """``amoeba <arguments>`` in the member checkout, with the world's environment."""
+def run_amoeba(
+    world: PauseWorld, *arguments: str, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    """``amoeba <arguments>`` with the world's environment, in the member checkout
+    unless ``cwd`` names another directory."""
     child = contained_popen(
         [str(AMOEBA), *arguments],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        cwd=world.repo,
+        cwd=world.repo if cwd is None else cwd,
         env=world.environ,
     )
     stdout, stderr = child.communicate(timeout=AMOEBA_TIMEOUT_SECONDS)

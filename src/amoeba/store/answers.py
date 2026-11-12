@@ -32,7 +32,8 @@ from amoeba.store.store import Store, Transaction
 from amoeba.store.vocabulary import QuestionState, ResumeOutcome
 
 
-def _answer(row: Sequence[object]) -> AnswerRecord:
+def answer_from_row(row: Sequence[object]) -> AnswerRecord:
+    """An ``AnswerRecord`` from a row of ``sql.ANSWER_COLUMNS``."""
     resume_at = row[10]
     return AnswerRecord(
         seq=integer(row[0], "answers.seq"),
@@ -67,13 +68,13 @@ def answers_of(transaction: Transaction, key: QuestionKey) -> tuple[AnswerRecord
     rows = transaction.execute(
         sql.SELECT_ANSWERS_OF, (key.run_id, key.paused_at)
     ).fetchall()
-    return tuple(_answer(row) for row in rows)
+    return tuple(answer_from_row(row) for row in rows)
 
 
 def get_answer(transaction: Transaction, seq: int) -> AnswerRecord | None:
     """The answer row with this ``seq``."""
     row = transaction.execute(sql.SELECT_ANSWER, (seq,)).fetchone()
-    return None if row is None else _answer(row)
+    return None if row is None else answer_from_row(row)
 
 
 def latest_answer(transaction: Transaction, key: QuestionKey) -> AnswerRecord | None:
@@ -81,7 +82,7 @@ def latest_answer(transaction: Transaction, key: QuestionKey) -> AnswerRecord | 
     row = transaction.execute(
         sql.SELECT_LATEST_ANSWER, (key.run_id, key.paused_at)
     ).fetchone()
-    return None if row is None else _answer(row)
+    return None if row is None else answer_from_row(row)
 
 
 def automatic_answer_count(transaction: Transaction, run_id: str) -> int:
