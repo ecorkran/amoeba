@@ -179,7 +179,7 @@ The answering run is a Squadron pipeline with two steps, each isolated:
 - **An independent check.** The check step sees the question, the passages and the reply, and shares no session with the answer step.
 - **No tools.** A passage that steers the model can at worst produce a wrong reply.
 
-These are properties of the step's configuration, not of a model vendor. Claude models need to work here, which is `ecorkran/squadron#299`.
+These are properties of the step's configuration, not of a model vendor. Claude models work here (`ecorkran/squadron#299`, closed).
 
 ### Decisions
 

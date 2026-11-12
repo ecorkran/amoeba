@@ -65,7 +65,6 @@ You start `sq run p6` on trading-ui at night. At task 4 the agent asks: "keep th
 
 - Does Squadron call Amoeba when it pauses (a hook, so no watcher is needed), or does something poll? A hook is simpler and needs a Squadron change.
 - Notification channel: macOS notification, phone push or Slack?
-- Answering on Claude models needs ecorkran/squadron#299.
 
 ## Scenario B: a change in one member blocks another
 

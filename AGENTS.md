@@ -216,3 +216,14 @@ relevant file when working in that area:
 - `project-documents/ai-project-guide/project-guides/rules/typescript.md` — TypeScript strict typing standards, idiomatic patterns, and project conventions. Use for all TypeScript files. Covers type annotations, generics, module patterns, and error handling.
   Applies to: `**/*.ts,**/*.tsx`
 <!-- END:context-forge -->
+
+## Amoeba Design Rules
+
+Added by the Project Manager 2026-11-12. These sit outside the generated block above, so `cf setup-ide` leaves them alone. They apply to every design, task breakdown and review in this repo, and reviews must check them.
+
+- **No deferral.** A slice design, task breakdown or review finding never defers in-scope behavior to an issue, a later slice, or "build only if use shows it's needed". Build it in the slice, or delete it from the design. Issues are for defects found in finished work, nothing else. A review that finds a deferral rejects it.
+- **No development step waits on real-world usage.** No task needs the PM or anyone else to generate events (a count of real runs, an observation period). Test with fixtures and live fixture pipelines. Ship, leave it on, and rework from what real use shows.
+- **Every state has an exit.** For each state a record or run can be in, the design says how it ends with nobody editing files: completion, automatic expiry, or an explicit cancel command. Every limit (cap, timeout, retry count) says what happens when it is hit, and "wait for a person who has no command to act with" is not an answer. Anything the system writes either has a named cleanup or the design says why it is bounded.
+- **Config is config; state is state.** Files a person edits live in the config directory. Databases, run records, logs and caches live in the state directory (`~/.local/state/<app>` or `$XDG_STATE_HOME`). State never lives under `~/.config`.
+- **Operator walkthrough.** Before a design is accepted, and in every design review, step through it as the person who runs it: start, normal path, each failure, the end state, and how to clear or undo it. Report every dead end. Consistency with the parent document is not enough; the parent can be wrong.
+- **Verify facts about other tools when writing tasks.** Run the command or `gh issue view`; do not copy a status from an older document.

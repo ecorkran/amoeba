@@ -84,7 +84,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    - A refused resume, or one whose process died, is resumed by a second `handle_pause` with the recorded answer and no new answering run.
    - `answer` on a waiting question resumes the run and is used for the same question next time; it never counts toward the answer limit.
    - Each live answering test that 221 deleted as `waits on 223` has its claim restored, from the commit the audit's Live tests section names.
-   **Dependencies:** 222. External: `ecorkran/squadron#299` for answering on Claude models; `ecorkran/squadron#302` for the hook to start `handle_pause` (calling it by hand works without it).
+   **Dependencies:** 222. External: `ecorkran/squadron#302` for the hook to start `handle_pause` (calling it by hand works without it).
    **Interfaces:** Provides `handle_pause` and `answer`, the question record's states and the resume outcomes. Consumes 140's answering pipeline and passages as kept by 221.
    **Risk Level:** High. It resumes real runs on a model's answer, and it is the test of the whole design.
    **Relative Effort:** 5
@@ -150,7 +150,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
 
 ## Notes
 
-- **External dependencies.** 223 can be built and tested by calling `handle_pause` by hand, but the trial needs `#302`. Answering on Claude models needs `#299`. Missed-hook catch-up and per-member run status need `#303`. `#304` stays on hold unless 227 shows agents skipping the rule lines.
+- **External dependencies.** 223 can be built and tested by calling `handle_pause` by hand, but the trial needs `#302`. Missed-hook catch-up and per-member run status need `#303`. `#304` stays on hold unless 227 shows agents skipping the rule lines.
 - **Retired work.** Slices 183 to 186 are retired by the architecture and get no successors here. Slice 180's slice-writing pipeline goes in 221 unless the audit finds a use. Slice 182 is decided by the audit; its program-concept passages are wanted and land in 223's context step if it is redone.
 - **Concept wording.** The concept still says a steered passage "can at worst produce a wrong reply" and that checks on an answer belong in the pipeline. Both are corrected as a planning edit, outside these slices.
 - **No data migration.** Nobody has run Amoeba, so 222 starts from a new baseline and 221 deletes the old migrations.

@@ -93,7 +93,7 @@ usageByModel:
   Note: installed with `uv tool install --force .` from the slice branch at commit 93e8f41; `which amoeba` = /Users/manta/.local/bin/amoeba; `amoeba --help` runs from /tmp.
 
 - [x] **2.2 Write the config**
-  - [x] Create `~/.config/amoeba/config.yaml` from the example in `docs/config-contract.md`. Credentials come from the environment, never the file. Answer and check models are non-Claude aliases until #299 lands (D8: do not change them mid-trial)
+  - [x] Create `~/.config/amoeba/config.yaml` from the example in `docs/config-contract.md`. Credentials come from the environment, never the file. Answer and check models are Claude aliases (squadron#299 is closed)
   - [x] Save a copy of the values used (no secrets) for the note
   - [x] Success: `amoeba status` run from outside every member exits without a config error
   Note: ~/.config/amoeba/config.yaml written from docs/config-contract.md's example. Values (no secrets): answer_model sonnet-high, check_model sonnet, max_cost_usd 0.5, answer_limit 3, passages_max_chars 60000, answering_wait_seconds 600, resume_wait_seconds 60, default five authorize_items. Deviation from task text: aliases are Claude aliases (the ones the live tier uses via AMOEBA_LIVE_*), not non-Claude, because squadron#299 is now CLOSED. `amoeba status` from /tmp exits 0 (lists old unplaced runs as directory_missing/no_directory).

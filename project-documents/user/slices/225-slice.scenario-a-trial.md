@@ -36,7 +36,7 @@ The counted trial (D5, D6, D7, D10: 20 counted questions, a ledger, a go/rethink
 - **Slices 223 and 224 merged:** `handle_pause`, `answer`, `status`, `decisions` and `mark_read` work on the CLI.
 - **`ecorkran/squadron#302`** (command started on pause, with a per-run opt-out). Without it nothing starts `handle_pause` and there is no trial. If it hasn't landed when implementation reaches D3, that task gets a `BLOCKED:` line.
 - **`ecorkran/squadron#303`**, which 224 needs for `status` to show missed hooks.
-- **`ecorkran/squadron#299`, not blocking.** Until it lands, the answer and check models are non-Claude aliases, as in 223.
+- **`ecorkran/squadron#299`** is closed (answering on Claude models works); the answer and check models are Claude aliases.
 
 ## Technical Decisions
 
