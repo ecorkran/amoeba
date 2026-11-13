@@ -169,7 +169,7 @@ def test_a_pm_answer_on_a_waiting_question_is_delivered_by_the_next_call(
                 evidence=None,
                 now=START,
             )
-            add_pm_answer(transaction, KEY, "PM says 250.", now=START)
+            add_pm_answer(transaction, KEY, "PM says 250.", now=START, via=None)
 
         result = w.handle()
 

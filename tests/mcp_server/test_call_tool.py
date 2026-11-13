@@ -12,6 +12,7 @@ import anyio
 import mcp_types as types
 import pytest
 
+from amoeba import wiring
 from amoeba.config.user_config import ConfigError
 from amoeba.mcp import server
 from amoeba.mcp.detached import (
@@ -25,6 +26,7 @@ from amoeba.operations.members import ContextForgeError
 from amoeba.operations.names import OperationName
 from amoeba.store.errors import StoreBusyError
 from amoeba.upstream.squadron.errors import SquadronError
+from amoeba.wiring import DeadlineError
 
 REJECTED_STYLE_RESULT: dict[str, object] = {"outcome": "rejected", "problems": ["x"]}
 STARTED = StartedCall(
@@ -112,6 +114,7 @@ def test_structured_content_equals_the_parsed_text_block(
     ("error", "text"),
     [
         (CallTimedOut("status did not finish"), "TimedOut: status did not finish"),
+        (DeadlineError("too long"), "DeadlineError: too long"),
         (SquadronError("sq down"), "SquadronError: sq down"),
         (ContextForgeError("cf down"), "ContextForgeError: cf down"),
         (ConfigError("bad key"), "ConfigError: bad key"),
@@ -136,6 +139,23 @@ def test_a_request_error_is_an_error_naming_the_field() -> None:
 
     assert result.is_error is True
     assert _text(result).startswith("RequestError: directory")
+
+
+def test_a_relative_handle_pause_directory_is_refused_by_the_one_validator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started: list[object] = []
+
+    def recording_start(*arguments: object) -> None:
+        started.append(arguments)
+
+    monkeypatch.setattr(wiring, "start_child", recording_start)
+
+    result = _call("handle_pause", {"run_id": "r", "directory": "relative/path"})
+
+    assert result.is_error is True
+    assert _text(result).startswith("RequestError: directory")
+    assert started == []
 
 
 @pytest.mark.parametrize(

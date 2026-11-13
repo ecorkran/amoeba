@@ -114,7 +114,9 @@ def test_a_pm_answer_gives_a_run_at_its_limit_another_automatic_answer(
     with world(tmp_path) as w:
         earlier = _earlier_automatic_answers(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, earlier[-1], "the PM stepped in", now=NOW)
+            add_pm_answer(
+                transaction, earlier[-1], "the PM stepped in", now=NOW, via=None
+            )
 
         result = w.handle()
 
@@ -251,7 +253,7 @@ def test_a_pm_answer_during_the_answering_run_supersedes_and_is_not_resumed(
         if run_id.startswith("amoeba-") and not pm_answered["done"]:
             pm_answered["done"] = True
             with w.store.write() as transaction:
-                add_pm_answer(transaction, KEY, "PM says 250.", now=NOW)
+                add_pm_answer(transaction, KEY, "PM says 250.", now=NOW, via=None)
 
     with world(tmp_path, on_poll=pm_answers_meanwhile) as w:
         result = w.handle()

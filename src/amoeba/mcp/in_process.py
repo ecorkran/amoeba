@@ -36,14 +36,26 @@ class CallTimedOut(Exception):
 
 def _invoke_logged(
     name: OperationName, document: object, directory: Path | None
-) -> wiring.OperationResult:
-    """``wiring.invoke`` on the MCP door, logging a failure before it propagates.
+) -> dict[str, object]:
+    """``wiring.invoke`` on the MCP door, as the JSON document the CLI prints.
 
-    After the deadline nobody awaits this call's result, so a failure then would be
-    lost; every failure is logged here, then raised as it always was.
+    Runs in a worker thread, so the result is serialized here, not on the event loop.
+    A failure is logged before it propagates: after the deadline nobody awaits this
+    call's result, so a failure then would be lost.
+
+    ``answer`` first checks the config this call will use against the deadline (D12):
+    the start-up check saw the config as it was then, and a person may have raised
+    ``resume_wait_seconds`` since. The refusal comes before anything is recorded.
+
+    Raises:
+        wiring.DeadlineError: ``answer``'s bound is not below the deadline.
     """
+    if name is OperationName.ANSWER:
+        wiring.check_deadline(wiring.load_config(), MCP_CALL_DEADLINE_SECONDS)
     try:
-        return wiring.invoke(name, document, directory, Door.MCP)
+        return wiring.result_document(
+            wiring.invoke(name, document, directory, Door.MCP)
+        )
     except Exception:
         logger.exception("%s failed in its worker thread", name.value)
         raise
@@ -57,17 +69,17 @@ async def run_in_process(
     Raises:
         CallTimedOut: The call outlived ``MCP_CALL_DEADLINE_SECONDS``.
         wiring.OPERATIONAL_ERRORS: As the operation raises them.
+        wiring.DeadlineError: ``answer`` with a config whose bound reaches the deadline.
         ValueError: ``spec`` has no timeout advice (it is not an in-process tool).
     """
     if spec.timeout_advice is None:
         raise ValueError(f"{spec.name.value} is not an in-process tool")
     deadline = MCP_CALL_DEADLINE_SECONDS
     with anyio.move_on_after(deadline):
-        result = await anyio.to_thread.run_sync(
+        return await anyio.to_thread.run_sync(
             partial(_invoke_logged, spec.name, document, directory),
             abandon_on_cancel=True,
         )
-        return wiring.result_document(result)
     # Reached only when the deadline cancelled the wait: a ``return`` or an error
     # inside the block never gets here. ``move_on_after`` rather than ``fail_after``
     # so a ``TimeoutError`` of the operation itself is never taken for the deadline.

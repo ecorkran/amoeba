@@ -43,7 +43,7 @@ def test_a_pm_answer_to_a_waiting_question_keeps_its_reason_and_detail(
 ) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        add_pm_answer(transaction, KEY, "Use 300 lines.", now=NOW)
+        add_pm_answer(transaction, KEY, "Use 300 lines.", now=NOW, via=None)
 
     assert _retained(store) == (
         QuestionState.ANSWERED,

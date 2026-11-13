@@ -129,7 +129,7 @@ def test_a_new_pm_answer_to_the_same_question_restores_precedent(
     seq = waiting_then_pm(store, SECOND, LINT, 2)
     _retract(store, seq)
     with store.write() as transaction:
-        add_pm_answer(transaction, SECOND, "the corrected answer", now=at(3))
+        add_pm_answer(transaction, SECOND, "the corrected answer", now=at(3), via=None)
 
     assert _precedent(store) == ["the corrected answer"]
 

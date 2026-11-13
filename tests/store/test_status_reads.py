@@ -62,7 +62,7 @@ def test_open_questions_are_the_waiting_rows_of_the_given_members_oldest_first(
         insert_question(
             transaction, waiting_question(answered, member_id=MEMBER_ID), now=NOW
         )
-        add_pm_answer(transaction, answered, "ok", now=NOW)
+        add_pm_answer(transaction, answered, "ok", now=NOW, via=None)
 
     with store.read() as transaction:
         opened = open_questions(transaction, [MEMBER_ID])
@@ -82,13 +82,15 @@ def test_the_latest_row_of_a_run_is_the_newer_question_with_its_latest_answer(
 ) -> None:
     with store.write() as transaction:
         insert_question(transaction, claimed_question(EARLY), now=NOW)
-        add_pm_answer(transaction, EARLY, "old answer", now=NOW)
+        add_pm_answer(transaction, EARLY, "old answer", now=NOW, via=None)
         insert_question(
             transaction, waiting_question(LATE), now=NOW + timedelta(minutes=5)
         )
-        add_pm_answer(transaction, LATE, "first", now=NOW + timedelta(minutes=6))
+        add_pm_answer(
+            transaction, LATE, "first", now=NOW + timedelta(minutes=6), via=None
+        )
         newest = add_pm_answer(
-            transaction, LATE, "second", now=NOW + timedelta(minutes=7)
+            transaction, LATE, "second", now=NOW + timedelta(minutes=7), via=None
         )
         insert_question(transaction, claimed_question(OTHER_RUN), now=NOW)
         insert_question(

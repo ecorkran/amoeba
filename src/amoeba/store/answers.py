@@ -130,13 +130,14 @@ def add_pm_answer(
     answer: str,
     *,
     now: datetime,
-    via: Door | None = None,
+    via: Door | None,
 ) -> int:
     """Add a PM answer and set the question ``answered`` from any state; returns the
     answer's ``seq``. ``waiting_reason`` and ``waiting_detail`` stay as they were.
 
-    ``via`` is the door that carried the answer; ``None`` records none (an answer
-    given by no door, as the rows from before migration 004 are)."""
+    ``via`` is the door that carried the answer. It is required so no writer records
+    a PM answer without saying where it came from; ``None`` is for a caller that
+    builds a row as it was before migration 004 (a test fixture)."""
     recorded = encode_timestamp(now)
     cursor = transaction.execute(
         sql.INSERT_RECORDED_ANSWER,

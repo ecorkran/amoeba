@@ -208,7 +208,7 @@ def test_a_pm_answer_during_settling_makes_it_superseded(
     _write_replies(tmp_path, answer=_proposed(), check=YES)
     rig = build_deps(tmp_path, polls={}, spawns=[])
     with store.write() as transaction:
-        add_pm_answer(transaction, KEY, "PM says 250.", now=NOW)
+        add_pm_answer(transaction, KEY, "PM says 250.", now=NOW, via=None)
 
     result = settle(store, rig.deps, _claim(), _completed())
 
@@ -296,7 +296,7 @@ def test_the_answer_limit_counts_automatic_answers_only(
                 claimed_question(key, answering_run_id=f"pm-claim-{number}"),
                 now=NOW,
             )
-            add_pm_answer(transaction, key, "pm", now=NOW)
+            add_pm_answer(transaction, key, "pm", now=NOW, via=None)
     _write_replies(tmp_path, answer=_proposed(), check=YES)
     rig = build_deps(tmp_path, polls={}, spawns=[])
 

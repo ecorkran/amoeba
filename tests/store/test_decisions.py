@@ -101,7 +101,9 @@ def test_a_row_carries_answer_question_member_program_and_prior(
 def test_a_pm_answer_after_an_automatic_one_names_it_as_prior(store: Store) -> None:
     automatic = automatic_answer(store, FIRST, CORE, 1)
     with store.write() as transaction:
-        override = add_pm_answer(transaction, FIRST, "pm says otherwise", now=at(2))
+        override = add_pm_answer(
+            transaction, FIRST, "pm says otherwise", now=at(2), via=None
+        )
 
     with store.read() as transaction:
         rows = answers_since(transaction, after_seq=0)

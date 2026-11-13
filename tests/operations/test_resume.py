@@ -86,7 +86,7 @@ def _question(store: Store) -> tuple[QuestionRecord, int]:
     )
     with store.write() as transaction:
         insert_question(transaction, new, now=NOW)
-        seq = add_pm_answer(transaction, KEY, ANSWER_TEXT, now=NOW)
+        seq = add_pm_answer(transaction, KEY, ANSWER_TEXT, now=NOW, via=None)
     with store.read() as transaction:
         record = get_question(transaction, KEY)
     assert record is not None
@@ -292,7 +292,7 @@ def test_an_answer_of_another_question_is_a_programming_error(
             ),
             now=NOW,
         )
-        foreign = add_pm_answer(transaction, other, "x", now=NOW)
+        foreign = add_pm_answer(transaction, other, "x", now=NOW, via=None)
     rig = build_deps(tmp_path, polls={RUN: [PAUSE]}, spawns=[])
 
     with pytest.raises(ValueError, match="not an answer"):
@@ -402,7 +402,7 @@ def test_instructions_are_one_argv_element_holding_the_composed_text(
     )
     with store.write() as transaction:
         insert_question(transaction, new, now=NOW)
-        seq = add_pm_answer(transaction, KEY, answer, now=NOW)
+        seq = add_pm_answer(transaction, KEY, answer, now=NOW, via=None)
     with store.read() as transaction:
         question = get_question(transaction, KEY)
     assert question is not None

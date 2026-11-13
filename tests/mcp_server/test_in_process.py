@@ -12,6 +12,7 @@ from pathlib import Path
 
 import anyio
 import pytest
+import yaml
 from user_configs import example_config_text
 from wiring_support import is_closed, record_opened_stores
 
@@ -283,6 +284,13 @@ def test_the_timed_out_text_carries_that_tools_advice(
     release = threading.Event()
     monkeypatch.setattr(wiring, "invoke", _blocking(release))
     monkeypatch.setattr(in_process, "MCP_CALL_DEADLINE_SECONDS", 0.05)
+
+    # A 0.05 s deadline is below any real ``answer`` bound; this test is about the
+    # text of a timeout, so the per-call config check is set aside.
+    def no_check(config: object, deadline: float) -> None:
+        return None
+
+    monkeypatch.setattr(wiring, "check_deadline", no_check)
     advice = (
         READ_ADVICE
         if tool.name in {OperationName.STATUS, OperationName.DECISIONS}
@@ -300,6 +308,54 @@ def test_the_timed_out_text_carries_that_tools_advice(
     assert str(raised.value) == (
         f"{tool.name.value} did not finish within 0.05 s; {advice}"
     )
+
+
+def _raise_resume_wait(seconds: float) -> None:
+    """Edit the running world's config, as a person could while a server runs."""
+    path = config_path()
+    config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    config["resume_wait_seconds"] = seconds
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+
+def test_an_answer_is_refused_before_it_acts_when_the_config_outgrew_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[OperationName] = []
+
+    def recorder(
+        name: OperationName, document: object, directory: Path | None, door: Door
+    ) -> MarkReadResult:
+        calls.append(name)
+        return STUB_RESULT
+
+    monkeypatch.setattr(wiring, "invoke", recorder)
+    _raise_resume_wait(in_process.MCP_CALL_DEADLINE_SECONDS)
+
+    async def scenario() -> None:
+        await run_in_process(_spec(OperationName.ANSWER), {"run_id": "r"}, None)
+
+    with pytest.raises(wiring.DeadlineError, match="resume_wait_seconds"):
+        anyio.run(scenario)
+
+    assert calls == []
+
+
+def test_only_answer_is_held_to_the_answer_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def stub_invoke(*_arguments: object) -> MarkReadResult:
+        return STUB_RESULT
+
+    monkeypatch.setattr(wiring, "invoke", stub_invoke)
+    _raise_resume_wait(in_process.MCP_CALL_DEADLINE_SECONDS)
+
+    async def scenario() -> dict[str, object]:
+        return await run_in_process(
+            _spec(OperationName.MARK_READ), {"through": 0}, None
+        )
+
+    assert anyio.run(scenario)["outcome"] == "unchanged"
 
 
 def test_an_exception_raised_after_the_deadline_is_logged_at_error(

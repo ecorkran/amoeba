@@ -63,7 +63,7 @@ def _row(store: Store, key: QuestionKey = KEY) -> QuestionRecord:
 def _answered(store: Store, outcome: ResumeOutcome | None) -> int:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        seq = add_pm_answer(transaction, KEY, "an answer", now=NOW)
+        seq = add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
         if outcome is not None:
             record_resume(transaction, seq, outcome, detail="why", log="/log", at=NOW)
     return seq

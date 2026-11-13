@@ -15,6 +15,7 @@ from pathlib import Path
 
 import anyio
 import mcp_types as types
+import pytest
 from cf_fixtures import DEFAULT_WORKTREE, write_fake_cf
 from fake_sq import write_fake_sq
 from live_environment import process_environment
@@ -82,16 +83,19 @@ def test_the_server_refuses_to_start_without_a_config(tmp_path: Path) -> None:
     parameters = _parameters(tmp_path)
     (Path(os.environ["AMOEBA_HOME"]) / "config.yaml").unlink()
 
+    stderr_log = tmp_path / "server-stderr.log"
+
     async def start() -> None:
         with anyio.fail_after(TIMEOUT_SECONDS):
-            async with stdio_client(parameters) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
+            with stderr_log.open("w", encoding="utf-8") as errlog:
+                async with stdio_client(parameters, errlog=errlog) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
 
-    try:
+    # The server exits at start-up, so the handshake ends in a closed connection
+    # (the SDK raises it inside nested task-group groups).
+    with pytest.raises(ExceptionGroup):
         anyio.run(start)
-    except BaseException as error:  # noqa: BLE001 - any failure to start counts
-        # Expected: the server exited at start-up, so the handshake cannot complete.
-        assert not isinstance(error, TimeoutError)
-    else:
-        raise AssertionError("a server with no config completed the handshake")
+
+    reported = stderr_log.read_text(encoding="utf-8")
+    assert "error: ConfigError: no config at" in reported, reported

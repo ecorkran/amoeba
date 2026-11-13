@@ -252,7 +252,7 @@ def test_answered_unresumed_exits_by_the_sweep(tmp_path: Path) -> None:
     with world(tmp_path) as w:
         _wait(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, KEY, "an answer", now=NOW)
+            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
         bound = timedelta(seconds=resume_bound_seconds(w.config))
 
         assert not _sweep(w, bound - timedelta(seconds=1)).changed_anything
@@ -268,7 +268,7 @@ def test_answered_unresumed_exits_by_the_hook_resuming_it(tmp_path: Path) -> Non
     with world(tmp_path, paused_polls=(PAUSE, *RESUME_POLLS)) as w:
         _wait(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, KEY, "an answer", now=NOW)
+            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
 
         w.handle()
 
@@ -281,7 +281,7 @@ def test_answered_unresumed_exits_by_dismiss(tmp_path: Path) -> None:
     with world(tmp_path) as w:
         _wait(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, KEY, "an answer", now=NOW)
+            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
 
         assert _dismiss(w) is DismissOutcome.DISMISSED
 

@@ -86,8 +86,10 @@ def _validated(raw: Mapping[str, object] | None) -> HandlePauseCall:
         raise RequestError(problems) from error
 
 
-def _start(script: Path, call: HandlePauseCall) -> StartedCall:
-    """Create the logs and start the child; blocking, so it runs in a thread."""
+def _start(call: HandlePauseCall) -> StartedCall:
+    """Find the script, create the logs and start the child; blocking (a stat and
+    file creation), so it runs in a thread."""
+    script = resolve_amoeba_script()
     started_at = datetime.now(UTC)
     logs = wiring.detached_logs(
         OperationName.HANDLE_PAUSE, started_at, uuid.uuid4().hex[:UNIQUE_LENGTH]
@@ -124,5 +126,4 @@ async def start_handle_pause(raw: Mapping[str, object] | None) -> StartedCall:
         wiring.OPERATIONAL_ERRORS: The state home cannot be located.
     """
     call = _validated(raw)
-    script = resolve_amoeba_script()
-    return await anyio.to_thread.run_sync(partial(_start, script, call))
+    return await anyio.to_thread.run_sync(partial(_start, call))

@@ -188,7 +188,7 @@ def test_open_questions_block_the_removal_until_dismissed(store: Store) -> None:
 def test_an_answer_not_yet_handed_over_blocks_the_removal_too(store: Store) -> None:
     _open_question(store, ANSWERED, waiting=True)
     with store.write() as transaction:
-        add_pm_answer(transaction, ANSWERED, "an answer", now=NOW)
+        add_pm_answer(transaction, ANSWERED, "an answer", now=NOW, via=None)
 
     blocked = _set_up(store, REMOVE_CONSUMER)
 

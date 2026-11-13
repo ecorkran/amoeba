@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from typing import Any, Final
 
 import anyio
+import anyio.to_thread
 import mcp_types as types
 from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
@@ -54,10 +55,12 @@ INSTRUCTIONS: Final = (
     "`handle_pause` and the question key for `answer`. `answer` carries only a "
     "decision the PM actually gave, passed on as given, never one you composed."
 )
-#: Failures reported as ``<ExceptionName>: <message>``: the operational errors and
-#: the two ways a detached start fails.
+#: Failures reported as ``<ExceptionName>: <message>``: the operational errors, an
+#: ``answer`` refused for a config the deadline cannot cover, and the two ways a
+#: detached start fails.
 _REPORTED_ERRORS: Final = (
     *wiring.OPERATIONAL_ERRORS,
+    wiring.DeadlineError,
     AmoebaScriptMissing,
     HandlePauseNotStarted,
 )
@@ -86,10 +89,11 @@ async def _run(
     spec: ToolSpec, arguments: Mapping[str, object] | None
 ) -> dict[str, object]:
     """Run the tool and return its JSON result; the errors propagate to the caller."""
-    document, directory = prepare_arguments(spec, arguments)
     if spec.mode is RunMode.DETACHED:
-        # The detached start validates the whole request itself, directory included.
+        # ``HandlePauseCall`` is the one validator of the detached request, the
+        # directory included.
         return (await start_handle_pause(arguments)).model_dump(mode="json")
+    document, directory = prepare_arguments(spec, arguments)
     return await run_in_process(spec, document, directory)
 
 
@@ -106,7 +110,9 @@ async def call_tool(
     if spec is None:
         return _error(f"unknown tool: {name}")
     try:
-        return _ok(await _run(spec, arguments))
+        document = await _run(spec, arguments)
+        # Serialized in a thread: a long ``decisions`` listing is not loop-sized work.
+        return await anyio.to_thread.run_sync(_ok, document)
     except RequestError as error:
         return _error(f"RequestError: {error}")
     except CallTimedOut as error:
@@ -118,10 +124,18 @@ async def call_tool(
         return _error(f"internal error: {error}")
 
 
-async def _on_list_tools(
-    ctx: ServerRequestContext[Any], params: types.PaginatedRequestParams | None
-) -> types.ListToolsResult:
-    return types.ListToolsResult(
+async def _on_call_tool(
+    ctx: ServerRequestContext[Any], params: types.CallToolRequestParams
+) -> types.CallToolResult:
+    return await call_tool(params.name, params.arguments)
+
+
+def build_server() -> Server[Any]:
+    """The MCP server: one tool per ``TOOLS`` row, no input validation by the SDK.
+
+    The published tools, with their schemas, are built once here, not per request.
+    """
+    published = types.ListToolsResult(
         tools=[
             types.Tool(
                 name=spec.name.value,
@@ -132,19 +146,15 @@ async def _on_list_tools(
         ]
     )
 
+    async def on_list_tools(
+        ctx: ServerRequestContext[Any], params: types.PaginatedRequestParams | None
+    ) -> types.ListToolsResult:
+        return published
 
-async def _on_call_tool(
-    ctx: ServerRequestContext[Any], params: types.CallToolRequestParams
-) -> types.CallToolResult:
-    return await call_tool(params.name, params.arguments)
-
-
-def build_server() -> Server[Any]:
-    """The MCP server: one tool per ``TOOLS`` row, no input validation by the SDK."""
     return Server(
         SERVER_NAME,
         instructions=INSTRUCTIONS,
-        on_list_tools=_on_list_tools,
+        on_list_tools=on_list_tools,
         on_call_tool=_on_call_tool,
     )
 

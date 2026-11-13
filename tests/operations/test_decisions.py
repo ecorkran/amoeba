@@ -211,7 +211,7 @@ def test_a_pm_record_for_a_question_that_never_waited_has_no_basis(
     key = QuestionKey("run-9", "2026-11-10T12:00:00+00:00")
     automatic_answer(store, key, CORE, 1)
     with store.write() as transaction:
-        add_pm_answer(transaction, key, "pm override", now=at(2))
+        add_pm_answer(transaction, key, "pm override", now=at(2), via=None)
 
     first, second = _run(store, tmp_path).records
 
@@ -229,7 +229,7 @@ def test_each_record_shows_the_door_that_carried_it_or_none(
         add_pm_answer(transaction, key, "by cli", now=at(2), via=Door.CLI)
         add_pm_answer(transaction, key, "by mcp", now=at(3), via=Door.MCP)
         # No door: how every answer from before migration 004 reads.
-        add_pm_answer(transaction, key, "from before", now=at(4))
+        add_pm_answer(transaction, key, "from before", now=at(4), via=None)
 
     records = _run(store, tmp_path).records
 
@@ -242,7 +242,7 @@ def test_a_pm_override_shows_the_answer_it_replaced(
     key = QuestionKey("run-9", "2026-11-10T12:00:00+00:00")
     automatic = automatic_answer(store, key, CORE, 1)
     with store.write() as transaction:
-        add_pm_answer(transaction, key, "pm override", now=at(2))
+        add_pm_answer(transaction, key, "pm override", now=at(2), via=None)
 
     records = _run(store, tmp_path).records
 

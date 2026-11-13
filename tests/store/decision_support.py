@@ -80,4 +80,6 @@ def waiting_then_pm(store: Store, key: QuestionKey, member: str, minutes: int) -
         insert_question(
             transaction, waiting_question(key, member_id=member), now=at(minutes)
         )
-        return add_pm_answer(transaction, key, f"pm {key.run_id}", now=at(minutes))
+        return add_pm_answer(
+            transaction, key, f"pm {key.run_id}", now=at(minutes), via=None
+        )
