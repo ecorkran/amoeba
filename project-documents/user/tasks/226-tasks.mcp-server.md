@@ -159,32 +159,36 @@ usageByModel:
 
 ## 5. Server, console script, dependency (D1, D7, D8)
 
-- [ ] **5.1 `call_tool` result and error mapping and tests**
-  - [ ] Create `mcp/server.py` with `async call_tool(name, arguments)`: look up the `ToolSpec` (unknown name is `isError`); `prepare_arguments`; dispatch on `mode` to `run_in_process` or `start_handle_pause`; return `structuredContent` plus the same JSON as one text content block
-  - [ ] Map per D7: `RequestError` to `isError` text `RequestError: <detail>`; `CallTimedOut` to `isError` with its text prefixed `TimedOut: `; `OPERATIONAL_ERRORS` to `isError` text `<ExceptionName>: <message>` (the CLI's stderr text); a `LaunchError` result or a log `OSError` to `isError`; any other exception is the process-boundary handler: `logger.exception`, return `isError` `internal error: <message>`, keep serving
-  - [ ] Test: a `rejected`-style result (CLI exit 1) is a normal result, not `isError`; each error row is `isError` with the stated text; an unexpected exception is `isError` `internal error:`, is logged at ERROR, and a following call still works; an unknown tool name is `isError`
-  - [ ] Test (dispatch): `call_tool("handle_pause", …)` with fakes for `start_handle_pause` and `run_in_process` reaches only `start_handle_pause` and returns its `StartedCall` JSON; an in-process tool name reaches only `run_in_process`
-  - [ ] Test: `structuredContent` equals the parsed text block
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **5.1 `call_tool` result and error mapping and tests**
+  - [x] Create `mcp/server.py` with `async call_tool(name, arguments)`: look up the `ToolSpec` (unknown name is `isError`); `prepare_arguments`; dispatch on `mode` to `run_in_process` or `start_handle_pause`; return `structuredContent` plus the same JSON as one text content block
+  - [x] Map per D7: `RequestError` to `isError` text `RequestError: <detail>`; `CallTimedOut` to `isError` with its text prefixed `TimedOut: `; `OPERATIONAL_ERRORS` to `isError` text `<ExceptionName>: <message>` (the CLI's stderr text); a `LaunchError` result or a log `OSError` to `isError`; any other exception is the process-boundary handler: `logger.exception`, return `isError` `internal error: <message>`, keep serving
+  - [x] Test: a `rejected`-style result (CLI exit 1) is a normal result, not `isError`; each error row is `isError` with the stated text; an unexpected exception is `isError` `internal error:`, is logged at ERROR, and a following call still works; an unknown tool name is `isError`
+  - [x] Test (dispatch): `call_tool("handle_pause", …)` with fakes for `start_handle_pause` and `run_in_process` reaches only `start_handle_pause` and returns its `StartedCall` JSON; an in-process tool name reaches only `run_in_process`
+  - [x] Test: `structuredContent` equals the parsed text block
+  - [x] Success: module imports; pyright strict clean; tests pass
+  - Note: `call_tool` returns `mcp_types.CallToolResult` (`structured_content`, `is_error`). Reported errors are `wiring.OPERATIONAL_ERRORS`, `AmoebaScriptMissing` and `HandlePauseNotStarted`, plus the D7 rows. An unknown tool is an error. The process-boundary handler logs with `logger.exception` and returns `internal error: ...`. For `handle_pause`, `call_tool` passes the raw arguments to `start_handle_pause`, which re-validates them. Tests: `tests/mcp_server/test_call_tool.py`.
 
-- [ ] **5.2 `main()`, server instructions and `list_tools`**
-  - [ ] In `mcp/server.py` build `mcp.server.lowlevel.Server("amoeba", instructions=...)` with `on_list_tools` returning one tool per `TOOLS` row (`name`, `description`, `input_schema(spec)`) and `on_call_tool` calling `call_tool`
-  - [ ] Instructions are short: the tools are the CLI's operations; `handle_pause` returns a receipt; `status` gives the inputs for `handle_pause` and `answer`; `answer` carries only a decision the PM gave (D1)
-  - [ ] `main()` takes no arguments; it calls `resolve_amoeba_script()` first and exits non-zero with a stderr message if it fails; then `wiring.prepare_home()` (a one-line wrapper over `prepare_state_home(state_layout())`, added to `wiring.py` and its `__all__` in this task) and `wiring.check_deadline(load_config(), MCP_CALL_DEADLINE_SECONDS)`, each exiting non-zero with the CLI's stderr text for `OPERATIONAL_ERRORS` and `DeadlineError`; then it runs the server over `stdio_server()` with `anyio.run`. The server ends when the client closes stdin. Logging is configured to stderr only
-  - [ ] Test: with `resolve_amoeba_script` patched to raise, `main()` exits non-zero, writes the message to stderr and starts no server
-  - [ ] Test: against a throwaway legacy home, `main()` calls `prepare_home` before it serves (a recorder on `prepare_home` and the serve step sees that order) and the state is moved; with `prepare_home` raising a `StoreRelocateError`, `main()` exits non-zero with the CLI's text and serves nothing; with a config whose bound is not below the deadline, `main()` exits non-zero naming `resume_wait_seconds` and serves nothing
-  - [ ] Test: two `wiring.invoke` calls started at once against a second throwaway legacy home both return results and the move happens once (228's lock keeps them apart)
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **5.2 `main()`, server instructions and `list_tools`**
+  - [x] In `mcp/server.py` build `mcp.server.lowlevel.Server("amoeba", instructions=...)` with `on_list_tools` returning one tool per `TOOLS` row (`name`, `description`, `input_schema(spec)`) and `on_call_tool` calling `call_tool`
+  - [x] Instructions are short: the tools are the CLI's operations; `handle_pause` returns a receipt; `status` gives the inputs for `handle_pause` and `answer`; `answer` carries only a decision the PM gave (D1)
+  - [x] `main()` takes no arguments; it calls `resolve_amoeba_script()` first and exits non-zero with a stderr message if it fails; then `wiring.prepare_home()` (a one-line wrapper over `prepare_state_home(state_layout())`, added to `wiring.py` and its `__all__` in this task) and `wiring.check_deadline(load_config(), MCP_CALL_DEADLINE_SECONDS)`, each exiting non-zero with the CLI's stderr text for `OPERATIONAL_ERRORS` and `DeadlineError`; then it runs the server over `stdio_server()` with `anyio.run`. The server ends when the client closes stdin. Logging is configured to stderr only
+  - [x] Test: with `resolve_amoeba_script` patched to raise, `main()` exits non-zero, writes the message to stderr and starts no server
+  - [x] Test: against a throwaway legacy home, `main()` calls `prepare_home` before it serves (a recorder on `prepare_home` and the serve step sees that order) and the state is moved; with `prepare_home` raising a `StoreRelocateError`, `main()` exits non-zero with the CLI's text and serves nothing; with a config whose bound is not below the deadline, `main()` exits non-zero naming `resume_wait_seconds` and serves nothing
+  - [x] Test: two `wiring.invoke` calls started at once against a second throwaway legacy home both return results and the move happens once (228's lock keeps them apart)
+  - [x] Success: module imports; pyright strict clean; tests pass
+  - Note: `build_server()` uses `mcp.server.Server("amoeba", instructions=..., on_list_tools=..., on_call_tool=...)`, the SDK 2.3.0 constructor handlers. The SDK does no input validation, so there is no flag to turn off. `main()` takes no arguments and runs `resolve_amoeba_script`, then `wiring.prepare_home` (new, a wrapper over `prepare_state_home(state_layout())`), then `wiring.check_deadline(load_config(), MCP_CALL_DEADLINE_SECONDS)`, then serves over `stdio_server()`. A failure writes `error: <ExceptionName>: <message>` to stderr and exits 1 (`EXIT_START_FAILED`). The server needs `config.yaml` at start-up, so `amoeba-mcp` refuses to start without it. Tests: `tests/mcp_server/test_server_main.py`.
 
-- [ ] **5.3 Packaging and boundary test**
-  - [ ] Add `amoeba-mcp = "amoeba.mcp.server:main"` beside `amoeba` in `[project.scripts]`; run `uv sync`
-  - [ ] Test (boundary): an AST test parses every file in `src/amoeba/mcp/` and asserts none imports `amoeba.store`, `amoeba.config`, `amoeba.upstream`, `amoeba.answering` or `amoeba.cli` (absolute or relative form)
-  - [ ] Success: `uv run amoeba-mcp` starts and waits on stdin without printing to stdout; boundary test passes
+- [x] **5.3 Packaging and boundary test**
+  - [x] Add `amoeba-mcp = "amoeba.mcp.server:main"` beside `amoeba` in `[project.scripts]`; run `uv sync`
+  - [x] Test (boundary): an AST test parses every file in `src/amoeba/mcp/` and asserts none imports `amoeba.store`, `amoeba.config`, `amoeba.upstream`, `amoeba.answering` or `amoeba.cli` (absolute or relative form)
+  - [x] Success: `uv run amoeba-mcp` starts and waits on stdin without printing to stdout; boundary test passes
+  - Note: `amoeba-mcp` was added to `[project.scripts]` and installed by `uv sync`. Manual check: `uv run amoeba-mcp` with a throwaway `AMOEBA_HOME` and config waited on stdin, exited 0 when stdin closed, and wrote 0 bytes to stdout. The boundary test, `tests/mcp_server/test_boundary.py`, covers absolute and relative imports and every file in `src/amoeba/mcp`.
 
-- [ ] **5.4 stdio smoke test**
-  - [ ] Test: the SDK's stdio client starts `amoeba-mcp` (the `amoeba-mcp` script beside `sys.executable`, with the home environment variable noted in task 0.2 set to a temp directory and fake `cf` and `sq` on `PATH`) and lists eight tools whose names equal `OperationName`, each with an input schema; also call `decisions` on an empty store and check a normal result
-  - [ ] Success: smoke test passes without leaving a child process behind
-  - [ ] Success: checks pass; the CLI's existing tests pass, edited only where task 1.2 or 2.1 requires it
+- [x] **5.4 stdio smoke test**
+  - [x] Test: the SDK's stdio client starts `amoeba-mcp` (the `amoeba-mcp` script beside `sys.executable`, with the home environment variable noted in task 0.2 set to a temp directory and fake `cf` and `sq` on `PATH`) and lists eight tools whose names equal `OperationName`, each with an input schema; also call `decisions` on an empty store and check a normal result
+  - [x] Success: smoke test passes without leaving a child process behind
+  - [x] Success: checks pass; the CLI's existing tests pass, edited only where task 1.2 or 2.1 requires it
+  - Note: `tests/mcp_server/test_stdio_smoke.py` starts the installed `amoeba-mcp` with the SDK stdio client (throwaway `AMOEBA_HOME`, fake `cf` and `sq` on `PATH`). It lists the eight tools with object input schemas, and calls `decisions` on an empty store (a normal result whose `structuredContent` equals the text block). It also checks the server exits at start-up without a config. Leaving the client context closes stdin, which ends the server, so no child is left behind.
 
 **Commit**: `feat: add amoeba-mcp stdio server`
 

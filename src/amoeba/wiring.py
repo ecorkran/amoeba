@@ -45,7 +45,7 @@ from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, RetractResult, retract
 from amoeba.operations.set_up import set_up
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
-from amoeba.operations.state_move import open_state_store
+from amoeba.operations.state_move import open_state_store, prepare_state_home
 from amoeba.operations.status import StatusOutcome, StatusResult, status
 from amoeba.store.errors import StoreError
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
@@ -71,6 +71,7 @@ __all__ = [
     "is_rejected",
     "load_config",
     "open_store",
+    "prepare_home",
     "result_document",
     "start_child",
 ]
@@ -108,6 +109,17 @@ def load_config() -> UserConfig:
         AmoebaHomeError: ``AMOEBA_HOME`` is set but empty or relative.
     """
     return load_user_config(config_path())
+
+
+def prepare_home() -> None:
+    """Move legacy state to the state home once, before any call is served (228).
+
+    Raises:
+        AmoebaHomeError: ``AMOEBA_HOME`` is set but empty or relative.
+        StoreBusyError: The legacy store stayed locked past the timeout.
+        StoreRelocateError: A copy failed, did not verify, or a move failed.
+    """
+    prepare_state_home(state_layout())
 
 
 def open_store(layout: StateLayout) -> Store:
