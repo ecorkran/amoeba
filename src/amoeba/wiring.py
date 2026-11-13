@@ -40,18 +40,20 @@ from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
+from amoeba.operations.resume import resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, RetractResult, retract
 from amoeba.operations.set_up import set_up
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
 from amoeba.operations.state_move import open_state_store
 from amoeba.operations.status import StatusOutcome, StatusResult, status
 from amoeba.store.errors import StoreError
-from amoeba.store.store import Store
+from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 
 __all__ = [
     "OPERATIONAL_ERRORS",
+    "DeadlineError",
     "Door",
     "LaunchError",
     "LaunchLogs",
@@ -60,6 +62,8 @@ __all__ = [
     "OperationResult",
     "Store",
     "UserConfig",
+    "answer_bound_seconds",
+    "check_deadline",
     "default_deps",
     "invoke",
     "is_rejected",
@@ -196,6 +200,46 @@ def invoke(
                 )
             case _:
                 assert_never(name)
+
+
+class DeadlineError(Exception):
+    """The config lets an ``answer`` run past the MCP call deadline."""
+
+
+#: Store waits ``answer`` can make before its resume: the legacy-move lock, the
+#: store open and the answer's own write transaction, each at most one busy timeout.
+ANSWER_STORE_WAITS: Final = 3
+
+
+def answer_bound_seconds(config: UserConfig) -> float:
+    """The longest an ``answer`` call can take (226 D12).
+
+    ``resume_bound_seconds`` (the resume's wait, polls, terminate graces and store
+    write) plus the store waits before it. ``answer`` calls no ``cf`` and no other
+    ``sq`` command; the polls it makes are inside the resume bound.
+    """
+    return resume_bound_seconds(config) + ANSWER_STORE_WAITS * BUSY_TIMEOUT_SECONDS
+
+
+def check_deadline(config: UserConfig, deadline_seconds: float) -> None:
+    """Refuse a config whose ``answer`` could outlive the MCP call deadline.
+
+    A call cut off after it recorded an answer and started a resume would report a
+    timeout for work that happened, so the bound must be below the deadline.
+
+    Raises:
+        DeadlineError: ``answer_bound_seconds`` is not below ``deadline_seconds``;
+            the message names ``resume_wait_seconds`` and the largest value allowed.
+    """
+    bound = answer_bound_seconds(config)
+    if bound < deadline_seconds:
+        return
+    largest = deadline_seconds - (bound - config.resume_wait_seconds)
+    raise DeadlineError(
+        f"resume_wait_seconds is {config.resume_wait_seconds:g}, so an answer can "
+        f"take {bound:g} s, which is not below the MCP call deadline of "
+        f"{deadline_seconds:g} s; set resume_wait_seconds below {largest:g}"
+    )
 
 
 def result_document(result: OperationResult) -> dict[str, object]:

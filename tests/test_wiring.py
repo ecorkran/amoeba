@@ -8,11 +8,11 @@ a request that the operation refuses (``rejected``) before it reaches ``sq`` or
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from user_configs import example_config_text
+from wiring_support import TrackedStore, is_closed, record_opened_stores
 
 from amoeba import wiring
 from amoeba.cli import main as cli
@@ -28,7 +28,6 @@ from amoeba.operations.retract import RetractResult
 from amoeba.operations.set_up_models import SetUpResult
 from amoeba.operations.status import StatusResult
 from amoeba.store.errors import StoreBusyError, StoreError
-from amoeba.store.store import Store
 from amoeba.upstream.squadron.errors import SquadronError
 
 #: For each in-process operation, a document it refuses and the result type it gives.
@@ -50,27 +49,9 @@ def _config() -> None:
 
 
 @pytest.fixture
-def opened(monkeypatch: pytest.MonkeyPatch) -> list[Store]:
+def opened(monkeypatch: pytest.MonkeyPatch) -> list[TrackedStore]:
     """Every store ``invoke`` opens, so a test can ask whether it was closed."""
-    stores: list[Store] = []
-    real_open: Callable[..., Store] = wiring.open_store
-
-    def recording_open(layout: object) -> Store:
-        store = real_open(layout)
-        stores.append(store)
-        return store
-
-    monkeypatch.setattr(wiring, "open_store", recording_open)
-    return stores
-
-
-def _is_closed(store: Store) -> bool:
-    try:
-        with store.read():
-            return False
-    except StoreError:
-        # Expected: the store wraps SQLite's "Cannot operate on a closed database".
-        return True
+    return record_opened_stores(monkeypatch)
 
 
 def test_default_deps_sets_every_field() -> None:
@@ -124,7 +105,7 @@ def test_the_cli_reports_each_operational_error_as_exit_three(
 
 @pytest.mark.parametrize("name", list(REFUSED), ids=lambda name: name.value)
 def test_invoke_returns_the_result_type_the_cli_prints(
-    name: OperationName, tmp_path: Path, opened: list[Store]
+    name: OperationName, tmp_path: Path, opened: list[TrackedStore]
 ) -> None:
     document, result_type = REFUSED[name]
 
@@ -134,11 +115,11 @@ def test_invoke_returns_the_result_type_the_cli_prints(
     assert wiring.is_rejected(result)
     assert wiring.result_document(result)["outcome"] == "rejected"
     (store,) = opened
-    assert _is_closed(store)
+    assert is_closed(store)
 
 
 def test_invoke_closes_the_store_when_the_operation_raises(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, opened: list[Store]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, opened: list[TrackedStore]
 ) -> None:
     def raising(*_arguments: object, **_keywords: object) -> object:
         raise SquadronError("sq down")
@@ -149,7 +130,7 @@ def test_invoke_closes_the_store_when_the_operation_raises(
         wiring.invoke(OperationName.MARK_READ, {"through": 0}, None, Door.MCP)
 
     (store,) = opened
-    assert _is_closed(store)
+    assert is_closed(store)
 
 
 @pytest.mark.parametrize("door", list(Door), ids=lambda door: door.value)
