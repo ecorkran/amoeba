@@ -15,7 +15,7 @@ projectState: Slices 222 to 225 and 228 are merged. The eight operations (`set_u
   is closed.
 dateCreated: 20261107
 dateUpdated: 20261112
-status: not_started
+status: complete
 turns: 7
 promptTokens: 182074
 cachedTokens: 148532
@@ -194,21 +194,24 @@ usageByModel:
 
 ## 6. Install docs and walkthrough (D9)
 
-- [ ] **6.1 `docs/mcp-server.md` and README link**
-  - [ ] Create `docs/mcp-server.md` with YAML frontmatter per `file-naming-conventions.md`. Content: install (`uv tool install --force <repo>`, which installs `amoeba` and `amoeba-mcp` into one environment); register once at user scope (`claude mcp add --scope user amoeba -- amoeba-mcp`, or a Codex `[mcp_servers.amoeba]` entry); the client must pass a `PATH` reaching `sq`, `cf` and `git` plus model credentials; restart the client session after a reinstall (a running server keeps the old code until then); the eight tools, that `handle_pause` returns a receipt whose stdout log holds the result, what a `TimedOut` result means (`status` and `decisions`: run the CLI in a shell; the write tools: the work may still finish, check `status` or `decisions` before repeating), the deadline's value and that start-up refuses a `resume_wait_seconds` whose bound is not below it, and how to raise each client's tool timeout from task 0.3's note; how to remove the registration (`claude mcp remove amoeba --scope user`)
-  - [ ] Check the Codex entry syntax against current Codex documentation before writing it; if it cannot be confirmed, state so in the doc rather than guessing
-  - [ ] Link the doc from the README
-  - [ ] Success: the doc exists, the README link resolves, and no credentials appear in either
+- [x] **6.1 `docs/mcp-server.md` and README link**
+  - [x] Create `docs/mcp-server.md` with YAML frontmatter per `file-naming-conventions.md`. Content: install (`uv tool install --force <repo>`, which installs `amoeba` and `amoeba-mcp` into one environment); register once at user scope (`claude mcp add --scope user amoeba -- amoeba-mcp`, or a Codex `[mcp_servers.amoeba]` entry); the client must pass a `PATH` reaching `sq`, `cf` and `git` plus model credentials; restart the client session after a reinstall (a running server keeps the old code until then); the eight tools, that `handle_pause` returns a receipt whose stdout log holds the result, what a `TimedOut` result means (`status` and `decisions`: run the CLI in a shell; the write tools: the work may still finish, check `status` or `decisions` before repeating), the deadline's value and that start-up refuses a `resume_wait_seconds` whose bound is not below it, and how to raise each client's tool timeout from task 0.3's note; how to remove the registration (`claude mcp remove amoeba --scope user`)
+  - [x] Check the Codex entry syntax against current Codex documentation before writing it; if it cannot be confirmed, state so in the doc rather than guessing
+  - [x] Link the doc from the README
+  - [x] Success: the doc exists, the README link resolves, and no credentials appear in either
+  - Note: Created `docs/mcp-server.md` (install, user-scope registration and removal, Codex entry, the eight tools, the `handle_pause` receipt, error texts, the 180 s deadline, client timeouts, start-up refusals) and linked it from README.md. Codex syntax checked 20261112 against learn.chatgpt.com/docs/extend/mcp (`~/.codex/config.toml`, `[mcp_servers.<name>]` with `command`, `args`, `tool_timeout_sec` (default 60), `env`, `env_vars`). No credentials appear in either file.
 
-- [ ] **6.2 Live walkthrough test**
-  - [ ] Add `tests/live/mcp/test_mcp_walkthrough_live.py` using the helpers and fixtures in `tests/live/pause/` (a throwaway member with its own Context Forge data directory and `AMOEBA_HOME`; a do-nothing `amoeba` first on `PATH` so the user-level pause hook cannot act on these runs; `amoeba-mcp` driven by the SDK stdio client from a working directory under `/tmp`). It runs design walkthrough steps 3 to 5: eight tools listed; `status` matches `amoeba status`; `decisions` then `mark_read` agree with the CLI; a real run pauses on a question; `handle_pause` returns a `StartedCall` at once and its stdout log later holds a `HandlePauseResult` and the calls log a line; `answer` through MCP then through the CLI lists `via: mcp` and `via: cli`; `dismiss` and `retract` return their results. A wrong result fails the test; nothing is retried
-  - [ ] Run it once with `uv run pytest tests/live/mcp`; fix failures in the code or the test, not by retrying
-  - [ ] Success: the test passes with real `sq`, `cf` and models; record the command and result under this task
+- [x] **6.2 Live walkthrough test**
+  - [x] Add `tests/live/mcp/test_mcp_walkthrough_live.py` using the helpers and fixtures in `tests/live/pause/` (a throwaway member with its own Context Forge data directory and `AMOEBA_HOME`; a do-nothing `amoeba` first on `PATH` so the user-level pause hook cannot act on these runs; `amoeba-mcp` driven by the SDK stdio client from a working directory under `/tmp`). It runs design walkthrough steps 3 to 5: eight tools listed; `status` matches `amoeba status`; `decisions` then `mark_read` agree with the CLI; a real run pauses on a question; `handle_pause` returns a `StartedCall` at once and its stdout log later holds a `HandlePauseResult` and the calls log a line; `answer` through MCP then through the CLI lists `via: mcp` and `via: cli`; `dismiss` and `retract` return their results. A wrong result fails the test; nothing is retried
+  - [x] Run it once with `uv run pytest tests/live/mcp`; fix failures in the code or the test, not by retrying
+  - [x] Success: the test passes with real `sq`, `cf` and models; record the command and result under this task
+  - Note: Added `tests/live/mcp/` (a conftest reusing the pause tier's fixtures, and `test_mcp_walkthrough_live.py`). It lowers the test world's `resume_wait_seconds` from 120 to 60 because `amoeba-mcp` refuses 89.5 or more, and uses one stdio session per call so the detached `handle_pause` child is shown to outlive its server. Command: `(set -a; . ./.env; set +a; uv run pytest tests/live/mcp)`. Result 20261112: `1 passed in 65.12s` with real sq, cf and models, first run.
 
-- [ ] **6.3 Verification walkthrough**
-  - [ ] Run design step 1: `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`; all pass
-  - [ ] Run design step 2: `uv tool install --force .` from the slice branch; `amoeba` and `amoeba-mcp` both resolve on `PATH`
-  - [ ] Run design step 6: `claude mcp add --scope user amoeba -- amoeba-mcp`, then `claude mcp list`; `amoeba` shows connected. This is the install and it stays registered. If `claude` is not on `PATH`, write `BLOCKED: claude CLI not installed` under this task and stop
-  - [ ] Success: all three pass; record each result under this task
+- [x] **6.3 Verification walkthrough**
+  - [x] Run design step 1: `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`; all pass
+  - [x] Run design step 2: `uv tool install --force .` from the slice branch; `amoeba` and `amoeba-mcp` both resolve on `PATH`
+  - [x] Run design step 6: `claude mcp add --scope user amoeba -- amoeba-mcp`, then `claude mcp list`; `amoeba` shows connected. This is the install and it stays registered. If `claude` is not on `PATH`, write `BLOCKED: claude CLI not installed` under this task and stop
+  - [x] Success: all three pass; record each result under this task
+  - Note: Step 1 (`uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`): all passed; 328 files formatted, 0 pyright errors, 1981 tests passed. Step 2 (`uv tool install --force .` from `226-slice.mcp-server`): `Installed 2 executables: amoeba, amoeba-mcp`, both linked in `~/.local/bin`. Step 6 (`claude mcp add --scope user amoeba -- amoeba-mcp`, then `claude mcp list`): `amoeba: amoeba-mcp` shows connected. The registration stays, as it is the install. The slice design's Verification Walkthrough records these commands and results.
 
 **Commit**: `docs: add MCP server install guide and live walkthrough`
