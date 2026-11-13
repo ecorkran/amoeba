@@ -18,10 +18,10 @@ from amoeba import wiring
 from amoeba.cli import main as cli
 from amoeba.config.home import AmoebaHomeError, config_path, state_layout
 from amoeba.config.user_config import ConfigError
-from amoeba.operations.answer import AnswerResult
+from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
-from amoeba.operations.mark_read import MarkReadResult
+from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.names import Door, OperationName
 from amoeba.operations.retract import RetractResult
@@ -150,6 +150,42 @@ def test_invoke_closes_the_store_when_the_operation_raises(
 
     (store,) = opened
     assert _is_closed(store)
+
+
+@pytest.mark.parametrize("door", list(Door), ids=lambda door: door.value)
+def test_invoke_gives_the_answer_operation_the_door_that_called(
+    monkeypatch: pytest.MonkeyPatch, door: Door
+) -> None:
+    seen: list[Door] = []
+
+    def recording(*_arguments: object, via: Door, **_keywords: object) -> object:
+        seen.append(via)
+        return AnswerResult(AnswerOutcome.REJECTED)
+
+    monkeypatch.setattr(wiring, "answer", recording)
+
+    wiring.invoke(OperationName.ANSWER, {}, None, door)
+
+    assert seen == [door]
+
+
+def test_the_cli_calls_invoke_as_the_cli_door(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    doors: list[Door] = []
+
+    def recording(
+        name: OperationName, document: object, directory: Path | None, door: Door
+    ) -> MarkReadResult:
+        doors.append(door)
+        return MarkReadResult(outcome=MarkReadOutcome.UNCHANGED, previous=0, current=0)
+
+    monkeypatch.setattr(cli, "invoke", recording)
+
+    assert cli.main(["mark_read", "--through", "0"]) == cli.EXIT_OK
+    capsys.readouterr()
+
+    assert doors == [Door.CLI]
 
 
 def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:

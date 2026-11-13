@@ -17,6 +17,7 @@ from amoeba.answering.values import AnsweredBy
 from amoeba.store.vocabulary import (
     ClosedReason,
     ConsumedMode,
+    Door,
     QuestionState,
     ResumeOutcome,
 )
@@ -34,6 +35,7 @@ ENUM_FOR_COLUMN: dict[str, type[StrEnum]] = {
     "answered_by": AnsweredBy,
     "resume_outcome": ResumeOutcome,
     "closed_reason": ClosedReason,
+    "via": Door,
 }
 
 

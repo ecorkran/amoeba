@@ -2,12 +2,17 @@
 
 ``OperationName`` is every operation's name once: the CLI registers its
 subcommands from it and the MCP tool table names its tools from it. ``Door`` is the
-way an answer reached Amoeba, recorded beside each PM answer.
+way a call reached Amoeba; it is defined in ``store.vocabulary`` (the store records
+it, and the store imports nothing from ``operations``) and re-exported here.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
+
+from amoeba.store.vocabulary import Door
+
+__all__ = ["Door", "OperationName"]
 
 
 class OperationName(StrEnum):
@@ -21,10 +26,3 @@ class OperationName(StrEnum):
     MARK_READ = "mark_read"
     DISMISS = "dismiss"
     RETRACT = "retract"
-
-
-class Door(StrEnum):
-    """Which interface carried a call: the command line or the MCP server."""
-
-    CLI = "cli"
-    MCP = "mcp"

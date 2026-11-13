@@ -30,7 +30,7 @@ from amoeba.store.answers import add_pm_answer, record_resume
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import find_question, get_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import ResumeOutcome
+from amoeba.store.vocabulary import Door, ResumeOutcome
 from amoeba.upstream.squadron.errors import SquadronError
 
 
@@ -71,9 +71,12 @@ class AnswerResult:
 
 
 def answer(
-    store: Store, config: UserConfig, document: object, *, deps: Deps
+    store: Store, config: UserConfig, document: object, *, deps: Deps, via: Door
 ) -> AnswerResult:
     """Record the PM's answer for the question ``document`` names, then resume.
+
+    ``via`` is the door that carried the call (226 D11): set by the door, never by
+    the request, and recorded beside the answer. It changes no outcome.
 
     Raises:
         StoreError: The store cannot be used.
@@ -94,7 +97,9 @@ def answer(
                     f"{request.run_id}` from the run's checkout first",
                 ),
             )
-        seq = add_pm_answer(transaction, found.key, request.text, now=deps.clock())
+        seq = add_pm_answer(
+            transaction, found.key, request.text, now=deps.clock(), via=via
+        )
         recorded = get_question(transaction, found.key)
     if recorded is None:
         raise ValueError(f"question {found.key} vanished after its answer was added")

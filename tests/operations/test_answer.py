@@ -23,7 +23,7 @@ from amoeba.store.questions import (
     insert_question,
     settle_waiting,
 )
-from amoeba.store.vocabulary import QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import Door, QuestionState, ResumeOutcome
 from amoeba.upstream.squadron.run_outcome import PollFailure
 from operations.handle_rig import (
     KEY,
@@ -73,8 +73,8 @@ def _waiting_row(w: World, key: QuestionKey = KEY, *, claimed_at: float = 0) -> 
         )
 
 
-def _ask(w: World, document: object) -> AnswerResult:
-    return answer(w.store, w.config, document, deps=w.deps)
+def _ask(w: World, document: object, via: Door = Door.CLI) -> AnswerResult:
+    return answer(w.store, w.config, document, deps=w.deps, via=via)
 
 
 def _answers(w: World, key: QuestionKey = KEY) -> tuple[AnswerRecord, ...]:
@@ -111,6 +111,31 @@ def test_an_answer_to_a_waiting_question_is_recorded_and_the_run_resumed(
         assert record.waiting_reason is DeclineReason.CHECK_SAID_NO
         assert record.waiting_detail == "not settled"
         assert w.spawned.resumes[0][-1] == f"You asked: {QUESTION}\nAnswer: {PM_TEXT}"
+
+
+@pytest.mark.parametrize("door", list(Door), ids=lambda door: door.value)
+def test_the_door_that_carried_the_answer_is_recorded_with_it(
+    tmp_path: Path, door: Door
+) -> None:
+    with world(tmp_path, paused_polls=RESUME_POLLS) as w:
+        _waiting_row(w)
+
+        result = _ask(w, {"run_id": RUN, "text": PM_TEXT}, door)
+
+        assert result.outcome is AnswerOutcome.RECORDED
+        (row,) = _answers(w)
+        assert row.via is door
+
+
+def test_a_request_cannot_set_the_door(tmp_path: Path) -> None:
+    with world(tmp_path) as w:
+        _waiting_row(w)
+
+        result = _ask(w, {"run_id": RUN, "text": PM_TEXT, "via": "mcp"})
+
+        assert result.outcome is AnswerOutcome.REJECTED
+        assert result.rejection is AnswerRejection.MALFORMED
+        assert _answers(w) == ()
 
 
 def test_no_question_is_rejected_and_says_to_run_handle_pause(tmp_path: Path) -> None:

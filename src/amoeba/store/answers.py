@@ -30,7 +30,7 @@ from amoeba.store.row_values import (
     vocabulary,
 )
 from amoeba.store.store import Store, Transaction
-from amoeba.store.vocabulary import QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import Door, QuestionState, ResumeOutcome
 
 
 def answer_from_row(row: Sequence[object]) -> AnswerRecord:
@@ -56,6 +56,7 @@ def answer_from_row(row: Sequence[object]) -> AnswerRecord:
         retracted_at=optional_timestamp(row[11], "answers.retracted_at"),
         retract_reason=optional_text(row[12], "answers.retract_reason"),
         resume_started_at=optional_timestamp(row[13], "answers.resume_started_at"),
+        via=None if row[14] is None else vocabulary(row[14], Door, "answers.via"),
     )
 
 
@@ -124,14 +125,30 @@ def pm_precedent(transaction: Transaction, member_id: str) -> tuple[PmPrecedent,
 
 
 def add_pm_answer(
-    transaction: Transaction, key: QuestionKey, answer: str, *, now: datetime
+    transaction: Transaction,
+    key: QuestionKey,
+    answer: str,
+    *,
+    now: datetime,
+    via: Door | None = None,
 ) -> int:
     """Add a PM answer and set the question ``answered`` from any state; returns the
-    answer's ``seq``. ``waiting_reason`` and ``waiting_detail`` stay as they were."""
+    answer's ``seq``. ``waiting_reason`` and ``waiting_detail`` stay as they were.
+
+    ``via`` is the door that carried the answer; ``None`` records none (an answer
+    given by no door, as the rows from before migration 004 are)."""
     recorded = encode_timestamp(now)
     cursor = transaction.execute(
         sql.INSERT_RECORDED_ANSWER,
-        (key.run_id, key.paused_at, AnsweredBy.PM.value, answer, None, recorded),
+        (
+            key.run_id,
+            key.paused_at,
+            AnsweredBy.PM.value,
+            answer,
+            None,
+            recorded,
+            None if via is None else via.value,
+        ),
     )
     transaction.execute(
         sql.MARK_QUESTION_ANSWERED,
@@ -270,6 +287,7 @@ def settle_answered(
                 answer,
                 serialize_cited(cited),
                 moment,
+                None,  # automatic answers are carried by no door
             ),
         )
         return Settled(integer(cursor.lastrowid, "answers.seq"))

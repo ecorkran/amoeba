@@ -101,14 +101,15 @@ usageByModel:
 
 ## 2. Door recorded on each answer (D11)
 
-- [ ] **2.1 Migration 004 and `via` through answer and decisions**
-  - [ ] Add `store/schema/004_answer_via.sql`: `ALTER TABLE answers ADD COLUMN via TEXT CHECK (via IN ('cli', 'mcp'))` with a header comment citing D11 and 222 D3. Raise `EXPECTED_SCHEMA_VERSION` to 4. Pin the CHECK list to `Door` in the vocabulary pinning test the way 003's lists are pinned
-  - [ ] Add `via: Door | None` to `AnswerRecord` and read it in `answer_from_row`; `add_pm_answer` writes it. `answer(…, via: Door)` takes it from the door (a keyword argument the request cannot set) and passes it to the store write. Every other writer of `answers` rows (the answerer's automatic answers) keeps `NULL`, as they are not carried by a door
-  - [ ] `decisions` entries gain `via` beside `answered_by`; a pre-004 row yields no value. Update `invoke` to pass `door`; the CLI passes `Door.CLI`
-  - [ ] Update `docs/store-contract.md` (the column, its vocabulary, the writer, schema version 4) and `docs/cli-contract.md` (`decisions` entry field; no new CLI input)
-  - [ ] Test: a migration from a version-3 store with answers adds the column, keeps every row with `via` NULL and stamps 4; `answer` through `invoke` with each `Door` stores it; `decisions` shows `cli` and `mcp` and shows no `via` for the old row; an unknown value is refused by the CHECK; a repeat run of the runner changes nothing
-  - [ ] Test: the existing contract-doc tests (`tests/test_contract_docs.py`) pass with the docs updated
-  - [ ] Success: tests pass; checks pass; no existing test edited except where it hard-codes schema version 3 or the `decisions` entry's field set
+- [x] **2.1 Migration 004 and `via` through answer and decisions**
+  - [x] Add `store/schema/004_answer_via.sql`: `ALTER TABLE answers ADD COLUMN via TEXT CHECK (via IN ('cli', 'mcp'))` with a header comment citing D11 and 222 D3. Raise `EXPECTED_SCHEMA_VERSION` to 4. Pin the CHECK list to `Door` in the vocabulary pinning test the way 003's lists are pinned
+  - [x] Add `via: Door | None` to `AnswerRecord` and read it in `answer_from_row`; `add_pm_answer` writes it. `answer(…, via: Door)` takes it from the door (a keyword argument the request cannot set) and passes it to the store write. Every other writer of `answers` rows (the answerer's automatic answers) keeps `NULL`, as they are not carried by a door
+  - [x] `decisions` entries gain `via` beside `answered_by`; a pre-004 row yields no value. Update `invoke` to pass `door`; the CLI passes `Door.CLI`
+  - [x] Update `docs/store-contract.md` (the column, its vocabulary, the writer, schema version 4) and `docs/cli-contract.md` (`decisions` entry field; no new CLI input)
+  - [x] Test: a migration from a version-3 store with answers adds the column, keeps every row with `via` NULL and stamps 4; `answer` through `invoke` with each `Door` stores it; `decisions` shows `cli` and `mcp` and shows no `via` for the old row; an unknown value is refused by the CHECK; a repeat run of the runner changes nothing
+  - [x] Test: the existing contract-doc tests (`tests/test_contract_docs.py`) pass with the docs updated
+  - [x] Success: tests pass; checks pass; no existing test edited except where it hard-codes schema version 3 or the `decisions` entry's field set
+  - Note: Added `store/schema/004_answer_via.sql` and set `EXPECTED_SCHEMA_VERSION` to 4. `Door` is defined in `store/vocabulary.py` (the store imports nothing from operations) and re-exported from `operations/names.py`. `AnswerRecord.via` is read by `answer_from_row`; `add_pm_answer(..., via: Door | None = None)` writes it (None for callers with no door); the answerer's automatic answer write passes NULL. `answer(..., via: Door)` is a required keyword; `wiring.invoke` passes its door; the CLI passes `Door.CLI`. `DecisionsRecord.via` sits beside `answered_by`. `docs/store-contract.md` and `docs/cli-contract.md` are updated. Existing tests were also edited for the pinned-column list (`answers.via`), the vocabulary pin (`via: Door`), `answer(...)` call sites (`via=Door.CLI`) and the `AnswerRecord` construction in `status_support.py` (`via=None`). New tests: `tests/store/test_migration_004.py` and `via` cases in `test_answer.py`, `test_decisions.py` and `test_wiring.py`. All four checks pass (ruff format, ruff check, pyright strict, pytest 1848 passed).
 
 **Commit**: `feat: record the door on each answer`
 

@@ -167,7 +167,13 @@ def invoke(
                     run=subprocess.run,
                 )
             case OperationName.ANSWER:
-                return answer(store, load_config(), document, deps=default_deps(layout))
+                return answer(
+                    store,
+                    load_config(),
+                    document,
+                    deps=default_deps(layout),
+                    via=door,
+                )
             case OperationName.STATUS:
                 return status(
                     store,

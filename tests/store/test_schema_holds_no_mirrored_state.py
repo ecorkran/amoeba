@@ -51,6 +51,7 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
             "answers.run_id",
             "answers.paused_at",
             "answers.answered_by",
+            "answers.via",
             "answers.answer",
             "answers.recorded_at",
             "answers.resume_outcome",

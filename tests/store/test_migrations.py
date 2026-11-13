@@ -295,9 +295,9 @@ def test_a_version_two_store_migrates_to_three_with_every_row_preserved(
     before = _snapshot(connection)
     assert read_schema_version(connection) == 2
 
-    assert migrate(connection) == 3
+    assert migrate(connection) == EXPECTED_SCHEMA_VERSION
 
-    assert read_schema_version(connection) == 3
+    assert read_schema_version(connection) == EXPECTED_SCHEMA_VERSION
     assert _snapshot(connection) == before
     assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     assert connection.execute(FOREIGN_KEYS_PRAGMA).fetchone() == (1,)

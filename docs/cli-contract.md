@@ -254,7 +254,7 @@ Result (`DecisionsResult`):
 |---|---|
 | `outcome` | `listed` or `rejected` |
 | `rejection` | with `rejected`: `unknown_program` or `malformed` |
-| `records` | each: `seq`, `recorded_at`, `program`, `member` (`{id, name}`), `run_id`, `paused_at`, `slice_label`, `question`, `answered_by` (`answerer` or `pm`), `answer`, `prior_answer_seq`, `based_on`, `resume` |
+| `records` | each: `seq`, `recorded_at`, `program`, `member` (`{id, name}`), `run_id`, `paused_at`, `slice_label`, `question`, `answered_by` (`answerer` or `pm`), `via` (`cli` or `mcp`, the door that carried a PM answer; null for an answer from before schema version 4 and for automatic answers), `answer`, `prior_answer_seq`, `based_on`, `resume` |
 | `read_through` | the last listed `seq`, only when the listing started at the marker, was not narrowed and is not empty; else null. Give it to `mark_read` |
 | `marker` | the marker's value when read |
 | `problems` | one line per problem when `rejected` |

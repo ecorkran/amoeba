@@ -17,6 +17,7 @@ from amoeba.answering.values import (
 from amoeba.store.vocabulary import (
     ClosedReason,
     ConsumedMode,
+    Door,
     QuestionState,
     ResumeOutcome,
 )
@@ -129,6 +130,9 @@ class AnswerRecord:
     retract_reason: str | None
     #: Set just before each resume spawn (228 D4).
     resume_started_at: datetime | None
+    #: The door that carried a PM answer (226 D11); ``None`` for an answer written
+    #: before migration 004 and for the answerer's automatic answers.
+    via: Door | None
 
 
 @dataclass(frozen=True)

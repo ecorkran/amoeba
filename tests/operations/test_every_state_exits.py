@@ -36,7 +36,12 @@ from amoeba.store.answers import (
 from amoeba.store.models import QuestionRecord
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import ClosedReason, QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import (
+    ClosedReason,
+    Door,
+    QuestionState,
+    ResumeOutcome,
+)
 from operations.handle_rig import (
     KEY,
     PAUSE,
@@ -83,7 +88,11 @@ def _dismiss(w: World) -> DismissOutcome:
 
 def _answer(w: World, text: str = "PM says: 250 lines.") -> AnswerOutcome:
     return answer(
-        w.store, w.config, {"run_id": KEY.run_id, "text": text}, deps=w.deps
+        w.store,
+        w.config,
+        {"run_id": KEY.run_id, "text": text},
+        deps=w.deps,
+        via=Door.CLI,
     ).outcome
 
 

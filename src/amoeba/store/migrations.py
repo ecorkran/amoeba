@@ -22,7 +22,7 @@ from amoeba.store.errors import StoreCorruptError, StoreSchemaError
 
 #: The highest numbered file in ``store/schema/``. Bumped with each migration added;
 #: ``tests/store/test_migrations.py`` pins it to the files.
-EXPECTED_SCHEMA_VERSION: Final = 3
+EXPECTED_SCHEMA_VERSION: Final = 4
 
 #: Stamp of a store with no ``schema_meta`` table yet, as a new store has.
 UNINITIALIZED_SCHEMA_VERSION: Final = 0
