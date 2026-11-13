@@ -142,17 +142,18 @@ usageByModel:
 
 ## 4. Detached `handle_pause` (D6)
 
-- [ ] **4.1 `detached.py`: `StartedCall`, start function and tests**
-  - [ ] Create `mcp/detached.py` with `StartedCall` (frozen pydantic: `operation`, `pid`, `cwd`, `started_at`, `stdout_log`, `stderr_log`)
-  - [ ] Add `resolve_amoeba_script()` returning `Path(sys.executable).parent / "amoeba"`, raising an explicit error naming the path if it does not exist
-  - [ ] Add `async start_handle_pause(raw) -> StartedCall`: validate `raw` with `HandlePauseCall` (a failure raises `RequestError`, nothing starts); build argv `[amoeba, "handle_pause", "--", run_id]`; `cwd` is the call's `directory` (the run's checkout), never the server's directory; create `logs_dir() / "mcp" / "handle_pause" / <UTC stamp>-<hex>.{stdout,stderr}.log`; start with `wiring.start_child` unchanged; run all of it in `anyio.to_thread.run_sync`. A `LaunchError` result raises an error carrying its text and an `OSError` from log creation propagates, both for task 5.1 to map to `isError`
-  - [ ] Test (same argv): the argv parses through `build_parser()` to the input values, including a `run_id` starting with `-`
-  - [ ] Test: a relative `directory` and a missing `run_id` raise `RequestError` and start nothing (recording fake `Spawner`); the start receives `cwd` equal to the given `directory`
-  - [ ] Test (detached): with a fake `amoeba` script (patched in as the resolved script) that waits until the test creates a go-file, then prints a `HandlePauseResult` JSON, `start_handle_pause` returns `StartedCall` while the go-file is absent (child still running); the test then creates the go-file, waits for the child's pid to exit, and asserts the stdout log holds the JSON. Log paths sit under the monkeypatched `logs_dir()`
-  - [ ] Test (real CLI): with the real `amoeba` script, a throwaway `AMOEBA_HOME`, fake `cf` and `sq`, and a `run_id` that has no pause, the child exits and the calls log under the throwaway state home holds the child's line (so the CLI's own logging runs under the MCP door)
-  - [ ] Test (log exit): a log file under `logs/mcp/handle_pause/` older than the cutoff is removed by `prune` and the emptied `mcp` directories with it; a younger one stays. Uses the real `prune` against a throwaway state home
-  - [ ] Test: a missing `amoeba` script raises the explicit error; an unwritable log directory surfaces `OSError`
-  - [ ] Success: module imports; pyright strict clean; tests pass
+- [x] **4.1 `detached.py`: `StartedCall`, start function and tests**
+  - [x] Create `mcp/detached.py` with `StartedCall` (frozen pydantic: `operation`, `pid`, `cwd`, `started_at`, `stdout_log`, `stderr_log`)
+  - [x] Add `resolve_amoeba_script()` returning `Path(sys.executable).parent / "amoeba"`, raising an explicit error naming the path if it does not exist
+  - [x] Add `async start_handle_pause(raw) -> StartedCall`: validate `raw` with `HandlePauseCall` (a failure raises `RequestError`, nothing starts); build argv `[amoeba, "handle_pause", "--", run_id]`; `cwd` is the call's `directory` (the run's checkout), never the server's directory; create `logs_dir() / "mcp" / "handle_pause" / <UTC stamp>-<hex>.{stdout,stderr}.log`; start with `wiring.start_child` unchanged; run all of it in `anyio.to_thread.run_sync`. A `LaunchError` result raises an error carrying its text and an `OSError` from log creation propagates, both for task 5.1 to map to `isError`
+  - [x] Test (same argv): the argv parses through `build_parser()` to the input values, including a `run_id` starting with `-`
+  - [x] Test: a relative `directory` and a missing `run_id` raise `RequestError` and start nothing (recording fake `Spawner`); the start receives `cwd` equal to the given `directory`
+  - [x] Test (detached): with a fake `amoeba` script (patched in as the resolved script) that waits until the test creates a go-file, then prints a `HandlePauseResult` JSON, `start_handle_pause` returns `StartedCall` while the go-file is absent (child still running); the test then creates the go-file, waits for the child's pid to exit, and asserts the stdout log holds the JSON. Log paths sit under the monkeypatched `logs_dir()`
+  - [x] Test (real CLI): with the real `amoeba` script, a throwaway `AMOEBA_HOME`, fake `cf` and `sq`, and a `run_id` that has no pause, the child exits and the calls log under the throwaway state home holds the child's line (so the CLI's own logging runs under the MCP door)
+  - [x] Test (log exit): a log file under `logs/mcp/handle_pause/` older than the cutoff is removed by `prune` and the emptied `mcp` directories with it; a younger one stays. Uses the real `prune` against a throwaway state home
+  - [x] Test: a missing `amoeba` script raises the explicit error; an unwritable log directory surfaces `OSError`
+  - [x] Success: module imports; pyright strict clean; tests pass
+  - Note: Created `mcp/detached.py` (`StartedCall`, `AmoebaScriptMissing`, `HandlePauseNotStarted`, `resolve_amoeba_script`, `start_handle_pause`). `wiring.py` gained `detached_logs(operation, started, unique)` and `MCP_LOG_DIRECTORY` (`"mcp"`), because `amoeba.mcp` may not import `config` to call `logs_dir()`; log names reuse the resume stamp format and the answering log suffixes. `start_handle_pause` validates the original arguments (directory included) with `HandlePauseCall`, so task 5.1's `call_tool` must pass `handle_pause` the raw arguments, not the output of `prepare_arguments`. Difference from the task text: `start_child` turns an `OSError` from creating the log directories into `LaunchError`, so an unwritable log directory surfaces as `HandlePauseNotStarted` carrying the OSError text; the test pins this. Tests: `tests/mcp_server/test_detached.py`. All four checks pass (pytest 1931 passed).
 
 **Commit**: `feat: add detached handle_pause start for MCP`
 

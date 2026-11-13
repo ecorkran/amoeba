@@ -31,6 +31,7 @@ from amoeba.config.home import (
 )
 from amoeba.config.user_config import ConfigError, UserConfig, load_user_config
 from amoeba.operations.answer import AnswerOutcome, AnswerResult, answer
+from amoeba.operations.answering_run import STDERR_LOG_SUFFIX, STDOUT_LOG_SUFFIX
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
 from amoeba.operations.deps import Deps, production_deps
 from amoeba.operations.dismiss import DismissOutcome, DismissResult, dismiss
@@ -40,7 +41,7 @@ from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
-from amoeba.operations.resume import resume_bound_seconds
+from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, RetractResult, retract
 from amoeba.operations.set_up import set_up
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
@@ -65,6 +66,7 @@ __all__ = [
     "answer_bound_seconds",
     "check_deadline",
     "default_deps",
+    "detached_logs",
     "invoke",
     "is_rejected",
     "load_config",
@@ -200,6 +202,28 @@ def invoke(
                 )
             case _:
                 assert_never(name)
+
+
+#: Under the logs directory: the logs of operations the MCP server starts detached
+#: (226 D6). Old files here are removed by ``prune`` like any other log.
+MCP_LOG_DIRECTORY: Final = "mcp"
+
+
+def detached_logs(
+    operation: OperationName, started: datetime, unique: str
+) -> LaunchLogs:
+    """The stdout and stderr log paths of a detached ``operation`` started at
+    ``started``: ``logs/mcp/<operation>/<UTC stamp>-<unique>.{stdout,stderr}.log``.
+
+    Raises:
+        AmoebaHomeError: ``AMOEBA_HOME`` is set but empty or relative.
+    """
+    directory = state_layout().logs_dir / MCP_LOG_DIRECTORY / operation.value
+    stem = f"{started.strftime(LOG_STAMP_FORMAT)}-{unique}"
+    return LaunchLogs(
+        stdout=directory / f"{stem}{STDOUT_LOG_SUFFIX}",
+        stderr=directory / f"{stem}{STDERR_LOG_SUFFIX}",
+    )
 
 
 class DeadlineError(Exception):
