@@ -94,7 +94,7 @@ The cost is that a missed hook leaves a question waiting (machine asleep, comman
 | `dismiss` | An agent, for the PM | Closes a `claimed` or `waiting_on_pm` question, or an `answered` one whose answer was never delivered, with a reason. The run is not resumed and stays paused in Squadron | A, C |
 | `retract` | An agent, for the PM | Marks a PM answer retracted, so it stops being precedent. The answer stays delivered and stays in `decisions` | A, C |
 | `mark_read` | An agent | Moves the PM's marker for `decisions` forward to the last record the caller saw | C |
-| `report_release` | An agent or release skill | Records what this member released and what that touched | B |
+| `report_release` | An agent or release skill | Records what this member released and what that touched; the same operation corrects a report's text or withdraws it | B |
 | `changes` | An agent | What this member's dependencies reported since a point the caller gives | B |
 | `set_up` | An agent | Registers programs, members, dependencies and per-member settings | Set-up |
 
@@ -102,11 +102,11 @@ The cost is that a missed hook leaves a question waiting (machine asleep, comman
 
 Each dependency pair carries a `consumed` value (`from_source` or `from_release`) that says which reports the consumer sees: every report, or only those with a version. So a repo that publishes no versions reports when it merges, and its consumers are `from_source`. A consumer can only see what its provider reports, so a `from_source` consumer of a repo that reports only at releases sees only those.
 
-A report is identified by member and commit, and holds the commit's current version. Reporting the same thing twice changes nothing. A release tagged on a commit already reported at merge adds the version to that report. `from_release` consumers then see it, and `from_source` consumers, who already saw the commit, don't see it again.
+A report is identified by member and commit, and holds the commit's current version. Reporting the same thing twice changes nothing. A release tagged on a commit already reported at merge adds the version to that report and replaces its text with the release's, which covers everything since the previous release. `from_release` consumers then see it, and `from_source` consumers, who already saw the commit, don't see it again. A wrong report is corrected in place, which makes it visible again to consumers whose starting point predates the correction, or withdrawn.
 
 **4. How a repo reaches program state: through its agents, by a line in its rules file.** There is no pipeline step and no Squadron change. A repo that joins a program adds two lines to its own rules file:
 
-- **As a consumer:** before designing a slice, check Amoeba for changes in what this repo depends on. The design agent calls `changes` with a starting point, usually its branch's last merge, and judges what it finds. Nothing is marked read, so each design sees everything since its own starting point, and parallel worktrees don't hide changes from each other. To stop, the agent ends on a question or a `BLOCKED:` line, and the run pauses as it does today.
+- **As a consumer:** before designing a slice, check Amoeba for changes in what this repo depends on. The design agent calls `changes` with a starting point it gives explicitly, normally the author time of the commit that added its branch's previous slice design (a provider often reports after a consumer's design and before its merge, so the last merge would miss that report), and judges what it finds. Nothing is marked read, so each design sees everything since its own starting point, and parallel worktrees don't hide changes from each other. To stop, the agent ends on a question or a `BLOCKED:` line, and the run pauses as it does today.
 - **As a provider:** when a slice changes something other repos use, call `report_release`. The repo's release skill gets the same line.
 
 Each repo adds lines, not pipeline copies, and a repo outside a program carries nothing. The cost is that nothing forces the agent to follow the line. If agents skip it in real use, a Squadron pipeline step (`ecorkran/squadron#304`, on hold) is the fallback.
@@ -197,7 +197,7 @@ Provisional. The audit and the slice plan decide.
 - **The cut:** remove what the audit rejects, and move to the single store and config.
 - **Pause handling:** `handle_pause`, `answer`, `status`, `decisions` and `mark_read`, through the CLI. This is the first proof, scenario A on a real run, measured by the test above.
 - **MCP:** the MCP server over those operations. This completes scenario C.
-- **Program dependencies:** dependency declarations, `report_release`, `changes` and the rule lines. Scenario B, built only if scenario A passes its test.
+- **Program dependencies:** dependency declarations, `report_release`, `changes` and the rule lines. Scenario B. It has no gate: the counted trial of scenario A was dropped (slice plan entry 6).
 
 ## Related Work
 

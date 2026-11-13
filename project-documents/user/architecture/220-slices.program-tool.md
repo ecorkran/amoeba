@@ -149,9 +149,10 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    - A `from_source` consumer sees a provider's merge report; a `from_release` consumer sees it only once it has a version.
    - Tagging a release on an already reported commit adds the version; a `from_source` consumer does not see it twice.
    - Two worktrees calling `changes` from different starting points each see everything since their own point.
-   - The rule lines, pasted into two of the PM's repos, lead the design agent to call `changes` in a real design run.
+   - The rule block's own git commands, run in fixture repos, give a starting point that still sees a provider's report, including after a rebase; a live test runs both operations against real Context Forge. No step waits on real use.
+   - A wrong report is corrected in place or withdrawn, and a corrected one is visible again to consumers whose starting point predates the correction.
    **Dependencies:** 226 and 228.
-   **Required fixes to the existing design:** `report_release` has a correct/replace flag so a wrong `touched` list can be fixed; a provider missing from `cf list projects` is a warning, not exit 3, and `set_up remove` (228) clears stale pairs; `changes` takes its starting point from the caller's own stored marker or an explicit argument, with the git commit time only a hint; the integration check is an automated fixture test, not a real design run in the PM's repos.
+   **Required fixes to the existing design:** `report_release` has a correct/replace flag so a wrong `touched` list can be fixed; a provider missing from `cf list projects` is a warning, not exit 3, and `set_up remove` (228) clears stale pairs; `changes` takes its starting point from an explicit argument, with the git author time of the previous slice design as the hint (no stored marker, so parallel worktrees never hide changes from each other); the integration check is an automated fixture test, not a real design run in the PM's repos.
    **Interfaces:** Provides `report_release`, `changes` and the rule-line text.
    **Risk Level:** Medium. Nothing forces an agent to follow a rule line.
    **Relative Effort:** 3

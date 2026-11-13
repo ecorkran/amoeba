@@ -71,7 +71,7 @@ docs/program-rules.md
 
 Import direction is unchanged: `cli`, `mcp` → `operations` → `store`, `upstream`.
 
-**Flow.** Each operation validates the unvalidated document from either door into its request model (`rejected / malformed` on failure). `changes` then reads the names with one `cf` call, and both operations resolve the directory with `resolve_member` (`rejected / not_a_member`). No `cf` call runs while a write transaction is open. `report_release` applies D2 in one `store.write()` transaction. `changes` reads pairs and visible reports in one `store.read()` transaction and writes nothing.
+**Flow.** Each operation validates the unvalidated document from either door into its request model (`rejected / malformed` on failure). `changes` then reads the names with one `cf` call, and both operations resolve the directory with `resolve_member` (`rejected / not_a_member`). The detail tells the two outcomes apart: for `NotInProgram`, "this Context Forge project is in no program"; for `NotAProject`, "this directory is in no Context Forge project" followed by Context Forge's message. No `cf` call runs while a write transaction is open. `report_release` applies D2 in one `store.write()` transaction. `changes` reads pairs and visible reports in one `store.read()` transaction and writes nothing.
 
 **State.** `releases` is written only by `report_release`. A row is created by a report, changed by versioning or correction, and deleted by withdrawal. No read position is stored (D4).
 
@@ -135,13 +135,13 @@ Flow: validate; `project_names()` (one `cf` call; a `CfCallFailed` raises `Conte
 
 ### D4 — The starting point belongs to the caller
 
-Amoeba stores no read marker. A marker kept by Amoeba would be shared by every worktree of a member, so a change could be hidden from one worktree by another. The caller gives `since`, and the rule block tells the consumer agent how to get it from git. The consumer's `since` is the committer time of the commit that added the most recent slice design on its branch:
+Amoeba stores no read marker. A marker kept by Amoeba would be shared by every worktree of a member, so a change could be hidden from one worktree by another. The caller gives `since`, and the rule block tells the consumer agent how to get it from git. The consumer's `since` is the author time of the commit that added the most recent slice design on its branch. Author time, not committer time: a rebase, cherry-pick or amend rewrites the committer date to the time of the rewrite, which would move `since` later and silently skip reports, while the author date survives them. (The project merges slice branches with a plain `git merge`, never a squash, so the author date also survives the merge.)
 
-    git log -1 --diff-filter=A --format=%cI -- project-documents/user/slices/
+    git log -1 --diff-filter=A --format=%aI -- project-documents/user/slices/
 
 If that prints nothing (no previous design), use the earliest root commit's time, which also handles several roots:
 
-    git log --max-parents=0 --reverse --format=%cI | head -1
+    git log --max-parents=0 --reverse --format=%aI | head -1
 
 The agent runs it before committing its own design. A provider often reports while the consumer implements, after the consumer's design and before its merge, so the last merge would miss that report. The path is the Context Forge slice-design path; a member whose slice designs live elsewhere edits the path in its pasted block.
 
@@ -166,7 +166,7 @@ The agent runs it before committing its own design. A provider often reports whi
 
 **Consumer** (rules file of a member with providers):
 
-> Before designing a slice, check Amoeba for changes in what this repo depends on. Run `amoeba changes --since <time>` in this checkout, or call the `changes` MCP tool with this checkout's absolute path as `directory`. Take `<time>` from `git log -1 --diff-filter=A --format=%cI -- project-documents/user/slices/`; if that prints nothing, take it from `git log --max-parents=0 --reverse --format=%cI | head -1`. Judge each report against the slice. In the design's Dependencies section, list the reports that affect the slice and how, or state that none do. If a report means the slice cannot be designed as planned, stop with a question or a `BLOCKED:` line. If the call fails, record its error in the Dependencies section; never treat a failed call as no changes.
+> Before designing a slice, check Amoeba for changes in what this repo depends on. Run `amoeba changes --since <time>` in this checkout, or call the `changes` MCP tool with this checkout's absolute path as `directory`. Take `<time>` from `git log -1 --diff-filter=A --format=%aI -- project-documents/user/slices/`; if that prints nothing, take it from `git log --max-parents=0 --reverse --format=%aI | head -1`. Judge each report against the slice. In the design's Dependencies section, list the reports that affect the slice and how, or state that none do. If a report means the slice cannot be designed as planned, stop with a question or a `BLOCKED:` line. If the call fails, record its error in the Dependencies section; never treat a failed call as no changes.
 
 **Provider** (rules file of a member others depend on, and the repo's release skill after its tag step):
 
@@ -188,7 +188,7 @@ Default suite, autouse `AMOEBA_HOME` fixture, the replayed `cf` in `tests/cf_fix
 - **`changes` writes nothing:** a table dump before and after is equal.
 - **Doors:** 226's parity tests cover the rows. 226's stdio literal count becomes one per `OperationName` member (the one edit to a 226 test). One CLI test per subcommand for exits 0, 1 and 2 (the mutually exclusive flags); a repeated `--touched` arrives as a list; absent flags are absent from the document.
 - **Rule blocks:** `docs/program-rules.md` has both blocks, each in the form D6 gives. Each names its operation and flags as `build_parser()` defines them (flag names come from the parser, not a literal list). The consumer block contains both D4 commands. Neither block contains a 40-hex string. The parser is lenient about heading and whitespace, and the real file is the fixture.
-- **Flow test (automated integration)**, `tests/program/test_program_flow.py`: a provider repo and a consumer repo from `tests/git_repo.py`, both members of one program in a replayed `cf`. The test reads the consumer block from `docs/program-rules.md`, runs its two git commands in the consumer repo, and passes the output to `changes`. Then it checks the window case: the provider reports after the consumer's design commit and before its merge, and the consumer's `since` still sees the report (committer dates set with `GIT_COMMITTER_DATE`, and a clock fixed after the design commit). The provider then tags and reports with a version, and the `from_release` consumer sees it.
+- **Flow test (automated integration)**, `tests/program/test_program_flow.py`: a provider repo and a consumer repo from `tests/git_repo.py`, both members of one program in a replayed `cf`. The test reads the consumer block from `docs/program-rules.md`, runs its two git commands in the consumer repo, and passes the output to `changes`. Then it checks the window case: the provider reports after the consumer's design commit and before its merge, and the consumer's `since` still sees the report (author dates set with `GIT_AUTHOR_DATE`, and a clock fixed after the design commit). A rebase case follows: the consumer's branch is rebased onto a newer commit with `GIT_COMMITTER_DATE` after the report, and the consumer's `since`, taken again from the rule block's command, still sees the report. The provider then tags and reports with a version, and the `from_release` consumer sees it.
 - **Live test**, `tests/live/program/test_program_dependencies_live.py`: real `cf` and `git`, two throwaway members built with the helpers in `tests/live/pause/harness.py`, and a throwaway `AMOEBA_HOME`. It runs both operations through the CLI and asserts `recorded`, `unchanged`, `malformed` with exit 1, and the consumer's `changes` result. It exercises the real `cf list projects` output through `project_names`.
 
 ### D8 — Contract docs
@@ -242,7 +242,7 @@ The operator is an agent session in each repo.
 - **Normal, provider.** After a merge that others use, the agent runs `report_release` with the full hash: `recorded`. After a release tag, it runs the same command with `--version`: `versioned`.
 - **Normal, consumer.** Before designing, the agent runs the D4 git command, then `changes`, and records the reports, or that there are none, in its Dependencies section.
 - **Failure: bad input.** An abbreviated hash, empty text or a blank version gives exit 1 and `malformed` with the detail. The agent corrects the value and runs again. A rejected call writes nothing.
-- **Failure: not a member.** `not_a_member`, and nothing is written. The agent records the directory as outside every program in its Dependencies section.
+- **Failure: not a member.** `not_a_member`, and nothing is written. The detail says which case it is (a Context Forge project in no program, or a directory in no Context Forge project), and the agent records that in its Dependencies section.
 - **Failure: `cf` down.** Exit 3 with the error. The agent records the error in its Dependencies section and does not retry with other values. It never treats the failure as "no changes".
 - **Failure: no previous design.** The fallback command runs. If the repo has no commits, both git commands print nothing, `since` is empty, and `changes` rejects it as `malformed`. The agent records that error.
 - **Wrong report.** `--correct` with the true text: `corrected`. Consumers whose `since` predates the correction see it again.
@@ -276,7 +276,7 @@ Relative effort: 3.
 
 ### Pending Planning Edits
 
-To apply as planning edits, outside this slice:
+Applied to the parents at design time, so they match what this slice builds (nothing is left to a later step):
 
-- **Starting point** (D4): architecture decision 4's "usually its branch's last merge" becomes the creation of the previous slice design. Slice plan entry 9's "stored marker or an explicit argument" becomes "an explicit argument, with the git commit time as the hint".
-- **Slice plan entry 9, integration criterion** ("a real design run in the PM's repos"): replaced by the automated flow and live tests (D7).
+- `220-arch.program-tool.md`: the operations table (the modes of `report_release`), decision 3 (versioning replaces the text; correction and withdrawal), decision 4 (the explicit starting point and why the last merge is not used), and Anticipated Slices (no gate).
+- `220-slices.program-tool.md` entry 9: the starting-point wording, and the integration criterion replaced by the automated flow and live tests (D7) plus a correction criterion.

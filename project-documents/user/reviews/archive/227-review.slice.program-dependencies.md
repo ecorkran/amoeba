@@ -14,52 +14,57 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261107
 dateUpdated: 20261107
-reviewedSha: a3dd824911e12ffecc1a0ed47156b32816393676
-revision_number: 1
+reviewedSha: 753e33399d6bbd658422c46a33ac9af816588d9c
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 12
+toolCallsMade: 7
 effort: high
-turns: 13
-promptTokens: 826073
-cachedTokens: 712574
-cacheWriteTokens: 113481
-completionTokens: 9180
-durationSeconds: 80.4
-costUsd: 0.61786
+turns: 8
+promptTokens: 409959
+cachedTokens: 300576
+cacheWriteTokens: 109373
+completionTokens: 7143
+durationSeconds: 60.8
+costUsd: 0.53984
 costBasis: provider
 runId: run-20261107-slices-plan-813acacc
 squadronVersion: 0.24.23
 findings:
   - id: F001
     severity: concern
-    category: architecture-alignment
-    summary: "Report identity is narrower than the architecture's, and the difference is not flagged"
-    location: "project-documents/user/slices/227-slice.program-dependencies.md#D2 — Report identity and repeats"
+    category: under-specification
+    summary: "Consumer rule line's `since` fallback has no command"
+    location: "project-documents/user/slices/227-slice.program-dependencies.md#D4 — The starting point belongs to the caller"
   - id: F002
     severity: concern
-    category: integration
-    summary: "The starting-point gap sits in scenario B's main timing"
-    location: "project-documents/user/slices/227-slice.program-dependencies.md#D4 — The starting point belongs to the caller"
+    category: architecture-alignment
+    summary: "Two departures from the architecture and slice plan are left unreconciled"
+    location: "project-documents/user/slices/227-slice.program-dependencies.md#D2 and #D4"
   - id: F003
-    severity: concern
-    category: proportionality
-    summary: "Overweight material that can be cut or deferred"
-    location: "project-documents/user/slices/227-slice.program-dependencies.md#Verification Walkthrough"
+    severity: note
+    category: dependencies
+    summary: "Frontmatter omits 224 although the slice edits its code"
+    location: "project-documents/user/slices/227-slice.program-dependencies.md:6-8"
   - id: F004
     severity: note
-    category: verification
-    summary: "The \"integration requirement\" depends on events outside the slice"
-    location: "project-documents/user/slices/227-slice.program-dependencies.md#Integration Requirements"
+    category: proportionality
+    summary: "The `parse_since` extraction is a small addition that stays in scope"
+    location: "project-documents/user/slices/227-slice.program-dependencies.md#Interfaces Required"
   - id: F005
     severity: pass
     category: architecture-alignment
-    summary: "Layering, dependency direction and scope"
+    summary: "Layering, import direction and integration points"
     location: "project-documents/user/slices/227-slice.program-dependencies.md#Architecture"
   - id: F006
     severity: pass
     category: error-handling
-    summary: "Failure modes for the new I/O paths"
-    location: "project-documents/user/slices/227-slice.program-dependencies.md#D2, D3, D5"
+    summary: "Failure modes for the two new operations are enumerated"
+    location: "project-documents/user/slices/227-slice.program-dependencies.md#Data Flow, #D2, #D5"
+  - id: F007
+    severity: pass
+    category: risk
+    summary: "Soft rule lines are handled as the architecture accepts"
+    location: "project-documents/user/slices/227-slice.program-dependencies.md#D6, #Risk Assessment"
 ---
 
 # Review: slice — slice 227
@@ -69,73 +74,79 @@ findings:
 
 ## Findings
 
-### [CONCERN] Report identity is narrower than the architecture's, and the difference is not flagged
+### [CONCERN] Consumer rule line's `since` fallback has no command
 
-The architecture (Decision 3) and the slice plan entry both key a report on "member, commit and version". D2 keys it on member and commit (222's `UNIQUE (member_id, commit_sha)`). It also makes a version belong to one commit per member, enforced in code and not by the schema. So a commit with two versions, or a version that moves to another commit, returns `version_conflict` and is "fixed by hand in SQLite".
+D4 gives the `git log -1 --diff-filter=A …` command for the starting point. For the case where it returns nothing, it gives only a description: "the time of the repo's first commit when there is none". D6 then tells the consumer block to use "D4's command and its fallback".
 
-- A release candidate promoted to final on the same commit is a common flow, and it is refused.
-- The design calls this rare, and that may be right. But it changes the architecture's stated identity, and neither the slice nor the architecture says so.
-- Do one of two things. Record the narrowing in the architecture's Decision 3. Or allow a later version on an already-versioned commit, and state how `from_release` consumers see it.
+- **The gap:** a repo with no prior slice design is the first-use case, and that is the case the Integration Requirement (a real design run calls `changes`) exercises first. The agent has to invent a command for it, and a repo can have several root commits.
+- **Why it matters:** this is the "retrieve a value from a source that may be empty" situation in the project rules. If the agent guesses wrong, `since` is wrong or `changes` rejects it as `malformed`. The design also wants a failed call recorded rather than treated as "no changes", and that is only reliable if the agent can form the call at all.
+- **Fix:** name the exact fallback command and its handling of multiple roots. Then add it to the D7 rule-lines test next to the existing flag-name checks.
 
-### [CONCERN] The starting-point gap sits in scenario B's main timing
+### [CONCERN] Two departures from the architecture and slice plan are left unreconciled
 
-D4 admits a known gap. A provider reports after a consumer's slice design but before that slice merges. The report then falls before the next design's `since`, so no design is shown it.
+The design states both departures and justifies them, but neither parent document is changed.
 
-- A provider merging while a consumer implements a slice is the ordinary case for scenario B, not an edge.
-- The architecture accepts a soft starting point, and "errs toward showing more" is the stated bias. Yet the chosen rule (last merge on the branch) misses this case by construction.
-- Either pick a `since` that covers it, or make the gap measurable. Walkthrough step 8 should explicitly record any report a design should have seen and didn't, as evidence for `#304`.
-- Currently step 8 only checks that the Dependencies section records what `changes` returned.
+- **D2 identity:** the architecture (line 103 of `220-arch.program-tool.md`) and slice plan item 8 say a report is "identified by member, commit and version". D2 narrows this to member and commit. A different version on a reported commit replaces the earlier one, and a version already on another commit is rejected as `version_conflict`. The reason is sound: 222's `UNIQUE (member_id, commit_sha)` allows nothing else. But under the architecture's wording, a different version would be a second report.
+- **D4 starting point:** the architecture says "usually its branch's last merge". D4 uses the previous design's creation time instead, with a good argument about the window between design and merge.
+- **Why it matters:** the slice plan already records a similar planning edit for the concept wording. Left as is, an implementer or the next reviewer reading the parent documents gets a different contract from the one built.
+- **Fix:** add a one-line planning edit to the 220 architecture and the slice plan entry for each departure, or list both in the Implementation Notes as pending planning edits.
 
-### [CONCERN] Overweight material that can be cut or deferred
+### [NOTE] Frontmatter omits 224 although the slice edits its code
 
-Several parts restate other sections or other slices' work.
+The frontmatter lists only 225 and 226, which matches the slice plan. The slice also changes 224's `decisions` operation to call the new `parse_since()`, and consumes `project_names` from 224. The Prerequisites section names 224, so the dependency is visible. Listing it in `dependencies` would stop the edit to 224's code from being a hidden coupling.
 
-- **Walkthrough steps 6 and 7.** Step 6 repeats D7's visibility and non-member tests. Step 7 repeats 226's parity and stdio coverage. Keep only what needs real tools: the scratch program, the CLI round trip, and step 8's real use.
-- **D6 rule-line text.** The full drafts appear in D6 and will appear again in `docs/program-rules.md`. The slice could name each line's required instructions and leave the wording to the doc. The rule-line test already guards the instructions.
-- **Edits to shipped slices.** The design changes 224's `decisions` (via `since.py`), adds a `clock` field to 226's `OperationDeps`, and edits a 226 test assertion. The `parse_since` extraction is justified on DRY grounds. But the "224's tests must pass unchanged" condition and the stdio change add coordination cost, so keep them as small as possible.
-- **Contract docs.** D8 updates four documents. The `consumed`-choice paragraph in `program-rules.md` belongs to 222's `set_up` contract, so a pointer there is enough.
+### [NOTE] The `parse_since` extraction is a small addition that stays in scope
 
-### [NOTE] The "integration requirement" depends on events outside the slice
+Moving 224 D5's `since` rule into `operations/since.py` touches an earlier slice. It avoids two copies of one rule, which the DRY principle asks for, and 224's tests are required to pass unchanged. The one edit to a 226 test (the literal tool count) is stated and bounded. I would not cut either. The rest of the design is proportionate: three rule blocks, three contract docs and the test list fit a relative effort of 3.
 
-The plan assigns the criterion that the rule lines lead a design agent to call `changes` in a real run, so it belongs here. Completing it needs a real provider merge and a real design. Implementation Notes already treat step 8 as recorded "when it happens", which keeps the slice from stalling on it. Say plainly whether the slice can close before step 8 happens.
+### [PASS] Layering, import direction and integration points
 
-### [PASS] Layering, dependency direction and scope
+The import direction is `cli`/`mcp` → `operations` → `store`/`upstream`, and `store/releases.py` imports nothing from `operations`. The slice uses 226's extension recipe as written: an `OperationName` member, a CLI subcommand and a `ToolSpec` row. It reads 222's `releases` and `dependency_pairs` tables as built, and 222 marks `releases` as "Written by 227". Both operations run in-process, with a stated reason. This fits "one operation, two doors", because neither is long work. No state is mirrored, and no read marker is stored.
 
-- `cli` and `mcp` → `operations` → `store` is unchanged, and `store/releases.py` imports nothing from `operations`.
-- The slice adds no table, no migration and no `set_up` change.
-- It marks nothing read, follows no graph beyond direct pairs, and runs no `git` from Amoeba. That matches "pull, never push" and "never walks the graph".
-- The exclusions (the pipeline step `#304`, report removal) match the architecture and the slice plan.
-- The two operations and three rule lines match plan entry 227's scope.
-- The `consumed` semantics match the architecture: `from_source` sees every report and `from_release` sees only versioned ones. The tag-on-reported-commit behavior also matches.
-- The 226 tool counts are consistent: 226 lists six tools, and this slice makes eight.
+### [PASS] Failure modes for the two new operations are enumerated
 
-### [PASS] Failure modes for the new I/O paths
+- **Validation:** bad input returns `rejected / malformed`.
+- **Non-member:** a directory that is not a member returns `rejected / not_a_member`.
+- **`cf` failure:** it is raised before any store write, as `ContextForgeError`, exit 3.
+- **Concurrent writers:** `BEGIN IMMEDIATE` serializes reports of one commit, and an `IntegrityError` is treated as a bug rather than caught.
+- **Version conflict:** a version already on another commit is refused with the stored report in the detail.
+- **Dead process:** each report is a single transaction, so a process that dies mid-call leaves nothing half-written. This matches "short-lived and restart-safe".
 
-- **Store writes.** Concurrent reports are serialized by `BEGIN IMMEDIATE`. An `IntegrityError` is deliberately treated as a bug and not swallowed, which fits the project's exception rules.
-- **`cf` calls.** All `cf` calls happen before the write. A failure becomes `ContextForgeError`, exit 3. A provider id missing from the `cf` list also raises, as in 224.
-- **Input errors.** Malformed input, non-members and version conflicts each get a typed rejection with detail.
-- **Soft rule lines.** The consumer line says a failed call is never "no changes". The provider and release-skill lines say to surface a non-zero exit and not retry with different values.
-- **Not restated.** The slice does not restate any `cf` call timeout. It inherits that from the 222 and 224 runners, which is acceptable.
+No architecture NFR (latency or throughput) applies to these paths, so none needs restating.
+
+### [PASS] Soft rule lines are handled as the architecture accepts
+
+The architecture accepts that agents may skip the rule lines and names `#304` as the fallback. The design makes a skip visible by requiring the Dependencies section to record the `changes` result or a failed call's error. It gives no example values in the rule text. It keeps Amoeba out of Squadron, since only member repos that opt in carry the lines.
 
 ### Run Digest
 
-- Response length: 6251 chars
+- Response length: 6473 chars
 - Response is newline-free: no
-- Tool calls made: 12
-- Tool calls failed: 1
+- Tool calls made: 7
+- Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: high
-- Turns: 13
-- Tokens — prompt / cached / cache write / completion / reasoning: 826073 / 712574 / 113481 / 9180 / not computed
-- Duration: 80.4 s
-- Cost: $0.62 (provider)
+- Turns: 8
+- Tokens — prompt / cached / cache write / completion / reasoning: 409959 / 300576 / 109373 / 7143 / not computed
+- Duration: 60.8 s
+- Cost: $0.54 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
+
+## Resolution
+
+- **[concern] `since` fallback has no command:** fixed. D4 now gives `git log --max-parents=0 --reverse --format=%cI | head -1` (earliest root, so several roots are handled), D6's consumer block points to it, and D7's rule-lines test checks the consumer block contains both commands.
+- **[concern] Departures from architecture and slice plan unreconciled:** fixed by listing both (D2 identity, D4 starting point) under a new "Pending Planning Edits" heading in Implementation Notes, to be applied to `220-arch.program-tool.md` and slice plan entry 8 as a planning edit outside this slice.
+- **[note] Frontmatter omits 224:** fixed. `224-slice.status-and-decisions` added to `dependencies`.
+- **[note] `parse_since` extraction stays in scope:** no change; the reviewer recommends keeping it as is.
+- **[pass] Layering, import direction and integration points:** no action.
+- **[pass] Failure modes enumerated:** no action.
+- **[pass] Soft rule lines handled as the architecture accepts:** no action.

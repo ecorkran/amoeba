@@ -48,7 +48,7 @@ status: not_started
   - [ ] Find 226's stdio test and its literal tool count, its parity tests, and any literal `takes_directory` name set
   - [ ] Find the replayed `cf` in `tests/cf_fixtures.py` and its recordings in `tests/fixtures/context_forge/`. If no recording of `cf list projects --json` exists, record it once from the real command (read-only) into that folder and note the file
   - [ ] Read `build_world` and `run_amoeba` in `tests/live/pause/harness.py`; note whether `build_world` makes one member or can make two
-  - [ ] Find the helpers in `tests/git_repo.py`; note whether a commit can take a committer date (`GIT_COMMITTER_DATE`)
+  - [ ] Find the helpers in `tests/git_repo.py`; note whether a commit can take an author date and a committer date (`GIT_AUTHOR_DATE`, `GIT_COMMITTER_DATE`) and whether it can rebase a branch
   - [ ] Run the checks once and note the baseline; failures present before this slice are written down, not fixed
   - [ ] Success: a note lists each import path, the timestamp helpers, the stdio test location, the `cf list projects` fixture, the live helper's member count, the git helper's date support, and the baseline result
 
@@ -98,7 +98,7 @@ status: not_started
   - [ ] Success: module imports; pyright strict clean; tests pass
 
 - [ ] **2.3 `report_release` operation and tests (D2)**
-  - [ ] Implement `report_release(store, document, *, directory, deps)`: validate `document` into the request (failure: `rejected` / `malformed`, with `validation_problems` as the detail); `resolve_member(store, directory, deps.cf_run)` (failure: `rejected` / `not_a_member`, the resolution as detail); take `deps.clock()` once; then one `store.write()` transaction applying D2's table for the request's mode. `unchanged` writes nothing. The result carries the stored report (null after `withdrawn` and on rejection) and the member's CF project id (null when not a member)
+  - [ ] Implement `report_release(store, document, *, directory, deps)`: validate `document` into the request (failure: `rejected` / `malformed`, with `validation_problems` as the detail); `resolve_member(store, directory, deps.cf_run)` (failure: `rejected` / `not_a_member`; the detail says "this Context Forge project is in no program" for `NotInProgram` and "this directory is in no Context Forge project" plus Context Forge's message for `NotAProject`, and a test covers each); take `deps.clock()` once; then one `store.write()` transaction applying D2's table for the request's mode. `unchanged` writes nothing. The result carries the stored report (null after `withdrawn` and on rejection) and the member's CF project id (null when not a member)
   - [ ] Test, `report` mode, one per D2 row, asserting outcome and stored row: a new commit is `recorded` with and without a version; a different version on a versioned commit and a version on a versionless commit are each `versioned` with the text replaced and `reported_at` unmoved; a rephrased repeat is `unchanged` and keeps the stored text; a repeat with the same version is `unchanged`; a versionless repeat on a versioned commit is `unchanged`
   - [ ] Test, `correct` mode: no stored report is `rejected` / `not_reported` and writes nothing; a stored report is `corrected` with the text replaced and `reported_at` moved to now
   - [ ] Test, `withdraw` mode: no stored report is `rejected` / `not_reported`; a stored report is `withdrawn`, the row is gone, and reporting the commit again is `recorded` with a new `seq`
@@ -173,7 +173,8 @@ status: not_started
 - [ ] **6.1 Flow test (D7)**
   - [ ] Create `tests/program/test_program_flow.py` (default suite). Build a provider repo and a consumer repo with `tests/git_repo.py`, both members of one program in the replayed `cf`
   - [ ] Read the consumer block from `docs/program-rules.md` (by heading, as 5.2 does); run its two git commands in the consumer repo; pass the output as `since` to `changes`
-  - [ ] Window case: the consumer commits its design at a set `GIT_COMMITTER_DATE`; the provider reports after that date with a fixed clock; the consumer's `since` still sees the report
+  - [ ] Window case: the consumer commits its design at a set `GIT_AUTHOR_DATE`; the provider reports after that date with a fixed clock; the consumer's `since` still sees the report
+  - [ ] Rebase case: rebase the consumer's branch onto a newer commit with `GIT_COMMITTER_DATE` after the report; take `since` again with the rule block's command; `changes` still sees the report. This fails if the block used committer time
   - [ ] Then the provider tags a release and reports it with `--version`; a `from_release` consumer sees the report with the release text; a correction is seen by a consumer whose `since` predates it; a withdrawal removes it from `changes`
   - [ ] Success: the test passes in the default suite
 
