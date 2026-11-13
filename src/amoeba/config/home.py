@@ -1,11 +1,12 @@
 """The Amoeba homes: where config lives and where state lives.
 
 This module holds the only read of ``AMOEBA_HOME`` and the only use of
-``Path.home``. Everything else asks these functions, and only the process
-boundary (the CLI, the MCP layer) does that; operations take a store, a config and
-a ``StateLayout`` as arguments. ``XDG_CONFIG_HOME`` and ``XDG_STATE_HOME`` are never
-consulted: there is one way to choose the location, because the hook and the shell
-may differ in the XDG variables and would silently use different stores.
+``Path.home``. Everything else asks these functions, and only ``cli``, ``mcp`` and
+``wiring`` call ``state_layout()``, ``config_home()`` and ``state_home()``;
+operations take a store, a config and a ``StateLayout`` as arguments.
+``XDG_CONFIG_HOME`` and ``XDG_STATE_HOME`` are never consulted: there is one way to
+choose the location, because the hook and the shell may differ in the XDG variables
+and would silently use different stores.
 
 Config (``config.yaml``, edited by a person) lives in the config home. The store,
 answering scratch and logs (state) live in the state home. ``AMOEBA_HOME``, when

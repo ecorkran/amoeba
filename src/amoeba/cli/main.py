@@ -1,16 +1,17 @@
 """The ``amoeba`` command (slices 222 to 224, D9, D13): one subcommand per operation.
 
-This is the process boundary. It alone calls ``state_layout()`` and
-``config_path()``, reads the request text, and turns the expected failures into an
-``error: <ExceptionName>: <message>`` line on stderr and an exit code. Later slices
-add subcommands and reuse the exit codes.
+This is the process boundary of the command-line door. It reads the request text,
+builds each operation's document, hands it to ``wiring.invoke`` (which places every
+argument), and turns the expected failures into an ``error: <ExceptionName>:
+<message>`` line on stderr and an exit code. ``handle_pause`` keeps its own body: it
+also appends the calls-log line (228 D11). Later slices add subcommands and reuse the
+exit codes.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict
@@ -20,32 +21,20 @@ from typing import Final
 
 import yaml
 
-from amoeba.config.home import (
-    AmoebaHomeError,
-    StateLayout,
-    config_path,
-    squadron_runs_dir,
-    state_layout,
-)
-from amoeba.config.user_config import ConfigError, load_user_config
-from amoeba.operations.answer import AnswerOutcome, AnswerResult, answer
+from amoeba.config.home import StateLayout, state_layout
 from amoeba.operations.calls_log import append_call, error_entry, result_entry
-from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
-from amoeba.operations.deps import Deps, production_deps
-from amoeba.operations.dismiss import DismissOutcome, DismissResult, dismiss
-from amoeba.operations.handle_pause import HandlePauseResult, handle_pause
-from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult, mark_read
-from amoeba.operations.members import ContextForgeError
-from amoeba.operations.prune import prune
-from amoeba.operations.prune_models import Prune, PruneReport
-from amoeba.operations.retract import RetractOutcome, RetractResult, retract
-from amoeba.operations.set_up import set_up
-from amoeba.operations.set_up_models import SetUpOutcome
-from amoeba.operations.state_move import open_state_store
-from amoeba.operations.status import StatusOutcome, StatusResult, status
-from amoeba.store.errors import StoreError
-from amoeba.store.store import Store
-from amoeba.upstream.squadron.errors import SquadronError
+from amoeba.operations.handle_pause import handle_pause
+from amoeba.operations.names import Door, OperationName
+from amoeba.wiring import (
+    OPERATIONAL_ERRORS,
+    OperationResult,
+    default_deps,
+    invoke,
+    is_rejected,
+    load_config,
+    open_store,
+    result_document,
+)
 
 #: Exit codes, shared by every subcommand.
 EXIT_OK: Final = 0  # the operation succeeded (for set_up: applied or unchanged)
@@ -53,14 +42,6 @@ EXIT_REJECTED: Final = 1  # the operation refused the request; the result says w
 EXIT_USAGE: Final = 2  # bad arguments, or a request that cannot be read
 EXIT_ERROR: Final = 3  # config, home, Context Forge or store failure
 
-SET_UP_COMMAND: Final = "set_up"
-HANDLE_PAUSE_COMMAND: Final = "handle_pause"
-ANSWER_COMMAND: Final = "answer"
-STATUS_COMMAND: Final = "status"
-DECISIONS_COMMAND: Final = "decisions"
-MARK_READ_COMMAND: Final = "mark_read"
-DISMISS_COMMAND: Final = "dismiss"
-RETRACT_COMMAND: Final = "retract"
 STDIN_SOURCE: Final = "-"
 STDIN_NAME: Final = "<stdin>"
 JSON_INDENT: Final = 2
@@ -98,52 +79,62 @@ def read_request_document(source: str) -> object:
         raise RequestDocumentError(f"{name}: not YAML: {error}") from error
 
 
-def _run_set_up(layout: StateLayout, source: str) -> int:
-    document = read_request_document(source)
-    config = load_user_config(config_path())
-    with open_state_store(layout) as store:
-        result = set_up(
-            store, config, document, directory=Path.cwd(), run=subprocess.run
-        )
-    sys.stdout.write(result.model_dump_json(indent=JSON_INDENT) + "\n")
-    return EXIT_REJECTED if result.outcome is SetUpOutcome.REJECTED else EXIT_OK
+def _print_json(document: object) -> None:
+    """A JSON document on stdout."""
+    sys.stdout.write(json.dumps(document, indent=JSON_INDENT, ensure_ascii=False))
+    sys.stdout.write("\n")
 
 
-def _prune_in(layout: StateLayout) -> Prune:
-    """``prune`` with the layout bound, so the operations never see the environment."""
-
-    def prune_layout(store: Store, *, now: datetime, after_days: int) -> PruneReport:
-        return prune(store, layout, now, after_days)
-
-    return prune_layout
+def _with_optional(
+    document: dict[str, object], **optional: object
+) -> dict[str, object]:
+    """``document`` plus each optional value that was given."""
+    return {**document, **{k: v for k, v in optional.items() if v is not None}}
 
 
-def _deps(layout: StateLayout) -> Deps:
-    """The real edges, with the layout's directories; only the CLI asks the home."""
-    return production_deps(
-        answering_dir=layout.answering_dir,
-        logs_dir=layout.logs_dir,
-        calls_log_dir=layout.calls_log_dir,
-        squadron_runs_dir=squadron_runs_dir(),
-        legacy_home=layout.legacy_home,
-        prune=_prune_in(layout),
+def _document_for(name: OperationName, arguments: argparse.Namespace) -> object:
+    """The request document an in-process operation is given, from its arguments."""
+    match name:
+        case OperationName.SET_UP:
+            return read_request_document(arguments.file)
+        case OperationName.ANSWER:
+            return _with_optional(
+                {"run_id": arguments.run_id, "text": arguments.text},
+                paused_at=arguments.paused_at,
+            )
+        case OperationName.STATUS:
+            return _with_optional({}, program=arguments.program)
+        case OperationName.DECISIONS:
+            return _with_optional({}, since=arguments.since, program=arguments.program)
+        case OperationName.MARK_READ:
+            return {"through": arguments.through}
+        case OperationName.DISMISS:
+            return _with_optional(
+                {"run_id": arguments.run_id, "reason": arguments.reason},
+                paused_at=arguments.paused_at,
+            )
+        case OperationName.RETRACT:
+            return {"answer_seq": arguments.answer_seq, "reason": arguments.reason}
+        case OperationName.HANDLE_PAUSE:
+            raise ValueError(f"{name.value} has no request document")
+
+
+def _run_invoked(name: OperationName, arguments: argparse.Namespace) -> int:
+    """Run an in-process operation through ``wiring.invoke``; print its result."""
+    result: OperationResult = invoke(
+        name, _document_for(name, arguments), Path.cwd(), Door.CLI
     )
-
-
-def _print_result(
-    result: HandlePauseResult | AnswerResult | DismissResult | RetractResult,
-) -> None:
-    """A result as JSON on stdout (enums are strings)."""
-    sys.stdout.write(json.dumps(asdict(result), indent=JSON_INDENT) + "\n")
+    _print_json(result_document(result))
+    return EXIT_REJECTED if is_rejected(result) else EXIT_OK
 
 
 def _run_handle_pause(layout: StateLayout, run_id: str) -> int:
-    config = load_user_config(config_path())
-    deps = _deps(layout)
+    config = load_config()
+    deps = default_deps(layout)
     directory = Path.cwd()
-    with open_state_store(layout) as store:
+    with open_store(layout) as store:
         result = handle_pause(store, config, run_id, directory=directory, deps=deps)
-    _print_result(result)
+    _print_json(asdict(result))
     # After the result is printed: a log failure cannot change what was reported.
     now = deps.clock()
     reason = result.skip_reason or result.waiting_reason
@@ -159,82 +150,22 @@ def _log_failed_call(layout: StateLayout, run_id: str, error: Exception) -> None
     append_call(layout.calls_log_dir, entry, now)
 
 
-def _run_answer(
-    layout: StateLayout, run_id: str, paused_at: str | None, text: str
-) -> int:
-    config = load_user_config(config_path())
-    deps = _deps(layout)
-    document: dict[str, str] = {"run_id": run_id, "text": text}
-    if paused_at is not None:
-        document["paused_at"] = paused_at
-    with open_state_store(layout) as store:
-        result = answer(store, config, document, deps=deps)
-    _print_result(result)
-    return EXIT_REJECTED if result.outcome is AnswerOutcome.REJECTED else EXIT_OK
+def _add_paused_at(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--paused-at",
+        metavar="TIMESTAMP",
+        help="the pause, as `sq runs wait --json` prints it (default: the latest)",
+    )
 
 
-def _run_dismiss(
-    layout: StateLayout, run_id: str, paused_at: str | None, reason: str
-) -> int:
-    document: dict[str, str] = {"run_id": run_id, "reason": reason}
-    if paused_at is not None:
-        document["paused_at"] = paused_at
-    with open_state_store(layout) as store:
-        result = dismiss(store, document, clock=_deps(layout).clock)
-    _print_result(result)
-    return EXIT_REJECTED if result.outcome is DismissOutcome.REJECTED else EXIT_OK
-
-
-def _run_retract(layout: StateLayout, answer_seq: int, reason: str) -> int:
-    document: dict[str, object] = {"answer_seq": answer_seq, "reason": reason}
-    with open_state_store(layout) as store:
-        result = retract(store, document, clock=_deps(layout).clock)
-    _print_result(result)
-    return EXIT_REJECTED if result.outcome is RetractOutcome.REJECTED else EXIT_OK
-
-
-def _print_model(result: StatusResult | DecisionsResult | MarkReadResult) -> None:
-    """A pydantic result as JSON on stdout."""
-    sys.stdout.write(result.model_dump_json(indent=JSON_INDENT) + "\n")
-
-
-def _run_status(layout: StateLayout, program: str | None) -> int:
-    config = load_user_config(config_path())
-    deps = _deps(layout)
-    document: dict[str, str] = {} if program is None else {"program": program}
-    with open_state_store(layout) as store:
-        result = status(store, config, document, directory=Path.cwd(), deps=deps)
-    _print_model(result)
-    return EXIT_REJECTED if result.outcome is StatusOutcome.REJECTED else EXIT_OK
-
-
-def _run_decisions(layout: StateLayout, since: str | None, program: str | None) -> int:
-    deps = _deps(layout)
-    document: dict[str, str] = {}
-    if since is not None:
-        document["since"] = since
-    if program is not None:
-        document["program"] = program
-    with open_state_store(layout) as store:
-        result = decisions(store, document, deps=deps)
-    _print_model(result)
-    return EXIT_REJECTED if result.outcome is DecisionsOutcome.REJECTED else EXIT_OK
-
-
-def _run_mark_read(layout: StateLayout, through: int) -> int:
-    with open_state_store(layout) as store:
-        result = mark_read(store, {"through": through})
-    _print_model(result)
-    return EXIT_REJECTED if result.outcome is MarkReadOutcome.REJECTED else EXIT_OK
-
-
-def _parser() -> argparse.ArgumentParser:
+def build_parser() -> argparse.ArgumentParser:
+    """The command's parser; one subcommand per ``OperationName``."""
     parser = argparse.ArgumentParser(
         prog="amoeba", description="Amoeba: the program tool."
     )
     commands = parser.add_subparsers(dest="command", required=True)
     set_up_parser = commands.add_parser(
-        SET_UP_COMMAND,
+        OperationName.SET_UP.value,
         help="register or update a program, its members and dependencies",
     )
     set_up_parser.add_argument(
@@ -244,29 +175,26 @@ def _parser() -> argparse.ArgumentParser:
         help=f"the request document (YAML); {STDIN_SOURCE} reads standard input",
     )
     pause_parser = commands.add_parser(
-        HANDLE_PAUSE_COMMAND,
+        OperationName.HANDLE_PAUSE.value,
         help="answer a paused run's question and resume it, or record it as waiting",
     )
     pause_parser.add_argument("run_id", help="the paused run (run in its checkout)")
     answer_parser = commands.add_parser(
-        ANSWER_COMMAND, help="record the PM's answer to a question, then resume the run"
+        OperationName.ANSWER.value,
+        help="record the PM's answer to a question, then resume the run",
     )
     answer_parser.add_argument("run_id", help="the run the question was asked in")
-    answer_parser.add_argument(
-        "--paused-at",
-        metavar="TIMESTAMP",
-        help="the pause, as `sq runs wait --json` prints it (default: the latest)",
-    )
+    _add_paused_at(answer_parser)
     answer_parser.add_argument("--text", required=True, help="the answer")
     status_parser = commands.add_parser(
-        STATUS_COMMAND,
+        OperationName.STATUS.value,
         help="runs, pauses and questions waiting on the PM, per program and member",
     )
     status_parser.add_argument(
         "--program", metavar="ID", help="only this program (default: see the contract)"
     )
     decisions_parser = commands.add_parser(
-        DECISIONS_COMMAND,
+        OperationName.DECISIONS.value,
         help="answers recorded since the PM's marker, or since a time",
     )
     decisions_parser.add_argument(
@@ -276,7 +204,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     decisions_parser.add_argument("--program", metavar="ID", help="only this program")
     mark_read_parser = commands.add_parser(
-        MARK_READ_COMMAND,
+        OperationName.MARK_READ.value,
         help="move the PM's marker forward to the last record seen",
     )
     mark_read_parser.add_argument(
@@ -287,18 +215,14 @@ def _parser() -> argparse.ArgumentParser:
         help="the read_through of a decisions call",
     )
     dismiss_parser = commands.add_parser(
-        DISMISS_COMMAND,
+        OperationName.DISMISS.value,
         help="close a question that has no answer to deliver; the run stays paused",
     )
     dismiss_parser.add_argument("run_id", help="the run the question was asked in")
-    dismiss_parser.add_argument(
-        "--paused-at",
-        metavar="TIMESTAMP",
-        help="the pause, as `sq runs wait --json` prints it (default: the latest)",
-    )
+    _add_paused_at(dismiss_parser)
     dismiss_parser.add_argument("--reason", required=True, help="why it is closed")
     retract_parser = commands.add_parser(
-        RETRACT_COMMAND,
+        OperationName.RETRACT.value,
         help="stop a PM answer being precedent; it stays delivered and listed",
     )
     retract_parser.add_argument(
@@ -310,41 +234,21 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command; returns the exit code."""
-    arguments = _parser().parse_args(argv)
+    arguments = build_parser().parse_args(argv)
+    name = OperationName(arguments.command)
     layout: StateLayout | None = None
     try:
-        layout = state_layout()
-        if arguments.command == SET_UP_COMMAND:
-            return _run_set_up(layout, arguments.file)
-        if arguments.command == HANDLE_PAUSE_COMMAND:
+        if name is OperationName.HANDLE_PAUSE:
+            layout = state_layout()
             return _run_handle_pause(layout, arguments.run_id)
-        if arguments.command == ANSWER_COMMAND:
-            return _run_answer(
-                layout, arguments.run_id, arguments.paused_at, arguments.text
-            )
-        if arguments.command == STATUS_COMMAND:
-            return _run_status(layout, arguments.program)
-        if arguments.command == DECISIONS_COMMAND:
-            return _run_decisions(layout, arguments.since, arguments.program)
-        if arguments.command == MARK_READ_COMMAND:
-            return _run_mark_read(layout, arguments.through)
-        if arguments.command == DISMISS_COMMAND:
-            return _run_dismiss(
-                layout, arguments.run_id, arguments.paused_at, arguments.reason
-            )
-        if arguments.command == RETRACT_COMMAND:
-            return _run_retract(layout, arguments.answer_seq, arguments.reason)
-        raise AssertionError(f"unhandled command {arguments.command!r}")
+        return _run_invoked(name, arguments)
     except RequestDocumentError as error:
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
         return EXIT_USAGE
-    except AmoebaHomeError as error:
-        # No state home, so no calls log to write: stderr only (228 D11).
+    except OPERATIONAL_ERRORS as error:
+        # The process boundary: these are the expected failures, reported once. With
+        # no layout (no state home) there is no calls log to write: stderr only.
         sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
-        return EXIT_ERROR
-    except (ConfigError, ContextForgeError, SquadronError, StoreError) as error:
-        # The process boundary: these are the expected failures, reported once.
-        sys.stderr.write(f"error: {type(error).__name__}: {error}\n")
-        if arguments.command == HANDLE_PAUSE_COMMAND and layout is not None:
+        if name is OperationName.HANDLE_PAUSE and layout is not None:
             _log_failed_call(layout, arguments.run_id, error)
         return EXIT_ERROR

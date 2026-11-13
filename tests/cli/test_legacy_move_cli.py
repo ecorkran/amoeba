@@ -14,6 +14,7 @@ import pytest
 from store.relocate_support import seed_store
 from user_configs import example_config_text
 
+from amoeba import wiring
 from amoeba.cli import main as cli
 from amoeba.config.home import HOME_VARIABLE
 from amoeba.upstream.squadron.errors import SquadronError
@@ -53,7 +54,8 @@ def test_the_move_happens_before_the_commands_own_work(
         seen.append((state_store.exists(), legacy_store.exists()))
         raise SquadronError("stub")
 
-    monkeypatch.setattr(cli, operation, stub)
+    # ``handle_pause`` is the CLI's own body; the others are placed by ``wiring``.
+    monkeypatch.setattr(cli if operation == "handle_pause" else wiring, operation, stub)
     argv = [*arguments, str(request)] if operation == "set_up" else arguments
 
     exit_code = cli.main(argv)
