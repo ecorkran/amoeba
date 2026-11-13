@@ -129,7 +129,7 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    **Risk Level:** Medium. Moves the live store; the move is tested only against throwaway homes and keeps the old file until the new one verifies.
    **Relative Effort:** 4
 
-8. [ ] **(226) MCP Server** — An MCP server over the operations built so far, with the same names and no logic of its own. Long work (`handle_pause`, `answer` with a resume) starts a detached CLI process and returns at once. Store calls run off the async loop. This completes scenario C: any agent session can see status and decisions and answer for the PM.
+8. [x] **(226) MCP Server** — An MCP server over the operations built so far, with the same names and no logic of its own. Long work (`handle_pause`, `answer` with a resume) starts a detached CLI process and returns at once. Store calls run off the async loop. This completes scenario C: any agent session can see status and decisions and answer for the PM.
    **Value:** User value. The PM can ask any agent what is waiting and answer through it, from any directory.
    **Success Criteria:**
    - Every operation available on the CLI is available over MCP with the same inputs and results.

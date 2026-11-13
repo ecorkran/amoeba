@@ -86,7 +86,7 @@ def test_an_unresumed_answer_is_not_resumed_from_a_second_directory(
             insert_question(
                 transaction, waiting_question(KEY, member_id=PROJECT_ID), now=NOW
             )
-            add_pm_answer(transaction, KEY, "an answer", now=NOW)
+            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
 
         result = _handle_from(w, _second_checkout(tmp_path))
 

@@ -9,6 +9,7 @@ The `amoeba` command, backed by one SQLite store. Its commands (`docs/cli-contra
 - `amoeba.answering`: the answering pipeline (`answering.yaml`), the passage cutting and citation check, the six-check decision on whether an answer stands, and the answer screen.
 - `amoeba.upstream`: bounded readers of what other tools say (`cf`, `git`, `sq`), and the argv for starting and resuming an `sq` run.
 - `amoeba.store`, `amoeba.operations`, `amoeba.cli`: the store and its migrations, the operations, and the command line.
+- `amoeba.mcp`: `amoeba-mcp`, the same operations as MCP tools for an agent session (`docs/mcp-server.md`: install, register, timeouts).
 
 ## Where things live
 

@@ -10,7 +10,7 @@ interfaces:
 - 227-slice.program-dependencies
 dateCreated: 20261107
 dateUpdated: 20261112
-status: not_started
+status: complete
 ---
 
 # Slice Design: MCP Server
@@ -130,7 +130,7 @@ Default suite, fake `cf` and `sq` from 222 to 224.
 Both doors answer for the PM, so an answer should say which door carried it. `Door(StrEnum)` (`cli`, `mcp`) in `operations/names.py`; `invoke` and `answer` take a `via: Door` argument, which the doors set and the caller cannot. Migration `004_answer_via.sql` is `ALTER TABLE answers ADD COLUMN via TEXT CHECK (via IN ('cli', 'mcp'))` (ADD COLUMN only, nullable, per 222 D3; pinned to the enum by the vocabulary test). Pre-004 rows keep `NULL`, which `decisions` prints as absent rather than inventing a door. `AnswerRecord`, the `decisions` entries (`via` beside `answered_by`), `EXPECTED_SCHEMA_VERSION` (3 to 4), `docs/store-contract.md` and `docs/cli-contract.md` change with it. No outcome of any operation depends on `via`.
 
 ### D12 — Every MCP call has a deadline
-`status` and `decisions` call `sq` and `cf`, and `status` makes one `cf` call per unknown directory, so their time has no fixed bound. `answer` has one: `wiring.answer_bound_seconds(config)` is `resume_bound_seconds(config)` (228 D4) plus the timeouts of the other `sq` and `cf` calls on `answer`'s path (task 0.2 lists them). `run_in_process` runs the worker under `anyio.fail_after(MCP_CALL_DEADLINE_SECONDS)` with `abandon_on_cancel=True`. `MCP_CALL_DEADLINE_SECONDS` is one named constant in `mcp/in_process.py`, set below the default tool timeout of the clients the install doc names (task 0.3 reads each client's current default and sets it; today's Codex documentation is the source for its value).
+`status` and `decisions` call `sq` and `cf`, and `status` makes one `cf` call per unknown directory, so their time has no fixed bound. `answer` has one: `wiring.answer_bound_seconds(config)` is `resume_bound_seconds(config)` (228 D4) plus the timeouts of the other `sq` and `cf` calls on `answer`'s path (task 0.2 lists them). `run_in_process` runs the worker under `anyio.fail_after(MCP_CALL_DEADLINE_SECONDS)` with `abandon_on_cancel=True`. `MCP_CALL_DEADLINE_SECONDS` is one named constant in `mcp/in_process.py`, 180 s. `answer`'s bound is `resume_wait_seconds` plus 90.5 s (`resume_bound_seconds` is `resume_wait_seconds` plus 75.5 s, and `answer`'s legacy-move lock, store open and write add three busy timeouts of 5 s), so the deadline cannot sit below Codex's default tool timeout of 60 s (checked 20261112; Claude Code's is about 28 hours). 180 s clears the config contract's example (`resume_wait_seconds: 60`, bound 150.5 s) and refuses a `resume_wait_seconds` of 89.5 s or more. The install doc tells Codex users to set `tool_timeout_sec` to at least 185.
 
 **Invariant.** `answer_bound_seconds(config)` is below `MCP_CALL_DEADLINE_SECONDS`, so `answer` never times out after it has recorded an answer and started a resume. `main()` checks it before serving and exits non-zero naming `resume_wait_seconds` as the config key to lower; a test pins the check.
 
@@ -155,12 +155,20 @@ The abandoned thread finishes on its own, closes its store in its `finally`, and
 
 All steps run by the implementing agent, with no person involved. Steps 3 to 5 are one live test, `tests/live/mcp/test_mcp_walkthrough_live.py`, which uses the pause fixtures and helpers in `tests/live/pause/` (a throwaway member, `AMOEBA_HOME` and Context Forge data directory, real `sq`, `cf` and models) and drives `amoeba-mcp` with the SDK's stdio client from a working directory under `/tmp`.
 
+Run on 20261112 from branch `226-slice.mcp-server`, with these results.
+
 1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`
+   Expect `328 files already formatted`, `All checks passed!`, `0 errors, 0 warnings, 0 informations`, and the default suite passing (`1981 passed`; the live tier is excluded). Done: all four passed.
 2. `uv tool install --force .` succeeds and installs `amoeba` and `amoeba-mcp` side by side.
-3. The client lists eight tools. `status` with `directory: /tmp/…` matches `amoeba status` run there. `decisions`, then `mark_read`; `amoeba decisions` agrees.
-4. A real run pauses on a question (fixture pipeline). `handle_pause` with the `run_id` and `directory` from `status` returns a `StartedCall` at once; its stdout log later holds a `HandlePauseResult`; the calls log holds a line for it.
-5. For a question the run left waiting on the PM, `answer` with a fixture text returns `AnswerResult`; `decisions` lists it with `via: mcp`; the same through `amoeba answer` lists `via: cli`. `dismiss` and `retract` on a second and third fixture question return their results.
+   Expect `Installed 2 executables: amoeba, amoeba-mcp`, and `ls -la ~/.local/bin | grep amoeba` listing both links into `~/.local/share/uv/tools/amoeba/bin/`. Done: as expected.
+3. to 5. `(set -a; . ./.env; set +a; uv run pytest tests/live/mcp)`
+   Needs `AMOEBA_LIVE_ANSWER_MODEL`, `AMOEBA_LIVE_CHECK_MODEL`, `AMOEBA_LIVE_MAX_COST_USD` and a provider key in the shell (the repo's untracked `.env` holds them); real `sq`, `cf` and models, so it spends. Expect `1 passed` in about a minute. Done: `1 passed in 65.12s`. The test, one fresh stdio session per call from a directory in no program:
+   - 3: the client lists eight tools named as `OperationName`; `status` with `directory` equals `amoeba status` run there (`outcome: listed`); `decisions` (empty) and `mark_read` through 0 (`unchanged`) equal the CLI's JSON.
+   - 4: three real runs pause on a question no rule settles. `handle_pause` with the `run_id` and `directory` from `status` returns a receipt (`operation`, `pid`, `cwd`, `started_at`, `stdout_log`, `stderr_log`) at once; the session ends and the child goes on; its stdout log then holds a `HandlePauseResult` with `outcome: waiting_on_pm`, and the calls log holds exactly one line for the run.
+   - 5: `answer` through MCP and `amoeba answer` through the CLI both return `recorded`; `decisions` lists `via: mcp` and `via: cli` and equals the CLI's JSON; `dismiss` returns `dismissed` and `retract` returns `retracted`; `mark_read` through `read_through` returns `moved`, after which `amoeba decisions` lists nothing.
+   Caveat: the test lowers the world's `resume_wait_seconds` from the pause tier's 120 to 60, because `amoeba-mcp` refuses to start for 89.5 or more (D12).
 6. Registration: `claude mcp add --scope user amoeba -- amoeba-mcp`, then `claude mcp list` shows `amoeba` connected. This is the install and the end state: it stays on. Steps 1 to 5 prove the server without touching any client configuration.
+   Done: `Added stdio MCP server amoeba with command: amoeba-mcp  to user config`; `claude mcp list` printed `amoeba: amoeba-mcp  - ✔ Connected`. The real config home already held `config.yaml` and the state home had been moved by 228, so start-up did no move.
 7. Clear: the throwaway world is deleted with its directory. The registration is not removed here. Undoing it is documented (`claude mcp remove amoeba --scope user`, in `docs/mcp-server.md`), not exercised.
 
 ### Operator walkthrough

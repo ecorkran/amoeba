@@ -36,7 +36,12 @@ from amoeba.store.answers import (
 from amoeba.store.models import QuestionRecord
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import ClosedReason, QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import (
+    ClosedReason,
+    Door,
+    QuestionState,
+    ResumeOutcome,
+)
 from operations.handle_rig import (
     KEY,
     PAUSE,
@@ -83,7 +88,11 @@ def _dismiss(w: World) -> DismissOutcome:
 
 def _answer(w: World, text: str = "PM says: 250 lines.") -> AnswerOutcome:
     return answer(
-        w.store, w.config, {"run_id": KEY.run_id, "text": text}, deps=w.deps
+        w.store,
+        w.config,
+        {"run_id": KEY.run_id, "text": text},
+        deps=w.deps,
+        via=Door.CLI,
     ).outcome
 
 
@@ -243,7 +252,7 @@ def test_answered_unresumed_exits_by_the_sweep(tmp_path: Path) -> None:
     with world(tmp_path) as w:
         _wait(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, KEY, "an answer", now=NOW)
+            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
         bound = timedelta(seconds=resume_bound_seconds(w.config))
 
         assert not _sweep(w, bound - timedelta(seconds=1)).changed_anything
@@ -259,7 +268,7 @@ def test_answered_unresumed_exits_by_the_hook_resuming_it(tmp_path: Path) -> Non
     with world(tmp_path, paused_polls=(PAUSE, *RESUME_POLLS)) as w:
         _wait(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, KEY, "an answer", now=NOW)
+            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
 
         w.handle()
 
@@ -272,7 +281,7 @@ def test_answered_unresumed_exits_by_dismiss(tmp_path: Path) -> None:
     with world(tmp_path) as w:
         _wait(w)
         with w.store.write() as transaction:
-            add_pm_answer(transaction, KEY, "an answer", now=NOW)
+            add_pm_answer(transaction, KEY, "an answer", now=NOW, via=None)
 
         assert _dismiss(w) is DismissOutcome.DISMISSED
 

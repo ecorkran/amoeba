@@ -76,8 +76,8 @@ def test_answers_come_back_in_seq_order_and_the_newest_is_latest(
 ) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        first = add_pm_answer(transaction, KEY, "first", now=NOW)
-        second = add_pm_answer(transaction, KEY, "second", now=NOW)
+        first = add_pm_answer(transaction, KEY, "first", now=NOW, via=None)
+        second = add_pm_answer(transaction, KEY, "second", now=NOW, via=None)
 
     with store.read() as transaction:
         rows = answers_of(transaction, KEY)
@@ -132,7 +132,7 @@ def test_automatic_count_spans_checkpoints_and_restarts_at_a_pm_answer(
         Settled,
     )
     with store.write() as transaction:
-        add_pm_answer(transaction, KEY, "pm says", now=NOW)
+        add_pm_answer(transaction, KEY, "pm says", now=NOW, via=None)
 
     with store.read() as transaction:
         # The PM answered after both, so the run's count started again (228 D7).
@@ -149,7 +149,7 @@ def test_a_pm_answer_sets_answered_and_keeps_the_waiting_reason(
         insert_question(transaction, new, now=NOW)
 
     with store.write() as transaction:
-        seq = add_pm_answer(transaction, KEY, "use 300", now=NOW)
+        seq = add_pm_answer(transaction, KEY, "use 300", now=NOW, via=None)
 
     with store.read() as transaction:
         record = get_question(transaction, KEY)
@@ -167,7 +167,7 @@ def test_record_resume_never_overwrites_resumed_or_not_delivered_but_does_refuse
 ) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        seq = add_pm_answer(transaction, KEY, "use 300", now=NOW)
+        seq = add_pm_answer(transaction, KEY, "use 300", now=NOW, via=None)
 
     def record(outcome: ResumeOutcome, detail: str) -> bool:
         with store.write() as transaction:
@@ -193,7 +193,7 @@ def test_record_resume_never_overwrites_resumed_or_not_delivered_but_does_refuse
 def test_not_delivered_is_final_too(store: Store) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        seq = add_pm_answer(transaction, KEY, "use 300", now=NOW)
+        seq = add_pm_answer(transaction, KEY, "use 300", now=NOW, via=None)
         assert record_resume(
             transaction, seq, ResumeOutcome.NOT_DELIVERED, detail=None, log=None, at=NOW
         )
@@ -224,7 +224,7 @@ def test_a_successful_settle_writes_the_answerer_row_with_cited(store: Store) ->
 def test_a_pm_answer_during_the_claim_makes_the_settle_lost(store: Store) -> None:
     with store.write() as transaction:
         insert_question(transaction, claimed_question(), now=NOW)
-        add_pm_answer(transaction, KEY, "pm first", now=NOW)
+        add_pm_answer(transaction, KEY, "pm first", now=NOW, via=None)
 
     assert isinstance(_settle(store), Lost)
     with store.read() as transaction:
@@ -265,7 +265,7 @@ def test_the_gate_counts_automatic_answers_only(store: Store) -> None:
             transaction, claimed_question(KEY, answering_run_id="a-1"), now=NOW
         )
         insert_question(transaction, waiting_question(SECOND_KEY), now=NOW)
-        add_pm_answer(transaction, SECOND_KEY, "pm", now=NOW)
+        add_pm_answer(transaction, SECOND_KEY, "pm", now=NOW, via=None)
 
     def gate(prior: int) -> None:
         seen.append(prior)
@@ -279,7 +279,9 @@ def test_the_gate_counts_automatic_answers_only(store: Store) -> None:
 
 def _pm_answer(store: Store, key: QuestionKey, text: str, minutes: int) -> None:
     with store.write() as transaction:
-        add_pm_answer(transaction, key, text, now=NOW + timedelta(minutes=minutes))
+        add_pm_answer(
+            transaction, key, text, now=NOW + timedelta(minutes=minutes), via=None
+        )
 
 
 def test_precedent_is_the_newest_pm_answer_per_question(store: Store) -> None:
@@ -415,8 +417,8 @@ def test_a_retracted_newest_answer_gives_no_precedent_and_the_older_is_not_reviv
 ) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        add_pm_answer(transaction, KEY, "older", now=NOW)
-        newest = add_pm_answer(transaction, KEY, "newer", now=NOW)
+        add_pm_answer(transaction, KEY, "older", now=NOW, via=None)
+        newest = add_pm_answer(transaction, KEY, "newer", now=NOW, via=None)
     assert _precedent(store) == ["newer"]
 
     _retract(store, newest)
@@ -427,12 +429,12 @@ def test_a_retracted_newest_answer_gives_no_precedent_and_the_older_is_not_reviv
 def test_a_new_pm_answer_after_a_retraction_is_the_precedent(store: Store) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        first = add_pm_answer(transaction, KEY, "first", now=NOW)
+        first = add_pm_answer(transaction, KEY, "first", now=NOW, via=None)
     _retract(store, first)
     assert _precedent(store) == []
 
     with store.write() as transaction:
-        add_pm_answer(transaction, KEY, "second", now=NOW)
+        add_pm_answer(transaction, KEY, "second", now=NOW, via=None)
 
     assert _precedent(store) == ["second"]
 
@@ -440,7 +442,7 @@ def test_a_new_pm_answer_after_a_retraction_is_the_precedent(store: Store) -> No
 def test_a_closed_question_gives_no_precedent(store: Store) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(), now=NOW)
-        add_pm_answer(transaction, KEY, "answer", now=NOW)
+        add_pm_answer(transaction, KEY, "answer", now=NOW, via=None)
         transaction.execute(
             "UPDATE questions SET state = ?, closed_reason = 'dismissed'",
             (QuestionState.CLOSED.value,),

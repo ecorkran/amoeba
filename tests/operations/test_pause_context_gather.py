@@ -102,7 +102,7 @@ def test_pm_precedent_appears_after_a_pm_answer_and_not_for_automatic_answers(
         with rig.store.write() as transaction:
             insert_question(transaction, _question(KEY, claimed=True), now=NOW)
             insert_question(transaction, _question(other, claimed=False), now=NOW)
-            add_pm_answer(transaction, other, "Merge to main.", now=NOW)
+            add_pm_answer(transaction, other, "Merge to main.", now=NOW, via=None)
         settle_answered(
             rig.store,
             KEY,
@@ -141,7 +141,7 @@ def test_a_pm_answer_with_no_recorded_slice_renders_with_no_slice_line(
         )
         with rig.store.write() as transaction:
             insert_question(transaction, waiting, now=NOW)
-            add_pm_answer(transaction, key, "Use main.", now=NOW)
+            add_pm_answer(transaction, key, "Use main.", now=NOW, via=None)
         context = _context(rig.gather({}))
 
     answers = [p for p in context.passages.passages if p.kind is PassageKind.PM_ANSWER]

@@ -88,7 +88,7 @@ def _latest(store: Store, key: QuestionKey) -> AnswerRecord:
 def _answered(store: Store, key: QuestionKey) -> int:
     _waiting(store, key)
     with store.write() as transaction:
-        return add_pm_answer(transaction, key, "the answer", now=NOW)
+        return add_pm_answer(transaction, key, "the answer", now=NOW, via=None)
 
 
 def test_a_waiting_row_at_an_older_pause_closes_as_moved_on_with_the_later_pause(
@@ -237,7 +237,7 @@ def test_a_concurrent_answer_between_read_and_write_wins(store: Store) -> None:
     _waiting(store, OLD)
     stale = _row(store, OLD)
     with store.write() as transaction:
-        add_pm_answer(transaction, OLD, "the PM got there first", now=NOW)
+        add_pm_answer(transaction, OLD, "the PM got there first", now=NOW, via=None)
 
     result = apply_sweep(store, CONFIG, [(stale, FATE)], NOW + timedelta(minutes=1))
 

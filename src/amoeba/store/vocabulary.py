@@ -36,6 +36,17 @@ class ClosedReason(StrEnum):
     RUN_GONE = "run_gone"
 
 
+class Door(StrEnum):
+    """Which interface carried a call: the command line or the MCP server (226 D11).
+
+    Recorded beside each PM answer. Defined here, where ``answers.via`` is pinned,
+    and re-exported by ``operations.names`` for the doors.
+    """
+
+    CLI = "cli"
+    MCP = "mcp"
+
+
 class ResumeOutcome(StrEnum):
     """What happened when an answer was handed back to the paused run."""
 

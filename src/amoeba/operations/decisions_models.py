@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from amoeba.answering.values import AnsweredBy, DeclineReason
 from amoeba.operations.reject_codes import RejectCode
-from amoeba.store.vocabulary import ResumeOutcome
+from amoeba.store.vocabulary import Door, ResumeOutcome
 
 
 class _Model(BaseModel):
@@ -73,6 +73,9 @@ class DecisionsRecord(_Model):
     slice_label: str | None
     question: str
     answered_by: AnsweredBy
+    #: The door that carried a PM answer (226 D11); null for an answer from before
+    #: migration 004 and for the answerer's automatic answers.
+    via: Door | None
     answer: str
     #: The newest earlier answer to the same question; a PM answer after an automatic
     #: one is an override.

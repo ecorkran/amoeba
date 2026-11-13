@@ -156,7 +156,7 @@ def test_a_young_claim_and_an_answer_whose_resume_may_be_in_flight_stay_open(
         insert_question(transaction, claimed_question(WAITING, member_id=CORE), now=NOW)
     _waiting(store, GONE)
     with store.write() as transaction:
-        add_pm_answer(transaction, GONE, "an answer", now=NOW)
+        add_pm_answer(transaction, GONE, "an answer", now=NOW, via=None)
 
     result = _status(store, tmp_path, core_dir, [])  # neither run is listed
 
@@ -170,7 +170,9 @@ def test_an_old_unresumed_answer_is_marked_not_delivered_and_reported(
 ) -> None:
     _waiting(store, WAITING)
     with store.write() as transaction:
-        seq = add_pm_answer(transaction, WAITING, "answer", now=NOW - 2 * BOUND)
+        seq = add_pm_answer(
+            transaction, WAITING, "answer", now=NOW - 2 * BOUND, via=None
+        )
     runs = [_listed(WAITING.run_id, "completed", core_dir)]
 
     result = _status(store, tmp_path, core_dir, runs)

@@ -161,7 +161,7 @@ def test_a_waiting_questions_evidence_is_kept_and_an_unresumed_answers_too(
             evidence=None,
             now=NOW,
         )
-        add_pm_answer(transaction, OPEN_KEY, "an answer", now=NOW)
+        add_pm_answer(transaction, OPEN_KEY, "an answer", now=NOW, via=None)
     scratch = _scratch(layout, OPEN_ANSWERING, OLD)
 
     _prune(store, layout)
@@ -225,7 +225,7 @@ def test_a_pruned_resume_log_stays_named_in_the_answer_and_decisions_still_lists
 ) -> None:
     with store.write() as transaction:
         insert_question(transaction, waiting_question(SETTLED_KEY), now=NOW)
-        seq = add_pm_answer(transaction, SETTLED_KEY, "an answer", now=NOW)
+        seq = add_pm_answer(transaction, SETTLED_KEY, "an answer", now=NOW, via=None)
     log = _resume_log(layout, SETTLED_KEY.run_id, OLD)
     with store.write() as transaction:
         record_resume(

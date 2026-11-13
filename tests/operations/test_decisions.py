@@ -36,7 +36,7 @@ from amoeba.store.decisions import advance_marker
 from amoeba.store.models import QuestionKey
 from amoeba.store.questions import insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import ResumeOutcome
+from amoeba.store.vocabulary import Door, ResumeOutcome
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import ProjectNames
 from operations.pause_support import DepsRig, build_deps
@@ -211,7 +211,7 @@ def test_a_pm_record_for_a_question_that_never_waited_has_no_basis(
     key = QuestionKey("run-9", "2026-11-10T12:00:00+00:00")
     automatic_answer(store, key, CORE, 1)
     with store.write() as transaction:
-        add_pm_answer(transaction, key, "pm override", now=at(2))
+        add_pm_answer(transaction, key, "pm override", now=at(2), via=None)
 
     first, second = _run(store, tmp_path).records
 
@@ -220,13 +220,29 @@ def test_a_pm_record_for_a_question_that_never_waited_has_no_basis(
     assert second.based_on is None
 
 
+def test_each_record_shows_the_door_that_carried_it_or_none(
+    store: Store, tmp_path: Path
+) -> None:
+    key = QuestionKey("run-9", "2026-11-10T12:00:00+00:00")
+    automatic_answer(store, key, CORE, 1)
+    with store.write() as transaction:
+        add_pm_answer(transaction, key, "by cli", now=at(2), via=Door.CLI)
+        add_pm_answer(transaction, key, "by mcp", now=at(3), via=Door.MCP)
+        # No door: how every answer from before migration 004 reads.
+        add_pm_answer(transaction, key, "from before", now=at(4), via=None)
+
+    records = _run(store, tmp_path).records
+
+    assert [record.via for record in records] == [None, Door.CLI, Door.MCP, None]
+
+
 def test_a_pm_override_shows_the_answer_it_replaced(
     store: Store, tmp_path: Path
 ) -> None:
     key = QuestionKey("run-9", "2026-11-10T12:00:00+00:00")
     automatic = automatic_answer(store, key, CORE, 1)
     with store.write() as transaction:
-        add_pm_answer(transaction, key, "pm override", now=at(2))
+        add_pm_answer(transaction, key, "pm override", now=at(2), via=None)
 
     records = _run(store, tmp_path).records
 

@@ -147,6 +147,7 @@ def _record(row: DecisionRow, names: ProjectNames) -> DecisionsRecord:
         slice_label=question.slice_label,
         question=question.question,
         answered_by=answer.answered_by,
+        via=answer.via,
         answer=answer.answer,
         prior_answer_seq=row.prior_answer_seq,
         based_on=_basis(row),

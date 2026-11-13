@@ -91,7 +91,7 @@ class LivePause:
         )
         with Store.open(self.world.store) as store, store.write() as transaction:
             insert_question(transaction, seeded, now=when)
-            add_pm_answer(transaction, key, answer, now=when)
+            add_pm_answer(transaction, key, answer, now=when, via=None)
         return key
 
     def settle(self) -> Settled:

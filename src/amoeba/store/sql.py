@@ -267,7 +267,7 @@ def select_open_rows_of_members(member_count: int) -> str:
 
 ANSWER_COLUMNS: Final = """seq, run_id, paused_at, answered_by, answer, cited,
     recorded_at, resume_outcome, resume_detail, resume_log, resume_at, retracted_at,
-    retract_reason, resume_started_at"""
+    retract_reason, resume_started_at, via"""
 SELECT_ANSWERS_OF: Final = (
     f"SELECT {ANSWER_COLUMNS} FROM answers WHERE run_id = ? AND paused_at = ? "
     "ORDER BY seq"
@@ -287,8 +287,9 @@ WHERE run_id = ? AND answered_by = ?
         (SELECT MAX(seq) FROM answers WHERE run_id = ? AND answered_by = ?), 0)
 """
 INSERT_RECORDED_ANSWER: Final = """
-INSERT INTO answers (run_id, paused_at, answered_by, answer, cited, recorded_at)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO answers (run_id, paused_at, answered_by, answer, cited, recorded_at,
+    via)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 """
 # ``resumed`` and ``not_delivered`` are final; only ``refused`` may be retried.
 RECORD_RESUME: Final = """

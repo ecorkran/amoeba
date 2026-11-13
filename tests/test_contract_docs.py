@@ -11,6 +11,7 @@ from amoeba.operations.answer import AnswerRejection
 from amoeba.operations.decisions import DecisionsOutcome
 from amoeba.operations.dismiss import DismissOutcome, DismissRejection
 from amoeba.operations.mark_read import MarkReadOutcome
+from amoeba.operations.names import OperationName
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.reject_codes import RejectCode
@@ -98,16 +99,7 @@ def test_the_store_contract_names_every_decline_reason() -> None:
 
 def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> None:
     text = CLI_CONTRACT.read_text(encoding="utf-8")
-    commands = [
-        cli.SET_UP_COMMAND,
-        cli.HANDLE_PAUSE_COMMAND,
-        cli.ANSWER_COMMAND,
-        cli.STATUS_COMMAND,
-        cli.DECISIONS_COMMAND,
-        cli.MARK_READ_COMMAND,
-        cli.DISMISS_COMMAND,
-        cli.RETRACT_COMMAND,
-    ]
+    commands = [name.value for name in OperationName]
     exit_codes = [cli.EXIT_OK, cli.EXIT_REJECTED, cli.EXIT_USAGE, cli.EXIT_ERROR]
     values = [
         *(outcome.value for outcome in HandlePauseOutcome),

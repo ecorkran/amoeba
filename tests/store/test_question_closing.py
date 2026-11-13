@@ -83,7 +83,7 @@ def _dismiss(store: Store, key: QuestionKey = KEY) -> bool:
 
 def _answer_unresumed(store: Store, key: QuestionKey) -> int:
     with store.write() as transaction:
-        return add_pm_answer(transaction, key, "answer", now=NOW)
+        return add_pm_answer(transaction, key, "answer", now=NOW, via=None)
 
 
 def test_close_question_closes_a_matching_row(store: Store) -> None:
@@ -230,8 +230,8 @@ def _seed_every_state(store: Store) -> None:
             ),
             now=NOW,
         )
-        add_pm_answer(transaction, SECOND, "unresumed", now=NOW)
-        third_seq = add_pm_answer(transaction, THIRD, "resumed", now=NOW)
+        add_pm_answer(transaction, SECOND, "unresumed", now=NOW, via=None)
+        third_seq = add_pm_answer(transaction, THIRD, "resumed", now=NOW, via=None)
         record_resume(
             transaction, third_seq, ResumeOutcome.RESUMED, detail=None, log=None, at=NOW
         )
