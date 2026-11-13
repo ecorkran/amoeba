@@ -170,8 +170,8 @@ All are general Squadron features that are off or unused unless configured. None
 | Change | Needed for | Status |
 |---|---|---|
 | Tool-less Claude steps | A, on Claude models | `ecorkran/squadron#299`, closed |
-| Command started on pause, in the run's directory, with a per-run opt-out | A | `ecorkran/squadron#302`, open |
-| Working directory in the run file, and JSON from `sq runs list` | C, and A's catching up on a missed hook | `ecorkran/squadron#303`, open |
+| Command started on pause, in the run's directory, with a per-run opt-out | A | `ecorkran/squadron#302`, closed |
+| Working directory in the run file, and JSON from `sq runs list` | C, and A's catching up on a missed hook | `ecorkran/squadron#303`, closed |
 | Command step in pipelines | Only if agents skip the scenario B rule lines | `ecorkran/squadron#304`, on hold |
 
 ## Technical Considerations

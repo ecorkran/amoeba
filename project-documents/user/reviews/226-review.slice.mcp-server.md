@@ -3,6 +3,8 @@ docType: review
 layer: project
 reviewType: slice
 slice: mcp-server
+targetKind: slice
+rulesSource: project
 conventionsSource: AGENTS.md
 projectRules: []
 project: amoeba
@@ -12,59 +14,67 @@ sourceDocument: project-documents/user/slices/226-slice.mcp-server.md
 aiModel: claude-sonnet-5-5
 aiProfile: sdk
 status: complete
-dateCreated: 20261107
-dateUpdated: 20261107
-reviewedSha: d7abb8b975e1a0cd857ccc7b945ab087cb6db4b6
-revision_number: 2
+dateCreated: 20261112
+dateUpdated: 20261112
+reviewedSha: 23803e729af58dbe031bd34a9ef8e524adf714ce
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 6
+toolCallsMade: 9
 effort: high
-turns: 7
-promptTokens: 412587
-cachedTokens: 301924
-cacheWriteTokens: 110653
-completionTokens: 9580
-durationSeconds: 80.7
-costUsd: 0.569467
+turns: 10
+promptTokens: 510078
+cachedTokens: 395667
+cacheWriteTokens: 114399
+completionTokens: 9431
+durationSeconds: 81.7
+costUsd: 0.592406
 costBasis: provider
-runId: run-20261107-slices-plan-813acacc
-squadronVersion: 0.24.23
+squadronVersion: 0.24.28
 findings:
   - id: F001
-    severity: pass
-    category: architecture-alignment
-    summary: "Two thin doors over shared operations, with the architecture's one allowed difference"
-    location: "project-documents/user/slices/226-slice.mcp-server.md#Technical Decisions"
+    severity: concern
+    category: integration
+    summary: "Home preparation contract differs from 228's stated MCP interface"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:46-48"
   - id: F002
-    severity: pass
-    category: architecture-alignment
-    summary: "Architecture's MCP-specific obligations are met"
-    location: "project-documents/user/slices/226-slice.mcp-server.md:165-170"
+    severity: concern
+    category: nfr
+    summary: "D12's deadline value is left to a task and not tied to the waits inside `answer`"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:128-129"
   - id: F003
     severity: concern
-    category: dependency-direction
-    summary: "The import-boundary rule conflicts with the typed tool table"
-    location: "project-documents/user/slices/226-slice.mcp-server.md:93"
+    category: error-handling
+    summary: "The `TimedOut` message sends the agent to the tool that timed out"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:128-129,157"
   - id: F004
     severity: concern
-    category: integration-contract
-    summary: "`answer` is always detached, so the PM-answer path loses its immediate result"
-    location: "project-documents/user/slices/226-slice.mcp-server.md:186"
+    category: operator-walkthrough
+    summary: "Verification steps 6 and 7 contradict each other and change the PM's real client config"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:150-151"
   - id: F005
-    severity: pass
-    category: error-handling
-    summary: "Failure modes are enumerated for the new I/O paths"
-    location: "project-documents/user/slices/226-slice.mcp-server.md:206-213"
+    severity: note
+    category: scope
+    summary: "`answer` is in-process, which departs from the plan wording"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:69"
   - id: F006
     severity: note
-    category: proportionality
-    summary: "Proportionality: some behavior and tests exceed what the slice must deliver"
-    location: "project-documents/user/slices/226-slice.mcp-server.md:212"
+    category: under-specification
+    summary: "How raw arguments reach the operations needs a pinned mechanism"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:53"
   - id: F007
     severity: note
-    category: security
-    summary: "`answered_by: pm` rests on description text alone"
-    location: "project-documents/user/slices/226-slice.mcp-server.md:163"
+    category: parent-document
+    summary: "The architecture's Squadron table is stale"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:30"
+  - id: F008
+    severity: pass
+    category: architecture
+    summary: "Layering, dependency direction and state placement"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:34-48"
+  - id: F009
+    severity: pass
+    category: error-handling
+    summary: "Failure modes and exits for the detached `handle_pause`"
+    location: "project-documents/user/slices/226-slice.mcp-server.md:88-94,96-104"
 ---
 
 # Review: slice — slice 226
@@ -74,44 +84,68 @@ findings:
 
 ## Findings
 
-### [PASS] Two thin doors over shared operations, with the architecture's one allowed difference
+### [CONCERN] Home preparation contract differs from 228's stated MCP interface
 
-The tool names come from one `OperationName` enum, and `cli/main.py` registers its subcommands from it. The tool table places arguments and nothing else, and result models are returned unchanged. The only door-specific rules are the absolute-`directory` check and detached starts for long work. Architecture decision 4 and the principle "One operation, two doors" allow both. The no-logic claim is backed by parity tests for names, functions and argv. Exclusions are correct: MCP resources, notifications, HTTP and `report_release`/`changes` (227) stay out of scope.
+228 lists what it provides to 226 as "`prepare_state_home` and `StateLayout`, called once when the MCP process starts" (228 line 345). It also says `open_state_store` "moves legacy state" before `Store.open` (228 line 117). 226 never mentions `prepare_state_home` or a start-up step. Its server "holds no state" and each call runs `open_state_store` in its own worker thread.
+- **The gap:** after an upgrade, the first calls reach the legacy move (228 D2: copy, verify, delete old store, move directories) from concurrent threads. Two parallel first calls from one client, or a CLI run alongside, can race each other.
+- **Failure handling:** a `StoreRelocateError` is exit 3 on the CLI. 226 doesn't say whether it surfaces at server start or on each call.
+- **Fix:** say whether `main()` calls `prepare_state_home` once before serving, and add a test of two concurrent first calls against a throwaway legacy home.
 
-### [PASS] Architecture's MCP-specific obligations are met
+### [CONCERN] D12's deadline value is left to a task and not tied to the waits inside `answer`
 
-The architecture's Technical Considerations require that the first MCP slice names the library and runs store calls off the async loop. D1 names `mcp` 2.x and D4 runs every in-process call in `anyio.to_thread.run_sync`, with a store connection per call. The explanation of how a stdio server fits "nothing to run" (State Management) matches the goal. The server is started and stopped by the client session and Amoeba starts nothing itself. The "resume's environment" consideration is carried into D6 and D9.
+`MCP_CALL_DEADLINE_SECONDS` is defined as "set below the default tool timeout of the clients the install doc names (task 0.3 reads each client's current default)." The design states no number or rule.
+- **No relation to config:** `answer` runs in-process and waits up to `resume_wait_seconds`, a required config key (223 D8). Nothing relates that key to the deadline.
+- **Dead end:** if `resume_wait_seconds` plus the `sq` and `cf` timeouts can exceed the deadline, every `answer` returns `TimedOut` after the answer is recorded and the resume started.
+- **Duplicate risk:** the agent may then retry `answer`.
+- **Fix:** add a start-up or test check that the worst-case `answer` time is below the deadline, or state the invariant.
+- **Dropped failures:** `abandon_on_cancel` also drops any exception raised in the abandoned thread after the timeout. Say whether it is logged.
 
-### [CONCERN] The import-boundary rule conflicts with the typed tool table
+### [CONCERN] The `TimedOut` message sends the agent to the tool that timed out
 
-The design says `mcp` imports nothing from `amoeba.store`, `upstream`, `answering` or `cli`, and D10 enforces this with an AST test. D2 gives `ToolSpec.call` the signature `(store, config, document, directory, deps)`. Under pyright strict (a stated requirement) those parameters need `Store` from `amoeba.store` and `UserConfig` from `amoeba.config`. The design doesn't say where `mcp` gets those types. Either the annotations break the rule the test enforces, or the rule is met by something unstated, such as a re-export from `wiring`, a Protocol, or loose `Callable[..., Any]` typing that weakens strict mode. The same ambiguity applies to the `deps` bundle type. 222's boundary rules are written around the module graph, so this needs a decision.
-Fix: state the type source for `Store`, `UserConfig` and `deps` in the `mcp` layer, and make the AST rule match it. For example, `wiring` could re-export the types as its public contract, or the adapters could be built in `wiring` so `mcp` never names them.
+The message reads "it may still complete, so check status or decisions", and the operator walkthrough says "`status` and `decisions` say which." That is circular when `status` is the call that timed out.
+- **No exit:** the abandoned thread's result is discarded and nothing is cached. If `sq runs list` plus the unknown-directory lookups always take longer than the deadline, every MCP `status` times out.
+- **No way out:** the design offers no exit. The only workaround is running `amoeba status` in a shell, which an agent session may not do and the PM can't ask for through MCP.
+- **Fix:** for `status` and `decisions`, say that the CLI is the fallback. Alternatively, name the time bound 228 D4 gives `status` and require it to sit below the deadline, with a test.
 
-### [CONCERN] `answer` is always detached, so the PM-answer path loses its immediate result
+### [CONCERN] Verification steps 6 and 7 contradict each other and change the PM's real client config
 
-The plan's success criterion is "same inputs and results", and the architecture says only long work goes detached. The plan entry lists "`answer` with a resume" as the detached case. The design detaches every `answer` call, including ones with no resume. The architecture's resume procedure only waits "briefly" for the run to reach `running`, and D6 itself says the wait is bounded by `resume_wait_seconds`. So `answer` is not long work in the sense that `handle_pause` is, since it only waits for the answering run to finish. The cost is acknowledged. The agent relaying the PM's decision gets no synchronous `no_such_question`, `refused`, `not_delivered` or `rejected` outcome, and must read a log file or call `decisions`. That undercuts "Fail where someone can see it" on the most trust-sensitive operation, and it makes `answer` the one tool whose result differs from the CLI's.
-Fix: either justify detaching by naming what in-process would break (the bounded wait is not the answer, because the worker thread already keeps the loop free), or run `answer` in a worker thread and return `AnswerResult`. If the plan's choice stands, state the deviation from the "same results" criterion in Success Criteria and say how an agent confirms a PM answer was recorded.
+Step 6 registers `amoeba` at user scope and says "it stays on." Step 7 runs `claude mcp remove amoeba --scope user`. Step 2 reinstalls the real tool with `uv tool install --force .`.
+- **The contradiction:** the registration either stays or is removed, and the doc says both.
+- **The side effect:** both steps change the PM's real environment, outside the throwaway `AMOEBA_HOME`.
+- **Fix:** pick one. Either use a project-scope or temporary registration that step 7 removes, or drop step 7 and say the install is the end state. Check that the stdio smoke test and live test already prove the server works without touching user-scope config.
 
-### [PASS] Failure modes are enumerated for the new I/O paths
+### [NOTE] `answer` is in-process, which departs from the plan wording
 
-Client cancel, slow or hung `cf`/`sq` (bounded by 224 D1's sum), stdin EOF with a call in flight, and log-directory or log-file creation errors each have an explicit handling strategy. Detached-child outcomes are handled too: a spawn error, an empty log meaning "still running or killed", and a missing `amoeba` script at start-up. `call_tool` as the process-boundary handler matches case (c) of the project's exception rule. Stdout corruption is closed off by the stdio design and a noisy-subprocess test.
+The plan entry and the architecture's "One operation, two doors" principle describe `answer` with a resume as long work started detached. The design runs it in-process and says why: the resume waits only `resume_wait_seconds`, and the agent gets the typed outcome back. That is sound and arguably better. It does make the deadline relationship above matter more, and the plan's "A long call returns at once" criterion now applies to `handle_pause` only. The design's own success criterion already says "`handle_pause` excepted".
 
-### [NOTE] Proportionality: some behavior and tests exceed what the slice must deliver
+### [NOTE] How raw arguments reach the operations needs a pinned mechanism
 
-The slice is rated effort 2, and the design carries a wiring/CLI extraction, six new modules, a custom low-level server, and ten test groups. The core choices are justified: the low-level server preserves the operations' own validation, and `wiring.py` is needed by both doors. These pieces could be cut or deferred without losing a requirement:
-- **EOF-with-call-in-flight test and failure-mode row** (D10, D7). This pins the default `anyio` thread behavior and a shutdown delay the design itself says nobody waits on. The "Off the loop" test, `ASYNC` lint rules and the cancel/disconnect row already cover the real risks.
-- **Repeated restatement of 224 D1's timeout sum and 225 decisions** in the failure table and prerequisites. A reference would do.
-- **Output schemas for every tool.** This is only needed if a client consumes them. The architecture requires input shape fidelity, not output schemas, so this could be deferred unless a target client needs it.
+D1 relies on the low-level server passing arguments to the operation without validating them against the published schema, so a malformed `set_up` gives `rejected` on both doors. It doesn't say how the SDK's own input validation is turned off. The D10 "same functions" test (malformed `set_up` returns `rejected`) will catch a mismatch, so no change is needed. The mechanism would still be worth one line in the design.
 
-### [NOTE] `answered_by: pm` rests on description text alone
+### [NOTE] The architecture's Squadron table is stale
 
-D3 makes the `answer` description say that `text` must be a decision the PM actually gave. The architecture's "What an answer may authorize" section says the record is the check afterward, and the design accepts that as scenario C's intent. No finding is raised. The residual risk is that an agent which ignores the description records its own judgment as the PM's, and it gets precedent status. If this shows up in real use, `answer` could take a required quoted-PM-text field to make the provenance auditable in `decisions`.
+226 records `ecorkran/squadron#303` as closed, checked on 20261112. The architecture's table (`220-arch.program-tool.md`, "Squadron changes") still lists it as open. I did not re-run `gh issue view` myself. The parent should be corrected so the two documents don't disagree.
+
+### [PASS] Layering, dependency direction and state placement
+
+- **Layering:** `cli` and `mcp` both depend on `operations` and `wiring`, `mcp` imports nothing from `store`, `config`, `upstream`, `answering` or `cli`, and an AST test enforces it.
+- **Shared invocation:** the single `wiring.invoke` delivers "no logic of its own" and gives 227 a four-item recipe for adding an operation.
+- **Config and state:** detached logs go under the state home's `logs/mcp/`, not `~/.config`.
+- **Plan coverage:** the design covers what the plan assigns: `via`, migration 004, `wiring.invoke`, deadlines, and a live fixture walkthrough in place of a PM step.
+
+### [PASS] Failure modes and exits for the detached `handle_pause`
+
+- **Start failures:** invalid input, a missing `amoeba` script, a `LaunchError` and a log-creation `OSError` each have an explicit `isError` path.
+- **Client disconnect:** the child runs in its own session and survives it.
+- **End state:** the child is bounded by `answering_wait_seconds`, and its logs are pruned by 228's `prune`.
+- **Test:** a test pins that the logs are pruned.
+- **Unexpected errors:** the top-level handler in `call_tool` logs with `logger.exception`, so that rule is met.
 
 ### Run Digest
 
-- Response length: 6917 chars
+- Response length: 7193 chars
 - Response is newline-free: no
-- Tool calls made: 6
+- Tool calls made: 9
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -119,22 +153,24 @@ D3 makes the `answer` description say that `text` must be a decision the PM actu
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: high
-- Turns: 7
-- Tokens — prompt / cached / cache write / completion / reasoning: 412587 / 301924 / 110653 / 9580 / not computed
-- Duration: 80.7 s
-- Cost: $0.57 (provider)
+- Turns: 10
+- Tokens — prompt / cached / cache write / completion / reasoning: 510078 / 395667 / 114399 / 9431 / not computed
+- Duration: 81.7 s
+- Cost: $0.59 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9
 
 ## Resolution
 
-- **[PASS] Two thin doors over shared operations:** no change needed.
-- **[PASS] Architecture's MCP-specific obligations are met:** no change needed.
-- **[CONCERN] Import-boundary rule conflicts with the typed tool table:** changed. `wiring` now re-exports `Store`, `UserConfig` and the `deps` bundle type `OperationDeps` as its public contract. `ToolSpec.call` is typed with those, and the import rule and the D10 AST test now also bar `amoeba.config`, so `mcp` is typed under pyright strict without importing `store` or `config`.
-- **[CONCERN] `answer` always detached:** changed. `answer` now runs in-process in a worker thread and returns `AnswerResult`, because its resume waits only `resume_wait_seconds` and the resumed run is spawned in its own session. D2 states the departure from the plan entry's wording and the reason. Only `handle_pause` stays detached, and Success Criteria names it as the one result that differs from the CLI's. The `answer` argv, door validation and refusal test are removed.
-- **[NOTE] Proportionality:** changed. Removed the EOF-with-call-in-flight test and shortened its failure-mode row. The timeout row and the 225 prerequisite now refer to 224 D1 and to 225's decisions instead of restating them. Output schemas and the `result_model` field are dropped, because no requirement or client consumes them.
-- **[NOTE] `answered_by: pm` rests on description text alone:** rejected, no change. The review raises no defect, and a required quoted-PM-text field would be new mechanism for a risk that hasn't appeared in use. The architecture relies on the record in `decisions` as the check afterward.
+- **[concern] Home preparation contract:** fixed. `main()` calls `wiring.prepare_home()` (228's `prepare_state_home(state_layout())`) once before serving; a failure exits non-zero with the CLI's text. Per-call `open_state_store` stays, as a no-op once moved, with 228's lock covering a CLI run beside the server. Tests: start-up order and failure, and two concurrent first calls against a throwaway legacy home (D10, tasks 5.2).
+- **[concern] D12 deadline value not tied to `answer`'s waits:** fixed. `wiring.answer_bound_seconds(config)` is `resume_bound_seconds(config)` plus the other `sq` and `cf` timeouts on `answer`'s path. `main()` refuses a config where it is not below `MCP_CALL_DEADLINE_SECONDS`, naming `resume_wait_seconds`, so `answer` never times out after acting and no retry duplicates it. An exception raised by an abandoned worker is logged with `logger.exception` by a wrapper.
+- **[concern] `TimedOut` sends the agent to the tool that timed out:** fixed. `ToolSpec.timeout_advice`: `status` and `decisions` name the CLI as the fallback (no deadline there); the write tools say to check `status` or `decisions` before repeating. 228 defines no time bound for `status` (it says "unchanged"), so a bound could not be required; the CLI fallback is the exit.
+- **[concern] Verification steps 6 and 7 contradict:** fixed. Step 6 is the install and the end state. Step 7 only clears the throwaway world; undoing the registration is documented, not exercised. Steps 1 to 5 prove the server without touching client config.
+- **[note] `answer` in-process:** no change. The design already states it and excepts `handle_pause` in its success criterion.
+- **[note] Raw arguments mechanism:** fixed. D1 says the handler is registered with the SDK's input validation off; task 0.3 confirms the 2.x spelling, and the D10 "same functions" test catches a mismatch.
+- **[note] Architecture's Squadron table stale:** fixed. Checked with `gh issue view` on 20261112: #302 and #303 are both closed; the rows in `220-arch.program-tool.md` now say closed.
+- **[pass] Layering and failure modes:** no action.

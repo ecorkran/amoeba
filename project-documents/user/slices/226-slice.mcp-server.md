@@ -34,7 +34,7 @@ An MCP server, `amoeba-mcp`, in front of the eight operations the CLI has after 
 ```
 src/amoeba/
 ├── operations/names.py  # OperationName, Door (StrEnum) (D3, D11)
-├── wiring.py            # load_config, open_store, default_deps, invoke(), OPERATIONAL_ERRORS; re-exports types (D4)
+├── wiring.py            # load_config, open_store, prepare_home, default_deps, invoke(), OPERATIONAL_ERRORS, answer_bound_seconds, check_deadline; re-exports types (D4, D12)
 ├── mcp/
 │   ├── server.py        # main(): low-level Server over stdio (D1, D7)
 │   ├── tools.py         # TOOLS table, input schemas (D2, D5)
@@ -47,13 +47,15 @@ src/amoeba/
 
 The server holds no state. Each call loads the config, opens the store in its worker thread and closes it, so no SQLite connection is shared across threads. The agent client starts and stops the server with its session, which fits "nothing to run".
 
+**Start-up.** `main()` calls `wiring.prepare_home()` once before serving. It is 228's `prepare_state_home(state_layout())`, so the legacy move runs once, single-threaded, before any call. A failure (`StoreRelocateError`, `StoreBusyError` or any other `OPERATIONAL_ERRORS`) exits non-zero with the CLI's stderr text, which the client shows, and the server never starts; the next session start tries again. Each call's `open_state_store` still runs the same function, which does nothing once the move is done. A CLI run beside the server, or beside a second server, is kept out by 228's lock on the legacy store, so two first calls cannot race. `main()` then checks the deadline invariant (D12), also before serving.
+
 ## Technical Decisions
 
 ### D1 — Low-level server over stdio
-`mcp.server.lowlevel.Server("amoeba", …)` with `on_list_tools` and `on_call_tool`, served with `stdio_server()`. `amoeba-mcp` takes no arguments. The low-level server is used so the published input schema is the operation's own request model while raw arguments reach the operation unvalidated: the operations validate their own input (222 D7), so malformed input gets the same result on both doors. Logging goes to stderr; nothing in `amoeba.mcp` prints. Short server instructions say the tools are the CLI's operations, `handle_pause` returns a receipt, `status` gives the inputs for `handle_pause` and `answer`, and `answer` carries only a decision the PM gave (D3).
+`mcp.server.lowlevel.Server("amoeba", …)` with `on_list_tools` and `on_call_tool`, served with `stdio_server()`. `amoeba-mcp` takes no arguments. The low-level server is used so the published input schema is the operation's own request model while raw arguments reach the operation unvalidated: the operations validate their own input (222 D7), so malformed input gets the same result on both doors. The handler is registered with the SDK's own input validation turned off (v1 spelled this `validate_input=False` on the call-tool decorator; task 0.3 confirms the 2.x spelling), so the arguments arrive exactly as the client sent them; the D10 "same functions" test fails if the SDK still validates. Logging goes to stderr; nothing in `amoeba.mcp` prints. Short server instructions say the tools are the CLI's operations, `handle_pause` returns a receipt, `status` gives the inputs for `handle_pause` and `answer`, and `answer` carries only a decision the PM gave (D3).
 
 ### D2 — One tool table
-`TOOLS: tuple[ToolSpec, ...]`. `ToolSpec` (frozen dataclass): `name` (`OperationName`), `request_model`, `takes_directory`, `mode` (`RunMode.IN_PROCESS` or `RunMode.DETACHED`) and `description`. There is no per-tool adapter: in-process tools run through `wiring.invoke` (D4).
+`TOOLS: tuple[ToolSpec, ...]`. `ToolSpec` (frozen dataclass): `name` (`OperationName`), `request_model`, `takes_directory`, `mode` (`RunMode.IN_PROCESS` or `RunMode.DETACHED`), `description` and `timeout_advice` (in-process rows: what the agent does when the call times out, D12). There is no per-tool adapter: in-process tools run through `wiring.invoke` (D4).
 
 | Tool | Mode | Input | Result |
 |---|---|---|---|
@@ -116,7 +118,9 @@ Default suite, fake `cf` and `sq` from 222 to 224.
 - **Same argv:** the `handle_pause` argv parses through `build_parser()` to the input values, including a `run_id` starting with `-`.
 - **Boundary:** an AST test that `amoeba.mcp` imports none of `store`, `config`, `upstream`, `answering`, `cli`.
 - **Off the loop:** a tool blocked on a `threading.Event` does not stop a second call completing.
-- **Deadline (D12):** a tool blocked past a patched short deadline returns the timed-out `isError`; a following call still works.
+- **Deadline (D12):** a tool blocked past a patched short deadline returns the timed-out `isError` carrying that tool's advice (`READ_ADVICE` for `status` and `decisions`, `WRITE_ADVICE` for the others); a following call still works. An exception raised by the abandoned worker after the deadline is logged at ERROR.
+- **Invariant (D12):** `answer_bound_seconds(config)` equals `resume_bound_seconds(config)` plus the listed timeouts, built from the constants; `check_deadline` passes when the bound is below the deadline and raises naming `resume_wait_seconds` when it is not; `main()` with such a config exits non-zero before serving.
+- **Start-up:** against a throwaway legacy home, `main()` moves the state before serving; a move that fails exits non-zero with the CLI's text and serves nothing. Two `invoke` calls started at once against a second throwaway legacy home both succeed and the move happens once (228's lock).
 - **Detached:** `handle_pause` returns `StartedCall` before the child exits; the child's stdout log then holds its `HandlePauseResult` and the calls log holds the child's line. A relative `directory` starts nothing.
 - **Log exit:** a log under `logs/mcp/handle_pause/` older than the cutoff is removed by `prune` and its emptied directories with it; a younger one stays.
 - **Via (D11):** `answer` through each door stores `cli` or `mcp`; `decisions` shows it; a store row from before migration 004 shows no `via`.
@@ -126,14 +130,23 @@ Default suite, fake `cf` and `sq` from 222 to 224.
 Both doors answer for the PM, so an answer should say which door carried it. `Door(StrEnum)` (`cli`, `mcp`) in `operations/names.py`; `invoke` and `answer` take a `via: Door` argument, which the doors set and the caller cannot. Migration `004_answer_via.sql` is `ALTER TABLE answers ADD COLUMN via TEXT CHECK (via IN ('cli', 'mcp'))` (ADD COLUMN only, nullable, per 222 D3; pinned to the enum by the vocabulary test). Pre-004 rows keep `NULL`, which `decisions` prints as absent rather than inventing a door. `AnswerRecord`, the `decisions` entries (`via` beside `answered_by`), `EXPECTED_SCHEMA_VERSION` (3 to 4), `docs/store-contract.md` and `docs/cli-contract.md` change with it. No outcome of any operation depends on `via`.
 
 ### D12 — Every MCP call has a deadline
-`status` and `answer` call `sq` and `cf`, each with its own timeout, but a `status` over many unknown directories can still add up beyond what an MCP client waits. `run_in_process` runs the worker under `anyio.fail_after(MCP_CALL_DEADLINE_SECONDS)` with `abandon_on_cancel=True`. `MCP_CALL_DEADLINE_SECONDS` is one named constant in `mcp/in_process.py`, set below the default tool timeout of the clients the install doc names (task 0.3 reads each client's current default and sets it; today's Codex documentation is the source for its value). When it is hit, the call returns `isError`, `TimedOut: <tool> did not finish within <n> s; it may still complete, so check status or decisions`. The abandoned thread finishes on its own, closes its store in its `finally`, and every operation write is one transaction, so a late finish leaves a consistent store. Nothing is written for the timeout itself.
+`status` and `decisions` call `sq` and `cf`, and `status` makes one `cf` call per unknown directory, so their time has no fixed bound. `answer` has one: `wiring.answer_bound_seconds(config)` is `resume_bound_seconds(config)` (228 D4) plus the timeouts of the other `sq` and `cf` calls on `answer`'s path (task 0.2 lists them). `run_in_process` runs the worker under `anyio.fail_after(MCP_CALL_DEADLINE_SECONDS)` with `abandon_on_cancel=True`. `MCP_CALL_DEADLINE_SECONDS` is one named constant in `mcp/in_process.py`, set below the default tool timeout of the clients the install doc names (task 0.3 reads each client's current default and sets it; today's Codex documentation is the source for its value).
+
+**Invariant.** `answer_bound_seconds(config)` is below `MCP_CALL_DEADLINE_SECONDS`, so `answer` never times out after it has recorded an answer and started a resume. `main()` checks it before serving and exits non-zero naming `resume_wait_seconds` as the config key to lower; a test pins the check.
+
+**On timeout.** The call returns `isError`, `TimedOut: <tool> did not finish within <n> s; <timeout_advice>`, with the advice from the tool's `ToolSpec` (D2):
+- `status`, `decisions` (`READ_ADVICE`): it was abandoned and may still finish; run `amoeba <tool>` in a shell, which has no deadline. The agent is never sent back to the tool that timed out.
+- `set_up`, `answer`, `mark_read`, `dismiss`, `retract` (`WRITE_ADVICE`): it may still complete; check `status` or `decisions` before repeating it.
+
+The abandoned thread finishes on its own, closes its store in its `finally`, and every operation write is one transaction, so a late finish leaves a consistent store. An exception it raises after the deadline is logged with `logger.exception` by the worker wrapper, since nobody awaits the result. Nothing is written for the timeout itself.
 
 ## Success Criteria
 
 - Every CLI operation is available over MCP with the same inputs and the same JSON results, `handle_pause` excepted: it returns a `StartedCall` at once, and its work shows in `status` and `decisions`.
 - No operation logic in `amoeba.mcp`; CLI and MCP place operation arguments in one function (`wiring.invoke`); D10 passes. No synchronous call on the event loop; ruff's `ASYNC` rules are clean.
 - Every answer records its door; `decisions` shows it.
-- No MCP call outlives `MCP_CALL_DEADLINE_SECONDS`.
+- No MCP call outlives `MCP_CALL_DEADLINE_SECONDS`, and `answer` cannot hit it: start-up refuses a config whose `answer` bound is not below it. A timed-out `status` or `decisions` names the CLI as the fallback.
+- The state move runs once at server start-up; a failed move stops the server with the CLI's message.
 - Format, lint, pyright strict and the full suite pass; the CLI's existing tests pass, edited only where a moved `_run_*` body or `via` requires it.
 - `docs/mcp-server.md` exists and the README links it.
 - 227 can add an operation to both doors with a name, a subcommand, an `invoke` case and a table row.
@@ -147,16 +160,16 @@ All steps run by the implementing agent, with no person involved. Steps 3 to 5 a
 3. The client lists eight tools. `status` with `directory: /tmp/…` matches `amoeba status` run there. `decisions`, then `mark_read`; `amoeba decisions` agrees.
 4. A real run pauses on a question (fixture pipeline). `handle_pause` with the `run_id` and `directory` from `status` returns a `StartedCall` at once; its stdout log later holds a `HandlePauseResult`; the calls log holds a line for it.
 5. For a question the run left waiting on the PM, `answer` with a fixture text returns `AnswerResult`; `decisions` lists it with `via: mcp`; the same through `amoeba answer` lists `via: cli`. `dismiss` and `retract` on a second and third fixture question return their results.
-6. Registration: `claude mcp add --scope user amoeba -- amoeba-mcp`, then `claude mcp list` shows `amoeba` connected. This is the install; it stays on.
-7. Clear and undo: `claude mcp remove amoeba --scope user` removes the registration; the throwaway world is deleted with its directory.
+6. Registration: `claude mcp add --scope user amoeba -- amoeba-mcp`, then `claude mcp list` shows `amoeba` connected. This is the install and the end state: it stays on. Steps 1 to 5 prove the server without touching any client configuration.
+7. Clear: the throwaway world is deleted with its directory. The registration is not removed here. Undoing it is documented (`claude mcp remove amoeba --scope user`, in `docs/mcp-server.md`), not exercised.
 
 ### Operator walkthrough
 
-- **Start.** Install the tool, register once, restart the session. A missing `amoeba` script, or an old tool without `amoeba-mcp`, stops the server at start with a stderr message the client shows.
+- **Start.** Install the tool, register once, restart the session. A missing `amoeba` script, or an old tool without `amoeba-mcp`, stops the server at start with a stderr message the client shows. So does a failed state move (the next session start tries again) and a config whose `resume_wait_seconds` is too large for the deadline (the message names the key).
 - **Normal.** Ask the agent what is waiting: `status` returns within the deadline. Ask it to answer: `answer` returns `recorded` and a resume result. A pause not yet handled: `handle_pause` returns a receipt; the agent reads the log or checks `status`.
-- **Failures.** Squadron or Context Forge down: `isError` with the exception's name, nothing written. Bad input: the operation's `rejected` result, same as the CLI. Slow `sq`: `TimedOut` after the deadline, the work may finish, `status` and `decisions` say which. A client that disconnects during `handle_pause`: the detached child finishes in its own session.
+- **Failures.** Squadron or Context Forge down: `isError` with the exception's name, nothing written. Bad input: the operation's `rejected` result, same as the CLI. Slow `sq`: `TimedOut` after the deadline. For `status` and `decisions` the message says to run the CLI in a shell, which has no deadline; for the write tools it says the work may still complete and to check `status` or `decisions` before repeating. `answer` cannot time out after it has acted, because start-up refuses a config whose resume wait exceeds the deadline. A client that disconnects during `handle_pause`: the detached child finishes in its own session.
 - **End state and cleanup.** Questions end as they do in 228 (answered, closed, dismissed, retracted). Detached logs are pruned after `prune_after_days`. The server has no state; `claude mcp remove` undoes the registration.
-- **Dead ends found and closed:** unbounded `status` (D12); detached logs nothing removed (D6, pinned by a test); answers that could not tell which door carried them (D11); a walkthrough step that needed a person's registered program and a real run (now fixtures).
+- **Dead ends found and closed:** a `status` that times out every time and points back at itself (D12: the CLI is the named fallback); an `answer` that times out after acting (D12 invariant, checked at start-up); two first calls racing the legacy move (start-up `prepare_home`); a walkthrough that registered the client and then removed it (step 6 is the end state); detached logs nothing removed (D6, pinned by a test); answers that could not tell which door carried them (D11); a walkthrough step that needed a person's registered program and a real run (now fixtures).
 
 ## Implementation Notes
 
