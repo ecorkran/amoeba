@@ -20,6 +20,7 @@ from amoeba.store.vocabulary import (
     Door,
     QuestionState,
     ResumeOutcome,
+    RulesFrom,
 )
 
 SCHEMA_FILES = sorted(
@@ -36,6 +37,7 @@ ENUM_FOR_COLUMN: dict[str, type[StrEnum]] = {
     "resume_outcome": ResumeOutcome,
     "closed_reason": ClosedReason,
     "via": Door,
+    "rules_from": RulesFrom,
 }
 
 

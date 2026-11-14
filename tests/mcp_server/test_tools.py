@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from amoeba.cli.main import build_parser
+from amoeba.cli.parser import build_parser
 from amoeba.mcp.tools import (
     READ_ADVICE,
     TOOLS,
@@ -26,11 +26,15 @@ from amoeba.operations.answer import AnswerRequest
 from amoeba.operations.names import OperationName
 
 DIRECTORY_TOOLS = {
-    OperationName.SET_UP,
+    OperationName.ADD,
+    OperationName.RM,
+    OperationName.LIST,
     OperationName.STATUS,
     OperationName.HANDLE_PAUSE,
 }
-READ_TOOLS = {OperationName.STATUS, OperationName.DECISIONS}
+READ_TOOLS = {OperationName.STATUS, OperationName.DECISIONS, OperationName.LIST}
+#: A CLI command that is a second name for another, so it has no tool of its own.
+CLI_ALIASES = {"remove"}
 
 
 def _spec(name: OperationName) -> ToolSpec:
@@ -47,15 +51,24 @@ def _subcommands() -> set[str]:
     return choices
 
 
-def test_tool_names_equal_the_operation_names_and_the_cli_subcommands() -> None:
+def test_tool_names_are_the_operation_names_and_the_cli_commands_their_cli_names() -> (
+    None
+):
     names = [tool.name.value for tool in TOOLS]
 
     assert len(names) == len(set(names))
     assert set(names) == {name.value for name in OperationName}
-    assert set(names) == _subcommands()
+    assert {name.cli_name for name in OperationName} == _subcommands() - CLI_ALIASES
 
 
-def test_exactly_three_tools_take_a_directory() -> None:
+def test_the_tool_table_has_add_rm_and_list_and_no_set_up() -> None:
+    names = {tool.name.value for tool in TOOLS}
+
+    assert {"add", "rm", "list"} <= names
+    assert "set_up" not in names
+
+
+def test_exactly_these_tools_take_a_directory() -> None:
     assert {tool.name for tool in TOOLS if tool.takes_directory} == DIRECTORY_TOOLS
 
 
@@ -130,7 +143,7 @@ def test_a_missing_or_unusable_directory_is_refused_naming_the_field(
 
 
 def test_invalid_values_reach_the_operation_untouched() -> None:
-    spec = _spec(OperationName.SET_UP)
+    spec = _spec(OperationName.ADD)
 
     document, directory = prepare_arguments(
         spec, {"directory": "/tmp/repo", "program": 5, "zzz": None}

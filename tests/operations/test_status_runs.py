@@ -18,7 +18,7 @@ from amoeba.operations.status_models import (
 from amoeba.operations.status_placement import PlacedRun
 from amoeba.operations.status_runs import LatestRows, classify_runs
 from amoeba.store.models import Member, MemberSettings, QuestionKey
-from amoeba.store.vocabulary import QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import QuestionState, ResumeOutcome, RulesFrom
 from amoeba.upstream.squadron.run_list import ListedRun
 from operations.status_support import (
     RUN_NOW,
@@ -29,7 +29,13 @@ from operations.status_support import (
 )
 
 LIMIT = 600.0
-MEMBER = Member("demo", MemberSettings("member-a", (), (), ()), RUN_NOW, RUN_NOW, None)
+MEMBER = Member(
+    "demo",
+    MemberSettings("member-a", (), (), (), RulesFrom.NAMED),
+    RUN_NOW,
+    RUN_NOW,
+    None,
+)
 PAUSED = "demo-pause-1"
 RUNNING = "run-20261111-p6-fe470d63"
 

@@ -1,4 +1,4 @@
-"""``amoeba handle_pause`` and ``amoeba answer`` as real subprocesses (slice 223, 8.2).
+"""``amoeba handle-pause`` and ``amoeba answer`` as real subprocesses (slice 223, 8.2).
 
 A fake ``sq`` and ``cf`` are first on ``PATH``; ``HOME`` is a temporary directory that
 holds ``.config/squadron/runs/<run_id>.json`` (copied from the recording), so nothing
@@ -38,6 +38,7 @@ from amoeba.store.models import MemberSettings, QuestionKey
 from amoeba.store.programs import upsert_member, upsert_program
 from amoeba.store.questions import NewQuestion, insert_question, settle_waiting
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import RulesFrom
 
 AMOEBA = Path(sys.executable).with_name("amoeba")
 RUN_TIMEOUT_SECONDS = 60
@@ -67,8 +68,11 @@ def _fake_sq(tmp_path: Path, waits: dict[str, str]) -> FakeSq:
 
 
 def _run(
-    tmp_path: Path, *arguments: str, with_sq: bool = True
+    tmp_path: Path, *arguments: str, with_sq: bool = True, as_json: bool = True
 ) -> subprocess.CompletedProcess[str]:
+    """Run ``amoeba``; ``as_json`` adds ``-j`` after the command name."""
+    if as_json and arguments and not arguments[0].startswith("-"):
+        arguments = (arguments[0], "-j", *arguments[1:])
     bin_dir = tmp_path / "bin"
     write_fake_cf(bin_dir, DEFAULT_WORKTREE)
     if not with_sq:
@@ -117,6 +121,7 @@ def _seed_waiting_question() -> QuestionKey:
                 rules_paths=("CLAUDE.md",),
                 authorize_allow=(),
                 authorize_deny=(),
+                rules_from=RulesFrom.NAMED,
             ),
             now=NOW,
         )
@@ -154,12 +159,35 @@ def test_handle_pause_skips_a_run_that_is_not_paused_with_exit_zero(
     _write_config()
     _fake_sq(tmp_path, {RUN: COMPLETED})
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     assert completed.returncode == EXIT_OK, completed.stderr
     result = _result(completed)
     assert result["outcome"] == "skipped"
     assert result["skip_reason"] == "not_paused"
+
+
+def test_handle_pause_prints_one_line_of_text_without_json(tmp_path: Path) -> None:
+    _write_config()
+    _fake_sq(tmp_path, {RUN: COMPLETED})
+
+    completed = _run(tmp_path, "handle-pause", RUN, as_json=False)
+
+    assert completed.returncode == EXIT_OK, completed.stderr
+    assert completed.stdout.splitlines()[0].startswith("skipped: not_paused")
+    assert len(completed.stdout.splitlines()) == 1
+
+
+def test_answer_with_no_question_prints_text_without_json(tmp_path: Path) -> None:
+    _write_config()
+    _fake_sq(tmp_path, {})
+
+    completed = _run(tmp_path, "answer", RUN, "--text", "Use 250.", as_json=False)
+
+    assert completed.returncode == EXIT_REJECTED, completed.stderr
+    assert completed.stdout.startswith(
+        "rejected: no_such_question: no question for run"
+    )
 
 
 def test_handle_pause_skips_a_project_in_no_program_with_exit_zero(
@@ -168,7 +196,7 @@ def test_handle_pause_skips_a_project_in_no_program_with_exit_zero(
     _write_config()
     _fake_sq(tmp_path, {RUN: PAUSED_AGENT_QUESTION})
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     assert completed.returncode == EXIT_OK, completed.stderr
     assert _result(completed)["skip_reason"] == "not_in_program"
@@ -179,7 +207,7 @@ def test_an_operational_failure_exits_three_with_the_error_on_stderr(
 ) -> None:
     _write_config()
     # No ``sq`` at all: Squadron cannot be asked, which is not "not mine".
-    completed = _run(tmp_path, "handle_pause", RUN, with_sq=False)
+    completed = _run(tmp_path, "handle-pause", RUN, with_sq=False)
 
     assert completed.returncode == EXIT_ERROR
     assert completed.stdout == ""
@@ -189,7 +217,7 @@ def test_an_operational_failure_exits_three_with_the_error_on_stderr(
 def test_a_missing_config_exits_three_naming_the_file(tmp_path: Path) -> None:
     _fake_sq(tmp_path, {RUN: COMPLETED})
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     assert completed.returncode == EXIT_ERROR
     assert "ConfigError" in completed.stderr
@@ -206,7 +234,7 @@ def test_answer_with_no_question_is_rejected_with_exit_one(tmp_path: Path) -> No
     result = _result(completed)
     assert result["outcome"] == "rejected"
     assert result["rejection"] == "no_such_question"
-    assert "handle_pause" in result["problems"][0]
+    assert "amoeba handle-pause" in result["problems"][0]
 
 
 def test_answer_records_and_reports_the_resume_with_exit_zero(tmp_path: Path) -> None:
@@ -246,7 +274,7 @@ def test_answer_with_a_paused_at_names_the_pause(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "arguments",
-    [("answer", RUN), ("handle_pause",), ("answer", "--text", "x"), ("no_such",)],
+    [("answer", RUN), ("handle-pause",), ("answer", "--text", "x"), ("no_such",)],
 )
 def test_a_usage_error_exits_two(tmp_path: Path, arguments: tuple[str, ...]) -> None:
     completed = _run(tmp_path, *arguments)
@@ -257,7 +285,7 @@ def test_a_usage_error_exits_two(tmp_path: Path, arguments: tuple[str, ...]) -> 
 
 
 def test_help_prints_usage_for_both_commands(tmp_path: Path) -> None:
-    for command in ("handle_pause", "answer"):
+    for command in ("handle-pause", "answer"):
         completed = _run(tmp_path, command, "--help")
 
         assert completed.returncode == EXIT_OK
@@ -269,7 +297,7 @@ def test_main_in_process_rejects_an_answer_with_no_question(
 ) -> None:
     _write_config()
 
-    code = main(["answer", RUN, "--text", "Use 250."])
+    code = main(["answer", RUN, "--text", "Use 250.", "-j"])
 
     assert code == EXIT_REJECTED
     printed = json.loads(capsys.readouterr().out)
@@ -296,7 +324,7 @@ def test_a_skipped_call_adds_one_calls_log_line(tmp_path: Path) -> None:
     _write_config()
     _fake_sq(tmp_path, {RUN: COMPLETED})
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     (line,) = _logged_lines()
     assert line["run_id"] == RUN
@@ -310,7 +338,7 @@ def test_a_handled_call_logs_the_outcome_it_printed(tmp_path: Path) -> None:
     _seed_waiting_question()
     _fake_sq(tmp_path, {RUN: PAUSED_AGENT_QUESTION})
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     assert completed.returncode == EXIT_OK, completed.stderr
     printed = _result(completed)
@@ -326,7 +354,7 @@ def test_a_config_error_with_a_fresh_state_home_still_adds_a_line(
     _fake_sq(tmp_path, {RUN: COMPLETED})
     assert not calls_log_dir().exists()
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     assert completed.returncode == EXIT_ERROR
     (line,) = _logged_lines()
@@ -342,7 +370,7 @@ def test_a_store_error_adds_one_line(tmp_path: Path) -> None:
     store_path().parent.mkdir(parents=True, exist_ok=True)
     store_path().write_bytes(b"this is not a sqlite database" * 100)
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     assert completed.returncode == EXIT_ERROR
     (line,) = _logged_lines()
@@ -358,7 +386,7 @@ def test_a_failing_log_write_leaves_the_exit_code_and_result_unchanged(
     calls_log_dir().parent.mkdir(parents=True, exist_ok=True)
     calls_log_dir().write_text("a file where the directory goes", encoding="utf-8")
 
-    completed = _run(tmp_path, "handle_pause", RUN)
+    completed = _run(tmp_path, "handle-pause", RUN)
 
     assert completed.returncode == EXIT_OK
     assert _result(completed)["skip_reason"] == "not_paused"
@@ -373,7 +401,7 @@ def test_a_bad_state_home_goes_to_stderr_only(
     monkeypatch.setenv("AMOEBA_HOME", "relative/path")
     monkeypatch.chdir(tmp_path)
 
-    code = main(["handle_pause", RUN])
+    code = main(["handle-pause", RUN, "-j"])
 
     assert code == EXIT_ERROR
     assert "AmoebaHomeError" in capsys.readouterr().err

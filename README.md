@@ -4,7 +4,7 @@ Amoeba is being rebuilt as a tool that agents and pipelines call. When a Squadro
 
 ## What exists now
 
-The `amoeba` command, backed by one SQLite store. Its commands (`docs/cli-contract.md`) are `set_up`, `handle_pause`, `answer`, `dismiss`, `retract`, `status`, `decisions` and `mark_read`. There is no resident process: each command is a short run, and Squadron never needs Amoeba.
+The `amoeba` command, backed by one SQLite store. Its commands (`docs/cli-contract.md`) are `add`, `rm`, `list`, `handle-pause`, `answer`, `dismiss`, `retract`, `status`, `decisions` and `mark-read`. Each prints text for a person and, with `-j`, the JSON result an agent reads. `amoeba add` registers a repo with no other flag; `amoeba list` shows what needs you and what is registered. A member reads rules files with no setup (`docs/rules.md`). There is no resident process: each command is a short run, and Squadron never needs Amoeba.
 
 - `amoeba.answering`: the answering pipeline (`answering.yaml`), the passage cutting and citation check, the six-check decision on whether an answer stands, and the answer screen.
 - `amoeba.upstream`: bounded readers of what other tools say (`cf`, `git`, `sq`), and the argv for starting and resuming an `sq` run.

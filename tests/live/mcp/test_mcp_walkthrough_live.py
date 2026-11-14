@@ -13,10 +13,8 @@ back. A wrong result fails the test; nothing is retried.
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
-from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -36,7 +34,13 @@ from amoeba.upstream.squadron.run_outcome import (
     RunOutcomeDocument,
     poll_run,
 )
-from live.pause.harness import PauseWorld, result_of, run_amoeba, start_pause
+from live.pause.harness import (
+    PauseWorld,
+    inert_hook,
+    result_of,
+    run_amoeba,
+    start_pause,
+)
 
 UNSETTLED_PIPELINE: Final = (
     Path(__file__).parent.parent / "pause" / "asks_unsettled_question.yaml"
@@ -49,17 +53,6 @@ SESSION_TIMEOUT_SECONDS: Final = 600
 DETACHED_RESULT_SECONDS: Final = 900
 POLL_CALL_TIMEOUT_SECONDS: Final = 30.0
 ANSWER_TEXT: Final = "Use teal."
-
-
-def _world(world: PauseWorld) -> PauseWorld:
-    """``world`` with a do-nothing ``amoeba`` first on ``PATH`` (the hook's command)."""
-    stub_dir = world.repo.parent / "hook-stub"
-    stub_dir.mkdir()
-    stub = stub_dir / "amoeba"
-    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    stub.chmod(0o755)
-    path = str(stub_dir) + os.pathsep + world.environ["PATH"]
-    return replace(world, environ={**world.environ, "PATH": path})
 
 
 def _lower_resume_wait(world: PauseWorld) -> None:
@@ -167,24 +160,41 @@ def test_the_mcp_walkthrough(
     pause_world: PauseWorld, live_settings: LiveSettings, tmp_path: Path
 ) -> None:
     del live_settings
-    world = _world(pause_world)
+    world = inert_hook(pause_world)
     _lower_resume_wait(world)
     workdir = tmp_path / "elsewhere"
     workdir.mkdir()
 
-    # Step 3: eight tools; status, decisions and mark_read agree with the CLI.
+    # Step 3: every tool; list, status, decisions, mark_read and add agree with the CLI.
     tools = _list_tools(world, workdir)
     assert {tool.name for tool in tools} == {name.value for name in OperationName}
-    assert len(tools) == 8
+    assert len(tools) == len(OperationName)
+    assert {"add", "rm", "list"} <= {tool.name for tool in tools}
+    assert "set_up" not in {tool.name for tool in tools}
     first, second, third = (_new_run(world) for _ in range(3))
     status = _tool(world, workdir, "status", {"directory": str(workdir)})
     assert status == _amoeba(world, "status", cwd=workdir)
     assert status["outcome"] == "listed"
+    listed_view = _tool(world, workdir, "list", {"directory": str(workdir)})
+    assert listed_view == status == _amoeba(world, "list", cwd=workdir)
+    members = _tool(
+        world, workdir, "list", {"subject": "members", "directory": str(workdir)}
+    )
+    assert members == _amoeba(world, "list", "members", cwd=workdir)
+    (member_row,) = members["members"]
+    assert member_row["rules_from"] == "config_default", member_row
+    repo_args: dict[str, object] = {"directory": str(world.repo)}
+    again = _tool(world, workdir, "add", repo_args)
+    assert again["outcome"] == "unchanged", again
+    assert again == _amoeba(world, "add")
+    stranger = _tool(world, workdir, "rm", {"members": ["no-such-member"], **repo_args})
+    assert stranger["outcome"] == "rejected", stranger
+    assert [p["code"] for p in stranger["problems"]] == ["not_a_member"]
     empty = _tool(world, workdir, "decisions", {})
     assert empty == _amoeba(world, "decisions")
     assert empty["records"] == []
     unchanged = _tool(world, workdir, "mark_read", {"through": 0})
-    assert unchanged == _amoeba(world, "mark_read", "--through", "0")
+    assert unchanged == _amoeba(world, "mark-read", "--through", "0")
     assert unchanged["outcome"] == "unchanged"
 
     # Step 4: handle_pause returns a receipt at once; the child's log gets the result.
@@ -203,7 +213,7 @@ def test_the_mcp_walkthrough(
     (logged,) = _calls_logged_for(first)
     assert logged["outcome"] == "waiting_on_pm", logged
     for run_id in (second, third):
-        declined = _amoeba(world, "handle_pause", run_id)
+        declined = _amoeba(world, "handle-pause", run_id)
         assert declined["outcome"] == "waiting_on_pm", declined
 
     # Step 5: answer through MCP and through the CLI; dismiss; retract.

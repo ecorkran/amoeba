@@ -3,9 +3,9 @@ docType: reference
 layer: project
 project: amoeba
 audience: [human, ai]
-description: The amoeba command line: each subcommand's arguments, its JSON result on stdout and the exit-code table.
+description: The amoeba command line: each command's arguments, its text and `-j` JSON output and the exit-code table.
 dateCreated: 20261110
-dateUpdated: 20261112
+dateUpdated: 20261114
 status: complete
 ---
 
@@ -13,8 +13,35 @@ status: complete
 
 `amoeba <command>` is the process boundary. It alone resolves the two homes (the config
 home and the state home, see `store-contract.md`), reads the user config
-(`config-contract.md`) and builds the real edges (`sq`, `cf`, `git`, the clock). Each
-operation prints its result as JSON on stdout.
+(`config-contract.md`) and builds the real edges (`sq`, `cf`, `git`, the clock).
+
+## Text and JSON
+
+Every command prints **text** by default, written for a person, and its **result as
+JSON** with `-j` (or `--json`), placed after the command name: `amoeba list -j`. The
+JSON is the result document both doors give (the MCP tool returns the same document),
+and it is what the sections below describe field by field.
+
+- The first line of the text says what happened: `added`, `removed`, `changed`,
+  `unchanged`, `recorded`, `dismissed`..., or `rejected: <code>: <detail>`.
+- Prose (a question, an answer, a reason) is cut to 100 columns with `…` and kept on
+  one line; the full text is in `-j`. A command or a path is never cut: it sits on its
+  own indented line, so it can be pasted.
+- No colour and no table wider than 100 columns.
+- Errors are `error: <ExceptionName>: <message>` on stderr, with the exit codes below,
+  in both forms.
+- `handle-pause` prints one line (`answered`, `waiting_on_pm: <reason>`,
+  `skipped: <reason>`, with its detail). Nothing parses the hook's output.
+
+## Names
+
+A command's name is its operation's name with `_` as `-`: `handle-pause` and
+`mark-read`; the others (`add`, `rm`, `list`, `answer`, `status`, `decisions`,
+`dismiss`, `retract`) have no underscore. `rm` also answers to `remove`. MCP tool names
+stay snake_case (`handle_pause`, `mark_read`), and so does the `operation` in JSON
+`next` entries. There is no alias for an old command name (`set_up`, `handle_pause`,
+`mark_read`): it is argparse's invalid-choice error, which lists the valid names, exit
+2. `set_up` is gone: `add` and `rm` replace it on both doors.
 
 The first command after an upgrade from a pre-228 install moves the old state out of
 `~/.config/amoeba/` into the state home before it does its own work, and writes one
@@ -26,46 +53,160 @@ the old store untouched.
 
 | Code | Meaning | Causes |
 |---|---|---|
-| 0 | The operation ran | `set_up` applied or unchanged; `handle_pause` any outcome, including `skipped`; `answer` recorded; `dismiss` dismissed or unchanged; `retract` retracted or unchanged; `status` and `decisions` listed; `mark_read` moved or unchanged |
-| 1 | The operation refused the request; the result says why | `set_up`, `answer`, `dismiss`, `retract`, `status`, `decisions` or `mark_read` rejected |
-| 2 | Usage | bad arguments (a missing or non-integer `mark_read --through`, for one), or a `set_up` request file that cannot be read, is not UTF-8 or is not YAML |
+| 0 | The operation ran | `add` or `rm` applied or unchanged; `list` and `status` listed; `handle-pause` any outcome, including `skipped`; `answer` recorded; `dismiss` dismissed or unchanged; `retract` retracted or unchanged; `decisions` listed; `mark-read` moved or unchanged |
+| 1 | The operation refused the request; the result says why | `add`, `rm`, `list`, `answer`, `dismiss`, `retract`, `status`, `decisions` or `mark-read` rejected |
+| 2 | Usage | bad arguments (a missing or non-integer `mark-read --through`, an old command name, `--all` with `list members`, `--file` with another `add` flag, mutually exclusive rules flags, an empty side of `--concept`), or an `add --file` request file that cannot be read, is not UTF-8 or is not YAML |
 | 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved) |
 
 A Squadron or Context Forge failure is an exit 3, never a skip: "cannot tell" is not
 "not mine". Nothing is written before it.
 
-## `amoeba set_up --file PATH`
+## `amoeba add`
 
-`PATH` is a YAML request document; `-` reads standard input. Result (`SetUpResult`):
-`outcome` (`applied`, `unchanged` or `rejected`), `changes` (one line per changed
-row), `problems` (empty unless rejected), `program` (the program as stored, or null)
+```
+amoeba add [--program ID] [--project NAME] [--rules PATH]... [--default-rules]
+           [--no-rules] [--allow KEY]... [--no-allow] [--deny KEY]... [--no-deny]
+           [--depends-on PROVIDER[:MODE]]... [--concept MEMBER:PATH] [-j]
+amoeba add --file PATH [-j]
+```
+
+Registers the working directory's repo (or the project `--project` names) as a member
+of a program. With no flag at all it registers the repo in a program named for its
+Context Forge project, on the default rules. A repeat changes nothing and is
+`unchanged`.
+
+| Flag | Request field | Meaning |
+|---|---|---|
+| `--program ID` | `program` | The program (created when new). Without it: the member's own program when it is registered (a removed member's too), else a new program named for its Context Forge project. A program that already exists by that name is joined, and the text says `added member Y to existing program X` instead of `created program X` |
+| `--project NAME` | `project` | A Context Forge project name or id; default the working directory's. A directory with no project and no `--project` is `not_a_project` and nothing is written |
+| `--rules PATH` (repeatable) | `rules_paths: [PATH...]` | Replaces the member's rules with these entries (`rules.md`) |
+| `--default-rules` | `rules_default: true` | Returns the member to the config's `default_rules_paths` |
+| `--no-rules` | `rules_paths: []` | Stores no rules at all |
+| `--allow KEY` (repeatable) | `authorize_allow: [KEY...]` | Replaces the member's allow list |
+| `--no-allow` | `authorize_allow: []` | Stores an empty allow list |
+| `--deny KEY`, `--no-deny` | `authorize_deny` | The same for the deny list |
+| `--depends-on PROVIDER[:MODE]` (repeatable) | `depends_on: [{provider, consumed}]` | A provider (Context Forge name or id); `MODE` is `from_source` or `from_release`, and without it the config's `default_consumed` |
+| `--concept MEMBER:PATH` | `concept: {member, path}` | The program's concept file, split at the first `:`; an empty side is a usage error |
+| `--file PATH` (`-` is stdin) | `bulk` | A whole request document (below); it cannot be combined with another flag |
+
+`--rules`, `--default-rules` and `--no-rules` are mutually exclusive, and so are
+`--allow` with `--no-allow` and `--deny` with `--no-deny`. A flag not given leaves its
+field out of the request, and a field left out leaves the stored value alone; giving
+none of the three rules flags leaves an existing member's rules as they are and gives a
+new member the default. `--allow`, `--deny` and `--rules` replace the list, they do not
+add to it.
+
+The MCP `add` tool takes the same fields (`program`, `project`, `rules_paths`,
+`rules_default`, `authorize_allow`, `authorize_deny`, `depends_on`, `concept`) or `bulk`,
+never both, plus `directory`. `add` builds a request for the `set_up` engine and returns
+its result (`SetUpResult`): `outcome` (`applied`, `unchanged` or `rejected`), `changes`
+(one line per changed row, `<added|updated|removed> <program|member|dependency|pair>
+...`), `change_records` (the same changes as `{verb, subject, detail}`), `problems` (empty unless rejected), `program` (the program as stored, or null)
 and `working_directory` (informational, or null for a malformed request). Exit 1 when
 `rejected`.
 
-Each problem has a `code` and a `detail` naming the field at fault. Codes: `malformed`,
-`not_a_project`, `empty_program`, `member_of_other_program`, `rules_paths_required`,
+Each problem has a `code`, a `detail` naming the field at fault, and `open_questions` (empty except for `member_has_open_questions`, where it lists each blocking question as `{run_id, paused_at}`). Codes: `malformed`,
+`not_a_project`, `empty_program`, `member_of_other_program`,
 `unknown_provider`, `self_dependency`, `unknown_authorize_item`,
 `concept_member_not_member`, `member_has_open_questions` and `not_a_member`. Any problem
-rejects the whole request and writes nothing.
+rejects the whole request and writes nothing. A new member needs no rules: it gets the
+default.
 
-### `remove`
+## `amoeba rm`
 
-A request may carry a `remove` section; omitted removes nothing:
+```
+amoeba rm [MEMBER]... [--pair PROVIDER:CONSUMER]... [--concept] [--program ID] [-j]
+```
+
+Also `amoeba remove`. With no `MEMBER`, no pair and no `--concept`, it removes the
+working directory's project. `MEMBER` is a Context Forge name or id (an id works after
+the Context Forge project is deleted). Every named member and pair end must belong to
+one program, found from the store, or `--program` names it: members of different
+programs are `member_of_other_program`, a member that was never in a program is
+`not_a_member`. `--concept` clears the program's concept, the only way to remove the
+concept's member (without it that member is `concept_member_not_member`). `rm` builds
+the `remove` section of a request (below), so soft removal and its refusals are the
+engine's. The MCP `rm` tool takes `members`, `pairs` (each `PROVIDER:CONSUMER`),
+`concept` (true) and `program`, plus `directory`.
+
+A member with open questions is refused (`member_has_open_questions`); the text prints
+each question's key and the `amoeba answer` and `amoeba dismiss` command that clears it.
+Removing an already removed member is `unchanged`. A removed member comes back with
+`amoeba add` (in its old program unless `--program` names another).
+
+## `amoeba list`
+
+```
+amoeba list [SUBJECT] [--all] [--program ID] [-j]
+```
+
+One view of what needs the PM, and what is registered. `SUBJECT` is `programs`,
+`members` or `dependencies` (the singular forms work too); with none it is the default
+view. The MCP `list` tool takes the same as `subject`, `all` and `program`, plus
+`directory`.
+
+**The default view** runs `status` (same code, same sweep): `list -j` is the `status`
+document, nothing more, and the text is the same as `status`'s. The text has these
+sections, in order, each left out when empty: **Waiting on you** (member, run, how long,
+reason, the question on one line, and the `amoeba answer` and `amoeba dismiss`
+commands), **Paused, not handled** (runs the hook missed, each with `amoeba handle-pause
+RUN_ID` to run in the run's checkout and, for a missed hook or a dead claim, the newest
+calls-log line), **Unplaced runs** (each says how it clears), **Problems**, then what
+this call closed. `Nothing needs you.` when nothing waits. With `--all` the document
+gains one top-level `settled` (the questions answered or closed within
+`prune_after_days`: `program`, `member_id`, `member_name`, `run_id`, `paused_at`,
+`question`, `ended`, `settled_at`), and the text adds **Other runs** under their members
+and **Settled**. `--program ID` narrows the view.
+
+**`programs`**: `{programs: [{program, concept: {member, path} | null, members:
+[project_id]}]}`. A program with no active members and no concept is left out unless
+`--all` is given; the row cannot be deleted (it is the target of its removed members'
+records), and `add --program` refills it.
+
+**`members`**: `{members: [{project_id, name, path, in_context_forge, program,
+rules_from, rules_paths, authorize_allow, authorize_deny, depends_on: [{provider,
+consumed}]}]}`. `path` is Context Forge's `projectPath`; the text says `(no path in
+Context Forge)` when it has none, and a member whose project is gone shows its id and
+`(not in Context Forge)`. `rules_paths` is the stored entries for `named` rules and the
+config's current `default_rules_paths` for `config_default`. A removed member is not
+listed.
+
+**`dependencies`**: `{dependencies: [{provider_id, provider_name, consumer_id,
+consumer_name, consumed}]}`.
+
+`--all` with `members` or `dependencies` is a usage error, exit 2 (as an operation it
+is `rejected`, `malformed`). The registered views read Context Forge once; `cf` failing
+is exit 3 with no partial view. An unknown `--program` is `rejected` with
+`unknown_program`.
+
+## The request document
+
+`add --file` (and the `bulk` field of the MCP `add` tool) takes a YAML request:
 
 ```yaml
 program: demo
-concept: null                     # removes the concept (omitted leaves it)
+concept: {member: some-member, path: docs/concept.md}   # omitted leaves it
+members:
+  - project: some-member          # Context Forge name or id; omitted: the working directory's
+    rules_paths: [CLAUDE.md]      # omitted: keep (a new member gets the default); [] is no rules
+    rules_default: false          # true returns the member to the default rules
+    authorize_allow: []
+    authorize_deny: []
+    depends_on:
+      - {provider: some-provider, consumed: from_source}
 remove:
-  members: [some-member]          # Context Forge names or ids
+  members: [other-member]         # Context Forge names or ids
   pairs:
     - {provider: some-provider, consumer: some-consumer}
 ```
 
+`rules_paths` and `rules_default` together are `malformed`. `remove` is what `rm` builds:
+
 - A removed member is **soft-removed**: its row stays (its questions and answers are
   the record), its pairs are deleted, and everywhere else it is treated as not a
   member (`NotInProgram`, absent from `status` and the program's members). Naming it
-  again under `members` re-registers it, with `rules_paths` required as for a new
-  member, in this or another program. A pair is deleted.
+  again under `members` re-registers it as a new member (the config's default rules
+  unless `rules_paths` is given), in this or another program. A pair is deleted.
 - A reference Context Forge does not know is read as a stored member id, so a member
   whose Context Forge project was deleted can still be removed by its id.
 - Removing an already removed member or an absent pair is no change, so a repeat is
@@ -74,15 +215,15 @@ remove:
 - Removing the program's concept member while the concept stays is rejected
   (`concept_member_not_member`). Clear the concept in the same request with
   `concept: null` (the one way to remove a concept), or move it.
-- New problem codes: `member_has_open_questions` (a `claimed` or `waiting_on_pm`
-  question, or an `answered` one whose answer was not yet handed back; the detail lists
-  the keys: `dismiss` or `answer` them first) and `not_a_member` (the reference is no
-  member of this program, past or present). `malformed` also covers a member under both
+- `member_has_open_questions` (a `claimed` or `waiting_on_pm` question, or an
+  `answered` one whose answer was not yet handed back; the detail lists the keys:
+  `dismiss` or `answer` them first) and `not_a_member` (the reference is no member of
+  this program, past or present). `malformed` also covers a member under both
   `members` and `remove.members`, a pair under both `depends_on` and `remove.pairs`,
   and a removed member named as the end of a pair (in `remove.pairs` or as a
   `depends_on` provider). Any problem rejects the whole request.
 
-## `amoeba handle_pause RUN_ID`
+## `amoeba handle-pause RUN_ID`
 
 Run it from the paused run's own checkout. For a run started on `sq` 0.24.24 or later
 Squadron records where the run started, and a call from another directory is skipped
@@ -113,7 +254,7 @@ so when the recorded directory no longer exists (then use Squadron's own command
 
 ### The calls log
 
-Every `handle_pause` call appends one JSON line to
+Every `handle-pause` call appends one JSON line to
 `<state home>/logs/calls/<UTC date>.jsonl`, whatever happened. A result is
 `{at, run_id, directory, outcome, reason, detail}` (`reason` is the skip or waiting
 reason); an exit-3 error, a `ConfigError` before any store opens included, is
@@ -132,7 +273,7 @@ used. Result (`AnswerResult`):
 | Field | Meaning |
 |---|---|
 | `outcome` | `recorded` or `rejected` |
-| `rejection` | with `rejected`: `no_such_question` (run `amoeba handle_pause RUN_ID` from the run's checkout first) or `malformed` (blank text, unknown field, bad type) |
+| `rejection` | with `rejected`: `no_such_question` (run `amoeba handle-pause RUN_ID` from the run's checkout first) or `malformed` (blank text, unknown field, bad type) |
 | `key` | the question, when `recorded` |
 | `answer_seq` | the answer row, when `recorded` |
 | `resume` | `outcome` (`resumed`, `refused` or `not_delivered`), `detail`, `resume_log` |
@@ -197,7 +338,7 @@ nothing to show. Result (`StatusResult`):
 | `rejection` | with `rejected`: `unknown_program` (`problems` lists the known ids) or `malformed` |
 | `programs` | per program, `members`: each `{id, name}` with `runs` and `waiting_on_pm` |
 | `unplaced_runs` | paused runs no member could be found for: `run_id`, `status`, `reason`, `checkpoint_kind`, `detail` |
-| `closed_now` | what this call closed (closures made by `handle_pause` are in that call's calls-log `detail`, not here), so each automatic closure is seen once: `{program, member, run_id, paused_at, question, closed_reason, closed_detail}` for a question, and for an answer marked `not_delivered` the same with `answer_seq` and `resume_outcome` |
+| `closed_now` | what this call closed (closures made by `handle-pause` are in that call's calls-log `detail`, not here), so each automatic closure is seen once: `{program, member, run_id, paused_at, question, closed_reason, closed_detail}` for a question, and for an answer marked `not_delivered` the same with `answer_seq` and `resume_outcome` |
 | `sweep_problem` | set when the closing could not take the store's lock; nothing was closed and the rows show as before |
 | `file_problems` | calls-log day files that could not be read, and entries `prune` could not remove |
 | `problems` | one line per problem when `rejected` |
@@ -255,7 +396,7 @@ Result (`DecisionsResult`):
 | `outcome` | `listed` or `rejected` |
 | `rejection` | with `rejected`: `unknown_program` or `malformed` |
 | `records` | each: `seq`, `recorded_at`, `program`, `member` (`{id, name}`), `run_id`, `paused_at`, `slice_label`, `question`, `answered_by` (`answerer` or `pm`), `via` (`cli` or `mcp`, the door that carried a PM answer; null for an answer from before schema version 4 and for automatic answers), `answer`, `prior_answer_seq`, `based_on`, `resume` |
-| `read_through` | the last listed `seq`, only when the listing started at the marker, was not narrowed and is not empty; else null. Give it to `mark_read` |
+| `read_through` | the last listed `seq`, only when the listing started at the marker, was not narrowed and is not empty; else null. Give it to `mark-read` |
 | `marker` | the marker's value when read |
 | `problems` | one line per problem when `rejected` |
 
@@ -266,7 +407,7 @@ the others, which the store records no kind for) with `check_verdict` and
 `check_reason`; for `pm`, the question's `waiting_reason` and `waiting_detail`, or null
 if the PM answered before the question waited. `resume` is `outcome`, `detail`, `at`.
 
-## `amoeba mark_read --through SEQ`
+## `amoeba mark-read --through SEQ`
 
 Moves the PM's marker forward to `SEQ`, the `read_through` of a `decisions` call. There
 is no "mark all": a record written after that call keeps a higher `seq` and stays

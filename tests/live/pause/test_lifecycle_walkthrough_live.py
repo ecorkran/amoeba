@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -23,6 +22,7 @@ from git_repo import git
 from live_harness import POLL_INTERVAL_SECONDS, watch_run
 from live_settings import LiveSettings
 
+from amoeba.operations.prune import PRUNE_MARKER_NAME
 from amoeba.upstream.squadron.launch import mint_run_id
 from amoeba.upstream.squadron.run_outcome import (
     PollFailure,
@@ -33,6 +33,7 @@ from amoeba.upstream.squadron.run_outcome import (
 from live.pause.harness import (
     PIPELINE_MODEL_PARAM,
     PauseWorld,
+    inert_hook,
     result_of,
     run_amoeba,
     start_pause,
@@ -47,17 +48,6 @@ SETTLED_QUESTION: Final = (
     "What is the maximum length of a source file in this repository?"
 )
 OLD_STAMP: Final = (datetime(2026, 1, 1, tzinfo=UTC)).timestamp()
-
-
-def _world(world: PauseWorld) -> PauseWorld:
-    """``world`` with a do-nothing ``amoeba`` first on ``PATH`` (the hook's command)."""
-    stub_dir = world.repo.parent / "hook-stub"
-    stub_dir.mkdir()
-    stub = stub_dir / "amoeba"
-    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    stub.chmod(0o755)
-    path = str(stub_dir) + os.pathsep + world.environ["PATH"]
-    return replace(world, environ={**world.environ, "PATH": path})
 
 
 def _amoeba(
@@ -179,9 +169,9 @@ def test_step_4_an_earlier_pause_closes_as_the_run_moves_on(
     pause_world: PauseWorld, live_settings: LiveSettings
 ) -> None:
     del live_settings
-    world = _world(pause_world)
+    world = inert_hook(pause_world)
     run_id, first_pause = _new_run(world)
-    waiting = _amoeba(world, "handle_pause", run_id)
+    waiting = _amoeba(world, "handle-pause", run_id)
     assert waiting["outcome"] == "waiting_on_pm", waiting
 
     # Resume it outside Amoeba, with the pause hook off so the next call is by hand.
@@ -195,7 +185,7 @@ def test_step_4_an_earlier_pause_closes_as_the_run_moves_on(
         world.environ,
     )
     assert isinstance(resumed.poll, RunOutcomeDocument), resumed.sq_output
-    handled = _amoeba(world, "handle_pause", run_id)
+    handled = _amoeba(world, "handle-pause", run_id)
     first = [row for row in _questions(world, run_id) if row[0] == first_pause]
 
     # Whether the run then pauses again or finishes is up to the model; the first
@@ -213,9 +203,9 @@ def test_step_5_dismiss_then_the_hook_skips_it_and_status_shows_closed(
     pause_world: PauseWorld, live_settings: LiveSettings
 ) -> None:
     del live_settings
-    world = _world(pause_world)
+    world = inert_hook(pause_world)
     run_id, _pause = _new_run(world)
-    assert _amoeba(world, "handle_pause", run_id)["outcome"] == "waiting_on_pm"
+    assert _amoeba(world, "handle-pause", run_id)["outcome"] == "waiting_on_pm"
 
     dismissed = _amoeba(world, "dismiss", run_id, "--reason", "not needed tonight")
     assert dismissed["outcome"] == "dismissed", dismissed
@@ -223,7 +213,7 @@ def test_step_5_dismiss_then_the_hook_skips_it_and_status_shows_closed(
     assert _amoeba(world, "dismiss", run_id, "--reason", "again")["outcome"] == (
         "unchanged"
     )
-    skipped = _amoeba(world, "handle_pause", run_id)
+    skipped = _amoeba(world, "handle-pause", run_id)
     assert (skipped["outcome"], skipped["skip_reason"]) == ("skipped", "closed")
     status = _amoeba(world, "status")
     entry = _run_entry(status, run_id)
@@ -237,15 +227,15 @@ def test_step_6_a_pm_answer_resets_the_limit_and_a_retraction_ends_precedent(
     pause_world: PauseWorld, live_settings: LiveSettings, tmp_path: Path
 ) -> None:
     del live_settings
-    world = _world(pause_world)
+    world = inert_hook(pause_world)
     _set_config(world, answer_limit=1)
     pipeline = _several_questions(tmp_path, "asks-four", 4)
     run_id, pause = _new_run(world, pipeline)
 
-    first = _amoeba(world, "handle_pause", run_id)
+    first = _amoeba(world, "handle-pause", run_id)
     assert first["outcome"] == "resumed", first  # an automatic answer: 1 of 1
     pause = _next_pause(run_id, pause)
-    limited = _amoeba(world, "handle_pause", run_id)
+    limited = _amoeba(world, "handle-pause", run_id)
     assert (limited["outcome"], limited["waiting_reason"]) == (
         "waiting_on_pm",
         "answer_limit_reached",
@@ -253,7 +243,7 @@ def test_step_6_a_pm_answer_resets_the_limit_and_a_retraction_ends_precedent(
     answered = _amoeba(world, "answer", run_id, "--text", "About 300 lines.")
     assert answered["resume"]["outcome"] == "resumed", answered
     pause = _next_pause(run_id, pause)
-    after_reset = _amoeba(world, "handle_pause", run_id)
+    after_reset = _amoeba(world, "handle-pause", run_id)
     assert after_reset["outcome"] == "resumed", after_reset  # the limit was reset
     assert _precedent_passages(world, run_id, pause), "the PM answer was not precedent"
 
@@ -270,7 +260,7 @@ def test_step_6_a_pm_answer_resets_the_limit_and_a_retraction_ends_precedent(
     )
 
     pause = _next_pause(run_id, pause)
-    _amoeba(world, "handle_pause", run_id)
+    _amoeba(world, "handle-pause", run_id)
     assert _precedent_passages(world, run_id, pause) == []
 
 
@@ -278,12 +268,12 @@ def test_step_7_a_call_from_a_second_worktree_is_a_wrong_checkout(
     pause_world: PauseWorld, live_settings: LiveSettings, tmp_path: Path
 ) -> None:
     del live_settings
-    world = _world(pause_world)
+    world = inert_hook(pause_world)
     run_id, _pause = _new_run(world)
     second = tmp_path / "second-worktree"
     git(world.repo, "worktree", "add", "-q", str(second), "-b", "second")
 
-    skipped = _amoeba(world, "handle_pause", run_id, cwd=second)
+    skipped = _amoeba(world, "handle-pause", run_id, cwd=second)
 
     assert (skipped["outcome"], skipped["skip_reason"]) == (
         "skipped",
@@ -317,12 +307,12 @@ def test_step_8_removal_is_blocked_by_an_open_question_and_pruning_keeps_it(
     pause_world: PauseWorld, live_settings: LiveSettings
 ) -> None:
     del live_settings
-    world = _world(pause_world)
+    world = inert_hook(pause_world)
     settled_run, _ = _new_run(world)
-    assert _amoeba(world, "handle_pause", settled_run)["outcome"] == "waiting_on_pm"
+    assert _amoeba(world, "handle-pause", settled_run)["outcome"] == "waiting_on_pm"
     _amoeba(world, "dismiss", settled_run, "--reason", "done with it")
     open_run, _ = _new_run(world)
-    assert _amoeba(world, "handle_pause", open_run)["outcome"] == "waiting_on_pm"
+    assert _amoeba(world, "handle-pause", open_run)["outcome"] == "waiting_on_pm"
     answering = world.amoeba_home / "answering"
     settled_dir = answering / str(_questions(world, settled_run)[0][3])
     open_dir = answering / str(_questions(world, open_run)[0][3])
@@ -334,21 +324,25 @@ def test_step_8_removal_is_blocked_by_an_open_question_and_pruning_keeps_it(
         _age(directory)
 
     _set_config(world, prune_after_days=1)
+    # The earlier calls already walked (at most one walk an hour); forget that, so
+    # this ``status`` walks again with the shorter limit.
+    (world.amoeba_home / PRUNE_MARKER_NAME).unlink()
     _amoeba(world, "status")
 
     assert not settled_dir.exists()
     assert not orphan_dir.exists()
     assert open_dir.is_dir()
 
-    request = world.repo.parent / "remove.yaml"
-    member = str(store_rows(world, "SELECT project_id FROM members")[0][0])
-    request.write_text(
-        yaml.safe_dump({"program": "live-pause", "remove": {"members": [member]}}),
-        encoding="utf-8",
-    )
-    blocked = _amoeba(world, "set_up", "--file", str(request), expect=1)
+    # ``rm`` with no argument removes the member whose checkout this is.
+    blocked = _amoeba(world, "rm", expect=1)
     assert [p["code"] for p in blocked["problems"]] == ["member_has_open_questions"]
     _amoeba(world, "dismiss", open_run, "--reason", "no longer needed")
-    applied = _amoeba(world, "set_up", "--file", str(request))
+    applied = _amoeba(world, "rm")
     assert applied["outcome"] == "applied", applied
-    assert _amoeba(world, "set_up", "--file", str(request))["outcome"] == "unchanged"
+    assert _amoeba(world, "rm")["outcome"] == "unchanged"
+    # ``add`` puts it back where it was, on the default rules.
+    revived = _amoeba(world, "add")
+    assert revived["outcome"] == "applied", revived
+    assert revived["program"]["program_id"] == "live-pause"
+    (member,) = revived["program"]["members"]
+    assert member["rules_from"] == "config_default", member

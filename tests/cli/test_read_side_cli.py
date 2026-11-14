@@ -1,4 +1,4 @@
-"""``amoeba status``, ``decisions`` and ``mark_read`` as real subprocesses
+"""``amoeba status``, ``decisions`` and ``mark-read`` as real subprocesses
 (slice 224, 4.1).
 
 A fake ``sq`` (replaying the real ``runs list`` recording) and a fake ``cf`` are first
@@ -48,8 +48,14 @@ def _write_config() -> None:
 
 
 def _run(
-    tmp_path: Path, *arguments: str, listing: FakeListing | None
+    tmp_path: Path,
+    *arguments: str,
+    listing: FakeListing | None,
+    as_json: bool = True,
 ) -> subprocess.CompletedProcess[str]:
+    """Run ``amoeba``; ``as_json`` adds ``-j`` after the command name."""
+    if as_json and arguments and not arguments[0].startswith("-"):
+        arguments = (arguments[0], "-j", *arguments[1:])
     bin_dir = tmp_path / "bin"
     write_fake_sq(bin_dir, waits={}, run_exit_code=0, run_stderr="", runs_list=listing)
     write_fake_cf_with_projects(bin_dir, DEFAULT_WORKTREE)
@@ -110,6 +116,23 @@ def test_status_prints_json_and_exits_zero(tmp_path: Path) -> None:
     assert member["member"] == {"id": PROJECT_ID, "name": "amoeba"}
     kinds = {entry["checkpoint_kind"] for entry in result["unplaced_runs"]}
     assert "awaits_human" in kinds
+
+
+def test_status_prints_text_without_json(tmp_path: Path) -> None:
+    _write_config()
+    _seed_one_answer()
+
+    completed = _run(
+        tmp_path,
+        "status",
+        listing=recorded_listing(stderr=recorded_warning()),
+        as_json=False,
+    )
+
+    assert completed.returncode == EXIT_OK, completed.stderr
+    assert completed.stdout.startswith("Unplaced runs\n")
+    assert "awaits_human" not in completed.stdout  # the text names the reason instead
+    assert not completed.stdout.lstrip().startswith("{")
 
 
 def test_status_with_an_unknown_program_exits_one(tmp_path: Path) -> None:
@@ -193,7 +216,7 @@ def test_a_malformed_since_exits_one(tmp_path: Path) -> None:
 def test_mark_read_moves_then_decisions_is_empty(tmp_path: Path) -> None:
     seq = _seed_one_answer()
 
-    moved = _run(tmp_path, "mark_read", "--through", str(seq), listing=None)
+    moved = _run(tmp_path, "mark-read", "--through", str(seq), listing=None)
     after = _run(tmp_path, "decisions", listing=None)
 
     assert moved.returncode == EXIT_OK, moved.stderr
@@ -202,29 +225,42 @@ def test_mark_read_moves_then_decisions_is_empty(tmp_path: Path) -> None:
     assert _result(after)["marker"] == seq
 
 
+def test_mark_read_and_decisions_print_text_without_json(tmp_path: Path) -> None:
+    seq = _seed_one_answer()
+
+    listed = _run(tmp_path, "decisions", listing=None, as_json=False)
+    moved = _run(
+        tmp_path, "mark-read", "--through", str(seq), listing=None, as_json=False
+    )
+
+    assert listed.stdout.startswith("1 answer (marker at 0)\n")
+    assert f"  amoeba mark-read --through {seq}\n" in listed.stdout
+    assert moved.stdout == f"moved: marker 0 -> {seq}\n"
+
+
 def test_mark_read_beyond_the_last_record_exits_one(tmp_path: Path) -> None:
-    completed = _run(tmp_path, "mark_read", "--through", "999999", listing=None)
+    completed = _run(tmp_path, "mark-read", "--through", "999999", listing=None)
 
     assert completed.returncode == EXIT_REJECTED
     assert _result(completed)["rejection"] == "beyond_last_record"
 
 
 def test_a_negative_through_exits_one_as_malformed(tmp_path: Path) -> None:
-    completed = _run(tmp_path, "mark_read", "--through", "-1", listing=None)
+    completed = _run(tmp_path, "mark-read", "--through", "-1", listing=None)
 
     assert completed.returncode == EXIT_REJECTED
     assert _result(completed)["rejection"] == "malformed"
 
 
 def test_mark_read_without_through_exits_two(tmp_path: Path) -> None:
-    completed = _run(tmp_path, "mark_read", listing=None)
+    completed = _run(tmp_path, "mark-read", listing=None)
 
     assert completed.returncode == EXIT_USAGE
     assert "--through" in completed.stderr
 
 
 def test_the_help_texts_print_usage(tmp_path: Path) -> None:
-    for command in ("status", "decisions", "mark_read"):
+    for command in ("status", "decisions", "mark-read"):
         completed = _run(tmp_path, command, "--help", listing=None)
 
         assert completed.returncode == EXIT_OK

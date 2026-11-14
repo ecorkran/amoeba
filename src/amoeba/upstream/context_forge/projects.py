@@ -1,13 +1,15 @@
-"""Context Forge's project names (slice 224, D6): ``cf list projects --json``.
+"""Context Forge's projects (slices 224, 229): ``cf list projects --json``.
 
-Members are stored by project id only; a name is read when a result is shown and
-never stored. Only ``id`` and ``name`` are read: ``projectPath`` is missing on some
-entries and ``fileSlice`` and ``isActive`` are not wanted.
+Members are stored by project id only; a name and a path are read when a result is
+shown and never stored. ``id`` and ``name`` are required on every entry;
+``projectPath`` is missing on some, so it is ``None`` there; ``fileSlice`` and
+``isActive`` are not wanted.
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Final
 
 from amoeba.upstream.context_forge.cli_call import (
@@ -27,9 +29,21 @@ CF_PROJECTS_TIMEOUT_SECONDS: Final = 30.0
 
 _ID_KEY: Final = "id"
 _NAME_KEY: Final = "name"
+_PATH_KEY: Final = "projectPath"
+
+
+@dataclass(frozen=True)
+class ProjectDetail:
+    id: str
+    name: str
+    #: Where the project is checked out; ``None`` when Context Forge has no path.
+    path: str | None
+
 
 #: Project id to project name.
 type ProjectNames = dict[str, str]
+#: Project id to its details.
+type ProjectDetails = dict[str, ProjectDetail]
 
 
 def project_names(run: CfRun) -> ProjectNames | CfCallFailed:
@@ -37,6 +51,17 @@ def project_names(run: CfRun) -> ProjectNames | CfCallFailed:
 
     Anything but a JSON array of objects with a string ``id`` and ``name`` is a
     ``CfCallFailed`` quoting the output head.
+    """
+    details = project_details(run)
+    if isinstance(details, CfCallFailed):
+        return details
+    return {project_id: detail.name for project_id, detail in details.items()}
+
+
+def project_details(run: CfRun) -> ProjectDetails | CfCallFailed:
+    """Every registered project's id, name and path (or ``None``), one ``cf`` call.
+
+    The same call and the same failures as :func:`project_names`.
     """
     argv = [CF_EXECUTABLE, *list_projects_command()]
     shown = " ".join(argv)
@@ -53,23 +78,29 @@ def project_names(run: CfRun) -> ProjectNames | CfCallFailed:
         return CfCallFailed(f"`{shown}` printed no JSON: {head!r}")
     if not isinstance(document, list):
         return CfCallFailed(f"`{shown}` did not print a JSON array: {head!r}")
-    names: ProjectNames = {}
+    details: ProjectDetails = {}
     for entry in document:  # pyright: ignore[reportUnknownVariableType]
-        pair = _id_and_name(entry)  # pyright: ignore[reportUnknownArgumentType]
-        if pair is None:
+        detail = _detail(entry)  # pyright: ignore[reportUnknownArgumentType]
+        if detail is None:
             return CfCallFailed(
                 f"`{shown}` listed a project without an id and name: "
                 f"{completed.stdout[:OUTPUT_HEAD_CHARS]!r}"
             )
-        names[pair[0]] = pair[1]
-    return names
+        details[detail.id] = detail
+    return details
 
 
-def _id_and_name(entry: object) -> tuple[str, str] | None:
+def _detail(entry: object) -> ProjectDetail | None:
     if not isinstance(entry, dict):
         return None
     project_id = entry.get(_ID_KEY)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     name = entry.get(_NAME_KEY)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    if isinstance(project_id, str) and isinstance(name, str) and project_id and name:
-        return project_id, name
-    return None
+    path = entry.get(_PATH_KEY)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    if not (isinstance(project_id, str) and isinstance(name, str)):
+        return None
+    if not (project_id and name):
+        return None
+    # A path of another type, or an empty one, is no path: CF omits it on some entries.
+    return ProjectDetail(
+        project_id, name, path if isinstance(path, str) and path else None
+    )

@@ -24,7 +24,7 @@ from amoeba.store.programs import (
 )
 from amoeba.store.questions import get_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import ConsumedMode
+from amoeba.store.vocabulary import ConsumedMode, RulesFrom
 from store.decision_support import (
     CORE,
     FIRST,
@@ -86,6 +86,7 @@ def _settings(project_id: str) -> MemberSettings:
         rules_paths=("CLAUDE.md",),
         authorize_allow=(),
         authorize_deny=(),
+        rules_from=RulesFrom.NAMED,
     )
 
 

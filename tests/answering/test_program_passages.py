@@ -18,6 +18,7 @@ from amoeba.answering.passages import (
     assemble,
     render_passages,
 )
+from amoeba.answering.settings import RulesChoice
 from amoeba.answering.source_reads import (
     CommittedSources,
     SliceRef,
@@ -124,7 +125,7 @@ def test_the_program_files_are_the_concept_then_the_member_list() -> None:
 
 # No-slice source reads
 
-RULES_ENTRIES = ("CLAUDE.md",)
+RULES_ENTRIES = RulesChoice(entries=("CLAUDE.md",), optional=False)
 SLICE = SliceRef(slice_index=132, initiative_index=120)
 TIMEOUT = 8.0
 

@@ -1,11 +1,11 @@
-"""Start ``handle_pause`` as a detached child of the server (slice 226, D6).
+"""Start ``handle-pause`` as a detached child of the server (slice 226, D6).
 
-``handle_pause`` can run an answering run for minutes, longer than a client waits for
+``handle-pause`` can run an answering run for minutes, longer than a client waits for
 a tool. So the server starts the ``amoeba`` command itself, in its own session, and
-returns a receipt at once. The child is the CLI's ``handle_pause``: it claims the
-pause, runs the answering run for at most ``answering_wait_seconds`` and exits, and it
-appends the calls-log line the same way a shell run does. Its logs are old files under
-``logs/mcp/``, which ``prune`` removes by age.
+returns a receipt at once. The child is the CLI's ``handle-pause``, printing JSON: it
+claims the pause, runs the answering run for at most ``answering_wait_seconds`` and
+exits, and it appends the calls-log line the same way a shell run does. Its logs are
+old files under ``logs/mcp/``, which ``prune`` removes by age.
 """
 
 from __future__ import annotations
@@ -29,6 +29,8 @@ from amoeba.operations.names import OperationName
 from amoeba.wiring import LaunchError
 
 AMOEBA_SCRIPT_NAME: Final = "amoeba"
+#: Keeps the child's stdout log machine-readable (229 D1): the CLI's text is for people.
+JSON_FLAG: Final = "--json"
 #: Marks the end of options, so a run id that starts with ``-`` is not read as a flag.
 END_OF_OPTIONS: Final = "--"
 UNIQUE_LENGTH: Final = 8
@@ -96,7 +98,8 @@ def _start(call: HandlePauseCall) -> StartedCall:
     )
     argv = [
         str(script),
-        OperationName.HANDLE_PAUSE.value,
+        OperationName.HANDLE_PAUSE.cli_name,
+        JSON_FLAG,
         END_OF_OPTIONS,
         call.run_id,
     ]
@@ -116,7 +119,7 @@ def _start(call: HandlePauseCall) -> StartedCall:
 
 
 async def start_handle_pause(raw: Mapping[str, object] | None) -> StartedCall:
-    """Start ``amoeba handle_pause`` for the run and checkout ``raw`` names.
+    """Start ``amoeba handle-pause`` for the run and checkout ``raw`` names.
 
     Raises:
         RequestError: ``raw`` is not a run id and an absolute directory; nothing

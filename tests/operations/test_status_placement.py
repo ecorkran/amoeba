@@ -10,6 +10,7 @@ from store.question_support import NOW
 from amoeba.operations.status_models import UnplacedReason
 from amoeba.operations.status_placement import Placement, place_runs, scratch_roots
 from amoeba.store.models import Member, MemberSettings
+from amoeba.store.vocabulary import RulesFrom
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
 from amoeba.upstream.squadron.run_list import ListedRun
@@ -18,7 +19,7 @@ from operations.status_support import in_directory, recorded_run
 MEMBER_ID = "project-in-scope"
 MEMBER = Member(
     "demo",
-    MemberSettings(MEMBER_ID, (), (), ()),
+    MemberSettings(MEMBER_ID, (), (), (), RulesFrom.NAMED),
     NOW,
     NOW,
     None,

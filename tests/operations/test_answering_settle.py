@@ -18,7 +18,7 @@ from store.question_support import (
 from user_configs import user_config
 
 from amoeba.answering.decide import Declined
-from amoeba.answering.settings import AnswererSettings
+from amoeba.answering.settings import AnswererSettings, RulesChoice
 from amoeba.answering.values import (
     AnsweredBy,
     AnsweringEvidence,
@@ -38,7 +38,7 @@ from amoeba.store.answers import add_pm_answer, answers_of, settle_answered
 from amoeba.store.models import MemberSettings, QuestionKey
 from amoeba.store.questions import get_question, insert_question
 from amoeba.store.store import Store
-from amoeba.store.vocabulary import QuestionState
+from amoeba.store.vocabulary import QuestionState, RulesFrom
 from amoeba.upstream.squadron.run_outcome import RunEnded
 from operations.pause_support import FakeChild, build_deps
 
@@ -46,7 +46,7 @@ QUESTION_TEXT = "What is the maximum length of a source file?"
 SETTINGS = AnswererSettings(
     answer_limit=3,
     reserved_terms=(),
-    rules_paths=("CLAUDE.md",),
+    rules=RulesChoice(entries=("CLAUDE.md",), optional=False),
     passages_max_chars=1000,
     answer_model="a",
     check_model="c",
@@ -174,6 +174,7 @@ def _settings_of(allow: tuple[str, ...]) -> AnswererSettings:
         rules_paths=("CLAUDE.md",),
         authorize_allow=allow,
         authorize_deny=(),
+        rules_from=RulesFrom.NAMED,
     )
     return answering_for(member, user_config()).settings
 

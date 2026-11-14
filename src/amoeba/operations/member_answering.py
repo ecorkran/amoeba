@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from amoeba.answering.settings import AnswererSettings
+from amoeba.answering.settings import AnswererSettings, RulesChoice
 from amoeba.config.user_config import ConfigError, NotAuthorizedItem, UserConfig
 from amoeba.store.models import MemberSettings
+from amoeba.store.vocabulary import RulesFrom
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,17 @@ def _require_known_keys(member: MemberSettings, config: UserConfig) -> None:
                 f"member {member.project_id}: authorize key {key!r} is not in the "
                 "config's authorize_items"
             )
+
+
+def rules_choice(member: MemberSettings, config: UserConfig) -> RulesChoice:
+    """The member's rules: its own entries, or the config's current default (D7).
+
+    The default is read here, at answering time, so a config edit changes every
+    member that is on it.
+    """
+    if member.rules_from is RulesFrom.CONFIG_DEFAULT:
+        return RulesChoice(entries=config.default_rules_paths, optional=True)
+    return RulesChoice(entries=member.rules_paths, optional=False)
 
 
 def answering_for(
@@ -53,7 +65,7 @@ def answering_for(
         reserved_terms=tuple(
             phrase for item in not_authorized for phrase in item.screen_phrases
         ),
-        rules_paths=member_settings.rules_paths,
+        rules=rules_choice(member_settings, config),
         passages_max_chars=config.passages_max_chars,
         answer_model=config.answer_model,
         check_model=config.check_model,

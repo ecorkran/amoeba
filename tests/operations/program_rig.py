@@ -24,6 +24,7 @@ from amoeba.operations.program_sources import (
     read_program_sources,
 )
 from amoeba.store.models import Member, MemberSettings, Program
+from amoeba.store.vocabulary import RulesFrom
 
 PROGRAM_ID = "trading"
 CONCEPT_MEMBER = "trading-data"
@@ -155,6 +156,7 @@ def member(project_id: str, *, updated: datetime = REGISTERED) -> Member:
             rules_paths=("CLAUDE.md",),
             authorize_allow=(),
             authorize_deny=(),
+            rules_from=RulesFrom.NAMED,
         ),
         registered_at=REGISTERED,
         updated_at=updated,

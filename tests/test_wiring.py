@@ -15,12 +15,14 @@ from user_configs import example_config_text
 from wiring_support import TrackedStore, is_closed, record_opened_stores
 
 from amoeba import wiring
+from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.config.home import AmoebaHomeError, config_path, state_layout
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.answer import AnswerOutcome, AnswerResult
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
+from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.names import Door, OperationName
@@ -32,7 +34,9 @@ from amoeba.upstream.squadron.errors import SquadronError
 
 #: For each in-process operation, a document it refuses and the result type it gives.
 REFUSED: dict[OperationName, tuple[object, type]] = {
-    OperationName.SET_UP: ({}, SetUpResult),
+    OperationName.ADD: ({"bogus": 1}, SetUpResult),
+    OperationName.RM: ({"bogus": 1}, SetUpResult),
+    OperationName.LIST: ({"bogus": 1}, ListResult),
     OperationName.ANSWER: ({}, AnswerResult),
     OperationName.STATUS: ({"bogus": 1}, StatusResult),
     OperationName.DECISIONS: ({"since": "not a time"}, DecisionsResult),
@@ -95,9 +99,9 @@ def test_the_cli_reports_each_operational_error_as_exit_three(
     def raising(*_arguments: object) -> object:
         raise error
 
-    monkeypatch.setattr(cli, "invoke", raising)
+    monkeypatch.setattr(commands, "invoke", raising)
 
-    code = cli.main(["mark_read", "--through", "0"])
+    code = cli.main(["mark-read", "--through", "0"])
 
     assert code == cli.EXIT_ERROR
     assert capsys.readouterr().err == f"error: {type(error).__name__}: {error}\n"
@@ -161,9 +165,9 @@ def test_the_cli_calls_invoke_as_the_cli_door(
         doors.append(door)
         return MarkReadResult(outcome=MarkReadOutcome.UNCHANGED, previous=0, current=0)
 
-    monkeypatch.setattr(cli, "invoke", recording)
+    monkeypatch.setattr(commands, "invoke", recording)
 
-    assert cli.main(["mark_read", "--through", "0"]) == cli.EXIT_OK
+    assert cli.main(["mark-read", "--through", "0"]) == cli.EXIT_OK
     capsys.readouterr()
 
     assert doors == [Door.CLI]
@@ -174,7 +178,10 @@ def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:
         wiring.invoke(OperationName.HANDLE_PAUSE, {}, tmp_path, Door.CLI)
 
 
-@pytest.mark.parametrize("name", [OperationName.SET_UP, OperationName.STATUS])
+@pytest.mark.parametrize(
+    "name",
+    [OperationName.ADD, OperationName.RM, OperationName.LIST, OperationName.STATUS],
+)
 def test_invoke_requires_a_directory_for_the_directory_operations(
     name: OperationName,
 ) -> None:

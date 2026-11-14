@@ -90,6 +90,7 @@ COLUMN_REASONS: Final[dict[str, frozenset[str]]] = {
         {
             "programs.concept_member",
             "programs.concept_path",
+            "members.rules_from",
             "members.rules_paths",
             "members.authorize_allow",
             "members.authorize_deny",

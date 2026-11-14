@@ -16,23 +16,33 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from amoeba.answering.import_follow import follow_imports
 from amoeba.answering.passages import (
     PassageKind,
     PlanRow,
     SourceFile,
     SourcesProblem,
     SourcesProblemKind,
-    match_rules_entry,
+    file_pieces,
     parse_git_date,
     select_plan_files,
     unreadable,
 )
+from amoeba.answering.rule_dedup import RuleDeduper
+from amoeba.answering.rule_entries import (
+    DirectoryListings,
+    SelectedFile,
+    select_rules,
+)
+from amoeba.answering.rule_imports import MARKDOWN_SUFFIX
+from amoeba.answering.settings import RulesChoice
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.git_read import (
     GitReadFailure,
     GitReadResult,
     git_read,
     last_change_args,
+    ls_tree_args,
     parse_tree_directories,
     parse_tree_listing,
     resolve_commit_args,
@@ -66,12 +76,6 @@ class SliceRef:
 
 
 @dataclass(frozen=True)
-class SelectedFile:
-    path: str
-    kind: PassageKind
-
-
-@dataclass(frozen=True)
 class SourceSelection:
     """The files to read, in offer order, and the commit they are read at."""
 
@@ -83,6 +87,9 @@ class SourceSelection:
 class CommittedSources:
     commit: str
     files: tuple[SourceFile, ...]
+    #: Characters of passage text the files add once duplicate rule sections are
+    #: dropped (D9); what counts against ``passages_max_chars``.
+    chars: int
 
 
 @dataclass(frozen=True)
@@ -106,11 +113,6 @@ class GitReads:
         return answer
 
 
-def _parent_and_name(entry: str) -> tuple[str, str]:
-    parent, _, name = entry.rpartition("/")
-    return parent, name
-
-
 def _user_subdirectory(directory: str) -> str:
     """``directory`` relative to :data:`USER_ROOT`; it must sit directly under it."""
     relative = directory.removeprefix(f"{USER_ROOT}/")
@@ -126,6 +128,7 @@ class Listings:
         self._git = git
         self._commit = commit
         self._by_directory: dict[str, tuple[str, ...]] = {}
+        self._present: dict[str, bool] = {}
 
     def of(self, directory: str, context: str) -> tuple[str, ...] | SourcesProblem:
         """File names in ``directory``; ``context`` prefixes a failure's detail."""
@@ -138,6 +141,16 @@ class Listings:
         self._by_directory[directory] = names
         return names
 
+    def exists(self, directory: str, context: str) -> bool | SourcesProblem:
+        """Whether ``directory`` is in the commit, from ``ls-tree`` alone (D8)."""
+        if directory in self._present:
+            return self._present[directory]
+        answer = self._git.read(ls_tree_args(self._commit, directory))
+        if not isinstance(answer, GitReadResult):
+            return in_context(answer, context)
+        self._present[directory] = bool(answer.stdout.strip())
+        return self._present[directory]
+
 
 def in_context(problem: SourcesProblem, context: str) -> SourcesProblem:
     return SourcesProblem(problem.kind, f"{context}: {problem.detail}")
@@ -147,7 +160,7 @@ def locate_sources(
     repo: Path,
     target: str,
     slice_ref: SliceRef | None,
-    rules_paths: tuple[str, ...],
+    rules: RulesChoice,
     run: CfRun,
     timeout_seconds: float,
 ) -> SourceSelection | SourcesProblem:
@@ -156,8 +169,22 @@ def locate_sources(
     With ``slice_ref`` ``None`` (a run with no slice) no plan file is selected.
 
     A file picked twice is kept at its first position. Makes ``2 + L`` git calls for
-    ``L`` directory listings; reading the files is :func:`read_committed_sources`.
+    ``L`` directory listings, plus one existence check per directory a rules entry
+    names; reading the files is :func:`read_committed_sources`.
     """
+    located = _locate(repo, target, slice_ref, rules, run, timeout_seconds)
+    return located if isinstance(located, SourcesProblem) else located[0]
+
+
+def _locate(  # noqa: PLR0913 - ``locate_sources``'s arguments
+    repo: Path,
+    target: str,
+    slice_ref: SliceRef | None,
+    rules: RulesChoice,
+    run: CfRun,
+    timeout_seconds: float,
+) -> tuple[SourceSelection, Listings] | SourcesProblem:
+    """The selection and the listings it read, so import following reuses them."""
     git = GitReads(repo, run, timeout_seconds)
     resolved = git.read(resolve_commit_args(target))
     if not isinstance(resolved, GitReadResult):
@@ -166,35 +193,16 @@ def locate_sources(
     if not commit:
         return unreadable(f"target {target!r} resolved to no commit")
     listings = Listings(git, commit)
-    rules = _select_rules(listings, rules_paths)
-    if not isinstance(rules, tuple):
-        return rules
+    chosen_rules = select_rules(listings, rules)
+    if not isinstance(chosen_rules, tuple):
+        return chosen_rules
     plan = () if slice_ref is None else _select_plan(git, listings, commit, slice_ref)
     if not isinstance(plan, tuple):
         return plan
     chosen: dict[str, SelectedFile] = {}
-    for selected in (*rules, *plan):
+    for selected in (*chosen_rules, *plan):
         chosen.setdefault(selected.path, selected)  # first position, first kind
-    return SourceSelection(commit, tuple(chosen.values()))
-
-
-def _select_rules(
-    listings: Listings, rules_paths: tuple[str, ...]
-) -> tuple[SelectedFile, ...] | SourcesProblem:
-    chosen: list[SelectedFile] = []
-    for entry in rules_paths:
-        parent, _ = _parent_and_name(entry)
-        names = listings.of(parent, f"rules entry {entry!r}")
-        if not isinstance(names, tuple):
-            return names
-        matched = match_rules_entry(entry, names)
-        if not matched:
-            return SourcesProblem(
-                SourcesProblemKind.MISSING, f"rules entry {entry!r} matches no file"
-            )
-        prefix = f"{parent}/" if parent else ""
-        chosen.extend(SelectedFile(prefix + n, PassageKind.RULE) for n in matched)
-    return tuple(chosen)
+    return SourceSelection(commit, tuple(chosen.values())), listings
 
 
 def _select_plan(
@@ -227,7 +235,7 @@ def read_committed_sources(
     repo: Path,
     target: str,
     slice_ref: SliceRef | None,
-    rules_paths: tuple[str, ...],
+    rules: RulesChoice,
     max_chars: int,
     run: CfRun,
     timeout_seconds: float,
@@ -238,27 +246,61 @@ def read_committed_sources(
     which bounds the git calls to the size limit rather than to what a glob matches.
     A date that cannot be read is ``sources_unreadable``; there is no fallback date.
     """
-    selection = locate_sources(
-        repo, target, slice_ref, rules_paths, run, timeout_seconds
-    )
-    if not isinstance(selection, SourceSelection):
-        return selection
+    located = _locate(repo, target, slice_ref, rules, run, timeout_seconds)
+    if isinstance(located, SourcesProblem):
+        return located
+    selection, listings = located
     git = GitReads(repo, run, timeout_seconds)
-    files: list[SourceFile] = []
-    total = 0
+    reading = _Reading(git, selection.commit, listings, max_chars)
     for chosen in selection.files:
-        read = read_file(git, selection.commit, chosen)
+        if reading.has_read(chosen.path):  # an import already read it
+            continue
+        read = reading.take(chosen)
         if not isinstance(read, SourceFile):
             return read
-        total += len(read.text)
-        if total > max_chars:
+        if chosen.kind is PassageKind.RULE and chosen.path.endswith(MARKDOWN_SUFFIX):
+            problem = follow_imports(reading, read, optional=chosen.optional)
+            if problem is not None:
+                return problem
+    return CommittedSources(selection.commit, tuple(reading.files), reading.total)
+
+
+class _Reading:
+    """The files read so far for one selection, and the text they add up to."""
+
+    def __init__(
+        self, git: GitReads, commit: str, listings: Listings, max_chars: int
+    ) -> None:
+        self._git = git
+        self._commit = commit
+        self._max_chars = max_chars
+        self._deduper = RuleDeduper()
+        self.files: list[SourceFile] = []
+        self.total = 0
+        self.listings: DirectoryListings = listings
+
+    def has_read(self, path: str) -> bool:
+        return any(file.path == path for file in self.files)
+
+    def read_rule(self, path: str) -> SourceFile | SourcesProblem:
+        """An imported file: a rule, read next after its importer."""
+        return self.take(SelectedFile(path, PassageKind.RULE))
+
+    def take(self, chosen: SelectedFile) -> SourceFile | SourcesProblem:
+        """Read one file and count it, or stop with ``sources_too_large``."""
+        read = read_file(self._git, self._commit, chosen)
+        if not isinstance(read, SourceFile):
+            return read
+        pieces = file_pieces(self._deduper, read)
+        self.total += sum(len(piece) for piece in pieces)
+        if self.total > self._max_chars:
             return SourcesProblem(
                 SourcesProblemKind.TOO_LARGE,
-                f"rules and plan text is at least {total} characters; "
-                f"the limit is {max_chars}",
+                f"rules and plan text is at least {self.total} characters; "
+                f"the limit is {self._max_chars}",
             )
-        files.append(read)
-    return CommittedSources(selection.commit, tuple(files))
+        self.files.append(read)
+        return read
 
 
 def read_file(

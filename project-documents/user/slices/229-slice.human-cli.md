@@ -9,8 +9,8 @@ dependencies:
 interfaces:
 - 227-slice.program-dependencies
 dateCreated: 20261113
-dateUpdated: 20261113
-status: not_started
+dateUpdated: 20261114
+status: complete
 ---
 
 # Slice Design: Human CLI
@@ -206,6 +206,117 @@ All with fixtures and the live fixture pipeline; nothing waits on real use.
 - **Changing rules.** `amoeba add --rules docs/rules.md` (replace), `amoeba add --default-rules` (back). `amoeba list members` shows which.
 - **Ending.** `amoeba rm` removes the working directory's repo. Open questions refuse it, with the keys and the commands that clear them. Removing the concept's member needs `--concept` to clear the concept first.
 - **Dead ends checked.** A new member has rules. A config missing a key fails naming the key. An old command name exits 2 with the valid names listed. A stale agent session needs a restart, said in the docs. A program left with 0 members is visible and refilled by `add --program`.
+
+## Verification walkthrough
+
+Run on 20261114 against the finished slice, with the real `cf` and the installed
+`amoeba`, in throwaway directories and a throwaway `AMOEBA_HOME` (nothing touches the
+PM's live store). A step passes when the output matches; ids and timestamps are left
+out of the expected text on purpose (read them from the output when a step needs one).
+
+Setup:
+
+```bash
+W=$(mktemp -d)
+export CONTEXT_FORGE_DATA_DIR=$W/cf-data AMOEBA_HOME=$W/home
+mkdir -p "$CONTEXT_FORGE_DATA_DIR" "$AMOEBA_HOME" "$W/plain"
+# $AMOEBA_HOME/config.yaml: the yaml block under "## Example" in docs/config-contract.md,
+# with the two model aliases replaced by Squadron aliases you have.
+for r in a b d; do
+  mkdir "$W/repo-$r" && (cd "$W/repo-$r" && git init -q -b main \
+    && printf '# Rules\n\nKeep files short.\n' > CLAUDE.md \
+    && git add -A && git commit -q -m rules && cf init --lite --name walk-$r)
+done
+```
+
+1. **First run.** `cd $W/repo-a && amoeba add` prints, exit 0:
+   ```
+   added
+     created program walk-a
+     added member walk-a
+       rules: default (CLAUDE.md, AGENTS.md)
+   ```
+   A second `amoeba add` prints `unchanged`. `amoeba add -j` prints the `SetUpResult`
+   document (`rules_from` is `config_default`).
+2. **No project.** `cd $W/plain && amoeba add` exits 1 with
+   `rejected: not_a_project: ...`, then `to fix, run one of:` and the two commands
+   `cf init` and `amoeba add --project NAME` on their own lines. Nothing is written
+   (`amoeba list programs` is unchanged).
+3. **A group.** `cd $W/repo-b && amoeba add --program walk-a --depends-on walk-a:from_source`
+   prints `added`, `added member walk-b to existing program walk-a`, its rules line and
+   `added dependency walk-b on walk-a (from_source)`. In `repo-a`, `amoeba add
+   --depends-on walk-d` exits 1 with `rejected: unknown_provider: ...` (walk-d is a
+   Context Forge project that is no member). A reference Context Forge does not know
+   (`--depends-on no-such-provider`) is `rejected: not_a_project: ...Project
+   'no-such-provider' not found.` with no `cf init` hint, since the working directory is
+   a project.
+4. **Registered views.** `amoeba list programs` lists `walk-a` and the two member ids;
+   `amoeba list members` prints, for each member, `walk-a · program walk-a`, `path:` and
+   the repo path on its own line, `rules: default (CLAUDE.md, AGENTS.md)` and, for
+   walk-b, `depends on: walk-a (from_source)`; `amoeba list dependencies` prints
+   `walk-a -> walk-b (from_source)`. Each with `-j` prints the documented JSON.
+   `amoeba list members --all` exits 2 (`--all does not apply to members`).
+5. **Changing rules.** `amoeba add --rules docs/rules.md` prints `changed` and
+   `rules: docs/rules.md`; `--no-rules` prints `rules: none`; `--default-rules`
+   prints `rules: default (CLAUDE.md, AGENTS.md)`; `amoeba list members` shows which.
+6. **Ending.** In `repo-a`: `amoeba add --concept walk-a:docs/concept.md` prints
+   `changed the concept of program walk-a`; `amoeba rm` then exits 1 with
+   `rejected: concept_member_not_member: ...` and, as commands, `clear the concept
+   first, then remove the member:` / `amoeba rm --concept`. `amoeba rm --concept`
+   clears it; `amoeba rm` prints `removed` and `removed member walk-a`, and a repeat
+   prints `unchanged`. A member with open questions is refused with
+   `rejected: member_has_open_questions: ...` and, for each question, its key and the
+   `amoeba answer` and `amoeba dismiss` commands (covered by `tests/cli/test_rm_cli.py`
+   and the live lifecycle walkthrough).
+7. **A program with 0 members.** After removing every member `amoeba list programs`
+   prints `No programs.`, `amoeba list programs --all` prints `walk-a` with `members:
+   none`, and `amoeba add --program walk-a` in a registered repo refills it
+   (`added member ... to existing program walk-a`). `--program other-program` for an
+   already registered member is `rejected: member_of_other_program`; the typo fix is
+   `rm`, then `add --program right`.
+8. **Old names.** `amoeba set_up`, `amoeba handle_pause x` and `amoeba mark_read` each
+   exit 2 with argparse's `invalid choice` and the list of valid names (`add`, `rm`,
+   `remove`, `list`, `handle-pause`, `answer`, `status`, `decisions`, `mark-read`,
+   `dismiss`, `retract`).
+9. **A config missing a key** (delete `default_rules_paths` from `config.yaml`) makes
+   any command exit 3 with `error: ConfigError: ... default_rules_paths ...`.
+10. **A pause arrives, the hook, the missed hook, a question that cannot be answered.**
+    These need real pipelines and models: `tests/live/pause/test_hook_live.py` (the hook
+    `<absolute amoeba path> handle-pause` handles a real pause; `list --all` shows it
+    settled), `test_status_walkthrough_live.py` (a missed hook shows under
+    `Paused, not handled`; a waiting question shows under `Waiting on you` with the
+    `amoeba answer` command, and `list --all` shows it settled after the answer) and
+    `test_lifecycle_walkthrough_live.py` (`rm` refused by an open question, then `rm`
+    and `add`). Run `uv run pytest tests/live/pause tests/live/mcp tests/live/answering`.
+11. **A fresh agent session sees the new tools.** `amoeba-mcp` over stdio lists `add`,
+    `answer`, `decisions`, `dismiss`, `handle_pause`, `list`, `mark_read`, `retract`,
+    `rm`, `status` and no `set_up` (checked against the installed server on 20261114;
+    an open session keeps the old table until restarted).
+
+Corrections found by running it, all fixed in the slice:
+
+- `add` refused with `not_a_project` for a `--depends-on` that Context Forge does not
+  know printed the `cf init` fix too, which is wrong when the directory is a project;
+  the fix is now offered only when the working directory itself is no project.
+- `rm` of a concept member printed a cut `concept_member_not_member` line and no way
+  on; it now says to run `amoeba rm --concept` first. Rejection text also shows names
+  instead of ids.
+- The first line of an `rm` result was `added`; it is now `removed` (and `changed` for
+  an update only).
+
+Caveats:
+
+- `amoeba list` shows every paused Squadron run that no member can be placed under, in
+  Squadron's whole listing. On a machine with many old paused runs the **Unplaced
+  runs** section is long; those runs leave it when Squadron stops listing them as
+  paused (Amoeba has no command that ends them).
+- Removing a provider deletes the dependency pairs it is in, and adding it back does
+  not restore them: pass `--depends-on` again.
+- The text cuts prose at 100 columns (a reason or an id-heavy refusal may end in `…`);
+  the full detail is in `-j`.
+- Names in `add` and `rm` text come from one `cf list projects` call; when it fails the
+  ids print and stderr says `note: Context Forge names unavailable: ...` (the write
+  already happened, so the exit stays 0).
 
 ## Success Criteria
 
