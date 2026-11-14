@@ -45,7 +45,7 @@ def test_cli_names_are_the_values_with_dashes() -> None:
     assert all("_" not in name.cli_name for name in OperationName)
 
 
-def test_the_operation_names_are_the_eleven_the_contract_lists() -> None:
+def test_the_operation_names_are_the_ones_the_contract_lists() -> None:
     assert {name.value for name in OperationName} == {
         "add",
         "rm",
@@ -57,6 +57,8 @@ def test_the_operation_names_are_the_eleven_the_contract_lists() -> None:
         "mark_read",
         "dismiss",
         "retract",
+        "report_release",
+        "changes",
     }
 
 
@@ -118,6 +120,8 @@ def test_every_command_takes_json_after_its_name() -> None:
         "mark-read": ["mark-read", "--through", "1"],
         "dismiss": ["dismiss", "r", "--reason", "x"],
         "retract": ["retract", "1", "--reason", "x"],
+        "report-release": ["report-release"],
+        "changes": ["changes"],
     }
 
     assert set(minimal) == {name.cli_name for name in OperationName}

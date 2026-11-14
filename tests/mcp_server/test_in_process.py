@@ -63,6 +63,14 @@ CASES: dict[OperationName, tuple[list[str], dict[str, object]]] = {
         ["retract", "7", "--reason", "why", "-j"],
         {"answer_seq": 7, "reason": "why"},
     ),
+    OperationName.REPORT_RELEASE: (
+        ["report-release", "--commit", "c1", "--changed", "t", "--touched", "i", "-j"],
+        {"commit": "c1", "changed": "t", "touched": ["i"]},
+    ),
+    OperationName.CHANGES: (
+        ["changes", "--since", "2026-11-10T00:00:00+00:00", "-j"],
+        {"since": "2026-11-10T00:00:00+00:00"},
+    ),
 }
 STUB_RESULT = MarkReadResult(outcome=MarkReadOutcome.UNCHANGED, previous=0, current=0)
 WAIT_SECONDS = 10
@@ -300,7 +308,12 @@ def test_the_timed_out_text_carries_that_tools_advice(
     advice = (
         READ_ADVICE
         if tool.name
-        in {OperationName.STATUS, OperationName.DECISIONS, OperationName.LIST}
+        in {
+            OperationName.STATUS,
+            OperationName.DECISIONS,
+            OperationName.LIST,
+            OperationName.CHANGES,
+        }
         else WRITE_ADVICE
     )
 

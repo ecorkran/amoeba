@@ -10,8 +10,8 @@ dependencies:
 - 229-slice.human-cli
 interfaces: []
 dateCreated: 20261107
-dateUpdated: 20261113
-status: not_started
+dateUpdated: 20261114
+status: complete
 ---
 
 # Slice Design: Program Dependencies
@@ -232,10 +232,39 @@ Default suite, autouse `AMOEBA_HOME` fixture, the replayed `cf` in `tests/cf_fix
 
 ### Verification Walkthrough
 
-All steps run by the implementing agent, with no person involved.
+All steps run by the implementing agent, with no person involved. Run from the repo root
+on the slice branch; `cf` (0.19.27 when checked) and `git` are on `PATH` for step 2, and
+the three `AMOEBA_LIVE_*` variables the live tier requires are set (no model runs in this
+slice's live test, so no spend).
 
-1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest` passes. This includes the flow test.
-2. The live test `tests/live/program/test_program_dependencies_live.py` passes with real `cf` and `git`.
+1. `uv run ruff format --check . && uv run ruff check . && uv run pyright && uv run pytest`
+
+   Expected: `408 files already formatted`, `All checks passed!`,
+   `0 errors, 0 warnings, 0 informations`, then `2661 passed` (about 90 s). This
+   includes the flow test (`tests/program/test_program_flow.py`, 7 tests) and the
+   rule-blocks test (`tests/test_program_rules_doc.py`). The counts grow as the repo
+   does; a pass is what matters.
+
+2. `uv run pytest tests/live/program`
+
+   Expected: `4 passed` (about 11 s), against real `cf` and `git`: `report-release`
+   gives `recorded`, then `unchanged`, and an abbreviated hash exits 1 with `malformed`;
+   the consumer's `changes` lists the report with the provider's Context Forge name; a
+   directory outside every member is `not_a_member`; a second worktree of the consumer
+   resolves through real `cf` to the same member and, with a later `since`, sees less
+   than the main checkout with an earlier one.
+
+3. `git diff main --stat -- src/amoeba/store`
+
+   Expected: only `models.py`, `releases.py` and `sql.py`; no `schema/` file and no
+   change to `EXPECTED_SCHEMA_VERSION` in `store/migrations.py`.
+
+Caveats found while implementing: the test for a duplicate `(member_id, commit_sha)`
+insert expects `StoreIntegrityError`, because `Transaction.execute` wraps sqlite3 errors
+in the store's typed errors. Two existing tests beyond the ones the task list names also
+carry per-operation tables and needed the two new names:
+`tests/mcp_server/test_in_process.py` (its read-tool set and the parity `CASES`) and a
+second table in `tests/cli/test_parser_names.py`.
 
 ## Operator Walkthrough
 

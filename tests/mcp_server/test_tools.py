@@ -31,8 +31,15 @@ DIRECTORY_TOOLS = {
     OperationName.LIST,
     OperationName.STATUS,
     OperationName.HANDLE_PAUSE,
+    OperationName.REPORT_RELEASE,
+    OperationName.CHANGES,
 }
-READ_TOOLS = {OperationName.STATUS, OperationName.DECISIONS, OperationName.LIST}
+READ_TOOLS = {
+    OperationName.STATUS,
+    OperationName.DECISIONS,
+    OperationName.LIST,
+    OperationName.CHANGES,
+}
 #: A CLI command that is a second name for another, so it has no tool of its own.
 CLI_ALIASES = {"remove"}
 

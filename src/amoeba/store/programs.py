@@ -108,6 +108,14 @@ def pairs_of(transaction: Transaction, program_id: str) -> tuple[DependencyPair,
     return tuple(_pair(row) for row in rows)
 
 
+def pairs_consumed_by(
+    transaction: Transaction, consumer_id: str
+) -> tuple[DependencyPair, ...]:
+    """The active pairs whose consumer is ``consumer_id``, by provider id."""
+    rows = transaction.execute(sql.SELECT_PAIRS_CONSUMED_BY, (consumer_id,)).fetchall()
+    return tuple(_pair(row) for row in rows)
+
+
 def get_pair(
     transaction: Transaction, provider_id: str, consumer_id: str
 ) -> DependencyPair | None:
