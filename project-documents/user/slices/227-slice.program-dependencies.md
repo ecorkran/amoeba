@@ -7,9 +7,10 @@ dependencies:
 - 224-slice.status-and-decisions
 - 226-slice.mcp-server
 - 228-slice.state-home-and-question-lifecycle
+- 229-slice.human-cli
 interfaces: []
 dateCreated: 20261107
-dateUpdated: 20261112
+dateUpdated: 20261113
 status: not_started
 ---
 
@@ -37,7 +38,7 @@ User value. A repo designing a slice sees what changed in the repos it depends o
 
 **Excluded:**
 
-- Any change to `set_up`. Pairs and `consumed` are set there (222 D7); removal is `set_up remove` (228).
+- Any change to `add` or `rm`. Pairs and `consumed` are set by `add --depends-on` (222 D7, 229 D4); removal is `rm --pair` (228, 229 D6).
 - Marking reports read, notifying consumers, or reading past direct providers (architecture: pull, never walks the graph).
 - Running `git` from Amoeba. The caller passes a full hash and a time.
 - A pipeline step that calls `changes` (`ecorkran/squadron#304`, slice plan Future Work 1). Not part of this slice.
@@ -45,7 +46,8 @@ User value. A repo designing a slice sees what changed in the repos it depends o
 ## Dependencies
 
 - **224:** `project_names` (`upstream/context_forge/projects.py`); `resolve_member` and `ContextForgeError` (`operations/members.py`); `RejectCode` and `validation_problems` (`operations/reject_codes.py`); `decisions`' `since` rule, which this slice moves into `parse_since()` (D5).
-- **226:** `OperationName`, `ToolSpec`, `RunMode`, `wiring.invoke` (`src/amoeba/wiring.py`), `build_parser()`, and 226's parity tests. 226 is designed and tasked but not built, so this slice starts after it merges.
+- **226:** `OperationName`, `ToolSpec`, `RunMode`, `wiring.invoke` (`src/amoeba/wiring.py`), `build_parser()`, and 226's parity tests. 226 is merged.
+- **229:** `OperationName.cli_name`, the `-j` parent parser, `cli/render/`, and the `add` and `rm` commands this slice's text refers to. 229 merges first.
 - **228:** `state_layout()`, which the doors use to open the store. Its active-member rule means `pairs_of` returns only pairs whose two members are active.
 - **222:** `Store.read()` and `Store.write()` (`write()` is `BEGIN IMMEDIATE`), `encode_string_list` and `decode_string_list`, `encode_timestamp` and `decode_timestamp`, `ConsumedMode`, and the `releases` table (`seq`, `member_id`, `commit_sha`, `version`, `changed`, `touched`, `reported_at`, `versioned_at`, `UNIQUE (member_id, commit_sha)`).
 - **225:** complete, with no verdict. Plan entry 6 dropped the counted trial, so this slice has no gate.
@@ -147,14 +149,15 @@ The agent runs it before committing its own design. A provider often reports whi
 
 ### D5 — Doors and shared pieces
 
-- `OperationName` gains `REPORT_RELEASE = "report_release"` and `CHANGES = "changes"`; 226's name-parity test covers them.
+- `OperationName` gains `REPORT_RELEASE = "report_release"` and `CHANGES = "changes"`; the MCP tools use those names and the CLI uses `cli_name` (`report-release`, `changes`, 229 D1). 229's name-parity test covers them.
+- Both commands print text by default and the result document with `-j` (229 D2). Each gets a renderer in `cli/render/`: the first line says `reported`, `unchanged`, `corrected`, `withdrawn` or `rejected: <code>`, and `changes` prints one entry per report (provider name, commit, version, changed text cut to the line width, touched items) with `No changes since <time>.` when empty. The rule blocks (D6) run `changes` with `-j`, so an agent reads the document.
 - `wiring.invoke` gains two cases. Each calls its operation with the caller's directory and the door (226 D4).
 - `operations/since.py`: `parse_since(value: str) -> str`. An ISO-8601 string with an offset becomes the store's UTC text (`encode_timestamp`). A string with no offset, or one that does not parse, raises `ValueError` with the same messages 224 uses. `DecisionsRequest._utc_text` in `operations/decisions.py` calls `parse_since`, so its behavior, messages and tests do not change.
 - `RejectCode` gains `NOT_A_MEMBER` and `NOT_REPORTED`. `test_contract_docs` checks the codes against the contract docs (D8).
 - **CLI:**
   ```
-  amoeba report_release --commit <sha> [--version <v>] --changed <text> --touched <item> [--touched <item> …] [--correct]
-  amoeba report_release --commit <sha> --withdraw
+  amoeba report-release --commit <sha> [--version <v>] --changed <text> --touched <item> [--touched <item> …] [--correct]
+  amoeba report-release --commit <sha> --withdraw
   amoeba changes --since <iso-8601>
   ```
   `--correct` and `--withdraw` form a mutually exclusive group. No flag is `required=True` in argparse. Absent flags are left out of the document, so the operation rejects a missing field with the same detail on both doors. `--touched` is repeatable and collected as a list. Exit codes: `0` for any non-rejected outcome, `1` rejected, `2` usage, `3` operational error (`OPERATIONAL_ERRORS`).
@@ -166,11 +169,11 @@ The agent runs it before committing its own design. A provider often reports whi
 
 **Consumer** (rules file of a member with providers):
 
-> Before designing a slice, check Amoeba for changes in what this repo depends on. Run `amoeba changes --since <time>` in this checkout, or call the `changes` MCP tool with this checkout's absolute path as `directory`. Take `<time>` from `git log -1 --diff-filter=A --format=%aI -- project-documents/user/slices/`; if that prints nothing, take it from `git log --max-parents=0 --reverse --format=%aI | head -1`. Judge each report against the slice. In the design's Dependencies section, list the reports that affect the slice and how, or state that none do. If a report means the slice cannot be designed as planned, stop with a question or a `BLOCKED:` line. If the call fails, record its error in the Dependencies section; never treat a failed call as no changes.
+> Before designing a slice, check Amoeba for changes in what this repo depends on. Run `amoeba changes -j --since <time>` in this checkout, or call the `changes` MCP tool with this checkout's absolute path as `directory`. Take `<time>` from `git log -1 --diff-filter=A --format=%aI -- project-documents/user/slices/`; if that prints nothing, take it from `git log --max-parents=0 --reverse --format=%aI | head -1`. Judge each report against the slice. In the design's Dependencies section, list the reports that affect the slice and how, or state that none do. If a report means the slice cannot be designed as planned, stop with a question or a `BLOCKED:` line. If the call fails, record its error in the Dependencies section; never treat a failed call as no changes.
 
 **Provider** (rules file of a member others depend on, and the repo's release skill after its tag step):
 
-> When a slice merge into the target, or a release, changes something other repos use (an interface, a command, a file format, a schema, or behavior they rely on), run `amoeba report_release` in this checkout. Pass `--commit` as the full hash of the merged commit (`git rev-parse HEAD`), or for a release the tagged commit (`git rev-list -n 1 <tag name>`). Pass `--version` as the tag name for a release, and omit it otherwise. Pass `--changed` as what changed, for someone using this repo; for a release, cover everything since the previous release. Pass one `--touched` per thing changed. On a non-zero exit, record the error in the task notes or the release result, and do not retry with different values. If a report you made is wrong, run the same command with `--correct` and the true text. To take a report back entirely, run `amoeba report_release --commit <full hash> --withdraw`.
+> When a slice merge into the target, or a release, changes something other repos use (an interface, a command, a file format, a schema, or behavior they rely on), run `amoeba report-release` in this checkout. Pass `--commit` as the full hash of the merged commit (`git rev-parse HEAD`), or for a release the tagged commit (`git rev-list -n 1 <tag name>`). Pass `--version` as the tag name for a release, and omit it otherwise. Pass `--changed` as what changed, for someone using this repo; for a release, cover everything since the previous release. Pass one `--touched` per thing changed. On a non-zero exit, record the error in the task notes or the release result, and do not retry with different values. If a report you made is wrong, run the same command with `--correct` and the true text. To take a report back entirely, run `amoeba report-release --commit <full hash> --withdraw`.
 
 The Dependencies section is where the consumer records the result, because `changes` writes nothing. No sample hash, time or version appears near any value the agent must fetch (project rules, hallucination traps).
 
@@ -195,7 +198,7 @@ Default suite, autouse `AMOEBA_HOME` fixture, the replayed `cf` in `tests/cf_fix
 
 - `docs/store-contract.md`: `releases` is written only by `report_release`; `touched` is a JSON array; D2's identity, repeat, correction and withdrawal rules; no read record is kept.
 - `docs/cli-contract.md` and `docs/mcp-server.md`: the two operations, their flags, modes, outcomes and exit codes; both MCP tools take an absolute `directory`.
-- `docs/program-rules.md`: the D6 blocks; a pointer to 222's `set_up` contract for choosing `consumed`; and the D2 note that a release merges into a merge report only when the tag is on the reported commit, and that a release flow adding its own commit makes a second report.
+- `docs/program-rules.md`: the D6 blocks; a pointer to the `add --depends-on` contract (229) for choosing `consumed`; and the D2 note that a release merges into a merge report only when the tag is on the reported commit, and that a release flow adding its own commit makes a second report.
 
 ## Implementation Details
 
@@ -248,7 +251,7 @@ The operator is an agent session in each repo.
 - **Wrong report.** `--correct` with the true text: `corrected`. Consumers whose `since` predates the correction see it again.
 - **Report that should not exist.** `--withdraw` with the full hash: `withdrawn`. The report is gone from `changes`. A consumer that read it earlier keeps its own record in its Dependencies section.
 - **End state.** Each report is one row per commit a member reported, and the rows are the record. No cleanup job runs. A removed member's reports stay in the table, bounded by its history, and are not listed because its pairs are gone.
-- **Clear or undo.** A single report: `--withdraw`. A pair: `set_up remove` (228). No step edits SQLite by hand.
+- **Clear or undo.** A single report: `--withdraw`. A pair: `amoeba rm --pair PROVIDER:CONSUMER` (228, 229). No step edits SQLite by hand.
 
 **Dead ends found and closed:**
 
