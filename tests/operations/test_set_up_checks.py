@@ -102,13 +102,6 @@ def test_a_removed_member_of_another_program_is_not_in_that_program(
     assert result.outcome is SetUpOutcome.APPLIED
 
 
-def test_rules_paths_required_for_a_new_member(store: Store) -> None:
-    result = _rejected(store, {"program": "demo", "members": [{"project": "provider"}]})
-
-    assert _codes(result) == [SetUpProblemCode.RULES_PATHS_REQUIRED]
-    assert "members.0" in result.problems[0].detail
-
-
 def test_an_empty_rules_paths_list_counts_as_given(store: Store) -> None:
     document: dict[str, Any] = {
         "program": "demo",
@@ -194,12 +187,7 @@ def test_two_problems_in_one_request_are_both_returned(store: Store) -> None:
 
     result = _rejected(store, document)
 
-    assert sorted(_codes(result)) == sorted(
-        [
-            SetUpProblemCode.RULES_PATHS_REQUIRED,
-            SetUpProblemCode.UNKNOWN_AUTHORIZE_ITEM,
-        ]
-    )
+    assert _codes(result) == [SetUpProblemCode.UNKNOWN_AUTHORIZE_ITEM]
 
 
 def test_a_rejection_against_an_existing_program_returns_its_unchanged_state(
@@ -217,7 +205,7 @@ def test_a_rejection_against_an_existing_program_returns_its_unchanged_state(
             "program": "demo",
             "members": [
                 {"project": "provider", "rules_paths": []},
-                {"project": "consumer"},
+                {"project": "consumer", "authorize_allow": ["no_such_item"]},
             ],
         },
     )

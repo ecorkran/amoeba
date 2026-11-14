@@ -9,16 +9,22 @@ it, and the store imports nothing from ``operations``) and re-exported here.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Final
 
 from amoeba.store.vocabulary import Door
 
-__all__ = ["Door", "OperationName"]
+#: The command a person types; the doors build command text from it and ``cli_name``.
+PROGRAM_NAME: Final = "amoeba"
+
+__all__ = ["PROGRAM_NAME", "Door", "OperationName"]
 
 
 class OperationName(StrEnum):
     """An operation's name: the CLI subcommand and the MCP tool name."""
 
-    SET_UP = "set_up"
+    ADD = "add"
+    RM = "rm"
+    LIST = "list"
     HANDLE_PAUSE = "handle_pause"
     ANSWER = "answer"
     STATUS = "status"
@@ -26,3 +32,8 @@ class OperationName(StrEnum):
     MARK_READ = "mark_read"
     DISMISS = "dismiss"
     RETRACT = "retract"
+
+    @property
+    def cli_name(self) -> str:
+        """The command-line form: the value with ``_`` as ``-`` (``handle-pause``)."""
+        return self.value.replace("_", "-")

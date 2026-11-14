@@ -1,4 +1,4 @@
-"""``amoeba handle_pause`` on a real pause with real models (slice 223, task 9.2).
+"""``amoeba handle-pause`` on a real pause with real models (slice 223, task 9.2).
 
 A throwaway member's run stops on a question its rules settle; ``handle_pause`` is
 called from the member's checkout, answers it and resumes the run. A wrong outcome
@@ -23,6 +23,7 @@ from amoeba.upstream.squadron.run_outcome import (
 )
 from live.pause.harness import (
     PauseWorld,
+    inert_hook,
     result_of,
     run_amoeba,
     start_pause,
@@ -49,6 +50,7 @@ def test_a_real_pause_is_answered_and_the_run_leaves_it(
     pause_world: PauseWorld, live_settings: LiveSettings
 ) -> None:
     del live_settings
+    pause_world = inert_hook(pause_world)
     run_id = mint_run_id(datetime.now(UTC))
     started = start_pause(pause_world, run_id, opt_out=True)
     assert isinstance(started.poll, RunOutcomeDocument), started.sq_output
@@ -57,7 +59,7 @@ def test_a_real_pause_is_answered_and_the_run_leaves_it(
     assert checkpoint is not None and checkpoint.paused_at_text is not None
     original_pause = checkpoint.paused_at_text
 
-    completed = run_amoeba(pause_world, "handle_pause", run_id)
+    completed = run_amoeba(pause_world, "handle-pause", run_id)
 
     assert completed.returncode == 0, completed.stderr
     result = result_of(completed)

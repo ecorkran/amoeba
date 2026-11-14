@@ -18,7 +18,7 @@ from fake_sq import write_fake_sq
 from user_configs import example_config_text
 
 from amoeba import wiring
-from amoeba.cli.main import build_parser
+from amoeba.cli.parser import build_parser
 from amoeba.config.home import StateLayout, calls_log_dir, config_path, state_layout
 from amoeba.mcp import detached
 from amoeba.mcp.detached import (
@@ -98,7 +98,9 @@ def test_the_argv_parses_through_the_cli_parser_to_the_input_values(
     ):
         assert argv[0] == "/x/amoeba"
         parsed = build_parser().parse_args(list(argv[1:]))
-        assert parsed.command == OperationName.HANDLE_PAUSE.value
+        assert parsed.command == OperationName.HANDLE_PAUSE.cli_name
+        assert parsed.operation is OperationName.HANDLE_PAUSE
+        assert parsed.json is True
         assert parsed.run_id == run_id
 
 
@@ -184,7 +186,7 @@ def test_the_start_returns_while_the_child_runs_and_the_log_gets_its_result(
         "outcome": "skipped"
     }
     seen = json.loads((script.parent / "seen.json").read_text(encoding="utf-8"))
-    assert seen["argv"] == ["handle_pause", "--", "-run"]
+    assert seen["argv"] == ["handle-pause", "--json", "--", "-run"]
     assert Path(seen["cwd"]).resolve() == checkout.resolve()
 
 

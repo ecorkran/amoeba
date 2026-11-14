@@ -17,6 +17,7 @@ from amoeba.upstream.git_read import (
     GitReadResult,
     git_read,
     last_change_args,
+    ls_tree_args,
     parse_tree_directories,
     parse_tree_listing,
     resolve_commit_args,
@@ -79,7 +80,7 @@ def test_a_timeout_and_a_missing_executable_are_failures_not_exceptions(
 
 
 def test_the_allowlist_holds_the_two_read_commands() -> None:
-    assert GIT_SUBCOMMANDS == {"show", "log"}
+    assert GIT_SUBCOMMANDS == {"show", "log", "ls-tree"}
 
 
 def test_the_object_read_builders_give_exact_arguments() -> None:
@@ -102,6 +103,7 @@ def test_a_commit_or_target_that_looks_like_an_option_is_refused() -> None:
         resolve_commit_args,
         partial(show_object_args, path="a.md"),
         partial(last_change_args, path="a.md"),
+        partial(ls_tree_args, directory="docs"),
     ):
         with pytest.raises(ValueError, match="--output"):
             build(option)
@@ -112,6 +114,32 @@ def _object_repo(tmp_path: Path) -> Path:
     commit_file(repo, "docs/top.md", "top\n", "top")
     commit_file(repo, "docs/nested/deep.md", "deep\n", "deep")
     return repo
+
+
+def test_ls_tree_args_end_the_options_before_the_directory() -> None:
+    assert ls_tree_args("abc123", "-docs") == (
+        "ls-tree",
+        "--name-only",
+        "abc123",
+        "--",
+        "-docs/",
+    )
+
+
+def test_ls_tree_says_a_directory_is_absent_with_exit_zero_and_no_output(
+    tmp_path: Path,
+) -> None:
+    repo = _object_repo(tmp_path)
+    commit = head_of(repo)
+
+    present = _read(repo, ls_tree_args(commit, "docs"))
+    absent = _read(repo, ls_tree_args(commit, "nowhere"))
+
+    assert (present.exit_code, present.stdout.split()) == (
+        0,
+        ["docs/nested", "docs/top.md"],
+    )
+    assert (absent.exit_code, absent.stdout) == (0, "")
 
 
 def _read(repo: Path, args: tuple[str, ...]) -> GitReadResult:

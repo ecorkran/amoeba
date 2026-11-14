@@ -27,14 +27,6 @@ def _member_problems(
 ) -> list[SetUpProblem]:
     own = f"members.{member.index}"
     problems: list[SetUpProblem] = []
-    stored = get_member(transaction, member.project_id)
-    if stored is None and member.rules_paths is None:
-        problems.append(
-            _problem(
-                SetUpProblemCode.RULES_PATHS_REQUIRED,
-                f"{own}: {member.project_id} is new and needs rules_paths",
-            )
-        )
     for field, keys in (
         ("authorize_allow", member.authorize_allow),
         ("authorize_deny", member.authorize_deny),

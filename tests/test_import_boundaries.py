@@ -10,7 +10,9 @@ cli ──► operations ──► store ──► answering.values
 imports nothing from ``store``, ``config``, ``operations`` or ``cli`` (``store`` and
 ``config`` import its value and settings modules, never the reverse). ``upstream``
 imports nothing from ``answering`` or the packages above it. ``config`` imports only
-``answering.settings`` and its type module. ``operations`` does not import ``cli``.
+``answering.settings``, its type module and ``store.vocabulary`` (the closed
+vocabularies, a leaf module: ``default_consumed`` is a ``ConsumedMode``).
+``operations`` does not import ``cli``.
 An import of a package that no longer exists is not checked here: it fails pyright.
 """
 
@@ -44,7 +46,11 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
 }
 #: package -> the only ``amoeba`` modules outside itself it may import.
 ONLY_ALLOWED: dict[str, tuple[str, ...]] = {
-    "config": ("amoeba.answering.settings", "amoeba.answering.values"),
+    "config": (
+        "amoeba.answering.settings",
+        "amoeba.answering.values",
+        "amoeba.store.vocabulary",
+    ),
 }
 
 

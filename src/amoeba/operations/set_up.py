@@ -22,6 +22,9 @@ from amoeba.config.user_config import UserConfig
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.set_up_checks import check_request
 from amoeba.operations.set_up_models import (
+    Change,
+    ChangeSubject,
+    ChangeVerb,
     ConceptState,
     DependencyState,
     MemberState,
@@ -54,6 +57,7 @@ from amoeba.store.programs import (
     upsert_program,
 )
 from amoeba.store.store import Store, Transaction
+from amoeba.store.vocabulary import RulesFrom
 from amoeba.upstream.context_forge.cli_call import CfRun
 from amoeba.upstream.context_forge.project_of import CFProject, CFProjectNotFound
 
@@ -76,6 +80,7 @@ def _member_state(member: Member, pairs: tuple[DependencyPair, ...]) -> MemberSt
     return MemberState(
         project_id=member.project_id,
         rules_paths=member.settings.rules_paths,
+        rules_from=member.settings.rules_from,
         authorize_allow=member.settings.authorize_allow,
         authorize_deny=member.settings.authorize_deny,
         depends_on=tuple(
@@ -130,7 +135,7 @@ def _rejected(
 ) -> SetUpResult:
     return SetUpResult(
         outcome=SetUpOutcome.REJECTED,
-        changes=(),
+        change_records=(),
         problems=tuple(problems),
         program=_program_state(transaction, program_id),
         working_directory=_working_directory(transaction, working),
@@ -141,7 +146,7 @@ def _location(loc: tuple[int | str, ...]) -> str:
     return ".".join(str(part) for part in loc) or DOCUMENT_LOCATION
 
 
-def _malformed(error: ValidationError) -> SetUpResult:
+def malformed_result(error: ValidationError) -> SetUpResult:
     """One ``malformed`` problem per pydantic error; nothing was looked up."""
     problems = tuple(
         SetUpProblem(
@@ -152,7 +157,7 @@ def _malformed(error: ValidationError) -> SetUpResult:
     )
     return SetUpResult(
         outcome=SetUpOutcome.REJECTED,
-        changes=(),
+        change_records=(),
         problems=problems,
         program=None,
         working_directory=None,
@@ -160,6 +165,22 @@ def _malformed(error: ValidationError) -> SetUpResult:
 
 
 # --- writes ------------------------------------------------------------------
+
+
+def _merged_rules(
+    member: ResolvedMember, stored: MemberSettings | None
+) -> tuple[tuple[str, ...], RulesFrom]:
+    """The member's rules after the request (229 D7).
+
+    Given ``rules_paths`` (even ``[]``) are named; ``rules_default``, or a new member
+    with neither, is the config default and stores no list; otherwise the stored
+    choice stays.
+    """
+    if member.rules_paths is not None:
+        return member.rules_paths, RulesFrom.NAMED
+    if member.rules_default or stored is None:
+        return (), RulesFrom.CONFIG_DEFAULT
+    return stored.rules_paths, stored.rules_from
 
 
 def _merged_settings(
@@ -174,17 +195,19 @@ def _merged_settings(
             return given
         return () if kept is None else kept
 
+    rules_paths, rules_from = _merged_rules(member, stored)
     return MemberSettings(
         project_id=member.project_id,
-        rules_paths=pick(member.rules_paths, stored and stored.rules_paths),
+        rules_paths=rules_paths,
         authorize_allow=pick(member.authorize_allow, stored and stored.authorize_allow),
         authorize_deny=pick(member.authorize_deny, stored and stored.authorize_deny),
+        rules_from=rules_from,
     )
 
 
 def _write_concept(
     transaction: Transaction, request: ResolvedRequest, now: datetime
-) -> list[str]:
+) -> list[Change]:
     stored = get_program(transaction, request.program_id)
     if request.concept_given:
         member = None if request.concept is None else request.concept.member_id
@@ -201,8 +224,8 @@ def _write_concept(
     )
     if not changed:
         return []
-    verb = "added" if stored is None else "updated"
-    return [f"{verb} program {request.program_id}"]
+    verb = ChangeVerb.ADDED if stored is None else ChangeVerb.UPDATED
+    return [Change(verb=verb, subject=ChangeSubject.PROGRAM, detail=request.program_id)]
 
 
 def _write_member(
@@ -210,9 +233,9 @@ def _write_member(
     request: ResolvedRequest,
     member: ResolvedMember,
     now: datetime,
-) -> list[str]:
+) -> list[Change]:
     stored = get_member(transaction, member.project_id)
-    changes: list[str] = []
+    changes: list[Change] = []
     changed = upsert_member(
         transaction,
         program_id=request.program_id,
@@ -220,8 +243,10 @@ def _write_member(
         now=now,
     )
     if changed:
-        verb = "added" if stored is None else "updated"
-        changes.append(f"{verb} member {member.project_id}")
+        verb = ChangeVerb.ADDED if stored is None else ChangeVerb.UPDATED
+        changes.append(
+            Change(verb=verb, subject=ChangeSubject.MEMBER, detail=member.project_id)
+        )
     return changes
 
 
@@ -230,8 +255,8 @@ def _write_pairs(
     request: ResolvedRequest,
     member: ResolvedMember,
     now: datetime,
-) -> list[str]:
-    changes: list[str] = []
+) -> list[Change]:
+    changes: list[Change] = []
     for dependency in member.depends_on:
         stored = get_pair(transaction, dependency.provider_id, member.project_id)
         changed = upsert_pair(
@@ -243,10 +268,14 @@ def _write_pairs(
             now=now,
         )
         if changed:
-            verb = "added" if stored is None else "updated"
+            verb = ChangeVerb.ADDED if stored is None else ChangeVerb.UPDATED
             changes.append(
-                f"{verb} dependency {member.project_id} on "
-                f"{dependency.provider_id} ({dependency.consumed.value})"
+                Change(
+                    verb=verb,
+                    subject=ChangeSubject.DEPENDENCY,
+                    detail=f"{member.project_id} on {dependency.provider_id} "
+                    f"({dependency.consumed.value})",
+                )
             )
     return changes
 
@@ -266,7 +295,7 @@ def _apply(
     changes += apply_removal(transaction, request.removal, now)
     return SetUpResult(
         outcome=SetUpOutcome.APPLIED if changes else SetUpOutcome.UNCHANGED,
-        changes=tuple(changes),
+        change_records=tuple(changes),
         problems=(),
         program=_program_state(transaction, request.program_id),
         working_directory=_working_directory(transaction, working),
@@ -290,7 +319,7 @@ def set_up(
     try:
         request = SetUpRequest.model_validate(document)
     except ValidationError as error:
-        return _malformed(error)
+        return malformed_result(error)
     resolution = resolve_request(request, directory, run)
     with store.write() as transaction:
         problems = list(resolution.problems)

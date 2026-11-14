@@ -20,6 +20,7 @@ from amoeba.store.vocabulary import (
     Door,
     QuestionState,
     ResumeOutcome,
+    RulesFrom,
 )
 
 
@@ -47,6 +48,8 @@ class MemberSettings:
     authorize_allow: tuple[str, ...]
     #: Config item keys put on it.
     authorize_deny: tuple[str, ...]
+    #: Whether the rules are ``rules_paths`` or the config's default (229 D7).
+    rules_from: RulesFrom
 
 
 @dataclass(frozen=True)

@@ -144,7 +144,7 @@ def test_no_question_is_rejected_and_says_to_run_handle_pause(tmp_path: Path) ->
 
         assert result.outcome is AnswerOutcome.REJECTED
         assert result.rejection is AnswerRejection.NO_SUCH_QUESTION
-        assert "handle_pause" in result.problems[0]
+        assert "amoeba handle-pause" in result.problems[0]
         assert "checkout" in result.problems[0]
         assert result.resume is None and result.answer_seq is None
         assert w.spawned.argvs == []

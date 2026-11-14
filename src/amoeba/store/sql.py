@@ -86,9 +86,13 @@ WHERE program_id = ?
 
 _MEMBER_INSERT_COLUMNS: Final = (
     "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
-    "registered_at, updated_at"
+    "registered_at, updated_at, rules_from"
 )
-_MEMBER_COLUMNS: Final = f"{_MEMBER_INSERT_COLUMNS}, removed_at"
+#: Select order: ``store.programs._member`` reads these positionally.
+_MEMBER_COLUMNS: Final = (
+    "project_id, program_id, rules_paths, authorize_allow, authorize_deny, "
+    "registered_at, updated_at, removed_at, rules_from"
+)
 #: The active-member predicate (228 D8), the one place "a removed member is not a
 #: member" is written. Every member and pair read below uses it.
 ACTIVE_MEMBER: Final = "removed_at IS NULL"
@@ -102,17 +106,18 @@ SELECT_MEMBERS_OF: Final = (
     f"AND {ACTIVE_MEMBER} ORDER BY project_id"
 )
 INSERT_MEMBER: Final = (
-    f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    f"INSERT INTO members ({_MEMBER_INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 )
 UPDATE_MEMBER: Final = """
-UPDATE members SET rules_paths = ?, authorize_allow = ?, authorize_deny = ?,
-    updated_at = ?
+UPDATE members SET rules_paths = ?, rules_from = ?, authorize_allow = ?,
+    authorize_deny = ?, updated_at = ?
 WHERE project_id = ?
 """
 # Re-registering a removed member: a fresh registration, possibly in another program.
 REREGISTER_MEMBER: Final = """
-UPDATE members SET program_id = ?, rules_paths = ?, authorize_allow = ?,
-    authorize_deny = ?, registered_at = ?, updated_at = ?, removed_at = NULL
+UPDATE members SET program_id = ?, rules_paths = ?, rules_from = ?,
+    authorize_allow = ?, authorize_deny = ?, registered_at = ?, updated_at = ?,
+    removed_at = NULL
 WHERE project_id = ?
 """
 REMOVE_MEMBER: Final = (
@@ -362,6 +367,33 @@ DECISIONS_ORDER: Final = " ORDER BY answer_row.seq"
 DECISIONS_PROGRAM_CLAUSE: Final = " AND member_row.program_id = ?"
 SELECT_DECISIONS_AFTER_SEQ: Final = f"{_SELECT_DECISIONS} WHERE answer_row.seq > ?"
 SELECT_DECISIONS_SINCE: Final = f"{_SELECT_DECISIONS} WHERE answer_row.recorded_at >= ?"
+# Questions that ended at or after a time (229 D3): closed ones by ``closed_at``,
+# answered ones whose newest answer was handed over (resumed) or can no longer be
+# (not delivered) by that answer's ``recorded_at``. Parameters: closed state, since,
+# answered state, since, resumed, not delivered. Keeps removed members: the record.
+SELECT_SETTLED_SINCE: Final = """
+SELECT member_row.program_id, question_row.member_id, question_row.run_id,
+    question_row.paused_at, question_row.question,
+    question_row.closed_reason, question_row.closed_at
+FROM questions AS question_row
+JOIN members AS member_row ON member_row.project_id = question_row.member_id
+WHERE question_row.state = ? AND question_row.closed_at >= ?
+UNION ALL
+SELECT member_row.program_id, question_row.member_id, question_row.run_id,
+    question_row.paused_at, question_row.question,
+    answer_row.answered_by, answer_row.recorded_at
+FROM questions AS question_row
+JOIN members AS member_row ON member_row.project_id = question_row.member_id
+JOIN answers AS answer_row
+    ON answer_row.run_id = question_row.run_id
+    AND answer_row.paused_at = question_row.paused_at
+WHERE question_row.state = ? AND answer_row.recorded_at >= ?
+    AND answer_row.resume_outcome IN (?, ?)
+    AND answer_row.seq = (SELECT MAX(latest.seq) FROM answers AS latest
+                          WHERE latest.run_id = answer_row.run_id
+                              AND latest.paused_at = answer_row.paused_at)
+ORDER BY 7 DESC, 3, 4
+"""
 SELECT_MARKER: Final = "SELECT last_seen_seq FROM pm_marker WHERE id = 1"
 SELECT_MAX_ANSWER_SEQ: Final = "SELECT COALESCE(MAX(seq), 0) FROM answers"
 RAISE_MARKER: Final = """

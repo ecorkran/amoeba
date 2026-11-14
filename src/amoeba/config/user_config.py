@@ -26,7 +26,8 @@ from pydantic import (
     field_validator,
 )
 
-from amoeba.answering.settings import ModelAlias
+from amoeba.answering.settings import ModelAlias, RulesPath
+from amoeba.store.vocabulary import ConsumedMode
 
 CONTRACT_DOC: Final = "docs/config-contract.md"
 
@@ -74,6 +75,11 @@ class UserConfig(BaseModel):
     #: Age in days after which settled scratch, logs and calls-log days are removed
     #: (slice 228, D9).
     prune_after_days: Annotated[StrictInt, Field(ge=1)]
+    #: Rules files a member that names none reads, each skipped when absent
+    #: (slice 229, D7, D8). Not empty: a default of no rules is ``--no-rules``.
+    default_rules_paths: Annotated[tuple[RulesPath, ...], Field(min_length=1)]
+    #: Which of a provider's reports a ``--depends-on`` without a mode consumes.
+    default_consumed: ConsumedMode
     #: Everything answers may be barred from authorizing. May be empty.
     authorize_items: tuple[NotAuthorizedItem, ...]
 

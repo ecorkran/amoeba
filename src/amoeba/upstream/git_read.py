@@ -2,9 +2,9 @@
 
 ``git_read`` runs under the call timeout with stdin closed and prompts disabled, and
 refuses any subcommand outside :data:`GIT_SUBCOMMANDS`. Amoeba never merges, commits,
-checks out, resets, stashes, deletes a branch or pushes, so the allowlist is two read
-commands: ``show`` and ``log`` for objects at a pinned commit (never the working
-tree).
+checks out, resets, stashes, deletes a branch or pushes, so the allowlist is three read
+commands: ``show``, ``log`` and ``ls-tree`` for objects at a pinned commit (never the
+working tree).
 """
 
 from __future__ import annotations
@@ -26,9 +26,12 @@ from amoeba.upstream.context_forge.cli_call import (
 GIT_EXECUTABLE: Final = "git"
 SUBCOMMAND_SHOW: Final = "show"
 SUBCOMMAND_LOG: Final = "log"
+SUBCOMMAND_LS_TREE: Final = "ls-tree"
 
 #: The only subcommands Amoeba may run; anything else is a programming error.
-GIT_SUBCOMMANDS: Final = frozenset({SUBCOMMAND_SHOW, SUBCOMMAND_LOG})
+GIT_SUBCOMMANDS: Final = frozenset(
+    {SUBCOMMAND_SHOW, SUBCOMMAND_LOG, SUBCOMMAND_LS_TREE}
+)
 
 #: Keeps git from waiting on credentials: with stdin closed it fails instead.
 _ENV_NO_PROMPT: Final = {"GIT_TERMINAL_PROMPT": "0"}
@@ -71,6 +74,17 @@ def show_object_args(commit: str, path: str) -> tuple[str, ...]:
     """
     _refuse_option(commit)
     return (SUBCOMMAND_SHOW, f"{commit}:{path}")
+
+
+def ls_tree_args(commit: str, directory: str) -> tuple[str, ...]:
+    """``ls-tree --name-only <commit> -- <directory>/``: the entries of a directory.
+
+    Exit 0 with empty output means the directory is absent at the commit; a
+    directory that is absent is not an error for ``ls-tree``, unlike ``show``.
+    """
+    _refuse_option(commit)
+    # ``--`` ends the options, so a directory named ``-x`` is a path, not a flag.
+    return (SUBCOMMAND_LS_TREE, "--name-only", commit, "--", f"{directory}/")
 
 
 def last_change_args(commit: str, path: str) -> tuple[str, ...]:

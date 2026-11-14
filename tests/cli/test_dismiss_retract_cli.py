@@ -35,8 +35,14 @@ def _seed_pm_answer() -> int:
         return waiting_then_pm(store, SECOND, MEMBER_ID, 2)
 
 
-def _run(capsys: pytest.CaptureFixture[str], *arguments: str) -> tuple[int, str, str]:
-    code = main(list(arguments))
+def _run(
+    capsys: pytest.CaptureFixture[str], *arguments: str, as_json: bool = True
+) -> tuple[int, str, str]:
+    """Run ``main``; ``as_json`` adds ``-j`` after the command name."""
+    argv = list(arguments)
+    if as_json:
+        argv.insert(1, "-j")
+    code = main(argv)
     captured = capsys.readouterr()
     return code, captured.out, captured.err
 
@@ -110,6 +116,24 @@ def test_retract_prints_its_result_and_exits_zero_for_retracted_and_unchanged(
 
     assert code == EXIT_OK
     assert json.loads(out)["outcome"] == "unchanged"
+
+
+def test_dismiss_and_retract_print_text_without_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seq = _seed_pm_answer()
+
+    code, out, _ = _run(
+        capsys, "retract", str(seq), "--reason", "wrong number", as_json=False
+    )
+
+    assert code == EXIT_OK
+    assert out.startswith(f"retracted: answer #{seq}\n")
+    code, out, _ = _run(
+        capsys, "dismiss", "no-such-run", "--reason", "x", as_json=False
+    )
+    assert code == EXIT_REJECTED
+    assert out.startswith("rejected: no_such_question: ")
 
 
 def test_a_rejected_retract_exits_one(capsys: pytest.CaptureFixture[str]) -> None:

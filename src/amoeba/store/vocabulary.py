@@ -15,6 +15,15 @@ class ConsumedMode(StrEnum):
     FROM_RELEASE = "from_release"
 
 
+class RulesFrom(StrEnum):
+    """Where a member's rules come from (229 D7)."""
+
+    #: The member's own ``rules_paths`` entries; an empty list means no rules.
+    NAMED = "named"
+    #: The config's ``default_rules_paths``, read at answering time.
+    CONFIG_DEFAULT = "config_default"
+
+
 class QuestionState(StrEnum):
     """Where a claimed question stands."""
 

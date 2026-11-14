@@ -22,6 +22,8 @@ TOP_LEVEL_KEYS = [
     "answering_wait_seconds",
     "resume_wait_seconds",
     "prune_after_days",
+    "default_rules_paths",
+    "default_consumed",
     "authorize_items",
 ]
 ITEM_KEYS = ["key", "description", "screen_phrases", "denied_by_default"]
@@ -52,6 +54,9 @@ def test_the_documented_example_loads(tmp_path: Path) -> None:
         "policy_change",
     ]
     assert all(item.denied_by_default for item in config.authorize_items)
+    assert config.default_rules_paths == ("CLAUDE.md", "AGENTS.md")
+    assert config.default_consumed == "from_source"
+    assert config.passages_max_chars == 250000
     assert config.authorize_items[1].screen_phrases == (
         "merge to main",
         "merge into main",
@@ -114,6 +119,10 @@ def _with(key: str, value: object) -> Callable[[dict[str, Any]], None]:
         (_with("answer_model", "a,b"), "answer_model"),
         (_with("check_model", "  "), "check_model"),
         (_with("authorize_items", "none"), "authorize_items"),
+        (_with("default_rules_paths", []), "default_rules_paths"),
+        (_with("default_rules_paths", "CLAUDE.md"), "default_rules_paths"),
+        (_with("default_rules_paths", ["/etc/rules.md"]), "default_rules_paths"),
+        (_with("default_consumed", "from_anywhere"), "default_consumed"),
     ],
 )
 def test_a_bad_or_unknown_key_names_it(

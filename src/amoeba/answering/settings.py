@@ -63,6 +63,23 @@ RulesPath = Annotated[
 ]
 
 
+class RulesChoice(BaseModel):
+    """Which rules files a run reads, and whether a missing entry is an error.
+
+    A member that names rules gets its own entries with ``optional`` false: an entry
+    matching nothing fails the selection. A member on the config default gets the
+    config's entries with ``optional`` true: an entry matching nothing is skipped
+    (slice 229, D7, D8).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: Repo-relative rules files read at the target commit; ``*`` in the last segment
+    #: only. A named choice may be empty (no rules).
+    entries: tuple[RulesPath, ...]
+    optional: bool
+
+
 def _checked_model_alias(alias: str) -> str:
     """The alias, when Squadron would not split it as a ``-p`` value.
 
@@ -102,9 +119,8 @@ class AnswererSettings(BaseModel):
         Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)],
         ...,
     ]
-    #: Repo-relative rules files read at the target commit; ``*`` in the last segment
-    #: only. May be empty; an entry that matches nothing fails assembly.
-    rules_paths: tuple[RulesPath, ...]
+    #: The rules files to read and how a missing one is treated.
+    rules: RulesChoice
     #: Most characters of rendered ``passages.md`` an answering run is sent.
     passages_max_chars: Annotated[StrictInt, Field(ge=1)]
     #: Squadron model aliases for the answer step and the check step. A comma would
