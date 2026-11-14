@@ -1,6 +1,10 @@
 # Amoeba: a tool that answers a paused run's first-level questions and keeps the record
 
-Amoeba is being rebuilt as a tool that agents and pipelines call. When a Squadron run pauses on a question, Amoeba will answer it from the project's own rules, plan and the PM's earlier answers when those settle it, and record every answer and every decline, across a program of repos. It has no process of its own, and Squadron never needs it.
+Amoeba is a tool that agents and pipelines call. When a Squadron run pauses on a question, Amoeba answers it from the project's own rules, plan and the PM's earlier answers when those settle it, and records every answer and every decline, across a program of repos (a group of related repos). Questions those sources do not settle wait for the PM. It has no process of its own, and Squadron never needs it.
+
+## For agents
+
+If you are an agent session, use the `amoeba-mcp` server (`docs/mcp-server.md`) or the `amoeba` command with `-j`. You want it when the PM asks what is waiting, wants to answer a waiting question, wants to know what was decided while away, or wants a repo registered. Start with `list` (what needs the PM), then `answer` with a decision the PM actually gave, never one you composed. The server's own instructions carry the same map of tools.
 
 ## What exists now
 
