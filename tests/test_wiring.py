@@ -14,22 +14,34 @@ import pytest
 from user_configs import example_config_text
 from wiring_support import TrackedStore, is_closed, record_opened_stores
 
-from amoeba import wiring
+from amoeba import wiring, wiring_releases
 from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.config.home import AmoebaHomeError, config_path, state_layout
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.answer import AnswerOutcome, AnswerResult
+from amoeba.operations.changes_models import (
+    ChangesOutcome,
+    ChangesResult,
+    MemberRef,
+    ProviderPair,
+)
 from amoeba.operations.decisions import DecisionsResult
 from amoeba.operations.dismiss import DismissResult
 from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.names import Door, OperationName
+from amoeba.operations.report_release_models import (
+    ReleaseReport,
+    ReportOutcome,
+    ReportReleaseResult,
+)
 from amoeba.operations.retract import RetractResult
 from amoeba.operations.set_up_models import SetUpResult
 from amoeba.operations.status import StatusResult
 from amoeba.store.errors import StoreBusyError, StoreError
+from amoeba.store.vocabulary import ConsumedMode
 from amoeba.upstream.squadron.errors import SquadronError
 
 #: For each in-process operation, a document it refuses and the result type it gives.
@@ -43,6 +55,8 @@ REFUSED: dict[OperationName, tuple[object, type]] = {
     OperationName.MARK_READ: ({}, MarkReadResult),
     OperationName.DISMISS: ({}, DismissResult),
     OperationName.RETRACT: ({}, RetractResult),
+    OperationName.REPORT_RELEASE: ({"bogus": 1}, ReportReleaseResult),
+    OperationName.CHANGES: ({"bogus": 1}, ChangesResult),
 }
 
 
@@ -173,6 +187,34 @@ def test_the_cli_calls_invoke_as_the_cli_door(
     assert doors == [Door.CLI]
 
 
+@pytest.mark.parametrize(
+    ("name", "operation"),
+    [
+        (OperationName.REPORT_RELEASE, "report_release"),
+        (OperationName.CHANGES, "changes"),
+    ],
+)
+def test_invoke_gives_each_release_operation_the_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    name: OperationName,
+    operation: str,
+) -> None:
+    seen: list[Path] = []
+
+    def recording(
+        _store: object, _document: object, *, directory: Path, deps: object
+    ) -> object:
+        seen.append(directory)
+        return _changes_result(ChangesOutcome.LISTED)
+
+    monkeypatch.setattr(wiring_releases, operation, recording)
+
+    wiring.invoke(name, {}, tmp_path, Door.CLI)
+
+    assert seen == [tmp_path]
+
+
 def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="handle_pause"):
         wiring.invoke(OperationName.HANDLE_PAUSE, {}, tmp_path, Door.CLI)
@@ -180,10 +222,124 @@ def test_invoke_refuses_handle_pause_naming_it(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    [OperationName.ADD, OperationName.RM, OperationName.LIST, OperationName.STATUS],
+    [
+        OperationName.ADD,
+        OperationName.RM,
+        OperationName.LIST,
+        OperationName.STATUS,
+        OperationName.REPORT_RELEASE,
+        OperationName.CHANGES,
+    ],
 )
 def test_invoke_requires_a_directory_for_the_directory_operations(
     name: OperationName,
 ) -> None:
     with pytest.raises(ValueError, match=name.value):
         wiring.invoke(name, {}, None, Door.CLI)
+
+
+def _release_report() -> ReleaseReport:
+    return ReleaseReport(
+        seq=1,
+        commit="a" * 40,
+        version=None,
+        changed="text",
+        touched=("one",),
+        reported_at="2026-11-09T12:00:00+00:00",
+        versioned_at=None,
+    )
+
+
+def _report_release_result(outcome: ReportOutcome) -> ReportReleaseResult:
+    return ReportReleaseResult(
+        outcome=outcome, member="member", report=_release_report(), problems=()
+    )
+
+
+def _changes_result(outcome: ChangesOutcome) -> ChangesResult:
+    return ChangesResult(
+        outcome=outcome,
+        member=MemberRef(id="member", name=None),
+        since="2026-11-09T12:00:00+00:00",
+        pairs=(),
+        problems=(),
+        warnings=(),
+    )
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        _report_release_result(ReportOutcome.REJECTED),
+        _changes_result(ChangesOutcome.REJECTED),
+    ],
+    ids=["report_release", "changes"],
+)
+def test_a_rejected_release_result_is_rejected(result: wiring.OperationResult) -> None:
+    assert wiring.is_rejected(result)
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        *(
+            _report_release_result(outcome)
+            for outcome in ReportOutcome
+            if outcome is not ReportOutcome.REJECTED
+        ),
+        _changes_result(ChangesOutcome.LISTED),
+    ],
+)
+def test_a_release_result_that_is_not_rejected_is_not_rejected(
+    result: wiring.OperationResult,
+) -> None:
+    assert not wiring.is_rejected(result)
+
+
+def test_the_report_release_document_has_the_designed_shape() -> None:
+    document = wiring.result_document(_report_release_result(ReportOutcome.RECORDED))
+    assert document == {
+        "outcome": "recorded",
+        "member": "member",
+        "report": {
+            "seq": 1,
+            "commit": "a" * 40,
+            "version": None,
+            "changed": "text",
+            "touched": ["one"],
+            "reported_at": "2026-11-09T12:00:00+00:00",
+            "versioned_at": None,
+        },
+        "problems": [],
+    }
+
+
+def test_the_changes_document_has_the_designed_shape() -> None:
+    result = ChangesResult(
+        outcome=ChangesOutcome.LISTED,
+        member=MemberRef(id="member", name="me"),
+        since="2026-11-09T12:00:00+00:00",
+        pairs=(
+            ProviderPair(
+                provider=MemberRef(id="provider", name="core"),
+                consumed=ConsumedMode.FROM_RELEASE,
+                releases=(_release_report(),),
+            ),
+        ),
+        problems=(),
+        warnings=(),
+    )
+    document = wiring.result_document(result)
+    assert list(document) == [
+        "outcome",
+        "member",
+        "since",
+        "pairs",
+        "problems",
+        "warnings",
+    ]
+    assert document["member"] == {"id": "member", "name": "me"}
+    (pair,) = document["pairs"]  # type: ignore[misc]
+    assert pair["provider"] == {"id": "provider", "name": "core"}
+    assert pair["consumed"] == "from_release"
+    assert pair["releases"][0]["touched"] == ["one"]

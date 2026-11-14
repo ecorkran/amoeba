@@ -31,6 +31,7 @@ from amoeba.config.home import (
 from amoeba.config.user_config import ConfigError, UserConfig, load_user_config
 from amoeba.operations.answer import AnswerOutcome, AnswerResult, answer
 from amoeba.operations.answering_run import STDERR_LOG_SUFFIX, STDOUT_LOG_SUFFIX
+from amoeba.operations.changes_models import ChangesOutcome, ChangesResult
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
 from amoeba.operations.deps import Deps, production_deps
 from amoeba.operations.dismiss import DismissOutcome, DismissResult, dismiss
@@ -46,6 +47,10 @@ from amoeba.operations.names import Door, OperationName
 from amoeba.operations.processes import start_child
 from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
+from amoeba.operations.report_release_models import (
+    ReportOutcome,
+    ReportReleaseResult,
+)
 from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, RetractResult, retract
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
@@ -56,6 +61,7 @@ from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
 from amoeba.wiring_registry import place_add, place_list, place_rm
+from amoeba.wiring_releases import place_release
 
 __all__ = [
     "OPERATIONAL_ERRORS",
@@ -107,6 +113,8 @@ type OperationResult = (
     | MarkReadResult
     | DismissResult
     | RetractResult
+    | ReportReleaseResult
+    | ChangesResult
 )
 
 
@@ -174,9 +182,9 @@ def invoke(
 
     Opens the store (after the legacy move), places the arguments exactly as the CLI
     always has, and closes the store whether the operation returns or raises.
-    ``directory`` is the caller's checkout: required by ``add``, ``rm``, ``list`` and
-    ``status``,
-    ignored by the others. ``door`` is the interface that carried the call.
+    ``directory`` is the caller's checkout: required by ``add``, ``rm``, ``list``,
+    ``status``, ``report_release`` and ``changes``, ignored by the others. ``door`` is
+    the interface that carried the call.
 
     Raises:
         ValueError: ``name`` is ``handle_pause`` (the CLI's own body), or a
@@ -226,6 +234,14 @@ def invoke(
                 return dismiss(store, document, clock=default_deps(layout).clock)
             case OperationName.RETRACT:
                 return retract(store, document, clock=default_deps(layout).clock)
+            case OperationName.REPORT_RELEASE | OperationName.CHANGES:
+                return place_release(
+                    name,
+                    store,
+                    document,
+                    _required_directory(name, directory),
+                    default_deps(layout),
+                )
             case OperationName.HANDLE_PAUSE:
                 raise ValueError(
                     f"{name.value} is not run in-process: it is the CLI's own body"
@@ -318,6 +334,8 @@ def is_rejected(result: OperationResult) -> bool:
             | MarkReadResult(outcome=MarkReadOutcome.REJECTED)
             | DismissResult(outcome=DismissOutcome.REJECTED)
             | RetractResult(outcome=RetractOutcome.REJECTED)
+            | ReportReleaseResult(outcome=ReportOutcome.REJECTED)
+            | ChangesResult(outcome=ChangesOutcome.REJECTED)
         ):
             return True
         case _:

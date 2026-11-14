@@ -85,6 +85,8 @@ on the CLI; it is not an error.
 | `mark_read` | |
 | `answer` | `text` must be a decision the PM actually gave, passed on as given. It becomes precedent. Recorded with `via: mcp`. |
 | `dismiss`, `retract` | |
+| `report_release` | Takes `directory` (the caller's checkout, an absolute path) and `commit` (the full hash), `changed`, `touched`, `version`, and `mode` (`report`, `correct` or `withdraw`; `report` when absent). |
+| `changes` | Takes `directory` (the caller's checkout, an absolute path) and `since` (ISO-8601 with a UTC offset). Writes nothing. |
 | `handle_pause` | Takes `run_id` and `directory` (the run's checkout, from `status`). Starts the work detached and returns a receipt at once. |
 
 `directory` is never guessed: a session can start anywhere, so a missing or relative
@@ -114,10 +116,10 @@ A failure is an error result whose text starts with its kind:
   (`SquadronError`, `ContextForgeError`, `ConfigError`, `StoreError` and its kinds).
 - `TimedOut: <tool> did not finish within 180 s; ...`: the call outlived the server's
   deadline, `MCP_CALL_DEADLINE_SECONDS` (180 s). What to do depends on the tool:
-  - `status`, `decisions`, `list`: it may still finish. Run `amoeba status`, `amoeba
-    decisions` or `amoeba list` in a shell, which has no deadline. Do not call the
-    tool again.
-  - `add`, `rm`, `answer`, `mark_read`, `dismiss`, `retract`: the work may still
+  - `status`, `decisions`, `list`, `changes`: it may still finish. Run `amoeba status`,
+    `amoeba decisions`, `amoeba list` or `amoeba changes` in a shell, which has no
+    deadline. Do not call the tool again.
+  - `add`, `rm`, `answer`, `mark_read`, `dismiss`, `retract`, `report_release`: the work may still
     complete. Check `status` or `decisions` before repeating it.
 - `internal error: ...`: a bug; it is logged on stderr and the server keeps serving.
 

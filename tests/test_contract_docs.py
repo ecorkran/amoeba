@@ -15,6 +15,7 @@ from amoeba.cli.parser import build_parser
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
 from amoeba.operations.add import AddRequest
 from amoeba.operations.answer import AnswerRejection
+from amoeba.operations.changes_models import ChangesOutcome, ChangesWarningCode
 from amoeba.operations.decisions import DecisionsOutcome
 from amoeba.operations.dismiss import DismissOutcome, DismissRejection
 from amoeba.operations.list_registry import (
@@ -29,6 +30,7 @@ from amoeba.operations.names import OperationName
 from amoeba.operations.pause_class import PauseClass
 from amoeba.operations.pause_models import HandlePauseOutcome, SkipReason
 from amoeba.operations.reject_codes import RejectCode
+from amoeba.operations.report_release_models import ReportMode, ReportOutcome
 from amoeba.operations.retract import RetractOutcome, RetractRejection
 from amoeba.operations.rm import RmRequest
 from amoeba.operations.set_up_models import RemoveRequest, SetUpProblemCode
@@ -137,6 +139,10 @@ def test_the_cli_contract_names_every_command_exit_code_and_result_value() -> No
         *(rejection.value for rejection in RetractRejection),
         *(code.value for code in SetUpProblemCode),
         *(reason.value for reason in ClosedReason),
+        *(outcome.value for outcome in ReportOutcome),
+        *(mode.value for mode in ReportMode),
+        *(outcome.value for outcome in ChangesOutcome),
+        *(code.value for code in ChangesWarningCode),
     ]
 
     missing = [f"amoeba {name}" for name in commands if f"amoeba {name}" not in text]

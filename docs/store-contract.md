@@ -137,13 +137,40 @@ a foreign key would be circular.
 
 | Column | Meaning |
 |---|---|
-| `seq` | Key; autoincrement. |
-| `member_id` | The reporting member. `UNIQUE (member_id, commit_sha)`. |
-| `commit_sha` | The released commit. |
-| `version` | Null until the commit is tagged. |
-| `changed`, `touched` | What the report says changed and what that touched. |
-| `reported_at` | When the report arrived. |
-| `versioned_at` | When a later tag set `version`; null until then. |
+| `seq` | Key; autoincrement, so a withdrawn commit that is reported again gets a higher `seq`. |
+| `member_id` | The reporting member. `UNIQUE (member_id, commit_sha)`: one row per commit a member reported. |
+| `commit_sha` | The reported commit: the full hash, lower-case (40 or 64 hex characters). |
+| `version` | The release tag; null until the report has one. |
+| `changed`, `touched` | What the report says changed (text) and what that touched (`touched` is a JSON array of strings, in the order given, without duplicates). |
+| `reported_at` | When the report was made, or last corrected. |
+| `versioned_at` | When the report got its version, or was last corrected while holding one; null while `version` is null. |
+
+Written only by `report_release`, one `BEGIN IMMEDIATE` transaction per call; `changes`
+only reads. A report is identified by its member and commit:
+
+- A new commit inserts a row (`reported_at` now; `versioned_at` now when a version is
+  given). A repeat of the commit is `unchanged` whatever its wording: the stored text
+  is kept.
+- A version that is new, or given to a row with none, sets `version` and `versioned_at`
+  and replaces `changed` and `touched`; `reported_at` and `seq` do not move, so a
+  `from_source` reader does not see the commit twice.
+- A correction replaces `changed` and `touched` (and `version`, if given) and moves
+  `reported_at` to now, and `versioned_at` to now when the row has a version, so readers
+  whose starting time predates it see it again.
+- Withdrawal deletes the row; it is the explicit cancel for a registered member's report.
+- No read record is kept: `changes` takes its starting time from the caller, so
+  there is no per-reader position to clean up.
+- A removed member's rows stay as the record (228 D8) and no cleanup runs. The table is
+  bounded by what agents report: one small row per commit a member reported, written by
+  an explicit call, never by a loop.
+
+The only index is the one behind `UNIQUE (member_id, commit_sha)`. Both reads filter by
+`member_id` first, which that index serves, and then by time within one member's rows,
+which is one small row per reported commit; adding a time index would need a migration
+for no measured need.
+
+What a consumer sees follows its pair's `consumed`: `from_source` reads `reported_at`,
+`from_release` reads `versioned_at` and only rows with a `version`.
 
 ### `questions` (written by slice 223)
 

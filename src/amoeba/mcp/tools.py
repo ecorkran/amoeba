@@ -20,12 +20,14 @@ from pydantic import BaseModel
 
 from amoeba.operations.add import AddRequest
 from amoeba.operations.answer import AnswerRequest
+from amoeba.operations.changes_models import ChangesRequest
 from amoeba.operations.decisions import DecisionsRequest
 from amoeba.operations.dismiss import DismissRequest
 from amoeba.operations.handle_pause_call import HandlePauseCall
 from amoeba.operations.list_view import ListRequest
 from amoeba.operations.mark_read import MarkReadRequest
 from amoeba.operations.names import OperationName
+from amoeba.operations.report_release_models import ReportReleaseRequest
 from amoeba.operations.retract import RetractRequest
 from amoeba.operations.rm import RmRequest
 from amoeba.operations.status import StatusRequest
@@ -187,6 +189,36 @@ TOOLS: Final = (
             "Stop a PM answer being precedent; it stays delivered and listed."
         ),
         timeout_advice=WRITE_ADVICE,
+    ),
+    ToolSpec(
+        name=OperationName.REPORT_RELEASE,
+        request_model=ReportReleaseRequest,
+        takes_directory=True,
+        mode=RunMode.IN_PROCESS,
+        description=(
+            "Report what a merge or release in the repo at `directory` changed for "
+            "the repos that depend on it. `commit` is the full hash, `changed` says "
+            "what changed for someone using the repo, and `touched` lists each thing "
+            "changed. Give `version` (the tag name) for a release. With `mode` "
+            "`correct` it replaces the text of a report already made; with "
+            "`withdraw` it takes the report back. Same request and result as "
+            "`amoeba report-release`."
+        ),
+        timeout_advice=WRITE_ADVICE,
+    ),
+    ToolSpec(
+        name=OperationName.CHANGES,
+        request_model=ChangesRequest,
+        takes_directory=True,
+        mode=RunMode.IN_PROCESS,
+        description=(
+            "What the repos that the repo at `directory` depends on have reported "
+            "since `since` (an ISO-8601 time with a UTC offset): one entry per "
+            "provider, each with the reports that provider's pair shows. Writes "
+            "nothing and marks nothing read. Same request and result as `amoeba "
+            "changes`."
+        ),
+        timeout_advice=READ_ADVICE,
     ),
     ToolSpec(
         name=OperationName.HANDLE_PAUSE,

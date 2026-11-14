@@ -1,7 +1,8 @@
-"""Why a read-side operation rejected its request (slice 224, D5, D7, D8).
+"""Why an operation rejected its request (slices 224 and 227).
 
-One vocabulary for ``status``, ``decisions`` and ``mark_read``: each uses the codes
-that apply to it. The CLI exits 1 for a rejected result.
+One vocabulary for the read side (``status``, ``decisions``, ``mark_read``) and the
+release side (``report_release``, ``changes``): each uses the codes that apply to it.
+The CLI exits 1 for a rejected result.
 """
 
 from __future__ import annotations
@@ -20,6 +21,10 @@ class RejectCode(StrEnum):
     UNKNOWN_PROGRAM = "unknown_program"
     MALFORMED = "malformed"
     BEYOND_LAST_RECORD = "beyond_last_record"
+    #: The caller's directory is in no Context Forge project, or no program (227 D5).
+    NOT_A_MEMBER = "not_a_member"
+    #: ``correct`` or ``withdraw`` for a commit the member never reported (227 D2).
+    NOT_REPORTED = "not_reported"
 
 
 def validation_problems(error: ValidationError) -> tuple[str, ...]:

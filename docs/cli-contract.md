@@ -35,9 +35,9 @@ and it is what the sections below describe field by field.
 
 ## Names
 
-A command's name is its operation's name with `_` as `-`: `handle-pause` and
-`mark-read`; the others (`add`, `rm`, `list`, `answer`, `status`, `decisions`,
-`dismiss`, `retract`) have no underscore. `rm` also answers to `remove`. MCP tool names
+A command's name is its operation's name with `_` as `-`: `handle-pause`,
+`mark-read` and `report-release`; the others (`add`, `rm`, `list`, `answer`, `status`, `decisions`,
+`dismiss`, `retract`, `changes`) have no underscore. `rm` also answers to `remove`. MCP tool names
 stay snake_case (`handle_pause`, `mark_read`), and so does the `operation` in JSON
 `next` entries. There is no alias for an old command name (`set_up`, `handle_pause`,
 `mark_read`): it is argparse's invalid-choice error, which lists the valid names, exit
@@ -53,8 +53,8 @@ the old store untouched.
 
 | Code | Meaning | Causes |
 |---|---|---|
-| 0 | The operation ran | `add` or `rm` applied or unchanged; `list` and `status` listed; `handle-pause` any outcome, including `skipped`; `answer` recorded; `dismiss` dismissed or unchanged; `retract` retracted or unchanged; `decisions` listed; `mark-read` moved or unchanged |
-| 1 | The operation refused the request; the result says why | `add`, `rm`, `list`, `answer`, `dismiss`, `retract`, `status`, `decisions` or `mark-read` rejected |
+| 0 | The operation ran | `add` or `rm` applied or unchanged; `list` and `status` listed; `handle-pause` any outcome, including `skipped`; `answer` recorded; `dismiss` dismissed or unchanged; `retract` retracted or unchanged; `decisions` listed; `mark-read` moved or unchanged; `report-release` recorded, versioned, corrected, unchanged or withdrawn; `changes` listed |
+| 1 | The operation refused the request; the result says why | `add`, `rm`, `list`, `answer`, `dismiss`, `retract`, `status`, `decisions`, `mark-read`, `report-release` or `changes` rejected |
 | 2 | Usage | bad arguments (a missing or non-integer `mark-read --through`, an old command name, `--all` with `list members`, `--file` with another `add` flag, mutually exclusive rules flags, an empty side of `--concept`), or an `add --file` request file that cannot be read, is not UTF-8 or is not YAML |
 | 3 | Operational failure; message on stderr as `error: <ExceptionName>: <message>` | `ConfigError`, `AmoebaHomeError`, `ContextForgeError`, `SquadronError`, any `StoreError` (including `StoreRelocateError`, a legacy store that could not be moved) |
 
@@ -415,3 +415,117 @@ unread. Result (`MarkReadResult`): `outcome` (`moved`, `unchanged` or `rejected`
 `rejection` (`beyond_last_record` when `SEQ` is above the last answer, `malformed` for
 a negative or non-integer `SEQ`), `previous`, `current`, `problems`. The marker never
 moves backward, so an equal or lower `SEQ` is `unchanged`. Exit 1 when `rejected`.
+
+## `amoeba report-release`
+
+```
+amoeba report-release --commit HASH [--version TAG] --changed TEXT --touched ITEM [--touched ITEM ...] [--correct]
+amoeba report-release --commit HASH --withdraw
+```
+
+A provider repo tells the repos that depend on it what a merge or release changed. It
+runs from the member's own checkout. `--commit` is the full commit hash (40 or 64 hex
+characters; `git rev-parse` gives it; Amoeba checks its shape only and never runs `git`, so
+it does not know whether the commit exists), `--version` the release tag (printable, no whitespace), `--changed` what
+changed for someone using the repo, and `--touched` one thing changed, repeated for each
+(duplicates are dropped, order kept). `--correct` and `--withdraw` are mutually
+exclusive (both is exit 2). No flag is required by argparse: an absent flag is left out
+of the request, and the operation rejects a missing field with the same detail on both
+doors.
+
+Three modes, from the flags: no mode flag is `report`, `--correct` is `correct`, and
+`--withdraw` is `withdraw`. `--commit` is needed in every mode. `--changed` and
+`--touched` are needed in `report` and `correct`; `--version` is optional there. None of
+`--version`, `--changed` and `--touched` is allowed in `withdraw`. A report is one per
+member and commit.
+
+| Mode | Case | `outcome` |
+|---|---|---|
+| `report` | no report for the commit | `recorded` |
+| `report` | a `--version` that is new, or one on a report with none: the version is set and the text replaced | `versioned` |
+| `report` | anything else, whatever the wording: the stored report is kept | `unchanged` |
+| `correct` | a report exists: the text is replaced (and the version, if given) and the report counts as new | `corrected` |
+| `withdraw` | a report exists: it is deleted | `withdrawn` |
+| `correct` or `withdraw` | no report for the commit | `rejected` with `not_reported` |
+
+Result (`ReportReleaseResult`), the same document over MCP:
+
+```json
+{"outcome": "recorded",
+ "member": "<cf project id>",
+ "report": {"seq": 0, "commit": "<full hash>", "version": "<tag>", "changed": "<text>",
+            "touched": ["<item>"], "reported_at": "<UTC ISO-8601>",
+            "versioned_at": "<UTC ISO-8601>"},
+ "problems": []}
+```
+
+`member` is null when the directory is not a member. `report` is the stored report after
+the call; it is null after `withdrawn` and on a rejection. `version` and `versioned_at`
+are null until the report has a version. `problems` is `{code, detail}` per problem:
+
+- `malformed`: the request is wrong (the detail names the field, and for `--commit` says
+  `git rev-parse` gives a full hash); nothing is written.
+- `not_a_member`: the caller's directory is in no Context Forge project, or its project
+  is in no program; the detail says which. Nothing is written.
+- `not_reported`: `--correct` or `--withdraw` found no report by this member for that
+  commit. Nothing is written.
+
+A version on an already reported commit does not move `reported_at`, so a consumer that
+takes `from_source` does not see the commit twice. A correction moves `reported_at` (and
+`versioned_at`, when the report has a version) to now, so consumers whose `--since`
+predates it see it again. A withdrawn commit can be reported again.
+
+Text: the first line is `reported` (for `recorded` and `versioned`), `unchanged`,
+`corrected`, `withdrawn`, or `rejected: <code>` with a line per problem. Exit 0 for any
+outcome but `rejected`, 1 for `rejected`, 2 for usage, 3 for an operational error
+(`ContextForgeError` when `cf` fails, never a rejection; nothing is written).
+
+## `amoeba changes --since ISO-8601`
+
+What the providers of this repo reported since a time. It runs from the member's own
+checkout and writes nothing: no read marker is kept, so the caller chooses its starting
+point (the rule blocks in `docs/program-rules.md` say how). `--since` is ISO-8601 with a
+UTC offset and is required by the operation (an absent or offset-less value is
+`rejected` with `malformed`).
+
+For each pair where this member is the consumer, the provider's reports that the pair's
+`consumed` shows: `from_source` sees a report from when it was made or last corrected
+(`reported_at` at or after `--since`), `from_release` sees only a report with a version,
+from when it was versioned or last corrected (`versioned_at` at or after `--since`).
+Every pair is listed, including one with nothing visible, so "checked, nothing new"
+differs from "not a dependency". A provider's own providers are never listed, and a
+provider that `rm` removed is gone with its pair: its reports are not listed, though
+they stay in the store. This command's name is also the name of a field: `changes` in
+an `add` or `rm` result lists the rows that call changed, which is unrelated. Result
+(`ChangesResult`), the same document over MCP:
+
+```json
+{"outcome": "listed",
+ "member": {"id": "<cf project id>", "name": "<cf name>"},
+ "since": "<UTC ISO-8601>",
+ "pairs": [{"provider": {"id": "<cf project id>", "name": "<cf name>"},
+            "consumed": "from_release",
+            "releases": [{"seq": 0, "commit": "<full hash>", "version": "<tag>",
+                          "changed": "<text>", "touched": ["<item>"],
+                          "reported_at": "<UTC ISO-8601>",
+                          "versioned_at": "<UTC ISO-8601>"}]}],
+ "problems": [],
+ "warnings": []}
+```
+
+`outcome` is `listed` or `rejected`. `since` is the normalized UTC text. A member with no
+providers is `listed` with empty `pairs`. Each release is oldest first and has the same
+shape as `report` above. `problems` are `malformed` (the request) or `not_a_member` (as
+for `report-release`). `warnings` hold `not_in_context_forge` when Context Forge's
+project list does not name the caller or a provider: the id is kept, `name` is null and
+the outcome stays `listed`. A `cf` failure is exit 3, never a warning or an empty list.
+
+Text: one entry per report (provider name or id, commit, version, the changed text cut
+to the line width, the touched items), warnings as `warning:` lines, and
+`No changes since <time>.` when no pair has a report. A rejection prints
+`rejected: <code>` and a line per problem. Exit codes are as for `report-release`.
+
+## Release rejection codes
+
+`not_a_member` and `not_reported` are two members of the rejection vocabulary, next to
+`malformed`; `report-release` and `changes` use the codes that apply to them, as above.

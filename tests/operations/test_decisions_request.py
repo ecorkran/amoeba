@@ -99,9 +99,11 @@ def test_an_unknown_program_with_none_registered_says_so(store: Store) -> None:
     assert "none registered" in problem
 
 
-def test_the_rejection_codes_are_the_three_the_design_names() -> None:
+def test_the_rejection_codes_are_the_closed_set() -> None:
     assert {code.value for code in RejectCode} == {
         "unknown_program",
         "malformed",
         "beyond_last_record",
+        "not_a_member",
+        "not_reported",
     }

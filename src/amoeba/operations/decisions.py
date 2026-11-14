@@ -7,8 +7,6 @@ their input through unchanged.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -37,9 +35,9 @@ from amoeba.operations.reject_codes import (
     unknown_program_problem,
     validation_problems,
 )
+from amoeba.operations.since import parse_since
 from amoeba.store.decisions import DecisionRow, answers_since, read_marker
 from amoeba.store.errors import StoreRowError
-from amoeba.store.row_values import encode_timestamp
 from amoeba.store.store import Store
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import ProjectNames
@@ -68,13 +66,7 @@ class DecisionsRequest(BaseModel):
     def _utc_text(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        try:
-            moment = datetime.fromisoformat(value.strip())
-        except ValueError as error:
-            raise ValueError(f"not an ISO-8601 time: {value!r}") from error
-        if moment.tzinfo is None:
-            raise ValueError(f"has no UTC offset: {value!r}")
-        return encode_timestamp(moment)
+        return parse_since(value)
 
 
 def decisions(store: Store, document: object, *, deps: Deps) -> DecisionsResult:

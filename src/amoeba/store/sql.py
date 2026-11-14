@@ -141,6 +141,10 @@ SELECT_PAIRS_OF: Final = (
     f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs WHERE program_id = ? "
     f"AND {_PAIR_ENDS_ACTIVE} ORDER BY provider_id, consumer_id"
 )
+SELECT_PAIRS_CONSUMED_BY: Final = (
+    f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs WHERE consumer_id = ? "
+    f"AND {_PAIR_ENDS_ACTIVE} ORDER BY provider_id"
+)
 SELECT_PAIR: Final = (
     f"SELECT {_PAIR_COLUMNS} FROM dependency_pairs "
     f"WHERE provider_id = ? AND consumer_id = ? AND {_PAIR_ENDS_ACTIVE}"
@@ -158,6 +162,48 @@ UPDATE_PAIR: Final = """
 UPDATE dependency_pairs SET consumed = ?, updated_at = ?
 WHERE provider_id = ? AND consumer_id = ?
 """
+
+# --- releases (slice 227, D2, D3) ---------------------------------------------
+
+RELEASE_COLUMNS: Final = (
+    "seq, commit_sha, version, changed, touched, reported_at, versioned_at"
+)
+SELECT_RELEASE_FOR_COMMIT: Final = (
+    f"SELECT {RELEASE_COLUMNS} FROM releases WHERE member_id = ? AND commit_sha = ?"
+)
+# Parameters: member, commit, version, changed, touched, reported_at, versioned_at.
+INSERT_RELEASE: Final = """
+INSERT INTO releases
+    (member_id, commit_sha, version, changed, touched, reported_at, versioned_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+"""
+# Parameters: version, versioned_at, changed, touched, member, commit.
+VERSION_RELEASE: Final = """
+UPDATE releases SET version = ?, versioned_at = ?, changed = ?, touched = ?
+WHERE member_id = ? AND commit_sha = ?
+"""
+# A given version replaces the stored one; ``versioned_at`` moves with the correction
+# whenever the row holds a version afterwards. SQLite evaluates every SET expression
+# against the old row, so the version expression is written twice. Parameters:
+# changed, touched, version, reported_at, version, versioned_at, member, commit.
+CORRECT_RELEASE: Final = """
+UPDATE releases
+SET changed = ?, touched = ?, version = COALESCE(?, version), reported_at = ?,
+    versioned_at = CASE WHEN COALESCE(?, version) IS NOT NULL THEN ? ELSE NULL END
+WHERE member_id = ? AND commit_sha = ?
+"""
+DELETE_RELEASE: Final = "DELETE FROM releases WHERE member_id = ? AND commit_sha = ?"
+# A ``from_source`` consumer sees a report from when it was made or last corrected.
+SELECT_RELEASES_FROM_SOURCE: Final = (
+    f"SELECT {RELEASE_COLUMNS} FROM releases WHERE member_id = ? AND reported_at >= ? "
+    "ORDER BY reported_at, seq"
+)
+# A ``from_release`` consumer sees a report from when it was versioned.
+SELECT_RELEASES_FROM_RELEASE: Final = (
+    f"SELECT {RELEASE_COLUMNS} FROM releases "
+    "WHERE member_id = ? AND version IS NOT NULL AND versioned_at >= ? "
+    "ORDER BY versioned_at, seq"
+)
 
 # --- questions and answers (written by slice 223) ---------------------------
 

@@ -126,4 +126,49 @@ def build_parser() -> argparse.ArgumentParser:
         "answer_seq", type=int, help="the answer's seq, from `amoeba decisions`"
     )
     retract_parser.add_argument("--reason", required=True, help="why it is retracted")
+    _register_release_commands(commands, parent)
     return parser
+
+
+def _register_release_commands(commands: Any, parent: argparse.ArgumentParser) -> None:
+    """``report-release`` and ``changes`` (slice 227). No flag is ``required=True``:
+    an absent flag is left out of the document, so the operation rejects it with the
+    same detail on both doors."""
+    report_parser = _command(
+        commands,
+        parent,
+        OperationName.REPORT_RELEASE,
+        "report what a merge or release changed for the repos that depend on this one",
+    )
+    report_parser.add_argument("--commit", help="the full hash of the reported commit")
+    report_parser.add_argument(
+        "--version", help="the release tag, when the commit is a release"
+    )
+    report_parser.add_argument(
+        "--changed", help="what changed, for a user of this repo"
+    )
+    report_parser.add_argument(
+        "--touched",
+        action="append",
+        help="one thing that changed; repeat for each",
+    )
+    mode = report_parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--correct",
+        action="store_true",
+        help="replace the text of a report already made",
+    )
+    mode.add_argument(
+        "--withdraw", action="store_true", help="take a report back entirely"
+    )
+    changes_parser = _command(
+        commands,
+        parent,
+        OperationName.CHANGES,
+        "what this repo's providers reported since a time",
+    )
+    changes_parser.add_argument(
+        "--since",
+        metavar="ISO-8601",
+        help="start at this time, with a UTC offset",
+    )

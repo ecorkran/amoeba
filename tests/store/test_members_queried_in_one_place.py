@@ -22,7 +22,13 @@ MEMBERS_TABLE = re.compile(r"\b(FROM|JOIN|INTO|UPDATE)\s+members\b", re.IGNORECA
 
 #: Member reads that skip removed members: every one must carry the predicate.
 ACTIVE_READS = frozenset(
-    {"SELECT_MEMBER", "SELECT_MEMBERS_OF", "SELECT_PAIRS_OF", "SELECT_PAIR"}
+    {
+        "SELECT_MEMBER",
+        "SELECT_MEMBERS_OF",
+        "SELECT_PAIRS_OF",
+        "SELECT_PAIRS_CONSUMED_BY",
+        "SELECT_PAIR",
+    }
 )
 #: Statements that name ``members`` and are not active-only reads.
 OTHER_MEMBER_STATEMENTS = frozenset(

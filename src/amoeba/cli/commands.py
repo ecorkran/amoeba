@@ -27,6 +27,7 @@ from amoeba.config.home import StateLayout
 from amoeba.operations.calls_log import append_call, error_entry, result_entry
 from amoeba.operations.handle_pause import handle_pause
 from amoeba.operations.names import Door, OperationName
+from amoeba.operations.report_release_models import ReportMode
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import project_names
@@ -90,6 +91,26 @@ def _with_optional(
     return {**document, **{k: v for k, v in optional.items() if v is not None}}
 
 
+def _report_release_document(arguments: argparse.Namespace) -> dict[str, object]:
+    """The ``report_release`` document: the flags given, ``mode`` only for
+    ``--correct`` or ``--withdraw`` (the default mode is ``report``)."""
+    mode = (
+        ReportMode.CORRECT
+        if arguments.correct
+        else ReportMode.WITHDRAW
+        if arguments.withdraw
+        else None
+    )
+    return _with_optional(
+        {},
+        mode=None if mode is None else mode.value,
+        commit=arguments.commit,
+        version=arguments.version,
+        changed=arguments.changed,
+        touched=arguments.touched,
+    )
+
+
 def _document_for(name: OperationName, arguments: argparse.Namespace) -> object:
     """The request document an in-process operation is given, from its arguments."""
     match name:
@@ -117,6 +138,10 @@ def _document_for(name: OperationName, arguments: argparse.Namespace) -> object:
             )
         case OperationName.RETRACT:
             return {"answer_seq": arguments.answer_seq, "reason": arguments.reason}
+        case OperationName.REPORT_RELEASE:
+            return _report_release_document(arguments)
+        case OperationName.CHANGES:
+            return _with_optional({}, since=arguments.since)
         case OperationName.HANDLE_PAUSE:
             raise ValueError(f"{name.value} has no request document")
 

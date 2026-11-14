@@ -81,6 +81,20 @@ class DependencyPair:
 
 
 @dataclass(frozen=True)
+class Release:
+    """One row of ``releases``: a member's report for one commit (slice 227, D2)."""
+
+    seq: int
+    commit: str
+    #: The release tag the report was versioned with; ``None`` until it is.
+    version: str | None
+    changed: str
+    touched: tuple[str, ...]
+    reported_at: datetime
+    versioned_at: datetime | None
+
+
+@dataclass(frozen=True)
 class QuestionKey:
     """A question's identity: the run and the checkpoint time exactly as Squadron
     printed it (slice 223, D1)."""

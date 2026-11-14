@@ -32,6 +32,8 @@ class OperationName(StrEnum):
     MARK_READ = "mark_read"
     DISMISS = "dismiss"
     RETRACT = "retract"
+    REPORT_RELEASE = "report_release"
+    CHANGES = "changes"
 
     @property
     def cli_name(self) -> str:
