@@ -34,7 +34,7 @@ The answering model sees the member's rules as evidence for what the repo allows
 
 ## Technical Scope
 
-**Included:** the names (D1); text rendering and `-j` (D2); `list` and its three registered views (D3); `add` and `rm` (D4 to D6); `rules_from` on members, `default_rules_paths` and `default_consumed` in the config (D7); optional default entries, duplicate dropping and import following (D8 to D10); migration 005 (D11); docs, the 227 design update and the cutover (D12, D13); tests (D14).
+**Included:** the names (D1); text rendering and `-j` (D2); `list` and its three registered views (D3); `add` and `rm` (D4 to D6); `rules_from` on members, `default_rules_paths` and `default_consumed` in the config (D7); optional default entries, duplicate dropping and import following (D8 to D10); migration 005 (D11); docs and the cutover (D12, D13); tests (D14).
 
 **Excluded:**
 
@@ -106,7 +106,7 @@ Every renderer is tested against fixture results with the exact expected text.
 | `members`, `member` | each active member: CF name, id, repo path, program, rules, allow/deny, dependencies | store, `cf list projects` |
 | `dependencies`, `dependency` | each pair: provider to consumer, `consumed` | store, `cf list projects` |
 
-Default view, in order: **Waiting on you** (each `WaitingEntry`: member, run, how long, reason, the question cut to one line, and the command to answer it); **Paused, not handled** (runs whose `pause` is `unhandled`, `claim_stale` or `answered_unresumed`, with the command that handles them and, for the first two, the newest calls-log line); **Unplaced runs**; **Problems** (`sweep_problem`, `file_problems`, `problems`). Nothing waiting prints `Nothing needs you.`.
+Default view, in order: **Waiting on you** (each `WaitingEntry`: member, run, how long, reason, the question cut to one line, and the command to answer it); **Paused, not handled** (runs whose `pause` is `unhandled`, `claim_stale` or `answered_unresumed`, with the command that handles them and, for the first two, the newest calls-log line); **Unplaced runs** (each says how it clears: `lookup_failed` on the next `list` once `cf` answers; `no_directory` and `directory_missing` are Squadron's runs with no Amoeba record, and leave the list when Squadron no longer lists them as paused); **Problems** (`sweep_problem`, `file_problems`, `problems`). Nothing waiting prints `Nothing needs you.`.
 
 `--all` with `programs` also lists programs that have no members and no concept (D3, last paragraph); with `members` or `dependencies` it is a usage error, exit 2. With no subject it adds every other run under its member, then **Settled**: questions answered or closed within `prune_after_days` (the window the system already treats as recent; older ones are in `decisions --since`). `store/settled.py` reads them.
 
@@ -118,14 +118,14 @@ A member's repo path is CF's `projectPath`. When CF has none the text says `(no 
 
 **Failures.** The registered views and `add` read Context Forge. `cf` absent, failing or timing out is exit 3 with the error and no partial view, as in 222 and 224. Amoeba does not match project names itself: `cf` resolves a name or id, its answer stands, and a reference it cannot resolve is `not_a_project` carrying its message (so a name `cf` finds ambiguous is whatever `cf` reports). A stored member id missing from `cf list projects` is shown as `(not in Context Forge)`.
 
-**Empty programs.** A program with no active members and no concept is hidden from `list programs` unless `--all` is given. The row cannot be deleted (Excluded), and it is bounded: rows exist only for names someone typed to `--program`, a few at most, each a handful of bytes. `add` says `created program X` when it creates one, so a typo shows at once, and the fix is `rm` then `add --program right`; adding to the same name later revives the row.
+**Empty programs.** A program with no active members and no concept is hidden from `list programs` unless `--all` is given. The row cannot be deleted (Excluded), and it is bounded: a row is created only by an `add` the PM runs, one per repo registered without `--program` (named after its Context Forge project) and one per name typed to `--program`; a re-run creates none, and each row is a handful of bytes, so growth is the number of repos and program names the PM registers. `add` says `created program X` when it creates one, so a typo shows at once, and the fix is `rm` then `add --program right`; adding to the same name later revives the row.
 
 ### D4. `add`
 
 `amoeba add [--program ID] [--project NAME] [--rules PATH]... [--default-rules] [--no-rules] [--allow KEY]... [--no-allow] [--deny KEY]... [--no-deny] [--depends-on PROVIDER[:MODE]]... [--concept MEMBER:PATH] [-j]`, or `amoeba add --file PATH`.
 
 - `--project` names a Context Forge project (name or id); absent means the working directory's. From one repo the PM can register others.
-- `--rules`, `--default-rules` and `--no-rules` are mutually exclusive. `--rules` replaces the member's rules with the named entries; `--default-rules` returns it to the config default; `--no-rules` stores none. None of the three leaves an existing member's rules as they are and gives a new member the default.
+- `--rules`, `--default-rules` and `--no-rules` are mutually exclusive. `--rules` replaces the member's rules with the named entries; `--default-rules` returns it to the config default; `--no-rules` stores an empty named list (no rules; D7). Giving none of the three leaves an existing member's rules as they are and gives a new member the default.
 - `--allow` and `--deny` replace the member's list with the keys given; they do not add to it. `--no-allow` and `--no-deny` store an empty list. Neither flag leaves the list as it is. On MCP, `authorize_allow: []` is the empty list and an omitted field leaves it.
 - `--depends-on PROVIDER:MODE` takes `from_source` or `from_release`; without `:MODE` it is the config's `default_consumed`.
 - `--concept MEMBER:PATH` splits at the first `:`; an empty side is a usage error.
@@ -162,6 +162,7 @@ In a rule file ending `.md`, an import is a token starting with `@` at the start
 
 - **Depth:** `IMPORT_DEPTH` (3). Deeper than that declines `sources_unreadable`, the detail giving the chain; the repo file is what to fix.
 - **Cycle or repeat:** a file already selected is not read twice; no error.
+- **Outside the repository:** declines `sources_unreadable`, the detail naming the import and the file, whichever kind of entry began the chain; the repo file is what to fix.
 - **Missing target:** skipped when the chain began at a config-default entry; `sources_missing` (detail `import @x in F matches no file`) when it began at a named entry.
 - **Size:** imported text counts against `passages_max_chars` like any rule text.
 
@@ -173,7 +174,7 @@ Requiring `.md` keeps `@types/node` and `@modelcontextprotocol/server` (this rep
 
 ### D12. Documents
 
-`docs/rules.md` (new) explains rules from the user's side: what is read and why; that only committed files at the target are read; where it is set (`add`, the config default); the defaults and how to change them (`--rules`, `--default-rules`, `--no-rules`, editing `default_rules_paths`); how to see what a member uses (`list members`); duplicates and imports; what a missing file does (default skipped, named fails, nothing found waits on the PM); the size cap and how to size it. `docs/config-contract.md` gets the two keys and an example `passages_max_chars` of 250000 with the sum it must cover (the rules, the slice's plan files, the program concept, room for precedent). The other docs that name commands (`cli-contract`, `mcp-server` with the restart note, `squadron-hook`, README, CHANGELOG) move to the new names. The 220 architecture is amended in this slice: its operations table lists `add`, `rm` and `list` in place of `set_up`, and its "same names" principle says the MCP names are snake_case and the CLI names kebab-case, both from one list. The 227 design already uses the new names.
+`docs/rules.md` (new) explains rules from the user's side: what is read and why; that only committed files at the target are read; where it is set (`add`, the config default); the defaults and how to change them (`--rules`, `--default-rules`, `--no-rules`, editing `default_rules_paths`); how to see what a member uses (`list members`); duplicates and imports; what a missing file does (default skipped, named fails, nothing found waits on the PM); the size cap and how to size it. `docs/config-contract.md` gets the two keys and an example `passages_max_chars` of 250000 with the sum it must cover (the rules, the slice's plan files, the program concept, room for precedent). The other docs that name commands (`cli-contract`, `mcp-server` with the restart note, `squadron-hook`, README, CHANGELOG) move to the new names. The 220 architecture (its operations table lists `add`, `rm` and `list` in place of `set_up`, and its "same names" principle says the MCP names are snake_case and the CLI names kebab-case, both from one list) and the 227 design already use the new names; this slice edits neither.
 
 ### D13. Cutover
 
@@ -189,7 +190,7 @@ Between 1 and 2 the old installed command rejects the new keys, so a pause landi
 
 All with fixtures and the live fixture pipeline; nothing waits on real use.
 
-- **Names:** every `OperationName` has a CLI command (by `cli_name`) and a tool row, and nothing else; `remove` aliases `rm`; singular and plural `list` subjects; `--all` with a registered subject is exit 2.
+- **Names:** every `OperationName` has a CLI command (by `cli_name`) and a tool row, and nothing else; `remove` aliases `rm`; singular and plural `list` subjects; `--all` with `members` or `dependencies` is exit 2.
 - **Renderers:** exact text for each result shape, including a 300-character question cut to 100 columns and a run with no path in CF.
 - **`add` and `rm`:** the request each builds, program resolution (D5), the default rules for a new member, `--default-rules` and `--no-rules`, the existing guards through the new door, and `--file` equal to the old `set_up`.
 - **Rules:** git-fixture repos for default entries present, one present, none present, a named entry missing, an entry in a missing subdirectory. The duplicate and import tests use copies of this repo's real `CLAUDE.md` and `AGENTS.md`, plus fixtures for depth, cycle, a missing import under each source, a fenced `@x.md`, and `@types/node`. A test shows the early size check counts deduplicated text.
@@ -201,7 +202,7 @@ All with fixtures and the live fixture pipeline; nothing waits on real use.
 - **First run.** In a repo: `amoeba add`. Text says the member was added to a new program named after the CF project, rules `default (CLAUDE.md, AGENTS.md)`. No CF project: `rejected: not_a_project`, with the fix in the text, nothing written.
 - **A group.** In the second repo: `amoeba add --program first --depends-on first:from_source`. A provider that is not a member is `unknown_provider`, naming it.
 - **A pause arrives.** The hook runs `amoeba handle-pause RUN`. It answers, or the question waits. `amoeba list` shows it under Waiting on you with the reason and the `amoeba answer` command. If the hook never ran, the run shows under Paused, not handled with the command to run.
-- **A question can't be answered.** `sources_missing`: the detail names what was tried. The PM adds a file, or `add --rules PATH`. `sources_too_large`: the detail gives the size and the limit; raise `passages_max_chars` in `config.yaml`. Both are in `list` with that text.
+- **A question can't be answered.** `sources_missing`: the detail names what was tried. The PM adds a file, or `add --rules PATH`. `sources_too_large`: the detail gives the size and the limit; raise `passages_max_chars` in `config.yaml`. Both are in `list` with that text. The waiting question itself is cleared by `answer` or `dismiss` (both shown with it), or closes when its run moves on; the fix serves the next question.
 - **Changing rules.** `amoeba add --rules docs/rules.md` (replace), `amoeba add --default-rules` (back). `amoeba list members` shows which.
 - **Ending.** `amoeba rm` removes the working directory's repo. Open questions refuse it, with the keys and the commands that clear them. Removing the concept's member needs `--concept` to clear the concept first.
 - **Dead ends checked.** A new member has rules. A config missing a key fails naming the key. An old command name exits 2 with the valid names listed. A stale agent session needs a restart, said in the docs. A program left with 0 members is visible and refilled by `add --program`.
