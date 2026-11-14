@@ -32,7 +32,7 @@ Splitting it again (say, questions in one initiative and programs in another) wo
 4. [ ] **(160) Translator & Notification** — Retired 20261106. The Translator is now the PM's separate chat agent app. The Discord bridge is dropped, because Amoeba notifies agents and agents already reach the PM. Status: deprecated
 5. [ ] **(180) Program Coordination** — Retired 20261106. Slices 180 (slice-writing pipeline) and 181 (program record) are merged. Slice 182 (program concept as a source) is parked on its branch, unmerged, and slices 183 to 186 are paused. Edges with hold and release, requests between members, and ordering are not in any scenario, and some of them walk the dependency graph, which the concept rules out. What programs still need moves to 220. Status: deprecated
 6. [ ] **(200) Multi-Agent Chat** — Retired 20261106. Not Amoeba: the PM's chat and agent-to-agent talk live elsewhere. Status: deprecated
-7. [ ] **(220) Program Tool** — Everything the concept asks for, built by cutting down what exists before adding to it. Scope:
+7. [x] **(220) Program Tool** — Everything the concept asks for, built by cutting down what exists before adding to it. Scope:
    - **Scenarios A, B and C** from the concept: a question while the PM is away, a change in one member reaching another, and the PM asking where things stand. Scenario A, end to end on a real run the PM started, is the first proof.
    - **One set of operations**, over MCP for agent sessions and a CLI for pipelines and scripts. No MCP server exists today.
    - **Answering on runs Amoeba did not launch**, resuming only the run that asked.

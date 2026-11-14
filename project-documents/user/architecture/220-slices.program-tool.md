@@ -8,8 +8,8 @@ component: program-tool
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, switching on scenario A for real work, the MCP server, and program dependencies (scenario B).
 dateCreated: 20261107
-dateUpdated: 20261113
-status: in_progress
+dateUpdated: 20261114
+status: complete
 ---
 
 # Slice Plan: Program Tool

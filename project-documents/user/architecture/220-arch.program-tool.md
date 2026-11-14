@@ -12,8 +12,8 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba as a tool that agents and pipelines call. No Amoeba process stays running. Squadron optionally starts a short-lived Amoeba command when a run pauses; Amoeba answers through the answering pipeline and starts the resume, or records the question as waiting on the PM. Squadron never requires Amoeba. Members report their own releases through their agents, and run and slice state are read from Squadron and Context Forge rather than mirrored. Revised 20261106 and 20261107 from two architecture reviews and PM notes.
 dateCreated: 20261106
-dateUpdated: 20261113
-status: in_progress
+dateUpdated: 20261114
+status: complete
 ---
 
 # Architecture: Program Tool
