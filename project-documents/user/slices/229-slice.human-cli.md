@@ -169,7 +169,7 @@ Requiring `.md` keeps `@types/node` and `@modelcontextprotocol/server` (this rep
 
 ### D11. Migration 005
 
-`ALTER TABLE members ADD COLUMN rules_from TEXT NOT NULL DEFAULT 'named' CHECK (rules_from IN ('named','config_default'))`. `EXPECTED_SCHEMA_VERSION` becomes 5. Existing members, including the two registered ones with `["CLAUDE.md"]`, stay `named` and behave as before. Updates to `docs/store-contract.md` and the schema test.
+`ALTER TABLE members ADD COLUMN rules_from TEXT NOT NULL DEFAULT 'named' CHECK (rules_from IN ('named','config_default'))`. `EXPECTED_SCHEMA_VERSION` becomes 5. Existing members, including the three registered ones (all in `trading`) with `["CLAUDE.md"]`, stay `named` and behave as before. Updates to `docs/store-contract.md` and the schema test.
 
 ### D12. Documents
 
