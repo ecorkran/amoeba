@@ -117,7 +117,7 @@ A report is identified by member and commit. With `stored` being the member's re
 
 `ReportReleaseResult`: `outcome` (`recorded`, `versioned`, `corrected`, `unchanged`, `withdrawn`, `rejected`); `member` (the CF project id, or null when the directory is not a member); `report` (the stored report after the call; null after `withdrawn` and on rejection); `problems` (`code` from `RejectCode`: `malformed`, `not_a_member` or `not_reported`, and `detail`).
 
-Rows are bounded: one per commit a member reported, so they grow with the member's merges and releases. `withdraw` is the explicit cancel for a row, and no cleanup job runs.
+Rows are bounded by what agents report: one small row per commit a member reported, written only by an explicit call after a merge or release, never by a loop. `withdraw` is the explicit cancel for a registered member's row. Removing a member keeps its rows as the record (228 D8), and no cleanup removes them: that retention is deliberate, and the table grows only with the merges and releases the repos report.
 
 ### D3 — What `changes` returns
 
@@ -189,7 +189,7 @@ Default suite, autouse `AMOEBA_HOME` fixture, the replayed `cf` in `tests/cf_fix
 - **Warnings:** a provider missing from the `cf` names is listed with `name: null` and one `not_in_context_forge` warning. A `cf` failure raises `ContextForgeError`.
 - **Non-members:** `not_a_member` on both operations, and nothing written.
 - **`changes` writes nothing:** a table dump before and after is equal.
-- **Doors:** 226's parity tests cover the rows. 226's stdio literal count becomes one per `OperationName` member (the one edit to a 226 test). One CLI test per subcommand for exits 0, 1 and 2 (the mutually exclusive flags); a repeated `--touched` arrives as a list; absent flags are absent from the document.
+- **Doors:** 226's parity tests cover the rows. The tests that list the operations take the two names (`DIRECTORY_TOOLS` and `READ_TOOLS` in 226's `test_tools.py`, 229's parser-names set, the contract-docs value lists); 226's stdio test already counts `OperationName`. One CLI test per subcommand for exits 0, 1 and 2 (the mutually exclusive flags); a repeated `--touched` arrives as a list; absent flags are absent from the document.
 - **Rule blocks:** `docs/program-rules.md` has both blocks, each in the form D6 gives. Each names its operation and flags as `build_parser()` defines them (flag names come from the parser, not a literal list). The consumer block contains both D4 commands. Neither block contains a 40-hex string. The parser is lenient about heading and whitespace, and the real file is the fixture.
 - **Flow test (automated integration)**, `tests/program/test_program_flow.py`: a provider repo and a consumer repo from `tests/git_repo.py`, both members of one program in a replayed `cf`. The test reads the consumer block from `docs/program-rules.md`, runs its two git commands in the consumer repo, and passes the output to `changes`. Then it checks the window case: the provider reports after the consumer's design commit and before its merge, and the consumer's `since` still sees the report (author dates set with `GIT_AUTHOR_DATE`, and a clock fixed after the design commit). A rebase case follows: the consumer's branch is rebased onto a newer commit with `GIT_COMMITTER_DATE` after the report, and the consumer's `since`, taken again from the rule block's command, still sees the report. The provider then tags and reports with a version, and the `from_release` consumer sees it.
 - **Live test**, `tests/live/program/test_program_dependencies_live.py`: real `cf` and `git`, two throwaway members built with the helpers in `tests/live/pause/harness.py`, and a throwaway `AMOEBA_HOME`. It runs both operations through the CLI and asserts `recorded`, `unchanged`, `malformed` with exit 1, and the consumer's `changes` result. It exercises the real `cf list projects` output through `project_names`.
@@ -250,7 +250,7 @@ The operator is an agent session in each repo.
 - **Failure: no previous design.** The fallback command runs. If the repo has no commits, both git commands print nothing, `since` is empty, and `changes` rejects it as `malformed`. The agent records that error.
 - **Wrong report.** `--correct` with the true text: `corrected`. Consumers whose `since` predates the correction see it again.
 - **Report that should not exist.** `--withdraw` with the full hash: `withdrawn`. The report is gone from `changes`. A consumer that read it earlier keeps its own record in its Dependencies section.
-- **End state.** Each report is one row per commit a member reported, and the rows are the record. No cleanup job runs. A removed member's reports stay in the table, bounded by its history, and are not listed because its pairs are gone.
+- **End state.** Each report is one row per commit a member reported, and the rows are the record. No cleanup job runs. A removed member's reports stay in the table as the record (228 D8) and are not listed because its pairs are gone. They are bounded as D2 says (one small row per commit the member reported) and deliberately never cleaned up.
 - **Clear or undo.** A single report: `--withdraw`. A pair: `amoeba rm --pair PROVIDER:CONSUMER` (228, 229). No step edits SQLite by hand.
 
 **Dead ends found and closed:**
