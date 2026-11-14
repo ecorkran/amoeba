@@ -8,7 +8,7 @@ component: program-tool
 audience: [human, ai]
 description: Slice plan for Amoeba initiative 220 — the code audit, the cut, the new store with config and set-up, pause handling through the CLI, status and decisions, switching on scenario A for real work, the MCP server, and program dependencies (scenario B).
 dateCreated: 20261107
-dateUpdated: 20261112
+dateUpdated: 20261113
 status: in_progress
 ---
 
@@ -141,9 +141,25 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    **Risk Level:** Low
    **Relative Effort:** 3
 
+## Human CLI
+
+9. [ ] **(229) Human CLI** — Makes the command usable by a person. Text output by default and `-j`/`--json` on every command. CLI names are kebab-case (`handle-pause`, `mark-read`) and MCP names stay snake_case, both derived once in `names.py`. `set_up` is replaced by two operations, `add` and `rm` (also `remove`), each a CLI command and an MCP tool: `add` registers the working directory's repo (or `--project NAME`) with `--program`, `--rules` (repeatable), `--allow`/`--deny`, `--depends-on PROVIDER[:from_source|from_release]` and `--concept MEMBER:PATH`, with `--file` for bulk; with no `--program` the repo joins its current program or starts a one-member program named after its Context Forge project. A new `list` is the one view: no argument shows what needs the PM; `--all` adds running work and settled questions; `list programs`, `list members` and `list dependencies` show what is registered, with repo names and paths. A member that names no rules reads the config's `default_rules_paths` (`CLAUDE.md`, `AGENTS.md`), each skipped when absent; `--rules` replaces them. Exact-duplicate rule passages are dropped before numbering and counting, and `@path` imports inside the rules files are followed. The docs explain rules from the user's side. The step that reinstalls the tool and changes the `pipeline.on_pause_command` hook to `amoeba handle-pause` runs back to back.
+   **Value:** User value. The PM can register a repo with one command, see what needs a decision at a glance, and read every result without a JSON viewer. A repo's rules work with no setup.
+   **Success Criteria:**
+   - Every command prints text by default and the same result as JSON with `-j`; `list --json` returns the full status report.
+   - `amoeba add` in a repo with a Context Forge project registers it with no other flag; with none, it is a clear error.
+   - A member with no named rules reads whichever of `CLAUDE.md` and `AGENTS.md` exist at the committed target, each section once; neither existing is `sources_missing` and names what was tried.
+   - A rules entry the member named that matches nothing still fails; an entry from the config default never does.
+   - Every setting of a member can be set from the CLI; only `config.yaml` is edited by hand.
+   - After the hook change, a real paused run in a fixture pipeline is handled through `amoeba handle-pause`; the old name is gone from the code, docs and hook.
+   **Dependencies:** 226 and 228.
+   **Interfaces:** Provides the renamed commands and tools, `add`, `rm`, `list`, and the default rules; 227 uses these names.
+   **Risk Level:** Medium. Renames every command and the live hook; a migration adds one column to `members`.
+   **Relative Effort:** 4
+
 ## Scenario B
 
-9. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member and commit and holding the commit's current version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
+10. [ ] **(227) Program Dependencies** — Scenario B. `report_release` records what this member released (commit, version if any, what changed and what it touched), keyed on member and commit and holding the commit's current version, so a repeat changes nothing and a later tag on a reported commit adds the version. `changes` returns what this member's dependencies reported since a starting point the caller gives, filtered by each pair's `consumed`, with nothing marked read. Both are added to the CLI and MCP. The two rule lines (consumer: call `changes` before designing; provider: call `report_release`, and the same line in the release skill) are written as text a member pastes into its own rules file.
    **Value:** User value. A repo designing a slice sees what changed upstream without the PM relaying it.
    **Success Criteria:**
    - A `from_source` consumer sees a provider's merge report; a `from_release` consumer sees it only once it has a version.
@@ -151,17 +167,17 @@ Slice numbers are execution order. The first slice takes the plan's index (220).
    - Two worktrees calling `changes` from different starting points each see everything since their own point.
    - The rule block's own git commands, run in fixture repos, give a starting point that still sees a provider's report, including after a rebase; a live test runs both operations against real Context Forge. No step waits on real use.
    - A wrong report is corrected in place or withdrawn, and a corrected one is visible again to consumers whose starting point predates the correction.
-   **Dependencies:** 226 and 228.
-   **Required fixes to the existing design:** `report_release` has a correct/replace flag so a wrong `touched` list can be fixed; a provider missing from `cf list projects` is a warning, not exit 3, and `set_up remove` (228) clears stale pairs; `changes` takes its starting point from an explicit argument, with the git author time of the previous slice design as the hint (no stored marker, so parallel worktrees never hide changes from each other); the integration check is an automated fixture test, not a real design run in the PM's repos.
+   **Dependencies:** 226, 228 and 229.
+   **Required fixes to the existing design:** the commands use 229's names: the CLI says `report-release` and `changes` with text output and `-j`, the MCP tools stay `report_release` and `changes`; `report_release` has a correct/replace flag so a wrong `touched` list can be fixed; a provider missing from `cf list projects` is a warning, not exit 3, and `set_up remove` (228) clears stale pairs; `changes` takes its starting point from an explicit argument, with the git author time of the previous slice design as the hint (no stored marker, so parallel worktrees never hide changes from each other); the integration check is an automated fixture test, not a real design run in the PM's repos.
    **Interfaces:** Provides `report_release`, `changes` and the rule-line text.
    **Risk Level:** Medium. Nothing forces an agent to follow a rule line.
    **Relative Effort:** 3
 
 ## Implementation Order
 
-`220 → 221 → 222 → 223 → 224 → 225 → 228 → 226 → 227`.
+`220 → 221 → 222 → 223 → 224 → 225 → 228 → 226 → 229 → 227`.
 
-- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 228 comes before 226 and 227 because they read the home layout and the question states it changes. 227 needs 226 and 228.
+- **Dependencies.** Each slice builds on the one before through 224. 226 needs the operations it wraps. 228 comes before 226 and 227 because they read the home layout and the question states it changes. 229 renames what 226 built and changes `set_up`, so it comes after 226 and before 227, which then uses the new names. 227 needs 226, 228 and 229.
 - **Risk.** 223 is the riskiest and the test of the design, so it comes right after the base it needs and before anything else new.
 - **Parallel work.** 226 can run beside 225, since 225 is only setup and a sanity pass.
 
