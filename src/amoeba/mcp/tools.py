@@ -81,11 +81,17 @@ TOOLS: Final = (
         takes_directory=True,
         mode=RunMode.IN_PROCESS,
         description=(
-            "Register the repository at `directory` (or the Context Forge project "
-            "`project` names) as a member of a program, with its rules, authorize "
-            "lists, dependencies and concept. `bulk` takes a whole multi-member "
-            "request instead of the single-member fields. Same request and result "
-            "as `amoeba add`."
+            "Register a repository so Amoeba answers its runs' questions. The repo is "
+            "the one at `directory` (or the Context Forge project `project` names). "
+            "It becomes a member of a program, a group of related repos Amoeba "
+            "answers across; `program` names it, and with none the repo joins its "
+            "current program or starts a one-member program. Nothing else is "
+            "needed: the repo's CLAUDE.md and AGENTS.md are read as its rules. "
+            "Optional `rules_paths` (or `rules_default`), `authorize_allow` and "
+            "`authorize_deny`, `depends_on` (another member this one consumes) and "
+            "`concept` refine that. `bulk` takes a whole multi-member request "
+            "instead of the single-member fields. Same request and result as "
+            "`amoeba add`."
         ),
         timeout_advice=WRITE_ADVICE,
     ),
@@ -132,8 +138,10 @@ TOOLS: Final = (
         takes_directory=False,
         mode=RunMode.IN_PROCESS,
         description=(
-            "Answers recorded since the PM's marker, or since a time, with who gave "
-            "each and through which door. Give its `read_through` to `mark_read`."
+            "What was decided while the PM was away: answers recorded since the "
+            "PM's read marker (the point they last marked as read), or since a "
+            "time, with who gave each and through which door. Give its "
+            "`read_through` to `mark_read`."
         ),
         timeout_advice=READ_ADVICE,
     ),
