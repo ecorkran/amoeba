@@ -12,7 +12,7 @@ riskLevel: medium
 audience: [human, ai]
 description: Architecture for Amoeba as a tool that agents and pipelines call. No Amoeba process stays running. Squadron optionally starts a short-lived Amoeba command when a run pauses; Amoeba answers through the answering pipeline and starts the resume, or records the question as waiting on the PM. Squadron never requires Amoeba. Members report their own releases through their agents, and run and slice state are read from Squadron and Context Forge rather than mirrored. Revised 20261106 and 20261107 from two architecture reviews and PM notes.
 dateCreated: 20261106
-dateUpdated: 20261112
+dateUpdated: 20261113
 status: in_progress
 ---
 
@@ -37,7 +37,7 @@ Amoeba today is a resident supervisor: a long-running process that launches and 
 ## Architectural Principles
 
 - **Read, don't mirror.** The store holds only what nobody else holds: the question and answer record, program membership and dependencies, reported releases, and the PM's read marker. Run state stays in Squadron and slice state in Context Forge.
-- **One operation, two doors.** MCP and the CLI are thin layers over the same operations, with the same names and no logic of their own. The only difference is that long work over MCP starts a detached CLI process and returns at once.
+- **One operation, two doors.** MCP and the CLI are thin layers over the same operations, with no logic of their own. The names come from one list: snake_case on MCP and in JSON (`handle_pause`), kebab-case on the CLI (`handle-pause`). The CLI prints text by default and the operation's result with `-j` (slice 229). The only difference is that long work over MCP starts a detached CLI process and returns at once.
 - **Called, never calling around.** Amoeba starts no work, and the only run it resumes is the one that asked. It never walks the dependency graph.
 - **Pull, never push.** Amoeba sends no notifications. A question waiting on the PM is a row in the store that agents read. Getting it to the PM is the job of chat and agent communication.
 - **Squadron never depends on Amoeba.** Each Squadron change is general and off unless configured. Nothing in Squadron's built-in pipelines, skills or docs assumes Amoeba exists. Only repos that join a program carry anything that mentions it.
@@ -96,7 +96,9 @@ The cost is that a missed hook leaves a question waiting (machine asleep, comman
 | `mark_read` | An agent | Moves the PM's marker for `decisions` forward to the last record the caller saw | C |
 | `report_release` | An agent or release skill | Records what this member released and what that touched; the same operation corrects a report's text or withdraws it | B |
 | `changes` | An agent | What this member's dependencies reported since a point the caller gives | B |
-| `set_up` | An agent | Registers programs, members, dependencies and per-member settings | Set-up |
+| `add` | An agent or the PM | Registers a repo as a program member, with its settings, dependencies and concept; `bulk` registers several (slice 229, replaces `set_up`) | Set-up |
+| `rm` | An agent or the PM | Removes a member, a dependency pair or a program's concept (slice 229; the removal half of `set_up`) | Set-up |
+| `list` | The PM, an agent | The person's view: what needs the PM, with `--all` what is running and settled, and what is registered (programs, members, dependencies) (slice 229) | A, C |
 
 **3. Dependencies and releases.** Set-up declares which members a member depends on, as member-to-member pairs. Each repo reports its own releases, because only the repo that made a change knows what it means. A report holds the commit, a version if there is one, what changed and what that touched.
 
