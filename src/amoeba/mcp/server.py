@@ -49,11 +49,29 @@ SERVER_NAME: Final = "amoeba"
 #: Exit status of ``amoeba-mcp`` when it refuses to start.
 EXIT_START_FAILED: Final = 1
 INSTRUCTIONS: Final = (
+    "Amoeba keeps unattended Squadron pipeline runs moving. When a run pauses on a "
+    "question, Amoeba answers it from the project's own rules, plan and the PM's "
+    "earlier answers when those settle it, and records every answer and every "
+    "decline. Questions they do not settle wait for the PM. Use these tools when the "
+    "PM asks what is waiting, wants to answer a waiting question, wants to know what "
+    "was decided while away, or wants a repo registered. Several repos form a "
+    "program, and Amoeba answers across it.\n\n"
     "These tools are the `amoeba` command's operations, with the same inputs and "
-    "results. `handle_pause` starts the work and returns a receipt; its result lands "
-    "in the receipt's stdout log. `status` gives the `run_id` and `directory` for "
-    "`handle_pause` and the question key for `answer`. `answer` carries only a "
-    "decision the PM actually gave, passed on as given, never one you composed."
+    "results.\n"
+    "- What needs the PM, or what is registered: `list` (or `status`). Its listing "
+    "gives the `run_id` and `directory` for `handle_pause` and the question key for "
+    "`answer`.\n"
+    "- The PM gives a decision on a waiting question: `answer`. It carries only a "
+    "decision the PM actually gave, passed on as given, never one you composed, "
+    "because it becomes precedent for later questions. `retract` stops an answer "
+    "being precedent; `dismiss` closes a question that has no answer to deliver.\n"
+    "- What was decided while the PM was away: `decisions`, then `mark_read` with "
+    "its `read_through`.\n"
+    "- Register or unregister a repo: `add` and `rm`. `add` needs only the "
+    "directory; the repo's CLAUDE.md and AGENTS.md are read as its rules.\n"
+    "- `handle_pause` is normally started by Squadron's pause hook, not by you. It "
+    "starts the work and returns a receipt; its result lands in the receipt's "
+    "stdout log."
 )
 #: Failures reported as ``<ExceptionName>: <message>``: the operational errors, an
 #: ``answer`` refused for a config the deadline cannot cover, and the two ways a
