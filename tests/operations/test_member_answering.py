@@ -5,9 +5,11 @@ from __future__ import annotations
 import pytest
 from user_configs import DEPLOY, MERGE_TO_MAIN, PUSH, user_config
 
+from amoeba.answering.settings import RulesChoice
 from amoeba.config.user_config import ConfigError
 from amoeba.operations.member_answering import answering_for
 from amoeba.store.models import MemberSettings
+from amoeba.store.vocabulary import RulesFrom
 
 
 def _member(
@@ -16,12 +18,14 @@ def _member(
     allow: tuple[str, ...] = (),
     deny: tuple[str, ...] = (),
     rules_paths: tuple[str, ...] = ("CLAUDE.md",),
+    rules_from: RulesFrom = RulesFrom.NAMED,
 ) -> MemberSettings:
     return MemberSettings(
         project_id=project_id,
         rules_paths=rules_paths,
         authorize_allow=allow,
         authorize_deny=deny,
+        rules_from=rules_from,
     )
 
 
@@ -75,7 +79,9 @@ def test_config_and_member_fields_reach_the_settings() -> None:
         _member(rules_paths=("CLAUDE.md", "docs/*.md")), config
     ).settings
 
-    assert settings.rules_paths == ("CLAUDE.md", "docs/*.md")
+    assert settings.rules == RulesChoice(
+        entries=("CLAUDE.md", "docs/*.md"), optional=False
+    )
     assert settings.answer_limit == config.answer_limit
     assert settings.passages_max_chars == config.passages_max_chars
     assert settings.answer_model == config.answer_model
@@ -83,9 +89,38 @@ def test_config_and_member_fields_reach_the_settings() -> None:
     assert settings.max_cost_usd == config.max_cost_usd
 
 
+def test_a_named_member_gets_its_stored_entries_as_required() -> None:
+    rules = answering_for(_member(rules_paths=("docs/rules.md",)), user_config())
+
+    assert rules.settings.rules == RulesChoice(
+        entries=("docs/rules.md",), optional=False
+    )
+
+
+def test_a_named_member_with_no_entries_has_an_empty_required_choice() -> None:
+    rules = answering_for(_member(rules_paths=()), user_config())
+
+    assert rules.settings.rules == RulesChoice(entries=(), optional=False)
+
+
+def test_a_default_member_gets_the_configs_current_entries_as_optional() -> None:
+    member = _member(rules_paths=(), rules_from=RulesFrom.CONFIG_DEFAULT)
+
+    rules = answering_for(member, user_config())
+
+    assert rules.settings.rules == RulesChoice(
+        entries=("CLAUDE.md", "AGENTS.md"), optional=True
+    )
+
+
 @pytest.mark.parametrize("field", ["allow", "deny"])
 def test_an_unknown_authorize_key_names_member_and_key(field: str) -> None:
-    member = _member("member-7", **{field: ("retired_item",)})
+    retired = ("retired_item",)
+    member = _member(
+        "member-7",
+        allow=retired if field == "allow" else (),
+        deny=retired if field == "deny" else (),
+    )
 
     with pytest.raises(ConfigError, match=r"member-7.*retired_item"):
         answering_for(member, user_config())

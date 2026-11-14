@@ -2,9 +2,9 @@
 models (slice 224, task 5.3).
 
 A throwaway member (its own Context Forge data directory and ``AMOEBA_HOME``) runs
-real pipelines that pause on a question. ``amoeba status``, ``handle_pause``,
-``decisions``, ``mark_read`` and ``answer`` are the real commands. A wrong result fails
-the test; nothing is retried.
+real pipelines that pause on a question. ``amoeba status``, ``list``,
+``handle-pause``, ``decisions``, ``mark-read`` and ``answer`` are the real commands.
+A wrong result fails the test; nothing is retried.
 """
 
 from __future__ import annotations
@@ -18,7 +18,13 @@ from live_settings import LiveSettings
 
 from amoeba.upstream.squadron.launch import mint_run_id
 from amoeba.upstream.squadron.run_outcome import RunOutcome, RunOutcomeDocument
-from live.pause.harness import PauseWorld, result_of, run_amoeba, start_pause
+from live.pause.harness import (
+    PauseWorld,
+    inert_hook,
+    result_of,
+    run_amoeba,
+    start_pause,
+)
 
 UNSETTLED_PIPELINE = Path(__file__).parent / "asks_unsettled_question.yaml"
 
@@ -61,7 +67,7 @@ def test_the_walkthrough(
     pause_world: PauseWorld, live_settings: LiveSettings, tmp_path: Path
 ) -> None:
     del live_settings
-    world = pause_world
+    world = inert_hook(pause_world)
 
     # Step 2: a missed hook. With no hook the run pauses and nothing records it.
     settled_run = mint_run_id(datetime.now(UTC))
@@ -77,7 +83,7 @@ def test_the_walkthrough(
     assert entry["next"]["paused_at"] == original_pause
 
     # Step 3: catch up from that directory.
-    handled = _amoeba(world, "handle_pause", settled_run)
+    handled = _amoeba(world, "handle-pause", settled_run)
     assert handled["outcome"] == "resumed", handled
     after = _amoeba(world, "status")
     caught_up = _run_entry(after, settled_run)
@@ -102,12 +108,12 @@ def test_the_walkthrough(
     assert isinstance(read_through, int)
 
     # Step 5: mark read.
-    moved = _amoeba(world, "mark_read", "--through", str(read_through))
+    moved = _amoeba(world, "mark-read", "--through", str(read_through))
     assert moved["outcome"] == "moved", moved
     empty = _amoeba(world, "decisions")
     assert empty["records"] == []
     assert empty["read_through"] is None
-    beyond = _amoeba(world, "mark_read", "--through", "999999", expect=1)
+    beyond = _amoeba(world, "mark-read", "--through", "999999", expect=1)
     assert beyond["rejection"] == "beyond_last_record"
 
     # Step 6: a pause the rules do not settle waits on the PM.
@@ -115,7 +121,7 @@ def test_the_walkthrough(
     waiting_pause = _paused(
         start_pause(world, waiting_run, opt_out=True, pipeline=UNSETTLED_PIPELINE)
     )
-    declined = _amoeba(world, "handle_pause", waiting_run)
+    declined = _amoeba(world, "handle-pause", waiting_run)
     assert declined["outcome"] == "waiting_on_pm", declined
     reason = declined["waiting_reason"]
     shown = _amoeba(world, "status")
@@ -133,8 +139,25 @@ def test_the_walkthrough(
         "paused_at": waiting_pause,
         "directory": None,
     }
+    # ``list`` is the same view for a person: ``-j`` is the status document, the text
+    # names the question and the command that answers it.
+    # (Runs from earlier steps may still be moving, so the waiting question, not the
+    # whole document, is compared; the documents' equality is the CLI tests'.)
+    assert (
+        _member(_amoeba(world, "list"))["waiting_on_pm"]
+        == (_member(shown)["waiting_on_pm"])
+    )
+    text = run_amoeba(world, "list", as_json=False).stdout
+    assert "Waiting on you" in text, text
+    assert f"amoeba answer {waiting_run} --paused-at {waiting_pause}" in text, text
     answered = _amoeba(world, "answer", waiting_run, "--text", "Use teal.")
     assert answered["outcome"] == "recorded", answered
+    # Once answered and handed back, the question is settled: ``list --all`` has it.
+    assert answered["resume"]["outcome"] == "resumed", answered
+    settled = _amoeba(world, "list", "--all")["settled"]
+    (settled_entry,) = [item for item in settled if item["run_id"] == waiting_run]
+    assert settled_entry["ended"] == "pm", settled_entry
+    assert "Settled" in run_amoeba(world, "list", "--all", as_json=False).stdout
     final = _amoeba(world, "decisions")
     (pm_record,) = final["records"]
     assert pm_record["answered_by"] == "pm"

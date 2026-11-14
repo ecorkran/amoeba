@@ -15,6 +15,7 @@ from amoeba import wiring
 from amoeba.config.home import HOME_VARIABLE
 from amoeba.mcp import server
 from amoeba.mcp.detached import AmoebaScriptMissing
+from amoeba.operations.mark_read import MarkReadResult
 from amoeba.operations.names import Door, OperationName
 from amoeba.store.errors import StoreRelocateError
 
@@ -157,6 +158,7 @@ def test_two_first_calls_at_once_both_succeed_and_the_state_moves_once(
 ) -> None:
     def call() -> str:
         result = wiring.invoke(OperationName.MARK_READ, {"through": 0}, None, Door.MCP)
+        assert isinstance(result, MarkReadResult)
         return result.outcome.value
 
     with ThreadPoolExecutor(max_workers=2) as pool:

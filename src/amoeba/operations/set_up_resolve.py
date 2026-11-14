@@ -44,6 +44,8 @@ class ResolvedMember:
     project_id: str
     #: ``None`` means omitted: leave the stored value.
     rules_paths: tuple[str, ...] | None
+    #: Return the member to the config's default rules.
+    rules_default: bool
     authorize_allow: tuple[str, ...] | None
     authorize_deny: tuple[str, ...] | None
     depends_on: tuple[ResolvedDependency, ...]
@@ -167,6 +169,7 @@ def resolve_request(request: SetUpRequest, directory: Path, run: CfRun) -> Resol
                 index=index,
                 project_id=project.id,
                 rules_paths=entry.rules_paths,
+                rules_default=entry.rules_default,
                 authorize_allow=entry.authorize_allow,
                 authorize_deny=entry.authorize_deny,
                 depends_on=tuple(dependencies),

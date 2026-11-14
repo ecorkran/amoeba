@@ -14,7 +14,6 @@ and ``state_home()``; the store is opened only through ``open_state_store``.
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +34,12 @@ from amoeba.operations.answering_run import STDERR_LOG_SUFFIX, STDOUT_LOG_SUFFIX
 from amoeba.operations.decisions import DecisionsOutcome, DecisionsResult, decisions
 from amoeba.operations.deps import Deps, production_deps
 from amoeba.operations.dismiss import DismissOutcome, DismissResult, dismiss
+from amoeba.operations.list_registry import (
+    DependenciesView,
+    MembersView,
+    ProgramsView,
+)
+from amoeba.operations.list_view import ListResult
 from amoeba.operations.mark_read import MarkReadOutcome, MarkReadResult, mark_read
 from amoeba.operations.members import ContextForgeError
 from amoeba.operations.names import Door, OperationName
@@ -43,7 +48,6 @@ from amoeba.operations.prune import prune
 from amoeba.operations.prune_models import Prune, PruneReport
 from amoeba.operations.resume import LOG_STAMP_FORMAT, resume_bound_seconds
 from amoeba.operations.retract import RetractOutcome, RetractResult, retract
-from amoeba.operations.set_up import set_up
 from amoeba.operations.set_up_models import SetUpOutcome, SetUpResult
 from amoeba.operations.state_move import open_state_store, prepare_state_home
 from amoeba.operations.status import StatusOutcome, StatusResult, status
@@ -51,6 +55,7 @@ from amoeba.store.errors import StoreError
 from amoeba.store.store import BUSY_TIMEOUT_SECONDS, Store
 from amoeba.upstream.squadron.errors import SquadronError
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
+from amoeba.wiring_registry import place_add, place_list, place_rm
 
 __all__ = [
     "OPERATIONAL_ERRORS",
@@ -92,6 +97,10 @@ OPERATIONAL_ERRORS: Final = (
 #: What ``invoke`` returns: the in-process operations' results.
 type OperationResult = (
     SetUpResult
+    | ListResult
+    | ProgramsView
+    | MembersView
+    | DependenciesView
     | AnswerResult
     | StatusResult
     | DecisionsResult
@@ -165,7 +174,8 @@ def invoke(
 
     Opens the store (after the legacy move), places the arguments exactly as the CLI
     always has, and closes the store whether the operation returns or raises.
-    ``directory`` is the caller's checkout: required by ``set_up`` and ``status``,
+    ``directory`` is the caller's checkout: required by ``add``, ``rm``, ``list`` and
+    ``status``,
     ignored by the others. ``door`` is the interface that carried the call.
 
     Raises:
@@ -176,13 +186,21 @@ def invoke(
     layout = state_layout()
     with open_store(layout) as store:
         match name:
-            case OperationName.SET_UP:
-                return set_up(
+            case OperationName.ADD:
+                return place_add(
+                    store, load_config(), document, _required_directory(name, directory)
+                )
+            case OperationName.RM:
+                return place_rm(
+                    store, load_config(), document, _required_directory(name, directory)
+                )
+            case OperationName.LIST:
+                return place_list(
                     store,
                     load_config(),
                     document,
-                    directory=_required_directory(name, directory),
-                    run=subprocess.run,
+                    _required_directory(name, directory),
+                    default_deps(layout),
                 )
             case OperationName.ANSWER:
                 return answer(
@@ -280,6 +298,8 @@ def check_deadline(config: UserConfig, deadline_seconds: float) -> None:
 
 def result_document(result: OperationResult) -> dict[str, object]:
     """``result`` as the JSON document both doors give: enums are strings."""
+    if isinstance(result, ListResult):
+        return result.document()
     if isinstance(result, BaseModel):
         return result.model_dump(mode="json")
     document: dict[str, object] = json.loads(json.dumps(asdict(result)))
@@ -291,6 +311,7 @@ def is_rejected(result: OperationResult) -> bool:
     match result:
         case (
             SetUpResult(outcome=SetUpOutcome.REJECTED)
+            | ListResult(status=StatusResult(outcome=StatusOutcome.REJECTED))
             | AnswerResult(outcome=AnswerOutcome.REJECTED)
             | StatusResult(outcome=StatusOutcome.REJECTED)
             | DecisionsResult(outcome=DecisionsOutcome.REJECTED)

@@ -18,6 +18,7 @@ from amoeba.operations.prune_models import PruneReport
 from amoeba.store.models import Member, MemberSettings
 from amoeba.store.programs import get_member, upsert_member, upsert_program
 from amoeba.store.store import Store
+from amoeba.store.vocabulary import RulesFrom
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
 from amoeba.upstream.context_forge.projects import ProjectNames
 from amoeba.upstream.squadron.launch import LaunchError, LaunchLogs
@@ -192,6 +193,7 @@ def register_member(
                 rules_paths=rules_paths,
                 authorize_allow=(),
                 authorize_deny=(),
+                rules_from=RulesFrom.NAMED,
             ),
             now=START,
         )

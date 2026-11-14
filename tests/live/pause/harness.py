@@ -14,7 +14,7 @@ import os
 import sqlite3
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
@@ -42,6 +42,8 @@ SQ_RUN_TIMEOUT_SECONDS: Final = 600
 LAUNCHER_EXIT_GRACE_SECONDS: Final = 30.0
 ANSWERING_WAIT_SECONDS: Final = 600
 RESUME_WAIT_SECONDS: Final = 120
+PROGRAM_ID: Final = "live-pause"
+CF_PROJECT_NAME: Final = "amoeba-live-pause"
 RULE_FILE: Final = "CLAUDE.md"
 RULE_TEXT: Final = (
     "# Rules\n\nSource files are kept to about 300 lines. Split a file that grows "
@@ -91,21 +93,36 @@ def build_world(
         "CONTEXT_FORGE_DATA_DIR": str(data_dir),
         "AMOEBA_HOME": str(amoeba_home),
     }
-    _run(["cf", "init", "--lite", "--name", "amoeba-live-pause"], repo, environ)
+    _run(["cf", "init", "--lite", "--name", CF_PROJECT_NAME], repo, environ)
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "cf init", check=False)
     world = PauseWorld(repo, environ, amoeba_home, settings)
     _write_config(world, passages_max_chars)
-    request = parent / "set_up.yaml"
-    request.write_text(
-        yaml.safe_dump(
-            {"program": "live-pause", "members": [{"rules_paths": [RULE_FILE]}]}
-        ),
-        encoding="utf-8",
+    # No rules flag: the member reads the config's default rules (229 D7), which for
+    # this repo is its CLAUDE.md (an absent AGENTS.md is skipped).
+    registered = run_amoeba(
+        world, "add", "--program", PROGRAM_ID, "--project", CF_PROJECT_NAME
     )
-    registered = run_amoeba(world, "set_up", "--file", str(request))
     assert registered.returncode == 0, registered.stderr + registered.stdout
     return world
+
+
+def inert_hook(world: PauseWorld) -> PauseWorld:
+    """``world`` with a do-nothing ``amoeba`` first on ``PATH``.
+
+    The user-level Squadron hook is the bare command ``amoeba handle-pause``. Without
+    this, a run resumed by a test would pause again and the real, installed ``amoeba``
+    would handle it behind the test's back. Every call the tests make goes by the
+    absolute ``AMOEBA`` path, so only the hook meets the stub. A test that wants the
+    hook sets a project-level command with the absolute path instead.
+    """
+    stub_dir = world.repo.parent / "hook-stub"
+    stub_dir.mkdir(exist_ok=True)
+    stub = stub_dir / "amoeba"
+    stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    stub.chmod(0o755)
+    path = str(stub_dir) + os.pathsep + world.environ["PATH"]
+    return replace(world, environ={**world.environ, "PATH": path})
 
 
 def _write_config(world: PauseWorld, passages_max_chars: int | None) -> None:
@@ -138,10 +155,20 @@ def _run(argv: list[str], cwd: Path, environ: dict[str, str]) -> None:
 
 
 def run_amoeba(
-    world: PauseWorld, *arguments: str, cwd: Path | None = None
+    world: PauseWorld,
+    *arguments: str,
+    cwd: Path | None = None,
+    as_json: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     """``amoeba <arguments>`` with the world's environment, in the member checkout
-    unless ``cwd`` names another directory."""
+    unless ``cwd`` names another directory.
+
+    Always the absolute ``AMOEBA`` path, never the bare name, which on ``PATH`` may be
+    another install. ``as_json`` puts ``-j`` after the command name, so the tests read
+    the result documents; ``as_json=False`` is the text a person reads.
+    """
+    if as_json and arguments and not arguments[0].startswith("-"):
+        arguments = (arguments[0], "-j", *arguments[1:])
     child = contained_popen(
         [str(AMOEBA), *arguments],
         stdin=subprocess.DEVNULL,
@@ -163,7 +190,7 @@ def question_pipeline(
 
     Same shape as ``asks_question.yaml`` (a ``dispatch`` that declares an artifact and
     writes none, so a reply ending on a question pauses the run). ``sliced`` adds a
-    required ``slice`` parameter, the run parameter ``handle_pause`` reads.
+    required ``slice`` parameter, the run parameter ``handle-pause`` reads.
     """
     params = (
         {"slice": "required", PIPELINE_MODEL_PARAM: "required"}

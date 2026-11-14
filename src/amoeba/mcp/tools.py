@@ -3,7 +3,7 @@
 ``TOOLS`` is the one list of what the server offers. A tool's name is its
 operation's name, its schema is the operation's own request model, and its arguments
 reach the operation unvalidated (the operation validates, 222 D7). The only thing
-this module adds to a request is ``directory``, for the three operations that need
+this module adds to a request is ``directory``, for the operations that need
 the caller's checkout, because an MCP session can start anywhere and the server never
 reads its own working directory.
 """
@@ -18,14 +18,16 @@ from typing import Any, Final
 
 from pydantic import BaseModel
 
+from amoeba.operations.add import AddRequest
 from amoeba.operations.answer import AnswerRequest
 from amoeba.operations.decisions import DecisionsRequest
 from amoeba.operations.dismiss import DismissRequest
 from amoeba.operations.handle_pause_call import HandlePauseCall
+from amoeba.operations.list_view import ListRequest
 from amoeba.operations.mark_read import MarkReadRequest
 from amoeba.operations.names import OperationName
 from amoeba.operations.retract import RetractRequest
-from amoeba.operations.set_up_models import SetUpRequest
+from amoeba.operations.rm import RmRequest
 from amoeba.operations.status import StatusRequest
 
 #: The argument that names the caller's checkout, for the tools that take one.
@@ -74,15 +76,43 @@ class ToolSpec:
 
 TOOLS: Final = (
     ToolSpec(
-        name=OperationName.SET_UP,
-        request_model=SetUpRequest,
+        name=OperationName.ADD,
+        request_model=AddRequest,
         takes_directory=True,
         mode=RunMode.IN_PROCESS,
         description=(
-            "Register or update a program, its members and their dependencies. "
-            "Same request and result as `amoeba set_up`."
+            "Register the repository at `directory` (or the Context Forge project "
+            "`project` names) as a member of a program, with its rules, authorize "
+            "lists, dependencies and concept. `bulk` takes a whole multi-member "
+            "request instead of the single-member fields. Same request and result "
+            "as `amoeba add`."
         ),
         timeout_advice=WRITE_ADVICE,
+    ),
+    ToolSpec(
+        name=OperationName.RM,
+        request_model=RmRequest,
+        takes_directory=True,
+        mode=RunMode.IN_PROCESS,
+        description=(
+            "Remove members, dependency pairs or a program's concept; with nothing "
+            "named, the repository at `directory`. Same request and result as "
+            "`amoeba rm`."
+        ),
+        timeout_advice=WRITE_ADVICE,
+    ),
+    ToolSpec(
+        name=OperationName.LIST,
+        request_model=ListRequest,
+        takes_directory=True,
+        mode=RunMode.IN_PROCESS,
+        description=(
+            "With no `subject`, what needs the PM: the same result as `status`, and "
+            "with `all` also what settled recently. `programs`, `members` or "
+            "`dependencies` show what is registered. Same request and result as "
+            "`amoeba list -j`."
+        ),
+        timeout_advice=READ_ADVICE,
     ),
     ToolSpec(
         name=OperationName.STATUS,

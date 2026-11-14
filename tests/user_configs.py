@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from amoeba.config.user_config import NotAuthorizedItem, UserConfig
+from amoeba.store.vocabulary import ConsumedMode
 
 CONFIG_CONTRACT = Path(__file__).parents[1] / "docs" / "config-contract.md"
 
@@ -51,5 +52,7 @@ def user_config(
         answering_wait_seconds=600,
         resume_wait_seconds=60,
         prune_after_days=30,
+        default_rules_paths=("CLAUDE.md", "AGENTS.md"),
+        default_consumed=ConsumedMode.FROM_SOURCE,
         authorize_items=authorize_items,
     )

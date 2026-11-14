@@ -24,6 +24,7 @@ from pydantic import (
 
 from amoeba.config.user_config import NonBlank, UserConfig
 from amoeba.operations.deps import Deps
+from amoeba.operations.names import PROGRAM_NAME, OperationName
 from amoeba.operations.pause_models import ResumeResult
 from amoeba.operations.resume import resume
 from amoeba.store.answers import add_pm_answer, record_resume
@@ -93,7 +94,8 @@ def answer(
             return _rejected(
                 AnswerRejection.NO_SUCH_QUESTION,
                 (
-                    f"no question for run {request.run_id}: run `amoeba handle_pause "
+                    f"no question for run {request.run_id}: run "
+                    f"`{PROGRAM_NAME} {OperationName.HANDLE_PAUSE.cli_name} "
                     f"{request.run_id}` from the run's checkout first",
                 ),
             )

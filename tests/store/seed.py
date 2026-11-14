@@ -14,7 +14,12 @@ from amoeba.answering.values import AnsweredBy
 from amoeba.store import sql
 from amoeba.store.row_values import encode_string_list, encode_timestamp
 from amoeba.store.store import Transaction
-from amoeba.store.vocabulary import ConsumedMode, QuestionState, ResumeOutcome
+from amoeba.store.vocabulary import (
+    ConsumedMode,
+    QuestionState,
+    ResumeOutcome,
+    RulesFrom,
+)
 
 
 def insert_program(
@@ -48,6 +53,7 @@ def insert_member(
     authorize_deny: tuple[str, ...],
     registered_at: datetime,
     updated_at: datetime,
+    rules_from: RulesFrom = RulesFrom.NAMED,
 ) -> None:
     transaction.execute(
         sql.INSERT_MEMBER,
@@ -59,6 +65,7 @@ def insert_member(
             encode_string_list(authorize_deny),
             encode_timestamp(registered_at),
             encode_timestamp(updated_at),
+            rules_from,
         ),
     )
 

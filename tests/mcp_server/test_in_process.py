@@ -17,6 +17,7 @@ from user_configs import example_config_text
 from wiring_support import is_closed, record_opened_stores
 
 from amoeba import wiring
+from amoeba.cli import commands
 from amoeba.cli import main as cli
 from amoeba.config.home import config_path
 from amoeba.mcp import in_process
@@ -38,23 +39,28 @@ IN_PROCESS_TOOLS = [tool for tool in TOOLS if tool.mode is RunMode.IN_PROCESS]
 REQUEST_FILE = "<request file>"
 #: Each in-process tool: its CLI arguments and the same input as MCP arguments.
 CASES: dict[OperationName, tuple[list[str], dict[str, object]]] = {
-    OperationName.SET_UP: (["set_up", "--file", REQUEST_FILE], {"program": "trial"}),
-    OperationName.STATUS: (["status", "--program", "p"], {"program": "p"}),
+    OperationName.ADD: (
+        ["add", "--file", REQUEST_FILE, "-j"],
+        {"bulk": {"program": "trial"}},
+    ),
+    OperationName.RM: (["rm", "some-member", "-j"], {"members": ["some-member"]}),
+    OperationName.LIST: (["list", "programs", "-j"], {"subject": "programs"}),
+    OperationName.STATUS: (["status", "--program", "p", "-j"], {"program": "p"}),
     OperationName.DECISIONS: (
-        ["decisions", "--since", "2026-11-10T00:00:00+00:00", "--program", "p"],
+        ["decisions", "--since", "2026-11-10T00:00:00+00:00", "--program", "p", "-j"],
         {"since": "2026-11-10T00:00:00+00:00", "program": "p"},
     ),
-    OperationName.MARK_READ: (["mark_read", "--through", "3"], {"through": 3}),
+    OperationName.MARK_READ: (["mark-read", "--through", "3", "-j"], {"through": 3}),
     OperationName.ANSWER: (
-        ["answer", "r1", "--text", "yes"],
+        ["answer", "r1", "--text", "yes", "-j"],
         {"run_id": "r1", "text": "yes"},
     ),
     OperationName.DISMISS: (
-        ["dismiss", "r1", "--reason", "why"],
+        ["dismiss", "r1", "--reason", "why", "-j"],
         {"run_id": "r1", "reason": "why"},
     ),
     OperationName.RETRACT: (
-        ["retract", "7", "--reason", "why"],
+        ["retract", "7", "--reason", "why", "-j"],
         {"answer_seq": 7, "reason": "why"},
     ),
 }
@@ -109,7 +115,7 @@ def test_both_doors_reach_invoke_with_the_same_call(
         calls.append((name, document, directory, door))
         return STUB_RESULT
 
-    monkeypatch.setattr(cli, "invoke", recorder)
+    monkeypatch.setattr(commands, "invoke", recorder)
     monkeypatch.setattr(wiring, "invoke", recorder)
     argv, arguments = CASES[name]
 
@@ -133,7 +139,7 @@ def test_the_real_invoke_gives_the_same_json_through_both_doors(
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
-    cli.main(["mark_read", "--through", "0"])
+    cli.main(["mark-read", "--through", "0", "-j"])
     printed = json.loads(capsys.readouterr().out)
     returned = _call(OperationName.MARK_READ, {"through": 0}, tmp_path)
 
@@ -141,7 +147,7 @@ def test_the_real_invoke_gives_the_same_json_through_both_doors(
     assert returned["outcome"] == "unchanged"
 
 
-def test_a_malformed_set_up_is_a_rejected_result_on_both_doors(
+def test_a_malformed_add_is_a_rejected_result_on_both_doors(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
@@ -150,9 +156,9 @@ def test_a_malformed_set_up_is_a_rejected_result_on_both_doors(
     request = tmp_path / "request.yaml"
     request.write_text("bogus: 1\n", encoding="utf-8")
 
-    code = cli.main(["set_up", "--file", str(request)])
+    code = cli.main(["add", "--file", str(request), "-j"])
     printed = json.loads(capsys.readouterr().out)
-    returned = _call(OperationName.SET_UP, {"bogus": 1}, tmp_path)
+    returned = _call(OperationName.ADD, {"bulk": {"bogus": 1}}, tmp_path)
 
     assert code == cli.EXIT_REJECTED
     assert returned == printed
@@ -293,7 +299,8 @@ def test_the_timed_out_text_carries_that_tools_advice(
     monkeypatch.setattr(wiring, "check_deadline", no_check)
     advice = (
         READ_ADVICE
-        if tool.name in {OperationName.STATUS, OperationName.DECISIONS}
+        if tool.name
+        in {OperationName.STATUS, OperationName.DECISIONS, OperationName.LIST}
         else WRITE_ADVICE
     )
 

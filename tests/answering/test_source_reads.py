@@ -15,6 +15,7 @@ from amoeba.answering.passages import (
     SourcesProblem,
     SourcesProblemKind,
 )
+from amoeba.answering.settings import RulesChoice
 from amoeba.answering.source_reads import (
     CommittedSources,
     SliceRef,
@@ -47,9 +48,10 @@ SLICE_132_PATHS = [
     "project-documents/user/slices/132-slice.pipeline-supervisor.md",
     "project-documents/user/tasks/132-tasks.pipeline-supervisor.md",
 ]
-#: 2 + L + 2F for the fixture: L = 6 listings (root, rules directory, four plan
-#: directories), F = 9 files, so 2 + 6 + 2 * 9.
-SLICE_132_CALLS = 26
+#: 2 + L + E + 2F for the fixture: L = 6 listings (root, rules directory, four plan
+#: directories), E = 1 existence check (the rules directory's ``ls-tree``), F = 9
+#: files, so 2 + 6 + 1 + 2 * 9.
+SLICE_132_CALLS = 27
 
 
 @pytest.fixture(scope="module")
@@ -57,25 +59,35 @@ def sources(tmp_path_factory: pytest.TempPathFactory) -> SourcesRepo:
     return build_sources_repo(tmp_path_factory.mktemp("sources") / "repo")
 
 
+def _choice(rules: tuple[str, ...], optional: bool) -> RulesChoice:
+    return RulesChoice(entries=rules, optional=optional)
+
+
 def _locate(
     repo: Path,
     *,
     rules: tuple[str, ...] = RULES,
+    optional: bool = False,
     slice_ref: SliceRef = SLICE,
     target: str = "main",
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> SourceSelection | SourcesProblem:
-    return locate_sources(repo, target, slice_ref, rules, run, TIMEOUT)
+    return locate_sources(
+        repo, target, slice_ref, _choice(rules, optional), run, TIMEOUT
+    )
 
 
 def _read(
     repo: Path,
     *,
     rules: tuple[str, ...] = RULES,
+    optional: bool = False,
     max_chars: int = BIG,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> CommittedSources | SourcesProblem:
-    return read_committed_sources(repo, "main", SLICE, rules, max_chars, run, TIMEOUT)
+    return read_committed_sources(
+        repo, "main", SLICE, _choice(rules, optional), max_chars, run, TIMEOUT
+    )
 
 
 def _paths(selection: SourceSelection | SourcesProblem) -> list[str]:
@@ -191,12 +203,12 @@ def test_a_rules_entry_that_matches_nothing_is_missing_and_named(
     assert entry in _problem(result, SourcesProblemKind.MISSING).detail
 
 
-def test_a_rules_entry_in_a_missing_directory_is_unreadable_and_named(
+def test_a_rules_entry_in_a_missing_directory_is_missing_and_named(
     sources: SourcesRepo,
 ) -> None:
     result = _locate(sources.path, rules=("nope/rules.md",))
 
-    assert "nope/rules.md" in _problem(result, SourcesProblemKind.UNREADABLE).detail
+    assert "nope/rules.md" in _problem(result, SourcesProblemKind.MISSING).detail
 
 
 def test_an_absent_plan_directory_matches_nothing(tmp_path: Path) -> None:

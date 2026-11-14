@@ -104,7 +104,9 @@ def _version_one_store_with_rows() -> sqlite3.Connection:
     )
     connection.execute("INSERT INTO programs VALUES ('demo', NULL, NULL, 't', 't')")
     connection.execute(
-        "INSERT INTO members VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't')"
+        "INSERT INTO members (project_id, program_id, rules_paths, authorize_allow, "
+        "authorize_deny, registered_at, updated_at) "
+        "VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't')"
     )
     connection.execute(
         "INSERT INTO questions (run_id, paused_at, member_id, question, checkout, "
@@ -243,8 +245,9 @@ def _version_two_store_with_every_state(
     connection.execute("INSERT INTO programs VALUES ('demo', NULL, NULL, 't', 't')")
     for member in ("m1", "m2"):
         connection.execute(
-            "INSERT INTO members VALUES (?, 'demo', '[\"CLAUDE.md\"]', '[]', '[]', "
-            "'t', 't')",
+            "INSERT INTO members (project_id, program_id, rules_paths, "
+            "authorize_allow, authorize_deny, registered_at, updated_at) "
+            "VALUES (?, 'demo', '[\"CLAUDE.md\"]', '[]', '[]', 't', 't')",
             (member,),
         )
     connection.execute(
@@ -336,7 +339,9 @@ def test_a_closed_question_needs_a_known_reason() -> None:
     migrate(connection)
     connection.execute("INSERT INTO programs VALUES ('demo', NULL, NULL, 't', 't')")
     connection.execute(
-        "INSERT INTO members VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', NULL)"
+        "INSERT INTO members (project_id, program_id, rules_paths, authorize_allow, "
+        "authorize_deny, registered_at, updated_at, removed_at) "
+        "VALUES ('m1', 'demo', '[]', '[]', '[]', 't', 't', NULL)"
     )
     insert = (
         "INSERT INTO questions (run_id, paused_at, member_id, question, checkout, "

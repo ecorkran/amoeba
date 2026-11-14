@@ -26,7 +26,7 @@ from amoeba.store.row_values import (
     vocabulary,
 )
 from amoeba.store.store import Transaction
-from amoeba.store.vocabulary import ConsumedMode
+from amoeba.store.vocabulary import ConsumedMode, RulesFrom
 
 # --- row mapping: positional, in the column order of the sql.py SELECTs -----
 
@@ -49,6 +49,7 @@ def _member(row: Sequence[object]) -> Member:
             rules_paths=decode_string_list(row[2], "members.rules_paths"),
             authorize_allow=decode_string_list(row[3], "members.authorize_allow"),
             authorize_deny=decode_string_list(row[4], "members.authorize_deny"),
+            rules_from=vocabulary(row[8], RulesFrom, "members.rules_from"),
         ),
         registered_at=decode_timestamp(row[5], "members.registered_at"),
         updated_at=decode_timestamp(row[6], "members.updated_at"),
@@ -160,22 +161,38 @@ def upsert_member(
         StoreIntegrityError: The active member already belongs to another program.
     """
     stamp = encode_timestamp(now)
-    lists = (
-        encode_string_list(settings.rules_paths),
-        encode_string_list(settings.authorize_allow),
-        encode_string_list(settings.authorize_deny),
-    )
+    rules_paths = encode_string_list(settings.rules_paths)
+    allow = encode_string_list(settings.authorize_allow)
+    deny = encode_string_list(settings.authorize_deny)
     existing = get_member_any(transaction, settings.project_id)
     if existing is None:
         transaction.execute(
             sql.INSERT_MEMBER,
-            (settings.project_id, program_id, *lists, stamp, stamp),
+            (
+                settings.project_id,
+                program_id,
+                rules_paths,
+                allow,
+                deny,
+                stamp,
+                stamp,
+                settings.rules_from,
+            ),
         )
         return True
     if existing.removed_at is not None:
         transaction.execute(
             sql.REREGISTER_MEMBER,
-            (program_id, *lists, stamp, stamp, settings.project_id),
+            (
+                program_id,
+                rules_paths,
+                settings.rules_from,
+                allow,
+                deny,
+                stamp,
+                stamp,
+                settings.project_id,
+            ),
         )
         return True
     if existing.program_id != program_id:
@@ -185,7 +202,17 @@ def upsert_member(
         )
     if existing.settings == settings:
         return False
-    transaction.execute(sql.UPDATE_MEMBER, (*lists, stamp, settings.project_id))
+    transaction.execute(
+        sql.UPDATE_MEMBER,
+        (
+            rules_paths,
+            settings.rules_from,
+            allow,
+            deny,
+            stamp,
+            settings.project_id,
+        ),
+    )
     return True
 
 

@@ -10,7 +10,11 @@ from pathlib import Path
 import pytest
 
 from amoeba.upstream.context_forge.cli_call import CfCallFailed
-from amoeba.upstream.context_forge.projects import project_names
+from amoeba.upstream.context_forge.projects import (
+    ProjectDetail,
+    project_details,
+    project_names,
+)
 
 RECORDING = (
     Path(__file__).parents[2] / "fixtures" / "context_forge" / "list_projects.json"
@@ -43,6 +47,30 @@ def test_the_real_recording_parses_to_the_id_to_name_map() -> None:
     assert isinstance(names, dict)
     assert names["project_1758069879482_xankquaj6"] == "trading"
     assert runner.calls == [["cf", "list", "projects", "--json"]]
+
+
+def test_details_carry_the_path_or_none_from_the_real_recording() -> None:
+    text = RECORDING.read_text(encoding="utf-8")
+    entries = json.loads(text)
+    runner = _Runner(text)
+
+    details = project_details(runner)
+
+    assert isinstance(details, dict)
+    assert len(details) == len(entries)
+    assert runner.calls == [["cf", "list", "projects", "--json"]]
+    for entry in entries:
+        assert details[entry["id"]] == ProjectDetail(
+            entry["id"], entry["name"], entry.get("projectPath")
+        )
+    assert any(detail.path is None for detail in details.values())
+    assert any(detail.path is not None for detail in details.values())
+
+
+def test_details_fail_like_names_on_a_malformed_entry() -> None:
+    result = project_details(_Runner('[{"id": "x"}]'))
+
+    assert isinstance(result, CfCallFailed)
 
 
 def test_the_recording_holds_an_entry_without_a_project_path() -> None:
